@@ -71,11 +71,11 @@ test("merges compiler and TypeScript diagnostics via provenance", () => {
   });
 
   const diags = service.getDiagnostics(uri);
-  const compilerDiag = diags.compiler.find((d) => d.source === "link");
+  const compilerDiag = diags.compiler.find((d) => d.stage === "link");
   expect(compilerDiag, "compiler diagnostics should be preserved").toBeTruthy();
   expect(compilerDiag.location?.uri).toBe(canonicalDocumentUri(uri).uri);
 
-  const tsDiag = diags.typescript.find((d) => d.source === "typescript");
+  const tsDiag = diags.typescript.find((d) => d.stage === "typescript");
   expect(tsDiag, "typescript diagnostics should be present").toBeTruthy();
   const projected = program.provenance.projectGeneratedSpan(overlayUri, diagSpan);
   expect(projected, "typescript diagnostic should map through provenance").toBeTruthy();
@@ -152,7 +152,7 @@ test("diagnostics use VM display name for missing members", () => {
   });
 
   const diags = service.getDiagnostics(uri);
-  const tsDiag = diags.typescript.find((d) => d.source === "typescript");
+  const tsDiag = diags.typescript.find((d) => d.stage === "typescript");
   expect(tsDiag, "typescript diagnostic should be present").toBeTruthy();
   expect(tsDiag.message).toBe("Property 'missing' does not exist on MyVm");
 });
@@ -1185,7 +1185,7 @@ describe("typecheck diagnostics integration", () => {
     const diags = service.getDiagnostics(uri);
     const tcDiag = diags.compiler.find((d) => d.code === "aurelia/expr-type-mismatch");
     expect(tcDiag, "expr-type-mismatch should surface for string→boolean mismatch in lenient mode").toBeTruthy();
-    expect(tcDiag.source).toBe("typecheck");
+    expect(tcDiag.stage).toBe("typecheck");
     expect(tcDiag.severity).toBe("warning");
     expect(tcDiag.location?.uri).toBe(canonicalDocumentUri(uri).uri);
     expect(tcDiag.message).toContain("expected boolean");
@@ -1212,7 +1212,7 @@ describe("typecheck diagnostics integration", () => {
     });
 
     const diags = service.getDiagnostics(uri);
-    const tcDiag = diags.compiler.find((d) => d.source === "typecheck");
+    const tcDiag = diags.compiler.find((d) => d.stage === "typecheck");
     expect(tcDiag, "typecheck diagnostic should be present").toBeTruthy();
     expect(tcDiag.location).toBeTruthy();
     // Location should point to the expression 'yes' not the whole binding
@@ -1242,7 +1242,7 @@ describe("typecheck diagnostics integration", () => {
 
     const diags = service.getDiagnostics(uri);
     // With lenient defaults, nullToString is "off" so no warning
-    const nullDiag = diags.compiler.find((d) => d.source === "typecheck");
+    const nullDiag = diags.compiler.find((d) => d.stage === "typecheck");
     expect(nullDiag, "lenient mode should NOT emit null→string warning").toBeFalsy();
   });
 
@@ -1266,7 +1266,7 @@ describe("typecheck diagnostics integration", () => {
     });
 
     const diags = service.getDiagnostics(uri);
-    const tcDiags = diags.compiler.filter((d) => d.source === "typecheck");
+    const tcDiags = diags.compiler.filter((d) => d.stage === "typecheck");
     expect(tcDiags.length, "DOM coercion should allow number→string").toBe(0);
   });
 
@@ -1291,10 +1291,10 @@ describe("typecheck diagnostics integration", () => {
 
     const diags = service.getDiagnostics(uri);
     // Should have resolve diagnostic (aurelia/invalid-binding-pattern) but no typecheck diagnostic
-    const resolveDiag = diags.compiler.find((d) => d.source === "link");
+    const resolveDiag = diags.compiler.find((d) => d.stage === "link");
     expect(resolveDiag, "resolve should emit diagnostic for unknown property").toBeTruthy();
 
-    const tcDiags = diags.compiler.filter((d) => d.source === "typecheck");
+    const tcDiags = diags.compiler.filter((d) => d.stage === "typecheck");
     expect(tcDiags.length, "typecheck should not emit when target.kind is unknown").toBe(0);
   });
 
@@ -1318,7 +1318,7 @@ describe("typecheck diagnostics integration", () => {
     });
 
     const diags = service.getDiagnostics(uri);
-    const tcDiags = diags.compiler.filter((d) => d.source === "typecheck");
+    const tcDiags = diags.compiler.filter((d) => d.stage === "typecheck");
     expect(tcDiags.length, "style coercion should allow number→string").toBe(0);
   });
 
@@ -1345,7 +1345,7 @@ describe("typecheck diagnostics integration", () => {
     const tcDiag = diags.compiler.find((d) => d.code === "aurelia/expr-type-mismatch");
     // This should produce a mismatch since boolean→string isn't a style coercion
     expect(tcDiag, "style binding should reject boolean→string").toBeTruthy();
-    expect(tcDiag?.source).toBe("typecheck");
+    expect(tcDiag?.stage).toBe("typecheck");
   });
 
   test("if.bind expects boolean, string literal produces warning", () => {
@@ -1368,7 +1368,7 @@ describe("typecheck diagnostics integration", () => {
     });
 
     const diags = service.getDiagnostics(uri);
-    const tcDiag = diags.compiler.find((d) => d.source === "typecheck");
+    const tcDiag = diags.compiler.find((d) => d.stage === "typecheck");
     expect(tcDiag, "if.bind should produce typecheck warning for string→boolean").toBeTruthy();
     // Lenient mode produces warning severity
     expect(tcDiag?.code).toBe("aurelia/expr-type-mismatch");
@@ -1395,7 +1395,7 @@ describe("typecheck diagnostics integration", () => {
     });
 
     const diags = service.getDiagnostics(uri);
-    const tcDiags = diags.compiler.filter((d) => d.source === "typecheck");
+    const tcDiags = diags.compiler.filter((d) => d.stage === "typecheck");
     // Should have exactly one diagnostic for disabled.bind (number→boolean mismatch)
     expect(tcDiags.length, "should have one typecheck diagnostic for disabled").toBe(1);
     // Lenient mode produces warning severity
@@ -1423,7 +1423,7 @@ describe("typecheck diagnostics integration", () => {
     });
 
     const diags = service.getDiagnostics(uri);
-    const tcDiags = diags.compiler.filter((d) => d.source === "typecheck");
+    const tcDiags = diags.compiler.filter((d) => d.stage === "typecheck");
     expect(tcDiags.length, "text interpolation should accept any type").toBe(0);
   });
 
@@ -1489,11 +1489,11 @@ describe("Elm-style error propagation", () => {
       const diags = service.getDiagnostics(uri);
 
       // Should have exactly ONE error from resolve phase
-      const resolveErrors = diags.compiler.filter((d) => d.source === "link");
+      const resolveErrors = diags.compiler.filter((d) => d.stage === "link");
       expect(resolveErrors.length).toBeGreaterThanOrEqual(1);
 
       // Should have ZERO errors from typecheck (cascade suppressed)
-      const typecheckErrors = diags.compiler.filter((d) => d.source === "typecheck");
+      const typecheckErrors = diags.compiler.filter((d) => d.stage === "typecheck");
       expect(typecheckErrors.length, "typecheck should not cascade on unknown property").toBe(0);
     });
 
@@ -1507,11 +1507,11 @@ describe("Elm-style error propagation", () => {
       const diags = service.getDiagnostics(uri);
 
       // Each unknown property should produce exactly one resolve error
-      const resolveErrors = diags.compiler.filter((d) => d.source === "link");
+      const resolveErrors = diags.compiler.filter((d) => d.stage === "link");
       expect(resolveErrors.length).toBe(2);
 
       // No typecheck cascades
-      const typecheckErrors = diags.compiler.filter((d) => d.source === "typecheck");
+      const typecheckErrors = diags.compiler.filter((d) => d.stage === "typecheck");
       expect(typecheckErrors.length, "no typecheck cascades for multiple unknowns").toBe(0);
     });
   });
@@ -1528,12 +1528,12 @@ describe("Elm-style error propagation", () => {
       const diags = service.getDiagnostics(uri);
 
       // Should have resolve error for 'unknown'
-      const resolveErrors = diags.compiler.filter((d) => d.source === "link");
+      const resolveErrors = diags.compiler.filter((d) => d.stage === "link");
       expect(resolveErrors.length).toBeGreaterThanOrEqual(1);
 
       // Should ALSO have typecheck warning for disabled (string → boolean mismatch)
       // This proves we don't over-suppress - valid targets still get checked
-      const typecheckErrors = diags.compiler.filter((d) => d.source === "typecheck");
+      const typecheckErrors = diags.compiler.filter((d) => d.stage === "typecheck");
       expect(typecheckErrors.length, "valid binding should still be type-checked").toBe(1);
       expect(typecheckErrors[0]?.code).toBe("aurelia/expr-type-mismatch");
       expect(typecheckErrors[0]?.severity).toBe("warning");
@@ -1553,11 +1553,11 @@ describe("Elm-style error propagation", () => {
       const diags = service.getDiagnostics(uri);
 
       // Resolve error for unknown
-      const resolveErrors = diags.compiler.filter((d) => d.source === "link");
+      const resolveErrors = diags.compiler.filter((d) => d.stage === "link");
       expect(resolveErrors.length).toBeGreaterThanOrEqual(1);
 
       // Typecheck error for disabled on SIBLING element
-      const typecheckErrors = diags.compiler.filter((d) => d.source === "typecheck");
+      const typecheckErrors = diags.compiler.filter((d) => d.stage === "typecheck");
       expect(typecheckErrors.length, "sibling element should still be type-checked").toBe(1);
     });
   });
@@ -1579,11 +1579,11 @@ describe("Elm-style error propagation", () => {
       const diags = service.getDiagnostics(uri);
 
       // Should have resolve error for inner unknown
-      const resolveErrors = diags.compiler.filter((d) => d.source === "link");
+      const resolveErrors = diags.compiler.filter((d) => d.stage === "link");
       expect(resolveErrors.length).toBeGreaterThanOrEqual(1);
 
       // Should have typecheck error for outer disabled (not suppressed by inner stub)
-      const typecheckErrors = diags.compiler.filter((d) => d.source === "typecheck");
+      const typecheckErrors = diags.compiler.filter((d) => d.stage === "typecheck");
       expect(typecheckErrors.length, "outer scope type errors not affected by inner stub").toBe(1);
     });
 
@@ -1602,12 +1602,12 @@ describe("Elm-style error propagation", () => {
 
       // Should have exactly one resolve error for 'unknown'
       const resolveErrors = diags.compiler.filter((d) =>
-        d.source === "link" && d.message?.includes("unknown")
+        d.stage === "link" && d.message?.includes("unknown")
       );
       expect(resolveErrors.length, "should have one error for unknown property").toBe(1);
 
       // No typecheck cascades
-      const typecheckErrors = diags.compiler.filter((d) => d.source === "typecheck");
+      const typecheckErrors = diags.compiler.filter((d) => d.stage === "typecheck");
       expect(typecheckErrors.length, "no typecheck cascades in repeat").toBe(0);
     });
   });
@@ -1626,7 +1626,7 @@ describe("Elm-style error propagation", () => {
       const diags = service.getDiagnostics(uri);
 
       // Should have exactly 2 typecheck warnings (one per binding)
-      const typecheckErrors = diags.compiler.filter((d) => d.source === "typecheck");
+      const typecheckErrors = diags.compiler.filter((d) => d.stage === "typecheck");
       expect(typecheckErrors.length, "each type error independent").toBe(2);
       expect(typecheckErrors.every((d) => d.code === "aurelia/expr-type-mismatch")).toBe(true);
       expect(typecheckErrors.every((d) => d.severity === "warning")).toBe(true);
@@ -1643,11 +1643,11 @@ describe("Elm-style error propagation", () => {
 
       // value.bind: string→string is valid, no error
       // disabled.bind: string→boolean is invalid, one error
-      const typecheckErrors = diags.compiler.filter((d) => d.source === "typecheck");
+      const typecheckErrors = diags.compiler.filter((d) => d.stage === "typecheck");
       expect(typecheckErrors.length, "only invalid binding produces error").toBe(1);
 
       // No resolve errors (both properties are valid targets)
-      const resolveErrors = diags.compiler.filter((d) => d.source === "link");
+      const resolveErrors = diags.compiler.filter((d) => d.stage === "link");
       expect(resolveErrors.length).toBe(0);
     });
   });
@@ -1660,7 +1660,7 @@ describe("Elm-style error propagation", () => {
       program.upsertTemplate(uri, markup);
 
       const diags = service.getDiagnostics(uri);
-      const error = diags.compiler.find((d) => d.source === "link");
+      const error = diags.compiler.find((d) => d.stage === "link");
 
       expect(error).toBeTruthy();
       // Error message should mention what couldn't be found
@@ -1675,7 +1675,7 @@ describe("Elm-style error propagation", () => {
       program.upsertTemplate(uri, markup);
 
       const diags = service.getDiagnostics(uri);
-      const error = diags.compiler.find((d) => d.source === "link");
+      const error = diags.compiler.find((d) => d.stage === "link");
 
       expect(error?.location).toBeTruthy();
       // Span should be within the binding, not at element start
@@ -1734,7 +1734,7 @@ describe("Elm-style error propagation", () => {
 
       const diags = service.getDiagnostics(uri);
       // Text interpolation accepts any type - no errors expected
-      const typecheckErrors = diags.compiler.filter((d) => d.source === "typecheck");
+      const typecheckErrors = diags.compiler.filter((d) => d.stage === "typecheck");
       expect(typecheckErrors.length).toBe(0);
     });
 
@@ -1755,11 +1755,11 @@ describe("Elm-style error propagation", () => {
       const diags = service.getDiagnostics(uri);
 
       // Should have exactly one resolve error at the leaf
-      const resolveErrors = diags.compiler.filter((d) => d.source === "link");
+      const resolveErrors = diags.compiler.filter((d) => d.stage === "link");
       expect(resolveErrors.length).toBe(1);
 
       // No cascades from any level
-      const typecheckErrors = diags.compiler.filter((d) => d.source === "typecheck");
+      const typecheckErrors = diags.compiler.filter((d) => d.stage === "typecheck");
       expect(typecheckErrors.length).toBe(0);
     });
   });

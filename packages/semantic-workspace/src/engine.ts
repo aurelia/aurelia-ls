@@ -1860,7 +1860,7 @@ function toRawDiagnostic(diag: TemplateLanguageDiagnostic): RawDiagnostic {
   return {
     code,
     message: diag.message,
-    source: diag.source,
+    source: diag.stage,
     ...(diag.severity ? { severity: diag.severity } : {}),
     ...(location ? { uri: location.uri, span: location.span } : {}),
     ...(related && related.length > 0 ? { related } : {}),
@@ -1872,7 +1872,7 @@ function toRawDiagnostic(diag: TemplateLanguageDiagnostic): RawDiagnostic {
 function buildDiagnosticData(
   diag: TemplateLanguageDiagnostic,
 ): Readonly<Record<string, unknown>> | undefined {
-  if (diag.source !== "typescript") return diag.data;
+  if (diag.stage !== "typescript") return diag.data;
   const extra: Record<string, unknown> = { tsCode: diag.code };
   if (diag.tags?.length) {
     extra.tags = diag.tags;

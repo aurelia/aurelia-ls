@@ -84,6 +84,7 @@ export interface AttributeDefInput {
   readonly bindables?: Readonly<Record<string, BindableDef>>;
   readonly primary?: string;
   readonly noMultiBindings?: boolean;
+  readonly dependencies?: readonly string[];
 }
 
 export interface TemplateControllerDefInput {
@@ -132,6 +133,7 @@ export function buildCustomAttributeDef(input: AttributeDefInput): CustomAttribu
     noMultiBindings: sourcedValue(input.noMultiBindings ?? false, input.file, input.span),
     ...(input.primary ? { primary: sourcedValue(input.primary, input.file, input.span) } : {}),
     bindables: input.bindables ?? {},
+    dependencies: (input.dependencies ?? []).map((dep) => sourcedValue(dep, input.file, input.span)),
     file: input.file,
   };
 }

@@ -63,7 +63,7 @@ describe("Full Pipeline: conditional registration guards", () => {
     );
     expect(conditional).toBeTruthy();
     const expectedSource = normalizePathForId("/src/main.ts");
-    expect(conditional?.source).toBe("project");
+    expect(conditional?.stage).toBe("project");
     expect(conditional?.uri).toBe(expectedSource);
     expect(result.catalog.confidence).toBe("partial");
     expect(result.semanticSnapshot.confidence).toBe("partial");
@@ -97,7 +97,7 @@ describe("Full Pipeline: conditional registration guards", () => {
     );
     expect(unresolved).toBeTruthy();
     const expectedSource = normalizePathForId("/src/main.ts");
-    expect(unresolved?.source).toBe("project");
+    expect(unresolved?.stage).toBe("project");
     expect(unresolved?.uri).toBe(expectedSource);
     expect(result.catalog.confidence).toBe("conservative");
     expect(result.semanticSnapshot.confidence).toBe("conservative");

@@ -1,6 +1,6 @@
 import type { SourceSpan } from "../model/ir.js";
 import type { Origin } from "../model/origin.js";
-import type { CompilerDiagnostic, DiagnosticSource, DiagnosticSeverity, DiagnosticRelated } from "../model/diagnostics.js";
+import type { CompilerDiagnostic, DiagnosticStage, DiagnosticSeverity, DiagnosticRelated } from "../model/diagnostics.js";
 import type {
   DiagnosticDataBase,
   DiagnosticStatus,
@@ -38,9 +38,9 @@ export function createDiagnosticEmitter<
   AllowedCodes extends keyof Catalog & string = keyof Catalog & string,
 >(
   catalog: Catalog,
-  options: { source: DiagnosticSource },
+  options: { stage: DiagnosticStage },
 ): DiagnosticEmitter<Catalog, AllowedCodes> {
-  const source = options.source;
+  const stage = options.stage;
 
   return {
     emit(code, input) {
@@ -55,7 +55,7 @@ export function createDiagnosticEmitter<
       return buildDiagnostic({
         code,
         message: input.message,
-        source,
+        stage,
         severity,
         span: input.span,
         origin: input.origin,

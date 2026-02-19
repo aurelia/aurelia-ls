@@ -1,5 +1,5 @@
 import type { BindingSourceIR, ExprId, ExprTableEntry, IrModule, SourceSpan, TextSpan } from "../../model/ir.js";
-import type { FrameId } from "../../model/symbols.js";
+import type { FrameId, FrameOrigin } from "../../model/symbols.js";
 import type { OverlayEmitMappingEntry } from "./emit.js";
 import {
   buildExprSpanIndex,
@@ -17,6 +17,7 @@ export interface TemplateMappingEntry {
   htmlSpan: SourceSpan;
   overlaySpan: TextSpan;
   frameId?: FrameId | undefined;
+  frameOrigin?: FrameOrigin | undefined;
   segments?: readonly TemplateMappingSegment[] | undefined;
 }
 
@@ -45,6 +46,7 @@ export interface BuildMappingInputs {
   fallbackFile: SourceFile;
   overlayFile?: SourceFile | null;
   exprToFrame?: ExprIdMapLike<FrameId> | null;
+  frameOrigins?: ReadonlyMap<FrameId, FrameOrigin> | null;
 }
 
 export interface BuildMappingResult {
@@ -65,6 +67,7 @@ export function buildTemplateMapping(inputs: BuildMappingInputs): BuildMappingRe
     htmlSpan: SourceSpan;
     overlaySpan: TextSpan;
     frameId?: FrameId;
+    frameOrigin?: FrameOrigin;
     segments: OwnedSegment[];
   };
 
@@ -75,6 +78,7 @@ export function buildTemplateMapping(inputs: BuildMappingInputs): BuildMappingRe
       : normalizeSpan(m.span);
     const htmlSegments = memberHtmlSegments.get(m.exprId) ?? [];
     const frameId = exprIdMapGet(inputs.exprToFrame ?? null, m.exprId) ?? undefined;
+    const frameOrigin = frameId !== undefined ? inputs.frameOrigins?.get(frameId) : undefined;
 
     const segments = buildSegmentPairs(
       m.segments ?? [],
@@ -89,6 +93,7 @@ export function buildTemplateMapping(inputs: BuildMappingInputs): BuildMappingRe
       htmlSpan,
       overlaySpan,
       ...(frameId !== undefined ? { frameId } : {}),
+      ...(frameOrigin !== undefined ? { frameOrigin } : {}),
       segments,
     };
   });
@@ -107,6 +112,7 @@ export function buildTemplateMapping(inputs: BuildMappingInputs): BuildMappingRe
       htmlSpan: entry.htmlSpan,
       overlaySpan: entry.overlaySpan,
       ...(entry.frameId !== undefined ? { frameId: entry.frameId } : {}),
+      ...(entry.frameOrigin !== undefined ? { frameOrigin: entry.frameOrigin } : {}),
       ...(aggregatedSegments.get(entry.exprId)?.length ? { segments: aggregatedSegments.get(entry.exprId) } : {}),
     }),
   );

@@ -1,9 +1,9 @@
+import type { DiagnosticSeverity } from "../../model/diagnostics.js";
 import type {
   DiagnosticSpec,
   DiagnosticsCatalog,
   DiagnosticDataRecord,
   DiagnosticStage,
-  DiagnosticSeverity,
   DiagnosticStatus,
 } from "../types.js";
 import type {

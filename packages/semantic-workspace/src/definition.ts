@@ -17,6 +17,8 @@ import {
   type FrameId,
   type NodeId,
   type ResourceDef,
+  type ScopeFrame,
+  type ScopeSymbol,
   type SourceLocation,
   type SourceSpan,
   type SymbolId,
@@ -600,17 +602,6 @@ function resolveAttributeSpans(
   return { target, command };
 }
 
-type ScopeSymbol = {
-  kind: "let" | "iteratorLocal" | "contextual" | "alias" | string;
-  name: string;
-  span?: SourceSpan | null;
-};
-
-type ScopeFrame = {
-  id: FrameId;
-  parent: FrameId | null;
-  symbols: readonly ScopeSymbol[];
-};
 
 type ScopeLookup = {
   frames: ScopeFrame[];

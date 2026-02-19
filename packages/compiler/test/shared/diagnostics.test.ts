@@ -8,7 +8,7 @@ describe("diagnostic utilities", () => {
     const diag = buildDiagnostic({
       code: "E_TEST",
       message: "Boom",
-      source: "link",
+      stage: "link",
       span: { start: 9, end: 2 },
     });
 
@@ -24,7 +24,7 @@ describe("diagnostic utilities", () => {
     const diag = buildDiagnostic({
       code: "E_ORIGIN",
       message: "Custom",
-      source: "bind",
+      stage: "bind",
       origin,
     });
 
@@ -36,7 +36,7 @@ describe("diagnostic utilities", () => {
     const diag = {
       code: "E_PREF",
       message: "Prefers origin",
-      source: "typecheck",
+      stage: "typecheck",
       severity: "warning",
       span: { start: 5, end: 6 },
       origin: { kind: "synthetic", span: { start: 1, end: 4 } },
@@ -46,7 +46,7 @@ describe("diagnostic utilities", () => {
     const fallback = buildDiagnostic({
       code: "E_FALL",
       message: "Fallback",
-      source: "link",
+      stage: "link",
       span: { start: 8, end: 3 },
       origin: { kind: "synthetic", span: null },
     });

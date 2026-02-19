@@ -360,7 +360,7 @@ describe("cascade suppression", () => {
     expect((ins as { target?: { kind?: string } })?.target?.kind).toBe("unknown");
 
     // No type diagnostics should be produced (cascade suppression)
-    const tcDiags = diagnostics.all.filter((d) => d.source === "typecheck");
+    const tcDiags = diagnostics.all.filter((d) => d.stage === "typecheck");
     expect(tcDiags).toHaveLength(0);
 
     // The expression should NOT be in expectedByExpr (skipped due to unknown target)
@@ -389,7 +389,7 @@ describe("cascade suppression", () => {
     expect((ins as { target?: { kind?: string } })?.target?.kind).not.toBe("unknown");
 
     // Should produce a type mismatch diagnostic
-    const tcDiags = diagnostics.all.filter((d) => d.source === "typecheck");
+    const tcDiags = diagnostics.all.filter((d) => d.stage === "typecheck");
     expect(tcDiags.length).toBeGreaterThan(0);
     expect(tcDiags[0]?.code).toBe("aurelia/expr-type-mismatch");
     expect(tcDiags[0]?.severity).toBe("error");

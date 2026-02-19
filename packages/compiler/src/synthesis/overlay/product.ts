@@ -2,10 +2,11 @@ import path from "node:path";
 import { buildTemplateMapping } from "./mapping.js";
 import { buildTemplateQuery } from "./query.js";
 import type { PipelineSession } from "../../pipeline/engine.js";
-import type { OverlayPlanModule } from "./types.js";
+import type { FrameOverlayPlan, OverlayPlanModule } from "./types.js";
 import type { TemplateQueryFacade } from "./query.js";
 import type { TemplateMappingArtifact } from "./mapping.js";
 import type { ExprId, ExprTableEntry, SourceSpan } from "../../model/ir.js";
+import type { FrameId, FrameOrigin } from "../../model/symbols.js";
 import { resolveSourceFile } from "../../model/source.js";
 import type { ExprSpanIndex } from "../../shared/expr-utils.js";
 import { normalizePathForId, type ExprIdMap } from "../../model/identity.js";
@@ -47,6 +48,7 @@ export function buildOverlayProduct(session: PipelineSession, opts: OverlayProdu
   const overlayPath = normalizePathForId(path.join(overlayDir, overlayEmit.filename));
   const overlayFile = resolveSourceFile(overlayPath);
   const exprToFrame = scope.templates?.[0]?.exprToFrame;
+  const frameOrigins = collectFrameOrigins(planOut.templates[0]?.frames);
 
   const { mapping, exprSpans, spanIndex } = buildTemplateMapping({
     overlayMapping: overlayEmit.mapping,
@@ -55,6 +57,7 @@ export function buildOverlayProduct(session: PipelineSession, opts: OverlayProdu
     fallbackFile: sourceFile,
     overlayFile,
     exprToFrame: exprToFrame ?? null,
+    frameOrigins,
   });
 
   const calls = overlayEmit.mapping.map((m) => ({
@@ -74,4 +77,13 @@ export function buildOverlayProduct(session: PipelineSession, opts: OverlayProdu
   const query = buildTemplateQuery(ir, linked, mapping, typecheck);
 
   return { plan: planOut, overlay, mapping, query, exprSpans, exprTable: ir.exprTable ?? [], spanIndex };
+}
+
+function collectFrameOrigins(frames: readonly FrameOverlayPlan[] | undefined): ReadonlyMap<FrameId, FrameOrigin> | null {
+  if (!frames) return null;
+  const map = new Map<FrameId, FrameOrigin>();
+  for (const f of frames) {
+    if (f.origin) map.set(f.frame, f.origin);
+  }
+  return map.size > 0 ? map : null;
 }

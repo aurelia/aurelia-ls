@@ -164,6 +164,7 @@ function mergeCustomAttributeDef(
       ) ?? primary.noMultiBindings,
     ...(mergedPrimary ? { primary: mergedPrimary } : {}),
     bindables: mergeBindableDefRecord(primary.bindables, secondary.bindables, primaryMeta, secondaryMeta, reasons),
+    dependencies: mergeSourcedAliasList(primary.dependencies, secondary.dependencies),
     ...(primary.file ?? secondary.file ? { file: primary.file ?? secondary.file } : {}),
     ...(primary.package ?? secondary.package ? { package: primary.package ?? secondary.package } : {}),
   };

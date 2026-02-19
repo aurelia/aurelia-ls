@@ -357,7 +357,7 @@ export {
   provenanceSpan,
   preferOrigin,
 } from "./model/index.js";
-export type { SpanLike, SourceSpan, TextSpan, NormalizedPath, SourceFileId, ExprId, FrameId, BindingMode } from "./model/index.js";
+export type { SpanLike, SourceSpan, TextSpan, NormalizedPath, SourceFileId, ExprId, FrameId, BindingMode, ScopeFrame, ScopeSymbol } from "./model/index.js";
 
 // IR types (DOM tree)
 export type {

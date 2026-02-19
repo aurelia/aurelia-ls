@@ -1,4 +1,6 @@
 import type ts from "typescript";
+import type { BindingMode } from "../model/ir.js";
+export type { BindingMode } from "../model/ir.js";
 import type { NormalizedPath, StringId } from "../model/identity.js";
 
 export interface SourceLocation {
@@ -19,7 +21,6 @@ export type Sourced<T> =
   | { origin: 'source'; state: 'known'; value: T; node?: ts.Node; location?: SourceLocation }
   | { origin: 'source'; state: 'unknown'; value?: undefined; node?: ts.Node; location?: SourceLocation };
 
-export type BindingMode = 'default' | 'oneTime' | 'toView' | 'fromView' | 'twoWay';
 
 export type TypeRef =
   | { kind: 'ts'; name: string }
@@ -88,6 +89,7 @@ export interface CustomAttributeDef extends ResourceDefBase {
   readonly noMultiBindings: Sourced<boolean>;
   readonly primary?: Sourced<string>;
   readonly bindables: Readonly<Record<string, BindableDef>>;
+  readonly dependencies: readonly Sourced<string>[];
 }
 
 export type ControllerTrigger =
@@ -223,6 +225,7 @@ export interface AttrRes {
   readonly primary?: string;
   readonly isTemplateController?: boolean;
   readonly noMultiBindings?: boolean;
+  readonly dependencies?: readonly string[];
   readonly className?: string;
   readonly file?: NormalizedPath;
   readonly package?: string;

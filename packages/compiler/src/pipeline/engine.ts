@@ -1,6 +1,6 @@
 // Model imports (via barrel)
 import type { IrModule, ScopeModule } from "../model/index.js";
-import type { DiagnosticSource } from "../model/diagnostics.js";
+import type { DiagnosticStage } from "../model/diagnostics.js";
 
 // Language imports (via barrel)
 import type {
@@ -216,7 +216,7 @@ export interface StageArtifactMeta {
   source: "run" | "cache" | "seed";
 }
 
-const STAGE_DIAGNOSTIC_SOURCE: Partial<Record<StageKey, DiagnosticSource>> = {
+const STAGE_DIAGNOSTIC_SOURCE: Partial<Record<StageKey, DiagnosticStage>> = {
   "10-lower": "lower",
   "20-link": "link",
   "30-bind": "bind",
@@ -225,7 +225,7 @@ const STAGE_DIAGNOSTIC_SOURCE: Partial<Record<StageKey, DiagnosticSource>> = {
   "overlay:emit": "overlay-emit",
 };
 
-function sourceForStage(stage: StageKey): DiagnosticSource {
+function sourceForStage(stage: StageKey): DiagnosticStage {
   const source = STAGE_DIAGNOSTIC_SOURCE[stage];
   if (!source) {
     throw new Error(`No diagnostic source mapping configured for stage '${stage}'.`);

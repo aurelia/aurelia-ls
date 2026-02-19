@@ -123,12 +123,12 @@ export interface DiagnosticRelatedInfo {
   location: DocumentSpan | null;
 }
 
-export type LanguageDiagnosticSource = CompilerDiagnostic["source"] | "typescript";
+export type LanguageDiagnosticStage = CompilerDiagnostic["stage"] | "typescript";
 
 export interface TemplateLanguageDiagnostic {
   code: string | number;
   message: string;
-  source: LanguageDiagnosticSource;
+  stage: LanguageDiagnosticStage;
   severity?: DiagnosticSeverity;
   location: DocumentSpan | null;
   related?: readonly DiagnosticRelatedInfo[];
@@ -1567,7 +1567,7 @@ function mapCompilerDiagnostic(
       message: hit?.memberPath
         ? `Type mismatch on ${subject}: expected ${expected ?? "unknown"}, got ${actual ?? "unknown"}`
         : `Type mismatch: expected ${expected ?? "unknown"}, got ${actual ?? "unknown"}`,
-      source: diag.source,
+      stage: diag.stage,
       severity: diag.severity,
       location,
       origin: diag.origin ?? null,
@@ -1580,7 +1580,7 @@ function mapCompilerDiagnostic(
   return {
     code,
     message: diag.message,
-    source: diag.source,
+    stage: diag.stage,
     severity: diag.severity,
     location,
     origin: diag.origin ?? null,
@@ -1590,7 +1590,7 @@ function mapCompilerDiagnostic(
 }
 
 function isTypecheckMismatch(diag: CompilerDiagnostic): boolean {
-  return diag.code === "aurelia/expr-type-mismatch" && diag.source === "typecheck";
+  return diag.code === "aurelia/expr-type-mismatch" && diag.stage === "typecheck";
 }
 
 function getDataString(
@@ -1706,7 +1706,7 @@ function mapTypeScriptDiagnostic(
   return {
     code: diag.code ?? "TS",
     message,
-    source: "typescript",
+    stage: "typescript",
     severity,
     location: locationDecision.location,
     ...(related.length ? { related } : {}),

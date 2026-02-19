@@ -55,7 +55,7 @@ describe("Diagnostic Conversion Functions", () => {
       expect(diagnostics[0].severity).toBe("warning");
       expect(diagnostics[0].message).toContain("my-element");
       expect(diagnostics[0].message).toContain("MyElement");
-      expect(diagnostics[0].source).toBe("project");
+      expect(diagnostics[0].stage).toBe("project");
       expect(diagnostics[0].uri).toBe("/app/src/my-element.ts");
       expect(diagnostics[0].data?.resourceKind).toBe("custom-element");
     });
@@ -102,7 +102,7 @@ describe("Diagnostic Conversion Functions", () => {
       expect(diagnostics[0].code).toBe("aurelia/project/unanalyzable-function-call");
       expect(diagnostics[0].severity).toBe("info");
       expect(diagnostics[0].message).toContain("getPlugins");
-      expect(diagnostics[0].source).toBe("project");
+      expect(diagnostics[0].stage).toBe("project");
       expect(diagnostics[0].uri).toBe("/app/src/main.ts");
       expect(diagnostics[0].data?.patternKind).toBe("function-call");
     });
@@ -149,7 +149,7 @@ describe("Diagnostic Conversion Functions", () => {
       expect(diagnostics[0].code).toBe("aurelia/project/not-a-resource");
       expect(diagnostics[0].severity).toBe("warning");
       expect(diagnostics[0].message).toBe("Identifier 'NotAResource' is not a known Aurelia resource");
-      expect(diagnostics[0].source).toBe("project");
+      expect(diagnostics[0].stage).toBe("project");
       expect(diagnostics[0].uri).toBe("/app/src/my-component.ts");
     });
 

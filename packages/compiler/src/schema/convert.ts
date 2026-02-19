@@ -119,6 +119,9 @@ export function toAttrRes(def: CustomAttributeDef): AttrRes {
   const primary = unwrapSourced(def.primary) ?? findPrimaryBindableName(def.bindables) ?? undefined;
 
   const noMultiBindings = unwrapSourced(def.noMultiBindings);
+  const deps = def.dependencies
+    .map(d => unwrapSourced(d))
+    .filter((d): d is string => !!d);
   const className = unwrapSourced(def.className);
   return {
     kind: "attribute",
@@ -127,6 +130,7 @@ export function toAttrRes(def: CustomAttributeDef): AttrRes {
     ...(aliases.length > 0 ? { aliases } : {}),
     ...(primary ? { primary } : {}),
     ...(noMultiBindings !== undefined ? { noMultiBindings } : {}),
+    ...(deps.length > 0 ? { dependencies: deps } : {}),
     ...(className ? { className } : {}),
     ...(def.file ? { file: def.file } : {}),
     ...(def.package ? { package: def.package } : {}),

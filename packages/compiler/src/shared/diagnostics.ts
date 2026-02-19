@@ -6,12 +6,12 @@ import type { Origin } from "../model/origin.js";
 // Re-export foundation types from model
 export type {
   DiagnosticSeverity,
-  DiagnosticSource,
+  DiagnosticStage,
   DiagnosticRelated,
   CompilerDiagnostic,
 } from "../model/diagnostics.js";
 
-import type { DiagnosticSeverity, DiagnosticSource, DiagnosticRelated, CompilerDiagnostic } from "../model/diagnostics.js";
+import type { DiagnosticSeverity, DiagnosticStage, DiagnosticRelated, CompilerDiagnostic } from "../model/diagnostics.js";
 
 export interface BuildDiagnosticInput<
   TCode extends string = string,
@@ -19,7 +19,7 @@ export interface BuildDiagnosticInput<
 > {
   code: TCode;
   message: string;
-  source: DiagnosticSource;
+  stage: DiagnosticStage;
   severity?: DiagnosticSeverity;
   span?: SourceSpan | null | undefined;
   origin?: Origin | null;
@@ -38,11 +38,11 @@ export function buildDiagnostic<
   TData extends Record<string, unknown> = Record<string, unknown>,
 >(input: BuildDiagnosticInput<TCode, TData>): CompilerDiagnostic<TCode, TData> {
   const span = normalizeSpanMaybe(input.span);
-  const origin = input.origin ?? (span ? originFromSpan(input.source, span, input.description) : null);
+  const origin = input.origin ?? (span ? originFromSpan(input.stage, span, input.description) : null);
   const diag: CompilerDiagnostic<TCode, TData> = {
     code: input.code,
     message: input.message,
-    source: input.source,
+    stage: input.stage,
     ...(input.severity ? { severity: input.severity } : {}),
     span,
     origin,

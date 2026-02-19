@@ -207,7 +207,7 @@ export class AureliaProjectIndex {
         code: d.code,
         message: d.message,
         severity: d.severity,
-        source: d.source ?? null,
+        stage: d.stage ?? null,
       })),
       resources: result.definition.authority.map((r) => ({
         kind: r.kind,

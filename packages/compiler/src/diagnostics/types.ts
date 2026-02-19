@@ -1,5 +1,6 @@
-/** UI severity is a presentation signal that can be tuned by policy without changing code. */
-export type DiagnosticSeverity = "error" | "warning" | "info";
+import type { DiagnosticSeverity, DiagnosticStage } from "../model/diagnostics.js";
+export type { DiagnosticStage } from "../model/diagnostics.js";
+
 /** Impact captures the real consequence if ignored, which can differ from UI severity. */
 export type DiagnosticImpact =
   | "blocking" // Execution cannot proceed or output is unusable.
@@ -7,19 +8,6 @@ export type DiagnosticImpact =
   | "informational"; // No behavioral impact; context only.
 /** Actionability communicates how safe automation is (autofix vs guidance vs human). */
 export type DiagnosticActionability = "autofix" | "guided" | "manual" | "none";
-/** Stage tags where the diagnostic was produced to support routing and suppression. */
-export type DiagnosticStage =
-  | "lower"
-  | "link"
-  | "project"
-  | "bind"
-  | "typecheck"
-  | "overlay-plan"
-  | "overlay-emit"
-  | "aot"
-  | "ssr"
-  | "ssg"
-  | "hmr";
 /** Surface indicates which outputs are allowed to render a diagnostic. */
 export type DiagnosticSurface =
   | "lsp"

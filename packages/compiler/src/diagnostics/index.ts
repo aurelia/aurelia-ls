@@ -11,13 +11,13 @@ export type {
   DiagnosticImpact,
   DiagnosticResourceKind,
   DiagnosticsCatalog,
-  DiagnosticSeverity,
   DiagnosticSpanRequirement,
   DiagnosticStage,
   DiagnosticStatus,
   DiagnosticSurface,
   DiagnosticSpec,
 } from "./types.js";
+export type { DiagnosticSeverity } from "../model/diagnostics.js";
 export * from "./emitter.js";
 export * from "./report.js";
 export * from "./runtime.js";

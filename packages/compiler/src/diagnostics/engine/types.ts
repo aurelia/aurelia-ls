@@ -1,5 +1,5 @@
 import type { SourceSpan } from "../../model/index.js";
-import type { DiagnosticRelated } from "../../model/diagnostics.js";
+import type { DiagnosticRelated, DiagnosticSeverity } from "../../model/diagnostics.js";
 import type { Origin } from "../../model/origin.js";
 import type { DocumentUri } from "../../program/primitives.js";
 import type {
@@ -8,7 +8,6 @@ import type {
   DiagnosticConfidence,
   CatalogConfidence,
   DiagnosticImpact,
-  DiagnosticSeverity,
   DiagnosticStage,
   DiagnosticSurface,
   DiagnosticSpec,

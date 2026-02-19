@@ -116,7 +116,7 @@ describe("Trace Integration: Full Compiler Pipeline", () => {
         diagnostics: diagnostics.forSource("lower"),
       });
 
-      const lowerDiags = diagnostics.all.filter((d) => d.source === "lower");
+      const lowerDiags = diagnostics.all.filter((d) => d.stage === "lower");
       expect(lowerDiags.length).toBe(0);
 
       // Stage 2: Resolve

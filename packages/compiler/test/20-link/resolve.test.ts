@@ -341,7 +341,7 @@ interface CompilerDiag {
 
 function reduceLinkedIntent(linked: LinkedModule, diagnostics: readonly CompilerDiag[]): ResolveIntent {
   const items: ResolveItem[] = [];
-  const diags = diagnostics.filter((d) => d.source === "link").map((d) => d.code);
+  const diags = diagnostics.filter((d) => d.stage === "link").map((d) => d.code);
 
   const visited = new Set<LinkedTemplate>();
   const visit = (template: LinkedTemplate): void => {

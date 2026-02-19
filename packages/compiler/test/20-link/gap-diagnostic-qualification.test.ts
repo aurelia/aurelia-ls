@@ -721,7 +721,7 @@ describe("Gap qualification invariants", () => {
       { gaps },
     );
     const diags = linkWithDiagnostics(`<data-grid></data-grid>`, BUILTIN_SEMANTICS, catalog);
-    const linkDiags = diags.filter((d: any) => d.source === "link");
+    const linkDiags = diags.filter((d: any) => d.stage === "link");
     // Every diagnostic code should be a known pre-R5 code
     const knownCodes = new Set([
       "aurelia/unknown-element",

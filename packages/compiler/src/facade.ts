@@ -68,8 +68,8 @@ export type CompileOverlayResult = OverlayProductResult;
 export interface TemplateDiagnostics {
   /** Flat list of all diagnostics from the pipeline. */
   all: CompilerDiagnostic[];
-  /** Per-stage view keyed by diagnostic source. */
-  bySource: Partial<Record<CompilerDiagnostic["source"], CompilerDiagnostic[]>>;
+  /** Per-stage view keyed by diagnostic stage. */
+  byStage: Partial<Record<CompilerDiagnostic["stage"], CompilerDiagnostic[]>>;
 }
 
 export type StageMetaSnapshot = Partial<Record<StageKey, StageArtifactMeta>>;
@@ -203,12 +203,12 @@ export function compileTemplate(
 function buildDiagnostics(
   diagnostics: readonly CompilerDiagnostic[],
 ): TemplateDiagnostics {
-  const bySource: Partial<Record<CompilerDiagnostic["source"], CompilerDiagnostic[]>> = {};
+  const byStage: Partial<Record<CompilerDiagnostic["stage"], CompilerDiagnostic[]>> = {};
   for (const d of diagnostics) {
-    if (!bySource[d.source]) bySource[d.source] = [];
-    bySource[d.source]!.push(d);
+    if (!byStage[d.stage]) byStage[d.stage] = [];
+    byStage[d.stage]!.push(d);
   }
-  return { all: [...diagnostics], bySource };
+  return { all: [...diagnostics], byStage };
 }
 
 /** Maps DiagnosticBindableOwnerKind to DiagnosticResourceKind for bindable-level diagnostics. */

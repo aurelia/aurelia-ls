@@ -129,7 +129,7 @@ function analyzeTemplate(
     const typeExpr = buildFrameTypeExpr(f, rootTypeRef, analysis.hints.get(f.id), analysis.envs, parentExpr);
     typeExprByFrame.set(f.id, typeExpr);
     const lambdas = collectOneLambdaPerExpression(st, f.id, exprIndex, listenerEventTypes);
-    frames.push({ frame: f.id, typeName, typeExpr, lambdas });
+    frames.push({ frame: f.id, typeName, typeExpr, lambdas, ...(f.origin ? { origin: f.origin } : {}) });
   }
 
   return { name: st.name!, vmType, frames };

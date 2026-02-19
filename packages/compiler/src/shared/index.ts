@@ -12,7 +12,7 @@ export {
   buildDiagnostic,
   diagnosticSpan,
   type DiagnosticSeverity,
-  type DiagnosticSource,
+  type DiagnosticStage,
   type DiagnosticRelated,
   type BuildDiagnosticInput,
   type CompilerDiagnostic,

@@ -396,7 +396,7 @@ function reduceIrToLowerIntent(irModule: IrModule, diagnostics: readonly IrDiag[
   if (root) reduceTemplate(root, out);
   // Reduce diagnostics
   for (const d of diagnostics) {
-    if (d.source !== "lower") continue;
+    if (d.stage !== "lower") continue;
     out.diags.push({ code: d.code });
   }
   return out;

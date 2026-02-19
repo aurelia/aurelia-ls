@@ -10,14 +10,19 @@ import type { Origin } from "./origin.js";
 
 export type DiagnosticSeverity = "error" | "warning" | "info";
 
-export type DiagnosticSource =
+/** Stage tags where the diagnostic was produced to support routing and suppression. */
+export type DiagnosticStage =
   | "lower"
   | "link"
   | "project"
   | "bind"
   | "typecheck"
   | "overlay-plan"
-  | "overlay-emit";
+  | "overlay-emit"
+  | "aot"
+  | "ssr"
+  | "ssg"
+  | "hmr";
 
 export interface DiagnosticRelated {
   code?: string;
@@ -32,7 +37,7 @@ export interface CompilerDiagnostic<
 > {
   code: TCode;
   message: string;
-  source: DiagnosticSource;
+  stage: DiagnosticStage;
   severity?: DiagnosticSeverity;
   span?: SourceSpan | null;
   related?: readonly DiagnosticRelated[];

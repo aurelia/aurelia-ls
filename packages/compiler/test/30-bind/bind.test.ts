@@ -176,7 +176,7 @@ export function reduceScopeToBindIntent({ ir, linked, scope, diagnostics }: Redu
 
   // diags
   for (const d of diagnostics ?? []) {
-    if (d.source !== "bind") continue;
+    if (d.stage !== "bind") continue;
     out.diags.push({ code: d.code });
   }
 

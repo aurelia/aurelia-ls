@@ -72,8 +72,8 @@ import { definitionConvergenceToDiagnostics } from "../diagnostics/convert.js";
 // ============================================================================
 
 const ANALYSIS_SCHEMA_VERSION = 1;
-const GAP_EMITTER = createDiagnosticEmitter(diagnosticsByCategory.gaps, { source: "project" });
-const CONVERGENCE_EMITTER = createDiagnosticEmitter(diagnosticsByCategoryFuture.project, { source: "project" });
+const GAP_EMITTER = createDiagnosticEmitter(diagnosticsByCategory.gaps, { stage: "project" });
+const CONVERGENCE_EMITTER = createDiagnosticEmitter(diagnosticsByCategoryFuture.project, { stage: "project" });
 
 export interface ThirdPartyDiscoveryContext {
   packagePath: string;
@@ -602,6 +602,7 @@ function toCustomAttributeDef(name: string, attribute: ResourceCollections["attr
     noMultiBindings: configSourced(Boolean(attribute.noMultiBindings), file),
     ...(attribute.primary ? { primary: configSourced(attribute.primary, file) } : {}),
     bindables: toBindableDefs(attribute.bindables, file),
+    dependencies: [],
     ...(attribute.file ? { file: attribute.file } : {}),
     ...(attribute.package ? { package: attribute.package } : {}),
   };

@@ -1,4 +1,4 @@
-import type { CompilerDiagnostic, DiagnosticSource } from "../model/diagnostics.js";
+import type { CompilerDiagnostic, DiagnosticStage } from "../model/diagnostics.js";
 import type { DiagnosticsCatalog } from "./types.js";
 import { createDiagnosticEmitter, type DiagnosticEmitter } from "./emitter.js";
 import { diagnosticsCatalog } from "./catalog/index.js";
@@ -6,8 +6,8 @@ import { diagnosticsCatalog } from "./catalog/index.js";
 export class DiagnosticsRuntime<Catalog extends DiagnosticsCatalog = typeof diagnosticsCatalog> {
   readonly #catalog: Catalog;
   readonly #diagnostics: CompilerDiagnostic[] = [];
-  readonly #emitters = new Map<DiagnosticSource, DiagnosticEmitter<Catalog>>();
-  readonly #counts = new Map<DiagnosticSource, number>();
+  readonly #emitters = new Map<DiagnosticStage, DiagnosticEmitter<Catalog>>();
+  readonly #counts = new Map<DiagnosticStage, number>();
 
   constructor(catalog?: Catalog) {
     this.#catalog = catalog ?? (diagnosticsCatalog as unknown as Catalog);
@@ -21,15 +21,15 @@ export class DiagnosticsRuntime<Catalog extends DiagnosticsCatalog = typeof diag
     return this.#diagnostics;
   }
 
-  count(source?: DiagnosticSource): number {
+  count(source?: DiagnosticStage): number {
     if (!source) return this.#diagnostics.length;
     return this.#counts.get(source) ?? 0;
   }
 
-  forSource(source: DiagnosticSource): DiagnosticEmitter<Catalog> {
+  forSource(source: DiagnosticStage): DiagnosticEmitter<Catalog> {
     const existing = this.#emitters.get(source);
     if (existing) return existing;
-    const base = createDiagnosticEmitter(this.#catalog, { source });
+    const base = createDiagnosticEmitter(this.#catalog, { stage: source });
     const runtimeEmitter: DiagnosticEmitter<Catalog> = {
       emit: (code, input) => {
         const diag = base.emit(code, input);
@@ -43,7 +43,7 @@ export class DiagnosticsRuntime<Catalog extends DiagnosticsCatalog = typeof diag
 
   record(diag: CompilerDiagnostic): void {
     this.#diagnostics.push(diag);
-    const prev = this.#counts.get(diag.source) ?? 0;
-    this.#counts.set(diag.source, prev + 1);
+    const prev = this.#counts.get(diag.stage) ?? 0;
+    this.#counts.set(diag.stage, prev + 1);
   }
 }

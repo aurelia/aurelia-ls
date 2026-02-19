@@ -149,6 +149,7 @@ function attribute(
     noMultiBindings: builtin(opts?.noMultiBindings ?? false),
     ...(opts?.primary && { primary: builtin(opts.primary) }),
     bindables,
+    dependencies: [],
     ...(opts?.package && { package: opts.package }),
   };
 }

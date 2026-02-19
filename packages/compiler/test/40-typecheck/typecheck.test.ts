@@ -113,7 +113,7 @@ function reduceTypecheckIntent({ ir, tc, diagnostics }: ReduceInput): TypecheckI
   const expected = mapEntries(tc.expectedByExpr, codeIndex);
   const inferred = mapEntries(tc.inferredByExpr, codeIndex);
   const diags: DiagEntry[] = (diagnostics ?? [])
-    .filter((d) => d.source === "typecheck")
+    .filter((d) => d.stage === "typecheck")
     .map((d) => {
       const span = d.span;
       const key = span ? `${span.start}|${span.end}|${span.file ?? ""}` : null;
