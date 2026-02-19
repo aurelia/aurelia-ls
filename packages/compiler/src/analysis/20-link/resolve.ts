@@ -380,9 +380,11 @@ function validateExpressionResources(
 
           // Check if registered
           if (!ctx.lookup.sem.resources.bindingBehaviors[ref.name]) {
-            reportDiagnostic(ctx.services.diagnostics, "aurelia/unknown-behavior", `Binding behavior '${ref.name}' not found.`, {
+            const hasGapInfo = ctx.lookup.hasGaps("binding-behavior", ref.name);
+            const gapQualifier = hasGapInfo ? " (analysis gaps exist for this resource)" : "";
+            reportDiagnostic(ctx.services.diagnostics, "aurelia/unknown-behavior", `Binding behavior '${ref.name}' not found${gapQualifier}.`, {
               span: ref.span,
-              data: { resourceKind: "binding-behavior", name: ref.name },
+              data: { resourceKind: "binding-behavior", name: ref.name, ...(hasGapInfo ? { confidence: "partial" as const } : {}) },
             });
           }
 
@@ -393,9 +395,11 @@ function validateExpressionResources(
       } else {
         // valueConverter
         if (!ctx.lookup.sem.resources.valueConverters[ref.name]) {
-          reportDiagnostic(ctx.services.diagnostics, "aurelia/unknown-converter", `Value converter '${ref.name}' not found.`, {
+          const hasGapInfo = ctx.lookup.hasGaps("value-converter", ref.name);
+          const gapQualifier = hasGapInfo ? " (analysis gaps exist for this resource)" : "";
+          reportDiagnostic(ctx.services.diagnostics, "aurelia/unknown-converter", `Value converter '${ref.name}' not found${gapQualifier}.`, {
             span: ref.span,
-            data: { resourceKind: "value-converter", name: ref.name },
+            data: { resourceKind: "value-converter", name: ref.name, ...(hasGapInfo ? { confidence: "partial" as const } : {}) },
           });
         }
       }
@@ -592,12 +596,14 @@ function validateUnknownElements(n: DOMNode, ctx: ResolverContext): void {
     const nodeSem = resolveNodeSem(n, ctx.lookup);
       if (nodeSem.kind === "element" && isMissingCustomElement(nodeSem)) {
         const existsInGraph = elementExistsInGraph(nodeSem.tag, ctx.graph);
+        const hasGapInfo = ctx.lookup.hasGaps("custom-element", nodeSem.tag);
+        const gapQualifier = hasGapInfo ? " (analysis gaps exist for this resource)" : "";
         const message = existsInGraph
-          ? `Custom element '<${nodeSem.tag}>' is not registered in this scope.`
-          : `Unknown custom element '<${nodeSem.tag}>'.`;
+          ? `Custom element '<${nodeSem.tag}>' is not registered in this scope${gapQualifier}.`
+          : `Unknown custom element '<${nodeSem.tag}>'${gapQualifier}.`;
         reportDiagnostic(ctx.services.diagnostics, "aurelia/unknown-element", message, {
           span: n.loc,
-          data: { resourceKind: "custom-element", name: nodeSem.tag },
+          data: { resourceKind: "custom-element", name: nodeSem.tag, ...(hasGapInfo ? { confidence: "partial" as const } : {}) },
         });
       }
   }
@@ -683,6 +689,8 @@ function linkPropertyBinding(ins: PropertyBindingIR, host: NodeSem, ctx: Resolve
       if (isUnknownCustomElement(host, ctx.graph)) {
         return pure(linked); // No diagnostic - root cause is element, not prop
       }
+      const hasHostGaps = host.kind === "element" && host.custom != null && ctx.lookup.hasGaps("custom-element", host.tag);
+      const gapQualifier = hasHostGaps ? " (element has analysis gaps)" : "";
       const bindable = {
         name: to,
         attribute: ins.to,
@@ -691,9 +699,9 @@ function linkPropertyBinding(ins: PropertyBindingIR, host: NodeSem, ctx: Resolve
           : {}),
       };
       const d = ctx.services.diagnostics.emit("aurelia/unknown-bindable", {
-        message: `Property target '${to}' not found on host${host.kind === "element" ? ` <${host.tag}>` : ""}.`,
+        message: `Property target '${to}' not found on host${host.kind === "element" ? ` <${host.tag}>` : ""}${gapQualifier}.`,
         span: ins.loc,
-        data: { bindable },
+        data: { bindable, ...(hasHostGaps ? { confidence: "partial" as const } : {}) },
       });
       return diag(d, withStub(linked, { diagnostic: d, span: ins.loc ?? undefined }));
     }
@@ -735,12 +743,15 @@ function linkAttributeBinding(ins: AttributeBindingIR, host: NodeSem, ctx: Resol
     if (isUnknownCustomElement(host, ctx.graph)) {
       return pure(linked);
     }
+    const hasHostGaps = host.kind === "element" && host.custom != null && ctx.lookup.hasGaps("custom-element", host.tag);
+    const gapQualifier = hasHostGaps ? " (element has analysis gaps)" : "";
     const d = ctx.services.diagnostics.emit("aurelia/unknown-attribute", {
-      message: `Attribute '${ins.attr}' could not be resolved to a property on host${host.kind === "element" ? ` <${host.tag}>` : ""}.`,
+      message: `Attribute '${ins.attr}' could not be resolved to a property on host${host.kind === "element" ? ` <${host.tag}>` : ""}${gapQualifier}.`,
       span: ins.loc,
       data: {
         resourceKind: "custom-attribute",
         name: ins.attr,
+        ...(hasHostGaps ? { confidence: "partial" as const } : {}),
       },
     });
     return diag(d, withStub(linked, { diagnostic: d, span: ins.loc ?? undefined }));
@@ -833,6 +844,8 @@ function linkSetProperty(ins: SetPropertyIR, host: NodeSem, ctx: ResolverContext
     if (isUnknownCustomElement(host, ctx.graph)) {
       return pure(linked);
     }
+    const hasHostGaps = host.kind === "element" && host.custom != null && ctx.lookup.hasGaps("custom-element", host.tag);
+    const gapQualifier = hasHostGaps ? " (element has analysis gaps)" : "";
     const bindable = {
       name: to,
       attribute: ins.to,
@@ -841,9 +854,9 @@ function linkSetProperty(ins: SetPropertyIR, host: NodeSem, ctx: ResolverContext
         : {}),
     };
     const d = ctx.services.diagnostics.emit("aurelia/unknown-bindable", {
-      message: `Property target '${to}' not found on host${host.kind === "element" ? ` <${host.tag}>` : ""}.`,
+      message: `Property target '${to}' not found on host${host.kind === "element" ? ` <${host.tag}>` : ""}${gapQualifier}.`,
       span: ins.loc,
-      data: { bindable },
+      data: { bindable, ...(hasHostGaps ? { confidence: "partial" as const } : {}) },
     });
     return diag(d, withStub(linked, { diagnostic: d, span: ins.loc ?? undefined }));
   }
@@ -867,9 +880,11 @@ function linkHydrateAttribute(ins: HydrateAttributeIR, host: NodeSem, ctx: Resol
   const res = resolveAttrResRef(ctx, ins.res);
   if (!res) {
     const name = ins.alias ?? ins.res;
-    reportDiagnostic(ctx.services.diagnostics, "aurelia/unknown-attribute", `Custom attribute '${name}' is not registered in this scope.`, {
+    const hasGapInfo = ctx.lookup.hasGaps("custom-attribute", name);
+    const gapQualifier = hasGapInfo ? " (analysis gaps exist for this resource)" : "";
+    reportDiagnostic(ctx.services.diagnostics, "aurelia/unknown-attribute", `Custom attribute '${name}' is not registered in this scope${gapQualifier}.`, {
       span: ins.loc,
-      data: { resourceKind: "custom-attribute", name },
+      data: { resourceKind: "custom-attribute", name, ...(hasGapInfo ? { confidence: "partial" as const } : {}) },
     });
   }
   const props = ins.props.map((p) => linkAttributeBindable(p, res));

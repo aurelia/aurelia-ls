@@ -102,12 +102,15 @@ export function resolveControllerSem(
 
   // 3. Unknown controller - return stub + diagnostic
   ctx.services.debug.link("controller.unknown", { name: res });
+  const hasGapInfo = lookup.hasGaps("template-controller", res);
+  const gapQualifier = hasGapInfo ? " (analysis gaps exist for this resource)" : "";
   const diagnostic = emitter.emit("aurelia/unknown-controller", {
-    message: `Unknown template controller '${res}'.`,
+    message: `Unknown template controller '${res}'${gapQualifier}.`,
     span,
     data: {
       resourceKind: "template-controller",
       name: res,
+      ...(hasGapInfo ? { confidence: "partial" as const } : {}),
     },
   });
 
