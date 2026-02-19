@@ -797,8 +797,10 @@ describe("R7: hover confidence from degradation (gap injection)", () => {
     const hover = query.hover(pos);
     expect(hover).not.toBeNull();
 
-    // R7: confidence is populated from degradation data
+    // R12: confidence derived from per-resource catalog gaps
     expect(hover?.confidence).toBe("partial");
+    // R12: confidenceReason names the gap kind — verifiable, not just present
+    expect(hover?.confidenceReason).toContain("dynamic-value");
 
     // Content still renders normally — provenance and card structure preserved
     expect(hover?.contents ?? "").toContain("(custom element) summary-panel");
@@ -851,5 +853,95 @@ describe("R7: hover confidence from degradation (gap injection)", () => {
     expect(hover).not.toBeNull();
     // Non-affected resource should NOT have confidence set
     expect(hover?.confidence).toBeUndefined();
+    expect(hover?.confidenceReason).toBeUndefined();
+  });
+
+  it("confidence derives from catalog gaps, not template degradation (R12 boundary)", async () => {
+    const gapHarness = await createWorkspaceHarness({
+      fixtureId: asFixtureId("workspace-contract"),
+      openTemplates: "none",
+    });
+    const engine = gapHarness.workspace as SemanticWorkspaceEngine;
+
+    // Inject catalog gaps for summary-panel but do NOT add an unresolved binding.
+    // Under R7 (degradation-based): no unresolved binding → no gap-qualified
+    // diagnostics → affectedResources empty → confidence undefined.
+    // Under R12 (catalog-gap-based): catalog gaps exist → confidence "partial".
+    engine.projectIndex.applyThirdPartyOverlay({
+      resources: {},
+      gaps: [
+        {
+          what: "bindables for summary-panel",
+          why: { kind: "dynamic-value" as any, expression: "test" },
+          suggestion: "Add explicit bindable declarations",
+          resource: { kind: "custom-element", name: "summary-panel" },
+        },
+      ],
+    });
+    engine.setResourceScope(null);
+
+    const uri = gapHarness.openTemplate("src/my-app.html");
+    const text = gapHarness.readText(uri);
+    if (!text) throw new Error("Expected template text");
+    // No template modification — all bindings resolve. Degradation has no
+    // affected resources because no binding encounters a gap-annotated element
+    // with an unresolved attribute.
+
+    const query = gapHarness.workspace.query(uri);
+    const pos = findPosition(text, "<summary-panel", 1);
+    const hover = query.hover(pos);
+    expect(hover).not.toBeNull();
+
+    // R12: confidence derived from catalog gaps — present even without degradation
+    expect(hover?.confidence).toBe("partial");
+    expect(hover?.confidenceReason).toContain("dynamic-value");
+  });
+
+  it("per-resource confidence differentiates within the same workspace (Pattern AC/AE)", async () => {
+    const gapHarness = await createWorkspaceHarness({
+      fixtureId: asFixtureId("workspace-contract"),
+      openTemplates: "none",
+    });
+    const engine = gapHarness.workspace as SemanticWorkspaceEngine;
+
+    // Inject gaps for summary-panel only
+    engine.projectIndex.applyThirdPartyOverlay({
+      resources: {},
+      gaps: [
+        {
+          what: "bindables for summary-panel",
+          why: { kind: "dynamic-value" as any, expression: "test" },
+          suggestion: "Add explicit bindable declarations",
+          resource: { kind: "custom-element", name: "summary-panel" },
+        },
+      ],
+    });
+    engine.setResourceScope(null);
+
+    const uri = gapHarness.openTemplate("src/my-app.html");
+    const originalText = gapHarness.readText(uri);
+    if (!originalText) {
+      throw new Error("Expected template text");
+    }
+    const text = originalText.replace(
+      `on-refresh.call="refreshStats()">`,
+      `on-refresh.call="refreshStats()" gap-probe.bind="x">`,
+    );
+    engine.update(uri, text);
+
+    const query = gapHarness.workspace.query(uri);
+
+    // Gapped resource: summary-panel has reduced confidence
+    const gappedPos = findPosition(text, "<summary-panel", 1);
+    const gappedHover = query.hover(gappedPos);
+    expect(gappedHover?.confidence).toBe("partial");
+
+    // Clean resource: convention-widget has no gaps — confidence absent (high)
+    const cleanPos = findPosition(text, "<convention-widget", 1);
+    const cleanHover = query.hover(cleanPos);
+    expect(cleanHover?.confidence).toBeUndefined();
+
+    // Two resources, same catalog, different per-resource confidence
+    expect(gappedHover?.confidence).not.toBe(cleanHover?.confidence);
   });
 });

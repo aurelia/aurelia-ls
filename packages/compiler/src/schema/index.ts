@@ -15,6 +15,9 @@ export * from "./resource-graph.js";
 // Resource catalog helpers
 export * from "./catalog.js";
 
+// Per-resource confidence derivation from gap state
+export * from "./confidence.js";
+
 // Symbol id policy (shared across snapshot and workspace surfaces)
 export * from "./symbol-id.js";
 

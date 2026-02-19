@@ -14,6 +14,7 @@ export {
   unwrapSourced,
   stripSourcedNode,
   sanitizeSourcedSnapshotValue,
+  isConservativeGap,
 } from "../schema/index.js";
 export type {
   ApiSurfaceBindable,

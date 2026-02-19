@@ -67,10 +67,12 @@ export interface WorkspaceLocation {
 export interface WorkspaceHover {
   readonly contents: string;
   readonly location?: WorkspaceLocation;
-  // Analysis confidence (exact/high/partial/low/manual), aligned with discovery
-  // analysis confidence. This is distinct from catalog confidence
-  // (complete/high/partial/conservative).
+  // Per-resource confidence derived from catalog gap state and provenance origin.
+  // Only set when confidence is reduced (partial/low). Absent means high/exact.
   readonly confidence?: "exact" | "high" | "partial" | "low" | "manual";
+  // Human-readable explanation of the confidence level (gap count, kinds, basis).
+  // Only set when confidence is set.
+  readonly confidenceReason?: string;
 }
 
 export interface WorkspaceCompletionItem {

@@ -14,6 +14,7 @@ import {
   buildResourceGraphFromSemantics,
   asDocumentUri,
   normalizePathForId,
+  isConservativeGap,
   createDiagnosticEmitter,
   diagnosticsByCategory,
   diagnosticsByCategoryFuture,
@@ -864,26 +865,3 @@ function catalogConfidenceFromAnalysisGaps(gaps: AnalysisGap[]): CatalogConfiden
   return "partial";
 }
 
-function isConservativeGap(kind: AnalysisGap["why"]["kind"]): boolean {
-  switch (kind) {
-    case "package-not-found":
-    case "invalid-package-json":
-    case "missing-package-field":
-    case "entry-point-not-found":
-    case "no-entry-points":
-    case "complex-exports":
-    case "workspace-no-source-dir":
-    case "workspace-entry-not-found":
-    case "unresolved-import":
-    case "circular-import":
-    case "external-package":
-    case "unsupported-format":
-    case "no-source":
-    case "minified-code":
-    case "parse-error":
-    case "analysis-failed":
-      return true;
-    default:
-      return false;
-  }
-}

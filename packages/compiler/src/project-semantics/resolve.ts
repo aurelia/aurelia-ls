@@ -21,6 +21,7 @@ import type {
 import {
   asDocumentUri,
   normalizePathForId,
+  isConservativeGap,
   NOOP_TRACE,
   debug,
 } from './compiler.js';
@@ -513,32 +514,6 @@ function catalogConfidenceFromGaps(gaps: AnalysisGap[]): CatalogConfidence {
   return "partial";
 }
 
-function isConservativeGap(kind: AnalysisGap["why"]["kind"]): boolean {
-  switch (kind) {
-    // Package structure failures: analysis could not proceed reliably.
-    case "package-not-found":
-    case "invalid-package-json":
-    case "missing-package-field":
-    case "entry-point-not-found":
-    case "no-entry-points":
-    case "complex-exports":
-    case "workspace-no-source-dir":
-    case "workspace-entry-not-found":
-    // Import/resolution failures.
-    case "unresolved-import":
-    case "circular-import":
-    case "external-package":
-    // Format/parse failures.
-    case "unsupported-format":
-    case "no-source":
-    case "minified-code":
-    case "parse-error":
-    case "analysis-failed":
-      return true;
-    default:
-      return false;
-  }
-}
 
 /**
  * Extract the file path from registration evidence.

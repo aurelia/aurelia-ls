@@ -56,6 +56,8 @@ export {
   unwrapSourced,
   stripSourcedNode,
   sanitizeSourcedSnapshotValue,
+  deriveResourceConfidence,
+  isConservativeGap,
 } from "./schema/index.js";
 export type {
   SourceLocation,
@@ -73,6 +75,7 @@ export type {
   ResourceCatalog,
   CatalogGap,
   CatalogConfidence,
+  ResourceConfidenceResult,
   ProjectSnapshot,
   ProjectSnapshotOptions,
   SemanticsSnapshot,

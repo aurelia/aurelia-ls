@@ -19,6 +19,7 @@ import {
   stableHash,
   toSourceSpan,
   unwrapSourced,
+  deriveResourceConfidence,
   type DiagnosticDataRecord,
   type DiagnosticSpec,
   type DiagnosticSurface,
@@ -733,8 +734,14 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     // Extract provenance origin from Sourced<T> on the resource name
     const provenanceLine = formatProvenanceOrigin(entry.def.name);
 
-    // Check degradation for confidence
-    const confidence = deriveHoverConfidence(compilation, resource.name);
+    // Derive per-resource confidence from catalog gap state
+    const catalog = this.#projectIndex.currentCatalog();
+    const gapKey = `${entry.def.kind}:${resource.name}`;
+    const gaps = catalog.gapsByResource?.[gapKey] ?? [];
+    const derived = deriveResourceConfidence(gaps, entry.def.name.origin);
+    // Only surface confidence when it indicates reduced trust
+    const confidence = derived.level === "exact" || derived.level === "high" ? undefined : derived.level;
+    const confidenceReason = confidence ? derived.reason : undefined;
 
     // Augment content with provenance
     let contents = baseResult.contents;
@@ -745,7 +752,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     return {
       ...baseResult,
       contents,
-      ...(confidence ? { confidence } : {}),
+      ...(confidence ? { confidence, confidenceReason } : {}),
     };
   }
 
@@ -1640,15 +1647,6 @@ function formatProvenanceOrigin(name: Sourced<string>): string | null {
   }
 }
 
-function deriveHoverConfidence(
-  compilation: TemplateCompilation,
-  resourceName: string,
-): WorkspaceHover["confidence"] | undefined {
-  const degradation = compilation.degradation;
-  if (!degradation?.hasGaps) return undefined;
-  const affected = degradation.affectedResources.some((r) => r.name === resourceName);
-  return affected ? "partial" : undefined;
-}
 
 function augmentHoverContent(contents: string, provenanceLine: string): string {
   // Insert provenance before the overlay command link (always last in resource cards)
