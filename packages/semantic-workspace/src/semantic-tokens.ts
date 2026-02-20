@@ -13,7 +13,11 @@ import type {
   TemplateSyntaxRegistry,
 } from "@aurelia-ls/compiler";
 import { analyzeAttributeName, createAttributeParserFromRegistry, spanContainsOffset, spanLength } from "@aurelia-ls/compiler";
-import type { WorkspaceToken } from "./types.js";
+import {
+  WORKSPACE_TOKEN_MODIFIER_GAP_AWARE,
+  WORKSPACE_TOKEN_MODIFIER_GAP_CONSERVATIVE,
+  type WorkspaceToken,
+} from "./types.js";
 
 const AURELIA_BUILTINS = new Set([
   "$index",
@@ -62,15 +66,30 @@ type ExpressionAst = {
   optional?: boolean;
 };
 
+export type TokenResourceKind =
+  | "custom-element"
+  | "custom-attribute"
+  | "template-controller"
+  | "value-converter"
+  | "binding-behavior";
+
+export type TokenConfidenceLevel = "exact" | "high" | "partial" | "low";
+
+export interface CollectSemanticTokensOptions {
+  readonly resourceConfidence?: (resource: { kind: TokenResourceKind; name: string }) => TokenConfidenceLevel | null | undefined;
+}
+
 export function collectSemanticTokens(
   text: string,
   compilation: TemplateCompilation,
   syntax: TemplateSyntaxRegistry,
   attrParser?: AttributeParser,
+  options?: CollectSemanticTokensOptions,
 ): WorkspaceToken[] {
   const templates = compilation.linked.templates;
   if (!templates.length) return [];
   const parser = attrParser ?? createAttributeParserFromRegistry(syntax);
+  const resolveResourceModifiers = createResourceModifierResolver(options?.resourceConfidence);
 
   const { attrIndex, elementIndex } = buildTemplateIndexes(templates);
   const elementTokens: WorkspaceToken[] = [];
@@ -78,11 +97,11 @@ export function collectSemanticTokens(
   const delimiterTokens: WorkspaceToken[] = [];
   for (const tmpl of templates) {
     const nodeMap = tmpl.dom ? buildNodeMap(tmpl.dom) : new Map<string, DOMNode>();
-    elementTokens.push(...extractElementTokens(tmpl.rows, nodeMap));
-    commandTokens.push(...extractBindingCommandTokens(tmpl.rows, syntax, parser, attrIndex, elementIndex));
+    elementTokens.push(...extractElementTokens(tmpl.rows, nodeMap, resolveResourceModifiers));
+    commandTokens.push(...extractBindingCommandTokens(tmpl.rows, syntax, parser, attrIndex, elementIndex, resolveResourceModifiers));
     delimiterTokens.push(...extractInterpolationDelimiterTokens(tmpl.rows));
   }
-  const exprTokens = extractExpressionTokens(compilation.exprTable ?? [], compilation.exprSpans ?? new Map());
+  const exprTokens = extractExpressionTokens(compilation.exprTable ?? [], compilation.exprSpans ?? new Map(), resolveResourceModifiers);
   const metaTokens = extractMetaElementTokens(templates[0]?.templateMeta);
 
   const all = [...elementTokens, ...exprTokens, ...commandTokens, ...delimiterTokens, ...metaTokens];
@@ -129,6 +148,34 @@ function buildNodeMap(root: DOMNode): Map<string, DOMNode> {
   }
   walk(root);
   return map;
+}
+
+type ResourceModifierResolver = (kind: TokenResourceKind, name: string) => readonly string[] | undefined;
+
+function createResourceModifierResolver(
+  resolveConfidence: CollectSemanticTokensOptions["resourceConfidence"],
+): ResourceModifierResolver {
+  if (!resolveConfidence) return () => undefined;
+  return (kind, name) => {
+    const confidence = resolveConfidence({ kind, name });
+    return gapModifiersForConfidence(confidence);
+  };
+}
+
+function gapModifiersForConfidence(
+  confidence: TokenConfidenceLevel | null | undefined,
+): readonly string[] | undefined {
+  switch (confidence) {
+    case "partial":
+      return [WORKSPACE_TOKEN_MODIFIER_GAP_AWARE];
+    case "low":
+      return [
+        WORKSPACE_TOKEN_MODIFIER_GAP_AWARE,
+        WORKSPACE_TOKEN_MODIFIER_GAP_CONSERVATIVE,
+      ];
+    default:
+      return undefined;
+  }
 }
 
 type AttrIndexEntry = { attr: Attr; loc: SourceSpan; nameLoc: SourceSpan | null };
@@ -201,6 +248,7 @@ function findElementByLoc(elements: ElementNode[], loc: SourceSpan): ElementNode
 function extractElementTokens(
   rows: LinkedRow[],
   nodeMap: Map<string, DOMNode>,
+  resolveResourceModifiers: ResourceModifierResolver,
 ): WorkspaceToken[] {
   const tokens: WorkspaceToken[] = [];
 
@@ -228,15 +276,18 @@ function extractElementTokens(
     }
 
     if (!nodeSem.custom) continue;
+    const gapModifiers = resolveResourceModifiers("custom-element", nodeSem.custom.def.name);
     if (element.tagLoc) {
       tokens.push({
         type: "aureliaElement",
+        ...(gapModifiers ? { modifiers: gapModifiers } : {}),
         span: element.tagLoc,
       });
     }
     if (element.closeTagLoc) {
       tokens.push({
         type: "aureliaElement",
+        ...(gapModifiers ? { modifiers: gapModifiers } : {}),
         span: element.closeTagLoc,
       });
     }
@@ -248,12 +299,13 @@ function extractElementTokens(
 function extractExpressionTokens(
   exprTable: readonly ExprTableEntry[],
   exprSpans: ReadonlyMap<string, SourceSpan>,
+  resolveResourceModifiers: ResourceModifierResolver,
 ): WorkspaceToken[] {
   const tokens: WorkspaceToken[] = [];
   for (const entry of exprTable) {
     const exprSpan = exprSpans.get(entry.id);
     if (!exprSpan) continue;
-    walkExpression(entry.ast as ExpressionAst, tokens);
+    walkExpression(entry.ast as ExpressionAst, tokens, resolveResourceModifiers);
   }
   return tokens;
 }
@@ -261,6 +313,7 @@ function extractExpressionTokens(
 function walkExpression(
   node: ExpressionAst | null | undefined,
   tokens: WorkspaceToken[],
+  resolveResourceModifiers: ResourceModifierResolver,
 ): void {
   if (!node || !node.$kind) return;
 
@@ -278,7 +331,7 @@ function walkExpression(
     }
 
     case "AccessMember": {
-      walkExpression(node.object, tokens);
+      walkExpression(node.object, tokens, resolveResourceModifiers);
       if (node.name?.span) {
         tokens.push({
           type: "property",
@@ -298,13 +351,13 @@ function walkExpression(
         });
       }
       for (const arg of node.args ?? []) {
-        walkExpression(arg, tokens);
+        walkExpression(arg, tokens, resolveResourceModifiers);
       }
       break;
     }
 
     case "CallMember": {
-      walkExpression(node.object, tokens);
+      walkExpression(node.object, tokens, resolveResourceModifiers);
       if (node.name?.span) {
         tokens.push({
           type: "function",
@@ -312,7 +365,7 @@ function walkExpression(
         });
       }
       for (const arg of node.args ?? []) {
-        walkExpression(arg, tokens);
+        walkExpression(arg, tokens, resolveResourceModifiers);
       }
       break;
     }
@@ -342,95 +395,99 @@ function walkExpression(
     }
 
     case "Conditional": {
-      walkExpression(node.condition, tokens);
-      walkExpression(node.yes, tokens);
-      walkExpression(node.no, tokens);
+      walkExpression(node.condition, tokens, resolveResourceModifiers);
+      walkExpression(node.yes, tokens, resolveResourceModifiers);
+      walkExpression(node.no, tokens, resolveResourceModifiers);
       break;
     }
 
     case "Binary": {
-      walkExpression(node.left, tokens);
-      walkExpression(node.right, tokens);
+      walkExpression(node.left, tokens, resolveResourceModifiers);
+      walkExpression(node.right, tokens, resolveResourceModifiers);
       break;
     }
 
     case "Unary": {
-      walkExpression(node.expression, tokens);
+      walkExpression(node.expression, tokens, resolveResourceModifiers);
       break;
     }
 
     case "Assign": {
-      walkExpression(node.target, tokens);
-      walkExpression(node.value, tokens);
+      walkExpression(node.target, tokens, resolveResourceModifiers);
+      walkExpression(node.value, tokens, resolveResourceModifiers);
       break;
     }
 
     case "AccessKeyed": {
-      walkExpression(node.object, tokens);
-      walkExpression(node.key, tokens);
+      walkExpression(node.object, tokens, resolveResourceModifiers);
+      walkExpression(node.key, tokens, resolveResourceModifiers);
       break;
     }
 
     case "CallFunction": {
-      walkExpression(node.func, tokens);
+      walkExpression(node.func, tokens, resolveResourceModifiers);
       for (const arg of node.args ?? []) {
-        walkExpression(arg, tokens);
+        walkExpression(arg, tokens, resolveResourceModifiers);
       }
       break;
     }
 
     case "ValueConverter": {
-      walkExpression(node.expression, tokens);
+      walkExpression(node.expression, tokens, resolveResourceModifiers);
       if (node.name?.span) {
+        const gapModifiers = resolveResourceModifiers("value-converter", node.name.name);
         tokens.push({
           type: "aureliaConverter",
+          ...(gapModifiers ? { modifiers: gapModifiers } : {}),
           span: node.name.span,
         });
       }
       for (const arg of node.args ?? []) {
-        walkExpression(arg, tokens);
+        walkExpression(arg, tokens, resolveResourceModifiers);
       }
       break;
     }
 
     case "BindingBehavior": {
-      walkExpression(node.expression, tokens);
+      walkExpression(node.expression, tokens, resolveResourceModifiers);
       if (node.name?.span) {
+        const gapModifiers = resolveResourceModifiers("binding-behavior", node.name.name);
         tokens.push({
           type: "aureliaBehavior",
+          ...(gapModifiers ? { modifiers: gapModifiers } : {}),
           span: node.name.span,
         });
       }
       for (const arg of node.args ?? []) {
-        walkExpression(arg, tokens);
+        walkExpression(arg, tokens, resolveResourceModifiers);
       }
       break;
     }
 
     case "ArrayLiteral": {
       for (const el of node.elements ?? []) {
-        walkExpression(el, tokens);
+        walkExpression(el, tokens, resolveResourceModifiers);
       }
       break;
     }
 
     case "ObjectLiteral": {
       for (const val of node.values ?? []) {
-        walkExpression(val, tokens);
+        walkExpression(val, tokens, resolveResourceModifiers);
       }
       break;
     }
 
     case "Template": {
       for (const expr of node.expressions ?? []) {
-        walkExpression(expr, tokens);
+        walkExpression(expr, tokens, resolveResourceModifiers);
       }
       break;
     }
 
     case "Interpolation": {
       for (const expr of node.expressions ?? []) {
-        walkExpression(expr, tokens);
+        walkExpression(expr, tokens, resolveResourceModifiers);
       }
       break;
     }
@@ -446,7 +503,7 @@ function walkExpression(
       } else if (decl) {
         walkBindingPattern(decl, tokens);
       }
-      walkExpression(node.iterable, tokens);
+      walkExpression(node.iterable, tokens, resolveResourceModifiers);
       break;
     }
 
@@ -454,27 +511,27 @@ function walkExpression(
       for (const param of node.args ?? []) {
         walkBindingPattern(param, tokens);
       }
-      walkExpression(node.body, tokens);
+      walkExpression(node.body, tokens, resolveResourceModifiers);
       break;
     }
 
     case "Paren": {
-      walkExpression(node.expression, tokens);
+      walkExpression(node.expression, tokens, resolveResourceModifiers);
       break;
     }
 
     case "TaggedTemplate": {
-      walkExpression(node.func, tokens);
+      walkExpression(node.func, tokens, resolveResourceModifiers);
       for (const expr of node.expressions ?? []) {
-        walkExpression(expr, tokens);
+        walkExpression(expr, tokens, resolveResourceModifiers);
       }
       break;
     }
 
     case "New": {
-      walkExpression(node.func, tokens);
+      walkExpression(node.func, tokens, resolveResourceModifiers);
       for (const arg of node.args ?? []) {
-        walkExpression(arg, tokens);
+        walkExpression(arg, tokens, resolveResourceModifiers);
       }
       break;
     }
@@ -551,11 +608,12 @@ function extractBindingCommandTokens(
   parser: AttributeParser,
   attrIndex: AttrIndexEntry[],
   elementIndex: ElementNode[],
+  resolveResourceModifiers: ResourceModifierResolver,
 ): WorkspaceToken[] {
   const tokens: WorkspaceToken[] = [];
   for (const row of rows) {
     for (const ins of row.instructions) {
-      extractBindingTokensFromIR(ins, tokens, syntax, parser, attrIndex, elementIndex);
+      extractBindingTokensFromIR(ins, tokens, syntax, parser, attrIndex, elementIndex, resolveResourceModifiers);
     }
   }
   return tokens;
@@ -568,6 +626,7 @@ function extractBindingTokensFromIR(
   parser: AttributeParser,
   attrIndex: AttrIndexEntry[],
   elementIndex: ElementNode[],
+  resolveResourceModifiers: ResourceModifierResolver,
 ): void {
   const kind = instructionKind(ins);
   if (!kind) return;
@@ -576,7 +635,7 @@ function extractBindingTokensFromIR(
     const nested = "instructions" in ins ? ins.instructions : undefined;
     if (Array.isArray(nested)) {
       for (const letIns of nested) {
-        extractBindingTokensFromIR(letIns as InstructionLike, tokens, syntax, parser, attrIndex, elementIndex);
+        extractBindingTokensFromIR(letIns as InstructionLike, tokens, syntax, parser, attrIndex, elementIndex, resolveResourceModifiers);
       }
     }
     return;
@@ -597,7 +656,7 @@ function extractBindingTokensFromIR(
     const props = "props" in ins ? ins.props : undefined;
     if (Array.isArray(props)) {
       for (const prop of props) {
-        extractBindingTokensFromIR(prop as InstructionLike, tokens, syntax, parser, attrIndex, elementIndex);
+        extractBindingTokensFromIR(prop as InstructionLike, tokens, syntax, parser, attrIndex, elementIndex, resolveResourceModifiers);
       }
     }
     return;
@@ -618,9 +677,11 @@ function extractBindingTokensFromIR(
   if (kind === "hydrateTemplateController") {
     const res = instructionResName(hasRes(ins) ? ins.res : null);
     if (!res) return;
+    const gapModifiers = resolveResourceModifiers("template-controller", res);
     if (targetSpan) {
       tokens.push({
         type: "aureliaController",
+        ...(gapModifiers ? { modifiers: gapModifiers } : {}),
         span: sliceSpan(nameStart + targetSpan.start, nameStart + targetSpan.end, loc),
       });
     }
@@ -633,7 +694,7 @@ function extractBindingTokensFromIR(
     if (nestedRows) {
       for (const row of nestedRows) {
         for (const nestedIns of row.instructions) {
-          extractBindingTokensFromIR(nestedIns as InstructionLike, tokens, syntax, parser, attrIndex, elementIndex);
+          extractBindingTokensFromIR(nestedIns as InstructionLike, tokens, syntax, parser, attrIndex, elementIndex, resolveResourceModifiers);
         }
       }
     }
@@ -643,6 +704,7 @@ function extractBindingTokensFromIR(
   if (kind === "hydrateAttribute") {
     const res = instructionResName(hasRes(ins) ? ins.res : null);
     if (!res) return;
+    const gapModifiers = resolveResourceModifiers("custom-attribute", res);
     if (commandSpan) {
       emitCommandToken(nameStart + commandSpan.start, commandSpan.end - commandSpan.start, loc, tokens);
     }
@@ -650,6 +712,7 @@ function extractBindingTokensFromIR(
       const start = nameStart + targetSpan.start;
       tokens.push({
         type: "aureliaAttribute",
+        ...(gapModifiers ? { modifiers: gapModifiers } : {}),
         span: sliceSpan(start, start + (targetSpan.end - targetSpan.start), loc),
       });
     }
@@ -680,9 +743,17 @@ function extractBindingTokensFromIR(
   if (kind === "propertyBinding" || kind === "attributeBinding" ||
       kind === "stylePropertyBinding" || kind === "setProperty") {
     if (isElementBindable) {
+      const target = "target" in ins ? ins.target : null;
+      const elementName = target && typeof target === "object" && "element" in target
+        ? (target as { element?: { def?: { name?: string } } }).element?.def?.name
+        : undefined;
+      const gapModifiers = elementName
+        ? resolveResourceModifiers("custom-element", elementName)
+        : undefined;
       if (targetSpan) {
         tokens.push({
           type: "aureliaBindable",
+          ...(gapModifiers ? { modifiers: gapModifiers } : {}),
           span: sliceSpan(nameStart + targetSpan.start, nameStart + targetSpan.end, loc),
         });
       }

@@ -92,6 +92,9 @@ export interface WorkspaceToken {
   readonly span: SourceSpan;
 }
 
+export const WORKSPACE_TOKEN_MODIFIER_GAP_AWARE = "aureliaGapAware" as const;
+export const WORKSPACE_TOKEN_MODIFIER_GAP_CONSERVATIVE = "aureliaGapConservative" as const;
+
 export type WorkspaceDiagnostic = ResolvedDiagnostic;
 export type WorkspaceDiagnostics = RoutedDiagnostics;
 

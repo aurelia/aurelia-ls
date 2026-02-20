@@ -1294,7 +1294,13 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     const text = this.lookupText(uri);
     if (!text) return [];
     const syntax = this.#attributeSyntaxContext();
-    return collectSemanticTokens(text, compilation, syntax.syntax, syntax.parser);
+    const catalog = this.#projectIndex.currentCatalog();
+    return collectSemanticTokens(text, compilation, syntax.syntax, syntax.parser, {
+      resourceConfidence: ({ kind, name }) => {
+        const gaps = catalog.gapsByResource?.[`${kind}:${name}`] ?? [];
+        return deriveResourceConfidence(gaps).level;
+      },
+    });
   }
 }
 
@@ -1912,4 +1918,3 @@ function filterDiagnosticsByUri(
     return !diag.span;
   });
 }
-

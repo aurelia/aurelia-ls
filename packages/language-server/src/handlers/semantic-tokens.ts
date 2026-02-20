@@ -11,7 +11,11 @@ import type {
 } from "vscode-languageserver/node.js";
 import { canonicalDocumentUri } from "@aurelia-ls/compiler";
 import type { ServerContext } from "../context.js";
-import type { WorkspaceToken } from "@aurelia-ls/semantic-workspace";
+import {
+  WORKSPACE_TOKEN_MODIFIER_GAP_AWARE,
+  WORKSPACE_TOKEN_MODIFIER_GAP_CONSERVATIVE,
+  type WorkspaceToken,
+} from "@aurelia-ls/semantic-workspace";
 
 export const TOKEN_TYPES = [
   "aureliaElement",
@@ -37,6 +41,8 @@ export const TOKEN_MODIFIERS = [
   "defaultLibrary",
   "deprecated",
   "readonly",
+  WORKSPACE_TOKEN_MODIFIER_GAP_AWARE,
+  WORKSPACE_TOKEN_MODIFIER_GAP_CONSERVATIVE,
 ] as const;
 
 export const SEMANTIC_TOKENS_LEGEND: SemanticTokensLegend = {
