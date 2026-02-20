@@ -3,6 +3,7 @@ import type { LanguageClientOptions, ServerOptions, Middleware } from "vscode-la
 import { type ClientLogger } from "./log.js";
 import { getVscodeApi, type VscodeApi } from "./vscode-api.js";
 import type { ExtensionContext, MarkdownString } from "vscode";
+import { applyDiagnosticsUxAugmentation } from "./features/diagnostics/taxonomy.js";
 
 async function fileExists(vscode: VscodeApi, p: string): Promise<boolean> {
   try {
@@ -39,7 +40,11 @@ async function resolveServerModule(context: ExtensionContext, logger: ClientLogg
   throw new Error(msg);
 }
 
-function createMiddleware(vscode: VscodeApi): Middleware {
+type DiagnosticsUxState = {
+  enabled: boolean;
+};
+
+function createMiddleware(vscode: VscodeApi, diagnosticsUx: DiagnosticsUxState): Middleware {
   return {
     provideHover: async (document, position, token, next) => {
       const hover = await next(document, position, token);
@@ -54,6 +59,12 @@ function createMiddleware(vscode: VscodeApi): Middleware {
       });
       return hover;
     },
+    handleDiagnostics: (uri, diagnostics, next) => {
+      if (diagnosticsUx.enabled) {
+        applyDiagnosticsUxAugmentation(diagnostics);
+      }
+      next(uri, diagnostics);
+    },
   };
 }
 
@@ -62,6 +73,7 @@ export class AureliaLanguageClient {
   #logger: ClientLogger;
   #vscode: VscodeApi;
   #serverEnv: Record<string, string> | null = null;
+  #diagnosticsUx: DiagnosticsUxState = { enabled: false };
 
   constructor(logger: ClientLogger, vscode: VscodeApi = getVscodeApi()) {
     this.#logger = logger;
@@ -70,6 +82,10 @@ export class AureliaLanguageClient {
 
   setServerEnv(env: Record<string, string> | null): void {
     this.#serverEnv = env;
+  }
+
+  setDiagnosticsUxEnabled(enabled: boolean): void {
+    this.#diagnosticsUx.enabled = enabled;
   }
 
   async start(context: ExtensionContext, options: { serverEnv?: Record<string, string> } = {}): Promise<LanguageClient> {
@@ -104,7 +120,7 @@ export class AureliaLanguageClient {
         { scheme: "untitled", language: "html" },
       ],
       synchronize: { fileEvents },
-      middleware: createMiddleware(this.#vscode),
+      middleware: createMiddleware(this.#vscode, this.#diagnosticsUx),
     };
 
     const client = new LanguageClient("aurelia-ls", "Aurelia Language Server", serverOptions, clientOptions);
