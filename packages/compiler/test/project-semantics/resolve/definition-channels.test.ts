@@ -75,7 +75,9 @@ describe("Project semantics definition channels", () => {
     expect(convergenceFiles).toEqual([
       "/external/runtime-debounce.ts",
       "/workspace/src/local-debounce.ts",
+      undefined,
     ]);
+    expect(convergence!.candidates.some((candidate) => candidate.sourceKind === "builtin")).toBe(true);
     expect(
       result.diagnostics.some((diagnostic) => diagnostic.code === "aurelia/project/definition-convergence"),
     ).toBe(true);
@@ -103,4 +105,3 @@ describe("Project semantics definition channels", () => {
     expect(convergenceFingerprint(reverse)).toEqual(convergenceFingerprint(forward));
   });
 });
-

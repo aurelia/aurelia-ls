@@ -16,7 +16,11 @@ import {
   type Sourced,
 } from "../../../src/index.js";
 import { buildSemanticsArtifacts } from "../../../src/project-semantics/assemble/build.js";
-import { buildCustomElementDef, buildBindableDefs } from "../../../src/project-semantics/assemble/resource-def.js";
+import {
+  buildCustomElementDef,
+  buildBindableDefs,
+  buildTemplateControllerDef,
+} from "../../../src/project-semantics/assemble/resource-def.js";
 import { sourcedKnown, sourcedUnknown, unwrapSourced } from "../../../src/project-semantics/assemble/sourced.js";
 import {
   mergeResourceDefinitionCandidates,
@@ -376,5 +380,52 @@ describe("R-SO: overlay resources carry config origin", () => {
     // Builtin also gets "exact"
     const builtinResult = deriveResourceConfidence([], "builtin");
     expect(builtinResult.level).toBe("exact");
+  });
+});
+
+// =============================================================================
+// R-BC1: builtin enrollment + merge integrity
+// =============================================================================
+
+describe("R-BC1: builtin convergence integrity", () => {
+  it("preserves builtin controller semantics for repeat collisions while keeping analysis fields", () => {
+    const file = normalizePathForId("/repo/repeat.ts");
+    const analysisRepeat = buildTemplateControllerDef({
+      name: "repeat",
+      className: "Repeat",
+      file,
+      bindables: buildBindableDefs(
+        [
+          { name: "items", mode: "fromView" },
+          { name: "tracked", mode: "toView" },
+        ],
+        file,
+      ),
+    });
+
+    const result = buildSemanticsArtifacts([analysisRepeat]);
+    const repeat = result.semantics.controllers.repeat;
+
+    expect(repeat).toBeDefined();
+    expect(repeat.semantics?.trigger).toEqual({ kind: "iterator", prop: "items", command: "for" });
+    expect(repeat.semantics?.injects?.contextuals).toContain("$previous");
+    expect(unwrapSourced(repeat.bindables.items?.mode)).toBe("fromView");
+    expect(repeat.bindables.tracked).toBeDefined();
+
+    const convergence = result.definitionConvergence.find(
+      (record) => record.resourceKind === "template-controller" && record.resourceName === "repeat",
+    );
+    expect(convergence).toBeDefined();
+    const sourceKinds = new Set(convergence!.candidates.map((candidate) => candidate.sourceKind));
+    expect(sourceKinds.has("analysis-explicit")).toBe(true);
+    expect(sourceKinds.has("builtin")).toBe(true);
+  });
+
+  it("does not synthesize builtin-only convergence records when no analysis candidates exist", () => {
+    const result = buildSemanticsArtifacts([]);
+
+    expect(result.definitionAuthority).toHaveLength(0);
+    expect(result.definitionConvergence).toHaveLength(0);
+    expect(result.semantics.controllers.repeat).toBeDefined();
   });
 });

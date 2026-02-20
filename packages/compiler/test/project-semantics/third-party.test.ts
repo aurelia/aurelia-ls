@@ -615,6 +615,74 @@ describe("applyThirdPartyResources", () => {
     assertLocalTemplateContract(forward);
     assertLocalTemplateContract(reverse);
   });
+
+  it("enrolls builtin repeat in convergence when overlay collides on template-controller key", () => {
+    const { program } = createProgramFromMemory(
+      { "/workspace/src/placeholder.ts": "export const x = 1;" },
+      ["/workspace/src/placeholder.ts"],
+    );
+    const diagnostics = new DiagnosticsRuntime();
+    const base = discoverProjectSemantics(program, {
+      packagePath: "/workspace",
+      diagnostics: diagnostics.forSource("project"),
+    });
+
+    const extra = buildThirdPartyResources({
+      attributes: {
+        repeat: {
+          isTemplateController: true,
+          bindables: {
+            items: { mode: "from-view" },
+            tracked: {},
+          },
+        },
+      },
+    });
+
+    const merged = applyThirdPartyResources(base, extra);
+    const repeat = merged.semantics.controllers.repeat;
+    expect(repeat).toBeDefined();
+    expect(repeat.semantics?.injects?.contextuals).toContain("$previous");
+    expect(unwrapSourced(repeat.bindables.items?.mode)).toBe("fromView");
+    expect(repeat.bindables.tracked).toBeDefined();
+
+    const convergence = merged.definition.convergence.find(
+      (record) => record.resourceKind === "template-controller" && record.resourceName === "repeat",
+    );
+    expect(convergence).toBeDefined();
+    const sourceKinds = new Set(convergence!.candidates.map((candidate) => candidate.sourceKind));
+    expect(sourceKinds.has("builtin")).toBe(true);
+    expect(sourceKinds.has("explicit-config")).toBe(true);
+  });
+
+  it("does not create repeat convergence when overlay does not redefine repeat", () => {
+    const { program } = createProgramFromMemory(
+      { "/workspace/src/placeholder.ts": "export const x = 1;" },
+      ["/workspace/src/placeholder.ts"],
+    );
+    const diagnostics = new DiagnosticsRuntime();
+    const base = discoverProjectSemantics(program, {
+      packagePath: "/workspace",
+      diagnostics: diagnostics.forSource("project"),
+    });
+
+    const extra = buildThirdPartyResources({
+      attributes: {
+        "external-only": {
+          isTemplateController: true,
+          bindables: {
+            value: {},
+          },
+        },
+      },
+    });
+
+    const merged = applyThirdPartyResources(base, extra);
+    const repeatConvergence = merged.definition.convergence.filter(
+      (record) => record.resourceKind === "template-controller" && record.resourceName === "repeat",
+    );
+    expect(repeatConvergence).toHaveLength(0);
+  });
 });
 
 function createMockFileSystemForFiles(files: Record<string, string>): FileSystemContext {

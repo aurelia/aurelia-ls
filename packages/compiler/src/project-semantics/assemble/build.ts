@@ -24,6 +24,8 @@ import {
   type ResourceDefinitionCandidate,
 } from "../definition/index.js";
 
+const BUILTIN_DEFINITION_BY_KEY = buildBuiltinDefinitionIndex();
+
 export interface DefinitionConvergenceCandidate {
   readonly candidateId: string;
   readonly sourceKind: DefinitionSourceKind;
@@ -224,7 +226,46 @@ function groupDefinitionCandidates(
     });
     grouped.set(key, candidates);
   }
+
+  // Enroll builtin definitions for colliding keys so builtin-analysis seam
+  // collisions are resolved via the same field-level merge algebra.
+  for (const [key, candidates] of grouped.entries()) {
+    const builtin = BUILTIN_DEFINITION_BY_KEY.get(key);
+    if (!builtin) continue;
+    const hasBuiltinCandidate = candidates.some((candidate) => candidate.sourceKind === "builtin");
+    if (hasBuiltinCandidate) continue;
+    candidates.push({
+      candidateId: createBuiltinCandidateId(builtin),
+      resource: builtin,
+      sourceKind: "builtin",
+      evidenceRank: 2,
+    });
+  }
+
   return { grouped, unnamedGaps };
+}
+
+function buildBuiltinDefinitionIndex(): ReadonlyMap<string, ResourceDef> {
+  const index = new Map<string, ResourceDef>();
+  const builtinResources: ResourceDef[] = [
+    ...Object.values(BUILTIN_SEMANTICS.elements),
+    ...Object.values(BUILTIN_SEMANTICS.attributes),
+    ...Object.values(BUILTIN_SEMANTICS.controllers),
+    ...Object.values(BUILTIN_SEMANTICS.valueConverters),
+    ...Object.values(BUILTIN_SEMANTICS.bindingBehaviors),
+  ];
+  for (const resource of builtinResources) {
+    const name = unwrapSourced(resource.name);
+    if (!name) continue;
+    index.set(`${resource.kind}:${name}`, resource);
+  }
+  return index;
+}
+
+function createBuiltinCandidateId(resource: ResourceDef): string {
+  const name = unwrapSourced(resource.name) ?? "";
+  const className = unwrapSourced(resource.className) ?? "";
+  return `builtin|${resource.kind}|${name}|${className}`;
 }
 
 function sourceKindFromNameOrigin(name: Sourced<string>): DefinitionSourceKind {
