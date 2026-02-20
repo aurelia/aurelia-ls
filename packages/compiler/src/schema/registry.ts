@@ -184,12 +184,14 @@ export const BUILTIN_CONTROLLERS: Record<string, TemplateControllerDef> = {
     scope: 'overlay',
     cardinality: 'zero-many',
     injects: {
-      contextuals: ['$index', '$first', '$last', '$even', '$odd', '$length', '$middle'],
+      contextuals: ['$index', '$first', '$last', '$even', '$odd', '$length', '$middle', '$previous'],
     },
     tailProps: {
       key: { name: 'key', accepts: ['bind', null] },
       contextual: { name: 'contextual', accepts: ['bind', null] },
     },
+  }, {
+    items: bindable('items', { primary: true }),
   }),
 
   with: controller('with', {
@@ -226,7 +228,13 @@ export const BUILTIN_CONTROLLERS: Record<string, TemplateControllerDef> = {
     placement: 'teleported',
   }, {
     target: bindable('target', { type: 'string | Element | null', primary: true }),
+    position: bindable('position', { type: "'beforebegin' | 'afterbegin' | 'beforeend' | 'afterend'" }),
+    activated: bindable('activated', { type: '(target: string | Element | null | undefined, view: unknown) => void | Promise<void>' }),
+    activating: bindable('activating', { type: '(target: string | Element | null | undefined, view: unknown) => void | Promise<void>' }),
+    callbackContext: bindable('callbackContext'),
     strict: bindable('strict', { type: 'boolean' }),
+    deactivated: bindable('deactivated', { type: '(target: string | Element | null | undefined, view: unknown) => void | Promise<void>' }),
+    deactivating: bindable('deactivating', { type: '(target: string | Element | null | undefined, view: unknown) => void | Promise<void>' }),
     renderContext: bindable('renderContext', { type: 'Document | ShadowRoot' }),
   }),
 
@@ -261,6 +269,8 @@ export const BUILTIN_CONTROLLERS: Record<string, TemplateControllerDef> = {
     scope: 'reuse',
     cardinality: 'zero-one',
     linksTo: 'promise',
+  }, {
+    value: bindable('value', { mode: 'toView', type: 'Promise<unknown>' }),
   }),
 
   then: controller('then', {
@@ -269,6 +279,8 @@ export const BUILTIN_CONTROLLERS: Record<string, TemplateControllerDef> = {
     cardinality: 'zero-one',
     linksTo: 'promise',
     injects: { alias: { prop: 'value', defaultName: 'then' } },
+  }, {
+    value: bindable('value', { mode: 'fromView' }),
   }),
 
   catch: controller('catch', {
@@ -277,6 +289,8 @@ export const BUILTIN_CONTROLLERS: Record<string, TemplateControllerDef> = {
     cardinality: 'zero-one',
     linksTo: 'promise',
     injects: { alias: { prop: 'value', defaultName: 'catch' } },
+  }, {
+    value: bindable('value', { mode: 'fromView' }),
   }),
 };
 

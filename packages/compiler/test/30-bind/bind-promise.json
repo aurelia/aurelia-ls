@@ -137,6 +137,7 @@
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$previous" },
         { "frame": "overlay:promiseBranch@3", "kind": "alias", "name": "data" }
       ],
       "exprs": [
@@ -166,7 +167,8 @@
         { "frame": "overlay:iterator@3", "kind": "contextual", "name": "$even" },
         { "frame": "overlay:iterator@3", "kind": "contextual", "name": "$odd" },
         { "frame": "overlay:iterator@3", "kind": "contextual", "name": "$length" },
-        { "frame": "overlay:iterator@3", "kind": "contextual", "name": "$middle" }
+        { "frame": "overlay:iterator@3", "kind": "contextual", "name": "$middle" },
+        { "frame": "overlay:iterator@3", "kind": "contextual", "name": "$previous" }
       ],
       "exprs": [
         { "kind": "expr", "frame": "root", "code": "fetchItems" },
