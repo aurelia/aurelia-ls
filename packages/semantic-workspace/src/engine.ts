@@ -3,7 +3,6 @@ import path from "node:path";
 import ts from "typescript";
 import {
   PRELUDE_TS,
-  asDocumentUri,
   canonicalDocumentUri,
   createAttributeParserFromRegistry,
   createDefaultCodeResolver,
@@ -671,7 +670,8 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       return resolveModuleSpecifier(specifier, componentPath, this.#env.tsService.compilerOptions());
     };
     const templateContext = (uri: DocumentUri) => {
-      const scope = this.#resourceScope ?? this.#templateIndex.templateToScope.get(uri) ?? defaultScope;
+      const canonical = canonicalDocumentUri(uri).uri;
+      const scope = this.#resourceScope ?? this.#templateIndex.templateToScope.get(canonical) ?? defaultScope;
       return { scopeId: scope ?? null };
     };
     return {
@@ -685,10 +685,11 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
   }
 
   #activateTemplate(uri: DocumentUri): void {
+    const canonical = canonicalDocumentUri(uri);
     const setter = getActiveTemplateSetter(this.#vm);
-    const componentPath = this.#templateIndex.templateToComponent.get(uri) ?? canonicalDocumentUri(uri).path;
+    const componentPath = this.#templateIndex.templateToComponent.get(canonical.uri) ?? canonical.path;
     if (setter) setter(componentPath);
-    this.#applyTemplateScope(uri);
+    this.#applyTemplateScope(canonical.uri);
   }
 
   #deactivateTemplate(): void {
@@ -844,7 +845,8 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     const meta = findImportAtOffset(template.templateMeta, offset);
     if (!meta) return null;
     const specifier = meta.from.value;
-    const containingFile = this.#templateIndex.templateToComponent.get(uri) ?? canonicalDocumentUri(uri).path;
+    const canonical = canonicalDocumentUri(uri);
+    const containingFile = this.#templateIndex.templateToComponent.get(canonical.uri) ?? canonical.path;
     const resolvedPath = resolveModuleSpecifier(specifier, containingFile, this.#env.tsService.compilerOptions());
     if (!resolvedPath) return null;
 
@@ -1045,7 +1047,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
   }
 
   #isTemplateUri(uri: DocumentUri): boolean {
-    return this.#templateIndex.templateToComponent.has(uri);
+    return this.#templateIndex.templateToComponent.has(canonicalDocumentUri(uri).uri);
   }
 
   #resourceReferencesAtOffset(uri: DocumentUri, offset: number): WorkspaceLocation[] {
@@ -1201,7 +1203,8 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
   #setActiveTemplateForOverlay(uri: DocumentUri): void {
     const setter = getActiveTemplateSetter(this.#vm);
     if (!setter) return;
-    const componentPath = this.#templateIndex.templateToComponent.get(uri) ?? canonicalDocumentUri(uri).path;
+    const canonical = canonicalDocumentUri(uri);
+    const componentPath = this.#templateIndex.templateToComponent.get(canonical.uri) ?? canonical.path;
     setter(componentPath);
   }
 
@@ -1383,17 +1386,17 @@ function getActiveTemplateSetter(vm: VmReflection): ((path: string | null) => vo
   return typeof maybe.setActiveTemplate === "function" ? maybe.setActiveTemplate.bind(maybe) : null;
 }
 
-function buildTemplateIndex(discovery: ProjectSemanticsDiscoveryResult): TemplateIndex {
+export function buildTemplateIndex(discovery: ProjectSemanticsDiscoveryResult): TemplateIndex {
   const templateToComponent = new Map<DocumentUri, string>();
   const templateToScope = new Map<DocumentUri, ResourceScopeId>();
   for (const entry of discovery.templates) {
-    const uri = asDocumentUri(entry.templatePath);
+    const uri = canonicalDocumentUri(entry.templatePath).uri;
     templateToComponent.set(uri, entry.componentPath);
     templateToScope.set(uri, entry.scopeId);
   }
   for (const entry of discovery.inlineTemplates) {
     const inlinePath = inlineTemplatePath(entry.componentPath);
-    const uri = asDocumentUri(inlinePath);
+    const uri = canonicalDocumentUri(inlinePath).uri;
     templateToComponent.set(uri, entry.componentPath);
     templateToScope.set(uri, entry.scopeId);
   }
