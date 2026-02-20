@@ -492,6 +492,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     if (!text) {
       return {
         target: "unknown",
+        resourceOrigin: "unknown",
         hasSemanticProvenance: false,
         hasMappedProvenance: inWorkspace,
         workspaceDocument: inWorkspace,
@@ -502,6 +503,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     if (offset == null) {
       return {
         target: "unknown",
+        resourceOrigin: "unknown",
         hasSemanticProvenance: false,
         hasMappedProvenance: inWorkspace,
         workspaceDocument: inWorkspace,
@@ -519,6 +521,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       });
       return {
         target: probe.targetClass,
+        resourceOrigin: probe.resourceOrigin ?? "unknown",
         hasSemanticProvenance: probe.hasSemanticProvenance,
         hasMappedProvenance: mappedProvenance.hasMappedProvenance,
         workspaceDocument: inWorkspace,
@@ -528,6 +531,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     const symbol = this.#symbolNameAt(this.#env.paths.canonical(canonical.path), offset, text);
     return {
       target: symbol ? "expression-member" : "unknown",
+      resourceOrigin: "unknown",
       hasSemanticProvenance: false,
       // Non-template docs are direct source edits, so mapping precondition is satisfied.
       hasMappedProvenance: true,

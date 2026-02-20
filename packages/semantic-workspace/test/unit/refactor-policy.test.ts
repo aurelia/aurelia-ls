@@ -89,6 +89,26 @@ describe("refactor policy", () => {
     expect(plan.reason).toBe("provenance-required");
   });
 
+  it("denies rename for builtin resource origins", () => {
+    const plan = planRenameExecution(DEFAULT_REFACTOR_POLICY, {
+      ...defaultContext,
+      target: "resource",
+      resourceOrigin: "builtin",
+    });
+    expect(plan.allowOperation).toBe(false);
+    expect(plan.reason).toBe("resource-origin-builtin");
+  });
+
+  it("denies rename for config resource origins", () => {
+    const plan = planRenameExecution(DEFAULT_REFACTOR_POLICY, {
+      ...defaultContext,
+      target: "resource",
+      resourceOrigin: "config",
+    });
+    expect(plan.allowOperation).toBe(false);
+    expect(plan.reason).toBe("resource-origin-config");
+  });
+
   it("denies rename when required decision points are unresolved", () => {
     const policy: RefactorPolicy = {
       ...DEFAULT_REFACTOR_POLICY,

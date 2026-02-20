@@ -44,7 +44,7 @@ import type { InlineTemplateInfo, TemplateInfo } from "@aurelia-ls/compiler";
 import type { ResourceDefinitionIndex } from "./definition.js";
 import { selectResourceCandidate } from "./resource-precedence-policy.js";
 import { buildDomIndex, elementTagSpanAtOffset, elementTagSpans, findAttrForSpan, findDomNode } from "./template-dom.js";
-import type { RefactorTargetClass, SemanticRenameRoute } from "./refactor-policy.js";
+import type { RefactorResourceOrigin, RefactorTargetClass, SemanticRenameRoute } from "./refactor-policy.js";
 import {
   attributeTargetNameFromSyntax,
   collectExpressionResourceNameSpans,
@@ -219,6 +219,7 @@ export interface TemplateEditEngineContext {
 export interface TemplateRenameProbe {
   readonly targetClass: RefactorTargetClass;
   readonly hasSemanticProvenance: boolean;
+  readonly resourceOrigin?: RefactorResourceOrigin;
 }
 
 export class TemplateEditEngine {
@@ -241,10 +242,12 @@ export class TemplateEditEngine {
     }
 
     for (const route of this.#semanticRenameRouteOrder()) {
-      if (this.#isSemanticRenameTarget(route, op)) {
+      const resourceOrigin = this.#semanticRenameTargetOrigin(route, op);
+      if (resourceOrigin) {
         return {
           targetClass: "resource",
           hasSemanticProvenance: true,
+          resourceOrigin,
         };
       }
     }
@@ -306,18 +309,21 @@ export class TemplateEditEngine {
     return ordered;
   }
 
-  #isSemanticRenameTarget(route: SemanticRenameRoute, op: RenameOperationContext): boolean {
+  #semanticRenameTargetOrigin(
+    route: SemanticRenameRoute,
+    op: RenameOperationContext,
+  ): RefactorResourceOrigin | null {
     switch (route) {
       case "custom-element":
-        return this.#hasElementRenameTarget(op.compilation, op.domIndex, op.offset);
+        return this.#elementRenameTargetOrigin(op.compilation, op.domIndex, op.offset, op.preferRoots);
       case "bindable-attribute":
-        return this.#hasBindableRenameTarget(op.compilation, op.domIndex, op.offset, op.preferRoots);
+        return this.#bindableRenameTargetOrigin(op.compilation, op.domIndex, op.offset, op.preferRoots);
       case "value-converter":
-        return findValueConverterHitAtOffset(op.compilation.exprTable ?? [], op.offset) !== null;
+        return this.#valueConverterRenameTargetOrigin(op.compilation, op.offset, op.preferRoots);
       case "binding-behavior":
-        return findBindingBehaviorHitAtOffset(op.compilation.exprTable ?? [], op.offset) !== null;
+        return this.#bindingBehaviorRenameTargetOrigin(op.compilation, op.offset, op.preferRoots);
       default:
-        return false;
+        return null;
     }
   }
 
@@ -348,39 +354,66 @@ export class TemplateEditEngine {
     }
   }
 
-  #hasElementRenameTarget(
-    compilation: TemplateCompilation,
-    domIndex: ReturnType<typeof buildDomIndex>,
-    offset: number,
-  ): boolean {
-    const node = compilation.query.nodeAt(offset);
-    if (!node || node.kind !== "element") return false;
-    const row = findLinkedRow(compilation.linked.templates, node.templateIndex, node.id);
-    if (!row || row.node.kind !== "element") return false;
-    const domNode = findDomNode(domIndex, node.templateIndex, node.id);
-    if (!domNode || domNode.kind !== "element") return false;
-    const tagSpan = elementTagSpanAtOffset(domNode, offset);
-    if (!tagSpan) return false;
-    return !!row.node.custom?.def;
-  }
-
-  #hasBindableRenameTarget(
+  #elementRenameTargetOrigin(
     compilation: TemplateCompilation,
     domIndex: ReturnType<typeof buildDomIndex>,
     offset: number,
     preferRoots: readonly string[],
-  ): boolean {
+  ): RefactorResourceOrigin | null {
+    const node = compilation.query.nodeAt(offset);
+    if (!node || node.kind !== "element") return null;
+    const row = findLinkedRow(compilation.linked.templates, node.templateIndex, node.id);
+    if (!row || row.node.kind !== "element") return null;
+    const domNode = findDomNode(domIndex, node.templateIndex, node.id);
+    if (!domNode || domNode.kind !== "element") return null;
+    const tagSpan = elementTagSpanAtOffset(domNode, offset);
+    if (!tagSpan) return null;
+    const def = row.node.custom?.def;
+    if (!def) return null;
+    const entry = findResourceEntry(this.ctx.definitionIndex.elements, def.name, def.file ?? null, preferRoots);
+    if (!entry) return "unknown";
+    return toRefactorResourceOrigin(entry.def.name.origin);
+  }
+
+  #bindableRenameTargetOrigin(
+    compilation: TemplateCompilation,
+    domIndex: ReturnType<typeof buildDomIndex>,
+    offset: number,
+    preferRoots: readonly string[],
+  ): RefactorResourceOrigin | null {
     const hits = findInstructionHitsAtOffset(compilation.linked.templates, compilation.ir.templates ?? [], domIndex, offset);
     for (const hit of hits) {
       const nameSpan = hit.attrNameSpan ?? null;
       if (!nameSpan || !spanContainsOffset(nameSpan, offset)) continue;
-      const attrName = hit.attrName ?? null;
-      if (!attrName) continue;
       const target = resolveBindableTarget(hit.instruction, this.ctx.definitionIndex, preferRoots);
       if (!target) continue;
-      return true;
+      return toRefactorResourceOrigin(target.bindable.attribute.origin);
     }
-    return false;
+    return null;
+  }
+
+  #valueConverterRenameTargetOrigin(
+    compilation: TemplateCompilation,
+    offset: number,
+    preferRoots: readonly string[],
+  ): RefactorResourceOrigin | null {
+    const hit = findValueConverterHitAtOffset(compilation.exprTable ?? [], offset);
+    if (!hit) return null;
+    const entry = findResourceEntry(this.ctx.definitionIndex.valueConverters, hit.name, null, preferRoots);
+    if (!entry) return "unknown";
+    return toRefactorResourceOrigin(entry.def.name.origin);
+  }
+
+  #bindingBehaviorRenameTargetOrigin(
+    compilation: TemplateCompilation,
+    offset: number,
+    preferRoots: readonly string[],
+  ): RefactorResourceOrigin | null {
+    const hit = findBindingBehaviorHitAtOffset(compilation.exprTable ?? [], offset);
+    if (!hit) return null;
+    const entry = findResourceEntry(this.ctx.definitionIndex.bindingBehaviors, hit.name, null, preferRoots);
+    if (!entry) return "unknown";
+    return toRefactorResourceOrigin(entry.def.name.origin);
   }
 
   codeActions(
@@ -1884,6 +1917,21 @@ export function findBindingBehaviorAtOffset(
   offset: number,
 ): { name: string; exprId: string } | null {
   return findBindingBehaviorHitAtOffset(exprTable, offset);
+}
+
+function toRefactorResourceOrigin(
+  origin: "source" | "config" | "builtin" | undefined,
+): RefactorResourceOrigin {
+  switch (origin) {
+    case "source":
+      return "source";
+    case "config":
+      return "config";
+    case "builtin":
+      return "builtin";
+    default:
+      return "unknown";
+  }
 }
 
 function resourceRefMatches(

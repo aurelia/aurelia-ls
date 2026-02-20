@@ -14,12 +14,15 @@ import { stableHash } from "@aurelia-ls/compiler";
 
 export type RefactorOperation = "rename" | "code-action";
 export type RefactorTargetClass = "resource" | "expression-member" | "unknown";
+export type RefactorResourceOrigin = "source" | "config" | "builtin" | "unknown";
 export type RefactorBoundaryReason =
   | "target-not-allowed"
   | "decision-required"
   | "semantic-step-disabled"
   | "provenance-required"
   | "workspace-only"
+  | "resource-origin-config"
+  | "resource-origin-builtin"
   | "fallback-disabled";
 export type SemanticRenameRoute =
   | "custom-element"
@@ -101,6 +104,7 @@ export interface RenameExecutionPlan {
 
 export interface RenameExecutionContext {
   readonly target: RefactorTargetClass;
+  readonly resourceOrigin?: RefactorResourceOrigin;
   readonly hasSemanticProvenance: boolean;
   readonly hasMappedProvenance: boolean;
   readonly workspaceDocument: boolean;
@@ -210,6 +214,29 @@ export function planRenameExecution(
       unresolvedDecisionPoints: resolved.unresolved,
       resolvedDecisionValues: resolved.values,
     };
+  }
+
+  if (context.target === "resource") {
+    if (context.resourceOrigin === "builtin") {
+      return {
+        allowOperation: false,
+        reason: "resource-origin-builtin",
+        trySemanticRename: false,
+        allowTypeScriptFallback: false,
+        unresolvedDecisionPoints: resolved.unresolved,
+        resolvedDecisionValues: resolved.values,
+      };
+    }
+    if (context.resourceOrigin === "config") {
+      return {
+        allowOperation: false,
+        reason: "resource-origin-config",
+        trySemanticRename: false,
+        allowTypeScriptFallback: false,
+        unresolvedDecisionPoints: resolved.unresolved,
+        resolvedDecisionValues: resolved.values,
+      };
+    }
   }
 
   const trySemanticRename = policy.rename.semantic.enabled
