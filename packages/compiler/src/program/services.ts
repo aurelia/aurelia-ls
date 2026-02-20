@@ -1,3 +1,4 @@
+import path from "node:path";
 // Model imports (via barrel)
 import type { NormalizedPath, SourceFileId, SourceSpan, Position, TextRange, Origin } from "../model/index.js";
 import {
@@ -19,13 +20,22 @@ import { stableHash } from "../pipeline/index.js";
 // Language imports (via barrel)
 import {
   buildSemanticsSnapshotFromProject,
+  deriveResourceConfidence,
+  unwrapSourced,
   type AttrRes,
   type Bindable,
+  type CustomAttributeDef,
+  type CustomElementDef,
   type ElementRes,
+  type ResourceCatalog,
   type ResourceCollections,
+  type ResourceDef,
   type MaterializedSemantics,
+  type TemplateControllerDef,
   type TemplateSyntaxRegistry,
   type TypeRef,
+  type ValueConverterDef,
+  type BindingBehaviorDef,
 } from "../schema/index.js";
 
 // Parsing imports (via barrel)
@@ -230,12 +240,18 @@ export interface TemplateLanguageServiceOptions {
 
 type TypeNameMap = ReadonlyMap<string, string>;
 
+export type CompletionConfidence = "exact" | "high" | "partial" | "low";
+export type CompletionOrigin = "builtin" | "config" | "source" | "unknown";
+
 export interface CompletionItem {
   label: string;
+  kind?: string;
   detail?: string;
   documentation?: string;
   insertText?: string;
   sortText?: string;
+  confidence?: CompletionConfidence;
+  origin?: CompletionOrigin;
   range?: TextRange;
   source: "template" | "typescript";
 }
@@ -470,27 +486,36 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     snapshot: DocumentSnapshot,
     offset: number,
   ): CompletionItem[] {
-    const { sem, resources, syntax } = resolveCompletionContext(this.program, snapshot.uri);
+    const { sem, resources, syntax, catalog } = resolveCompletionContext(this.program, snapshot.uri);
     const attrParser = createAttributeParserFromRegistry(syntax);
 
     const exprInfo = query.exprAt(offset);
     if (exprInfo) {
-      return collectExpressionCompletions(snapshot.text, offset, exprInfo.span, resources);
+      return collectExpressionCompletions(snapshot.text, offset, exprInfo.span, resources, sem, catalog);
     }
 
     const context = findTagContext(snapshot.text, offset);
     if (!context) return [];
 
     if (context.kind === "tag-name") {
-      return collectTagNameCompletions(snapshot.text, context, resources, sem);
+      return collectTagNameCompletions(snapshot.text, context, resources, sem, catalog);
     }
 
     if (context.kind === "attr-name") {
-      return collectAttributeNameCompletions(snapshot.text, context, resources, sem, syntax, attrParser);
+      return collectAttributeNameCompletions(snapshot.text, context, resources, sem, syntax, attrParser, catalog);
     }
 
     if (context.kind === "attr-value") {
-      return collectAttributeValueCompletions(snapshot.text, context, resources, syntax, attrParser);
+      return collectAttributeValueCompletions(
+        snapshot.text,
+        snapshot.uri,
+        context,
+        resources,
+        sem,
+        syntax,
+        attrParser,
+        catalog,
+      );
     }
 
     return [];
@@ -944,10 +969,15 @@ type TagContext =
 function resolveCompletionContext(
   program: TemplateProgram,
   uri: DocumentUri,
-): { sem: MaterializedSemantics; resources: ResourceCollections; syntax: TemplateSyntaxRegistry } {
+): { sem: MaterializedSemantics; resources: ResourceCollections; syntax: TemplateSyntaxRegistry; catalog: ResourceCatalog } {
   const context = program.options.templateContext?.(uri) ?? {};
   const snapshot = buildSemanticsSnapshotFromProject(program.options.project, context);
-  return { sem: snapshot.semantics, resources: snapshot.semantics.resources, syntax: snapshot.syntax };
+  return {
+    sem: snapshot.semantics,
+    resources: snapshot.semantics.resources,
+    syntax: snapshot.syntax,
+    catalog: snapshot.catalog,
+  };
 }
 
 function collectExpressionCompletions(
@@ -955,6 +985,8 @@ function collectExpressionCompletions(
   offset: number,
   exprSpan: SourceSpan,
   resources: ResourceCollections,
+  sem: MaterializedSemantics,
+  catalog: ResourceCatalog,
 ): CompletionItem[] {
   if (!spanContainsOffset(exprSpan, offset)) return [];
   const exprText = text.slice(exprSpan.start, exprSpan.end);
@@ -970,7 +1002,18 @@ function collectExpressionCompletions(
   return labels
     .filter((label) => label.toLowerCase().startsWith(prefix))
     .sort()
-    .map((label) => ({ label, source: "template", range, detail }));
+    .map((label) => {
+      const trust = hit.kind === "value-converter"
+        ? completionTrustForValueConverter(label, sem, catalog)
+        : completionTrustForBindingBehavior(label, sem, catalog);
+      return {
+        label,
+        source: "template",
+        range,
+        detail,
+        ...completionTrustProps(trust),
+      };
+    });
 }
 
 function collectTagNameCompletions(
@@ -978,6 +1021,7 @@ function collectTagNameCompletions(
   context: Extract<TagContext, { kind: "tag-name" }>,
   resources: ResourceCollections,
   sem: MaterializedSemantics,
+  catalog: ResourceCatalog,
 ): CompletionItem[] {
   const range = rangeFromOffsets(text, context.nameStart, context.nameEnd);
   const prefix = context.prefix.toLowerCase();
@@ -985,6 +1029,7 @@ function collectTagNameCompletions(
   const seen = new Set<string>();
 
   for (const [key, element] of Object.entries(resources.elements)) {
+    const trust = completionTrustForElement(element, sem, catalog);
     const names = new Set(
       [key, element.name, ...(element.aliases ?? [])].filter((name): name is string => !!name),
     );
@@ -992,7 +1037,13 @@ function collectTagNameCompletions(
       if (!name.toLowerCase().startsWith(prefix)) continue;
       if (seen.has(name)) continue;
       seen.add(name);
-      items.push({ label: name, source: "template", range, detail: "Custom Element" });
+      items.push({
+        label: name,
+        source: "template",
+        range,
+        detail: "Custom Element",
+        ...completionTrustProps(trust),
+      });
     }
   }
 
@@ -1013,6 +1064,7 @@ function collectAttributeNameCompletions(
   sem: MaterializedSemantics,
   syntax: TemplateSyntaxRegistry,
   attrParser: AttributeParser,
+  catalog: ResourceCatalog,
 ): CompletionItem[] {
   const typed = context.prefix;
   const command = parseBindingCommandContext(typed, context.attrName, syntax);
@@ -1039,7 +1091,12 @@ function collectAttributeNameCompletions(
 
   const items: CompletionItem[] = [];
   const seen = new Set<string>();
-  const push = (label: string, detail?: string, documentation?: string) => {
+  const push = (
+    label: string,
+    detail?: string,
+    documentation?: string,
+    trust?: CompletionTrust,
+  ) => {
     if (!label.toLowerCase().startsWith(lowerPrefix)) return;
     if (seen.has(label)) return;
     seen.add(label);
@@ -1049,25 +1106,28 @@ function collectAttributeNameCompletions(
       range,
       ...(detail ? { detail } : {}),
       ...(documentation ? { documentation } : {}),
+      ...completionTrustProps(trust),
     });
   };
 
   const element = context.tagName ? resolveElement(resources, context.tagName) : null;
+  const elementTrust = element ? completionTrustForElement(element, sem, catalog) : undefined;
   if (element) {
     for (const bindable of Object.values(element.bindables ?? {})) {
       const label = (bindable.attribute ?? bindable.name).trim();
       if (!label) continue;
-      push(label, "Bindable", typeRefToString(bindable.type));
+      push(label, "Bindable", typeRefToString(bindable.type), elementTrust);
     }
   }
 
   for (const [key, attr] of Object.entries(resources.attributes ?? {})) {
     const detail = attr.isTemplateController ? "Template Controller" : "Custom Attribute";
+    const trust = completionTrustForAttribute(attr, sem, catalog);
     const names = new Set(
       [key, attr.name, ...(attr.aliases ?? [])].filter((name): name is string => !!name),
     );
     for (const name of names) {
-      push(name, detail);
+      push(name, detail, undefined, trust);
     }
   }
 
@@ -1095,16 +1155,23 @@ function collectAttributeNameCompletions(
 
 function collectAttributeValueCompletions(
   text: string,
+  uri: DocumentUri,
   context: Extract<TagContext, { kind: "attr-value" }>,
   resources: ResourceCollections,
+  sem: MaterializedSemantics,
   syntax: TemplateSyntaxRegistry,
   attrParser: AttributeParser,
+  catalog: ResourceCatalog,
 ): CompletionItem[] {
   const attrTarget = normalizeAttributeTarget(context.attrName, syntax, attrParser);
   if (!attrTarget) return [];
 
   const range = rangeFromOffsets(text, context.valueStart, context.valueEnd);
   const prefix = context.prefix.toLowerCase();
+
+  if (isImportFromAttribute(context.tagName, attrTarget)) {
+    return collectImportModuleSpecifierCompletions(uri, prefix, sem, range, catalog);
+  }
 
   const element = context.tagName ? resolveElement(resources, context.tagName) : null;
   const elementBindable = element ? findBindableForAttribute(element.bindables, attrTarget) : null;
@@ -1114,6 +1181,9 @@ function collectAttributeValueCompletions(
 
   const bindable = elementBindable ?? attributeBindable;
   if (!bindable) return [];
+  const trust = elementBindable
+    ? (element ? completionTrustForElement(element, sem, catalog) : undefined)
+    : (attribute ? completionTrustForAttribute(attribute, sem, catalog) : undefined);
 
   const literals = extractStringLiteralUnion(bindable.type);
   if (!literals.length) return [];
@@ -1121,7 +1191,12 @@ function collectAttributeValueCompletions(
   return literals
     .filter((value) => value.toLowerCase().startsWith(prefix))
     .sort()
-    .map((value) => ({ label: value, source: "template", range }));
+    .map((value) => ({
+      label: value,
+      source: "template",
+      range,
+      ...completionTrustProps(trust),
+    }));
 }
 
 function collectBindingCommandCompletions(
@@ -1144,6 +1219,335 @@ function collectBindingCommandCompletions(
       range,
       ...(entry.detail ? { detail: entry.detail } : {}),
     }));
+}
+
+type CompletionResourceKind =
+  | "custom-element"
+  | "custom-attribute"
+  | "template-controller"
+  | "value-converter"
+  | "binding-behavior";
+
+type CompletionTrust = {
+  confidence: CompletionConfidence;
+  origin: CompletionOrigin;
+};
+
+function completionTrustProps(
+  trust: CompletionTrust | undefined,
+): Pick<CompletionItem, "confidence" | "origin"> {
+  if (!trust) return {};
+  return {
+    confidence: trust.confidence,
+    origin: trust.origin,
+  };
+}
+
+function completionTrustForElement(
+  element: ElementRes,
+  sem: MaterializedSemantics,
+  catalog: ResourceCatalog,
+): CompletionTrust {
+  const def = findElementDefinition(sem, element);
+  return completionTrustForDefinition("custom-element", element.name, def, catalog);
+}
+
+function completionTrustForAttribute(
+  attribute: AttrRes,
+  sem: MaterializedSemantics,
+  catalog: ResourceCatalog,
+): CompletionTrust {
+  if (attribute.isTemplateController) {
+    const def = findTemplateControllerDefinition(sem, attribute.name);
+    return completionTrustForDefinition("template-controller", attribute.name, def, catalog);
+  }
+  const def = findCustomAttributeDefinition(sem, attribute.name);
+  return completionTrustForDefinition("custom-attribute", attribute.name, def, catalog);
+}
+
+function completionTrustForValueConverter(
+  name: string,
+  sem: MaterializedSemantics,
+  catalog: ResourceCatalog,
+): CompletionTrust {
+  const def = findValueConverterDefinition(sem, name);
+  return completionTrustForDefinition("value-converter", name, def, catalog);
+}
+
+function completionTrustForBindingBehavior(
+  name: string,
+  sem: MaterializedSemantics,
+  catalog: ResourceCatalog,
+): CompletionTrust {
+  const def = findBindingBehaviorDefinition(sem, name);
+  return completionTrustForDefinition("binding-behavior", name, def, catalog);
+}
+
+function completionTrustForDefinition(
+  kind: CompletionResourceKind,
+  name: string,
+  def: ResourceDef | null,
+  catalog: ResourceCatalog,
+): CompletionTrust {
+  const origin = sourcedOriginToCompletionOrigin(def?.name.origin);
+  const canonicalName = normalizeResourceName(name, def);
+  const gaps = catalog.gapsByResource?.[`${kind}:${canonicalName}`] ?? [];
+  const confidence = deriveResourceConfidence(gaps, confidenceOrigin(origin)).level;
+  return { confidence, origin };
+}
+
+function sourcedOriginToCompletionOrigin(
+  origin: ResourceDef["name"]["origin"] | undefined,
+): CompletionOrigin {
+  switch (origin) {
+    case "source":
+      return "source";
+    case "config":
+      return "config";
+    case "builtin":
+      return "builtin";
+    default:
+      return "unknown";
+  }
+}
+
+function confidenceOrigin(
+  origin: CompletionOrigin,
+): "builtin" | "config" | "source" | undefined {
+  switch (origin) {
+    case "builtin":
+    case "config":
+    case "source":
+      return origin;
+    default:
+      return undefined;
+  }
+}
+
+function normalizeResourceName(
+  fallback: string,
+  def: ResourceDef | null,
+): string {
+  return unwrapSourced(def?.name) ?? fallback;
+}
+
+function findElementDefinition(
+  sem: MaterializedSemantics,
+  element: ElementRes,
+): CustomElementDef | null {
+  return findDefinitionByNameAndFile(
+    sem.elements,
+    element.name,
+    element.file ?? null,
+  );
+}
+
+function findCustomAttributeDefinition(
+  sem: MaterializedSemantics,
+  name: string,
+): CustomAttributeDef | null {
+  return findDefinitionByNameAndFile(sem.attributes, name, null);
+}
+
+function findTemplateControllerDefinition(
+  sem: MaterializedSemantics,
+  name: string,
+): TemplateControllerDef | null {
+  return findDefinitionByNameAndFile(sem.controllers, name, null);
+}
+
+function findValueConverterDefinition(
+  sem: MaterializedSemantics,
+  name: string,
+): ValueConverterDef | null {
+  return findDefinitionByNameAndFile(sem.valueConverters, name, null);
+}
+
+function findBindingBehaviorDefinition(
+  sem: MaterializedSemantics,
+  name: string,
+): BindingBehaviorDef | null {
+  return findDefinitionByNameAndFile(sem.bindingBehaviors, name, null);
+}
+
+function findDefinitionByNameAndFile<T extends ResourceDef>(
+  defs: Readonly<Record<string, T>>,
+  name: string,
+  file: string | null,
+): T | null {
+  const normalizedName = name.toLowerCase();
+  const normalizedFile = file ? normalizePathSlashes(path.resolve(file)) : null;
+  for (const def of Object.values(defs)) {
+    const defName = unwrapSourced(def.name);
+    if (!defName) continue;
+    const names = new Set<string>([defName, ...(resourceAliases(def) ?? [])]);
+    const hasName = Array.from(names).some((entry) => entry.toLowerCase() === normalizedName);
+    if (!hasName) continue;
+    if (normalizedFile && def.file) {
+      const defFile = normalizePathSlashes(path.resolve(def.file));
+      if (defFile !== normalizedFile) continue;
+    }
+    return def;
+  }
+  return null;
+}
+
+function resourceAliases(def: ResourceDef): readonly string[] {
+  if (def.kind === "custom-element" || def.kind === "custom-attribute") {
+    return def.aliases.map((alias) => unwrapSourced(alias)).filter((value): value is string => !!value);
+  }
+  if (def.kind === "template-controller") {
+    const aliases = unwrapSourced(def.aliases) ?? [];
+    return Array.isArray(aliases) ? aliases : [];
+  }
+  return [];
+}
+
+function isImportFromAttribute(tagName: string, attrTarget: string): boolean {
+  return tagName === "import" && attrTarget === "from";
+}
+
+function collectImportModuleSpecifierCompletions(
+  templateUri: DocumentUri,
+  prefix: string,
+  sem: MaterializedSemantics,
+  range: TextRange,
+  catalog: ResourceCatalog,
+): CompletionItem[] {
+  const templatePath = canonicalDocumentUri(templateUri).path;
+  const candidates = new Map<string, CompletionTrust>();
+  const addCandidate = (label: string, trust: CompletionTrust): void => {
+    if (!label) return;
+    const current = candidates.get(label);
+    if (!current) {
+      candidates.set(label, trust);
+      return;
+    }
+    if (compareCompletionTrust(trust, current) < 0) {
+      candidates.set(label, trust);
+    }
+  };
+
+  const addDefinition = (kind: CompletionResourceKind, def: ResourceDef): void => {
+    const name = unwrapSourced(def.name);
+    if (!name) return;
+    const trust = completionTrustForDefinition(kind, name, def, catalog);
+    if (def.package) {
+      addCandidate(def.package, trust);
+      return;
+    }
+    if (!def.file) return;
+    const moduleSpecifier = moduleSpecifierFromFile(def.file, templatePath);
+    if (!moduleSpecifier) return;
+    addCandidate(moduleSpecifier, trust);
+  };
+
+  for (const def of Object.values(sem.elements)) {
+    addDefinition("custom-element", def);
+  }
+  for (const def of Object.values(sem.attributes)) {
+    addDefinition("custom-attribute", def);
+  }
+  for (const def of Object.values(sem.controllers)) {
+    addDefinition("template-controller", def);
+  }
+  for (const def of Object.values(sem.valueConverters)) {
+    addDefinition("value-converter", def);
+  }
+  for (const def of Object.values(sem.bindingBehaviors)) {
+    addDefinition("binding-behavior", def);
+  }
+
+  const lowerPrefix = prefix.toLowerCase();
+  return Array.from(candidates.entries())
+    .filter(([label]) => label.toLowerCase().startsWith(lowerPrefix))
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([label, trust]) => ({
+      label,
+      source: "template",
+      detail: "Aurelia Module",
+      range,
+      ...completionTrustProps(trust),
+    }));
+}
+
+function compareCompletionTrust(
+  a: CompletionTrust,
+  b: CompletionTrust,
+): number {
+  const confidenceDelta = completionConfidenceRank(a.confidence) - completionConfidenceRank(b.confidence);
+  if (confidenceDelta !== 0) return confidenceDelta;
+  return completionOriginRank(a.origin) - completionOriginRank(b.origin);
+}
+
+function completionConfidenceRank(confidence: CompletionConfidence): number {
+  switch (confidence) {
+    case "exact":
+      return 0;
+    case "high":
+      return 1;
+    case "partial":
+      return 2;
+    case "low":
+      return 3;
+    default:
+      return 4;
+  }
+}
+
+function completionOriginRank(origin: CompletionOrigin): number {
+  switch (origin) {
+    case "source":
+      return 0;
+    case "config":
+      return 1;
+    case "builtin":
+      return 2;
+    case "unknown":
+    default:
+      return 3;
+  }
+}
+
+function moduleSpecifierFromFile(targetFile: string, containingFile: string): string | null {
+  const absoluteTarget = path.resolve(targetFile);
+  const containingDir = path.dirname(path.resolve(containingFile));
+  let relative = normalizePathSlashes(path.relative(containingDir, absoluteTarget));
+  if (!relative) return null;
+  relative = stripKnownModuleExtension(relative);
+  if (!relative.startsWith(".")) {
+    relative = `./${relative}`;
+  }
+  return relative;
+}
+
+function stripKnownModuleExtension(filePath: string): string {
+  const lower = filePath.toLowerCase();
+  const extensions = [
+    ".d.mts",
+    ".d.cts",
+    ".d.ts",
+    ".inline.html",
+    ".html",
+    ".mts",
+    ".cts",
+    ".mjs",
+    ".cjs",
+    ".tsx",
+    ".jsx",
+    ".ts",
+    ".js",
+  ];
+  for (const ext of extensions) {
+    if (lower.endsWith(ext)) {
+      return filePath.slice(0, -ext.length);
+    }
+  }
+  return filePath;
+}
+
+function normalizePathSlashes(filePath: string): string {
+  return filePath.split("\\").join("/");
 }
 
 function findPipeContext(

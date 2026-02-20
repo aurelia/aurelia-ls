@@ -440,13 +440,20 @@ function normalizeOptions(
 function mapCompletions(items: readonly TemplateCompletionItem[]): WorkspaceCompletionItem[] {
   const mapped = items.map((item, index) => ({
     label: item.label,
+    ...(item.kind ? { kind: item.kind } : {}),
     ...(item.detail ? { detail: item.detail } : {}),
     ...(item.documentation ? { documentation: item.documentation } : {}),
     ...(item.sortText ? { sortText: item.sortText } : {}),
+    ...(item.confidence ? { confidence: item.confidence } : {}),
+    ...(item.origin ? { origin: item.origin } : {}),
     ...(item.insertText ? { insertText: item.insertText } : {}),
     _index: index,
   }));
   mapped.sort((a, b) => {
+    const confidenceDelta = completionConfidenceRank(a.confidence) - completionConfidenceRank(b.confidence);
+    if (confidenceDelta !== 0) return confidenceDelta;
+    const originDelta = completionOriginRank(a.origin) - completionOriginRank(b.origin);
+    if (originDelta !== 0) return originDelta;
     const aKey = a.sortText ?? a.label;
     const bKey = b.sortText ?? b.label;
     const keyDelta = aKey.localeCompare(bKey);
@@ -456,6 +463,40 @@ function mapCompletions(items: readonly TemplateCompletionItem[]): WorkspaceComp
     return a._index - b._index;
   });
   return mapped.map(({ _index: _unused, ...item }) => item);
+}
+
+function completionConfidenceRank(
+  confidence: WorkspaceCompletionItem["confidence"],
+): number {
+  switch (confidence) {
+    case "exact":
+      return 0;
+    case "high":
+      return 1;
+    case "partial":
+      return 2;
+    case "low":
+      return 3;
+    default:
+      return 1;
+  }
+}
+
+function completionOriginRank(
+  origin: WorkspaceCompletionItem["origin"],
+): number {
+  switch (origin) {
+    case "source":
+      return 0;
+    case "config":
+      return 1;
+    case "builtin":
+      return 2;
+    case "unknown":
+      return 3;
+    default:
+      return 2;
+  }
 }
 
 function mapLocations(

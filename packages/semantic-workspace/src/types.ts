@@ -81,6 +81,8 @@ export interface WorkspaceCompletionItem {
   readonly detail?: string;
   readonly documentation?: string;
   readonly sortText?: string;
+  readonly confidence?: "exact" | "high" | "partial" | "low";
+  readonly origin?: "builtin" | "config" | "source" | "unknown";
   // insertText overrides label when present (no snippet semantics assumed).
   readonly insertText?: string;
 }

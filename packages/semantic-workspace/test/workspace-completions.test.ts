@@ -37,10 +37,44 @@ function hasLabel(items: readonly { label: string }[], label: string): boolean {
   return items.some((item) => item.label === label);
 }
 
+function completionConfidenceRank(confidence: "exact" | "high" | "partial" | "low" | undefined): number {
+  switch (confidence) {
+    case "exact":
+      return 0;
+    case "high":
+      return 1;
+    case "partial":
+      return 2;
+    case "low":
+      return 3;
+    default:
+      return 1;
+  }
+}
+
+function completionOriginRank(origin: "source" | "config" | "builtin" | "unknown" | undefined): number {
+  switch (origin) {
+    case "source":
+      return 0;
+    case "config":
+      return 1;
+    case "builtin":
+      return 2;
+    case "unknown":
+      return 3;
+    default:
+      return 2;
+  }
+}
+
 function compareCompletionOrder(
-  a: { label: string; sortText?: string },
-  b: { label: string; sortText?: string },
+  a: { label: string; sortText?: string; confidence?: "exact" | "high" | "partial" | "low"; origin?: "source" | "config" | "builtin" | "unknown" },
+  b: { label: string; sortText?: string; confidence?: "exact" | "high" | "partial" | "low"; origin?: "source" | "config" | "builtin" | "unknown" },
 ): number {
+  const confidenceDelta = completionConfidenceRank(a.confidence) - completionConfidenceRank(b.confidence);
+  if (confidenceDelta !== 0) return confidenceDelta;
+  const originDelta = completionOriginRank(a.origin) - completionOriginRank(b.origin);
+  if (originDelta !== 0) return originDelta;
   const aKey = a.sortText ?? a.label;
   const bKey = b.sortText ?? b.label;
   const keyDelta = aKey.localeCompare(bKey);
@@ -48,7 +82,14 @@ function compareCompletionOrder(
   return a.label.localeCompare(b.label);
 }
 
-function expectOrderedCompletions(items: readonly { label: string; sortText?: string }[]): void {
+function expectOrderedCompletions(
+  items: readonly {
+    label: string;
+    sortText?: string;
+    confidence?: "exact" | "high" | "partial" | "low";
+    origin?: "source" | "config" | "builtin" | "unknown";
+  }[],
+): void {
   for (let i = 1; i < items.length; i += 1) {
     const prev = items[i - 1];
     const next = items[i];
@@ -132,6 +173,24 @@ describe("workspace completions (workspace-contract)", () => {
     expect(hasLabel(completions, "titlecase")).toBe(true);
   });
 
+  it("includes structured trust metadata for converter completions", () => {
+    const withProbe = `${appText}\n<div>\${activeDevice.name | s}</div>`;
+    harness.updateTemplate(appUri, withProbe);
+    try {
+      const query = harness.workspace.query(appUri);
+      const titlecaseCompletions = query.completions(findPosition(withProbe, "| titlecase", 2));
+      const sanitizeCompletions = query.completions(findPosition(withProbe, "| s}", 2));
+      const titlecase = titlecaseCompletions.find((item) => item.label === "titlecase");
+      const sanitize = sanitizeCompletions.find((item) => item.label === "sanitize");
+      expect(titlecase?.origin).toBe("source");
+      expect(titlecase?.confidence).toBe("high");
+      expect(sanitize?.origin).toBeDefined();
+      expect(sanitize?.confidence).toBeDefined();
+    } finally {
+      harness.updateTemplate(appUri, appText);
+    }
+  });
+
   it("completes binding behaviors", () => {
     const query = harness.workspace.query(appUri);
     const completions = query.completions(findPosition(appText, "& debounce", 2));
@@ -150,6 +209,22 @@ describe("workspace completions (workspace-contract)", () => {
       expect(hasLabel(completions, "info")).toBe(true);
       expect(hasLabel(completions, "warn")).toBe(true);
       expect(hasLabel(completions, "success")).toBe(true);
+    } finally {
+      harness.updateTemplate(appUri, appText);
+    }
+  });
+
+  it("completes <import from> module specifiers", () => {
+    const withImportPrefix = appText.replace(
+      "<import from=\"./views/summary-panel\"></import>",
+      "<import from=\"./views/\"></import>",
+    );
+    harness.updateTemplate(appUri, withImportPrefix);
+    try {
+      const query = harness.workspace.query(appUri);
+      const completions = query.completions(findPosition(withImportPrefix, "from=\"./views/\"", "from=\"./views/".length));
+      expect(hasLabel(completions, "./views/summary-panel")).toBe(true);
+      expect(hasLabel(completions, "./views/table-panel")).toBe(true);
     } finally {
       harness.updateTemplate(appUri, appText);
     }

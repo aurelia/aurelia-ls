@@ -167,4 +167,59 @@ describe("Completions", () => {
       fs.rmSync(fixture, { recursive: true, force: true });
     }
   });
+
+  test("completes module specifiers for <import from>", async () => {
+    const fixture = createFixture({
+      "tsconfig.json": JSON.stringify({
+        compilerOptions: {
+          target: "ES2022",
+          module: "NodeNext",
+          moduleResolution: "NodeNext",
+          strict: true,
+          experimentalDecorators: true,
+          types: [],
+        },
+        files: ["app.ts", "views/summary-panel.ts"],
+      }),
+      "app.ts": [
+        "import { customElement } from 'aurelia';",
+        "@customElement({ name: 'app-root' })",
+        "export class AppRoot {}",
+      ].join("\n"),
+      "views/summary-panel.ts": [
+        "import { customElement } from 'aurelia';",
+        "@customElement({ name: 'summary-panel' })",
+        "export class SummaryPanel {}",
+      ].join("\n"),
+      "app.html": [
+        "<import from=\"./views/s\"></import>",
+        "<summary-panel></summary-panel>",
+      ].join("\n"),
+    });
+
+    const htmlUri = fileUri(fixture, "app.html");
+    const { connection, child, dispose, getStderr } = startServer(fixture);
+
+    try {
+      await initialize(connection, child, getStderr, fixture);
+      const htmlText = fs.readFileSync(path.join(fixture, "app.html"), "utf8");
+      await openDocument(connection, htmlUri, "html", htmlText);
+      await waitForDiagnostics(connection, child, () => getStderr(), htmlUri, 5000);
+
+      const pos = positionAt(htmlText, htmlText.indexOf("./views/s") + "./views/s".length);
+      const completions = await connection.sendRequest("textDocument/completion", {
+        textDocument: { uri: htmlUri },
+        position: pos,
+      });
+
+      const items = Array.isArray(completions) ? completions : (completions as { items?: unknown[] })?.items ?? [];
+      const labels = items.map((item: { label?: string }) => item.label);
+      expect(labels).toContain("./views/summary-panel");
+    } finally {
+      dispose();
+      child.kill("SIGKILL");
+      await waitForExit(child);
+      fs.rmSync(fixture, { recursive: true, force: true });
+    }
+  });
 });
