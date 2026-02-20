@@ -17,7 +17,13 @@
  */
 
 import { describe, it, expect } from "vitest";
-import type { CatalogGap, ResourceKind } from "@aurelia-ls/compiler";
+import type {
+  CatalogGap,
+  NormalizedPath,
+  ResourceKind,
+  ResourceScopeId,
+  ScopeCompleteness,
+} from "@aurelia-ls/compiler";
 import { buildResourceCatalog } from "../../src/schema/catalog.js";
 import { createSemanticsLookup, prepareProjectSemantics, BUILTIN_SEMANTICS } from "../../src/schema/registry.js";
 import { gap, type AnalysisGap } from "../../src/project-semantics/evaluate/types.js";
@@ -64,6 +70,21 @@ function countIndexedGaps(gapsByResource: Readonly<Record<string, readonly Catal
     count += gapsByResource[key]!.length;
   }
   return count;
+}
+
+function incompleteScopeCompleteness(reason: string): ScopeCompleteness {
+  return {
+    complete: false,
+    unresolvedRegistrations: [
+      {
+        source: "analysis",
+        reason,
+        file: "/src/main.ts" as NormalizedPath,
+        span: { start: 0, end: 1 },
+        pattern: { kind: "function-call", functionName: "loadPlugins" },
+      },
+    ],
+  };
 }
 
 // =============================================================================
@@ -344,6 +365,70 @@ describe("Pattern F: SemanticsLookup gap query methods", () => {
     expect(lookup.gapsFor("custom-element", "foo")[0]!.kind).toBe("dynamic-value");
     expect(lookup.gapsFor("custom-attribute", "foo")).toHaveLength(1);
     expect(lookup.gapsFor("custom-attribute", "foo")[0]!.kind).toBe("function-return");
+  });
+});
+
+describe("Scope completeness propagation: catalog and lookup", () => {
+  const rootScope = "root" as ResourceScopeId;
+  const localScope = "local:/src/page.ts" as ResourceScopeId;
+
+  it("buildResourceCatalog carries scope completeness metadata", () => {
+    const scopeCompleteness = {
+      [rootScope]: incompleteScopeCompleteness("Cannot statically analyze loadPlugins()"),
+    };
+    const catalog = buildResourceCatalog(EMPTY_RESOURCES, {}, [], { scopeCompleteness });
+
+    expect(catalog.scopeCompleteness).toBeDefined();
+    expect(catalog.scopeCompleteness?.[rootScope]?.complete).toBe(false);
+    expect(catalog.scopeCompleteness?.[rootScope]?.unresolvedRegistrations[0]?.source).toBe("analysis");
+  });
+
+  it("SemanticsLookup reports local scope incomplete when root scope is incomplete", () => {
+    const rootCompleteness = incompleteScopeCompleteness("Global registration path is dynamic");
+    const scopeCompleteness = {
+      [rootScope]: rootCompleteness,
+      [localScope]: { complete: true, unresolvedRegistrations: [] },
+    };
+    const catalog = buildResourceCatalog(EMPTY_RESOURCES, {}, [], { scopeCompleteness });
+    const graph = {
+      version: "aurelia-resource-graph@1" as const,
+      root: rootScope,
+      scopes: {
+        [rootScope]: {
+          id: rootScope,
+          parent: null,
+          resources: {},
+          completeness: rootCompleteness,
+        },
+        [localScope]: {
+          id: localScope,
+          parent: rootScope,
+          resources: {},
+          completeness: { complete: true, unresolvedRegistrations: [] },
+        },
+      },
+    };
+    const sem = { ...BUILTIN_SEMANTICS, catalog, resourceGraph: graph, defaultScope: localScope };
+
+    const lookup = createSemanticsLookup(sem, { graph, scope: localScope });
+
+    expect(lookup.isScopeComplete()).toBe(false);
+    expect(lookup.scopeCompleteness().unresolvedRegistrations[0]?.reason).toContain("Global registration path is dynamic");
+    expect(lookup.isScopeComplete(rootScope)).toBe(false);
+  });
+
+  it("prepareProjectSemantics rebuild preserves scope completeness", () => {
+    const scopeCompleteness = {
+      [rootScope]: incompleteScopeCompleteness("Spread registration cannot be evaluated"),
+    };
+    const catalog = buildResourceCatalog(EMPTY_RESOURCES, {}, [], { scopeCompleteness });
+    const sem = { ...BUILTIN_SEMANTICS, catalog };
+
+    const rebuilt = prepareProjectSemantics(sem);
+    const lookup = createSemanticsLookup(sem, { resources: EMPTY_RESOURCES, scope: rootScope });
+
+    expect(rebuilt.catalog.scopeCompleteness?.[rootScope]?.complete).toBe(false);
+    expect(lookup.isScopeComplete()).toBe(false);
   });
 });
 

@@ -20,6 +20,8 @@ import type {
   ResourceCatalog,
   ResourceCollections,
   ResourceKind,
+  ResourceScopeId,
+  ScopeCompleteness,
   ValueConverterDef,
   BindingBehaviorDef,
   DomSchema,
@@ -47,7 +49,11 @@ import {
   toValueConverterSig,
 } from "./convert.js";
 import { buildResourceCatalog } from "./catalog.js";
-import { applyLocalImports, materializeResourcesForScope } from "./resource-graph.js";
+import {
+  applyLocalImports,
+  buildScopeCompletenessIndex,
+  materializeResourcesForScope,
+} from "./resource-graph.js";
 
 // ============================================================================
 // Builders
@@ -657,12 +663,17 @@ export function prepareProjectSemantics(
   );
   const bindingCommands = overrides?.bindingCommands ?? sem.bindingCommands ?? buildBindingCommandConfigs(sem);
   const attributePatterns = overrides?.attributePatterns ?? sem.attributePatterns ?? buildAttributePatternConfigs(sem);
+  const scopeCompleteness = sem.resourceGraph
+    ? buildScopeCompletenessIndex(sem.resourceGraph)
+    : (sem.catalog?.scopeCompleteness ?? {});
   const catalog = overrides?.catalog
     ?? buildResourceCatalog(
       resources,
       bindingCommands,
       attributePatterns,
-      sem.catalog ? { gaps: sem.catalog.gaps, confidence: sem.catalog.confidence } : undefined,
+      sem.catalog
+        ? { gaps: sem.catalog.gaps, confidence: sem.catalog.confidence, scopeCompleteness }
+        : { scopeCompleteness },
     );
   return { ...sem, resources, bindingCommands, attributePatterns, catalog };
 }
@@ -718,6 +729,36 @@ export function createSemanticsLookup(sem: ProjectSemantics, opts?: SemanticsLoo
     : { ...base, resourceGraph: graph ?? undefined, defaultScope: scope ?? undefined };
 
   const catalog = semWithCaches.catalog;
+  const COMPLETE_SCOPE: ScopeCompleteness = { complete: true, unresolvedRegistrations: [] };
+
+  const resolveScopeCompleteness = (requestedScope?: ResourceScopeId | null): ScopeCompleteness => {
+    const activeScope = requestedScope ?? scope ?? graph?.root ?? null;
+    if (activeScope == null) return COMPLETE_SCOPE;
+
+    const index = catalog.scopeCompleteness ?? {};
+    const target = index[activeScope];
+
+    if (!graph || activeScope === graph.root) {
+      return target ?? COMPLETE_SCOPE;
+    }
+
+    const rootCompleteness = index[graph.root];
+    if (!target && !rootCompleteness) {
+      return COMPLETE_SCOPE;
+    }
+
+    const unresolvedRegistrations = [
+      ...(rootCompleteness?.unresolvedRegistrations ?? []),
+      ...(target?.unresolvedRegistrations ?? []),
+    ];
+    if (unresolvedRegistrations.length === 0) {
+      return COMPLETE_SCOPE;
+    }
+    return {
+      complete: false,
+      unresolvedRegistrations,
+    };
+  };
 
   return {
     sem: semWithCaches,
@@ -781,6 +822,12 @@ export function createSemanticsLookup(sem: ProjectSemantics, opts?: SemanticsLoo
     },
     projectLevelGaps(): readonly CatalogGap[] {
       return catalog.projectLevelGaps ?? [];
+    },
+    scopeCompleteness(scopeId?: ResourceScopeId | null): ScopeCompleteness {
+      return resolveScopeCompleteness(scopeId);
+    },
+    isScopeComplete(scopeId?: ResourceScopeId | null): boolean {
+      return resolveScopeCompleteness(scopeId).complete;
     },
   };
 }

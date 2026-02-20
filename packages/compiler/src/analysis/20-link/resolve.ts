@@ -597,13 +597,22 @@ function validateUnknownElements(n: DOMNode, ctx: ResolverContext): void {
       if (nodeSem.kind === "element" && isMissingCustomElement(nodeSem)) {
         const existsInGraph = elementExistsInGraph(nodeSem.tag, ctx.graph);
         const hasGapInfo = ctx.lookup.hasGaps("custom-element", nodeSem.tag);
-        const gapQualifier = hasGapInfo ? " (analysis gaps exist for this resource)" : "";
+        const scopeComplete = ctx.lookup.isScopeComplete();
+        const qualifiers: string[] = [];
+        if (hasGapInfo) qualifiers.push("analysis gaps exist for this resource");
+        if (!scopeComplete) qualifiers.push("scope analysis is incomplete");
+        const gapQualifier = qualifiers.length > 0 ? ` (${qualifiers.join("; ")})` : "";
+        const isQualified = hasGapInfo || !scopeComplete;
         const message = existsInGraph
           ? `Custom element '<${nodeSem.tag}>' is not registered in this scope${gapQualifier}.`
           : `Unknown custom element '<${nodeSem.tag}>'${gapQualifier}.`;
         reportDiagnostic(ctx.services.diagnostics, "aurelia/unknown-element", message, {
           span: n.loc,
-          data: { resourceKind: "custom-element", name: nodeSem.tag, ...(hasGapInfo ? { confidence: "partial" as const } : {}) },
+          data: {
+            resourceKind: "custom-element",
+            name: nodeSem.tag,
+            ...(isQualified ? { confidence: "partial" as const } : {}),
+          },
         });
       }
   }

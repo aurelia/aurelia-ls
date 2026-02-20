@@ -5,6 +5,8 @@ import type {
   CatalogGap,
   ResourceCatalog,
   ResourceCollections,
+  ResourceScopeId,
+  ScopeCompleteness,
 } from "./types.js";
 
 export function buildResourceCatalog(
@@ -14,6 +16,7 @@ export function buildResourceCatalog(
   opts?: {
     gaps?: readonly CatalogGap[];
     confidence?: CatalogConfidence;
+    scopeCompleteness?: Readonly<Record<ResourceScopeId, ScopeCompleteness>>;
   },
 ): ResourceCatalog {
   const gaps = opts?.gaps;
@@ -26,6 +29,7 @@ export function buildResourceCatalog(
     confidence: opts?.confidence,
     gapsByResource,
     projectLevelGaps,
+    scopeCompleteness: opts?.scopeCompleteness ?? {},
   };
 }
 

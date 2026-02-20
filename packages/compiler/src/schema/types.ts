@@ -331,11 +331,29 @@ export interface ResourceCollections {
   readonly bindingBehaviors: Readonly<Record<string, BindingBehaviorSig>>;
 }
 
+export interface ScopeUnresolvedRegistration {
+  readonly source: "site" | "analysis";
+  readonly reason: string;
+  readonly file: NormalizedPath;
+  readonly span: Readonly<{
+    readonly start: number;
+    readonly end: number;
+  }>;
+  readonly pattern?: Readonly<Record<string, unknown>>;
+  readonly resourceName?: string;
+}
+
+export interface ScopeCompleteness {
+  readonly complete: boolean;
+  readonly unresolvedRegistrations: readonly ScopeUnresolvedRegistration[];
+}
+
 export interface ResourceScope {
   readonly id: ResourceScopeId;
   readonly parent: ResourceScopeId | null;
   readonly label?: string;
   readonly resources: Partial<ResourceCollections>;
+  readonly completeness?: ScopeCompleteness;
 }
 
 export interface ResourceGraph {
@@ -400,6 +418,8 @@ export interface ResourceCatalog {
   readonly gapsByResource?: Readonly<Record<string, readonly CatalogGap[]>>;
   /** Gaps without resource identity — project-level analysis uncertainty */
   readonly projectLevelGaps?: readonly CatalogGap[];
+  /** Scope completeness metadata keyed by scope id. */
+  readonly scopeCompleteness?: Readonly<Record<ResourceScopeId, ScopeCompleteness>>;
 }
 
 // ============================================================================
@@ -472,6 +492,10 @@ export interface SemanticsLookup {
   hasGaps(kind: ResourceKind, name: string): boolean;
   /** Returns gaps without resource identity — project-level analysis uncertainty. */
   projectLevelGaps(): readonly CatalogGap[];
+  /** Returns completeness metadata for the active scope (or an explicitly provided scope). */
+  scopeCompleteness(scope?: ResourceScopeId | null): ScopeCompleteness;
+  /** Returns true when scope analysis is complete for the active scope (or explicitly provided scope). */
+  isScopeComplete(scope?: ResourceScopeId | null): boolean;
 }
 
 // ============================================================================

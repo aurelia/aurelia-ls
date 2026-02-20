@@ -210,6 +210,7 @@ export function applyThirdPartyResources(
         parent: rootScope?.parent ?? null,
         ...(rootScope?.label ? { label: rootScope.label } : {}),
         resources: mergedRootResources,
+        ...(rootScope?.completeness ? { completeness: rootScope.completeness } : {}),
       },
     },
   };

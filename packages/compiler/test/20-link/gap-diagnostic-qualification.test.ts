@@ -8,6 +8,7 @@
  * → template analysis (diagnostic qualification, R5).
  */
 import { describe, test, expect } from "vitest";
+import type { NormalizedPath } from "@aurelia-ls/compiler";
 
 import { deepMergeSemantics } from "../_helpers/semantics-merge.js";
 import { noopModuleResolver } from "../_helpers/test-utils.js";
@@ -23,7 +24,14 @@ import {
 } from "@aurelia-ls/compiler";
 
 import { buildResourceCatalog } from "../../src/schema/catalog.js";
-import type { CatalogGap, ResourceKind, ResourceCatalog } from "../../src/schema/types.js";
+import type {
+  CatalogGap,
+  ResourceCatalog,
+  ResourceGraph,
+  ResourceKind,
+  ResourceScopeId,
+  ScopeCompleteness,
+} from "../../src/schema/types.js";
 
 const RESOLVE_OPTS = { moduleResolver: noopModuleResolver, templateFilePath: "mem.html" };
 
@@ -45,7 +53,15 @@ function catalogGap(
 }
 
 /** Lower markup and link against semantics with a given catalog, return all diagnostics. */
-function linkWithDiagnostics(markup: string, sem: any, catalog?: ResourceCatalog) {
+function linkWithDiagnostics(
+  markup: string,
+  sem: any,
+  catalog?: ResourceCatalog,
+  snapshotOpts?: {
+    resourceGraph?: ResourceGraph | null;
+    resourceScope?: ResourceScopeId | null;
+  },
+) {
   const diagnostics = new DiagnosticsRuntime();
   const ir = lowerDocument(markup, {
     attrParser: DEFAULT_SYNTAX,
@@ -55,7 +71,11 @@ function linkWithDiagnostics(markup: string, sem: any, catalog?: ResourceCatalog
     catalog: catalog ?? sem.catalog,
     diagnostics: diagnostics.forSource("lower"),
   });
-  const snapshot = buildSemanticsSnapshot(sem, { catalog });
+  const snapshot = buildSemanticsSnapshot(sem, {
+    catalog,
+    ...(snapshotOpts?.resourceGraph !== undefined ? { resourceGraph: snapshotOpts.resourceGraph } : {}),
+    ...(snapshotOpts?.resourceScope !== undefined ? { resourceScope: snapshotOpts.resourceScope } : {}),
+  });
   linkTemplateSemantics(ir, snapshot, {
     ...RESOLVE_OPTS,
     diagnostics: diagnostics.forSource("link"),
@@ -111,6 +131,83 @@ describe("Pattern J: Non-gapped unknown element retains high confidence", () => 
     expect(d, "aurelia/unknown-element should be emitted").toBeDefined();
     expect(d.data?.confidence).toBeUndefined();
     expect(d.message).not.toContain("(analysis gaps exist for this resource)");
+  });
+});
+
+describe("Scope completeness qualification: unknown element", () => {
+  const rootScope = "root" as ResourceScopeId;
+
+  function rootGraph(completeness: ScopeCompleteness): ResourceGraph {
+    return {
+      version: "aurelia-resource-graph@1",
+      root: rootScope,
+      scopes: {
+        [rootScope]: {
+          id: rootScope,
+          parent: null,
+          resources: {},
+          completeness,
+        },
+      },
+    };
+  }
+
+  test("incomplete scope qualifies unknown-element without per-resource gaps", () => {
+    const completeness: ScopeCompleteness = {
+      complete: false,
+      unresolvedRegistrations: [
+        {
+          source: "analysis",
+          reason: "Cannot statically analyze call to 'loadPlugins()'",
+          file: "/src/main.ts" as NormalizedPath,
+          span: { start: 0, end: 1 },
+          pattern: { kind: "function-call", functionName: "loadPlugins" },
+        },
+      ],
+    };
+    const graph = rootGraph(completeness);
+    const catalog = buildResourceCatalog(
+      BUILTIN_SEMANTICS.catalog.resources,
+      BUILTIN_SEMANTICS.catalog.bindingCommands,
+      BUILTIN_SEMANTICS.catalog.attributePatterns,
+      { scopeCompleteness: { [rootScope]: completeness } },
+    );
+
+    const diags = linkWithDiagnostics(
+      `<data-grid></data-grid>`,
+      BUILTIN_SEMANTICS,
+      catalog,
+      { resourceGraph: graph, resourceScope: rootScope },
+    );
+    const d = findDiag(diags, "aurelia/unknown-element");
+
+    expect(d, "aurelia/unknown-element should be emitted").toBeDefined();
+    expect(d.data?.confidence).toBe("partial");
+    expect(d.message).toContain("(scope analysis is incomplete)");
+    expect(d.message).not.toContain("(analysis gaps exist for this resource)");
+  });
+
+  test("complete scope keeps unknown-element unqualified when no resource gaps exist", () => {
+    const completeness: ScopeCompleteness = { complete: true, unresolvedRegistrations: [] };
+    const graph = rootGraph(completeness);
+    const catalog = buildResourceCatalog(
+      BUILTIN_SEMANTICS.catalog.resources,
+      BUILTIN_SEMANTICS.catalog.bindingCommands,
+      BUILTIN_SEMANTICS.catalog.attributePatterns,
+      { scopeCompleteness: { [rootScope]: completeness } },
+    );
+
+    const diags = linkWithDiagnostics(
+      `<data-grid></data-grid>`,
+      BUILTIN_SEMANTICS,
+      catalog,
+      { resourceGraph: graph, resourceScope: rootScope },
+    );
+    const d = findDiag(diags, "aurelia/unknown-element");
+
+    expect(d, "aurelia/unknown-element should be emitted").toBeDefined();
+    expect(d.data?.confidence).toBeUndefined();
+    expect(d.message).not.toContain("(scope analysis is incomplete)");
   });
 });
 

@@ -146,6 +146,7 @@ export function buildSemanticsArtifacts(
     ? {
         ...opts,
         gaps: [...(opts?.gaps ?? []), ...unnamedGaps],
+        scopeCompleteness: prepared.catalog.scopeCompleteness,
       }
     : undefined;
   const catalog = catalogOpts

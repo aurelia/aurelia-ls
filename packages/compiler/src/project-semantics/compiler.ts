@@ -41,6 +41,8 @@ export type {
   ResourceKind,
   ResourceScope,
   ResourceScopeId,
+  ScopeCompleteness,
+  ScopeUnresolvedRegistration,
   SemanticSnapshot,
   SemanticSymbolSnapshot,
   ProjectSemantics,

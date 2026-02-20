@@ -5,6 +5,7 @@ import type {
   ResourceGraph,
   ResourceScope,
   ResourceScopeId,
+  ScopeCompleteness,
   ScopedResources,
   ProjectSemantics,
   MaterializedSemantics,
@@ -93,7 +94,12 @@ export function materializeSemanticsForScope(
     resources,
     bindingCommands,
     attributePatterns,
-    catalogBase ? { gaps: catalogBase.gaps, confidence: catalogBase.confidence } : undefined,
+    {
+      ...(catalogBase ? { gaps: catalogBase.gaps, confidence: catalogBase.confidence } : {}),
+      scopeCompleteness: graph
+        ? buildScopeCompletenessIndex(graph)
+        : (catalogBase?.scopeCompleteness ?? {}),
+    },
   );
   return {
     ...baseSem,
@@ -104,6 +110,26 @@ export function materializeSemanticsForScope(
     resourceGraph: graph ?? undefined,
     defaultScope: scope ?? undefined,
   };
+}
+
+export function buildScopeCompletenessIndex(
+  graph: ResourceGraph,
+): Readonly<Record<ResourceScopeId, ScopeCompleteness>> {
+  const scopeCompleteness: Record<ResourceScopeId, ScopeCompleteness> = {};
+  for (const [scopeId, scope] of Object.entries(graph.scopes)) {
+    const completeness = scope.completeness;
+    scopeCompleteness[scopeId as ResourceScopeId] = completeness
+      ? {
+          complete: completeness.complete,
+          unresolvedRegistrations: completeness.unresolvedRegistrations.map((entry) => ({
+            ...entry,
+            span: { ...entry.span },
+            ...(entry.pattern ? { pattern: { ...entry.pattern } } : {}),
+          })),
+        }
+      : { complete: true, unresolvedRegistrations: [] };
+  }
+  return scopeCompleteness;
 }
 
 /**

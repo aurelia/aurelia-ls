@@ -14,6 +14,8 @@ import {
   type ResourceGraph,
   type ResourceScope,
   type ResourceScopeId,
+  type ScopeCompleteness,
+  type ScopeUnresolvedRegistration,
   type ProjectSemantics,
   type ElementRes,
   type AttrRes,
@@ -24,7 +26,13 @@ import {
   type Sourced,
   type NormalizedPath,
 } from '../compiler.js';
-import type { RegistrationAnalysis, RegistrationEvidence } from "../register/types.js";
+import type {
+  RegistrationAnalysis,
+  RegistrationEvidence,
+  RegistrationSite,
+  UnresolvedPattern,
+  UnresolvedRegistration,
+} from "../register/types.js";
 import { stableStringify } from "../fingerprint/fingerprint.js";
 import { unwrapSourced } from "../assemble/sourced.js";
 
@@ -48,6 +56,7 @@ type LocalScopeData = {
   className: string;
   parentOwner: NormalizedPath | null;
   resources: MutableResourceCollections;
+  unresolvedRegistrations: ScopeUnresolvedRegistration[];
 };
 
 /**
@@ -79,31 +88,45 @@ export function buildResourceGraph(
 
   // Separate sites by scope
   const globalResources = createEmptyCollections();
+  const globalUnresolved: ScopeUnresolvedRegistration[] = [];
   const localScopes = new Map<NormalizedPath, LocalScopeData>();
 
   for (const site of registration.sites) {
-    // Only process resolved resource references
-    if (site.resourceRef.kind !== "resolved") continue;
-
-    const resource = site.resourceRef.resource;
-
     if (site.scope.kind === "global") {
-      // Add to global scope
-      addToCollections(globalResources, resource);
-    } else {
-      // Local scope - owner may be a component or a local-template synthetic owner.
-      const scopeKey = site.scope.owner;
-      let className = extractClassNameFromEvidence(site.evidence);
-      let parentOwner: NormalizedPath | null = null;
-
-      if (site.evidence.kind === "template-import" && site.evidence.localTemplateName) {
-        className = localTemplateScopeLabel(site.evidence.className, site.evidence.localTemplateName);
-        parentOwner = site.evidence.component;
-        ensureLocalScopeEntry(localScopes, site.evidence.component, site.evidence.className, null);
+      if (site.resourceRef.kind === "resolved") {
+        addToCollections(globalResources, site.resourceRef.resource);
+      } else {
+        globalUnresolved.push(scopeUnresolvedFromSite(site));
       }
+      continue;
+    }
 
-      const scopeData = ensureLocalScopeEntry(localScopes, scopeKey, className, parentOwner);
-      addToCollections(scopeData.resources, resource, site.alias ?? null);
+    // Local scope - owner may be a component or a local-template synthetic owner.
+    const scopeKey = site.scope.owner;
+    let className = extractClassNameFromEvidence(site.evidence);
+    let parentOwner: NormalizedPath | null = null;
+
+    if (site.evidence.kind === "template-import" && site.evidence.localTemplateName) {
+      className = localTemplateScopeLabel(site.evidence.className, site.evidence.localTemplateName);
+      parentOwner = site.evidence.component;
+      ensureLocalScopeEntry(localScopes, site.evidence.component, site.evidence.className, null);
+    }
+
+    const scopeData = ensureLocalScopeEntry(localScopes, scopeKey, className, parentOwner);
+    if (site.resourceRef.kind === "resolved") {
+      addToCollections(scopeData.resources, site.resourceRef.resource, site.alias ?? null);
+    } else {
+      scopeData.unresolvedRegistrations.push(scopeUnresolvedFromSite(site));
+    }
+  }
+
+  for (const unresolved of registration.unresolved) {
+    const targetOwner = deriveKnownLocalOwner(unresolved, localScopes);
+    if (targetOwner) {
+      const scopeData = ensureLocalScopeEntry(localScopes, targetOwner, "unknown", null);
+      scopeData.unresolvedRegistrations.push(scopeUnresolvedFromAnalysis(unresolved));
+    } else {
+      globalUnresolved.push(scopeUnresolvedFromAnalysis(unresolved));
     }
   }
 
@@ -134,6 +157,7 @@ export function buildResourceGraph(
         parent: targetScope.parent,
         ...(targetScope.label ? { label: targetScope.label } : {}),
         resources: overlayScopeResources(targetScope.resources, overlay),
+        ...(targetScope.completeness ? { completeness: targetScope.completeness } : {}),
       };
     }
   }
@@ -166,11 +190,27 @@ export function buildResourceGraph(
           baseScope.resources,
           filterMutableCollectionsByActivatedPackages(scopeData.resources, activatedPackages),
         ),
+        ...(baseScope.completeness ? { completeness: baseScope.completeness } : {}),
       };
     }
   };
   createLocalScopesPass(false);
   createLocalScopesPass(true);
+
+  if (globalUnresolved.length > 0) {
+    const rootScope = scopes[baseGraph.root];
+    if (rootScope) {
+      scopes[baseGraph.root] = withScopeUnresolved(rootScope, globalUnresolved);
+    }
+  }
+
+  for (const [owner, scopeData] of localScopes) {
+    if (scopeData.unresolvedRegistrations.length === 0) continue;
+    const scopeId = `local:${owner}` as ResourceScopeId;
+    const scope = scopes[scopeId];
+    if (!scope) continue;
+    scopes[scopeId] = withScopeUnresolved(scope, scopeData.unresolvedRegistrations);
+  }
 
   return { version: baseGraph.version, root: baseGraph.root, scopes };
 }
@@ -207,6 +247,7 @@ function ensureLocalScopeEntry(
     className,
     parentOwner,
     resources: createEmptyCollections(),
+    unresolvedRegistrations: [],
   };
   localScopes.set(owner, created);
   return created;
@@ -214,6 +255,93 @@ function ensureLocalScopeEntry(
 
 function localTemplateScopeLabel(componentClassName: string, localTemplateName: string): string {
   return `${componentClassName}:${localTemplateName}`;
+}
+
+function scopeUnresolvedFromSite(site: RegistrationSite): ScopeUnresolvedRegistration {
+  return {
+    source: "site",
+    reason: site.resourceRef.kind === "unresolved" ? site.resourceRef.reason : "unknown",
+    file: fileFromEvidence(site.evidence),
+    span: {
+      start: site.span.start,
+      end: site.span.end,
+    },
+    ...(site.resourceRef.kind === "unresolved" ? { resourceName: site.resourceRef.name } : {}),
+  };
+}
+
+function scopeUnresolvedFromAnalysis(unresolved: UnresolvedRegistration): ScopeUnresolvedRegistration {
+  return {
+    source: "analysis",
+    reason: unresolved.reason,
+    file: unresolved.file,
+    span: {
+      start: unresolved.span.start,
+      end: unresolved.span.end,
+    },
+    pattern: { ...unresolvedPatternToRecord(unresolved.pattern) },
+  };
+}
+
+function unresolvedPatternToRecord(pattern: UnresolvedPattern): Readonly<Record<string, unknown>> {
+  return { ...pattern };
+}
+
+function withScopeUnresolved(
+  scope: ResourceScope,
+  unresolved: readonly ScopeUnresolvedRegistration[],
+): ResourceScope {
+  if (unresolved.length === 0) return scope;
+  const existing = scope.completeness?.unresolvedRegistrations ?? [];
+  return {
+    ...scope,
+    completeness: {
+      complete: false,
+      unresolvedRegistrations: [...existing, ...unresolved],
+    },
+  };
+}
+
+function fileFromEvidence(evidence: RegistrationEvidence): NormalizedPath {
+  switch (evidence.kind) {
+    case "aurelia-register":
+    case "container-register":
+    case "plugin":
+      return evidence.file;
+    case "static-dependencies":
+    case "decorator-dependencies":
+    case "static-au-dependencies":
+      return evidence.component;
+    case "template-import":
+    case "local-template-definition":
+      return evidence.templateFile;
+  }
+}
+
+function deriveKnownLocalOwner(
+  unresolved: UnresolvedRegistration,
+  localScopes: ReadonlyMap<NormalizedPath, LocalScopeData>,
+): NormalizedPath | null {
+  const isTemplateOwnerAmbiguity =
+    unresolved.pattern.kind === "other"
+    && unresolved.pattern.description === "template-import-owner-ambiguous";
+  if (!isTemplateOwnerAmbiguity) {
+    return null;
+  }
+
+  if (localScopes.has(unresolved.file)) {
+    return unresolved.file;
+  }
+
+  const sourceMatch = /source file '([^']+)'/i.exec(unresolved.reason);
+  if (sourceMatch) {
+    const owner = sourceMatch[1] as NormalizedPath;
+    if (localScopes.has(owner)) {
+      return owner;
+    }
+  }
+
+  return null;
 }
 
 function addToCollections(
@@ -435,6 +563,7 @@ function cloneResourceGraph(graph: ResourceGraph): ResourceGraph {
       parent: scope.parent,
       ...(scope.label ? { label: scope.label } : {}),
       resources: clonePartialResources(scope.resources),
+      ...(scope.completeness ? { completeness: cloneScopeCompleteness(scope.completeness) } : {}),
     };
   }
   return { version: graph.version, root: graph.root, scopes };
@@ -457,9 +586,21 @@ function cloneResourceGraphWithFilter(
       parent: scope.parent,
       ...(scope.label ? { label: scope.label } : {}),
       resources: filterResourceCollectionsByActivatedPackages(scope.resources, activatedPackages),
+      ...(scope.completeness ? { completeness: cloneScopeCompleteness(scope.completeness) } : {}),
     };
   }
   return { version: graph.version, root: graph.root, scopes };
+}
+
+function cloneScopeCompleteness(completeness: ScopeCompleteness): ScopeCompleteness {
+  return {
+    complete: completeness.complete,
+    unresolvedRegistrations: completeness.unresolvedRegistrations.map((entry) => ({
+      ...entry,
+      span: { ...entry.span },
+      ...(entry.pattern ? { pattern: { ...entry.pattern } } : {}),
+    })),
+  };
 }
 
 function filterResourceCollectionsByActivatedPackages(
