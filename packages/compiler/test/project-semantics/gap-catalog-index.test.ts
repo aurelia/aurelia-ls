@@ -20,17 +20,21 @@ import { describe, it, expect } from "vitest";
 import type {
   CatalogGap,
   NormalizedPath,
+  RegistrationAnalysis,
   ResourceKind,
   ResourceScopeId,
   ScopeCompleteness,
 } from "@aurelia-ls/compiler";
+import { toSourceFileId } from "@aurelia-ls/compiler";
 import { buildResourceCatalog } from "../../src/schema/catalog.js";
 import { createSemanticsLookup, prepareProjectSemantics, BUILTIN_SEMANTICS } from "../../src/schema/registry.js";
 import { gap, type AnalysisGap } from "../../src/project-semantics/evaluate/types.js";
 import { analysisGapToCatalogGap } from "../../src/project-semantics/resolve.js";
 import { buildSemanticsArtifacts } from "../../src/project-semantics/assemble/build.js";
+import { buildCustomElementDef } from "../../src/project-semantics/assemble/resource-def.js";
 import { applyThirdPartyResources, buildThirdPartyResources } from "../../src/project-semantics/third-party/index.js";
 import { discoverProjectSemantics } from "../../src/project-semantics/resolve.js";
+import { buildResourceGraph } from "../../src/project-semantics/scope/builder.js";
 import { DiagnosticsRuntime } from "../../src/diagnostics/runtime.js";
 import { createProgramFromMemory } from "./_helpers/index.js";
 
@@ -84,6 +88,14 @@ function incompleteScopeCompleteness(reason: string): ScopeCompleteness {
         pattern: { kind: "function-call", functionName: "loadPlugins" },
       },
     ],
+  };
+}
+
+function span(file: NormalizedPath) {
+  return {
+    file: toSourceFileId(file),
+    start: 0,
+    end: 1,
   };
 }
 
@@ -429,6 +441,61 @@ describe("Scope completeness propagation: catalog and lookup", () => {
 
     expect(rebuilt.catalog.scopeCompleteness?.[rootScope]?.complete).toBe(false);
     expect(lookup.isScopeComplete()).toBe(false);
+  });
+
+  it("routes template-owner ambiguity to the owning local scope and keeps root complete", () => {
+    const ownerPath = "/app/multi-owner.ts" as NormalizedPath;
+    const templatePath = "/app/multi-owner.html" as NormalizedPath;
+    const registration: RegistrationAnalysis = {
+      sites: [
+        {
+          resourceRef: {
+            kind: "resolved",
+            resource: buildCustomElementDef({
+              name: "local-widget",
+              className: "LocalWidget",
+              file: "/app/local-widget.ts" as NormalizedPath,
+            }),
+          },
+          scope: { kind: "local", owner: ownerPath },
+          evidence: {
+            kind: "template-import",
+            origin: "sibling",
+            component: ownerPath,
+            className: "FirstOwner",
+            templateFile: templatePath,
+          },
+          span: span(templatePath),
+        },
+      ],
+      orphans: [],
+      unresolved: [
+        {
+          pattern: { kind: "other", description: "template-import-owner-ambiguous" },
+          file: templatePath,
+          span: span(templatePath),
+          reason: "Cannot determine owner for source file '/app/multi-owner.ts'. Candidate owners: FirstOwner, SecondOwner",
+        },
+      ],
+      activatedPlugins: [],
+    };
+
+    const graph = buildResourceGraph(registration);
+    const ownerScope = `local:${ownerPath}` as ResourceScopeId;
+    const sem = { ...BUILTIN_SEMANTICS, resourceGraph: graph, defaultScope: ownerScope };
+    const lookup = createSemanticsLookup(sem, { graph, scope: ownerScope });
+
+    expect(lookup.isScopeComplete(ownerScope)).toBe(false);
+    expect(lookup.isScopeComplete(graph.root)).toBe(true);
+
+    const localCompleteness = lookup.scopeCompleteness(ownerScope);
+    expect(localCompleteness.unresolvedRegistrations).toHaveLength(1);
+    expect(localCompleteness.unresolvedRegistrations[0]?.source).toBe("analysis");
+    expect(localCompleteness.unresolvedRegistrations[0]?.reason).toContain("Candidate owners");
+    expect(localCompleteness.unresolvedRegistrations[0]?.pattern?.kind).toBe("other");
+    expect(localCompleteness.unresolvedRegistrations[0]?.pattern?.description).toBe("template-import-owner-ambiguous");
+
+    expect(lookup.scopeCompleteness(graph.root).unresolvedRegistrations).toHaveLength(0);
   });
 });
 
