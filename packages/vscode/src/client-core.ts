@@ -2,7 +2,7 @@ import { LanguageClient, TransportKind } from "vscode-languageclient/node.js";
 import type { LanguageClientOptions, ServerOptions, Middleware } from "vscode-languageclient/node.js";
 import { type ClientLogger } from "./log.js";
 import { getVscodeApi, type VscodeApi } from "./vscode-api.js";
-import type { ExtensionContext, MarkdownString } from "vscode";
+import type { ExtensionContext, MarkdownString, SemanticTokens, TextDocument } from "vscode";
 import { applyDiagnosticsUxAugmentation } from "./features/diagnostics/taxonomy.js";
 
 async function fileExists(vscode: VscodeApi, p: string): Promise<boolean> {
@@ -44,7 +44,17 @@ type DiagnosticsUxState = {
   enabled: boolean;
 };
 
-function createMiddleware(vscode: VscodeApi, diagnosticsUx: DiagnosticsUxState): Middleware {
+type InlineUxState = {
+  enabled: boolean;
+  onSemanticTokens: ((document: TextDocument, tokens: SemanticTokens) => void) | null;
+};
+
+function createMiddleware(
+  vscode: VscodeApi,
+  logger: ClientLogger,
+  diagnosticsUx: DiagnosticsUxState,
+  inlineUx: InlineUxState,
+): Middleware {
   return {
     provideHover: async (document, position, token, next) => {
       const hover = await next(document, position, token);
@@ -65,6 +75,17 @@ function createMiddleware(vscode: VscodeApi, diagnosticsUx: DiagnosticsUxState):
       }
       next(uri, diagnostics);
     },
+    provideDocumentSemanticTokens: async (document, token, next) => {
+      const semanticTokens = await next(document, token);
+      if (semanticTokens && inlineUx.enabled && inlineUx.onSemanticTokens) {
+        try {
+          inlineUx.onSemanticTokens(document, semanticTokens);
+        } catch (error) {
+          logger.warn(`[client] inline semantic token hook failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+      return semanticTokens;
+    },
   };
 }
 
@@ -74,6 +95,7 @@ export class AureliaLanguageClient {
   #vscode: VscodeApi;
   #serverEnv: Record<string, string> | null = null;
   #diagnosticsUx: DiagnosticsUxState = { enabled: false };
+  #inlineUx: InlineUxState = { enabled: false, onSemanticTokens: null };
 
   constructor(logger: ClientLogger, vscode: VscodeApi = getVscodeApi()) {
     this.#logger = logger;
@@ -86,6 +108,16 @@ export class AureliaLanguageClient {
 
   setDiagnosticsUxEnabled(enabled: boolean): void {
     this.#diagnosticsUx.enabled = enabled;
+  }
+
+  setInlineUxEnabled(enabled: boolean): void {
+    this.#inlineUx.enabled = enabled;
+  }
+
+  setInlineUxSemanticTokensConsumer(
+    consumer: ((document: TextDocument, tokens: SemanticTokens) => void) | null,
+  ): void {
+    this.#inlineUx.onSemanticTokens = consumer;
   }
 
   async start(context: ExtensionContext, options: { serverEnv?: Record<string, string> } = {}): Promise<LanguageClient> {
@@ -120,7 +152,7 @@ export class AureliaLanguageClient {
         { scheme: "untitled", language: "html" },
       ],
       synchronize: { fileEvents },
-      middleware: createMiddleware(this.#vscode, this.#diagnosticsUx),
+      middleware: createMiddleware(this.#vscode, this.#logger, this.#diagnosticsUx, this.#inlineUx),
     };
 
     const client = new LanguageClient("aurelia-ls", "Aurelia Language Server", serverOptions, clientOptions);
