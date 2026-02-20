@@ -352,6 +352,7 @@ export {
   toSourceLoc,
   idKey,
   idFromKey,
+  defaultPathCaseSensitivity,
   normalizePathForId,
   toSourceFileId,
   provenanceSpan,

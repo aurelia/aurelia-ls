@@ -12,6 +12,7 @@ import {
   toExprIdMap,
   hashIdentity,
   deterministicStringId,
+  defaultPathCaseSensitivity,
   normalizePathForId,
   toSourceFileId,
   HierarchicalIdBuilder,
@@ -74,12 +75,14 @@ describe("identity helpers", () => {
     expect(id1.startsWith("expr_")).toBe(true);
   });
 
-  test("normalizePathForId and toSourceFileId respect platform rules", () => {
+  test("normalizePathForId and toSourceFileId respect the shared case oracle", () => {
     const normalized = normalizePathForId("C:\\Foo\\Bar");
-    const expected = process.platform === "win32" ? "c:/foo/bar" : "C:/Foo/Bar";
+    const expected = defaultPathCaseSensitivity() ? "C:/Foo/Bar" : "c:/foo/bar";
 
     expect(normalized).toBe(expected);
     expect(toSourceFileId("C:\\Foo\\Bar")).toBe(expected);
+    expect(normalizePathForId("C:\\Foo\\Bar", true)).toBe("C:/Foo/Bar");
+    expect(normalizePathForId("C:\\Foo\\Bar", false)).toBe("c:/foo/bar");
   });
 
   test("HierarchicalIdBuilder and NodeIdGen build stable ids", () => {

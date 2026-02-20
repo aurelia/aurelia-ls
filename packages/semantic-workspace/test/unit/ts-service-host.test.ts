@@ -25,6 +25,15 @@ function createHarness() {
   return { paths, overlay, tsService };
 }
 
+test("path utils canonicalization follows explicit case-sensitivity policy", () => {
+  const sensitive = createPathUtils(true);
+  const insensitive = createPathUtils(false);
+  const input = "C:\\Foo\\Bar.ts";
+
+  expect(sensitive.canonical(input)).toBe("C:/Foo/Bar.ts");
+  expect(insensitive.canonical(input)).toBe("c:/foo/bar.ts");
+});
+
 test("configure loads tsconfig and base roots", () => {
   const { tsService, overlay, paths } = createHarness();
   const before = tsService.getProjectVersion();

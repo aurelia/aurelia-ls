@@ -6,6 +6,8 @@
  * - Small helpers for hierarchical ids (templates/dom tree)
  * ======================================================================================= */
 
+import ts from "typescript";
+
 export type Brand<T extends string> = { readonly __brand: T };
 export type Branded<TValue, TBrand extends string> = TValue & Brand<TBrand>;
 
@@ -144,9 +146,18 @@ export function deterministicStringId<TBrand extends string>(
   return `${prefix}_${hashForId(payload)}` as StringId<TBrand>;
 }
 
-export function normalizePathForId(filePath: string): NormalizedPath {
+export function defaultPathCaseSensitivity(): boolean {
+  const hostCaseSensitivity = ts.sys.useCaseSensitiveFileNames;
+  if (typeof hostCaseSensitivity === "boolean") return hostCaseSensitivity;
+  return process.platform !== "win32";
+}
+
+export function normalizePathForId(
+  filePath: string,
+  caseSensitive: boolean = defaultPathCaseSensitivity(),
+): NormalizedPath {
   const normalized = filePath.split("\\").join("/");
-  const canonical = process.platform === "win32" ? normalized.toLowerCase() : normalized;
+  const canonical = caseSensitive ? normalized : normalized.toLowerCase();
   return brandString<"NormalizedPath">(canonical);
 }
 

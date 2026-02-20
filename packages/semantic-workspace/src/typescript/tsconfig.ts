@@ -68,7 +68,7 @@ export function loadTsConfig(options: TsConfigLoadOptions): TsConfigSnapshot {
     readFile: (p) => ts.sys.readFile(p),
     readDirectory: (p, extensions, excludes, includes, depth) =>
       ts.sys.readDirectory(p, extensions, excludes, includes, depth),
-    useCaseSensitiveFileNames: ts.sys.useCaseSensitiveFileNames ?? false,
+    useCaseSensitiveFileNames: options.paths.isCaseSensitive(),
   };
 
   const parsed = ts.parseJsonConfigFileContent(read.config ?? {}, parseHost, path.dirname(configPath), undefined, configPath);

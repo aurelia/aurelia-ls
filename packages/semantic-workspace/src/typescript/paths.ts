@@ -1,16 +1,14 @@
-import ts from "typescript";
-import { normalizePathForId, type NormalizedPath } from "@aurelia-ls/compiler";
+import { defaultPathCaseSensitivity, normalizePathForId, type NormalizedPath } from "@aurelia-ls/compiler";
 
 export class PathUtils {
   constructor(private readonly caseSensitive: boolean) {}
 
   normalize(file: string): NormalizedPath {
-    return normalizePathForId(file);
+    return normalizePathForId(file, this.caseSensitive);
   }
 
   canonical(file: string): NormalizedPath {
-    const normalized = this.normalize(file);
-    return this.caseSensitive ? normalized : normalizePathForId(normalized.toLowerCase());
+    return this.normalize(file);
   }
 
   isCaseSensitive(): boolean {
@@ -18,6 +16,6 @@ export class PathUtils {
   }
 }
 
-export function createPathUtils(): PathUtils {
-  return new PathUtils(ts.sys.useCaseSensitiveFileNames ?? false);
+export function createPathUtils(caseSensitive = defaultPathCaseSensitivity()): PathUtils {
+  return new PathUtils(caseSensitive);
 }
