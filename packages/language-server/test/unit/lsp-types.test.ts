@@ -8,6 +8,8 @@ import {
   guessLanguage,
   spanToRange,
   mapWorkspaceDiagnostics,
+  AURELIA_LSP_DIAGNOSTIC_NAMESPACE_KEY,
+  AURELIA_LSP_DIAGNOSTIC_TAXONOMY_SCHEMA,
   mapWorkspaceCompletions,
   mapWorkspaceHover,
   mapWorkspaceLocations,
@@ -151,7 +153,54 @@ describe("mapWorkspaceDiagnostics", () => {
     const mapped = mapWorkspaceDiagnostics(spanUri, toRouted(diagnostics), lookupText);
     expect(mapped).toHaveLength(1);
     expect(mapped[0]?.severity).toBe(2); // DiagnosticSeverity.Warning
-    expect(mapped[0]?.data).toEqual({ confidence: "high" });
+    expect(mapped[0]?.data).toEqual({
+      confidence: "high",
+      [AURELIA_LSP_DIAGNOSTIC_NAMESPACE_KEY]: {
+        diagnostics: {
+          schema: AURELIA_LSP_DIAGNOSTIC_TAXONOMY_SCHEMA,
+          impact: "degraded",
+          actionability: "manual",
+          category: "toolchain",
+        },
+      },
+    });
+  });
+
+  test("merges taxonomy payload without dropping existing namespace data", () => {
+    const diagnostics: WorkspaceDiagnostic[] = [
+      makeDiagnostic({
+        code: "AU1002",
+        message: "Merge taxonomy",
+        severity: "warning",
+        span: makeSpan(spanUri, 6, 10),
+        data: {
+          confidence: "partial",
+          [AURELIA_LSP_DIAGNOSTIC_NAMESPACE_KEY]: {
+            traceId: "abc123",
+            diagnostics: {
+              detail: "existing",
+            },
+          },
+        },
+        uri: spanUri,
+      }),
+    ];
+
+    const mapped = mapWorkspaceDiagnostics(spanUri, toRouted(diagnostics), lookupText);
+    expect(mapped).toHaveLength(1);
+    expect(mapped[0]?.data).toEqual({
+      confidence: "partial",
+      [AURELIA_LSP_DIAGNOSTIC_NAMESPACE_KEY]: {
+        traceId: "abc123",
+        diagnostics: {
+          detail: "existing",
+          schema: AURELIA_LSP_DIAGNOSTIC_TAXONOMY_SCHEMA,
+          impact: "degraded",
+          actionability: "manual",
+          category: "toolchain",
+        },
+      },
+    });
   });
 
   test("skips diagnostics without spans", () => {

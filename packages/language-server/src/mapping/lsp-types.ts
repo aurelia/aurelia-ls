@@ -24,12 +24,26 @@ import type {
 } from "@aurelia-ls/semantic-workspace";
 import {
   canonicalDocumentUri,
+  type DiagnosticActionability,
+  type DiagnosticCategory,
+  type DiagnosticImpact,
   type DiagnosticSurface,
   type DocumentSpan,
   type DocumentUri,
 } from "@aurelia-ls/compiler";
 
 export type LookupTextFn = (uri: DocumentUri) => string | null;
+export const AURELIA_LSP_DIAGNOSTIC_NAMESPACE_KEY = "__aurelia" as const;
+export const AURELIA_LSP_DIAGNOSTIC_TAXONOMY_SCHEMA = "diagnostics-taxonomy/1" as const;
+
+type AureliaLspDiagnosticTaxonomy = {
+  schema: typeof AURELIA_LSP_DIAGNOSTIC_TAXONOMY_SCHEMA;
+  impact?: DiagnosticImpact;
+  actionability?: DiagnosticActionability;
+  category?: DiagnosticCategory;
+};
+
+type RecordValue = Readonly<Record<string, unknown>>;
 
 export function toLspUri(uri: DocumentUri): string {
   const canonical = canonicalDocumentUri(uri);
@@ -72,6 +86,35 @@ function toLspSeverity(sev?: "error" | "warning" | "info"): LspDiagnosticSeverit
   }
 }
 
+function asRecord(value: unknown): RecordValue | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as RecordValue;
+}
+
+function buildTaxonomyPayload(diag: WorkspaceDiagnostic): AureliaLspDiagnosticTaxonomy {
+  const taxonomy: AureliaLspDiagnosticTaxonomy = {
+    schema: AURELIA_LSP_DIAGNOSTIC_TAXONOMY_SCHEMA,
+  };
+  if (diag.impact) taxonomy.impact = diag.impact;
+  if (diag.actionability) taxonomy.actionability = diag.actionability;
+  if (diag.spec.category) taxonomy.category = diag.spec.category;
+  return taxonomy;
+}
+
+function mergeDiagnosticData(diag: WorkspaceDiagnostic): Record<string, unknown> {
+  const data = { ...(diag.data ?? {}) };
+  const existingNamespace = asRecord(data[AURELIA_LSP_DIAGNOSTIC_NAMESPACE_KEY]);
+  const existingDiagnostics = asRecord(existingNamespace?.diagnostics);
+  data[AURELIA_LSP_DIAGNOSTIC_NAMESPACE_KEY] = {
+    ...(existingNamespace ?? {}),
+    diagnostics: {
+      ...(existingDiagnostics ?? {}),
+      ...buildTaxonomyPayload(diag),
+    },
+  };
+  return data;
+}
+
 export function mapWorkspaceDiagnostics(
   uri: DocumentUri,
   diags: WorkspaceDiagnostics,
@@ -95,7 +138,7 @@ export function mapWorkspaceDiagnostics(
       source: diag.source ?? "aurelia",
     };
     if (severity !== undefined) base.severity = severity;
-    if (diag.data) base.data = diag.data;
+    base.data = mergeDiagnosticData(diag);
     if (related.length > 0) base.relatedInformation = related;
     mapped.push(base);
   }
