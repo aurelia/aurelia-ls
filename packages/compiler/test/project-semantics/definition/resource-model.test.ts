@@ -429,3 +429,142 @@ describe("R-BC1: builtin convergence integrity", () => {
     expect(result.semantics.controllers.repeat).toBeDefined();
   });
 });
+
+// =============================================================================
+// R-EA3: recognized extension merge contract
+// =============================================================================
+
+describe("R-EA3: recognized command/pattern merge contract", () => {
+  it("fills missing command keys conservatively and preserves builtin collisions", () => {
+    const result = buildSemanticsArtifacts([], undefined, {
+      recognizedBindingCommands: [
+        {
+          name: "my-cmd",
+          className: "MyCommand",
+          file: normalizePathForId("/repo/local.ts"),
+          source: "decorator",
+          declarationSpan: { start: 10, end: 20 },
+          nameSpan: { start: 12, end: 18 },
+        },
+        {
+          name: "bind",
+          className: "BindOverride",
+          file: normalizePathForId("/repo/local.ts"),
+          source: "decorator",
+          declarationSpan: { start: 30, end: 40 },
+          nameSpan: { start: 32, end: 36 },
+        },
+      ],
+    });
+
+    expect(result.semantics.commands["my-cmd"]).toBeDefined();
+    expect(result.semantics.commands["my-cmd"]?.commandKind.value).toBe("property");
+    expect(result.semantics.commands.bind.commandKind.value).toBe("property");
+    expect(result.semantics.commands.bind.mode?.value).toBe("default");
+
+    const uncertaintyKinds = (result.catalog.gaps ?? [])
+      .filter((gap) => gap.kind === "recognized-command-uncertain")
+      .map((gap) => gap.kind);
+    expect(uncertaintyKinds).toEqual(["recognized-command-uncertain"]);
+  });
+
+  it("fills missing pattern keys conservatively and preserves builtin collisions", () => {
+    const result = buildSemanticsArtifacts([], undefined, {
+      recognizedAttributePatterns: [
+        {
+          pattern: "PART.local",
+          symbols: ".",
+          className: "LocalPattern",
+          file: normalizePathForId("/repo/local.ts"),
+          source: "decorator",
+          declarationSpan: { start: 10, end: 20 },
+          patternSpan: { start: 11, end: 20 },
+          symbolsSpan: { start: 21, end: 22 },
+        },
+        {
+          pattern: ":PART",
+          symbols: ":",
+          className: "ColonPattern",
+          file: normalizePathForId("/repo/local.ts"),
+          source: "decorator",
+          declarationSpan: { start: 30, end: 40 },
+          patternSpan: { start: 31, end: 36 },
+          symbolsSpan: { start: 37, end: 38 },
+        },
+      ],
+    });
+
+    const local = result.semantics.patterns.find((entry) => entry.pattern.value === "PART.local" && entry.symbols.value === ".");
+    expect(local).toBeDefined();
+    expect(local?.interpret.value.kind).toBe("fixed-command");
+    if (local?.interpret.value.kind === "fixed-command") {
+      expect(local.interpret.value.command).toBe("bind");
+    }
+
+    const colon = result.semantics.patterns.find((entry) => entry.pattern.value === ":PART" && entry.symbols.value === ":");
+    expect(colon).toBeDefined();
+    expect(colon?.interpret.value.kind).toBe("fixed-command");
+    if (colon?.interpret.value.kind === "fixed-command") {
+      expect(colon.interpret.value.mode).toBe("toView");
+    }
+
+    const uncertaintyKinds = (result.catalog.gaps ?? [])
+      .filter((gap) => gap.kind === "recognized-pattern-uncertain")
+      .map((gap) => gap.kind);
+    expect(uncertaintyKinds).toEqual(["recognized-pattern-uncertain"]);
+  });
+
+  it("produces deterministic merge output under recognized input reordering", () => {
+    const recognizedBindingCommands = [
+      {
+        name: "local-a",
+        className: "LocalA",
+        file: normalizePathForId("/repo/a.ts"),
+        source: "decorator" as const,
+        declarationSpan: { start: 10, end: 20 },
+      },
+      {
+        name: "local-b",
+        className: "LocalB",
+        file: normalizePathForId("/repo/b.ts"),
+        source: "decorator" as const,
+        declarationSpan: { start: 10, end: 20 },
+      },
+    ];
+    const recognizedAttributePatterns = [
+      {
+        pattern: "PART.alpha",
+        symbols: ".",
+        className: "AlphaPattern",
+        file: normalizePathForId("/repo/a.ts"),
+        source: "decorator" as const,
+        declarationSpan: { start: 10, end: 20 },
+      },
+      {
+        pattern: "PART.beta",
+        symbols: ".",
+        className: "BetaPattern",
+        file: normalizePathForId("/repo/b.ts"),
+        source: "decorator" as const,
+        declarationSpan: { start: 10, end: 20 },
+      },
+    ];
+
+    const forward = buildSemanticsArtifacts([], undefined, {
+      recognizedBindingCommands,
+      recognizedAttributePatterns,
+    });
+    const reverse = buildSemanticsArtifacts([], undefined, {
+      recognizedBindingCommands: [...recognizedBindingCommands].reverse(),
+      recognizedAttributePatterns: [...recognizedAttributePatterns].reverse(),
+    });
+
+    const forwardCommands = Object.keys(forward.catalog.bindingCommands).sort();
+    const reverseCommands = Object.keys(reverse.catalog.bindingCommands).sort();
+    expect(reverseCommands).toEqual(forwardCommands);
+
+    const forwardPatterns = forward.catalog.attributePatterns.map((entry) => `${entry.pattern}|${entry.symbols}`).sort();
+    const reversePatterns = reverse.catalog.attributePatterns.map((entry) => `${entry.pattern}|${entry.symbols}`).sort();
+    expect(reversePatterns).toEqual(forwardPatterns);
+  });
+});

@@ -149,7 +149,7 @@ describe("Project semantics definition channels", () => {
     expect(convergenceFingerprint(reverse)).toEqual(convergenceFingerprint(forward));
   });
 
-  it("surfaces recognized command/pattern identities without pre-merge semantics changes", () => {
+  it("merges recognized command/pattern identities onto semantics/catalog/syntax with explicit uncertainty", () => {
     const result = discoverExtensionsWithRoots([
       "/workspace/src/local-extensions.ts",
       "/external/runtime-extensions.ts",
@@ -168,19 +168,43 @@ describe("Project semantics definition channels", () => {
       "PART.local|.@/workspace/src/local-extensions.ts",
     ]);
 
-    expect(result.semantics.commands["local-cmd"]).toBeUndefined();
-    expect(result.syntax.bindingCommands["local-cmd"]).toBeUndefined();
-    expect(result.catalog.bindingCommands["local-cmd"]).toBeUndefined();
+    expect(result.semantics.commands["local-cmd"]).toBeDefined();
+    expect(result.semantics.commands["runtime-cmd"]).toBeDefined();
+    expect(result.semantics.commands["local-cmd"]?.commandKind.value).toBe("property");
+    expect(result.syntax.bindingCommands["local-cmd"]).toBeDefined();
+    expect(result.syntax.bindingCommands["local-cmd"]?.kind).toBe("property");
+    expect(result.catalog.bindingCommands["local-cmd"]).toBeDefined();
+    expect(result.catalog.bindingCommands["local-cmd"]?.kind).toBe("property");
 
     expect(
-      result.semantics.patterns.some((entry) => entry.pattern.value === "PART.local"),
-    ).toBe(false);
+      result.semantics.patterns.some((entry) => entry.pattern.value === "PART.local" && entry.symbols.value === "."),
+    ).toBe(true);
     expect(
       result.syntax.attributePatterns.some((entry) => entry.pattern === "PART.local"),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       result.catalog.attributePatterns.some((entry) => entry.pattern === "PART.local"),
-    ).toBe(false);
+    ).toBe(true);
+
+    // Builtin precedence wins for collisions (":PART" should keep builtin mode toView).
+    const builtinColonPattern = result.semantics.patterns.find(
+      (entry) => entry.pattern.value === ":PART" && entry.symbols.value === ":",
+    );
+    expect(builtinColonPattern).toBeDefined();
+    expect(builtinColonPattern?.interpret.value.kind).toBe("fixed-command");
+    if (builtinColonPattern?.interpret.value.kind === "fixed-command") {
+      expect(builtinColonPattern.interpret.value.mode).toBe("toView");
+    }
+
+    const uncertaintyKinds = (result.catalog.gaps ?? [])
+      .filter((gap) => gap.kind === "recognized-command-uncertain" || gap.kind === "recognized-pattern-uncertain")
+      .map((gap) => gap.kind)
+      .sort();
+    expect(uncertaintyKinds).toEqual([
+      "recognized-command-uncertain",
+      "recognized-command-uncertain",
+      "recognized-pattern-uncertain",
+    ]);
   });
 
   it("keeps recognized command/pattern streams deterministic under root input reordering", () => {
@@ -216,6 +240,12 @@ describe("Project semantics definition channels", () => {
     ).toBe(true);
     expect(
       unknownRegistrationDiagnostics.some((diagnostic) => diagnostic.message.includes("attribute pattern for DynamicPattern")),
+    ).toBe(true);
+    expect(
+      unknownRegistrationDiagnostics.some((diagnostic) => diagnostic.message.includes("Binding command 'local-cmd' merged with conservative defaults")),
+    ).toBe(true);
+    expect(
+      unknownRegistrationDiagnostics.some((diagnostic) => diagnostic.message.includes("Attribute pattern 'PART.local' merged with conservative interpret")),
     ).toBe(true);
   });
 });

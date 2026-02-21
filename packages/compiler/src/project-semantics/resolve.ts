@@ -346,13 +346,22 @@ export function discoverProjectSemantics(
     // Stage: assemble
     log.info("[discovery] building semantics artifacts...");
     trace.event("discovery.semantics.start");
-    const { semantics, catalog, syntax, definitionAuthority, definitionConvergence } = buildSemanticsArtifacts(
+    const {
+      semantics,
+      catalog,
+      syntax,
+      definitionAuthority,
+      definitionConvergence,
+      mergeUncertaintyGaps,
+    } = buildSemanticsArtifacts(
       convergedResources,
       config?.baseSemantics,
       {
         confidence: catalogConfidence,
         ...(catalogGaps.length ? { gaps: catalogGaps } : {}),
         ...(candidateOverrides.size > 0 ? { candidateOverrides } : {}),
+        ...(dedupedBindingCommands.length > 0 ? { recognizedBindingCommands: dedupedBindingCommands } : {}),
+        ...(dedupedAttributePatterns.length > 0 ? { recognizedAttributePatterns: dedupedAttributePatterns } : {}),
       },
     );
     trace.event("discovery.semantics.done", {
@@ -444,10 +453,13 @@ export function discoverProjectSemantics(
       }));
 
     const convergenceDiagnostics = definitionConvergenceToDiagnostics(definitionConvergence, diagEmitter);
+    const mergeUncertaintyDiagnostics = mergeUncertaintyGaps
+      .map((gap) => catalogGapToDiagnostic(gap, diagEmitter));
 
     // Merge all diagnostics: matcher gaps + convergence + orphans + unresolved patterns + unresolved refs
     const allDiagnostics: ProjectSemanticsDiscoveryDiagnostic[] = [
       ...analysisGaps.map((gap) => gapToDiagnostic(gap, diagEmitter)),
+      ...mergeUncertaintyDiagnostics,
       ...convergenceDiagnostics,
       ...orphansToDiagnostics(registration.orphans, diagEmitter),
       ...unresolvedToDiagnostics(registration.unresolved, diagEmitter),
@@ -459,6 +471,7 @@ export function discoverProjectSemantics(
       "discovery.resourceEvidenceCount": convergedResources.length,
       "discovery.bindingCommandRecognitionCount": dedupedBindingCommands.length,
       "discovery.attributePatternRecognitionCount": dedupedAttributePatterns.length,
+      "discovery.mergeUncertaintyGapCount": mergeUncertaintyGaps.length,
       "discovery.globalCount": globalCount,
       "discovery.localCount": localCount,
       "discovery.orphanCount": registration.orphans.length,
@@ -517,6 +530,21 @@ function gapToDiagnostic(gap: AnalysisGap, emitter: ProjectSemanticsDiscoveryDia
     message: `${gap.what}: ${gap.suggestion}`,
     severity: code === "aurelia/gap/cache-corrupt" ? "warning" : "info",
     data: { gapKind: gap.why.kind },
+  }));
+  return uri ? { ...diagnostic, uri } : diagnostic;
+}
+
+function catalogGapToDiagnostic(
+  gap: CatalogGap,
+  emitter: ProjectSemanticsDiscoveryDiagnosticEmitter,
+): ProjectSemanticsDiscoveryDiagnostic {
+  const uri = gap.resource
+    ? asDocumentUri(normalizePathForId(gap.resource))
+    : undefined;
+  const diagnostic = toRawDiagnostic(emitter.emit("aurelia/gap/unknown-registration", {
+    message: gap.message,
+    severity: "info",
+    data: { gapKind: gap.kind },
   }));
   return uri ? { ...diagnostic, uri } : diagnostic;
 }

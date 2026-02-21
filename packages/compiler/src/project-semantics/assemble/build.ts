@@ -6,6 +6,7 @@ import type {
   CustomElementDef,
   NormalizedPath,
   ResourceKind,
+  SourceLocation,
   Sourced,
   ResourceCatalog,
   ResourceDef,
@@ -15,8 +16,17 @@ import type {
   TemplateSyntaxRegistry,
   ValueConverterDef,
 } from '../compiler.js';
+import type { AttributePatternDef, BindingCommandDef, PatternInterpret } from '../../schema/types.js';
 import { BUILTIN_SEMANTICS, buildResourceCatalog, prepareProjectSemantics } from '../compiler.js';
 import { unwrapSourced } from "./sourced.js";
+import type {
+  RecognizedAttributePattern,
+  RecognizedBindingCommand,
+} from "../recognize/extensions.js";
+import {
+  compareAttributePatternRecognition,
+  compareBindingCommandRecognition,
+} from "../recognize/extensions.js";
 import {
   mergeResourceDefinitionCandidates,
   type DefinitionReductionReason,
@@ -48,6 +58,8 @@ export interface DefinitionCandidateOverride {
 export interface BuildSemanticsArtifactsOptions {
   readonly gaps?: readonly CatalogGap[];
   readonly confidence?: CatalogConfidence;
+  readonly recognizedBindingCommands?: readonly RecognizedBindingCommand[];
+  readonly recognizedAttributePatterns?: readonly RecognizedAttributePattern[];
   /**
    * Optional per-resource convergence metadata overrides.
    *
@@ -65,6 +77,7 @@ export interface SemanticsArtifacts {
    */
   readonly definitionAuthority: readonly ResourceDef[];
   readonly definitionConvergence: readonly DefinitionConvergenceRecord[];
+  readonly mergeUncertaintyGaps: readonly CatalogGap[];
 }
 
 export function buildSemanticsArtifacts(
@@ -82,6 +95,7 @@ export function buildSemanticsArtifacts(
   const bindingBehaviors: Record<string, BindingBehaviorDef> = {};
   const definitionAuthority: ResourceDef[] = [];
   const definitionConvergence: DefinitionConvergenceRecord[] = [];
+  const mergeUncertaintyGaps: CatalogGap[] = [];
 
   const { grouped, unnamedGaps } = groupDefinitionCandidates(resources, opts?.candidateOverrides);
   for (const candidates of grouped.values()) {
@@ -128,6 +142,16 @@ export function buildSemanticsArtifacts(
     }
   }
 
+  const mergedCommands = mergeRecognizedBindingCommands(
+    base.commands,
+    opts?.recognizedBindingCommands,
+  );
+  const mergedPatterns = mergeRecognizedAttributePatterns(
+    base.patterns,
+    opts?.recognizedAttributePatterns,
+  );
+  mergeUncertaintyGaps.push(...mergedCommands.uncertaintyGaps, ...mergedPatterns.uncertaintyGaps);
+
   const sem: ProjectSemantics = {
     ...stripped,
     elements: { ...base.elements, ...elements },
@@ -135,8 +159,8 @@ export function buildSemanticsArtifacts(
     controllers: { ...base.controllers, ...controllers },
     valueConverters: { ...base.valueConverters, ...valueConverters },
     bindingBehaviors: { ...base.bindingBehaviors, ...bindingBehaviors },
-    commands: base.commands,
-    patterns: base.patterns,
+    commands: mergedCommands.commands,
+    patterns: mergedPatterns.patterns,
     dom: base.dom,
     events: base.events,
     naming: base.naming,
@@ -144,10 +168,13 @@ export function buildSemanticsArtifacts(
   };
 
   const prepared = prepareProjectSemantics(sem);
-  const catalogOpts = unnamedGaps.length > 0 || opts
+  const catalogOpts = unnamedGaps.length > 0 || mergeUncertaintyGaps.length > 0 || opts
     ? {
         ...opts,
-        gaps: [...(opts?.gaps ?? []), ...unnamedGaps],
+        gaps: [...(opts?.gaps ?? []), ...unnamedGaps, ...mergeUncertaintyGaps],
+        confidence: mergeUncertaintyGaps.length > 0
+          ? degradeConfidenceForUncertainty(opts?.confidence)
+          : opts?.confidence,
         scopeCompleteness: prepared.catalog.scopeCompleteness,
       }
     : undefined;
@@ -168,6 +195,7 @@ export function buildSemanticsArtifacts(
     syntax,
     definitionAuthority,
     definitionConvergence,
+    mergeUncertaintyGaps,
   };
 }
 
@@ -302,4 +330,161 @@ function createDefinitionCandidateId(resource: ResourceDef, ordinal: number): st
   const className = unwrapSourced(resource.className) ?? "";
   const file = resource.file ?? "";
   return `${resource.kind}|${name}|${className}|${file}|${ordinal}`;
+}
+
+interface BindingCommandMergeResult {
+  readonly commands: Record<string, BindingCommandDef>;
+  readonly uncertaintyGaps: CatalogGap[];
+}
+
+function mergeRecognizedBindingCommands(
+  baseCommands: Readonly<Record<string, BindingCommandDef>>,
+  recognized: readonly RecognizedBindingCommand[] | undefined,
+): BindingCommandMergeResult {
+  const commands: Record<string, BindingCommandDef> = { ...baseCommands };
+  const uncertaintyGaps: CatalogGap[] = [];
+  if (!recognized || recognized.length === 0) {
+    return { commands, uncertaintyGaps };
+  }
+
+  const sorted = [...recognized].sort(compareBindingCommandRecognition);
+  for (const recognition of sorted) {
+    const key = recognition.name;
+    if (commands[key]) {
+      continue;
+    }
+    commands[key] = createConservativeBindingCommandDef(recognition);
+    uncertaintyGaps.push({
+      kind: "recognized-command-uncertain",
+      message: `Binding command '${recognition.name}' merged with conservative defaults (kind=property).`,
+      resource: recognition.file,
+    });
+  }
+
+  return { commands, uncertaintyGaps };
+}
+
+interface AttributePatternMergeResult {
+  readonly patterns: AttributePatternDef[];
+  readonly uncertaintyGaps: CatalogGap[];
+}
+
+function mergeRecognizedAttributePatterns(
+  basePatterns: readonly AttributePatternDef[],
+  recognized: readonly RecognizedAttributePattern[] | undefined,
+): AttributePatternMergeResult {
+  const patterns = [...basePatterns];
+  const uncertaintyGaps: CatalogGap[] = [];
+  if (!recognized || recognized.length === 0) {
+    return { patterns, uncertaintyGaps };
+  }
+
+  const existing = new Set(
+    basePatterns.map((pattern) => {
+      const pat = pattern.pattern.value ?? "";
+      const symbols = pattern.symbols.value ?? "";
+      return `${pat}|${symbols}`;
+    }),
+  );
+  const sorted = [...recognized].sort(compareAttributePatternRecognition);
+
+  for (const recognition of sorted) {
+    const key = `${recognition.pattern}|${recognition.symbols}`;
+    if (existing.has(key)) {
+      continue;
+    }
+    const interpret = inferConservativePatternInterpret(recognition.pattern);
+    patterns.push(createConservativeAttributePatternDef(recognition, interpret));
+    existing.add(key);
+    uncertaintyGaps.push({
+      kind: "recognized-pattern-uncertain",
+      message: `Attribute pattern '${recognition.pattern}' merged with conservative interpret '${describePatternInterpret(interpret)}'.`,
+      resource: recognition.file,
+    });
+  }
+
+  return { patterns, uncertaintyGaps };
+}
+
+function createConservativeBindingCommandDef(
+  recognition: RecognizedBindingCommand,
+): BindingCommandDef {
+  const nameLocation = toRecognitionLocation(recognition.file, recognition.nameSpan, recognition.declarationSpan);
+  return {
+    name: configValue(recognition.name, nameLocation),
+    commandKind: configValue("property", toRecognitionLocation(recognition.file, recognition.declarationSpan, recognition.nameSpan)),
+  };
+}
+
+function createConservativeAttributePatternDef(
+  recognition: RecognizedAttributePattern,
+  interpret: PatternInterpret,
+): AttributePatternDef {
+  return {
+    pattern: configValue(
+      recognition.pattern,
+      toRecognitionLocation(recognition.file, recognition.patternSpan, recognition.declarationSpan),
+    ),
+    symbols: configValue(
+      recognition.symbols,
+      toRecognitionLocation(recognition.file, recognition.symbolsSpan, recognition.declarationSpan),
+    ),
+    interpret: configValue(
+      interpret,
+      toRecognitionLocation(recognition.file, recognition.declarationSpan, recognition.patternSpan),
+    ),
+  };
+}
+
+function inferConservativePatternInterpret(pattern: string): PatternInterpret {
+  const partCount = countPartTokens(pattern);
+  if (partCount >= 2) {
+    return { kind: "target-command" };
+  }
+  return { kind: "fixed-command", command: "bind" };
+}
+
+function countPartTokens(pattern: string): number {
+  let count = 0;
+  let index = 0;
+  while (index < pattern.length) {
+    const next = pattern.indexOf("PART", index);
+    if (next < 0) break;
+    count += 1;
+    index = next + 4;
+  }
+  return count;
+}
+
+function describePatternInterpret(interpret: PatternInterpret): string {
+  if (interpret.kind === "target-command") {
+    return "target-command";
+  }
+  if (interpret.kind === "fixed-command") {
+    return `fixed-command:${interpret.command}`;
+  }
+  return interpret.kind;
+}
+
+function configValue<T>(value: T, location: SourceLocation): { origin: "config"; value: T; location: SourceLocation } {
+  return { origin: "config", value, location };
+}
+
+function toRecognitionLocation(
+  file: NormalizedPath,
+  primary?: { start: number; end: number },
+  fallback?: { start: number; end: number },
+): SourceLocation {
+  const span = primary ?? fallback;
+  const start = span?.start ?? 0;
+  const end = span?.end ?? start;
+  return { file, pos: start, end };
+}
+
+function degradeConfidenceForUncertainty(confidence: CatalogConfidence | undefined): CatalogConfidence | undefined {
+  if (!confidence) return undefined;
+  if (confidence === "conservative" || confidence === "partial") {
+    return confidence;
+  }
+  return "partial";
 }
