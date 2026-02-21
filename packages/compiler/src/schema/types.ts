@@ -174,12 +174,12 @@ export type BindingCommandKind =
   | 'translation';
 
 export interface BindingCommandDef {
-  readonly name: Configured<string>;
-  readonly commandKind: Configured<BindingCommandKind>;
-  readonly mode?: Configured<BindingMode>;
-  readonly capture?: Configured<boolean>;
-  readonly forceAttribute?: Configured<string>;
-  readonly package?: Configured<string>;
+  readonly name: Sourced<string>;
+  readonly commandKind: Sourced<BindingCommandKind>;
+  readonly mode?: Sourced<BindingMode>;
+  readonly capture?: Sourced<boolean>;
+  readonly forceAttribute?: Sourced<string>;
+  readonly package?: Sourced<string>;
 }
 
 export type PatternInterpret =
@@ -191,10 +191,10 @@ export type PatternInterpret =
   | { kind: 'passthrough'; target: string; command: string };
 
 export interface AttributePatternDef {
-  readonly pattern: Configured<string>;
-  readonly symbols: Configured<string>;
-  readonly interpret: Configured<PatternInterpret>;
-  readonly package?: Configured<string>;
+  readonly pattern: Sourced<string>;
+  readonly symbols: Sourced<string>;
+  readonly interpret: Sourced<PatternInterpret>;
+  readonly package?: Sourced<string>;
 }
 
 // ============================================================================

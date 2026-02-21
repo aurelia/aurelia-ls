@@ -22,6 +22,8 @@ import {
   buildTemplateControllerDef,
 } from "../../../src/project-semantics/assemble/resource-def.js";
 import { sourcedKnown, sourcedUnknown, unwrapSourced } from "../../../src/project-semantics/assemble/sourced.js";
+import { toAttributePatternConfig, toBindingCommandConfig } from "../../../src/schema/convert.js";
+import type { AttributePatternDef, BindingCommandDef } from "../../../src/schema/types.js";
 import {
   mergeResourceDefinitionCandidates,
   type ResourceDefinitionCandidate,
@@ -566,5 +568,57 @@ describe("R-EA3: recognized command/pattern merge contract", () => {
     const forwardPatterns = forward.catalog.attributePatterns.map((entry) => `${entry.pattern}|${entry.symbols}`).sort();
     const reversePatterns = reverse.catalog.attributePatterns.map((entry) => `${entry.pattern}|${entry.symbols}`).sort();
     expect(reversePatterns).toEqual(forwardPatterns);
+  });
+});
+
+// =============================================================================
+// R-EA4: command/pattern sourced-wrapper widening
+// =============================================================================
+
+describe("R-EA4: command/pattern conversion unwraps Sourced envelopes", () => {
+  it("converts source-known command/pattern definitions without behavior drift", () => {
+    const command: BindingCommandDef = {
+      name: { origin: "source", state: "known", value: "custom-listener" },
+      commandKind: { origin: "source", state: "known", value: "listener" },
+      capture: { origin: "source", state: "known", value: true },
+    };
+    const pattern: AttributePatternDef = {
+      pattern: { origin: "source", state: "known", value: "PART.local" },
+      symbols: { origin: "source", state: "known", value: "." },
+      interpret: { origin: "source", state: "known", value: { kind: "fixed-command", command: "bind" } },
+    };
+
+    expect(toBindingCommandConfig(command)).toEqual({
+      name: "custom-listener",
+      kind: "listener",
+      capture: true,
+    });
+    expect(toAttributePatternConfig(pattern)).toEqual({
+      pattern: "PART.local",
+      symbols: ".",
+      interpret: { kind: "fixed-command", command: "bind" },
+    });
+  });
+
+  it("keeps deterministic converter fallbacks for source-unknown command/pattern definitions", () => {
+    const command: BindingCommandDef = {
+      name: { origin: "source", state: "unknown" },
+      commandKind: { origin: "source", state: "unknown" },
+    };
+    const pattern: AttributePatternDef = {
+      pattern: { origin: "source", state: "unknown" },
+      symbols: { origin: "source", state: "unknown" },
+      interpret: { origin: "source", state: "unknown" },
+    };
+
+    expect(toBindingCommandConfig(command)).toEqual({
+      name: "",
+      kind: "property",
+    });
+    expect(toAttributePatternConfig(pattern)).toEqual({
+      pattern: "",
+      symbols: "",
+      interpret: { kind: "target-command" },
+    });
   });
 });

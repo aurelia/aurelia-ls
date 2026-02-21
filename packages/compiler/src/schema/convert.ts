@@ -8,7 +8,6 @@ import type {
   BindingBehaviorSig,
   BindingCommandConfig,
   BindingCommandDef,
-  Configured,
   ControllerConfig,
   CustomAttributeDef,
   CustomElementDef,
@@ -22,10 +21,6 @@ import type {
   ValueConverterSig,
 } from "./types.js";
 import { unwrapSourced as unwrapSourcedValue } from "./sourced.js";
-
-export function unwrapConfigured<T>(value: Configured<T> | undefined): T | undefined {
-  return value?.value;
-}
 
 export function unwrapSourced<T>(value: Sourced<T> | undefined): T | undefined {
   return unwrapSourcedValue(value);
@@ -206,14 +201,14 @@ export function toBindingBehaviorSig(def: BindingBehaviorDef): BindingBehaviorSi
 }
 
 export function toBindingCommandConfig(def: BindingCommandDef): BindingCommandConfig {
-  const name = unwrapConfigured(def.name) ?? "";
-  const mode = unwrapConfigured(def.mode);
-  const capture = unwrapConfigured(def.capture);
-  const forceAttribute = unwrapConfigured(def.forceAttribute);
-  const pkg = unwrapConfigured(def.package);
+  const name = unwrapSourced(def.name) ?? "";
+  const mode = unwrapSourced(def.mode);
+  const capture = unwrapSourced(def.capture);
+  const forceAttribute = unwrapSourced(def.forceAttribute);
+  const pkg = unwrapSourced(def.package);
   return {
     name,
-    kind: unwrapConfigured(def.commandKind) ?? "property",
+    kind: unwrapSourced(def.commandKind) ?? "property",
     ...(mode ? { mode } : {}),
     ...(capture !== undefined ? { capture } : {}),
     ...(forceAttribute ? { forceAttribute } : {}),
@@ -222,10 +217,10 @@ export function toBindingCommandConfig(def: BindingCommandDef): BindingCommandCo
 }
 
 export function toAttributePatternConfig(def: AttributePatternDef): AttributePatternConfig {
-  const pattern = unwrapConfigured(def.pattern) ?? "";
-  const symbols = unwrapConfigured(def.symbols) ?? "";
-  const interpret = unwrapConfigured(def.interpret) ?? { kind: "target-command" };
-  const pkg = unwrapConfigured(def.package);
+  const pattern = unwrapSourced(def.pattern) ?? "";
+  const symbols = unwrapSourced(def.symbols) ?? "";
+  const interpret = unwrapSourced(def.interpret) ?? { kind: "target-command" };
+  const pkg = unwrapSourced(def.package);
   return {
     pattern,
     symbols,
