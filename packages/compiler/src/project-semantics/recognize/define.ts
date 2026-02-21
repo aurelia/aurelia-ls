@@ -22,6 +22,7 @@ import type {
   CustomElementDef,
   NormalizedPath,
   ResourceKind,
+  TextSpan,
   ValueConverterDef,
   TemplateControllerDef,
   ResourceDef,
@@ -60,12 +61,27 @@ import {
   mergeBindableInputs,
   parseBindablesValue,
 } from './bindables.js';
+import type {
+  RecognizedAttributePattern,
+  RecognizedBindingCommand,
+} from './extensions.js';
+import {
+  sortAndDedupeAttributePatterns,
+  sortAndDedupeBindingCommands,
+} from './extensions.js';
 
 // =============================================================================
 // Main Export
 // =============================================================================
 
 export interface DefineMatchResult {
+  resource: ResourceDef | null;
+  bindingCommands: RecognizedBindingCommand[];
+  attributePatterns: RecognizedAttributePattern[];
+  gaps: AnalysisGap[];
+}
+
+interface ResourceDefineMatchResult {
   resource: ResourceDef | null;
   gaps: AnalysisGap[];
 }
@@ -93,23 +109,37 @@ export function matchDefine(
       'The class reference in .define() must be a simple identifier.',
       { file: filePath },
     ));
-    return { resource: null, gaps };
+    return { resource: null, bindingCommands: [], attributePatterns: [], gaps };
   }
   const classValue = findClassValue(className, classes);
 
   // Dispatch based on resource type
   switch (defineCall.resourceType) {
     case 'CustomElement':
-      return buildElementDef(defineCall, className, filePath, gaps, classValue);
+      return toDefineMatchResult(
+        buildElementDef(defineCall, className, filePath, gaps, classValue),
+      );
 
     case 'CustomAttribute':
-      return buildAttributeDef(defineCall, className, filePath, gaps, classValue);
+      return toDefineMatchResult(
+        buildAttributeDef(defineCall, className, filePath, gaps, classValue),
+      );
 
     case 'ValueConverter':
-      return buildValueConverterDefFromDefine(defineCall, className, filePath, gaps);
+      return toDefineMatchResult(
+        buildValueConverterDefFromDefine(defineCall, className, filePath, gaps),
+      );
 
     case 'BindingBehavior':
-      return buildBindingBehaviorDefFromDefine(defineCall, className, filePath, gaps);
+      return toDefineMatchResult(
+        buildBindingBehaviorDefFromDefine(defineCall, className, filePath, gaps),
+      );
+
+    case 'BindingCommand':
+      return buildBindingCommandRecognitionFromDefine(defineCall, className, filePath, gaps);
+
+    case 'AttributePattern':
+      return buildAttributePatternRecognitionFromDefine(defineCall, className, filePath, gaps);
   }
 }
 
@@ -144,7 +174,7 @@ function buildElementDef(
   filePath: NormalizedPath,
   gaps: AnalysisGap[],
   cls: ClassValue | null
-): DefineMatchResult {
+): ResourceDefineMatchResult {
   const def = defineCall.definition;
   const staticBindables = cls ? getStaticBindableInputs(cls) : [];
   const memberBindables = cls?.bindableMembers ?? [];
@@ -233,7 +263,7 @@ function buildAttributeDef(
   filePath: NormalizedPath,
   gaps: AnalysisGap[],
   cls: ClassValue | null
-): DefineMatchResult {
+): ResourceDefineMatchResult {
   const def = defineCall.definition;
   const staticBindables = cls ? getStaticBindableInputs(cls) : [];
   const memberBindables = cls?.bindableMembers ?? [];
@@ -336,7 +366,7 @@ function buildValueConverterDefFromDefine(
   className: string,
   filePath: NormalizedPath,
   gaps: AnalysisGap[]
-): DefineMatchResult {
+): ResourceDefineMatchResult {
   const def = defineCall.definition;
 
   // Handle string-only definition
@@ -399,7 +429,7 @@ function buildBindingBehaviorDefFromDefine(
   className: string,
   filePath: NormalizedPath,
   gaps: AnalysisGap[]
-): DefineMatchResult {
+): ResourceDefineMatchResult {
   const def = defineCall.definition;
 
   // Handle string-only definition
@@ -451,6 +481,174 @@ function buildBindingBehaviorDefFromDefine(
   });
 
   return { resource, gaps };
+}
+
+// =============================================================================
+// Extension Recognition Building
+// =============================================================================
+
+function buildBindingCommandRecognitionFromDefine(
+  defineCall: DefineCall,
+  className: string,
+  filePath: NormalizedPath,
+  gaps: AnalysisGap[],
+): DefineMatchResult {
+  const parsed = parseBindingCommandName(defineCall.definition);
+  if (!parsed) {
+    gaps.push(gap(
+      `binding command definition for ${className}`,
+      { kind: 'dynamic-value', expression: 'binding-command definition' },
+      'BindingCommand.define requires a string or object literal with a static "name" property.',
+      { file: filePath },
+    ));
+    return { resource: null, bindingCommands: [], attributePatterns: [], gaps };
+  }
+
+  const name = canonicalSimpleName(parsed.value);
+  if (!name) {
+    gaps.push(gap(
+      `binding command definition for ${className}`,
+      {
+        kind: 'invalid-resource-name',
+        className,
+        reason: 'Could not derive valid binding command name from BindingCommand.define.',
+      },
+      'Provide a non-empty binding command name in BindingCommand.define.',
+      { file: filePath },
+    ));
+    return { resource: null, bindingCommands: [], attributePatterns: [], gaps };
+  }
+
+  return {
+    resource: null,
+    bindingCommands: sortAndDedupeBindingCommands([{
+      name,
+      className,
+      file: filePath,
+      source: 'define',
+      declarationSpan: defineCall.span,
+      nameSpan: parsed.span,
+    }]),
+    attributePatterns: [],
+    gaps,
+  };
+}
+
+function buildAttributePatternRecognitionFromDefine(
+  defineCall: DefineCall,
+  className: string,
+  filePath: NormalizedPath,
+  gaps: AnalysisGap[],
+): DefineMatchResult {
+  const recognized: RecognizedAttributePattern[] = [];
+  const definitions = parseAttributePatternDefinitions(defineCall.definition);
+  if (definitions.length === 0) {
+    gaps.push(gap(
+      `attribute pattern definition for ${className}`,
+      { kind: 'dynamic-value', expression: 'attribute-pattern definition' },
+      'AttributePattern.define requires object literal definitions with static "pattern" and "symbols" strings.',
+      { file: filePath },
+    ));
+    return { resource: null, bindingCommands: [], attributePatterns: [], gaps };
+  }
+
+  for (const definition of definitions) {
+    const pattern = normalizePattern(definition.pattern.value);
+    if (!pattern) {
+      gaps.push(gap(
+        `attribute pattern definition for ${className}`,
+        {
+          kind: 'invalid-resource-name',
+          className,
+          reason: 'Could not derive valid attribute pattern identity from AttributePattern.define.',
+        },
+        'Provide a non-empty "pattern" string in AttributePattern.define.',
+        { file: filePath },
+      ));
+      continue;
+    }
+
+    recognized.push({
+      pattern,
+      symbols: definition.symbols.value.trim(),
+      className,
+      file: filePath,
+      source: 'define',
+      declarationSpan: defineCall.span,
+      patternSpan: definition.pattern.span,
+      symbolsSpan: definition.symbols.span,
+    });
+  }
+
+  return {
+    resource: null,
+    bindingCommands: [],
+    attributePatterns: sortAndDedupeAttributePatterns(recognized),
+    gaps,
+  };
+}
+
+function parseBindingCommandName(
+  definition: AnalyzableValue,
+): { value: string; span?: TextSpan } | null {
+  const stringName = extractStringWithSpan(definition);
+  if (stringName) {
+    return stringName;
+  }
+
+  if (definition.kind === 'object') {
+    const nameProp = extractStringPropWithSpan(definition, 'name');
+    if (nameProp) {
+      return nameProp;
+    }
+  }
+
+  return null;
+}
+
+function parseAttributePatternDefinitions(
+  definition: AnalyzableValue,
+): Array<{
+  pattern: { value: string; span?: TextSpan };
+  symbols: { value: string; span?: TextSpan };
+}> {
+  const parsed: Array<{
+    pattern: { value: string; span?: TextSpan };
+    symbols: { value: string; span?: TextSpan };
+  }> = [];
+
+  const definitions = definition.kind === 'array'
+    ? definition.elements
+    : [definition];
+
+  for (const item of definitions) {
+    if (!item || item.kind !== 'object') {
+      continue;
+    }
+
+    const pattern = extractStringPropWithSpan(item, 'pattern');
+    const symbols = extractStringPropWithSpan(item, 'symbols');
+    if (!pattern || !symbols) {
+      continue;
+    }
+
+    parsed.push({ pattern, symbols });
+  }
+
+  return parsed;
+}
+
+function normalizePattern(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function toDefineMatchResult(result: ResourceDefineMatchResult): DefineMatchResult {
+  return {
+    ...result,
+    bindingCommands: [],
+    attributePatterns: [],
+  };
 }
 
 function resolvePrimaryName(
@@ -518,4 +716,3 @@ function findClassValue(
   }
   return null;
 }
-

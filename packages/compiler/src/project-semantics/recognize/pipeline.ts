@@ -18,6 +18,14 @@ import { matchDecorator } from './decorator.js';
 import { matchStaticAu } from './static-au.js';
 import { matchConvention } from './convention.js';
 import { matchDefine } from './define.js';
+import type {
+  RecognizedAttributePattern,
+  RecognizedBindingCommand,
+} from './extensions.js';
+import {
+  sortAndDedupeAttributePatterns,
+  sortAndDedupeBindingCommands,
+} from './extensions.js';
 
 // =============================================================================
 // Types
@@ -25,6 +33,10 @@ import { matchDefine } from './define.js';
 
 /** Which pattern matcher produced a resource match. */
 export type MatchSource = "decorator" | "static-au" | "define" | "convention";
+export type {
+  RecognizedBindingCommand,
+  RecognizedAttributePattern,
+} from './extensions.js';
 
 /**
  * Result of pattern matching on a single class.
@@ -32,6 +44,12 @@ export type MatchSource = "decorator" | "static-au" | "define" | "convention";
 export interface MatchResult {
   /** The matched resource definition, or null if no match */
   resource: ResourceDef | null;
+
+  /** Binding-command identities recognized from this class */
+  bindingCommands: RecognizedBindingCommand[];
+
+  /** Attribute-pattern identities recognized from this class */
+  attributePatterns: RecognizedAttributePattern[];
 
   /** All gaps encountered during matching */
   gaps: AnalysisGap[];
@@ -46,6 +64,12 @@ export interface MatchResult {
 export interface FileMatchResult {
   /** Successfully matched resource definitions */
   resources: ResourceDef[];
+
+  /** Recognized binding-command identities */
+  bindingCommands: RecognizedBindingCommand[];
+
+  /** Recognized attribute-pattern identities */
+  attributePatterns: RecognizedAttributePattern[];
 
   /** All gaps encountered */
   gaps: AnalysisGap[];
@@ -73,27 +97,47 @@ export function matchAll(cls: ClassValue, context?: FileContext): MatchResult {
 
   // 1. Try decorator pattern (highest priority)
   const decoratorResult = matchDecorator(cls);
+  const bindingCommands = [...decoratorResult.bindingCommands];
+  const attributePatterns = [...decoratorResult.attributePatterns];
   gaps.push(...decoratorResult.gaps);
   if (decoratorResult.resource) {
-    return { resource: decoratorResult.resource, gaps, matchSource: "decorator" };
+    return {
+      resource: decoratorResult.resource,
+      bindingCommands,
+      attributePatterns,
+      gaps,
+      matchSource: "decorator",
+    };
   }
 
   // 2. Try static $au pattern
   const staticAuResult = matchStaticAu(cls);
   gaps.push(...staticAuResult.gaps);
   if (staticAuResult.resource) {
-    return { resource: staticAuResult.resource, gaps, matchSource: "static-au" };
+    return {
+      resource: staticAuResult.resource,
+      bindingCommands,
+      attributePatterns,
+      gaps,
+      matchSource: "static-au",
+    };
   }
 
   // 3. Try convention pattern (lowest priority)
   const conventionResult = matchConvention(cls, context);
   gaps.push(...conventionResult.gaps);
   if (conventionResult.resource) {
-    return { resource: conventionResult.resource, gaps, matchSource: "convention" };
+    return {
+      resource: conventionResult.resource,
+      bindingCommands,
+      attributePatterns,
+      gaps,
+      matchSource: "convention",
+    };
   }
 
   // No match
-  return { resource: null, gaps };
+  return { resource: null, bindingCommands, attributePatterns, gaps };
 }
 
 /**
@@ -108,6 +152,8 @@ export function matchFile(
   context?: FileContext
 ): FileMatchResult {
   const resources: ResourceDef[] = [];
+  const bindingCommands: RecognizedBindingCommand[] = [];
+  const attributePatterns: RecognizedAttributePattern[] = [];
   const gaps: AnalysisGap[] = [];
   const matchSources = new Map<ResourceDef, MatchSource>();
 
@@ -117,6 +163,8 @@ export function matchFile(
 
     const result = matchAll(cls, context);
     gaps.push(...result.gaps);
+    bindingCommands.push(...result.bindingCommands);
+    attributePatterns.push(...result.attributePatterns);
 
     if (result.resource) {
       resources.push(result.resource);
@@ -126,7 +174,13 @@ export function matchFile(
     }
   }
 
-  return { resources, gaps, matchSources };
+  return {
+    resources,
+    bindingCommands: sortAndDedupeBindingCommands(bindingCommands),
+    attributePatterns: sortAndDedupeAttributePatterns(attributePatterns),
+    gaps,
+    matchSources,
+  };
 }
 
 /**
@@ -168,12 +222,16 @@ export function matchDefineCalls(
   classes: readonly ClassValue[] = []
 ): FileMatchResult {
   const resources: ResourceDef[] = [];
+  const bindingCommands: RecognizedBindingCommand[] = [];
+  const attributePatterns: RecognizedAttributePattern[] = [];
   const gaps: AnalysisGap[] = [];
   const matchSources = new Map<ResourceDef, MatchSource>();
 
   for (const call of defineCalls) {
     const result = matchDefine(call, filePath, classes);
     gaps.push(...result.gaps);
+    bindingCommands.push(...result.bindingCommands);
+    attributePatterns.push(...result.attributePatterns);
 
     if (result.resource) {
       resources.push(result.resource);
@@ -181,7 +239,13 @@ export function matchDefineCalls(
     }
   }
 
-  return { resources, gaps, matchSources };
+  return {
+    resources,
+    bindingCommands: sortAndDedupeBindingCommands(bindingCommands),
+    attributePatterns: sortAndDedupeAttributePatterns(attributePatterns),
+    gaps,
+    matchSources,
+  };
 }
 
 // =============================================================================
@@ -203,12 +267,16 @@ export function matchFileFacts(
   context?: FileContext
 ): FileMatchResult {
   const resources: ResourceDef[] = [];
+  const bindingCommands: RecognizedBindingCommand[] = [];
+  const attributePatterns: RecognizedAttributePattern[] = [];
   const gaps: AnalysisGap[] = [];
   const matchSources = new Map<ResourceDef, MatchSource>();
 
   // 1. Match class-based patterns (decorator, static $au, convention)
   const classResult = matchFile(facts.classes, context);
   resources.push(...classResult.resources);
+  bindingCommands.push(...classResult.bindingCommands);
+  attributePatterns.push(...classResult.attributePatterns);
   gaps.push(...classResult.gaps);
   for (const [resource, source] of classResult.matchSources) {
     matchSources.set(resource, source);
@@ -217,6 +285,8 @@ export function matchFileFacts(
   // 2. Match define calls
   const defineResult = matchDefineCalls(facts.defineCalls, facts.path, facts.classes);
   resources.push(...defineResult.resources);
+  bindingCommands.push(...defineResult.bindingCommands);
+  attributePatterns.push(...defineResult.attributePatterns);
   gaps.push(...defineResult.gaps);
   for (const [resource, source] of defineResult.matchSources) {
     matchSources.set(resource, source);
@@ -225,6 +295,11 @@ export function matchFileFacts(
   // 3. Include file-level gaps
   gaps.push(...facts.gaps);
 
-  return { resources, gaps, matchSources };
+  return {
+    resources,
+    bindingCommands: sortAndDedupeBindingCommands(bindingCommands),
+    attributePatterns: sortAndDedupeAttributePatterns(attributePatterns),
+    gaps,
+    matchSources,
+  };
 }
-

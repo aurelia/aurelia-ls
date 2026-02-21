@@ -27,7 +27,13 @@ const FILE = "/src/resources.ts" as NormalizedPath;
 const SPAN: TextSpan = { start: 0, end: 1 };
 
 function defineCall(
-  resourceType: "CustomElement" | "CustomAttribute" | "ValueConverter" | "BindingBehavior",
+  resourceType:
+    | "CustomElement"
+    | "CustomAttribute"
+    | "ValueConverter"
+    | "BindingBehavior"
+    | "BindingCommand"
+    | "AttributePattern",
   definition: AnalyzableValue,
   classRef: AnalyzableValue
 ) {
@@ -399,6 +405,93 @@ describe("matchDefine - Simple Resources", () => {
     expect(result.gaps.length).toBe(0);
     expect(result.resource?.kind).toBe("value-converter");
     expect(unwrapSourced(result.resource?.name)).toBe("myjsonconverter");
+  });
+});
+
+// =============================================================================
+// Extension Discovery
+// =============================================================================
+
+describe("matchDefine - Extension discovery", () => {
+  it("recognizes BindingCommand.define(string, Type) identities", () => {
+    const result = matchDefine(
+      defineCall("BindingCommand", literal("My-Cmd"), ref("MyCommand")),
+      FILE,
+    );
+
+    expect(result.resource).toBeNull();
+    expect(result.gaps).toHaveLength(0);
+    expect(result.bindingCommands).toEqual([
+      expect.objectContaining({
+        name: "my-cmd",
+        className: "MyCommand",
+        file: FILE,
+        source: "define",
+      }),
+    ]);
+    expect(result.attributePatterns).toHaveLength(0);
+  });
+
+  it("recognizes BindingCommand.define({ name }, Type) identities", () => {
+    const result = matchDefine(
+      defineCall(
+        "BindingCommand",
+        object(new Map([["name", literal("form.submit")]])),
+        ref("FormSubmitCommand"),
+      ),
+      FILE,
+    );
+
+    expect(result.resource).toBeNull();
+    expect(result.gaps).toHaveLength(0);
+    expect(result.bindingCommands.map((entry) => entry.name)).toEqual(["form.submit"]);
+    expect(result.bindingCommands[0]?.className).toBe("FormSubmitCommand");
+  });
+
+  it("recognizes AttributePattern.define object and array definitions", () => {
+    const single = matchDefine(
+      defineCall(
+        "AttributePattern",
+        object(new Map([
+          ["pattern", literal("@PART")],
+          ["symbols", literal("@")],
+        ])),
+        ref("AtPattern"),
+      ),
+      FILE,
+    );
+    expect(single.gaps).toHaveLength(0);
+    expect(single.attributePatterns).toEqual([
+      expect.objectContaining({
+        pattern: "@PART",
+        symbols: "@",
+        className: "AtPattern",
+        source: "define",
+      }),
+    ]);
+
+    const multiple = matchDefine(
+      defineCall(
+        "AttributePattern",
+        array([
+          object(new Map([
+            ["pattern", literal(":PART")],
+            ["symbols", literal(":")],
+          ])),
+          object(new Map([
+            ["pattern", literal("PART.bind")],
+            ["symbols", literal(".")],
+          ])),
+        ]),
+        ref("CompositePattern"),
+      ),
+      FILE,
+    );
+    expect(multiple.gaps).toHaveLength(0);
+    expect(multiple.attributePatterns.map((entry) => `${entry.pattern}|${entry.symbols}`)).toEqual([
+      ":PART|:",
+      "PART.bind|.",
+    ]);
   });
 });
 

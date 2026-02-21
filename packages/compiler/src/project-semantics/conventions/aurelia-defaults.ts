@@ -14,6 +14,8 @@ export const DECORATOR_NAMES = {
   templateController: "templateController",
   valueConverter: "valueConverter",
   bindingBehavior: "bindingBehavior",
+  bindingCommand: "bindingCommand",
+  attributePattern: "attributePattern",
   bindable: "bindable",
 } as const;
 
@@ -26,6 +28,8 @@ export const RESOURCE_DECORATOR_NAMES = [
   DECORATOR_NAMES.templateController,
   DECORATOR_NAMES.valueConverter,
   DECORATOR_NAMES.bindingBehavior,
+  DECORATOR_NAMES.bindingCommand,
+  DECORATOR_NAMES.attributePattern,
 ] as const;
 
 /**

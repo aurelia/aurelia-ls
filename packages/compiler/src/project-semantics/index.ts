@@ -8,7 +8,7 @@
 // - extract: AST -> FileFacts (classes, imports, exports, registrations)
 // - exports: FileFacts -> ExportBindingMap
 // - evaluate: FileFacts -> resolved FileFacts + gaps
-// - recognize: FileFacts -> ResourceDef[] + gaps
+// - recognize: FileFacts -> ResourceDef[] + extension identities + gaps
 // - template-facts: recognized resources + contexts -> routed template facts
 // - assemble: ResourceDef[] -> Semantics + Catalog + Syntax
 // - register: ResourceDef[] + FileFacts -> RegistrationAnalysis
@@ -155,7 +155,17 @@ export {
 
 // === Pattern Matchers (New) ===
 // Pattern matchers operate on ClassValue -> ResourceDef.
-export { matchAll, matchFile, matchExpected, matchDefineCalls, matchFileFacts, type MatchResult, type FileMatchResult } from "./recognize/index.js";
+export {
+  matchAll,
+  matchFile,
+  matchExpected,
+  matchDefineCalls,
+  matchFileFacts,
+  type MatchResult,
+  type FileMatchResult,
+  type RecognizedBindingCommand,
+  type RecognizedAttributePattern,
+} from "./recognize/index.js";
 export { matchDecorator, type DecoratorMatchResult } from "./recognize/index.js";
 export { matchStaticAu, type StaticAuMatchResult } from "./recognize/index.js";
 export { matchDefine, type DefineMatchResult } from "./recognize/index.js";

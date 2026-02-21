@@ -254,7 +254,13 @@ export interface RegistrationGuard {
  */
 export interface DefineCall {
   /** Resource type: CustomElement, CustomAttribute, etc. */
-  readonly resourceType: 'CustomElement' | 'CustomAttribute' | 'ValueConverter' | 'BindingBehavior';
+  readonly resourceType:
+    | 'CustomElement'
+    | 'CustomAttribute'
+    | 'ValueConverter'
+    | 'BindingBehavior'
+    | 'BindingCommand'
+    | 'AttributePattern';
 
   /** The definition object (first arg) */
   readonly definition: AnalyzableValue;

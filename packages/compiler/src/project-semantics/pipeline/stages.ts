@@ -15,6 +15,10 @@ import type { AnalysisGap, PartialEvaluationResult } from "../evaluate/index.js"
 import type { RegistrationAnalysis } from "../register/types.js";
 import type { InlineTemplateInfo, TemplateInfo } from "../templates/types.js";
 import type { DefinitionConvergenceRecord } from "../assemble/build.js";
+import type {
+  RecognizedAttributePattern,
+  RecognizedBindingCommand,
+} from "../recognize/pipeline.js";
 
 export const DISCOVERY_STAGES = {
   extract: "extract",
@@ -46,6 +50,8 @@ export const DISCOVERY_STAGE_ORDER: readonly DiscoveryStageKey[] = [
 
 export type PatternMatchOutput = {
   resources: ResourceDef[];
+  bindingCommands: RecognizedBindingCommand[];
+  attributePatterns: RecognizedAttributePattern[];
   gaps: AnalysisGap[];
   contexts: Map<NormalizedPath, FileContext>;
 };

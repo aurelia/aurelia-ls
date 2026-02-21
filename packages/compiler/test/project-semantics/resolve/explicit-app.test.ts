@@ -22,6 +22,10 @@ describe("Full Pipeline: explicit-app", () => {
     // Should have all expected artifacts
     expect(result.resourceGraph, "Should produce a ResourceGraph").toBeTruthy();
     expect(result.facts.size > 0, "Should produce facts").toBe(true);
+    expect(Array.isArray(result.recognizedBindingCommands), "Should expose recognized binding command discovery stream").toBe(true);
+    expect(Array.isArray(result.recognizedAttributePatterns), "Should expose recognized attribute pattern discovery stream").toBe(true);
+    expect(result.recognizedBindingCommands).toHaveLength(0);
+    expect(result.recognizedAttributePatterns).toHaveLength(0);
 
     // Filter to only app-defined resources (exclude Aurelia framework source via path mapping)
     const appResources = result.definition.evidence.filter(c => c.file?.includes("/explicit-app/src/"));

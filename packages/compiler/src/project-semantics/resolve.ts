@@ -36,7 +36,16 @@ import { extractAllFileFacts, extractFileContext } from "./extract/file-facts-ex
 import { collectTemplateFactCollection } from "./extract/template-facts.js";
 import { evaluateFileFacts } from "./evaluate/index.js";
 import { buildExportBindingMap } from "./exports/export-resolver.js";
-import { matchFileFacts, type MatchSource } from "./recognize/pipeline.js";
+import {
+  matchFileFacts,
+  type MatchSource,
+  type RecognizedBindingCommand,
+  type RecognizedAttributePattern,
+} from "./recognize/pipeline.js";
+import {
+  sortAndDedupeAttributePatterns,
+  sortAndDedupeBindingCommands,
+} from "./recognize/extensions.js";
 import { createRegistrationAnalyzer } from "./register/analyzer.js";
 import { buildResourceGraph } from "./scope/builder.js";
 import {
@@ -147,6 +156,10 @@ export interface ProjectSemanticsDiscoveryResult {
   inlineTemplates: readonly InlineTemplateInfo[];
   /** Diagnostics from project-semantics discovery */
   diagnostics: readonly ProjectSemanticsDiscoveryDiagnostic[];
+  /** Binding-command identities discovered during recognize stage (pre-merge). */
+  recognizedBindingCommands: readonly RecognizedBindingCommand[];
+  /** Attribute-pattern identities discovered during recognize stage (pre-merge). */
+  recognizedAttributePatterns: readonly RecognizedAttributePattern[];
   /** Extracted facts with partial evaluation applied */
   facts: Map<NormalizedPath, FileFacts>;
 }
@@ -174,7 +187,7 @@ export type ProjectSemanticsDiscoveryDiagnosticEmitter = DiagnosticEmitter<Diagn
  * extract: AST -> FileFacts (with import resolution)
  * exports: FileFacts -> ExportBindingMap
  * evaluate: FileFacts -> resolved FileFacts + gaps
- * recognize: FileFacts -> ResourceDef[] + gaps
+ * recognize: FileFacts -> ResourceDef[] + extension identities + gaps
  * template-facts: recognized resources + contexts -> routed template facts
  * assemble: ResourceDef[] -> Semantics + Catalog + Syntax
  * register: ResourceDef[] + FileFacts -> RegistrationAnalysis
@@ -247,6 +260,8 @@ export function discoverProjectSemantics(
     log.info("[discovery] matching patterns...");
     trace.event("discovery.patternMatching.start");
     const recognizedResources: ResourceDef[] = [];
+    const recognizedBindingCommands: RecognizedBindingCommand[] = [];
+    const recognizedAttributePatterns: RecognizedAttributePattern[] = [];
     const matcherGaps: AnalysisGap[] = [];
     const matchSources = new Map<ResourceDef, MatchSource>();
     const contexts = new Map<NormalizedPath, FileContext>();
@@ -265,14 +280,24 @@ export function discoverProjectSemantics(
       // Run pattern matchers on classes AND define calls
       const matchResult = matchFileFacts(fileFacts, context);
       recognizedResources.push(...matchResult.resources);
+      recognizedBindingCommands.push(...matchResult.bindingCommands);
+      recognizedAttributePatterns.push(...matchResult.attributePatterns);
       matcherGaps.push(...matchResult.gaps);
       for (const [resource, source] of matchResult.matchSources) {
         matchSources.set(resource, source);
       }
     }
-    trace.event("discovery.patternMatching.done", { resourceCount: recognizedResources.length });
+    const dedupedBindingCommands = sortAndDedupeBindingCommands(recognizedBindingCommands);
+    const dedupedAttributePatterns = sortAndDedupeAttributePatterns(recognizedAttributePatterns);
+    trace.event("discovery.patternMatching.done", {
+      resourceCount: recognizedResources.length,
+      bindingCommandCount: dedupedBindingCommands.length,
+      attributePatternCount: dedupedAttributePatterns.length,
+    });
     debug.project("patternMatching.complete", {
       resourceCount: recognizedResources.length,
+      bindingCommandCount: dedupedBindingCommands.length,
+      attributePatternCount: dedupedAttributePatterns.length,
       gapCount: matcherGaps.length,
     });
 
@@ -432,6 +457,8 @@ export function discoverProjectSemantics(
     trace.setAttributes({
       "discovery.resourceCount": definitionAuthority.length,
       "discovery.resourceEvidenceCount": convergedResources.length,
+      "discovery.bindingCommandRecognitionCount": dedupedBindingCommands.length,
+      "discovery.attributePatternRecognitionCount": dedupedAttributePatterns.length,
       "discovery.globalCount": globalCount,
       "discovery.localCount": localCount,
       "discovery.orphanCount": registration.orphans.length,
@@ -468,6 +495,8 @@ export function discoverProjectSemantics(
       templates,
       inlineTemplates,
       diagnostics: allDiagnostics,
+      recognizedBindingCommands: dedupedBindingCommands,
+      recognizedAttributePatterns: dedupedAttributePatterns,
       facts,
     };
   });

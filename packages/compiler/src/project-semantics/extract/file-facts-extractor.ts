@@ -628,7 +628,14 @@ function extractDefineCall(
   if (!ts.isIdentifier(callee)) return null;
 
   const resourceType = callee.text as DefineCall['resourceType'];
-  if (!['CustomElement', 'CustomAttribute', 'ValueConverter', 'BindingBehavior'].includes(resourceType)) {
+  if (![
+    'CustomElement',
+    'CustomAttribute',
+    'ValueConverter',
+    'BindingBehavior',
+    'BindingCommand',
+    'AttributePattern',
+  ].includes(resourceType)) {
     return null;
   }
 

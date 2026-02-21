@@ -22,6 +22,7 @@ import type {
   ResourceDef,
 } from '../compiler.js';
 import type { AnalysisGap } from '../evaluate/types.js';
+import { gap } from '../evaluate/types.js';
 import type {
   ClassValue,
   DecoratorApplication,
@@ -57,6 +58,14 @@ import {
   mergeBindableInputs,
   parseBindablesValue,
 } from './bindables.js';
+import type {
+  RecognizedAttributePattern,
+  RecognizedBindingCommand,
+} from './extensions.js';
+import {
+  sortAndDedupeAttributePatterns,
+  sortAndDedupeBindingCommands,
+} from './extensions.js';
 
 // =============================================================================
 // Main Export
@@ -64,6 +73,8 @@ import {
 
 export interface DecoratorMatchResult {
   resource: ResourceDef | null;
+  bindingCommands: RecognizedBindingCommand[];
+  attributePatterns: RecognizedAttributePattern[];
   gaps: AnalysisGap[];
 }
 
@@ -78,6 +89,8 @@ export interface DecoratorMatchResult {
  */
 export function matchDecorator(cls: ClassValue): DecoratorMatchResult {
   const gaps: AnalysisGap[] = [];
+  const bindingCommands = collectBindingCommandRecognitions(cls, gaps);
+  const attributePatterns = collectAttributePatternRecognitions(cls, gaps);
 
   // Collect metadata from all decorators
   const meta = collectDecoratorMeta(cls.decorators);
@@ -85,26 +98,26 @@ export function matchDecorator(cls: ClassValue): DecoratorMatchResult {
   // Check for resource decorators in priority order
   if (meta.element) {
     const resource = buildElementDef(cls, meta, gaps);
-    return { resource, gaps };
+    return { resource, bindingCommands, attributePatterns, gaps };
   }
 
   if (meta.attribute) {
     const resource = buildAttributeDef(cls, meta, gaps);
-    return { resource, gaps };
+    return { resource, bindingCommands, attributePatterns, gaps };
   }
 
   if (meta.valueConverter) {
     const resource = buildValueConverterDefFromMeta(cls, meta.valueConverter, gaps);
-    return { resource, gaps };
+    return { resource, bindingCommands, attributePatterns, gaps };
   }
 
   if (meta.bindingBehavior) {
     const resource = buildBindingBehaviorDefFromMeta(cls, meta.bindingBehavior, gaps);
-    return { resource, gaps };
+    return { resource, bindingCommands, attributePatterns, gaps };
   }
 
   // No resource decorator found
-  return { resource: null, gaps };
+  return { resource: null, bindingCommands, attributePatterns, gaps };
 }
 
 // =============================================================================
@@ -355,6 +368,163 @@ function mergeSimpleMeta(
 }
 
 // =============================================================================
+// Command and Pattern Recognition
+// =============================================================================
+
+function collectBindingCommandRecognitions(
+  cls: ClassValue,
+  gaps: AnalysisGap[],
+): RecognizedBindingCommand[] {
+  const recognized: RecognizedBindingCommand[] = [];
+
+  for (const decorator of cls.decorators) {
+    if (decorator.name !== 'bindingCommand') {
+      continue;
+    }
+
+    const nameResult = parseBindingCommandName(decorator);
+    if (!nameResult) {
+      gaps.push(gap(
+        `binding command name for ${cls.className}`,
+        { kind: 'dynamic-value', expression: '@bindingCommand(...)' },
+        'Use a string literal or object literal with a static "name" property in @bindingCommand.',
+        { file: cls.filePath },
+      ));
+      continue;
+    }
+
+    const normalizedName = canonicalSimpleName(nameResult.value);
+    if (!normalizedName) {
+      gaps.push(gap(
+        `binding command name for ${cls.className}`,
+        {
+          kind: 'invalid-resource-name',
+          className: cls.className,
+          reason: 'Could not derive valid binding command name from @bindingCommand.',
+        },
+        'Provide a non-empty command name in @bindingCommand.',
+        { file: cls.filePath },
+      ));
+      continue;
+    }
+
+    recognized.push({
+      name: normalizedName,
+      className: cls.className,
+      file: cls.filePath,
+      source: 'decorator',
+      declarationSpan: decorator.span ?? cls.span,
+      nameSpan: nameResult.span,
+    });
+  }
+
+  return sortAndDedupeBindingCommands(recognized);
+}
+
+function collectAttributePatternRecognitions(
+  cls: ClassValue,
+  gaps: AnalysisGap[],
+): RecognizedAttributePattern[] {
+  const recognized: RecognizedAttributePattern[] = [];
+
+  for (const decorator of cls.decorators) {
+    if (decorator.name !== 'attributePattern') {
+      continue;
+    }
+
+    if (decorator.args.length === 0) {
+      gaps.push(gap(
+        `attribute patterns for ${cls.className}`,
+        { kind: 'dynamic-value', expression: '@attributePattern(...)' },
+        'Provide one or more object literal arguments with static "pattern" and "symbols" strings.',
+        { file: cls.filePath },
+      ));
+      continue;
+    }
+
+    for (const arg of decorator.args) {
+      if (!arg || arg.kind !== 'object') {
+        gaps.push(gap(
+          `attribute pattern for ${cls.className}`,
+          { kind: 'dynamic-value', expression: '@attributePattern(...)' },
+          'Use object literal arguments for @attributePattern definitions.',
+          { file: cls.filePath },
+        ));
+        continue;
+      }
+
+      const patternProp = extractStringPropWithSpan(arg, 'pattern');
+      const symbolsProp = extractStringPropWithSpan(arg, 'symbols');
+      if (!patternProp || !symbolsProp) {
+        gaps.push(gap(
+          `attribute pattern for ${cls.className}`,
+          { kind: 'dynamic-value', expression: '@attributePattern(...)' },
+          'Each @attributePattern definition requires static "pattern" and "symbols" string properties.',
+          { file: cls.filePath },
+        ));
+        continue;
+      }
+
+      const normalizedPattern = normalizePattern(patternProp.value);
+      if (!normalizedPattern) {
+        gaps.push(gap(
+          `attribute pattern for ${cls.className}`,
+          {
+            kind: 'invalid-resource-name',
+            className: cls.className,
+            reason: 'Could not derive valid attribute pattern identity from @attributePattern.',
+          },
+          'Provide a non-empty "pattern" string in @attributePattern.',
+          { file: cls.filePath },
+        ));
+        continue;
+      }
+
+      recognized.push({
+        pattern: normalizedPattern,
+        symbols: symbolsProp.value.trim(),
+        className: cls.className,
+        file: cls.filePath,
+        source: 'decorator',
+        declarationSpan: decorator.span ?? cls.span,
+        patternSpan: patternProp.span,
+        symbolsSpan: symbolsProp.span,
+      });
+    }
+  }
+
+  return sortAndDedupeAttributePatterns(recognized);
+}
+
+function parseBindingCommandName(
+  decorator: DecoratorApplication,
+): { value: string; span?: TextSpan } | null {
+  const firstArg = decorator.args[0];
+  if (!firstArg) {
+    return null;
+  }
+
+  const stringValue = extractStringWithSpan(firstArg);
+  if (stringValue) {
+    return stringValue;
+  }
+
+  if (firstArg.kind === 'object') {
+    const nameProp = extractStringPropWithSpan(firstArg, 'name');
+    if (nameProp) {
+      return nameProp;
+    }
+  }
+
+  return null;
+}
+
+function normalizePattern(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+// =============================================================================
 // Annotation Building
 // =============================================================================
 
@@ -547,4 +717,3 @@ function applyPrimaryBindable(
 
   return updated;
 }
-

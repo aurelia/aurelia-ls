@@ -26,4 +26,6 @@ export {
   type MatchResult,
   type MatchSource,
   type FileMatchResult,
+  type RecognizedBindingCommand,
+  type RecognizedAttributePattern,
 } from './pipeline.js';
