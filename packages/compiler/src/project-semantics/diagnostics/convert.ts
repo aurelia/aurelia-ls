@@ -217,7 +217,6 @@ function definitionConvergenceToDiagnostic(
     message: conflict
       ? `${kindLabel} '${name}' has conflicting definition inputs; convergence selected one source.`
       : `${kindLabel} '${name}' used fallback definition convergence behavior.`,
-    severity: conflict ? "warning" : "info",
     data: {
       resourceKind: record.resourceKind,
       resourceName: record.resourceName,

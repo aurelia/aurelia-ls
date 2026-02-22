@@ -34,6 +34,7 @@ type Edit = { uri: string; range: Range; newText: string };
 
 const TYPE_INDEX = new Map<string, number>(TOKEN_TYPES.map((t, i) => [t, i]));
 const MOD_INDEX = new Map<string, number>(TOKEN_MODIFIERS.map((m, i) => [m, i]));
+const DEFINITION_CONVERGENCE_CODE = "aurelia/project/definition-convergence";
 
 function findPosition(text: string, needle: string, delta = 0): { line: number; character: number } {
   const index = text.indexOf(needle);
@@ -149,10 +150,56 @@ function normalizeCodeActions(input: unknown): Array<{ title: string; kind?: str
 }
 
 type DiagnosticsPipelineHost = {
-  debugDiagnosticsPipeline: (uri: DocumentUri) => { normalization: { issues: readonly unknown[] } };
+  debugDiagnosticsPipeline: (uri: DocumentUri) => { normalization: { issues: readonly unknown[]; diagnostics: readonly unknown[] } };
 };
 
+type NormalizationIssue = {
+  kind?: unknown;
+  code?: unknown;
+  field?: unknown;
+};
+
+function definitionConvergenceSeverityConflicts(
+  workspace: DiagnosticsPipelineHost,
+  uri: DocumentUri,
+): readonly NormalizationIssue[] {
+  const issues = workspace.debugDiagnosticsPipeline(uri).normalization.issues;
+  return issues.filter((issue): issue is NormalizationIssue => {
+    const entry = issue as NormalizationIssue;
+    return entry.kind === "conflicting-default"
+      && entry.code === DEFINITION_CONVERGENCE_CODE
+      && entry.field === "severity";
+  });
+}
+
+function expectNoDefinitionConvergenceSeverityConflicts(
+  workspace: DiagnosticsPipelineHost,
+  uri: DocumentUri,
+): void {
+  const conflicts = definitionConvergenceSeverityConflicts(workspace, uri);
+  if (conflicts.length > 0) {
+    throw new Error(`Definition-convergence severity conflicts detected:\n${JSON.stringify(conflicts, null, 2)}`);
+  }
+}
+
+function expectDefinitionConvergenceSeamExercised(
+  workspace: DiagnosticsPipelineHost,
+  uri: DocumentUri,
+  fixtureLabel: string,
+): void {
+  const normalizedDiagnostics = workspace.debugDiagnosticsPipeline(uri).normalization.diagnostics;
+  const hasDefinitionConvergence = normalizedDiagnostics.some((diag) => {
+    const entry = diag as { code?: unknown };
+    return entry.code === DEFINITION_CONVERGENCE_CODE;
+  });
+  expect(
+    hasDefinitionConvergence,
+    `${fixtureLabel} should include ${DEFINITION_CONVERGENCE_CODE} in normalized diagnostics to exercise this seam.`,
+  ).toBe(true);
+}
+
 function expectNoNormalizationIssues(workspace: DiagnosticsPipelineHost, uri: DocumentUri): void {
+  expectNoDefinitionConvergenceSeverityConflicts(workspace, uri);
   const issues = workspace.debugDiagnosticsPipeline(uri).normalization.issues;
   if (issues.length > 0) {
     throw new Error(`Normalization issues detected:\n${JSON.stringify(issues, null, 2)}`);
@@ -348,6 +395,8 @@ describe("adapter contract (workspace-contract)", () => {
     expectNoNormalizationIssues(harness.workspace, tableUri);
     const expectedApp = mapWorkspaceDiagnostics(appUri, harness.workspace.diagnostics(appUri), lookupText);
     const expectedTable = mapWorkspaceDiagnostics(tableUri, harness.workspace.diagnostics(tableUri), lookupText);
+    expectDefinitionConvergenceSeamExercised(harness.workspace, appUri, "workspace-contract app diagnostics");
+    expectDefinitionConvergenceSeamExercised(harness.workspace, tableUri, "workspace-contract table diagnostics");
     expect(normalizeDiagnostics(lspDiagnosticsByUri.get(appLspUri) ?? [])).toEqual(normalizeDiagnostics(expectedApp));
     expect(normalizeDiagnostics(lspDiagnosticsByUri.get(tableLspUri) ?? [])).toEqual(normalizeDiagnostics(expectedTable));
   });
@@ -586,6 +635,26 @@ describe("adapter contract (template control scenarios)", () => {
     const expectedProjection = mapWorkspaceDiagnostics(projectionUri, harness.workspace.diagnostics(projectionUri), lookupText);
     const expectedDeep = mapWorkspaceDiagnostics(deepUri, harness.workspace.diagnostics(deepUri), lookupText);
     const expectedLocals = mapWorkspaceDiagnostics(localsUri, harness.workspace.diagnostics(localsUri), lookupText);
+    expectDefinitionConvergenceSeamExercised(
+      harness.workspace,
+      controllersUri,
+      "template-control-scenarios controllers diagnostics",
+    );
+    expectDefinitionConvergenceSeamExercised(
+      harness.workspace,
+      projectionUri,
+      "template-control-scenarios projection diagnostics",
+    );
+    expectDefinitionConvergenceSeamExercised(
+      harness.workspace,
+      deepUri,
+      "template-control-scenarios deep diagnostics",
+    );
+    expectDefinitionConvergenceSeamExercised(
+      harness.workspace,
+      localsUri,
+      "template-control-scenarios locals diagnostics",
+    );
 
     expect(normalizeDiagnostics(lspDiagnosticsByUri.get(controllersLspUri) ?? [])).toEqual(
       normalizeDiagnostics(expectedControllers),
@@ -705,7 +774,9 @@ describe("adapter contract (binding shorthand syntax)", () => {
     });
     const actualTokens = (lspTokens as { data?: number[] } | null)?.data ?? [];
     expect(actualTokens).toEqual(expectedTokens);
+    expectNoNormalizationIssues(harness.workspace, appUri);
     const expectedDiagnostics = mapWorkspaceDiagnostics(appUri, harness.workspace.diagnostics(appUri), lookupText);
+    expectDefinitionConvergenceSeamExercised(harness.workspace, appUri, "binding-shorthand diagnostics");
     expect(normalizeDiagnostics(lspDiagnosticsByUri.get(appLspUri) ?? [])).toEqual(
       normalizeDiagnostics(expectedDiagnostics),
     );
@@ -818,6 +889,7 @@ describe("adapter contract (template local scopes)", () => {
 
     expectNoNormalizationIssues(harness.workspace, appUri);
     const expectedDiagnostics = mapWorkspaceDiagnostics(appUri, harness.workspace.diagnostics(appUri), lookupText);
+    expectDefinitionConvergenceSeamExercised(harness.workspace, appUri, "template-local-scopes diagnostics");
     expect(normalizeDiagnostics(lspDiagnosticsByUri.get(appLspUri) ?? [])).toEqual(
       normalizeDiagnostics(expectedDiagnostics),
     );
@@ -930,6 +1002,7 @@ describe("adapter contract (portal chain)", () => {
 
     expectNoNormalizationIssues(harness.workspace, appUri);
     const expectedDiagnostics = mapWorkspaceDiagnostics(appUri, harness.workspace.diagnostics(appUri), lookupText);
+    expectDefinitionConvergenceSeamExercised(harness.workspace, appUri, "portal-chain diagnostics");
     expect(normalizeDiagnostics(lspDiagnosticsByUri.get(appLspUri) ?? [])).toEqual(
       normalizeDiagnostics(expectedDiagnostics),
     );
@@ -1042,6 +1115,7 @@ describe("adapter contract (portal deep nesting)", () => {
 
     expectNoNormalizationIssues(harness.workspace, appUri);
     const expectedDiagnostics = mapWorkspaceDiagnostics(appUri, harness.workspace.diagnostics(appUri), lookupText);
+    expectDefinitionConvergenceSeamExercised(harness.workspace, appUri, "portal-deep-nesting diagnostics");
     expect(normalizeDiagnostics(lspDiagnosticsByUri.get(appLspUri) ?? [])).toEqual(
       normalizeDiagnostics(expectedDiagnostics),
     );
@@ -1154,6 +1228,7 @@ describe("adapter contract (let edge cases)", () => {
 
     expectNoNormalizationIssues(harness.workspace, appUri);
     const expectedDiagnostics = mapWorkspaceDiagnostics(appUri, harness.workspace.diagnostics(appUri), lookupText);
+    expectDefinitionConvergenceSeamExercised(harness.workspace, appUri, "let-edge-cases diagnostics");
     expect(normalizeDiagnostics(lspDiagnosticsByUri.get(appLspUri) ?? [])).toEqual(
       normalizeDiagnostics(expectedDiagnostics),
     );

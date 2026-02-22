@@ -7,6 +7,14 @@ import type { WorkspaceDiagnostic, WorkspaceDiagnostics } from "../src/types.js"
 import { createWorkspaceHarness } from "./harness/index.js";
 import { asFixtureId, getFixture, resolveFixtureRoot } from "./fixtures/index.js";
 
+const DEFINITION_CONVERGENCE_CODE = "aurelia/project/definition-convergence";
+
+type NormalizationIssue = {
+  kind?: unknown;
+  code?: unknown;
+  field?: unknown;
+};
+
 function insertBefore(text: string, marker: string, insert: string): string {
   const index = text.indexOf(marker);
   if (index < 0) {
@@ -66,7 +74,24 @@ function collectAllDiagnostics(routed: WorkspaceDiagnostics): readonly Workspace
   return combined;
 }
 
+function definitionConvergenceSeverityConflicts(
+  workspace: SemanticWorkspaceEngine,
+  uri: string,
+): readonly NormalizationIssue[] {
+  const issues = workspace.debugDiagnosticsPipeline(uri).normalization.issues;
+  return issues.filter((issue): issue is NormalizationIssue => {
+    const entry = issue as NormalizationIssue;
+    return entry.kind === "conflicting-default"
+      && entry.code === DEFINITION_CONVERGENCE_CODE
+      && entry.field === "severity";
+  });
+}
+
 function expectNoNormalizationIssues(workspace: SemanticWorkspaceEngine, uri: string): void {
+  const conflicts = definitionConvergenceSeverityConflicts(workspace, uri);
+  if (conflicts.length > 0) {
+    throw new Error(`Definition-convergence severity conflicts detected:\n${JSON.stringify(conflicts, null, 2)}`);
+  }
   const issues = workspace.debugDiagnosticsPipeline(uri).normalization.issues;
   if (issues.length > 0) {
     throw new Error(`Normalization issues detected:\n${JSON.stringify(issues, null, 2)}`);
