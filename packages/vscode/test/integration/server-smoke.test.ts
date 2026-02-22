@@ -8,11 +8,32 @@
  *
  * This catches bundle configuration issues, missing dependencies, etc.
  */
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { test, expect, afterEach } from "vitest";
 
-const SERVER_PATH = path.resolve(import.meta.dirname, "../../dist/server/main.cjs");
+const VSCODE_PACKAGE_ROOT = path.resolve(import.meta.dirname, "../..");
+const SERVER_PATH = path.resolve(VSCODE_PACKAGE_ROOT, "dist/server/main.cjs");
+const BUNDLE_SCRIPT = path.resolve(VSCODE_PACKAGE_ROOT, "esbuild.mjs");
+
+function ensureBundledServer(): void {
+  if (existsSync(SERVER_PATH)) {
+    return;
+  }
+
+  const result = spawnSync("node", [BUNDLE_SCRIPT], {
+    cwd: VSCODE_PACKAGE_ROOT,
+    stdio: "pipe",
+    encoding: "utf8",
+  });
+
+  if (result.status !== 0 || !existsSync(SERVER_PATH)) {
+    throw new Error(
+      `Failed to build bundled server.\nstdout:\n${result.stdout ?? ""}\nstderr:\n${result.stderr ?? ""}`,
+    );
+  }
+}
 
 /** JSON-RPC message header */
 function makeHeader(content: string): string {
@@ -57,6 +78,8 @@ afterEach(() => {
 });
 
 test("bundled server starts and responds to initialize", async () => {
+  ensureBundledServer();
+
   serverProcess = spawn("node", [SERVER_PATH, "--stdio"], {
     stdio: ["pipe", "pipe", "pipe"],
   });

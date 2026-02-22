@@ -17,7 +17,7 @@
     "expect": {
       "items": [
         { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "toView" },
-        { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "fromView" },
         { "kind": "branch", "res": "then", "branch": "then" }
       ],
       "diags": []
@@ -29,7 +29,7 @@
     "expect": {
       "items": [
         { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "toView" },
-        { "kind": "ctrlProp", "res": "catch", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "ctrlProp", "res": "catch", "to": "value", "target": "controller", "effectiveMode": "fromView" },
         { "kind": "branch", "res": "catch", "branch": "catch" }
       ],
       "diags": []
@@ -43,9 +43,9 @@
         { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "ctrlProp", "res": "pending", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "branch", "res": "pending", "branch": "pending" },
-        { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "fromView" },
         { "kind": "branch", "res": "then", "branch": "then" },
-        { "kind": "ctrlProp", "res": "catch", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "ctrlProp", "res": "catch", "to": "value", "target": "controller", "effectiveMode": "fromView" },
         { "kind": "branch", "res": "catch", "branch": "catch" }
       ],
       "diags": []
@@ -57,7 +57,7 @@
     "expect": {
       "items": [
         { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "toView" },
-        { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "fromView" },
         { "kind": "branch", "res": "then", "branch": "then" }
       ],
       "diags": []
@@ -69,7 +69,7 @@
     "expect": {
       "items": [
         { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "toView" },
-        { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "fromView" },
         { "kind": "branch", "res": "then", "branch": "then" },
         { "kind": "prop", "to": "class", "target": "native", "effectiveMode": "toView" },
         { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" }
@@ -86,7 +86,7 @@
         { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "ctrlProp", "res": "pending", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "branch", "res": "pending", "branch": "pending" },
-        { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "fromView" },
         { "kind": "branch", "res": "then", "branch": "then" }
       ],
       "diags": []
@@ -98,7 +98,7 @@
     "expect": {
       "items": [
         { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "toView" },
-        { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "fromView" },
         { "kind": "branch", "res": "then", "branch": "then" },
         { "kind": "iterator", "res": "repeat", "to": "items" }
       ],
@@ -113,7 +113,7 @@
         { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "ctrlProp", "res": "pending", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "branch", "res": "pending", "branch": "pending" },
-        { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "fromView" },
         { "kind": "branch", "res": "then", "branch": "then" }
       ],
       "diags": []
@@ -139,7 +139,7 @@
     "expect": {
       "items": [
         { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "toView" },
-        { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "fromView" },
         { "kind": "branch", "res": "then", "branch": "then" },
         { "kind": "prop", "to": "value", "target": "bindable", "effectiveMode": "toView" }
       ],

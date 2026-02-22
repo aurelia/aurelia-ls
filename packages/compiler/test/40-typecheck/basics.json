@@ -53,12 +53,7 @@
         { "code": "active", "type": "NonNullable<(RootVm)>['active']" }
       ],
       "diags": [
-        {
-          "code": "aurelia/expr-type-mismatch",
-          "expr": "active",
-          "expected": "string",
-          "actual": "NonNullable<(RootVm)>['active']"
-        }
+        { "code": "aurelia/expr-type-mismatch", "expr": "active", "expected": "string", "actual": "NonNullable<(RootVm)>['active']" }
       ]
     }
   },
@@ -73,12 +68,7 @@
         { "code": "width", "type": "NonNullable<(RootVm)>['width']" }
       ],
       "diags": [
-        {
-          "code": "aurelia/expr-type-mismatch",
-          "expr": "width",
-          "expected": "string",
-          "actual": "NonNullable<(RootVm)>['width']"
-        }
+        { "code": "aurelia/expr-type-mismatch", "expr": "width", "expected": "string", "actual": "NonNullable<(RootVm)>['width']" }
       ]
     }
   }

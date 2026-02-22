@@ -5,9 +5,9 @@
     "expect": {
       "items": [
         { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "toView" },
-        { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "fromView" },
         { "kind": "branch", "res": "then", "branch": "then" },
-        { "kind": "ctrlProp", "res": "catch", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "ctrlProp", "res": "catch", "to": "value", "target": "controller", "effectiveMode": "fromView" },
         { "kind": "branch", "res": "catch", "branch": "catch" },
         { "kind": "prop", "to": "textContent", "target": "native", "effectiveMode": "toView" },
         { "kind": "event", "to": "click", "type": "MouseEvent" }
@@ -22,7 +22,7 @@
         { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "ctrlProp", "res": "pending", "to": "value", "target": "controller", "effectiveMode": "toView" },
         { "kind": "branch", "res": "pending", "branch": "pending" },
-        { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "fromView" },
         { "kind": "branch", "res": "then", "branch": "then" }
       ]
     }

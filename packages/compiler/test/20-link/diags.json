@@ -49,9 +49,9 @@
     "expect": {
       "items": [
         { "kind": "ctrlProp", "res": "promise", "to": "value", "target": "controller", "effectiveMode": "toView" },
-        { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "ctrlProp", "res": "then", "to": "value", "target": "controller", "effectiveMode": "fromView" },
         { "kind": "branch", "res": "then", "branch": "then" },
-        { "kind": "ctrlProp", "res": "catch", "to": "value", "target": "controller", "effectiveMode": "toView" },
+        { "kind": "ctrlProp", "res": "catch", "to": "value", "target": "controller", "effectiveMode": "fromView" },
         { "kind": "branch", "res": "catch", "branch": "catch" }
       ],
       "diags": []

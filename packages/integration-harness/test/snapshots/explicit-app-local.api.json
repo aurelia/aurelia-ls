@@ -17,7 +17,7 @@
     { "id": "sym:8acbec4fa5ddaf769ec368513c34c408c705b4f887369a0ede2e8e47992017ad", "kind": "binding-behavior", "name": "updatetrigger", "source": "aurelia/packages/runtime-html/src/resources/binding-behaviors/update-trigger.ts" },
     {
       "bindables": [
-        { "attribute": "value", "name": "value", "primary": true }
+        { "attribute": "value", "mode": "twoWay", "name": "value", "primary": true }
       ],
       "id": "sym:e9f09469e0e7d6ae951dc0f1c2676cb9880b5771538b1f7d172e3cd18ccd6e47",
       "kind": "custom-attribute",
@@ -57,7 +57,7 @@
     {
       "aliases": [ "hide" ],
       "bindables": [
-        { "attribute": "value", "name": "value", "primary": true }
+        { "attribute": "value", "mode": "toView", "name": "value", "primary": true }
       ],
       "id": "sym:fa9bf5a86f3da366ef00fb29f3193c649b3560dccbe8917f71ed0040c0e05594",
       "kind": "custom-attribute",
@@ -75,13 +75,13 @@
     },
     {
       "bindables": [
-        { "attribute": "component", "name": "component" },
-        { "attribute": "composing", "name": "composing" },
-        { "attribute": "composition", "name": "composition" },
-        { "attribute": "model", "name": "model" },
-        { "attribute": "scope-behavior", "name": "scopeBehavior" },
-        { "attribute": "tag", "name": "tag" },
-        { "attribute": "template", "name": "template" }
+        { "attribute": "component", "mode": "toView", "name": "component" },
+        { "attribute": "composing", "mode": "fromView", "name": "composing" },
+        { "attribute": "composition", "mode": "fromView", "name": "composition" },
+        { "attribute": "model", "mode": "toView", "name": "model" },
+        { "attribute": "scope-behavior", "mode": "toView", "name": "scopeBehavior" },
+        { "attribute": "tag", "mode": "toView", "name": "tag" },
+        { "attribute": "template", "mode": "toView", "name": "template" }
       ],
       "id": "sym:7f875c1c7f40d5fb9886ebc7134698998e267586550fa4f2acfebab73c576b72",
       "kind": "custom-element",
@@ -90,8 +90,8 @@
     },
     {
       "bindables": [
-        { "attribute": "expose", "name": "expose" },
-        { "attribute": "slotchange", "name": "slotchange" }
+        { "attribute": "expose", "mode": "toView", "name": "expose" },
+        { "attribute": "slotchange", "mode": "toView", "name": "slotchange" }
       ],
       "id": "sym:53d9a2d0fd9ecb6f901020ba1e29795d038e9f5e4e7a7f5ba59611d2ef84bf8b",
       "kind": "custom-element",
@@ -189,7 +189,7 @@
     },
     {
       "bindables": [
-        { "attribute": "value", "name": "value" }
+        { "attribute": "value", "mode": "fromView", "name": "value" }
       ],
       "id": "sym:aeb6eeb2d3664edc5e90a5d6c80358bf8fbe5f8dbef60e79d1b132fdc6d201b5",
       "kind": "template-controller",
@@ -207,8 +207,8 @@
     { "id": "sym:0be3e5ac7eabeee3737873bb6dee1e72b198ed3e5a54df5e3f4d59c042e916b5", "kind": "template-controller", "name": "else", "source": "aurelia/packages/runtime-html/src/resources/template-controllers/if.ts" },
     {
       "bindables": [
-        { "attribute": "cache", "name": "cache" },
-        { "attribute": "value", "name": "value" }
+        { "attribute": "cache", "mode": "default", "name": "cache" },
+        { "attribute": "value", "mode": "default", "name": "value" }
       ],
       "id": "sym:a20c48a4e07438ad6f8adbeccc395ee6230c787cdc21011a9c4e1153afec1898",
       "kind": "template-controller",
@@ -217,7 +217,7 @@
     },
     {
       "bindables": [
-        { "attribute": "value", "name": "value" }
+        { "attribute": "value", "mode": "toView", "name": "value" }
       ],
       "id": "sym:1bb1e540636c7e22fd2a650f9a4f5355285833216bc4ff23389c068f138aa38e",
       "kind": "template-controller",
@@ -226,15 +226,15 @@
     },
     {
       "bindables": [
-        { "attribute": "activated", "name": "activated" },
-        { "attribute": "activating", "name": "activating" },
-        { "attribute": "callback-context", "name": "callbackContext" },
-        { "attribute": "deactivated", "name": "deactivated" },
-        { "attribute": "deactivating", "name": "deactivating" },
-        { "attribute": "position", "name": "position" },
-        { "attribute": "render-context", "name": "renderContext" },
-        { "attribute": "strict", "name": "strict" },
-        { "attribute": "target", "name": "target" }
+        { "attribute": "activated", "mode": "default", "name": "activated" },
+        { "attribute": "activating", "mode": "default", "name": "activating" },
+        { "attribute": "callback-context", "mode": "default", "name": "callbackContext" },
+        { "attribute": "deactivated", "mode": "default", "name": "deactivated" },
+        { "attribute": "deactivating", "mode": "default", "name": "deactivating" },
+        { "attribute": "position", "mode": "default", "name": "position" },
+        { "attribute": "render-context", "mode": "default", "name": "renderContext" },
+        { "attribute": "strict", "mode": "default", "name": "strict" },
+        { "attribute": "target", "mode": "default", "name": "target" }
       ],
       "id": "sym:befdc1523f9e0029697a37f928577b06cf27be174d9d72e1bb6cd7df920b79fb",
       "kind": "template-controller",
@@ -243,7 +243,7 @@
     },
     {
       "bindables": [
-        { "attribute": "value", "name": "value" }
+        { "attribute": "value", "mode": "default", "name": "value" }
       ],
       "id": "sym:7ffa45d035c7e6f03300e56c1ea8bcc0a6cb67deae12585b7688dd287432522f",
       "kind": "template-controller",
@@ -252,7 +252,7 @@
     },
     {
       "bindables": [
-        { "attribute": "items", "name": "items" }
+        { "attribute": "items", "mode": "default", "name": "items" }
       ],
       "id": "sym:57dd9812d05849b39d023767b948e1031553dec9428d48166c18fe9028c8cad0",
       "kind": "template-controller",
@@ -261,7 +261,7 @@
     },
     {
       "bindables": [
-        { "attribute": "value", "name": "value" }
+        { "attribute": "value", "mode": "default", "name": "value" }
       ],
       "id": "sym:7d2a7d2b8ba3637c88a537a913f2cfa258e22abf957e6bb5a80731d405bf4d30",
       "kind": "template-controller",
@@ -270,7 +270,7 @@
     },
     {
       "bindables": [
-        { "attribute": "value", "name": "value" }
+        { "attribute": "value", "mode": "fromView", "name": "value" }
       ],
       "id": "sym:d13bd366e0b2cac66113cecbea55d948657ff673b54bc447acdd17e71eb5e45d",
       "kind": "template-controller",
@@ -279,7 +279,7 @@
     },
     {
       "bindables": [
-        { "attribute": "value", "name": "value" }
+        { "attribute": "value", "mode": "default", "name": "value" }
       ],
       "id": "sym:32d632be4399a321aa93d1562efea3e2576d89e23b59f09b1215a0e486b415da",
       "kind": "template-controller",

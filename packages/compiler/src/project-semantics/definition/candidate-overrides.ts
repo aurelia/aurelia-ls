@@ -29,7 +29,9 @@ export function createDiscoveryConvergenceOverrides(
   for (const resource of templateMetaResources) {
     overrides.set(resource, {
       sourceKind: "analysis-convention",
-      evidenceRank: 4,
+      // Template metadata should backfill unknowns but not override stronger
+      // class/runtime-known fields when both are present.
+      evidenceRank: 5,
     });
   }
   return overrides;

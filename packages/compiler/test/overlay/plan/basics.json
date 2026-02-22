@@ -21,12 +21,7 @@
             "name": "aurelia-table",
             "isTemplateController": false,
             "bindables": {
-              "displayData": {
-                "name": "displayData",
-                "attribute": "display-data",
-                "mode": "twoWay",
-                "type": "any[]"
-              }
+              "displayData": { "name": "displayData", "attribute": "display-data", "mode": "twoWay", "type": "any[]" }
             }
           }
         }

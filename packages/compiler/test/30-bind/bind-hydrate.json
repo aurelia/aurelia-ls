@@ -66,11 +66,7 @@
             "name": "aurelia-table",
             "isTemplateController": false,
             "bindables": {
-              "displayData": {
-                "name": "displayData",
-                "attribute": "display-data",
-                "mode": "twoWay"
-              }
+              "displayData": { "name": "displayData", "attribute": "display-data", "mode": "twoWay" }
             }
           }
         }

@@ -91,7 +91,14 @@
       "kind": "template-controller",
       "name": "case"
     },
-    { "id": "sym:d5d28e40e60f803563d27833e11a600f401129491767beadb820333489a5c435", "kind": "template-controller", "name": "catch" },
+    {
+      "bindables": [
+        { "attribute": "value", "mode": "fromView", "name": "value" }
+      ],
+      "id": "sym:d5d28e40e60f803563d27833e11a600f401129491767beadb820333489a5c435",
+      "kind": "template-controller",
+      "name": "catch"
+    },
     {
       "bindables": [
         { "attribute": "fallThrough", "mode": "default", "name": "fallThrough" }
@@ -110,9 +117,22 @@
       "kind": "template-controller",
       "name": "if"
     },
-    { "id": "sym:5ee5f38b42ddd1a8505593d2864ce71bda55f67f8001a57a0755e027f101f056", "kind": "template-controller", "name": "pending" },
     {
       "bindables": [
+        { "attribute": "value", "mode": "toView", "name": "value" }
+      ],
+      "id": "sym:5ee5f38b42ddd1a8505593d2864ce71bda55f67f8001a57a0755e027f101f056",
+      "kind": "template-controller",
+      "name": "pending"
+    },
+    {
+      "bindables": [
+        { "attribute": "activated", "mode": "default", "name": "activated" },
+        { "attribute": "activating", "mode": "default", "name": "activating" },
+        { "attribute": "callbackContext", "mode": "default", "name": "callbackContext" },
+        { "attribute": "deactivated", "mode": "default", "name": "deactivated" },
+        { "attribute": "deactivating", "mode": "default", "name": "deactivating" },
+        { "attribute": "position", "mode": "default", "name": "position" },
         { "attribute": "renderContext", "mode": "default", "name": "renderContext" },
         { "attribute": "strict", "mode": "default", "name": "strict" },
         { "attribute": "target", "mode": "default", "name": "target", "primary": true }
@@ -129,7 +149,14 @@
       "kind": "template-controller",
       "name": "promise"
     },
-    { "id": "sym:bcd87ba155b6df3f485cf6bc1ee8718f0a56c75838c891b838c6c9ae63458149", "kind": "template-controller", "name": "repeat" },
+    {
+      "bindables": [
+        { "attribute": "items", "mode": "default", "name": "items", "primary": true }
+      ],
+      "id": "sym:bcd87ba155b6df3f485cf6bc1ee8718f0a56c75838c891b838c6c9ae63458149",
+      "kind": "template-controller",
+      "name": "repeat"
+    },
     {
       "bindables": [
         { "attribute": "value", "mode": "default", "name": "value" }
@@ -138,7 +165,14 @@
       "kind": "template-controller",
       "name": "switch"
     },
-    { "id": "sym:6e4da88e15b7109346a3cb527a32f6e14796b70e8a0e99b9e5427a7d3810b17c", "kind": "template-controller", "name": "then" },
+    {
+      "bindables": [
+        { "attribute": "value", "mode": "fromView", "name": "value" }
+      ],
+      "id": "sym:6e4da88e15b7109346a3cb527a32f6e14796b70e8a0e99b9e5427a7d3810b17c",
+      "kind": "template-controller",
+      "name": "then"
+    },
     {
       "bindables": [
         { "attribute": "value", "mode": "default", "name": "value" }
