@@ -67,6 +67,7 @@ export interface HostExecuteOptions {
 
 export interface SemanticAuthorityHostRuntimeOptions {
   readonly logger?: Logger;
+  readonly workspaceLogger?: Logger;
   readonly defaultWorkspaceRoot?: string;
   readonly workspaceFactory?: HostWorkspaceFactory;
   readonly parityAdapter?: SemanticAuthorityParityAdapter;
@@ -102,7 +103,7 @@ export class SemanticAuthorityHostRuntime {
   constructor(options: SemanticAuthorityHostRuntimeOptions = {}) {
     this.#logger = options.logger ?? SILENT_LOGGER;
     this.#sessions = new HostSessionManager({
-      logger: this.#logger,
+      logger: options.workspaceLogger ?? SILENT_LOGGER,
       defaultWorkspaceRoot: options.defaultWorkspaceRoot,
       workspaceFactory: options.workspaceFactory,
     });
