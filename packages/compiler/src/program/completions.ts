@@ -34,7 +34,7 @@ import type { TemplateQueryFacade } from "../synthesis/index.js";
 import type { DocumentSnapshot, DocumentUri } from "./primitives.js";
 import { canonicalDocumentUri } from "./paths.js";
 import type { TemplateProgram } from "./program.js";
-import type { CompletionConfidence, CompletionItem, CompletionOrigin } from "./services.js";
+import type { CompletionConfidence, CompletionItem, CompletionOrigin } from "./completion-contracts.js";
 
 export function collectTemplateCompletionsForProgram(
   program: TemplateProgram,

@@ -22,6 +22,7 @@ import type { TemplateQueryFacade, TemplateMappingArtifact } from "../synthesis/
 import type { TemplateCompilation } from "../facade.js";
 
 // Program layer imports
+import type { CompletionItem } from "./completion-contracts.js";
 import type { DocumentSnapshot, DocumentUri, TemplateExprId } from "./primitives.js";
 import { canonicalDocumentUri, deriveTemplatePaths, type CanonicalDocumentUri } from "./paths.js";
 import { collectTemplateCompletionsForProgram } from "./completions.js";
@@ -49,6 +50,7 @@ import {
 
 export type { DocumentSpan } from "./provenance.js";
 export type { Position, TextRange } from "../model/index.js";
+export type { CompletionConfidence, CompletionItem, CompletionOrigin } from "./completion-contracts.js";
 
 const PROVENANCE_POLICY = DEFAULT_PROVENANCE_PROJECTION_POLICY;
 
@@ -214,22 +216,6 @@ export interface TemplateLanguageServiceOptions {
 }
 
 type TypeNameMap = ReadonlyMap<string, string>;
-
-export type CompletionConfidence = "exact" | "high" | "partial" | "low";
-export type CompletionOrigin = "builtin" | "config" | "source" | "unknown";
-
-export interface CompletionItem {
-  label: string;
-  kind?: string;
-  detail?: string;
-  documentation?: string;
-  insertText?: string;
-  sortText?: string;
-  confidence?: CompletionConfidence;
-  origin?: CompletionOrigin;
-  range?: TextRange;
-  source: "template" | "typescript";
-}
 
 export interface TemplateLanguageService {
   getDiagnostics(uri: DocumentUri): TemplateLanguageDiagnostics;
