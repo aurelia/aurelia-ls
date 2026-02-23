@@ -68,6 +68,11 @@ interface UnknownConfidenceClassification {
   readonly gap: SemanticAuthorityGap;
 }
 
+interface RenamePolicyErrorDetails {
+  readonly reason: string | null;
+  readonly unresolvedDecisionPointIds: readonly string[];
+}
+
 export interface HostExecuteOptions {
   readonly record?: boolean;
   readonly runId?: string | null;
@@ -484,11 +489,14 @@ export class SemanticAuthorityHostRuntime {
       uri: canonicalDocumentUri(request.request.uri).uri,
     });
     if ("error" in result) {
-      return degraded(session.id, session.profile, result, [{
-        what: "Rename could not be completed",
-        why: result.error.message,
-        howToClose: "Resolve refactor policy constraints or rename a provenance-backed symbol.",
-      }]);
+      const details = parseRenamePolicyErrorDetails(result.error);
+      return degraded(
+        session.id,
+        session.profile,
+        result,
+        [renameDeniedGap(result.error.message, details)],
+        { confidence: renameDeniedConfidence(result.error.kind, details) },
+      );
     }
     return ok(session, result, { confidence: "high", touchedDocumentCount: result.edit.edits.length });
   }
@@ -1024,6 +1032,87 @@ function rollupSweepStatuses(
     degradedCount,
     errorCount,
   };
+}
+
+function parseRenamePolicyErrorDetails(
+  error: { data?: Readonly<Record<string, unknown>> },
+): RenamePolicyErrorDetails {
+  const data = error.data;
+  if (!data || typeof data !== "object") {
+    return { reason: null, unresolvedDecisionPointIds: [] };
+  }
+  const reason = typeof data.reason === "string" ? data.reason : null;
+  const unresolvedRaw = data.unresolvedDecisionPointIds;
+  const unresolvedDecisionPointIds = Array.isArray(unresolvedRaw)
+    ? unresolvedRaw.filter((value): value is string => typeof value === "string")
+    : [];
+  return { reason, unresolvedDecisionPointIds };
+}
+
+function renameDeniedGap(
+  message: string,
+  details: RenamePolicyErrorDetails,
+): SemanticAuthorityGap {
+  switch (details.reason) {
+    case "target-not-allowed":
+      return {
+        what: "Rename target class is not supported by semantic policy",
+        why: message,
+        howToClose: "Rename a semantic resource symbol (custom element, bindable attribute, value converter, or binding behavior).",
+      };
+    case "provenance-required":
+      return {
+        what: "Rename requires semantic provenance",
+        why: message,
+        howToClose: "Invoke rename from a provenance-backed symbol location in template or source.",
+      };
+    case "decision-required": {
+      const unresolved = details.unresolvedDecisionPointIds.join(", ");
+      return {
+        what: "Rename requires explicit policy decisions",
+        why: unresolved.length > 0
+          ? `${message} Unresolved decisions: ${unresolved}.`
+          : message,
+        howToClose: unresolved.length > 0
+          ? `Resolve required decisions (${unresolved}) and retry rename.`
+          : "Resolve required policy decisions and retry rename.",
+      };
+    }
+    case "resource-origin-config":
+      return {
+        what: "Rename is blocked for config-origin resources",
+        why: message,
+        howToClose: "Rename the resource in configuration authority and then refresh the workspace.",
+      };
+    case "resource-origin-builtin":
+      return {
+        what: "Rename is blocked for builtin resources",
+        why: message,
+        howToClose: "Use a project-defined resource alias or rename a non-builtin resource.",
+      };
+    case "semantic-step-disabled":
+      return {
+        what: "Semantic rename path is disabled for this request",
+        why: message,
+        howToClose: "Enable semantic rename support for the target class before retrying.",
+      };
+    default:
+      return {
+        what: "Rename could not be completed",
+        why: message,
+        howToClose: "Resolve refactor policy constraints or rename a provenance-backed symbol.",
+      };
+  }
+}
+
+function renameDeniedConfidence(
+  kind: string,
+  details: RenamePolicyErrorDetails,
+): SemanticAuthorityConfidence {
+  if (kind === "refactor-decision-required" || details.reason === "decision-required") {
+    return "partial";
+  }
+  return "low";
 }
 
 function locationRef(uri: string, start: number, end: number): string {

@@ -92,6 +92,9 @@ describe("workspace refactor policy (rename)", () => {
       expect(result.error.kind).toBe("refactor-decision-required");
       expect(result.error.message).toContain("required decisions are unresolved");
       expect(result.error.retryable).toBe(false);
+      expect(result.error.data?.operation).toBe("rename");
+      expect(result.error.data?.reason).toBe("decision-required");
+      expect(result.error.data?.unresolvedDecisionPointIds).toContain("file-rename");
     }
   });
 
@@ -139,6 +142,9 @@ describe("workspace refactor policy (rename preflight)", () => {
       expect(result.error.kind).toBe("refactor-policy-denied");
       expect(result.error.message).toContain("target-not-allowed");
       expect(result.error.retryable).toBe(false);
+      expect(result.error.data?.operation).toBe("rename");
+      expect(result.error.data?.reason).toBe("target-not-allowed");
+      expect(result.error.data?.unresolvedDecisionPointIds).toEqual([]);
     }
     expect(refreshSpy).not.toHaveBeenCalled();
     refreshSpy.mockRestore();

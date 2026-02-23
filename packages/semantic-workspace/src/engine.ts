@@ -1430,6 +1430,11 @@ class WorkspaceRefactorProxy implements RefactorEngine {
         kind: refactorPolicyErrorKind(plan.reason, plan.unresolvedDecisionPoints),
         message: buildRefactorPolicyErrorMessage("rename", plan.reason, plan.unresolvedDecisionPoints),
         retryable: false,
+        data: {
+          operation: "rename",
+          reason: plan.reason ?? "unknown",
+          unresolvedDecisionPointIds: plan.unresolvedDecisionPoints.map((point) => point.id),
+        },
       },
     };
   }

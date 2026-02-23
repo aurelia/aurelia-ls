@@ -94,6 +94,9 @@ describe("workspace refactor (workspace-contract)", () => {
       expect(result.error.kind).toBe("refactor-policy-denied");
       expect(result.error.message).toContain("target-not-allowed");
       expect(result.error.retryable).toBe(false);
+      expect(result.error.data?.reason).toBe("target-not-allowed");
+      expect(result.error.data?.operation).toBe("rename");
+      expect(result.error.data?.unresolvedDecisionPointIds).toEqual([]);
     }
   });
 });

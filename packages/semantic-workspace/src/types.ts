@@ -164,6 +164,7 @@ export interface WorkspaceError {
   readonly kind: WorkspaceErrorKind;
   readonly message: string;
   readonly retryable?: boolean;
+  readonly data?: Readonly<Record<string, unknown>>;
 }
 
 export type WorkspaceRefactorResult =

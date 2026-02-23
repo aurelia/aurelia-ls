@@ -18,6 +18,9 @@ if (!fixtureRoot) {
 const appPath = path.join(fixtureRoot, "src", "my-app.html");
 const appUri = asDocumentUri(appPath);
 const appText = fs.readFileSync(appPath, "utf8");
+const tablePath = path.join(fixtureRoot, "src", "views", "table-panel.html");
+const tableUri = asDocumentUri(tablePath);
+const tableText = fs.readFileSync(tablePath, "utf8");
 
 function createHost() {
   return createSemanticAuthorityHostRuntime();
@@ -188,6 +191,40 @@ describe("semantic-authority host runtime", () => {
     expect(navigation.epistemic.confidence).toBe("unknown");
     expect(navigation.epistemic.unknownReason).toBe("unresolved-authority");
     expect(navigation.epistemic.gaps[0]?.why).toContain("aurelia/unknown-");
+  });
+
+  it("projects rename policy denial with structured reason and actionable gap", async () => {
+    const host = createHost();
+    const sessionId = await openSession(host);
+
+    await host.execute({
+      command: "doc.open",
+      args: { sessionId, uri: tableUri, text: tableText },
+    } satisfies SemanticAuthorityCommandInvocation<"doc.open">);
+
+    const rename = await host.execute({
+      command: "refactor.rename",
+      args: {
+        sessionId,
+        request: {
+          uri: tableUri,
+          position: findPosition(tableText, "item.rating", "item.".length),
+          newName: "score",
+        },
+      },
+    } satisfies SemanticAuthorityCommandInvocation<"refactor.rename">);
+
+    expect(rename.status).toBe("degraded");
+    expect(rename.epistemic.confidence).toBe("low");
+    expect(rename.epistemic.gaps.length).toBeGreaterThan(0);
+    expect(rename.epistemic.gaps[0]?.what).toContain("not supported by semantic policy");
+    expect(rename.epistemic.gaps[0]?.howToClose).toContain("semantic resource symbol");
+    expect("error" in rename.result).toBe(true);
+    if ("error" in rename.result) {
+      expect(rename.result.error.kind).toBe("refactor-policy-denied");
+      expect(rename.result.error.data?.operation).toBe("rename");
+      expect(rename.result.error.data?.reason).toBe("target-not-allowed");
+    }
   });
 
   it("runs pressure scenario and replays without divergence", async () => {
