@@ -65,7 +65,8 @@ export class HostVerifier {
 
   async verifyParity(args: VerifyParityArgs): Promise<VerifyParityResult> {
     const hostEnvelope = await this.#dispatch(args.invocation, { record: false });
-    const hostHash = stableHash(hostEnvelope.result);
+    const hostResult = hostEnvelope.result;
+    const hostHash = stableHash(hostResult);
     if (!this.#parityAdapter) {
       return {
         parity: false,
@@ -78,10 +79,24 @@ export class HostVerifier {
 
     const adapterRaw = await this.#parityAdapter.execute(args.invocation);
     const adapterResult = unwrapAdapterResult(adapterRaw);
-    const adapterHash = stableHash(adapterResult);
+    let hostComparable = hostResult;
+    let adapterComparable = adapterResult;
+    if (this.#parityAdapter.normalize) {
+      const normalized = this.#parityAdapter.normalize({
+        invocation: args.invocation,
+        hostResult,
+        adapterResult,
+      });
+      if (normalized) {
+        hostComparable = normalized.host;
+        adapterComparable = normalized.adapter;
+      }
+    }
+    const normalizedHostHash = stableHash(hostComparable);
+    const adapterHash = stableHash(adapterComparable);
     return {
-      parity: hostHash === adapterHash,
-      hostHash,
+      parity: normalizedHostHash === adapterHash,
+      hostHash: normalizedHostHash,
       adapterHash,
       adapterAvailable: true,
       adapterName: this.#parityAdapter.name ?? "parity-adapter",

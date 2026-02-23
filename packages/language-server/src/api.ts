@@ -6,6 +6,7 @@ export * from "./handlers/features.js";
 export * from "./handlers/lifecycle.js";
 export * from "./handlers/semantic-tokens.js";
 export * from "./mapping/lsp-types.js";
+export * from "./parity/diagnostics-parity-adapter.js";
 export {
   spanToRange as spanToDocumentRange,
   spanToRangeOrNull,

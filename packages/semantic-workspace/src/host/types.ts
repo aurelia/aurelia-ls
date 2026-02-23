@@ -608,7 +608,21 @@ export interface SemanticAuthorityCommandInvocation<TCommand extends SemanticAut
   readonly args: SemanticAuthorityCommandArgs<TCommand>;
 }
 
+export interface SemanticAuthorityParityNormalizationInput {
+  readonly invocation: ReplayableCommandInvocation;
+  readonly hostResult: unknown;
+  readonly adapterResult: unknown;
+}
+
+export interface SemanticAuthorityParityNormalizedResult {
+  readonly host: unknown;
+  readonly adapter: unknown;
+}
+
 export interface SemanticAuthorityParityAdapter {
   readonly name?: string;
   execute(invocation: ReplayableCommandInvocation): Promise<unknown> | unknown;
+  normalize?(
+    input: SemanticAuthorityParityNormalizationInput,
+  ): SemanticAuthorityParityNormalizedResult | null | undefined;
 }

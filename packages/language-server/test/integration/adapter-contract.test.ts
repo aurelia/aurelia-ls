@@ -346,7 +346,7 @@ describe("adapter contract (workspace-contract)", () => {
     expect(normalizeLocations(lspDefs)).toEqual(expectedDefs);
   });
 
-  it("mirrors references and rename edits", async () => {
+  it("mirrors references and rename policy denial", async () => {
     const connection = serverState.connection;
     if (!connection) throw new Error("Missing LSP connection");
 
@@ -367,17 +367,19 @@ describe("adapter contract (workspace-contract)", () => {
       position: pos,
       newName: "score",
     });
+    expect("error" in renameResult).toBe(true);
     if ("error" in renameResult) {
-      throw new Error(`Workspace rename failed: ${renameResult.error.message}`);
+      expect(renameResult.error.kind).toBe("refactor-policy-denied");
+      expect(renameResult.error.data?.reason).toBe("target-not-allowed");
     }
 
-    const expectedEdit = mapSemanticWorkspaceEdit(renameResult.edit, lookupText);
-    const lspRename = await connection.sendRequest("textDocument/rename", {
+    await expect(connection.sendRequest("textDocument/rename", {
       textDocument: { uri: tableLspUri },
       position: pos,
       newName: "score",
+    })).rejects.toMatchObject({
+      message: expect.stringContaining("target-not-allowed"),
     });
-    expect(normalizeEdits(lspRename)).toEqual(normalizeEdits(expectedEdit));
   });
 
   it("mirrors completions", async () => {

@@ -391,6 +391,45 @@ describe("semantic-authority host runtime", () => {
     expect(result.result.divergenceIndexes.length).toBe(0);
   });
 
+  it("supports parity normalization when adapter and host results use different shapes", async () => {
+    const host = createSemanticAuthorityHostRuntime({
+      parityAdapter: {
+        name: "projection-adapter",
+        execute: () => ({ result: null }),
+        normalize: ({ hostResult, adapterResult }) => ({
+          host: (hostResult as { hover: unknown }).hover ?? null,
+          adapter: adapterResult,
+        }),
+      },
+    });
+    const sessionId = await openSession(host);
+
+    await host.execute({
+      command: "doc.open",
+      args: { sessionId, uri: appUri, text: appText },
+    } satisfies SemanticAuthorityCommandInvocation<"doc.open">);
+
+    const parity = await host.execute({
+      command: "verify.parity",
+      args: {
+        sessionId,
+        invocation: {
+          command: "query.hover",
+          args: {
+            sessionId,
+            uri: appUri,
+            position: findPosition(appText, "<section", 1),
+          },
+        },
+      },
+    } satisfies SemanticAuthorityCommandInvocation<"verify.parity">);
+
+    expect(parity.status).toBe("ok");
+    expect(parity.result.parity).toBe(true);
+    expect(parity.result.adapterAvailable).toBe(true);
+    expect(parity.result.adapterName).toBe("projection-adapter");
+  });
+
   it("preserves what/why/howToClose on degraded parity verification", async () => {
     const host = createHost();
     const sessionId = await openSession(host);
