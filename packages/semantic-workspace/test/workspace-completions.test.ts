@@ -133,6 +133,8 @@ describe("workspace completions (workspace-contract)", () => {
     const completions = query.completions(findPosition(appText, "<summary-panel", 1));
     expect(hasLabel(completions, "summary-panel")).toBe(true);
     expect(hasLabel(completions, "table-panel")).toBe(true);
+    expect(completions.find((item) => item.label === "summary-panel")?.kind).toBe("custom-element");
+    expect(completions.find((item) => item.label === "div")?.kind).toBe("html-element");
   });
 
   it("orders completions by relevance then label", () => {
@@ -152,6 +154,7 @@ describe("workspace completions (workspace-contract)", () => {
     const completions = query.completions(findPosition(appText, "stats.bind", 0));
     expect(hasLabel(completions, "stats")).toBe(true);
     expect(hasLabel(completions, "updated-at")).toBe(true);
+    expect(completions.find((item) => item.label === "stats")?.kind).toBe("bindable-property");
   });
 
   it("completes native attributes", () => {
@@ -159,18 +162,21 @@ describe("workspace completions (workspace-contract)", () => {
     const completions = query.completions(findPosition(appText, "type=\"text\"", 0));
     expect(hasLabel(completions, "type")).toBe(true);
     expect(hasLabel(completions, "value")).toBe(true);
+    expect(completions.find((item) => item.label === "type")?.kind).toBe("html-attribute");
   });
 
   it("completes binding commands", () => {
     const query = harness.workspace.query(appUri);
     const completions = query.completions(findPosition(appText, "value.bind", "value.".length));
     expect(hasLabel(completions, "bind")).toBe(true);
+    expect(completions.find((item) => item.label === "bind")?.kind).toBe("binding-command");
   });
 
   it("completes value converters", () => {
     const query = harness.workspace.query(appUri);
     const completions = query.completions(findPosition(appText, "| titlecase", 2));
     expect(hasLabel(completions, "titlecase")).toBe(true);
+    expect(completions.find((item) => item.label === "titlecase")?.kind).toBe("value-converter");
   });
 
   it("includes structured trust metadata for converter completions", () => {
@@ -195,6 +201,7 @@ describe("workspace completions (workspace-contract)", () => {
     const query = harness.workspace.query(appUri);
     const completions = query.completions(findPosition(appText, "& debounce", 2));
     expect(hasLabel(completions, "debounce")).toBe(true);
+    expect(completions.find((item) => item.label === "debounce")?.kind).toBe("binding-behavior");
   });
 
   it("completes bindable literal values", () => {

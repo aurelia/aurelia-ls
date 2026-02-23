@@ -1,8 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { NOOP_TRACE } from "@aurelia-ls/compiler";
-import { handleSemanticTokensFull, SEMANTIC_TOKENS_LEGEND } from "../../src/handlers/semantic-tokens.js";
-import type { ServerContext } from "../../src/context.js";
+import {
+  handleSemanticTokensFull,
+  SEMANTIC_TOKENS_LEGEND,
+  type ServerContext,
+} from "@aurelia-ls/language-server/api";
 import {
   WORKSPACE_TOKEN_MODIFIER_GAP_AWARE,
   WORKSPACE_TOKEN_MODIFIER_GAP_CONSERVATIVE,

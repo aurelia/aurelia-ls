@@ -77,6 +77,7 @@ export interface WorkspaceHover {
 
 export interface WorkspaceCompletionItem {
   readonly label: string;
+  // Canonical completion class id from completion-kind-authority.md.
   readonly kind?: string;
   readonly detail?: string;
   readonly documentation?: string;

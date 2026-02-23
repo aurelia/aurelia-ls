@@ -5,6 +5,7 @@ import {
   CompletionItemKind,
   DiagnosticSeverity as LspDiagnosticSeverity,
   type CompletionItem,
+  type CompletionList,
   type Hover,
   type Location,
   type WorkspaceEdit,
@@ -165,24 +166,28 @@ function mapRelatedDiagnostics(
   return results;
 }
 
-const DETAIL_TO_COMPLETION_KIND: Record<string, CompletionItemKind> = {
-  "Custom Element": CompletionItemKind.Class,
-  "HTML Element": CompletionItemKind.Keyword,
-  "Bindable": CompletionItemKind.Property,
-  "Template Controller": CompletionItemKind.Struct,
-  "Custom Attribute": CompletionItemKind.Interface,
-  "Native Attribute": CompletionItemKind.Field,
-  "Value Converter": CompletionItemKind.Function,
-  "Binding Behavior": CompletionItemKind.Module,
+const COMPLETION_KIND_BY_CANONICAL_CLASS_ID: Readonly<Record<string, CompletionItemKind>> = {
+  "custom-element": CompletionItemKind.Class,
+  "template-controller": CompletionItemKind.Struct,
+  "custom-attribute": CompletionItemKind.Property,
+  "bindable-property": CompletionItemKind.Field,
+  "value-converter": CompletionItemKind.Function,
+  "binding-behavior": CompletionItemKind.Function,
+  "binding-command": CompletionItemKind.Keyword,
+  "html-element": CompletionItemKind.Variable,
+  "html-attribute": CompletionItemKind.Variable,
+  "view-model-property": CompletionItemKind.Property,
+  "view-model-method": CompletionItemKind.Method,
+  "scope-variable": CompletionItemKind.Variable,
+  "gap-marker": CompletionItemKind.Text,
 };
 
 export function mapWorkspaceCompletions(items: readonly WorkspaceCompletionItem[]): CompletionItem[] {
   return items.map((item) => {
     const completion: CompletionItem = { label: item.label };
-    const kindSource = item.kind ?? item.detail;
-    if (kindSource) {
-      const kind = DETAIL_TO_COMPLETION_KIND[kindSource];
-      if (kind !== undefined) completion.kind = kind;
+    if (item.kind) {
+      const mappedKind = COMPLETION_KIND_BY_CANONICAL_CLASS_ID[item.kind];
+      if (mappedKind !== undefined) completion.kind = mappedKind;
     }
     if (item.detail) completion.detail = item.detail;
     if (item.documentation) completion.documentation = item.documentation;
@@ -190,6 +195,28 @@ export function mapWorkspaceCompletions(items: readonly WorkspaceCompletionItem[
     if (item.insertText) completion.insertText = item.insertText;
     return completion;
   });
+}
+
+export const COMPLETION_GAP_MARKER_LABEL = "Aurelia analysis incomplete";
+export const COMPLETION_GAP_MARKER_DETAIL = "Results may be partial";
+
+export function createCompletionGapMarker(items: readonly CompletionItem[]): CompletionList {
+  const alreadyPresent = items.some((item) => item.label === COMPLETION_GAP_MARKER_LABEL);
+  if (alreadyPresent) {
+    return { isIncomplete: true, items: [...items] };
+  }
+  return {
+    isIncomplete: true,
+    items: [
+      ...items,
+      {
+        label: COMPLETION_GAP_MARKER_LABEL,
+        kind: CompletionItemKind.Text,
+        detail: COMPLETION_GAP_MARKER_DETAIL,
+        sortText: "\uffff",
+      },
+    ],
+  };
 }
 
 export function mapWorkspaceHover(hover: WorkspaceHover | null, lookupText: LookupTextFn): Hover | null {

@@ -7,7 +7,7 @@
 import {
   ResponseError,
   SemanticTokensRequest,
-  type CompletionItem,
+  type CompletionList,
   type Hover,
   type Definition,
   type Location,
@@ -20,8 +20,13 @@ import {
   type CompletionParams,
 } from "vscode-languageserver/node.js";
 import { canonicalDocumentUri } from "@aurelia-ls/compiler";
+import type {
+  WorkspaceCompletionItem,
+  WorkspaceDiagnostics,
+} from "@aurelia-ls/semantic-workspace";
 import type { ServerContext } from "../context.js";
 import {
+  createCompletionGapMarker,
   mapSemanticWorkspaceEdit,
   mapWorkspaceCompletions,
   mapWorkspaceHover,
@@ -35,16 +40,48 @@ function formatError(e: unknown): string {
   return String(e);
 }
 
-export function handleCompletion(ctx: ServerContext, params: CompletionParams): CompletionItem[] {
+function hasPartialCompletionConfidence(
+  completions: readonly WorkspaceCompletionItem[],
+): boolean {
+  return completions.some((item) => item.confidence === "partial" || item.confidence === "low");
+}
+
+function hasGapOrLowConfidenceDiagnostics(
+  diagnostics: WorkspaceDiagnostics,
+): boolean {
+  const lspDiagnostics = diagnostics.bySurface.get("lsp") ?? [];
+  return lspDiagnostics.some((diag) => {
+    const confidence = diag.data?.confidence;
+    return diag.spec.category === "gaps"
+      || confidence === "partial"
+      || confidence === "low"
+      || confidence === "manual";
+  });
+}
+
+function shouldSignalIncompleteCompletionList(
+  completions: readonly WorkspaceCompletionItem[],
+  diagnostics: WorkspaceDiagnostics,
+): boolean {
+  return hasPartialCompletionConfidence(completions) || hasGapOrLowConfidenceDiagnostics(diagnostics);
+}
+
+export function handleCompletion(ctx: ServerContext, params: CompletionParams): CompletionList {
   try {
     const doc = ctx.ensureProgramDocument(params.textDocument.uri);
-    if (!doc) return [];
+    if (!doc) return { isIncomplete: false, items: [] };
     const canonical = canonicalDocumentUri(doc.uri);
-    const completions = ctx.workspace.query(canonical.uri).completions(params.position);
-    return mapWorkspaceCompletions(completions);
+    const query = ctx.workspace.query(canonical.uri);
+    const completions = query.completions(params.position);
+    const mapped = mapWorkspaceCompletions(completions);
+    const diagnostics = query.diagnostics();
+    const isIncomplete = shouldSignalIncompleteCompletionList(completions, diagnostics);
+    if (!isIncomplete) return { isIncomplete: false, items: mapped };
+    if (mapped.length === 0) return { isIncomplete: true, items: [] };
+    return createCompletionGapMarker(mapped);
   } catch (e) {
     ctx.logger.error(`[completion] failed for ${params.textDocument.uri}: ${formatError(e)}`);
-    return [];
+    return { isIncomplete: false, items: [] };
   }
 }
 

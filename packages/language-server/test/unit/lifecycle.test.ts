@@ -1,5 +1,5 @@
 import { describe, test, expect, vi } from "vitest";
-import { refreshDocument, registerLifecycleHandlers } from "../../src/handlers/lifecycle.js";
+import { refreshDocument, registerLifecycleHandlers } from "@aurelia-ls/language-server/api";
 
 function createMockContext(overrides: Record<string, unknown> = {}) {
   return {

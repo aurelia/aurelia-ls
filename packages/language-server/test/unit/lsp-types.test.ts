@@ -10,12 +10,15 @@ import {
   mapWorkspaceDiagnostics,
   AURELIA_LSP_DIAGNOSTIC_NAMESPACE_KEY,
   AURELIA_LSP_DIAGNOSTIC_TAXONOMY_SCHEMA,
+  COMPLETION_GAP_MARKER_LABEL,
+  COMPLETION_GAP_MARKER_DETAIL,
+  createCompletionGapMarker,
   mapWorkspaceCompletions,
   mapWorkspaceHover,
   mapWorkspaceLocations,
   mapSemanticWorkspaceEdit,
   type LookupTextFn,
-} from "../../src/mapping/lsp-types.js";
+} from "@aurelia-ls/language-server/api";
 import {
   asDocumentUri,
   canonicalDocumentUri,
@@ -226,34 +229,42 @@ describe("mapWorkspaceCompletions", () => {
     expect(mapped[1]?.documentation).toBe("A number");
   });
 
-  // Pattern AM: known detail strings → CompletionItemKind set
-  test("derives CompletionItemKind from known detail strings (Pattern AM)", () => {
+  test("maps canonical completion class ids to CompletionItemKind", () => {
     const items: WorkspaceCompletionItem[] = [
-      { label: "my-el", detail: "Custom Element" },
-      { label: "div", detail: "HTML Element" },
-      { label: "value", detail: "Bindable" },
-      { label: "if", detail: "Template Controller" },
-      { label: "tooltip", detail: "Custom Attribute" },
-      { label: "id", detail: "Native Attribute" },
-      { label: "date", detail: "Value Converter" },
-      { label: "throttle", detail: "Binding Behavior" },
+      { label: "my-el", kind: "custom-element" },
+      { label: "if", kind: "template-controller" },
+      { label: "tooltip", kind: "custom-attribute" },
+      { label: "value", kind: "bindable-property" },
+      { label: "bind", kind: "binding-command" },
+      { label: "div", kind: "html-element" },
+      { label: "id", kind: "html-attribute" },
+      { label: "date", kind: "value-converter" },
+      { label: "throttle", kind: "binding-behavior" },
+      { label: "title", kind: "view-model-property" },
+      { label: "toLocaleString", kind: "view-model-method" },
+      { label: "item", kind: "scope-variable" },
+      { label: "partial", kind: "gap-marker" },
     ];
 
     const mapped = mapWorkspaceCompletions(items);
     expect(mapped[0]?.kind).toBe(CompletionItemKind.Class);
-    expect(mapped[1]?.kind).toBe(CompletionItemKind.Keyword);
+    expect(mapped[1]?.kind).toBe(CompletionItemKind.Struct);
     expect(mapped[2]?.kind).toBe(CompletionItemKind.Property);
-    expect(mapped[3]?.kind).toBe(CompletionItemKind.Struct);
-    expect(mapped[4]?.kind).toBe(CompletionItemKind.Interface);
-    expect(mapped[5]?.kind).toBe(CompletionItemKind.Field);
-    expect(mapped[6]?.kind).toBe(CompletionItemKind.Function);
-    expect(mapped[7]?.kind).toBe(CompletionItemKind.Module);
+    expect(mapped[3]?.kind).toBe(CompletionItemKind.Field);
+    expect(mapped[4]?.kind).toBe(CompletionItemKind.Keyword);
+    expect(mapped[5]?.kind).toBe(CompletionItemKind.Variable);
+    expect(mapped[6]?.kind).toBe(CompletionItemKind.Variable);
+    expect(mapped[7]?.kind).toBe(CompletionItemKind.Function);
+    expect(mapped[8]?.kind).toBe(CompletionItemKind.Function);
+    expect(mapped[9]?.kind).toBe(CompletionItemKind.Property);
+    expect(mapped[10]?.kind).toBe(CompletionItemKind.Method);
+    expect(mapped[11]?.kind).toBe(CompletionItemKind.Variable);
+    expect(mapped[12]?.kind).toBe(CompletionItemKind.Text);
   });
 
-  // Pattern AN: unknown detail → no kind (safe fallback)
-  test("omits kind for unknown detail strings (Pattern AN)", () => {
+  test("omits kind for unknown canonical class ids", () => {
     const items: WorkspaceCompletionItem[] = [
-      { label: "x", detail: "Something Unknown" },
+      { label: "x", kind: "unknown-kind-id" },
       { label: "y" },
     ];
 
@@ -263,11 +274,21 @@ describe("mapWorkspaceCompletions", () => {
     expect(mapped).toHaveLength(2);
   });
 
-  // Pattern AO: existing fields still mapped alongside kind
-  test("preserves all existing fields when kind is derived (Pattern AO)", () => {
+  test("does not derive kind from detail labels when kind is missing", () => {
+    const items: WorkspaceCompletionItem[] = [
+      { label: "my-el", detail: "Custom Element" },
+    ];
+
+    const mapped = mapWorkspaceCompletions(items);
+    expect(mapped[0]?.kind).toBeUndefined();
+    expect(mapped[0]?.detail).toBe("Custom Element");
+  });
+
+  test("preserves all existing fields when kind is mapped", () => {
     const items: WorkspaceCompletionItem[] = [
       {
         label: "my-el",
+        kind: "custom-element",
         detail: "Custom Element",
         documentation: "A custom element",
         sortText: "0001",
@@ -282,6 +303,30 @@ describe("mapWorkspaceCompletions", () => {
     expect(mapped[0]?.sortText).toBe("0001");
     expect(mapped[0]?.insertText).toBe("my-el");
     expect(mapped[0]?.kind).toBe(CompletionItemKind.Class);
+  });
+});
+
+describe("createCompletionGapMarker", () => {
+  test("appends a canonical gap marker and sets isIncomplete", () => {
+    const list = createCompletionGapMarker([{ label: "summary-panel" }]);
+    expect(list.isIncomplete).toBe(true);
+    expect(list.items).toHaveLength(2);
+    expect(list.items[1]).toEqual({
+      label: COMPLETION_GAP_MARKER_LABEL,
+      kind: CompletionItemKind.Text,
+      detail: COMPLETION_GAP_MARKER_DETAIL,
+      sortText: "\uffff",
+    });
+  });
+
+  test("does not duplicate an existing gap marker", () => {
+    const list = createCompletionGapMarker([
+      { label: "summary-panel" },
+      { label: COMPLETION_GAP_MARKER_LABEL, kind: CompletionItemKind.Text },
+    ]);
+    const markerCount = list.items.filter((item) => item.label === COMPLETION_GAP_MARKER_LABEL).length;
+    expect(list.isIncomplete).toBe(true);
+    expect(markerCount).toBe(1);
   });
 });
 

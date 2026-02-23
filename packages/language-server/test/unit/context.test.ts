@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { createServerContext } from "../../src/context.js";
+import { createServerContext } from "@aurelia-ls/language-server/api";
 
 function createLogger() {
   return {

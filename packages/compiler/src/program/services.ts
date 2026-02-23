@@ -980,6 +980,18 @@ function resolveCompletionContext(
   };
 }
 
+const TEMPLATE_COMPLETION_KIND = {
+  customElement: "custom-element",
+  templateController: "template-controller",
+  customAttribute: "custom-attribute",
+  bindableProperty: "bindable-property",
+  valueConverter: "value-converter",
+  bindingBehavior: "binding-behavior",
+  bindingCommand: "binding-command",
+  htmlElement: "html-element",
+  htmlAttribute: "html-attribute",
+} as const;
+
 function collectExpressionCompletions(
   text: string,
   offset: number,
@@ -999,6 +1011,9 @@ function collectExpressionCompletions(
     ? Object.keys(resources.valueConverters ?? {})
     : Object.keys(resources.bindingBehaviors ?? {});
   const detail = hit.kind === "value-converter" ? "Value Converter" : "Binding Behavior";
+  const kind = hit.kind === "value-converter"
+    ? TEMPLATE_COMPLETION_KIND.valueConverter
+    : TEMPLATE_COMPLETION_KIND.bindingBehavior;
   return labels
     .filter((label) => label.toLowerCase().startsWith(prefix))
     .sort()
@@ -1010,6 +1025,7 @@ function collectExpressionCompletions(
         label,
         source: "template",
         range,
+        kind,
         detail,
         ...completionTrustProps(trust),
       };
@@ -1041,6 +1057,7 @@ function collectTagNameCompletions(
         label: name,
         source: "template",
         range,
+        kind: TEMPLATE_COMPLETION_KIND.customElement,
         detail: "Custom Element",
         ...completionTrustProps(trust),
       });
@@ -1051,7 +1068,13 @@ function collectTagNameCompletions(
     if (!name.toLowerCase().startsWith(prefix)) continue;
     if (seen.has(name)) continue;
     seen.add(name);
-    items.push({ label: name, source: "template", range, detail: "HTML Element" });
+    items.push({
+      label: name,
+      source: "template",
+      range,
+      kind: TEMPLATE_COMPLETION_KIND.htmlElement,
+      detail: "HTML Element",
+    });
   }
 
   return items;
@@ -1096,6 +1119,7 @@ function collectAttributeNameCompletions(
     detail?: string,
     documentation?: string,
     trust?: CompletionTrust,
+    kind?: CompletionItem["kind"],
   ) => {
     if (!label.toLowerCase().startsWith(lowerPrefix)) return;
     if (seen.has(label)) return;
@@ -1104,6 +1128,7 @@ function collectAttributeNameCompletions(
       label,
       source: "template",
       range,
+      ...(kind ? { kind } : {}),
       ...(detail ? { detail } : {}),
       ...(documentation ? { documentation } : {}),
       ...completionTrustProps(trust),
@@ -1116,36 +1141,45 @@ function collectAttributeNameCompletions(
     for (const bindable of Object.values(element.bindables ?? {})) {
       const label = (bindable.attribute ?? bindable.name).trim();
       if (!label) continue;
-      push(label, "Bindable", typeRefToString(bindable.type), elementTrust);
+      push(
+        label,
+        "Bindable",
+        typeRefToString(bindable.type),
+        elementTrust,
+        TEMPLATE_COMPLETION_KIND.bindableProperty,
+      );
     }
   }
 
   for (const [key, attr] of Object.entries(resources.attributes ?? {})) {
     const detail = attr.isTemplateController ? "Template Controller" : "Custom Attribute";
+    const kind = attr.isTemplateController
+      ? TEMPLATE_COMPLETION_KIND.templateController
+      : TEMPLATE_COMPLETION_KIND.customAttribute;
     const trust = completionTrustForAttribute(attr, sem, catalog);
     const names = new Set(
       [key, attr.name, ...(attr.aliases ?? [])].filter((name): name is string => !!name),
     );
     for (const name of names) {
-      push(name, detail, undefined, trust);
+      push(name, detail, undefined, trust, kind);
     }
   }
 
   const dom = context.tagName ? sem.dom.elements[context.tagName] : null;
   if (dom) {
     for (const name of Object.keys(dom.props ?? {})) {
-      push(name, "Native Attribute");
+      push(name, "Native Attribute", undefined, undefined, TEMPLATE_COMPLETION_KIND.htmlAttribute);
     }
     for (const name of Object.keys(dom.attrToProp ?? {})) {
-      push(name, "Native Attribute");
+      push(name, "Native Attribute", undefined, undefined, TEMPLATE_COMPLETION_KIND.htmlAttribute);
     }
     for (const name of Object.keys(sem.naming.attrToPropGlobal ?? {})) {
-      push(name, "Native Attribute");
+      push(name, "Native Attribute", undefined, undefined, TEMPLATE_COMPLETION_KIND.htmlAttribute);
     }
     const perTag = sem.naming.perTag?.[context.tagName];
     if (perTag) {
       for (const name of Object.keys(perTag)) {
-        push(name, "Native Attribute");
+        push(name, "Native Attribute", undefined, undefined, TEMPLATE_COMPLETION_KIND.htmlAttribute);
       }
     }
   }
@@ -1217,6 +1251,7 @@ function collectBindingCommandCompletions(
       label: entry.name,
       source: "template",
       range,
+      kind: TEMPLATE_COMPLETION_KIND.bindingCommand,
       ...(entry.detail ? { detail: entry.detail } : {}),
     }));
 }
@@ -1232,6 +1267,23 @@ type CompletionTrust = {
   confidence: CompletionConfidence;
   origin: CompletionOrigin;
 };
+
+function completionKindForResourceKind(
+  kind: CompletionResourceKind,
+): CompletionItem["kind"] {
+  switch (kind) {
+    case "custom-element":
+      return TEMPLATE_COMPLETION_KIND.customElement;
+    case "custom-attribute":
+      return TEMPLATE_COMPLETION_KIND.customAttribute;
+    case "template-controller":
+      return TEMPLATE_COMPLETION_KIND.templateController;
+    case "value-converter":
+      return TEMPLATE_COMPLETION_KIND.valueConverter;
+    case "binding-behavior":
+      return TEMPLATE_COMPLETION_KIND.bindingBehavior;
+  }
+}
 
 function completionTrustProps(
   trust: CompletionTrust | undefined,
@@ -1415,16 +1467,16 @@ function collectImportModuleSpecifierCompletions(
   catalog: ResourceCatalog,
 ): CompletionItem[] {
   const templatePath = canonicalDocumentUri(templateUri).path;
-  const candidates = new Map<string, CompletionTrust>();
-  const addCandidate = (label: string, trust: CompletionTrust): void => {
+  const candidates = new Map<string, { trust: CompletionTrust; kind: CompletionItem["kind"] }>();
+  const addCandidate = (label: string, trust: CompletionTrust, kind: CompletionItem["kind"]): void => {
     if (!label) return;
     const current = candidates.get(label);
     if (!current) {
-      candidates.set(label, trust);
+      candidates.set(label, { trust, kind });
       return;
     }
-    if (compareCompletionTrust(trust, current) < 0) {
-      candidates.set(label, trust);
+    if (compareCompletionTrust(trust, current.trust) < 0) {
+      candidates.set(label, { trust, kind });
     }
   };
 
@@ -1432,14 +1484,15 @@ function collectImportModuleSpecifierCompletions(
     const name = unwrapSourced(def.name);
     if (!name) return;
     const trust = completionTrustForDefinition(kind, name, def, catalog);
+    const completionKind = completionKindForResourceKind(kind);
     if (def.package) {
-      addCandidate(def.package, trust);
+      addCandidate(def.package, trust, completionKind);
       return;
     }
     if (!def.file) return;
     const moduleSpecifier = moduleSpecifierFromFile(def.file, templatePath);
     if (!moduleSpecifier) return;
-    addCandidate(moduleSpecifier, trust);
+    addCandidate(moduleSpecifier, trust, completionKind);
   };
 
   for (const def of Object.values(sem.elements)) {
@@ -1462,12 +1515,13 @@ function collectImportModuleSpecifierCompletions(
   return Array.from(candidates.entries())
     .filter(([label]) => label.toLowerCase().startsWith(lowerPrefix))
     .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([label, trust]) => ({
+    .map(([label, candidate]) => ({
       label,
       source: "template",
+      kind: candidate.kind,
       detail: "Aurelia Module",
       range,
-      ...completionTrustProps(trust),
+      ...completionTrustProps(candidate.trust),
     }));
 }
 

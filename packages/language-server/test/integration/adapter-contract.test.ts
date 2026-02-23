@@ -16,10 +16,11 @@ import {
   mapWorkspaceDiagnostics,
   mapWorkspaceHover,
   mapWorkspaceLocations,
+  TOKEN_MODIFIERS,
+  TOKEN_TYPES,
   toLspUri,
   type LookupTextFn,
-} from "../../src/mapping/lsp-types.js";
-import { TOKEN_MODIFIERS, TOKEN_TYPES } from "../../src/handlers/semantic-tokens.js";
+} from "@aurelia-ls/language-server/api";
 import {
   asDocumentUri,
   type DocumentUri,
@@ -112,6 +113,7 @@ function normalizeEdits(edit: unknown): Edit[] {
 
 function normalizeCompletions(input: unknown): Array<{
   label: string;
+  kind?: number;
   detail?: string;
   documentation?: string;
   sortText?: string;
@@ -122,6 +124,7 @@ function normalizeCompletions(input: unknown): Array<{
   return list.map((item) => {
     const entry = item as {
       label?: string;
+      kind?: number;
       detail?: string;
       documentation?: string | { value?: string };
       sortText?: string;
@@ -131,6 +134,7 @@ function normalizeCompletions(input: unknown): Array<{
     const documentation = typeof doc === "string" ? doc : doc && typeof doc === "object" ? doc.value : undefined;
     return {
       label: entry.label ?? "",
+      kind: entry.kind,
       detail: entry.detail,
       documentation,
       sortText: entry.sortText,

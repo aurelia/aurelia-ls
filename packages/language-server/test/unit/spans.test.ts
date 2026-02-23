@@ -1,6 +1,10 @@
 import { test, expect, describe } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { spanToRange, spanToRangeOrNull, diagnosticToRange } from "../../src/services/spans.js";
+import {
+  spanToDocumentRange,
+  spanToRangeOrNull,
+  diagnosticToRange,
+} from "@aurelia-ls/language-server/api";
 import type { CompilerDiagnostic } from "@aurelia-ls/compiler";
 
 function createDoc(content: string): TextDocument {
@@ -10,7 +14,7 @@ function createDoc(content: string): TextDocument {
 describe("spanToRange", () => {
   test("converts span with start/end to Range", () => {
     const doc = createDoc("hello world");
-    const range = spanToRange(doc, { start: 0, end: 5 });
+    const range = spanToDocumentRange(doc, { start: 0, end: 5 });
 
     expect(range.start.line).toBe(0);
     expect(range.start.character).toBe(0);
@@ -20,7 +24,7 @@ describe("spanToRange", () => {
 
   test("handles multi-line spans", () => {
     const doc = createDoc("line1\nline2\nline3");
-    const range = spanToRange(doc, { start: 6, end: 11 }); // "line2"
+    const range = spanToDocumentRange(doc, { start: 6, end: 11 }); // "line2"
 
     expect(range.start.line).toBe(1);
     expect(range.start.character).toBe(0);
@@ -30,7 +34,7 @@ describe("spanToRange", () => {
 
   test("handles span crossing lines", () => {
     const doc = createDoc("abc\ndefg\nhij");
-    const range = spanToRange(doc, { start: 2, end: 10 }); // "c\ndefg\nh"
+    const range = spanToDocumentRange(doc, { start: 2, end: 10 }); // "c\ndefg\nh"
 
     expect(range.start.line).toBe(0);
     expect(range.start.character).toBe(2);
@@ -40,7 +44,7 @@ describe("spanToRange", () => {
 
   test("handles zero-width span", () => {
     const doc = createDoc("hello");
-    const range = spanToRange(doc, { start: 3, end: 3 });
+    const range = spanToDocumentRange(doc, { start: 3, end: 3 });
 
     expect(range.start.line).toBe(0);
     expect(range.start.character).toBe(3);

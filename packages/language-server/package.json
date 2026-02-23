@@ -5,6 +5,16 @@
   "type": "module",
   "main": "./out/main.js",
   "types": "./out/main.d.ts",
+  "exports": {
+    ".": {
+      "import": "./out/main.js",
+      "types": "./out/main.d.ts"
+    },
+    "./api": {
+      "import": "./out/api.js",
+      "types": "./out/api.d.ts"
+    }
+  },
   "license": "MIT",
   "repository": {
     "type": "git",
