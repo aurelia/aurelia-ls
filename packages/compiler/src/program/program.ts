@@ -13,6 +13,7 @@ import type { NormalizedPath } from "../model/index.js";
 // Language imports (via barrel)
 import {
   buildSemanticsSnapshotFromProject,
+  type DependencyGraph,
   type ProjectSnapshot,
   type TemplateContext,
   type ResourceScopeId,
@@ -63,6 +64,14 @@ export interface TemplateProgramOptions {
   readonly sourceStore?: SourceStore;
   readonly provenance?: ProvenanceIndex;
   readonly telemetry?: TemplateProgramTelemetry;
+  /**
+   * Dependency graph for recording template compilation edges.
+   *
+   * When provided, each compilation records edges from its template-compilation
+   * node to the resources, scope, and vocabulary it consumed. This enables
+   * targeted invalidation via `graph.getAffected()`.
+   */
+  readonly depGraph?: DependencyGraph;
 }
 
 type ProgramOptions = Omit<TemplateProgramOptions, "sourceStore" | "provenance" | "telemetry">;
@@ -340,7 +349,11 @@ export class DefaultTemplateProgram implements TemplateProgram {
       cached.contentHash === contentHash
     ) {
       if (!this.dependencyIndex.has(canonical.uri)) {
-        this.dependencyIndex.set(canonical.uri, buildDependencyRecord(canonical.uri, cached.compilation, this.options));
+        const depRecord = buildDependencyRecord(canonical.uri, cached.compilation, this.options);
+        this.dependencyIndex.set(canonical.uri, depRecord);
+        if (this.options.depGraph) {
+          recordDepsToGraph(this.options.depGraph, canonical.uri, depRecord.deps);
+        }
       }
       if (cached.version !== snap.version) {
         this.compilationCache.set(canonical.uri, { ...cached, version: snap.version });
@@ -418,7 +431,11 @@ export class DefaultTemplateProgram implements TemplateProgram {
       contextFingerprint,
       scopeId,
     });
-    this.dependencyIndex.set(canonical.uri, buildDependencyRecord(canonical.uri, compilation, this.options));
+    const depRecord = buildDependencyRecord(canonical.uri, compilation, this.options);
+    this.dependencyIndex.set(canonical.uri, depRecord);
+    if (this.options.depGraph) {
+      recordDepsToGraph(this.options.depGraph, canonical.uri, depRecord.deps);
+    }
     this.recordAccess(canonical.uri, "overlay", {
       programCacheHit: false,
       stageMeta: compilation.meta,
@@ -881,6 +898,49 @@ function buildDependencyRecord(
   const deps = collectTemplateDependencies(compilation, options, context);
   const fingerprint = computeDependencyFingerprint(deps, options, context);
   return { deps, fingerprint };
+}
+
+/**
+ * Record template compilation edges into the dependency graph.
+ *
+ * For each resource the template consumed (elements, attributes, controllers,
+ * value converters, binding behaviors), record an edge from the template-compilation
+ * node to the corresponding convergence-entry node. Also record scope and
+ * vocabulary edges.
+ */
+function recordDepsToGraph(
+  graph: DependencyGraph,
+  uri: DocumentUri,
+  deps: TemplateDependencySet,
+): void {
+  const compilationNode = graph.addNode('template-compilation', uri);
+
+  // Resource edges
+  for (const name of deps.elements) {
+    graph.addDependency(compilationNode, graph.addNode('convergence-entry', `custom-element:${name}`));
+  }
+  for (const name of deps.attributes) {
+    graph.addDependency(compilationNode, graph.addNode('convergence-entry', `custom-attribute:${name}`));
+  }
+  for (const name of deps.controllers) {
+    graph.addDependency(compilationNode, graph.addNode('convergence-entry', `template-controller:${name}`));
+  }
+  for (const name of deps.valueConverters) {
+    graph.addDependency(compilationNode, graph.addNode('convergence-entry', `value-converter:${name}`));
+  }
+  for (const name of deps.bindingBehaviors) {
+    graph.addDependency(compilationNode, graph.addNode('convergence-entry', `binding-behavior:${name}`));
+  }
+
+  // Scope edge
+  if (deps.scopeId) {
+    graph.addDependency(compilationNode, graph.addNode('scope', deps.scopeId));
+  }
+
+  // Vocabulary edge (commands and patterns come from vocabulary)
+  if (deps.commands.length > 0 || deps.patterns.length > 0) {
+    graph.addDependency(compilationNode, graph.addNode('vocabulary', 'vocabulary'));
+  }
 }
 
 function collectTemplateDependencies(

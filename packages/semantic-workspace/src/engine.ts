@@ -753,6 +753,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       project,
       moduleResolver,
       templateContext,
+      depGraph: this.#query.model.deps,
       ...(overlayBaseName !== undefined ? { overlayBaseName } : {}),
     };
   }

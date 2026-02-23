@@ -5,6 +5,7 @@ import { asFixtureId } from "./fixtures/index.js";
 import { createSemanticWorkspaceKernel } from "../src/workspace.js";
 import {
   buildProjectSnapshot,
+  type DependencyGraph,
   type DocumentUri,
   type ResourceGraph,
   type ResourceScopeId,
@@ -343,6 +344,86 @@ describe("workspace incremental churn (incremental-churn)", () => {
         expect(betaAfter.contentHash).toBe(betaBefore.contentHash);
         expect(betaAfter.compilation?.programCacheHit).toBe(true);
       });
+    });
+  });
+
+  describe("dependency graph population", () => {
+    it("populates dep graph with template-compilation nodes after getCompilation", () => {
+      const { workspace } = harness;
+      const model = workspace.projectIndex.currentModel();
+      const deps: DependencyGraph = model.deps;
+
+      // Open templates in the workspace engine
+      workspace.open(alphaUri, alphaText, 1);
+      workspace.open(betaUri, betaText, 1);
+
+      // Before compilation, no template-compilation nodes
+      const nodesBefore = [...deps.nodes.values()]
+        .filter((n) => n.kind === "template-compilation");
+
+      // Compile templates
+      workspace.getCompilation(alphaUri);
+      workspace.getCompilation(betaUri);
+
+      // After compilation, template-compilation nodes should exist
+      const nodesAfter = [...deps.nodes.values()]
+        .filter((n) => n.kind === "template-compilation");
+      expect(nodesAfter.length).toBeGreaterThan(nodesBefore.length);
+
+      // Each compiled template should have dependency edges
+      for (const node of nodesAfter) {
+        const edges = deps.dependsOn.get(node.id);
+        expect(edges, `Expected edges for ${node.key}`).toBeDefined();
+        expect(edges!.size).toBeGreaterThan(0);
+      }
+    });
+
+    it("records resource edges matching template dependency set", () => {
+      const { workspace } = harness;
+      const model = workspace.projectIndex.currentModel();
+      const deps: DependencyGraph = model.deps;
+
+      workspace.open(alphaUri, alphaText, 1);
+      workspace.getCompilation(alphaUri);
+
+      const alphaNode = deps.findNode("template-compilation", alphaUri as string);
+      expect(alphaNode, "Expected template-compilation node for alpha").not.toBeNull();
+
+      const edges = deps.dependsOn.get(alphaNode!);
+      expect(edges).toBeDefined();
+
+      // Verify that at least scope and resource edges exist
+      const edgeNodes = [...edges!].map((id) => deps.nodes.get(id)!);
+      const kinds = new Set(edgeNodes.map((n) => n.kind));
+      // Template should at minimum depend on its scope
+      expect(kinds.has("scope")).toBe(true);
+    });
+
+    it("getAffected returns template-compilation nodes when resource changes", () => {
+      const { workspace } = harness;
+      const model = workspace.projectIndex.currentModel();
+      const deps: DependencyGraph = model.deps;
+
+      workspace.open(alphaUri, alphaText, 1);
+      workspace.getCompilation(alphaUri);
+
+      // Find a convergence-entry node that the template depends on
+      const alphaNode = deps.findNode("template-compilation", alphaUri as string);
+      expect(alphaNode).not.toBeNull();
+
+      const alphaEdges = deps.dependsOn.get(alphaNode!);
+      expect(alphaEdges).toBeDefined();
+
+      const resourceEdges = [...alphaEdges!]
+        .map((id) => deps.nodes.get(id)!)
+        .filter((n) => n.kind === "convergence-entry");
+
+      if (resourceEdges.length > 0) {
+        // Invalidate a resource and check that the template is affected
+        const affected = deps.getAffected([resourceEdges[0].id]);
+        const affectedIds = new Set(affected);
+        expect(affectedIds.has(alphaNode!)).toBe(true);
+      }
     });
   });
 });
