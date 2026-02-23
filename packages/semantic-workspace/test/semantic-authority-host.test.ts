@@ -50,6 +50,9 @@ describe("semantic-authority host runtime", () => {
     expect(response.status).toBe("ok");
     expect(response.policy.profile).toBe("ai.product");
     expect(response.meta.commandId).toMatch(/cmd-/);
+    expect(response.meta.memory.rssMb).toBeGreaterThan(0);
+    expect(response.meta.memory.heapUsedMb).toBeGreaterThan(0);
+    expect(response.meta.memory.heapTotalMb).toBeGreaterThan(0);
     expect(response.result.sessionId).toMatch(/^session-/);
   });
 

@@ -55,6 +55,12 @@ export interface HostInvalidationMeta {
   readonly count: number;
 }
 
+export interface HostMemoryMeta {
+  readonly rssMb: number;
+  readonly heapUsedMb: number;
+  readonly heapTotalMb: number;
+}
+
 export interface SemanticAuthorityError {
   readonly code: string;
   readonly message: string;
@@ -66,6 +72,7 @@ export interface SemanticAuthorityEnvelopeMeta {
   readonly commandId: string;
   readonly workspaceFingerprint?: string;
   readonly durationMs: number;
+  readonly memory: HostMemoryMeta;
   readonly cache: HostCacheMeta;
   readonly invalidation: HostInvalidationMeta;
   readonly touchedDocumentCount: number;

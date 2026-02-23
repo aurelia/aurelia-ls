@@ -12,6 +12,7 @@ import type {
   DocUpdateArgs,
   HostCacheMeta,
   HostInvalidationMeta,
+  HostMemoryMeta,
   PressureRunScenarioArgs,
   PressureSweepResult,
   QueryDiagnosticsArgs,
@@ -92,6 +93,7 @@ type MutableEnvelope = {
     commandId: string;
     workspaceFingerprint?: string;
     durationMs: number;
+    memory: HostMemoryMeta;
     cache: HostCacheMeta;
     invalidation: HostInvalidationMeta;
     touchedDocumentCount: number;
@@ -206,6 +208,7 @@ export class SemanticAuthorityHostRuntime {
         commandId,
         ...(value.workspaceFingerprint ? { workspaceFingerprint: value.workspaceFingerprint } : {}),
         durationMs,
+        memory: snapshotMemory(),
         cache: value.cache,
         invalidation: value.invalidation,
         touchedDocumentCount: value.touchedDocumentCount,
@@ -1021,6 +1024,19 @@ function rollupSweepStatuses(
 
 function locationRef(uri: string, start: number, end: number): string {
   return `${uri}#${start}:${end}`;
+}
+
+function snapshotMemory(): HostMemoryMeta {
+  const memory = process.memoryUsage();
+  return {
+    rssMb: roundMb(memory.rss),
+    heapUsedMb: roundMb(memory.heapUsed),
+    heapTotalMb: roundMb(memory.heapTotal),
+  };
+}
+
+function roundMb(value: number): number {
+  return Math.round((value / (1024 * 1024)) * 10) / 10;
 }
 
 function withSession(
