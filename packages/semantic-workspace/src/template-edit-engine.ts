@@ -4,6 +4,7 @@ import ts from "typescript";
 import {
   analyzeAttributeName,
   canonicalDocumentUri,
+  createBindableSymbolId,
   normalizePathForId,
   offsetAtPosition,
   spanContainsOffset,
@@ -43,11 +44,10 @@ import {
 import type { InlineTemplateInfo, TemplateInfo } from "@aurelia-ls/compiler";
 import type { ResourceDefinitionIndex } from "./definition.js";
 import { selectResourceCandidate } from "./resource-precedence-policy.js";
-import { buildDomIndex, elementTagSpanAtOffset, elementTagSpans, findAttrForSpan, findDomNode } from "./template-dom.js";
+import { buildDomIndex, elementTagSpanAtOffset, findDomNode } from "./template-dom.js";
 import type { RefactorResourceOrigin, RefactorTargetClass, SemanticRenameRoute } from "./refactor-policy.js";
 import {
   attributeTargetNameFromSyntax,
-  collectExpressionResourceNameSpans,
   findBindingBehaviorAtOffset as findBindingBehaviorHitAtOffset,
   findInstructionHitsAtOffset,
   findValueConverterAtOffset as findValueConverterHitAtOffset,
@@ -57,10 +57,10 @@ import type {
   WorkspaceCodeAction,
   WorkspaceCodeActionRequest,
   WorkspaceDiagnostic,
+  WorkspaceLocation,
   WorkspaceRenameRequest,
   WorkspaceTextEdit,
 } from "./types.js";
-import { inlineTemplatePath } from "./templates.js";
 import { StylePolicy, type BindableDeclarationKind, type RefactorOverrides } from "./style-profile.js";
 
 export interface TemplateIndex {
@@ -81,15 +81,12 @@ type ResourceDefinitionEntry = {
 };
 
 type ResourceTarget = {
-  kind: "element" | "attribute" | "value-converter" | "binding-behavior";
   name: string;
   file: string | null;
 };
 
 type BindableTarget = {
-  ownerKind: "element" | "attribute";
-  ownerName: string;
-  ownerFile: string | null;
+  ownerSymbolId: SymbolId;
   ownerDef: ResourceDef;
   bindable: BindableDef;
   property: string;
@@ -186,11 +183,9 @@ type InsertContext = {
 };
 
 type RenameOperationContext = {
-  text: string;
   offset: number;
   compilation: TemplateCompilation;
   domIndex: ReturnType<typeof buildDomIndex>;
-  syntax: AttributeSyntaxContext;
   preferRoots: readonly string[];
 };
 
@@ -210,6 +205,10 @@ export interface TemplateEditEngineContext {
   readonly lookupText: (uri: DocumentUri) => string | null;
   readonly getCompilation: (uri: DocumentUri) => TemplateCompilation | null;
   readonly ensureTemplate: (uri: DocumentUri) => void;
+  readonly getResourceReferencesBySymbolId: (
+    activeUri: DocumentUri,
+    symbolId: SymbolId,
+  ) => readonly WorkspaceLocation[];
   readonly getAttributeSyntax: () => AttributeSyntaxContext;
   readonly styleProfile?: StyleProfile | null;
   readonly refactorOverrides?: RefactorOverrides | null;
@@ -270,7 +269,7 @@ export class TemplateEditEngine {
     if (!op) return null;
 
     for (const route of this.#semanticRenameRouteOrder()) {
-      const edits = this.#renameByRoute(route, op, request.newName);
+      const edits = this.#renameByRoute(route, request.uri, op, request.newName);
       if (edits?.length) {
         return finalizeWorkspaceEdits(edits);
       }
@@ -287,9 +286,8 @@ export class TemplateEditEngine {
     const compilation = this.ctx.getCompilation(request.uri);
     if (!compilation) return null;
     const domIndex = buildDomIndex(compilation.ir.templates ?? []);
-    const syntax = this.ctx.getAttributeSyntax();
     const preferRoots = [this.ctx.workspaceRoot];
-    return { text, offset, compilation, domIndex, syntax, preferRoots };
+    return { offset, compilation, domIndex, preferRoots };
   }
 
   #semanticRenameRouteOrder(): readonly SemanticRenameRoute[] {
@@ -329,26 +327,26 @@ export class TemplateEditEngine {
 
   #renameByRoute(
     route: SemanticRenameRoute,
+    requestUri: DocumentUri,
     op: RenameOperationContext,
     newName: string,
   ): WorkspaceTextEdit[] | null {
     switch (route) {
       case "custom-element":
-        return this.#renameElementAt(op.compilation, op.domIndex, op.text, op.offset, newName, op.preferRoots);
+        return this.#renameElementAt(requestUri, op.compilation, op.domIndex, op.offset, newName, op.preferRoots);
       case "bindable-attribute":
         return this.#renameBindableAttributeAt(
+          requestUri,
           op.compilation,
           op.domIndex,
-          op.text,
           op.offset,
           newName,
-          op.syntax,
           op.preferRoots,
         );
       case "value-converter":
-        return this.#renameValueConverterAt(op.compilation, op.offset, newName, op.preferRoots);
+        return this.#renameValueConverterAt(requestUri, op.compilation, op.offset, newName, op.preferRoots);
       case "binding-behavior":
-        return this.#renameBindingBehaviorAt(op.compilation, op.offset, newName, op.preferRoots);
+        return this.#renameBindingBehaviorAt(requestUri, op.compilation, op.offset, newName, op.preferRoots);
       default:
         return null;
     }
@@ -371,7 +369,7 @@ export class TemplateEditEngine {
     const def = row.node.custom?.def;
     if (!def) return null;
     const entry = findResourceEntry(this.ctx.definitionIndex.elements, def.name, def.file ?? null, preferRoots);
-    if (!entry) return "unknown";
+    if (!entry || !entry.symbolId) return null;
     return toRefactorResourceOrigin(entry.def.name.origin);
   }
 
@@ -400,7 +398,7 @@ export class TemplateEditEngine {
     const hit = findValueConverterHitAtOffset(compilation.exprTable ?? [], offset);
     if (!hit) return null;
     const entry = findResourceEntry(this.ctx.definitionIndex.valueConverters, hit.name, null, preferRoots);
-    if (!entry) return "unknown";
+    if (!entry || !entry.symbolId) return null;
     return toRefactorResourceOrigin(entry.def.name.origin);
   }
 
@@ -412,7 +410,7 @@ export class TemplateEditEngine {
     const hit = findBindingBehaviorHitAtOffset(compilation.exprTable ?? [], offset);
     if (!hit) return null;
     const entry = findResourceEntry(this.ctx.definitionIndex.bindingBehaviors, hit.name, null, preferRoots);
-    if (!entry) return "unknown";
+    if (!entry || !entry.symbolId) return null;
     return toRefactorResourceOrigin(entry.def.name.origin);
   }
 
@@ -448,9 +446,9 @@ export class TemplateEditEngine {
   }
 
   #renameElementAt(
+    requestUri: DocumentUri,
     compilation: TemplateCompilation,
     domIndex: ReturnType<typeof buildDomIndex>,
-    text: string,
     offset: number,
     newName: string,
     preferRoots: readonly string[],
@@ -466,12 +464,13 @@ export class TemplateEditEngine {
     const res = row.node.custom?.def ?? null;
     if (!res) return null;
 
-    const target: ResourceTarget = { kind: "element", name: res.name, file: res.file ?? null };
+    const target: ResourceTarget = { name: res.name, file: res.file ?? null };
     const edits: WorkspaceTextEdit[] = [];
     const formattedName = this.#style.formatElementName(newName);
-    this.#collectElementTagEdits(target, formattedName, edits);
 
     const entry = findResourceEntry(this.ctx.definitionIndex.elements, target.name, target.file, preferRoots);
+    if (!entry?.symbolId) return null;
+    this.#collectSymbolEdits(requestUri, entry.symbolId, formattedName, edits);
     const nameEdit = entry ? buildResourceNameEdit(entry.def, target.name, formattedName, this.ctx.lookupText) : null;
     if (nameEdit) edits.push(nameEdit);
 
@@ -479,26 +478,24 @@ export class TemplateEditEngine {
   }
 
   #renameBindableAttributeAt(
+    requestUri: DocumentUri,
     compilation: TemplateCompilation,
     domIndex: ReturnType<typeof buildDomIndex>,
-    text: string,
     offset: number,
     newName: string,
-    syntax: AttributeSyntaxContext,
     preferRoots: readonly string[],
   ): WorkspaceTextEdit[] | null {
     const hits = findInstructionHitsAtOffset(compilation.linked.templates, compilation.ir.templates ?? [], domIndex, offset);
     for (const hit of hits) {
       const nameSpan = hit.attrNameSpan ?? null;
       if (!nameSpan || !spanContainsOffset(nameSpan, offset)) continue;
-      const attrName = hit.attrName ?? null;
-      if (!attrName) continue;
       const target = resolveBindableTarget(hit.instruction, this.ctx.definitionIndex, preferRoots);
       if (!target) continue;
 
       const edits: WorkspaceTextEdit[] = [];
       const formattedName = this.#style.formatRenameTarget(newName);
-      this.#collectBindableAttributeEdits(target, formattedName, syntax, edits);
+      const bindableSymbolId = createBindableSymbolId({ owner: target.ownerSymbolId, property: target.property });
+      this.#collectSymbolEdits(requestUri, bindableSymbolId, formattedName, edits);
 
       const attrValue = unwrapSourced(target.bindable.attribute) ?? target.property;
       const attrEdit = buildBindableAttributeEdit(target.bindable, attrValue, formattedName, this.ctx.lookupText);
@@ -511,6 +508,7 @@ export class TemplateEditEngine {
   }
 
   #renameValueConverterAt(
+    requestUri: DocumentUri,
     compilation: TemplateCompilation,
     offset: number,
     newName: string,
@@ -521,9 +519,10 @@ export class TemplateEditEngine {
 
     const edits: WorkspaceTextEdit[] = [];
     const formattedName = this.#style.formatConverterName(newName);
-    this.#collectConverterEdits(hit.name, formattedName, edits);
 
     const entry = findResourceEntry(this.ctx.definitionIndex.valueConverters, hit.name, null, preferRoots);
+    if (!entry?.symbolId) return null;
+    this.#collectSymbolEdits(requestUri, entry.symbolId, formattedName, edits);
     const nameEdit = entry ? buildResourceNameEdit(entry.def, hit.name, formattedName, this.ctx.lookupText) : null;
     if (nameEdit) edits.push(nameEdit);
 
@@ -531,6 +530,7 @@ export class TemplateEditEngine {
   }
 
   #renameBindingBehaviorAt(
+    requestUri: DocumentUri,
     compilation: TemplateCompilation,
     offset: number,
     newName: string,
@@ -541,80 +541,25 @@ export class TemplateEditEngine {
 
     const edits: WorkspaceTextEdit[] = [];
     const formattedName = this.#style.formatBehaviorName(newName);
-    this.#collectBehaviorEdits(hit.name, formattedName, edits);
 
     const entry = findResourceEntry(this.ctx.definitionIndex.bindingBehaviors, hit.name, null, preferRoots);
+    if (!entry?.symbolId) return null;
+    this.#collectSymbolEdits(requestUri, entry.symbolId, formattedName, edits);
     const nameEdit = entry ? buildResourceNameEdit(entry.def, hit.name, formattedName, this.ctx.lookupText) : null;
     if (nameEdit) edits.push(nameEdit);
 
     return edits.length ? edits : null;
   }
 
-  #collectElementTagEdits(target: ResourceTarget, newName: string, out: WorkspaceTextEdit[]): void {
-    this.#forEachTemplateCompilation((uri, text, compilation) => {
-      const spans = collectElementTagSpans(compilation, target);
-      for (const span of spans) {
-        out.push({ uri, span, newText: newName });
-      }
-    });
-  }
-
-  #collectBindableAttributeEdits(
-    target: BindableTarget,
+  #collectSymbolEdits(
+    requestUri: DocumentUri,
+    symbolId: SymbolId,
     newName: string,
-    syntax: AttributeSyntaxContext,
     out: WorkspaceTextEdit[],
   ): void {
-    this.#forEachTemplateCompilation((uri, text, compilation) => {
-      const matches = collectBindableAttributeMatches(compilation, target);
-      for (const match of matches) {
-        const replacement = renameAttributeName(match.attrName, newName, syntax);
-        out.push({ uri, span: match.span, newText: replacement });
-      }
-    });
-  }
-
-  #collectConverterEdits(name: string, newName: string, out: WorkspaceTextEdit[]): void {
-    this.#forEachTemplateCompilation((uri, _text, compilation) => {
-      const spans = collectConverterSpans(compilation.exprTable ?? [], name);
-      for (const span of spans) {
-        out.push({ uri, span, newText: newName });
-      }
-    });
-  }
-
-  #collectBehaviorEdits(name: string, newName: string, out: WorkspaceTextEdit[]): void {
-    this.#forEachTemplateCompilation((uri, _text, compilation) => {
-      const spans = collectBehaviorSpans(compilation.exprTable ?? [], name);
-      for (const span of spans) {
-        out.push({ uri, span, newText: newName });
-      }
-    });
-  }
-
-  #forEachTemplateCompilation(
-    visit: (uri: DocumentUri, text: string, compilation: TemplateCompilation) => void,
-  ): void {
-    const visited = new Set<DocumentUri>();
-    const iterate = (uri: DocumentUri) => {
-      if (visited.has(uri)) return;
-      visited.add(uri);
-      const text = this.ctx.lookupText(uri);
-      if (!text) return;
-      const compilation = this.ctx.getCompilation(uri);
-      if (!compilation) return;
-      visit(uri, text, compilation);
-    };
-
-    for (const entry of this.ctx.templateIndex.templates) {
-      const canonical = canonicalDocumentUri(entry.templatePath);
-      iterate(canonical.uri);
-    }
-
-    for (const entry of this.ctx.templateIndex.inlineTemplates) {
-      const inlinePath = inlineTemplatePath(entry.componentPath);
-      const canonical = canonicalDocumentUri(inlinePath);
-      iterate(canonical.uri);
+    const refs = this.ctx.getResourceReferencesBySymbolId(requestUri, symbolId);
+    for (const ref of refs) {
+      out.push({ uri: ref.uri, span: ref.span, newText: newName });
     }
   }
 }
@@ -1741,13 +1686,11 @@ function resolveBindableTarget(
     case "element.bindable": {
       const t = target as { element: { def: { name: string; file?: string } } };
       const entry = findResourceEntry(resources.elements, t.element.def.name, t.element.def.file ?? null, preferRoots);
-      if (!entry) return null;
+      if (!entry?.symbolId) return null;
       const bindable = findBindableDef(entry.def, instruction.to);
       if (!bindable) return null;
       return {
-        ownerKind: "element",
-        ownerName: t.element.def.name,
-        ownerFile: t.element.def.file ?? null,
+        ownerSymbolId: entry.symbolId,
         ownerDef: entry.def,
         bindable,
         property: instruction.to,
@@ -1757,13 +1700,11 @@ function resolveBindableTarget(
       const t = target as { attribute: { def: { name: string; file?: string; isTemplateController?: boolean } } };
       const map = t.attribute.def.isTemplateController ? resources.controllers : resources.attributes;
       const entry = findResourceEntry(map, t.attribute.def.name, t.attribute.def.file ?? null, preferRoots);
-      if (!entry) return null;
+      if (!entry?.symbolId) return null;
       const bindable = findBindableDef(entry.def, instruction.to);
       if (!bindable) return null;
       return {
-        ownerKind: "attribute",
-        ownerName: t.attribute.def.name,
-        ownerFile: t.attribute.def.file ?? null,
+        ownerSymbolId: entry.symbolId,
         ownerDef: entry.def,
         bindable,
         property: instruction.to,
@@ -1772,137 +1713,6 @@ function resolveBindableTarget(
     default:
       return null;
   }
-}
-
-function collectBindableAttributeMatches(
-  compilation: TemplateCompilation,
-  target: BindableTarget,
-): Array<{ span: SourceSpan; attrName: string }> {
-  const results: Array<{ span: SourceSpan; attrName: string }> = [];
-  const domIndex = buildDomIndex(compilation.ir.templates ?? []);
-  const templates = compilation.linked.templates ?? [];
-  const irTemplates = compilation.ir.templates ?? [];
-
-  for (let ti = 0; ti < templates.length; ti += 1) {
-    const template = templates[ti];
-    const irTemplate = irTemplates[ti];
-    if (!template || !irTemplate) continue;
-    for (const row of template.rows ?? []) {
-      const domNode = findDomNode(domIndex, ti, row.target);
-      for (const instruction of row.instructions ?? []) {
-        collectBindableInstructionMatches(instruction, domNode, target, results);
-        if (
-          instruction.kind === "hydrateElement"
-          || instruction.kind === "hydrateAttribute"
-          || instruction.kind === "hydrateTemplateController"
-        ) {
-          for (const prop of instruction.props ?? []) {
-            collectBindableInstructionMatches(prop, domNode, target, results);
-          }
-        }
-      }
-    }
-  }
-  return results;
-}
-
-function collectBindableInstructionMatches(
-  instruction: LinkedInstruction,
-  node: DOMNode | null,
-  target: BindableTarget,
-  results: Array<{ span: SourceSpan; attrName: string }>,
-): void {
-  if (instruction.kind !== "propertyBinding" && instruction.kind !== "attributeBinding" && instruction.kind !== "setProperty") {
-    return;
-  }
-  const loc = instruction.loc ?? null;
-  if (!loc) return;
-
-  const targetInfo = instruction.target as { kind?: string } | null | undefined;
-  if (!targetInfo || typeof targetInfo !== "object" || !("kind" in targetInfo)) return;
-
-  if (target.ownerKind === "element" && targetInfo.kind === "element.bindable") {
-    const t = targetInfo as { element: { def: { name: string; file?: string } } };
-    if (!resourceRefMatches(t.element.def, target.ownerName, target.ownerFile)) return;
-  } else if (target.ownerKind === "attribute" && targetInfo.kind === "attribute.bindable") {
-    const t = targetInfo as { attribute: { def: { name: string; file?: string } } };
-    if (!resourceRefMatches(t.attribute.def, target.ownerName, target.ownerFile)) return;
-  } else {
-    return;
-  }
-
-  if (instruction.to !== target.property) return;
-  if (!node || (node.kind !== "element" && node.kind !== "template")) return;
-  const attr = findAttrForSpan(node, loc);
-  const nameSpan = attr?.nameLoc ?? null;
-  const attrName = attr?.name ?? null;
-  if (!nameSpan || !attrName) return;
-  results.push({ span: nameSpan, attrName });
-}
-
-function renameAttributeName(attrName: string, newBase: string, syntax: AttributeSyntaxContext): string {
-  if (!attrName) return newBase;
-  const analysis = analyzeAttributeName(attrName, syntax.syntax, syntax.parser);
-  const targetSpan = analysis.targetSpan ?? (analysis.syntax.command ? null : { start: 0, end: attrName.length });
-  if (!targetSpan) return newBase;
-  return `${attrName.slice(0, targetSpan.start)}${newBase}${attrName.slice(targetSpan.end)}`;
-}
-
-function collectElementTagSpans(
-  compilation: TemplateCompilation,
-  target: ResourceTarget,
-): SourceSpan[] {
-  const results: SourceSpan[] = [];
-  const irTemplates = compilation.ir.templates ?? [];
-  const linkedTemplates = compilation.linked.templates ?? [];
-
-  for (let i = 0; i < irTemplates.length; i += 1) {
-    const irTemplate = irTemplates[i];
-    const linked = linkedTemplates[i];
-    if (!irTemplate || !linked) continue;
-    const rowsByTarget = new Map<string, LinkedRow>();
-    for (const row of linked.rows ?? []) {
-      rowsByTarget.set(row.target, row);
-    }
-
-    const stack: DOMNode[] = [irTemplate.dom];
-    while (stack.length) {
-      const node = stack.pop();
-      if (!node) continue;
-      if (node.kind === "element") {
-        const row = rowsByTarget.get(node.id);
-        if (row?.node.kind === "element" && row.node.custom?.def) {
-          if (resourceRefMatches(row.node.custom.def, target.name, target.file)) {
-            results.push(...elementTagSpans(node));
-          }
-        }
-      }
-      if (node.kind === "element" || node.kind === "template") {
-        const children = node.children;
-        if (children?.length) {
-          for (let c = children.length - 1; c >= 0; c -= 1) {
-            stack.push(children[c]!);
-          }
-        }
-      }
-    }
-  }
-
-  return results;
-}
-
-function collectConverterSpans(
-  exprTable: readonly { id: string; ast: unknown }[],
-  name: string,
-): SourceSpan[] {
-  return collectExpressionResourceNameSpans(exprTable, "ValueConverter", name);
-}
-
-function collectBehaviorSpans(
-  exprTable: readonly { id: string; ast: unknown }[],
-  name: string,
-): SourceSpan[] {
-  return collectExpressionResourceNameSpans(exprTable, "BindingBehavior", name);
 }
 
 export function findValueConverterAtOffset(
@@ -1932,18 +1742,6 @@ function toRefactorResourceOrigin(
     default:
       return "unknown";
   }
-}
-
-function resourceRefMatches(
-  def: { name: string; file?: string | null },
-  name: string,
-  file: string | null,
-): boolean {
-  if (def.name !== name) return false;
-  if (file && def.file) {
-    return normalizePathForId(def.file) === normalizePathForId(file);
-  }
-  return true;
 }
 
 function findBindableDef(def: ResourceDef, name: string): BindableDef | null {

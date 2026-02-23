@@ -127,7 +127,7 @@ describe("workspace refactor policy (rename preflight)", () => {
     appText = text;
   });
 
-  it("denies provenance-required rename without forcing refresh", () => {
+  it("denies non-resource rename targets without forcing refresh", () => {
     const refreshSpy = vi.spyOn(harness.workspace, "refresh");
     const result = harness.workspace.refactor().rename({
       uri: appUri,
@@ -137,7 +137,7 @@ describe("workspace refactor policy (rename preflight)", () => {
     expect("error" in result).toBe(true);
     if ("error" in result) {
       expect(result.error.kind).toBe("refactor-policy-denied");
-      expect(result.error.message).toContain("provenance-required");
+      expect(result.error.message).toContain("target-not-allowed");
       expect(result.error.retryable).toBe(false);
     }
     expect(refreshSpy).not.toHaveBeenCalled();

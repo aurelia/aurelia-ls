@@ -68,10 +68,6 @@ describe("workspace refactor (workspace-contract)", () => {
   let harness: Awaited<ReturnType<typeof createWorkspaceHarness>>;
   let tableUri: string;
   let tableText: string;
-  let detailUri: string;
-  let detailText: string;
-  let modelsUri: string;
-  let modelsText: string;
 
   beforeAll(async () => {
     harness = await createWorkspaceHarness({
@@ -79,44 +75,26 @@ describe("workspace refactor (workspace-contract)", () => {
       openTemplates: "none",
     });
     tableUri = harness.openTemplate("src/views/table-panel.html");
-    detailUri = harness.toDocumentUri("src/components/device-detail.html");
-    modelsUri = harness.toDocumentUri("src/models.ts");
-
     const table = harness.readText(tableUri);
-    const detail = harness.readText(detailUri);
-    const models = harness.readText(modelsUri);
-    if (!table || !detail || !models) {
+    if (!table) {
       throw new Error("Expected template text for workspace-contract fixtures");
     }
     tableText = table;
-    detailText = detail;
-    modelsText = models;
   });
 
-  it("renames property references across templates", () => {
+  it("denies expression-member rename targets in semantic-only mode", () => {
     const position = findPosition(tableText, "item.rating", "item.".length);
     const result = harness.workspace.refactor().rename({
       uri: tableUri,
       position,
       newName: "score",
     });
-
+    expect("error" in result).toBe(true);
     if ("error" in result) {
-      throw new Error(`Rename failed: ${result.error.message}`);
+      expect(result.error.kind).toBe("refactor-policy-denied");
+      expect(result.error.message).toContain("target-not-allowed");
+      expect(result.error.retryable).toBe(false);
     }
-
-    const edits = result.edit.edits;
-    const tableOffsets = findOffsets(tableText, /item\.rating/g).map((offset) => offset + "item.".length);
-    expectRenameEditsAtOffsets(edits, tableUri, tableOffsets, "score");
-
-    const detailOffsets = findOffsets(detailText, /device\.rating/g).map((offset) => offset + "device.".length);
-    expectRenameEditsAtOffsets(edits, detailUri, detailOffsets, "score");
-
-    const modelsOffset = modelsText.indexOf("rating: number");
-    if (modelsOffset < 0) {
-      throw new Error("Expected rating property in models.ts");
-    }
-    expectRenameEditsAtOffsets(edits, modelsUri, [modelsOffset], "score");
   });
 });
 

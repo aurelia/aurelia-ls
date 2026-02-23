@@ -129,25 +129,23 @@ export interface DecisionResolutionResult {
 }
 
 /**
- * Current policy defaults preserve existing runtime behavior:
- * - rename is semantic-first
- * - TS fallback is restricted to expression-member targets
- *
- * Tightening fallback target classes is expected as the refactor trust boundary hardens.
+ * Current policy defaults are semantic-only for rename:
+ * - only semantic resource targets are accepted
+ * - TypeScript fallback is disabled
  */
 export const DEFAULT_REFACTOR_POLICY: RefactorPolicy = {
   version: "aurelia-refactor-policy/1",
   rename: {
     strategy: "semantic-first",
-    allowedTargets: ["resource", "expression-member", "unknown"],
+    allowedTargets: ["resource"],
     semantic: {
       enabled: true,
       requireProvenance: true,
       routeOrder: ["custom-element", "bindable-attribute", "value-converter", "binding-behavior"],
     },
     fallback: {
-      enabled: true,
-      allowedTargets: ["expression-member"],
+      enabled: false,
+      allowedTargets: [],
       requireMappedProvenance: true,
       workspaceOnly: true,
     },
@@ -241,26 +239,14 @@ export function planRenameExecution(
 
   const trySemanticRename = policy.rename.semantic.enabled
     && (!policy.rename.semantic.requireProvenance || context.hasSemanticProvenance);
-  const fallbackTargetAllowed = policy.rename.fallback.allowedTargets.includes(context.target);
-  const fallbackWorkspaceAllowed = !policy.rename.fallback.workspaceOnly || context.workspaceDocument;
-  const fallbackProvenanceAllowed = !policy.rename.fallback.requireMappedProvenance || context.hasMappedProvenance;
-  const allowTypeScriptFallback = policy.rename.fallback.enabled
-    && fallbackTargetAllowed
-    && fallbackWorkspaceAllowed
-    && fallbackProvenanceAllowed;
+  const allowTypeScriptFallback = false;
 
-  if (!trySemanticRename && !allowTypeScriptFallback) {
+  if (!trySemanticRename) {
     let reason: RefactorBoundaryReason = "semantic-step-disabled";
     if (policy.rename.semantic.enabled && policy.rename.semantic.requireProvenance && !context.hasSemanticProvenance) {
       reason = "provenance-required";
-    } else if (policy.rename.fallback.enabled && fallbackTargetAllowed && !fallbackWorkspaceAllowed) {
-      reason = "workspace-only";
-    } else if (policy.rename.fallback.enabled && fallbackTargetAllowed && !fallbackProvenanceAllowed) {
-      reason = "provenance-required";
-    } else if (!policy.rename.semantic.enabled && !policy.rename.fallback.enabled) {
+    } else if (!policy.rename.semantic.enabled) {
       reason = "semantic-step-disabled";
-    } else {
-      reason = "fallback-disabled";
     }
     return {
       allowOperation: false,

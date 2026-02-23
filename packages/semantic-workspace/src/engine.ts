@@ -726,6 +726,10 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       ensureTemplate: (uri) => {
         this.#kernel.ensureFromFile(uri);
       },
+      getResourceReferencesBySymbolId: (activeUri, symbolId) => {
+        const index = this.#ensureResourceReferenceIndex(activeUri);
+        return index.bySymbol.get(symbolId) ?? [];
+      },
       getAttributeSyntax: this.#attributeSyntaxContext.bind(this),
       styleProfile: this.#styleProfile,
       refactorOverrides: this.#refactorOverrides,
@@ -1398,26 +1402,26 @@ class WorkspaceRefactorProxy implements RefactorEngine {
     if (preflight.conclusive && !preflight.plan.allowOperation) {
       return this.#policyDeniedRename(preflight.plan);
     }
-    this.engine.refresh();
-    this.engine.prepareRefactor(request.uri);
     const plan = this.engine.planRename(request);
     if (!plan.allowOperation) {
       return this.#policyDeniedRename(plan);
     }
-    if (plan.trySemanticRename) {
-      const resourceRename = this.engine.tryResourceRename(request);
-      if (resourceRename) return resourceRename;
+    if (!plan.trySemanticRename) {
+      return this.#policyDeniedRename({
+        ...plan,
+        allowOperation: false,
+        reason: "semantic-step-disabled",
+      });
     }
-    if (plan.allowTypeScriptFallback) {
-      return this.inner.rename(request);
-    }
-    return {
-      error: {
-        kind: "refactor-policy-denied",
-        message: buildRefactorPolicyErrorMessage("rename", "fallback-disabled", plan.unresolvedDecisionPoints),
-        retryable: false,
-      },
-    };
+
+    const resourceRename = this.engine.tryResourceRename(request);
+    if (resourceRename) return resourceRename;
+
+    return this.#policyDeniedRename({
+      ...plan,
+      allowOperation: false,
+      reason: "target-not-allowed",
+    });
   }
 
   #policyDeniedRename(plan: RenameExecutionPlan): WorkspaceRefactorResult {

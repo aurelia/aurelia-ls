@@ -10,13 +10,13 @@ import {
 
 describe("refactor policy", () => {
   const defaultContext: RenameExecutionContext = {
-    target: "unknown",
+    target: "resource",
     hasSemanticProvenance: true,
     hasMappedProvenance: true,
     workspaceDocument: true,
   };
 
-  it("plans semantic-first rename and keeps fallback off for unknown targets by default", () => {
+  it("plans semantic-first rename with fallback disabled by default", () => {
     const plan = planRenameExecution(DEFAULT_REFACTOR_POLICY, defaultContext);
     expect(plan.allowOperation).toBe(true);
     expect(plan.trySemanticRename).toBe(true);
@@ -39,7 +39,7 @@ describe("refactor policy", () => {
     expect(plan.reason).toBe("target-not-allowed");
   });
 
-  it("can disable fallback while keeping semantic rename enabled", () => {
+  it("preserves semantic rename when fallback is explicitly disabled", () => {
     const policy: RefactorPolicy = {
       ...DEFAULT_REFACTOR_POLICY,
       rename: {
@@ -59,28 +59,19 @@ describe("refactor policy", () => {
     expect(plan.allowTypeScriptFallback).toBe(false);
   });
 
-  it("allows fallback for expression-member targets by default", () => {
+  it("denies expression-member rename targets by default", () => {
     const plan = planRenameExecution(DEFAULT_REFACTOR_POLICY, {
       ...defaultContext,
       target: "expression-member",
       hasSemanticProvenance: false,
     });
-    expect(plan.allowOperation).toBe(true);
-    expect(plan.allowTypeScriptFallback).toBe(true);
+    expect(plan.allowOperation).toBe(false);
+    expect(plan.reason).toBe("target-not-allowed");
+    expect(plan.allowTypeScriptFallback).toBe(false);
   });
 
   it("denies rename when provenance is required but unavailable", () => {
-    const policy: RefactorPolicy = {
-      ...DEFAULT_REFACTOR_POLICY,
-      rename: {
-        ...DEFAULT_REFACTOR_POLICY.rename,
-        fallback: {
-          ...DEFAULT_REFACTOR_POLICY.rename.fallback,
-          enabled: false,
-        },
-      },
-    };
-    const plan = planRenameExecution(policy, {
+    const plan = planRenameExecution(DEFAULT_REFACTOR_POLICY, {
       ...defaultContext,
       target: "resource",
       hasSemanticProvenance: false,
