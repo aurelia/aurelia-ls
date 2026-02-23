@@ -130,7 +130,6 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
     const docs = Array.from(this.sources.all())
       .map((doc) => ({
         uri: doc.uri,
-        version: doc.version,
         textHash: stableHash(doc.text),
       }))
       .sort((a, b) => a.uri.localeCompare(b.uri));
