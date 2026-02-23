@@ -39,6 +39,10 @@ export {
   prepareProjectSemantics,
   createSemanticsLookup,
   createSemanticModel,
+  createDependencyGraph,
+  createDepRecorder,
+  NOOP_DEP_RECORDER,
+  resourceKeyToDepKey,
   buildResourceCatalog,
   buildResourceGraphFromSemantics,
   materializeResourcesForScope,
@@ -121,6 +125,11 @@ export type {
   SemanticModelQuery,
   SemanticModelQueryOptions,
   CreateSemanticModelOptions,
+  DependencyGraph,
+  DepNode,
+  DepNodeId,
+  DepNodeKind,
+  DepRecorder,
 } from "./schema/index.js";
 
 // Resource definitions (for compiler project-semantics and external tooling)

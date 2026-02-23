@@ -21,10 +21,13 @@ import type {
   SemanticsLookup,
   SemanticsLookupOptions,
   LocalImportDef,
+  ResourceKind,
 } from "./types.js";
 import type { ProjectSnapshot } from "./snapshot.js";
 import { buildProjectSnapshot } from "./snapshot.js";
 import { createSemanticsLookup } from "./registry.js";
+import type { DependencyGraph } from "./dependency-graph.js";
+import { createDependencyGraph } from "./dependency-graph.js";
 import type {
   ProjectSemanticsDiscoveryResult,
   ProjectSemanticsDefinitionChannels,
@@ -35,6 +38,7 @@ import type {
 } from "../project-semantics/index.js";
 import type { NormalizedPath } from "../model/index.js";
 import { stableHash, stableHashSemantics } from "../pipeline/index.js";
+import { unwrapSourced } from "./sourced.js";
 
 // ============================================================================
 // Semantic Model
@@ -66,6 +70,14 @@ export interface SemanticModel {
   readonly defaultScope: ResourceScopeId | null;
   /** Content-derived identity (changes when semantic content changes) */
   readonly fingerprint: string;
+  /**
+   * Dependency graph tracking input→output relationships.
+   *
+   * Populated at creation time with project-level edges (file→resource, scope, vocabulary).
+   * Template compilations add edges via DepRecorder for template-level tracking.
+   * Used by the workspace for targeted invalidation (convergence route step 3).
+   */
+  readonly deps: DependencyGraph;
 
   /**
    * Create a scope-aware query.
@@ -158,6 +170,7 @@ export function createSemanticModel(
   };
 
   const fingerprint = computeModelFingerprint(discovery, semantics);
+  const deps = buildModelDependencyGraph(discovery);
 
   let cachedSnapshot: ProjectSnapshot | undefined;
 
@@ -169,6 +182,7 @@ export function createSemanticModel(
     resourceGraph: discovery.resourceGraph,
     defaultScope,
     fingerprint,
+    deps,
 
     query(opts?: SemanticModelQueryOptions): SemanticModelQuery {
       return createModelQuery(model, opts);
@@ -238,6 +252,97 @@ function createModelQuery(
  * It excludes TS project metadata (compilerOptions, roots) which are external
  * invalidation signals handled by the workspace.
  */
+/**
+ * Build the project-level dependency graph from a discovery result.
+ *
+ * This captures the structural dependencies between files, resources, scopes,
+ * and vocabulary that were established during project semantics discovery.
+ * Template-level dependencies are added later via DepRecorder during compilation.
+ *
+ * Graph edges:
+ * - convergence-entry → file (each resource depends on its source file)
+ * - scope → convergence-entry (each scope references resources)
+ * - vocabulary → config (vocabulary depends on binding command/pattern configuration)
+ * - file nodes for all analyzed files (available for template compilation recording)
+ */
+function buildModelDependencyGraph(
+  discovery: ProjectSemanticsDiscoveryResult,
+): DependencyGraph {
+  const graph = createDependencyGraph();
+
+  // 1. Register file nodes for all analyzed files
+  for (const [filePath] of discovery.facts) {
+    graph.addNode('file', filePath);
+  }
+
+  // 2. Register convergence-entry nodes and file→resource edges
+  const resourceKinds: readonly ResourceKind[] = [
+    'custom-element',
+    'custom-attribute',
+    'template-controller',
+    'value-converter',
+    'binding-behavior',
+  ];
+
+  for (const def of discovery.definition.authority) {
+    const name = unwrapSourced(def.name);
+    if (!name) continue;
+
+    const entryKey = `${def.kind}:${name}`;
+    const entryNode = graph.addNode('convergence-entry', entryKey);
+
+    // Link resource to its source file
+    if (def.file) {
+      graph.addDependency(entryNode, graph.addNode('file', def.file));
+    }
+  }
+
+  // 3. Register scope nodes
+  const resourceGraph = discovery.resourceGraph;
+  if (resourceGraph) {
+    for (const scopeId of Object.keys(resourceGraph.scopes)) {
+      const scope = resourceGraph.scopes[scopeId as ResourceScopeId];
+      if (!scope) continue;
+
+      const scopeNode = graph.addNode('scope', scopeId);
+
+      // Link scope to resources it contains
+      if (scope.resources) {
+        for (const kind of resourceKinds) {
+          const collection = getResourceCollection(scope.resources, kind);
+          if (collection) {
+            for (const resourceName of Object.keys(collection)) {
+              const entryId = graph.findNode('convergence-entry', `${kind}:${resourceName}`);
+              if (entryId) {
+                graph.addDependency(scopeNode, entryId);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 4. Register vocabulary node (depends on syntax config)
+  graph.addNode('vocabulary', 'vocabulary');
+
+  return graph;
+}
+
+/** Get the resource collection for a given kind from partial collections. */
+function getResourceCollection(
+  resources: Partial<import("./types.js").ResourceCollections>,
+  kind: ResourceKind,
+): Readonly<Record<string, unknown>> | undefined {
+  switch (kind) {
+    case 'custom-element': return resources.elements;
+    case 'custom-attribute': return resources.attributes;
+    case 'template-controller': return resources.controllers;
+    case 'value-converter': return resources.valueConverters;
+    case 'binding-behavior': return resources.bindingBehaviors;
+  }
+}
+
 function computeModelFingerprint(
   discovery: ProjectSemanticsDiscoveryResult,
   semantics: MaterializedSemantics,

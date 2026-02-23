@@ -24,5 +24,8 @@ export * from "./symbol-id.js";
 // Semantics snapshots (project-level seam)
 export * from "./snapshot.js";
 
+// Dependency graph (L2 invalidation infrastructure)
+export * from "./dependency-graph.js";
+
 // Semantic model (L2 canonical authority)
 export * from "./model.js";
