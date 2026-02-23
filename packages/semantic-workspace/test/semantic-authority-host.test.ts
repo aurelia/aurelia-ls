@@ -178,6 +178,46 @@ describe("semantic-authority host runtime", () => {
     expect(firstObservation?.replay.runId).toBe(sweep.result.runId);
   });
 
+  it("rolls up sweep status monotonically when contained observations are degraded", async () => {
+    const host = createHost();
+    const sessionId = await openSession(host);
+
+    const sweep = await host.execute({
+      command: "pressure.runScenario",
+      args: {
+        sessionId,
+        sweep: {
+          corpusId: "workspace-contract",
+          mutatedCorpus: false,
+          surfaces: ["rename"],
+          traversal: {
+            includeExtensions: [".html"],
+            maxFiles: 1,
+          },
+          sampling: {
+            everyN: 64,
+            maxPositionsPerFile: 1,
+            renameMaxPositionsPerFile: 1,
+          },
+          output: {
+            includeObservations: true,
+            maxObservations: 8,
+          },
+        },
+      },
+    } satisfies SemanticAuthorityCommandInvocation<"pressure.runScenario">);
+
+    expect(sweep.result.sweep).toBeTruthy();
+    const renameSummary = sweep.result.sweep!.surfaces.find((entry) => entry.surface === "rename");
+    expect(renameSummary).toBeTruthy();
+    const nonOkObservationCount = (renameSummary?.degraded ?? 0) + (renameSummary?.error ?? 0);
+    expect(nonOkObservationCount).toBeGreaterThan(0);
+    expect(sweep.result.sweep!.anomalyCount).toBe(0);
+    expect(sweep.result.stoppedEarly).toBe(false);
+    expect(sweep.status).toBe("degraded");
+    expect(sweep.epistemic.gaps.some((gap) => gap.what === "Sweep contained non-ok observations")).toBe(true);
+  });
+
   it("verifies deterministic hash for fixed invocation", async () => {
     const host = createHost();
     const sessionId = await openSession(host);

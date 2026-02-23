@@ -13,6 +13,7 @@ import type {
   HostCacheMeta,
   HostInvalidationMeta,
   PressureRunScenarioArgs,
+  PressureSweepResult,
   QueryDiagnosticsArgs,
   QueryHoverArgs,
   QueryNavigationArgs,
@@ -584,17 +585,38 @@ export class SemanticAuthorityHostRuntime {
         execute: (invocation, options) => this.execute(invocation, options),
         onProgress: (event) => this.#logger.info(`[host.sweep] ${JSON.stringify(event)}`),
       });
-      if (sweep.result.anomalyCount > 0 || sweep.stoppedEarly) {
+      const rollup = rollupSweepStatuses(sweep.result);
+      const sweepGaps: SemanticAuthorityGap[] = [];
+      if (rollup.nonOkObservationCount > 0) {
+        sweepGaps.push({
+          what: "Sweep contained non-ok observations",
+          why: `Observed ${rollup.degradedCount} degraded and ${rollup.errorCount} error observations across ${sweep.result.observationCount} observations.`,
+          howToClose: "Inspect degraded/error observations and close declared uncertainty or failures.",
+        });
+      }
+      if (sweep.result.anomalyCount > 0) {
+        sweepGaps.push({
+          what: "Sweep surfaced anomalies",
+          why: `Observed ${sweep.result.anomalyCount} anomalies across ${sweep.result.observationCount} observations.`,
+          howToClose: "Inspect sweep observations and close tagged seam anomalies.",
+        });
+      }
+      if (sweep.stoppedEarly) {
+        sweepGaps.push({
+          what: "Sweep stopped early",
+          why: "Sweep execution stopped before planned traversal completed.",
+          howToClose: "Re-run with sufficient budget and inspect the failing observation that triggered early stop.",
+        });
+      }
+      if (sweepGaps.length > 0) {
         return degraded(session.id, session.profile, {
           runId,
           stoppedEarly: sweep.stoppedEarly,
           steps: [],
           sweep: sweep.result,
-        }, [{
-          what: "Sweep surfaced anomalies",
-          why: `Observed ${sweep.result.anomalyCount} anomalies across ${sweep.result.observationCount} observations.`,
-          howToClose: "Inspect sweep observations and close tagged seam anomalies.",
-        }]);
+        }, sweepGaps, {
+          confidence: rollup.errorCount > 0 ? "low" : "partial",
+        });
       }
       return ok(session, {
         runId,
@@ -841,6 +863,26 @@ function completionGap(
     what: "Completion confidence reduced",
     why: `${itemCount} completion items were returned with ${confidence} confidence.`,
     howToClose: "Add explicit declarations and registrations so completion sources converge.",
+  };
+}
+
+function rollupSweepStatuses(
+  sweep: PressureSweepResult,
+): {
+    nonOkObservationCount: number;
+    degradedCount: number;
+    errorCount: number;
+  } {
+  let degradedCount = 0;
+  let errorCount = 0;
+  for (const surface of sweep.surfaces) {
+    degradedCount += surface.degraded;
+    errorCount += surface.error;
+  }
+  return {
+    nonOkObservationCount: degradedCount + errorCount,
+    degradedCount,
+    errorCount,
   };
 }
 
