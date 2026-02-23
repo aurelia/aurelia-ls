@@ -96,6 +96,64 @@ describe("semantic-authority host runtime", () => {
     expect(replay.result.divergenceCount).toBe(0);
   });
 
+  it("runs sweep mode with per-surface coverage and replay handles", async () => {
+    const host = createHost();
+    const sessionId = await openSession(host);
+
+    const sweep = await host.execute({
+      command: "pressure.runScenario",
+      args: {
+        sessionId,
+        sweep: {
+          corpusId: "workspace-contract",
+          mutatedCorpus: true,
+          surfaces: [
+            "diagnostics",
+            "completions",
+            "hover",
+            "navigation",
+            "rename",
+            "semanticTokens",
+          ],
+          traversal: {
+            includeExtensions: [".html"],
+            maxFiles: 1,
+          },
+          sampling: {
+            everyN: 10,
+            maxPositionsPerFile: 8,
+            renameMaxPositionsPerFile: 2,
+          },
+          output: {
+            includeObservations: true,
+            maxObservations: 64,
+          },
+        },
+      },
+    } satisfies SemanticAuthorityCommandInvocation<"pressure.runScenario">);
+
+    expect(["ok", "degraded"]).toContain(sweep.status);
+    expect(sweep.result.steps).toEqual([]);
+    expect(sweep.result.sweep).toBeTruthy();
+    expect(sweep.result.sweep!.corpusId).toBe("workspace-contract");
+    expect(sweep.result.sweep!.mutatedCorpus).toBe(true);
+    expect(sweep.result.sweep!.traversal.crawledFiles).toBeGreaterThan(0);
+    expect(sweep.result.sweep!.observationCount).toBeGreaterThan(0);
+    expect(sweep.result.sweep!.surfaces.map((entry) => entry.surface)).toEqual([
+      "diagnostics",
+      "completions",
+      "hover",
+      "navigation",
+      "rename",
+      "semanticTokens",
+    ]);
+
+    const firstObservation = sweep.result.sweep!.observations[0];
+    expect(firstObservation).toBeTruthy();
+    expect(firstObservation?.replay.sessionId).toBe(sessionId);
+    expect(firstObservation?.replay.runId).toBe(sweep.result.runId);
+  });
+
   it("verifies deterministic hash for fixed invocation", async () => {
     const host = createHost();
     const sessionId = await openSession(host);

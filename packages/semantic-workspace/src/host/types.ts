@@ -405,10 +405,44 @@ export interface PressureScenarioStep {
   readonly expectStatus?: SemanticAuthorityCommandStatus;
 }
 
+export type PressureSurfaceId =
+  | "diagnostics"
+  | "completions"
+  | "hover"
+  | "navigation"
+  | "rename"
+  | "semanticTokens";
+
+export interface PressureSweepTraversalOptions {
+  readonly includeExtensions?: readonly string[];
+  readonly maxFiles?: number;
+}
+
+export interface PressureSweepSamplingOptions {
+  readonly everyN?: number;
+  readonly maxPositionsPerFile?: number;
+  readonly renameMaxPositionsPerFile?: number;
+}
+
+export interface PressureSweepOutputOptions {
+  readonly includeObservations?: boolean;
+  readonly maxObservations?: number;
+}
+
+export interface PressureSweepConfig {
+  readonly corpusId?: string;
+  readonly mutatedCorpus?: boolean;
+  readonly surfaces?: readonly PressureSurfaceId[];
+  readonly traversal?: PressureSweepTraversalOptions;
+  readonly sampling?: PressureSweepSamplingOptions;
+  readonly output?: PressureSweepOutputOptions;
+}
+
 export interface PressureRunScenarioArgs {
   readonly sessionId: string;
-  readonly steps: readonly PressureScenarioStep[];
+  readonly steps?: readonly PressureScenarioStep[];
   readonly stopOnFailure?: boolean;
+  readonly sweep?: PressureSweepConfig;
 }
 
 export interface PressureScenarioStepResult {
@@ -426,6 +460,79 @@ export interface PressureRunScenarioResult {
   readonly runId: string;
   readonly stoppedEarly: boolean;
   readonly steps: readonly PressureScenarioStepResult[];
+  readonly sweep?: PressureSweepResult;
+}
+
+export interface PressureObservationAnchor {
+  readonly uri: DocumentUri;
+  readonly offset?: number;
+  readonly line?: number;
+  readonly character?: number;
+}
+
+export interface PressureObservationInputSummary {
+  readonly uri: DocumentUri;
+  readonly position?: SourcePosition;
+  readonly mode?: QueryNavigationMode;
+}
+
+export interface PressureObservationEpistemicSummary {
+  readonly confidence: SemanticAuthorityConfidence;
+  readonly gapCount: number;
+  readonly provenanceRefCount: number;
+}
+
+export interface PressureObservationReplayHandle {
+  readonly sessionId: string;
+  readonly runId: string;
+  readonly commandId: string;
+}
+
+export interface PressureSweepObservation {
+  readonly corpusId: string;
+  readonly surface: PressureSurfaceId;
+  readonly command: PressureScenarioCommandName;
+  readonly anchor: PressureObservationAnchor;
+  readonly input: PressureObservationInputSummary;
+  readonly status: SemanticAuthorityCommandStatus;
+  readonly epistemic: PressureObservationEpistemicSummary;
+  readonly anomalyTags: readonly string[];
+  readonly replay: PressureObservationReplayHandle;
+}
+
+export interface PressureSurfaceSummary {
+  readonly surface: PressureSurfaceId;
+  readonly observations: number;
+  readonly ok: number;
+  readonly degraded: number;
+  readonly error: number;
+  readonly anomalies: number;
+}
+
+export interface PressureSweepTraversalSummary {
+  readonly workspaceRoot: string;
+  readonly crawledFiles: number;
+  readonly sampledFiles: number;
+  readonly includeExtensions: readonly string[];
+  readonly maxFiles: number | null;
+}
+
+export interface PressureSweepSamplingSummary {
+  readonly everyN: number;
+  readonly maxPositionsPerFile: number;
+  readonly renameMaxPositionsPerFile: number;
+}
+
+export interface PressureSweepResult {
+  readonly corpusId: string;
+  readonly mutatedCorpus: boolean;
+  readonly traversal: PressureSweepTraversalSummary;
+  readonly sampling: PressureSweepSamplingSummary;
+  readonly surfaces: readonly PressureSurfaceSummary[];
+  readonly observationCount: number;
+  readonly anomalyCount: number;
+  readonly observationsTruncated: boolean;
+  readonly observations: readonly PressureSweepObservation[];
 }
 
 export interface SemanticAuthorityCommandArgsMap {

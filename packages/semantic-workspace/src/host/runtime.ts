@@ -1,5 +1,6 @@
 import { canonicalDocumentUri, type Logger } from "@aurelia-ls/compiler";
 import { HostReplayLog, hashEnvelopeForReplay } from "./replay-log.js";
+import { runPressureSweep } from "./pressure-sweep.js";
 import { HostSessionManager, type HostSessionState, type HostWorkspaceFactory } from "./session-manager.js";
 import { HostVerifier } from "./verify.js";
 import { SEMANTIC_AUTHORITY_SCHEMA_VERSION } from "./types.js";
@@ -92,14 +93,16 @@ type MutableEnvelope = {
 };
 
 export class SemanticAuthorityHostRuntime {
+  readonly #logger: Logger;
   readonly #sessions: HostSessionManager;
   readonly #replay: HostReplayLog;
   readonly #verifier: HostVerifier;
   #globalCommandSequence = 0;
 
   constructor(options: SemanticAuthorityHostRuntimeOptions = {}) {
+    this.#logger = options.logger ?? SILENT_LOGGER;
     this.#sessions = new HostSessionManager({
-      logger: options.logger ?? SILENT_LOGGER,
+      logger: this.#logger,
       defaultWorkspaceRoot: options.defaultWorkspaceRoot,
       workspaceFactory: options.workspaceFactory,
     });
@@ -556,6 +559,50 @@ export class SemanticAuthorityHostRuntime {
     const session = this.#sessions.require(args.sessionId);
     const runId = this.#replay.startRun(session.id, "pressure");
     const stopOnFailure = args.stopOnFailure ?? true;
+
+    if (args.sweep) {
+      const sweep = await runPressureSweep({
+        sessionId: session.id,
+        runId,
+        workspaceRoot: session.workspaceRoot,
+        sweep: args.sweep,
+        stopOnFailure,
+        execute: (invocation, options) => this.execute(invocation, options),
+        onProgress: (event) => this.#logger.info(`[host.sweep] ${JSON.stringify(event)}`),
+      });
+      if (sweep.result.anomalyCount > 0 || sweep.stoppedEarly) {
+        return degraded(session.id, session.profile, {
+          runId,
+          stoppedEarly: sweep.stoppedEarly,
+          steps: [],
+          sweep: sweep.result,
+        }, [{
+          what: "Sweep surfaced anomalies",
+          why: `Observed ${sweep.result.anomalyCount} anomalies across ${sweep.result.observationCount} observations.`,
+          howToClose: "Inspect sweep observations and close tagged seam anomalies.",
+        }]);
+      }
+      return ok(session, {
+        runId,
+        stoppedEarly: false,
+        steps: [],
+        sweep: sweep.result,
+      }, { confidence: "high" });
+    }
+
+    const steps = args.steps ?? [];
+    if (steps.length === 0) {
+      return degraded(session.id, session.profile, {
+        runId,
+        stoppedEarly: true,
+        steps: [],
+      }, [{
+        what: "No pressure steps were provided",
+        why: "pressure.runScenario requires either sweep configuration or at least one step.",
+        howToClose: "Provide pressure.steps for step mode or pressure.sweep for sweep mode.",
+      }]);
+    }
+
     const stepResults: Array<{
       index: number;
       label: string | null;
@@ -569,7 +616,7 @@ export class SemanticAuthorityHostRuntime {
     const extraGaps: SemanticAuthorityGap[] = [];
     let stoppedEarly = false;
 
-    for (const [index, step] of args.steps.entries()) {
+    for (const [index, step] of steps.entries()) {
       const invocation: ReplayableCommandInvocation = {
         command: step.command,
         args: withSessionValue(step.args, session.id),
