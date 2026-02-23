@@ -361,7 +361,13 @@ export class SemanticAuthorityHostRuntime {
     const confidence = completionsConfidence(items);
     const result = { items, isIncomplete: confidence === "partial" || confidence === "low" };
     if (result.isIncomplete) {
-      return degraded(session.id, session.profile, result, [completionGap(items.length, confidence as "partial" | "low")]);
+      return degraded(
+        session.id,
+        session.profile,
+        result,
+        [completionGap(items.length, confidence as "partial" | "low")],
+        { confidence },
+      );
     }
     return ok(session, result, { cache: { hit: true, tier: "warm" }, confidence });
   }
@@ -371,20 +377,27 @@ export class SemanticAuthorityHostRuntime {
     const session = this.#sessions.require(request.sessionId);
     const uri = canonicalDocumentUri(request.uri).uri;
     const hover = session.workspace.query(uri).hover(request.position);
-    const confidence = normalizeConfidence(hover?.confidence);
-    if (hover && (confidence === "partial" || confidence === "low") && hover.confidenceReason) {
+    const confidence = hover ? normalizeConfidence(hover.confidence) : "unknown";
+    const provenanceRefs = hover?.location
+      ? [locationRef(hover.location.uri, hover.location.span.start, hover.location.span.end)]
+      : [];
+    if (hover && (confidence === "partial" || confidence === "low")) {
       return degraded(session.id, session.profile, { hover }, [{
         what: "Hover confidence reduced",
-        why: hover.confidenceReason,
+        why: hover.confidenceReason ?? `Hover reported ${confidence} confidence.`,
         howToClose: "Strengthen declarations so hover resolution converges.",
-      }]);
+      }], { confidence, provenanceRefs });
+    }
+    if (!hover) {
+      return ok(session, { hover }, {
+        cache: { hit: true, tier: "warm" },
+        confidence: "unknown",
+      });
     }
     return ok(session, { hover }, {
       cache: { hit: true, tier: "warm" },
       confidence,
-      provenanceRefs: hover?.location
-        ? [locationRef(hover.location.uri, hover.location.span.start, hover.location.span.end)]
-        : [],
+      provenanceRefs,
     });
   }
 
@@ -725,6 +738,10 @@ function degraded(
   profile: SemanticAuthorityPolicyProfile,
   result: unknown,
   gaps: readonly SemanticAuthorityGap[],
+  options: {
+    confidence?: SemanticAuthorityConfidence;
+    provenanceRefs?: readonly string[];
+  } = {},
 ): CommandOutcome {
   return {
     status: "degraded",
@@ -732,9 +749,9 @@ function degraded(
     sessionId,
     policyProfile: profile,
     epistemic: {
-      confidence: "partial",
+      confidence: options.confidence ?? "partial",
       gaps,
-      provenanceRefs: [],
+      provenanceRefs: options.provenanceRefs ?? [],
     },
   };
 }

@@ -53,6 +53,30 @@ describe("semantic-authority host runtime", () => {
     expect(response.result.sessionId).toMatch(/^session-/);
   });
 
+  it("reports unknown confidence when hover has no semantic match", async () => {
+    const host = createHost();
+    const sessionId = await openSession(host);
+
+    await host.execute({
+      command: "doc.open",
+      args: { sessionId, uri: appUri, text: appText },
+    } satisfies SemanticAuthorityCommandInvocation<"doc.open">);
+
+    const hover = await host.execute({
+      command: "query.hover",
+      args: {
+        sessionId,
+        uri: appUri,
+        position: findPosition(appText, "<section", 1),
+      },
+    } satisfies SemanticAuthorityCommandInvocation<"query.hover">);
+
+    expect(hover.status).toBe("ok");
+    expect(hover.result.hover).toBeNull();
+    expect(hover.epistemic.confidence).toBe("unknown");
+    expect(hover.epistemic.provenanceRefs).toEqual([]);
+  });
+
   it("runs pressure scenario and replays without divergence", async () => {
     const host = createHost();
     const sessionId = await openSession(host);
