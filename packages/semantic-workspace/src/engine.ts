@@ -167,7 +167,6 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
   #templateIndex: TemplateIndex;
   #attrParser: AttributeParser | null = null;
   #attrParserSyntax: TemplateSyntaxRegistry | null = null;
-  #componentHashes: Map<DocumentUri, string> = new Map();
   #diagnosticsCache: DiagnosticsCache | null = null;
   readonly #styleProfile: StyleProfile | null;
   readonly #refactorOverrides: RefactorOverrides | null;
@@ -214,7 +213,6 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     this.#lookupText = options.lookupText;
     this.#model = this.#projectIndex.currentModel();
     this.#templateIndex = buildTemplateIndex(this.#model.discovery);
-    this.#componentHashes = buildComponentHashes(this.#templateIndex);
     this.#definitionIndex = buildResourceDefinitionIndex(this.#model.discovery);
 
     this.#kernel = createSemanticWorkspaceKernel({
@@ -257,7 +255,6 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
         this.#logger.info("[workspace] Third-party overlay applied, refreshing workspace");
         this.#model = this.#projectIndex.currentModel();
         this.#templateIndex = buildTemplateIndex(this.#model.discovery);
-        this.#componentHashes = buildComponentHashes(this.#templateIndex);
         this.#definitionIndex = buildResourceDefinitionIndex(this.#model.discovery);
         this.#resourceReferenceIndex = null;
         this.#kernel.reconfigure({
@@ -290,23 +287,15 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       return false;
     }
 
-    const prevTemplateIndex = this.#templateIndex;
-    const prevComponentHashes = this.#componentHashes;
     this.#projectIndex.refresh();
     this.#model = this.#projectIndex.currentModel();
     this.#projectVersion = version;
     this.#templateIndex = buildTemplateIndex(this.#model.discovery);
-    const nextComponentHashes = buildComponentHashes(this.#templateIndex);
-    const componentInvalidations = collectComponentInvalidations(prevTemplateIndex, prevComponentHashes, this.#templateIndex, nextComponentHashes);
-    if (componentInvalidations.length > 0) {
-      debug.workspace("component.invalidate", { uris: componentInvalidations });
-    }
-    for (const uri of componentInvalidations) {
-      this.#kernel.program.invalidateTemplate(uri);
-    }
-    this.#componentHashes = nextComponentHashes;
     this.#definitionIndex = buildResourceDefinitionIndex(this.#model.discovery);
     this.#resourceReferenceIndex = null;
+    // kernel.reconfigure() → updateOptions() handles per-template invalidation
+    // through dependency fingerprint comparison — no pre-emptive file-hash
+    // invalidation needed.
     this.#kernel.reconfigure({
       program: this.#programOptions(this.#vm, this.#isJs, this.#overlayBaseName),
       fingerprint: this.#model.fingerprint,
@@ -387,7 +376,6 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     }
     this.#resourceReferenceIndex = null;
     this.#diagnosticsCache = null;
-    this.#componentHashes.clear();
     this.#deactivateTemplate();
     this.#env.dispose();
   }
@@ -1499,48 +1487,6 @@ export function buildTemplateIndex(discovery: ProjectSemanticsDiscoveryResult): 
     templateToComponent,
     templateToScope,
   };
-}
-
-function buildComponentHashes(index: TemplateIndex): Map<DocumentUri, string> {
-  const hashes = new Map<DocumentUri, string>();
-  for (const [uri, componentPath] of index.templateToComponent.entries()) {
-    const hash = hashFile(componentPath);
-    if (hash) {
-      hashes.set(uri, hash);
-    }
-  }
-  return hashes;
-}
-
-function collectComponentInvalidations(
-  prevIndex: TemplateIndex,
-  prevHashes: Map<DocumentUri, string>,
-  nextIndex: TemplateIndex,
-  nextHashes: Map<DocumentUri, string>,
-): DocumentUri[] {
-  const invalidated: DocumentUri[] = [];
-  for (const [uri, nextHash] of nextHashes.entries()) {
-    const prevHash = prevHashes.get(uri);
-    const prevComponent = prevIndex.templateToComponent.get(uri) ?? null;
-    const nextComponent = nextIndex.templateToComponent.get(uri) ?? null;
-    if (prevComponent && nextComponent && prevComponent !== nextComponent) {
-      invalidated.push(uri);
-      continue;
-    }
-    if (prevHash && prevHash !== nextHash) {
-      invalidated.push(uri);
-    }
-  }
-  return invalidated;
-}
-
-function hashFile(filePath: string): string | null {
-  try {
-    const text = fs.readFileSync(filePath, "utf8");
-    return stableHash(text);
-  } catch {
-    return null;
-  }
 }
 
 function getMetaElementHover(meta: TemplateMeta, offset: number): MetaHoverResult | null {
