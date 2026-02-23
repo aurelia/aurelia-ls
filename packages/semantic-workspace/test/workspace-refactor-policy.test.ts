@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_REFACTOR_POLICY,
   type RefactorPolicy,
@@ -93,6 +93,55 @@ describe("workspace refactor policy (rename)", () => {
       expect(result.error.message).toContain("required decisions are unresolved");
       expect(result.error.retryable).toBe(false);
     }
+  });
+
+  it("short-circuits conclusive denied rename before workspace refresh", () => {
+    const refreshSpy = vi.spyOn(harness.workspace, "refresh");
+    const position = findPosition(appText, "<my-element", 1);
+    const result = harness.workspace.refactor().rename({
+      uri: appUri,
+      position,
+      newName: "my-widget",
+    });
+    expect("error" in result).toBe(true);
+    expect(refreshSpy).not.toHaveBeenCalled();
+    refreshSpy.mockRestore();
+  });
+});
+
+describe("workspace refactor policy (rename preflight)", () => {
+  let harness: Awaited<ReturnType<typeof createWorkspaceHarness>>;
+  let appUri: string;
+  let appText: string;
+
+  beforeAll(async () => {
+    harness = await createWorkspaceHarness({
+      fixtureId: asFixtureId("rename-cascade-basic"),
+      openTemplates: "none",
+    });
+    appUri = harness.openTemplate("src/app.html");
+    const text = harness.readText(appUri);
+    if (!text) {
+      throw new Error("Expected template text for rename-cascade-basic app.html");
+    }
+    appText = text;
+  });
+
+  it("denies provenance-required rename without forcing refresh", () => {
+    const refreshSpy = vi.spyOn(harness.workspace, "refresh");
+    const result = harness.workspace.refactor().rename({
+      uri: appUri,
+      position: positionAt(appText, appText.length),
+      newName: "renamed",
+    });
+    expect("error" in result).toBe(true);
+    if ("error" in result) {
+      expect(result.error.kind).toBe("refactor-policy-denied");
+      expect(result.error.message).toContain("provenance-required");
+      expect(result.error.retryable).toBe(false);
+    }
+    expect(refreshSpy).not.toHaveBeenCalled();
+    refreshSpy.mockRestore();
   });
 });
 

@@ -98,6 +98,7 @@ import {
   type RefactorDecisionPointId,
   type RefactorDecisionSet,
   type RefactorDecisionPoint,
+  type RenameExecutionPlan,
   type RenameExecutionContext,
   type RefactorPolicy,
 } from "./refactor-policy.js";
@@ -116,6 +117,16 @@ import {
 import { buildDomIndex } from "./template-dom.js";
 
 type ProjectSemanticsDiscoveryConfigBase = Omit<ProjectSemanticsDiscoveryConfig, "diagnostics">;
+
+type RenamePreflightPlan = {
+  readonly plan: RenameExecutionPlan;
+  readonly conclusive: boolean;
+};
+
+type RenameExecutionContextProbe = {
+  readonly context: RenameExecutionContext;
+  readonly conclusive: boolean;
+};
 
 export interface SemanticWorkspaceEngineOptions {
   readonly logger: Logger;
@@ -477,6 +488,18 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     );
   }
 
+  planRenamePreflight(request: WorkspaceRenameRequest): RenamePreflightPlan {
+    const probe = this.#renameExecutionContextProbe(request, { ensureTemplateContext: false });
+    return {
+      plan: planRenameExecution(
+        this.#refactorPolicy,
+        probe.context,
+        this.#decisionResolution(request.refactorDecisions),
+      ),
+      conclusive: probe.conclusive,
+    };
+  }
+
   planCodeActions(request: WorkspaceCodeActionRequest) {
     return planCodeActionExecution(
       this.#refactorPolicy,
@@ -485,32 +508,56 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
   }
 
   #renameExecutionContext(request: WorkspaceRenameRequest): RenameExecutionContext {
+    return this.#renameExecutionContextProbe(request, { ensureTemplateContext: true }).context;
+  }
+
+  #renameExecutionContextProbe(
+    request: WorkspaceRenameRequest,
+    options: { ensureTemplateContext: boolean },
+  ): RenameExecutionContextProbe {
+    const ensureTemplateContext = options.ensureTemplateContext;
     const canonical = canonicalDocumentUri(request.uri);
     const inWorkspace = isPathWithin(this.#workspaceRoot, canonical.path);
     const text = this.lookupText(canonical.uri);
+    const unknownContext = (): RenameExecutionContext => ({
+      target: "unknown",
+      resourceOrigin: "unknown",
+      hasSemanticProvenance: false,
+      hasMappedProvenance: inWorkspace,
+      workspaceDocument: inWorkspace,
+    });
     if (!text) {
       return {
-        target: "unknown",
-        resourceOrigin: "unknown",
-        hasSemanticProvenance: false,
-        hasMappedProvenance: inWorkspace,
-        workspaceDocument: inWorkspace,
+        context: unknownContext(),
+        conclusive: false,
       };
     }
 
     const offset = offsetAtPosition(text, request.position);
     if (offset == null) {
       return {
-        target: "unknown",
-        resourceOrigin: "unknown",
-        hasSemanticProvenance: false,
-        hasMappedProvenance: inWorkspace,
-        workspaceDocument: inWorkspace,
+        context: unknownContext(),
+        conclusive: false,
       };
     }
 
+    const projectVersionCurrent = this.#env.project.getProjectVersion() === this.#projectVersion;
+
     if (this.#isTemplateUri(canonical.uri)) {
-      this.#ensureTemplateContext(canonical.uri);
+      if (ensureTemplateContext) {
+        this.#ensureTemplateContext(canonical.uri);
+      } else if (!projectVersionCurrent) {
+        return {
+          context: unknownContext(),
+          conclusive: false,
+        };
+      }
+      if (!this.#kernel.getCompilation(canonical.uri)) {
+        return {
+          context: unknownContext(),
+          conclusive: false,
+        };
+      }
       const probe = this.#templateEditEngine().probeRenameAt({ ...request, uri: canonical.uri });
       const mappingPresent = this.#kernel.getMapping(canonical.uri) !== null;
       const positionMapped = this.#kernel.provenance.lookupSource(canonical.uri, offset) !== null;
@@ -519,22 +566,28 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
         positionMapped,
       });
       return {
-        target: probe.targetClass,
-        resourceOrigin: probe.resourceOrigin ?? "unknown",
-        hasSemanticProvenance: probe.hasSemanticProvenance,
-        hasMappedProvenance: mappedProvenance.hasMappedProvenance,
-        workspaceDocument: inWorkspace,
+        context: {
+          target: probe.targetClass,
+          resourceOrigin: probe.resourceOrigin ?? "unknown",
+          hasSemanticProvenance: probe.hasSemanticProvenance,
+          hasMappedProvenance: mappedProvenance.hasMappedProvenance,
+          workspaceDocument: inWorkspace,
+        },
+        conclusive: true,
       };
     }
 
     const symbol = this.#symbolNameAt(this.#env.paths.canonical(canonical.path), offset, text);
     return {
-      target: symbol ? "expression-member" : "unknown",
-      resourceOrigin: "unknown",
-      hasSemanticProvenance: false,
-      // Non-template docs are direct source edits, so mapping precondition is satisfied.
-      hasMappedProvenance: true,
-      workspaceDocument: inWorkspace,
+      context: {
+        target: symbol ? "expression-member" : "unknown",
+        resourceOrigin: "unknown",
+        hasSemanticProvenance: false,
+        // Non-template docs are direct source edits, so mapping precondition is satisfied.
+        hasMappedProvenance: true,
+        workspaceDocument: inWorkspace,
+      },
+      conclusive: ensureTemplateContext || projectVersionCurrent,
     };
   }
 
@@ -1322,17 +1375,15 @@ class WorkspaceRefactorProxy implements RefactorEngine {
   ) {}
 
   rename(request: { uri: DocumentUri; position: { line: number; character: number }; newName: string }): WorkspaceRefactorResult {
+    const preflight = this.engine.planRenamePreflight(request);
+    if (preflight.conclusive && !preflight.plan.allowOperation) {
+      return this.#policyDeniedRename(preflight.plan);
+    }
     this.engine.refresh();
     this.engine.prepareRefactor(request.uri);
     const plan = this.engine.planRename(request);
     if (!plan.allowOperation) {
-      return {
-        error: {
-          kind: refactorPolicyErrorKind(plan.reason, plan.unresolvedDecisionPoints),
-          message: buildRefactorPolicyErrorMessage("rename", plan.reason, plan.unresolvedDecisionPoints),
-          retryable: false,
-        },
-      };
+      return this.#policyDeniedRename(plan);
     }
     if (plan.trySemanticRename) {
       const resourceRename = this.engine.tryResourceRename(request);
@@ -1345,6 +1396,16 @@ class WorkspaceRefactorProxy implements RefactorEngine {
       error: {
         kind: "refactor-policy-denied",
         message: buildRefactorPolicyErrorMessage("rename", "fallback-disabled", plan.unresolvedDecisionPoints),
+        retryable: false,
+      },
+    };
+  }
+
+  #policyDeniedRename(plan: RenameExecutionPlan): WorkspaceRefactorResult {
+    return {
+      error: {
+        kind: refactorPolicyErrorKind(plan.reason, plan.unresolvedDecisionPoints),
+        message: buildRefactorPolicyErrorMessage("rename", plan.reason, plan.unresolvedDecisionPoints),
         retryable: false,
       },
     };
