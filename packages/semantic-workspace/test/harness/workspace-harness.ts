@@ -68,7 +68,7 @@ export async function createWorkspaceHarness(options: WorkspaceHarnessOptions): 
     ...(options.workspace?.refactorDecisions !== undefined ? { refactorDecisions: options.workspace.refactorDecisions } : {}),
   });
 
-  const discovery = workspace.projectIndex.currentDiscovery();
+  const discovery = workspace.projectIndex.currentModel().discovery;
   const {
     templates,
     templateByUri,

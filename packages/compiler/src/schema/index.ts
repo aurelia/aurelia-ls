@@ -23,3 +23,6 @@ export * from "./symbol-id.js";
 
 // Semantics snapshots (project-level seam)
 export * from "./snapshot.js";
+
+// Semantic model (L2 canonical authority)
+export * from "./model.js";

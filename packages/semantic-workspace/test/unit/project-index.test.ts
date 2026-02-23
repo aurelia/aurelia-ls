@@ -69,28 +69,27 @@ test("produces a semantics + resource graph snapshot from TS project state", () 
   const tsProject = createTsProject();
   const index = new AureliaProjectIndex({ ts: tsProject, logger });
 
-  const semantics = index.currentSemantics();
-  const graph = index.currentResourceGraph();
+  const model = index.currentModel();
 
-  expect(semantics.version).toBe(BUILTIN_SEMANTICS.version);
-  expect(graph.root).toBeTruthy();
-  expect(graph.version).toBe("aurelia-resource-graph@1");
-  expect(graph.scopes[graph.root]).toBeTruthy();
-  expect(index.currentFingerprint().length > 0).toBe(true);
+  expect(model.semantics.version).toBe(BUILTIN_SEMANTICS.version);
+  expect(model.resourceGraph.root).toBeTruthy();
+  expect(model.resourceGraph.version).toBe("aurelia-resource-graph@1");
+  expect(model.resourceGraph.scopes[model.resourceGraph.root]).toBeTruthy();
+  expect(model.fingerprint.length > 0).toBe(true);
 });
 
 test("fingerprint tracks resource and root changes", async () => {
   const tsProject = createTsProject();
   const index = new AureliaProjectIndex({ ts: tsProject, logger });
 
-  const baseline = index.currentFingerprint();
+  const baseline = index.currentModel().fingerprint;
 
-  await index.refresh();
-  expect(index.currentFingerprint(), "refresh without change should be stable").toBe(baseline);
+  index.refresh();
+  expect(index.currentModel().fingerprint, "refresh without change should be stable").toBe(baseline);
 
   tsProject.bumpVersion();
-  await index.refresh();
-  expect(index.currentFingerprint(), "project version bumps alone should not affect fingerprint").toBe(baseline);
+  index.refresh();
+  expect(index.currentModel().fingerprint, "project version bumps alone should not affect fingerprint").toBe(baseline);
 
   const examplePath = path.join(process.cwd(), "src", "example.ts");
   tsProject.updateFile(examplePath, `
@@ -99,14 +98,15 @@ test("fingerprint tracks resource and root changes", async () => {
     @customElement({ name: 'updated-box' })
     export class UpdatedBox {}
   `);
-  await index.refresh();
-  const afterResourceChange = index.currentFingerprint();
+  index.refresh();
+  const afterResourceChange = index.currentModel().fingerprint;
   expect(afterResourceChange).not.toBe(baseline);
 
+  // Adding a non-Aurelia file doesn't change semantic content, so the
+  // model fingerprint stays stable (content-derived, not input-derived).
   tsProject.addFile(path.join(process.cwd(), "src", "other.ts"), "export const value = 1;");
-  await index.refresh();
-  const afterRootChange = index.currentFingerprint();
-  expect(afterRootChange).not.toBe(afterResourceChange);
+  index.refresh();
+  expect(index.currentModel().fingerprint, "non-resource file addition should not change semantic fingerprint").toBe(afterResourceChange);
 });
 
 test("discovers Aurelia resources from decorators and bindable members", () => {
@@ -144,7 +144,7 @@ test("discovers Aurelia resources from decorators and bindable members", () => {
   }, { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext });
 
   const index = new AureliaProjectIndex({ ts: tsProject, logger });
-  const sem = index.currentSemantics();
+  const sem = index.currentModel().semantics;
 
   const fancy = sem.resources.elements["fancy-box"];
   expect(fancy, "custom element discovered").toBeTruthy();
@@ -188,8 +188,9 @@ test("maps discoveries into the default resource scope when a graph is provided"
     logger,
     discovery: { baseSemantics, defaultScope: featureScope },
   });
-  const graph = index.currentResourceGraph();
-  const sem = index.currentSemantics();
+  const model = index.currentModel();
+  const graph = model.resourceGraph;
+  const sem = model.semantics;
 
   expect(graph).toBe(sem.resourceGraph);
 

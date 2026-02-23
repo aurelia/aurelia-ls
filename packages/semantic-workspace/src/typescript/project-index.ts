@@ -1,27 +1,17 @@
 import {
   BUILTIN_SEMANTICS,
   prepareProjectSemantics,
-  stableHash,
-  stableHashSemantics,
-  unwrapSourced,
+  createSemanticModel,
   DiagnosticsRuntime,
-  type ResourceCatalog,
-  type ResourceGraph,
-  type ResourceScopeId,
   type MaterializedSemantics,
-  type ProjectSnapshot,
-  type TemplateSyntaxRegistry,
+  type ResourceScopeId,
+  type SemanticModel,
 } from "@aurelia-ls/compiler";
 import {
-  hashObject,
-  normalizeCompilerOptions,
   discoverProjectSemantics,
   applyThirdPartyResources,
   hasThirdPartyResources,
   type ProjectSemanticsDiscoveryConfig,
-  type ProjectSemanticsDiscoveryResult,
-  type ResourceDef,
-  type Sourced,
   type Logger,
   type ThirdPartyDiscoveryResult,
 } from "@aurelia-ls/compiler";
@@ -35,23 +25,18 @@ export interface AureliaProjectIndexOptions {
 
 type ProjectSemanticsDiscoveryConfigBase = Omit<ProjectSemanticsDiscoveryConfig, "diagnostics">;
 
-interface IndexSnapshot {
-  readonly discovery: ProjectSemanticsDiscoveryResult;
-  readonly semantics: MaterializedSemantics;
-  readonly catalog: ResourceCatalog;
-  readonly syntax: TemplateSyntaxRegistry;
-  readonly resourceGraph: ResourceGraph;
-  readonly fingerprint: string;
-}
-
 /**
- * TS-backed project index that discovers Aurelia resources and produces the
- * semantics + resource graph snapshot used by TemplateProgram construction.
+ * Bridge between TypeScript project state and SemanticModel.
  *
- * Structured as a mini-pipeline:
- * - discovery: TS program -> resources/descriptors/registrations
- * - scoping:   resources + base semantics -> scoped resource graph + semantics
- * - fingerprint: stable snapshot for workspace invalidation
+ * Runs `discoverProjectSemantics()` against the TS program and produces
+ * a `SemanticModel` — the canonical semantic authority for the project.
+ * All semantic reads go through `currentModel().query()`.
+ *
+ * Responsibilities:
+ * - Holds TS project reference and discovery config
+ * - Runs discovery on refresh
+ * - Produces SemanticModel via createSemanticModel()
+ * - Applies third-party overlays
  */
 export class AureliaProjectIndex {
   #ts: TypeScriptProject;
@@ -60,12 +45,7 @@ export class AureliaProjectIndex {
   #defaultScope: ResourceScopeId | null;
   #discoveryConfig: ProjectSemanticsDiscoveryConfigBase;
 
-  #discovery: ProjectSemanticsDiscoveryResult;
-  #semantics: MaterializedSemantics;
-  #catalog: ResourceCatalog;
-  #syntax: TemplateSyntaxRegistry;
-  #resourceGraph: ResourceGraph;
-  #fingerprint: string;
+  #model: SemanticModel;
 
   constructor(options: AureliaProjectIndexOptions) {
     this.#ts = options.ts;
@@ -79,95 +59,47 @@ export class AureliaProjectIndex {
       defaultScope: this.#defaultScope ?? discoveryConfig.defaultScope,
     };
 
-    const snapshot = this.#computeSnapshot();
-    this.#discovery = snapshot.discovery;
-    this.#semantics = snapshot.semantics;
-    this.#catalog = snapshot.catalog;
-    this.#syntax = snapshot.syntax;
-    this.#resourceGraph = snapshot.resourceGraph;
-    this.#fingerprint = snapshot.fingerprint;
+    this.#model = this.#buildModel();
+  }
+
+  /** The current semantic model — single source of truth. */
+  currentModel(): SemanticModel {
+    return this.#model;
   }
 
   refresh(): void {
-    const snapshot = this.#computeSnapshot();
-    const changed = snapshot.fingerprint !== this.#fingerprint;
-    this.#discovery = snapshot.discovery;
-    this.#semantics = snapshot.semantics;
-    this.#catalog = snapshot.catalog;
-    this.#syntax = snapshot.syntax;
-    this.#resourceGraph = snapshot.resourceGraph;
-    this.#fingerprint = snapshot.fingerprint;
-    const status = changed ? "updated" : "unchanged";
-    this.#logger.info(`[index] refresh ${status} fingerprint=${this.#fingerprint}`);
-  }
-
-  currentResourceGraph(): ResourceGraph {
-    return this.#resourceGraph;
-  }
-
-  currentDiscovery(): ProjectSemanticsDiscoveryResult {
-    return this.#discovery;
-  }
-
-  currentCatalog(): ResourceCatalog {
-    return this.#catalog;
-  }
-
-  currentSyntax(): TemplateSyntaxRegistry {
-    return this.#syntax;
-  }
-
-  currentSemantics(): MaterializedSemantics {
-    return this.#semantics;
-  }
-
-  currentProjectSnapshot(): ProjectSnapshot {
-    return {
-      semantics: this.#semantics,
-      catalog: this.#catalog,
-      syntax: this.#syntax,
-      resourceGraph: this.#resourceGraph,
-      defaultScope: this.#semantics.defaultScope ?? this.#resourceGraph.root ?? null,
-    };
-  }
-
-  currentFingerprint(): string {
-    return this.#fingerprint;
+    const prevFingerprint = this.#model.fingerprint;
+    this.#model = this.#buildModel();
+    const status = this.#model.fingerprint !== prevFingerprint ? "updated" : "unchanged";
+    this.#logger.info(`[index] refresh ${status} fingerprint=${this.#model.fingerprint}`);
   }
 
   /**
-   * Merge third-party npm resources into the current snapshot.
+   * Merge third-party npm resources into the current model.
    *
-   * Called after async npm analysis completes. Applies resources to
-   * the current discovery result and updates all derived artifacts.
+   * Called after async npm analysis completes. Creates a new model
+   * from the merged discovery result.
    *
-   * @returns true if the overlay changed the snapshot
+   * @returns true if the overlay changed semantic content
    */
   applyThirdPartyOverlay(thirdParty: ThirdPartyDiscoveryResult): boolean {
     const hasResources = hasThirdPartyResources(thirdParty.resources);
     const hasGaps = thirdParty.gaps.length > 0;
     if (!hasResources && !hasGaps) return false;
 
-    const merged = applyThirdPartyResources(this.#discovery, thirdParty.resources, {
+    const merged = applyThirdPartyResources(this.#model.discovery, thirdParty.resources, {
       gaps: thirdParty.gaps,
       confidence: thirdParty.confidence,
     });
 
-    this.#discovery = merged;
-    this.#semantics = {
-      ...merged.semantics,
-      resourceGraph: merged.resourceGraph,
-      defaultScope: this.#defaultScope ?? merged.semantics.defaultScope ?? null,
-    };
-    this.#catalog = merged.catalog;
-    this.#syntax = merged.syntax;
-    this.#resourceGraph = merged.resourceGraph;
-    // Fingerprint stays the same — third-party overlay is additive,
-    // we don't want to trigger a full rebuild cascade for overlays.
-    return true;
+    const prevFingerprint = this.#model.fingerprint;
+    this.#model = createSemanticModel(merged, {
+      defaultScope: this.#defaultScope,
+    });
+    return this.#model.fingerprint !== prevFingerprint;
   }
 
-  #computeSnapshot(): IndexSnapshot {
+  #buildModel(): SemanticModel {
     const program = this.#ts.getProgram();
     const diagnostics = new DiagnosticsRuntime();
     const result = discoverProjectSemantics(
@@ -176,77 +108,8 @@ export class AureliaProjectIndex {
       this.#logger,
     );
 
-    const semantics: MaterializedSemantics = {
-      ...result.semantics,
-      resourceGraph: result.resourceGraph,
-      defaultScope: this.#defaultScope ?? result.semantics.defaultScope ?? null,
-    };
-
-    const fingerprint = hashObject({
-      compilerOptions: normalizeCompilerOptions(this.#ts.compilerOptions()),
-      roots: [...this.#ts.getRootFileNames()].sort(),
-      semantics: stableHashSemantics(semantics),
-      catalog: stableHash(result.catalog),
-      syntax: stableHash(result.syntax),
-      resourceGraph: stableHash(result.resourceGraph),
-      templates: result.templates.map((t) => ({
-        templatePath: t.templatePath,
-        componentPath: t.componentPath,
-        scopeId: t.scopeId,
-        className: t.className,
-        resourceName: t.resourceName,
-      })),
-      inlineTemplates: result.inlineTemplates.map((t) => ({
-        componentPath: t.componentPath,
-        scopeId: t.scopeId,
-        className: t.className,
-        resourceName: t.resourceName,
-        content: t.content,
-      })),
-      diagnostics: result.diagnostics.map((d) => ({
-        code: d.code,
-        message: d.message,
-        severity: d.severity,
-        stage: d.stage ?? null,
-      })),
-      resources: result.definition.authority.map((r) => ({
-        kind: r.kind,
-        name: unwrapSourced(r.name),
-        aliases: resourceAliasesForFingerprint(r),
-        source: r.file,
-        className: unwrapSourced(r.className),
-      })),
+    return createSemanticModel(result, {
+      defaultScope: this.#defaultScope,
     });
-
-    return {
-      discovery: result,
-      semantics,
-      catalog: result.catalog,
-      syntax: result.syntax,
-      resourceGraph: result.resourceGraph,
-      fingerprint,
-    };
   }
-}
-
-
-function resourceAliasesForFingerprint(resource: ResourceDef): string[] {
-  switch (resource.kind) {
-    case "custom-element":
-    case "custom-attribute":
-      return aliasesFromSourcedList(resource.aliases);
-    case "template-controller":
-      return aliasesFromSourcedValue(resource.aliases);
-    default:
-      return [];
-  }
-}
-
-function aliasesFromSourcedList(aliases: readonly Sourced<string>[]): string[] {
-  return aliases.map((alias) => unwrapSourced(alias)).filter((alias): alias is string => !!alias);
-}
-
-function aliasesFromSourcedValue(aliases: Sourced<readonly string[]> | undefined): string[] {
-  const value = aliases ? unwrapSourced(aliases) : undefined;
-  return value ? [...value] : [];
 }

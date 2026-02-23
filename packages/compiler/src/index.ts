@@ -38,6 +38,7 @@ export {
   BUILTIN_SEMANTICS,
   prepareProjectSemantics,
   createSemanticsLookup,
+  createSemanticModel,
   buildResourceCatalog,
   buildResourceGraphFromSemantics,
   materializeResourcesForScope,
@@ -70,6 +71,7 @@ export type {
   ResourceScopeId,
   ResourceCollections,
   ScopedResources,
+  SemanticsLookup,
   SemanticsLookupOptions,
   LocalImportDef,
   ResourceCatalog,
@@ -115,6 +117,10 @@ export type {
   LocalSymbolIdInput,
   BindableSymbolIdInput,
   SymbolId,
+  SemanticModel,
+  SemanticModelQuery,
+  SemanticModelQueryOptions,
+  CreateSemanticModelOptions,
 } from "./schema/index.js";
 
 // Resource definitions (for compiler project-semantics and external tooling)

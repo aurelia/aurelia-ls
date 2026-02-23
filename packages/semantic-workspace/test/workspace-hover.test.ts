@@ -582,7 +582,7 @@ describe("R7: hover provenance from definition authority (workspace-contract)", 
   // survived the definition-authority → engine → hover content seam.
   it("Sourced<T>.origin from definition authority survives to hover content", () => {
     const engine = harness.workspace as SemanticWorkspaceEngine;
-    const authority = engine.projectIndex.currentDiscovery().definition.authority;
+    const authority = engine.projectIndex.currentModel().discovery.definition.authority;
 
     // Find summary-panel in the definition authority
     const summaryDef = authority.find(
@@ -681,7 +681,7 @@ describe("R7: hover provenance from definition authority (workspace-contract)", 
   // and receive provenance augmentation.
   it("convention-based resources get provenance from definition authority", () => {
     const engine = harness.workspace as SemanticWorkspaceEngine;
-    const authority = engine.projectIndex.currentDiscovery().definition.authority;
+    const authority = engine.projectIndex.currentModel().discovery.definition.authority;
 
     // Verify convention-widget is in definition authority
     const conventionDef = authority.find(
@@ -729,7 +729,7 @@ describe("R7: hover provenance from definition authority (workspace-contract)", 
     // but it's used in summary-panel.html, not my-app.html. So we verify
     // by checking the definition authority has entries for controllers.
     const engine = harness.workspace as SemanticWorkspaceEngine;
-    const authority = engine.projectIndex.currentDiscovery().definition.authority;
+    const authority = engine.projectIndex.currentModel().discovery.definition.authority;
     const localControllers = authority.filter((d) => d.kind === "template-controller");
     // At minimum if-not should be there as a locally-defined TC
     expect(localControllers.length).toBeGreaterThan(0);

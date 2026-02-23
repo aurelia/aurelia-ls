@@ -23,7 +23,7 @@
 //
 
 // === Main entry point ===
-export { discoverProjectSemantics, type ProjectSemanticsDiscoveryConfig, type ProjectSemanticsDiscoveryResult, type ProjectSemanticsDiscoveryDiagnostic } from "./resolve.js";
+export { discoverProjectSemantics, type ProjectSemanticsDiscoveryConfig, type ProjectSemanticsDiscoveryResult, type ProjectSemanticsDiscoveryDiagnostic, type ProjectSemanticsDefinitionChannels } from "./resolve.js";
 export type { TemplateInfo, InlineTemplateInfo } from "./templates/types.js";
 export {
   DISCOVERY_STAGES,
