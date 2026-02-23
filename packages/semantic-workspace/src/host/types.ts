@@ -28,6 +28,10 @@ export type SemanticAuthorityConfidence =
   | "low"
   | "unknown";
 
+export type SemanticAuthorityUnknownReason =
+  | "non-symbol-position"
+  | "unresolved-authority";
+
 export interface SemanticAuthorityGap {
   readonly what: string;
   readonly why: string;
@@ -38,6 +42,7 @@ export interface SemanticAuthorityEpistemic {
   readonly confidence: SemanticAuthorityConfidence;
   readonly gaps: readonly SemanticAuthorityGap[];
   readonly provenanceRefs: readonly string[];
+  readonly unknownReason?: SemanticAuthorityUnknownReason;
 }
 
 export interface HostCacheMeta {

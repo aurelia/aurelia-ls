@@ -62,19 +62,86 @@ describe("semantic-authority host runtime", () => {
       args: { sessionId, uri: appUri, text: appText },
     } satisfies SemanticAuthorityCommandInvocation<"doc.open">);
 
+    const position = findPosition(appText, "<section", 1);
     const hover = await host.execute({
       command: "query.hover",
       args: {
         sessionId,
         uri: appUri,
-        position: findPosition(appText, "<section", 1),
+        position,
       },
     } satisfies SemanticAuthorityCommandInvocation<"query.hover">);
 
     expect(hover.status).toBe("ok");
     expect(hover.result.hover).toBeNull();
     expect(hover.epistemic.confidence).toBe("unknown");
+    expect(hover.epistemic.unknownReason).toBe("non-symbol-position");
+    expect(hover.epistemic.gaps.length).toBeGreaterThan(0);
+    expect(hover.epistemic.gaps[0]?.howToClose).toContain("Move the position");
     expect(hover.epistemic.provenanceRefs).toEqual([]);
+
+    const navigation = await host.execute({
+      command: "query.navigation",
+      args: {
+        sessionId,
+        uri: appUri,
+        position,
+        mode: "definition",
+      },
+    } satisfies SemanticAuthorityCommandInvocation<"query.navigation">);
+
+    expect(navigation.status).toBe("ok");
+    expect(navigation.result.locations).toEqual([]);
+    expect(navigation.epistemic.confidence).toBe("unknown");
+    expect(navigation.epistemic.unknownReason).toBe("non-symbol-position");
+    expect(navigation.epistemic.gaps[0]?.howToClose).toContain("Move the position");
+  });
+
+  it("classifies unknown confidence as unresolved-authority when diagnostics overlap query position", async () => {
+    const host = createHost();
+    const sessionId = await openSession(host);
+    const withUnknownElement = appText.replace(
+      "  <summary-panel",
+      "  <unknown-widget></unknown-widget>\n  <summary-panel",
+    );
+
+    await host.execute({
+      command: "doc.open",
+      args: { sessionId, uri: appUri, text: withUnknownElement },
+    } satisfies SemanticAuthorityCommandInvocation<"doc.open">);
+
+    const hover = await host.execute({
+      command: "query.hover",
+      args: {
+        sessionId,
+        uri: appUri,
+        position: findPosition(withUnknownElement, "<unknown-widget", 1),
+      },
+    } satisfies SemanticAuthorityCommandInvocation<"query.hover">);
+
+    expect(hover.status).toBe("ok");
+    expect(hover.result.hover).toBeNull();
+    expect(hover.epistemic.confidence).toBe("unknown");
+    expect(hover.epistemic.unknownReason).toBe("unresolved-authority");
+    expect(hover.epistemic.gaps.length).toBeGreaterThan(0);
+    expect(hover.epistemic.gaps[0]?.why).toContain("aurelia/unknown-");
+    expect(hover.epistemic.gaps[0]?.howToClose).toContain("declaration/registration");
+
+    const navigation = await host.execute({
+      command: "query.navigation",
+      args: {
+        sessionId,
+        uri: appUri,
+        position: findPosition(withUnknownElement, "<unknown-widget", 1),
+        mode: "definition",
+      },
+    } satisfies SemanticAuthorityCommandInvocation<"query.navigation">);
+
+    expect(navigation.status).toBe("ok");
+    expect(navigation.result.locations).toEqual([]);
+    expect(navigation.epistemic.confidence).toBe("unknown");
+    expect(navigation.epistemic.unknownReason).toBe("unresolved-authority");
+    expect(navigation.epistemic.gaps[0]?.why).toContain("aurelia/unknown-");
   });
 
   it("runs pressure scenario and replays without divergence", async () => {

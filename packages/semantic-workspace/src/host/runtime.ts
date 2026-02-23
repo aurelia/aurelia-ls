@@ -1,4 +1,4 @@
-import { canonicalDocumentUri, type Logger } from "@aurelia-ls/compiler";
+import { canonicalDocumentUri, type DocumentUri, type Logger } from "@aurelia-ls/compiler";
 import { HostReplayLog, hashEnvelopeForReplay } from "./replay-log.js";
 import { runPressureSweep } from "./pressure-sweep.js";
 import { HostSessionManager, type HostSessionState, type HostWorkspaceFactory } from "./session-manager.js";
@@ -31,6 +31,7 @@ import type {
   SemanticAuthorityEpistemic,
   SemanticAuthorityError,
   SemanticAuthorityGap,
+  SemanticAuthorityUnknownReason,
   SemanticAuthorityParityAdapter,
   SemanticAuthorityPolicyProfile,
   SerializableWorkspaceDiagnostics,
@@ -59,6 +60,11 @@ interface CommandOutcome {
   readonly touchedDocumentCount?: number;
   readonly errors?: readonly SemanticAuthorityError[];
   readonly epistemic?: Partial<SemanticAuthorityEpistemic>;
+}
+
+interface UnknownConfidenceClassification {
+  readonly reason: SemanticAuthorityUnknownReason;
+  readonly gap: SemanticAuthorityGap;
 }
 
 export interface HostExecuteOptions {
@@ -361,6 +367,15 @@ export class SemanticAuthorityHostRuntime {
     const items = session.workspace.query(uri).completions(request.position);
     const confidence = completionsConfidence(items);
     const result = { items, isIncomplete: confidence === "partial" || confidence === "low" };
+    if (confidence === "unknown") {
+      const classification = classifyUnknownConfidence(session, uri, request.position, "completions");
+      return ok(session, result, {
+        cache: { hit: true, tier: "warm" },
+        confidence,
+        gaps: [classification.gap],
+        unknownReason: classification.reason,
+      });
+    }
     if (result.isIncomplete) {
       return degraded(
         session.id,
@@ -390,9 +405,12 @@ export class SemanticAuthorityHostRuntime {
       }], { confidence, provenanceRefs });
     }
     if (!hover) {
+      const classification = classifyUnknownConfidence(session, uri, request.position, "hover");
       return ok(session, { hover }, {
         cache: { hit: true, tier: "warm" },
         confidence: "unknown",
+        gaps: [classification.gap],
+        unknownReason: classification.reason,
       });
     }
     return ok(session, { hover }, {
@@ -425,9 +443,18 @@ export class SemanticAuthorityHostRuntime {
     const locations = request.mode === "definition"
       ? query.definition(request.position)
       : query.references(request.position);
+    if (locations.length === 0) {
+      const classification = classifyUnknownConfidence(session, uri, request.position, "navigation");
+      return ok(session, { mode: request.mode, locations }, {
+        cache: { hit: true, tier: "warm" },
+        confidence: "unknown",
+        gaps: [classification.gap],
+        unknownReason: classification.reason,
+      });
+    }
     return ok(session, { mode: request.mode, locations }, {
       cache: { hit: true, tier: "warm" },
-      confidence: locations.length > 0 ? "high" : "unknown",
+      confidence: "high",
       provenanceRefs: locations.slice(0, 20).map((loc) => locationRef(loc.uri, loc.span.start, loc.span.end)),
     });
   }
@@ -736,6 +763,8 @@ function ok(
     touchedDocumentCount?: number;
     confidence: SemanticAuthorityConfidence;
     provenanceRefs?: readonly string[];
+    gaps?: readonly SemanticAuthorityGap[];
+    unknownReason?: SemanticAuthorityUnknownReason;
   },
 ): CommandOutcome {
   return {
@@ -749,8 +778,9 @@ function ok(
     touchedDocumentCount: options.touchedDocumentCount ?? 0,
     epistemic: {
       confidence: options.confidence,
-      gaps: [],
+      gaps: options.gaps ?? [],
       provenanceRefs: options.provenanceRefs ?? [],
+      ...(options.unknownReason ? { unknownReason: options.unknownReason } : {}),
     },
   };
 }
@@ -763,6 +793,7 @@ function degraded(
   options: {
     confidence?: SemanticAuthorityConfidence;
     provenanceRefs?: readonly string[];
+    unknownReason?: SemanticAuthorityUnknownReason;
   } = {},
 ): CommandOutcome {
   return {
@@ -774,6 +805,7 @@ function degraded(
       confidence: options.confidence ?? "partial",
       gaps,
       provenanceRefs: options.provenanceRefs ?? [],
+      ...(options.unknownReason ? { unknownReason: options.unknownReason } : {}),
     },
   };
 }
@@ -793,6 +825,9 @@ function mergeEpistemic(
     confidence: partial.confidence ?? base.confidence,
     gaps: partial.gaps ?? base.gaps,
     provenanceRefs: partial.provenanceRefs ?? base.provenanceRefs,
+    ...(partial.unknownReason ?? base.unknownReason
+      ? { unknownReason: partial.unknownReason ?? base.unknownReason }
+      : {}),
   };
 }
 
@@ -864,6 +899,104 @@ function completionGap(
     why: `${itemCount} completion items were returned with ${confidence} confidence.`,
     howToClose: "Add explicit declarations and registrations so completion sources converge.",
   };
+}
+
+function classifyUnknownConfidence(
+  session: HostSessionState,
+  uri: DocumentUri,
+  position: { line: number; character: number },
+  surface: "completions" | "hover" | "navigation",
+): UnknownConfidenceClassification {
+  const text = session.workspace.lookupText(uri);
+  const offset = text ? toOffset(text, position) : null;
+  if (offset !== null) {
+    const code = findUnresolvedDiagnosticCodeAtOffset(session.workspace.diagnostics(uri), offset);
+    if (code) {
+      return {
+        reason: "unresolved-authority",
+        gap: {
+          what: `${surfaceLabel(surface)} authority unresolved at position`,
+          why: `Diagnostic '${code}' overlaps the queried position and indicates unresolved semantic authority.`,
+          howToClose: "Add or repair the missing declaration/registration so semantic authority can resolve this position.",
+        },
+      };
+    }
+  }
+  return {
+    reason: "non-symbol-position",
+    gap: {
+      what: `${surfaceLabel(surface)} has no semantic subject at position`,
+      why: "The queried cursor location does not map to a resolvable semantic symbol.",
+      howToClose: "Move the position to a symbol-bearing token or expression and retry the query.",
+    },
+  };
+}
+
+function findUnresolvedDiagnosticCodeAtOffset(
+  diagnostics: ReturnType<HostSessionState["workspace"]["diagnostics"]>,
+  offset: number,
+): string | null {
+  for (const bucket of diagnostics.bySurface.values()) {
+    const code = findUnresolvedDiagnosticCodeInBucket(bucket, offset);
+    if (code) return code;
+  }
+  return findUnresolvedDiagnosticCodeInBucket(diagnostics.suppressed, offset);
+}
+
+function findUnresolvedDiagnosticCodeInBucket(
+  diagnostics: readonly { code?: unknown; span?: { start: number; end: number } }[],
+  offset: number,
+): string | null {
+  for (const diagnostic of diagnostics) {
+    const code = typeof diagnostic.code === "string" ? diagnostic.code : null;
+    if (!code || !isUnresolvedAuthorityCode(code)) continue;
+    const span = diagnostic.span;
+    if (!span) continue;
+    if (offset >= span.start && offset <= span.end) {
+      return code;
+    }
+  }
+  return null;
+}
+
+function isUnresolvedAuthorityCode(code: string): boolean {
+  return code.startsWith("aurelia/unknown-")
+    || code.startsWith("aurelia/gap/");
+}
+
+function toOffset(
+  text: string,
+  position: { line: number; character: number },
+): number | null {
+  if (position.line < 0 || position.character < 0) return null;
+  let line = 0;
+  let offset = 0;
+  while (line < position.line) {
+    if (offset >= text.length) return null;
+    const code = text.charCodeAt(offset);
+    offset += 1;
+    if (code === 10) {
+      line += 1;
+    }
+  }
+  let character = 0;
+  while (character < position.character) {
+    if (offset >= text.length) return null;
+    const code = text.charCodeAt(offset);
+    if (code === 10 || code === 13) return null;
+    offset += 1;
+    character += 1;
+  }
+  return offset;
+}
+
+function surfaceLabel(surface: "completions" | "hover" | "navigation"): string {
+  switch (surface) {
+    case "completions": return "Completion";
+    case "hover": return "Hover";
+    case "navigation": return "Navigation";
+    default: return assertNever(surface);
+  }
 }
 
 function rollupSweepStatuses(
