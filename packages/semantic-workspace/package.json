@@ -12,7 +12,8 @@
     }
   },
   "bin": {
-    "aurelia-inspect": "./out/bin/aurelia-inspect.js"
+    "aurelia-inspect": "./out/bin/aurelia-inspect.js",
+    "semantic-authority-host": "./out/bin/semantic-authority-host.js"
   },
   "scripts": {
     "build": "tsc -b"

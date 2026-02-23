@@ -12,3 +12,4 @@ export * from "./typescript/project.js";
 export * from "./typescript/ts-service.js";
 export * from "./typescript/typescript-services.js";
 export * from "./typescript/vm-reflection.js";
+export * from "./host/index.js";
