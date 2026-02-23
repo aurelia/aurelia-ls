@@ -58,6 +58,12 @@ export class OverlayFs {
     return Array.from(this.#files.keys());
   }
 
+  clear(): void {
+    this.#files.clear();
+    this.#scriptRoots.clear();
+    this.#baseRoots.clear();
+  }
+
   fileExists(file: string): boolean {
     const key = this.#paths.canonical(file);
     return this.#files.has(key) || fs.existsSync(file);

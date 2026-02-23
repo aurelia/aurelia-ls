@@ -255,7 +255,11 @@ export class SemanticAuthorityHostRuntime {
       workspaceFingerprint: this.#sessions.workspaceFingerprint(session),
       profile: session.profile,
       openDocumentCount: session.documents.size,
-    }, { cache: { hit: false, tier: "cold" }, invalidation: { kind: "project", count: 1 }, confidence: "high" });
+    }, {
+      cache: { hit: session.workspaceCacheHit, tier: session.workspaceCacheHit ? "warm" : "cold" },
+      invalidation: { kind: "project", count: 1 },
+      confidence: "high",
+    });
   }
 
   #sessionRefresh(args: SessionRefreshArgs): CommandOutcome {

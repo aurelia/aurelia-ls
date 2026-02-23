@@ -56,6 +56,49 @@ describe("semantic-authority host runtime", () => {
     expect(response.result.sessionId).toMatch(/^session-/);
   });
 
+  it("reuses cached workspace authority across sequential sessions", async () => {
+    const host = createHost();
+    const first = await host.execute({
+      command: "session.open",
+      args: {
+        workspaceRoot: fixtureRoot,
+        policy: { profile: "ai.product" },
+      },
+    } satisfies SemanticAuthorityCommandInvocation<"session.open">);
+
+    expect(first.status).toBe("ok");
+    expect(first.meta.cache.hit).toBe(false);
+    expect(first.meta.cache.tier).toBe("cold");
+
+    const closedFirst = await host.execute({
+      command: "session.close",
+      args: { sessionId: first.result.sessionId },
+    } satisfies SemanticAuthorityCommandInvocation<"session.close">);
+
+    expect(closedFirst.status).toBe("ok");
+    expect(closedFirst.result.closed).toBe(true);
+
+    const second = await host.execute({
+      command: "session.open",
+      args: {
+        workspaceRoot: fixtureRoot,
+        policy: { profile: "ai.product" },
+      },
+    } satisfies SemanticAuthorityCommandInvocation<"session.open">);
+
+    expect(second.status).toBe("ok");
+    expect(second.meta.cache.hit).toBe(true);
+    expect(second.meta.cache.tier).toBe("warm");
+
+    const closedSecond = await host.execute({
+      command: "session.close",
+      args: { sessionId: second.result.sessionId },
+    } satisfies SemanticAuthorityCommandInvocation<"session.close">);
+
+    expect(closedSecond.status).toBe("ok");
+    expect(closedSecond.result.closed).toBe(true);
+  });
+
   it("reports unknown confidence when hover has no semantic match", async () => {
     const host = createHost();
     const sessionId = await openSession(host);

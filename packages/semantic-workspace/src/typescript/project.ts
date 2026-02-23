@@ -12,6 +12,7 @@ export interface TypeScriptProject {
   getProjectVersion(): number;
   configure?(options: TypeScriptProjectOptions): void;
   invalidate?(reason?: string): void;
+  dispose?(): void;
 }
 
 export interface TypeScriptProjectOptions {
@@ -74,6 +75,13 @@ export class ProjectProgram implements TypeScriptProject {
     this.#program = null;
     this.#projectVersion++;
     this.#logger.log(`[ts-project] invalidated${reason ? ` (${reason})` : ""} version=${this.#projectVersion}`);
+  }
+
+  dispose(): void {
+    this.#program = null;
+    this.#rootFileNames = [];
+    this.#configPath = null;
+    this.#configFingerprint = "";
   }
 
   getProgram(): ts.Program {

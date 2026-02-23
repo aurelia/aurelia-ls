@@ -37,6 +37,8 @@ export interface HostSessionState {
   readonly workspaceRoot: string;
   readonly tsconfigPath: string | null;
   readonly configFileName: string | null;
+  readonly workspaceKey: string;
+  readonly workspaceCacheHit: boolean;
   readonly workspace: SemanticWorkspaceEngine;
   readonly documents: Map<DocumentUri, HostOpenDocumentState>;
   nextCommandSequence: number;
@@ -46,13 +48,17 @@ export interface HostSessionManagerOptions {
   readonly logger?: Logger;
   readonly defaultWorkspaceRoot?: string;
   readonly workspaceFactory?: HostWorkspaceFactory;
+  readonly maxIdleWorkspaces?: number;
 }
 
 export class HostSessionManager {
   readonly #logger: Logger;
   readonly #workspaceFactory: HostWorkspaceFactory;
   readonly #defaultWorkspaceRoot: string | null;
+  readonly #maxIdleWorkspaces: number;
   readonly #sessions = new Map<string, HostSessionState>();
+  readonly #idleWorkspaces = new Map<string, SemanticWorkspaceEngine>();
+  readonly #idleWorkspaceOrder: string[] = [];
   #sessionSequence = 0;
 
   constructor(options: HostSessionManagerOptions = {}) {
@@ -61,6 +67,7 @@ export class HostSessionManager {
     this.#defaultWorkspaceRoot = options.defaultWorkspaceRoot
       ? path.resolve(options.defaultWorkspaceRoot)
       : null;
+    this.#maxIdleWorkspaces = normalizeMaxIdleWorkspaces(options.maxIdleWorkspaces);
   }
 
   open(args: SessionOpenArgs): HostSessionState {
@@ -72,19 +79,49 @@ export class HostSessionManager {
     const workspaceRoot = path.resolve(
       args.workspaceRoot ?? this.#defaultWorkspaceRoot ?? process.cwd(),
     );
-    const workspace = this.#workspaceFactory({
+    const tsconfigPath = args.tsconfigPath ?? null;
+    const configFileName = args.configFileName ?? null;
+    const workspaceKey = stableHash({
+      workspaceRoot,
+      tsconfigPath: resolveTsconfigPath(workspaceRoot, tsconfigPath),
+      configFileName,
+    });
+    const workspaceFactoryOptions: HostWorkspaceFactoryOptions = {
       logger: this.#logger,
       workspaceRoot,
-      tsconfigPath: args.tsconfigPath ?? null,
-      configFileName: args.configFileName,
-    });
+      tsconfigPath,
+      ...(configFileName ? { configFileName } : {}),
+    };
+
+    let workspaceCacheHit = false;
+    let workspace = this.#acquireWorkspace(workspaceKey);
+    if (workspace) {
+      workspaceCacheHit = true;
+      try {
+        // Reused workspaces stay incrementally warm; callers can still request
+        // an explicit session.refresh when they need a full external resync.
+        workspace.refresh({ force: false });
+      } catch (error) {
+        this.#logger.warn(
+          `[host.session] failed to refresh cached workspace; rebuilding (${String(error)})`,
+        );
+        disposeWorkspace(workspace, this.#logger);
+        workspace = this.#workspaceFactory(workspaceFactoryOptions);
+        workspaceCacheHit = false;
+      }
+    } else {
+      workspace = this.#workspaceFactory(workspaceFactoryOptions);
+    }
+
     const profile = args.policy?.profile ?? "tooling";
     const session: HostSessionState = {
       id: sessionId,
       profile,
       workspaceRoot,
-      tsconfigPath: args.tsconfigPath ?? null,
-      configFileName: args.configFileName ?? null,
+      tsconfigPath,
+      configFileName,
+      workspaceKey,
+      workspaceCacheHit,
       workspace,
       documents: new Map(),
       nextCommandSequence: 1,
@@ -107,7 +144,24 @@ export class HostSessionManager {
   }
 
   close(sessionId: string): boolean {
-    return this.#sessions.delete(sessionId);
+    const session = this.#sessions.get(sessionId);
+    if (!session) {
+      return false;
+    }
+
+    for (const { uri } of session.documents.values()) {
+      try {
+        session.workspace.close(uri);
+      } catch (error) {
+        this.#logger.warn(
+          `[host.session] failed to close document during session teardown (${uri}): ${String(error)}`,
+        );
+      }
+    }
+    session.documents.clear();
+    this.#sessions.delete(sessionId);
+    this.#releaseWorkspace(session.workspaceKey, session.workspace);
+    return true;
   }
 
   nextCommandId(sessionId: string): string {
@@ -173,6 +227,61 @@ export class HostSessionManager {
     this.#sessionSequence += 1;
     return `session-${String(this.#sessionSequence).padStart(4, "0")}`;
   }
+
+  #acquireWorkspace(
+    workspaceKey: string,
+  ): SemanticWorkspaceEngine | null {
+    const cached = this.#idleWorkspaces.get(workspaceKey);
+    if (cached) {
+      this.#idleWorkspaces.delete(workspaceKey);
+      this.#removeIdleWorkspaceOrderKey(workspaceKey);
+      return cached;
+    }
+    return null;
+  }
+
+  #releaseWorkspace(
+    workspaceKey: string,
+    workspace: SemanticWorkspaceEngine,
+  ): void {
+    if (this.#maxIdleWorkspaces <= 0) {
+      disposeWorkspace(workspace, this.#logger);
+      return;
+    }
+
+    const existing = this.#idleWorkspaces.get(workspaceKey);
+    if (existing) {
+      this.#idleWorkspaces.delete(workspaceKey);
+      this.#removeIdleWorkspaceOrderKey(workspaceKey);
+      disposeWorkspace(existing, this.#logger);
+    }
+    this.#idleWorkspaces.set(workspaceKey, workspace);
+    this.#idleWorkspaceOrder.push(workspaceKey);
+    this.#trimIdleWorkspaces();
+  }
+
+  #trimIdleWorkspaces(): void {
+    while (this.#idleWorkspaces.size > this.#maxIdleWorkspaces) {
+      const evictedKey = this.#idleWorkspaceOrder.shift();
+      if (!evictedKey) {
+        break;
+      }
+      const evicted = this.#idleWorkspaces.get(evictedKey);
+      if (!evicted) {
+        continue;
+      }
+      this.#idleWorkspaces.delete(evictedKey);
+      disposeWorkspace(evicted, this.#logger);
+    }
+  }
+
+  #removeIdleWorkspaceOrderKey(workspaceKey: string): void {
+    let index = this.#idleWorkspaceOrder.indexOf(workspaceKey);
+    while (index !== -1) {
+      this.#idleWorkspaceOrder.splice(index, 1);
+      index = this.#idleWorkspaceOrder.indexOf(workspaceKey);
+    }
+  }
 }
 
 function defaultWorkspaceFactory(
@@ -184,4 +293,38 @@ function defaultWorkspaceFactory(
     tsconfigPath: options.tsconfigPath ?? null,
     configFileName: options.configFileName,
   });
+}
+
+function normalizeMaxIdleWorkspaces(value: number | undefined): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return 1;
+  }
+  return Math.max(0, Math.floor(value));
+}
+
+function resolveTsconfigPath(
+  workspaceRoot: string,
+  tsconfigPath: string | null,
+): string | null {
+  if (!tsconfigPath) {
+    return null;
+  }
+  return path.isAbsolute(tsconfigPath)
+    ? path.resolve(tsconfigPath)
+    : path.resolve(workspaceRoot, tsconfigPath);
+}
+
+function disposeWorkspace(
+  workspace: SemanticWorkspaceEngine,
+  logger: Logger,
+): void {
+  const candidate = workspace as SemanticWorkspaceEngine & { dispose?: () => void };
+  if (typeof candidate.dispose !== "function") {
+    return;
+  }
+  try {
+    candidate.dispose();
+  } catch (error) {
+    logger.warn(`[host.session] workspace dispose failed (${String(error)})`);
+  }
 }

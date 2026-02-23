@@ -103,6 +103,17 @@ export class TsService {
     return this.#projectVersion;
   }
 
+  dispose(): void {
+    try {
+      this.#service.dispose();
+    } catch {
+      // best-effort cleanup
+    }
+    this.#overlay.clear();
+    this.#rootFileNames = [];
+    this.#configPath = null;
+  }
+
   forceOverlaySourceFile(overlayPath: string): ts.SourceFile | undefined {
     const target = this.#paths.canonical(overlayPath);
     try {

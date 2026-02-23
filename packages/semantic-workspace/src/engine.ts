@@ -171,6 +171,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
   readonly #refactorOverrides: RefactorOverrides | null;
   readonly #refactorPolicy: RefactorPolicy;
   readonly #refactorDecisions: RefactorDecisionSet | null;
+  #disposed = false;
 
   constructor(options: SemanticWorkspaceEngineOptions) {
     this.#logger = options.logger;
@@ -364,6 +365,24 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     const canonical = canonicalDocumentUri(uri);
     this.#kernel.close(canonical.uri);
     this.#deactivateTemplate();
+  }
+
+  dispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
+
+    for (const snapshot of this.#kernel.sources.all()) {
+      try {
+        this.#kernel.close(snapshot.uri);
+      } catch {
+        // best-effort teardown
+      }
+    }
+    this.#resourceReferenceIndex = null;
+    this.#diagnosticsCache = null;
+    this.#componentHashes.clear();
+    this.#deactivateTemplate();
+    this.#env.dispose();
   }
 
   snapshot(): WorkspaceSnapshot {

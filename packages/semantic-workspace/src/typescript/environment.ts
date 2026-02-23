@@ -14,6 +14,7 @@ export interface TypeScriptEnvironment {
   readonly typescript: TypeScriptServices;
   readonly vmReflection: VmReflectionService;
   readonly project: TypeScriptProject;
+  dispose(): void;
 }
 
 export interface TypeScriptEnvironmentOptions extends TsServiceConfig {
@@ -40,5 +41,17 @@ export function createTypeScriptEnvironment(options: TypeScriptEnvironmentOption
   }
   const typescript = new TsServicesAdapter(tsService, paths);
   const vmReflection = new VmReflectionService(tsService, paths, options.logger);
-  return { paths, overlayFs, tsService, typescript, vmReflection, project };
+  return {
+    paths,
+    overlayFs,
+    tsService,
+    typescript,
+    vmReflection,
+    project,
+    dispose: () => {
+      tsService.dispose();
+      project.dispose?.();
+      overlayFs.clear();
+    },
+  };
 }
