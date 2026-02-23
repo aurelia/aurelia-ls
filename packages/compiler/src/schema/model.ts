@@ -22,6 +22,8 @@ import type {
   SemanticsLookupOptions,
   LocalImportDef,
   ResourceKind,
+  SemanticSnapshot,
+  ApiSurfaceSnapshot,
 } from "./types.js";
 import type { ProjectSnapshot } from "./snapshot.js";
 import { buildProjectSnapshot } from "./snapshot.js";
@@ -129,11 +131,15 @@ export interface SemanticModelQuery extends SemanticsLookup {
   /** Inline templates discovered by the pipeline */
   readonly inlineTemplates: readonly InlineTemplateInfo[];
   /** Definition channels (authority/evidence/convergence) */
-  readonly definitions: ProjectSemanticsDefinitionChannels;
+  readonly definition: ProjectSemanticsDefinitionChannels;
   /** Per-file extracted facts */
   readonly facts: ReadonlyMap<NormalizedPath, FileFacts>;
   /** Diagnostics from project-semantics discovery */
   readonly discoveryDiagnostics: readonly ProjectSemanticsDiscoveryDiagnostic[];
+  /** Semantic symbol snapshot for symbol ID resolution */
+  readonly semanticSnapshot: SemanticSnapshot;
+  /** API surface snapshot for workspace-level introspection */
+  readonly apiSurfaceSnapshot: ApiSurfaceSnapshot;
   /** Get the ProjectSnapshot (optimization-only projection) */
   snapshot(): ProjectSnapshot;
 }
@@ -230,9 +236,11 @@ function createModelQuery(
     syntax: model.syntax,
     templates: model.discovery.templates,
     inlineTemplates: model.discovery.inlineTemplates,
-    definitions: model.discovery.definition,
+    definition: model.discovery.definition,
     facts: model.discovery.facts,
     discoveryDiagnostics: model.discovery.diagnostics,
+    semanticSnapshot: model.discovery.semanticSnapshot,
+    apiSurfaceSnapshot: model.discovery.apiSurfaceSnapshot,
 
     snapshot(): ProjectSnapshot {
       return model.snapshot();

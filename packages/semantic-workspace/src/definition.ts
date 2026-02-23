@@ -27,7 +27,10 @@ import {
   type DocumentUri,
   type TemplateSyntaxRegistry,
 } from "@aurelia-ls/compiler";
-import type { ProjectSemanticsDiscoveryResult } from "@aurelia-ls/compiler";
+import type {
+  ProjectSemanticsDefinitionChannels,
+  SemanticSnapshot,
+} from "@aurelia-ls/compiler";
 import type { WorkspaceLocation } from "./types.js";
 import { selectResourceCandidate } from "./resource-precedence-policy.js";
 import { buildDomIndex, elementTagSpanAtOffset, elementTagSpans, findDomNode } from "./template-dom.js";
@@ -62,8 +65,11 @@ type AttributeSyntaxContext = {
   parser: AttributeParser;
 };
 
-export function buildResourceDefinitionIndex(discovery: ProjectSemanticsDiscoveryResult): ResourceDefinitionIndex {
-  const symbols = buildSymbolIdMap(discovery);
+export function buildResourceDefinitionIndex(source: {
+  readonly definition: ProjectSemanticsDefinitionChannels;
+  readonly semanticSnapshot: SemanticSnapshot;
+}): ResourceDefinitionIndex {
+  const symbols = buildSymbolIdMap(source.semanticSnapshot);
   const elements = new Map<string, ResourceDefinitionEntry[]>();
   const attributes = new Map<string, ResourceDefinitionEntry[]>();
   const controllers = new Map<string, ResourceDefinitionEntry[]>();
@@ -71,7 +77,7 @@ export function buildResourceDefinitionIndex(discovery: ProjectSemanticsDiscover
   const bindingBehaviors = new Map<string, ResourceDefinitionEntry[]>();
   const bySymbolId = new Map<SymbolId, ResourceDefinitionEntry>();
 
-  for (const def of discovery.definition.authority) {
+  for (const def of source.definition.authority) {
     const name = unwrapSourced(def.name);
     if (!name) continue;
     const entry: ResourceDefinitionEntry = {
@@ -537,9 +543,9 @@ export function findEntry(
   });
 }
 
-function buildSymbolIdMap(discovery: ProjectSemanticsDiscoveryResult): Map<string, SymbolId> {
+function buildSymbolIdMap(snapshot: SemanticSnapshot): Map<string, SymbolId> {
   const map = new Map<string, SymbolId>();
-  for (const symbol of discovery.semanticSnapshot.symbols) {
+  for (const symbol of snapshot.symbols) {
     const key = symbolKey(symbol.kind, symbol.name, symbol.source ?? null);
     if (!map.has(key)) map.set(key, symbol.id);
   }

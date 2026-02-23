@@ -40,6 +40,7 @@ import {
   type SymbolId,
   type StyleProfile,
   type SemanticModel,
+  type SemanticModelQuery,
 } from "@aurelia-ls/compiler";
 import {
   createNodeFileSystem,
@@ -152,7 +153,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
   readonly #env: TypeScriptEnvironment;
   readonly #kernel: SemanticWorkspaceKernel;
   readonly #projectIndex: AureliaProjectIndex;
-  #model: SemanticModel;
+  #query: SemanticModelQuery;
   readonly #refactorProxy: RefactorEngine;
   readonly #lookupText?: (uri: DocumentUri) => string | null;
   readonly #typescript?: TypeScriptServices;
@@ -211,14 +212,14 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     this.#refactorDecisions = options.refactorDecisions ?? null;
 
     this.#lookupText = options.lookupText;
-    this.#model = this.#projectIndex.currentModel();
-    this.#templateIndex = buildTemplateIndex(this.#model.discovery);
-    this.#definitionIndex = buildResourceDefinitionIndex(this.#model.discovery);
+    this.#query = this.#projectIndex.currentModel().query();
+    this.#templateIndex = buildTemplateIndex(this.#query);
+    this.#definitionIndex = buildResourceDefinitionIndex(this.#query);
 
     this.#kernel = createSemanticWorkspaceKernel({
       program: this.#programOptions(this.#vm, this.#isJs, this.#overlayBaseName),
       ...(this.#typescript ? { language: { typescript: this.#typescript } } : {}),
-      fingerprint: this.#model.fingerprint,
+      fingerprint: this.#query.model.fingerprint,
       lookupText: (uri) => this.#lookupText?.(uri) ?? null,
     });
 
@@ -253,15 +254,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       const applied = this.#projectIndex.applyThirdPartyOverlay(thirdPartyResult);
       if (applied) {
         this.#logger.info("[workspace] Third-party overlay applied, refreshing workspace");
-        this.#model = this.#projectIndex.currentModel();
-        this.#templateIndex = buildTemplateIndex(this.#model.discovery);
-        this.#definitionIndex = buildResourceDefinitionIndex(this.#model.discovery);
-        this.#resourceReferenceIndex = null;
-        this.#kernel.reconfigure({
-          program: this.#programOptions(this.#vm, this.#isJs, this.#overlayBaseName),
-          fingerprint: this.#model.fingerprint,
-          lookupText: (uri) => this.#lookupText?.(uri) ?? null,
-        });
+        this.#rebuildFromModel(this.#projectIndex.currentModel());
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -288,19 +281,8 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     }
 
     this.#projectIndex.refresh();
-    this.#model = this.#projectIndex.currentModel();
     this.#projectVersion = version;
-    this.#templateIndex = buildTemplateIndex(this.#model.discovery);
-    this.#definitionIndex = buildResourceDefinitionIndex(this.#model.discovery);
-    this.#resourceReferenceIndex = null;
-    // kernel.reconfigure() → updateOptions() handles per-template invalidation
-    // through dependency fingerprint comparison — no pre-emptive file-hash
-    // invalidation needed.
-    this.#kernel.reconfigure({
-      program: this.#programOptions(this.#vm, this.#isJs, this.#overlayBaseName),
-      fingerprint: this.#model.fingerprint,
-      lookupText: (uri) => this.#lookupText?.(uri) ?? null,
-    });
+    this.#rebuildFromModel(this.#projectIndex.currentModel());
     return true;
   }
 
@@ -336,10 +318,10 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     this.#resourceReferenceIndex = null;
     // Refresh model from project index in case it was mutated externally
     // (e.g., applyThirdPartyOverlay called directly on projectIndex).
-    this.#model = this.#projectIndex.currentModel();
+    this.#query = this.#projectIndex.currentModel().query();
     return this.#kernel.reconfigure({
       program: this.#programOptions(this.#vm, this.#isJs, this.#overlayBaseName),
-      fingerprint: this.#model.fingerprint,
+      fingerprint: this.#query.model.fingerprint,
       lookupText: (uri) => this.#lookupText?.(uri) ?? null,
     });
   }
@@ -385,8 +367,8 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     const base = this.#kernel.snapshot();
     return {
       ...base,
-      semanticSnapshot: this.#model.discovery.semanticSnapshot,
-      apiSurface: this.#model.discovery.apiSurfaceSnapshot,
+      semanticSnapshot: this.#query.semanticSnapshot,
+      apiSurface: this.#query.apiSurfaceSnapshot,
     };
   }
 
@@ -683,6 +665,27 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     return this.#kernel.getCacheStats(target);
   }
 
+  /**
+   * Rebuild all derived state from a new SemanticModel.
+   *
+   * Centralizes the model → query → derived indexes → kernel reconfigure flow.
+   * Called on refresh, third-party overlay, and any other model replacement.
+   */
+  #rebuildFromModel(model: SemanticModel): void {
+    const query = model.query();
+    this.#query = query;
+    this.#templateIndex = buildTemplateIndex(query);
+    this.#definitionIndex = buildResourceDefinitionIndex(query);
+    this.#resourceReferenceIndex = null;
+    // kernel.reconfigure() → updateOptions() handles per-template invalidation
+    // through dependency fingerprint comparison.
+    this.#kernel.reconfigure({
+      program: this.#programOptions(this.#vm, this.#isJs, this.#overlayBaseName),
+      fingerprint: query.model.fingerprint,
+      lookupText: (uri) => this.#lookupText?.(uri) ?? null,
+    });
+  }
+
   #ensurePrelude(root: string): void {
     const preludePath = path.join(root, ".aurelia", "__prelude.d.ts");
     this.#env.tsService.ensurePrelude(preludePath, PRELUDE_TS);
@@ -700,7 +703,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
   }
 
   #attributeSyntaxContext(): AttributeSyntaxContext {
-    const syntax = this.#model.syntax;
+    const syntax = this.#query.syntax;
     if (!this.#attrParser || this.#attrParserSyntax !== syntax) {
       this.#attrParser = createAttributeParserFromRegistry(syntax);
       this.#attrParserSyntax = syntax;
@@ -713,7 +716,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       workspaceRoot: this.#workspaceRoot,
       templateIndex: this.#templateIndex,
       definitionIndex: this.#definitionIndex,
-      facts: this.#model.discovery.facts,
+      facts: this.#query.facts,
       compilerOptions: this.#env.tsService.compilerOptions(),
       lookupText: this.lookupText.bind(this),
       getCompilation: (uri) => this.#kernel.getCompilation(uri),
@@ -732,7 +735,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
   }
 
   #programOptions(vm: VmReflection, isJs: boolean, overlayBaseName?: string) {
-    const project = this.#model.snapshot();
+    const project = this.#query.snapshot();
     const defaultScope = project.defaultScope ?? project.resourceGraph?.root ?? null;
     const moduleResolver: ModuleResolver = (specifier, containingFile) => {
       const canonical = canonicalDocumentUri(containingFile);
@@ -811,7 +814,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
 
     // Derive per-resource confidence from catalog gap state
     const gapKey = `${entry.def.kind}:${resource.name}`;
-    const gaps = this.#model.catalog.gapsByResource?.[gapKey] ?? [];
+    const gaps = this.#query.catalog.gapsByResource?.[gapKey] ?? [];
     const derived = deriveResourceConfidence(gaps, entry.def.name.origin);
     // Only surface confidence when it indicates reduced trust
     const confidence = derived.level === "exact" || derived.level === "high" ? undefined : derived.level;
@@ -1296,7 +1299,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     }
 
     const raw = this.#collectRawDiagnostics(activeUri);
-    const { catalog } = this.#model;
+    const { catalog } = this.#query;
     const gapCount = catalog.gaps?.length ?? 0;
     const policyContext = {
       gapCount,
@@ -1332,7 +1335,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       }))
       .sort((a, b) => String(a.uri).localeCompare(String(b.uri)));
     return stableHash({
-      project: this.#model.fingerprint,
+      project: this.#query.model.fingerprint,
       docs,
     });
   }
@@ -1360,7 +1363,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     }
 
     this.#activateTemplate(active);
-    raw.push(...this.#model.discovery.diagnostics);
+    raw.push(...this.#query.discoveryDiagnostics);
     return raw;
   }
 
@@ -1372,7 +1375,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     const syntax = this.#attributeSyntaxContext();
     return collectSemanticTokens(text, compilation, syntax.syntax, syntax.parser, {
       resourceConfidence: ({ kind, name }) => {
-        const gaps = this.#model.catalog.gapsByResource?.[`${kind}:${name}`] ?? [];
+        const gaps = this.#query.catalog.gapsByResource?.[`${kind}:${name}`] ?? [];
         return deriveResourceConfidence(gaps).level;
       },
     });
@@ -1467,23 +1470,23 @@ function getActiveTemplateSetter(vm: VmReflection): ((path: string | null) => vo
   return typeof maybe.setActiveTemplate === "function" ? maybe.setActiveTemplate.bind(maybe) : null;
 }
 
-export function buildTemplateIndex(discovery: ProjectSemanticsDiscoveryResult): TemplateIndex {
+export function buildTemplateIndex(source: Pick<ProjectSemanticsDiscoveryResult, "templates" | "inlineTemplates">): TemplateIndex {
   const templateToComponent = new Map<DocumentUri, string>();
   const templateToScope = new Map<DocumentUri, ResourceScopeId>();
-  for (const entry of discovery.templates) {
+  for (const entry of source.templates) {
     const uri = canonicalDocumentUri(entry.templatePath).uri;
     templateToComponent.set(uri, entry.componentPath);
     templateToScope.set(uri, entry.scopeId);
   }
-  for (const entry of discovery.inlineTemplates) {
+  for (const entry of source.inlineTemplates) {
     const inlinePath = inlineTemplatePath(entry.componentPath);
     const uri = canonicalDocumentUri(inlinePath).uri;
     templateToComponent.set(uri, entry.componentPath);
     templateToScope.set(uri, entry.scopeId);
   }
   return {
-    templates: discovery.templates,
-    inlineTemplates: discovery.inlineTemplates,
+    templates: source.templates,
+    inlineTemplates: source.inlineTemplates,
     templateToComponent,
     templateToScope,
   };
