@@ -2,13 +2,13 @@ import {
   BUILTIN_SEMANTICS,
   prepareProjectSemantics,
   createSemanticModel,
+  IncrementalDiscovery,
   DiagnosticsRuntime,
   type MaterializedSemantics,
   type ResourceScopeId,
   type SemanticModel,
 } from "@aurelia-ls/compiler";
 import {
-  discoverProjectSemantics,
   applyThirdPartyResources,
   hasThirdPartyResources,
   type ProjectSemanticsDiscoveryConfig,
@@ -44,6 +44,7 @@ export class AureliaProjectIndex {
   #baseSemantics: MaterializedSemantics;
   #defaultScope: ResourceScopeId | null;
   #discoveryConfig: ProjectSemanticsDiscoveryConfigBase;
+  #discovery: IncrementalDiscovery;
 
   #model: SemanticModel;
 
@@ -58,6 +59,7 @@ export class AureliaProjectIndex {
       baseSemantics: this.#baseSemantics,
       defaultScope: this.#defaultScope ?? discoveryConfig.defaultScope,
     };
+    this.#discovery = new IncrementalDiscovery();
 
     this.#model = this.#buildModel();
   }
@@ -102,7 +104,7 @@ export class AureliaProjectIndex {
   #buildModel(): SemanticModel {
     const program = this.#ts.getProgram();
     const diagnostics = new DiagnosticsRuntime();
-    const result = discoverProjectSemantics(
+    const result = this.#discovery.refresh(
       program,
       { ...this.#discoveryConfig, diagnostics: diagnostics.forSource("project") },
       this.#logger,
