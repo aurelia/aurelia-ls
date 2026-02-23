@@ -316,6 +316,7 @@ describe("createCompletionGapMarker", () => {
       kind: CompletionItemKind.Text,
       detail: COMPLETION_GAP_MARKER_DETAIL,
       sortText: "\uffff",
+      insertText: "",
     });
   });
 

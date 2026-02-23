@@ -6,6 +6,7 @@
 import { describe, test, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
+import { COMPLETION_GAP_MARKER_LABEL } from "@aurelia-ls/language-server/api";
 import {
   createFixture,
   fileUri,
@@ -16,6 +17,24 @@ import {
   waitForDiagnostics,
   waitForExit,
 } from "./helpers/lsp-harness.js";
+
+type CompletionListItem = {
+  label?: string;
+  insertText?: string;
+};
+
+type CompletionListResponse = {
+  isIncomplete: boolean;
+  items: CompletionListItem[];
+};
+
+function expectCompletionList(response: unknown): CompletionListResponse {
+  expect(Array.isArray(response)).toBe(false);
+  const list = response as { isIncomplete?: unknown; items?: unknown };
+  expect(typeof list.isIncomplete).toBe("boolean");
+  expect(Array.isArray(list.items)).toBe(true);
+  return list as CompletionListResponse;
+}
 
 describe("Completions", () => {
   test("provides completions for view-model properties in interpolation", async () => {
@@ -56,12 +75,13 @@ describe("Completions", () => {
         position: pos,
       });
 
-      // completions could be an array or { items: [] }
-      const items = Array.isArray(completions) ? completions : (completions as { items?: unknown[] })?.items ?? [];
+      const completionList = expectCompletionList(completions);
+      expect(completionList.isIncomplete).toBe(false);
+      const items = completionList.items;
       expect(items.length).toBeGreaterThan(0);
 
       // Check that 'message' is in the completions
-      const labels = items.map((item: { label?: string }) => item.label);
+      const labels = items.map((item) => item.label);
       expect(labels).toContain("message");
     } finally {
       dispose();
@@ -111,8 +131,9 @@ describe("Completions", () => {
         position: pos,
       });
 
-      const items = Array.isArray(completions) ? completions : (completions as { items?: unknown[] })?.items ?? [];
-      const labels = items.map((item: { label?: string }) => item.label);
+      const completionList = expectCompletionList(completions);
+      expect(completionList.isIncomplete).toBe(false);
+      const labels = completionList.items.map((item) => item.label);
 
       // Should include counter which matches the prefix
       expect(labels).toContain("counter");
@@ -124,7 +145,7 @@ describe("Completions", () => {
     }
   });
 
-  test("returns empty array when no context available", async () => {
+  test("returns empty completion list when no context available", async () => {
     const fixture = createFixture({
       "tsconfig.json": JSON.stringify({
         compilerOptions: {
@@ -157,9 +178,9 @@ describe("Completions", () => {
         position: pos,
       });
 
-      // Should return array (possibly empty) without throwing
-      const items = Array.isArray(completions) ? completions : (completions as { items?: unknown[] })?.items ?? [];
-      expect(Array.isArray(items)).toBe(true);
+      const completionList = expectCompletionList(completions);
+      expect(completionList.isIncomplete).toBe(false);
+      expect(completionList.items).toEqual([]);
     } finally {
       dispose();
       child.kill("SIGKILL");
@@ -212,9 +233,67 @@ describe("Completions", () => {
         position: pos,
       });
 
-      const items = Array.isArray(completions) ? completions : (completions as { items?: unknown[] })?.items ?? [];
-      const labels = items.map((item: { label?: string }) => item.label);
+      const completionList = expectCompletionList(completions);
+      expect(completionList.isIncomplete).toBe(false);
+      const labels = completionList.items.map((item) => item.label);
       expect(labels).toContain("./views/summary-panel");
+    } finally {
+      dispose();
+      child.kill("SIGKILL");
+      await waitForExit(child);
+      fs.rmSync(fixture, { recursive: true, force: true });
+    }
+  });
+
+  test("signals incomplete list and non-actionable gap marker when diagnostics report analysis gaps", async () => {
+    const fixture = createFixture({
+      "tsconfig.json": JSON.stringify({
+        compilerOptions: {
+          target: "ES2022",
+          module: "NodeNext",
+          moduleResolution: "NodeNext",
+          strict: true,
+          types: [],
+        },
+        files: ["component.ts"],
+      }),
+      "component.ts": [
+        "export class Component {",
+        "  message: string = 'Hello';",
+        "}",
+      ].join("\n"),
+      "component.html": [
+        "<import from=\"./missing-resource\"></import>",
+        "<missing-element></missing-element>",
+        "<template>${m}</template>",
+      ].join("\n"),
+    });
+
+    const htmlUri = fileUri(fixture, "component.html");
+    const { connection, child, dispose, getStderr } = startServer(fixture);
+
+    try {
+      await initialize(connection, child, getStderr, fixture);
+      const htmlText = fs.readFileSync(path.join(fixture, "component.html"), "utf8");
+      await openDocument(connection, htmlUri, "html", htmlText);
+      const diagnostics = await waitForDiagnostics(connection, child, () => getStderr(), htmlUri, 5000);
+      expect(diagnostics.length).toBeGreaterThan(0);
+
+      const pos = positionAt(htmlText, htmlText.indexOf("m}"));
+      const completions = await connection.sendRequest("textDocument/completion", {
+        textDocument: { uri: htmlUri },
+        position: pos,
+      });
+
+      const completionList = expectCompletionList(completions);
+      expect(completionList.isIncomplete).toBe(true);
+      expect(completionList.items.length).toBeGreaterThan(0);
+      expect(completionList.items.map((item) => item.label)).toContain("message");
+
+      const marker = completionList.items.find((item) => item.label === COMPLETION_GAP_MARKER_LABEL);
+      expect(marker).toBeDefined();
+      expect(marker?.insertText).toBe("");
+      expect(completionList.items.at(-1)?.label).toBe(COMPLETION_GAP_MARKER_LABEL);
     } finally {
       dispose();
       child.kill("SIGKILL");

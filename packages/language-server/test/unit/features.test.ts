@@ -150,6 +150,7 @@ describe("handleCompletion", () => {
     expect(result.items.some((item) => item.label === "summary-panel")).toBe(true);
     const marker = result.items.find((item) => item.label === COMPLETION_GAP_MARKER_LABEL);
     expect(marker?.kind).toBe(CompletionItemKind.Text);
+    expect(marker?.insertText).toBe("");
   });
 
   test("signals incomplete list from gap diagnostics even when completion confidence is high", () => {
@@ -167,7 +168,9 @@ describe("handleCompletion", () => {
 
     const result = handleCompletion(ctx as never, params);
     expect(result.isIncomplete).toBe(true);
-    expect(result.items.some((item) => item.label === COMPLETION_GAP_MARKER_LABEL)).toBe(true);
+    const marker = result.items.find((item) => item.label === COMPLETION_GAP_MARKER_LABEL);
+    expect(marker).toBeDefined();
+    expect(marker?.insertText).toBe("");
   });
 
   test("returns empty CompletionList when document is unavailable", () => {

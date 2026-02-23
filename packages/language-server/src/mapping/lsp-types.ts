@@ -214,6 +214,8 @@ export function createCompletionGapMarker(items: readonly CompletionItem[]): Com
         kind: CompletionItemKind.Text,
         detail: COMPLETION_GAP_MARKER_DETAIL,
         sortText: "\uffff",
+        // Gap marker is informational only; never insert marker text.
+        insertText: "",
       },
     ],
   };
