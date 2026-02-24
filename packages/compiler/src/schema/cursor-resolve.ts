@@ -109,12 +109,18 @@ export function resolveCursorEntity(
   }
 
   // 3. DOM node at offset (custom element tags, native elements)
+  //    Only produce a CE entity when the cursor is on the tag name span,
+  //    not on attributes within the element. Attribute-level entities
+  //    (bindable, CA, command) are resolved by step 4 (instructions).
   const node = query.nodeAt(offset);
   if (node) {
-    const entity = resolveNodeEntity(compilation, node, offset);
-    if (entity) {
-      const confidence = computeResourceConfidence(entity);
-      return { entity, confidence, compositeConfidence: computeConfidence(confidence) };
+    const onTagName = !node.tagLoc || spanContainsOffset(node.tagLoc, offset);
+    if (onTagName) {
+      const entity = resolveNodeEntity(compilation, node, offset);
+      if (entity) {
+        const confidence = computeResourceConfidence(entity);
+        return { entity, confidence, compositeConfidence: computeConfidence(confidence) };
+      }
     }
   }
 

@@ -192,7 +192,13 @@ export function collectTemplateDefinitionSlices(options: {
   }
 
   // Dispatch resource-level entities to definition lookup.
-  const entityDef = entity
+  // Skip entity dispatch when the cursor is on the command portion of an
+  // attribute (e.g., ".bind" in "if-not.bind"). The command position should
+  // produce no definition — it's a binding mechanic, not a navigable symbol.
+  const entityOnCommand = entity && (entity.kind === 'tc-attr' || entity.kind === 'ca-attr' || entity.kind === 'command')
+    ? isOffsetOnCommand(compilation, offset, syntax)
+    : false;
+  const entityDef = entity && !entityOnCommand
     ? resolveResourceEntityDefinition(entity, resources, preferRoots, options.resolveClassLocation)
     : null;
   if (entityDef) resource.push(entityDef);
@@ -205,7 +211,7 @@ export function collectTemplateDefinitionSlices(options: {
   // controllerAt is the authoritative TC check — it uses the linked instruction
   // spans directly. This runs independently of CursorEntity to ensure TC
   // navigation always works at any position within the TC attribute.
-  if (resource.length === 0) {
+  if (resource.length === 0 && !entityOnCommand) {
     const controller = compilation.query.controllerAt(offset);
     if (controller) {
       const entry = findEntry(resources.controllers, controller.kind, null, preferRoots);
@@ -816,6 +822,24 @@ function readLocation(value: unknown): SourceLocation | null {
 function dashToCamel(value: string): string {
   if (!value.includes("-")) return value;
   return value.replace(/-([a-z])/g, (_match, chr: string) => chr.toUpperCase());
+}
+
+function isOffsetOnCommand(
+  compilation: TemplateCompilation,
+  offset: number,
+  syntax: AttributeSyntaxContext,
+): boolean {
+  const domIndex = buildDomIndex(compilation.ir.templates ?? []);
+  const hits = findInstructionHitsAtOffset(compilation.linked.templates, compilation.ir.templates ?? [], domIndex, offset);
+  for (const hit of hits) {
+    const nameSpan = hit.attrNameSpan ?? null;
+    if (!nameSpan || !spanContainsOffset(nameSpan, offset)) continue;
+    const attrName = hit.attrName ?? null;
+    if (!attrName) continue;
+    const spans = resolveAttributeSpans(attrName, nameSpan, syntax);
+    if (spans.command && spanContainsOffset(spans.command, offset)) return true;
+  }
+  return false;
 }
 
 function resolveAttributeSpans(

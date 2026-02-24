@@ -28,6 +28,8 @@ export interface TemplateNodeInfo {
   kind: "element" | "attribute" | "text" | "comment";
   hostKind: "custom" | "native" | "none";
   span: SourceSpan;
+  /** Tag name span for the opening tag (elements only). */
+  tagLoc?: SourceSpan | null;
   templateIndex: number;
 }
 
@@ -239,7 +241,8 @@ function pickNodeAt(nodes: NodeIndex[], rows: Map<string, LinkedRow>, offset: nu
   if (!mappedKind) return null;
   const row = rows.get(rowKey(best.templateIndex, best.id));
   const hostKind = row ? resolveHostKind(row.node) : mappedKind === "element" ? "native" : "none";
-  return { id: best.id, kind: mappedKind, hostKind, span: best.span, templateIndex: best.templateIndex };
+  const tagLoc = best.node.kind === "element" ? (best.node as { tagLoc?: SourceSpan | null }).tagLoc ?? null : null;
+  return { id: best.id, kind: mappedKind, hostKind, span: best.span, tagLoc, templateIndex: best.templateIndex };
 }
 
 function mapNodeKind(k: NodeIndex["kind"]): TemplateNodeInfo["kind"] | null {
