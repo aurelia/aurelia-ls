@@ -7,7 +7,6 @@ import {
   type TextRange,
 } from "../model/index.js";
 import {
-  buildSemanticsSnapshotFromProject,
   deriveResourceConfidence,
   unwrapSourced,
   type AttrRes,

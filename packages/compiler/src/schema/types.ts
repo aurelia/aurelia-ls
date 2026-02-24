@@ -412,6 +412,8 @@ export interface ElementRes {
   readonly className?: string;
   readonly file?: NormalizedPath;
   readonly package?: string;
+  /** Convergence identity ref for provenance queries. Set when entries available. */
+  readonly __convergenceRef?: ConvergenceRef;
 }
 
 export interface AttrRes {
@@ -426,6 +428,8 @@ export interface AttrRes {
   readonly className?: string;
   readonly file?: NormalizedPath;
   readonly package?: string;
+  /** Convergence identity ref for provenance queries. Set when entries available. */
+  readonly __convergenceRef?: ConvergenceRef;
 }
 
 export interface ValueConverterSig {
@@ -671,6 +675,12 @@ export interface SemanticsLookupOptions {
   readonly graph?: ResourceGraph | null;
   readonly scope?: ResourceScopeId | null;
   readonly localImports?: readonly LocalImportDef[];
+  /**
+   * Convergence entries from SemanticModel.
+   * When provided, lookup results carry ConvergenceRef for provenance queries
+   * and gap state is derived from entry Sourced<T> fields (not just catalog).
+   */
+  readonly entries?: ReadonlyMap<string, import("./model.js").ConvergenceEntry>;
 }
 
 export interface SemanticsLookup {

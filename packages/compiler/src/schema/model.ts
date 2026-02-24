@@ -321,6 +321,7 @@ function createModelQuery(
     graph: model.resourceGraph,
     scope: opts?.scope ?? model.defaultScope,
     localImports: opts?.localImports,
+    entries: model.entries,
   };
 
   const lookup = createSemanticsLookup(model.semantics, lookupOpts);

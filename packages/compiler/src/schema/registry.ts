@@ -14,6 +14,7 @@ import type {
   AttributePatternDef,
   PatternInterpret,
   CatalogGap,
+  ConvergenceRef,
   CustomElementDef,
   CustomAttributeDef,
   ElementRes,
@@ -34,6 +35,7 @@ import type {
   MaterializedSemantics,
   TypeRef,
 } from "./types.js";
+import type { ConvergenceEntry } from "./model.js";
 import {
   buildAttributePatternConfigs,
   buildBindingCommandConfigs,
@@ -743,7 +745,19 @@ export function createSemanticsLookup(sem: ProjectSemantics, opts?: SemanticsLoo
     : { ...base, resourceGraph: graph ?? undefined, defaultScope: scope ?? undefined };
 
   const catalog = semWithCaches.catalog;
+  const entries = opts?.entries;
   const COMPLETE_SCOPE: ScopeCompleteness = { complete: true, unresolvedRegistrations: [] };
+
+  // When convergence entries are available, attach ConvergenceRef to results
+  function attachRef<T extends { name: string; kind: string }>(res: T, kind: string): T {
+    if (!entries) return res;
+    const key = `${kind}:${res.name}`;
+    const entry = entries.get(key);
+    if (entry) {
+      return { ...res, __convergenceRef: entry.ref } as T;
+    }
+    return res;
+  }
 
   const resolveScopeCompleteness = (requestedScope?: ResourceScopeId | null): ScopeCompleteness => {
     const activeScope = requestedScope ?? scope ?? graph?.root ?? null;
@@ -781,16 +795,18 @@ export function createSemanticsLookup(sem: ProjectSemantics, opts?: SemanticsLoo
     element(name: string): ElementRes | null {
       const normalized = name.toLowerCase();
       const direct = semWithCaches.resources.elements[normalized];
-      if (direct) return direct;
+      if (direct) return attachRef(direct, 'custom-element');
       const byAlias = findByAlias(semWithCaches.resources.elements, normalized);
-      if (byAlias) return byAlias;
+      if (byAlias) return attachRef(byAlias, 'custom-element');
       return null;
     },
     attribute(name: string): AttrRes | null {
       const normalized = name.toLowerCase();
       const direct = semWithCaches.resources.attributes[normalized];
-      if (direct) return direct;
-      return findByAlias(semWithCaches.resources.attributes, normalized);
+      if (direct) return attachRef(direct, direct.isTemplateController ? 'template-controller' : 'custom-attribute');
+      const byAlias = findByAlias(semWithCaches.resources.attributes, normalized);
+      if (byAlias) return attachRef(byAlias, byAlias.isTemplateController ? 'template-controller' : 'custom-attribute');
+      return null;
     },
     controller(name: string): ControllerConfig | null {
       const normalized = name.toLowerCase();
