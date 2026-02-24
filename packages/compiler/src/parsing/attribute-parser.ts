@@ -42,6 +42,35 @@ type Token =
 
 type Score = { statics: number; dynamics: number; symbols: number };
 
+/**
+ * Result from the predictive DFA. Describes where a partial input ran out
+ * within a pattern and what the next expected token is.
+ */
+export interface PredictiveMatchResult {
+  /** The pattern config that matched this prefix. */
+  readonly config: AttributePatternConfig;
+  /** Parts consumed so far (variable segments only). */
+  readonly consumedParts: readonly string[];
+  /** Number of literal tokens consumed from the input. A prediction is only
+   *  structurally significant when at least one literal has been consumed —
+   *  without a consumed separator/literal, the match is just a bare
+   *  identifier with no structural intent evidence. */
+  readonly consumedLiterals: number;
+  /** Token index in the pattern where the input ran out. */
+  readonly tokenIndex: number;
+  /** The token expected next. */
+  readonly nextToken: { kind: 'PART' } | { kind: 'LIT'; value: string };
+  /** How many characters of the input were consumed. */
+  readonly inputConsumed: number;
+  /** The kind of prediction. */
+  readonly state:
+    | 'expects-part'      // next token is a variable PART
+    | 'expects-literal'   // next token is a fixed literal string
+    | 'partial-literal';  // input ran out mid-literal (partial prefix match)
+  /** What the user has typed toward the next token (may be empty). */
+  readonly prefix: string;
+}
+
 class CompiledPattern {
   readonly tokens: Token[];
   readonly score: Score;
@@ -84,6 +113,112 @@ class CompiledPattern {
       }
     }
     return i === input.length ? { parts, spans } : null;
+  }
+
+  /**
+   * Predictive match: given a partial input, determine how far through this
+   * pattern the input matches and what the next expected token is.
+   *
+   * Returns null if the input cannot be a prefix of this pattern.
+   * Returns a PredictiveMatchResult describing where the input ran out
+   * and what could come next.
+   *
+   * This is the prediction counterpart to the recognition tryMatch. Where
+   * tryMatch answers "does this complete string match?", tryPredictiveMatch
+   * answers "is this string a valid prefix, and what could follow?"
+   */
+  tryPredictiveMatch(input: string): PredictiveMatchResult | null {
+    const consumedParts: string[] = [];
+    const syms = this.symbolSet;
+    let i = 0;
+    let consumedLiterals = 0;
+
+    for (let t = 0; t < this.tokens.length; t++) {
+      const tok = this.tokens[t]!;
+
+      if (i >= input.length) {
+        // Input exhausted mid-pattern — this token is the next expected.
+        return {
+          config: this.config,
+          consumedParts,
+          consumedLiterals,
+          tokenIndex: t,
+          nextToken: tok,
+          inputConsumed: i,
+          state: tok.kind === 'PART' ? 'expects-part' : 'expects-literal',
+          prefix: '',
+        };
+      }
+
+      if (tok.kind === 'LIT') {
+        const { value } = tok;
+        // Check if the remaining input is a prefix of this literal
+        const remaining = input.length - i;
+        if (remaining < value.length) {
+          // Partial literal match — input ran out inside a literal token
+          if (input.slice(i) === value.slice(0, remaining)) {
+            return {
+              config: this.config,
+              consumedParts,
+              consumedLiterals,
+              tokenIndex: t,
+              nextToken: tok,
+              inputConsumed: i,
+              state: 'partial-literal',
+              prefix: input.slice(i),
+            };
+          }
+          return null; // mismatch
+        }
+        if (!input.startsWith(value, i)) return null;
+        i += value.length;
+        consumedLiterals++;
+      } else {
+        // PART: consume >= 1 char that is NOT a symbol
+        const start = i;
+        while (i < input.length && !syms.has(input[i]!)) i++;
+
+        if (i === start) {
+          // Input is at a symbol boundary with nothing consumed for PART.
+          // This means input ends right where a PART is expected with an
+          // empty prefix — valid predictive position.
+          return {
+            config: this.config,
+            consumedParts,
+            consumedLiterals,
+            tokenIndex: t,
+            nextToken: tok,
+            inputConsumed: i,
+            state: 'expects-part',
+            prefix: '',
+          };
+        }
+
+        const text = input.slice(start, i);
+        consumedParts.push(text);
+
+        // If input ended exactly here and there are more tokens, this is
+        // a valid prefix: we consumed a PART and the next token tells us
+        // what separator or literal must follow.
+        if (i === input.length && t + 1 < this.tokens.length) {
+          const nextTok = this.tokens[t + 1]!;
+          return {
+            config: this.config,
+            consumedParts,
+            consumedLiterals,
+            tokenIndex: t + 1,
+            nextToken: nextTok,
+            inputConsumed: i,
+            state: nextTok.kind === 'PART' ? 'expects-part' : 'expects-literal',
+            prefix: '',
+          };
+        }
+      }
+    }
+
+    // Full match (all tokens consumed, input fully consumed) — not a prefix,
+    // it's a complete match. Return null to signal "not a prediction scenario".
+    return i === input.length ? null : null;
   }
 }
 
@@ -281,6 +416,40 @@ export class AttributeParser {
       config: best.pat.config,
       partSpans: best.spans,
     };
+  }
+
+  /**
+   * Predictive completion: given a partial attribute name, determine what
+   * completions could follow.
+   *
+   * Runs the predictive DFA on each registered pattern, collecting all
+   * patterns that accept the input as a valid prefix. Returns the combined
+   * predictions ordered by pattern score (same precedence as recognition).
+   *
+   * This is the completion counterpart to `parse`. Where `parse` maps a
+   * complete attribute name to its semantic interpretation, `predictCompletions`
+   * maps a partial attribute name to the set of valid continuations.
+   */
+  predictCompletions(partialName: string): readonly PredictiveMatchResult[] {
+    this._sealed = true;
+    const results: { result: PredictiveMatchResult; score: Score }[] = [];
+
+    for (const pat of this._compiled) {
+      const match = pat.tryPredictiveMatch(partialName);
+      if (match) {
+        results.push({ result: match, score: pat.score });
+      }
+    }
+
+    // Sort by same precedence as recognition: statics > dynamics > symbols
+    results.sort((a, b) => {
+      const sa = a.score, sb = b.score;
+      if (sa.statics !== sb.statics) return sb.statics - sa.statics;
+      if (sa.dynamics !== sb.dynamics) return sb.dynamics - sa.dynamics;
+      return sb.symbols - sa.symbols;
+    });
+
+    return results.map((r) => r.result);
   }
 }
 

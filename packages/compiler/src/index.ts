@@ -31,7 +31,7 @@ export {
   createAttributeParserFromRegistry,
   registerBuiltins,
 } from "./parsing/index.js";
-export type { AttrCommandSpan, AttrPartSpan, AttributeNameAnalysis, ExpressionParseContext, IExpressionParser, Token } from "./parsing/index.js";
+export type { AttrCommandSpan, AttrPartSpan, AttributeNameAnalysis, ExpressionParseContext, IExpressionParser, PredictiveMatchResult, Token } from "./parsing/index.js";
 
 // === Language / Semantics ===
 export {
