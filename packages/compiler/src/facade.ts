@@ -13,14 +13,14 @@ import type { FeatureUsageSet, TemplateContext } from "./schema/index.js";
 import type { AttributeParser, IExpressionParser } from "./parsing/index.js";
 
 // Shared imports
-import type { VmReflection, CompilerDiagnostic, ModuleResolver } from "./shared/index.js";
+import { NOOP_TRACE, type VmReflection, type CompilerDiagnostic, type ModuleResolver, type CompileTrace } from "./shared/index.js";
 
 // Diagnostics imports
 import type { DiagnosticResourceKind } from "./diagnostics/index.js";
 
 // Pipeline imports
 import { runFullPipeline } from "./pipeline/stages.js";
-import type { StageKey, CacheOptions, FingerprintHints, StageArtifactMeta } from "./pipeline/engine.js";
+import type { StageKey, StageArtifactMeta } from "./pipeline/engine.js";
 
 // Synthesis imports
 import {
@@ -49,6 +49,8 @@ export interface CompileOptions {
   exprParser?: IExpressionParser;
   moduleResolver: ModuleResolver;
   overlayBaseName?: string;
+  /** Trace context for per-stage timing instrumentation. */
+  trace?: CompileTrace;
 }
 
 // ============================================================================
@@ -101,9 +103,10 @@ export interface TemplateCompilation {
  * No engine, no session. Delegates to runFullPipeline.
  */
 export function compileTemplate(opts: CompileOptions): TemplateCompilation {
+  const trace = opts.trace ?? NOOP_TRACE;
   const overlayBase = computeOverlayBaseName(opts.templateFilePath, opts.overlayBaseName);
 
-  const result = runFullPipeline({
+  const result = trace.span("facade:pipeline", () => runFullPipeline({
     html: opts.html,
     templateFilePath: opts.templateFilePath,
     query: opts.query,
@@ -113,22 +116,23 @@ export function compileTemplate(opts: CompileOptions): TemplateCompilation {
     depGraph: opts.query.model.deps,
     attrParser: opts.attrParser,
     exprParser: opts.exprParser,
+    trace,
     overlay: {
       isJs: opts.isJs,
       filename: overlayBase,
       syntheticPrefix: opts.vm.getSyntheticPrefix?.() ?? "__AU_TTC_",
     },
-  });
+  }));
 
   // Build overlay product from stage results
-  const overlayArtifacts = buildOverlayProductFromStages(
+  const overlayArtifacts = trace.span("facade:overlay-product", () => buildOverlayProductFromStages(
     result.ir,
     result.linked,
     result.scope,
     result.overlayPlan,
     result.overlayEmit,
     { templateFilePath: opts.templateFilePath },
-  );
+  ));
 
   return {
     ir: result.ir,

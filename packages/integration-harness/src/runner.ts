@@ -25,6 +25,7 @@ import {
 import {
   compileAot,
   compileTemplate,
+  createSemanticModel,
   buildResourceGraphFromSemantics,
   buildTemplateSyntaxRegistry,
   prepareProjectSemantics,
@@ -488,6 +489,17 @@ function compileTargets(
   const results: Record<string, CompileRunResult> = {};
   const targets = scenario.compile.map(ensureCompileTarget);
 
+  // Build a SemanticModel from the merged discovery result.
+  // This patches the original discovery with post-merge fields so that
+  // the query-based compile API sees external resources.
+  const model = createSemanticModel({
+    ...discovery,
+    semantics: merged.semantics,
+    catalog: merged.catalog,
+    syntax: merged.syntax,
+    resourceGraph: merged.resourceGraph,
+  });
+
   for (const target of targets) {
     const { markup, templatePath } = resolveTemplateSource(target, scenario, fileMap);
     const scopeId = resolveScopeId(target, scenario, discovery, merged.resourceGraph);
@@ -502,19 +514,13 @@ function compileTargets(
 
     const needsAnalysis = options.computeUsage || target.overlay;
     if (needsAnalysis) {
-      // TODO(tech-debt): migrate this direct facade call to workspace/program
-      // orchestration once integration harness consumes the unified authority path.
+      const query = model.query({ scope: scopeId, localImports });
       const analysis = compileTemplate({
         html: markup,
         templateFilePath: templatePath,
         isJs: false,
         vm: createDefaultVmReflection(),
-        semantics: merged.semantics,
-        catalog: merged.catalog,
-        syntax: merged.syntax,
-        resourceGraph: merged.resourceGraph,
-        resourceScope: scopeId,
-        localImports,
+        query,
         moduleResolver,
       });
       compileResult.usage = analysis.usage;

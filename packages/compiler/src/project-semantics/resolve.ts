@@ -186,11 +186,11 @@ export function discoverProjectSemantics(
 
     // Stage 1: Extract
     log.info("[discovery] extracting facts...");
-    const rawFacts = extractAllFileFacts(program, {
+    const rawFacts = trace.span("discovery:extract", () => extractAllFileFacts(program, {
       fileSystem: config?.fileSystem,
       templateExtensions: config?.templateExtensions,
       styleExtensions: config?.styleExtensions,
-    });
+    }));
     debug.project("extraction.complete", { factCount: rawFacts.size });
 
     // Stages 2-10
@@ -215,13 +215,15 @@ export function discoverFromFacts(
   }
   const log = logger ?? nullLogger;
 
+  const trace = config?.trace ?? NOOP_TRACE;
+
   // Stage 2: Characterize (exports + evaluate + recognize + template-facts)
   log.info("[discovery] characterizing...");
-  const characterized = characterize(rawFacts, program, config);
+  const characterized = trace.span("discovery:characterize", () => characterize(rawFacts, program, config));
 
   // Stage 3: Converge (assemble + register + scope + snapshot + templates + diagnostics)
   log.info("[discovery] converging...");
-  const result = converge(characterized, program, config, diagEmitter);
+  const result = trace.span("discovery:converge", () => converge(characterized, program, config, diagEmitter));
 
   log.info(
     `[discovery] complete: authority=${result.definition.authority.length} ` +

@@ -6,6 +6,8 @@ import {
   canonicalDocumentUri,
   createAttributeParserFromRegistry,
   createDefaultCodeResolver,
+  createTrace,
+  createConsoleExporter,
   debug,
   diagnosticsCatalog,
   normalizePathForId,
@@ -143,6 +145,8 @@ export interface SemanticWorkspaceEngineOptions {
   readonly tsconfigPath?: string | null;
   readonly configFileName?: string;
   readonly discovery?: ProjectSemanticsDiscoveryConfigBase;
+  /** Pre-computed discovery result — skips the initial discovery pipeline. */
+  readonly seededDiscovery?: ProjectSemanticsDiscoveryResult;
   readonly typescript?: TypeScriptServices | false;
   readonly vm?: VmReflection;
   readonly lookupText?: (uri: DocumentUri) => string | null;
@@ -180,10 +184,22 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
   readonly #refactorOverrides: RefactorOverrides | null;
   readonly #refactorPolicy: RefactorPolicy;
   readonly #refactorDecisions: RefactorDecisionSet | null;
+  readonly #trace: ReturnType<typeof createTrace> | null;
   #disposed = false;
 
   constructor(options: SemanticWorkspaceEngineOptions) {
     this.#logger = options.logger;
+    this.#trace = process.env.AURELIA_PERF
+      ? createTrace({
+          name: "workspace",
+          exporter: createConsoleExporter({
+            minDuration: 100_000n, // 0.1ms — skip trivial spans
+            logEvents: false,
+            log: (msg) => console.error(msg),
+          }),
+        })
+      : null;
+
     this.#env = createTypeScriptEnvironment({
       logger: options.logger,
       workspaceRoot: options.workspaceRoot ?? null,
@@ -197,12 +213,14 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       ...(options.discovery ?? {}),
       packagePath: options.discovery?.packagePath ?? workspaceRoot,
       fileSystem: options.discovery?.fileSystem ?? createNodeFileSystem({ root: workspaceRoot }),
+      ...(this.#trace ? { trace: this.#trace } : {}),
     };
 
     this.#projectIndex = new AureliaProjectIndex({
       ts: this.#env.project,
       logger: options.logger,
       discovery,
+      seededDiscovery: options.seededDiscovery,
     });
     this.#projectVersion = this.#env.project.getProjectVersion();
 
@@ -806,6 +824,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       templateContext,
       depGraph: query.model.deps,
       ...(overlayBaseName !== undefined ? { overlayBaseName } : {}),
+      ...(this.#trace ? { trace: this.#trace } : {}),
     };
   }
 

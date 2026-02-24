@@ -18,7 +18,7 @@ import type { NormalizedPath } from "../model/index.js";
 import type { DependencyGraph, TemplateContext, ResourceScopeId } from "../schema/index.js";
 import type { SemanticModelQuery } from "../schema/model.js";
 import type { AttributeParser, IExpressionParser } from "../parsing/index.js";
-import { debug, type VmReflection, type ModuleResolver } from "../shared/index.js";
+import { debug, createTrace, createConsoleExporter, NOOP_TRACE, type VmReflection, type ModuleResolver, type CompileTrace } from "../shared/index.js";
 import { stableHash } from "../pipeline/index.js";
 import type { TemplateMappingArtifact, TemplateQueryFacade } from "../synthesis/index.js";
 
@@ -46,6 +46,8 @@ export interface TemplateProgramOptions {
   readonly overlayBaseName?: string;
   readonly sourceStore?: SourceStore;
   readonly provenance?: ProvenanceIndex;
+  /** Trace for per-compilation instrumentation. */
+  readonly trace?: CompileTrace;
 }
 
 // ============================================================================
@@ -162,7 +164,8 @@ export class DefaultTemplateProgram implements TemplateProgram {
       { isJs: this.options.isJs, overlayBaseName: this.options.overlayBaseName },
     );
     const templateContext = this.options.templateContext?.(canonical.uri) ?? undefined;
-    const compilation = compileTemplate({
+    const trace = this.options.trace ?? NOOP_TRACE;
+    const compilation = trace.span("program:compile", () => compileTemplate({
       html: snap.text,
       templateFilePath: templatePaths.template.path,
       isJs: this.options.isJs,
@@ -173,7 +176,8 @@ export class DefaultTemplateProgram implements TemplateProgram {
       attrParser: this.options.attrParser,
       exprParser: this.options.exprParser,
       overlayBaseName: this.options.overlayBaseName,
-    });
+      trace,
+    }));
 
     // Feed overlay mapping into provenance
     const overlayUri = normalizeDocumentUri(compilation.overlay.overlayPath);

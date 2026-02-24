@@ -16,7 +16,10 @@ import { fileURLToPath } from "node:url";
 import { discoverProjectSemantics, DiagnosticsRuntime } from "@aurelia-ls/compiler";
 import {
   buildTemplateSyntaxRegistry,
+  buildResourceCatalog,
   compileTemplate,
+  createSemanticModel,
+  prepareProjectSemantics,
   BUILTIN_SEMANTICS,
   materializeSemanticsForScope,
   type NodeSem,
@@ -55,20 +58,36 @@ function createProgramFromApp(appPath: string): ts.Program {
   return ts.createProgram(parsed.fileNames, parsed.options);
 }
 
+function buildQuery(semantics: MaterializedSemantics) {
+  const syntax = buildTemplateSyntaxRegistry(semantics);
+  const catalog = buildResourceCatalog(semantics.resources, syntax.bindingCommands, syntax.attributePatterns);
+  const model = createSemanticModel({
+    semantics, catalog, syntax,
+    resourceGraph: semantics.resourceGraph ?? { root: null, scopes: {} } as any,
+    semanticSnapshot: { version: "test" as const, symbols: [], catalog: { resources: {} }, graph: null, gaps: [], confidence: "complete" as const },
+    apiSurfaceSnapshot: { version: "test" as const, symbols: [] },
+    definition: { authority: [], evidence: [], convergence: [] },
+    registration: { sites: [], orphans: [], unresolved: [] },
+    templates: [], inlineTemplates: [], diagnostics: [],
+    recognizedBindingCommands: [], recognizedAttributePatterns: [],
+    facts: new Map(),
+  } as any);
+  return model.query({ scope: semantics.defaultScope ?? null });
+}
+
 function compileTemplateForSemanticTokens(
   markup: string,
   semantics: MaterializedSemantics,
   options?: { templatePath?: string },
 ) {
   const templatePath = options?.templatePath ?? "template.html";
+  const query = buildQuery(semantics);
   return compileTemplate({
     html: markup,
     templateFilePath: templatePath,
     isJs: false,
     vm: VM,
-    semantics,
-    resourceGraph: semantics.resourceGraph,
-    resourceScope: semantics.defaultScope ?? null,
+    query,
     moduleResolver: NOOP_MODULE_RESOLVER,
   });
 }

@@ -14,15 +14,15 @@ import type { SemanticModelQuery } from "../schema/model.js";
 import type { DependencyGraph, DepRecorder } from "../schema/dependency-graph.js";
 import { createDepRecorder, NOOP_DEP_RECORDER } from "../schema/dependency-graph.js";
 import { createAttributeParserFromRegistry, getExpressionParser, type AttributeParser, type IExpressionParser } from "../parsing/index.js";
-import type { VmReflection, SynthesisOptions, CompileTrace } from "../shared/index.js";
+import type { VmReflection, SynthesisOptions, ModuleResolver } from "../shared/index.js";
+import { NOOP_TRACE, type CompileTrace } from "../shared/trace.js";
 import { lowerDocument, linkTemplateSemantics, bindScopes, typecheck, collectFeatureUsage } from "../analysis/index.js";
 import { planOverlay, emitOverlayFile, type OverlayEmitOptions, planAot, type AotPlanOptions } from "../synthesis/index.js";
 import { DiagnosticsRuntime } from "../diagnostics/runtime.js";
 import type { LinkModule, TypecheckModule } from "../analysis/index.js";
 import type { FeatureUsageSet } from "../schema/index.js";
 import type { OverlayPlanModule, OverlayEmitResult, AotPlanModule } from "../synthesis/index.js";
-import type { PipelineOptions, StageOutputs, StageKey, CacheOptions, FingerprintHints, StageArtifactMeta } from "./engine.js";
-import type { ModuleResolver } from "./engine.js";
+import type { PipelineOptions, StageKey, StageArtifactMeta } from "./engine.js";
 import { stableHash, stableHashSemantics } from "./hash.js";
 
 // ============================================================================
@@ -128,72 +128,69 @@ export function runFullPipeline(opts: PipelineOptions): {
     ? createDepRecorder(depGraph, depGraph.addNode('template-compilation', opts.templateFilePath))
     : NOOP_DEP_RECORDER;
 
-  const exprParser = opts.exprParser ?? getExpressionParser();
-  const attrParser = opts.attrParser ?? createAttributeParserFromRegistry(query.syntax);
+  const trace = opts.trace ?? NOOP_TRACE;
 
-  // Record template file read
-  recorder.readFile(opts.templateFilePath as any);
+  const { exprParser, attrParser } = trace.span("pipeline:setup", () => {
+    const ep = opts.exprParser ?? getExpressionParser();
+    const ap = opts.attrParser ?? createAttributeParserFromRegistry(query.syntax);
+    recorder.readFile(opts.templateFilePath as any);
+    return { exprParser: ep, attrParser: ap };
+  });
 
-  // Stage 1: Lower
-  const ir = lowerDocument(opts.html, {
+  const ir = trace.span("stage:lower", () => lowerDocument(opts.html, {
     file: opts.templateFilePath,
     name: path.basename(opts.templateFilePath),
     attrParser,
     exprParser,
     catalog: query.model.catalog,
     diagnostics: diag.forSource("lower"),
-    trace: opts.trace,
-  });
+    trace,
+  }));
 
-  // Stage 2: Link
-  const linked = linkTemplateSemantics(ir, null, {
+  const linked = trace.span("stage:link", () => linkTemplateSemantics(ir, null, {
     moduleResolver: opts.moduleResolver,
     templateFilePath: opts.templateFilePath,
     diagnostics: diag.forSource("link"),
-    trace: opts.trace,
+    trace,
     deps: recorder,
     lookup: query,
     graph: query.graph,
-  });
+  }));
 
-  // Stage 3: Bind
-  const scope = bindScopes(linked, {
-    trace: opts.trace,
+  const scope = trace.span("stage:bind", () => bindScopes(linked, {
+    trace,
     diagnostics: diag.forSource("bind"),
     model: query,
     deps: recorder,
-  });
+  }));
 
-  // Stage 4: Typecheck
   const vm = opts.vm;
   const rootVm = vm ? (hasQualifiedVm(vm) ? vm.getQualifiedRootVmTypeExpr() : vm.getRootVmTypeExpr()) : "unknown";
-  const tc = typecheck({
+  const tc = trace.span("stage:typecheck", () => typecheck({
     linked,
     scope,
     ir,
     rootVmType: rootVm,
     diagnostics: diag.forSource("typecheck"),
-    trace: opts.trace,
+    trace,
     deps: recorder,
     model: query,
-  });
+  }));
 
-  // Stage 5: Usage collection
-  const usage = collectFeatureUsage(linked, { syntax: query.syntax, attrParser });
+  const usage = trace.span("stage:usage", () => collectFeatureUsage(linked, { syntax: query.syntax, attrParser }));
 
-  // Stage 6: Overlay synthesis
   const overlayOpts: SynthesisOptions = {
     isJs: opts.overlay?.isJs ?? false,
     vm: vm!,
     syntheticPrefix: opts.overlay?.syntheticPrefix ?? vm?.getSyntheticPrefix?.() ?? "__AU_TTC_",
   };
-  const overlayPlan = planOverlay(linked, scope, overlayOpts);
+  const overlayPlan = trace.span("stage:overlay-plan", () => planOverlay(linked, scope, overlayOpts));
 
   const emitOpts: OverlayEmitOptions & { isJs: boolean } = { isJs: opts.overlay?.isJs ?? false };
   if (opts.overlay?.eol) emitOpts.eol = opts.overlay.eol;
   if (opts.overlay?.banner) emitOpts.banner = opts.overlay.banner;
   if (opts.overlay?.filename) emitOpts.filename = opts.overlay.filename;
-  const overlayEmit = emitOverlayFile(overlayPlan, emitOpts);
+  const overlayEmit = trace.span("stage:overlay-emit", () => emitOverlayFile(overlayPlan, emitOpts));
 
   return { ir, linked, scope, typecheck: tc, usage, overlayPlan, overlayEmit, diagnostics: diag, recorder };
 }
@@ -203,4 +200,4 @@ function hasQualifiedVm(vm: VmReflection): vm is VmReflection & { getQualifiedRo
 }
 
 // Re-exports for backward compatibility during migration
-export type { PipelineOptions, StageKey, StageOutputs, CacheOptions, FingerprintHints, ModuleResolver, StageArtifactMeta };
+export type { PipelineOptions, StageKey, StageArtifactMeta };

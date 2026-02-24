@@ -15,6 +15,7 @@ import {
   applyThirdPartyResources,
   hasThirdPartyResources,
   type ProjectSemanticsDiscoveryConfig,
+  type ProjectSemanticsDiscoveryResult,
   type Logger,
   type ThirdPartyDiscoveryResult,
 } from "@aurelia-ls/compiler";
@@ -24,6 +25,8 @@ export interface AureliaProjectIndexOptions {
   readonly ts: TypeScriptProject;
   readonly logger: Logger;
   readonly discovery?: ProjectSemanticsDiscoveryConfigBase;
+  /** Pre-computed discovery result — skips the initial discovery pipeline. */
+  readonly seededDiscovery?: ProjectSemanticsDiscoveryResult;
 }
 
 type ProjectSemanticsDiscoveryConfigBase = Omit<ProjectSemanticsDiscoveryConfig, "diagnostics">;
@@ -65,7 +68,13 @@ export class AureliaProjectIndex {
     };
     this.#discovery = new IncrementalDiscovery();
 
-    this.#model = this.#buildModel();
+    if (options.seededDiscovery) {
+      this.#model = createSemanticModel(options.seededDiscovery, {
+        defaultScope: this.#defaultScope,
+      });
+    } else {
+      this.#model = this.#buildModel();
+    }
   }
 
   /** The current semantic model — single source of truth. */

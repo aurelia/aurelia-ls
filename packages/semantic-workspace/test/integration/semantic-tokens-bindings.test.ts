@@ -7,7 +7,14 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { buildTemplateSyntaxRegistry, compileTemplate, BUILTIN_SEMANTICS } from "@aurelia-ls/compiler";
+import {
+  buildTemplateSyntaxRegistry,
+  buildResourceCatalog,
+  compileTemplate,
+  createSemanticModel,
+  prepareProjectSemantics,
+  BUILTIN_SEMANTICS,
+} from "@aurelia-ls/compiler";
 import { collectSemanticTokens } from "../../src/semantic-tokens.js";
 
 /* ===========================
@@ -35,15 +42,33 @@ function createVmReflection() {
 const VM = createVmReflection();
 const NOOP_MODULE_RESOLVER = (_specifier: string, _containingFile: string) => null;
 
+function buildQuery() {
+  const sem = prepareProjectSemantics(BUILTIN_SEMANTICS);
+  const syntax = buildTemplateSyntaxRegistry(sem);
+  const catalog = buildResourceCatalog(sem.resources, syntax.bindingCommands, syntax.attributePatterns);
+  const model = createSemanticModel({
+    semantics: sem, catalog, syntax,
+    resourceGraph: { root: null, scopes: {} } as any,
+    semanticSnapshot: { version: "test" as const, symbols: [], catalog: { resources: {} }, graph: null, gaps: [], confidence: "complete" as const },
+    apiSurfaceSnapshot: { version: "test" as const, symbols: [] },
+    definition: { authority: [], evidence: [], convergence: [] },
+    registration: { sites: [], orphans: [], unresolved: [] },
+    templates: [], inlineTemplates: [], diagnostics: [],
+    recognizedBindingCommands: [], recognizedAttributePatterns: [],
+    facts: new Map(),
+  } as any);
+  return { query: model.query(), syntax };
+}
+
 function compileForTokens(markup: string) {
-  const syntax = buildTemplateSyntaxRegistry(BUILTIN_SEMANTICS);
+  const { query, syntax } = buildQuery();
   return {
     compilation: compileTemplate({
       html: markup,
       templateFilePath: "test.html",
       isJs: false,
       vm: VM,
-      semantics: BUILTIN_SEMANTICS,
+      query,
       moduleResolver: NOOP_MODULE_RESOLVER,
     }),
     syntax,

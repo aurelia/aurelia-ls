@@ -13,6 +13,7 @@ import { createSemanticWorkspace, type SemanticWorkspaceEngine } from "../../src
 import { inlineTemplatePath } from "../../src/templates.js";
 import { getFixture, resolveFixtureRoot } from "../fixtures/index.js";
 import type { WorkspaceHarness, WorkspaceHarnessOptions, WorkspaceTemplateEntry } from "./types.js";
+import { getCachedDiscovery, setCachedDiscovery, claimCacheLock } from "./discovery-cache.js";
 
 const SILENT_LOGGER: CompilerLogger = {
   log: () => {},
@@ -53,11 +54,24 @@ export async function createWorkspaceHarness(options: WorkspaceHarnessOptions): 
     ...options.discovery,
   };
 
+  // Check filesystem cache for pre-computed discovery (parallel worker reuse).
+  // Skip cache for isolated fixtures (mutable) and custom discovery overrides.
+  const useCache = !options.isolateFixture && !options.discovery?.fileSystem && !options.discovery?.baseSemantics;
+  let cachedDiscovery = useCache ? getCachedDiscovery(fixture.id, sourceRoot) : null;
+  // If no cache, try to claim the build lock. If we lose the race,
+  // getCachedDiscovery will block until the winner writes the cache.
+  const weOwnBuild = useCache && !cachedDiscovery && claimCacheLock(fixture.id, sourceRoot);
+  if (useCache && !cachedDiscovery && !weOwnBuild) {
+    // Another worker is building — wait for it.
+    cachedDiscovery = getCachedDiscovery(fixture.id, sourceRoot);
+  }
+
   const workspace = createSemanticWorkspace({
     logger,
     workspaceRoot: root,
     tsconfigPath,
     discovery: discoveryConfig,
+    seededDiscovery: cachedDiscovery ?? undefined,
     lookupText: (uri) => lookupText(uri, inlineTextByUri),
     ...(options.workspace?.vm ? { vm: options.workspace.vm } : {}),
     ...(options.workspace?.typescript !== undefined ? { typescript: options.workspace.typescript } : {}),
@@ -69,6 +83,11 @@ export async function createWorkspaceHarness(options: WorkspaceHarnessOptions): 
   });
 
   const discovery = workspace.projectIndex.currentModel().discovery;
+
+  // Write cache on miss so parallel workers can reuse this result.
+  if (weOwnBuild) {
+    setCachedDiscovery(fixture.id, sourceRoot, discovery);
+  }
   const {
     templates,
     templateByUri,
