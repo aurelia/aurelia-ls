@@ -23,6 +23,7 @@ import {
   getAppQuery,
   getAppTemplate,
   pos,
+  posInFile,
 } from "./_harness.js";
 import type { WorkspaceHarness } from "../harness/types.js";
 import type { SemanticQuery, RefactorEngine } from "../../out/types.js";
@@ -67,26 +68,25 @@ function renameAt(needle: string, newName: string, delta = 1) {
 describe("rename: renameable entities", () => {
   it("CE tag name is renameable", async () => {
     const result = await prepareAt("<matrix-panel\n")();
+    expect("result" in result, `Expected success but got error: ${"error" in result ? result.error.message : ""}`).toBe(true);
     if ("result" in result) {
       expect(result.result.placeholder).toBe("matrix-panel");
       expect(result.result.range).toBeDefined();
       expect(result.result.range.start).toBeGreaterThanOrEqual(0);
-    } else {
-      // If denied, the error should explain why — not silently fail
-      expect(result.error.kind).toBeDefined();
     }
   });
 
   it("bindable attribute is renameable", async () => {
     const result = await prepareAt("count.bind")();
+    expect("result" in result, `Expected success but got error: ${"error" in result ? result.error.message : ""}`).toBe(true);
     if ("result" in result) {
-      // Bindable rename: placeholder should be the bindable name
       expect(["count", "count.bind"]).toContain(result.result.placeholder);
     }
   });
 
   it("VC pipe name is renameable", async () => {
     const result = await prepareAt("| format-date", 2)();
+    expect("result" in result, `Expected success but got error: ${"error" in result ? result.error.message : ""}`).toBe(true);
     if ("result" in result) {
       expect(result.result.placeholder).toBe("format-date");
     }
@@ -94,14 +94,58 @@ describe("rename: renameable entities", () => {
 
   it("BB ampersand name is renameable", async () => {
     const result = await prepareAt("& rate-limit", 2)();
+    expect("result" in result, `Expected success but got error: ${"error" in result ? result.error.message : ""}`).toBe(true);
     if ("result" in result) {
       expect(result.result.placeholder).toBe("rate-limit");
+    }
+  });
+
+  it("VM property in binding expression is renameable", async () => {
+    // count.bind="total" — cursor on "total" (the VM property)
+    const result = await prepareAt('="total"', 2)();
+    expect("result" in result, `Expected success but got error: ${"error" in result ? result.error.message : ""}`).toBe(true);
+    if ("result" in result) {
+      expect(result.result.placeholder).toBe("total");
+    }
+  });
+
+  it("VM property in interpolation is renameable", async () => {
+    // ${title} — cursor on "title"
+    const result = await prepareAt("${title}", 2)();
+    expect("result" in result, `Expected success but got error: ${"error" in result ? result.error.message : ""}`).toBe(true);
+    if ("result" in result) {
+      expect(result.result.placeholder).toBe("title");
+    }
+  });
+
+  it("VM method in event binding is renameable", async () => {
+    // click.trigger="selectItem(item)" — cursor on "selectItem"
+    const result = await prepareAt("selectItem(item)", 1)();
+    expect("result" in result, `Expected success but got error: ${"error" in result ? result.error.message : ""}`).toBe(true);
+    if ("result" in result) {
+      expect(result.result.placeholder).toBe("selectItem");
+    }
+  });
+
+  it("CA attribute name is renameable", async () => {
+    const result = await prepareAt("matrix-highlight.bind", 1)();
+    expect("result" in result, `Expected success but got error: ${"error" in result ? result.error.message : ""}`).toBe(true);
+    if ("result" in result) {
+      expect(result.result.placeholder).toBe("matrix-highlight");
+    }
+  });
+
+  it("local template element name is renameable", async () => {
+    const result = await prepareAt("<inline-tag repeat.for", 1)();
+    expect("result" in result, `Expected success but got error: ${"error" in result ? result.error.message : ""}`).toBe(true);
+    if ("result" in result) {
+      expect(result.result.placeholder).toBe("inline-tag");
     }
   });
 });
 
 // ============================================================================
-// 2. Non-renameable constructs — prepareRename should deny or return error
+// 2. Non-renameable constructs — prepareRename MUST deny
 //    (rename-spec: binding commands, contextual vars, builtins are not
 //    user-renameable)
 // ============================================================================
@@ -109,15 +153,15 @@ describe("rename: renameable entities", () => {
 describe("rename: non-renameable constructs", () => {
   it("binding command (.bind) is not renameable", async () => {
     const result = await prepareAt("count.bind", "count.".length + 1)();
-    // Should either return error or succeed but deny at rename time
+    expect("error" in result, "Binding command .bind should be denied").toBe(true);
     if ("error" in result) {
       expect(result.error.kind).toBeDefined();
     }
-    // If prepareRename succeeds, the rename itself should be denied
   });
 
   it("binding command (.trigger) is not renameable", async () => {
     const result = await prepareAt("click.trigger", "click.".length + 1)();
+    expect("error" in result, "Binding command .trigger should be denied").toBe(true);
     if ("error" in result) {
       expect(result.error.kind).toBeDefined();
     }
@@ -125,14 +169,15 @@ describe("rename: non-renameable constructs", () => {
 
   it("contextual variable ($index) is not renameable", async () => {
     const result = await prepareAt("${$index", 2)();
+    expect("error" in result, "Contextual variable $index should be denied").toBe(true);
     if ("error" in result) {
-      // Contextual vars are framework-injected — rename denied
       expect(result.error.kind).toBeDefined();
     }
   });
 
   it("native HTML element is not renameable", async () => {
     const result = await prepareAt("<h2>", 1)();
+    expect("error" in result, "Native HTML element should be denied").toBe(true);
     if ("error" in result) {
       expect(result.error.kind).toBeDefined();
     }
@@ -140,9 +185,42 @@ describe("rename: non-renameable constructs", () => {
 
   it("static text is not renameable", async () => {
     const result = await prepareAt("Detail view", 1)();
+    expect("error" in result, "Static text should be denied").toBe(true);
     if ("error" in result) {
       expect(result.error.kind).toBeDefined();
     }
+  });
+
+  it("binding command (.two-way) is not renameable", async () => {
+    const result = await prepareAt("value.two-way", "value.".length + 1)();
+    expect("error" in result, "Binding command .two-way should be denied").toBe(true);
+    if ("error" in result) {
+      expect(result.error.kind).toBeDefined();
+    }
+  });
+
+  it("contextual variable ($first) is not renameable", async () => {
+    const result = await prepareAt("${$first ?", 2)();
+    expect("error" in result, "Contextual variable $first should be denied").toBe(true);
+    if ("error" in result) {
+      expect(result.error.kind).toBeDefined();
+    }
+  });
+
+  it("built-in TC (if) is not user-renameable", async () => {
+    const result = await prepareAt("if.bind=\"showDetail\"", 1)();
+    // Built-in TCs are framework-owned — rename should be denied
+    expect("error" in result, "Built-in TC 'if' should be denied").toBe(true);
+  });
+
+  it("built-in CE (au-compose) is not user-renameable", async () => {
+    const result = await prepareAt("<au-compose", 1)();
+    expect("error" in result, "Built-in CE 'au-compose' should be denied").toBe(true);
+  });
+
+  it("built-in CE (au-slot) is not user-renameable", async () => {
+    const result = await prepareAt("<au-slot name", 1)();
+    expect("error" in result, "Built-in CE 'au-slot' should be denied").toBe(true);
   });
 });
 
@@ -153,10 +231,10 @@ describe("rename: non-renameable constructs", () => {
 describe("rename: safety assessment", () => {
   it("prepareRename for source-analyzed CE includes safety", async () => {
     const result = await prepareAt("<matrix-panel\n")();
+    expect("result" in result, "prepareRename should succeed for CE").toBe(true);
     if ("result" in result) {
       const safety = result.result.safety;
       expect(safety).toBeDefined();
-      // Source-analyzed CE with full scope coverage: high confidence
       expect(safety.confidence).toBeDefined();
       expect(safety.totalReferences).toBeGreaterThanOrEqual(0);
     }
@@ -164,11 +242,11 @@ describe("rename: safety assessment", () => {
 
   it("safety includes reference counts", async () => {
     const result = await prepareAt("<matrix-panel\n")();
+    expect("result" in result, "prepareRename should succeed for CE").toBe(true);
     if ("result" in result) {
       const safety = result.result.safety;
       expect(typeof safety.totalReferences).toBe("number");
       expect(typeof safety.certainReferences).toBe("number");
-      // Certain references cannot exceed total
       expect(safety.certainReferences).toBeLessThanOrEqual(safety.totalReferences);
     }
   });
@@ -181,35 +259,43 @@ describe("rename: safety assessment", () => {
 describe("rename: edit production", () => {
   it("renaming CE tag produces edits in template", async () => {
     const result = await renameAt("<matrix-panel\n", "matrix-widget")();
+    expect("edit" in result, `Expected edits but got error: ${"error" in result ? result.error.message : ""}`).toBe(true);
     if ("edit" in result) {
       const edits = result.edit.edits;
       expect(edits.length).toBeGreaterThan(0);
-      // At least one edit should target the template
       const templateEdits = edits.filter((e) => String(e.uri).endsWith("app.html"));
       expect(templateEdits.length).toBeGreaterThan(0);
-    }
-    // If error, it should be a structured policy denial, not a crash
-    if ("error" in result) {
-      expect(result.error.kind).toBeDefined();
-      expect(result.error.message).toBeDefined();
     }
   });
 
   it("renaming CE also produces edits in TypeScript", async () => {
     const result = await renameAt("<matrix-panel\n", "matrix-widget")();
+    expect("edit" in result, `Expected edits but got error: ${"error" in result ? result.error.message : ""}`).toBe(true);
     if ("edit" in result) {
-      const edits = result.edit.edits;
-      // Should include declaration site edit (decorator name property)
-      const tsEdits = edits.filter((e) => String(e.uri).endsWith(".ts"));
+      const tsEdits = result.edit.edits.filter((e) => String(e.uri).endsWith(".ts"));
       expect(tsEdits.length).toBeGreaterThan(0);
     }
   });
 
   it("renaming VC produces edits in expression and declaration", async () => {
     const result = await renameAt("| format-date", "format-datetime", 2)();
+    expect("edit" in result, `Expected edits but got error: ${"error" in result ? result.error.message : ""}`).toBe(true);
+    if ("edit" in result) {
+      expect(result.edit.edits.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("renaming VM property from binding expression produces edits", async () => {
+    const result = await renameAt('="total"', "grandTotal", 2)();
+    expect("edit" in result, `Expected edits but got error: ${"error" in result ? result.error.message : ""}`).toBe(true);
     if ("edit" in result) {
       const edits = result.edit.edits;
       expect(edits.length).toBeGreaterThan(0);
+      // Should produce edits in both template and TS
+      const templateEdits = edits.filter((e) => String(e.uri).endsWith(".html"));
+      const tsEdits = edits.filter((e) => String(e.uri).endsWith(".ts"));
+      expect(templateEdits.length, "Should edit template binding expressions").toBeGreaterThan(0);
+      expect(tsEdits.length, "Should edit TS property declaration").toBeGreaterThan(0);
     }
   });
 });
@@ -224,20 +310,18 @@ describe("rename: cross-feature consistency with find-references", () => {
   it("CE rename edits cover all find-reference locations", async () => {
     const p = await pos("<matrix-panel\n", 1);
 
-    // Collect find-references for matrix-panel
     const refs = query.references(p);
     const refUris = new Set(refs.map((r) => String(r.uri)));
 
-    // Collect rename edits
     const result = refactor.rename({
       uri: uri as any,
       position: p,
       newName: "matrix-widget",
     });
 
+    expect("edit" in result, `Expected edits but got error: ${"error" in result ? result.error.message : ""}`).toBe(true);
     if ("edit" in result) {
       const editUris = new Set(result.edit.edits.map((e) => String(e.uri)));
-      // Every file that has a reference should also have an edit
       for (const refUri of refUris) {
         expect(
           editUris.has(refUri),
@@ -250,18 +334,16 @@ describe("rename: cross-feature consistency with find-references", () => {
 
 // ============================================================================
 // 6. Policy gating — refactor policy determines what's allowed
-//    (The existing workspace-refactor-policy.test.ts tests policy details;
-//    here we verify the policy seam is exercised.)
 // ============================================================================
 
 describe("rename: policy enforcement", () => {
   it("rename at non-resource position produces structured error", async () => {
-    // Position on static text — not a renameable symbol
     const result = refactor.rename({
       uri: uri as any,
       position: await pos("Detail view", 1),
       newName: "new-name",
     });
+    expect("error" in result, "Rename at static text should produce error").toBe(true);
     if ("error" in result) {
       expect(result.error.kind).toBeDefined();
       expect(typeof result.error.message).toBe("string");
@@ -275,12 +357,90 @@ describe("rename: policy enforcement", () => {
       position: await pos("Detail view", 1),
       newName: "new-name",
     });
+    expect("error" in result, "Rename at static text should produce error").toBe(true);
     if ("error" in result) {
       const data = result.error.data;
-      if (data) {
-        expect(data.operation).toBe("rename");
-        expect(typeof data.reason).toBe("string");
-      }
+      expect(data).toBeDefined();
+      expect(data!.operation).toBe("rename");
+      expect(typeof data!.reason).toBe("string");
+    }
+  });
+});
+
+// ============================================================================
+// 7. TS-side rename — renaming in TypeScript propagates to templates
+//    (The user's VS Code bug: "renaming from the TS side doesn't propagate")
+// ============================================================================
+
+describe("rename: from TypeScript side", () => {
+  it("renaming VM property in TS propagates to template bindings", async () => {
+    // Rename 'total' in app.ts → should produce edits in app.html (count.bind="total", ${total})
+    const { uri: tsUri, position } = await posInFile("src/app.ts", "total = 42", 1);
+    const result = refactor.rename({ uri: tsUri as any, position, newName: "grandTotal" });
+    expect("edit" in result, `Expected edits but got error: ${"error" in result ? result.error.message : ""}`).toBe(true);
+    if ("edit" in result) {
+      const htmlEdits = result.edit.edits.filter((e) => String(e.uri).endsWith(".html"));
+      expect(htmlEdits.length, "TS rename should propagate to template").toBeGreaterThan(0);
+    }
+  });
+
+  it("renaming VM method in TS propagates to template event bindings", async () => {
+    const { uri: tsUri, position } = await posInFile("src/app.ts", "selectItem(item: MatrixItem)", 1);
+    const result = refactor.rename({ uri: tsUri as any, position, newName: "chooseItem" });
+    expect("edit" in result, `Expected edits but got error: ${"error" in result ? result.error.message : ""}`).toBe(true);
+    if ("edit" in result) {
+      const htmlEdits = result.edit.edits.filter((e) => String(e.uri).endsWith(".html"));
+      expect(htmlEdits.length, "TS method rename should propagate to template").toBeGreaterThan(0);
+    }
+  });
+
+  it("renaming @bindable property in TS propagates to template attribute", async () => {
+    // Rename 'title' bindable in matrix-panel.ts → should update template usages
+    const { uri: tsUri, position } = await posInFile(
+      "src/components/matrix-panel.ts",
+      '@bindable title = "Untitled"',
+      "@bindable ".length,
+    );
+    const result = refactor.rename({ uri: tsUri as any, position, newName: "heading" });
+    expect("edit" in result, `Expected edits but got error: ${"error" in result ? result.error.message : ""}`).toBe(true);
+    if ("edit" in result) {
+      const htmlEdits = result.edit.edits.filter((e) => String(e.uri).endsWith(".html"));
+      expect(htmlEdits.length, "Bindable rename should propagate to template attribute").toBeGreaterThan(0);
+    }
+  });
+
+  it("renaming CE class preserves decorator name (not class name)", async () => {
+    // Renaming the class 'MatrixPanel' should NOT change the CE name 'matrix-panel'
+    // The decorator name property is the CE identity, not the class name
+    const { uri: tsUri, position } = await posInFile(
+      "src/components/matrix-panel.ts",
+      "export class MatrixPanel",
+      "export class ".length,
+    );
+    const result = refactor.prepareRename({ uri: tsUri as any, position });
+    // Class rename is a TS concern — our refactor engine may or may not handle it
+    // If it does handle it, template edits should only appear if the decorator name changes
+    if ("result" in result) {
+      expect(result.result.placeholder).toBe("MatrixPanel");
+    }
+    // Either way: should not crash
+  });
+
+  it("renaming CE decorator name property propagates to template tags", async () => {
+    // Cursor on "matrix-panel" inside the @customElement({ name: "matrix-panel" }) decorator
+    const { uri: tsUri, position } = await posInFile(
+      "src/components/matrix-panel.ts",
+      '"matrix-panel"',
+      1,
+    );
+    const result = refactor.rename({ uri: tsUri as any, position, newName: "matrix-widget" });
+    if ("edit" in result) {
+      const htmlEdits = result.edit.edits.filter((e) => String(e.uri).endsWith(".html"));
+      expect(htmlEdits.length, "Decorator name rename should update template tags").toBeGreaterThan(0);
+    }
+    // Even if denied, it should produce a structured error, not crash
+    if ("error" in result) {
+      expect(result.error.kind).toBeDefined();
     }
   });
 });

@@ -99,6 +99,34 @@ export async function offsetToPos(off: number): Promise<{ line: number; characte
 }
 
 // ============================================================================
+// TS file helpers — for testing TS-side rename, references, etc.
+// ============================================================================
+
+/**
+ * Open a TS source file from the fixture and return its URI and text.
+ */
+export async function openFixtureFile(relativePath: string): Promise<{ uri: DocumentUri; text: string }> {
+  const harness = await getHarness();
+  const uri = harness.openTemplate(relativePath);
+  const text = harness.readText(uri);
+  if (!text) throw new Error(`File text not found for ${relativePath}`);
+  return { uri, text };
+}
+
+/**
+ * Find a position inside a TS fixture file.
+ */
+export async function posInFile(
+  relativePath: string,
+  needle: string,
+  delta = 1,
+): Promise<{ uri: DocumentUri; position: { line: number; character: number }; text: string }> {
+  const { uri, text } = await openFixtureFile(relativePath);
+  const position = findPosition(text, needle, delta);
+  return { uri, position, text };
+}
+
+// ============================================================================
 // Assertion helpers — property-coupled, not output-coupled
 // ============================================================================
 

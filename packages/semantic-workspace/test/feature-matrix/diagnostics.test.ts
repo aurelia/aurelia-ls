@@ -324,3 +324,187 @@ describe("diagnostics: deduplication", () => {
     }
   });
 });
+
+// ============================================================================
+// 9. False positive prevention — extended construct coverage
+//    (Beyond §5: test that well-formed template constructs don't trigger errors)
+// ============================================================================
+
+describe("diagnostics: extended false positive prevention", () => {
+  it("local template inline-tag does not produce unknown-element", () => {
+    const falseDiags = diagsWithCode("aurelia/unknown-element").filter((d) => {
+      if (!d.span) return false;
+      return text.slice(d.span.start, d.span.end).includes("inline-tag");
+    });
+    expect(falseDiags).toHaveLength(0);
+  });
+
+  it("as-element target does not produce unknown-element for the host div", () => {
+    // <div as-element="matrix-badge"> — the div should not be flagged
+    const asElementOffset = text.indexOf('as-element="matrix-badge"');
+    const falseDiags = diagsWithCode("aurelia/unknown-element").filter((d) => {
+      if (!d.span) return false;
+      return d.span.start >= asElementOffset - 10 && d.span.start <= asElementOffset + 30;
+    });
+    expect(falseDiags).toHaveLength(0);
+  });
+
+  it("shorthand :value binding does not produce diagnostics", () => {
+    const shorthandOffset = text.indexOf(':value="title"');
+    const falseDiags = lspDiagnostics.filter((d) => {
+      if (!d.span) return false;
+      return d.span.start >= shorthandOffset && d.span.start < shorthandOffset + ':value="title"'.length;
+    });
+    expect(falseDiags).toHaveLength(0);
+  });
+
+  it("shorthand @click binding does not produce diagnostics", () => {
+    const atClickOffset = text.indexOf('@click="refreshData()"');
+    const falseDiags = lspDiagnostics.filter((d) => {
+      if (!d.span) return false;
+      return d.span.start >= atClickOffset && d.span.start < atClickOffset + '@click="refreshData()"'.length;
+    });
+    expect(falseDiags).toHaveLength(0);
+  });
+
+  it("multi-binding CA does not produce unknown-attribute", () => {
+    const tooltipOffset = text.indexOf("matrix-tooltip=");
+    const falseDiags = diagsWithCode("aurelia/unknown-attribute").filter((d) => {
+      if (!d.span) return false;
+      return text.slice(d.span.start, d.span.end).includes("matrix-tooltip");
+    });
+    expect(falseDiags).toHaveLength(0);
+  });
+
+  it("let element does not produce unknown-element", () => {
+    const falseDiags = diagsWithCode("aurelia/unknown-element").filter((d) => {
+      if (!d.span) return false;
+      return text.slice(d.span.start, d.span.end).includes("let");
+    });
+    expect(falseDiags).toHaveLength(0);
+  });
+
+  it("au-compose does not produce unknown-element", () => {
+    const falseDiags = diagsWithCode("aurelia/unknown-element").filter((d) => {
+      if (!d.span) return false;
+      return text.slice(d.span.start, d.span.end).includes("au-compose");
+    });
+    expect(falseDiags).toHaveLength(0);
+  });
+
+  it("au-slot does not produce unknown-element", () => {
+    const falseDiags = diagsWithCode("aurelia/unknown-element").filter((d) => {
+      if (!d.span) return false;
+      return text.slice(d.span.start, d.span.end).includes("au-slot");
+    });
+    expect(falseDiags).toHaveLength(0);
+  });
+
+  it("switch/case/default-case do not produce unknown-attribute", () => {
+    for (const tc of ["switch", "case", "default-case"]) {
+      const falseDiags = diagsWithCode("aurelia/unknown-attribute").filter((d) => {
+        if (!d.span) return false;
+        return text.slice(d.span.start, d.span.end).includes(tc);
+      });
+      expect(falseDiags, `${tc} should not produce unknown-attribute`).toHaveLength(0);
+    }
+  });
+
+  it("ref binding does not produce unknown-attribute", () => {
+    const refOffset = text.indexOf('ref="searchInput"');
+    const falseDiags = lspDiagnostics.filter((d) => {
+      if (!d.span) return false;
+      return d.span.start >= refOffset && d.span.start < refOffset + 'ref="searchInput"'.length;
+    });
+    expect(falseDiags).toHaveLength(0);
+  });
+
+  it("repeat.for does not produce diagnostics", () => {
+    const falseDiags = diagsWithCode("aurelia/unknown-attribute").filter((d) => {
+      if (!d.span) return false;
+      return text.slice(d.span.start, d.span.end).includes("repeat");
+    });
+    expect(falseDiags).toHaveLength(0);
+  });
+
+  it("if.bind does not produce diagnostics", () => {
+    const falseDiags = diagsWithCode("aurelia/unknown-attribute").filter((d) => {
+      if (!d.span) return false;
+      return text.slice(d.span.start, d.span.end).includes("if");
+    });
+    expect(falseDiags).toHaveLength(0);
+  });
+
+  it("with.bind does not produce diagnostics", () => {
+    const falseDiags = diagsWithCode("aurelia/unknown-attribute").filter((d) => {
+      if (!d.span) return false;
+      return text.slice(d.span.start, d.span.end).includes("with");
+    });
+    expect(falseDiags).toHaveLength(0);
+  });
+
+  it("promise data flow (then.from-view, catch.from-view) does not produce diagnostics", () => {
+    for (const attr of ["then.from-view", "catch.from-view"]) {
+      const attrOffset = text.indexOf(attr);
+      const falseDiags = lspDiagnostics.filter((d) => {
+        if (!d.span) return false;
+        return d.span.start >= attrOffset && d.span.start < attrOffset + attr.length;
+      });
+      expect(falseDiags, `${attr} should not produce diagnostics`).toHaveLength(0);
+    }
+  });
+
+  it("destructured repeat does not produce diagnostics", () => {
+    const destrOffset = text.indexOf("[idx, entry] of indexedItems");
+    const falseDiags = lspDiagnostics.filter((d) => {
+      if (!d.span) return false;
+      return d.span.start >= destrOffset && d.span.start < destrOffset + "[idx, entry] of indexedItems".length;
+    });
+    expect(falseDiags).toHaveLength(0);
+  });
+
+  it("interpolation in attribute value does not produce spurious diagnostics", () => {
+    const interpOffset = text.indexOf('level="${activeSeverity}"');
+    const falseDiags = lspDiagnostics.filter((d) => {
+      if (!d.span) return false;
+      return d.span.start >= interpOffset && d.span.start < interpOffset + 'level="${activeSeverity}"'.length;
+    });
+    expect(falseDiags).toHaveLength(0);
+  });
+});
+
+// ============================================================================
+// 10. Diagnostic counts — expected number of each diagnostic type
+// ============================================================================
+
+describe("diagnostics: expected counts", () => {
+  it("exactly one unknown-element diagnostic fires", () => {
+    // Only <missing-component> should trigger unknown-element
+    const count = diagsWithCode("aurelia/unknown-element").length;
+    expect(count).toBe(1);
+  });
+
+  it("exactly one unknown-bindable diagnostic fires", () => {
+    // Only nonexistent-prop.bind on matrix-panel should trigger
+    const count = diagsWithCode("aurelia/unknown-bindable").length;
+    expect(count).toBe(1);
+  });
+
+  it("exactly one unknown-command diagnostic fires", () => {
+    // Only title.badcommand should trigger
+    const count = diagsWithCode("aurelia/unknown-command").length;
+    expect(count).toBe(1);
+  });
+
+  it("exactly one unknown-converter diagnostic fires", () => {
+    // Only | nonexistent should trigger
+    const count = diagsWithCode("aurelia/unknown-converter").length;
+    expect(count).toBe(1);
+  });
+
+  it("exactly one unknown-behavior diagnostic fires", () => {
+    // Only & nonexistent should trigger
+    const count = diagsWithCode("aurelia/unknown-behavior").length;
+    expect(count).toBe(1);
+  });
+});

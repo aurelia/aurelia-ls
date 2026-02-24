@@ -16,7 +16,9 @@
     "semantic-authority-host": "./out/bin/semantic-authority-host.js"
   },
   "scripts": {
-    "build": "tsc -b"
+    "build": "tsc -b",
+    "test": "vitest run",
+    "test:matrix": "vitest run test/feature-matrix/"
   },
   "dependencies": {
     "@aurelia-ls/compiler": "workspace:*"

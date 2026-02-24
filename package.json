@@ -75,6 +75,7 @@
     "test:language-server": "pnpm -w build && node scripts/run-vitest.mjs packages/language-server/test",
     "test:sem-unit": "node scripts/run-vitest.mjs packages/semantic-workspace/test/unit",
     "test:sem-workspace": "node scripts/run-vitest.mjs packages/semantic-workspace/test",
+    "test:sem-matrix": "node scripts/run-vitest.mjs packages/semantic-workspace/test/feature-matrix",
     "test:ide": "pnpm -w build && node scripts/run-vitest.mjs packages/language-server/test packages/semantic-workspace/test",
     "test:language-server:cov": "pnpm -w build && node scripts/run-vitest.mjs --coverage packages/language-server/test",
     "test:vscode": "pnpm -w build && node scripts/run-vitest.mjs packages/vscode",

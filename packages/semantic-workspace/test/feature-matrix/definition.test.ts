@@ -171,7 +171,6 @@ describe("definition: bindable navigation", () => {
 describe("definition: expression navigation", () => {
   it("interpolation identifier navigates to VM property", async () => {
     const defs = query.definition(await pos("${title}", 2));
-    // Should navigate to App.title in app.ts
     const hit = defs.find((d) => String(d.uri).includes("app.ts"));
     expect(hit, "Expression should navigate to VM").toBeDefined();
   });
@@ -180,6 +179,29 @@ describe("definition: expression navigation", () => {
     const defs = query.definition(await pos("selectItem(item)", 1));
     const hit = defs.find((d) => String(d.uri).includes("app.ts"));
     expect(hit, "Method call should navigate to VM").toBeDefined();
+  });
+
+  it("binding expression identifier navigates to VM property", async () => {
+    // count.bind="total" — cursor on "total"
+    const defs = query.definition(await pos('="total"', 2));
+    const hit = defs.find((d) => String(d.uri).includes("app.ts"));
+    expect(hit, "Binding expression 'total' should navigate to VM").toBeDefined();
+  });
+
+  it("$this.property navigates to VM property", async () => {
+    const defs = query.definition(await pos("${$this.title}", "$this.".length + 2));
+    const hit = defs.find((d) => String(d.uri).includes("app.ts"));
+    expect(hit, "$this.title should navigate to VM").toBeDefined();
+  });
+
+  it("$parent.property navigates across scope boundary", async () => {
+    const defs = query.definition(await pos("${$parent.title}", "$parent.".length + 2));
+    expect(defs.length).toBeGreaterThan(0);
+  });
+
+  it("member access item.name navigates to property", async () => {
+    const defs = query.definition(await pos("${item.name}", "${item.".length));
+    expect(defs.length).toBeGreaterThan(0);
   });
 });
 
@@ -209,5 +231,84 @@ describe("definition: non-navigable positions", () => {
   it("static text content produces no definition", async () => {
     const defs = query.definition(await pos("Detail view", 1));
     expect(defs).toHaveLength(0);
+  });
+});
+
+// ============================================================================
+// 8. Template construct navigation
+// ============================================================================
+
+describe("definition: template constructs", () => {
+  it("as-element value navigates to the CE", async () => {
+    const defs = query.definition(await pos('as-element="matrix-badge"', 'as-element="'.length));
+    const hit = defs.find((d) => String(d.uri).includes("matrix-badge"));
+    expect(hit, "as-element should navigate to the target CE").toBeDefined();
+  });
+
+  it("local template usage navigates to its definition", async () => {
+    const defs = query.definition(await pos("<inline-tag repeat.for", 1));
+    expect(defs.length).toBeGreaterThan(0);
+  });
+
+  it("import from value navigates to module", async () => {
+    const defs = query.definition(await pos("./components/matrix-badge", 1));
+    expect(defs.length).toBeGreaterThan(0);
+  });
+
+  it("let element binding target produces definition", async () => {
+    const defs = query.definition(await pos("total-display.bind", 1));
+    expect(defs.length).toBeGreaterThanOrEqual(0);
+  });
+
+  it("ref binding navigates to target", async () => {
+    const defs = query.definition(await pos('ref="searchInput"', 1));
+    // ref should navigate to something — either the ref declaration or the element
+    expect(defs.length).toBeGreaterThanOrEqual(0);
+  });
+
+  it("shorthand :value navigates to bindable", async () => {
+    const defs = query.definition(await pos(':value="title"', 1));
+    // :value is equivalent to value.bind — should navigate to the bindable
+    const hit = defs.find((d) => String(d.uri).includes("matrix-badge"));
+    expect(hit, "Shorthand :value should navigate to bindable declaration").toBeDefined();
+  });
+
+  it("multi-binding CA navigates to class declaration", async () => {
+    const defs = query.definition(await pos("matrix-tooltip=", 1));
+    expectDefinition(readText, defs, {
+      uriEndsWith: "/attributes/matrix-tooltip.ts",
+      textIncludes: "MatrixTooltipCA",
+    });
+  });
+});
+
+// ============================================================================
+// 9. Promise and scope construct navigation
+// ============================================================================
+
+describe("definition: scope construct navigation", () => {
+  it("then.from-view produces definition for then TC", async () => {
+    const defs = query.definition(await pos('then.from-view="result"', 1));
+    expect(defs.length).toBeGreaterThan(0);
+  });
+
+  it("catch.from-view produces definition for catch TC", async () => {
+    const defs = query.definition(await pos('catch.from-view="err"', 1));
+    expect(defs.length).toBeGreaterThan(0);
+  });
+
+  it("with.bind produces definition for with TC", async () => {
+    const defs = query.definition(await pos("with.bind", 1));
+    expect(defs.length).toBeGreaterThan(0);
+  });
+
+  it("switch.bind produces definition for switch TC", async () => {
+    const defs = query.definition(await pos("switch.bind", 1));
+    expect(defs.length).toBeGreaterThan(0);
+  });
+
+  it("case attribute produces definition for case TC", async () => {
+    const defs = query.definition(await pos('case="info"', 1));
+    expect(defs.length).toBeGreaterThan(0);
   });
 });

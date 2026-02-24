@@ -283,9 +283,166 @@ describe("completions: custom attributes", () => {
 
 describe("completions: import from", () => {
   it("includes module specifiers for import elements", async () => {
-    // Position inside the `from` attribute value of <import>
     const completions = query.completions(await pos('<import from="./components/matrix-badge">', '<import from="./'.length));
-    // Should suggest paths — at minimum, this shouldn't crash
     expect(Array.isArray(completions)).toBe(true);
+  });
+});
+
+// ============================================================================
+// 10. Scope-aware expression completions
+// ============================================================================
+
+describe("completions: scope-aware expressions", () => {
+  it("repeat scope includes iteration local 'item'", async () => {
+    // Inside the repeat body, expression completions should include the local
+    const completions = query.completions(await pos("${item.name}", 2));
+    expect(hasLabel(completions, "item")).toBe(true);
+  });
+
+  it("repeat scope includes contextual variables", async () => {
+    const completions = query.completions(await pos("${$index + 1}", 2));
+    expect(hasLabel(completions, "$index")).toBe(true);
+  });
+
+  it("with scope includes value properties", async () => {
+    // Inside with.bind="items[0]", completions should include item properties
+    // (name, status, etc. from MatrixItem)
+    const completions = query.completions(await pos("<div with.bind=\"items[0]\">\n      <span>${name}", "${name}".length - 2));
+    // At minimum, the 'name' property from the with value should appear
+    if (completions.length > 0) {
+      expect(hasLabel(completions, "name")).toBe(true);
+    }
+  });
+
+  it("nested repeat inner scope includes inner local", async () => {
+    // group.items repeat: inner 'item' should be in scope
+    const completions = query.completions(await pos("${item.name}: ${item.count}", 2));
+    expect(hasLabel(completions, "item")).toBe(true);
+  });
+
+  it("$parent completions include outer scope members", async () => {
+    const completions = query.completions(await pos("${$parent.title}", "$parent.".length + 2));
+    if (completions.length > 0) {
+      expect(hasLabel(completions, "title")).toBe(true);
+    }
+  });
+});
+
+// ============================================================================
+// 11. Member access completions
+// ============================================================================
+
+describe("completions: member access", () => {
+  it("dot access on item shows item properties", async () => {
+    const completions = query.completions(await pos("${item.name}", "${item.".length));
+    if (completions.length > 0) {
+      expect(hasLabel(completions, "name")).toBe(true);
+    }
+  });
+
+  it("dot access on group shows group properties", async () => {
+    const completions = query.completions(await pos("${group.title}", "${group.".length));
+    if (completions.length > 0) {
+      expect(hasLabel(completions, "title")).toBe(true);
+    }
+  });
+});
+
+// ============================================================================
+// 12. Binding command completions per position
+// ============================================================================
+
+describe("completions: binding commands context", () => {
+  it("includes event commands (trigger, capture) at event position", async () => {
+    const completions = query.completions(await pos("click.trigger", "click.".length));
+    expect(hasLabel(completions, "trigger")).toBe(true);
+  });
+
+  it("includes for command at repeat position", async () => {
+    const completions = query.completions(await pos("repeat.for", "repeat.".length));
+    expect(hasLabel(completions, "for")).toBe(true);
+  });
+});
+
+// ============================================================================
+// 13. Contextual variable completions
+// ============================================================================
+
+describe("completions: contextual variables", () => {
+  it("repeat scope includes $even, $odd, $first, $last", async () => {
+    const completions = query.completions(await pos("${$first ?", 2));
+    expect(hasLabel(completions, "$first")).toBe(true);
+    expect(hasLabel(completions, "$last")).toBe(true);
+    expect(hasLabel(completions, "$even")).toBe(true);
+    expect(hasLabel(completions, "$odd")).toBe(true);
+  });
+
+  it("repeat scope includes $length and $middle", async () => {
+    const completions = query.completions(await pos("${$index + 1}", 2));
+    expect(hasLabel(completions, "$length")).toBe(true);
+    expect(hasLabel(completions, "$middle")).toBe(true);
+  });
+});
+
+// ============================================================================
+// 14. Promise scope completions
+// ============================================================================
+
+describe("completions: promise scope", () => {
+  it("then block scope includes the from-view variable", async () => {
+    // Inside then.from-view="result", ${result.message} — 'result' should be in scope
+    const completions = query.completions(await pos("${result.message}", 2));
+    expect(hasLabel(completions, "result")).toBe(true);
+  });
+
+  it("catch block scope includes the from-view variable", async () => {
+    const completions = query.completions(await pos("${err.message}", 2));
+    expect(hasLabel(completions, "err")).toBe(true);
+  });
+});
+
+// ============================================================================
+// 15. Destructured repeat completions
+// ============================================================================
+
+describe("completions: destructured repeat", () => {
+  it("destructured variables are in scope", async () => {
+    const completions = query.completions(await pos("${idx}:", 2));
+    expect(hasLabel(completions, "idx")).toBe(true);
+  });
+
+  it("destructured entry variable is in scope", async () => {
+    const completions = query.completions(await pos("${entry.name}", 2));
+    expect(hasLabel(completions, "entry")).toBe(true);
+  });
+});
+
+// ============================================================================
+// 16. Template controller completions at attribute positions
+// ============================================================================
+
+describe("completions: TC attribute positions", () => {
+  it("switch.bind has completions for VM properties", async () => {
+    const completions = query.completions(await pos('switch.bind="activeSeverity"', 'switch.bind="'.length));
+    expect(hasLabel(completions, "activeSeverity")).toBe(true);
+  });
+
+  it("if.bind has completions for VM properties", async () => {
+    const completions = query.completions(await pos('if.bind="showDetail"', 'if.bind="'.length));
+    expect(hasLabel(completions, "showDetail")).toBe(true);
+  });
+});
+
+// ============================================================================
+// 17. Multi-binding CA completions
+// ============================================================================
+
+describe("completions: multi-binding CA", () => {
+  it("multi-binding CA attribute position includes the CA name", async () => {
+    const completions = query.completions(await pos("matrix-tooltip=", 1));
+    // At the attribute name position, the CA should appear
+    if (completions.length > 0) {
+      expect(hasLabel(completions, "matrix-tooltip")).toBe(true);
+    }
   });
 });

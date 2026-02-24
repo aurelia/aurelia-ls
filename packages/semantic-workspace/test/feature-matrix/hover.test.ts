@@ -86,6 +86,21 @@ describe("hover identity (resource kinds)", () => {
     const hover = query.hover(await pos("value.two-way", "value.".length + 1));
     assertHoverContains(hover, /\(binding command\) two-way/);
   });
+
+  it("bindable attribute: count on matrix-panel", async () => {
+    const hover = query.hover(await pos("count.bind", 1));
+    assertHoverContains(hover, "count");
+  });
+
+  it("local template element: inline-tag", async () => {
+    const hover = query.hover(await pos("<inline-tag repeat.for", 1));
+    assertHoverContains(hover, /\(custom element\) inline-tag/);
+  });
+
+  it("as-element identity: div acting as matrix-badge", async () => {
+    const hover = query.hover(await pos('as-element="matrix-badge"', 'as-element="'.length));
+    assertHoverContains(hover, "matrix-badge");
+  });
 });
 
 // ============================================================================
@@ -287,6 +302,52 @@ describe("hover scope constructs", () => {
     const hover = query.hover(await pos("switch.bind", 1));
     assertHoverContains(hover, /\(template controller\) switch/);
   });
+
+  it("with.bind hover shows template controller identity", async () => {
+    const hover = query.hover(await pos("with.bind", 1));
+    assertHoverContains(hover, /\(template controller\) with/);
+  });
+});
+
+// ============================================================================
+// 9. Expression hovers — identifiers, scope tokens, member access
+// ============================================================================
+
+describe("hover expression constructs", () => {
+  it("interpolation identifier shows type info", async () => {
+    const hover = query.hover(await pos("${title}", 2));
+    expect(hover).not.toBeNull();
+  });
+
+  it("$this shows scope/binding context info", async () => {
+    const hover = query.hover(await pos("${$this.title}", 2));
+    expect(hover).not.toBeNull();
+  });
+
+  it("$parent shows scope traversal info", async () => {
+    const hover = query.hover(await pos("${$parent.title}", 2));
+    expect(hover).not.toBeNull();
+  });
+
+  it("contextual variable $index produces hover", async () => {
+    const hover = query.hover(await pos("${$index + 1}", 2));
+    expect(hover).not.toBeNull();
+  });
+
+  it("contextual variable $first produces hover", async () => {
+    const hover = query.hover(await pos("${$first ?", 2));
+    expect(hover).not.toBeNull();
+  });
+
+  it("member access item.name produces hover", async () => {
+    const hover = query.hover(await pos("${item.name}", "${item.".length));
+    expect(hover).not.toBeNull();
+  });
+
+  it("method call selectItem produces hover", async () => {
+    const hover = query.hover(await pos("selectItem(item)", 1));
+    expect(hover).not.toBeNull();
+  });
 });
 
 // ============================================================================
@@ -302,5 +363,141 @@ describe("hover meta elements", () => {
   it("bindable meta element produces hover", async () => {
     const hover = query.hover(await pos("<bindable name", 1));
     assertHoverContains(hover, "<bindable>");
+  });
+
+  it("let element produces hover", async () => {
+    const hover = query.hover(await pos("<let total-display", 1));
+    expect(hover).not.toBeNull();
+  });
+});
+
+// ============================================================================
+// 11. Template construct hovers — ref, multi-binding, shorthand
+// ============================================================================
+
+describe("hover template constructs", () => {
+  it("ref binding produces hover", async () => {
+    const hover = query.hover(await pos('ref="searchInput"', 1));
+    expect(hover).not.toBeNull();
+  });
+
+  it("multi-binding CA property produces hover", async () => {
+    // matrix-tooltip with multi-binding syntax: text.bind: noteMessage; position: top
+    const hover = query.hover(await pos("matrix-tooltip=", 1));
+    expect(hover).not.toBeNull();
+    assertHoverContains(hover, "matrix-tooltip");
+  });
+
+  it("shorthand :value binding produces hover", async () => {
+    // :value is colon-prefix pattern → equivalent to value.bind
+    const hover = query.hover(await pos(':value="title"', 1));
+    expect(hover).not.toBeNull();
+  });
+
+  it("shorthand @click binding produces hover", async () => {
+    // @click is at-prefix pattern → equivalent to click.trigger
+    const hover = query.hover(await pos("@click=", 1));
+    expect(hover).not.toBeNull();
+  });
+
+  it("au-compose element produces hover", async () => {
+    const hover = query.hover(await pos("<au-compose", 1));
+    expect(hover).not.toBeNull();
+  });
+
+  it("au-slot element produces hover", async () => {
+    const hover = query.hover(await pos("<au-slot name", 1));
+    expect(hover).not.toBeNull();
+  });
+
+  it("interpolation in attribute value produces hover on expression", async () => {
+    // level="${activeSeverity}" — cursor on activeSeverity inside the interpolation
+    const hover = query.hover(await pos("${activeSeverity}", 2));
+    expect(hover).not.toBeNull();
+  });
+
+  it("static string bindable value produces hover on attribute name", async () => {
+    // title="Dashboard" — cursor on the 'title' attribute name
+    const hover = query.hover(await pos('title="Dashboard"', 1));
+    expect(hover).not.toBeNull();
+    assertHoverContains(hover, "title");
+  });
+
+  it("value.two-way bindable produces hover on attribute name", async () => {
+    const hover = query.hover(await pos("value.two-way", 1));
+    expect(hover).not.toBeNull();
+  });
+});
+
+// ============================================================================
+// 12. Promise data flow — then.from-view, catch.from-view
+// ============================================================================
+
+describe("hover promise data flow", () => {
+  it("then.from-view attribute produces hover", async () => {
+    const hover = query.hover(await pos('then.from-view="result"', 1));
+    expect(hover).not.toBeNull();
+  });
+
+  it("catch.from-view attribute produces hover", async () => {
+    const hover = query.hover(await pos('catch.from-view="err"', 1));
+    expect(hover).not.toBeNull();
+  });
+
+  it("pending TC produces hover", async () => {
+    const hover = query.hover(await pos("<span pending>", "span ".length + 1));
+    // pending is a TC — should produce TC hover
+    expect(hover).not.toBeNull();
+  });
+
+  it("result variable inside then block produces hover", async () => {
+    const hover = query.hover(await pos("${result.message}", 2));
+    expect(hover).not.toBeNull();
+  });
+});
+
+// ============================================================================
+// 13. Destructured repeat
+// ============================================================================
+
+describe("hover destructured repeat", () => {
+  it("destructured repeat.for produces TC hover", async () => {
+    const hover = query.hover(await pos('repeat.for="[idx, entry] of indexedItems"', 1));
+    assertHoverContains(hover, /\(template controller\) repeat/);
+  });
+
+  it("destructured variable produces hover inside loop body", async () => {
+    // ${idx}: ${entry.name} — cursor on 'idx'
+    const hover = query.hover(await pos("${idx}:", 2));
+    expect(hover).not.toBeNull();
+  });
+
+  it("destructured variable member access produces hover", async () => {
+    // ${entry.name} — cursor on 'entry'
+    const hover = query.hover(await pos("${entry.name}", 2));
+    expect(hover).not.toBeNull();
+  });
+});
+
+// ============================================================================
+// 14. Nested scopes
+// ============================================================================
+
+describe("hover nested scopes", () => {
+  it("outer repeat group variable produces hover", async () => {
+    const hover = query.hover(await pos("${group.title}", 2));
+    expect(hover).not.toBeNull();
+  });
+
+  it("inner repeat item inside nested loop produces hover", async () => {
+    // The inner repeat: item of group.items
+    const hover = query.hover(await pos("${item.name}: ${item.count}", 2));
+    expect(hover).not.toBeNull();
+  });
+
+  it("with scope property produces hover", async () => {
+    // Inside with.bind="items[0]", ${name} resolves to item's name
+    const hover = query.hover(await pos("<div with.bind=\"items[0]\">\n      <span>${name}", "${name}".length - 2));
+    expect(hover).not.toBeNull();
   });
 });
