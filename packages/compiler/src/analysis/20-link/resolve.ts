@@ -95,6 +95,7 @@ import { extractExprResources, extractHostAssignments } from "../../shared/expr-
 import { CompilerAttributes, type CompileTrace } from "../../shared/trace.js";
 import { createResolveContext, createResolveServices, type ResolveContext, type ResolveDiagnosticEmitter } from "./resolve-context.js";
 import type { SemanticsSnapshot } from "../../schema/snapshot.js";
+import type { SemanticsLookup } from "../../schema/types.js";
 
 function assertUnreachable(_x: never): never {
   throw new Error("unreachable");
@@ -153,8 +154,28 @@ export interface LinkOptions {
   diagnostics: ResolveDiagnosticEmitter;
   /** Optional trace for instrumentation. Defaults to NOOP_TRACE. */
   trace?: CompileTrace;
+  /**
+   * Optional dependency recorder for tracking which resources are read
+   * during link resolution. When provided, records resource-read edges
+   * for dependency-graph-driven invalidation.
+   */
+  deps?: import("../../schema/dependency-graph.js").DepRecorder;
+  /**
+   * L2 path: pre-resolved SemanticsLookup (e.g., from SemanticModelQuery).
+   * When provided, the snapshot parameter is not used for lookup creation.
+   */
+  lookup?: SemanticsLookup;
+  /** L2 path: resource graph for scope-aware resolution. */
+  graph?: import("../../schema/resource-graph.js").ResourceGraph | null;
 }
 
+/**
+ * Link template semantics using either a SemanticsSnapshot (legacy) or
+ * a pre-resolved SemanticsLookup + ResourceGraph (L2 path).
+ *
+ * L2 path: pass `lookup` and `graph` in LinkOptions. The snapshot parameter
+ * becomes unused but is kept for backward compatibility.
+ */
 export function linkTemplateSemantics(ir: IrModule, snapshot: SemanticsSnapshot, opts: LinkOptions): LinkModule {
   if (!opts.moduleResolver) {
     throw new Error("linkTemplateSemantics requires a moduleResolver; missing resolver is a wiring error.");
@@ -175,16 +196,27 @@ export function linkTemplateSemantics(ir: IrModule, snapshot: SemanticsSnapshot,
       "link.exprCount": ir.exprTable?.length ?? 0,
     });
 
-    const lookupOpts: SemanticsLookupOptions | undefined = buildLookupOpts(snapshot);
-    const ctxGraph = snapshot.resourceGraph ?? snapshot.semantics.resourceGraph ?? null;
-    const ctx: ResolverContext = createResolveContext(
-      snapshot.semantics,
-      services,
-      lookupOpts,
-      ctxGraph,
-      opts.moduleResolver,
-      opts.templateFilePath,
-    );
+    // L2 path: use pre-resolved lookup if provided
+    const ctx: ResolverContext = opts.lookup
+      ? {
+          lookup: opts.lookup,
+          graph: opts.graph ?? snapshot.resourceGraph ?? null,
+          services,
+          moduleResolver: opts.moduleResolver,
+          templateFilePath: opts.templateFilePath,
+        }
+      : (() => {
+          const lookupOpts: SemanticsLookupOptions | undefined = buildLookupOpts(snapshot);
+          const ctxGraph = snapshot.resourceGraph ?? snapshot.semantics.resourceGraph ?? null;
+          return createResolveContext(
+            snapshot.semantics,
+            services,
+            lookupOpts,
+            ctxGraph,
+            opts.moduleResolver,
+            opts.templateFilePath,
+          );
+        })();
 
     for (const template of ir.templates) {
       if (template.templateMeta) {

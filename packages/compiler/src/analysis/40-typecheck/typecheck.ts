@@ -65,6 +65,12 @@ export interface TypecheckOptions {
   config?: Partial<TypecheckConfig>;
   /** Optional trace for instrumentation. Defaults to NOOP_TRACE. */
   trace?: CompileTrace;
+  /**
+   * Optional dependency recorder for tracking which type-states are read
+   * during type checking. When provided, records type-state-read edges
+   * for dependency-graph-driven invalidation.
+   */
+  deps?: import("../../schema/dependency-graph.js").DepRecorder;
 }
 
 /** Phase 40: derive expected + inferred types and surface lightweight diagnostics. */

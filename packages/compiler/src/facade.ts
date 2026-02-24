@@ -44,9 +44,11 @@ export interface CompileOptions {
   templateFilePath: string;
   isJs: boolean;
   vm: VmReflection;
-  /** Optional precomputed project snapshot (preferred). */
+  /** L2 semantic authority — scope-resolved query from SemanticModel. */
+  query?: import("./schema/model.js").SemanticModelQuery;
+  /** Optional precomputed project snapshot (legacy). */
   project?: ProjectSnapshot;
-  /** Base semantics (used when project snapshot is not provided). */
+  /** Base semantics (used when neither query nor project is provided). */
   semantics?: ProjectSemantics;
   catalog?: ResourceCatalog;
   syntax?: TemplateSyntaxRegistry;
@@ -107,9 +109,10 @@ export interface TemplateCompilation {
 }
 
 function resolveProjectSnapshot(opts: CompileOptions): ProjectSnapshot {
+  if (opts.query) return opts.query.snapshot();
   if (opts.project) return opts.project;
   if (!opts.semantics) {
-    throw new Error("compileTemplate requires either 'project' or 'semantics'.");
+    throw new Error("compileTemplate requires 'query', 'project', or 'semantics'.");
   }
   return buildProjectSnapshot(opts.semantics, {
     catalog: opts.catalog,
@@ -133,7 +136,7 @@ function buildPipelineOptions(opts: CompileOptions, overlayBaseName: string): Pi
     html: opts.html,
     templateFilePath: opts.templateFilePath,
     vm: opts.vm,
-    project: resolveProjectSnapshot(opts),
+    ...(opts.query ? { query: opts.query } : { project: resolveProjectSnapshot(opts) }),
     moduleResolver: opts.moduleResolver,
     overlay: {
       isJs: opts.isJs,

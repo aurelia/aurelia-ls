@@ -19,6 +19,9 @@ import type { VmReflection, SynthesisOptions } from "../shared/index.js";
 // Analysis imports (via barrel)
 import { lowerDocument, linkTemplateSemantics, bindScopes, typecheck, collectFeatureUsage } from "../analysis/index.js";
 
+// Dependency graph imports
+import { createDepRecorder, NOOP_DEP_RECORDER } from "../schema/dependency-graph.js";
+
 // Synthesis imports (via barrel)
 import { planOverlay, emitOverlayFile, type OverlayEmitOptions, planAot, type AotPlanOptions } from "../synthesis/index.js";
 
@@ -34,7 +37,10 @@ import { stableHash, stableHashSemantics } from "./hash.js";
 export interface CoreCompileOptions {
   html: string;
   templateFilePath: string;
-  project: ProjectSnapshot;
+  /** L2 semantic authority. */
+  query?: import("../schema/model.js").SemanticModelQuery;
+  /** Legacy semantic authority. */
+  project?: ProjectSnapshot;
   templateContext?: TemplateContext;
   attrParser?: AttributeParser;
   exprParser?: IExpressionParser;
@@ -67,7 +73,7 @@ export function runCorePipeline(opts: CoreCompileOptions): CorePipelineResult {
     html: opts.html,
     templateFilePath: opts.templateFilePath,
     vm: opts.vm,
-    project: opts.project,
+    ...(opts.query ? { query: opts.query } : { project: opts.project }),
     moduleResolver: opts.moduleResolver,
   };
   if (opts.templateContext) pipelineOpts.templateContext = opts.templateContext;
@@ -97,17 +103,30 @@ function assertOption<T>(value: T | undefined, name: string): T {
 export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
   const definitions: StageDefinition<StageKey>[] = [];
 
-  const resolveProject = (options: PipelineOptions) => assertOption(options.project, "project");
+  // Resolve semantic authority: prefer L2 query path, fall back to legacy ProjectSnapshot.
+  const resolveProject = (options: PipelineOptions): ProjectSnapshot => {
+    if (options.query) {
+      // L2 path: derive ProjectSnapshot-equivalent from SemanticModelQuery
+      return options.query.snapshot();
+    }
+    return assertOption(options.project, "project or query");
+  };
   const resolveTemplateSnapshot = (options: PipelineOptions) => {
+    if (options.query) {
+      // L2 path: the query is already scope-resolved. Build snapshot from its model.
+      const q = options.query;
+      return buildSemanticsSnapshotFromProject(q.snapshot(), options.templateContext);
+    }
     const project = resolveProject(options);
     return buildSemanticsSnapshotFromProject(project, options.templateContext);
   };
 
   const scopeFingerprint = (options: PipelineOptions) => {
-    const project = resolveProject(options);
-    const graph = project.resourceGraph ?? null;
+    const query = options.query;
+    const graph = query ? query.graph : (resolveProject(options).resourceGraph ?? null);
     if (!graph) return null;
-    const scope = options.templateContext?.scopeId ?? project.defaultScope ?? graph.root ?? null;
+    const defaultScope = query ? query.model.defaultScope : (resolveProject(options).defaultScope ?? null);
+    const scope = options.templateContext?.scopeId ?? defaultScope ?? graph.root ?? null;
     return { graph: stableHash(graph), scope };
   };
 
@@ -117,30 +136,34 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
     deps: [],
     fingerprint(ctx) {
       const options = ctx.options;
-      const project = resolveProject(options);
+      const query = options.query;
       const source = resolveSourceFile(options.templateFilePath);
+      const syntax = query ? query.syntax : resolveProject(options).syntax;
+      const catalog = query ? query.model.catalog : resolveProject(options).catalog;
       const attrParserFingerprint = options.fingerprints?.attrParser
         ?? options.fingerprints?.syntax
-        ?? (options.attrParser ? "custom" : stableHash(project.syntax.attributePatterns));
+        ?? (options.attrParser ? "custom" : stableHash(syntax.attributePatterns));
       return {
         html: stableHash(options.html),
         file: source.hashKey,
-        catalog: options.fingerprints?.catalog ?? stableHash(project.catalog),
+        catalog: options.fingerprints?.catalog ?? stableHash(catalog),
         attrParser: attrParserFingerprint,
         exprParser: options.fingerprints?.exprParser ?? (options.exprParser ? "custom" : "default"),
       };
     },
     run(ctx) {
       const options = ctx.options;
+      const query = options.query;
       const exprParser = options.exprParser ?? getExpressionParser();
-      const project = resolveProject(options);
-      const attrParser = options.attrParser ?? createAttributeParserFromRegistry(project.syntax);
+      const syntax = query ? query.syntax : resolveProject(options).syntax;
+      const catalog = query ? query.model.catalog : resolveProject(options).catalog;
+      const attrParser = options.attrParser ?? createAttributeParserFromRegistry(syntax);
       return lowerDocument(options.html, {
         file: options.templateFilePath,
         name: path.basename(options.templateFilePath),
         attrParser,
         exprParser,
-        catalog: project.catalog,
+        catalog,
         diagnostics: ctx.diag,
         trace: options.trace,
       });
@@ -152,7 +175,8 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
     version: "3",
     deps: ["10-lower"],
     fingerprint(ctx) {
-      const { semantics } = resolveTemplateSnapshot(ctx.options);
+      const query = ctx.options.query;
+      const semantics = query ? query.model.semantics : resolveTemplateSnapshot(ctx.options).semantics;
       const moduleResolverFingerprint = ctx.options.fingerprints?.moduleResolver ?? "custom";
       return {
         sem: ctx.options.fingerprints?.semantics ?? stableHashSemantics(semantics),
@@ -162,13 +186,22 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
       };
     },
     run(ctx) {
-      const scoped = resolveTemplateSnapshot(ctx.options);
       const ir = ctx.require("10-lower");
-      const resolveOpts = {
+      const depGraph = ctx.options.depGraph;
+      const deps = depGraph
+        ? createDepRecorder(depGraph, depGraph.addNode('template-compilation', ctx.options.templateFilePath))
+        : NOOP_DEP_RECORDER;
+      const query = ctx.options.query;
+      // L2 path: pass query directly as pre-resolved lookup + graph.
+      // Legacy path: build SemanticsSnapshot from ProjectSnapshot.
+      const scoped = resolveTemplateSnapshot(ctx.options);
+      const resolveOpts: Parameters<typeof linkTemplateSemantics>[2] = {
         moduleResolver: ctx.options.moduleResolver,
         templateFilePath: ctx.options.templateFilePath,
         diagnostics: ctx.diag,
         trace: ctx.options.trace,
+        deps,
+        ...(query ? { lookup: query, graph: query.graph } : {}),
       };
       return linkTemplateSemantics(ir, scoped, resolveOpts);
     },
@@ -202,9 +235,13 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
       const scope = ctx.require("30-bind");
       const ir = ctx.require("10-lower");
       const vm = assertOption(ctx.options.vm, "vm");
-      // TODO(productize): expose a diagnostics-only typecheck product/DAG once editor flows need it.
       const rootVm = hasQualifiedVm(vm) ? vm.getQualifiedRootVmTypeExpr() : vm.getRootVmTypeExpr();
-      return typecheck({ linked, scope, ir, rootVmType: rootVm, diagnostics: ctx.diag, trace: ctx.options.trace });
+      // Create a DepRecorder if a dependency graph is available.
+      const depGraph = ctx.options.depGraph;
+      const deps = depGraph
+        ? createDepRecorder(depGraph, depGraph.addNode('template-compilation', ctx.options.templateFilePath))
+        : NOOP_DEP_RECORDER;
+      return typecheck({ linked, scope, ir, rootVmType: rootVm, diagnostics: ctx.diag, trace: ctx.options.trace, deps });
     },
   });
 
@@ -213,17 +250,19 @@ export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
     version: "1",
     deps: ["20-link"],
     fingerprint(ctx) {
-      const { syntax } = resolveTemplateSnapshot(ctx.options);
+      const query = ctx.options.query;
+      const syntax = query ? query.syntax : resolveTemplateSnapshot(ctx.options).syntax;
       const attrParserFingerprint = ctx.options.fingerprints?.attrParser
         ?? ctx.options.fingerprints?.syntax
         ?? (ctx.options.attrParser ? "custom" : stableHash(syntax.attributePatterns));
       return { attrParser: attrParserFingerprint };
     },
     run(ctx) {
-      const scoped = resolveTemplateSnapshot(ctx.options);
-      const attrParser = ctx.options.attrParser ?? createAttributeParserFromRegistry(scoped.syntax);
+      const query = ctx.options.query;
+      const syntax = query ? query.syntax : resolveTemplateSnapshot(ctx.options).syntax;
+      const attrParser = ctx.options.attrParser ?? createAttributeParserFromRegistry(syntax);
       const linked = ctx.require("20-link");
-      return collectFeatureUsage(linked, { syntax: scoped.syntax, attrParser });
+      return collectFeatureUsage(linked, { syntax, attrParser });
     },
   });
 

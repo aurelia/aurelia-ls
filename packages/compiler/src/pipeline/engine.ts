@@ -76,8 +76,21 @@ export interface PipelineOptions {
   templateFilePath: string;
   attrParser?: AttributeParser;
   exprParser?: IExpressionParser;
-  project: ProjectSnapshot;
+  /**
+   * Semantic authority for this compilation.
+   *
+   * L2 path: provide `query` (SemanticModelQuery) — the pipeline reads
+   * semantics through the query's scope-aware methods.
+   *
+   * Legacy path: provide `project` (ProjectSnapshot) — the pipeline
+   * builds a SemanticsSnapshot internally. This path will be removed.
+   */
+  project?: ProjectSnapshot;
+  /** L2 semantic authority — scope-resolved query from SemanticModel. */
+  query?: import("../schema/model.js").SemanticModelQuery;
   templateContext?: TemplateContext;
+  /** Dependency graph for recording pipeline-stage read edges via DepRecorder. */
+  depGraph?: import("../schema/dependency-graph.js").DependencyGraph;
   moduleResolver: ModuleResolver;
   vm?: VmReflection;
   /** Pipeline-wide cache knobs. */

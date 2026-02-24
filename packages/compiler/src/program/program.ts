@@ -52,7 +52,10 @@ export type TemplateContextResolver = (uri: DocumentUri) => TemplateContext | nu
 export interface TemplateProgramOptions {
   readonly vm: VmReflection;
   readonly isJs: boolean;
-  readonly project: ProjectSnapshot;
+  /** Legacy semantic authority. Provide `project` or `query`, not both. */
+  readonly project?: ProjectSnapshot;
+  /** L2 semantic authority — scope-resolved query from SemanticModel. */
+  readonly query?: import("../schema/model.js").SemanticModelQuery;
   /** Optional per-template context resolver (scope/local imports). */
   readonly templateContext?: TemplateContextResolver;
   readonly moduleResolver: ModuleResolver;
@@ -75,7 +78,14 @@ export interface TemplateProgramOptions {
 }
 
 type ProgramOptions = Omit<TemplateProgramOptions, "sourceStore" | "provenance" | "telemetry">;
-type ResolvedProgramOptions = ProgramOptions & { readonly fingerprints: FingerprintHints };
+type ResolvedProgramOptions = ProgramOptions & { readonly fingerprints: FingerprintHints; readonly project: ProjectSnapshot };
+
+/** Resolve a ProjectSnapshot from TemplateProgramOptions (query path or legacy project path). */
+function resolveProjectFromOptions(options: ProgramOptions): ProjectSnapshot {
+  if (options.query) return options.query.snapshot();
+  if (options.project) return options.project;
+  throw new Error("TemplateProgramOptions requires either `project` or `query`.");
+}
 
 interface CachedCompilation {
   readonly compilation: TemplateCompilation;
@@ -279,9 +289,12 @@ export class DefaultTemplateProgram implements TemplateProgram {
 
   constructor(options: TemplateProgramOptions) {
     const { sourceStore, provenance, telemetry, ...rest } = options;
-    this.fingerprintHints = normalizeFingerprintHints(rest);
-    this.options = { ...rest, fingerprints: this.fingerprintHints };
-    this.optionsFingerprint = computeProgramOptionsFingerprint(rest, this.fingerprintHints);
+    // Resolve project from either query or legacy project path
+    const resolvedProject = resolveProjectFromOptions(rest);
+    const resolved: ProgramOptions & { project: ProjectSnapshot } = { ...rest, project: resolvedProject };
+    this.fingerprintHints = normalizeFingerprintHints(resolved);
+    this.options = { ...resolved, fingerprints: this.fingerprintHints };
+    this.optionsFingerprint = computeProgramOptionsFingerprint(resolved, this.fingerprintHints);
     this.sources = sourceStore ?? new InMemorySourceStore();
     this.provenance = provenance ?? new InMemoryProvenanceIndex();
     this.telemetry = telemetry;
@@ -530,9 +543,11 @@ export class DefaultTemplateProgram implements TemplateProgram {
     void provenance;
     void telemetry;
 
-    const nextHints = normalizeFingerprintHints(rest);
-    const nextOptions: ResolvedProgramOptions = { ...rest, fingerprints: nextHints };
-    const nextFingerprint = computeProgramOptionsFingerprint(rest, nextHints);
+    const resolvedProject = resolveProjectFromOptions(rest);
+    const resolved = { ...rest, project: resolvedProject };
+    const nextHints = normalizeFingerprintHints(resolved);
+    const nextOptions: ResolvedProgramOptions = { ...resolved, fingerprints: nextHints };
+    const nextFingerprint = computeProgramOptionsFingerprint(resolved, nextHints);
     debug.workspace("program.update", {
       currentFingerprint: this.optionsFingerprint,
       nextFingerprint,
@@ -814,7 +829,7 @@ function hashSnapshotContent(snap: DocumentSnapshot): string {
   return stableHash(snap.text);
 }
 
-function computeProgramOptionsFingerprint(options: ProgramOptions, hints: FingerprintHints): string {
+function computeProgramOptionsFingerprint(options: ProgramOptions & { project: ProjectSnapshot }, hints: FingerprintHints): string {
   const project = options.project;
   const sem = project.semantics;
   const overlayHint = hints.overlay ?? { isJs: options.isJs, syntheticPrefix: options.vm.getSyntheticPrefix?.() ?? "__AU_TTC_" };
@@ -841,7 +856,7 @@ function computeProgramOptionsFingerprint(options: ProgramOptions, hints: Finger
   return stableHash(fingerprint);
 }
 
-function normalizeFingerprintHints(options: ProgramOptions): FingerprintHints {
+function normalizeFingerprintHints(options: ProgramOptions & { project: ProjectSnapshot }): FingerprintHints {
   const base: FingerprintHints = { ...(options.fingerprints ?? {}) };
   const sem = options.project.semantics;
   if (base.semantics === undefined) base.semantics = stableHashSemantics(sem);

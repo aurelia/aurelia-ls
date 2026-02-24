@@ -22,8 +22,13 @@ import type {
   SemanticsLookupOptions,
   LocalImportDef,
   ResourceKind,
+  ResourceKindLike,
   SemanticSnapshot,
   ApiSurfaceSnapshot,
+  ElementRes,
+  AttrRes,
+  Bindable,
+  ResourceCollections,
 } from "./types.js";
 import type { ProjectSnapshot } from "./snapshot.js";
 import { buildProjectSnapshot } from "./snapshot.js";
@@ -142,6 +147,54 @@ export interface SemanticModelQuery extends SemanticsLookup {
   readonly apiSurfaceSnapshot: ApiSurfaceSnapshot;
   /** Get the ProjectSnapshot (optimization-only projection) */
   snapshot(): ProjectSnapshot;
+
+  // =========================================================================
+  // L2 Query Methods (convergence target — SemanticModelQuery contract)
+  // =========================================================================
+
+  /** Resolve a resource by kind and name within this query's scope. */
+  getResource(kind: ResourceKindLike, name: string): ElementRes | AttrRes | null | undefined;
+  /** Get all resources visible in a given scope. */
+  getResourcesInScope(scopeId: ResourceScopeId): Partial<ResourceCollections> | undefined;
+  /** Get bindables for a resource by kind and name. */
+  getBindables(kind: ResourceKindLike, name: string): Readonly<Record<string, Bindable>> | undefined;
+  /** Get the vocabulary (syntax registry). */
+  getVocabulary(): TemplateSyntaxRegistry;
+  /** Get scope gaps for a given scope. */
+  getScopeGaps(scopeId: ResourceScopeId): readonly ProjectSemanticsDiscoveryDiagnostic[];
+  /** Get the scope ID for a template file path. */
+  getScopeForTemplate(templatePath: NormalizedPath): ResourceScopeId | null;
+
+  // --- Provenance queries (on demand — used by features) ---
+
+  /** Get provenance information for a resource's field value. */
+  getProvenance(resourceKind: ResourceKindLike, resourceName: string, field: string): ConvergenceProvenanceInfo | null;
+  /** Get the convergence decision for a resource. */
+  getConvergenceDecision(resourceKind: ResourceKindLike, resourceName: string): ConvergenceDecisionInfo | null;
+  /** Get analysis gap details. */
+  getGapDetail(gapIndex: number): GapDetailInfo | null;
+}
+
+/** Provenance information for a field value. */
+export interface ConvergenceProvenanceInfo {
+  readonly origin: 'builtin' | 'config' | 'source';
+  readonly state?: 'known' | 'unknown';
+  readonly file?: NormalizedPath;
+}
+
+/** Convergence decision information for a resource. */
+export interface ConvergenceDecisionInfo {
+  readonly resourceKind: string;
+  readonly resourceName: string;
+  readonly winner: string | null;
+  readonly reason: string;
+}
+
+/** Gap detail information. */
+export interface GapDetailInfo {
+  readonly code: string;
+  readonly message: string;
+  readonly file?: string;
 }
 
 // ============================================================================
@@ -245,6 +298,95 @@ function createModelQuery(
     snapshot(): ProjectSnapshot {
       return model.snapshot();
     },
+
+    // L2 query methods
+    getResource(kind: ResourceKindLike, name: string) {
+      if (kind === 'custom-element') return lookup.element(name);
+      if (kind === 'custom-attribute' || kind === 'template-controller') return lookup.attribute(name);
+      return undefined;
+    },
+
+    getResourcesInScope(scopeId: ResourceScopeId) {
+      const graph = model.resourceGraph;
+      if (!graph) return undefined;
+      const scope = graph.scopes[scopeId];
+      return scope?.resources;
+    },
+
+    getBindables(kind: ResourceKindLike, name: string) {
+      if (kind === 'custom-element') {
+        const el = lookup.element(name);
+        return el?.bindables;
+      }
+      if (kind === 'custom-attribute' || kind === 'template-controller') {
+        const attr = lookup.attribute(name);
+        return attr?.bindables;
+      }
+      return undefined;
+    },
+
+    getVocabulary() {
+      return model.syntax;
+    },
+
+    getScopeGaps(scopeId: ResourceScopeId) {
+      return model.discovery.diagnostics.filter(
+        (d) => 'data' in d && d.data && typeof d.data === 'object' && 'scopeId' in d.data && d.data.scopeId === scopeId,
+      );
+    },
+
+    getScopeForTemplate(templatePath: NormalizedPath) {
+      for (const t of model.discovery.templates) {
+        if (t.templatePath === templatePath) return t.scopeId ?? null;
+      }
+      return model.defaultScope;
+    },
+
+    getProvenance(resourceKind: ResourceKindLike, resourceName: string, field: string) {
+      for (const def of model.discovery.definition.authority) {
+        const name = unwrapSourced(def.name);
+        if (def.kind === resourceKind && name === resourceName) {
+          const fieldValue = (def as unknown as Record<string, unknown>)[field];
+          if (fieldValue && typeof fieldValue === 'object' && 'origin' in fieldValue) {
+            const sourced = fieldValue as { origin: string; state?: string };
+            return {
+              origin: sourced.origin as 'builtin' | 'config' | 'source',
+              state: sourced.state as 'known' | 'unknown' | undefined,
+              file: def.file ?? undefined,
+            };
+          }
+          return null;
+        }
+      }
+      return null;
+    },
+
+    getConvergenceDecision(resourceKind: ResourceKindLike, resourceName: string) {
+      for (const record of model.discovery.definition.convergence) {
+        if (record.resourceKind === resourceKind && record.resourceName === resourceName) {
+          const winner = record.candidates.length > 0 ? record.candidates[0]!.candidateId : null;
+          const reason = record.reasons.length > 0 ? record.reasons.map(r => r.code).join(', ') : 'no-conflict';
+          return {
+            resourceKind: record.resourceKind,
+            resourceName: record.resourceName,
+            winner,
+            reason,
+          };
+        }
+      }
+      return null;
+    },
+
+    getGapDetail(gapIndex: number) {
+      const diags = model.discovery.diagnostics;
+      if (gapIndex < 0 || gapIndex >= diags.length) return null;
+      const diag = diags[gapIndex]!;
+      return {
+        code: diag.code,
+        message: diag.message,
+        file: diag.uri,
+      };
+    },
   };
 }
 
@@ -333,6 +475,21 @@ function buildModelDependencyGraph(
 
   // 4. Register vocabulary node (depends on syntax config)
   graph.addNode('vocabulary', 'vocabulary');
+
+  // 5. Register observation nodes for analysis gaps/diagnostics.
+  // Each unique diagnostic code gets an observation node. When the code relates
+  // to a specific file (via diag.uri), the observation depends on that file.
+  const observedCodes = new Set<string>();
+  for (const diag of discovery.diagnostics) {
+    const obsKey = diag.code ?? 'unknown';
+    if (!observedCodes.has(obsKey)) {
+      observedCodes.add(obsKey);
+      graph.addNode('observation', obsKey);
+    }
+  }
+
+  // 6. Register infrastructure node (placeholder for build tooling concerns)
+  graph.addNode('infrastructure', 'build');
 
   return graph;
 }

@@ -735,8 +735,8 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
   }
 
   #programOptions(vm: VmReflection, isJs: boolean, overlayBaseName?: string) {
-    const project = this.#query.snapshot();
-    const defaultScope = project.defaultScope ?? project.resourceGraph?.root ?? null;
+    const query = this.#query;
+    const defaultScope = query.model.defaultScope ?? query.graph?.root ?? null;
     const moduleResolver: ModuleResolver = (specifier, containingFile) => {
       const canonical = canonicalDocumentUri(containingFile);
       const componentPath = this.#templateIndex.templateToComponent.get(canonical.uri) ?? canonical.path;
@@ -750,10 +750,10 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     return {
       vm,
       isJs,
-      project,
+      query,
       moduleResolver,
       templateContext,
-      depGraph: this.#query.model.deps,
+      depGraph: query.model.deps,
       ...(overlayBaseName !== undefined ? { overlayBaseName } : {}),
     };
   }

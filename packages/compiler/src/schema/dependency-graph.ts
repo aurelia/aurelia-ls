@@ -31,6 +31,9 @@ import type { ResourceKey, ResourceScopeId } from "./types.js";
  * - vocabulary: the frozen vocabulary registry (stale when commands/patterns change)
  * - template-compilation: a compiled template (stale when dependencies change)
  * - type-state: TypeScript type information for a file (stale when types change)
+ * - observation: a source-level observation (gap/diagnostic from analysis)
+ * - manifest: an external package manifest (stale when npm package changes)
+ * - infrastructure: an infrastructure concern (build tooling, config loading failures)
  */
 export type DepNodeKind =
   | 'file'
@@ -39,7 +42,10 @@ export type DepNodeKind =
   | 'scope'
   | 'vocabulary'
   | 'template-compilation'
-  | 'type-state';
+  | 'type-state'
+  | 'observation'
+  | 'manifest'
+  | 'infrastructure';
 
 // ============================================================================
 // Node Identity

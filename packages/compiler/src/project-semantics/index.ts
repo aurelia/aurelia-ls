@@ -24,7 +24,7 @@
 
 // === Main entry point ===
 export { discoverProjectSemantics, discoverFromFacts, type ProjectSemanticsDiscoveryConfig, type ProjectSemanticsDiscoveryResult, type ProjectSemanticsDiscoveryDiagnostic, type ProjectSemanticsDefinitionChannels } from "./resolve.js";
-export { IncrementalDiscovery, type IncrementalDiscoveryStats } from "./incremental.js";
+export { IncrementalDiscovery, type IncrementalDiscoveryStats, type IncrementalDiscoveryResult } from "./incremental.js";
 export type { TemplateInfo, InlineTemplateInfo } from "./templates/types.js";
 export {
   DISCOVERY_STAGES,
