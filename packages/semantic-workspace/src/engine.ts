@@ -16,6 +16,7 @@ import {
   runDiagnosticsPipeline,
   spanContainsOffset,
   stableHash,
+  toSourceFileId,
   toSourceSpan,
   unwrapSourced,
   deriveResourceConfidence,
@@ -948,7 +949,48 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       syntax,
       preferRoots: [this.#workspaceRoot],
       documentUri: uri,
+      resolveClassLocation: (className) => this.#resolveClassLocation(className),
     });
+  }
+
+  /**
+   * Resolve a class name to its declaration location via the TS program.
+   *
+   * Used as a fallback when a resource has no file location (builtins,
+   * framework classes). Searches the TS program's source files for a class
+   * export matching the name and returns the declaration span.
+   */
+  #resolveClassLocation(className: string): WorkspaceLocation | null {
+    try {
+      const program = this.#env.project.getProgram();
+      if (!program) return null;
+      const checker = program.getTypeChecker();
+
+      for (const sf of program.getSourceFiles()) {
+        // Skip project source files — only search external declarations
+        // (framework, plugins). Handles both node_modules paths and symlinked
+        // monorepo paths (e.g., aurelia-60/packages/runtime-html).
+        if (!sf.isDeclarationFile) continue;
+        const symbol = checker.getSymbolAtLocation(sf);
+        if (!symbol) continue;
+        const exports = checker.getExportsOfModule(symbol);
+        for (const exp of exports) {
+          if (exp.getName() !== className) continue;
+          // Accept Class or any value export (d.ts files may not have Class flag)
+          if (!(exp.getFlags() & (ts.SymbolFlags.Class | ts.SymbolFlags.Value))) continue;
+          const decl = exp.getDeclarations()?.[0];
+          if (!decl) continue;
+          const declFile = decl.getSourceFile();
+          return {
+            uri: canonicalDocumentUri(declFile.fileName).uri,
+            span: { start: decl.getStart(), end: decl.getEnd(), file: toSourceFileId(declFile.fileName) },
+          };
+        }
+      }
+    } catch {
+      // best-effort — return null if TS resolution fails
+    }
+    return null;
   }
 
   #localReferencesAt(uri: DocumentUri, pos: { line: number; character: number }): WorkspaceLocation[] {

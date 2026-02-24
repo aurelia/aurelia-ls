@@ -139,6 +139,13 @@ export function collectTemplateDefinitions(options: {
   return [...slices.local, ...slices.resource];
 }
 
+/**
+ * Callback for resolving a class name to its declaration location via the
+ * TS program. Used when a resource has no file location (built-in, plugin,
+ * framework class) but does have a class name visible to the TS project.
+ */
+export type ClassLocationResolver = (className: string) => WorkspaceLocation | null;
+
 export function collectTemplateDefinitionSlices(options: {
   compilation: TemplateCompilation;
   text: string;
@@ -147,6 +154,7 @@ export function collectTemplateDefinitionSlices(options: {
   syntax: AttributeSyntaxContext;
   preferRoots?: readonly string[] | null;
   documentUri?: DocumentUri | null;
+  resolveClassLocation?: ClassLocationResolver | null;
 }): TemplateDefinitionSlices {
   const { compilation, text, offset, resources } = options;
   const syntax = options.syntax;
@@ -185,7 +193,7 @@ export function collectTemplateDefinitionSlices(options: {
 
   // Dispatch resource-level entities to definition lookup.
   const entityDef = entity
-    ? resolveResourceEntityDefinition(entity, resources, preferRoots)
+    ? resolveResourceEntityDefinition(entity, resources, preferRoots, options.resolveClassLocation)
     : null;
   if (entityDef) resource.push(entityDef);
 
@@ -284,31 +292,46 @@ function resolveResourceEntityDefinition(
   entity: CursorEntity,
   resources: ResourceDefinitionIndex,
   preferRoots: readonly string[],
+  resolveClassLocation?: ClassLocationResolver | null,
 ): WorkspaceLocation | null {
+  let entry: ResourceDefinitionEntry | null = null;
   switch (entity.kind) {
-    case 'ce-tag': {
-      const entry = findEntry(resources.elements, entity.name, null, preferRoots);
-      return entry ? resourceLocation(entry) : null;
-    }
-    case 'tc-attr': {
-      const entry = findEntry(resources.controllers, entity.name, null, preferRoots);
-      return entry ? resourceLocation(entry) : null;
-    }
-    case 'ca-attr': {
-      const entry = findEntry(resources.attributes, entity.name, null, preferRoots);
-      return entry ? resourceLocation(entry) : null;
-    }
-    case 'value-converter': {
-      const entry = findEntry(resources.valueConverters, entity.name, null, preferRoots);
-      return entry ? resourceLocation(entry) : null;
-    }
-    case 'binding-behavior': {
-      const entry = findEntry(resources.bindingBehaviors, entity.name, null, preferRoots);
-      return entry ? resourceLocation(entry) : null;
-    }
+    case 'ce-tag':
+      entry = findEntry(resources.elements, entity.name, null, preferRoots);
+      break;
+    case 'tc-attr':
+      entry = findEntry(resources.controllers, entity.name, null, preferRoots);
+      break;
+    case 'ca-attr':
+      entry = findEntry(resources.attributes, entity.name, null, preferRoots);
+      break;
+    case 'value-converter':
+      entry = findEntry(resources.valueConverters, entity.name, null, preferRoots);
+      break;
+    case 'binding-behavior':
+      entry = findEntry(resources.bindingBehaviors, entity.name, null, preferRoots);
+      break;
     default:
       return null;
   }
+  if (!entry) return null;
+
+  // Primary path: resource has a source location from discovery/convergence
+  const location = resourceLocation(entry);
+  if (location) return location;
+
+  // Fallback: resource has no usable file location (builtin, framework, plugin)
+  // but has a className. Try to resolve the class through the TS program.
+  if (resolveClassLocation) {
+    const className = unwrapSourced(entry.def.className);
+    if (className) {
+      const resolved = resolveClassLocation(className);
+      if (resolved) {
+        return entry.symbolId ? { ...resolved, symbolId: entry.symbolId } : resolved;
+      }
+    }
+  }
+  return null;
 }
 
 export function collectTemplateReferences(options: {
@@ -606,13 +629,23 @@ function sourceLocationToWorkspaceLocation(loc: SourceLocation, symbolId?: Symbo
 
 function resourceSourceLocation(def: ResourceDef): SourceLocation | null {
   const classLoc = readLocation(def.className);
-  if (classLoc) return classLoc;
+  if (classLoc && isNavigableLocation(classLoc)) return classLoc;
   const nameLoc = readLocation(def.name);
-  if (nameLoc) return nameLoc;
-  if (def.file) {
+  if (nameLoc && isNavigableLocation(nameLoc)) return nameLoc;
+  if (def.file && def.file.endsWith(".ts")) {
     return { file: def.file, pos: 0, end: 0 };
   }
   return null;
+}
+
+/** A location is navigable if it points to a real source file, not a placeholder. */
+function isNavigableLocation(loc: SourceLocation): boolean {
+  // Placeholder locations (workspace root, config directory) have zero-span
+  // and point to directories, not source files. These are convergence artifacts
+  // from configSourced() — the config file is the workspace root, not the
+  // actual class declaration.
+  if (loc.pos === 0 && loc.end === 0 && !loc.file.match(/\.[a-z]+$/i)) return false;
+  return true;
 }
 
 function resourceDebugName(def: ResourceDef): string | null {

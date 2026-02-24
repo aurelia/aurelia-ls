@@ -254,6 +254,16 @@ export class SemanticAuthorityHostRuntime {
 
   #sessionOpen(args: SessionOpenArgs): CommandOutcome {
     const session = this.#sessions.open(args);
+
+    // Fire-and-forget: scan node_modules for Aurelia packages asynchronously.
+    // This mirrors the LSP lifecycle handler (lifecycle.ts:110) which calls
+    // initThirdParty() on workspace initialization. Without this, framework
+    // resources (repeat, if, etc.) have no file locations and can't navigate
+    // to their source declarations.
+    void session.workspace.initThirdParty().catch(() => {
+      // Swallow — the workspace logs its own errors
+    });
+
     return ok(session, {
       sessionId: session.id,
       workspaceRoot: session.workspaceRoot,

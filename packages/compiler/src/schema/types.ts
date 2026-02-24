@@ -459,6 +459,10 @@ export interface ControllerConfig {
   readonly injects?: ControllerInjects;
   readonly tailProps?: Readonly<Record<string, IteratorTailPropSpec>>;
   readonly props?: Readonly<Record<string, Bindable>>;
+  /** Class name of the TC implementation. Carries provenance for navigation. */
+  readonly className?: string;
+  /** Source file where the TC class is declared. Carries provenance for navigation. */
+  readonly file?: NormalizedPath;
 }
 
 export type ControllerName = string;

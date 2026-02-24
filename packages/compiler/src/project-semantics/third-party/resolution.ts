@@ -534,7 +534,7 @@ function resourceCollectionsToResourceDefs(
   for (const [name, controller] of controllerEntries) {
     const normalized = normalizeName(controller.name || name);
     if (templateControllerNames.has(normalized)) continue;
-    defs.push(toControllerOnlyDefinition(normalized, controller, configFile));
+    defs.push(toControllerOnlyDefinition(normalized, controller, controller.file ?? configFile));
   }
 
   const converterEntries = Object.entries(resources.valueConverters ?? {})
@@ -642,7 +642,7 @@ function toControllerOnlyDefinition(
   return {
     kind: "template-controller",
     name: configSourced(name, file),
-    className: configSourced(toPascalCase(name), file),
+    className: configSourced(controller.className ?? toPascalCase(name), file),
     aliases: configSourced([], file),
     noMultiBindings: configSourced(false, file),
     bindables: toBindableDefs(controller.props ?? {}, file),
