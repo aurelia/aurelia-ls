@@ -42,6 +42,22 @@ export function createTestQuery(
     syntax.attributePatterns,
   );
 
+  // Build authority array from ProjectSemantics (Sourced<T> fields) so that
+  // createSemanticModel can unwrap names and populate model.entries + dep graph.
+  const authority: any[] = [];
+  const semanticsCollections: [string, Record<string, any>][] = [
+    ["custom-element", sem.elements ?? {}],
+    ["custom-attribute", sem.attributes ?? {}],
+    ["template-controller", sem.controllers ?? {}],
+    ["value-converter", sem.valueConverters ?? {}],
+    ["binding-behavior", sem.bindingBehaviors ?? {}],
+  ];
+  for (const [kind, collection] of semanticsCollections) {
+    for (const [, def] of Object.entries(collection)) {
+      authority.push({ ...def, kind });
+    }
+  }
+
   // Minimal discovery result that satisfies createSemanticModel
   const discovery = {
     semantics: sem,
@@ -50,7 +66,7 @@ export function createTestQuery(
     resourceGraph: { root: null, scopes: {} } as any,
     semanticSnapshot: { version: "test" as const, symbols: [], catalog: { resources: {} }, graph: null, gaps: [], confidence: "complete" as const },
     apiSurfaceSnapshot: { version: "test" as const, symbols: [] },
-    definition: { authority: [] as any[], evidence: [] as any[], convergence: [] as any[] },
+    definition: { authority, evidence: [] as any[], convergence: [] as any[] },
     registration: { sites: [], orphans: [], unresolved: [] },
     templates: [] as any[],
     inlineTemplates: [] as any[],

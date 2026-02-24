@@ -48,6 +48,8 @@ export interface CompileOptions {
   overlayBaseName?: string;
   /** Trace context for per-stage timing instrumentation. */
   trace?: CompileTrace;
+  /** Pre-computed IR to skip the lower stage (per-stage caching). */
+  seededIr?: import("./model/index.js").IrModule;
 }
 
 // ============================================================================
@@ -104,6 +106,7 @@ export function compileTemplate(opts: CompileOptions): TemplateCompilation {
     attrParser: opts.attrParser,
     exprParser: opts.exprParser,
     trace,
+    seededIr: opts.seededIr,
     overlay: {
       isJs: opts.isJs,
       filename: overlayBase,

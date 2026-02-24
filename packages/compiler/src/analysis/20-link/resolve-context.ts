@@ -23,6 +23,7 @@ export interface ResolveContext {
   readonly services: ResolveServices;
   readonly moduleResolver: ModuleResolver;
   readonly templateFilePath: string;
+  readonly deps?: import("../../schema/dependency-graph.js").DepRecorder;
 }
 
 export function createResolveServices(opts: {

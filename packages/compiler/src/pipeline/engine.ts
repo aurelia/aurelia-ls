@@ -50,6 +50,8 @@ export interface PipelineOptions {
   };
   /** Trace context for instrumentation. */
   trace?: CompileTrace;
+  /** Pre-computed IR from a previous lower pass (skip re-lowering when provided). */
+  seededIr?: import("../model/index.js").IrModule;
 }
 
 // ============================================================================

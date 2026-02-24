@@ -87,6 +87,7 @@ export function resolveControllerSem(
 ): Diagnosed<ControllerSem> {
   const lookup = ctx.lookup;
   const emitter = ctx.services.diagnostics;
+  ctx.deps?.readResource("template-controller", res);
   // 1. Check scoped controller configs first (authoritative semantic source)
   const scopedConfig = lookup.controller(res);
   if (scopedConfig) {
@@ -190,6 +191,7 @@ export function resolveEffectiveMode(
 export function resolveElementResRef(ctx: ResolveContext, res: HydrateElementIR["res"]): ElementResRef | null {
   if (!res) return null;
   const name = typeof res === "string" ? res.toLowerCase() : res;
+  if (typeof name === "string") ctx.deps?.readResource("custom-element", name);
   const resolved = typeof name === "string" ? ctx.lookup.element(name) : null;
   return resolved ? { def: resolved } : null;
 }
@@ -197,6 +199,7 @@ export function resolveElementResRef(ctx: ResolveContext, res: HydrateElementIR[
 export function resolveAttrResRef(ctx: ResolveContext, res: HydrateAttributeIR["res"]): AttrResRef | null {
   if (!res) return null;
   const name = typeof res === "string" ? res.toLowerCase() : res;
+  if (typeof name === "string") ctx.deps?.readResource("custom-attribute", name);
   const resolved = typeof name === "string" ? ctx.lookup.attribute(name) : null;
   return resolved ? { def: resolved } : null;
 }

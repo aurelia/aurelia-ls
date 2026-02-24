@@ -207,6 +207,7 @@ export function linkTemplateSemantics(ir: IrModule, snapshot: SemanticsSnapshot 
           services,
           moduleResolver: opts.moduleResolver,
           templateFilePath: opts.templateFilePath,
+          deps: opts.deps,
         }
       : (() => {
           if (!snapshot) throw new Error("linkTemplateSemantics requires either opts.lookup or a non-null snapshot");
@@ -415,6 +416,7 @@ function validateExpressionResources(
           }
 
           // Check if registered
+          ctx.deps?.readResource("binding-behavior", ref.name);
           if (!ctx.lookup.sem.resources.bindingBehaviors[ref.name]) {
             const hasGapInfo = ctx.lookup.hasGaps("binding-behavior", ref.name);
             const gapQualifier = hasGapInfo ? " (analysis gaps exist for this resource)" : "";
@@ -430,6 +432,7 @@ function validateExpressionResources(
         }
       } else {
         // valueConverter
+        ctx.deps?.readResource("value-converter", ref.name);
         if (!ctx.lookup.sem.resources.valueConverters[ref.name]) {
           const hasGapInfo = ctx.lookup.hasGaps("value-converter", ref.name);
           const gapQualifier = hasGapInfo ? " (analysis gaps exist for this resource)" : "";
@@ -631,6 +634,7 @@ function validateUnknownElements(n: DOMNode, ctx: ResolverContext): void {
   if (n.kind === "element") {
     const nodeSem = resolveNodeSem(n, ctx.lookup);
       if (nodeSem.kind === "element" && isMissingCustomElement(nodeSem)) {
+        ctx.deps?.readResource("custom-element", nodeSem.tag);
         const existsInGraph = elementExistsInGraph(nodeSem.tag, ctx.graph);
         const hasGapInfo = ctx.lookup.hasGaps("custom-element", nodeSem.tag);
         const scopeComplete = ctx.lookup.isScopeComplete();

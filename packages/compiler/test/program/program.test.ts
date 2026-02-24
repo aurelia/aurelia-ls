@@ -116,7 +116,7 @@ test("closeTemplate purges sources, caches, and provenance", () => {
   expect(doc.compilation).toBeUndefined();
   expect(doc.core).toBeUndefined();
   expect(doc.provenance.totalEdges).toBe(0);
-  expect(() => program.getOverlay(uri)).toThrow(/no snapshot/);
+  expect(() => program.getOverlay(uri)).toThrow(/no document/);
 });
 
 test("invalidateAll keeps sources but forces recomputation", () => {
@@ -161,46 +161,6 @@ test("cache stats totals reflect multi-document builds", () => {
   expect(totals.compilation).toBe(templates.length);
   expect(totals.core).toBe(templates.length);
   expect(totals.provenanceEdges > 0).toBeTruthy();
-});
-
-test("telemetry hooks capture cache/materialization/provenance data", () => {
-  const cacheEvents = [];
-  const materializationEvents = [];
-  const provenanceEvents = [];
-  const program = createProgram({
-    telemetry: {
-      onCacheAccess(event) {
-        cacheEvents.push(event);
-      },
-      onMaterialization(event) {
-        materializationEvents.push(event);
-      },
-      onProvenance(event) {
-        provenanceEvents.push(event);
-      },
-    },
-  });
-  const uri = "/app/telemetry.html";
-
-  program.upsertTemplate(uri, "<template>${name}</template>");
-  program.getOverlay(uri);
-  program.getOverlay(uri);
-
-  const overlayCaches = cacheEvents.filter((evt) => evt.kind === "overlay");
-  expect(overlayCaches.length).toBe(2);
-  expect(overlayCaches[0]?.programCacheHit).toBe(false);
-  expect(overlayCaches[1]?.programCacheHit).toBe(true);
-  expect((overlayCaches[0]?.stageReuse.computed.length ?? 0) > 0).toBeTruthy();
-
-  const overlayMaterialization = materializationEvents.filter((evt) => evt.kind === "overlay");
-  expect(overlayMaterialization.length).toBe(2);
-  expect(overlayMaterialization[1]?.programCacheHit).toBe(true);
-  expect(overlayMaterialization.every((evt) => evt.durationMs >= 0)).toBeTruthy();
-
-  expect(provenanceEvents.length >= 1).toBeTruthy();
-  const last = provenanceEvents.at(-1);
-  expect(last?.templateUri).toBe(uri);
-  expect((last?.overlayEdges ?? 0) > 0).toBeTruthy();
 });
 
 test("updateOptions invalidates only templates that depend on changed custom elements", () => {

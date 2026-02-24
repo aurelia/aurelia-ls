@@ -134,10 +134,11 @@ export function runFullPipeline(opts: PipelineOptions): {
     const ep = opts.exprParser ?? getExpressionParser();
     const ap = opts.attrParser ?? createAttributeParserFromRegistry(query.syntax);
     recorder.readFile(opts.templateFilePath as any);
+    recorder.readVocabulary();
     return { exprParser: ep, attrParser: ap };
   });
 
-  const ir = trace.span("stage:lower", () => lowerDocument(opts.html, {
+  const ir = opts.seededIr ?? trace.span("stage:lower", () => lowerDocument(opts.html, {
     file: opts.templateFilePath,
     name: path.basename(opts.templateFilePath),
     attrParser,

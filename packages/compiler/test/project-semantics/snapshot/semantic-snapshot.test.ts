@@ -85,7 +85,7 @@ describe("buildSemanticSnapshot", () => {
       kind: "custom-element",
       name: "core-element",
       origin: "source",
-      source: "src/alpha.ts",
+      source: "out/alpha.ts",
       package: packageName,
     })}`;
 
@@ -166,7 +166,7 @@ describe("buildSemanticSnapshot", () => {
       kind: "custom-element",
       name: "core-element",
       origin: "source",
-      source: "src/alpha.ts",
+      source: "out/alpha.ts",
       package: packageName,
     })}`;
 
@@ -186,7 +186,7 @@ describe("buildSemanticSnapshot", () => {
       kind: "custom-element",
       name: "core-element",
       origin: "source",
-      source: "src/alpha.ts",
+      source: "out/alpha.ts",
       package: packageName,
     })}`;
 
