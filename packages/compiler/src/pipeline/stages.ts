@@ -116,7 +116,13 @@ export function runFullPipeline(opts: PipelineOptions): {
   recorder: DepRecorder;
 } {
   const diag = new DiagnosticsRuntime();
-  const query = opts.query;
+  // Create scope-parameterized query if templateContext provides a scope.
+  // This ensures the link stage resolves resources visible in the template's
+  // scope (e.g., local imports from <import> tags) rather than only the default scope.
+  const ctx = opts.templateContext;
+  const query = (ctx?.scopeId || ctx?.localImports?.length)
+    ? opts.query.model.query({ scope: ctx.scopeId, localImports: ctx.localImports })
+    : opts.query;
   const depGraph = opts.depGraph;
   const recorder = depGraph
     ? createDepRecorder(depGraph, depGraph.addNode('template-compilation', opts.templateFilePath))
