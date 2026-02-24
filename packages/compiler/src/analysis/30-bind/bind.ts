@@ -75,6 +75,10 @@ export interface BindScopesOptions {
   /** Optional trace for instrumentation. Defaults to NOOP_TRACE. */
   trace?: CompileTrace;
   diagnostics: BindDiagnosticEmitter;
+  /** Semantic model for bindable + converter/behavior resolution. */
+  model?: import("../../schema/model.js").SemanticModelQuery;
+  /** Dependency recorder for tracking resource reads during bind. */
+  deps?: import("../../schema/dependency-graph.js").DepRecorder;
 }
 
 /* =============================================================================

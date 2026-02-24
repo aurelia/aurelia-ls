@@ -154,6 +154,8 @@ export function runFullPipeline(opts: PipelineOptions): {
   const scope = bindScopes(linked, {
     trace: opts.trace,
     diagnostics: diag.forSource("bind"),
+    model: query,
+    deps: recorder,
   });
 
   // Stage 4: Typecheck
@@ -167,6 +169,7 @@ export function runFullPipeline(opts: PipelineOptions): {
     diagnostics: diag.forSource("typecheck"),
     trace: opts.trace,
     deps: recorder,
+    model: query,
   });
 
   // Stage 5: Usage collection

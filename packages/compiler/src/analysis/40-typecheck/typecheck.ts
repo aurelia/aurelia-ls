@@ -71,6 +71,8 @@ export interface TypecheckOptions {
    * for dependency-graph-driven invalidation.
    */
   deps?: import("../../schema/dependency-graph.js").DepRecorder;
+  /** Semantic model for confidence cascade and definition index building. */
+  model?: import("../../schema/model.js").SemanticModelQuery;
 }
 
 /** Phase 40: derive expected + inferred types and surface lightweight diagnostics. */
