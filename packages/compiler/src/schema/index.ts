@@ -35,3 +35,6 @@ export * from "./project.js";
 
 // Cursor entity (L2 shared feature resolution)
 export * from "./cursor-entity.js";
+
+// Cursor entity resolver (offset → entity + confidence)
+export * from "./cursor-resolve.js";
