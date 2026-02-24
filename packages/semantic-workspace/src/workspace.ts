@@ -122,9 +122,7 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
   }
 
   snapshot(): WorkspaceSnapshot {
-    // Resolve semantic authority from query (L2) or project (legacy)
-    const query = this.#programOptions.query;
-    const project = query ? query.snapshot() : this.#programOptions.project!;
+    const project = this.#programOptions.query.snapshot();
     const catalog = project.catalog;
     const syntax = project.syntax;
     const resourceGraph = project.resourceGraph ?? buildResourceGraphFromSemantics(project.semantics);
@@ -555,7 +553,7 @@ function spanFromRange(
 }
 
 function computeConfigHash(options: WorkspaceProgramOptions): string {
-  const project = options.query ? options.query.snapshot() : options.project!;
+  const project = options.query.snapshot();
   return stableHash({
     project: {
       semantics: stableHashSemantics(project.semantics),

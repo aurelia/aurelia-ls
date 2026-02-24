@@ -1,6 +1,7 @@
 // Compiler facade
 import {
   compileTemplate,
+  type CompileOptions,
   type CompileOverlayResult,
   type TemplateCompilation,
   type TemplateDiagnostics,
@@ -52,10 +53,8 @@ export type TemplateContextResolver = (uri: DocumentUri) => TemplateContext | nu
 export interface TemplateProgramOptions {
   readonly vm: VmReflection;
   readonly isJs: boolean;
-  /** Legacy semantic authority. Provide `project` or `query`, not both. */
-  readonly project?: ProjectSnapshot;
-  /** L2 semantic authority — scope-resolved query from SemanticModel. */
-  readonly query?: import("../schema/model.js").SemanticModelQuery;
+  /** Semantic authority — scope-resolved query from SemanticModel. */
+  readonly query: import("../schema/model.js").SemanticModelQuery;
   /** Optional per-template context resolver (scope/local imports). */
   readonly templateContext?: TemplateContextResolver;
   readonly moduleResolver: ModuleResolver;
@@ -79,13 +78,6 @@ export interface TemplateProgramOptions {
 
 type ProgramOptions = Omit<TemplateProgramOptions, "sourceStore" | "provenance" | "telemetry">;
 type ResolvedProgramOptions = ProgramOptions & { readonly fingerprints: FingerprintHints; readonly project: ProjectSnapshot };
-
-/** Resolve a ProjectSnapshot from TemplateProgramOptions (query path or legacy project path). */
-function resolveProjectFromOptions(options: ProgramOptions): ProjectSnapshot {
-  if (options.query) return options.query.snapshot();
-  if (options.project) return options.project;
-  throw new Error("TemplateProgramOptions requires either `project` or `query`.");
-}
 
 interface CachedCompilation {
   readonly compilation: TemplateCompilation;
@@ -289,9 +281,8 @@ export class DefaultTemplateProgram implements TemplateProgram {
 
   constructor(options: TemplateProgramOptions) {
     const { sourceStore, provenance, telemetry, ...rest } = options;
-    // Resolve project from either query or legacy project path
-    const resolvedProject = resolveProjectFromOptions(rest);
-    const resolved: ProgramOptions & { project: ProjectSnapshot } = { ...rest, project: resolvedProject };
+    const project = rest.query.snapshot();
+    const resolved: ProgramOptions & { project: ProjectSnapshot } = { ...rest, project };
     this.fingerprintHints = normalizeFingerprintHints(resolved);
     this.options = { ...resolved, fingerprints: this.fingerprintHints };
     this.optionsFingerprint = computeProgramOptionsFingerprint(resolved, this.fingerprintHints);
@@ -413,8 +404,7 @@ export class DefaultTemplateProgram implements TemplateProgram {
       withOverlayBase(this.options.isJs, this.options.overlayBaseName),
     );
     const compileOpts = this.buildCompileOptions(snap, templatePaths.template.path);
-    const seed = this.coreSeed(canonical.uri, contentHash);
-    const compilation = compileTemplate(compileOpts, seed ?? undefined);
+    const compilation = compileTemplate(compileOpts);
 
     // Feed overlay mapping into provenance for downstream features.
     const overlayUri = normalizeDocumentUri(compilation.overlay.overlayPath);
@@ -543,8 +533,8 @@ export class DefaultTemplateProgram implements TemplateProgram {
     void provenance;
     void telemetry;
 
-    const resolvedProject = resolveProjectFromOptions(rest);
-    const resolved = { ...rest, project: resolvedProject };
+    const project = rest.query.snapshot();
+    const resolved = { ...rest, project };
     const nextHints = normalizeFingerprintHints(resolved);
     const nextOptions: ResolvedProgramOptions = { ...resolved, fingerprints: nextHints };
     const nextFingerprint = computeProgramOptionsFingerprint(resolved, nextHints);
@@ -758,33 +748,18 @@ export class DefaultTemplateProgram implements TemplateProgram {
 
   private buildCompileOptions(snap: DocumentSnapshot, templatePath: NormalizedPath) {
     const templateContext = resolveTemplateContext(this.options, snap.uri);
-    const opts: {
-      html: string;
-      templateFilePath: string;
-      isJs: boolean;
-      vm: VmReflection;
-      project: ProjectSnapshot;
-      templateContext?: TemplateContext;
-      attrParser?: AttributeParser;
-      exprParser?: IExpressionParser;
-      moduleResolver: ModuleResolver;
-      overlayBaseName?: string;
-      cache?: CacheOptions;
-      fingerprints?: FingerprintHints;
-    } = {
+    const opts: CompileOptions = {
       html: snap.text,
       templateFilePath: templatePath,
       isJs: this.options.isJs,
       vm: this.options.vm,
-      project: this.options.project,
+      query: this.options.query,
       moduleResolver: this.options.moduleResolver,
     };
     if (templateContext) opts.templateContext = templateContext;
     if (this.options.attrParser !== undefined) opts.attrParser = this.options.attrParser;
     if (this.options.exprParser !== undefined) opts.exprParser = this.options.exprParser;
     if (this.options.overlayBaseName !== undefined) opts.overlayBaseName = this.options.overlayBaseName;
-    if (this.options.cache !== undefined) opts.cache = this.options.cache;
-    opts.fingerprints = this.fingerprintHints;
 
     return opts;
   }

@@ -170,13 +170,16 @@ export interface LinkOptions {
 }
 
 /**
- * Link template semantics using either a SemanticsSnapshot (legacy) or
- * a pre-resolved SemanticsLookup + ResourceGraph (L2 path).
+ * Link template semantics.
  *
- * L2 path: pass `lookup` and `graph` in LinkOptions. The snapshot parameter
- * becomes unused but is kept for backward compatibility.
+ * L2 path: pass `lookup` and `graph` in LinkOptions — the snapshot parameter
+ * is ignored.
+ *
+ * Legacy path: pass `snapshot` — a SemanticsLookup is created from it internally.
+ *
+ * The snapshot parameter will be removed once all callers provide opts.lookup.
  */
-export function linkTemplateSemantics(ir: IrModule, snapshot: SemanticsSnapshot, opts: LinkOptions): LinkModule {
+export function linkTemplateSemantics(ir: IrModule, snapshot: SemanticsSnapshot | null, opts: LinkOptions): LinkModule {
   if (!opts.moduleResolver) {
     throw new Error("linkTemplateSemantics requires a moduleResolver; missing resolver is a wiring error.");
   }
@@ -200,12 +203,13 @@ export function linkTemplateSemantics(ir: IrModule, snapshot: SemanticsSnapshot,
     const ctx: ResolverContext = opts.lookup
       ? {
           lookup: opts.lookup,
-          graph: opts.graph ?? snapshot.resourceGraph ?? null,
+          graph: opts.graph ?? null,
           services,
           moduleResolver: opts.moduleResolver,
           templateFilePath: opts.templateFilePath,
         }
       : (() => {
+          if (!snapshot) throw new Error("linkTemplateSemantics requires either opts.lookup or a non-null snapshot");
           const lookupOpts: SemanticsLookupOptions | undefined = buildLookupOpts(snapshot);
           const ctxGraph = snapshot.resourceGraph ?? snapshot.semantics.resourceGraph ?? null;
           return createResolveContext(

@@ -1,8 +1,8 @@
 import path from "node:path";
 import { buildTemplateMapping } from "./mapping.js";
 import { buildTemplateQuery } from "./query.js";
-import type { PipelineSession } from "../../pipeline/engine.js";
 import type { FrameOverlayPlan, OverlayPlanModule } from "./types.js";
+import type { EmitResult as OverlayEmitResult } from "./emit.js";
 import type { TemplateQueryFacade } from "./query.js";
 import type { TemplateMappingArtifact } from "./mapping.js";
 import type { ExprId, ExprTableEntry, SourceSpan } from "../../model/ir.js";
@@ -34,16 +34,20 @@ export interface OverlayProductResult {
   mapping?: TemplateMappingArtifact;
 }
 
-export function buildOverlayProduct(session: PipelineSession, opts: OverlayProductOptions): OverlayProductArtifacts {
+// buildOverlayProduct removed — use buildOverlayProductFromStages instead.
+
+/**
+ * Build overlay product from pre-computed stage outputs (no PipelineSession needed).
+ */
+export function buildOverlayProductFromStages(
+  ir: import("../../model/index.js").IrModule,
+  linked: import("../../analysis/index.js").LinkModule,
+  scope: import("../../model/index.js").ScopeModule,
+  planOut: OverlayPlanModule,
+  overlayEmit: OverlayEmitResult,
+  opts: OverlayProductOptions,
+): OverlayProductArtifacts {
   const sourceFile = resolveSourceFile(opts.templateFilePath);
-  const ir = session.run("10-lower");
-  const linked = session.run("20-link");
-  const scope = session.run("30-bind");
-  const typecheck = session.run("40-typecheck");
-
-  const planOut = session.run("overlay:plan");
-  const overlayEmit = session.run("overlay:emit");
-
   const overlayDir = path.dirname(opts.templateFilePath);
   const overlayPath = normalizePathForId(path.join(overlayDir, overlayEmit.filename));
   const overlayFile = resolveSourceFile(overlayPath);
@@ -60,22 +64,15 @@ export function buildOverlayProduct(session: PipelineSession, opts: OverlayProdu
     frameOrigins,
   });
 
-  const calls = overlayEmit.mapping.map((m) => ({
+  const calls = overlayEmit.mapping.map((m: import("./emit.js").OverlayEmitMappingEntry) => ({
     exprId: m.exprId,
     overlayStart: m.span.start,
     overlayEnd: m.span.end,
     htmlSpan: spanIndex.ensure(m.exprId, sourceFile),
   }));
 
-  const overlay: OverlayProductResult = {
-    overlayPath,
-    text: overlayEmit.text,
-    calls,
-    mapping,
-  };
-
-  const query = buildTemplateQuery(ir, linked, mapping, typecheck);
-
+  const overlay: OverlayProductResult = { overlayPath, text: overlayEmit.text, calls, mapping };
+  const query = buildTemplateQuery(ir, linked, mapping, null as any);
   return { plan: planOut, overlay, mapping, query, exprSpans, exprTable: ir.exprTable ?? [], spanIndex };
 }
 

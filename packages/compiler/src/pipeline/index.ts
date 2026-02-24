@@ -1,13 +1,13 @@
-// Pipeline public API - compilation engine and caching
+// Pipeline — L2 template compilation pipeline
+//
+// Pure sequential pipeline: lower → link → bind → typecheck → usage → overlay.
+// No engine, no session, no stage graph.
 
-// Engine - pipeline session, stage definitions, context
+// Types and options
 export * from "./engine.js";
 
-// Stages - default stage implementations (wires analysis + synthesis)
+// Stage functions
 export * from "./stages.js";
 
-// Cache - stage caching infrastructure
-export * from "./cache.js";
-
-// Hash - content hashing for fingerprints
+// Hash utilities
 export * from "./hash.js";

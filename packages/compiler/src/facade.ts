@@ -1,88 +1,72 @@
-// Pipeline imports (via barrel)
-import { createDefaultEngine } from "./pipeline/index.js";
+// Template Compilation Facade
+//
+// Public entry point for template compilation. Delegates to the pure
+// pipeline functions in pipeline/stages.ts.
 
-// Model imports (via barrel)
+// Model imports
 import type { ExprTableEntry, SourceSpan, ExprIdMap } from "./model/index.js";
 
-// Language imports (via barrel)
-import type {
-  FeatureUsageSet,
-  LocalImportDef,
-  ResourceCatalog,
-  ResourceGraph,
-  ResourceScopeId,
-  ProjectSemantics,
-  ProjectSnapshot,
-  TemplateContext,
-  TemplateSyntaxRegistry,
-} from "./schema/index.js";
-import { buildProjectSnapshot } from "./schema/index.js";
+// Language imports
+import type { FeatureUsageSet, TemplateContext } from "./schema/index.js";
 
-// Parsing imports (via barrel)
+// Parsing imports
 import type { AttributeParser, IExpressionParser } from "./parsing/index.js";
 
-// Shared imports (via barrel)
+// Shared imports
 import type { VmReflection, CompilerDiagnostic, ModuleResolver } from "./shared/index.js";
 
-// Diagnostics imports (via barrel)
+// Diagnostics imports
 import type { DiagnosticResourceKind } from "./diagnostics/index.js";
 
-// Pipeline imports (via barrel)
-import type { StageOutputs, PipelineOptions, CacheOptions, FingerprintHints, StageArtifactMeta, StageKey, PipelineSession } from "./pipeline/index.js";
+// Pipeline imports
+import { runFullPipeline } from "./pipeline/stages.js";
+import type { StageKey, CacheOptions, FingerprintHints, StageArtifactMeta } from "./pipeline/engine.js";
 
-// Synthesis imports (via barrel)
+// Synthesis imports
 import {
-  buildOverlayProduct,
+  buildOverlayProductFromStages,
   computeOverlayBaseName,
   type OverlayProductResult,
   type TemplateMappingArtifact,
   type TemplateQueryFacade,
 } from "./synthesis/index.js";
 
+import type { SemanticModelQuery } from "./schema/model.js";
+
+// ============================================================================
+// Compile Options
+// ============================================================================
+
 export interface CompileOptions {
   html: string;
   templateFilePath: string;
   isJs: boolean;
   vm: VmReflection;
-  /** L2 semantic authority — scope-resolved query from SemanticModel. */
-  query?: import("./schema/model.js").SemanticModelQuery;
-  /** Optional precomputed project snapshot (legacy). */
-  project?: ProjectSnapshot;
-  /** Base semantics (used when neither query nor project is provided). */
-  semantics?: ProjectSemantics;
-  catalog?: ResourceCatalog;
-  syntax?: TemplateSyntaxRegistry;
-  resourceGraph?: ResourceGraph;
-  resourceScope?: ResourceScopeId | null;
-  localImports?: readonly LocalImportDef[];
-  /** Optional per-template context override. */
+  /** Semantic authority — the query IS the model. */
+  query: SemanticModelQuery;
   templateContext?: TemplateContext;
   attrParser?: AttributeParser;
   exprParser?: IExpressionParser;
   moduleResolver: ModuleResolver;
   overlayBaseName?: string;
-  cache?: CacheOptions;
-  fingerprints?: FingerprintHints;
 }
+
+// ============================================================================
+// Compilation Result Types
+// ============================================================================
 
 export type CompileOverlayResult = OverlayProductResult;
 
 export interface TemplateDiagnostics {
-  /** Flat list of all diagnostics from the pipeline. */
   all: CompilerDiagnostic[];
-  /** Per-stage view keyed by diagnostic stage. */
   byStage: Partial<Record<CompilerDiagnostic["stage"], CompilerDiagnostic[]>>;
 }
 
 export type StageMetaSnapshot = Partial<Record<StageKey, StageArtifactMeta>>;
 
-/** Gap/degradation summary derived from diagnostic confidence qualifications. */
 export interface TemplateDegradation {
-  /** True when at least one diagnostic has gap-qualified confidence. */
   readonly hasGaps: boolean;
-  /** Number of diagnostics with data.confidence below the default. */
   readonly gapQualifiedCount: number;
-  /** Deduplicated resources with at least one gap-qualified diagnostic. */
   readonly affectedResources: ReadonlyArray<{
     readonly kind: DiagnosticResourceKind;
     readonly name: string;
@@ -90,122 +74,85 @@ export interface TemplateDegradation {
 }
 
 export interface TemplateCompilation {
-  ir: StageOutputs["10-lower"];
-  linked: StageOutputs["20-link"];
-  scope: StageOutputs["30-bind"];
-  typecheck: StageOutputs["40-typecheck"];
+  ir: import("./model/index.js").IrModule;
+  linked: import("./analysis/index.js").LinkModule;
+  scope: import("./model/index.js").ScopeModule;
+  typecheck: import("./analysis/index.js").TypecheckModule;
   usage: FeatureUsageSet;
-  overlayPlan: StageOutputs["overlay:plan"];
+  overlayPlan: import("./synthesis/index.js").OverlayPlanModule;
   overlay: CompileOverlayResult;
   mapping: TemplateMappingArtifact;
   query: TemplateQueryFacade;
-  /** Authored expression table + spans for tooling (hover/refs). */
   exprTable: readonly ExprTableEntry[];
   exprSpans: ExprIdMap<SourceSpan>;
   diagnostics: TemplateDiagnostics;
-  /** Gap/degradation summary derived from diagnostic confidence. */
   degradation: TemplateDegradation;
   meta: StageMetaSnapshot;
 }
 
-function resolveProjectSnapshot(opts: CompileOptions): ProjectSnapshot {
-  if (opts.query) return opts.query.snapshot();
-  if (opts.project) return opts.project;
-  if (!opts.semantics) {
-    throw new Error("compileTemplate requires 'query', 'project', or 'semantics'.");
-  }
-  return buildProjectSnapshot(opts.semantics, {
-    catalog: opts.catalog,
-    syntax: opts.syntax,
-    resourceGraph: opts.resourceGraph,
-    ...(opts.resourceScope !== undefined ? { defaultScope: opts.resourceScope } : {}),
-  });
-}
+// ============================================================================
+// Public API
+// ============================================================================
 
-function resolveTemplateContext(opts: CompileOptions): TemplateContext | undefined {
-  if (opts.templateContext) return opts.templateContext;
-  if (opts.resourceScope === undefined && !opts.localImports) return undefined;
-  return {
-    ...(opts.resourceScope !== undefined ? { scopeId: opts.resourceScope ?? null } : {}),
-    ...(opts.localImports ? { localImports: opts.localImports } : {}),
-  };
-}
+/**
+ * Compile a template.
+ *
+ * Pure function: query + html + options → TemplateCompilation.
+ * No engine, no session. Delegates to runFullPipeline.
+ */
+export function compileTemplate(opts: CompileOptions): TemplateCompilation {
+  const overlayBase = computeOverlayBaseName(opts.templateFilePath, opts.overlayBaseName);
 
-function buildPipelineOptions(opts: CompileOptions, overlayBaseName: string): PipelineOptions {
-  const base: PipelineOptions = {
+  const result = runFullPipeline({
     html: opts.html,
     templateFilePath: opts.templateFilePath,
-    vm: opts.vm,
-    ...(opts.query ? { query: opts.query } : { project: resolveProjectSnapshot(opts) }),
+    query: opts.query,
     moduleResolver: opts.moduleResolver,
+    vm: opts.vm,
+    templateContext: opts.templateContext,
+    depGraph: opts.query.model.deps,
+    attrParser: opts.attrParser,
+    exprParser: opts.exprParser,
     overlay: {
       isJs: opts.isJs,
-      filename: overlayBaseName,
+      filename: overlayBase,
       syntheticPrefix: opts.vm.getSyntheticPrefix?.() ?? "__AU_TTC_",
     },
-  };
-  const templateContext = resolveTemplateContext(opts);
-  if (templateContext) base.templateContext = templateContext;
-  if (opts.cache) base.cache = opts.cache;
-  if (opts.fingerprints) base.fingerprints = opts.fingerprints;
-  if (opts.attrParser) base.attrParser = opts.attrParser;
-  if (opts.exprParser) base.exprParser = opts.exprParser;
-  return base;
-}
+  });
 
-/** Full pipeline (lower -> link -> bind -> plan -> emit) plus mapping/query scaffolding. */
-// TODO(tech-debt): direct facade entrypoints are transitional while workspace/program
-// becomes the single compilation authority path across packages.
-export function compileTemplate(
-  opts: CompileOptions,
-  seed?: Partial<Record<StageKey, StageOutputs[StageKey]>>,
-): TemplateCompilation {
-  const overlayBase = computeOverlayBaseName(opts.templateFilePath, opts.overlayBaseName);
-  const engine = createDefaultEngine();
-  const session = engine.createSession(buildPipelineOptions(opts, overlayBase), seed);
-
-  const overlayArtifacts = buildOverlayProduct(session, { templateFilePath: opts.templateFilePath });
-
-  const ir = session.run("10-lower");
-  const linked = session.run("20-link");
-  const scope = session.run("30-bind");
-  const typecheck = session.run("40-typecheck");
-  const usage = session.run("50-usage");
-  const overlayPlan = overlayArtifacts.plan;
+  // Build overlay product from stage results
+  const overlayArtifacts = buildOverlayProductFromStages(
+    result.ir,
+    result.linked,
+    result.scope,
+    result.overlayPlan,
+    result.overlayEmit,
+    { templateFilePath: opts.templateFilePath },
+  );
 
   return {
-    ir,
-    linked,
-    scope,
-    typecheck,
-    usage,
-    overlayPlan,
+    ir: result.ir,
+    linked: result.linked,
+    scope: result.scope,
+    typecheck: result.typecheck,
+    usage: result.usage,
+    overlayPlan: result.overlayPlan,
     overlay: overlayArtifacts.overlay,
     mapping: overlayArtifacts.mapping,
     query: overlayArtifacts.query,
     exprTable: overlayArtifacts.exprTable,
     exprSpans: overlayArtifacts.exprSpans,
-    diagnostics: buildDiagnostics(session.diagnostics.all),
-    degradation: buildDegradation(session.diagnostics.all),
-    meta: collectStageMeta(session, [
-      "10-lower",
-      "20-link",
-      "30-bind",
-      "40-typecheck",
-      "50-usage",
-      "overlay:plan",
-      "overlay:emit",
-    ]),
+    diagnostics: buildDiagnostics(result.diagnostics.all),
+    degradation: buildDegradation(result.diagnostics.all),
+    meta: {},
   };
 }
 
-/* --------------------------
- * Helpers
- * ------------------------ */
+// ============================================================================
+// Helpers
+// ============================================================================
 
-function buildDiagnostics(
-  diagnostics: readonly CompilerDiagnostic[],
-): TemplateDiagnostics {
+function buildDiagnostics(diagnostics: readonly CompilerDiagnostic[]): TemplateDiagnostics {
   const byStage: Partial<Record<CompilerDiagnostic["stage"], CompilerDiagnostic[]>> = {};
   for (const d of diagnostics) {
     if (!byStage[d.stage]) byStage[d.stage] = [];
@@ -214,16 +161,13 @@ function buildDiagnostics(
   return { all: [...diagnostics], byStage };
 }
 
-/** Maps DiagnosticBindableOwnerKind to DiagnosticResourceKind for bindable-level diagnostics. */
 const OWNER_KIND_TO_RESOURCE_KIND: Record<string, DiagnosticResourceKind> = {
   element: "custom-element",
   attribute: "custom-attribute",
   controller: "template-controller",
 };
 
-function buildDegradation(
-  diagnostics: readonly CompilerDiagnostic[],
-): TemplateDegradation {
+function buildDegradation(diagnostics: readonly CompilerDiagnostic[]): TemplateDegradation {
   const seen = new Map<string, { kind: DiagnosticResourceKind; name: string }>();
   let count = 0;
   for (const d of diagnostics) {
@@ -232,7 +176,6 @@ function buildDegradation(
       count++;
       let kind = data.resourceKind as DiagnosticResourceKind | undefined;
       let name = data.name as string | undefined;
-      // For bindable-level diagnostics, the affected resource is the owner element/attribute.
       if (!kind && data.bindable) {
         const b = data.bindable as Record<string, unknown>;
         kind = OWNER_KIND_TO_RESOURCE_KIND[b.ownerKind as string];
@@ -249,13 +192,4 @@ function buildDegradation(
     gapQualifiedCount: count,
     affectedResources: [...seen.values()],
   };
-}
-
-function collectStageMeta(session: PipelineSession, keys: StageKey[]): StageMetaSnapshot {
-  const meta: StageMetaSnapshot = {};
-  for (const k of keys) {
-    const m = session.meta(k);
-    if (m) meta[k] = m;
-  }
-  return meta;
 }
