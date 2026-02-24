@@ -29,6 +29,7 @@ import type {
   AttrRes,
   Bindable,
   ResourceCollections,
+  ConvergenceRef,
 } from "./types.js";
 import type { ProjectSnapshot } from "./snapshot.js";
 import { buildProjectSnapshot } from "./snapshot.js";
@@ -66,6 +67,8 @@ export interface ConvergenceEntry {
   readonly key: string;
   readonly def: ResourceDef;
   readonly file?: NormalizedPath;
+  /** Opaque identity ref for provenance queries. */
+  readonly ref: ConvergenceRef;
 }
 
 // ============================================================================
@@ -269,7 +272,8 @@ export function createSemanticModel(
     const name = unwrapSourced(def.name);
     if (!name) continue;
     const key = `${def.kind}:${name}`;
-    entries.set(key, { kind: def.kind, name, key, def, file: def.file });
+    const ref = { resourceKey: key, __brand: 'ConvergenceRef' } as ConvergenceRef;
+    entries.set(key, { kind: def.kind, name, key, def, file: def.file, ref });
   }
 
   let cachedSnapshot: ProjectSnapshot | undefined;

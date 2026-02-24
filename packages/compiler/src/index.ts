@@ -130,6 +130,38 @@ export type {
   DepNodeId,
   DepNodeKind,
   DepRecorder,
+  // L2 convergence types
+  ConvergenceEntry,
+  ConvergenceProvenanceInfo,
+  ConvergenceDecisionInfo,
+  GapDetailInfo,
+  // L2 gap primitives
+  Stub,
+  Resolved,
+  GapCategory,
+  GapRef,
+  // L2 resource views
+  ResourceView,
+  BindableView,
+  ConvergenceRef,
+  // L2 confidence cascade
+  ConfidenceLevel,
+  ConfidenceSignals,
+  // L2 invalidation + feature response
+  InvalidationScope,
+  FeatureResponse,
+  Degradation,
+  NotApplicable,
+} from "./schema/index.js";
+
+export {
+  // L2 utility functions
+  isStub,
+  resolveValue,
+  createStub,
+  computeConfidence,
+  isDegradation,
+  isNotApplicable,
 } from "./schema/index.js";
 
 // Resource definitions (for compiler project-semantics and external tooling)

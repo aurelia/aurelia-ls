@@ -73,6 +73,133 @@ export function createStub<T>(fallback: T, gapCategory: GapCategory, resourceKey
   };
 }
 
+// ============================================================================
+// L2 Resource Views (consumer-facing, carries Resolved<T> for gapped fields)
+// ============================================================================
+
+/**
+ * Opaque identity reference for provenance queries.
+ * Follow this ref to get convergence decision and gap details.
+ */
+export type ConvergenceRef = { readonly resourceKey: string; readonly __brand: 'ConvergenceRef' };
+
+/**
+ * Base view for all resource kinds.
+ * Consumer-facing: resolved values for known fields, Stubs for gapped fields.
+ */
+export interface ResourceView {
+  readonly kind: string;
+  readonly name: string;
+  readonly className: string;
+  readonly file: Resolved<NormalizedPath | undefined>;
+  readonly package: Resolved<string | undefined>;
+  readonly ref: ConvergenceRef;
+}
+
+/**
+ * Bindable view — consumer-facing bindable metadata.
+ */
+export interface BindableView {
+  readonly property: string;
+  readonly attribute: Resolved<string>;
+  readonly mode: Resolved<BindingMode>;
+  readonly primary: Resolved<boolean>;
+  readonly type: string | undefined;
+  readonly doc: string | undefined;
+}
+
+// ============================================================================
+// L2 Confidence Cascade
+// ============================================================================
+
+/**
+ * Four confidence levels — per-position confidence from the cascade.
+ */
+export type ConfidenceLevel = 'high' | 'medium' | 'low' | 'none';
+
+/**
+ * Four independent confidence signals. Per-position confidence is
+ * the minimum of all four signals.
+ */
+export interface ConfidenceSignals {
+  /** Is the resource known? How was it declared? */
+  readonly resource: ConfidenceLevel;
+  /** Are relevant types annotated? (tier C raises this) */
+  readonly type: ConfidenceLevel;
+  /** Is the scope chain fully determined? (dynamic registration lowers this) */
+  readonly scope: ConfidenceLevel;
+  /** Is the expression fully analyzable? */
+  readonly expression: ConfidenceLevel;
+}
+
+/**
+ * Compute composite confidence from individual signals.
+ * Returns the minimum signal level.
+ */
+export function computeConfidence(signals: ConfidenceSignals): ConfidenceLevel {
+  const order: ConfidenceLevel[] = ['none', 'low', 'medium', 'high'];
+  const min = Math.min(
+    order.indexOf(signals.resource),
+    order.indexOf(signals.type),
+    order.indexOf(signals.scope),
+    order.indexOf(signals.expression),
+  );
+  return order[min]!;
+}
+
+// ============================================================================
+// L2 Invalidation Scope
+// ============================================================================
+
+/**
+ * What changed — determines the blast radius of a re-execution.
+ */
+export type InvalidationScope =
+  | { readonly kind: 'global' }
+  | { readonly kind: 'file'; readonly paths: readonly NormalizedPath[] }
+  | { readonly kind: 'resource'; readonly keys: readonly string[] }
+  | { readonly kind: 'template'; readonly paths: readonly NormalizedPath[] }
+  | { readonly kind: 'type'; readonly paths: readonly NormalizedPath[] };
+
+// ============================================================================
+// L2 Feature Response (degradation ladder)
+// ============================================================================
+
+/**
+ * Degradation response — honest partial output or no-knowledge explanation.
+ * Rung 2 = partial knowledge. Rung 3 = no knowledge.
+ */
+export interface Degradation {
+  readonly __degraded: true;
+  readonly rung: 2 | 3;
+  readonly what: string;
+  readonly why: string;
+  readonly howToClose: string | null;
+}
+
+/**
+ * Not applicable — cursor on non-semantic position (whitespace, comment, plain HTML).
+ */
+export interface NotApplicable {
+  readonly __notApplicable: true;
+}
+
+/**
+ * Feature response type — the universal return type for all feature queries.
+ * Rung 1 = success (T). Rung 2-3 = degradation. Rung 4 = not applicable.
+ */
+export type FeatureResponse<T> = T | Degradation | NotApplicable;
+
+/** Type guard for degradation. */
+export function isDegradation<T>(response: FeatureResponse<T>): response is Degradation {
+  return response !== null && typeof response === 'object' && '__degraded' in response;
+}
+
+/** Type guard for not applicable. */
+export function isNotApplicable<T>(response: FeatureResponse<T>): response is NotApplicable {
+  return response !== null && typeof response === 'object' && '__notApplicable' in response;
+}
+
 export interface SourceLocation {
   readonly file: NormalizedPath;
   readonly pos: number;
