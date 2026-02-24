@@ -6,11 +6,14 @@ import {
   debug,
   isDebugEnabled,
   normalizePathForId,
+  resolveCursorEntity,
   spanContainsOffset,
   spanLength,
   toSourceFileId,
   unwrapSourced,
   type BindableDef,
+  type CursorEntity,
+  type CursorResolutionResult,
   type ExprId,
   type LinkedInstruction,
   type LinkedRow,
@@ -156,72 +159,156 @@ export function collectTemplateDefinitionSlices(options: {
     debug.workspace("definition.start", { offset, uri: options.documentUri ?? null });
   }
 
-  const elementHit = findElementDefinitionHit(compilation, domIndex, offset);
+  // ── CursorEntity dispatch (L2 shared resolution) ───────────────────
+  //
+  // Use the shared CursorEntity resolver as the primary entity detector.
+  // This replaces scattered per-position detection (element-hit, controller-
+  // hit, VC-hit, BB-hit) with a single unified dispatch for resource-level
+  // entities. All features resolve the same entity for a given position;
+  // definition.ts projects the resource definition location from it.
+  //
+  // CursorEntity handles: ce-tag, tc-attr, ca-attr (partial), vc, bb,
+  // scope-identifier, member-access, command, plain-attr-binding.
+  // Instruction-hit path remains for bindable resolution (not yet in CursorEntity).
+  const resolution = resolveCursorEntity({
+    compilation,
+    offset,
+    syntax: syntax.syntax,
+  });
+  const entity = resolution?.entity ?? null;
   if (debugEnabled) {
-    debug.workspace("definition.element", {
-      hit: !!elementHit,
-      templateIndex: elementHit?.templateIndex ?? null,
-      nodeId: elementHit?.row.target ?? null,
-      tag: elementHit?.row.node.tag ?? null,
-      tagSpan: elementHit?.tagSpan ?? null,
+    debug.workspace("definition.entity", {
+      kind: entity?.kind ?? null,
+      confidence: resolution?.compositeConfidence ?? null,
     });
   }
-  if (elementHit) {
-    const { row, tagSpan } = elementHit;
-    const resolved = row.node.custom?.def ?? null;
-    const entry = resolved
-      ? findEntry(resources.elements, resolved.name, resolved.file ?? null)
-      : null;
-    const location = entry ? resourceLocation(entry) : null;
-    if (location && tagSpan) resource.push(location);
+
+  // Dispatch resource-level entities to definition lookup.
+  const entityDef = entity
+    ? resolveResourceEntityDefinition(entity, resources, preferRoots)
+    : null;
+  if (entityDef) resource.push(entityDef);
+
+  // ── Template controller direct check ───────────────────────────────
+  //
+  // CursorEntity's priority order (expression > controller > node > instruction)
+  // means expressions can shadow controllers at TC positions (e.g., the
+  // ForOfStatement mapping may cover the full repeat.for="..." attribute).
+  // controllerAt is the authoritative TC check — it uses the linked instruction
+  // spans directly. This runs independently of CursorEntity to ensure TC
+  // navigation always works at any position within the TC attribute.
+  if (resource.length === 0) {
+    const controller = compilation.query.controllerAt(offset);
+    if (controller) {
+      const entry = findEntry(resources.controllers, controller.kind, null, preferRoots);
+      const location = entry ? resourceLocation(entry) : null;
+      if (location) resource.push(location);
+    }
   }
 
-  const instructionHits = findInstructionHitsAtOffset(compilation.linked.templates, compilation.ir.templates ?? [], domIndex, offset);
-  for (const hit of instructionHits) {
-    const nameSpan = hit.attrNameSpan ?? null;
-    if (!nameSpan || !spanContainsOffset(nameSpan, offset)) continue;
-    const attrName = hit.attrName ?? null;
-    if (!attrName) continue;
-    const spans = resolveAttributeSpans(attrName, nameSpan, syntax);
-    const matchSpan = spans.target ?? nameSpan;
-    if (!spanContainsOffset(matchSpan, offset)) continue;
-    if (spans.command && spanContainsOffset(spans.command, offset)) continue;
-    const defs = definitionsForInstruction(hit.instruction, resources, preferRoots);
-    if (defs.length) resource.push(...defs);
+  // ── Instruction-hit fallback (bindable + CA resolution) ────────────
+  //
+  // When CursorEntity didn't produce a resource definition, fall back to
+  // instruction-hit matching for bindable property resolution (the entity
+  // resolver doesn't yet produce bindable entities with parent context).
+  // Also handles custom attribute instructions not yet covered by entity.
+  if (!entityDef) {
+    const elementHit = findElementDefinitionHit(compilation, domIndex, offset);
+    if (debugEnabled) {
+      debug.workspace("definition.element", {
+        hit: !!elementHit,
+        templateIndex: elementHit?.templateIndex ?? null,
+        nodeId: elementHit?.row.target ?? null,
+        tag: elementHit?.row.node.tag ?? null,
+        tagSpan: elementHit?.tagSpan ?? null,
+      });
+    }
+    if (elementHit) {
+      const { row, tagSpan } = elementHit;
+      const resolved = row.node.custom?.def ?? null;
+      const entry = resolved
+        ? findEntry(resources.elements, resolved.name, resolved.file ?? null)
+        : null;
+      const location = entry ? resourceLocation(entry) : null;
+      if (location && tagSpan) resource.push(location);
+    }
+
+    const instructionHits = findInstructionHitsAtOffset(compilation.linked.templates, compilation.ir.templates ?? [], domIndex, offset);
+    for (const hit of instructionHits) {
+      const nameSpan = hit.attrNameSpan ?? null;
+      if (!nameSpan || !spanContainsOffset(nameSpan, offset)) continue;
+      const attrName = hit.attrName ?? null;
+      if (!attrName) continue;
+      const spans = resolveAttributeSpans(attrName, nameSpan, syntax);
+      const matchSpan = spans.target ?? nameSpan;
+      if (!spanContainsOffset(matchSpan, offset)) continue;
+      if (spans.command && spanContainsOffset(spans.command, offset)) continue;
+      const defs = definitionsForInstruction(hit.instruction, resources, preferRoots);
+      if (defs.length) resource.push(...defs);
+    }
   }
 
-  const converterHit = findValueConverterAtOffset(compilation.exprTable ?? [], offset);
-  if (converterHit) {
-    const entry = findEntry(resources.valueConverters, converterHit.name, null, preferRoots);
-    const location = entry ? resourceLocation(entry) : null;
-    if (location) resource.push(location);
+  // ── Resource reference hits (symbolId safety net) ──────────────────
+  //
+  // Cross-template symbolId matching catches any remaining positions
+  // where the cursor overlaps a resource reference span.
+  if (resource.length === 0) {
+    const resourceHits = collectTemplateResourceReferences({
+      compilation,
+      resources,
+      syntax,
+      preferRoots,
+      documentUri: options.documentUri ?? null,
+    });
+    for (const hit of resourceHits) {
+      if (!hit.symbolId || !spanContainsOffset(hit.span, offset)) continue;
+      const entry = resources.bySymbolId.get(hit.symbolId);
+      const location = entry ? resourceLocation(entry) : null;
+      if (location) resource.push(location);
+    }
   }
 
-  const behaviorHit = findBindingBehaviorAtOffset(compilation.exprTable ?? [], offset);
-  if (behaviorHit) {
-    const entry = findEntry(resources.bindingBehaviors, behaviorHit.name, null, preferRoots);
-    const location = entry ? resourceLocation(entry) : null;
-    if (location) resource.push(location);
-  }
-
-  const resourceHits = collectTemplateResourceReferences({
-    compilation,
-    resources,
-    syntax,
-    preferRoots,
-    documentUri: options.documentUri ?? null,
-  });
-  for (const hit of resourceHits) {
-    if (!hit.symbolId || !spanContainsOffset(hit.span, offset)) continue;
-    const entry = resources.bySymbolId.get(hit.symbolId);
-    const location = entry ? resourceLocation(entry) : null;
-    if (location) resource.push(location);
-  }
-
+  // ── Local scope definition (expression identifiers) ────────────────
   const localDef = findLocalScopeDefinition(compilation, text, offset, options.documentUri ?? null);
   if (localDef) local.push(localDef);
 
   return { local, resource };
+}
+
+// ── CursorEntity → Definition Location dispatch ──────────────────────
+//
+// Maps resource-level CursorEntity kinds to their definition locations
+// via the ResourceDefinitionIndex. Returns null for non-resource entities
+// or entities whose definitions aren't in the index.
+function resolveResourceEntityDefinition(
+  entity: CursorEntity,
+  resources: ResourceDefinitionIndex,
+  preferRoots: readonly string[],
+): WorkspaceLocation | null {
+  switch (entity.kind) {
+    case 'ce-tag': {
+      const entry = findEntry(resources.elements, entity.name, null, preferRoots);
+      return entry ? resourceLocation(entry) : null;
+    }
+    case 'tc-attr': {
+      const entry = findEntry(resources.controllers, entity.name, null, preferRoots);
+      return entry ? resourceLocation(entry) : null;
+    }
+    case 'ca-attr': {
+      const entry = findEntry(resources.attributes, entity.name, null, preferRoots);
+      return entry ? resourceLocation(entry) : null;
+    }
+    case 'value-converter': {
+      const entry = findEntry(resources.valueConverters, entity.name, null, preferRoots);
+      return entry ? resourceLocation(entry) : null;
+    }
+    case 'binding-behavior': {
+      const entry = findEntry(resources.bindingBehaviors, entity.name, null, preferRoots);
+      return entry ? resourceLocation(entry) : null;
+    }
+    default:
+      return null;
+  }
 }
 
 export function collectTemplateReferences(options: {
@@ -302,6 +389,15 @@ export function collectTemplateResourceReferences(options: {
   const instructionHits = collectInstructionHits(compilation.linked.templates, compilation.ir.templates ?? [], domIndex);
   for (const hit of instructionHits) {
     const nameSpan = hit.attrNameSpan ?? null;
+    // TC attributes are consumed during compilation — attrNameSpan will
+    // be null. Use the instruction's loc span directly for TC references.
+    if (hit.instruction.kind === "hydrateTemplateController") {
+      const entry = findEntry(resources.controllers, hit.instruction.res, null, preferRoots);
+      if (!entry?.symbolId) continue;
+      const loc = spanLocation(hit.loc, documentUri);
+      if (loc) results.push({ ...loc, symbolId: entry.symbolId });
+      continue;
+    }
     if (!nameSpan) continue;
     const attrName = hit.attrName ?? null;
     const span = attrName ? (resolveAttributeSpans(attrName, nameSpan, syntax).target ?? nameSpan) : nameSpan;
@@ -311,13 +407,6 @@ export function collectTemplateResourceReferences(options: {
         const entry = res
           ? findEntry(resources.attributes, res.name, res.file ?? null)
           : null;
-        if (!entry?.symbolId) break;
-        const loc = spanLocation(span, documentUri);
-        if (loc) results.push({ ...loc, symbolId: entry.symbolId });
-        break;
-      }
-      case "hydrateTemplateController": {
-        const entry = findEntry(resources.controllers, hit.instruction.res, null, preferRoots);
         if (!entry?.symbolId) break;
         const loc = spanLocation(span, documentUri);
         if (loc) results.push({ ...loc, symbolId: entry.symbolId });
