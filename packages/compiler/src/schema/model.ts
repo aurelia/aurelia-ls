@@ -45,9 +45,17 @@ import type {
   FileFacts,
 } from "../project-semantics/index.js";
 import type { NormalizedPath } from "../model/index.js";
-import type { ResourceDef } from "./types.js";
+import type { ResourceDef, BindableView } from "./types.js";
 import { stableHash, stableHashSemantics } from "../pipeline/index.js";
 import { unwrapSourced } from "./sourced.js";
+import {
+  projectResourceDef,
+  projectBindables as projectBindableDefs,
+  type AnyResourceView,
+  type CustomElementView,
+  type CustomAttributeView,
+  type TemplateControllerView,
+} from "./project.js";
 
 // ============================================================================
 // Convergence Entry (L2 target: entries IS the model)
@@ -187,12 +195,12 @@ export interface SemanticModelQuery extends SemanticsLookup {
   // L2 Query Methods (convergence target — SemanticModelQuery contract)
   // =========================================================================
 
-  /** Resolve a resource by kind and name within this query's scope. */
-  getResource(kind: ResourceKindLike, name: string): ElementRes | AttrRes | null | undefined;
+  /** Resolve a resource by kind and name, returning an L2 ResourceView with Resolved<T> fields. */
+  getResource(kind: ResourceKindLike, name: string): AnyResourceView | undefined;
   /** Get all resources visible in a given scope. */
   getResourcesInScope(scopeId: ResourceScopeId): Partial<ResourceCollections> | undefined;
-  /** Get bindables for a resource by kind and name. */
-  getBindables(kind: ResourceKindLike, name: string): Readonly<Record<string, Bindable>> | undefined;
+  /** Get bindables for a resource, returning L2 BindableView with Resolved<T> fields. */
+  getBindables(kind: ResourceKindLike, name: string): Readonly<Record<string, BindableView>> | undefined;
   /** Get the vocabulary (syntax registry). */
   getVocabulary(): TemplateSyntaxRegistry;
   /** Get scope gaps for a given scope. */
@@ -346,10 +354,15 @@ function createModelQuery(
       return model.snapshot();
     },
 
-    // L2 query methods
-    getResource(kind: ResourceKindLike, name: string) {
-      if (kind === 'custom-element') return lookup.element(name);
-      if (kind === 'custom-attribute' || kind === 'template-controller') return lookup.attribute(name);
+    // L2 query methods — project Sourced<T> → Resolved<T> at the query boundary
+    getResource(kind: ResourceKindLike, name: string): AnyResourceView | undefined {
+      const key = `${kind}:${name}`;
+      const entry = model.entries.get(key);
+      if (entry) return projectResourceDef(entry.def, entry.ref);
+      // Fallback: check all entries for name match (some kinds might be queried loosely)
+      for (const e of model.entries.values()) {
+        if (e.name === name && e.kind === kind) return projectResourceDef(e.def, e.ref);
+      }
       return undefined;
     },
 
@@ -360,14 +373,20 @@ function createModelQuery(
       return scope?.resources;
     },
 
-    getBindables(kind: ResourceKindLike, name: string) {
-      if (kind === 'custom-element') {
-        const el = lookup.element(name);
-        return el?.bindables;
+    getBindables(kind: ResourceKindLike, name: string): Readonly<Record<string, BindableView>> | undefined {
+      const key = `${kind}:${name}`;
+      const entry = model.entries.get(key);
+      if (entry?.def.kind === 'custom-element' || entry?.def.kind === 'custom-attribute' || entry?.def.kind === 'template-controller') {
+        return projectBindableDefs(entry.def.bindables, key);
       }
-      if (kind === 'custom-attribute' || kind === 'template-controller') {
-        const attr = lookup.attribute(name);
-        return attr?.bindables;
+      // Fallback for name-only lookup
+      for (const e of model.entries.values()) {
+        if (e.name === name && e.kind === kind) {
+          const def = e.def;
+          if (def.kind === 'custom-element' || def.kind === 'custom-attribute' || def.kind === 'template-controller') {
+            return projectBindableDefs(def.bindables, `${kind}:${name}`);
+          }
+        }
       }
       return undefined;
     },

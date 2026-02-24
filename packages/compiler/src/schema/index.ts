@@ -30,5 +30,8 @@ export * from "./dependency-graph.js";
 // Semantic model (L2 canonical authority)
 export * from "./model.js";
 
+// Resource view projection (Sourced<T> → Resolved<T> at query boundary)
+export * from "./project.js";
+
 // Cursor entity (L2 shared feature resolution)
 export * from "./cursor-entity.js";
