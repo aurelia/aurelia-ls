@@ -193,20 +193,24 @@ function walk(dir: string, out: string[]): void {
 // Serialization
 // ---------------------------------------------------------------------------
 
+// Tagged serialization for Maps. Uses a distinctive key that won't collide
+// with real data structures in the discovery result.
+const MAP_SENTINEL = "\0__aurelia_map__";
+
 function serialize(discovery: ProjectSemanticsDiscoveryResult): string {
-  const serializable = {
-    ...discovery,
-    // Map → Array<[key, value]> for JSON compatibility
-    facts: Array.from(discovery.facts.entries()),
-  };
-  return JSON.stringify(serializable);
+  return JSON.stringify(discovery, (_key, value) => {
+    if (value instanceof Map) {
+      return { [MAP_SENTINEL]: Array.from(value.entries()) };
+    }
+    return value;
+  });
 }
 
 function deserialize(json: string): ProjectSemanticsDiscoveryResult {
-  const raw = JSON.parse(json);
-  return {
-    ...raw,
-    // Array<[key, value]> → Map
-    facts: new Map(raw.facts),
-  };
+  return JSON.parse(json, (_key, value) => {
+    if (value && typeof value === "object" && !Array.isArray(value) && MAP_SENTINEL in value) {
+      return new Map(value[MAP_SENTINEL]);
+    }
+    return value;
+  });
 }
