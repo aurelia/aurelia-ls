@@ -775,7 +775,9 @@ export function findEntry(
   file: string | null,
   preferRoots?: readonly string[] | null,
 ): ResourceDefinitionEntry | null {
-  const list = map.get(name.toLowerCase());
+  // Try exact match first (VC/BB names are case-sensitive camelCase),
+  // then fall back to lowercase (CE/CA names are always kebab-case).
+  const list = map.get(name) ?? map.get(name.toLowerCase());
   return selectResourceCandidate(list, {
     file,
     preferredRoots: preferRoots ?? [],

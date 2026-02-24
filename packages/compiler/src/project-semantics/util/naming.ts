@@ -41,10 +41,12 @@ export function canonicalAttrName(value: string): string {
 }
 
 /**
- * Canonicalize a simple resource name (lowercase, for value converters/behaviors).
+ * Canonicalize a simple resource name (value converters, binding behaviors).
+ * These names are expression identifiers resolved via DI — case-sensitive,
+ * not HTML attribute names. Trim only, no case folding.
  */
 export function canonicalSimpleName(value: string): string {
-  return value.trim().toLowerCase();
+  return value.trim();
 }
 
 /**
