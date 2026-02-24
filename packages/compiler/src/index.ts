@@ -155,6 +155,8 @@ export type {
   // L2 cursor entity (shared feature resolution)
   CursorEntity,
   ResolveCursorEntity,
+  CursorResolutionInput,
+  CursorResolutionResult,
 } from "./schema/index.js";
 
 export {
@@ -165,6 +167,7 @@ export {
   computeConfidence,
   isDegradation,
   isNotApplicable,
+  resolveCursorEntity,
   // L2 cursor entity utilities
   isNavigable,
   isRenameable,

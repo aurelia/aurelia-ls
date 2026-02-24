@@ -31,6 +31,8 @@ import {
   type TemplateQueryFacade,
   type TextEdit as TemplateTextEdit,
   type TextRange,
+  type ConfidenceLevel,
+  resolveCursorEntity,
 } from "@aurelia-ls/compiler";
 import {
   asWorkspaceFingerprint,
@@ -309,6 +311,7 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
 
       const base = this.languageService.getHover(uri, pos);
       let detail = null;
+      let confidence: ConfidenceLevel = 'high';
       try {
         const compilation = this.program.getCompilation(uri);
         const query = this.program.query;
@@ -319,6 +322,17 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
           syntax: query.syntax,
           semantics: query.model.semantics,
         });
+
+        // Resolve confidence for this position
+        const resolution = resolveCursorEntity({
+          compilation,
+          offset,
+          syntax: query.syntax,
+          semantics: query.model.semantics,
+        });
+        if (resolution) {
+          confidence = resolution.compositeConfidence;
+        }
       } catch (error) {
         debug.workspace("hover.collect.error", {
           message: error instanceof Error ? error.message : String(error),
@@ -330,11 +344,17 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
       // Always pass base type info so mergeHoverContents can integrate TS
       // type signatures from the language service (expectedTypeOf + getQuickInfo)
       // alongside the structured template metadata from collectTemplateHover.
-      const contents = mergeHoverContents(detail?.lines ?? [], base?.contents ?? null);
+      let contents = mergeHoverContents(detail?.lines ?? [], base?.contents ?? null);
       if (!contents) return null;
 
+      // Apply confidence-tiered rendering per hover spec epistemic contract
+      contents = applyConfidenceTier(contents, confidence);
+
+      // Map L2 ConfidenceLevel to workspace confidence (only set when reduced)
+      const wsConfidence = mapConfidenceToWorkspace(confidence);
+
       const span = detail?.span ?? baseSpan ?? null;
-      if (!span) return { contents };
+      if (!span) return { contents, ...(wsConfidence ? { confidence: wsConfidence } : {}) };
 
       const location: WorkspaceLocation = {
         uri,
@@ -342,7 +362,7 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
         ...(detail?.exprId ? { exprId: detail.exprId } : {}),
         ...(detail?.nodeId ? { nodeId: detail.nodeId } : {}),
       };
-      return { contents, location };
+      return { contents, location, ...(wsConfidence ? { confidence: wsConfidence } : {}) };
     } catch {
       return null;
     }
@@ -539,6 +559,38 @@ function mapCodeActions(
     });
   }
   return results;
+}
+
+/**
+ * Apply confidence-tiered rendering to hover content.
+ *
+ * Per hover spec epistemic contract:
+ * - High: definitive, dense. No modification needed.
+ * - Medium: hedged. Add gap indicator.
+ * - Low: sparse, explicitly uncertain. Prepend uncertainty notice.
+ * - None: minimal. Replace with "analysis could not determine" message.
+ */
+/** Map L2 ConfidenceLevel to workspace hover confidence. Returns undefined for high (the default). */
+function mapConfidenceToWorkspace(level: ConfidenceLevel): "exact" | "high" | "partial" | "low" | undefined {
+  switch (level) {
+    case 'high': return undefined; // default, not set
+    case 'medium': return 'partial';
+    case 'low': return 'low';
+    case 'none': return 'low';
+  }
+}
+
+function applyConfidenceTier(contents: string, confidence: ConfidenceLevel): string {
+  switch (confidence) {
+    case 'high':
+      return contents;
+    case 'medium':
+      return contents + "\n\n---\n\n*Confidence: partial — some fields could not be fully resolved*";
+    case 'low':
+      return "⚠ *Analysis incomplete for this construct*\n\n---\n\n" + contents;
+    case 'none':
+      return "```\n(dynamic construct — analysis could not determine this)\n```\n\n---\n\n*This construct uses patterns that resist static analysis. Runtime behavior may differ.*";
+  }
 }
 
 function spanFromRange(
