@@ -7,7 +7,7 @@ import {
 } from "../_helpers/vector-runner.js";
 import { diffByKeyCounts } from "../_helpers/test-utils.js";
 
-import { lowerDocument } from "@aurelia-ls/compiler";
+import { lowerDocument } from "../../out/analysis/10-lower/lower.js";
 
 interface DiagIntent {
   code: string;

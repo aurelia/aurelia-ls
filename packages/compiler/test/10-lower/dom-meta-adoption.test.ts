@@ -13,13 +13,11 @@
  */
 
 import { describe, it, expect } from "vitest";
-import {
-  lowerDocument,
-  DEFAULT_SYNTAX,
-  getExpressionParser,
-  BUILTIN_SEMANTICS,
-  DiagnosticsRuntime,
-} from "@aurelia-ls/compiler";
+import { lowerDocument } from "../../out/analysis/10-lower/lower.js";
+import { DEFAULT_SYNTAX } from "../../out/parsing/attribute-parser.js";
+import { getExpressionParser } from "../../out/parsing/expression-parser.js";
+import { BUILTIN_SEMANTICS } from "../../out/schema/registry.js";
+import { DiagnosticsRuntime } from "../../out/diagnostics/runtime.js";
 
 function lower(html: string) {
   const diagnostics = new DiagnosticsRuntime();

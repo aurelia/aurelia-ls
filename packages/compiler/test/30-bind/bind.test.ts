@@ -1,7 +1,10 @@
 import { runVectorTests, getDirname, lowerOpts, indexExprCodeFromIr } from "../_helpers/vector-runner.js";
 import { diffByKeyCounts, noopModuleResolver } from "../_helpers/test-utils.js";
 
-import { lowerDocument, linkTemplateSemantics, buildSemanticsSnapshot, bindScopes } from "@aurelia-ls/compiler";
+import { lowerDocument } from "../../out/analysis/10-lower/lower.js";
+import { linkTemplateSemantics } from "../../out/analysis/20-link/resolve.js";
+import { buildSemanticsSnapshot } from "../../out/schema/snapshot.js";
+import { bindScopes } from "../../out/analysis/30-bind/bind.js";
 
 // --- Types ---
 

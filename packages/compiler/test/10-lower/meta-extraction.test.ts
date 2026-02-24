@@ -4,8 +4,8 @@ import {
   extractMeta,
   extractTemplateMeta,
   stripMetaFromHtml,
-} from "../../src/analysis/10-lower/meta-extraction.js";
-import { resolveSourceFile } from "../../src/model/source.js";
+} from "../../out/analysis/10-lower/meta-extraction.js";
+import { resolveSourceFile } from "../../out/model/source.js";
 
 function extract(html: string) {
   const p5 = parseFragment(html, { sourceCodeLocationInfo: true });

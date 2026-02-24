@@ -16,20 +16,17 @@ import { fileURLToPath } from "node:url";
 import { createFailureRecorder, fmtList, diffByKey, noopModuleResolver } from "../../_helpers/test-utils.js";
 import { deepMergeSemantics } from "../../_helpers/semantics-merge.js";
 
-import {
-  lowerDocument,
-  linkTemplateSemantics, buildSemanticsSnapshot,
-  bindScopes,
-  planAot,
-  emitAotCode,
-  getExpressionParser,
-  DEFAULT_SYNTAX,
-  BUILTIN_SEMANTICS as SEM_DEFAULT,
-  prepareProjectSemantics,
-  DiagnosticsRuntime,
-  INSTRUCTION_TYPE,
-  BINDING_MODE,
-} from "@aurelia-ls/compiler";
+import { lowerDocument } from "../../../out/analysis/10-lower/lower.js";
+import { linkTemplateSemantics } from "../../../out/analysis/20-link/resolve.js";
+import { buildSemanticsSnapshot } from "../../../out/schema/snapshot.js";
+import { bindScopes } from "../../../out/analysis/30-bind/bind.js";
+import { planAot } from "../../../out/synthesis/aot/plan.js";
+import { emitAotCode } from "../../../out/synthesis/aot/emit.js";
+import { getExpressionParser } from "../../../out/parsing/expression-parser.js";
+import { DEFAULT_SYNTAX } from "../../../out/parsing/attribute-parser.js";
+import { BUILTIN_SEMANTICS as SEM_DEFAULT, prepareProjectSemantics } from "../../../out/schema/registry.js";
+import { DiagnosticsRuntime } from "../../../out/diagnostics/runtime.js";
+import { INSTRUCTION_TYPE, BINDING_MODE } from "../../../out/synthesis/aot/constants.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

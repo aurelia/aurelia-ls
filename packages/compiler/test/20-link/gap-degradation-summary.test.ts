@@ -19,19 +19,16 @@ import { describe, test, expect } from "vitest";
 import { deepMergeSemantics } from "../_helpers/semantics-merge.js";
 import { noopModuleResolver, createTestQuery } from "../_helpers/test-utils.js";
 
-import {
-  compileTemplate,
-  BUILTIN_SEMANTICS,
-  DiagnosticsRuntime,
-  lowerDocument,
-  linkTemplateSemantics,
-  getExpressionParser,
-  DEFAULT_SYNTAX,
-  buildSemanticsSnapshot,
-} from "@aurelia-ls/compiler";
-
-import { buildResourceCatalog } from "../../src/schema/catalog.js";
-import type { CatalogGap, ResourceKind } from "../../src/schema/types.js";
+import { compileTemplate } from "../../out/facade.js";
+import { BUILTIN_SEMANTICS } from "../../out/schema/registry.js";
+import { DiagnosticsRuntime } from "../../out/diagnostics/runtime.js";
+import { lowerDocument } from "../../out/analysis/10-lower/lower.js";
+import { linkTemplateSemantics } from "../../out/analysis/20-link/resolve.js";
+import { getExpressionParser } from "../../out/parsing/expression-parser.js";
+import { DEFAULT_SYNTAX } from "../../out/parsing/attribute-parser.js";
+import { buildSemanticsSnapshot } from "../../out/schema/snapshot.js";
+import { buildResourceCatalog } from "../../out/schema/catalog.js";
+import type { CatalogGap, ResourceKind } from "../../out/schema/types.js";
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -326,6 +326,7 @@ function createModelQuery(
   opts?: SemanticModelQueryOptions,
 ): SemanticModelQuery {
   const lookupOpts: SemanticsLookupOptions = {
+    catalog: model.catalog,
     graph: model.resourceGraph,
     scope: opts?.scope ?? model.defaultScope,
     localImports: opts?.localImports,

@@ -744,7 +744,7 @@ export function createSemanticsLookup(sem: ProjectSemantics, opts?: SemanticsLoo
       )
     : { ...base, resourceGraph: graph ?? undefined, defaultScope: scope ?? undefined };
 
-  const catalog = semWithCaches.catalog;
+  const catalog = opts?.catalog ?? semWithCaches.catalog;
   const entries = opts?.entries;
   const COMPLETE_SCOPE: ScopeCompleteness = { complete: true, unresolvedRegistrations: [] };
 

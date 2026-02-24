@@ -1,22 +1,18 @@
 import { describe, test, expect } from "vitest";
 
-import {
-  lowerDocument,
-  linkTemplateSemantics, buildSemanticsSnapshot,
-  bindScopes,
-  planAot,
-  emitAotCode,
-  emitTemplate,
-  collectNestedTemplateHtmlTree,
-  getExpressionParser,
-  DEFAULT_SYNTAX,
-  BUILTIN_SEMANTICS,
-  DiagnosticsRuntime,
-  INSTRUCTION_TYPE,
-  type SerializedDefinition,
-  type SerializedHydrateTemplateController,
-  type NestedTemplateHtmlNode,
-} from "@aurelia-ls/compiler";
+import { lowerDocument } from "../../../out/analysis/10-lower/lower.js";
+import { linkTemplateSemantics } from "../../../out/analysis/20-link/resolve.js";
+import { buildSemanticsSnapshot } from "../../../out/schema/snapshot.js";
+import { bindScopes } from "../../../out/analysis/30-bind/bind.js";
+import { planAot } from "../../../out/synthesis/aot/plan.js";
+import { emitAotCode } from "../../../out/synthesis/aot/emit.js";
+import { emitTemplate, collectNestedTemplateHtmlTree, type NestedTemplateHtmlNode } from "../../../out/synthesis/aot/emit-template.js";
+import { getExpressionParser } from "../../../out/parsing/expression-parser.js";
+import { DEFAULT_SYNTAX } from "../../../out/parsing/attribute-parser.js";
+import { BUILTIN_SEMANTICS } from "../../../out/schema/registry.js";
+import { DiagnosticsRuntime } from "../../../out/diagnostics/runtime.js";
+import { INSTRUCTION_TYPE } from "../../../out/synthesis/aot/constants.js";
+import type { SerializedDefinition, SerializedHydrateTemplateController } from "../../../out/synthesis/aot/types.js";
 import { noopModuleResolver } from "../../_helpers/test-utils.js";
 
 type DefinitionTree = {

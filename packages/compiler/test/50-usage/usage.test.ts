@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { compileTemplate } from "@aurelia-ls/compiler";
+import { compileTemplate } from "../../out/facade.js";
 import { createTestQuery } from "../_helpers/test-utils.js";
 
 function createVmReflection() {

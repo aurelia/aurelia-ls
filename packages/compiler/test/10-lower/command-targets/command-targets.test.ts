@@ -1,4 +1,4 @@
-import { lowerDocument } from "@aurelia-ls/compiler";
+import { lowerDocument } from "../../../out/analysis/10-lower/lower.js";
 
 import {
   getDirname,

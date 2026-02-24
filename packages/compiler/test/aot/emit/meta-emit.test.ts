@@ -6,17 +6,16 @@
  */
 
 import { describe, it, expect } from "vitest";
-import {
-  lowerDocument,
-  linkTemplateSemantics, buildSemanticsSnapshot,
-  bindScopes,
-  planAot,
-  emitAotCode,
-  getExpressionParser,
-  DEFAULT_SYNTAX,
-  BUILTIN_SEMANTICS,
-  DiagnosticsRuntime,
-} from "@aurelia-ls/compiler";
+import { lowerDocument } from "../../../out/analysis/10-lower/lower.js";
+import { linkTemplateSemantics } from "../../../out/analysis/20-link/resolve.js";
+import { buildSemanticsSnapshot } from "../../../out/schema/snapshot.js";
+import { bindScopes } from "../../../out/analysis/30-bind/bind.js";
+import { planAot } from "../../../out/synthesis/aot/plan.js";
+import { emitAotCode } from "../../../out/synthesis/aot/emit.js";
+import { getExpressionParser } from "../../../out/parsing/expression-parser.js";
+import { DEFAULT_SYNTAX } from "../../../out/parsing/attribute-parser.js";
+import { BUILTIN_SEMANTICS } from "../../../out/schema/registry.js";
+import { DiagnosticsRuntime } from "../../../out/diagnostics/runtime.js";
 import { noopModuleResolver } from "../../_helpers/test-utils.js";
 
 // Run full pipeline: markup → SerializedDefinition

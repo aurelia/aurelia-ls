@@ -1,7 +1,12 @@
 import { runVectorTests, getDirname, lowerOpts, indexExprCodeFromIr, type TestVector, type CompilerContext } from "../_helpers/vector-runner.js";
 import { diffByKeyCounts, noopModuleResolver } from "../_helpers/test-utils.js";
 
-import { lowerDocument, linkTemplateSemantics, buildSemanticsSnapshot, bindScopes, typecheck, buildExprSpanIndex } from "@aurelia-ls/compiler";
+import { lowerDocument } from "../../out/analysis/10-lower/lower.js";
+import { linkTemplateSemantics } from "../../out/analysis/20-link/resolve.js";
+import { buildSemanticsSnapshot } from "../../out/schema/snapshot.js";
+import { bindScopes } from "../../out/analysis/30-bind/bind.js";
+import { typecheck } from "../../out/analysis/40-typecheck/typecheck.js";
+import { buildExprSpanIndex } from "../../out/shared/expr-utils.js";
 
 // --- Types ---
 

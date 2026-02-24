@@ -8,22 +8,19 @@
  * → template analysis (diagnostic qualification, R5).
  */
 import { describe, test, expect } from "vitest";
-import type { NormalizedPath } from "@aurelia-ls/compiler";
+import type { NormalizedPath } from "../../out/model/identity.js";
 
 import { deepMergeSemantics } from "../_helpers/semantics-merge.js";
 import { noopModuleResolver } from "../_helpers/test-utils.js";
 
-import {
-  getExpressionParser,
-  DEFAULT_SYNTAX,
-  lowerDocument,
-  BUILTIN_SEMANTICS,
-  linkTemplateSemantics,
-  buildSemanticsSnapshot,
-  DiagnosticsRuntime,
-} from "@aurelia-ls/compiler";
-
-import { buildResourceCatalog } from "../../src/schema/catalog.js";
+import { getExpressionParser } from "../../out/parsing/expression-parser.js";
+import { DEFAULT_SYNTAX } from "../../out/parsing/attribute-parser.js";
+import { lowerDocument } from "../../out/analysis/10-lower/lower.js";
+import { BUILTIN_SEMANTICS } from "../../out/schema/registry.js";
+import { linkTemplateSemantics } from "../../out/analysis/20-link/resolve.js";
+import { buildSemanticsSnapshot } from "../../out/schema/snapshot.js";
+import { DiagnosticsRuntime } from "../../out/diagnostics/runtime.js";
+import { buildResourceCatalog } from "../../out/schema/catalog.js";
 import type {
   CatalogGap,
   ResourceCatalog,
@@ -31,7 +28,7 @@ import type {
   ResourceKind,
   ResourceScopeId,
   ScopeCompleteness,
-} from "../../src/schema/types.js";
+} from "../../out/schema/types.js";
 
 const RESOLVE_OPTS = { moduleResolver: noopModuleResolver, templateFilePath: "mem.html" };
 

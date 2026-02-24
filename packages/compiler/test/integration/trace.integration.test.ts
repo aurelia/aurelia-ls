@@ -10,37 +10,34 @@
  */
 import { describe, test, expect, beforeEach } from "vitest";
 import {
-  // Core trace infrastructure
   createTrace,
-  createCollectingExporter,
-  createConsoleExporter,
-  createJSONExporter,
-  createMultiExporter,
   NOOP_TRACE,
   CompilerAttributes,
   formatDuration,
   type CompileTrace,
+} from "../../out/shared/trace.js";
+import {
+  createCollectingExporter,
+  createConsoleExporter,
+  createJSONExporter,
+  createMultiExporter,
   type CollectingExporter,
   type JSONExporter,
-
-  // Compiler pipeline
-  DefaultTemplateProgram,
-  DefaultTemplateBuildService,
-  lowerDocument,
-  linkTemplateSemantics, buildSemanticsSnapshot,
-  bindScopes,
-  typecheck,
-  planAot,
-  emitAotCode,
-  planOverlay,
-
-  // Support
-  BUILTIN_SEMANTICS,
-  buildProjectSnapshot,
-  getExpressionParser,
-  DEFAULT_SYNTAX,
-  DiagnosticsRuntime,
-} from "@aurelia-ls/compiler";
+} from "../../out/shared/trace-exporters.js";
+import { DefaultTemplateProgram } from "../../out/program/program.js";
+import { DefaultTemplateBuildService } from "../../out/program/services.js";
+import { lowerDocument } from "../../out/analysis/10-lower/lower.js";
+import { linkTemplateSemantics } from "../../out/analysis/20-link/resolve.js";
+import { buildSemanticsSnapshot } from "../../out/schema/snapshot.js";
+import { bindScopes } from "../../out/analysis/30-bind/bind.js";
+import { typecheck } from "../../out/analysis/40-typecheck/typecheck.js";
+import { planAot } from "../../out/synthesis/aot/plan.js";
+import { emitAotCode } from "../../out/synthesis/aot/emit.js";
+import { planOverlay } from "../../out/synthesis/overlay/index.js";
+import { BUILTIN_SEMANTICS } from "../../out/schema/registry.js";
+import { getExpressionParser } from "../../out/parsing/expression-parser.js";
+import { DEFAULT_SYNTAX } from "../../out/parsing/attribute-parser.js";
+import { DiagnosticsRuntime } from "../../out/diagnostics/runtime.js";
 import { noopModuleResolver, createTestQuery } from "../_helpers/test-utils.js";
 
 // =============================================================================

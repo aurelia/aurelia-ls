@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { lowerDocument, spanContainsOffset, type DOMNode, type SourceSpan, type TemplateIR } from "@aurelia-ls/compiler";
+import { lowerDocument } from "../../out/analysis/10-lower/lower.js";
+import { spanContainsOffset, type SourceSpan } from "../../out/model/span.js";
+import type { DOMNode, TemplateIR } from "../../out/model/ir.js";
 import { createCompilerContext, lowerOpts, type TestVector } from "../_helpers/vector-runner.js";
 
 function tagNameOffsets(text: string, tag: string): number[] {

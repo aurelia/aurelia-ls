@@ -4,22 +4,17 @@ import { runVectorTests, getDirname, lowerOpts } from "../_helpers/vector-runner
 import { deepMergeSemantics } from "../_helpers/semantics-merge.js";
 import { noopModuleResolver } from "../_helpers/test-utils.js";
 
-import {
-  getExpressionParser,
-  DEFAULT_SYNTAX,
-  lowerDocument,
-  BUILTIN_SEMANTICS,
-  linkTemplateSemantics, buildSemanticsSnapshot,
-  materializeResourcesForScope,
-  createSemanticsLookup,
-  prepareProjectSemantics,
-  DiagnosticsRuntime,
-} from "@aurelia-ls/compiler";
-
-// Internal import for direct unit testing of resolveControllerSem
-import { resolveControllerSem } from "../../src/analysis/20-link/resolution-helpers.js";
-import { createResolveContext, createResolveServices } from "../../src/analysis/20-link/resolve-context.js";
-import { isStub } from "../../src/shared/diagnosed.js";
+import { getExpressionParser } from "../../out/parsing/expression-parser.js";
+import { DEFAULT_SYNTAX } from "../../out/parsing/attribute-parser.js";
+import { lowerDocument } from "../../out/analysis/10-lower/lower.js";
+import { BUILTIN_SEMANTICS, prepareProjectSemantics, createSemanticsLookup } from "../../out/schema/registry.js";
+import { linkTemplateSemantics } from "../../out/analysis/20-link/resolve.js";
+import { buildSemanticsSnapshot } from "../../out/schema/snapshot.js";
+import { materializeResourcesForScope } from "../../out/schema/resource-graph.js";
+import { DiagnosticsRuntime } from "../../out/diagnostics/runtime.js";
+import { resolveControllerSem } from "../../out/analysis/20-link/resolution-helpers.js";
+import { createResolveContext, createResolveServices } from "../../out/analysis/20-link/resolve-context.js";
+import { isStub } from "../../out/shared/diagnosed.js";
 
 const dirname = getDirname(import.meta.url);
 const RESOLVE_OPTS = { moduleResolver: noopModuleResolver, templateFilePath: "mem.html" };

@@ -1,8 +1,8 @@
-import { test, describe, it } from "vitest";
+import { describe, it } from "vitest";
 import { compileFromEntry, assertSuccess, assertFailure, prop } from "./_helpers/overlay-ls.js";
-
-const compilerIndexUrl = new URL("../../out/index.js", import.meta.url);
-const { PRELUDE_TS, getExpressionParser, DEFAULT_SYNTAX } = await import(compilerIndexUrl.href);
+import { PRELUDE_TS } from "../../out/prelude.js";
+import { getExpressionParser } from "../../out/parsing/expression-parser.js";
+import { DEFAULT_SYNTAX } from "../../out/parsing/attribute-parser.js";
 
 const exprParser = getExpressionParser();
 const attrParser = DEFAULT_SYNTAX;

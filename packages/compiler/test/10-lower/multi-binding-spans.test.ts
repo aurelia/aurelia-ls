@@ -9,7 +9,9 @@
 
 import path from "node:path";
 import { describe, test, expect } from "vitest";
-import { lowerDocument, toSourceFileId, type ExprRef, type InstructionIR } from "@aurelia-ls/compiler";
+import { lowerDocument } from "../../out/analysis/10-lower/lower.js";
+import { toSourceFileId } from "../../out/model/identity.js";
+import type { ExprRef, InstructionIR } from "../../out/model/ir.js";
 import { createCompilerContext, lowerOpts, type TestVector } from "../_helpers/vector-runner.js";
 
 // Semantics override for `load` custom attribute with bindables

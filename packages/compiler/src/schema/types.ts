@@ -676,6 +676,8 @@ export interface LocalImportDef {
 
 export interface SemanticsLookupOptions {
   readonly resources?: ResourceCollections;
+  /** Pre-built catalog (preserves gap index). When omitted, rebuilt from semantics. */
+  readonly catalog?: ResourceCatalog;
   readonly graph?: ResourceGraph | null;
   readonly scope?: ResourceScopeId | null;
   readonly localImports?: readonly LocalImportDef[];
