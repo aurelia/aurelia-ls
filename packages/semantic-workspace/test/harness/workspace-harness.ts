@@ -9,8 +9,8 @@ import {
 } from "@aurelia-ls/compiler";
 import { createNodeFileSystem, type ProjectSemanticsDiscoveryConfig, type ProjectSemanticsDiscoveryResult, type Logger as CompilerLogger } from "@aurelia-ls/compiler";
 import { buildPackageRootMap, detectMonorepo } from "@aurelia-ls/compiler";
-import { createSemanticWorkspace, type SemanticWorkspaceEngine } from "../../src/engine.js";
-import { inlineTemplatePath } from "../../src/templates.js";
+import { createSemanticWorkspace, type SemanticWorkspaceEngine } from "../../out/engine.js";
+import { inlineTemplatePath } from "../../out/templates.js";
 import { getFixture, resolveFixtureRoot } from "../fixtures/index.js";
 import type { WorkspaceHarness, WorkspaceHarnessOptions, WorkspaceTemplateEntry } from "./types.js";
 import { getCachedDiscovery, setCachedDiscovery, claimCacheLock } from "./discovery-cache.js";

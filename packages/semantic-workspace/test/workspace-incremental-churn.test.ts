@@ -2,7 +2,7 @@ import fs from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createWorkspaceHarness } from "./harness/index.js";
 import { asFixtureId } from "./fixtures/index.js";
-import { createSemanticWorkspaceKernel } from "../src/workspace.js";
+import { createSemanticWorkspaceKernel } from "../out/workspace.js";
 import {
   buildProjectSnapshot,
   type DependencyGraph,

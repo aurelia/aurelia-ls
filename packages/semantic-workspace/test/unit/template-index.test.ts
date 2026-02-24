@@ -7,8 +7,8 @@ import {
   type ProjectSemanticsDiscoveryResult,
   type ResourceScopeId,
 } from "@aurelia-ls/compiler";
-import { buildTemplateIndex } from "../../src/engine.js";
-import { inlineTemplatePath } from "../../src/templates.js";
+import { buildTemplateIndex } from "../../out/engine.js";
+import { inlineTemplatePath } from "../../out/templates.js";
 
 function discoveryWithTemplates(
   templates: ProjectSemanticsDiscoveryResult["templates"],

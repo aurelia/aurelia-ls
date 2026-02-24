@@ -2,7 +2,7 @@ import { test, expect } from "vitest";
 import path from "node:path";
 import ts from "typescript";
 
-import { AureliaProjectIndex } from "@aurelia-ls/semantic-workspace";
+import { AureliaProjectIndex } from "../../out/typescript/project-index.js";
 import { BUILTIN_SEMANTICS, buildResourceGraphFromSemantics, type ResourceScopeId } from "@aurelia-ls/compiler";
 
 const logger = { log() {}, info() {}, warn() {}, error() {} };

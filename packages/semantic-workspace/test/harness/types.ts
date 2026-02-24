@@ -7,9 +7,9 @@ import type {
   VmReflection,
 } from "@aurelia-ls/compiler";
 import type { ProjectSemanticsDiscoveryConfig, ProjectSemanticsDiscoveryResult, Logger as CompilerLogger } from "@aurelia-ls/compiler";
-import type { SemanticWorkspaceEngine } from "../../src/engine.js";
-import type { RefactorDecisionSet, RefactorPolicy } from "../../src/refactor-policy.js";
-import type { RefactorOverrides } from "../../src/style-profile.js";
+import type { SemanticWorkspaceEngine } from "../../out/engine.js";
+import type { RefactorDecisionSet, RefactorPolicy } from "../../out/refactor-policy.js";
+import type { RefactorOverrides } from "../../out/style-profile.js";
 import type { FixtureDescriptor, FixtureId } from "../fixtures/types.js";
 
 export type TemplateOpenMode = "none" | "external" | "all";

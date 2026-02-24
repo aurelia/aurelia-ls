@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { asDocumentUri } from "@aurelia-ls/compiler";
-import { createSemanticWorkspace } from "../../src/engine.js";
+import { createSemanticWorkspace } from "../../out/engine.js";
 
 const logger = {
   log() {},

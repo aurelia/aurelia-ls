@@ -7,11 +7,11 @@ import {
   createSemanticModel,
   prepareProjectSemantics,
 } from "@aurelia-ls/compiler";
-import { collectSemanticTokens } from "../src/semantic-tokens.js";
+import { collectSemanticTokens } from "../out/semantic-tokens.js";
 import {
   WORKSPACE_TOKEN_MODIFIER_GAP_AWARE,
   WORKSPACE_TOKEN_MODIFIER_GAP_CONSERVATIVE,
-} from "../src/types.js";
+} from "../out/types.js";
 
 function createVmReflection() {
   return {

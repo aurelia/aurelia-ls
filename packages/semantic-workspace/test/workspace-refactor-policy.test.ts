@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_REFACTOR_POLICY,
   type RefactorPolicy,
-} from "../src/refactor-policy.js";
+} from "../out/refactor-policy.js";
 import { asFixtureId } from "./fixtures/index.js";
 import { createWorkspaceHarness } from "./harness/index.js";
 

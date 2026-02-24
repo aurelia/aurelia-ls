@@ -2,13 +2,13 @@ import fs from "node:fs";
 import path from "node:path";
 import { asDocumentUri } from "@aurelia-ls/compiler";
 import { describe, expect, it } from "vitest";
-import { createSemanticAuthorityHostRuntime } from "../src/host/runtime.js";
+import { createSemanticAuthorityHostRuntime } from "../out/host/runtime.js";
 import { asFixtureId, getFixture, resolveFixtureRoot } from "./fixtures/index.js";
 import { findPosition } from "./test-utils.js";
 import type {
   ReplayableCommandInvocation,
   SemanticAuthorityCommandInvocation,
-} from "../src/host/types.js";
+} from "../out/host/types.js";
 
 const fixture = getFixture(asFixtureId("workspace-contract"));
 const fixtureRoot = resolveFixtureRoot(fixture);

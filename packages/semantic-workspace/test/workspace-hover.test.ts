@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { createWorkspaceHarness } from "./harness/index.js";
 import { asFixtureId } from "./fixtures/index.js";
-import type { SemanticWorkspaceEngine } from "../src/engine.js";
+import type { SemanticWorkspaceEngine } from "../out/engine.js";
 
 function insertBefore(text: string, marker: string, insert: string): string {
   const index = text.indexOf(marker);

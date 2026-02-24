@@ -2,8 +2,8 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { createWorkspaceHarness } from "./harness/index.js";
 import { asFixtureId } from "./fixtures/index.js";
 import type { DiagnosticSurface } from "@aurelia-ls/compiler";
-import type { SemanticWorkspaceEngine } from "../src/engine.js";
-import type { WorkspaceDiagnostic, WorkspaceDiagnostics } from "../src/types.js";
+import type { SemanticWorkspaceEngine } from "../out/engine.js";
+import type { WorkspaceDiagnostic, WorkspaceDiagnostics } from "../out/types.js";
 
 const DEFINITION_CONVERGENCE_CODE = "aurelia/project/definition-convergence";
 

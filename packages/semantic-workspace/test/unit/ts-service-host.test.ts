@@ -4,7 +4,9 @@ import os from "node:os";
 import path from "node:path";
 import ts from "typescript";
 import { fileURLToPath } from "node:url";
-import { createPathUtils, OverlayFs, TsService } from "@aurelia-ls/semantic-workspace";
+import { OverlayFs } from "../../out/typescript/overlay-fs.js";
+import { createPathUtils } from "../../out/typescript/paths.js";
+import { TsService } from "../../out/typescript/ts-service.js";
 
 const fixtureRoot = fileURLToPath(new URL("../../../../fixtures/server/ts-host/basic", import.meta.url));
 const componentPath = path.join(fixtureRoot, "src", "component.ts");

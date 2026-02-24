@@ -2,8 +2,8 @@ import path from "node:path";
 import { canonicalPath } from "@aurelia-ls/compiler";
 import type { DiagnosticSurface } from "@aurelia-ls/compiler";
 import { beforeAll, describe, expect, it } from "vitest";
-import type { SemanticWorkspaceEngine } from "../src/engine.js";
-import type { WorkspaceDiagnostic, WorkspaceDiagnostics } from "../src/types.js";
+import type { SemanticWorkspaceEngine } from "../out/engine.js";
+import type { WorkspaceDiagnostic, WorkspaceDiagnostics } from "../out/types.js";
 import { createWorkspaceHarness } from "./harness/index.js";
 import { asFixtureId, getFixture, resolveFixtureRoot } from "./fixtures/index.js";
 

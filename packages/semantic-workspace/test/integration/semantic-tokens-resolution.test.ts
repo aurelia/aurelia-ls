@@ -25,7 +25,7 @@ import {
   type NodeSem,
   type MaterializedSemantics,
 } from "@aurelia-ls/compiler";
-import { collectSemanticTokens } from "../../src/semantic-tokens.js";
+import { collectSemanticTokens } from "../../out/semantic-tokens.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const EXPLICIT_APP = path.resolve(__dirname, "../../../compiler/test/project-semantics/apps/explicit-app");

@@ -15,7 +15,7 @@ import {
   prepareProjectSemantics,
   BUILTIN_SEMANTICS,
 } from "@aurelia-ls/compiler";
-import { collectSemanticTokens } from "../../src/semantic-tokens.js";
+import { collectSemanticTokens } from "../../out/semantic-tokens.js";
 
 /* ===========================
  * Test Utilities
