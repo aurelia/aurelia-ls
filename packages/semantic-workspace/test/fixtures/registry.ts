@@ -555,4 +555,32 @@ export const fixtures: readonly FixtureDescriptor[] = [
     },
     notes: ["File-based fixtures; not a full workspace root."],
   },
+  {
+    id: asFixtureId("feature-matrix"),
+    title: "feature-matrix",
+    description:
+      "Kitchen-sink fixture exercising all resource kinds, declaration forms, " +
+      "template position types, and diagnostic triggers. Designed for systematic " +
+      "cross-feature verification driven by domain specs.",
+    origin: "workspace",
+    root: { kind: "repo", path: "packages/semantic-workspace/test/fixtures/cases/feature-matrix" },
+    scenarios: ["S1", "S3", "S5", "S6", "S7"],
+    suites: ["workspace"],
+    coverage: {
+      artifacts: editingArtifacts,
+      queries: editingQueries,
+      resources: editingResources,
+      declarations: ["decorator", "decorator-config", "convention", "define"],
+      scopes: ["global", "local"],
+      templateFeatures: editingTemplateFeatures,
+    },
+    entry: "src/app.ts",
+    templateEntry: "src/app.html",
+    notes: [
+      "Designed from feature specs (hover, completions, diagnostics, navigation, rename, semantic tokens).",
+      "One instance of each resource kind with varied declaration forms.",
+      "Template exercises all 10 position types from completions-spec.",
+      "Includes deliberate errors for diagnostic regime testing.",
+    ],
+  },
 ];
