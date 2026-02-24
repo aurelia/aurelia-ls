@@ -3,7 +3,7 @@
 // VC definition navigation, VC semantic tokens.
 import { valueConverter } from "@aurelia/runtime-html";
 
-@valueConverter("format-date")
+@valueConverter("formatDate")
 export class FormatDateValueConverter {
   toView(value: Date | string | null, format?: string): string {
     if (!value) return "";

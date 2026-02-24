@@ -151,7 +151,7 @@ function resolveExpressionEntity(
   offset: number,
   semantics?: MaterializedSemantics | null,
 ): CursorEntity | null {
-  // Check for value converter at this offset
+  // Check for value converter / binding behavior at this offset.
   const vcHit = findValueConverterAtOffset(compilation.exprTable, offset);
   if (vcHit && semantics) {
     const vcSig = semantics.resources.valueConverters[vcHit.name] ?? null;
@@ -160,11 +160,10 @@ function resolveExpressionEntity(
       name: vcHit.name,
       converter: vcSig,
       span: vcHit.span ?? expr.span,
-      ref: null, // TODO: wire from convergence entries
+      ref: null,
     } satisfies ValueConverterEntity;
   }
 
-  // Check for binding behavior at this offset
   const bbHit = findBindingBehaviorAtOffset(compilation.exprTable, offset);
   if (bbHit && semantics) {
     const bbSig = semantics.resources.bindingBehaviors[bbHit.name] ?? null;
@@ -173,7 +172,7 @@ function resolveExpressionEntity(
       name: bbHit.name,
       behavior: bbSig,
       span: bbHit.span ?? expr.span,
-      ref: null, // TODO: wire from convergence entries
+      ref: null,
     } satisfies BindingBehaviorEntity;
   }
 
@@ -446,16 +445,24 @@ function findRowByNodeId(
   return null;
 }
 
-// Inline VC/BB finders (simplified from workspace query-helpers)
+// Inline VC/BB finders — walk the expression tail chain (BB wraps VC wraps core).
+// AST node kinds: 'ValueConverter', 'BindingBehavior' (not *Expression suffix).
+// The `name` field is an Identifier { name: string, span: SourceSpan }.
+
+// VC/BB finders — walk the expression tail chain.
+// AST $kind values: 'ValueConverter', 'BindingBehavior'.
+// AST name is Identifier { $kind, name: string, span: SourceSpan }.
+// Spans are already absolute (rebased by the expression parser when baseSpan is provided).
+
+type ExprNode = { $kind?: string; name?: { name?: string; span?: SourceSpan }; expression?: ExprNode; span?: SourceSpan; expressions?: ExprNode[] };
+
 function findValueConverterAtOffset(
   exprTable: readonly ExprTableEntry[],
   offset: number,
 ): { name: string; exprId: ExprId; span?: SourceSpan } | null {
   for (const entry of exprTable) {
-    const ast = entry.ast as { $kind?: string; name?: string; expression?: { span?: SourceSpan }; span?: SourceSpan };
-    if (ast.$kind === 'ValueConverterExpression' && ast.name && ast.span && spanContainsOffset(ast.span, offset)) {
-      return { name: ast.name, exprId: entry.id, span: ast.span };
-    }
+    const hit = findPipeNameAtOffset(entry.ast as ExprNode, offset, 'ValueConverter');
+    if (hit) return { name: hit.name, exprId: entry.id, span: hit.span };
   }
   return null;
 }
@@ -465,9 +472,31 @@ function findBindingBehaviorAtOffset(
   offset: number,
 ): { name: string; exprId: ExprId; span?: SourceSpan } | null {
   for (const entry of exprTable) {
-    const ast = entry.ast as { $kind?: string; name?: string; span?: SourceSpan };
-    if (ast.$kind === 'BindingBehaviorExpression' && ast.name && ast.span && spanContainsOffset(ast.span, offset)) {
-      return { name: ast.name, exprId: entry.id, span: ast.span };
+    const hit = findPipeNameAtOffset(entry.ast as ExprNode, offset, 'BindingBehavior');
+    if (hit) return { name: hit.name, exprId: entry.id, span: hit.span };
+  }
+  return null;
+}
+
+function findPipeNameAtOffset(
+  node: ExprNode | undefined | null,
+  offset: number,
+  kind: 'ValueConverter' | 'BindingBehavior',
+): { name: string; span?: SourceSpan } | null {
+  if (!node || !node.$kind) return null;
+  if (node.$kind === kind && node.name?.name && node.name.span && spanContainsOffset(node.name.span, offset)) {
+    return { name: node.name.name, span: node.name.span };
+  }
+  // Walk inner expression (BB wraps VC wraps core)
+  if (node.expression) {
+    const hit = findPipeNameAtOffset(node.expression, offset, kind);
+    if (hit) return hit;
+  }
+  // Walk Interpolation sub-expressions
+  if (node.expressions) {
+    for (const sub of node.expressions) {
+      const hit = findPipeNameAtOffset(sub, offset, kind);
+      if (hit) return hit;
     }
   }
   return null;

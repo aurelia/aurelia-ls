@@ -184,13 +184,13 @@ describe("completions: expression root (scope members)", () => {
 
 describe("completions: value converter pipe position", () => {
   it("includes registered value converters after pipe operator", async () => {
-    const completions = query.completions(await pos("| format-date", 2));
-    expect(hasLabel(completions, "format-date")).toBe(true);
+    const completions = query.completions(await pos("| formatDate", 2));
+    expect(hasLabel(completions, "formatDate")).toBe(true);
   });
 
   it("VC completions have correct kind", async () => {
-    const completions = query.completions(await pos("| format-date", 2));
-    const item = findItem(completions, "format-date");
+    const completions = query.completions(await pos("| formatDate", 2));
+    const item = findItem(completions, "formatDate");
     if (item) {
       expect(item.kind).toBe("value-converter");
     }
@@ -199,13 +199,13 @@ describe("completions: value converter pipe position", () => {
 
 describe("completions: binding behavior ampersand position", () => {
   it("includes registered binding behaviors after ampersand", async () => {
-    const completions = query.completions(await pos("& rate-limit", 2));
-    expect(hasLabel(completions, "rate-limit")).toBe(true);
+    const completions = query.completions(await pos("& rateLimit", 2));
+    expect(hasLabel(completions, "rateLimit")).toBe(true);
   });
 
   it("BB completions have correct kind", async () => {
-    const completions = query.completions(await pos("& rate-limit", 2));
-    const item = findItem(completions, "rate-limit");
+    const completions = query.completions(await pos("& rateLimit", 2));
+    const item = findItem(completions, "rateLimit");
     if (item) {
       expect(item.kind).toBe("binding-behavior");
     }
@@ -219,8 +219,8 @@ describe("completions: binding behavior ampersand position", () => {
 describe("completions: universe filtering", () => {
   it("tag position does not include VCs or BBs", async () => {
     const completions = query.completions(await pos("<matrix-panel\n", 1));
-    expect(hasLabel(completions, "format-date")).toBe(false);
-    expect(hasLabel(completions, "rate-limit")).toBe(false);
+    expect(hasLabel(completions, "formatDate")).toBe(false);
+    expect(hasLabel(completions, "rateLimit")).toBe(false);
   });
 
   it("attribute position does not include CEs", async () => {
@@ -235,7 +235,7 @@ describe("completions: universe filtering", () => {
   });
 
   it("VC pipe position does not include CEs or CAs", async () => {
-    const completions = query.completions(await pos("| format-date", 2));
+    const completions = query.completions(await pos("| formatDate", 2));
     expect(hasLabel(completions, "matrix-panel")).toBe(false);
     expect(hasLabel(completions, "matrix-highlight")).toBe(false);
   });
@@ -255,8 +255,8 @@ describe("completions: confidence metadata", () => {
   });
 
   it("VC completions carry trust metadata", async () => {
-    const completions = query.completions(await pos("| format-date", 2));
-    const item = findItem(completions, "format-date");
+    const completions = query.completions(await pos("| formatDate", 2));
+    const item = findItem(completions, "formatDate");
     if (item?.confidence) {
       // Source-analyzed VC should have high or exact confidence
       expect(["exact", "high"]).toContain(item.confidence);

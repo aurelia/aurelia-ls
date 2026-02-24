@@ -263,7 +263,7 @@ describe("diagnostics: false positive prevention", () => {
     const falseDiags = diagsWithCode("aurelia/unknown-converter").filter((d) => {
       if (!d.span) return false;
       const diagText = text.slice(d.span.start, d.span.end);
-      return diagText.includes("format-date");
+      return diagText.includes("formatDate");
     });
     expect(falseDiags).toHaveLength(0);
   });
@@ -273,7 +273,7 @@ describe("diagnostics: false positive prevention", () => {
     const falseDiags = diagsWithCode("aurelia/unknown-behavior").filter((d) => {
       if (!d.span) return false;
       const diagText = text.slice(d.span.start, d.span.end);
-      return diagText.includes("rate-limit");
+      return diagText.includes("rateLimit");
     });
     expect(falseDiags).toHaveLength(0);
   });

@@ -42,10 +42,10 @@
         <span matrix-highlight.bind="item.status">${item.label}</span>
 
         <!-- VC in expression (position type 5d: pipe operator) -->
-        <time>${item.date | format-date}</time>
+        <time>${item.date | formatDate}</time>
 
         <!-- BB in expression (position type 5e: ampersand operator) -->
-        <em>${item.name & rate-limit}</em>
+        <em>${item.name & rateLimit}</em>
 
         <!-- CE tag inside repeat scope -->
         <matrix-badge value.bind="item.severity"></matrix-badge>

@@ -3,7 +3,7 @@
 // BB semantic tokens.
 import { bindingBehavior } from "@aurelia/runtime-html";
 
-@bindingBehavior("rate-limit")
+@bindingBehavior("rateLimit")
 export class RateLimitBindingBehavior {
   bind() {}
   unbind() {}

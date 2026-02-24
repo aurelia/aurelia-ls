@@ -74,7 +74,7 @@ describe("definition: resource kinds", () => {
   });
 
   it("VC navigates to class declaration", async () => {
-    const defs = query.definition(await pos("| format-date", 2));
+    const defs = query.definition(await pos("| formatDate", 2));
     expectDefinition(readText, defs, {
       uriEndsWith: "/converters/format-date.ts",
       textIncludes: "FormatDateValueConverter",
@@ -82,7 +82,7 @@ describe("definition: resource kinds", () => {
   });
 
   it("BB navigates to class declaration", async () => {
-    const defs = query.definition(await pos("& rate-limit", 2));
+    const defs = query.definition(await pos("& rateLimit", 2));
     expectDefinition(readText, defs, {
       uriEndsWith: "/behaviors/rate-limit.ts",
       textIncludes: "RateLimitBindingBehavior",

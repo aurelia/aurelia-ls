@@ -72,12 +72,12 @@ describe("references: resource kinds", () => {
   });
 
   it("VC pipe name produces references", async () => {
-    const refs = await refsAt("| format-date", 2)();
+    const refs = await refsAt("| formatDate", 2)();
     expect(refs.length).toBeGreaterThanOrEqual(1);
   });
 
   it("BB ampersand name produces references", async () => {
-    const refs = await refsAt("& rate-limit", 2)();
+    const refs = await refsAt("& rateLimit", 2)();
     expect(refs.length).toBeGreaterThanOrEqual(1);
   });
 });

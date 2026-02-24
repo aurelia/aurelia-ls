@@ -89,13 +89,13 @@ describe("semantic tokens: presence", () => {
   });
 
   it("produces tokens for value converters in expressions", () => {
-    const token = findToken(tokens, text, { type: "aureliaConverter", text: "format-date" });
-    expect(token, "format-date VC should have a converter token").toBeDefined();
+    const token = findToken(tokens, text, { type: "aureliaConverter", text: "formatDate" });
+    expect(token, "formatDate VC should have a converter token").toBeDefined();
   });
 
   it("produces tokens for binding behaviors in expressions", () => {
-    const token = findToken(tokens, text, { type: "aureliaBehavior", text: "rate-limit" });
-    expect(token, "rate-limit BB should have a behavior token").toBeDefined();
+    const token = findToken(tokens, text, { type: "aureliaBehavior", text: "rateLimit" });
+    expect(token, "rateLimit BB should have a behavior token").toBeDefined();
   });
 });
 
@@ -146,9 +146,9 @@ describe("semantic tokens: span correctness", () => {
   });
 
   it("VC token covers the converter name only", () => {
-    const token = findToken(tokens, text, { type: "aureliaConverter", text: "format-date" });
+    const token = findToken(tokens, text, { type: "aureliaConverter", text: "formatDate" });
     expect(token).toBeDefined();
-    expect(tokenText(token!)).toBe("format-date");
+    expect(tokenText(token!)).toBe("formatDate");
   });
 });
 

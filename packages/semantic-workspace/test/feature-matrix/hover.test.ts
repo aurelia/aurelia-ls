@@ -68,13 +68,13 @@ describe("hover identity (resource kinds)", () => {
   });
 
   it("value converter: format-date", async () => {
-    const hover = query.hover(await pos("| format-date", 2));
-    assertHoverContains(hover, /\(value converter\) format-date/);
+    const hover = query.hover(await pos("| formatDate", 2));
+    assertHoverContains(hover, /\(value converter\) formatDate/);
   });
 
   it("binding behavior: rate-limit", async () => {
-    const hover = query.hover(await pos("& rate-limit", 2));
-    assertHoverContains(hover, /\(binding behavior\) rate-limit/);
+    const hover = query.hover(await pos("& rateLimit", 2));
+    assertHoverContains(hover, /\(binding behavior\) rateLimit/);
   });
 
   it("binding command: trigger", async () => {
@@ -120,12 +120,12 @@ describe("hover provenance (seam test)", () => {
   });
 
   it("VC shows discovery provenance", async () => {
-    const hover = query.hover(await pos("| format-date", 2));
+    const hover = query.hover(await pos("| formatDate", 2));
     assertHoverContains(hover, "Discovered via source analysis");
   });
 
   it("BB shows discovery provenance", async () => {
-    const hover = query.hover(await pos("& rate-limit", 2));
+    const hover = query.hover(await pos("& rateLimit", 2));
     assertHoverContains(hover, "Discovered via source analysis");
   });
 
@@ -167,12 +167,12 @@ describe("hover span tightness", () => {
   });
 
   it("VC hover span covers the converter name", async () => {
-    const hover = query.hover(await pos("| format-date", 2));
+    const hover = query.hover(await pos("| formatDate", 2));
     expect(hover).not.toBeNull();
     expect(hover!.location?.span).toBeDefined();
-    const vcStart = text.indexOf("format-date");
+    const vcStart = text.indexOf("formatDate");
     expect(hover!.location!.span!.start).toBeLessThanOrEqual(vcStart);
-    expect(hover!.location!.span!.end).toBeGreaterThanOrEqual(vcStart + "format-date".length);
+    expect(hover!.location!.span!.end).toBeGreaterThanOrEqual(vcStart + "formatDate".length);
   });
 });
 
@@ -217,7 +217,7 @@ describe("hover confidence", () => {
   });
 
   it("non-gapped VC has no confidence set", async () => {
-    const hover = query.hover(await pos("| format-date", 2));
+    const hover = query.hover(await pos("| formatDate", 2));
     expect(hover).not.toBeNull();
     expect(hover!.confidence).toBeUndefined();
   });

@@ -85,18 +85,18 @@ describe("rename: renameable entities", () => {
   });
 
   it("VC pipe name is renameable", async () => {
-    const result = await prepareAt("| format-date", 2)();
+    const result = await prepareAt("| formatDate", 2)();
     expect("result" in result, `Expected success but got error: ${"error" in result ? result.error.message : ""}`).toBe(true);
     if ("result" in result) {
-      expect(result.result.placeholder).toBe("format-date");
+      expect(result.result.placeholder).toBe("formatDate");
     }
   });
 
   it("BB ampersand name is renameable", async () => {
-    const result = await prepareAt("& rate-limit", 2)();
+    const result = await prepareAt("& rateLimit", 2)();
     expect("result" in result, `Expected success but got error: ${"error" in result ? result.error.message : ""}`).toBe(true);
     if ("result" in result) {
-      expect(result.result.placeholder).toBe("rate-limit");
+      expect(result.result.placeholder).toBe("rateLimit");
     }
   });
 
@@ -278,7 +278,7 @@ describe("rename: edit production", () => {
   });
 
   it("renaming VC produces edits in expression and declaration", async () => {
-    const result = await renameAt("| format-date", "format-datetime", 2)();
+    const result = await renameAt("| formatDate", "formatDatetime", 2)();
     expect("edit" in result, `Expected edits but got error: ${"error" in result ? result.error.message : ""}`).toBe(true);
     if ("edit" in result) {
       expect(result.edit.edits.length).toBeGreaterThan(0);
