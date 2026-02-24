@@ -4,7 +4,7 @@ import { createWorkspaceHarness } from "./harness/index.js";
 import { asFixtureId } from "./fixtures/index.js";
 import { createSemanticWorkspaceKernel } from "../out/workspace.js";
 import {
-  buildProjectSnapshot,
+  createSemanticModel,
   type DependencyGraph,
   type DocumentUri,
   type ResourceGraph,
@@ -125,16 +125,15 @@ describe("workspace incremental churn (incremental-churn)", () => {
 
   function createKernel(scopeId: ResourceScopeId | null): Kernel {
     // Keep a fixed resource scope so cache assertions are not affected by template scope switching.
-    const project = buildProjectSnapshot(harness.discovery.semantics, {
-      catalog: harness.discovery.catalog,
-      syntax: harness.discovery.syntax,
-      resourceGraph: harness.discovery.resourceGraph,
+    const model = createSemanticModel(harness.discovery, {
+      ...(scopeId !== null ? { defaultScope: scopeId } : {}),
     });
+    const query = model.query();
     return createSemanticWorkspaceKernel({
       program: {
         vm: VM,
         isJs: false,
-        project,
+        query,
         moduleResolver: NOOP_MODULE_RESOLVER,
         ...(scopeId !== null ? { templateContext: () => ({ scopeId }) } : {}),
       },
@@ -196,16 +195,13 @@ describe("workspace incremental churn (incremental-churn)", () => {
     const betaAfterContent = getDocStats(kernel, betaUri);
 
     const configBefore = kernel.snapshot().meta.configHash;
-    const project = buildProjectSnapshot(harness.discovery.semantics, {
-      catalog: harness.discovery.catalog,
-      syntax: harness.discovery.syntax,
-      resourceGraph: harness.discovery.resourceGraph,
-    });
+    const reconfigModel = createSemanticModel(harness.discovery);
+    const reconfigQuery = reconfigModel.query();
     const updated = kernel.reconfigure({
       program: {
         vm: VM,
         isJs: false,
-        project,
+        query: reconfigQuery,
         overlayBaseName: "__churn__",
         moduleResolver: NOOP_MODULE_RESOLVER,
       },

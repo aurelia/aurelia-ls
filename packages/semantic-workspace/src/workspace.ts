@@ -189,13 +189,21 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
 
     if (this.program.updateOptions) {
       const result = this.program.updateOptions(next.program);
+      const configHashChanged = nextConfigHash !== this.#configHash;
       const updated = result.changed
         || nextFingerprint !== this.#workspaceFingerprint
-        || nextConfigHash !== this.#configHash
+        || configHashChanged
         || languageChanged
         || lookupChanged;
 
       if (!updated) return false;
+
+      // Config changes (overlayBaseName, etc.) affect compilation output but
+      // aren't part of the semantic model. Force full invalidation when the
+      // model didn't change but config did.
+      if (configHashChanged && !result.changed) {
+        this.program.invalidateAll();
+      }
 
       this.#programOptions = next.program;
       this.#languageOptions = next.language;
@@ -277,8 +285,8 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
     }
   }
 
-  getCacheStats(_target?: DocumentUri) {
-    return { compilations: this.program.sources };
+  getCacheStats(target?: DocumentUri) {
+    return this.program.getCacheStats(target);
   }
 
   lookupText(uri: DocumentUri): string | null {
