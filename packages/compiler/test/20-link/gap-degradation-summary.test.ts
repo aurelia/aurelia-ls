@@ -17,7 +17,7 @@
 import { describe, test, expect } from "vitest";
 
 import { deepMergeSemantics } from "../_helpers/semantics-merge.js";
-import { noopModuleResolver } from "../_helpers/test-utils.js";
+import { noopModuleResolver, createTestQuery } from "../_helpers/test-utils.js";
 
 import {
   compileTemplate,
@@ -70,8 +70,7 @@ function compileWith(markup: string, sem: any, catalog?: any) {
     templateFilePath: "/test.html",
     isJs: false,
     vm: createVmReflection(),
-    semantics: sem,
-    catalog,
+    query: createTestQuery(sem, catalog),
     moduleResolver: NOOP_MODULE_RESOLVER,
   });
 }

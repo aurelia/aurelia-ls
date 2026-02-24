@@ -1,8 +1,67 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { ModuleResolver } from "@aurelia-ls/compiler";
+import type {
+  ModuleResolver,
+  MaterializedSemantics,
+  ProjectSemantics,
+  ResourceCatalog,
+  SemanticModelQuery,
+} from "@aurelia-ls/compiler";
+import {
+  createSemanticModel,
+  prepareProjectSemantics,
+  buildTemplateSyntaxRegistry,
+  buildResourceCatalog,
+  BUILTIN_SEMANTICS,
+} from "@aurelia-ls/compiler";
 
 export const noopModuleResolver: ModuleResolver = () => null;
+
+/**
+ * Build a SemanticModelQuery from semantics for test use.
+ *
+ * Accepts either MaterializedSemantics or plain ProjectSemantics (which
+ * will be materialized via prepareProjectSemantics). Creates a minimal
+ * ProjectSemanticsDiscoveryResult and runs it through the real
+ * createSemanticModel factory. This bridges old-style test fixtures
+ * (semantics + optional catalog) to the new query-based API.
+ */
+export function createTestQuery(
+  semantics?: MaterializedSemantics | ProjectSemantics,
+  catalog?: ResourceCatalog,
+): SemanticModelQuery {
+  const raw = semantics ?? BUILTIN_SEMANTICS;
+  // Materialize if needed (plain ProjectSemantics lack resources/bindingCommands/etc.)
+  const sem: MaterializedSemantics = "catalog" in raw && "resources" in raw
+    ? raw as MaterializedSemantics
+    : prepareProjectSemantics(raw);
+  const syntax = buildTemplateSyntaxRegistry(sem);
+  const cat: ResourceCatalog = catalog ?? buildResourceCatalog(
+    sem.resources,
+    syntax.bindingCommands,
+    syntax.attributePatterns,
+  );
+
+  // Minimal discovery result that satisfies createSemanticModel
+  const discovery = {
+    semantics: sem,
+    catalog: cat,
+    syntax,
+    resourceGraph: { root: null, scopes: {} } as any,
+    semanticSnapshot: { version: "test" as const, symbols: [], catalog: { resources: {} }, graph: null, gaps: [], confidence: "complete" as const },
+    apiSurfaceSnapshot: { version: "test" as const, symbols: [] },
+    definition: { authority: [] as any[], evidence: [] as any[], convergence: [] as any[] },
+    registration: { sites: [], orphans: [], unresolved: [] },
+    templates: [] as any[],
+    inlineTemplates: [] as any[],
+    diagnostics: [] as any[],
+    recognizedBindingCommands: [] as any[],
+    recognizedAttributePatterns: [] as any[],
+    facts: new Map() as any,
+  };
+
+  return createSemanticModel(discovery as any).query();
+}
 
 /**
  * Generic set diff by key.

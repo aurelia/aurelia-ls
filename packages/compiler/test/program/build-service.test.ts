@@ -1,15 +1,13 @@
 import { test, expect } from "vitest";
 
 import {
-  BUILTIN_SEMANTICS,
   DefaultTemplateBuildService,
   DefaultTemplateLanguageService,
   DefaultTemplateProgram,
   canonicalDocumentUri,
   deriveTemplatePaths,
-  buildProjectSnapshot,
 } from "@aurelia-ls/compiler";
-import { noopModuleResolver } from "../_helpers/test-utils.js";
+import { createTestQuery, noopModuleResolver } from "../_helpers/test-utils.js";
 
 test("build service exposes canonical overlay artifacts", () => {
   const program = createProgram();
@@ -118,7 +116,7 @@ function createProgram(opts = {}) {
   return new DefaultTemplateProgram({
     vm: createVmReflection(),
     isJs: false,
-    project: buildProjectSnapshot(BUILTIN_SEMANTICS),
+    query: createTestQuery(),
     moduleResolver: noopModuleResolver,
     ...opts,
   });

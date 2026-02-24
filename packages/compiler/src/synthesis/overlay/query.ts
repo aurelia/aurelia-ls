@@ -63,13 +63,13 @@ export function buildTemplateQuery(
   irModule: IrModule | undefined,
   linked: LinkModule,
   mapping: TemplateMappingArtifact,
-  typecheck: TypecheckModule,
+  typecheck: TypecheckModule | null | undefined,
 ): TemplateQueryFacade {
-  if (!irModule) return buildPendingQueryFacade(mapping, typecheck);
+  if (!irModule) return buildPendingQueryFacade(mapping, typecheck ?? null);
   const domIndex = indexDomAll(irModule.templates);
   const originCandidates = indexTemplateOrigins(irModule.templates, domIndex.templateIndexById, domIndex.domByTemplate);
   const rowsByTarget = indexRowsAll(linked);
-  const expectedByExpr = typecheck.expectedByExpr;
+  const expectedByExpr = typecheck?.expectedByExpr ?? new Map();
   const controllers = indexControllers(linked);
 
   return {
@@ -383,7 +383,7 @@ function addType<T extends BindableBase>(base: T, type: string | undefined): T {
   return { ...base, type };
 }
 
-function buildPendingQueryFacade(mapping: TemplateMappingArtifact, typecheck: TypecheckModule): TemplateQueryFacade {
+function buildPendingQueryFacade(mapping: TemplateMappingArtifact, typecheck: TypecheckModule | null): TemplateQueryFacade {
   return {
     nodeAt(_htmlOffset) { return null; },
     bindablesFor(_node) { return null; },
@@ -394,7 +394,7 @@ function buildPendingQueryFacade(mapping: TemplateMappingArtifact, typecheck: Ty
     },
     expectedTypeOf(exprOrBindable) {
       if ("exprId" in exprOrBindable) {
-        return typecheck.expectedByExpr.get(exprOrBindable.exprId) ?? null;
+        return typecheck?.expectedByExpr.get(exprOrBindable.exprId) ?? null;
       }
       if ("type" in exprOrBindable) return exprOrBindable.type ?? null;
       return null;

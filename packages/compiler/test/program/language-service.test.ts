@@ -1,17 +1,15 @@
 import { test, expect } from "vitest";
 
 import {
-  BUILTIN_SEMANTICS,
   InMemoryProvenanceIndex,
   emitOverlay,
   DefaultTemplateLanguageService,
   DefaultTemplateProgram,
   canonicalDocumentUri,
-  buildProjectSnapshot,
 } from "@aurelia-ls/compiler";
 import { resolveSourceFile } from "../../src/model/source.js";
 import { buildTemplateMapping } from "../../src/synthesis/overlay/mapping.js";
-import { noopModuleResolver } from "../_helpers/test-utils.js";
+import { createTestQuery, noopModuleResolver } from "../_helpers/test-utils.js";
 
 function createVmReflection() {
   return {
@@ -28,7 +26,7 @@ function createProgram() {
   return new DefaultTemplateProgram({
     vm: createVmReflection(),
     isJs: false,
-    project: buildProjectSnapshot(BUILTIN_SEMANTICS),
+    query: createTestQuery(),
     moduleResolver: noopModuleResolver,
   });
 }
@@ -125,7 +123,7 @@ test("diagnostics use VM display name for missing members", () => {
       getSyntheticPrefix() { return "__AU_TTC_"; },
     },
     isJs: false,
-    project: buildProjectSnapshot(BUILTIN_SEMANTICS),
+    query: createTestQuery(),
     moduleResolver: noopModuleResolver,
   });
   const uri = "/app/diag-display.html";
@@ -166,7 +164,7 @@ test("TypeScript diagnostics replace overlay aliases with VM display names", () 
       getSyntheticPrefix() { return "__AU_TTC_"; },
     },
     isJs: false,
-    project: buildProjectSnapshot(BUILTIN_SEMANTICS),
+    query: createTestQuery(),
     moduleResolver: noopModuleResolver,
   });
   const uri = "/app/noisy.html";
@@ -220,7 +218,7 @@ test("suppresses typecheck mismatch when TypeScript confirms matching type", () 
       getSyntheticPrefix() { return "__AU_TTC_"; },
     },
     isJs: false,
-    project: buildProjectSnapshot(BUILTIN_SEMANTICS),
+    query: createTestQuery(),
     moduleResolver: noopModuleResolver,
   });
   const uri = "/app/typecheck-noise.html";
@@ -1170,7 +1168,7 @@ describe("typecheck diagnostics integration", () => {
         getSyntheticPrefix() { return "__AU_TTC_"; },
       },
       isJs: false,
-      project: buildProjectSnapshot(BUILTIN_SEMANTICS),
+      query: createTestQuery(),
       moduleResolver: noopModuleResolver,
     });
     const uri = "/app/tc-warning.html";
@@ -1199,7 +1197,7 @@ describe("typecheck diagnostics integration", () => {
         getSyntheticPrefix() { return "__AU_TTC_"; },
       },
       isJs: false,
-      project: buildProjectSnapshot(BUILTIN_SEMANTICS),
+      query: createTestQuery(),
       moduleResolver: noopModuleResolver,
     });
     const uri = "/app/tc-location.html";
@@ -1228,7 +1226,7 @@ describe("typecheck diagnostics integration", () => {
         getSyntheticPrefix() { return "__AU_TTC_"; },
       },
       isJs: false,
-      project: buildProjectSnapshot(BUILTIN_SEMANTICS),
+      query: createTestQuery(),
       moduleResolver: noopModuleResolver,
     });
     const uri = "/app/tc-null.html";
@@ -1253,7 +1251,7 @@ describe("typecheck diagnostics integration", () => {
         getSyntheticPrefix() { return "__AU_TTC_"; },
       },
       isJs: false,
-      project: buildProjectSnapshot(BUILTIN_SEMANTICS),
+      query: createTestQuery(),
       moduleResolver: noopModuleResolver,
     });
     const uri = "/app/tc-coerce.html";
@@ -1277,7 +1275,7 @@ describe("typecheck diagnostics integration", () => {
         getSyntheticPrefix() { return "__AU_TTC_"; },
       },
       isJs: false,
-      project: buildProjectSnapshot(BUILTIN_SEMANTICS),
+      query: createTestQuery(),
       moduleResolver: noopModuleResolver,
     });
     const uri = "/app/tc-cascade.html";
@@ -1305,7 +1303,7 @@ describe("typecheck diagnostics integration", () => {
         getSyntheticPrefix() { return "__AU_TTC_"; },
       },
       isJs: false,
-      project: buildProjectSnapshot(BUILTIN_SEMANTICS),
+      query: createTestQuery(),
       moduleResolver: noopModuleResolver,
     });
     const uri = "/app/tc-style.html";
@@ -1329,7 +1327,7 @@ describe("typecheck diagnostics integration", () => {
         getSyntheticPrefix() { return "__AU_TTC_"; },
       },
       isJs: false,
-      project: buildProjectSnapshot(BUILTIN_SEMANTICS),
+      query: createTestQuery(),
       moduleResolver: noopModuleResolver,
     });
     const uri = "/app/tc-style-bool.html";
@@ -1355,7 +1353,7 @@ describe("typecheck diagnostics integration", () => {
         getSyntheticPrefix() { return "__AU_TTC_"; },
       },
       isJs: false,
-      project: buildProjectSnapshot(BUILTIN_SEMANTICS),
+      query: createTestQuery(),
       moduleResolver: noopModuleResolver,
     });
     const uri = "/app/tc-if.html";
@@ -1382,7 +1380,7 @@ describe("typecheck diagnostics integration", () => {
         getSyntheticPrefix() { return "__AU_TTC_"; },
       },
       isJs: false,
-      project: buildProjectSnapshot(BUILTIN_SEMANTICS),
+      query: createTestQuery(),
       moduleResolver: noopModuleResolver,
     });
     const uri = "/app/tc-multi.html";
@@ -1410,7 +1408,7 @@ describe("typecheck diagnostics integration", () => {
         getSyntheticPrefix() { return "__AU_TTC_"; },
       },
       isJs: false,
-      project: buildProjectSnapshot(BUILTIN_SEMANTICS),
+      query: createTestQuery(),
       moduleResolver: noopModuleResolver,
     });
     const uri = "/app/tc-text.html";
@@ -1469,7 +1467,7 @@ describe("Elm-style error propagation", () => {
         getSyntheticPrefix() { return "__AU_TTC_"; },
       },
       isJs: false,
-      project: buildProjectSnapshot(BUILTIN_SEMANTICS),
+      query: createTestQuery(),
       moduleResolver: noopModuleResolver,
     });
     const service = new DefaultTemplateLanguageService(program, {

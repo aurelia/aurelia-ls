@@ -1,11 +1,9 @@
 import { test, expect } from "vitest";
 
 import {
-  BUILTIN_SEMANTICS,
   DefaultTemplateProgram,
-  buildProjectSnapshot,
 } from "@aurelia-ls/compiler";
-import { noopModuleResolver } from "../_helpers/test-utils.js";
+import { createTestQuery, noopModuleResolver } from "../_helpers/test-utils.js";
 
 function createProgram() {
   return new DefaultTemplateProgram({
@@ -18,7 +16,7 @@ function createProgram() {
       },
     },
     isJs: false,
-    project: buildProjectSnapshot(BUILTIN_SEMANTICS),
+    query: createTestQuery(),
     moduleResolver: noopModuleResolver,
   });
 }

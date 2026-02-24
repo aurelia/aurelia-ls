@@ -3,13 +3,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { BUILTIN_SEMANTICS, buildProjectSnapshot } from "@aurelia-ls/compiler";
 import {
   PipelineEngine,
   type StageDefinition,
   type StageKey,
   type StageOutputs,
 } from "../../src/pipeline/engine.js";
+import { createTestQuery } from "../_helpers/test-utils.js";
 
 function withTempDir<T>(fn: (dir: string) => T): T {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aurelia-pipeline-"));
@@ -55,7 +55,7 @@ function baseOptions(overrides: Partial<Parameters<PipelineEngine["run"]>[1]> = 
   return {
     html: "<div></div>",
     templateFilePath: "/app.html",
-    project: buildProjectSnapshot(BUILTIN_SEMANTICS),
+    query: createTestQuery(),
     ...overrides,
   };
 }

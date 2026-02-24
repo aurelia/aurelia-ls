@@ -41,7 +41,7 @@ import {
   DEFAULT_SYNTAX,
   DiagnosticsRuntime,
 } from "@aurelia-ls/compiler";
-import { noopModuleResolver } from "../_helpers/test-utils.js";
+import { noopModuleResolver, createTestQuery } from "../_helpers/test-utils.js";
 
 // =============================================================================
 // Test Fixtures
@@ -81,7 +81,7 @@ function createProgram(trace?: CompileTrace) {
   return new DefaultTemplateProgram({
     vm: createVmReflection(),
     isJs: false,
-    project: buildProjectSnapshot(BUILTIN_SEMANTICS),
+    query: createTestQuery(),
     moduleResolver: noopModuleResolver,
     trace,
   });

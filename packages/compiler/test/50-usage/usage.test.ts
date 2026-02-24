@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 
-import { compileTemplate, BUILTIN_SEMANTICS } from "@aurelia-ls/compiler";
+import { compileTemplate } from "@aurelia-ls/compiler";
+import { createTestQuery } from "../_helpers/test-utils.js";
 
 function createVmReflection() {
   return {
@@ -32,7 +33,7 @@ describe("FeatureUsageSet", () => {
       templateFilePath: "/app.html",
       isJs: false,
       vm: createVmReflection(),
-      semantics: BUILTIN_SEMANTICS,
+      query: createTestQuery(),
       moduleResolver: NOOP_MODULE_RESOLVER,
     });
 

@@ -3,12 +3,11 @@ import { test, expect } from "vitest";
 import {
   BUILTIN_SEMANTICS,
   DefaultTemplateProgram,
-  buildProjectSnapshot,
   type BindingMode,
   type BindableDef,
   type ProjectSemantics,
 } from "@aurelia-ls/compiler";
-import { noopModuleResolver } from "../_helpers/test-utils.js";
+import { createTestQuery, noopModuleResolver } from "../_helpers/test-utils.js";
 
 test("cache stats track hits and invalidation", () => {
   const program = createProgram();
@@ -208,7 +207,7 @@ test("updateOptions invalidates only templates that depend on changed custom ele
   const dependentUri = "/app/element-dependent.html";
   const unrelatedUri = "/app/unrelated.html";
   const program = createProgram({
-    project: buildProjectSnapshot(baseProjectSemantics()),
+    query: createTestQuery(baseProjectSemantics()),
   });
 
   program.upsertTemplate(
@@ -219,11 +218,11 @@ test("updateOptions invalidates only templates that depend on changed custom ele
   program.getOverlay(dependentUri);
   program.getOverlay(unrelatedUri);
 
-  const nextProject = buildProjectSnapshot(withElementBindable("au-compose", "mode"));
+  const nextQuery = createTestQuery(withElementBindable("au-compose", "mode"));
   const result = program.updateOptions?.({
     vm: createVmReflection(),
     isJs: false,
-    project: nextProject,
+    query: nextQuery,
     moduleResolver: noopModuleResolver,
   });
 
@@ -244,7 +243,7 @@ test("updateOptions invalidates only templates that depend on changed custom att
   const dependentUri = "/app/attribute-dependent.html";
   const unrelatedUri = "/app/unrelated.html";
   const program = createProgram({
-    project: buildProjectSnapshot(baseProjectSemantics()),
+    query: createTestQuery(baseProjectSemantics()),
   });
 
   program.upsertTemplate(
@@ -255,11 +254,11 @@ test("updateOptions invalidates only templates that depend on changed custom att
   program.getOverlay(dependentUri);
   program.getOverlay(unrelatedUri);
 
-  const nextProject = buildProjectSnapshot(withAttributeBindable("show", "tone"));
+  const nextQuery = createTestQuery(withAttributeBindable("show", "tone"));
   const result = program.updateOptions?.({
     vm: createVmReflection(),
     isJs: false,
-    project: nextProject,
+    query: nextQuery,
     moduleResolver: noopModuleResolver,
   });
 
@@ -280,7 +279,7 @@ test("updateOptions invalidates only templates that depend on changed value conv
   const dependentUri = "/app/converter-dependent.html";
   const unrelatedUri = "/app/unrelated.html";
   const program = createProgram({
-    project: buildProjectSnapshot(baseProjectSemantics()),
+    query: createTestQuery(baseProjectSemantics()),
   });
 
   program.upsertTemplate(dependentUri, "<template>${name | sanitize}</template>");
@@ -288,11 +287,11 @@ test("updateOptions invalidates only templates that depend on changed value conv
   program.getOverlay(dependentUri);
   program.getOverlay(unrelatedUri);
 
-  const nextProject = buildProjectSnapshot(withConverterOutType("sanitize", "string"));
+  const nextQuery = createTestQuery(withConverterOutType("sanitize", "string"));
   const result = program.updateOptions?.({
     vm: createVmReflection(),
     isJs: false,
-    project: nextProject,
+    query: nextQuery,
     moduleResolver: noopModuleResolver,
   });
 
@@ -410,7 +409,7 @@ function createProgram(overrides = {}) {
   return new DefaultTemplateProgram({
     vm: createVmReflection(),
     isJs: false,
-    project: buildProjectSnapshot(BUILTIN_SEMANTICS),
+    query: createTestQuery(),
     moduleResolver: noopModuleResolver,
     ...overrides,
   });
