@@ -508,3 +508,73 @@ describe("diagnostics: expected counts", () => {
     expect(count).toBe(1);
   });
 });
+
+// ============================================================================
+// 11. Ecosystem expression FP prevention
+//     Well-formed ecosystem patterns should produce no diagnostics
+// ============================================================================
+
+describe("diagnostics: ecosystem expression FP prevention", () => {
+  it("deep property chain does not produce diagnostics", () => {
+    const chainOffset = text.indexOf("${groups[0].items[0].name}");
+    const falseDiags = lspDiagnostics.filter((d) => {
+      if (!d.span) return false;
+      return d.span.start >= chainOffset && d.span.start < chainOffset + "${groups[0].items[0].name}".length;
+    });
+    expect(falseDiags).toHaveLength(0);
+  });
+
+  it("method call as repeat source does not produce diagnostics", () => {
+    const methodRepeatOffset = text.indexOf("getItemsByStatus('active')");
+    const falseDiags = lspDiagnostics.filter((d) => {
+      if (!d.span) return false;
+      return d.span.start >= methodRepeatOffset && d.span.start < methodRepeatOffset + "getItemsByStatus('active')".length;
+    });
+    expect(falseDiags).toHaveLength(0);
+  });
+
+  it("optional chaining does not produce diagnostics", () => {
+    const optOffset = text.indexOf("${selectedItem?.name}");
+    const falseDiags = lspDiagnostics.filter((d) => {
+      if (!d.span) return false;
+      return d.span.start >= optOffset && d.span.start < optOffset + "${selectedItem?.name}".length;
+    });
+    expect(falseDiags).toHaveLength(0);
+  });
+
+  it("&& chain in if.bind does not produce diagnostics", () => {
+    const andOffset = text.indexOf('if.bind="showDetail && items.length"');
+    const falseDiags = lspDiagnostics.filter((d) => {
+      if (!d.span) return false;
+      return d.span.start >= andOffset && d.span.start < andOffset + 'if.bind="showDetail && items.length"'.length;
+    });
+    expect(falseDiags).toHaveLength(0);
+  });
+
+  it("string concatenation does not produce diagnostics", () => {
+    const concatOffset = text.indexOf("${noteMessage + ' (' + total");
+    const falseDiags = lspDiagnostics.filter((d) => {
+      if (!d.span) return false;
+      return d.span.start >= concatOffset && d.span.start < concatOffset + 40;
+    });
+    expect(falseDiags).toHaveLength(0);
+  });
+
+  it("inline array literal in repeat does not produce diagnostics", () => {
+    const inlineOffset = text.indexOf("['alpha', 'beta', 'gamma']");
+    const falseDiags = lspDiagnostics.filter((d) => {
+      if (!d.span) return false;
+      return d.span.start >= inlineOffset && d.span.start < inlineOffset + "['alpha', 'beta', 'gamma']".length;
+    });
+    expect(falseDiags).toHaveLength(0);
+  });
+
+  it("nested ternary in class binding does not produce diagnostics", () => {
+    const ternaryOffset = text.indexOf("${activeSeverity === 'error'");
+    const falseDiags = lspDiagnostics.filter((d) => {
+      if (!d.span) return false;
+      return d.span.start >= ternaryOffset && d.span.start < ternaryOffset + 80;
+    });
+    expect(falseDiags).toHaveLength(0);
+  });
+});

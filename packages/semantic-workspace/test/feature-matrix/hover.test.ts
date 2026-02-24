@@ -501,3 +501,71 @@ describe("hover nested scopes", () => {
     expect(hover).not.toBeNull();
   });
 });
+
+// ============================================================================
+// 15. Ecosystem expression patterns (from cortex-device-list)
+// ============================================================================
+
+describe("hover ecosystem expression patterns", () => {
+  it("deep property chain produces hover", async () => {
+    // groups[0].items[0].name — 3 levels deep
+    const hover = query.hover(await pos("${groups[0].items[0].name}", 2));
+    expect(hover).not.toBeNull();
+  });
+
+  it("method call as repeat source produces hover on method", async () => {
+    const hover = query.hover(await pos("getItemsByStatus('active')", 1));
+    expect(hover).not.toBeNull();
+  });
+
+  it("optional chaining produces hover", async () => {
+    const hover = query.hover(await pos("${selectedItem?.name}", 2));
+    expect(hover).not.toBeNull();
+  });
+
+  it("$event in trigger produces hover", async () => {
+    const hover = query.hover(await pos("selectItem($event)", "selectItem(".length + 1));
+    expect(hover).not.toBeNull();
+  });
+
+  it("string concatenation expression produces hover", async () => {
+    const hover = query.hover(await pos("${noteMessage + ' (' + total", 2));
+    expect(hover).not.toBeNull();
+  });
+
+  it("getter property in interpolation produces hover", async () => {
+    const hover = query.hover(await pos("${filteredItems.length}", 2));
+    expect(hover).not.toBeNull();
+  });
+
+  it("keyed access items[0].name produces hover", async () => {
+    const hover = query.hover(await pos("${items[0].name}", 2));
+    expect(hover).not.toBeNull();
+  });
+
+  it("inline array literal repeat local produces hover", async () => {
+    // repeat.for="label of ['alpha', 'beta', 'gamma']" — cursor on label usage
+    const hover = query.hover(await pos("of ['alpha', 'beta', 'gamma']\">\n        <span>${label}", "${label}".length - 2));
+    expect(hover).not.toBeNull();
+  });
+
+  it("nested ternary expression produces hover on identifier", async () => {
+    const hover = query.hover(await pos("${activeSeverity === 'error'", 2));
+    expect(hover).not.toBeNull();
+  });
+
+  it("negation in if.bind produces hover on operand", async () => {
+    const hover = query.hover(await pos('if.bind="!showDetail"', 'if.bind="!'.length));
+    expect(hover).not.toBeNull();
+  });
+
+  it("&& chain in if.bind produces hover on left operand", async () => {
+    const hover = query.hover(await pos('if.bind="showDetail && items.length"', 'if.bind="'.length + 1));
+    expect(hover).not.toBeNull();
+  });
+
+  it("comparison in if.bind produces hover on left operand", async () => {
+    const hover = query.hover(await pos('if.bind="items.length > 0"', 'if.bind="'.length + 1));
+    expect(hover).not.toBeNull();
+  });
+});

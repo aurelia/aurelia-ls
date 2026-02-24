@@ -133,6 +133,52 @@
         <span>${idx}: ${entry.name}</span>
       </li>
     </ul>
+
+    <!-- ═══════ Ecosystem patterns (from cortex-device-list) ═══════ -->
+
+    <!-- Deep property chain (3+ levels) -->
+    <span>${groups[0].items[0].name}</span>
+
+    <!-- Method call as repeat source -->
+    <ul>
+      <li repeat.for="active of getItemsByStatus('active')">
+        <span>${active.name}</span>
+      </li>
+    </ul>
+
+    <!-- && chain in if.bind -->
+    <div if.bind="showDetail && items.length">Both conditions met</div>
+
+    <!-- Comparison operator in if.bind -->
+    <div if.bind="items.length > 0">Has items</div>
+
+    <!-- Optional chaining -->
+    <span>${selectedItem?.name}</span>
+
+    <!-- $event in trigger -->
+    <button click.trigger="selectItem($event)">Event select</button>
+
+    <!-- String concatenation in expression -->
+    <span>${noteMessage + ' (' + total + ')'}</span>
+
+    <!-- Negation in if.bind -->
+    <div if.bind="!showDetail">Hidden when detail shown</div>
+
+    <!-- Inline array literal in repeat -->
+    <ul>
+      <li repeat.for="label of ['alpha', 'beta', 'gamma']">
+        <span>${label}</span>
+      </li>
+    </ul>
+
+    <!-- Keyed access with expression -->
+    <span>${items[0].name}</span>
+
+    <!-- Getter property in interpolation -->
+    <span>Active: ${filteredItems.length}</span>
+
+    <!-- Nested ternary -->
+    <span class="${activeSeverity === 'error' ? 'danger' : activeSeverity === 'warn' ? 'warning' : 'normal'}">severity indicator</span>
   </matrix-panel>
 
   <!-- ═══════ Diagnostic triggers ═══════ -->

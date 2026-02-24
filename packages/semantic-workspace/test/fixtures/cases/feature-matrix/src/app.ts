@@ -52,8 +52,17 @@ export class App {
     return this.items.filter((item) => item.status === "active");
   }
 
+  // Method returning array (for method-call-as-repeat-source)
+  getItemsByStatus(status: Status): MatrixItem[] {
+    return this.items.filter((item) => item.status === status);
+  }
+
+  // Nullable for optional chaining tests
+  selectedItem: MatrixItem | null = null;
+
   selectItem(item: MatrixItem): void {
     this.noteMessage = item.name;
+    this.selectedItem = item;
   }
 
   refreshData(): void {

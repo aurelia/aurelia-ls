@@ -312,3 +312,32 @@ describe("definition: scope construct navigation", () => {
     expect(defs.length).toBeGreaterThan(0);
   });
 });
+
+// ============================================================================
+// 10. Ecosystem expression navigation
+// ============================================================================
+
+describe("definition: ecosystem expression patterns", () => {
+  it("deep property chain navigates to property", async () => {
+    // groups[0].items[0].name — navigate from 'name'
+    const defs = query.definition(await pos("${groups[0].items[0].name}", "${groups[0].items[0].".length));
+    expect(defs.length).toBeGreaterThan(0);
+  });
+
+  it("method call navigates to method declaration", async () => {
+    const defs = query.definition(await pos("getItemsByStatus('active')", 1));
+    const hit = defs.find((d) => String(d.uri).includes("app.ts"));
+    expect(hit, "Method call should navigate to VM method").toBeDefined();
+  });
+
+  it("optional chaining navigates to property", async () => {
+    const defs = query.definition(await pos("${selectedItem?.name}", "${selectedItem?.".length));
+    expect(defs.length).toBeGreaterThan(0);
+  });
+
+  it("getter property navigates to getter declaration", async () => {
+    const defs = query.definition(await pos("${filteredItems.length}", 2));
+    const hit = defs.find((d) => String(d.uri).includes("app.ts"));
+    expect(hit, "Getter should navigate to VM").toBeDefined();
+  });
+});

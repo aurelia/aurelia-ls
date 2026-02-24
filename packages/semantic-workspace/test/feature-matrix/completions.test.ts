@@ -440,9 +440,50 @@ describe("completions: TC attribute positions", () => {
 describe("completions: multi-binding CA", () => {
   it("multi-binding CA attribute position includes the CA name", async () => {
     const completions = query.completions(await pos("matrix-tooltip=", 1));
-    // At the attribute name position, the CA should appear
     if (completions.length > 0) {
       expect(hasLabel(completions, "matrix-tooltip")).toBe(true);
+    }
+  });
+});
+
+// ============================================================================
+// 18. Ecosystem expression completions (from cortex-device-list patterns)
+// ============================================================================
+
+describe("completions: ecosystem expression patterns", () => {
+  it("method call result has member completions", async () => {
+    // getItemsByStatus('active') returns MatrixItem[] — .length should be available
+    const completions = query.completions(await pos("getItemsByStatus('active')", "getItemsByStatus".length - 1));
+    expect(hasLabel(completions, "getItemsByStatus")).toBe(true);
+  });
+
+  it("deep property chain has member completions", async () => {
+    // groups[0].items[0].name — after the final dot
+    const completions = query.completions(await pos("${groups[0].items[0].name}", "${groups[0].items[0].".length));
+    if (completions.length > 0) {
+      expect(hasLabel(completions, "name")).toBe(true);
+    }
+  });
+
+  it("optional chaining base has member completions", async () => {
+    // selectedItem?.name — after the ?.
+    const completions = query.completions(await pos("${selectedItem?.name}", "${selectedItem?.".length));
+    if (completions.length > 0) {
+      expect(hasLabel(completions, "name")).toBe(true);
+    }
+  });
+
+  it("inline array repeat local has completions", async () => {
+    // Inside repeat.for="label of ['alpha', ...]", ${label} should complete
+    const completions = query.completions(await pos("of ['alpha', 'beta', 'gamma']\">\n        <span>${label}", "${label}".length - 2));
+    expect(hasLabel(completions, "label")).toBe(true);
+  });
+
+  it("method-sourced repeat local has member completions", async () => {
+    // repeat.for="active of getItemsByStatus('active')" — ${active.name}
+    const completions = query.completions(await pos("${active.name}", "${active.".length));
+    if (completions.length > 0) {
+      expect(hasLabel(completions, "name")).toBe(true);
     }
   });
 });
