@@ -3,6 +3,76 @@ import type { BindingMode } from "../model/ir.js";
 export type { BindingMode } from "../model/ir.js";
 import type { NormalizedPath, StringId } from "../model/identity.js";
 
+// ============================================================================
+// L2 Gap Primitives — Stub<T> and Resolved<T>
+// ============================================================================
+
+/**
+ * Six gap categories from L2 (F7). Compose downstream: declaration→all,
+ * registration→scope→template, type→expression, config→registration.
+ */
+export type GapCategory =
+  | 'declaration'
+  | 'registration'
+  | 'type'
+  | 'scope'
+  | 'expression'
+  | 'configuration';
+
+/**
+ * Opaque reference to a gap record in the convergence model.
+ */
+export type GapRef = { readonly resourceKey: string; readonly field: string; readonly __brand: 'GapRef' };
+
+/**
+ * Stub value for gapped fields.
+ *
+ * When a convergence field could not be resolved (state: 'unknown'), the
+ * query interface returns a Stub instead of undefined. The stub carries:
+ * - A safe fallback value for pipeline processing (so the pipeline doesn't halt)
+ * - The gap category (for diagnostic classification)
+ * - A reference to the gap record (for provenance queries)
+ *
+ * The pipeline treats the stub's fallback as the field value for processing.
+ * The stub's presence triggers a diagnostic. The diagnostic's severity is
+ * confidence-adjusted per L1 surface-projection.
+ */
+export interface Stub<T> {
+  readonly __stub: true;
+  readonly fallback: T;
+  readonly gapCategory: GapCategory;
+  readonly gapRef: GapRef;
+}
+
+/**
+ * A resolved value: either the actual value or a Stub.
+ *
+ * Consumers check `isStub(value)` to determine whether a diagnostic
+ * should be emitted, then use `resolveValue(value)` to get the usable
+ * value (actual or fallback).
+ */
+export type Resolved<T> = T | Stub<T>;
+
+/** Type guard for Stub<T>. */
+export function isStub<T>(value: Resolved<T>): value is Stub<T> {
+  return value !== null && typeof value === 'object' && '__stub' in value && (value as Stub<T>).__stub === true;
+}
+
+/** Extract the usable value from a Resolved<T> (actual value or stub fallback). */
+export function resolveValue<T>(value: Resolved<T>): T {
+  return isStub(value) ? value.fallback : value;
+}
+
+/** Create a stub for a gapped field. */
+export function createStub<T>(fallback: T, gapCategory: GapCategory, resourceKey: string, field: string): Stub<T> {
+  return {
+    __stub: true,
+    fallback,
+    gapCategory,
+    gapRef: { resourceKey, field, __brand: 'GapRef' } as GapRef,
+  };
+}
+
 export interface SourceLocation {
   readonly file: NormalizedPath;
   readonly pos: number;

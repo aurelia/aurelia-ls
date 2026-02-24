@@ -1,3 +1,14 @@
+// Project Pipeline — L2 Architecture
+//
+// Pipeline stages: extract → characterize → converge
+//
+// Extract: AST → FileFacts (per-file, cacheable by IncrementalDiscovery)
+// Characterize: FileFacts → recognized resources + observations + gaps
+// Converge: resources → semantics + catalog + scope + templates + diagnostics
+//
+// This is the L2 project pipeline decomposition. Each stage is a named
+// function with explicit inputs and outputs.
+
 import ts from "typescript";
 import type {
   CatalogConfidence,
@@ -33,9 +44,10 @@ import type { ConventionConfig } from "./conventions/types.js";
 import type { Logger } from "./types.js";
 import type { FileSystemContext } from "./project/context.js";
 import { extractAllFileFacts, extractFileContext } from "./extract/file-facts-extractor.js";
-import { collectTemplateFactCollection } from "./extract/template-facts.js";
+import { collectTemplateFactCollection, type TemplateFactCollection } from "./extract/template-facts.js";
 import { evaluateFileFacts } from "./evaluate/index.js";
 import { buildExportBindingMap } from "./exports/export-resolver.js";
+import type { ExportBindingMap } from "./exports/types.js";
 import {
   matchFileFacts,
   type MatchSource,
@@ -68,132 +80,96 @@ import { buildApiSurfaceSnapshot, buildSemanticSnapshot } from "./snapshot/index
 
 export type { InlineTemplateInfo, TemplateInfo } from "./templates/types.js";
 
-/**
- * Configuration for project-semantics discovery.
- */
+// ============================================================================
+// Configuration
+// ============================================================================
+
 export interface ProjectSemanticsDiscoveryConfig {
-  /** Convention configuration for inference */
   conventions?: ConventionConfig;
-  /** Base semantics to build upon */
   baseSemantics?: ProjectSemantics;
-  /** Default scope for resources */
   defaultScope?: ResourceScopeId | null;
-  /** Optional trace for instrumentation */
   trace?: CompileTrace;
-  /** Optional package root (for resolution context metadata) */
   packagePath?: string;
-  /** Optional package root mapping for stable snapshot ids */
   packageRoots?: ReadonlyMap<string, string> | Readonly<Record<string, string>>;
-  /** Compile-time constant definitions (e.g. window.__AU_DEF__ = true) */
   defines?: DefineMap;
-  /**
-   * Memory profiling knob.
-   * When enabled, drops ts.Node references from Sourced<T> after analysis.
-   * Keeps location/value provenance but reduces heap retention from AST graphs.
-   */
   stripSourcedNodes?: boolean;
-  /**
-   * Partial evaluation test hooks.
-   * Used by integration tests to validate analysis-failed gaps.
-   */
   partialEvaluation?: {
     failOnFiles?: ReadonlySet<NormalizedPath> | readonly NormalizedPath[];
   };
-  /**
-   * File system context for sibling detection.
-   *
-   * When provided, enables the sibling-file convention:
-   * `foo.ts` + `foo.html` as adjacent files -> custom element "foo"
-   */
   fileSystem?: FileSystemContext;
-  /**
-   * Template extensions to look for as siblings.
-   * Only used when fileSystem is provided.
-   * @default ['.html']
-   */
   templateExtensions?: readonly string[];
-  /**
-   * Style extensions to look for as siblings.
-   * Only used when fileSystem is provided.
-   * @default ['.css', '.scss']
-   */
   styleExtensions?: readonly string[];
-  /** Diagnostics emitter (required). */
   diagnostics: ProjectSemanticsDiscoveryDiagnosticEmitter;
 }
 
-/**
- * Result of running project-semantics discovery.
- */
+// ============================================================================
+// Result Types
+// ============================================================================
+
 export interface ProjectSemanticsDiscoveryResult {
-  /** Full semantics with provenance */
   semantics: MaterializedSemantics;
-  /** Minimal catalog for lowering */
   catalog: ResourceCatalog;
-  /** Syntax registry for parsing and emitting */
   syntax: TemplateSyntaxRegistry;
-  /** Package root used for project-local precedence evaluation. */
   packagePath?: NormalizedPath;
-  /** The constructed resource graph */
   resourceGraph: ResourceGraph;
-  /** Stable semantic snapshot (for diffing/manifests) */
   semanticSnapshot: SemanticSnapshot;
-  /** API surface summary snapshot */
   apiSurfaceSnapshot: ApiSurfaceSnapshot;
-  /**
-   * Definition channels for explicit authority/evidence/convergence contracts.
-   *
-   * `authority`: converged definitions used for semantic truth.
-   * `evidence`: all candidates that entered convergence.
-   * `convergence`: winner/loser reasons from convergence.
-   */
   definition: ProjectSemanticsDefinitionChannels;
-  /** Registration analysis results */
   registration: RegistrationAnalysis;
-  /** External template files (convention-based: foo.ts -> foo.html) */
   templates: readonly TemplateInfo[];
-  /** Inline templates (string literals in decorators/static $au) */
   inlineTemplates: readonly InlineTemplateInfo[];
-  /** Diagnostics from project-semantics discovery */
   diagnostics: readonly ProjectSemanticsDiscoveryDiagnostic[];
-  /** Binding-command identities discovered during recognize stage (pre-merge). */
   recognizedBindingCommands: readonly RecognizedBindingCommand[];
-  /** Attribute-pattern identities discovered during recognize stage (pre-merge). */
   recognizedAttributePatterns: readonly RecognizedAttributePattern[];
-  /** Extracted facts with partial evaluation applied */
   facts: Map<NormalizedPath, FileFacts>;
 }
 
 export interface ProjectSemanticsDefinitionChannels {
-  /** Converged definitions consumed as semantic authority. */
   authority: readonly ResourceDef[];
-  /** Raw candidates that entered definition convergence. */
   evidence: readonly ResourceDef[];
-  /** Convergence reason traces produced by the definition solver. */
   convergence: readonly DefinitionConvergenceRecord[];
 }
 
-/**
- * Diagnostic from project-semantics discovery.
- */
 export type ProjectSemanticsDiscoveryDiagnostic = RawDiagnostic;
-
 export type ProjectSemanticsDiscoveryDiagnosticEmitter = DiagnosticEmitter<DiagnosticsCatalog>;
 
+// ============================================================================
+// Characterization Output (intermediate — between extract and converge)
+// ============================================================================
+
+export interface CharacterizationResult {
+  /** Evaluated facts (with partial evaluation applied) */
+  readonly facts: Map<NormalizedPath, FileFacts>;
+  /** Export binding map */
+  readonly exportBindings: ExportBindingMap;
+  /** Recognized resources */
+  readonly resources: readonly ResourceDef[];
+  /** Recognized binding commands */
+  readonly bindingCommands: readonly RecognizedBindingCommand[];
+  /** Recognized attribute patterns */
+  readonly attributePatterns: readonly RecognizedAttributePattern[];
+  /** All analysis gaps */
+  readonly gaps: readonly AnalysisGap[];
+  /** Match sources (for convergence override ordering) */
+  readonly matchSources: ReadonlyMap<ResourceDef, MatchSource>;
+  /** File contexts (for registration analysis) */
+  readonly contexts: ReadonlyMap<NormalizedPath, FileContext>;
+  /** Template fact collection */
+  readonly templateFacts: TemplateFactCollection;
+  /** Template meta definition candidates */
+  readonly templateMetaCandidates: readonly ResourceDef[];
+  /** Template meta gaps */
+  readonly templateMetaGaps: readonly AnalysisGap[];
+  /** Local template authorities */
+  readonly localTemplateAuthorities: ReadonlyMap<string, ResourceDef>;
+}
+
+// ============================================================================
+// Top-Level Entry Points
+// ============================================================================
+
 /**
- * Main entry point: run the full project semantics discovery pipeline.
- *
- * Pipeline (stage map):
- * extract: AST -> FileFacts (with import resolution)
- * exports: FileFacts -> ExportBindingMap
- * evaluate: FileFacts -> resolved FileFacts + gaps
- * recognize: FileFacts -> ResourceDef[] + extension identities + gaps
- * template-facts: recognized resources + contexts -> routed template facts
- * assemble: ResourceDef[] -> Semantics + Catalog + Syntax
- * register: ResourceDef[] + FileFacts -> RegistrationAnalysis
- * scope: RegistrationAnalysis -> ResourceGraph
- * snapshot: Semantics + ResourceGraph -> snapshots
- * templates: RegistrationAnalysis + ResourceGraph -> templates
+ * Full project semantics discovery: extract + characterize + converge.
  */
 export function discoverProjectSemantics(
   program: ts.Program,
@@ -205,38 +181,27 @@ export function discoverProjectSemantics(
 
   return trace.span("discovery.project", () => {
     const sourceFileCount = program.getSourceFiles().length;
-    trace.setAttributes({
-      "discovery.sourceFileCount": sourceFileCount,
-    });
-
+    trace.setAttributes({ "discovery.sourceFileCount": sourceFileCount });
     debug.project("start", { sourceFileCount, hasFileSystem: !!config?.fileSystem });
 
-    // Stage: extract
+    // Stage 1: Extract
     log.info("[discovery] extracting facts...");
-    trace.event("discovery.extraction.start");
     const rawFacts = extractAllFileFacts(program, {
       fileSystem: config?.fileSystem,
       templateExtensions: config?.templateExtensions,
       styleExtensions: config?.styleExtensions,
     });
-    trace.event("discovery.extraction.done", { factCount: rawFacts.size });
     debug.project("extraction.complete", { factCount: rawFacts.size });
 
-    // Stages 2-10: resolve from pre-extracted facts
+    // Stages 2-10
     return discoverFromFacts(rawFacts, program, config, logger);
   });
 }
 
 /**
- * Run discovery stages 2-10 from pre-extracted facts.
+ * Run stages 2-10 from pre-extracted facts.
  *
- * Accepts a pre-built facts map (from extractAllFileFacts or from an
- * incremental cache) and runs all downstream stages: exports, evaluate,
- * recognize, template-facts, assemble, register, scope, snapshot, templates.
- *
- * This is the decomposition point for incremental discovery: the expensive
- * per-file AST extraction (stage 1) can be cached, while these cross-file
- * stages re-run from scratch on every refresh.
+ * Decomposed into characterize() → converge().
  */
 export function discoverFromFacts(
   rawFacts: Map<NormalizedPath, FileFacts>,
@@ -246,131 +211,138 @@ export function discoverFromFacts(
 ): ProjectSemanticsDiscoveryResult {
   const diagEmitter = config?.diagnostics;
   if (!diagEmitter) {
-    throw new Error("discoverFromFacts requires diagnostics emitter; missing emitter is a wiring error.");
+    throw new Error("discoverFromFacts requires diagnostics emitter.");
   }
-  const trace = config?.trace ?? NOOP_TRACE;
   const log = logger ?? nullLogger;
 
-  // Stage: exports
-  log.info("[discovery] building export bindings...");
-  trace.event("discovery.binding.start");
-  const exportBindings = buildExportBindingMap(rawFacts);
-  trace.event("discovery.binding.done", {
-    fileCount: exportBindings.size,
-  });
-  debug.project("binding.complete", {
-    fileCount: exportBindings.size,
-  });
+  // Stage 2: Characterize (exports + evaluate + recognize + template-facts)
+  log.info("[discovery] characterizing...");
+  const characterized = characterize(rawFacts, program, config);
 
-  // Stage: evaluate
-  log.info("[discovery] partially evaluating values...");
-  trace.event("discovery.partialEvaluation.start");
+  // Stage 3: Converge (assemble + register + scope + snapshot + templates + diagnostics)
+  log.info("[discovery] converging...");
+  const result = converge(characterized, program, config, diagEmitter);
+
+  log.info(
+    `[discovery] complete: authority=${result.definition.authority.length} ` +
+    `evidence=${result.definition.evidence.length}, ` +
+    `${result.templates.length} external + ${result.inlineTemplates.length} inline templates`,
+  );
+
+  return result;
+}
+
+// ============================================================================
+// Stage: Characterize
+// ============================================================================
+
+/**
+ * Characterize: exports → evaluate → recognize → template-facts.
+ *
+ * Transforms raw FileFacts into recognized resources with analysis gaps.
+ * This is the L2 "characterize" stage — produces observations from source analysis.
+ */
+function characterize(
+  rawFacts: Map<NormalizedPath, FileFacts>,
+  program: ts.Program,
+  config?: ProjectSemanticsDiscoveryConfig,
+): CharacterizationResult {
+  // 2a. Export bindings
+  const exportBindings = buildExportBindingMap(rawFacts);
+
+  // 2b. Partial evaluation
   const evaluation = evaluateFileFacts(rawFacts, exportBindings, {
     packagePath: config?.packagePath,
     defines: config?.defines,
     failOnFiles: config?.partialEvaluation?.failOnFiles,
   });
-  trace.event("discovery.partialEvaluation.done", {
-    factCount: evaluation.facts.size,
-    gapCount: evaluation.gaps.length,
-  });
-  debug.project("partialEvaluation.complete", {
-    factCount: evaluation.facts.size,
-    gapCount: evaluation.gaps.length,
-  });
-
   const facts = evaluation.facts;
 
-  // Stage: recognize
-  log.info("[discovery] matching patterns...");
-  trace.event("discovery.patternMatching.start");
-  const recognizedResources: ResourceDef[] = [];
-  const recognizedBindingCommands: RecognizedBindingCommand[] = [];
-  const recognizedAttributePatterns: RecognizedAttributePattern[] = [];
+  // 2c. Pattern recognition
+  const resources: ResourceDef[] = [];
+  const bindingCommands: RecognizedBindingCommand[] = [];
+  const attributePatterns: RecognizedAttributePattern[] = [];
   const matcherGaps: AnalysisGap[] = [];
   const matchSources = new Map<ResourceDef, MatchSource>();
   const contexts = new Map<NormalizedPath, FileContext>();
 
   for (const [filePath, fileFacts] of facts) {
-    // Get file context for convention matching
     const context = extractFileContext(filePath, {
       fileSystem: config?.fileSystem,
       templateExtensions: config?.templateExtensions,
       styleExtensions: config?.styleExtensions,
     }, program);
-
-    // Store context for later use by registration analyzer
     contexts.set(filePath, context);
 
-    // Run pattern matchers on classes AND define calls
     const matchResult = matchFileFacts(fileFacts, context);
-    recognizedResources.push(...matchResult.resources);
-    recognizedBindingCommands.push(...matchResult.bindingCommands);
-    recognizedAttributePatterns.push(...matchResult.attributePatterns);
+    resources.push(...matchResult.resources);
+    bindingCommands.push(...matchResult.bindingCommands);
+    attributePatterns.push(...matchResult.attributePatterns);
     matcherGaps.push(...matchResult.gaps);
     for (const [resource, source] of matchResult.matchSources) {
       matchSources.set(resource, source);
     }
   }
-  const dedupedBindingCommands = sortAndDedupeBindingCommands(recognizedBindingCommands);
-  const dedupedAttributePatterns = sortAndDedupeAttributePatterns(recognizedAttributePatterns);
-  trace.event("discovery.patternMatching.done", {
-    resourceCount: recognizedResources.length,
-    bindingCommandCount: dedupedBindingCommands.length,
-    attributePatternCount: dedupedAttributePatterns.length,
-  });
-  debug.project("patternMatching.complete", {
-    resourceCount: recognizedResources.length,
-    bindingCommandCount: dedupedBindingCommands.length,
-    attributePatternCount: dedupedAttributePatterns.length,
-    gapCount: matcherGaps.length,
-  });
 
-  // Stage: template-facts
-  log.info("[discovery] collecting template facts...");
-  trace.event("discovery.templateFacts.start");
+  // 2d. Template facts
   const templateFacts = collectTemplateFactCollection(
-    recognizedResources,
+    resources,
     contexts,
     config?.fileSystem,
     (specifier, fromFile) => resolveProjectModulePath(program, specifier, fromFile),
   );
-  trace.event("discovery.templateFacts.done", {
-    ownedCount: templateFacts.owned.length,
-    ambiguityCount: templateFacts.ambiguities.length,
-    missingOwnerCount: templateFacts.missingOwners.length,
-  });
-  debug.project("templateFacts.complete", {
-    ownedCount: templateFacts.owned.length,
-    ambiguityCount: templateFacts.ambiguities.length,
-    missingOwnerCount: templateFacts.missingOwners.length,
-  });
 
-  const templateMetaCandidates = collectTemplateMetaDefinitionCandidates(
-    templateFacts,
-  );
-  const candidateOverrides = createDiscoveryConvergenceOverrides(
-    recognizedResources,
-    templateMetaCandidates.candidates,
-    config?.packagePath,
+  const templateMetaResult = collectTemplateMetaDefinitionCandidates(templateFacts);
+
+  return {
+    facts,
+    exportBindings,
+    resources,
+    bindingCommands: sortAndDedupeBindingCommands(bindingCommands),
+    attributePatterns: sortAndDedupeAttributePatterns(attributePatterns),
+    gaps: [...evaluation.gaps, ...matcherGaps, ...templateMetaResult.gaps],
     matchSources,
+    contexts,
+    templateFacts,
+    templateMetaCandidates: templateMetaResult.candidates,
+    templateMetaGaps: templateMetaResult.gaps,
+    localTemplateAuthorities: templateMetaResult.localTemplateAuthorities,
+  };
+}
+
+// ============================================================================
+// Stage: Converge
+// ============================================================================
+
+/**
+ * Converge: assemble → register → scope → snapshot → templates → diagnostics.
+ *
+ * Transforms characterized resources into the final semantic model components.
+ * This is the L2 "converge" stage — produces conclusions from observations.
+ */
+function converge(
+  characterized: CharacterizationResult,
+  program: ts.Program,
+  config: ProjectSemanticsDiscoveryConfig | undefined,
+  diagEmitter: ProjectSemanticsDiscoveryDiagnosticEmitter,
+): ProjectSemanticsDiscoveryResult {
+  const trace = config?.trace ?? NOOP_TRACE;
+
+  // Prepare convergence inputs
+  const candidateOverrides = createDiscoveryConvergenceOverrides(
+    characterized.resources as ResourceDef[],
+    characterized.templateMetaCandidates as ResourceDef[],
+    config?.packagePath,
+    characterized.matchSources as Map<ResourceDef, MatchSource>,
   );
-  const convergedResources = [
-    ...recognizedResources,
-    ...templateMetaCandidates.candidates,
+  const allResources = [
+    ...characterized.resources,
+    ...characterized.templateMetaCandidates,
   ];
+  const catalogGaps = characterized.gaps.map(analysisGapToCatalogGap);
+  const catalogConfidence = catalogConfidenceFromGaps(characterized.gaps as AnalysisGap[]);
 
-  const analysisGaps = [
-    ...evaluation.gaps,
-    ...matcherGaps,
-    ...templateMetaCandidates.gaps,
-  ];
-  const catalogGaps = analysisGaps.map(analysisGapToCatalogGap);
-  const catalogConfidence = catalogConfidenceFromGaps(analysisGaps);
-
-  // Stage: assemble
-  log.info("[discovery] building semantics artifacts...");
-  trace.event("discovery.semantics.start");
+  // 3a. Assemble semantics
   const {
     semantics,
     catalog,
@@ -379,60 +351,31 @@ export function discoverFromFacts(
     definitionConvergence,
     mergeUncertaintyGaps,
   } = buildSemanticsArtifacts(
-    convergedResources,
+    allResources as ResourceDef[],
     config?.baseSemantics,
     {
       confidence: catalogConfidence,
       ...(catalogGaps.length ? { gaps: catalogGaps } : {}),
       ...(candidateOverrides.size > 0 ? { candidateOverrides } : {}),
-      ...(dedupedBindingCommands.length > 0 ? { recognizedBindingCommands: dedupedBindingCommands } : {}),
-      ...(dedupedAttributePatterns.length > 0 ? { recognizedAttributePatterns: dedupedAttributePatterns } : {}),
+      ...(characterized.bindingCommands.length > 0 ? { recognizedBindingCommands: characterized.bindingCommands } : {}),
+      ...(characterized.attributePatterns.length > 0 ? { recognizedAttributePatterns: characterized.attributePatterns } : {}),
     },
   );
-  trace.event("discovery.semantics.done", {
-    resourceCount: definitionAuthority.length,
-  });
 
-  // Stage: register
-  log.info("[discovery] analyzing registration...");
-  trace.event("discovery.registration.start");
+  // 3b. Registration analysis
   const analyzer = createRegistrationAnalyzer();
   const registration = analyzer.analyze(
     definitionAuthority,
-    facts,
-    exportBindings,
-    templateFacts,
-    templateMetaCandidates.localTemplateAuthorities,
+    characterized.facts,
+    characterized.exportBindings,
+    characterized.templateFacts,
+    characterized.localTemplateAuthorities,
   );
-  trace.event("discovery.registration.done", {
-    siteCount: registration.sites.length,
-    orphanCount: registration.orphans.length,
-    unresolvedCount: registration.unresolved.length,
-  });
-  debug.project("registration.complete", {
-    siteCount: registration.sites.length,
-    orphanCount: registration.orphans.length,
-    unresolvedCount: registration.unresolved.length,
-  });
 
-  // Stage: scope
-  log.info("[discovery] building resource graph...");
-  trace.event("discovery.scope.start");
+  // 3c. Scope graph
   const resourceGraph = buildResourceGraph(registration, config?.baseSemantics, config?.defaultScope);
-  trace.event("discovery.scope.done");
 
-  const globalCount = registration.sites.filter((s) => s.scope.kind === "global").length;
-  const localCount = registration.sites.filter((s) => s.scope.kind === "local").length;
-
-  debug.project("scope.complete", {
-    globalCount,
-    localCount,
-    orphanCount: registration.orphans.length,
-  });
-
-  // Stage: snapshot
-  log.info("[discovery] building snapshots...");
-  trace.event("discovery.snapshots.start");
+  // 3d. Snapshots
   const snapshotIdOptions = {
     rootDir: config?.packagePath ?? program.getCurrentDirectory(),
     packageRoots: config?.packageRoots,
@@ -443,29 +386,11 @@ export function discoverFromFacts(
     catalog,
   });
   const apiSurfaceSnapshot = buildApiSurfaceSnapshot(semantics, snapshotIdOptions);
-  trace.event("discovery.snapshots.done", {
-    semanticSymbolCount: semanticSnapshot.symbols.length,
-    apiSymbolCount: apiSurfaceSnapshot.symbols.length,
-  });
 
-  // Stage: templates
-  log.info("[discovery] discovering templates...");
-  trace.event("discovery.templates.start");
+  // 3e. Template discovery
   const { templates, inlineTemplates } = discoverTemplates(registration, program, resourceGraph);
-  trace.event("discovery.templates.done", {
-    externalCount: templates.length,
-    inlineCount: inlineTemplates.length,
-  });
-  debug.project("templates.complete", {
-    externalCount: templates.length,
-    inlineCount: inlineTemplates.length,
-  });
 
-  log.info(
-    `[discovery] complete: authority=${definitionAuthority.length} evidence=${convergedResources.length} (${globalCount} global, ${localCount} local, ${registration.orphans.length} orphans), ${templates.length} external + ${inlineTemplates.length} inline templates`,
-  );
-
-  // Extract unresolved resource refs from registration sites
+  // 3f. Diagnostics
   const unresolvedRefs: UnresolvedResourceInfo[] = registration.sites
     .filter((s): s is RegistrationSite & { resourceRef: { kind: "unresolved"; name: string; reason: string } } =>
       s.resourceRef.kind === "unresolved"
@@ -477,43 +402,18 @@ export function discoverFromFacts(
       span: s.span,
     }));
 
-  const convergenceDiagnostics = definitionConvergenceToDiagnostics(definitionConvergence, diagEmitter);
-  const mergeUncertaintyDiagnostics = mergeUncertaintyGaps
-    .map((gap) => catalogGapToDiagnostic(gap, diagEmitter));
-
-  // Merge all diagnostics: matcher gaps + convergence + orphans + unresolved patterns + unresolved refs
   const allDiagnostics: ProjectSemanticsDiscoveryDiagnostic[] = [
-    ...analysisGaps.map((gap) => gapToDiagnostic(gap, diagEmitter)),
-    ...mergeUncertaintyDiagnostics,
-    ...convergenceDiagnostics,
+    ...(characterized.gaps as AnalysisGap[]).map((gap) => gapToDiagnostic(gap, diagEmitter)),
+    ...mergeUncertaintyGaps.map((gap) => catalogGapToDiagnostic(gap, diagEmitter)),
+    ...definitionConvergenceToDiagnostics(definitionConvergence, diagEmitter),
     ...orphansToDiagnostics(registration.orphans, diagEmitter),
     ...unresolvedToDiagnostics(registration.unresolved, diagEmitter),
     ...unresolvedRefsToDiagnostics(unresolvedRefs, diagEmitter),
   ];
 
-  trace.setAttributes({
-    "discovery.resourceCount": definitionAuthority.length,
-    "discovery.resourceEvidenceCount": convergedResources.length,
-    "discovery.bindingCommandRecognitionCount": dedupedBindingCommands.length,
-    "discovery.attributePatternRecognitionCount": dedupedAttributePatterns.length,
-    "discovery.mergeUncertaintyGapCount": mergeUncertaintyGaps.length,
-    "discovery.globalCount": globalCount,
-    "discovery.localCount": localCount,
-    "discovery.orphanCount": registration.orphans.length,
-    "discovery.unresolvedCount": registration.unresolved.length,
-    "discovery.templateCount": templates.length,
-    "discovery.inlineTemplateCount": inlineTemplates.length,
-    "discovery.analysisGapCount": analysisGaps.length,
-    "discovery.partialEvaluationGapCount": evaluation.gaps.length,
-    "discovery.diagnosticCount": allDiagnostics.length,
-    "discovery.semanticSnapshotSymbolCount": semanticSnapshot.symbols.length,
-    "discovery.apiSnapshotSymbolCount": apiSurfaceSnapshot.symbols.length,
-  });
-
+  // Optional: strip AST node references for memory
   if (config?.stripSourcedNodes) {
-    const stripped = stripSourcedNodes(recognizedResources);
-    trace.event("discovery.stripSourcedNodes", { removed: stripped.removed });
-    debug.project("stripSourcedNodes.complete", { removed: stripped.removed });
+    stripSourcedNodes(characterized.resources as ResourceDef[]);
   }
 
   return {
@@ -526,25 +426,23 @@ export function discoverFromFacts(
     apiSurfaceSnapshot,
     definition: {
       authority: definitionAuthority,
-      evidence: convergedResources,
+      evidence: allResources as ResourceDef[],
       convergence: definitionConvergence,
     },
     registration,
     templates,
     inlineTemplates,
     diagnostics: allDiagnostics,
-    recognizedBindingCommands: dedupedBindingCommands,
-    recognizedAttributePatterns: dedupedAttributePatterns,
-    facts,
+    recognizedBindingCommands: characterized.bindingCommands as RecognizedBindingCommand[],
+    recognizedAttributePatterns: characterized.attributePatterns as RecognizedAttributePattern[],
+    facts: characterized.facts,
   };
 }
 
-/**
- * Convert an AnalysisGap to a ProjectSemanticsDiscoveryDiagnostic.
- *
- * The uri field is only included when gap has location information.
- * The file path is normalized since GapLocation.file is a plain string.
- */
+// ============================================================================
+// Diagnostic Helpers
+// ============================================================================
+
 function gapToDiagnostic(gap: AnalysisGap, emitter: ProjectSemanticsDiscoveryDiagnosticEmitter): ProjectSemanticsDiscoveryDiagnostic {
   const code = mapGapKindToCode(gap.why.kind);
   const uri = gap.where?.file
@@ -578,7 +476,6 @@ function toRawDiagnostic(diag: CompilerDiagnostic): RawDiagnostic {
   return span ? { ...rest, span } : { ...rest };
 }
 
-/** Exported for testing (Pattern B: gap identity survival through catalog boundary). */
 export function analysisGapToCatalogGap(gap: AnalysisGap): CatalogGap {
   const message = `${gap.what}: ${gap.suggestion}`;
   const resource = gap.where?.file;
@@ -590,23 +487,14 @@ export function analysisGapToCatalogGap(gap: AnalysisGap): CatalogGap {
   };
 }
 
-function catalogConfidenceFromGaps(gaps: AnalysisGap[]): CatalogConfidence {
+function catalogConfidenceFromGaps(gaps: readonly AnalysisGap[]): CatalogConfidence {
   if (gaps.length === 0) return "complete";
   for (const gap of gaps) {
-    if (isConservativeGap(gap.why.kind)) {
-      return "conservative";
-    }
+    if (isConservativeGap(gap.why.kind)) return "conservative";
   }
   return "partial";
 }
 
-
-/**
- * Extract the file path from registration evidence.
- *
- * All evidence types contain a file or component path that indicates
- * where the registration was declared.
- */
 function getFileFromEvidence(evidence: RegistrationEvidence): NormalizedPath {
   switch (evidence.kind) {
     case "aurelia-register":
@@ -676,32 +564,13 @@ function mapGapKindToCode(kind: string): "aurelia/gap/partial-eval" | "aurelia/g
 }
 
 const UNKNOWN_REGISTRATION_GAP_KINDS = new Set([
-  "dynamic-value",
-  "function-return",
-  "computed-property",
-  "spread-unknown",
-  "unsupported-pattern",
-  "conditional-registration",
-  "loop-variable",
-  "invalid-resource-name",
+  "dynamic-value", "function-return", "computed-property", "spread-unknown",
+  "unsupported-pattern", "conditional-registration", "loop-variable", "invalid-resource-name",
 ]);
 
 const PARTIAL_EVAL_GAP_KINDS = new Set([
-  "package-not-found",
-  "invalid-package-json",
-  "missing-package-field",
-  "entry-point-not-found",
-  "no-entry-points",
-  "complex-exports",
-  "workspace-no-source-dir",
-  "workspace-entry-not-found",
-  "unresolved-import",
-  "circular-import",
-  "external-package",
-  "legacy-decorators",
-  "no-source",
-  "minified-code",
-  "unsupported-format",
-  "analysis-failed",
-  "parse-error",
+  "package-not-found", "invalid-package-json", "missing-package-field", "entry-point-not-found",
+  "no-entry-points", "complex-exports", "workspace-no-source-dir", "workspace-entry-not-found",
+  "unresolved-import", "circular-import", "external-package", "legacy-decorators",
+  "no-source", "minified-code", "unsupported-format", "analysis-failed", "parse-error",
 ]);
