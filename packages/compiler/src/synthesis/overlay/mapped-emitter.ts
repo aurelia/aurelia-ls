@@ -262,8 +262,9 @@ function emitCallScope(node: CallScopeExpression): EmitResult {
   const dot = node.optional ? "?." : ".";
   const args = emitArgsParts(node.args);
   const path = ancestorPath(node.ancestor, node.name.name);
-  // Include the dot in the member segment for symmetric mapping with HTML spans
-  const memberSpan = spanFromBounds(base.length, base.length + dot.length + node.name.name.length);
+  // Exclude dot from member segment to match emitAccessScope — the name-only span
+  // projects cleanly to the HTML expression (which has no "o." prefix).
+  const memberSpan = spanFromBounds(base.length + dot.length, base.length + dot.length + node.name.name.length);
   const segments: OverlayLambdaSegment[] = [{ kind: "member", path, span: memberSpan }];
   return combine(node, [base, dot, node.name.name, "(", ...args, ")"], segments, path);
 }
@@ -273,8 +274,8 @@ function emitCallMember(node: CallMemberExpression): EmitResult {
   const dot = node.optionalMember ? "?." : ".";
   const optCall = node.optionalCall ? "?." : "";
   const args = emitArgsParts(node.args);
-  // Include the dot in the member segment for symmetric mapping with HTML spans
-  const memberStart = obj.code.length;
+  // Exclude dot from member segment — name-only span projects cleanly to HTML
+  const memberStart = obj.code.length + dot.length;
   const memberEnd = obj.code.length + dot.length + node.name.name.length;
   const memberSpan = spanFromBounds(memberStart, memberEnd);
   const basePath = obj.path;
