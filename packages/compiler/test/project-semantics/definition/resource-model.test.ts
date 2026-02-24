@@ -8,27 +8,22 @@
  * - R-SO: overlay resources carry config origin
  */
 import { describe, expect, it } from "vitest";
-import {
-  normalizePathForId,
-  deriveResourceConfidence,
-  type CustomElementDef,
-  type ResourceDef,
-  type Sourced,
-} from "../../../src/index.js";
-import { buildSemanticsArtifacts } from "../../../src/project-semantics/assemble/build.js";
+import { normalizePathForId } from "../../../out/model/index.js";
+import { deriveResourceConfidence, type CustomElementDef, type ResourceDef, type Sourced } from "../../../out/schema/index.js";
+import { buildSemanticsArtifacts } from "../../../out/project-semantics/assemble/build.js";
 import {
   buildCustomElementDef,
   buildBindableDefs,
   buildTemplateControllerDef,
-} from "../../../src/project-semantics/assemble/resource-def.js";
-import { sourcedKnown, sourcedUnknown, unwrapSourced } from "../../../src/project-semantics/assemble/sourced.js";
-import { toAttributePatternConfig, toBindingCommandConfig } from "../../../src/schema/convert.js";
-import type { AttributePatternDef, BindingCommandDef } from "../../../src/schema/types.js";
+} from "../../../out/project-semantics/assemble/resource-def.js";
+import { sourcedKnown, sourcedUnknown, unwrapSourced } from "../../../out/project-semantics/assemble/sourced.js";
+import { toAttributePatternConfig, toBindingCommandConfig } from "../../../out/schema/convert.js";
+import type { AttributePatternDef, BindingCommandDef } from "../../../out/schema/types.js";
 import {
   mergeResourceDefinitionCandidates,
   type ResourceDefinitionCandidate,
-} from "../../../src/project-semantics/definition/index.js";
-import { createDiscoveryConvergenceOverrides } from "../../../src/project-semantics/definition/candidate-overrides.js";
+} from "../../../out/project-semantics/definition/index.js";
+import { createDiscoveryConvergenceOverrides } from "../../../out/project-semantics/definition/candidate-overrides.js";
 
 // =============================================================================
 // R2: unnamed resource pathway (patterns AS, AT, AU)

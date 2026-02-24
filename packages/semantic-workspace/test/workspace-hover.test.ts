@@ -563,17 +563,6 @@ describe("R7: hover provenance from definition authority (workspace-contract)", 
     expect(hover?.confidence).toBeUndefined();
   });
 
-  // Verify degradation field is structurally accessible (R6 prerequisite for R7)
-  it("compilation degradation is accessible and clean for non-gapped fixture", () => {
-    const engine = harness.workspace as SemanticWorkspaceEngine;
-    const compilation = engine.getCompilation(appUri);
-    expect(compilation).not.toBeNull();
-    expect(compilation!.degradation).toBeDefined();
-    expect(compilation!.degradation.hasGaps).toBe(false);
-    expect(compilation!.degradation.gapQualifiedCount).toBe(0);
-    expect(compilation!.degradation.affectedResources).toEqual([]);
-  });
-
   // ── Seam-crossing property test ──────────────────────────────────────────
   // The adversarial testing landscape says: "zero tests that Sourced<T>
   // wrappings survive any pipeline stage transition." This test reads
@@ -652,7 +641,7 @@ describe("R7: hover provenance from definition authority (workspace-contract)", 
     expect(contents).not.toContain("Discovered via source analysis");
     expect(contents).not.toContain("Declared in configuration");
     expect(contents).not.toContain("Built-in Aurelia resource");
-    // No confidence — meta hover bypasses degradation check
+    // No confidence — meta hover has no catalog gap
     expect(hover?.confidence).toBeUndefined();
   });
 
@@ -738,7 +727,7 @@ describe("R7: hover provenance from definition authority (workspace-contract)", 
 });
 
 // Pattern U: Hover on a gap-affected resource populates WorkspaceHover.confidence
-describe("R7: hover confidence from degradation (gap injection)", () => {
+describe("R7: hover confidence from catalog gaps (gap injection)", () => {
   it("sets confidence to 'partial' for gap-affected resources (Pattern U)", async () => {
     const gapHarness = await createWorkspaceHarness({
       fixtureId: asFixtureId("workspace-contract"),
@@ -782,14 +771,6 @@ describe("R7: hover confidence from degradation (gap injection)", () => {
       `on-refresh.call="refreshStats()" gap-probe.bind="x">`,
     );
     engine.update(uri, text);
-
-    // Verify degradation now reports gaps
-    const compilation = engine.getCompilation(uri);
-    expect(compilation).not.toBeNull();
-    expect(compilation!.degradation.hasGaps).toBe(true);
-    expect(compilation!.degradation.affectedResources.some(
-      (r) => r.name === "summary-panel",
-    )).toBe(true);
 
     // Hover on the gap-affected resource
     const query = gapHarness.workspace.query(uri);
@@ -841,11 +822,6 @@ describe("R7: hover confidence from degradation (gap injection)", () => {
     );
     engine.update(uri, text);
 
-    // Verify the workspace IS gapped (guards against false-positive from broken injection)
-    const compilation = engine.getCompilation(uri);
-    expect(compilation).not.toBeNull();
-    expect(compilation!.degradation.hasGaps).toBe(true);
-
     // Hover on convention-widget — NOT gap-affected
     const query = gapHarness.workspace.query(uri);
     const pos = findPosition(text, "<convention-widget", 1);
@@ -856,7 +832,7 @@ describe("R7: hover confidence from degradation (gap injection)", () => {
     expect(hover?.confidenceReason).toBeUndefined();
   });
 
-  it("confidence derives from catalog gaps, not template degradation (R12 boundary)", async () => {
+  it("confidence derives from catalog gaps, not diagnostic scanning (R12 boundary)", async () => {
     const gapHarness = await createWorkspaceHarness({
       fixtureId: asFixtureId("workspace-contract"),
       openTemplates: "none",
@@ -864,9 +840,7 @@ describe("R7: hover confidence from degradation (gap injection)", () => {
     const engine = gapHarness.workspace as SemanticWorkspaceEngine;
 
     // Inject catalog gaps for summary-panel but do NOT add an unresolved binding.
-    // Under R7 (degradation-based): no unresolved binding → no gap-qualified
-    // diagnostics → affectedResources empty → confidence undefined.
-    // Under R12 (catalog-gap-based): catalog gaps exist → confidence "partial".
+    // Confidence derives from catalog gaps directly, not from diagnostic scanning.
     engine.projectIndex.applyThirdPartyOverlay({
       resources: {},
       gaps: [
@@ -883,9 +857,8 @@ describe("R7: hover confidence from degradation (gap injection)", () => {
     const uri = gapHarness.openTemplate("src/my-app.html");
     const text = gapHarness.readText(uri);
     if (!text) throw new Error("Expected template text");
-    // No template modification — all bindings resolve. Degradation has no
-    // affected resources because no binding encounters a gap-annotated element
-    // with an unresolved attribute.
+    // No template modification — all bindings resolve. Confidence is still
+    // "partial" because the catalog gap exists regardless of diagnostic output.
 
     const query = gapHarness.workspace.query(uri);
     const pos = findPosition(text, "<summary-panel", 1);

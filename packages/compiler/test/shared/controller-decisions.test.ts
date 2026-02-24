@@ -5,7 +5,7 @@ import type {
   ExprId,
   ExprRef,
 } from "@aurelia-ls/compiler";
-import type { ControllerConfig } from "../../src/schema/registry.js";
+import type { ControllerConfig } from "../../out/schema/registry.js";
 import {
   isPromiseParentController,
   planControllerAttribute,
@@ -14,7 +14,7 @@ import {
   planIteratorTailBinding,
   resolveIteratorTarget,
   resolvePromiseBranchKind,
-} from "../../src/analysis/shared/controller-decisions.js";
+} from "../../out/analysis/shared/controller-decisions.js";
 
 function exprRef(code: string): ExprRef {
   return {

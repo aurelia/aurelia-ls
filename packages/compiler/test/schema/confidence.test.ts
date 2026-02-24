@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 
-import type { CatalogGap } from "../../src/schema/types.js";
-import { deriveResourceConfidence, isConservativeGap } from "../../src/schema/confidence.js";
+import type { CatalogGap } from "../../out/schema/types.js";
+import { deriveResourceConfidence, isConservativeGap } from "../../out/schema/confidence.js";
 
 // ---------------------------------------------------------------------------
 // Helpers

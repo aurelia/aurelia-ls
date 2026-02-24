@@ -6,7 +6,7 @@
 
 import { describe, it, expect } from "vitest";
 import type { NormalizedPath, TextSpan } from "@aurelia-ls/compiler";
-import { matchDefine } from "../../../src/project-semantics/recognize/define.js";
+import { matchDefine } from "../../../out/project-semantics/recognize/define.js";
 import {
   array,
   classVal,
@@ -16,14 +16,14 @@ import {
   ref,
   type AnalyzableValue,
   type BindableMember,
-} from "../../../src/project-semantics/evaluate/value/types.js";
-import { unwrapSourced } from "../../../src/project-semantics/assemble/sourced.js";
+} from "../../../out/project-semantics/evaluate/value/types.js";
+import { unwrapSourced } from "../../../out/project-semantics/assemble/sourced.js";
 
 // =============================================================================
 // Test Helpers
 // =============================================================================
 
-const FILE = "/src/resources.ts" as NormalizedPath;
+const FILE = "/out/resources.ts" as NormalizedPath;
 const SPAN: TextSpan = { start: 0, end: 1 };
 
 function defineCall(

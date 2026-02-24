@@ -18,20 +18,20 @@
 
 import { describe, it, expect } from "vitest";
 import type { NormalizedPath, TextSpan } from "@aurelia-ls/compiler";
-import { matchDefine } from "../../src/project-semantics/recognize/define.js";
-import { gap } from "../../src/project-semantics/evaluate/types.js";
-import { analysisGapToCatalogGap } from "../../src/project-semantics/resolve.js";
+import { matchDefine } from "../../out/project-semantics/recognize/define.js";
+import { gap } from "../../out/project-semantics/evaluate/types.js";
+import { analysisGapToCatalogGap } from "../../out/project-semantics/resolve.js";
 import {
   literal,
   ref,
   object,
-} from "../../src/project-semantics/evaluate/value/types.js";
+} from "../../out/project-semantics/evaluate/value/types.js";
 
 // =============================================================================
 // Test Helpers
 // =============================================================================
 
-const FILE = "/src/resources.ts" as NormalizedPath;
+const FILE = "/out/resources.ts" as NormalizedPath;
 const SPAN: TextSpan = { start: 0, end: 1 };
 
 function defineCall(
@@ -157,7 +157,7 @@ describe("Pattern B: gap identity survives conversion to CatalogGap", () => {
       "bindables for user-card",
       { kind: "dynamic-value", expression: "computedBindables()" },
       "Provide explicit bindable declarations.",
-      { file: "/src/user-card.ts" },
+      { file: "/out/user-card.ts" },
       { kind: "custom-element", name: "user-card" },
     );
 
@@ -165,7 +165,7 @@ describe("Pattern B: gap identity survives conversion to CatalogGap", () => {
 
     expect(catalogGap.kind).toBe("dynamic-value");
     expect(catalogGap.message).toBe("bindables for user-card: Provide explicit bindable declarations.");
-    expect(catalogGap.resource).toBe("/src/user-card.ts");
+    expect(catalogGap.resource).toBe("/out/user-card.ts");
     expect(catalogGap.resourceKind).toBe("custom-element");
     expect(catalogGap.resourceName).toBe("user-card");
   });
@@ -236,7 +236,7 @@ describe("Pattern D: gaps without resource identity are honestly absent", () => 
       "import resolution",
       { kind: "unresolved-import", path: "./missing", reason: "file not found" },
       "Check the import path.",
-      { file: "/src/main.ts" },
+      { file: "/out/main.ts" },
       // No resource parameter — identity unknown
     );
 
@@ -244,7 +244,7 @@ describe("Pattern D: gaps without resource identity are honestly absent", () => 
 
     expect(catalogGap.kind).toBe("unresolved-import");
     expect(catalogGap.message).toBe("import resolution: Check the import path.");
-    expect(catalogGap.resource).toBe("/src/main.ts");
+    expect(catalogGap.resource).toBe("/out/main.ts");
     // Identity fields absent — not fabricated
     expect(catalogGap.resourceKind).toBeUndefined();
     expect(catalogGap.resourceName).toBeUndefined();

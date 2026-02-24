@@ -1,8 +1,9 @@
 import { describe, test, expect } from "vitest";
 
-import { normalizePathForId, unwrapSourced, type NormalizedPath, type CustomAttributeDef, type Sourced } from "../../../src/index.js";
-import { buildCustomAttributeDef } from "../../../src/project-semantics/assemble/resource-def.js";
-import { toAttrRes } from "../../../src/schema/convert.js";
+import { normalizePathForId, type NormalizedPath } from "../../../out/model/index.js";
+import { unwrapSourced, type CustomAttributeDef, type Sourced } from "../../../out/schema/index.js";
+import { buildCustomAttributeDef } from "../../../out/project-semantics/assemble/resource-def.js";
+import { toAttrRes } from "../../../out/schema/convert.js";
 
 const file = normalizePathForId("/repo/my-attribute.ts");
 

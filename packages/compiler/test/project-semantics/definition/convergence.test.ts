@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { normalizePathForId, type CustomElementDef, type ResourceCollections } from "../../../src/index.js";
-import { buildBindableDefs, buildCustomElementDef } from "../../../src/project-semantics/assemble/resource-def.js";
-import { unwrapSourced } from "../../../src/project-semantics/assemble/sourced.js";
+import { normalizePathForId } from "../../../out/model/index.js";
+import type { CustomElementDef, ResourceCollections } from "../../../out/schema/index.js";
+import { buildBindableDefs, buildCustomElementDef } from "../../../out/project-semantics/assemble/resource-def.js";
+import { unwrapSourced } from "../../../out/project-semantics/assemble/sourced.js";
 import {
   createCanonicalSourceIdV1,
   serializeCanonicalSourceIdV1,
@@ -9,7 +10,7 @@ import {
   mergeResolvedResourceCollections,
   sortResourceDefinitionCandidates,
   type ResourceDefinitionCandidate,
-} from "../../../src/project-semantics/definition/index.js";
+} from "../../../out/project-semantics/definition/index.js";
 
 describe("definition convergence", () => {
   it("merges bindables field-wise for resource definition candidates", () => {
@@ -150,7 +151,7 @@ describe("definition convergence", () => {
       ...buildCustomElementDef({
         name: "device-list",
         className: "DeviceList",
-        file: normalizePathForId("/repo/node_modules/@scope/devices/src/device-list.ts"),
+        file: normalizePathForId("/repo/node_modules/@scope/devices/out/device-list.ts"),
         bindables: {},
       }),
       package: "@scope/devices",
@@ -159,7 +160,7 @@ describe("definition convergence", () => {
       resource,
       sourceKind: "analysis-explicit",
     });
-    expect(id.sourceFileKey).toBe("npm:@scope/devices/src/device-list.ts");
+    expect(id.sourceFileKey).toBe("npm:@scope/devices/out/device-list.ts");
   });
 
   it("uses workspace canonical source file key when file is under workspace package root", () => {
@@ -167,7 +168,7 @@ describe("definition convergence", () => {
       ...buildCustomElementDef({
         name: "device-list",
         className: "DeviceList",
-        file: normalizePathForId("/repo/packages/devices/src/device-list.ts"),
+        file: normalizePathForId("/repo/packages/devices/out/device-list.ts"),
         bindables: {},
       }),
       package: "@scope/devices",
@@ -176,7 +177,7 @@ describe("definition convergence", () => {
       resource,
       sourceKind: "analysis-explicit",
     });
-    expect(id.sourceFileKey).toBe("ws:@scope/devices/src/device-list.ts");
+    expect(id.sourceFileKey).toBe("ws:@scope/devices/out/device-list.ts");
   });
 
   it("keeps definition merge deterministic when canonical source identities match", () => {

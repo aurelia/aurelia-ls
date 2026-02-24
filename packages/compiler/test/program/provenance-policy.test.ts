@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import type { SourceSpan } from "../../src/model/index.js";
+import type { SourceSpan } from "../../out/model/index.js";
 import {
   DEFAULT_PROVENANCE_PROJECTION_POLICY,
   projectTemplateOffsetToOverlayWithPolicy,
@@ -8,8 +8,8 @@ import {
   resolveOverlayDiagnosticLocationWithPolicy,
   resolveRelatedDiagnosticLocationWithPolicy,
   shouldRejectOverlayEditBatch,
-} from "../../src/program/provenance-policy.js";
-import type { OverlayProvenanceHit } from "../../src/program/provenance.js";
+} from "../../out/program/provenance-policy.js";
+import type { OverlayProvenanceHit } from "../../out/program/provenance.js";
 
 function makeOverlayHit(): OverlayProvenanceHit {
   return {

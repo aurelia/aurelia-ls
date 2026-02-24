@@ -1,7 +1,7 @@
 import { describe, test, expect } from "vitest";
 
-import { buildDiagnostic, diagnosticSpan } from "../../src/shared/diagnostics.js";
-import { authoredOrigin } from "../../src/model/origin.js";
+import { buildDiagnostic, diagnosticSpan } from "../../out/shared/diagnostics.js";
+import { authoredOrigin } from "../../out/model/origin.js";
 
 describe("diagnostic utilities", () => {
   test("buildDiagnostic normalizes spans and attaches origin", () => {

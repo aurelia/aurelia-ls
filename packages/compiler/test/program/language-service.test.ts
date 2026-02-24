@@ -7,8 +7,8 @@ import {
   DefaultTemplateProgram,
   canonicalDocumentUri,
 } from "@aurelia-ls/compiler";
-import { resolveSourceFile } from "../../src/model/source.js";
-import { buildTemplateMapping } from "../../src/synthesis/overlay/mapping.js";
+import { resolveSourceFile } from "../../out/model/source.js";
+import { buildTemplateMapping } from "../../out/synthesis/overlay/mapping.js";
 import { createTestQuery, noopModuleResolver } from "../_helpers/test-utils.js";
 
 function createVmReflection() {

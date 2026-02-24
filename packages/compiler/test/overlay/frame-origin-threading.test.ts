@@ -2,13 +2,13 @@ import { describe, test, expect } from "vitest";
 
 import type { ExprId, FrameId, FrameOrigin, IrModule, SourceSpan, TextSpan } from "@aurelia-ls/compiler";
 import { planOverlay } from "@aurelia-ls/compiler";
-import type { OverlayEmitMappingEntry } from "../../src/synthesis/overlay/emit.js";
-import type { BuildMappingInputs } from "../../src/synthesis/overlay/mapping.js";
-import { buildTemplateMapping } from "../../src/synthesis/overlay/mapping.js";
-import type { SourceFile } from "../../src/model/source.js";
-import { toSourceFileId } from "../../src/model/identity.js";
-import type { LinkModule } from "../../src/analysis/20-link/types.js";
-import type { ScopeModule, ScopeTemplate } from "../../src/model/symbols.js";
+import type { OverlayEmitMappingEntry } from "../../out/synthesis/overlay/emit.js";
+import type { BuildMappingInputs } from "../../out/synthesis/overlay/mapping.js";
+import { buildTemplateMapping } from "../../out/synthesis/overlay/mapping.js";
+import type { SourceFile } from "../../out/model/source.js";
+import { toSourceFileId } from "../../out/model/identity.js";
+import type { LinkModule } from "../../out/analysis/20-link/types.js";
+import type { ScopeModule, ScopeTemplate } from "../../out/model/symbols.js";
 
 // -- Helpers --
 

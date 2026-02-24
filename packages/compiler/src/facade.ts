@@ -13,10 +13,7 @@ import type { FeatureUsageSet, TemplateContext } from "./schema/index.js";
 import type { AttributeParser, IExpressionParser } from "./parsing/index.js";
 
 // Shared imports
-import { NOOP_TRACE, type VmReflection, type CompilerDiagnostic, type ModuleResolver, type CompileTrace } from "./shared/index.js";
-
-// Diagnostics imports
-import type { DiagnosticResourceKind } from "./diagnostics/index.js";
+import { NOOP_TRACE, type CompilerDiagnostic, type VmReflection, type ModuleResolver, type CompileTrace } from "./shared/index.js";
 
 // Pipeline imports
 import { runFullPipeline } from "./pipeline/stages.js";
@@ -66,15 +63,6 @@ export interface TemplateDiagnostics {
 
 export type StageMetaSnapshot = Partial<Record<StageKey, StageArtifactMeta>>;
 
-export interface TemplateDegradation {
-  readonly hasGaps: boolean;
-  readonly gapQualifiedCount: number;
-  readonly affectedResources: ReadonlyArray<{
-    readonly kind: DiagnosticResourceKind;
-    readonly name: string;
-  }>;
-}
-
 export interface TemplateCompilation {
   ir: import("./model/index.js").IrModule;
   linked: import("./analysis/index.js").LinkModule;
@@ -88,7 +76,6 @@ export interface TemplateCompilation {
   exprTable: readonly ExprTableEntry[];
   exprSpans: ExprIdMap<SourceSpan>;
   diagnostics: TemplateDiagnostics;
-  degradation: TemplateDegradation;
   meta: StageMetaSnapshot;
 }
 
@@ -147,7 +134,6 @@ export function compileTemplate(opts: CompileOptions): TemplateCompilation {
     exprTable: overlayArtifacts.exprTable,
     exprSpans: overlayArtifacts.exprSpans,
     diagnostics: buildDiagnostics(result.diagnostics.all),
-    degradation: buildDegradation(result.diagnostics.all),
     meta: {},
   };
 }
@@ -165,35 +151,3 @@ function buildDiagnostics(diagnostics: readonly CompilerDiagnostic[]): TemplateD
   return { all: [...diagnostics], byStage };
 }
 
-const OWNER_KIND_TO_RESOURCE_KIND: Record<string, DiagnosticResourceKind> = {
-  element: "custom-element",
-  attribute: "custom-attribute",
-  controller: "template-controller",
-};
-
-function buildDegradation(diagnostics: readonly CompilerDiagnostic[]): TemplateDegradation {
-  const seen = new Map<string, { kind: DiagnosticResourceKind; name: string }>();
-  let count = 0;
-  for (const d of diagnostics) {
-    const data = d.data as Record<string, unknown> | undefined;
-    if (data?.confidence === "partial") {
-      count++;
-      let kind = data.resourceKind as DiagnosticResourceKind | undefined;
-      let name = data.name as string | undefined;
-      if (!kind && data.bindable) {
-        const b = data.bindable as Record<string, unknown>;
-        kind = OWNER_KIND_TO_RESOURCE_KIND[b.ownerKind as string];
-        name = b.ownerName as string | undefined;
-      }
-      if (kind && name) {
-        const key = `${kind}:${name}`;
-        if (!seen.has(key)) seen.set(key, { kind, name });
-      }
-    }
-  }
-  return {
-    hasGaps: count > 0,
-    gapQualifiedCount: count,
-    affectedResources: [...seen.values()],
-  };
-}

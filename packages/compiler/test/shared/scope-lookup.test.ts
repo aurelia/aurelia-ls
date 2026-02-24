@@ -1,7 +1,7 @@
 import { describe, test, expect } from "vitest";
 
 import type { ExprId, FrameId, ScopeFrame, ScopeTemplate, FrameOrigin } from "@aurelia-ls/compiler";
-import { buildScopeLookup } from "../../src/analysis/shared/scope-lookup.js";
+import { buildScopeLookup } from "../../out/analysis/shared/scope-lookup.js";
 
 /**
  * Test pattern BH: canonical ScopeFrame fields flow through buildScopeLookup.

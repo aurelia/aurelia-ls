@@ -4,7 +4,7 @@ import {
   findSimilar,
   findBestMatch,
   formatSuggestion,
-} from "../../src/shared/suggestions.js";
+} from "../../out/shared/suggestions.js";
 
 describe("levenshteinDistance", () => {
   it("returns 0 for identical strings", () => {

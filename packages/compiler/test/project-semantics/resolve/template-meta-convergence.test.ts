@@ -7,7 +7,7 @@ import {
   unwrapSourced,
   type NormalizedPath,
 } from "@aurelia-ls/compiler";
-import type { FileSystemContext } from "../../../src/project-semantics/project/context.js";
+import type { FileSystemContext } from "../../../out/project-semantics/project/context.js";
 
 function createProgramFromFiles(files: Record<string, string>): ts.Program {
   const host = ts.createCompilerHost({});

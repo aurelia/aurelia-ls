@@ -11,7 +11,7 @@
 import { describe, test, expect } from "vitest";
 import { ExpressionParser } from "@aurelia-ls/compiler";
 import type { ExprTableEntry, SourceSpan, ExprIdMap } from "@aurelia-ls/compiler";
-import { collectExprMemberSegments } from "../../src/shared/expr-utils.js";
+import { collectExprMemberSegments } from "../../out/shared/expr-utils.js";
 
 // Helper to parse an expression and build an ExprTableEntry
 function parseExpr(src: string, baseOffset = 0): { entry: ExprTableEntry; base: SourceSpan } {

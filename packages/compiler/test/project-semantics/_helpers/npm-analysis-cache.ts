@@ -1,5 +1,5 @@
-import type { AnalysisOptions, AnalysisResult, PackageAnalysis, InspectionResult } from "../../../src/project-semantics/npm/index.js";
-import { analyzePackage, inspect } from "../../../src/project-semantics/npm/index.js";
+import type { AnalysisOptions, AnalysisResult, PackageAnalysis, InspectionResult } from "../../../out/project-semantics/npm/index.js";
+import { analyzePackage, inspect } from "../../../out/project-semantics/npm/index.js";
 
 type CacheKey = string;
 

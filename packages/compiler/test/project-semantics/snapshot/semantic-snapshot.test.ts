@@ -6,8 +6,8 @@ import { tmpdir } from "node:os";
 import type { CatalogGap, ResourceGraph, ResourceScopeId, Semantics } from "@aurelia-ls/compiler";
 import { BUILTIN_SEMANTICS, normalizePathForId, stableHash } from "@aurelia-ls/compiler";
 import { buildSemanticSnapshot, buildSemanticsArtifacts } from "@aurelia-ls/compiler";
-import { buildBindableDefs, buildCustomAttributeDef, buildCustomElementDef } from "../../../src/project-semantics/assemble/resource-def.js";
-import { buildPackageRootMap, detectMonorepo } from "../../../src/project-semantics/npm/index.js";
+import { buildBindableDefs, buildCustomAttributeDef, buildCustomElementDef } from "../../../out/project-semantics/assemble/resource-def.js";
+import { buildPackageRootMap, detectMonorepo } from "../../../out/project-semantics/npm/index.js";
 
 function baseSemantics(): Semantics {
   return {
@@ -27,8 +27,8 @@ function baseSemantics(): Semantics {
 
 describe("buildSemanticSnapshot", () => {
   it("emits stable symbols with catalog metadata", () => {
-    const fileA = normalizePathForId("/repo/src/alpha.ts");
-    const fileB = normalizePathForId("/repo/src/beta.ts");
+    const fileA = normalizePathForId("/repo/out/alpha.ts");
+    const fileB = normalizePathForId("/repo/out/beta.ts");
 
     const element = buildCustomElementDef({
       name: "alpha-element",
@@ -121,14 +121,14 @@ describe("buildSemanticSnapshot", () => {
       rootDir: "/repo",
       packageName,
       packageRoots: { [packageName]: packageRoot },
-      filePath: `${packageRoot}/src/alpha.ts`,
+      filePath: `${packageRoot}/out/alpha.ts`,
       resourceName: "core-element",
     });
     const idB = buildSnapshotIdForResource({
       rootDir: "/repo",
       packageName,
       packageRoots: { [packageName]: packageRoot },
-      filePath: `${packageRoot}/src/beta.ts`,
+      filePath: `${packageRoot}/out/beta.ts`,
       resourceName: "core-element",
     });
 
@@ -144,14 +144,14 @@ describe("buildSemanticSnapshot", () => {
       rootDir: "/repo",
       packageName,
       packageRoots: { [packageName]: packageRoot },
-      filePath: `${packageRoot}/src/alpha.ts`,
+      filePath: `${packageRoot}/out/alpha.ts`,
       resourceName: "core-element",
     });
     const idB = buildSnapshotIdForResource({
       rootDir: "/repo",
       packageName,
       packageRoots: { [packageName]: packageRoot },
-      filePath: `${packageRoot}/src/alpha.ts`,
+      filePath: `${packageRoot}/out/alpha.ts`,
       resourceName: "core-element-renamed",
     });
 
@@ -173,7 +173,7 @@ describe("buildSemanticSnapshot", () => {
     const id = buildSnapshotIdForResource({
       rootDir: "/repo",
       packageName,
-      filePath: `/repo/node_modules/${packageName}/src/alpha.ts`,
+      filePath: `/repo/node_modules/${packageName}/out/alpha.ts`,
       resourceName: "core-element",
     });
 
@@ -193,7 +193,7 @@ describe("buildSemanticSnapshot", () => {
     const id = buildSnapshotIdForResource({
       rootDir: "/repo",
       packageName,
-      filePath: "/repo/packages/core/src/alpha.ts",
+      filePath: "/repo/packages/core/out/alpha.ts",
       resourceName: "core-element",
     });
 
@@ -206,14 +206,14 @@ describe("buildSemanticSnapshot", () => {
       kind: "custom-element",
       name: "core-element",
       origin: "source",
-      source: "packages/pkg-core/src/alpha.ts",
+      source: "packages/pkg-core/out/alpha.ts",
       package: packageName,
     })}`;
 
     const id = buildSnapshotIdForResource({
       rootDir: "/repo",
       packageName,
-      filePath: "/repo/packages/pkg-core/src/alpha.ts",
+      filePath: "/repo/packages/pkg-core/out/alpha.ts",
       resourceName: "core-element",
     });
 
@@ -226,7 +226,7 @@ function buildSnapshotId(rootDir: string, packageName: string): string | undefin
     rootDir,
     packageName,
     packageRoots: { [packageName]: `${rootDir}/workspaces/pkg-core` },
-    filePath: `${rootDir}/workspaces/pkg-core/src/alpha.ts`,
+    filePath: `${rootDir}/workspaces/pkg-core/out/alpha.ts`,
     resourceName: "core-element",
   });
 }
@@ -241,7 +241,7 @@ async function buildSnapshotIdFromMonorepo(
     throw new Error(`Monorepo context not detected for ${packageRoot}`);
   }
   const packageRoots = buildPackageRootMap(ctx);
-  const fileA = normalizePathForId(`${packageRoot}/src/alpha.ts`);
+  const fileA = normalizePathForId(`${packageRoot}/out/alpha.ts`);
 
   const element = {
     ...buildCustomElementDef({

@@ -9,13 +9,13 @@ import { describe, it, expect, beforeAll } from "vitest";
 import ts from "typescript";
 import type { NormalizedPath } from "@aurelia-ls/compiler";
 import { DiagnosticsRuntime } from "@aurelia-ls/compiler";
-import { discoverProjectSemantics, type ProjectSemanticsDiscoveryResult } from "../../../src/project-semantics/resolve.js";
-import type { FileSystemContext } from "../../../src/project-semantics/project/context.js";
+import { discoverProjectSemantics, type ProjectSemanticsDiscoveryResult } from "../../../out/project-semantics/resolve.js";
+import type { FileSystemContext } from "../../../out/project-semantics/project/context.js";
 
 // Test app with template imports
 const TEST_FILES: Record<string, string> = {
   // Main app component with sibling template
-  "/app/src/my-app.ts": `
+  "/app/out/my-app.ts": `
     import { customElement } from "@aurelia/runtime-html";
 
     @customElement({ name: "my-app" })
@@ -23,7 +23,7 @@ const TEST_FILES: Record<string, string> = {
   `,
 
   // Template with imports
-  "/app/src/my-app.html": `
+  "/app/out/my-app.html": `
     <import from="./components/nav-bar">
     <import from="./components/footer">
     <nav-bar></nav-bar>
@@ -34,30 +34,30 @@ const TEST_FILES: Record<string, string> = {
   `,
 
   // Imported components
-  "/app/src/components/nav-bar.ts": `
+  "/app/out/components/nav-bar.ts": `
     import { customElement } from "@aurelia/runtime-html";
 
     @customElement({ name: "nav-bar" })
     export class NavBar {}
   `,
 
-  "/app/src/components/nav-bar.html": `
+  "/app/out/components/nav-bar.html": `
     <nav>Navigation</nav>
   `,
 
-  "/app/src/components/footer.ts": `
+  "/app/out/components/footer.ts": `
     import { customElement } from "@aurelia/runtime-html";
 
     @customElement({ name: "footer-bar" })
     export class Footer {}
   `,
 
-  "/app/src/components/footer.html": `
+  "/app/out/components/footer.html": `
     <footer>Footer content</footer>
   `,
 
   // Main entry point
-  "/app/src/main.ts": `
+  "/app/out/main.ts": `
     import Aurelia from "aurelia";
     import { MyApp } from "./my-app.js";
 
@@ -235,8 +235,8 @@ describe("Template Import Registration", () => {
 
     for (const site of templateImportSites) {
       if (site.evidence.kind === "template-import") {
-        expect(site.evidence.component).toBe("/app/src/my-app.ts");
-        expect(site.evidence.templateFile).toBe("/app/src/my-app.html");
+        expect(site.evidence.component).toBe("/app/out/my-app.ts");
+        expect(site.evidence.templateFile).toBe("/app/out/my-app.html");
         expect(site.evidence.className).toBe("MyApp");
       }
     }

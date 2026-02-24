@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
 import type { NormalizedPath } from "@aurelia-ls/compiler";
-import type { AnalyzableValue, LexicalScope } from "../../../src/project-semantics/evaluate/value/types.js";
-import type { ExportBindingMap } from "../../../src/project-semantics/exports/types.js";
-import { evaluateFileFacts } from "../../../src/project-semantics/evaluate/index.js";
-import { emptyFileFacts } from "../../../src/project-semantics/extract/file-facts.js";
+import type { AnalyzableValue, LexicalScope } from "../../../out/project-semantics/evaluate/value/types.js";
+import type { ExportBindingMap } from "../../../out/project-semantics/exports/types.js";
+import { evaluateFileFacts } from "../../../out/project-semantics/evaluate/index.js";
+import { emptyFileFacts } from "../../../out/project-semantics/extract/file-facts.js";
 
 function createScope(path: NormalizedPath): LexicalScope {
   return {
@@ -16,7 +16,7 @@ function createScope(path: NormalizedPath): LexicalScope {
 
 describe("partial evaluation failure handling", () => {
   it("records analysis-failed gap and preserves raw facts when evaluation throws", () => {
-    const path = "/src/bad.ts" as NormalizedPath;
+    const path = "/out/bad.ts" as NormalizedPath;
     const scope = createScope(path);
     const badValue = { kind: "corrupt" } as unknown as AnalyzableValue;
 

@@ -15,10 +15,10 @@ import {
   buildSimpleContext,
   resolveToBoolean,
   resolveToString,
-} from "../../../../src/project-semantics/evaluate/value-helpers.js";
-import { canonicalPath } from "../../../../src/project-semantics/util/naming.js";
+} from "../../../../out/project-semantics/evaluate/value-helpers.js";
+import { canonicalPath } from "../../../../out/project-semantics/util/naming.js";
 
-const FILE = "/src/main.ts" as NormalizedPath;
+const FILE = "/out/main.ts" as NormalizedPath;
 
 // =============================================================================
 // AST Helpers
@@ -143,18 +143,18 @@ describe("resolveToString", () => {
 
   it("resolves imported identifiers with a program-backed context", () => {
     const { program, paths, dir } = createProgramOnDisk({
-      "/src/constants.ts": `
+      "/out/constants.ts": `
         export const ELEMENT_NAME = "my-element";
         export const ENABLED = true;
       `,
-      "/src/main.ts": `
+      "/out/main.ts": `
         import { ELEMENT_NAME, ENABLED } from "./constants.js";
         const config = { name: ELEMENT_NAME, enabled: ENABLED };
       `,
     });
 
     try {
-      const sf = program.getSourceFile(paths["/src/main.ts"])!;
+      const sf = program.getSourceFile(paths["/out/main.ts"])!;
       const expr = getObjectPropertyInitializer(sf, "config", "name");
       const ctx = buildContextWithProgram(sf, canonicalPath(sf.fileName), program);
 
@@ -166,17 +166,17 @@ describe("resolveToString", () => {
 
   it("resolves namespace import property access via program context", () => {
     const { program, paths, dir } = createProgramOnDisk({
-      "/src/constants.ts": `
+      "/out/constants.ts": `
         export const ELEMENT_NAME = "ns-element";
       `,
-      "/src/main.ts": `
+      "/out/main.ts": `
         import * as constants from "./constants.js";
         const config = { name: constants.ELEMENT_NAME };
       `,
     });
 
     try {
-      const sf = program.getSourceFile(paths["/src/main.ts"])!;
+      const sf = program.getSourceFile(paths["/out/main.ts"])!;
       const expr = getObjectPropertyInitializer(sf, "config", "name");
       const ctx = buildContextWithProgram(sf, canonicalPath(sf.fileName), program);
 
@@ -220,18 +220,18 @@ describe("resolveToBoolean", () => {
 
   it("resolves imported identifiers with a program-backed context", () => {
     const { program, paths, dir } = createProgramOnDisk({
-      "/src/constants.ts": `
+      "/out/constants.ts": `
         export const ELEMENT_NAME = "my-element";
         export const ENABLED = false;
       `,
-      "/src/main.ts": `
+      "/out/main.ts": `
         import { ELEMENT_NAME, ENABLED } from "./constants.js";
         const config = { name: ELEMENT_NAME, enabled: ENABLED };
       `,
     });
 
     try {
-      const sf = program.getSourceFile(paths["/src/main.ts"])!;
+      const sf = program.getSourceFile(paths["/out/main.ts"])!;
       const expr = getObjectPropertyInitializer(sf, "config", "enabled");
       const ctx = buildContextWithProgram(sf, canonicalPath(sf.fileName), program);
 
@@ -243,17 +243,17 @@ describe("resolveToBoolean", () => {
 
   it("resolves namespace import property access via program context", () => {
     const { program, paths, dir } = createProgramOnDisk({
-      "/src/constants.ts": `
+      "/out/constants.ts": `
         export const ENABLED = true;
       `,
-      "/src/main.ts": `
+      "/out/main.ts": `
         import * as constants from "./constants.js";
         const config = { enabled: constants.ENABLED };
       `,
     });
 
     try {
-      const sf = program.getSourceFile(paths["/src/main.ts"])!;
+      const sf = program.getSourceFile(paths["/out/main.ts"])!;
       const expr = getObjectPropertyInitializer(sf, "config", "enabled");
       const ctx = buildContextWithProgram(sf, canonicalPath(sf.fileName), program);
 

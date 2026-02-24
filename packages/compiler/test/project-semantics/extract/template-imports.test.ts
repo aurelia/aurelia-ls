@@ -9,9 +9,9 @@ import {
   extractLocalTemplateDefinitions,
   extractTemplateImports,
   extractLocalTemplateImports,
-} from "../../../src/project-semantics/extract/template-imports.js";
+} from "../../../out/project-semantics/extract/template-imports.js";
 import type { NormalizedPath } from "@aurelia-ls/compiler";
-import type { FileSystemContext } from "../../../src/project-semantics/project/context.js";
+import type { FileSystemContext } from "../../../out/project-semantics/project/context.js";
 
 // Mock file system
 function createMockFs(files: Record<string, string>): FileSystemContext {

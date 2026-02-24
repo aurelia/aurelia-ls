@@ -1,6 +1,6 @@
 import { describe, test, expect } from "vitest";
 
-import { stableHash, stableHashSemantics, stableSerialize } from "../../src/pipeline/hash.js";
+import { stableHash, stableHashSemantics, stableSerialize } from "../../out/pipeline/hash.js";
 
 describe("pipeline hash utilities", () => {
   test("stableSerialize sorts object keys deterministically", () => {

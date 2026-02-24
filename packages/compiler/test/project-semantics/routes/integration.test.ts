@@ -10,7 +10,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
-import { buildRouteTree, type RouteTree, type RouteNode } from "../../../src/project-semantics/routes/index.js";
+import { buildRouteTree, type RouteTree, type RouteNode } from "../../../out/project-semantics/routes/index.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROUTED_APP_DIR = join(__dirname, "..", "apps", "routed-app");

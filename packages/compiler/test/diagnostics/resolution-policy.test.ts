@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
-import type { AuDiagnosticMapping } from "../../src/diagnostics/mappings/au.js";
-import { resolveConditionalAuMappingWithPolicy } from "../../src/diagnostics/engine/resolution-policy.js";
-import type { RawDiagnostic } from "../../src/diagnostics/engine/types.js";
+import type { AuDiagnosticMapping } from "../../out/diagnostics/mappings/au.js";
+import { resolveConditionalAuMappingWithPolicy } from "../../out/diagnostics/engine/resolution-policy.js";
+import type { RawDiagnostic } from "../../out/diagnostics/engine/types.js";
 
 const conditionalMapping: AuDiagnosticMapping = {
   auCode: "AU1104",

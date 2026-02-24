@@ -5,7 +5,7 @@ import {
   reduceDefinitionAtoms,
   sortDefinitionAtoms,
   type DefinitionEvidenceAtom,
-} from "../../../src/project-semantics/definition/index.js";
+} from "../../../out/project-semantics/definition/index.js";
 
 describe("definition rulebook skeleton", () => {
   it("resolves static and bindable field rules", () => {

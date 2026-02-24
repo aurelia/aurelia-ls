@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 
-import type { Sourced } from "../../src/schema/types.js";
-import { sanitizeSourcedSnapshotValue, stripSourcedNode, unwrapSourced } from "../../src/schema/sourced.js";
+import type { Sourced } from "../../out/schema/types.js";
+import { sanitizeSourcedSnapshotValue, stripSourcedNode, unwrapSourced } from "../../out/schema/sourced.js";
 
 describe("schema sourced helpers", () => {
   test("unwrapSourced handles known/unknown source states", () => {

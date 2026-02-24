@@ -17,7 +17,7 @@ import {
   hasGetRouteConfigMethod,
   type ExtractedRouteConfig,
   type ComponentRef,
-} from "../../../src/project-semantics/routes/index.js";
+} from "../../../out/project-semantics/routes/index.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const VECTORS_DIR = join(__dirname, "vectors");
@@ -175,7 +175,7 @@ function assertComponentRefMatches(
  * Compare child routes.
  */
 function assertChildRoutesMatch(
-  actual: readonly import("../../../src/project-semantics/routes/types.js").ExtractedChildRoute[],
+  actual: readonly import("../../../out/project-semantics/routes/types.js").ExtractedChildRoute[],
   expected: ExpectedChildRoute[],
   context: string
 ): void {

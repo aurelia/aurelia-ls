@@ -26,16 +26,16 @@ import type {
   ScopeCompleteness,
 } from "@aurelia-ls/compiler";
 import { toSourceFileId } from "@aurelia-ls/compiler";
-import { buildResourceCatalog } from "../../src/schema/catalog.js";
-import { createSemanticsLookup, prepareProjectSemantics, BUILTIN_SEMANTICS } from "../../src/schema/registry.js";
-import { gap, type AnalysisGap } from "../../src/project-semantics/evaluate/types.js";
-import { analysisGapToCatalogGap } from "../../src/project-semantics/resolve.js";
-import { buildSemanticsArtifacts } from "../../src/project-semantics/assemble/build.js";
-import { buildCustomElementDef } from "../../src/project-semantics/assemble/resource-def.js";
-import { applyThirdPartyResources, buildThirdPartyResources } from "../../src/project-semantics/third-party/index.js";
-import { discoverProjectSemantics } from "../../src/project-semantics/resolve.js";
-import { buildResourceGraph } from "../../src/project-semantics/scope/builder.js";
-import { DiagnosticsRuntime } from "../../src/diagnostics/runtime.js";
+import { buildResourceCatalog } from "../../out/schema/catalog.js";
+import { createSemanticsLookup, prepareProjectSemantics, BUILTIN_SEMANTICS } from "../../out/schema/registry.js";
+import { gap, type AnalysisGap } from "../../out/project-semantics/evaluate/types.js";
+import { analysisGapToCatalogGap } from "../../out/project-semantics/resolve.js";
+import { buildSemanticsArtifacts } from "../../out/project-semantics/assemble/build.js";
+import { buildCustomElementDef } from "../../out/project-semantics/assemble/resource-def.js";
+import { applyThirdPartyResources, buildThirdPartyResources } from "../../out/project-semantics/third-party/index.js";
+import { discoverProjectSemantics } from "../../out/project-semantics/resolve.js";
+import { buildResourceGraph } from "../../out/project-semantics/scope/builder.js";
+import { DiagnosticsRuntime } from "../../out/diagnostics/runtime.js";
 import { createProgramFromMemory } from "./_helpers/index.js";
 
 // =============================================================================
@@ -83,7 +83,7 @@ function incompleteScopeCompleteness(reason: string): ScopeCompleteness {
       {
         source: "analysis",
         reason,
-        file: "/src/main.ts" as NormalizedPath,
+        file: "/out/main.ts" as NormalizedPath,
         span: { start: 0, end: 1 },
         pattern: { kind: "function-call", functionName: "loadPlugins" },
       },
@@ -136,7 +136,7 @@ describe("Pattern E: per-resource gap index groups gaps correctly", () => {
 
   it("puts gaps without resource identity in projectLevelGaps", () => {
     const gaps: CatalogGap[] = [
-      catalogGap("unresolved-import", "import resolution", undefined, undefined, "/src/main.ts"),
+      catalogGap("unresolved-import", "import resolution", undefined, undefined, "/out/main.ts"),
       catalogGap("parse-error", "syntax error"),
       catalogGap("dynamic-value", "bindables for data-grid", "custom-element", "data-grid"),
     ];
@@ -259,7 +259,7 @@ describe("Pattern E: per-resource gap index groups gaps correctly", () => {
     const fullGap: CatalogGap = {
       kind: "function-return",
       message: "factory for data-grid: Use explicit definition.",
-      resource: "/src/factory.ts",
+      resource: "/out/factory.ts",
       resourceKind: "custom-element",
       resourceName: "data-grid",
     };
@@ -268,7 +268,7 @@ describe("Pattern E: per-resource gap index groups gaps correctly", () => {
     const indexed = catalog.gapsByResource!["custom-element:data-grid"]![0]!;
     expect(indexed.kind).toBe("function-return");
     expect(indexed.message).toBe("factory for data-grid: Use explicit definition.");
-    expect(indexed.resource).toBe("/src/factory.ts");
+    expect(indexed.resource).toBe("/out/factory.ts");
     expect(indexed.resourceKind).toBe("custom-element");
     expect(indexed.resourceName).toBe("data-grid");
   });
@@ -382,7 +382,7 @@ describe("Pattern F: SemanticsLookup gap query methods", () => {
 
 describe("Scope completeness propagation: catalog and lookup", () => {
   const rootScope = "root" as ResourceScopeId;
-  const localScope = "local:/src/page.ts" as ResourceScopeId;
+  const localScope = "local:/out/page.ts" as ResourceScopeId;
 
   it("buildResourceCatalog carries scope completeness metadata", () => {
     const scopeCompleteness = {
@@ -510,7 +510,7 @@ describe("Seam crossing: gap identity survives from AnalysisGap to SemanticsLook
       "bindables for user-card",
       { kind: "dynamic-value", expression: "computedBindables()" },
       "Provide explicit bindable declarations.",
-      { file: "/src/user-card.ts" },
+      { file: "/out/user-card.ts" },
       { kind: "custom-element", name: "user-card" },
     );
     const analysisGap2 = gap(
@@ -524,7 +524,7 @@ describe("Seam crossing: gap identity survives from AnalysisGap to SemanticsLook
       "import resolution",
       { kind: "unresolved-import", path: "./missing", reason: "file not found" },
       "Check the import path.",
-      { file: "/src/main.ts" },
+      { file: "/out/main.ts" },
       // No resource identity — project-level
     );
 
@@ -544,7 +544,7 @@ describe("Seam crossing: gap identity survives from AnalysisGap to SemanticsLook
     expect(userCardGaps[0]!.kind).toBe("dynamic-value");
     expect(userCardGaps[0]!.resourceKind).toBe("custom-element");
     expect(userCardGaps[0]!.resourceName).toBe("user-card");
-    expect(userCardGaps[0]!.resource).toBe("/src/user-card.ts");
+    expect(userCardGaps[0]!.resource).toBe("/out/user-card.ts");
 
     const dataGridGaps = lookup.gapsFor("custom-element", "data-grid");
     expect(dataGridGaps).toHaveLength(1);
@@ -678,13 +678,13 @@ describe("Pattern H: gap index correct after third-party merge", () => {
     // Set up a minimal project with a class that produces a gap
     const { program } = createProgramFromMemory(
       {
-        "/workspace/src/my-element.ts": `
+        "/workspace/out/my-element.ts": `
           declare function customElement(name: string): ClassDecorator;
           @customElement("my-element")
           export class MyElementCustomElement {}
         `,
       },
-      ["/workspace/src/my-element.ts"],
+      ["/workspace/out/my-element.ts"],
     );
     const diagnostics = new DiagnosticsRuntime();
     const base = discoverProjectSemantics(program, {
@@ -741,9 +741,9 @@ describe("Pattern H: gap index correct after third-party merge", () => {
     // Set up a project that will produce initial gaps
     const { program } = createProgramFromMemory(
       {
-        "/workspace/src/placeholder.ts": `export const x = 1;`,
+        "/workspace/out/placeholder.ts": `export const x = 1;`,
       },
-      ["/workspace/src/placeholder.ts"],
+      ["/workspace/out/placeholder.ts"],
     );
     const diagnostics = new DiagnosticsRuntime();
     const base = discoverProjectSemantics(program, {

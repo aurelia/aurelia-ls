@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { analyzePackages } from "../../../src/project-semantics/npm/index.js";
+import { analyzePackages } from "../../../out/project-semantics/npm/index.js";
 import { resourceName } from "./resource-helpers.js";
 
 type TempPackage = {
@@ -130,7 +130,7 @@ function writePackageJson(
   const pkg = {
     name: data.name,
     version: data.version,
-    exports: "./src/analysis/20-link/resolution/index.ts",
+    exports: "./out/analysis/20-link/resolution/index.ts",
     dependencies: {
       aurelia: "^2.0.0",
     },

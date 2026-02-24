@@ -17,7 +17,7 @@ import {
   withDiags,
   withStub,
   DiagnosticAccumulator,
-} from "../../src/shared/diagnosed.js";
+} from "../../out/shared/diagnosed.js";
 
 function mkDiag(code = "E_TEST"): CompilerDiagnostic {
   return {

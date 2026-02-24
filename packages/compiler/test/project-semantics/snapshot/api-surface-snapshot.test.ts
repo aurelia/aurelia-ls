@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import type { Semantics } from "@aurelia-ls/compiler";
 import { BUILTIN_SEMANTICS, normalizePathForId } from "@aurelia-ls/compiler";
 import { buildApiSurfaceSnapshot, buildSemanticSnapshot, buildSemanticsArtifacts } from "@aurelia-ls/compiler";
-import { buildBindableDefs, buildCustomAttributeDef, buildCustomElementDef } from "../../../src/project-semantics/assemble/resource-def.js";
+import { buildBindableDefs, buildCustomAttributeDef, buildCustomElementDef } from "../../../out/project-semantics/assemble/resource-def.js";
 
 function baseSemantics(): Semantics {
   return {
@@ -23,8 +23,8 @@ function baseSemantics(): Semantics {
 
 describe("buildApiSurfaceSnapshot", () => {
   it("summarizes bindables and aliases with stable ids", () => {
-    const fileA = normalizePathForId("/repo/src/alpha.ts");
-    const fileB = normalizePathForId("/repo/src/beta.ts");
+    const fileA = normalizePathForId("/repo/out/alpha.ts");
+    const fileB = normalizePathForId("/repo/out/beta.ts");
 
     const element = buildCustomElementDef({
       name: "alpha-element",

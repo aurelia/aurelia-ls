@@ -12,12 +12,12 @@ import {
   mergeResourceCollections,
   mergeScopeResources,
   shouldScanPackage,
-} from "../../src/project-semantics/third-party/index.js";
-import { discoverProjectSemantics } from "../../src/project-semantics/resolve.js";
-import { unwrapSourced, type NormalizedPath, type ResourceCollections } from "../../src/project-semantics/compiler.js";
-import { DiagnosticsRuntime } from "../../src/diagnostics/runtime.js";
+} from "../../out/project-semantics/third-party/index.js";
+import { discoverProjectSemantics } from "../../out/project-semantics/resolve.js";
+import { unwrapSourced, type NormalizedPath, type ResourceCollections } from "../../out/project-semantics/compiler.js";
+import { DiagnosticsRuntime } from "../../out/diagnostics/runtime.js";
 import { createProgramFromMemory } from "./_helpers/index.js";
-import type { FileSystemContext } from "../../src/project-semantics/project/context.js";
+import type { FileSystemContext } from "../../out/project-semantics/project/context.js";
 
 // ============================================================================
 // shouldScanPackage
@@ -333,7 +333,7 @@ describe("applyThirdPartyResources", () => {
   it("recomputes authority/evidence/convergence channels for overlays", () => {
     const { program } = createProgramFromMemory(
       {
-        "/workspace/src/local-debounce.ts": `
+        "/workspace/out/local-debounce.ts": `
           declare function bindingBehavior(name: string): ClassDecorator;
           @bindingBehavior("debounce")
           export class LocalDebounceBindingBehavior {}
@@ -345,7 +345,7 @@ describe("applyThirdPartyResources", () => {
         `,
       },
       [
-        "/workspace/src/local-debounce.ts",
+        "/workspace/out/local-debounce.ts",
         "/external/runtime-debounce.ts",
       ],
     );
@@ -376,7 +376,7 @@ describe("applyThirdPartyResources", () => {
       (resource) => resource.kind === "binding-behavior" && unwrapSourced(resource.name) === "debounce",
     );
     expect(debounceAuthority).toBeDefined();
-    expect(debounceAuthority!.file).toBe("/workspace/src/local-debounce.ts");
+    expect(debounceAuthority!.file).toBe("/workspace/out/local-debounce.ts");
 
     const debounceConvergence = merged.definition.convergence.find(
       (record) => record.resourceKind === "binding-behavior" && record.resourceName === "debounce",
@@ -390,7 +390,7 @@ describe("applyThirdPartyResources", () => {
 
   it("keeps local winner stable under root-order permutations after overlay recompute", () => {
     const files = {
-      "/workspace/src/local-debounce.ts": `
+      "/workspace/out/local-debounce.ts": `
         declare function bindingBehavior(name: string): ClassDecorator;
         @bindingBehavior("debounce")
         export class LocalDebounceBindingBehavior {}
@@ -406,7 +406,7 @@ describe("applyThirdPartyResources", () => {
 
     const forward = discoverProjectSemantics(
       createProgramFromMemory(files, [
-        "/workspace/src/local-debounce.ts",
+        "/workspace/out/local-debounce.ts",
         "/external/runtime-debounce.ts",
       ]).program,
       { packagePath: "/workspace", diagnostics: diagnostics.forSource("project") },
@@ -414,7 +414,7 @@ describe("applyThirdPartyResources", () => {
     const reverse = discoverProjectSemantics(
       createProgramFromMemory(files, [
         "/external/runtime-debounce.ts",
-        "/workspace/src/local-debounce.ts",
+        "/workspace/out/local-debounce.ts",
       ]).program,
       { packagePath: "/workspace", diagnostics: diagnostics.forSource("project") },
     );
@@ -430,13 +430,13 @@ describe("applyThirdPartyResources", () => {
     );
     expect(forwardAuthority).toBeDefined();
     expect(reverseAuthority).toBeDefined();
-    expect(forwardAuthority!.file).toBe("/workspace/src/local-debounce.ts");
-    expect(reverseAuthority!.file).toBe("/workspace/src/local-debounce.ts");
+    expect(forwardAuthority!.file).toBe("/workspace/out/local-debounce.ts");
+    expect(reverseAuthority!.file).toBe("/workspace/out/local-debounce.ts");
   });
 
   it("keeps template-meta candidates weak after replay (winner + provenance stable)", () => {
     const files: Record<string, string> = {
-      "/workspace/src/device-list.ts": `
+      "/workspace/out/device-list.ts": `
         declare function customElement(name: string): ClassDecorator;
         @customElement("device-list")
         export class DeviceListCustomElement {
@@ -445,8 +445,8 @@ describe("applyThirdPartyResources", () => {
           };
         }
       `,
-      "/workspace/src/placeholder.ts": `export const placeholder = true;`,
-      "/workspace/src/device-list.html": `
+      "/workspace/out/placeholder.ts": `export const placeholder = true;`,
+      "/workspace/out/device-list.html": `
         <bindable name="display-data" mode="two-way"></bindable>
       `,
     };
@@ -467,12 +467,12 @@ describe("applyThirdPartyResources", () => {
     };
 
     const forward = run([
-      "/workspace/src/device-list.ts",
-      "/workspace/src/placeholder.ts",
+      "/workspace/out/device-list.ts",
+      "/workspace/out/placeholder.ts",
     ]);
     const reverse = run([
-      "/workspace/src/placeholder.ts",
-      "/workspace/src/device-list.ts",
+      "/workspace/out/placeholder.ts",
+      "/workspace/out/device-list.ts",
     ]);
 
     const assertWeakTemplateMetaContract = (result: ReturnType<typeof run>) => {
@@ -495,7 +495,7 @@ describe("applyThirdPartyResources", () => {
 
   it("keeps inline template-meta candidates weak after replay (winner + provenance stable)", () => {
     const files: Record<string, string> = {
-      "/workspace/src/inline-device.ts": `
+      "/workspace/out/inline-device.ts": `
         declare function customElement(definition: { name: string; template: string }): ClassDecorator;
         @customElement({
           name: "inline-device",
@@ -507,7 +507,7 @@ describe("applyThirdPartyResources", () => {
           };
         }
       `,
-      "/workspace/src/placeholder.ts": `export const placeholder = true;`,
+      "/workspace/out/placeholder.ts": `export const placeholder = true;`,
     };
 
     const run = (rootNames: string[]) => {
@@ -525,12 +525,12 @@ describe("applyThirdPartyResources", () => {
     };
 
     const forward = run([
-      "/workspace/src/inline-device.ts",
-      "/workspace/src/placeholder.ts",
+      "/workspace/out/inline-device.ts",
+      "/workspace/out/placeholder.ts",
     ]);
     const reverse = run([
-      "/workspace/src/placeholder.ts",
-      "/workspace/src/inline-device.ts",
+      "/workspace/out/placeholder.ts",
+      "/workspace/out/inline-device.ts",
     ]);
 
     const assertWeakInlineTemplateMetaContract = (result: ReturnType<typeof run>) => {
@@ -552,19 +552,19 @@ describe("applyThirdPartyResources", () => {
 
   it("keeps local-template bindables authoritative and surface-only fields inert after overlay replay", () => {
     const files: Record<string, string> = {
-      "/workspace/src/my-page.ts": `
+      "/workspace/out/my-page.ts": `
         declare function customElement(name: string): ClassDecorator;
         @customElement("my-page")
         export class MyPageCustomElement {}
       `,
-      "/workspace/src/my-page.html": `
+      "/workspace/out/my-page.html": `
         <template as-custom-element="local-card">
           <bindable name="status" mode="two-way"></bindable>
           <alias name="local-alias"></alias>
           <containerless></containerless>
         </template>
       `,
-      "/workspace/src/placeholder.ts": `export const placeholder = true;`,
+      "/workspace/out/placeholder.ts": `export const placeholder = true;`,
     };
 
     const run = (rootNames: string[]) => {
@@ -583,12 +583,12 @@ describe("applyThirdPartyResources", () => {
     };
 
     const forward = run([
-      "/workspace/src/my-page.ts",
-      "/workspace/src/placeholder.ts",
+      "/workspace/out/my-page.ts",
+      "/workspace/out/placeholder.ts",
     ]);
     const reverse = run([
-      "/workspace/src/placeholder.ts",
-      "/workspace/src/my-page.ts",
+      "/workspace/out/placeholder.ts",
+      "/workspace/out/my-page.ts",
     ]);
 
     const assertLocalTemplateContract = (result: ReturnType<typeof run>) => {
@@ -604,7 +604,7 @@ describe("applyThirdPartyResources", () => {
         expect(localDefinitionSite.resourceRef.resource.aliases).toHaveLength(0);
       }
 
-      const localScope = result.merged.resourceGraph.scopes["local:/workspace/src/my-page.ts"];
+      const localScope = result.merged.resourceGraph.scopes["local:/workspace/out/my-page.ts"];
       const localCard = localScope?.resources?.elements?.["local-card"];
       expect(localCard).toBeDefined();
       expect(localCard?.bindables?.status?.mode).toBe("twoWay");
@@ -618,8 +618,8 @@ describe("applyThirdPartyResources", () => {
 
   it("enrolls builtin repeat in convergence when overlay collides on template-controller key", () => {
     const { program } = createProgramFromMemory(
-      { "/workspace/src/placeholder.ts": "export const x = 1;" },
-      ["/workspace/src/placeholder.ts"],
+      { "/workspace/out/placeholder.ts": "export const x = 1;" },
+      ["/workspace/out/placeholder.ts"],
     );
     const diagnostics = new DiagnosticsRuntime();
     const base = discoverProjectSemantics(program, {
@@ -657,8 +657,8 @@ describe("applyThirdPartyResources", () => {
 
   it("does not create repeat convergence when overlay does not redefine repeat", () => {
     const { program } = createProgramFromMemory(
-      { "/workspace/src/placeholder.ts": "export const x = 1;" },
-      ["/workspace/src/placeholder.ts"],
+      { "/workspace/out/placeholder.ts": "export const x = 1;" },
+      ["/workspace/out/placeholder.ts"],
     );
     const diagnostics = new DiagnosticsRuntime();
     const base = discoverProjectSemantics(program, {
