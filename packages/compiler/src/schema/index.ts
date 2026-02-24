@@ -29,3 +29,6 @@ export * from "./dependency-graph.js";
 
 // Semantic model (L2 canonical authority)
 export * from "./model.js";
+
+// Cursor entity (L2 shared feature resolution)
+export * from "./cursor-entity.js";

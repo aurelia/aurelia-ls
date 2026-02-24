@@ -152,6 +152,9 @@ export type {
   FeatureResponse,
   Degradation,
   NotApplicable,
+  // L2 cursor entity (shared feature resolution)
+  CursorEntity,
+  ResolveCursorEntity,
 } from "./schema/index.js";
 
 export {
@@ -162,6 +165,10 @@ export {
   computeConfidence,
   isDegradation,
   isNotApplicable,
+  // L2 cursor entity utilities
+  isNavigable,
+  isRenameable,
+  entityRef,
 } from "./schema/index.js";
 
 // Resource definitions (for compiler project-semantics and external tooling)
