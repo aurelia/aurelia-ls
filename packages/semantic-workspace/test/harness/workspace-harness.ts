@@ -56,7 +56,7 @@ export async function createWorkspaceHarness(options: WorkspaceHarnessOptions): 
 
   // Check filesystem cache for pre-computed discovery (parallel worker reuse).
   // Skip cache for isolated fixtures (mutable) and custom discovery overrides.
-  const useCache = !options.isolateFixture && !options.discovery?.fileSystem && !options.discovery?.baseSemantics;
+  const useCache = !options.isolateFixture && !options.discovery?.fileSystem && !options.discovery?.baseSemantics && !options.discovery?.partialEvaluation;
   let cachedDiscovery = useCache ? getCachedDiscovery(fixture.id, sourceRoot) : null;
   // If no cache, try to claim the build lock. If we lose the race,
   // getCachedDiscovery will block until the winner writes the cache.
