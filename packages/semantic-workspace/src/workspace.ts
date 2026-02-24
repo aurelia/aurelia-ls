@@ -273,8 +273,8 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
     }
   }
 
-  getCacheStats(target?: DocumentUri) {
-    return this.program.getCacheStats(target);
+  getCacheStats(_target?: DocumentUri) {
+    return { compilations: this.program.sources };
   }
 
   lookupText(uri: DocumentUri): string | null {
@@ -311,13 +311,13 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
       let detail = null;
       try {
         const compilation = this.program.getCompilation(uri);
-        const syntax = this.program.options.project.syntax;
+        const query = this.program.query;
         detail = collectTemplateHover({
           compilation,
           text,
           offset,
-          syntax,
-          semantics: this.program.options.project.semantics,
+          syntax: query.syntax,
+          semantics: query.model.semantics,
         });
       } catch (error) {
         debug.workspace("hover.collect.error", {

@@ -44,8 +44,29 @@ import type {
   FileFacts,
 } from "../project-semantics/index.js";
 import type { NormalizedPath } from "../model/index.js";
+import type { ResourceDef } from "./types.js";
 import { stableHash, stableHashSemantics } from "../pipeline/index.js";
 import { unwrapSourced } from "./sourced.js";
+
+// ============================================================================
+// Convergence Entry (L2 target: entries IS the model)
+// ============================================================================
+
+/**
+ * A convergence entry: the resolved state of a single resource.
+ *
+ * In the L2 target, the SemanticModel stores entries directly as
+ * `Map<string, ConvergenceEntry>`. Currently backed by ResourceDef
+ * from the discovery result. This bridge type will evolve toward the
+ * full L2 ConvergenceEntry (observations, decision, gaps, ref).
+ */
+export interface ConvergenceEntry {
+  readonly kind: string;
+  readonly name: string;
+  readonly key: string;
+  readonly def: ResourceDef;
+  readonly file?: NormalizedPath;
+}
 
 // ============================================================================
 // Semantic Model
@@ -63,6 +84,17 @@ import { unwrapSourced } from "./sourced.js";
  * a fresh discovery result and compare fingerprints.
  */
 export interface SemanticModel {
+  /**
+   * Convergence entries — the core data of the semantic model.
+   *
+   * L2 target: `entries` IS the semantic model. Each entry represents a
+   * resource that went through the convergence pipeline. Keyed by
+   * `${kind}:${name}` (e.g., "custom-element:my-app").
+   *
+   * The query interface reads from these entries, not from a projected copy.
+   */
+  readonly entries: ReadonlyMap<string, ConvergenceEntry>;
+
   /** Full discovery result (internal authority — not for direct feature consumption) */
   readonly discovery: ProjectSemanticsDiscoveryResult;
   /** Converged semantics with materialized resources */
@@ -231,9 +263,19 @@ export function createSemanticModel(
   const fingerprint = computeModelFingerprint(discovery, semantics);
   const deps = buildModelDependencyGraph(discovery);
 
+  // Build convergence entries from the discovery authority channel
+  const entries = new Map<string, ConvergenceEntry>();
+  for (const def of discovery.definition.authority) {
+    const name = unwrapSourced(def.name);
+    if (!name) continue;
+    const key = `${def.kind}:${name}`;
+    entries.set(key, { kind: def.kind, name, key, def, file: def.file });
+  }
+
   let cachedSnapshot: ProjectSnapshot | undefined;
 
   const model: SemanticModel = {
+    entries,
     discovery,
     semantics,
     catalog: discovery.catalog,

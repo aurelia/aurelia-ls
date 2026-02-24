@@ -106,13 +106,12 @@ function resolveCompletionContext(
   program: TemplateProgram,
   uri: DocumentUri,
 ): { sem: MaterializedSemantics; resources: ResourceCollections; syntax: TemplateSyntaxRegistry; catalog: ResourceCatalog } {
-  const context = program.options.templateContext?.(uri) ?? {};
-  const snapshot = buildSemanticsSnapshotFromProject(program.options.project, context);
+  const query = program.query;
   return {
-    sem: snapshot.semantics,
-    resources: snapshot.semantics.resources,
-    syntax: snapshot.syntax,
-    catalog: snapshot.catalog,
+    sem: query.model.semantics,
+    resources: query.model.semantics.resources,
+    syntax: query.syntax,
+    catalog: query.model.catalog,
   };
 }
 
