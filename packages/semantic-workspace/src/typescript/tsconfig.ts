@@ -45,6 +45,9 @@ export function applyDefaultCompilerOptions(options: ts.CompilerOptions): ts.Com
 }
 
 export function loadTsConfig(options: TsConfigLoadOptions): TsConfigSnapshot {
+  if (!options.workspaceRoot) {
+    options.logger.warn(`[ts] no workspaceRoot provided — tsconfig discovery will use CWD which may be wrong`);
+  }
   const searchRoot = options.workspaceRoot ?? process.cwd();
   const configPath = resolveConfigPath(searchRoot, options.tsconfigPath ?? null, options.configFileName);
   if (!configPath) {

@@ -76,9 +76,14 @@ export class HostSessionManager {
       throw new Error(`Session already exists: ${sessionId}`);
     }
 
-    const workspaceRoot = path.resolve(
-      args.workspaceRoot ?? this.#defaultWorkspaceRoot ?? process.cwd(),
-    );
+    const resolvedRoot = args.workspaceRoot ?? this.#defaultWorkspaceRoot;
+    if (!resolvedRoot) {
+      throw new Error(
+        "session.open requires workspaceRoot (or a defaultWorkspaceRoot on the session manager). " +
+        "CWD fallback was removed because it silently analyzes the wrong project.",
+      );
+    }
+    const workspaceRoot = path.resolve(resolvedRoot);
     const tsconfigPath = args.tsconfigPath ?? null;
     const configFileName = args.configFileName ?? null;
     const workspaceKey = stableHash({

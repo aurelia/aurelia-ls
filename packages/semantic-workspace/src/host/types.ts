@@ -96,7 +96,8 @@ export interface SemanticAuthorityEnvelope<TResult> {
 
 export interface SessionOpenArgs {
   readonly sessionId?: string;
-  readonly workspaceRoot?: string;
+  /** Absolute path to the project root. Required — no CWD fallback. */
+  readonly workspaceRoot: string;
   readonly tsconfigPath?: string | null;
   readonly configFileName?: string;
   readonly policy?: {

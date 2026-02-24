@@ -282,6 +282,14 @@ function characterize(
     for (const [resource, source] of matchResult.matchSources) {
       matchSources.set(resource, source);
     }
+    debug.project("characterize.file", {
+      filePath,
+      classCount: fileFacts.classes.length,
+      siblingCount: context.siblings.length,
+      matchedResources: matchResult.resources.length,
+      matchedCommands: matchResult.bindingCommands.length,
+      gapCount: matchResult.gaps.length,
+    });
   }
 
   // 2d. Template facts

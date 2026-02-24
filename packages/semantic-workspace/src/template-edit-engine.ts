@@ -58,8 +58,14 @@ import type {
   WorkspaceCodeActionRequest,
   WorkspaceDiagnostic,
   WorkspaceLocation,
+  WorkspacePrepareRenameRequest,
   WorkspaceRenameRequest,
   WorkspaceTextEdit,
+  TextReferenceSite,
+  NameForm,
+  PrepareRenameResult,
+  RenameSafety,
+  RenameConfidence,
 } from "./types.js";
 import { StylePolicy, type BindableDeclarationKind, type RefactorOverrides } from "./style-profile.js";
 
@@ -208,7 +214,7 @@ export interface TemplateEditEngineContext {
   readonly getResourceReferencesBySymbolId: (
     activeUri: DocumentUri,
     symbolId: SymbolId,
-  ) => readonly WorkspaceLocation[];
+  ) => readonly TextReferenceSite[];
   readonly getAttributeSyntax: () => AttributeSyntaxContext;
   readonly styleProfile?: StyleProfile | null;
   readonly refactorOverrides?: RefactorOverrides | null;
@@ -262,6 +268,168 @@ export class TemplateEditEngine {
       targetClass: "unknown",
       hasSemanticProvenance: false,
     };
+  }
+
+  prepareRenameAt(request: WorkspacePrepareRenameRequest): PrepareRenameResult | null {
+    const op = this.#renameOperationContext({ ...request, newName: "" });
+    if (!op) return null;
+
+    for (const route of this.#semanticRenameRouteOrder()) {
+      const result = this.#prepareRenameByRoute(route, request.uri, op);
+      if (result) return result;
+    }
+
+    return null;
+  }
+
+  #prepareRenameByRoute(
+    route: SemanticRenameRoute,
+    requestUri: DocumentUri,
+    op: RenameOperationContext,
+  ): PrepareRenameResult | null {
+    // Resolve the symbol and get its span + name + symbolId
+    const origin = this.#semanticRenameTargetOrigin(route, op);
+    if (!origin) return null;
+
+    // Find the symbolId and reference count for confidence assessment
+    const symbolId = this.#resolveSymbolIdForRoute(route, op);
+    if (!symbolId) return null;
+    const refs = this.ctx.getResourceReferencesBySymbolId(requestUri, symbolId);
+
+    // Compute safety: for now, base confidence on declaration provenance and
+    // reference completeness. The full safety decision (scope gap assessment,
+    // project analysis completeness) requires infrastructure we'll build next.
+    const declarationConfidence: RenameConfidence =
+      origin === "builtin" ? "none"
+        : origin === "config" ? "none"
+          : origin === "source" ? "high"
+            : "low";
+
+    const safety: RenameSafety = {
+      confidence: declarationConfidence,
+      totalReferences: refs.length,
+      certainReferences: refs.length,
+      uncertainScopes: [],
+      declarationConfidence,
+    };
+
+    // Resolve the name span at the cursor position
+    const nameSpan = this.#resolveNameSpanForRoute(route, op);
+    if (!nameSpan) return null;
+
+    const placeholder = this.#resolveNameForRoute(route, op);
+    if (!placeholder) return null;
+
+    return { range: nameSpan, placeholder, safety };
+  }
+
+  #resolveSymbolIdForRoute(route: SemanticRenameRoute, op: RenameOperationContext): SymbolId | null {
+    switch (route) {
+      case "custom-element": {
+        const node = op.compilation.query.nodeAt(op.offset);
+        if (!node || node.kind !== "element") return null;
+        const row = findLinkedRow(op.compilation.linked.templates, node.templateIndex, node.id);
+        if (!row || row.node.kind !== "element") return null;
+        const def = row.node.custom?.def;
+        if (!def) return null;
+        const entry = findResourceEntry(this.ctx.definitionIndex.elements, def.name, def.file ?? null, op.preferRoots);
+        return entry?.symbolId ?? null;
+      }
+      case "bindable-attribute": {
+        const domIndex = op.domIndex;
+        const hits = findInstructionHitsAtOffset(op.compilation.linked.templates, op.compilation.ir.templates ?? [], domIndex, op.offset);
+        for (const hit of hits) {
+          const nameSpan = hit.attrNameSpan ?? null;
+          if (!nameSpan || !spanContainsOffset(nameSpan, op.offset)) continue;
+          const target = resolveBindableTarget(hit.instruction, this.ctx.definitionIndex, op.preferRoots);
+          if (!target) continue;
+          return createBindableSymbolId({ owner: target.ownerSymbolId, property: target.property });
+        }
+        return null;
+      }
+      case "value-converter": {
+        const hit = findValueConverterHitAtOffset(op.compilation.exprTable ?? [], op.offset);
+        if (!hit) return null;
+        const entry = findResourceEntry(this.ctx.definitionIndex.valueConverters, hit.name, null, op.preferRoots);
+        return entry?.symbolId ?? null;
+      }
+      case "binding-behavior": {
+        const hit = findBindingBehaviorHitAtOffset(op.compilation.exprTable ?? [], op.offset);
+        if (!hit) return null;
+        const entry = findResourceEntry(this.ctx.definitionIndex.bindingBehaviors, hit.name, null, op.preferRoots);
+        return entry?.symbolId ?? null;
+      }
+      default:
+        return null;
+    }
+  }
+
+  #resolveNameSpanForRoute(route: SemanticRenameRoute, op: RenameOperationContext): SourceSpan | null {
+    switch (route) {
+      case "custom-element": {
+        const node = op.compilation.query.nodeAt(op.offset);
+        if (!node || node.kind !== "element") return null;
+        const domNode = findDomNode(op.domIndex, node.templateIndex, node.id);
+        if (!domNode || domNode.kind !== "element") return null;
+        return elementTagSpanAtOffset(domNode, op.offset) ?? null;
+      }
+      case "bindable-attribute": {
+        const hits = findInstructionHitsAtOffset(op.compilation.linked.templates, op.compilation.ir.templates ?? [], op.domIndex, op.offset);
+        for (const hit of hits) {
+          const nameSpan = hit.attrNameSpan ?? null;
+          if (!nameSpan || !spanContainsOffset(nameSpan, op.offset)) continue;
+          return nameSpan;
+        }
+        return null;
+      }
+      case "value-converter": {
+        const hit = findValueConverterHitAtOffset(op.compilation.exprTable ?? [], op.offset);
+        if (!hit) return null;
+        // The VC hit finder returns name+exprId but no span. Use text-based
+        // span derivation from the compilation offset.
+        return findExprResourceSpan(op.compilation, op.offset, "valueConverter", hit.name);
+      }
+      case "binding-behavior": {
+        const hit = findBindingBehaviorHitAtOffset(op.compilation.exprTable ?? [], op.offset);
+        if (!hit) return null;
+        return findExprResourceSpan(op.compilation, op.offset, "bindingBehavior", hit.name);
+      }
+      default:
+        return null;
+    }
+  }
+
+  #resolveNameForRoute(route: SemanticRenameRoute, op: RenameOperationContext): string | null {
+    switch (route) {
+      case "custom-element": {
+        const node = op.compilation.query.nodeAt(op.offset);
+        if (!node || node.kind !== "element") return null;
+        const row = findLinkedRow(op.compilation.linked.templates, node.templateIndex, node.id);
+        if (!row || row.node.kind !== "element") return null;
+        return row.node.custom?.def?.name ?? null;
+      }
+      case "bindable-attribute": {
+        const hits = findInstructionHitsAtOffset(op.compilation.linked.templates, op.compilation.ir.templates ?? [], op.domIndex, op.offset);
+        for (const hit of hits) {
+          const nameSpan = hit.attrNameSpan ?? null;
+          if (!nameSpan || !spanContainsOffset(nameSpan, op.offset)) continue;
+          const target = resolveBindableTarget(hit.instruction, this.ctx.definitionIndex, op.preferRoots);
+          if (!target) continue;
+          return unwrapSourced(target.bindable.attribute) ?? target.property;
+        }
+        return null;
+      }
+      case "value-converter": {
+        const hit = findValueConverterHitAtOffset(op.compilation.exprTable ?? [], op.offset);
+        return hit?.name ?? null;
+      }
+      case "binding-behavior": {
+        const hit = findBindingBehaviorHitAtOffset(op.compilation.exprTable ?? [], op.offset);
+        return hit?.name ?? null;
+      }
+      default:
+        return null;
+    }
   }
 
   renameAt(request: WorkspaceRenameRequest): WorkspaceTextEdit[] | null {
@@ -470,9 +638,7 @@ export class TemplateEditEngine {
 
     const entry = findResourceEntry(this.ctx.definitionIndex.elements, target.name, target.file, preferRoots);
     if (!entry?.symbolId) return null;
-    this.#collectSymbolEdits(requestUri, entry.symbolId, formattedName, edits);
-    const nameEdit = entry ? buildResourceNameEdit(entry.def, target.name, formattedName, this.ctx.lookupText) : null;
-    if (nameEdit) edits.push(nameEdit);
+    this.#collectSymbolEdits(requestUri, entry.symbolId, formattedName, edits, "kebab-case");
 
     return edits.length ? edits : null;
   }
@@ -495,11 +661,11 @@ export class TemplateEditEngine {
       const edits: WorkspaceTextEdit[] = [];
       const formattedName = this.#style.formatRenameTarget(newName);
       const bindableSymbolId = createBindableSymbolId({ owner: target.ownerSymbolId, property: target.property });
-      this.#collectSymbolEdits(requestUri, bindableSymbolId, formattedName, edits);
-
-      const attrValue = unwrapSourced(target.bindable.attribute) ?? target.property;
-      const attrEdit = buildBindableAttributeEdit(target.bindable, attrValue, formattedName, this.ctx.lookupText);
-      if (attrEdit) edits.push(attrEdit);
+      // Bindable renames from template attributes use kebab-case input form.
+      // The unified reference index includes TS-side bindable-property and
+      // bindable-config-key references alongside template attribute-name references.
+      // Per-site name transformation handles the kebab→camel conversion.
+      this.#collectSymbolEdits(requestUri, bindableSymbolId, formattedName, edits, "kebab-case");
 
       if (!edits.length) return null;
       return edits;
@@ -522,9 +688,7 @@ export class TemplateEditEngine {
 
     const entry = findResourceEntry(this.ctx.definitionIndex.valueConverters, hit.name, null, preferRoots);
     if (!entry?.symbolId) return null;
-    this.#collectSymbolEdits(requestUri, entry.symbolId, formattedName, edits);
-    const nameEdit = entry ? buildResourceNameEdit(entry.def, hit.name, formattedName, this.ctx.lookupText) : null;
-    if (nameEdit) edits.push(nameEdit);
+    this.#collectSymbolEdits(requestUri, entry.symbolId, formattedName, edits, "camelCase");
 
     return edits.length ? edits : null;
   }
@@ -544,9 +708,7 @@ export class TemplateEditEngine {
 
     const entry = findResourceEntry(this.ctx.definitionIndex.bindingBehaviors, hit.name, null, preferRoots);
     if (!entry?.symbolId) return null;
-    this.#collectSymbolEdits(requestUri, entry.symbolId, formattedName, edits);
-    const nameEdit = entry ? buildResourceNameEdit(entry.def, hit.name, formattedName, this.ctx.lookupText) : null;
-    if (nameEdit) edits.push(nameEdit);
+    this.#collectSymbolEdits(requestUri, entry.symbolId, formattedName, edits, "camelCase");
 
     return edits.length ? edits : null;
   }
@@ -556,10 +718,14 @@ export class TemplateEditEngine {
     symbolId: SymbolId,
     newName: string,
     out: WorkspaceTextEdit[],
+    inputForm?: NameForm,
   ): void {
     const refs = this.ctx.getResourceReferencesBySymbolId(requestUri, symbolId);
+    const transform = inputForm ? deriveNameForms(newName, inputForm) : null;
     for (const ref of refs) {
-      out.push({ uri: ref.uri, span: ref.span, newText: newName });
+      // Apply per-site name transformation when we have form information.
+      const transformed = transform ? selectNameForSite(ref, transform) : newName;
+      out.push({ uri: ref.uri, span: ref.span, newText: transformed });
     }
   }
 }
@@ -1891,4 +2057,145 @@ function replaceStringLiteral(original: string, value: string): string {
     }
   }
   return value;
+}
+
+// ============================================================================
+// Name transformation for cross-boundary rename
+// ============================================================================
+
+interface NameTransformation {
+  input: string;
+  inputForm: NameForm;
+  kebab: string;
+  camel: string;
+  pascal: string;
+}
+
+function deriveNameForms(newName: string, inputForm: NameForm): NameTransformation {
+  let kebab: string;
+  let camel: string;
+  let pascal: string;
+
+  switch (inputForm) {
+    case "kebab-case":
+      kebab = newName;
+      camel = kebabToCamel(newName);
+      pascal = kebabToPascal(newName);
+      break;
+    case "camelCase":
+      kebab = camelToKebab(newName);
+      camel = newName;
+      pascal = camel[0] ? camel[0].toUpperCase() + camel.slice(1) : camel;
+      break;
+    case "PascalCase":
+      kebab = camelToKebab(newName);
+      camel = newName[0] ? newName[0].toLowerCase() + newName.slice(1) : newName;
+      pascal = newName;
+      break;
+  }
+
+  return { input: newName, inputForm, kebab, camel, pascal };
+}
+
+function selectNameForSite(site: TextReferenceSite, transform: NameTransformation): string {
+  // For declaration sites that are string literals (decorator-name-property,
+  // static-au-name, define-name), the name form in the source is the resource
+  // registration name (kebab for CE/CA/TC, camel for VC/BB).
+  // For class-name sites, use PascalCase.
+  // For bindable-property sites, use camelCase.
+  // For template reference sites, use the site's declared nameForm.
+  switch (site.referenceKind) {
+    case "class-name":
+      return transform.pascal;
+    case "bindable-property":
+    case "bindable-callback":
+    case "expression-pipe":
+    case "expression-behavior":
+      return transform.camel;
+    case "bindable-config-key":
+      return transform.camel;
+    case "tag-name":
+    case "close-tag-name":
+    case "attribute-name":
+    case "as-element-value":
+    case "import-element-from":
+    case "decorator-name-property":
+    case "decorator-string-arg":
+    case "static-au-name":
+    case "define-name":
+    case "local-template-attr":
+    case "import-path":
+    case "dependencies-class":
+    case "dependencies-string":
+    case "property-access":
+    default:
+      return selectByNameForm(site.nameForm, transform);
+  }
+}
+
+function selectByNameForm(form: NameForm, transform: NameTransformation): string {
+  switch (form) {
+    case "kebab-case": return transform.kebab;
+    case "camelCase": return transform.camel;
+    case "PascalCase": return transform.pascal;
+  }
+}
+
+function findExprResourceSpan(
+  compilation: TemplateCompilation,
+  offset: number,
+  kind: "valueConverter" | "bindingBehavior",
+  name: string,
+): SourceSpan | null {
+  // Walk the expression table for resources of the given kind+name at the offset.
+  for (const entry of compilation.exprTable ?? []) {
+    const ast = entry.ast as { $kind?: string; name?: { name?: string; span?: SourceSpan } | string; span?: SourceSpan; expression?: unknown } | null;
+    if (!ast) continue;
+    const target = kind === "valueConverter" ? "ValueConverter" : "BindingBehavior";
+    const span = findExprResourceSpanInAst(ast, offset, target, name);
+    if (span) return span;
+  }
+  return null;
+}
+
+function findExprResourceSpanInAst(
+  node: Record<string, unknown> | null | undefined,
+  offset: number,
+  kind: string,
+  name: string,
+): SourceSpan | null {
+  if (!node || typeof node !== "object" || !node.$kind) return null;
+  if (node.$kind === kind) {
+    const ident = node.name;
+    const nodeName = typeof ident === "string" ? ident : (ident as { name?: string } | null)?.name;
+    if (nodeName === name) {
+      const span = typeof ident === "object" && ident !== null ? (ident as { span?: SourceSpan }).span : (node as { span?: SourceSpan }).span;
+      if (span && span.start <= offset && offset <= span.end) return span;
+    }
+  }
+  // Walk children
+  for (const key of ["expression", "object", "left", "right", "condition", "yes", "no", "target", "value", "func"]) {
+    const child = node[key];
+    if (child && typeof child === "object") {
+      const result = findExprResourceSpanInAst(child as Record<string, unknown>, offset, kind, name);
+      if (result) return result;
+    }
+  }
+  return null;
+}
+
+function kebabToCamel(value: string): string {
+  if (!value.includes("-")) return value;
+  return value.replace(/-([a-zA-Z0-9])/g, (_match, captured) => captured.toUpperCase());
+}
+
+function kebabToPascal(value: string): string {
+  const camel = kebabToCamel(value);
+  return camel[0] ? camel[0].toUpperCase() + camel.slice(1) : camel;
+}
+
+function camelToKebab(value: string): string {
+  return value.replace(/[A-Z]/g, (match, offset) =>
+    offset > 0 ? `-${match.toLowerCase()}` : match.toLowerCase(),
+  );
 }

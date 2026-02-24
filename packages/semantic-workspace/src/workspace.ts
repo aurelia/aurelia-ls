@@ -45,6 +45,8 @@ import {
   type WorkspaceEdit,
   type WorkspaceLocation,
   type WorkspaceRefactorResult,
+  type WorkspacePrepareRenameRequest,
+  type WorkspacePrepareRenameResult,
   type WorkspaceSnapshot,
   type WorkspaceTextEdit,
   type WorkspaceToken,
@@ -395,6 +397,18 @@ export function createSemanticWorkspaceKernel(options: SemanticWorkspaceKernelOp
 
 class WorkspaceRefactorEngine implements RefactorEngine {
   constructor(private readonly workspace: SemanticWorkspaceKernel) {}
+
+  prepareRename(_request: WorkspacePrepareRenameRequest): WorkspacePrepareRenameResult {
+    // The inner (TS-based) refactor engine does not support prepareRename.
+    // PrepareRename is handled by the semantic workspace engine's proxy layer.
+    return {
+      error: {
+        kind: "refactor-policy-denied",
+        message: "Rename is not available at this position.",
+        retryable: false,
+      },
+    };
+  }
 
   rename(request: { uri: DocumentUri; position: { line: number; character: number }; newName: string }): WorkspaceRefactorResult {
     try {

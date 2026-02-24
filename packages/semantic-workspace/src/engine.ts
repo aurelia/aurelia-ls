@@ -76,6 +76,10 @@ import {
   type WorkspaceCodeAction,
   type WorkspaceCodeActionRequest,
   type WorkspaceRenameRequest,
+  type WorkspacePrepareRenameRequest,
+  type WorkspacePrepareRenameResult,
+  type TextReferenceSite,
+  type WorkspaceCompletionItem,
 } from "./types.js";
 import { inlineTemplatePath } from "./templates.js";
 import { collectSemanticTokens } from "./semantic-tokens.js";
@@ -84,6 +88,7 @@ import {
   collectTemplateDefinitionSlices,
   collectTemplateReferences,
   collectTemplateResourceReferences,
+  collectTypeScriptResourceReferences,
   findEntry,
   type ResourceDefinitionIndex,
   type ResourceDefinitionEntry,
@@ -118,6 +123,7 @@ import {
   findInstructionHitsAtOffset,
 } from "./query-helpers.js";
 import { buildDomIndex } from "./template-dom.js";
+import { computeCompletions, type CompletionEngineContext } from "./completions-engine.js";
 
 type ProjectSemanticsDiscoveryConfigBase = Omit<ProjectSemanticsDiscoveryConfig, "diagnostics">;
 
@@ -435,7 +441,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       },
       completions: (pos) => {
         this.#ensureTemplateContext(canonical.uri);
-        return base.completions(pos);
+        return this.#computeCompletions(canonical.uri, pos, base);
       },
       diagnostics: () => this.diagnostics(canonical.uri),
       semanticTokens: () => {
@@ -464,8 +470,22 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     const canonical = canonicalDocumentUri(uri);
     this.#ensureTemplateContext(canonical.uri);
     this.#syncTemplateOverlaysForReferences(canonical.uri);
-    // TODO(refactor-policy): evolve this into a prepareRefactor(request) API
-    // that returns unresolved decision points + inferred defaults for adapters.
+  }
+
+  prepareRename(request: WorkspacePrepareRenameRequest): WorkspacePrepareRenameResult {
+    const canonical = canonicalDocumentUri(request.uri);
+    this.#ensureTemplateContext(canonical.uri);
+    const result = this.#templateEditEngine().prepareRenameAt({ ...request, uri: canonical.uri });
+    if (!result) {
+      return {
+        error: {
+          kind: "refactor-policy-denied",
+          message: "Rename is not available at this position.",
+          retryable: false,
+        },
+      };
+    }
+    return { result };
   }
 
   tryResourceRename(request: WorkspaceRenameRequest): WorkspaceRefactorResult | null {
@@ -701,6 +721,36 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
   #ensureTemplateContext(uri: DocumentUri): void {
     this.#ensureIndexFresh();
     this.#activateTemplate(uri);
+  }
+
+  #computeCompletions(
+    uri: DocumentUri,
+    pos: { line: number; character: number },
+    base: SemanticQuery,
+  ): readonly WorkspaceCompletionItem[] {
+    const text = this.lookupText(uri);
+    if (!text) return base.completions(pos);
+    const offset = offsetAtPosition(text, pos);
+    if (offset == null) return base.completions(pos);
+
+    const compilation = this.#kernel.getCompilation(uri);
+    const snapshot = this.#kernel.snapshot();
+    const baseCompletions = base.completions(pos);
+
+    const ctx: CompletionEngineContext = {
+      text,
+      uri,
+      offset,
+      compilation,
+      definitions: this.#definitionIndex,
+      query: this.#query,
+      syntax: this.#query.syntax,
+      catalog: snapshot.catalog,
+      semantics: snapshot.semantics,
+      baseCompletions,
+    };
+
+    return computeCompletions(ctx);
   }
 
   #attributeSyntaxContext(): AttributeSyntaxContext {
@@ -1165,7 +1215,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     return this.#templateIndex.templateToComponent.has(canonicalDocumentUri(uri).uri);
   }
 
-  #resourceReferencesAtOffset(uri: DocumentUri, offset: number): WorkspaceLocation[] {
+  #resourceReferencesAtOffset(uri: DocumentUri, offset: number): TextReferenceSite[] {
     const index = this.#ensureResourceReferenceIndex(uri);
     const occurrences = index.byUri.get(uri);
     if (!occurrences || occurrences.length === 0) return [];
@@ -1176,7 +1226,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       }
     }
     if (symbolIds.size === 0) return [];
-    const results: WorkspaceLocation[] = [];
+    const results: TextReferenceSite[] = [];
     for (const symbolId of symbolIds) {
       const refs = index.bySymbol.get(symbolId);
       if (refs && refs.length > 0) results.push(...refs);
@@ -1194,7 +1244,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     const sources = this.#kernel.sources;
     const syntax = this.#attributeSyntaxContext();
     const preferRoots = [this.#workspaceRoot];
-    const bySymbol = new Map<SymbolId, WorkspaceLocation[]>();
+    const bySymbol = new Map<SymbolId, TextReferenceSite[]>();
     const byUri = new Map<DocumentUri, ResourceReferenceOccurrence[]>();
 
     const loadTemplate = (uri: DocumentUri, text: string | null) => {
@@ -1269,6 +1319,22 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       }
       if (occurrences.length > 0) {
         byUri.set(canonical.uri, occurrences);
+      }
+    }
+
+    // ── TS-side references (declaration sites, class names, bindable properties) ──
+    const tsRefs = collectTypeScriptResourceReferences({
+      resources: this.#definitionIndex,
+    });
+    for (const ref of tsRefs) {
+      if (ref.kind !== "text") continue;
+      const sid = ref.symbolId;
+      if (!sid) continue;
+      const list = bySymbol.get(sid);
+      if (list) {
+        list.push(ref);
+      } else {
+        bySymbol.set(sid, [ref]);
       }
     }
 
@@ -1434,6 +1500,10 @@ class WorkspaceRefactorProxy implements RefactorEngine {
     private readonly engine: SemanticWorkspaceEngine,
     private readonly inner: RefactorEngine,
   ) {}
+
+  prepareRename(request: WorkspacePrepareRenameRequest): WorkspacePrepareRenameResult {
+    return this.engine.prepareRename(request);
+  }
 
   rename(request: { uri: DocumentUri; position: { line: number; character: number }; newName: string }): WorkspaceRefactorResult {
     const preflight = this.engine.planRenamePreflight(request);
@@ -1819,7 +1889,7 @@ type ResourceReferenceOccurrence = {
 
 type ResourceReferenceIndex = {
   fingerprint: string;
-  bySymbol: Map<SymbolId, WorkspaceLocation[]>;
+  bySymbol: Map<SymbolId, TextReferenceSite[]>;
   byUri: Map<DocumentUri, ResourceReferenceOccurrence[]>;
 };
 

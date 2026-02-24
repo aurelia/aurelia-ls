@@ -171,8 +171,18 @@ export type WorkspaceRefactorResult =
   | { readonly edit: WorkspaceEdit }
   | { readonly error: WorkspaceError };
 
+export interface WorkspacePrepareRenameRequest {
+  readonly uri: DocumentUri;
+  readonly position: SourcePosition;
+}
+
+export type WorkspacePrepareRenameResult =
+  | { readonly result: PrepareRenameResult }
+  | { readonly error: WorkspaceError };
+
 export interface RefactorEngine {
   // Refactors return a single atomic edit set or a structured error.
+  prepareRename(request: WorkspacePrepareRenameRequest): WorkspacePrepareRenameResult;
   rename(request: WorkspaceRenameRequest): WorkspaceRefactorResult;
   codeActions(request: WorkspaceCodeActionRequest): readonly WorkspaceCodeAction[];
 }
@@ -187,6 +197,126 @@ export interface SemanticWorkspace {
   query(uri: DocumentUri): SemanticQuery;
   refactor(): RefactorEngine;
 }
+
+// ============================================================================
+// Reference Sites — Unified cross-boundary reference model
+// ============================================================================
+
+// Name form determines the casing convention at each reference site.
+// Rename must derive all forms from the input form.
+export type NameForm = "kebab-case" | "camelCase" | "PascalCase";
+
+// Reference kind discriminates what source code construct the reference lives in.
+// This determines: (a) name transformation rules, (b) annotation grouping,
+// (c) edit mechanics (string literal vs identifier vs file path).
+export type ReferenceKind =
+  // Declaration sites (annotation group: "declaration")
+  | "decorator-name-property"    // { name: 'my-el' } in decorator arg
+  | "decorator-string-arg"       // @customElement('my-el')
+  | "static-au-name"             // static $au = { name: 'my-el' }
+  | "define-name"                // CustomElement.define({ name: 'my-el' })
+  | "local-template-attr"        // <template as-custom-element="my-local">
+  // Template reference sites (annotation group: "template-refs")
+  | "tag-name"                   // <my-element ...>
+  | "close-tag-name"             // </my-element>
+  | "attribute-name"             // my-attr.bind="..." or value.bind="..."
+  | "as-element-value"           // <div as-element="my-element">
+  | "expression-pipe"            // ${ value | myConverter }
+  | "expression-behavior"        // value.bind="x & myBehavior"
+  | "import-element-from"        // <import from="./my-element">
+  // Script reference sites (annotation group: "ts-refs")
+  | "import-path"                // import { MyEl } from './my-element'
+  | "dependencies-class"         // dependencies: [MyElement]
+  | "dependencies-string"        // dependencies: ['my-element']
+  | "class-name"                 // class MyElement (convention form)
+  | "bindable-property"          // @bindable myProp on the class
+  | "bindable-config-key"        // bindables: { myProp: ... }
+  | "bindable-callback"          // myPropChanged() method
+  | "property-access";           // this.myProp or instance.myProp in TS
+
+// A text reference site: a span in a source file that contains the name.
+export interface TextReferenceSite {
+  readonly kind: "text";
+  readonly referenceKind: ReferenceKind;
+  readonly uri: DocumentUri;
+  readonly span: SourceSpan;
+  readonly nameForm: NameForm;
+  readonly symbolId?: SymbolId;
+  readonly exprId?: ExprId;
+  readonly nodeId?: NodeId;
+}
+
+// A file reference site: a file whose path embeds the resource name (convention form).
+export interface FileReferenceSite {
+  readonly kind: "file-rename";
+  readonly oldPath: string;
+  readonly extension: string;
+}
+
+export type ReferenceSite = TextReferenceSite | FileReferenceSite;
+
+// ============================================================================
+// Rename Safety — Inverted degradation model
+// ============================================================================
+
+export type RenameConfidence = "high" | "medium" | "low" | "none";
+
+export interface ScopeGapSummary {
+  readonly scopeId: string;
+  readonly gapSource: "dynamic-registration" | "behavioral-gap";
+  readonly intrinsic: boolean;
+  readonly affectedReferenceCount: number;
+  readonly remediation: string;
+}
+
+export interface RenameSafety {
+  readonly confidence: RenameConfidence;
+  readonly totalReferences: number;
+  readonly certainReferences: number;
+  readonly uncertainScopes: readonly ScopeGapSummary[];
+  readonly declarationConfidence: RenameConfidence;
+}
+
+export type RenameAnnotationGroup =
+  | "declaration"
+  | "template-refs"
+  | "ts-refs"
+  | "file-ops"
+  | "uncertain";
+
+export interface RenameAnnotation {
+  readonly id: string;
+  readonly group: RenameAnnotationGroup;
+  readonly label: string;
+  readonly description: string;
+  readonly needsConfirmation: boolean;
+}
+
+export interface RenameEdit {
+  readonly uri: DocumentUri;
+  readonly span: SourceSpan;
+  readonly newText: string;
+  readonly annotationId?: string;
+}
+
+export interface RenameResult {
+  readonly edits: readonly RenameEdit[];
+  readonly fileRenames: readonly { readonly oldPath: string; readonly newPath: string }[];
+  readonly annotations: readonly RenameAnnotation[];
+  readonly safety: RenameSafety;
+}
+
+// PrepareRename output: the gate that runs before the developer types a new name.
+export interface PrepareRenameResult {
+  readonly range: SourceSpan;
+  readonly placeholder: string;
+  readonly safety: RenameSafety;
+}
+
+// Extended refactor result that can carry rename-specific metadata.
+export type WorkspaceRenameResult =
+  | { readonly rename: RenameResult }
+  | { readonly error: WorkspaceError };
 
 export function asWorkspaceFingerprint(value: string): WorkspaceFingerprint {
   return value as WorkspaceFingerprint;

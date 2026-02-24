@@ -34,9 +34,9 @@ import type {
   ProjectSemanticsDefinitionChannels,
   SemanticSnapshot,
 } from "@aurelia-ls/compiler";
-import type { WorkspaceLocation } from "./types.js";
+import type { WorkspaceLocation, TextReferenceSite } from "./types.js";
 import { selectResourceCandidate } from "./resource-precedence-policy.js";
-import { buildDomIndex, elementTagSpanAtOffset, elementTagSpans, findDomNode } from "./template-dom.js";
+import { buildDomIndex, elementTagSpanAtOffset, findDomNode } from "./template-dom.js";
 import {
   collectInstructionHits,
   findBindingBehaviorAtOffset,
@@ -382,11 +382,11 @@ export function collectTemplateResourceReferences(options: {
   syntax: AttributeSyntaxContext;
   preferRoots?: readonly string[] | null;
   documentUri?: DocumentUri | null;
-}): WorkspaceLocation[] {
+}): TextReferenceSite[] {
   const { compilation, resources } = options;
   const syntax = options.syntax;
   const preferRoots = options.preferRoots ?? [];
-  const results: WorkspaceLocation[] = [];
+  const results: TextReferenceSite[] = [];
   const domIndex = buildDomIndex(compilation.ir.templates ?? []);
   const documentUri = options.documentUri ?? null;
 
@@ -402,9 +402,14 @@ export function collectTemplateResourceReferences(options: {
         ? findEntry(resources.elements, row.node.custom.def.name, row.node.custom.def.file ?? null)
         : null;
       if (!entry?.symbolId) continue;
-      for (const span of elementTagSpans(domNode)) {
-        const loc = spanLocation(span, documentUri);
-        if (loc) results.push({ ...loc, symbolId: entry.symbolId, nodeId: row.target });
+      // Emit separate open and close tag references with distinct referenceKinds.
+      if (domNode.tagLoc) {
+        const loc = spanLocation(domNode.tagLoc, documentUri);
+        if (loc) results.push({ kind: "text", referenceKind: "tag-name", nameForm: "kebab-case", ...loc, symbolId: entry.symbolId, nodeId: row.target });
+      }
+      if (domNode.closeTagLoc) {
+        const loc = spanLocation(domNode.closeTagLoc, documentUri);
+        if (loc) results.push({ kind: "text", referenceKind: "close-tag-name", nameForm: "kebab-case", ...loc, symbolId: entry.symbolId, nodeId: row.target });
       }
     }
   }
@@ -418,7 +423,7 @@ export function collectTemplateResourceReferences(options: {
       const entry = findEntry(resources.controllers, hit.instruction.res, null, preferRoots);
       if (!entry?.symbolId) continue;
       const loc = spanLocation(hit.loc, documentUri);
-      if (loc) results.push({ ...loc, symbolId: entry.symbolId });
+      if (loc) results.push({ kind: "text", referenceKind: "attribute-name", nameForm: "kebab-case", ...loc, symbolId: entry.symbolId });
       continue;
     }
     if (!nameSpan) continue;
@@ -432,7 +437,7 @@ export function collectTemplateResourceReferences(options: {
           : null;
         if (!entry?.symbolId) break;
         const loc = spanLocation(span, documentUri);
-        if (loc) results.push({ ...loc, symbolId: entry.symbolId });
+        if (loc) results.push({ kind: "text", referenceKind: "attribute-name", nameForm: "kebab-case", ...loc, symbolId: entry.symbolId });
         break;
       }
       case "propertyBinding":
@@ -443,7 +448,7 @@ export function collectTemplateResourceReferences(options: {
         const symbolId = bindableSymbolIdForTarget(target, hit.instruction.to, resources);
         if (!symbolId) break;
         const loc = spanLocation(span, documentUri);
-        if (loc) results.push({ ...loc, symbolId });
+        if (loc) results.push({ kind: "text", referenceKind: "attribute-name", nameForm: "kebab-case", ...loc, symbolId });
         break;
       }
       default:
@@ -459,10 +464,116 @@ export function collectTemplateResourceReferences(options: {
     if (!entry?.symbolId) continue;
     const loc = spanLocation(ref.span, documentUri);
     if (!loc) continue;
-    results.push({ ...loc, symbolId: entry.symbolId, exprId: ref.exprId });
+    const referenceKind = ref.kind === "valueConverter" ? "expression-pipe" as const : "expression-behavior" as const;
+    results.push({ kind: "text", referenceKind, nameForm: "camelCase", ...loc, symbolId: entry.symbolId, exprId: ref.exprId });
   }
 
   return results;
+}
+
+/**
+ * Collects TS-side reference sites for all resources in the definition index.
+ *
+ * For each resource, extracts references from the already-computed ResourceDef
+ * provenance: declaration name locations, class name locations, bindable
+ * property locations, and bindable callback locations.
+ *
+ * This is the second half of the dual-scope reference system — template
+ * references come from collectTemplateResourceReferences, TS references
+ * come from here. Both return TextReferenceSite[] and merge into a
+ * unified index.
+ */
+export function collectTypeScriptResourceReferences(options: {
+  resources: ResourceDefinitionIndex;
+}): TextReferenceSite[] {
+  const { resources } = options;
+  const results: TextReferenceSite[] = [];
+
+  const collectForMap = (map: ReadonlyMap<string, ResourceDefinitionEntry[]>) => {
+    for (const entries of map.values()) {
+      for (const entry of entries) {
+        collectResourceDefReferences(entry, results);
+      }
+    }
+  };
+
+  collectForMap(resources.elements);
+  collectForMap(resources.attributes);
+  collectForMap(resources.controllers);
+  collectForMap(resources.valueConverters);
+  collectForMap(resources.bindingBehaviors);
+
+  return results;
+}
+
+function collectResourceDefReferences(
+  entry: ResourceDefinitionEntry,
+  results: TextReferenceSite[],
+): void {
+  const { def, symbolId } = entry;
+  if (!symbolId) return;
+
+  // Declaration name site — the name property in the decorator/$au/define/local-template
+  const nameLoc = readLocation(def.name);
+  if (nameLoc && isNavigableSourceLocation(nameLoc)) {
+    const referenceKind = inferDeclarationReferenceKind(def);
+    const uri = canonicalDocumentUri(nameLoc.file).uri;
+    const span: SourceSpan = { start: nameLoc.pos, end: nameLoc.end, file: toSourceFileId(nameLoc.file) };
+    results.push({ kind: "text", referenceKind, nameForm: "kebab-case", uri, span, symbolId });
+  }
+
+  // Class name site — the class declaration identifier
+  const classNameLoc = readLocation(def.className);
+  if (classNameLoc && isNavigableSourceLocation(classNameLoc)) {
+    const uri = canonicalDocumentUri(classNameLoc.file).uri;
+    const span: SourceSpan = { start: classNameLoc.pos, end: classNameLoc.end, file: toSourceFileId(classNameLoc.file) };
+    results.push({ kind: "text", referenceKind: "class-name", nameForm: "PascalCase", uri, span, symbolId });
+  }
+
+  // Bindable property sites
+  if ("bindables" in def && def.bindables) {
+    const bindables = def.bindables as Readonly<Record<string, BindableDef>>;
+    for (const [propName, bindable] of Object.entries(bindables)) {
+      const bindableSymbolId = createBindableSymbolId({ owner: symbolId, property: propName });
+
+      // The @bindable property declaration
+      const propLoc = readLocation(bindable.property);
+      if (propLoc && isNavigableSourceLocation(propLoc)) {
+        const uri = canonicalDocumentUri(propLoc.file).uri;
+        const span: SourceSpan = { start: propLoc.pos, end: propLoc.end, file: toSourceFileId(propLoc.file) };
+        results.push({ kind: "text", referenceKind: "bindable-property", nameForm: "camelCase", uri, span, symbolId: bindableSymbolId });
+      }
+
+      // The attribute declaration site (from definition object bindable config)
+      const attrLoc = readLocation(bindable.attribute);
+      if (attrLoc && isNavigableSourceLocation(attrLoc)) {
+        const uri = canonicalDocumentUri(attrLoc.file).uri;
+        const span: SourceSpan = { start: attrLoc.pos, end: attrLoc.end, file: toSourceFileId(attrLoc.file) };
+        results.push({ kind: "text", referenceKind: "bindable-config-key", nameForm: "kebab-case", uri, span, symbolId: bindableSymbolId });
+      }
+    }
+  }
+}
+
+/** Infers the declaration-site referenceKind from the ResourceDef's provenance. */
+function inferDeclarationReferenceKind(def: ResourceDef): TextReferenceSite["referenceKind"] {
+  const nameSourcing = def.name;
+  if (!nameSourcing || typeof nameSourcing !== "object") return "decorator-name-property";
+  if ("origin" in nameSourcing) {
+    if (nameSourcing.origin === "builtin") return "decorator-name-property";
+    if (nameSourcing.origin === "config") return "decorator-name-property";
+  }
+  // For source-derived names, we can't easily distinguish decorator vs $au vs define
+  // from the Sourced<T> envelope alone. Default to decorator-name-property.
+  // The rename engine uses this for annotation grouping, not edit mechanics —
+  // edit mechanics use readLocation directly.
+  return "decorator-name-property";
+}
+
+function isNavigableSourceLocation(loc: SourceLocation): boolean {
+  if (loc.pos === 0 && loc.end === 0) return false;
+  if (!loc.file || !loc.file.match(/\.[a-z]+$/i)) return false;
+  return true;
 }
 
 function findRow(
