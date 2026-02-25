@@ -336,7 +336,12 @@ type ScopeEntry = { scope: ResourceScope; scopeOwner?: string };
 
 /**
  * Build an index of resource name → scope info from the ResourceGraph.
- * Resources in the root scope are global; resources in non-root scopes are local.
+ *
+ * Resource visibility is two-level (L1 scope-resolution): local container
+ * then root container. A resource in the root scope is visible everywhere.
+ * A resource is only "local" if it appears in a non-root scope AND is NOT
+ * in the root scope. Resources in both root and local scopes are global —
+ * the local copy is a pre-seeded duplicate, not an independent registration.
  */
 function buildScopeIndex(
   graph: import("@aurelia-ls/compiler").ResourceGraph | undefined | null,
@@ -344,19 +349,34 @@ function buildScopeIndex(
   const index = new Map<string, ScopeEntry>();
   if (!graph) return index;
 
-  for (const [scopeId, scope] of Object.entries(graph.scopes)) {
-    const isRoot = scopeId === graph.root;
-    if (isRoot) continue; // Root scope resources are global by default
+  const categories = ["elements", "attributes", "controllers", "valueConverters", "bindingBehaviors"] as const;
 
-    // Walk resources in this non-root scope — these are local
+  // Collect root scope resources — these are global everywhere
+  const rootResources = new Set<string>();
+  const rootScope = graph.scopes[graph.root];
+  if (rootScope?.resources) {
+    for (const category of categories) {
+      const records = rootScope.resources[category];
+      if (!records) continue;
+      for (const name of Object.keys(records)) {
+        rootResources.add(name);
+      }
+    }
+  }
+
+  // Walk non-root scopes — only mark resources as local if they're NOT in root
+  for (const [scopeId, scope] of Object.entries(graph.scopes)) {
+    if (scopeId === graph.root) continue;
+
     const resources = scope.resources;
     if (!resources) continue;
     const owner = scope.label ?? scopeId;
 
-    for (const category of ["elements", "attributes", "controllers", "valueConverters", "bindingBehaviors"] as const) {
+    for (const category of categories) {
       const records = resources[category];
       if (!records) continue;
       for (const name of Object.keys(records)) {
+        if (rootResources.has(name)) continue;
         index.set(name, { scope: "local" as ResourceScope, scopeOwner: owner });
       }
     }
