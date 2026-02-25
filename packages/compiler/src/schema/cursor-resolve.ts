@@ -520,6 +520,21 @@ function matchInstruction(
     case 'hydrateTemplateController': {
       const controllerName = (ins as { res?: string }).res ?? '';
       const config = syntax?.controllers?.[controllerName] ?? null;
+      // Command-position detection: if the cursor is on the command suffix
+      // (e.g., "bind" in "if-not.bind"), return CommandEntity instead of
+      // TCAttrEntity. Commands are binding mechanics, not navigable symbols.
+      const tcCmdName = (ins as { command?: string }).command;
+      if (tcCmdName && syntax?.bindingCommands?.[tcCmdName]) {
+        const commandStart = loc.start + controllerName.length + 1; // +1 for the dot
+        if (offset >= commandStart) {
+          return {
+            kind: 'command',
+            command: syntax.bindingCommands[tcCmdName]!,
+            name: tcCmdName,
+            span: loc,
+          } satisfies CommandEntity;
+        }
+      }
       const props = (ins as { props?: readonly { kind?: string; forOf?: { code?: string } }[] }).props;
       const iteratorProp = props?.find((p) => p.kind === 'iteratorBinding');
       return {

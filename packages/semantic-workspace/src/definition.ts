@@ -195,9 +195,13 @@ export function collectTemplateDefinitionSlices(options: {
   // Skip entity dispatch when the cursor is on the command portion of an
   // attribute (e.g., ".bind" in "if-not.bind"). The command position should
   // produce no definition — it's a binding mechanic, not a navigable symbol.
-  const entityOnCommand = entity && (entity.kind === 'tc-attr' || entity.kind === 'ca-attr' || entity.kind === 'command')
-    ? isOffsetOnCommand(compilation, offset, syntax)
-    : false;
+  // When CursorEntity returns kind:'command', trust it directly — no secondary
+  // check needed. The isOffsetOnCommand fallback handles cases where CursorEntity
+  // produces a tc-attr or ca-attr but the cursor is actually on the command suffix.
+  const entityOnCommand = entity?.kind === 'command'
+    || (entity && (entity.kind === 'tc-attr' || entity.kind === 'ca-attr')
+      ? isOffsetOnCommand(compilation, offset, syntax)
+      : false);
   const entityDef = entity && !entityOnCommand
     ? resolveResourceEntityDefinition(entity, resources, preferRoots, options.resolveClassLocation)
     : null;
@@ -267,7 +271,10 @@ export function collectTemplateDefinitionSlices(options: {
   //
   // Cross-template symbolId matching catches any remaining positions
   // where the cursor overlaps a resource reference span.
-  if (resource.length === 0) {
+  // Skip when the cursor is on a command — commands are binding mechanics
+  // with no navigable definition, and reference spans for TC/CA attributes
+  // cover the full attribute including the command suffix.
+  if (resource.length === 0 && !entityOnCommand) {
     const resourceHits = collectTemplateResourceReferences({
       compilation,
       resources,
