@@ -17,7 +17,7 @@
     count.bind="total"
     level="${activeSeverity}"
     items.bind="items"
-    on-refresh.call="refreshData()"
+    on-refresh.trigger="refreshData()"
   >
     <!-- ═══════ Position type 5a: interpolation expression ═══════ -->
     <h2>${title}</h2>
@@ -108,7 +108,7 @@
     </au-slot>
 
     <!-- ═══════ au-compose ═══════ -->
-    <au-compose subject.bind="items[0]" component.bind="null"></au-compose>
+    <au-compose component.bind="null"></au-compose>
 
     <!-- ═══════ switch/case/default-case (branch TCs with linking) ═══════ -->
     <template switch.bind="activeSeverity">

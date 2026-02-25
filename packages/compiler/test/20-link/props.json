@@ -451,14 +451,11 @@
     }
   },
   {
-    "name": "R-P-45 au-compose unknown bindable -> aurelia/unknown-bindable",
+    "name": "R-P-45 au-compose unknown bindable suppressed (capture: true absorbs unrecognized attrs)",
     "markup": "<au-compose bogus.bind=\"x\"></au-compose>",
     "expect": {
       "items": [
         { "kind": "prop", "to": "bogus", "target": "unknown", "effectiveMode": "toView" }
-      ],
-      "diags": [
-        { "code": "aurelia/unknown-bindable" }
       ]
     }
   },
@@ -476,7 +473,7 @@
     }
   },
   {
-    "name": "R-P-47 au-compose 'subject.bind' becomes unknown when removed from bindables",
+    "name": "R-P-47 au-compose 'subject.bind' becomes unknown when removed from bindables (capture disabled)",
     "semOverrides": {
       "resources": {
         "elements": {
@@ -485,6 +482,7 @@
             "name": "au-compose",
             "boundary": true,
             "containerless": false,
+            "capture": false,
             "bindables": {}
           }
         }

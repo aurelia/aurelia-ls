@@ -738,6 +738,11 @@ function linkPropertyBinding(ins: PropertyBindingIR, host: NodeSem, ctx: Resolve
       if (isUnknownCustomElement(host, ctx.graph)) {
         return pure(linked); // No diagnostic - root cause is element, not prop
       }
+      // F8 §Missing Bindable: when the CE has `capture` enabled, unrecognized
+      // attributes are captured rather than flagged. Suppress the diagnostic.
+      if (host.kind === "element" && host.custom?.def.capture) {
+        return pure(linked);
+      }
       const hasHostGaps = host.kind === "element" && host.custom != null && ctx.lookup.hasGaps("custom-element", host.tag);
       const gapQualifier = hasHostGaps ? " (element has analysis gaps)" : "";
       const bindable = {
@@ -891,6 +896,10 @@ function linkSetProperty(ins: SetPropertyIR, host: NodeSem, ctx: ResolverContext
   if (target.kind === "unknown") {
     // Stub propagation: suppress unknown-target diagnostics for unknown custom elements.
     if (isUnknownCustomElement(host, ctx.graph)) {
+      return pure(linked);
+    }
+    // F8 §Missing Bindable: capture-enabled CEs absorb unrecognized attributes.
+    if (host.kind === "element" && host.custom?.def.capture) {
       return pure(linked);
     }
     const hasHostGaps = host.kind === "element" && host.custom != null && ctx.lookup.hasGaps("custom-element", host.tag);

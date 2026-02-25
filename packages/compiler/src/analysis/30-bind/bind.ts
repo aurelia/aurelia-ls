@@ -878,8 +878,14 @@ function bindingNamesFromDeclaration(
 // Note: findBadInPattern is now imported from expr-utils.ts
 
 function badExpressionSpan(ast: BadExpression, ref: ExprRef): SourceSpan | null {
-  const span = provenanceSpan(ast.origin ?? null) ?? ast.span ?? ref.loc ?? null;
-  return normalizeSpanMaybe(span);
+  const precise = provenanceSpan(ast.origin ?? null) ?? ast.span ?? null;
+  // When the parse error span is zero-length (cursor position only), prefer
+  // the full expression span from ref.loc so the diagnostic underlines the
+  // expression rather than an invisible point.
+  if (precise && precise.start < precise.end) {
+    return normalizeSpanMaybe(precise);
+  }
+  return normalizeSpanMaybe(ref.loc ?? precise ?? null);
 }
 
 function unwrapOrigin(source: Origin | Provenance | null): Origin | null {

@@ -57,6 +57,9 @@ export class App {
     return this.items.filter((item) => item.status === status);
   }
 
+  // Ref binding target (ref="searchInput" assigns the element to this property)
+  searchInput!: HTMLInputElement;
+
   // Nullable for optional chaining tests
   selectedItem: MatrixItem | null = null;
 

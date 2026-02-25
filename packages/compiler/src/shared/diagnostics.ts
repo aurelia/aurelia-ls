@@ -52,8 +52,13 @@ export function buildDiagnostic<
   return diag;
 }
 
-/** Resolve the canonical span for a diagnostic, preferring provenance when available. */
+/** Resolve the canonical span for a diagnostic, preferring provenance when available.
+ * When the provenance span is zero-length (e.g., parse error cursor position),
+ * fall back to the diagnostic's own span so underlines cover the expression. */
 export function diagnosticSpan(diag: CompilerDiagnostic): SourceSpan | null {
-  const resolved = provenanceSpan(diag.origin ?? null) ?? diag.span ?? null;
-  return normalizeSpanMaybe(resolved);
+  const fromOrigin = provenanceSpan(diag.origin ?? null);
+  if (fromOrigin && fromOrigin.start < fromOrigin.end) {
+    return normalizeSpanMaybe(fromOrigin);
+  }
+  return normalizeSpanMaybe(diag.span ?? fromOrigin ?? null);
 }

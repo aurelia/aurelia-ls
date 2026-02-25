@@ -24,6 +24,7 @@ export const resourceResolutionDiagnostics = {
     stages: ["link", "bind"],
     surfaces: ["lsp", "vscode-inline", "vscode-panel", "cli", "aot"],
     defaultConfidence: "high",
+    aurCode: "AUR0752",
     aurCodeHints: ["AUR0752", "AUR0760"],
     description: "Unknown custom element.",
     data: {

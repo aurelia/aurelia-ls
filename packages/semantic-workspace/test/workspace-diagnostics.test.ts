@@ -261,7 +261,7 @@ describe("workspace diagnostics (workspace-contract)", () => {
     harness.updateTemplate(appUri, mutated, 6);
 
     const diags = diagnosticsForSurface(harness.workspace.query(appUri).diagnostics());
-    const offset = findOffset(mutated, "foo(") + "foo(".length;
+    const offset = findOffset(mutated, "foo(") + 1;
     const match = findDiagnostic(diags, "aurelia/expr-parse-error", offset);
     expect(match).toBeDefined();
     expectNoNormalizationIssues(harness.workspace, appUri);

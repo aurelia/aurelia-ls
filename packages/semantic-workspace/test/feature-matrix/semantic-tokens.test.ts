@@ -368,11 +368,12 @@ describe("semantic tokens: completeness", () => {
     expect(fvTokens.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("call command on on-refresh gets a token", () => {
-    const callTokens = tokens.filter(
-      (t) => t.type === "aureliaCommand" && tokenText(t) === "call",
+  it("trigger command on on-refresh gets a token", () => {
+    const triggerTokens = tokens.filter(
+      (t) => t.type === "aureliaCommand" && tokenText(t) === "trigger",
     );
-    expect(callTokens.length).toBeGreaterThanOrEqual(1);
+    // on-refresh.trigger + click.trigger + @click (mapped to trigger)
+    expect(triggerTokens.length).toBeGreaterThanOrEqual(1);
   });
 });
 
