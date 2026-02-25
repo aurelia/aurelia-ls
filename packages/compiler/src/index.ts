@@ -157,6 +157,13 @@ export type {
   ResolveCursorEntity,
   CursorResolutionInput,
   CursorResolutionResult,
+  // L2 referential index (workspace-level cross-domain provenance)
+  ReferentialIndex,
+  ReferenceSite,
+  TextReferenceSite,
+  FileReferenceSite,
+  ReferenceKind,
+  NameForm,
 } from "./schema/index.js";
 
 export {
@@ -172,6 +179,9 @@ export {
   isNavigable,
   isRenameable,
   entityRef,
+  // L2 referential index implementation
+  InMemoryReferentialIndex,
+  extractReferenceSites,
 } from "./schema/index.js";
 
 // Resource definitions (for compiler project-semantics and external tooling)

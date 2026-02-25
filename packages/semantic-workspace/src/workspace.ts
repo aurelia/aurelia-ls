@@ -3,7 +3,7 @@ import {
   DefaultTemplateBuildService,
   DefaultTemplateLanguageService,
   DefaultTemplateProgram,
-  InMemoryProvenanceIndex,
+  InMemoryOverlaySpanIndex,
   InMemorySourceStore,
   buildResourceGraphFromSemantics,
   canonicalDocumentUri,
@@ -18,7 +18,7 @@ import {
   type DocumentUri,
   type Location as TemplateLocation,
   type OverlayBuildArtifact,
-  type ProvenanceIndex,
+  type OverlaySpanIndex,
   type SourceSpan,
   type SourceStore,
   type TemplateCodeAction,
@@ -32,6 +32,10 @@ import {
   type TextEdit as TemplateTextEdit,
   type TextRange,
   type ConfidenceLevel,
+  type CursorEntity,
+  type ReferentialIndex,
+  InMemoryReferentialIndex,
+  extractReferenceSites,
   resolveCursorEntity,
 } from "@aurelia-ls/compiler";
 import {
@@ -59,7 +63,7 @@ export interface SemanticWorkspaceKernelOptions {
   readonly program: WorkspaceProgramOptions;
   readonly language?: TemplateLanguageServiceOptions;
   readonly sourceStore?: SourceStore;
-  readonly provenance?: ProvenanceIndex;
+  readonly provenance?: OverlaySpanIndex;
   readonly configHash?: string;
   readonly fingerprint?: string;
   readonly lookupText?: (uri: DocumentUri) => string | null;
@@ -73,7 +77,8 @@ const EMPTY_COMPLETIONS: readonly WorkspaceCompletionItem[] = [];
 
 export class SemanticWorkspaceKernel implements SemanticWorkspace {
   readonly sources: SourceStore;
-  provenance: ProvenanceIndex;
+  readonly referentialIndex: ReferentialIndex;
+  provenance: OverlaySpanIndex;
   program: TemplateProgram;
   buildService: DefaultTemplateBuildService;
   languageService: TemplateLanguageService;
@@ -87,7 +92,8 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
 
   constructor(options: SemanticWorkspaceKernelOptions) {
     this.sources = options.sourceStore ?? new InMemorySourceStore();
-    this.provenance = options.provenance ?? new InMemoryProvenanceIndex();
+    this.referentialIndex = new InMemoryReferentialIndex();
+    this.provenance = options.provenance ?? new InMemoryOverlaySpanIndex();
     this.#programOptions = options.program;
     this.#languageOptions = options.language ?? {};
     this.#lookupText = options.lookupText;
@@ -218,7 +224,7 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
       return true;
     }
 
-    const preview = this.#createProgram(new InMemoryProvenanceIndex(), next.program);
+    const preview = this.#createProgram(new InMemoryOverlaySpanIndex(), next.program);
     const previewFingerprint = next.fingerprint ?? preview.optionsFingerprint;
 
     if (preview.optionsFingerprint === this.program.optionsFingerprint && previewFingerprint === this.#workspaceFingerprint) {
@@ -270,7 +276,15 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
   getCompilation(uri: DocumentUri): TemplateCompilation | null {
     try {
       const canonical = canonicalDocumentUri(uri);
-      return this.program.getCompilation(canonical.uri);
+      const compilation = this.program.getCompilation(canonical.uri);
+      if (compilation) {
+        // Feed the referential index after each compilation.
+        // extractReferenceSites walks the linked module and produces
+        // reference sites for every resource reference in this template.
+        const sites = extractReferenceSites(canonical.uri as any, compilation);
+        this.referentialIndex.updateFromTemplate(canonical.uri as any, sites);
+      }
+      return compilation;
     } catch {
       return null;
     }
@@ -304,7 +318,7 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
     }
   }
 
-  #createProgram(provenance: ProvenanceIndex, options: WorkspaceProgramOptions): TemplateProgram {
+  #createProgram(provenance: OverlaySpanIndex, options: WorkspaceProgramOptions): TemplateProgram {
     return new DefaultTemplateProgram({
       ...options,
       sourceStore: this.sources,
@@ -319,21 +333,19 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
       const offset = offsetAtPosition(text, pos);
       if (offset == null) return null;
 
-      const base = this.languageService.getHover(uri, pos);
+      // CursorEntity is the sole authority for hover content.
+      // Identity comes from the entity, type from the epistemic path.
+      // No overlay fallback — if the epistemic path returns unknown,
+      // that's an honest answer about what the system knows.
       let detail = null;
       let confidence: ConfidenceLevel = 'high';
-      try {
-        const compilation = this.program.getCompilation(uri);
-        const query = this.program.query;
-        detail = collectTemplateHover({
-          compilation,
-          text,
-          offset,
-          syntax: query.syntax,
-          semantics: query.model.semantics,
-        });
+      let entityType: string | null = null;
 
-        // Resolve confidence for this position
+      try {
+        const compilation = this.getCompilation(uri) ?? this.program.getCompilation(uri);
+        const query = this.program.query;
+
+        // 1. Resolve CursorEntity — shared across all features
         const resolution = resolveCursorEntity({
           compilation,
           offset,
@@ -342,7 +354,20 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
         });
         if (resolution) {
           confidence = resolution.compositeConfidence;
+
+          // 2. Extract type from the epistemic path (clean, no overlay artifacts)
+          entityType = extractEntityType(resolution.entity);
         }
+
+        // 4. Build structured hover cards (resource metadata, expression labels)
+        detail = collectTemplateHover({
+          compilation,
+          text,
+          offset,
+          syntax: query.syntax,
+          semantics: query.model.semantics,
+          entityType,
+        });
       } catch (error) {
         debug.workspace("hover.collect.error", {
           message: error instanceof Error ? error.message : String(error),
@@ -350,20 +375,14 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
         detail = null;
       }
 
-      const baseSpan = base ? spanFromRange(uri, base.range, this.lookupText.bind(this)) : null;
-      // Always pass base type info so mergeHoverContents can integrate TS
-      // type signatures from the language service (expectedTypeOf + getQuickInfo)
-      // alongside the structured template metadata from collectTemplateHover.
-      let contents = mergeHoverContents(detail?.lines ?? [], base?.contents ?? null);
+      let contents = mergeHoverContents(detail?.lines ?? []);
       if (!contents) return null;
 
-      // Apply confidence-tiered rendering per hover spec epistemic contract
       contents = applyConfidenceTier(contents, confidence);
 
-      // Map L2 ConfidenceLevel to workspace confidence (only set when reduced)
       const wsConfidence = mapConfidenceToWorkspace(confidence);
 
-      const span = detail?.span ?? baseSpan ?? null;
+      const span = detail?.span ?? null;
       if (!span) return { contents, ...(wsConfidence ? { confidence: wsConfidence } : {}) };
 
       const location: WorkspaceLocation = {
@@ -592,6 +611,36 @@ function mapCodeActions(
  * - Low: sparse, explicitly uncertain. Prepend uncertainty notice.
  * - None: minimal. Replace with "analysis could not determine" message.
  */
+/**
+ * Extract the type string from a CursorEntity using the epistemic path.
+ *
+ * This is the clean type — derived from the compilation's type inference
+ * (inferredByExpr/expectedByExpr), not from TS display strings. Returns
+ * null when no type is available on the entity.
+ */
+function extractEntityType(entity: CursorEntity): string | null {
+  switch (entity.kind) {
+    case 'scope-identifier':
+      return entity.type ?? null;
+    case 'member-access':
+      return entity.memberType ?? null;
+    case 'global-access':
+      return entity.globalType ?? null;
+    case 'contextual-var':
+      return entity.type ?? null;
+    case 'scope-token':
+      return entity.resolvedType ?? null;
+    case 'iterator-decl':
+      return entity.itemType ?? null;
+    case 'value-converter': {
+      const out = entity.converter?.out;
+      return out?.kind === 'ts' ? out.name : null;
+    }
+    default:
+      return null;
+  }
+}
+
 /** Map L2 ConfidenceLevel to workspace hover confidence. Returns undefined for high (the default). */
 function mapConfidenceToWorkspace(level: ConfidenceLevel): "exact" | "high" | "partial" | "low" | undefined {
   switch (level) {

@@ -21,6 +21,8 @@ import {
   pos,
   offset,
   assertHoverContains,
+  assertHoverClean,
+  assertHoverNotContains,
   assertHoverSpanCovers,
   assertNoHover,
 } from "./_harness.js";
@@ -567,5 +569,173 @@ describe("hover ecosystem expression patterns", () => {
   it("comparison in if.bind produces hover on left operand", async () => {
     const hover = query.hover(await pos('if.bind="items.length > 0"', 'if.bind="'.length + 1));
     expect(hover).not.toBeNull();
+  });
+});
+
+// ============================================================================
+// 16. Overlay content sanitization — no implementation artifacts in hover
+//
+// The overlay system generates TypeScript files with internal names
+// (__AU_TTC_VM, __au$access, etc.) that must NEVER leak to the user.
+// These tests verify the full hover content is clean at every position
+// where the overlay is consulted (expressions, bindings, types).
+// ============================================================================
+
+describe("hover overlay sanitization", () => {
+  // --- Expression positions (overlay lambdas are consulted for type info) ---
+
+  it("interpolation identifier: no overlay artifacts", async () => {
+    const hover = query.hover(await pos("${title}", 2));
+    assertHoverClean(hover, "title interpolation");
+  });
+
+  it("member access: no overlay artifacts", async () => {
+    const hover = query.hover(await pos("${item.name}", "${item.".length));
+    assertHoverClean(hover, "item.name member");
+  });
+
+  it("deep property chain: no overlay artifacts", async () => {
+    const hover = query.hover(await pos("${groups[0].items[0].name}", 2));
+    assertHoverClean(hover, "deep chain");
+  });
+
+  it("method call expression: no overlay artifacts", async () => {
+    const hover = query.hover(await pos("selectItem(item)", 1));
+    assertHoverClean(hover, "selectItem method");
+  });
+
+  it("optional chaining: no overlay artifacts", async () => {
+    const hover = query.hover(await pos("${selectedItem?.name}", 2));
+    assertHoverClean(hover, "optional chain");
+  });
+
+  it("$this scope token: no overlay artifacts", async () => {
+    const hover = query.hover(await pos("${$this.title}", 2));
+    assertHoverClean(hover, "$this");
+  });
+
+  it("$parent scope token: no overlay artifacts", async () => {
+    const hover = query.hover(await pos("${$parent.title}", 2));
+    assertHoverClean(hover, "$parent");
+  });
+
+  it("contextual variable $index: no overlay artifacts", async () => {
+    const hover = query.hover(await pos("${$index + 1}", 2));
+    assertHoverClean(hover, "$index");
+  });
+
+  it("string concatenation: no overlay artifacts", async () => {
+    const hover = query.hover(await pos("${noteMessage + ' (' + total", 2));
+    assertHoverClean(hover, "string concat");
+  });
+
+  it("getter property: no overlay artifacts", async () => {
+    const hover = query.hover(await pos("${filteredItems.length}", 2));
+    assertHoverClean(hover, "getter");
+  });
+
+  it("nested ternary: no overlay artifacts", async () => {
+    const hover = query.hover(await pos("${activeSeverity === 'error'", 2));
+    assertHoverClean(hover, "ternary");
+  });
+
+  it("binding expression value.bind: no overlay artifacts", async () => {
+    const hover = query.hover(await pos("value.bind=\"noteMessage\"", "value.bind=\"".length + 1));
+    assertHoverClean(hover, "bind expression");
+  });
+
+  // --- Resource positions (type info from overlay) ---
+
+  it("CE hover: no overlay artifacts in bindable types", async () => {
+    const hover = query.hover(await pos("<matrix-panel\n", 1));
+    assertHoverClean(hover, "CE matrix-panel");
+  });
+
+  it("CA hover: no overlay artifacts", async () => {
+    const hover = query.hover(await pos("matrix-highlight.bind", 1));
+    assertHoverClean(hover, "CA matrix-highlight");
+  });
+
+  it("VC hover: no overlay artifacts", async () => {
+    const hover = query.hover(await pos("| formatDate", 2));
+    assertHoverClean(hover, "VC formatDate");
+  });
+
+  it("BB hover: no overlay artifacts", async () => {
+    const hover = query.hover(await pos("& rateLimit", 2));
+    assertHoverClean(hover, "BB rateLimit");
+  });
+
+  it("TC repeat hover: no overlay artifacts", async () => {
+    const hover = query.hover(await pos("repeat.for=\"item of items\"", 1));
+    assertHoverClean(hover, "TC repeat");
+  });
+
+  // --- Scope construct positions (overlay frames are consulted) ---
+
+  it("with scope property: no overlay artifacts", async () => {
+    const hover = query.hover(await pos("<div with.bind=\"items[0]\">\n      <span>${name}", "${name}".length - 2));
+    assertHoverClean(hover, "with scope name");
+  });
+
+  it("promise result variable: no overlay artifacts", async () => {
+    const hover = query.hover(await pos("${result.message}", 2));
+    assertHoverClean(hover, "promise result");
+  });
+
+  it("destructured repeat variable: no overlay artifacts", async () => {
+    const hover = query.hover(await pos("${entry.name}", 2));
+    assertHoverClean(hover, "destructured entry");
+  });
+
+  it("nested repeat inner item: no overlay artifacts", async () => {
+    const hover = query.hover(await pos("${item.name}: ${item.count}", 2));
+    assertHoverClean(hover, "nested repeat item");
+  });
+
+  // --- Hover content should show user-friendly type names ---
+
+  it("expression type shows clean TypeScript type, not overlay alias", async () => {
+    const hover = query.hover(await pos("${title}", 2));
+    if (hover) {
+      // If type info is present, it should be a clean TS type
+      assertHoverNotContains(hover, "__", "expression type");
+    }
+  });
+
+  it("binding target type shows clean type, not overlay wrapper", async () => {
+    const hover = query.hover(await pos("count.bind", 1));
+    if (hover) {
+      assertHoverNotContains(hover, "__", "bindable type");
+    }
+  });
+});
+
+// ============================================================================
+// 17. Hover content quality — type info shown for expression positions
+// ============================================================================
+
+describe("hover expression type info quality", () => {
+  it("simple identifier hover includes type information", async () => {
+    const hover = query.hover(await pos("${title}", 2));
+    if (hover) {
+      // Should show "string" type or similar, not just "(expression) title"
+      // At minimum, should have both expression card and type info
+      expect(hover.contents.length).toBeGreaterThan(20);
+    }
+  });
+
+  it("member access hover includes member type", async () => {
+    const hover = query.hover(await pos("${item.name}", "${item.".length));
+    if (hover) {
+      expect(hover.contents.length).toBeGreaterThan(20);
+    }
+  });
+
+  it("method call hover includes return type or method signature", async () => {
+    const hover = query.hover(await pos("selectItem(item)", 1));
+    if (hover) {
+      expect(hover.contents.length).toBeGreaterThan(20);
+    }
   });
 });

@@ -3,10 +3,10 @@ import { canonicalDocumentUri } from "./paths.js";
 import type { DocumentUri } from "./primitives.js";
 import {
   type DocumentSpan,
-  type OverlayProvenanceHit,
-  type ProvenanceIndex,
+  type OverlaySpanHit,
+  type OverlaySpanIndex,
   resolveTemplateUriForGenerated,
-} from "./provenance.js";
+} from "./overlay-span-index.js";
 
 export type TemplateToOverlayProjectionReason =
   | "mapped"
@@ -29,7 +29,7 @@ export type GeneratedReferenceLocationReason =
   | "missing-location";
 
 export interface TemplateToOverlayProjectionDecision {
-  readonly hit: OverlayProvenanceHit | null;
+  readonly hit: OverlaySpanHit | null;
   readonly reason: TemplateToOverlayProjectionReason;
 }
 
@@ -87,7 +87,7 @@ export const DEFAULT_PROVENANCE_PROJECTION_POLICY: ProvenanceProjectionPolicy = 
 };
 
 export function projectTemplateOffsetToOverlayWithPolicy(args: {
-  provenance: Pick<ProvenanceIndex, "projectTemplateOffset">;
+  provenance: Pick<OverlaySpanIndex, "projectTemplateOffset">;
   uri: DocumentUri;
   offset: number;
   materializeOverlay?: (() => void) | null | undefined;
@@ -115,7 +115,7 @@ export function projectTemplateOffsetToOverlayWithPolicy(args: {
 }
 
 export function projectTemplateSpanToOverlayWithPolicy(args: {
-  provenance: Pick<ProvenanceIndex, "projectTemplateSpan">;
+  provenance: Pick<OverlaySpanIndex, "projectTemplateSpan">;
   uri: DocumentUri;
   span: SourceSpan;
   materializeOverlay?: (() => void) | null | undefined;
@@ -208,7 +208,7 @@ export function resolveGeneratedReferenceLocationWithPolicy(args: {
   generatedSpan: SourceSpan | null;
   mappedLocation: DocumentSpan | null;
   mappedEvidence?: "exact" | "degraded" | null | undefined;
-  provenance: Pick<ProvenanceIndex, "getTemplateUriForGenerated">;
+  provenance: Pick<OverlaySpanIndex, "getTemplateUriForGenerated">;
   policy?: ProvenanceProjectionPolicy | undefined;
 }): GeneratedReferenceLocationDecision {
   const policy = args.policy ?? DEFAULT_PROVENANCE_PROJECTION_POLICY;

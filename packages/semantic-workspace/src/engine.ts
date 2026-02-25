@@ -13,7 +13,7 @@ import {
   normalizePathForId,
   normalizeSpan,
   offsetAtPosition,
-  provenanceHitToDocumentSpan,
+  overlayHitToDocumentSpan,
   resolveGeneratedReferenceLocationWithPolicy,
   runDiagnosticsPipeline,
   spanContainsOffset,
@@ -186,6 +186,8 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
   readonly #refactorDecisions: RefactorDecisionSet | null;
   readonly #trace: ReturnType<typeof createTrace> | null;
   #disposed = false;
+
+  get referentialIndex() { return this.#kernel.referentialIndex; }
 
   constructor(options: SemanticWorkspaceEngineOptions) {
     this.#logger = options.logger;
@@ -1095,7 +1097,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
         ),
       );
       const hit = provenance.projectGeneratedSpan(refCanonical.uri, span);
-      const mapped = provenanceHitToDocumentSpan(hit);
+      const mapped = overlayHitToDocumentSpan(hit);
       const decision = resolveGeneratedReferenceLocationWithPolicy({
         generatedUri: refCanonical.uri,
         generatedSpan: span,

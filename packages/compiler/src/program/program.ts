@@ -24,7 +24,7 @@ import type { TemplateMappingArtifact, TemplateQueryFacade } from "../synthesis/
 
 import type { DocumentSnapshot, DocumentUri } from "./primitives.js";
 import { InMemorySourceStore, type SourceStore } from "./sources.js";
-import { InMemoryProvenanceIndex, type ProvenanceIndex } from "./provenance.js";
+import { InMemoryOverlaySpanIndex, type OverlaySpanIndex } from "./overlay-span-index.js";
 import { canonicalDocumentUri, deriveTemplatePaths, normalizeDocumentUri, type CanonicalDocumentUri } from "./paths.js";
 
 // ============================================================================
@@ -45,7 +45,7 @@ export interface TemplateProgramOptions {
   readonly exprParser?: IExpressionParser;
   readonly overlayBaseName?: string;
   readonly sourceStore?: SourceStore;
-  readonly provenance?: ProvenanceIndex;
+  readonly provenance?: OverlaySpanIndex;
   /** Trace for per-compilation instrumentation. */
   readonly trace?: CompileTrace;
 }
@@ -69,7 +69,7 @@ export interface TemplateProgramUpdateResult {
 export interface TemplateProgram {
   readonly query: SemanticModelQuery;
   readonly sources: SourceStore;
-  readonly provenance: ProvenanceIndex;
+  readonly provenance: OverlaySpanIndex;
   readonly options: TemplateProgramOptions;
   /** Model fingerprint — changes when semantics change. */
   readonly optionsFingerprint: string;
@@ -143,7 +143,7 @@ export class DefaultTemplateProgram implements TemplateProgram {
   options: TemplateProgramOptions;
   optionsFingerprint: string;
   readonly sources: SourceStore;
-  readonly provenance: ProvenanceIndex;
+  readonly provenance: OverlaySpanIndex;
 
   #modelFingerprint: string;
   #vocabFingerprint: string;
@@ -157,7 +157,7 @@ export class DefaultTemplateProgram implements TemplateProgram {
     this.#vocabFingerprint = stableHash(options.query.model.syntax);
     this.optionsFingerprint = this.#modelFingerprint;
     this.sources = options.sourceStore ?? new InMemorySourceStore();
-    this.provenance = options.provenance ?? new InMemoryProvenanceIndex();
+    this.provenance = options.provenance ?? new InMemoryOverlaySpanIndex();
   }
 
   upsertTemplate(uri: DocumentUri, text: string, version?: number): void {

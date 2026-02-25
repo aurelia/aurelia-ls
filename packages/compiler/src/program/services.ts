@@ -29,14 +29,14 @@ import { collectTemplateCompletionsForProgram } from "./completions.js";
 import {
   projectGeneratedLocationToDocumentSpanWithOffsetFallback,
   projectGeneratedSpanToDocumentSpanWithOffsetFallback,
-  provenanceHitToDocumentSpan,
+  overlayHitToDocumentSpan,
   resolveGeneratedLocationSpan,
   resolveTemplateUriForGenerated,
   type DocumentSpan,
-  type OverlayProvenanceHit,
-  type ProvenanceIndex,
-  type TemplateProvenanceHit,
-} from "./provenance.js";
+  type OverlaySpanHit,
+  type OverlaySpanIndex,
+  type TemplateSpanHit,
+} from "./overlay-span-index.js";
 import type { TemplateProgram } from "./program.js";
 import {
   DEFAULT_PROVENANCE_PROJECTION_POLICY,
@@ -46,9 +46,9 @@ import {
   resolveOverlayDiagnosticLocationWithPolicy,
   resolveRelatedDiagnosticLocationWithPolicy,
   shouldRejectOverlayEditBatch,
-} from "./provenance-policy.js";
+} from "./overlay-span-policy.js";
 
-export type { DocumentSpan } from "./provenance.js";
+export type { DocumentSpan } from "./overlay-span-index.js";
 export type { Position, TextRange } from "../model/index.js";
 export type { CompletionConfidence, CompletionItem, CompletionOrigin } from "./completion-contracts.js";
 
@@ -69,11 +69,6 @@ export interface TemplateCodeAction {
 
 export interface Location {
   uri: DocumentUri;
-  range: TextRange;
-}
-
-export interface HoverInfo {
-  contents: string;
   range: TextRange;
 }
 
@@ -219,7 +214,7 @@ type TypeNameMap = ReadonlyMap<string, string>;
 
 export interface TemplateLanguageService {
   getDiagnostics(uri: DocumentUri): TemplateLanguageDiagnostics;
-  getHover(uri: DocumentUri, position: Position): HoverInfo | null;
+  getExpressionType(uri: DocumentUri, position: Position): string | null;
   getCompletions(uri: DocumentUri, position: Position): CompletionItem[];
   getDefinition(uri: DocumentUri, position: Position): Location[];
   getReferences(uri: DocumentUri, position: Position): Location[];
@@ -313,36 +308,37 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     return this.build.getOverlay(uri);
   }
 
-  getHover(uri: DocumentUri, position: Position): HoverInfo | null {
+  /**
+   * Extract only the type for an expression at a template position.
+   *
+   * Uses the overlay projection to query TypeScript, then parses out only the
+   * type portion — identity comes from positional provenance (memberPath),
+   * never from the TS display string. Returns null when no type is available.
+   */
+  getExpressionType(uri: DocumentUri, position: Position): string | null {
     const canonical = canonicalDocumentUri(uri);
-    const query = this.program.getQuery(canonical.uri);
     const snapshot = this.requireSnapshot(canonical);
     const offset = offsetAtPosition(snapshot.text, position);
     if (offset == null) return null;
 
-    const expr = query.exprAt(offset);
+    const ts = this.options.typescript;
+    if (!ts?.getQuickInfo) return null;
 
-    const contents: string[] = [];
-    if (expr) {
-      const type = query.expectedTypeOf(expr);
-      const member = expr.memberPath ? `${expr.memberPath}` : "expression";
-      contents.push(type ? `${member}: ${type}` : member);
-    }
+    const overlayHit = this.projectTemplateOffsetToOverlay(canonical, offset);
+    if (!overlayHit) return null;
 
-    const tsHover = this.collectTypeScriptHover(canonical, snapshot, offset);
-    if (tsHover) contents.push(tsHover.text);
+    const overlay = this.overlaySnapshot(canonical.uri);
+    const overlayOffset = overlayHit.edge.from.span.start;
+    const info = ts.getQuickInfo(overlay, overlayOffset);
+    if (!info?.text) return null;
 
-    if (!contents.length) return null;
+    if (isOverlayLambdaParameter(info.text)) return null;
 
-    const span =
-      tsHover?.span ??
-      expr?.span ??
-      resolveSourceSpan({ start: offset, end: offset }, snapshot.uri);
+    const parsed = parseQuickInfoType(info.text);
+    if (!parsed) return null;
 
-    return {
-      contents: contents.join("\n\n"),
-      range: spanToRange(span, snapshot.text),
-    };
+    const typeNames = this.typeNamesFor(canonical);
+    return rewriteTypeNames(parsed, typeNames);
   }
 
   getCompletions(uri: DocumentUri, position: Position): CompletionItem[] {
@@ -547,36 +543,8 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     };
   }
 
-  private collectTypeScriptHover(
-    canonical: CanonicalDocumentUri,
-    snapshot: DocumentSnapshot,
-    offset: number,
-  ): { text: string; span?: SourceSpan } | null {
-    const ts = this.options.typescript;
-    if (!ts?.getQuickInfo) return null;
-
-    const overlayHit = this.projectTemplateOffsetToOverlay(canonical, offset);
-    if (!overlayHit) return null;
-
-    const overlay = this.overlaySnapshot(canonical.uri);
-    const overlayOffset = overlayHit.edge.from.span.start;
-    const info = ts.getQuickInfo(overlay, overlayOffset);
-    if (!info) return null;
-    const typeNames = this.typeNamesFor(canonical);
-
-    const overlaySpan = resolveSourceSpan(
-      { start: info.start ?? overlayOffset, end: (info.start ?? overlayOffset) + (info.length ?? 0) },
-      overlay.file,
-    );
-    const mapped = projectGeneratedSpanToDocumentSpanWithOffsetFallback(this.program.provenance, overlay.uri, overlaySpan);
-    const hoverSpan =
-      mapped?.span && spanLength(mapped.span) > 0
-        ? mapped.span
-        : overlayHit.edge.to.span;
-    const rewrittenText = rewriteTypeNames(info.text, typeNames);
-    const text = info.documentation ? `${rewrittenText}\n\n${info.documentation}` : rewrittenText;
-    return { text, span: hoverSpan };
-  }
+  // collectTypeScriptHover removed — hover now driven by CursorEntity
+  // in workspace layer. Type enrichment via getExpressionType() above.
 
   private mapTypeScriptLocations(locations: readonly TsLocation[], overlay: OverlayDocumentSnapshot): Location[] {
     const results: Location[] = [];
@@ -604,7 +572,7 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
         ? this.program.provenance.projectGeneratedSpan(generated.uri, generatedSpan)
         : null;
       const projectedLocation = projectedHit
-        ? provenanceHitToDocumentSpan(projectedHit)
+        ? overlayHitToDocumentSpan(projectedHit)
         : projectGeneratedLocationToDocumentSpanWithOffsetFallback(this.program.provenance, generatedLocation);
       const projectedEvidence = projectedHit?.edge.evidence?.level ?? (projectedLocation ? "degraded" : null);
       const decision = resolveGeneratedReferenceLocationWithPolicy({
@@ -738,7 +706,7 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
   private provenanceForReferenceDecision(
     generatedUri: DocumentUri,
     templateUri: DocumentUri | null,
-  ): Pick<ProvenanceIndex, "getTemplateUriForGenerated"> {
+  ): Pick<OverlaySpanIndex, "getTemplateUriForGenerated"> {
     if (!templateUri) return this.program.provenance;
     const canonicalGeneratedUri = canonicalDocumentUri(generatedUri).uri;
     return {
@@ -767,7 +735,7 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     }
   }
 
-  private projectTemplateOffsetToOverlay(uri: CanonicalDocumentUri, offset: number): OverlayProvenanceHit | null {
+  private projectTemplateOffsetToOverlay(uri: CanonicalDocumentUri, offset: number): OverlaySpanHit | null {
     const decision = projectTemplateOffsetToOverlayWithPolicy({
       provenance: this.program.provenance,
       uri: uri.uri,
@@ -784,7 +752,7 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     uri: CanonicalDocumentUri,
     start: number,
     end: number,
-  ): OverlayProvenanceHit | null {
+  ): OverlaySpanHit | null {
     const span = resolveSourceSpan({ start, end }, uri.file);
     const decision = projectTemplateSpanToOverlayWithPolicy({
       provenance: this.program.provenance,
@@ -874,7 +842,7 @@ type CompilerDiagnosticContext = {
   vmDisplayName?: string;
   vmRootTypeExpr?: string;
   overlay?: OverlayDocumentSnapshot | null | undefined;
-  provenance?: ProvenanceIndex | undefined;
+  provenance?: OverlaySpanIndex | undefined;
   typescript?: TypeScriptServices | undefined;
   typeNames?: TypeNameMap | undefined;
 };
@@ -973,7 +941,7 @@ function lookupQuickInfoType(
   ts: TypeScriptServices | undefined,
   overlay: OverlayDocumentSnapshot | null,
   overlaySpan: SourceSpan | null,
-  hit: TemplateProvenanceHit | null,
+  hit: TemplateSpanHit | null,
   typeNames: TypeNameMap,
 ): string | null {
   if (!ts?.getQuickInfo || !overlay || !overlaySpan) return null;
@@ -1008,7 +976,7 @@ function typeTextMatches(expected: string, actual: string): boolean {
 function mapTypeScriptDiagnostic(
   diag: TsDiagnostic,
   overlay: OverlayDocumentSnapshot,
-  provenance: ProvenanceIndex,
+  provenance: OverlaySpanIndex,
   vmDisplayName: string,
   typeNames: TypeNameMap,
 ): TemplateLanguageDiagnostic {
@@ -1097,11 +1065,28 @@ function rewriteTypeNames(text: string, typeNames: TypeNameMap): string {
   if (!text || typeNames.size === 0) return text;
   let result = text;
   for (const [alias, friendly] of typeNames) {
-    if (!alias || !friendly || alias === friendly) continue;
+    if (!alias || friendly == null || alias === friendly) continue;
     const re = new RegExp(`\\b${escapeRegExp(String(alias))}\\b`, "g");
     result = result.replace(re, friendly);
   }
   return result;
+}
+
+/**
+ * Detect overlay lambda parameter type info that should not be shown to users.
+ *
+ * The overlay emits lambdas like `o => o.member` where `o` is a generated
+ * parameter typed to the overlay frame. When the provenance projection maps
+ * a template offset to the `o` parameter (e.g., for `$this`), TypeScript
+ * returns the full frame type — an implementation artifact.
+ *
+ * This is a provenance-aware check: the overlay plan guarantees `o` is the
+ * sole parameter name for all overlay lambdas. If quickInfo identifies a
+ * `(parameter) o:`, we know it's the generated lambda parameter, not
+ * authored code.
+ */
+function isOverlayLambdaParameter(text: string): boolean {
+  return /^\(parameter\)\s+o\s*:/.test(text);
 }
 
 function escapeRegExp(value: string): string {
@@ -1111,6 +1096,16 @@ function escapeRegExp(value: string): string {
 function collectTypeNames(compilation: TemplateCompilation | null | undefined): TypeNameMap {
   const map = new Map<string, string>();
   if (!compilation) return map;
+
+  // Overlay helper types and functions — these are emitted by the overlay
+  // emitter and must never appear in user-facing content. The mapping is
+  // from the overlay plan's known vocabulary, not regex guessing.
+  map.set("__AU_DollarChangedProps", "");
+  map.set("__AU_DollarChangedValue", "");
+  map.set("__au$access", "");
+  map.set("__au_vc", "");
+  map.set("__au_bb", "");
+
   for (const tpl of compilation.overlayPlan.templates ?? []) {
     if (tpl.vmType?.alias) {
       const friendly = tpl.vmType.displayName ?? tpl.vmType.typeExpr;
@@ -1131,7 +1126,7 @@ function collectTypeNames(compilation: TemplateCompilation | null | undefined): 
 function formatTypeScriptMessage(
   diag: TsDiagnostic,
   vmDisplayName: string,
-  hit: TemplateProvenanceHit | null,
+  hit: TemplateSpanHit | null,
   typeNames: TypeNameMap,
 ): string {
   if (hit?.memberPath && shouldRewriteAsMissingMember(diag)) {

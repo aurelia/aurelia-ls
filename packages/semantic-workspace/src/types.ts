@@ -4,7 +4,7 @@ import type {
   ExprId,
   FeatureUsageSet,
   NodeId,
-  ProvenanceIndex,
+  OverlaySpanIndex,
   ResolvedDiagnostic,
   RoutedDiagnostics,
   RegistrationPlan,
@@ -41,7 +41,7 @@ export interface WorkspaceSnapshot {
   readonly syntax: TemplateSyntaxRegistry;
   readonly resourceGraph: ResourceGraph;
   // Provenance is the only mapping authority between generated and source spans.
-  readonly provenance: ProvenanceIndex;
+  readonly provenance: OverlaySpanIndex;
   // Optional artifacts are feature-driven; absence means the stage was not run.
   readonly semanticSnapshot?: SemanticSnapshot;
   readonly apiSurface?: ApiSurfaceSnapshot;
@@ -196,6 +196,9 @@ export interface SemanticWorkspace {
   diagnostics(uri: DocumentUri): WorkspaceDiagnostics;
   query(uri: DocumentUri): SemanticQuery;
   refactor(): RefactorEngine;
+
+  /** Workspace-level referential index (L2 cross-domain provenance). */
+  readonly referentialIndex: import("@aurelia-ls/compiler").ReferentialIndex;
 }
 
 // ============================================================================

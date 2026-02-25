@@ -13,8 +13,8 @@ import type {
 import type { DocumentUri, TemplateExprId, TemplateNodeId } from "./primitives.js";
 import { canonicalDocumentUri } from "./paths.js";
 
-/** Discriminant for provenance edges. Keep the set small and generic. */
-export type ProvenanceKind =
+/** Discriminant for overlay span edges. Keep the set small and generic. */
+export type OverlaySpanKind =
   | "overlayExpr"   // overlay TS <-> template expression
   | "overlayMember" // overlay TS member path segment <-> template member segment
   | "runtimeExpr"   // runtime artifact <-> template expression
@@ -22,37 +22,37 @@ export type ProvenanceKind =
   | "runtimeNode"   // runtime artifact <-> template node
   | "custom";       // reserved for tooling/plugins
 
-export interface ProvenanceEdgeEnd {
+export interface OverlaySpanEdgeEnd {
   readonly uri: DocumentUri;
   readonly span: SourceSpan;
   readonly exprId?: ExprId;
   readonly nodeId?: NodeId;
 }
 
-export interface ProvenanceEdgeEvidence {
+export interface OverlaySpanEvidence {
   readonly level: "exact" | "degraded";
   readonly reason?: "missing-html-member-span";
 }
 
-export interface ProvenanceEdge {
-  readonly kind: ProvenanceKind;
-  readonly from: ProvenanceEdgeEnd;
-  readonly to: ProvenanceEdgeEnd;
+export interface OverlaySpanEdge {
+  readonly kind: OverlaySpanKind;
+  readonly from: OverlaySpanEdgeEnd;
+  readonly to: OverlaySpanEdgeEnd;
   readonly tag?: string;
-  readonly evidence?: ProvenanceEdgeEvidence;
+  readonly evidence?: OverlaySpanEvidence;
 }
 
-export interface OverlayProvenanceHit {
+export interface OverlaySpanHit {
   readonly exprId?: ExprId;
   readonly memberPath?: string;
-  readonly edge: ProvenanceEdge;
+  readonly edge: OverlaySpanEdge;
 }
 
-export interface TemplateProvenanceHit {
+export interface TemplateSpanHit {
   readonly exprId?: ExprId;
   readonly nodeId?: NodeId;
   readonly memberPath?: string;
-  readonly edge: ProvenanceEdge;
+  readonly edge: OverlaySpanEdge;
 }
 
 export interface DocumentSpan {
@@ -72,7 +72,7 @@ export interface GeneratedLocation {
   readonly range?: TextRange | null;
 }
 
-export interface ProvenanceTemplateStats {
+export interface OverlayTemplateStats {
   readonly templateUri: DocumentUri;
   readonly overlayUri: DocumentUri | null;
   readonly runtimeUri: DocumentUri | null;
@@ -87,40 +87,40 @@ export interface ProvenanceTemplateStats {
   readonly runtimeEdges: number;
 }
 
-export interface ProvenanceStats {
+export interface OverlaySpanStats {
   readonly totalEdges: number;
-  readonly byKind: Partial<Record<ProvenanceKind, number>>;
+  readonly byKind: Partial<Record<OverlaySpanKind, number>>;
   readonly documents: readonly {
     readonly uri: DocumentUri;
     readonly edges: number;
-    readonly byKind: Partial<Record<ProvenanceKind, number>>;
+    readonly byKind: Partial<Record<OverlaySpanKind, number>>;
   }[];
 }
 
-export interface ProvenanceIndex {
-  addEdges(edges: Iterable<ProvenanceEdge>): void;
+export interface OverlaySpanIndex {
+  addEdges(edges: Iterable<OverlaySpanEdge>): void;
   addOverlayMapping(templateUri: DocumentUri, overlayUri: DocumentUri, mapping: TemplateMappingArtifact): void;
 
-  findByGenerated(uri: DocumentUri, offset: number): ProvenanceEdge[];
+  findByGenerated(uri: DocumentUri, offset: number): OverlaySpanEdge[];
 
   /** Project a generated span back to its template span, when possible. */
-  projectGeneratedSpan(uri: DocumentUri, span: SourceSpan): TemplateProvenanceHit | null;
+  projectGeneratedSpan(uri: DocumentUri, span: SourceSpan): TemplateSpanHit | null;
 
   /** Project a generated offset back to its template span, when possible. */
-  projectGeneratedOffset(uri: DocumentUri, offset: number): TemplateProvenanceHit | null;
+  projectGeneratedOffset(uri: DocumentUri, offset: number): TemplateSpanHit | null;
 
   /** Project a template span to its generated overlay span, when possible. */
-  projectTemplateSpan(uri: DocumentUri, span: SourceSpan): OverlayProvenanceHit | null;
+  projectTemplateSpan(uri: DocumentUri, span: SourceSpan): OverlaySpanHit | null;
 
   /** Project a template offset to its generated overlay span, when possible. */
-  projectTemplateOffset(uri: DocumentUri, offset: number): OverlayProvenanceHit | null;
+  projectTemplateOffset(uri: DocumentUri, offset: number): OverlaySpanHit | null;
 
-  findBySource(uri: DocumentUri, offset: number): ProvenanceEdge[];
-  lookupGenerated(uri: DocumentUri, offset: number): OverlayProvenanceHit | null;
-  lookupSource(uri: DocumentUri, offset: number): TemplateProvenanceHit | null;
+  findBySource(uri: DocumentUri, offset: number): OverlaySpanEdge[];
+  lookupGenerated(uri: DocumentUri, offset: number): OverlaySpanHit | null;
+  lookupSource(uri: DocumentUri, offset: number): TemplateSpanHit | null;
 
-  stats(): ProvenanceStats;
-  templateStats(templateUri: DocumentUri): ProvenanceTemplateStats;
+  stats(): OverlaySpanStats;
+  templateStats(templateUri: DocumentUri): OverlayTemplateStats;
 
   getOverlayMapping(templateUri: DocumentUri): TemplateMappingArtifact | null;
   getOverlayUri(templateUri: DocumentUri): DocumentUri | null;
@@ -130,7 +130,7 @@ export interface ProvenanceIndex {
   removeDocument(uri: DocumentUri): void;
 }
 
-export function provenanceHitToDocumentSpan(hit: OverlayProvenanceHit | TemplateProvenanceHit | null): DocumentSpan | null {
+export function overlayHitToDocumentSpan(hit: OverlaySpanHit | TemplateSpanHit | null): DocumentSpan | null {
   if (!hit) return null;
   const target = hit.edge.to;
   return {
@@ -143,23 +143,23 @@ export function provenanceHitToDocumentSpan(hit: OverlayProvenanceHit | Template
 }
 
 export function projectGeneratedSpanToDocumentSpan(
-  provenance: Pick<ProvenanceIndex, "projectGeneratedSpan">,
+  provenance: Pick<OverlaySpanIndex, "projectGeneratedSpan">,
   uri: DocumentUri,
   span: SourceSpan,
 ): DocumentSpan | null {
-  return provenanceHitToDocumentSpan(provenance.projectGeneratedSpan(uri, span));
+  return overlayHitToDocumentSpan(provenance.projectGeneratedSpan(uri, span));
 }
 
 export function projectGeneratedOffsetToDocumentSpan(
-  provenance: Pick<ProvenanceIndex, "projectGeneratedOffset">,
+  provenance: Pick<OverlaySpanIndex, "projectGeneratedOffset">,
   uri: DocumentUri,
   offset: number,
 ): DocumentSpan | null {
-  return provenanceHitToDocumentSpan(provenance.projectGeneratedOffset(uri, offset));
+  return overlayHitToDocumentSpan(provenance.projectGeneratedOffset(uri, offset));
 }
 
 export function projectGeneratedSpanToDocumentSpanWithOffsetFallback(
-  provenance: Pick<ProvenanceIndex, "projectGeneratedSpan" | "projectGeneratedOffset">,
+  provenance: Pick<OverlaySpanIndex, "projectGeneratedSpan" | "projectGeneratedOffset">,
   uri: DocumentUri,
   span: SourceSpan,
 ): DocumentSpan | null {
@@ -192,7 +192,7 @@ export function projectGeneratedSpanToDocumentSpanWithOffsetFallback(
 }
 
 export function projectGeneratedLocationToDocumentSpanWithOffsetFallback(
-  provenance: Pick<ProvenanceIndex, "projectGeneratedSpan" | "projectGeneratedOffset">,
+  provenance: Pick<OverlaySpanIndex, "projectGeneratedSpan" | "projectGeneratedOffset">,
   location: GeneratedLocation,
 ): DocumentSpan | null {
   const canonical = canonicalDocumentUri(location.generatedUri);
@@ -207,13 +207,13 @@ export function projectGeneratedLocationToDocumentSpanWithOffsetFallback(
 }
 
 export function collectOverlayUrisFromProvenance(
-  provenance: Pick<ProvenanceIndex, "getOverlayUris">,
+  provenance: Pick<OverlaySpanIndex, "getOverlayUris">,
 ): Set<DocumentUri> {
   return new Set(provenance.getOverlayUris());
 }
 
 export function resolveTemplateUriForGenerated(
-  provenance: Pick<ProvenanceIndex, "getTemplateUriForGenerated">,
+  provenance: Pick<OverlaySpanIndex, "getTemplateUriForGenerated">,
   generatedUri: DocumentUri,
 ): DocumentUri | null {
   const normalizedGenerated = canonicalDocumentUri(generatedUri).uri;
@@ -222,17 +222,17 @@ export function resolveTemplateUriForGenerated(
 }
 
 /**
- * Naive in-memory provenance. Edges are indexed by URI for offset-aware queries;
+ * Naive in-memory overlay span index. Edges are indexed by URI for offset-aware queries;
  * overlay mappings cached by template.
  */
-export class InMemoryProvenanceIndex implements ProvenanceIndex {
-  private readonly edges: ProvenanceEdge[] = [];
-  private readonly edgesByFrom = new Map<DocumentUri, ProvenanceEdge[]>();
-  private readonly edgesByTo = new Map<DocumentUri, ProvenanceEdge[]>();
+export class InMemoryOverlaySpanIndex implements OverlaySpanIndex {
+  private readonly edges: OverlaySpanEdge[] = [];
+  private readonly edgesByFrom = new Map<DocumentUri, OverlaySpanEdge[]>();
+  private readonly edgesByTo = new Map<DocumentUri, OverlaySpanEdge[]>();
   private readonly overlayByTemplate = new Map<DocumentUri, OverlayMappingRecord>();
   private readonly templateByOverlay = new Map<DocumentUri, DocumentUri>();
 
-  addEdges(edges: Iterable<ProvenanceEdge>): void {
+  addEdges(edges: Iterable<OverlaySpanEdge>): void {
     for (const edge of edges) this.storeEdge(normalizeEdge(edge));
   }
 
@@ -254,14 +254,14 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
     this.addEdges(expandOverlayMapping(template.uri, overlay.uri, normalized));
   }
 
-  findByGenerated(uri: DocumentUri, offset: number): ProvenanceEdge[] {
+  findByGenerated(uri: DocumentUri, offset: number): OverlaySpanEdge[] {
     const canonical = canonicalDocumentUri(uri).uri;
     const candidates = this.edgesByFrom.get(canonical);
     if (!candidates) return [];
     return filterEdgesBySpan(candidates, pointSpan(offset), "from");
   }
 
-  projectGeneratedSpan(uri: DocumentUri, span: SourceSpan): TemplateProvenanceHit | null {
+  projectGeneratedSpan(uri: DocumentUri, span: SourceSpan): TemplateSpanHit | null {
     const canonical = canonicalDocumentUri(uri);
     const candidates = this.edgesByFrom.get(canonical.uri);
     if (!candidates) return null;
@@ -303,7 +303,7 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
           const coveringMembers = memberEdgesForExpr.filter((edge) => spanEquals(edge.from.span, fullExprEdge.from.span));
           const chosen =
             coveringMembers[0] ??
-            memberEdgesForExpr.reduce<ProvenanceEdge | undefined>((best, edge) => {
+            memberEdgesForExpr.reduce<OverlaySpanEdge | undefined>((best, edge) => {
               if (!best) return edge;
               const bestDepth = memberDepth(best);
               const depth = memberDepth(edge);
@@ -320,12 +320,12 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
       }
     }
 
-    const resultEdge: ProvenanceEdge = {
+    const resultEdge: OverlaySpanEdge = {
       ...projectionEdge,
       to: { ...projectionEdge.to, span: projectedSpan },
     };
 
-    const hit: TemplateProvenanceHit = {
+    const hit: TemplateSpanHit = {
       edge: resultEdge,
       ...(exprId ? { exprId } : {}),
       ...(nodeId ? { nodeId } : {}),
@@ -335,11 +335,11 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
     return hit;
   }
 
-  projectGeneratedOffset(uri: DocumentUri, offset: number): TemplateProvenanceHit | null {
+  projectGeneratedOffset(uri: DocumentUri, offset: number): TemplateSpanHit | null {
     return this.projectGeneratedSpan(uri, pointSpan(offset));
   }
 
-  projectTemplateSpan(uri: DocumentUri, span: SourceSpan): OverlayProvenanceHit | null {
+  projectTemplateSpan(uri: DocumentUri, span: SourceSpan): OverlaySpanHit | null {
     const canonical = canonicalDocumentUri(uri);
     const candidates = this.edgesByTo.get(canonical.uri);
     if (!candidates) return null;
@@ -359,13 +359,13 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
     const projectedSpan = projectTemplateSpanToOverlaySpan(projectionEdge, querySpan);
     const exprId = projectionEdge.to.exprId ?? projectionEdge.from.exprId;
 
-    const resultEdge: ProvenanceEdge = {
+    const resultEdge: OverlaySpanEdge = {
       ...projectionEdge,
       from: { ...projectionEdge.from, span: projectedSpan },
       to: projectionEdge.to,
     };
 
-    const hit: OverlayProvenanceHit = {
+    const hit: OverlaySpanHit = {
       edge: resultEdge,
       ...(exprId ? { exprId } : {}),
       ...(
@@ -377,18 +377,18 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
     return hit;
   }
 
-  projectTemplateOffset(uri: DocumentUri, offset: number): OverlayProvenanceHit | null {
+  projectTemplateOffset(uri: DocumentUri, offset: number): OverlaySpanHit | null {
     return this.projectTemplateSpan(uri, pointSpan(offset));
   }
 
-  findBySource(uri: DocumentUri, offset: number): ProvenanceEdge[] {
+  findBySource(uri: DocumentUri, offset: number): OverlaySpanEdge[] {
     const canonical = canonicalDocumentUri(uri).uri;
     const candidates = this.edgesByTo.get(canonical);
     if (!candidates) return [];
     return filterEdgesBySpan(candidates, pointSpan(offset), "to");
   }
 
-  lookupGenerated(uri: DocumentUri, offset: number): OverlayProvenanceHit | null {
+  lookupGenerated(uri: DocumentUri, offset: number): OverlaySpanHit | null {
     const canonical = canonicalDocumentUri(uri).uri;
     const candidates = this.edgesByFrom.get(canonical);
     if (!candidates) return null;
@@ -408,7 +408,7 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
     };
   }
 
-  lookupSource(uri: DocumentUri, offset: number): TemplateProvenanceHit | null {
+  lookupSource(uri: DocumentUri, offset: number): TemplateSpanHit | null {
     const canonical = canonicalDocumentUri(uri).uri;
     const candidates = this.edgesByTo.get(canonical);
     if (!candidates) return null;
@@ -434,9 +434,9 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
     return this.overlayByTemplate.get(canonical)?.mapping ?? null;
   }
 
-  stats(): ProvenanceStats {
+  stats(): OverlaySpanStats {
     const byKind = zeroedKindCounts();
-    const docMap = new Map<DocumentUri, { edges: number; byKind: Record<ProvenanceKind, number> }>();
+    const docMap = new Map<DocumentUri, { edges: number; byKind: Record<OverlaySpanKind, number> }>();
 
     for (const edge of this.edges) {
       byKind[edge.kind] = (byKind[edge.kind] ?? 0) + 1;
@@ -453,7 +453,7 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
     return { totalEdges: this.edges.length, byKind, documents };
   }
 
-  templateStats(templateUri: DocumentUri): ProvenanceTemplateStats {
+  templateStats(templateUri: DocumentUri): OverlayTemplateStats {
     const canonical = canonicalDocumentUri(templateUri);
     const overlay = this.overlayByTemplate.get(canonical.uri);
     const trackedUris = new Set<DocumentUri>([canonical.uri]);
@@ -477,8 +477,8 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
     }
 
     const runtimeUri = runtimeUris.size === 1 ? runtimeUris.values().next().value ?? null : null;
-    const runtimeStatus: ProvenanceTemplateStats["runtimeStatus"] = runtimeUri ? "tracked" : "unsupported";
-    const runtimeReason: ProvenanceTemplateStats["runtimeReason"] = runtimeUri
+    const runtimeStatus: OverlayTemplateStats["runtimeStatus"] = runtimeUri ? "tracked" : "unsupported";
+    const runtimeReason: OverlayTemplateStats["runtimeReason"] = runtimeUri
       ? "runtime-uri-tracked"
       : runtimeEdges === 0
         ? "runtime-synthesis-not-implemented"
@@ -525,7 +525,7 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
       }
     }
 
-    const keep: ProvenanceEdge[] = [];
+    const keep: OverlaySpanEdge[] = [];
     for (const edge of this.edges) {
       if (urisToDrop.has(edge.from.uri) || urisToDrop.has(edge.to.uri)) continue;
       keep.push(edge);
@@ -533,13 +533,13 @@ export class InMemoryProvenanceIndex implements ProvenanceIndex {
     this.rebuildEdges(keep);
   }
 
-  private storeEdge(edge: ProvenanceEdge): void {
+  private storeEdge(edge: OverlaySpanEdge): void {
     this.edges.push(edge);
     ensureEdgeList(this.edgesByFrom, edge.from.uri).push(edge);
     ensureEdgeList(this.edgesByTo, edge.to.uri).push(edge);
   }
 
-  private rebuildEdges(edges: readonly ProvenanceEdge[]): void {
+  private rebuildEdges(edges: readonly OverlaySpanEdge[]): void {
     this.edges.length = 0;
     this.edgesByFrom.clear();
     this.edgesByTo.clear();
@@ -554,9 +554,9 @@ interface OverlayMappingRecord {
   readonly overlayFile: SourceFileId;
 }
 
-const EXACT_EDGE_EVIDENCE: ProvenanceEdgeEvidence = { level: "exact" };
+const EXACT_EDGE_EVIDENCE: OverlaySpanEvidence = { level: "exact" };
 
-function normalizeEdge(edge: ProvenanceEdge): ProvenanceEdge {
+function normalizeEdge(edge: OverlaySpanEdge): OverlaySpanEdge {
   const from = canonicalDocumentUri(edge.from.uri);
   const to = canonicalDocumentUri(edge.to.uri);
   return {
@@ -600,8 +600,8 @@ function expandOverlayMapping(
   templateUri: DocumentUri,
   overlayUri: DocumentUri,
   mapping: TemplateMappingArtifact,
-): ProvenanceEdge[] {
-  const edges: ProvenanceEdge[] = [];
+): OverlaySpanEdge[] {
+  const edges: OverlaySpanEdge[] = [];
   for (const entry of mapping.entries) {
     edges.push(buildOverlayExprEdge(templateUri, overlayUri, entry));
     for (const seg of entry.segments ?? []) {
@@ -616,7 +616,7 @@ function buildOverlayExprEdge(
   templateUri: DocumentUri,
   overlayUri: DocumentUri,
   entry: TemplateMappingEntry,
-): ProvenanceEdge {
+): OverlaySpanEdge {
   return {
     kind: "overlayExpr",
     evidence: EXACT_EDGE_EVIDENCE,
@@ -630,7 +630,7 @@ function buildOverlayMemberEdge(
   overlayUri: DocumentUri,
   entry: TemplateMappingEntry,
   seg: TemplateMappingSegment,
-): ProvenanceEdge {
+): OverlaySpanEdge {
   const evidence = seg.degradation
     ? {
       level: "degraded" as const,
@@ -651,11 +651,11 @@ function pointSpan(offset: number): SourceSpan {
 }
 
 function filterEdgesBySpan(
-  edges: readonly ProvenanceEdge[],
+  edges: readonly OverlaySpanEdge[],
   query: SourceSpan,
   side: "from" | "to",
-): ProvenanceEdge[] {
-  const hits: ProvenanceEdge[] = [];
+): OverlaySpanEdge[] {
+  const hits: OverlaySpanEdge[] = [];
   for (const edge of edges) {
     const span = side === "from" ? edge.from.span : edge.to.span;
     if (edgeOverlap(span, query) > 0) hits.push(edge);
@@ -665,12 +665,12 @@ function filterEdgesBySpan(
 }
 
 function pickBestEdgeForSpan(
-  edges: readonly ProvenanceEdge[],
+  edges: readonly OverlaySpanEdge[],
   query: SourceSpan,
   side: "from" | "to",
-): ProvenanceEdge | null {
+): OverlaySpanEdge | null {
   let best: {
-    edge: ProvenanceEdge;
+    edge: OverlaySpanEdge;
     priority: number;
     overlap: number;
     specificity: [number, number];
@@ -699,8 +699,8 @@ function pickBestEdgeForSpan(
 }
 
 function compareEdgesForSpan(
-  a: ProvenanceEdge,
-  b: ProvenanceEdge,
+  a: OverlaySpanEdge,
+  b: OverlaySpanEdge,
   query: SourceSpan,
   side: "from" | "to",
 ): number {
@@ -734,7 +734,7 @@ function compareEdgesForSpan(
   return 0;
 }
 
-function edgePriority(kind: ProvenanceKind): number {
+function edgePriority(kind: OverlaySpanKind): number {
   switch (kind) {
     case "overlayMember":
       return 0;
@@ -751,7 +751,7 @@ function edgePriority(kind: ProvenanceKind): number {
   }
 }
 
-function memberDepth(edge: ProvenanceEdge): number {
+function memberDepth(edge: OverlaySpanEdge): number {
   return edge.kind === "overlayMember" || edge.kind === "runtimeMember" ? memberPathDepth(edge.tag) : 0;
 }
 
@@ -778,7 +778,7 @@ function isBetterEdge(
   return false;
 }
 
-function edgeSpecificity(edge: ProvenanceEdge, side: "from" | "to"): [number, number] {
+function edgeSpecificity(edge: OverlaySpanEdge, side: "from" | "to"): [number, number] {
   const querySpan = side === "from" ? edge.from.span : edge.to.span;
   const otherSpan = side === "from" ? edge.to.span : edge.from.span;
   if (edge.kind === "overlayMember" || edge.kind === "runtimeMember") {
@@ -802,15 +802,15 @@ function edgeOverlap(span: SourceSpan, query: SourceSpan): number {
   return 0;
 }
 
-function ensureEdgeList(map: Map<DocumentUri, ProvenanceEdge[]>, uri: DocumentUri): ProvenanceEdge[] {
+function ensureEdgeList(map: Map<DocumentUri, OverlaySpanEdge[]>, uri: DocumentUri): OverlaySpanEdge[] {
   const existing = map.get(uri);
   if (existing) return existing;
-  const next: ProvenanceEdge[] = [];
+  const next: OverlaySpanEdge[] = [];
   map.set(uri, next);
   return next;
 }
 
-function zeroedKindCounts(): Record<ProvenanceKind, number> {
+function zeroedKindCounts(): Record<OverlaySpanKind, number> {
   return {
     overlayExpr: 0,
     overlayMember: 0,
@@ -822,9 +822,9 @@ function zeroedKindCounts(): Record<ProvenanceKind, number> {
 }
 
 function bumpDocCounts(
-  map: Map<DocumentUri, { edges: number; byKind: Record<ProvenanceKind, number> }>,
+  map: Map<DocumentUri, { edges: number; byKind: Record<OverlaySpanKind, number> }>,
   uri: DocumentUri,
-  kind: ProvenanceKind,
+  kind: OverlaySpanKind,
 ): void {
   const current = map.get(uri);
   if (current) {
@@ -838,7 +838,7 @@ function bumpDocCounts(
 }
 
 function collectRuntimeUriCandidates(
-  edge: ProvenanceEdge,
+  edge: OverlaySpanEdge,
   templateUri: DocumentUri,
   overlayUri: DocumentUri | null,
   target: Set<DocumentUri>,
@@ -882,7 +882,7 @@ function resolveGeneratedLocationOffset(location: GeneratedLocation): number | n
  * - Maps relative position proportionally into edge.to.span.
  * - Clamps + rounds to valid integer offsets.
  */
-export function projectOverlaySpanToTemplateSpan(edge: ProvenanceEdge, overlaySlice: SourceSpan): SourceSpan {
+export function projectOverlaySpanToTemplateSpan(edge: OverlaySpanEdge, overlaySlice: SourceSpan): SourceSpan {
   const from = edge.from.span;
   const to = edge.to.span;
 
@@ -917,7 +917,7 @@ export function projectOverlaySpanToTemplateSpan(edge: ProvenanceEdge, overlaySl
   return resolveSourceSpan(projected, targetFile);
 }
 
-function projectEdgeSpanToTemplateSpan(edge: ProvenanceEdge, slice: SourceSpan): SourceSpan {
+function projectEdgeSpanToTemplateSpan(edge: OverlaySpanEdge, slice: SourceSpan): SourceSpan {
   if (edge.kind === "runtimeNode") {
     const targetFile = edge.to.span.file ?? canonicalDocumentUri(edge.to.uri).file;
     return resolveSourceSpan(edge.to.span, targetFile);
@@ -928,7 +928,7 @@ function projectEdgeSpanToTemplateSpan(edge: ProvenanceEdge, slice: SourceSpan):
   return projectOverlaySpanToTemplateSpan(edge, slice);
 }
 
-function projectTemplateSpanToOverlaySpan(edge: ProvenanceEdge, templateSlice: SourceSpan): SourceSpan {
+function projectTemplateSpanToOverlaySpan(edge: OverlaySpanEdge, templateSlice: SourceSpan): SourceSpan {
   const source = edge.to.span;
   const target = edge.from.span;
 
@@ -967,7 +967,7 @@ function clamp(value: number, min: number, max: number): number {
   return value;
 }
 
-function projectOverlayMemberSlice(edge: ProvenanceEdge, slice: SourceSpan): SourceSpan {
+function projectOverlayMemberSlice(edge: OverlaySpanEdge, slice: SourceSpan): SourceSpan {
   const from = edge.from.span;
   const to = edge.to.span;
 

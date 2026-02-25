@@ -179,3 +179,52 @@ export function assertNoHover(
     throw new Error(`Expected no hover${label ? ` (${label})` : ""}, got: ${hover.contents.slice(0, 100)}`);
   }
 }
+
+/**
+ * Assert hover content does NOT contain a pattern.
+ */
+export function assertHoverNotContains(
+  hover: WorkspaceHover | null,
+  pattern: string | RegExp,
+  label?: string,
+): void {
+  if (!hover) return; // null hover trivially passes
+  const contents = hover.contents;
+  if (typeof pattern === "string") {
+    if (contents.includes(pattern)) {
+      throw new Error(`Hover content should NOT contain "${pattern}"${label ? ` (${label})` : ""}\nGot: ${contents.slice(0, 300)}`);
+    }
+  } else {
+    if (pattern.test(contents)) {
+      throw new Error(`Hover content should NOT match ${pattern}${label ? ` (${label})` : ""}\nGot: ${contents.slice(0, 300)}`);
+    }
+  }
+}
+
+/**
+ * Assert hover content is clean of overlay implementation artifacts.
+ * Checks for internal prefixes, overlay file paths, and generated names.
+ */
+export function assertHoverClean(
+  hover: WorkspaceHover | null,
+  label?: string,
+): void {
+  if (!hover) return;
+  const contents = hover.contents;
+  const ctx = label ? ` (${label})` : "";
+
+  // Internal overlay type aliases (__AU_TTC_VM, __AU_TTC_T0_F0, etc.)
+  if (/__AU_/i.test(contents)) {
+    throw new Error(`Hover leaks overlay type alias (__AU_...)${ctx}\nGot: ${contents.slice(0, 300)}`);
+  }
+
+  // Internal overlay function names (__au$access, __au$vc, __au$bb, etc.)
+  if (/__au\$/i.test(contents)) {
+    throw new Error(`Hover leaks overlay function name (__au$...)${ctx}\nGot: ${contents.slice(0, 300)}`);
+  }
+
+  // Overlay file path fragments
+  if (/\.overlay\.ts/i.test(contents)) {
+    throw new Error(`Hover leaks overlay file path (.overlay.ts)${ctx}\nGot: ${contents.slice(0, 300)}`);
+  }
+}

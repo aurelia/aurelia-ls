@@ -38,3 +38,6 @@ export * from "./cursor-entity.js";
 
 // Cursor entity resolver (offset → entity + confidence)
 export * from "./cursor-resolve.js";
+
+// Referential index (L2 workspace-level cross-domain provenance)
+export * from "./referential-index.js";

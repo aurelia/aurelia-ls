@@ -78,6 +78,7 @@ export function collectTemplateHover(options: {
   syntax?: TemplateSyntaxRegistry | null;
   attrParser?: AttributeParser;
   semantics?: MaterializedSemantics | null;
+  entityType?: string | null;
 }): TemplateHoverDetails | null {
   const { compilation, text, offset } = options;
   const syntax = options.syntax ?? null;
@@ -117,9 +118,10 @@ export function collectTemplateHover(options: {
     const pathAtOffset = exprAst ? expressionLabelAtOffset(exprAst, offset) : null;
     const label = chooseExpressionLabel(pathAtOffset, expr.memberPath) ?? "expression";
 
-    // Type is provided by the base TypeScript hover (getQuickInfo) and merged
-    // in workspace.ts — we don't duplicate it here.
-    cards.push({ signature: `(expression) ${label}`, meta: [] });
+    // Type comes from the epistemic path (CursorEntity), passed in by the
+    // workspace layer. Identity comes from positional provenance (memberPath).
+    const typeAnnotation = options.entityType ? `: ${options.entityType}` : '';
+    cards.push({ signature: `(expression) ${label}${typeAnnotation}`, meta: [] });
   }
 
   // ── Template controllers ─────────────────────────────────────────────
@@ -262,37 +264,14 @@ export function collectTemplateHover(options: {
 
 export function mergeHoverContents(
   detailLines: readonly string[],
-  baseTypeInfo?: string | null,
 ): string | null {
   const blocks: string[] = [];
   const seen = new Set<string>();
-
-  // If we have structured detail and base type info, integrate the type info
-  // into the first card (which is typically the expression card) rather than
-  // appending it as a disconnected blob.
-  if (detailLines.length > 0 && baseTypeInfo) {
-    // The base contains "member: type" or TS quickInfo — it's the type
-    // signature that should augment (not replace) our structured hover.
-    // If our first card already has a code-block signature for the same
-    // expression, the base is redundant. Otherwise, append it.
-    const first = detailLines[0]!;
-    // If the first card already has a fenced code block with type info,
-    // skip the base (it would be a duplicate member: type string).
-    const firstHasType = first.includes("```") && first.includes(":");
-    if (!firstHasType) {
-      // Wrap the base type info in a code block for visual consistency
-      blocks.push("```ts\n" + baseTypeInfo + "\n```");
-      blocks.push("---");
-    }
-  }
 
   for (const line of detailLines) {
     if (seen.has(line)) continue;
     seen.add(line);
     blocks.push(line);
-  }
-  if (!detailLines.length && baseTypeInfo) {
-    if (!seen.has(baseTypeInfo)) blocks.push(baseTypeInfo);
   }
   return blocks.length ? blocks.join("\n\n") : null;
 }

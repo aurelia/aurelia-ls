@@ -219,7 +219,9 @@ function collectOneLambdaPerExpression(
 
     switch (entry.expressionType) {
       case "IsIterator":
-        // headers are mapped for scope only; no overlay lambda
+        // TODO: extract iterable expression and create overlay lambda.
+        // Currently skipped — needs careful span alignment between
+        // ForOfStatement header span and iterable-only overlay.
         break;
 
       case "IsProperty":
