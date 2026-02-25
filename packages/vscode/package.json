@@ -27,8 +27,8 @@
   "license": "MIT",
   "activationEvents": [
     "onLanguage:html",
-    "workspaceContains:**/node_modules/@aurelia/runtime-html/package.json",
-    "workspaceContains:**/node_modules/aurelia/package.json"
+    "workspaceContains:node_modules/@aurelia/runtime-html/package.json",
+    "workspaceContains:node_modules/aurelia/package.json"
   ],
   "contributes": {
     "viewsContainers": {
