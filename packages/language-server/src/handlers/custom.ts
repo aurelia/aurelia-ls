@@ -282,12 +282,15 @@ export function handleGetResources(ctx: ServerContext): ResourceExplorerResponse
       if (res.isTemplateController) continue;
       resources.push(mapCatalogResource(name, "custom-attribute", res, catalog, scopeIndex, discrepancies));
     }
-    // Walk controllers (authoritative source for TCs — avoids duplicates with attributes)
+    // Walk controllers — ControllerConfig lacks origin/declarationForm/gaps/package,
+    // so merge from the corresponding AttrRes entry (which always exists for TCs).
     const seenControllers = new Set<string>();
-    for (const [name, res] of Object.entries(collections.controllers)) {
+    for (const [name, controllerRes] of Object.entries(collections.controllers)) {
       if (seenControllers.has(name)) continue;
       seenControllers.add(name);
-      resources.push(mapCatalogResource(name, "template-controller", res, catalog, scopeIndex, discrepancies));
+      const attrRes = collections.attributes[name];
+      const merged = attrRes ? { ...controllerRes, origin: attrRes.origin, declarationForm: attrRes.declarationForm, gaps: attrRes.gaps, package: attrRes.package, className: attrRes.className ?? controllerRes.className, file: attrRes.file ?? controllerRes.file, bindables: attrRes.bindables } : controllerRes;
+      resources.push(mapCatalogResource(name, "template-controller", merged, catalog, scopeIndex, discrepancies));
     }
     // Pick up any TCs that are only in attributes (not in controllers)
     for (const [name, res] of Object.entries(collections.attributes)) {
@@ -372,7 +375,6 @@ type FlatResourceLike = {
 };
 
 function detectOrigin(res: FlatResourceLike): ResourceOrigin {
-  // Use direct origin field from BC-3 when available
   if (res.origin === "builtin") return "framework";
   if (res.origin === "config") return "framework";
   if (res.package) return "package";
@@ -400,7 +402,7 @@ function mapCatalogResource(
     }
   }
 
-  // Use direct gaps from BC-3 when available, fall back to catalog cross-reference
+  // Use direct gaps when available, fall back to catalog cross-reference
   const gapTotal = res.gaps?.total ?? 0;
   const gapIntrinsic = res.gaps?.intrinsic ?? 0;
   const fallbackGapCount = gapTotal > 0 ? gapTotal : (() => {
