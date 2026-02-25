@@ -354,6 +354,96 @@ export function buildResourceCollectionsFromSemantics(sem: ProjectSemantics): Re
   };
 }
 
+// ── Builtin staleness detection ──────────────────────────────────────
+//
+// Computes discrepancies between the builtin encoding and analysis
+// observations for framework resources. A derived comparison — not a
+// carried property. See deflection-builtin-staleness-detection.md.
+
+import type { BuiltinDiscrepancy, ResourceDef } from "./types.js";
+
+/** Walk a resource def's Sourced<T> fields and find those where analysis won over builtin. */
+function computeFieldsFromAnalysis(def: ResourceDef): string[] {
+  const fields: string[] = [];
+  const check = (name: string, field: Sourced<unknown> | undefined) => {
+    if (field && 'origin' in field && field.origin !== 'builtin') {
+      fields.push(name);
+    }
+  };
+
+  check('className', def.className);
+  check('name', def.name);
+
+  if (def.kind === 'custom-element') {
+    check('containerless', def.containerless);
+    check('shadowOptions', def.shadowOptions);
+    check('capture', def.capture);
+    check('processContent', def.processContent);
+    check('boundary', def.boundary);
+    if (def.inlineTemplate) check('inlineTemplate', def.inlineTemplate);
+    // Check bindables — each bindable's property field
+    for (const [key, bindable] of Object.entries(def.bindables)) {
+      if (bindable.property && 'origin' in bindable.property && bindable.property.origin !== 'builtin') {
+        fields.push(`bindables.${key}`);
+      }
+    }
+  } else if (def.kind === 'custom-attribute') {
+    check('noMultiBindings', def.noMultiBindings);
+    if (def.primary) check('primary', def.primary);
+    for (const [key, bindable] of Object.entries(def.bindables)) {
+      if (bindable.property && 'origin' in bindable.property && bindable.property.origin !== 'builtin') {
+        fields.push(`bindables.${key}`);
+      }
+    }
+  } else if (def.kind === 'template-controller') {
+    for (const [key, bindable] of Object.entries(def.bindables)) {
+      if (bindable.property && 'origin' in bindable.property && bindable.property.origin !== 'builtin') {
+        fields.push(`bindables.${key}`);
+      }
+    }
+  } else if (def.kind === 'value-converter') {
+    if (def.fromType) check('fromType', def.fromType);
+    if (def.toType) check('toType', def.toType);
+  }
+
+  return fields;
+}
+
+/** Check if a resource def has any builtin-origin observation (is a framework builtin). */
+function isBuiltinResource(def: ResourceDef): boolean {
+  // A resource is builtin if its className came from the builtin registry.
+  // After convergence, analysis may have won some fields, but className.origin
+  // tracks the original source of the identity.
+  return def.className.origin === 'builtin';
+}
+
+/**
+ * Compute builtin discrepancies for all resources in a ProjectSemantics.
+ * Returns a map from resource key to discrepancy. Only includes resources
+ * that ARE builtins and HAVE discrepancies (fieldsFromAnalysis > 0).
+ */
+export function computeBuiltinDiscrepancies(sem: ProjectSemantics): Map<string, BuiltinDiscrepancy> {
+  const result = new Map<string, BuiltinDiscrepancy>();
+
+  const check = (key: string, def: ResourceDef) => {
+    if (!isBuiltinResource(def)) return;
+    const fieldsFromAnalysis = computeFieldsFromAnalysis(def);
+    if (fieldsFromAnalysis.length === 0) return;
+    result.set(key, {
+      fieldsFromAnalysis,
+      membersNotInSemantics: [], // Requires TS reflection — not yet implemented
+    });
+  };
+
+  for (const [key, def] of Object.entries(sem.elements)) check(key, def);
+  for (const [key, def] of Object.entries(sem.attributes)) check(key, def);
+  for (const [key, def] of Object.entries(sem.controllers)) check(key, def);
+  for (const [key, def] of Object.entries(sem.valueConverters)) check(key, def);
+  for (const [key, def] of Object.entries(sem.bindingBehaviors)) check(key, def);
+
+  return result;
+}
+
 export function buildBindingCommandConfigs(sem: ProjectSemantics): Record<string, BindingCommandConfig> {
   return Object.fromEntries(
     Object.entries(sem.commands).map(([key, def]) => [key, toBindingCommandConfig(def)]),

@@ -413,6 +413,20 @@ export interface ResourceGapSummary {
   readonly intrinsic: number;
 }
 
+/** Builtin staleness: derived comparison between builtin encoding and analysis.
+ *  NOT a carried property — computed from the relationship between observations.
+ *  See deflection-builtin-staleness-detection.md for derivation. */
+export interface BuiltinDiscrepancy {
+  /** Fields where analysis won over the builtin observation.
+   *  These are stratum 1 fields that analysis discovered and the
+   *  builtin encoding didn't declare (or declared differently). */
+  readonly fieldsFromAnalysis: readonly string[];
+  /** Class members (methods, properties) found by tier A/C analysis
+   *  that the behavioral semantics don't reference. Empty until
+   *  per-field winner tracking + TS reflection are implemented. */
+  readonly membersNotInSemantics: readonly string[];
+}
+
 export interface ElementRes {
   readonly kind: 'element';
   readonly name: string;

@@ -41,3 +41,6 @@ export * from "./cursor-resolve.js";
 
 // Referential index (L2 workspace-level cross-domain provenance)
 export * from "./referential-index.js";
+
+// Convert helpers (flattening, discrepancy computation)
+export { computeBuiltinDiscrepancies } from "./convert.js";

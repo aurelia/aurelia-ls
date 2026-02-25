@@ -214,7 +214,10 @@ export type {
   ResourceOrigin,
   ResourceGapSummary,
   DeclarationForm,
+  // Builtin staleness: derived comparison (not carried property)
+  BuiltinDiscrepancy,
 } from "./schema/index.js";
+export { computeBuiltinDiscrepancies } from "./schema/index.js";
 
 // Binding command configuration (values)
 export {
