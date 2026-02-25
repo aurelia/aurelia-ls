@@ -218,6 +218,114 @@ export function handleDumpState(ctx: ServerContext) {
   }
 }
 
+export type ResourceExplorerBindable = {
+  name: string;
+  attribute?: string;
+  mode?: string;
+  primary?: boolean;
+  type?: string;
+};
+
+export type ResourceExplorerItem = {
+  name: string;
+  kind: string;
+  className?: string;
+  file?: string;
+  package?: string;
+  bindableCount: number;
+  bindables: ResourceExplorerBindable[];
+  gapCount: number;
+};
+
+export type ResourceExplorerResponse = {
+  fingerprint: string;
+  resources: ResourceExplorerItem[];
+  templateCount: number;
+  inlineTemplateCount: number;
+};
+
+export function handleGetResources(ctx: ServerContext): ResourceExplorerResponse {
+  try {
+    const snapshot = ctx.workspace.snapshot();
+    const catalog = snapshot.catalog;
+    const collections = catalog.resources;
+    const resources: ResourceExplorerItem[] = [];
+
+    // Walk elements
+    for (const [name, res] of Object.entries(collections.elements)) {
+      resources.push(mapCatalogResource(name, "custom-element", res, catalog));
+    }
+    // Walk attributes (includes template controllers flagged as isTemplateController)
+    for (const [name, res] of Object.entries(collections.attributes)) {
+      const kind = res.isTemplateController ? "template-controller" : "custom-attribute";
+      resources.push(mapCatalogResource(name, kind, res, catalog));
+    }
+    // Walk controllers
+    for (const [name, res] of Object.entries(collections.controllers)) {
+      resources.push(mapCatalogResource(name, "template-controller", res, catalog));
+    }
+    // Walk value converters
+    for (const [name, res] of Object.entries(collections.valueConverters)) {
+      resources.push(mapCatalogResource(name, "value-converter", res, catalog));
+    }
+    // Walk binding behaviors
+    for (const [name, res] of Object.entries(collections.bindingBehaviors)) {
+      resources.push(mapCatalogResource(name, "binding-behavior", res, catalog));
+    }
+
+    // Sort: elements first, then alphabetically within each kind
+    const kindOrder = ["custom-element", "template-controller", "custom-attribute", "value-converter", "binding-behavior"];
+    resources.sort((a, b) => {
+      const ka = kindOrder.indexOf(a.kind);
+      const kb = kindOrder.indexOf(b.kind);
+      if (ka !== kb) return ka - kb;
+      return a.name.localeCompare(b.name);
+    });
+
+    return {
+      fingerprint: snapshot.meta.fingerprint,
+      resources,
+      templateCount: ctx.workspace.templates.length,
+      inlineTemplateCount: ctx.workspace.inlineTemplates.length,
+    };
+  } catch (e) {
+    ctx.logger.error(`[getResources] failed: ${formatError(e)}`);
+    return { fingerprint: "", resources: [], templateCount: 0, inlineTemplateCount: 0 };
+  }
+}
+
+function mapCatalogResource(
+  name: string,
+  kind: string,
+  res: { className?: string; file?: string; package?: string; bindables?: Readonly<Record<string, import("@aurelia-ls/compiler").Bindable>> },
+  catalog: import("@aurelia-ls/compiler").ResourceCatalog,
+): ResourceExplorerItem {
+  const bindables: ResourceExplorerBindable[] = [];
+  if (res.bindables) {
+    for (const [, b] of Object.entries(res.bindables)) {
+      bindables.push({
+        name: b.name,
+        attribute: b.attribute,
+        mode: b.mode,
+        primary: b.primary,
+        type: b.type?.kind === "ts" ? b.type.name : b.type?.kind,
+      });
+    }
+  }
+  const gapKey = `${kind}:${name}`;
+  const gaps = catalog.gapsByResource?.[gapKey] ?? [];
+  return {
+    name,
+    kind,
+    className: res.className,
+    file: res.file,
+    package: res.package,
+    bindableCount: bindables.length,
+    bindables,
+    gapCount: Array.isArray(gaps) ? gaps.length : 0,
+  };
+}
+
 export function handleCapabilities(ctx: ServerContext): CapabilitiesResponse {
   try {
     return buildCapabilities(ctx);
@@ -237,5 +345,6 @@ export function registerCustomHandlers(ctx: ServerContext): void {
   ctx.connection.onRequest("aurelia/getSsr", (params: MaybeUriParam) => handleGetSsr(ctx, params));
   ctx.connection.onRequest("aurelia/getDiagnostics", (params: MaybeUriParam) => handleGetDiagnostics(ctx, params));
   ctx.connection.onRequest("aurelia/dumpState", () => handleDumpState(ctx));
+  ctx.connection.onRequest("aurelia/getResources", () => handleGetResources(ctx));
   ctx.connection.onRequest("aurelia/capabilities", () => handleCapabilities(ctx));
 }

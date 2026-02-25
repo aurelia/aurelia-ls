@@ -100,6 +100,9 @@ export class ClientApp {
 
     await features.activateAll(ctx);
 
+    // Set context so views with "when": "aurelia.active" appear
+    void vscode.commands.executeCommand("setContext", "aurelia.active", true);
+
     return ctx;
   }
 

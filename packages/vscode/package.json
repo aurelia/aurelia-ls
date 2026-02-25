@@ -43,6 +43,24 @@
     "onCommand:aurelia.observability.openOutput"
   ],
   "contributes": {
+    "viewsContainers": {
+      "activityBar": [
+        {
+          "id": "aurelia",
+          "title": "Aurelia",
+          "icon": "$(symbol-class)"
+        }
+      ]
+    },
+    "views": {
+      "aurelia": [
+        {
+          "id": "aureliaResourceExplorer",
+          "name": "Resource Explorer",
+          "when": "aurelia.active"
+        }
+      ]
+    },
     "snippets": [
       {
         "language": "html",
@@ -50,6 +68,7 @@
       }
     ],
     "commands": [
+      { "command": "aurelia.refreshResourceExplorer", "title": "Refresh", "icon": "$(refresh)" },
       { "command": "aurelia.showOverlay", "title": "Aurelia: Show Generated Overlay" },
       { "command": "aurelia.showOverlayMapping", "title": "Aurelia: Show Overlay Mapping" },
       { "command": "aurelia.showTemplateInfo", "title": "Aurelia: Show Template Info" },
@@ -65,6 +84,15 @@
       { "command": "aurelia.observability.setTraceMinDuration", "title": "Aurelia: Set Trace Min Duration" },
       { "command": "aurelia.observability.openOutput", "title": "Aurelia: Show Output Channel" }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "aurelia.refreshResourceExplorer",
+          "when": "view == aureliaResourceExplorer",
+          "group": "navigation"
+        }
+      ]
+    },
     "configuration": {
       "type": "object",
       "title": "Aurelia",

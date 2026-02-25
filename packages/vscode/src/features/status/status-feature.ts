@@ -11,7 +11,14 @@ export const StatusFeature: FeatureModule = {
     const status = new StatusService(ctx.vscode);
     const registration = ctx.services.register(StatusServiceToken, status, { dispose: () => status.dispose() });
 
+    // Transition to "discovering" once capabilities are known (server is ready)
+    status.discovering();
+
+    let overlayCount = 0;
+
     ctx.lsp.onOverlayReady((payload) => {
+      overlayCount++;
+
       // If coverage data is available (L2 TemplateCoverage), show that
       const coverage = payload.coverage;
       if (coverage && typeof coverage.totalPositions === "number") {
@@ -25,9 +32,13 @@ export const StatusFeature: FeatureModule = {
           },
           payload.uri,
         );
-      } else {
-        // Fallback to overlay metadata display
-        status.overlayReady(payload);
+      } else if (overlayCount === 1 && status.phase !== "ready") {
+        // First overlay notification — query resources to get counts
+        void ctx.lsp.getResources().then((response) => {
+          if (!response) return;
+          const gapCount = response.resources.reduce((sum, r) => sum + r.gapCount, 0);
+          status.ready(response.resources.length, response.templateCount, gapCount);
+        });
       }
 
       ctx.presentation.update({

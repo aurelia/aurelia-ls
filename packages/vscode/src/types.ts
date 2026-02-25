@@ -132,6 +132,32 @@ export interface SsrResponse {
   ssr?: SsrArtifactShape | null;
 }
 
+export interface ResourceExplorerBindable {
+  name: string;
+  attribute?: string;
+  mode?: string;
+  primary?: boolean;
+  type?: string;
+}
+
+export interface ResourceExplorerItem {
+  name: string;
+  kind: string;
+  className?: string;
+  file?: string;
+  package?: string;
+  bindableCount: number;
+  bindables: ResourceExplorerBindable[];
+  gapCount: number;
+}
+
+export interface ResourceExplorerResponse {
+  fingerprint?: string;
+  resources: ResourceExplorerItem[];
+  templateCount: number;
+  inlineTemplateCount: number;
+}
+
 export interface CapabilitiesResponse {
   schema?: "aurelia.capabilities/1";
   server?: {
