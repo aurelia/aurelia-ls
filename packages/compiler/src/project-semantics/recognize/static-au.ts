@@ -46,6 +46,7 @@ import {
   canonicalElementName,
   canonicalAttrName,
   canonicalSimpleName,
+  canonicalExplicitName,
   canonicalAliases,
 } from '../util/naming.js';
 import {
@@ -245,10 +246,9 @@ function buildValueConverterDefFromAu(
   au: AnalyzableValue,
   gaps: AnalysisGap[]
 ): StaticAuMatchResult {
-  // Derive name
+  // Derive name — explicit from $au.name, or camelCase from className
   const nameProp = extractStringPropWithSpan(au, 'name');
-  const rawName = nameProp?.value ?? cls.className;
-  const name = canonicalSimpleName(rawName);
+  const name = nameProp ? canonicalExplicitName(nameProp.value) : canonicalSimpleName(cls.className);
   if (!name) {
     gaps.push({
       what: `value converter name for ${cls.className}`,
@@ -279,10 +279,9 @@ function buildBindingBehaviorDefFromAu(
   au: AnalyzableValue,
   gaps: AnalysisGap[]
 ): StaticAuMatchResult {
-  // Derive name
+  // Derive name — explicit from $au.name, or camelCase from className
   const nameProp = extractStringPropWithSpan(au, 'name');
-  const rawName = nameProp?.value ?? cls.className;
-  const name = canonicalSimpleName(rawName);
+  const name = nameProp ? canonicalExplicitName(nameProp.value) : canonicalSimpleName(cls.className);
   if (!name) {
     gaps.push({
       what: `binding behavior name for ${cls.className}`,

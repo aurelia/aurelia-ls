@@ -256,18 +256,30 @@ describe("Naming Utilities", () => {
   // ===========================================================================
 
   describe("canonicalSimpleName", () => {
-    it("lowercases and trims", () => {
+    it("applies acronym-aware camelCase from @aurelia/kernel", () => {
+      // Per vocabulary-contract.md §Resource naming normalization:
+      // Uses @aurelia/kernel's baseCase + camelCase callback.
+      // NOT lcfirst ("lowercase first char, preserve rest").
       expect(canonicalSimpleName("Date")).toBe("date");
-      expect(canonicalSimpleName("  JSON  ")).toBe("json");
-      expect(canonicalSimpleName("NumberFormat")).toBe("numberformat");
+      expect(canonicalSimpleName("  JSON  ")).toBe("json"); // all-caps → all-lowercase
+      expect(canonicalSimpleName("NumberFormat")).toBe("numberFormat"); // word boundary at F
     });
 
-    it("preserves hyphens (doesn't split)", () => {
-      expect(canonicalSimpleName("my-converter")).toBe("my-converter");
+    it("handles acronym-rich names correctly", () => {
+      expect(canonicalSimpleName("HTMLParser")).toBe("htmlParser");
+      expect(canonicalSimpleName("URLEncoder")).toBe("urlEncoder");
+      expect(canonicalSimpleName("XMLHTTPRequest")).toBe("xmlhttpRequest");
     });
 
-    it("preserves other characters", () => {
-      expect(canonicalSimpleName("CamelCase")).toBe("camelcase");
+    it("treats hyphens as word separators", () => {
+      // Hyphens are separators in the baseCase algorithm
+      expect(canonicalSimpleName("my-converter")).toBe("myConverter");
+    });
+
+    it("handles PascalCase with word boundaries", () => {
+      expect(canonicalSimpleName("CamelCase")).toBe("camelCase");
+      expect(canonicalSimpleName("FormatDate")).toBe("formatDate");
+      expect(canonicalSimpleName("Throttle")).toBe("throttle");
     });
   });
 

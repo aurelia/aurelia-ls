@@ -48,6 +48,7 @@ import {
   canonicalElementName,
   canonicalAttrName,
   canonicalSimpleName,
+  canonicalExplicitName,
   canonicalBindableName,
   canonicalAliases,
 } from '../util/naming.js';
@@ -393,7 +394,7 @@ function collectBindingCommandRecognitions(
       continue;
     }
 
-    const normalizedName = canonicalSimpleName(nameResult.value);
+    const normalizedName = canonicalExplicitName(nameResult.value);
     if (!normalizedName) {
       gaps.push(gap(
         `binding command name for ${cls.className}`,
@@ -632,7 +633,8 @@ function buildValueConverterDefFromMeta(
   meta: SimpleResourceMeta,
   gaps: AnalysisGap[]
 ): ValueConverterDef | null {
-  const name = canonicalSimpleName(meta.name ?? cls.className);
+  // Explicit name from decorator → verbatim. Class name fallback → camelCase.
+  const name = meta.name ? canonicalExplicitName(meta.name) : canonicalSimpleName(cls.className);
   if (!name) {
     gaps.push({
       what: `value converter name for ${cls.className}`,
@@ -657,7 +659,8 @@ function buildBindingBehaviorDefFromMeta(
   meta: SimpleResourceMeta,
   gaps: AnalysisGap[]
 ): BindingBehaviorDef | null {
-  const name = canonicalSimpleName(meta.name ?? cls.className);
+  // Explicit name from decorator → verbatim. Class name fallback → camelCase.
+  const name = meta.name ? canonicalExplicitName(meta.name) : canonicalSimpleName(cls.className);
   if (!name) {
     gaps.push({
       what: `binding behavior name for ${cls.className}`,

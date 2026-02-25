@@ -41,12 +41,84 @@ export function canonicalAttrName(value: string): string {
 }
 
 /**
- * Canonicalize a simple resource name (value converters, binding behaviors).
- * These names are expression identifiers resolved via DI — case-sensitive,
- * not HTML attribute names. Trim only, no case folding.
+ * Canonicalize a convention-derived VC/BB resource name.
+ *
+ * Applies the acronym-aware camelCase algorithm from @aurelia/kernel
+ * (packages/kernel/src/functions.ts baseCase + camelCase callback).
+ * This is NOT lcfirst — it handles word boundaries for acronyms:
+ * `DateFormat` → `dateFormat`, `JSON` → `json`, `HTMLParser` → `htmlParser`.
+ *
+ * Only used for convention path (class name → stripped suffix → this function).
+ * For explicit names (decorator/define/$au), use canonicalExplicitName().
  */
 export function canonicalSimpleName(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return trimmed;
+  return aureliaKernelCamelCase(trimmed);
+}
+
+/**
+ * Preserve an explicitly declared resource name verbatim.
+ *
+ * When a developer writes `@valueConverter('JSON')` or
+ * `ValueConverter.define({ name: 'myVC' })`, the name is used as-is.
+ * The runtime's Definition.create() applies no transformation.
+ * The naming transform (camelCase/kebabCase) only applies to
+ * convention-derived names at build time via plugin-conventions.
+ */
+export function canonicalExplicitName(value: string): string {
   return value.trim();
+}
+
+/**
+ * Replicate @aurelia/kernel camelCase (acronym-aware word-boundary algorithm).
+ *
+ * Character classification: upper/lower/digit/none.
+ * Word boundary: uppercase char where prevChar is lower OR nextChar is lower.
+ * At boundary: char is uppercased (starts new word).
+ * Not at boundary: char is lowercased.
+ *
+ * Source: packages/kernel/src/functions.ts lines 52-169
+ */
+function aureliaKernelCamelCase(input: string): string {
+  const len = input.length;
+  if (len === 0) return input;
+
+  let sep = false;
+  let output = '';
+  let prevKind = 0; // none
+  let curKind = 0;
+  let nextChar = input.charAt(0);
+  let nextKind = charKind(nextChar);
+
+  for (let i = 0; i < len; i++) {
+    prevKind = curKind;
+    const curChar = nextChar;
+    curKind = nextKind;
+    nextChar = input.charAt(i + 1);
+    nextKind = charKind(nextChar);
+
+    if (curKind === 0) { // none (separator)
+      if (output.length > 0) sep = true;
+    } else {
+      if (!sep && output.length > 0 && curKind === 2) { // upper
+        // Word boundary: uppercase with a lowercase neighbor
+        sep = prevKind === 3 || nextKind === 3; // lower
+      }
+      output += sep ? curChar.toUpperCase() : curChar.toLowerCase();
+      sep = false;
+    }
+  }
+  return output;
+}
+
+/** Classify a character: 0=none, 1=digit, 2=upper, 3=lower */
+function charKind(ch: string): number {
+  if (ch === '') return 0;
+  if (ch !== ch.toUpperCase()) return 3; // lower
+  if (ch !== ch.toLowerCase()) return 2; // upper
+  if (ch >= '0' && ch <= '9') return 1; // digit
+  return 0; // none (separator)
 }
 
 /**

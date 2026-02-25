@@ -52,6 +52,7 @@ import {
   canonicalElementName,
   canonicalAttrName,
   canonicalSimpleName,
+  canonicalExplicitName,
   canonicalBindableName,
   canonicalAliases,
 } from '../util/naming.js';
@@ -369,10 +370,10 @@ function buildValueConverterDefFromDefine(
 ): ResourceDefineMatchResult {
   const def = defineCall.definition;
 
-  // Handle string-only definition
+  // Handle string-only definition (explicit name — verbatim)
   const stringName = extractStringWithSpan(def);
   if (stringName) {
-    const name = canonicalSimpleName(stringName.value);
+    const name = canonicalExplicitName(stringName.value);
     if (!name) {
       gaps.push(invalidNameGap(className, 'value converter', 'value-converter', filePath));
       return { resource: null, gaps };
@@ -400,10 +401,9 @@ function buildValueConverterDefFromDefine(
     return { resource: null, gaps };
   }
 
-  // Extract name
+  // Extract name — explicit from define arg, or camelCase from className
   const nameProp = extractStringPropWithSpan(def, 'name');
-  const rawName = nameProp?.value ?? className;
-  const name = canonicalSimpleName(rawName);
+  const name = nameProp ? canonicalExplicitName(nameProp.value) : canonicalSimpleName(className);
   if (!name) {
     gaps.push(invalidNameGap(className, 'value converter', 'value-converter', filePath));
     return { resource: null, gaps };
@@ -432,10 +432,10 @@ function buildBindingBehaviorDefFromDefine(
 ): ResourceDefineMatchResult {
   const def = defineCall.definition;
 
-  // Handle string-only definition
+  // Handle string-only definition (explicit name — verbatim)
   const stringName = extractStringWithSpan(def);
   if (stringName) {
-    const name = canonicalSimpleName(stringName.value);
+    const name = canonicalExplicitName(stringName.value);
     if (!name) {
       gaps.push(invalidNameGap(className, 'binding behavior', 'binding-behavior', filePath));
       return { resource: null, gaps };
@@ -463,10 +463,9 @@ function buildBindingBehaviorDefFromDefine(
     return { resource: null, gaps };
   }
 
-  // Extract name
+  // Extract name — explicit from define arg, or camelCase from className
   const nameProp = extractStringPropWithSpan(def, 'name');
-  const rawName = nameProp?.value ?? className;
-  const name = canonicalSimpleName(rawName);
+  const name = nameProp ? canonicalExplicitName(nameProp.value) : canonicalSimpleName(className);
   if (!name) {
     gaps.push(invalidNameGap(className, 'binding behavior', 'binding-behavior', filePath));
     return { resource: null, gaps };
@@ -504,7 +503,7 @@ function buildBindingCommandRecognitionFromDefine(
     return { resource: null, bindingCommands: [], attributePatterns: [], gaps };
   }
 
-  const name = canonicalSimpleName(parsed.value);
+  const name = canonicalExplicitName(parsed.value);
   if (!name) {
     gaps.push(gap(
       `binding command definition for ${className}`,

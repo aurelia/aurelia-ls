@@ -679,11 +679,11 @@ describe("Registration Patterns: Mixed", () => {
     });
 
     // All four resource kinds should be registered
-    // Note: canonicalSimpleName lowercases all names
+    // CE/CA use kebabCase; VC/BB use @aurelia/kernel camelCase
     expect(findSiteByName(analysis.sites, "my-element")).toBeTruthy();
     expect(findSiteByName(analysis.sites, "my-attribute")).toBeTruthy();
-    expect(findSiteByName(analysis.sites, "myconverter")).toBeTruthy();
-    expect(findSiteByName(analysis.sites, "mybehavior")).toBeTruthy();
+    expect(findSiteByName(analysis.sites, "myConverter")).toBeTruthy();
+    expect(findSiteByName(analysis.sites, "myBehavior")).toBeTruthy();
 
     // All should be global
     for (const site of analysis.sites) {

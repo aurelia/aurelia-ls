@@ -382,7 +382,8 @@ describe("matchDefine - Simple Resources", () => {
 
     expect(result.gaps.length).toBe(0);
     expect(result.resource?.kind).toBe("value-converter");
-    expect(unwrapSourced(result.resource?.name)).toBe("json");
+    // Explicit name from define object → verbatim (no transformation)
+    expect(unwrapSourced(result.resource?.name)).toBe("JSON");
   });
 
   it("handles binding behaviors with string definition", () => {
@@ -393,7 +394,8 @@ describe("matchDefine - Simple Resources", () => {
 
     expect(result.gaps.length).toBe(0);
     expect(result.resource?.kind).toBe("binding-behavior");
-    expect(unwrapSourced(result.resource?.name)).toBe("throttle");
+    // Explicit string name → verbatim (no transformation)
+    expect(unwrapSourced(result.resource?.name)).toBe("Throttle");
   });
 
   it("falls back to className when name is omitted", () => {
@@ -404,7 +406,8 @@ describe("matchDefine - Simple Resources", () => {
 
     expect(result.gaps.length).toBe(0);
     expect(result.resource?.kind).toBe("value-converter");
-    expect(unwrapSourced(result.resource?.name)).toBe("myjsonconverter");
+    // No explicit name → className through @aurelia/kernel camelCase
+    expect(unwrapSourced(result.resource?.name)).toBe("myJsonConverter");
   });
 });
 
@@ -421,9 +424,10 @@ describe("matchDefine - Extension discovery", () => {
 
     expect(result.resource).toBeNull();
     expect(result.gaps).toHaveLength(0);
+    // Explicit string name → verbatim (no transformation)
     expect(result.bindingCommands).toEqual([
       expect.objectContaining({
-        name: "my-cmd",
+        name: "My-Cmd",
         className: "MyCommand",
         file: FILE,
         source: "define",
