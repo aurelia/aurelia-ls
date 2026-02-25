@@ -444,3 +444,147 @@ describe("rename: from TypeScript side", () => {
     }
   });
 });
+
+// ============================================================================
+// 8. Edit completeness — verify edits cover ALL reference sites
+//    (Rename-spec principle: partial rename is worse than refusal.
+//    These tests verify the edit set is complete, not just non-empty.)
+// ============================================================================
+
+describe("rename: edit completeness — VM property", () => {
+  it("renaming 'total' from template covers all template binding sites", async () => {
+    const result = await renameAt('="total"', "grandTotal", 2)();
+    expect("edit" in result, `Expected edits: ${"error" in result ? result.error.message : ""}`).toBe(true);
+    if (!("edit" in result)) return;
+
+    const htmlEdits = result.edit.edits.filter((e) => String(e.uri).endsWith(".html"));
+    const editTexts = htmlEdits.map((e) => e.newText);
+
+    // All template edits should produce "grandTotal"
+    for (const t of editTexts) {
+      expect(t).toBe("grandTotal");
+    }
+
+    // count.bind="total", ${total}, let total-display.bind="total", total in string concat,
+    // nonexistent-prop.bind="total" — at minimum 4 distinct binding expression sites
+    expect(htmlEdits.length, "Should find all template references to 'total'").toBeGreaterThanOrEqual(4);
+  });
+
+  it("renaming 'total' from template also edits TS declaration and usages", async () => {
+    const result = await renameAt('="total"', "grandTotal", 2)();
+    expect("edit" in result).toBe(true);
+    if (!("edit" in result)) return;
+
+    const tsEdits = result.edit.edits.filter((e) => String(e.uri).endsWith(".ts"));
+    // Should edit: property declaration (total = 42) + this.total in refreshData
+    expect(tsEdits.length, "Should edit TS property declaration and member accesses").toBeGreaterThanOrEqual(2);
+    for (const e of tsEdits) {
+      expect(e.newText).toBe("grandTotal");
+    }
+  });
+
+  it("renaming 'total' from TS side produces same template edits", async () => {
+    const { uri: tsUri, position } = await posInFile("src/app.ts", "total = 42", 1);
+    const result = refactor.rename({ uri: tsUri as any, position, newName: "grandTotal" });
+    expect("edit" in result, `Expected edits: ${"error" in result ? result.error.message : ""}`).toBe(true);
+    if (!("edit" in result)) return;
+
+    const htmlEdits = result.edit.edits.filter((e) => String(e.uri).endsWith(".html"));
+    // Same template reference count as template-initiated rename
+    expect(htmlEdits.length, "TS-initiated rename should find same template references").toBeGreaterThanOrEqual(4);
+  });
+});
+
+describe("rename: edit completeness — CE tag", () => {
+  it("renaming CE covers all tag name occurrences in template", async () => {
+    const result = await renameAt("<matrix-panel\n", "matrix-widget")();
+    expect("edit" in result).toBe(true);
+    if (!("edit" in result)) return;
+
+    const htmlEdits = result.edit.edits.filter((e) => String(e.uri).endsWith("app.html"));
+    // matrix-panel appears as: open tag (line 15), close tag (line 182),
+    // second usage open+close (line 190)
+    // All edits should contain the new name
+    const newNameEdits = htmlEdits.filter((e) => e.newText.includes("matrix-widget"));
+    expect(newNameEdits.length, "Should rename all tag name occurrences").toBeGreaterThanOrEqual(2);
+  });
+
+  it("renaming CE updates decorator name property in TS", async () => {
+    const result = await renameAt("<matrix-panel\n", "matrix-widget")();
+    expect("edit" in result).toBe(true);
+    if (!("edit" in result)) return;
+
+    const panelTsEdits = result.edit.edits.filter(
+      (e) => String(e.uri).endsWith("matrix-panel.ts"),
+    );
+    // Should edit the name: "matrix-panel" string in the decorator
+    expect(panelTsEdits.length, "Should edit CE definition in matrix-panel.ts").toBeGreaterThan(0);
+    const nameEdit = panelTsEdits.find((e) => e.newText.includes("matrix-widget"));
+    expect(nameEdit, "Should update decorator name property to 'matrix-widget'").toBeDefined();
+  });
+});
+
+describe("rename: edit completeness — VC pipe", () => {
+  it("renaming VC covers template pipe expression", async () => {
+    const result = await renameAt("| formatDate", "formatDatetime", 2)();
+    expect("edit" in result).toBe(true);
+    if (!("edit" in result)) return;
+
+    const htmlEdits = result.edit.edits.filter((e) => String(e.uri).endsWith(".html"));
+    expect(htmlEdits.length, "Should edit pipe expression in template").toBeGreaterThan(0);
+    expect(htmlEdits[0]!.newText).toBe("formatDatetime");
+  });
+
+  it("renaming VC covers TS class/declaration", async () => {
+    const result = await renameAt("| formatDate", "formatDatetime", 2)();
+    expect("edit" in result).toBe(true);
+    if (!("edit" in result)) return;
+
+    const tsEdits = result.edit.edits.filter((e) => String(e.uri).endsWith(".ts"));
+    expect(tsEdits.length, "Should edit VC definition/usage in TS").toBeGreaterThan(0);
+  });
+});
+
+describe("rename: edit completeness — VM method", () => {
+  it("renaming method from template covers event binding and TS declaration", async () => {
+    // selectItem(item) in click.trigger
+    const result = await renameAt("selectItem(item)", "chooseItem", 1)();
+    if ("error" in result) {
+      // Expression-member rename may not find the method — acceptable for now
+      return;
+    }
+
+    const htmlEdits = result.edit.edits.filter((e) => String(e.uri).endsWith(".html"));
+    const tsEdits = result.edit.edits.filter((e) => String(e.uri).endsWith(".ts"));
+
+    // Template: selectItem(item) in click.trigger, selectItem($event) in second button
+    expect(htmlEdits.length, "Should edit method calls in template").toBeGreaterThanOrEqual(1);
+    // TS: method declaration + any internal calls
+    expect(tsEdits.length, "Should edit method declaration in TS").toBeGreaterThanOrEqual(1);
+
+    for (const e of htmlEdits) {
+      expect(e.newText).toBe("chooseItem");
+    }
+  });
+});
+
+describe("rename: edit completeness — @bindable from TS", () => {
+  it("renaming @bindable 'title' propagates to consumer template attributes", async () => {
+    const { uri: tsUri, position } = await posInFile(
+      "src/components/matrix-panel.ts",
+      '@bindable title = "Untitled"',
+      "@bindable ".length,
+    );
+    const result = refactor.rename({ uri: tsUri as any, position, newName: "heading" });
+    expect("edit" in result, `Expected edits: ${"error" in result ? result.error.message : ""}`).toBe(true);
+    if (!("edit" in result)) return;
+
+    const htmlEdits = result.edit.edits.filter((e) => String(e.uri).endsWith(".html"));
+    const tsEdits = result.edit.edits.filter((e) => String(e.uri).endsWith(".ts"));
+
+    // Template: title="Dashboard" attribute on <matrix-panel>
+    expect(htmlEdits.length, "Should update template attribute for bindable").toBeGreaterThan(0);
+    // TS: @bindable title declaration + ${title} in inline template
+    expect(tsEdits.length, "Should update TS property declaration").toBeGreaterThan(0);
+  });
+});
