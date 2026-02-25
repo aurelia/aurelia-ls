@@ -2,12 +2,12 @@ import { test, expect } from "vitest";
 
 import {
   collectOverlayUrisFromProvenance,
-  InMemoryProvenanceIndex,
+  InMemoryOverlaySpanIndex,
   projectGeneratedLocationToDocumentSpanWithOffsetFallback,
   projectGeneratedOffsetToDocumentSpan,
   projectGeneratedSpanToDocumentSpan,
   projectGeneratedSpanToDocumentSpanWithOffsetFallback,
-  provenanceHitToDocumentSpan,
+  overlayHitToDocumentSpan,
   projectOverlaySpanToTemplateSpan,
   resolveTemplateUriForGenerated,
 } from "@aurelia-ls/compiler";
@@ -43,7 +43,7 @@ const mapping = {
 };
 
 test("overlay mappings expand to provenance edges and offset-aware lookups", () => {
-  const provenance = new InMemoryProvenanceIndex();
+  const provenance = new InMemoryOverlaySpanIndex();
   provenance.addOverlayMapping(templateUri, overlayUri, mapping);
 
   const generatedEdges = provenance.findByGenerated(overlayUri, 22);
@@ -72,7 +72,7 @@ test("overlay mappings expand to provenance edges and offset-aware lookups", () 
 });
 
 test("overlay projection via projectGeneratedSpan/projectGeneratedOffset", () => {
-  const provenance = new InMemoryProvenanceIndex();
+  const provenance = new InMemoryOverlaySpanIndex();
   provenance.addOverlayMapping(templateUri, overlayUri, mapping);
 
   // Full slice across the entire expression range -> maps to full HTML span.
@@ -105,7 +105,7 @@ test("overlay projection via projectGeneratedSpan/projectGeneratedOffset", () =>
 });
 
 test("projectGeneratedSpanToDocumentSpan materializes mapped document spans", () => {
-  const provenance = new InMemoryProvenanceIndex();
+  const provenance = new InMemoryOverlaySpanIndex();
   provenance.addOverlayMapping(templateUri, overlayUri, mapping);
 
   const mapped = projectGeneratedSpanToDocumentSpan(provenance, overlayUri, { start: 21, end: 26 });
@@ -118,7 +118,7 @@ test("projectGeneratedSpanToDocumentSpan materializes mapped document spans", ()
 });
 
 test("projectOverlaySpanToTemplateSpan respects covering vs sliced spans", () => {
-  const provenance = new InMemoryProvenanceIndex();
+  const provenance = new InMemoryOverlaySpanIndex();
   provenance.addOverlayMapping(templateUri, overlayUri, mapping);
 
   const edges = provenance.findByGenerated(overlayUri, 22);
@@ -140,7 +140,7 @@ test("projectOverlaySpanToTemplateSpan respects covering vs sliced spans", () =>
 });
 
 test("overlay projection scales proportionally when overlay and template spans differ", () => {
-  const provenance = new InMemoryProvenanceIndex();
+  const provenance = new InMemoryOverlaySpanIndex();
   const scaledMapping = {
     kind: "mapping",
     entries: [
@@ -162,7 +162,7 @@ test("overlay projection scales proportionally when overlay and template spans d
 });
 
 test("projectGeneratedSpan breaks ties on member depth after overlap and span length", () => {
-  const provenance = new InMemoryProvenanceIndex();
+  const provenance = new InMemoryOverlaySpanIndex();
   const tieMapping = {
     kind: "mapping",
     entries: [
@@ -206,7 +206,7 @@ test("projectGeneratedSpan breaks ties on member depth after overlap and span le
 });
 
 test("member selection prefers narrower spans before deeper paths", () => {
-  const provenance = new InMemoryProvenanceIndex();
+  const provenance = new InMemoryOverlaySpanIndex();
   const narrowVsDeep = {
     kind: "mapping",
     entries: [
@@ -242,7 +242,7 @@ test("member selection prefers narrower spans before deeper paths", () => {
 });
 
 test("member depth ranking uses structural path depth instead of raw string length", () => {
-  const provenance = new InMemoryProvenanceIndex();
+  const provenance = new InMemoryOverlaySpanIndex();
   const depthMapping = {
     kind: "mapping",
     entries: [
@@ -283,7 +283,7 @@ test("member depth ranking uses structural path depth instead of raw string leng
 });
 
 test("member specificity prefers deeper member segments when multiple match", () => {
-  const provenance = new InMemoryProvenanceIndex();
+  const provenance = new InMemoryOverlaySpanIndex();
   provenance.addOverlayMapping(templateUri, overlayUri, mapping);
 
   const offset = 22; // inside both 'user' and 'user.name'
@@ -299,7 +299,7 @@ test("member specificity prefers deeper member segments when multiple match", ()
 });
 
 test("lookupGenerated falls back to overlayExpr when no member segment covers offset", () => {
-  const provenance = new InMemoryProvenanceIndex();
+  const provenance = new InMemoryOverlaySpanIndex();
   const localMapping = {
     kind: "mapping",
     entries: [
@@ -337,7 +337,7 @@ test("lookupGenerated falls back to overlayExpr when no member segment covers of
 });
 
 test("provenance stats aggregate edges by kind and document", () => {
-  const provenance = new InMemoryProvenanceIndex();
+  const provenance = new InMemoryOverlaySpanIndex();
   provenance.addOverlayMapping(templateUri, overlayUri, mapping);
 
   const stats = provenance.stats();
@@ -372,7 +372,7 @@ test("provenance stats aggregate edges by kind and document", () => {
 });
 
 test("runtime provenance stats report tracked runtime uri when runtime edges are present", () => {
-  const provenance = new InMemoryProvenanceIndex();
+  const provenance = new InMemoryOverlaySpanIndex();
   provenance.addOverlayMapping(templateUri, overlayUri, mapping);
   provenance.addEdges([
     {
@@ -390,7 +390,7 @@ test("runtime provenance stats report tracked runtime uri when runtime edges are
 });
 
 test("runtime provenance stats report missing runtime uri when runtime edges never leave template/overlay", () => {
-  const provenance = new InMemoryProvenanceIndex();
+  const provenance = new InMemoryOverlaySpanIndex();
   provenance.addOverlayMapping(templateUri, overlayUri, mapping);
   provenance.addEdges([
     {
@@ -408,7 +408,7 @@ test("runtime provenance stats report missing runtime uri when runtime edges nev
 });
 
 test("runtime provenance stats report ambiguous runtime uri when multiple candidates exist", () => {
-  const provenance = new InMemoryProvenanceIndex();
+  const provenance = new InMemoryOverlaySpanIndex();
   provenance.addOverlayMapping(templateUri, overlayUri, mapping);
   provenance.addEdges([
     {
@@ -432,7 +432,7 @@ test("runtime provenance stats report ambiguous runtime uri when multiple candid
 });
 
 test("degraded member evidence is preserved on provenance edges", () => {
-  const provenance = new InMemoryProvenanceIndex();
+  const provenance = new InMemoryOverlaySpanIndex();
   const degradedMapping = {
     kind: "mapping",
     entries: [
@@ -464,7 +464,7 @@ test("degraded member evidence is preserved on provenance edges", () => {
 });
 
 test("provenance pruning drops edges and overlay cache entries", () => {
-  const provenance = new InMemoryProvenanceIndex();
+  const provenance = new InMemoryOverlaySpanIndex();
   provenance.addOverlayMapping(templateUri, overlayUri, mapping);
 
   expect(provenance.findByGenerated(overlayUri, 22).length > 0).toBeTruthy();
@@ -480,7 +480,7 @@ test("provenance pruning drops edges and overlay cache entries", () => {
 });
 
 test("provenance exposes generated->template lookup and overlay uri inventory", () => {
-  const provenance = new InMemoryProvenanceIndex();
+  const provenance = new InMemoryOverlaySpanIndex();
   provenance.addOverlayMapping(templateUri, overlayUri, mapping);
 
   expect(resolveTemplateUriForGenerated(provenance, overlayUri)).toBe(templateUri);
@@ -489,7 +489,7 @@ test("provenance exposes generated->template lookup and overlay uri inventory", 
 });
 
 test("generated location projection maps range-based locations through provenance", () => {
-  const provenance = new InMemoryProvenanceIndex();
+  const provenance = new InMemoryOverlaySpanIndex();
   provenance.addOverlayMapping(templateUri, overlayUri, mapping);
 
   const generatedText = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";

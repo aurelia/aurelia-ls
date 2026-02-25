@@ -8,10 +8,10 @@ import {
   resolveOverlayDiagnosticLocationWithPolicy,
   resolveRelatedDiagnosticLocationWithPolicy,
   shouldRejectOverlayEditBatch,
-} from "../../out/program/provenance-policy.js";
-import type { OverlayProvenanceHit } from "../../out/program/provenance.js";
+} from "../../out/program/overlay-span-policy.js";
+import type { OverlaySpanHit } from "../../out/program/overlay-span-index.js";
 
-function makeOverlayHit(): OverlayProvenanceHit {
+function makeOverlayHit(): OverlaySpanHit {
   return {
     edge: {
       kind: "overlayExpr",
