@@ -50,6 +50,7 @@ export type {
   SymbolId,
   SourceLocation,
   Sourced,
+  DeclarationForm,
   TemplateControllerDef,
   TemplateSyntaxRegistry,
   TypeRef,

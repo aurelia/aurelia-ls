@@ -61,6 +61,8 @@ export function buildBindableDef(
   };
 }
 
+import type { DeclarationForm } from '../compiler.js';
+
 export interface ElementDefInput {
   readonly name: string;
   readonly className: string;
@@ -72,6 +74,7 @@ export interface ElementDefInput {
   readonly containerless?: boolean;
   readonly boundary?: boolean;
   readonly inlineTemplate?: string;
+  readonly declarationForm?: DeclarationForm;
 }
 
 export interface AttributeDefInput {
@@ -85,6 +88,7 @@ export interface AttributeDefInput {
   readonly primary?: string;
   readonly noMultiBindings?: boolean;
   readonly dependencies?: readonly string[];
+  readonly declarationForm?: DeclarationForm;
 }
 
 export interface TemplateControllerDefInput {
@@ -96,6 +100,7 @@ export interface TemplateControllerDefInput {
   readonly aliases?: readonly string[];
   readonly bindables?: Readonly<Record<string, BindableDef>>;
   readonly noMultiBindings?: boolean;
+  readonly declarationForm?: DeclarationForm;
 }
 
 export interface SimpleDefInput {
@@ -104,6 +109,7 @@ export interface SimpleDefInput {
   readonly file: NormalizedPath;
   readonly span?: TextSpan;
   readonly nameSpan?: TextSpan;
+  readonly declarationForm?: DeclarationForm;
 }
 
 export function buildCustomElementDef(input: ElementDefInput): CustomElementDef {
@@ -121,6 +127,7 @@ export function buildCustomElementDef(input: ElementDefInput): CustomElementDef 
     dependencies: [],
     ...(input.inlineTemplate ? { inlineTemplate: sourcedValue(input.inlineTemplate, input.file, input.span) } : {}),
     file: input.file,
+    ...(input.declarationForm ? { declarationForm: input.declarationForm } : {}),
   };
 }
 
@@ -135,6 +142,7 @@ export function buildCustomAttributeDef(input: AttributeDefInput): CustomAttribu
     bindables: input.bindables ?? {},
     dependencies: (input.dependencies ?? []).map((dep) => sourcedValue(dep, input.file, input.span)),
     file: input.file,
+    ...(input.declarationForm ? { declarationForm: input.declarationForm } : {}),
   };
 }
 
@@ -147,6 +155,7 @@ export function buildTemplateControllerDef(input: TemplateControllerDefInput): T
     noMultiBindings: sourcedValue(input.noMultiBindings ?? false, input.file, input.span),
     bindables: input.bindables ?? {},
     file: input.file,
+    ...(input.declarationForm ? { declarationForm: input.declarationForm } : {}),
   };
 }
 
@@ -156,6 +165,7 @@ export function buildValueConverterDef(input: SimpleDefInput): ValueConverterDef
     className: sourcedValue(input.className, input.file, input.span),
     name: sourcedValue(input.name, input.file, input.nameSpan ?? input.span),
     file: input.file,
+    ...(input.declarationForm ? { declarationForm: input.declarationForm } : {}),
   };
 }
 
@@ -165,6 +175,7 @@ export function buildBindingBehaviorDef(input: SimpleDefInput): BindingBehaviorD
     className: sourcedValue(input.className, input.file, input.span),
     name: sourcedValue(input.name, input.file, input.nameSpan ?? input.span),
     file: input.file,
+    ...(input.declarationForm ? { declarationForm: input.declarationForm } : {}),
   };
 }
 

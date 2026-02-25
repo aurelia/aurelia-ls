@@ -259,10 +259,15 @@ export interface ResourceKey {
 
 export type SymbolId = StringId<"SymbolId">;
 
+/** How the resource was declared/discovered by the recognition pipeline. */
+export type DeclarationForm = 'decorator' | 'static-property' | 'define-call' | 'convention';
+
 export interface ResourceDefBase {
   readonly className: Sourced<string>;
   readonly file?: NormalizedPath;
   readonly package?: string;
+  /** Discovery path used to recognize this resource. Set by the recognition pipeline. */
+  readonly declarationForm?: DeclarationForm;
 }
 
 export interface CustomElementDef extends ResourceDefBase {
@@ -401,6 +406,13 @@ export interface AttributePatternDef {
 /** Evidence origin tier from convergence — preserved through flattening boundary. */
 export type ResourceOrigin = 'builtin' | 'config' | 'source';
 
+/** Gap summary preserved through flattening. total = all gapped fields,
+ *  intrinsic = gaps beyond the B+C operating tier (mandatory-declaration). */
+export interface ResourceGapSummary {
+  readonly total: number;
+  readonly intrinsic: number;
+}
+
 export interface ElementRes {
   readonly kind: 'element';
   readonly name: string;
@@ -419,6 +431,10 @@ export interface ElementRes {
   readonly __convergenceRef?: ConvergenceRef;
   /** Evidence origin tier from convergence conclusion's winning observation. */
   readonly origin?: ResourceOrigin;
+  /** Discovery path used to recognize this resource. */
+  readonly declarationForm?: DeclarationForm;
+  /** Gap summary: total gapped fields and intrinsic (mandatory-declaration) count. */
+  readonly gaps?: ResourceGapSummary;
 }
 
 export interface AttrRes {
@@ -437,6 +453,10 @@ export interface AttrRes {
   readonly __convergenceRef?: ConvergenceRef;
   /** Evidence origin tier from convergence conclusion's winning observation. */
   readonly origin?: ResourceOrigin;
+  /** Discovery path used to recognize this resource. */
+  readonly declarationForm?: DeclarationForm;
+  /** Gap summary: total gapped fields and intrinsic (mandatory-declaration) count. */
+  readonly gaps?: ResourceGapSummary;
 }
 
 export interface ValueConverterSig {
@@ -448,6 +468,10 @@ export interface ValueConverterSig {
   readonly package?: string;
   /** Evidence origin tier from convergence conclusion's winning observation. */
   readonly origin?: ResourceOrigin;
+  /** Discovery path used to recognize this resource. */
+  readonly declarationForm?: DeclarationForm;
+  /** Gap summary: total gapped fields and intrinsic (mandatory-declaration) count. */
+  readonly gaps?: ResourceGapSummary;
 }
 
 export interface BindingBehaviorSig {
@@ -457,6 +481,10 @@ export interface BindingBehaviorSig {
   readonly package?: string;
   /** Evidence origin tier from convergence conclusion's winning observation. */
   readonly origin?: ResourceOrigin;
+  /** Discovery path used to recognize this resource. */
+  readonly declarationForm?: DeclarationForm;
+  /** Gap summary: total gapped fields and intrinsic (mandatory-declaration) count. */
+  readonly gaps?: ResourceGapSummary;
 }
 
 export interface ControllerConfig {

@@ -210,6 +210,10 @@ export type {
   // Attribute pattern configuration
   AttributePatternConfig,
   PatternInterpret,
+  // Boundary conservation: carried properties through flattening
+  ResourceOrigin,
+  ResourceGapSummary,
+  DeclarationForm,
 } from "./schema/index.js";
 
 // Binding command configuration (values)

@@ -13,6 +13,7 @@ import type {
   CustomElementDef,
   ElementRes,
   ResourceCollections,
+  ResourceGapSummary,
   ProjectSemantics,
   Sourced,
   TemplateControllerDef,
@@ -21,6 +22,73 @@ import type {
   ValueConverterSig,
 } from "./types.js";
 import { unwrapSourced as unwrapSourcedValue } from "./sourced.js";
+
+// ── Gap counting ────────────────────────────────────────────────────────
+//
+// Counts gapped fields on resource defs by walking Sourced<T> fields.
+// A field is gapped when origin: 'source' and state: 'unknown'.
+// Intrinsic gaps are fields beyond the B+C operating tier — their values
+// can only come from manifests/declarations, not source analysis.
+
+function isGapped(field: Sourced<unknown> | undefined): boolean {
+  if (!field) return false; // absent field — not a gap (field not applicable)
+  return 'state' in field && field.state === 'unknown';
+}
+
+/** Fields on CustomElementDef that are beyond B+C tier (mandatory-declaration). */
+const CE_INTRINSIC_FIELDS = new Set(['capture', 'processContent', 'boundary']);
+
+function countElementGaps(def: CustomElementDef): ResourceGapSummary {
+  const fields: [string, Sourced<unknown> | undefined][] = [
+    ['name', def.name],
+    ['containerless', def.containerless],
+    ['shadowOptions', def.shadowOptions],
+    ['capture', def.capture],
+    ['processContent', def.processContent],
+    ['boundary', def.boundary],
+  ];
+  let total = 0;
+  let intrinsic = 0;
+  for (const [name, field] of fields) {
+    if (isGapped(field)) {
+      total++;
+      if (CE_INTRINSIC_FIELDS.has(name)) intrinsic++;
+    }
+  }
+  // Count gapped bindable defs
+  for (const bindable of Object.values(def.bindables)) {
+    if (isGapped(bindable.property)) total++;
+  }
+  return { total, intrinsic };
+}
+
+function countAttributeGaps(def: CustomAttributeDef): ResourceGapSummary {
+  const fields: Sourced<unknown>[] = [def.name, def.noMultiBindings];
+  let total = 0;
+  for (const field of fields) {
+    if (isGapped(field)) total++;
+  }
+  for (const bindable of Object.values(def.bindables)) {
+    if (isGapped(bindable.property)) total++;
+  }
+  // CA has no intrinsic fields at B+C tier
+  return { total, intrinsic: 0 };
+}
+
+function countValueConverterGaps(def: ValueConverterDef): ResourceGapSummary {
+  let total = 0;
+  if (isGapped(def.name)) total++;
+  // VC type signatures (fromType, toType) are source-derivable at tier C
+  if (def.fromType && isGapped(def.fromType)) total++;
+  if (def.toType && isGapped(def.toType)) total++;
+  return { total, intrinsic: 0 };
+}
+
+function countBindingBehaviorGaps(def: BindingBehaviorDef): ResourceGapSummary {
+  let total = 0;
+  if (isGapped(def.name)) total++;
+  return { total, intrinsic: 0 };
+}
 
 export function unwrapSourced<T>(value: Sourced<T> | undefined): T | undefined {
   return unwrapSourcedValue(value);
@@ -104,6 +172,8 @@ export function toElementRes(def: CustomElementDef): ElementRes {
     ...(def.file ? { file: def.file } : {}),
     ...(def.package ? { package: def.package } : {}),
     origin: def.className.origin,
+    ...(def.declarationForm ? { declarationForm: def.declarationForm } : {}),
+    gaps: countElementGaps(def),
   };
 }
 
@@ -131,6 +201,8 @@ export function toAttrRes(def: CustomAttributeDef): AttrRes {
     ...(def.file ? { file: def.file } : {}),
     ...(def.package ? { package: def.package } : {}),
     origin: def.className.origin,
+    ...(def.declarationForm ? { declarationForm: def.declarationForm } : {}),
+    gaps: countAttributeGaps(def),
   };
 }
 
@@ -153,6 +225,7 @@ export function toTemplateControllerAttrRes(def: TemplateControllerDef): AttrRes
     ...(def.file ? { file: def.file } : {}),
     ...(def.package ? { package: def.package } : {}),
     origin: def.className.origin,
+    ...(def.declarationForm ? { declarationForm: def.declarationForm } : {}),
   };
 }
 
@@ -190,6 +263,8 @@ export function toValueConverterSig(def: ValueConverterDef): ValueConverterSig {
     ...(def.file ? { file: def.file } : {}),
     ...(def.package ? { package: def.package } : {}),
     origin: def.className.origin,
+    ...(def.declarationForm ? { declarationForm: def.declarationForm } : {}),
+    gaps: countValueConverterGaps(def),
   };
 }
 
@@ -202,6 +277,8 @@ export function toBindingBehaviorSig(def: BindingBehaviorDef): BindingBehaviorSi
     ...(def.file ? { file: def.file } : {}),
     ...(def.package ? { package: def.package } : {}),
     origin: def.className.origin,
+    ...(def.declarationForm ? { declarationForm: def.declarationForm } : {}),
+    gaps: countBindingBehaviorGaps(def),
   };
 }
 

@@ -568,6 +568,7 @@ function buildElementDef(
     containerless: elementMeta.containerless || meta.containerless,
     boundary: true,
     inlineTemplate: elementMeta.template,
+    declarationForm: 'decorator',
   });
 }
 
@@ -612,6 +613,7 @@ function buildAttributeDef(
       aliases: canonicalAliases(attrMeta.aliases),
       bindables: buildBindableDefs(bindablesWithPrimary, cls.filePath, attrMeta.decoratorSpan ?? cls.span),
       noMultiBindings: attrMeta.noMultiBindings,
+      declarationForm: 'decorator',
     });
   }
 
@@ -625,6 +627,7 @@ function buildAttributeDef(
     bindables: buildBindableDefs(bindablesWithPrimary, cls.filePath, attrMeta.decoratorSpan ?? cls.span),
     primary,
     noMultiBindings: attrMeta.noMultiBindings,
+    declarationForm: 'decorator',
   });
 }
 
@@ -651,6 +654,7 @@ function buildValueConverterDefFromMeta(
     file: cls.filePath,
     span: cls.span,
     nameSpan: meta.nameSpan,
+    declarationForm: 'decorator',
   });
 }
 
@@ -677,6 +681,7 @@ function buildBindingBehaviorDefFromMeta(
     file: cls.filePath,
     span: cls.span,
     nameSpan: meta.nameSpan,
+    declarationForm: 'decorator',
   });
 }
 

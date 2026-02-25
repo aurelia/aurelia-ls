@@ -202,6 +202,7 @@ function buildElementDef(
       ),
       boundary: true,
       containerless: false,
+      declarationForm: 'define-call',
     });
     return { resource, gaps };
   }
@@ -249,6 +250,7 @@ function buildElementDef(
     containerless,
     boundary: true,
     inlineTemplate: template,
+    declarationForm: 'define-call',
   });
 
   return { resource, gaps };
@@ -290,6 +292,7 @@ function buildAttributeDef(
         defineCall.span,
       ),
       noMultiBindings: false,
+      declarationForm: 'define-call',
     });
     return { resource, gaps };
   }
@@ -339,6 +342,7 @@ function buildAttributeDef(
       aliases: canonicalAliases([...aliases]),
       bindables: buildBindableDefs(bindablesWithPrimary, filePath, defineCall.span),
       noMultiBindings,
+      declarationForm: 'define-call',
     });
     return { resource, gaps };
   }
@@ -353,6 +357,7 @@ function buildAttributeDef(
     bindables: buildBindableDefs(bindablesWithPrimary, filePath, defineCall.span),
     primary,
     noMultiBindings,
+    declarationForm: 'define-call',
   });
 
   return { resource, gaps };
@@ -385,6 +390,7 @@ function buildValueConverterDefFromDefine(
       file: filePath,
       span: defineCall.span,
       nameSpan: stringName.span,
+      declarationForm: 'define-call',
     });
     return { resource, gaps };
   }
@@ -415,6 +421,7 @@ function buildValueConverterDefFromDefine(
     file: filePath,
     span: defineCall.span,
     nameSpan: nameProp?.span,
+    declarationForm: 'define-call',
   });
 
   return { resource, gaps };
@@ -447,6 +454,7 @@ function buildBindingBehaviorDefFromDefine(
       file: filePath,
       span: defineCall.span,
       nameSpan: stringName.span,
+      declarationForm: 'define-call',
     });
     return { resource, gaps };
   }
@@ -477,6 +485,7 @@ function buildBindingBehaviorDefFromDefine(
     file: filePath,
     span: defineCall.span,
     nameSpan: nameProp?.span,
+    declarationForm: 'define-call',
   });
 
   return { resource, gaps };

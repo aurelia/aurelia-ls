@@ -165,6 +165,7 @@ function buildElementDef(
     containerless,
     boundary: true,
     inlineTemplate: template,
+    declarationForm: 'static-property',
   });
 
   return { resource, gaps };
@@ -218,6 +219,7 @@ function buildAttributeDef(
       aliases: canonicalAliases([...aliases]),
       bindables: buildBindableDefs(mergedBindables, cls.filePath, au.span ?? cls.span),
       noMultiBindings,
+      declarationForm: 'static-property',
     });
     return { resource, gaps };
   }
@@ -232,6 +234,7 @@ function buildAttributeDef(
     bindables: buildBindableDefs(mergedBindables, cls.filePath, au.span ?? cls.span),
     primary,
     noMultiBindings,
+    declarationForm: 'static-property',
   });
 
   return { resource, gaps };
@@ -265,6 +268,7 @@ function buildValueConverterDefFromAu(
     file: cls.filePath,
     span: cls.span,
     nameSpan: nameProp?.span,
+    declarationForm: 'static-property',
   });
 
   return { resource, gaps };
@@ -298,6 +302,7 @@ function buildBindingBehaviorDefFromAu(
     file: cls.filePath,
     span: cls.span,
     nameSpan: nameProp?.span,
+    declarationForm: 'static-property',
   });
 
   return { resource, gaps };

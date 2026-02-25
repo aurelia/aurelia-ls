@@ -144,6 +144,7 @@ function buildElementDef(
     bindables: buildBindableDefs(bindables, cls.filePath, cls.span),
     containerless: false,
     boundary: true,
+    declarationForm: 'convention',
   });
 }
 
@@ -164,6 +165,7 @@ function buildAttributeDef(
     bindables: buildBindableDefs(bindables, cls.filePath, cls.span),
     primary,
     noMultiBindings: false,
+    declarationForm: 'convention',
   });
 }
 
@@ -176,6 +178,7 @@ function buildValueConverterDefFromConvention(
     className: cls.className,
     file: cls.filePath,
     span: cls.span,
+    declarationForm: 'convention',
   });
 }
 
@@ -188,6 +191,7 @@ function buildBindingBehaviorDefFromConvention(
     className: cls.className,
     file: cls.filePath,
     span: cls.span,
+    declarationForm: 'convention',
   });
 }
 
