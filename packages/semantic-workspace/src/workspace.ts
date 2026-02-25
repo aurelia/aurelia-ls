@@ -32,7 +32,6 @@ import {
   type TextEdit as TemplateTextEdit,
   type TextRange,
   type ConfidenceLevel,
-  type CursorEntity,
   type ReferentialIndex,
   InMemoryReferentialIndex,
   extractReferenceSites,
@@ -334,12 +333,12 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
       if (offset == null) return null;
 
       // CursorEntity is the sole authority for hover content.
-      // Identity comes from the entity, type from the epistemic path.
-      // No overlay fallback — if the epistemic path returns unknown,
-      // that's an honest answer about what the system knows.
+      // Identity comes from positional provenance (expression labels,
+      // resource names). Type display is NOT included in hover cards —
+      // inferredByExpr types are for type checking, not display.
+      // No overlay fallback anywhere in this path.
       let detail = null;
       let confidence: ConfidenceLevel = 'high';
-      let entityType: string | null = null;
 
       try {
         const compilation = this.getCompilation(uri) ?? this.program.getCompilation(uri);
@@ -354,19 +353,15 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
         });
         if (resolution) {
           confidence = resolution.compositeConfidence;
-
-          // 2. Extract type from the epistemic path (clean, no overlay artifacts)
-          entityType = extractEntityType(resolution.entity);
         }
 
-        // 4. Build structured hover cards (resource metadata, expression labels)
+        // 2. Build structured hover cards (resource metadata, expression labels)
         detail = collectTemplateHover({
           compilation,
           text,
           offset,
           syntax: query.syntax,
           semantics: query.model.semantics,
-          entityType,
         });
       } catch (error) {
         debug.workspace("hover.collect.error", {
@@ -611,36 +606,6 @@ function mapCodeActions(
  * - Low: sparse, explicitly uncertain. Prepend uncertainty notice.
  * - None: minimal. Replace with "analysis could not determine" message.
  */
-/**
- * Extract the type string from a CursorEntity using the epistemic path.
- *
- * This is the clean type — derived from the compilation's type inference
- * (inferredByExpr/expectedByExpr), not from TS display strings. Returns
- * null when no type is available on the entity.
- */
-function extractEntityType(entity: CursorEntity): string | null {
-  switch (entity.kind) {
-    case 'scope-identifier':
-      return entity.type ?? null;
-    case 'member-access':
-      return entity.memberType ?? null;
-    case 'global-access':
-      return entity.globalType ?? null;
-    case 'contextual-var':
-      return entity.type ?? null;
-    case 'scope-token':
-      return entity.resolvedType ?? null;
-    case 'iterator-decl':
-      return entity.itemType ?? null;
-    case 'value-converter': {
-      const out = entity.converter?.out;
-      return out?.kind === 'ts' ? out.name : null;
-    }
-    default:
-      return null;
-  }
-}
-
 /** Map L2 ConfidenceLevel to workspace hover confidence. Returns undefined for high (the default). */
 function mapConfidenceToWorkspace(level: ConfidenceLevel): "exact" | "high" | "partial" | "low" | undefined {
   switch (level) {

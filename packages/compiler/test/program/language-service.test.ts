@@ -1,7 +1,7 @@
 import { test, expect } from "vitest";
 
 import {
-  InMemoryProvenanceIndex,
+  InMemoryOverlaySpanIndex,
   emitOverlay,
   DefaultTemplateLanguageService,
   DefaultTemplateProgram,
@@ -226,7 +226,6 @@ test("suppresses typecheck mismatch when TypeScript confirms matching type", () 
   program.upsertTemplate(uri, markup);
 
   const compilation = program.getCompilation(uri);
-
   const mappingEntry = compilation.mapping.entries[0];
   const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
 
@@ -285,37 +284,9 @@ test("falls back to template URI when provenance has no mapping", () => {
   expect(tsDiag.location?.uri).toBe(templateUri);
 });
 
-test("hover merges template query and TypeScript quick info mapped to template span", () => {
-  const program = createProgram();
-  const uri = "/app/hover.html";
-  const markup = "<template><div foo.bind=\"bar\"></div></template>";
-  program.upsertTemplate(uri, markup);
-
-  const compilation = program.getCompilation(uri);
-  const mappingEntry = compilation.mapping.entries[0];
-  const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
-
-  const service = new DefaultTemplateLanguageService(program, {
-    typescript: {
-      getDiagnostics() { return []; },
-      getQuickInfo(overlay, offset) {
-        expect(overlay.uri).toBe(overlayUri);
-        expect(offset >= mappingEntry.overlaySpan.start && offset <= mappingEntry.overlaySpan.end).toBeTruthy();
-        return {
-          text: "bar: string",
-          documentation: "vm member",
-          start: mappingEntry.overlaySpan.start,
-          length: mappingEntry.overlaySpan.end - mappingEntry.overlaySpan.start,
-        };
-      },
-    },
-  });
-
-  const hover = service.getHover(uri, positionAtOffset(markup, mappingEntry.htmlSpan.start + 1));
-  expect(hover, "hover should be produced").toBeTruthy();
-  expect(hover.contents.includes("bar: string"), "TS quick info should be present").toBeTruthy();
-  expect(hover.range).toEqual(spanToRange(mappingEntry.htmlSpan, markup));
-});
+// Hover is now workspace-layer-only (CursorEntity-driven).
+// Compiler-layer hover tests removed — see feature-matrix/hover.test.ts
+// and workspace-hover.test.ts for the current hover test suite.
 
 test("definitions map overlay ranges back to template and pass through VM files", () => {
   const program = createProgram();
@@ -923,31 +894,6 @@ test("rename aborts when overlay edits cannot be mapped to the template", () => 
   expect(edits, "rename should abort when overlay edits cannot be mapped").toEqual([]);
 });
 
-test("hover uses overlay offset when TS quick info lacks span data", () => {
-  const program = createProgram();
-  const uri = "/app/hover-fallback.html";
-  const markup = "<template><em>${value}</em></template>";
-  program.upsertTemplate(uri, markup);
-
-  const compilation = program.getCompilation(uri);
-  const mappingEntry = compilation.mapping.entries[0];
-  const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
-
-  const service = new DefaultTemplateLanguageService(program, {
-    typescript: {
-      getDiagnostics() { return []; },
-      getQuickInfo(overlay) {
-        expect(overlay.uri).toBe(overlayUri);
-        return { text: "value: number" }; // no start/length provided
-      },
-    },
-  });
-
-  const hover = service.getHover(uri, positionAtOffset(markup, mappingEntry.htmlSpan.start + 1));
-  expect(hover, "hover should map quick info without span data").toBeTruthy();
-  expect(hover.range).toEqual(spanToRange(mappingEntry.htmlSpan, markup));
-});
-
 test("navigation is empty when TS services are absent", () => {
   const program = createProgram();
   const uri = "/app/nav-none.html";
@@ -1113,7 +1059,7 @@ test("buildTemplateMapping preserves degradation evidence through grouping and p
 
   const templateUri = canonicalDocumentUri(uri).uri;
   const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
-  const provenance = new InMemoryProvenanceIndex();
+  const provenance = new InMemoryOverlaySpanIndex();
   provenance.addOverlayMapping(templateUri, overlayUri, rebuilt.mapping);
 
   const hit = provenance.projectGeneratedSpan(overlayUri, {

@@ -78,7 +78,6 @@ export function collectTemplateHover(options: {
   syntax?: TemplateSyntaxRegistry | null;
   attrParser?: AttributeParser;
   semantics?: MaterializedSemantics | null;
-  entityType?: string | null;
 }): TemplateHoverDetails | null {
   const { compilation, text, offset } = options;
   const syntax = options.syntax ?? null;
@@ -118,10 +117,12 @@ export function collectTemplateHover(options: {
     const pathAtOffset = exprAst ? expressionLabelAtOffset(exprAst, offset) : null;
     const label = chooseExpressionLabel(pathAtOffset, expr.memberPath) ?? "expression";
 
-    // Type comes from the epistemic path (CursorEntity), passed in by the
-    // workspace layer. Identity comes from positional provenance (memberPath).
-    const typeAnnotation = options.entityType ? `: ${options.entityType}` : '';
-    cards.push({ signature: `(expression) ${label}${typeAnnotation}`, meta: [] });
+    // Identity comes from positional provenance (memberPath).
+    // Type is NOT included in the expression card — inferredByExpr types
+    // are for type checking (precision), not display (readability). Display-
+    // quality types require a display-friendly type renderer, which is a
+    // separate concern from cursor entity resolution.
+    cards.push({ signature: `(expression) ${label}`, meta: [] });
   }
 
   // ── Template controllers ─────────────────────────────────────────────

@@ -214,7 +214,6 @@ type TypeNameMap = ReadonlyMap<string, string>;
 
 export interface TemplateLanguageService {
   getDiagnostics(uri: DocumentUri): TemplateLanguageDiagnostics;
-  getExpressionType(uri: DocumentUri, position: Position): string | null;
   getCompletions(uri: DocumentUri, position: Position): CompletionItem[];
   getDefinition(uri: DocumentUri, position: Position): Location[];
   getReferences(uri: DocumentUri, position: Position): Location[];
@@ -306,39 +305,6 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
 
   getOverlay(uri: DocumentUri): OverlayBuildArtifact {
     return this.build.getOverlay(uri);
-  }
-
-  /**
-   * Extract only the type for an expression at a template position.
-   *
-   * Uses the overlay projection to query TypeScript, then parses out only the
-   * type portion — identity comes from positional provenance (memberPath),
-   * never from the TS display string. Returns null when no type is available.
-   */
-  getExpressionType(uri: DocumentUri, position: Position): string | null {
-    const canonical = canonicalDocumentUri(uri);
-    const snapshot = this.requireSnapshot(canonical);
-    const offset = offsetAtPosition(snapshot.text, position);
-    if (offset == null) return null;
-
-    const ts = this.options.typescript;
-    if (!ts?.getQuickInfo) return null;
-
-    const overlayHit = this.projectTemplateOffsetToOverlay(canonical, offset);
-    if (!overlayHit) return null;
-
-    const overlay = this.overlaySnapshot(canonical.uri);
-    const overlayOffset = overlayHit.edge.from.span.start;
-    const info = ts.getQuickInfo(overlay, overlayOffset);
-    if (!info?.text) return null;
-
-    if (isOverlayLambdaParameter(info.text)) return null;
-
-    const parsed = parseQuickInfoType(info.text);
-    if (!parsed) return null;
-
-    const typeNames = this.typeNamesFor(canonical);
-    return rewriteTypeNames(parsed, typeNames);
   }
 
   getCompletions(uri: DocumentUri, position: Position): CompletionItem[] {
@@ -463,6 +429,7 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     if (!entries.length) return [];
 
     const fallbackSpan = overlayHit.edge.to.span;
+    const typeNames = this.typeNamesFor(canonical);
     const results: CompletionItem[] = [];
     for (const entry of entries) {
       const overlaySpan = entry.replacementSpan
@@ -475,14 +442,18 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
         ? projectGeneratedSpanToDocumentSpanWithOffsetFallback(this.program.provenance, overlay.uri, overlaySpan)
         : null;
       const span = mapped?.span ?? (overlaySpan ? null : fallbackSpan);
-      const detail = entry.detail ?? entry.kind;
+      // Clean detail and documentation using the overlay plan's type name
+      // map — same vocabulary-based cleaning as diagnostics.
+      const rawDetail = entry.detail ?? entry.kind;
+      const detail = rawDetail ? rewriteTypeNames(rawDetail, typeNames) : rawDetail;
+      const documentation = entry.documentation ? rewriteTypeNames(entry.documentation, typeNames) : entry.documentation;
       const range = span ? spanToRange(span, snapshot.text) : undefined;
       results.push({
         label: entry.name,
         source: "typescript",
         ...(range ? { range } : {}),
         ...(detail ? { detail } : {}),
-        ...(entry.documentation ? { documentation: entry.documentation } : {}),
+        ...(documentation ? { documentation } : {}),
         ...(entry.insertText ? { insertText: entry.insertText } : {}),
         ...(entry.sortText ? { sortText: entry.sortText } : {}),
       });
@@ -511,12 +482,13 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     const actions = ts.getCodeActions(overlay, overlayStart, overlayEnd) ?? [];
     if (!actions.length) return [];
 
+    const typeNames = this.typeNamesFor(canonical);
     const results: TemplateCodeAction[] = [];
     for (const action of actions) {
       const mapped = this.mapTypeScriptEdits(action.edits, overlay, true);
       if (!mapped?.length) continue;
       results.push({
-        title: action.title,
+        title: rewriteTypeNames(action.title, typeNames),
         kind: "quickfix",
         source: "typescript",
         edits: mapped,
@@ -542,9 +514,6 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
       templateUri: overlay.template.uri,
     };
   }
-
-  // collectTypeScriptHover removed — hover now driven by CursorEntity
-  // in workspace layer. Type enrichment via getExpressionType() above.
 
   private mapTypeScriptLocations(locations: readonly TsLocation[], overlay: OverlayDocumentSnapshot): Location[] {
     const results: Location[] = [];
@@ -868,6 +837,9 @@ function mapCompilerDiagnostic(
         ? context.provenance.lookupSource(templateUri, targetSpan.start)
         : null;
     const overlaySpan = hit?.edge.from.span ?? null;
+    // Use TS type resolution to validate the compiler's type mismatch.
+    // This is a validation check (suppress false positives), not display —
+    // the resolved type is compared, never shown to the user.
     const quickInfoType = lookupQuickInfoType(
       context?.typescript,
       context?.overlay ?? null,
@@ -937,6 +909,13 @@ function withTypeMismatchData(
   return next;
 }
 
+/**
+ * Query TS for the resolved type at an overlay position.
+ *
+ * Used ONLY for validation (e.g., suppressing false-positive type
+ * mismatches when TS confirms the types actually match). The result
+ * is never shown to the user — it's compared against compiler data.
+ */
 function lookupQuickInfoType(
   ts: TypeScriptServices | undefined,
   overlay: OverlayDocumentSnapshot | null,
@@ -945,7 +924,6 @@ function lookupQuickInfoType(
   typeNames: TypeNameMap,
 ): string | null {
   if (!ts?.getQuickInfo || !overlay || !overlaySpan) return null;
-  // Prefer the exact member segment when available; otherwise sample the span center.
   const probe = hit?.edge.from.span ?? overlaySpan;
   const center = probe.start + Math.max(0, Math.floor(spanLength(probe) / 2));
   const info = ts.getQuickInfo(overlay, center);
@@ -1072,23 +1050,6 @@ function rewriteTypeNames(text: string, typeNames: TypeNameMap): string {
   return result;
 }
 
-/**
- * Detect overlay lambda parameter type info that should not be shown to users.
- *
- * The overlay emits lambdas like `o => o.member` where `o` is a generated
- * parameter typed to the overlay frame. When the provenance projection maps
- * a template offset to the `o` parameter (e.g., for `$this`), TypeScript
- * returns the full frame type — an implementation artifact.
- *
- * This is a provenance-aware check: the overlay plan guarantees `o` is the
- * sole parameter name for all overlay lambdas. If quickInfo identifies a
- * `(parameter) o:`, we know it's the generated lambda parameter, not
- * authored code.
- */
-function isOverlayLambdaParameter(text: string): boolean {
-  return /^\(parameter\)\s+o\s*:/.test(text);
-}
-
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -1107,37 +1068,77 @@ function collectTypeNames(compilation: TemplateCompilation | null | undefined): 
   map.set("__au_bb", "");
 
   for (const tpl of compilation.overlayPlan.templates ?? []) {
-    if (tpl.vmType?.alias) {
-      const friendly = tpl.vmType.displayName ?? tpl.vmType.typeExpr;
-      if (friendly && friendly !== tpl.vmType.alias) {
-        map.set(tpl.vmType.alias, friendly);
-      }
+    // VM alias → authored class name
+    const vmDisplay = tpl.vmType?.displayName ?? tpl.vmType?.typeExpr ?? null;
+    if (tpl.vmType?.alias && vmDisplay && vmDisplay !== tpl.vmType.alias) {
+      map.set(tpl.vmType.alias, vmDisplay);
     }
-    const frameLabelBase = tpl.vmType?.displayName ?? "frame";
+
+    // Frame aliases → VM display name (not "App 0" — the frame index
+    // is an overlay implementation detail). Also map the full typeExpr
+    // (Omit<> wrappers, intersections) so that if TS expands the alias
+    // in a diagnostic message, the expansion is also cleaned.
     for (const frame of tpl.frames ?? []) {
-      if (!frame.typeName) continue;
-      const label = `${frameLabelBase} ${frame.frame}`;
-      if (label !== frame.typeName) map.set(frame.typeName, label);
+      if (frame.typeName && vmDisplay && frame.typeName !== vmDisplay) {
+        map.set(frame.typeName, vmDisplay);
+      }
+      if (frame.typeExpr && vmDisplay && frame.typeExpr !== vmDisplay) {
+        map.set(frame.typeExpr, vmDisplay);
+      }
     }
   }
   return map;
 }
 
+/**
+ * Construct a diagnostic message from provenance data when possible,
+ * falling back to type-name-cleaned TS text for unrecognized codes.
+ *
+ * For recognized codes, the message is built from the provenance hit's
+ * memberPath and the VM display name — never from raw TS display text.
+ * The overlay plan's type name map covers all generated identifiers,
+ * so the fallback path also produces clean messages.
+ */
 function formatTypeScriptMessage(
   diag: TsDiagnostic,
   vmDisplayName: string,
   hit: TemplateSpanHit | null,
   typeNames: TypeNameMap,
 ): string {
-  if (hit?.memberPath && shouldRewriteAsMissingMember(diag)) {
-    return `Property '${hit.memberPath}' does not exist on ${vmDisplayName}`;
-  }
-  return rewriteTypeNames(flattenTsMessage(diag.messageText), typeNames);
-}
-
-function shouldRewriteAsMissingMember(diag: TsDiagnostic): boolean {
   const code = normalizeTsDiagnosticCode(diag.code);
-  return code === 2339 || code === 2551;
+  const member = hit?.memberPath;
+  const subject = member ? `${vmDisplayName}.${member}` : vmDisplayName;
+
+  // Property does not exist (TS2339, TS2551)
+  if (member && (code === 2339 || code === 2551)) {
+    return `Property '${member}' does not exist on ${vmDisplayName}`;
+  }
+
+  // Type not assignable (TS2322) — construct from provenance subject
+  if (code === 2322 && member) {
+    const raw = flattenTsMessage(diag.messageText);
+    const cleaned = rewriteTypeNames(raw, typeNames);
+    // Replace TS's container type references with the VM display name
+    return cleaned.replace(/type '([^']+)'/gi, (match, type) => {
+      const cleanType = rewriteTypeNames(type, typeNames);
+      return `type '${cleanType}'`;
+    });
+  }
+
+  // Argument type not assignable (TS2345) — same approach
+  if (code === 2345) {
+    const raw = flattenTsMessage(diag.messageText);
+    const cleaned = rewriteTypeNames(raw, typeNames);
+    return cleaned.replace(/type '([^']+)'/gi, (match, type) => {
+      const cleanType = rewriteTypeNames(type, typeNames);
+      return `type '${cleanType}'`;
+    });
+  }
+
+  // All other codes: the type name map (derived from the overlay plan's
+  // known vocabulary) covers every generated identifier. Apply it to
+  // the full message text.
+  return rewriteTypeNames(flattenTsMessage(diag.messageText), typeNames);
 }
 
 function normalizeTsDiagnosticCode(code: TsDiagnostic["code"]): number | null {
