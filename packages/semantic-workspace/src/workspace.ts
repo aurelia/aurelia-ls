@@ -187,6 +187,12 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
     return this.#refactor;
   }
 
+  onDidChangeSemantics(_handler: (event: import("./types.js").SemanticChangeEvent) => void): import("./types.js").Disposable {
+    // The kernel is a stateless query surface — change detection lives
+    // in SemanticWorkspaceEngine which wraps the kernel.
+    return { dispose: () => {} };
+  }
+
   reconfigure(options: SemanticWorkspaceKernelOptions): boolean {
     const next = normalizeOptions(options, this.#languageOptions, this.#lookupText);
     const nextFingerprint = next.fingerprint ?? this.#workspaceFingerprint;

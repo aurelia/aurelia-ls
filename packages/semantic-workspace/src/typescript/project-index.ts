@@ -54,6 +54,7 @@ export class AureliaProjectIndex {
   #discovery: IncrementalDiscovery;
 
   #model: SemanticModel;
+  #thirdPartyOverlay: ThirdPartyDiscoveryResult | null = null;
 
   constructor(options: AureliaProjectIndexOptions) {
     this.#ts = options.ts;
@@ -102,6 +103,9 @@ export class AureliaProjectIndex {
     const hasResources = hasThirdPartyResources(thirdParty.resources);
     const hasGaps = thirdParty.gaps.length > 0;
     if (!hasResources && !hasGaps) return false;
+
+    // Store for replay after incremental rebuilds (level 3 in #buildModelWithInvalidation)
+    this.#thirdPartyOverlay = thirdParty;
 
     const merged = applyThirdPartyResources(this.#model.discovery, thirdParty.resources, {
       gaps: thirdParty.gaps,
@@ -161,7 +165,17 @@ export class AureliaProjectIndex {
     );
 
     // Build new model from the fresh discovery result.
-    return createSemanticModel(result.discovery, {
+    // Re-apply third-party overlay if previously applied — the overlay
+    // is not part of the IncrementalDiscovery result and would otherwise
+    // be lost on fact-level rebuilds.
+    let discovery = result.discovery;
+    if (this.#thirdPartyOverlay && hasThirdPartyResources(this.#thirdPartyOverlay.resources)) {
+      discovery = applyThirdPartyResources(discovery, this.#thirdPartyOverlay.resources, {
+        gaps: this.#thirdPartyOverlay.gaps,
+        confidence: this.#thirdPartyOverlay.confidence,
+      });
+    }
+    return createSemanticModel(discovery, {
       defaultScope: this.#defaultScope,
     });
   }

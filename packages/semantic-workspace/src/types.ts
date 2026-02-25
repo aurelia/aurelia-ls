@@ -214,6 +214,43 @@ export interface SemanticWorkspace {
 
   /** Workspace-level referential index (L2 cross-domain provenance). */
   readonly referentialIndex: import("@aurelia-ls/compiler").ReferentialIndex;
+
+  /**
+   * Fires when the workspace's semantic model changes outside the
+   * per-document update flow. Consumers subscribe to react to
+   * workspace-level knowledge changes (new resources from third-party
+   * scan, TS project version bump, config reload).
+   */
+  onDidChangeSemantics(handler: (event: SemanticChangeEvent) => void): Disposable;
+}
+
+// ============================================================================
+// Workspace Change Events
+// ============================================================================
+
+/**
+ * Knowledge domains that can change in the workspace.
+ * Consumers subscribe to the domains they care about.
+ */
+export type SemanticChangeDomain =
+  | "resources"    // catalog resource identity/interface changed
+  | "types"        // type state changed (TS project version bump)
+  | "scopes"       // scope topology changed (registrations)
+  | "diagnostics"  // diagnostic results changed
+  | "config";      // project configuration changed
+
+/**
+ * Event fired when the workspace's semantic model changes.
+ */
+export interface SemanticChangeEvent {
+  /** New workspace fingerprint after the change. */
+  readonly fingerprint: string;
+  /** Which knowledge domains were affected. */
+  readonly domains: readonly SemanticChangeDomain[];
+}
+
+export interface Disposable {
+  dispose(): void;
 }
 
 // ============================================================================

@@ -186,8 +186,25 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
   readonly #refactorDecisions: RefactorDecisionSet | null;
   readonly #trace: ReturnType<typeof createTrace> | null;
   #disposed = false;
+  readonly #changeHandlers = new Set<(event: import("./types.js").SemanticChangeEvent) => void>();
 
   get referentialIndex() { return this.#kernel.referentialIndex; }
+
+  onDidChangeSemantics(handler: (event: import("./types.js").SemanticChangeEvent) => void): import("./types.js").Disposable {
+    this.#changeHandlers.add(handler);
+    return { dispose: () => { this.#changeHandlers.delete(handler); } };
+  }
+
+  #fireSemanticChange(domains: import("./types.js").SemanticChangeDomain[]): void {
+    if (this.#changeHandlers.size === 0) return;
+    const event: import("./types.js").SemanticChangeEvent = {
+      fingerprint: this.#query.model.fingerprint,
+      domains,
+    };
+    for (const handler of this.#changeHandlers) {
+      try { handler(event); } catch { /* consumer errors must not crash the workspace */ }
+    }
+  }
 
   constructor(options: SemanticWorkspaceEngineOptions) {
     this.#logger = options.logger;
@@ -282,6 +299,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       if (applied) {
         this.#logger.info("[workspace] Third-party overlay applied, refreshing workspace");
         this.#rebuildFromModel(this.#projectIndex.currentModel());
+        this.#fireSemanticChange(["resources", "scopes"]);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -310,6 +328,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     this.#projectIndex.refresh();
     this.#projectVersion = version;
     this.#rebuildFromModel(this.#projectIndex.currentModel());
+    this.#fireSemanticChange(["resources", "types", "scopes", "diagnostics"]);
     return true;
   }
 
