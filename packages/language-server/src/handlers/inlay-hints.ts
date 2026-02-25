@@ -26,9 +26,6 @@ const BINDING_MODE_LABELS: Record<string, string> = {
   oneTime: "oneTime",
 };
 
-/** Commands where the mode is already explicit — no hint needed. */
-const EXPLICIT_MODE_COMMANDS = new Set(["two-way", "to-view", "from-view", "one-time"]);
-
 export function handleInlayHints(
   ctx: ServerContext,
   params: InlayHintParams,
@@ -44,30 +41,37 @@ export function handleInlayHints(
 
     const hints: InlayHint[] = [];
 
-    // Walk linked instructions for property bindings with resolved modes
+    // Walk linked instructions for property bindings with resolved modes.
+    //
+    // The mode provenance chain: attribute syntax (pattern + command) →
+    // IR mode (authored, may be 'default') → linked effectiveMode (resolved
+    // from target bindable, native prop defaults, or two-way defaults).
+    //
+    // A hint is shown when the system resolved a mode that the developer
+    // didn't explicitly author — i.e., when mode !== effectiveMode. This
+    // works for all syntax: standard commands (.bind), custom commands,
+    // pattern-based shorthand (:value), and any future extensible syntax.
     for (const template of compilation.linked.templates) {
       for (const row of template.rows) {
         for (const instr of row.instructions) {
           if (instr.kind !== "propertyBinding") continue;
 
-          // Skip explicit mode commands — the developer already wrote the intent
-          if (instr.command && EXPLICIT_MODE_COMMANDS.has(instr.command)) continue;
-
           // Skip unresolved default — nothing useful to show
           if (instr.effectiveMode === "default") continue;
 
-          // Skip when authored mode matches effective mode — no new information
+          // The core check: if the authored mode already matches the
+          // effective mode, the developer's intent is explicit (via an
+          // explicit command like .two-way, a custom command with a
+          // declared mode, or a pattern override like :value). No hint.
           if (instr.mode === instr.effectiveMode) continue;
 
-          // Only show for `.bind` (and bare attribute bindings that default)
           const label = BINDING_MODE_LABELS[instr.effectiveMode];
           if (!label) continue;
 
-          // Position the hint after the attribute name (e.g., after "value.bind")
+          // Position after the attribute name span (e.g., after "value.bind")
           const span = instr.nameLoc ?? instr.loc;
           if (!span || typeof span.end !== "number") continue;
 
-          // Convert byte offset to LSP position
           const pos = doc.positionAt(span.end);
 
           // Only include hints within the requested range
