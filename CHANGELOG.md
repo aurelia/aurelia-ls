@@ -52,9 +52,12 @@ converge → SemanticModel.
 **Template pipeline:**
 
 Pipeline stages renamed for clarity: `20-resolve` → `20-link`.
+`PipelineEngine` removed — pipeline stages now query `SemanticModel` directly.
 
 - Link stage resolves elements, attributes, and template controllers against the semantic model with three-way resolution status (resolved / stub / absent)
 - Bind stage validates bindings against resource definitions, resolves value converters and binding behaviors in expressions, computes effective binding modes
+- Synthetic writeback locals for two-way/from-view bindings targeting `$`-prefixed expressions
+- `.class`/`.style` command binding targets preserved through the pipeline
 - Gap-aware diagnostics across all link-stage emission sites — confidence qualifies every diagnostic
 - Confidence-based severity demotion — errors demote to warnings when analysis is incomplete
 
@@ -74,10 +77,23 @@ Pipeline stages renamed for clarity: `20-resolve` → `20-link`.
 - `DepRecorder` wired into every pipeline stage
 - File-scoped discovery replaces full-project recomputation
 
+**Completions engine:**
+- Predictive DFA for attribute state machine completion
+- IR walker for context-aware element and attribute suggestions
+- Expression scanner for member access and scope-aware completions
+
+**Code actions:**
+- Add-import for unregistered elements and attributes
+- Multi-form bindable declaration support (decorator, array, object forms)
+
 **Other changes:**
+- `DomSchema.base` for HTMLElement global properties inherited by all elements
 - Precise spans on DOM nodes and AST identifiers
 - Symbol graph for stable cross-file definition and reference tracking
 - Referential index for cross-domain provenance traversal
+- Import alias handling with conflict detection
+- VC/BB name canonicalization to match `@aurelia/kernel` camelCase behavior
+- Overlay leakage elimination from all user-facing surfaces
 - Policy modules: query policy, resource precedence, rename, refactor, provenance projection, controller dispatch, symbol ID
 - Command and attribute pattern recognition streams with uncertainty gap handling
 - Builtin alignment with runtime metadata (repeat, portal, promise)
@@ -93,6 +109,10 @@ knowledge construction has moved to the semantic workspace.
 - Gap-aware semantic token modifiers forwarded from workspace
 - Workspace change notifications (`onDidChangeSemantics`) for live updates
 - Parity adapter for verification against the semantic authority host
+
+### @aurelia-ls/vscode
+
+- TS-side rename propagation — renaming a property in TypeScript updates template usages
 
 ### @aurelia-ls/transform
 
