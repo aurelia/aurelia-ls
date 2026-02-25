@@ -20,6 +20,7 @@ import type {
 import type { WorkspaceDiagnostic, WorkspaceDiagnostics } from "@aurelia-ls/semantic-workspace";
 import type { ServerContext } from "../context.js";
 import { buildCapabilities, buildCapabilitiesFallback, type CapabilitiesResponse } from "../capabilities.js";
+import { mapSemanticWorkspaceEdit } from "../mapping/lsp-types.js";
 import { handleCodeLens } from "./code-lens.js";
 
 type MaybeUriParam = { uri?: string } | string | null;
@@ -646,6 +647,62 @@ export function handleCapabilities(ctx: ServerContext): CapabilitiesResponse {
   }
 }
 
+// ============================================================================
+// TS-side rename → template propagation
+// ============================================================================
+
+export type RenameFromTsParams = {
+  uri: string;
+  position: Position;
+  newName: string;
+};
+
+export type RenameFromTsResponse = {
+  /** Template-side edits only (TS edits come from the built-in TS rename). */
+  changes: Record<string, { range: { start: Position; end: Position }; newText: string }[]>;
+} | null;
+
+export function handleRenameFromTs(
+  ctx: ServerContext,
+  params: RenameFromTsParams,
+): RenameFromTsResponse {
+  try {
+    if (!params?.uri || !params.position || !params.newName) return null;
+
+    const canonical = canonicalDocumentUri(params.uri);
+    // tryExpressionMemberRename lives on SemanticWorkspaceEngine (implementation),
+    // not on the SemanticWorkspace interface. Runtime check guards the cast.
+    const engine = ctx.workspace as any;
+    if (typeof engine.tryExpressionMemberRename !== "function") return null;
+
+    const result = engine.tryExpressionMemberRename({
+      uri: canonical.uri,
+      position: params.position,
+      newName: params.newName,
+    }) as import("@aurelia-ls/semantic-workspace").WorkspaceRefactorResult | null;
+    if (!result || !("edit" in result)) return null;
+
+    // Filter to template-only edits (TS edits are handled by VS Code's built-in TS rename)
+    const templateEdits = result.edit.edits.filter(
+      (e) => String(e.uri).endsWith(".html"),
+    );
+    if (!templateEdits.length) return null;
+
+    // Convert workspace edits to LSP format
+    const lookupText = (uri: any) => ctx.lookupText(uri);
+    const mapped = mapSemanticWorkspaceEdit({ edits: templateEdits }, lookupText);
+    if (!mapped?.changes) return null;
+
+    const changes = mapped.changes as Record<string, { range: { start: Position; end: Position }; newText: string }[]>;
+
+    return Object.keys(changes).length ? { changes } : null;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    ctx.logger.error(`[renameFromTs] failed: ${msg}`);
+    return null;
+  }
+}
+
 /**
  * Registers all custom Aurelia request handlers on the connection.
  */
@@ -663,4 +720,5 @@ export function registerCustomHandlers(ctx: ServerContext): void {
     handleCodeLens(ctx, { textDocument: { uri: params.uri } }),
   );
   ctx.connection.onRequest("aurelia/capabilities", () => handleCapabilities(ctx));
+  ctx.connection.onRequest("aurelia/renameFromTs", (params: RenameFromTsParams) => handleRenameFromTs(ctx, params));
 }
