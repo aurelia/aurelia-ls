@@ -60,7 +60,7 @@
       { "command": "aurelia.diagnosticsReport", "title": "Diagnostics Report", "category": "Aurelia" },
       { "command": "aurelia.showSuppressedDiagnostics", "title": "Show Suppressed Diagnostics", "category": "Aurelia" },
       { "command": "aurelia.inspectAtCursor", "title": "Inspect at Cursor", "category": "Aurelia" },
-      { "command": "aurelia.findResource", "title": "Find Resource", "category": "Aurelia" },
+      { "command": "aurelia.findResource", "title": "Find Resource", "icon": "$(search)", "category": "Aurelia" },
       { "command": "aurelia.showOverlay", "title": "Show Compiled Template", "category": "Aurelia Debug" },
       { "command": "aurelia.showOverlayMapping", "title": "Show Overlay Mapping", "category": "Aurelia Debug" },
       { "command": "aurelia.dumpState", "title": "Dump Server State", "category": "Aurelia Debug" },
@@ -72,12 +72,43 @@
       { "command": "aurelia.observability.setTraceMinDuration", "title": "Set Trace Min Duration", "category": "Aurelia Debug" },
       { "command": "aurelia.observability.openOutput", "title": "Show Output Channel", "category": "Aurelia Debug" }
     ],
+    "keybindings": [
+      {
+        "command": "aurelia.findResource",
+        "key": "ctrl+shift+a",
+        "mac": "cmd+shift+a",
+        "when": "aurelia.active"
+      },
+      {
+        "command": "aurelia.inspectAtCursor",
+        "key": "ctrl+shift+i",
+        "mac": "cmd+shift+i",
+        "when": "aurelia.active && editorTextFocus && editorLangId == html"
+      }
+    ],
     "menus": {
       "view/title": [
+        {
+          "command": "aurelia.findResource",
+          "when": "view == aureliaResourceExplorer",
+          "group": "navigation"
+        },
         {
           "command": "aurelia.refreshResourceExplorer",
           "when": "view == aureliaResourceExplorer",
           "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "aurelia.inspectAtCursor",
+          "when": "aurelia.active && editorLangId == html",
+          "group": "aurelia@1"
+        },
+        {
+          "command": "aurelia.diagnosticsReport",
+          "when": "aurelia.active && editorLangId == html",
+          "group": "aurelia@2"
         }
       ],
       "commandPalette": [
