@@ -398,6 +398,9 @@ export interface AttributePatternDef {
 // Derived Semantics (compiler-facing, no provenance)
 // ============================================================================
 
+/** Evidence origin tier from convergence — preserved through flattening boundary. */
+export type ResourceOrigin = 'builtin' | 'config' | 'source';
+
 export interface ElementRes {
   readonly kind: 'element';
   readonly name: string;
@@ -414,6 +417,8 @@ export interface ElementRes {
   readonly package?: string;
   /** Convergence identity ref for provenance queries. Set when entries available. */
   readonly __convergenceRef?: ConvergenceRef;
+  /** Evidence origin tier from convergence conclusion's winning observation. */
+  readonly origin?: ResourceOrigin;
 }
 
 export interface AttrRes {
@@ -430,6 +435,8 @@ export interface AttrRes {
   readonly package?: string;
   /** Convergence identity ref for provenance queries. Set when entries available. */
   readonly __convergenceRef?: ConvergenceRef;
+  /** Evidence origin tier from convergence conclusion's winning observation. */
+  readonly origin?: ResourceOrigin;
 }
 
 export interface ValueConverterSig {
@@ -439,6 +446,8 @@ export interface ValueConverterSig {
   readonly className?: string;
   readonly file?: NormalizedPath;
   readonly package?: string;
+  /** Evidence origin tier from convergence conclusion's winning observation. */
+  readonly origin?: ResourceOrigin;
 }
 
 export interface BindingBehaviorSig {
@@ -446,6 +455,8 @@ export interface BindingBehaviorSig {
   readonly className?: string;
   readonly file?: NormalizedPath;
   readonly package?: string;
+  /** Evidence origin tier from convergence conclusion's winning observation. */
+  readonly origin?: ResourceOrigin;
 }
 
 export interface ControllerConfig {

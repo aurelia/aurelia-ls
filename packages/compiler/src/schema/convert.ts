@@ -103,6 +103,7 @@ export function toElementRes(def: CustomElementDef): ElementRes {
     ...(className ? { className } : {}),
     ...(def.file ? { file: def.file } : {}),
     ...(def.package ? { package: def.package } : {}),
+    origin: def.className.origin,
   };
 }
 
@@ -129,6 +130,7 @@ export function toAttrRes(def: CustomAttributeDef): AttrRes {
     ...(className ? { className } : {}),
     ...(def.file ? { file: def.file } : {}),
     ...(def.package ? { package: def.package } : {}),
+    origin: def.className.origin,
   };
 }
 
@@ -150,6 +152,7 @@ export function toTemplateControllerAttrRes(def: TemplateControllerDef): AttrRes
     ...(className ? { className } : {}),
     ...(def.file ? { file: def.file } : {}),
     ...(def.package ? { package: def.package } : {}),
+    origin: def.className.origin,
   };
 }
 
@@ -186,6 +189,7 @@ export function toValueConverterSig(def: ValueConverterDef): ValueConverterSig {
     ...(className ? { className } : {}),
     ...(def.file ? { file: def.file } : {}),
     ...(def.package ? { package: def.package } : {}),
+    origin: def.className.origin,
   };
 }
 
@@ -197,6 +201,7 @@ export function toBindingBehaviorSig(def: BindingBehaviorDef): BindingBehaviorSi
     ...(className ? { className } : {}),
     ...(def.file ? { file: def.file } : {}),
     ...(def.package ? { package: def.package } : {}),
+    origin: def.className.origin,
   };
 }
 

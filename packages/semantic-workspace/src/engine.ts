@@ -468,6 +468,10 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
         this.#ensureTemplateContext(canonical.uri);
         return this.#semanticTokens(canonical.uri);
       },
+      inspect: (pos) => {
+        this.#ensureTemplateContext(canonical.uri);
+        return base.inspect(pos);
+      },
     };
   }
 

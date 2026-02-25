@@ -1,5 +1,6 @@
 import type {
   ApiSurfaceSnapshot,
+  CursorResolutionResult,
   DocumentUri,
   ExprId,
   FeatureUsageSet,
@@ -59,6 +60,9 @@ export interface WorkspaceLocation {
   // Location spans must be provenance-backed. Do not compute offsets manually.
   readonly uri: DocumentUri;
   readonly span: SourceSpan;
+  /** Name-only span within the target for precise selection highlighting.
+   *  Maps to LSP LocationLink.targetSelectionRange. When absent, span is used. */
+  readonly selectionSpan?: SourceSpan;
   readonly symbolId?: SymbolId;
   readonly exprId?: ExprId;
   readonly nodeId?: NodeId;
@@ -110,6 +114,17 @@ export interface SemanticQuery {
   completions(pos: SourcePosition): readonly WorkspaceCompletionItem[];
   diagnostics(): WorkspaceDiagnostics;
   semanticTokens(): readonly WorkspaceToken[];
+  /** Secondary disclosure: full CursorEntity resolution at a position.
+   *  Returns the raw entity, confidence, expression label, and provenance refs.
+   *  Not cost-budget-constrained — intended for development tooling and inspect commands. */
+  inspect(pos: SourcePosition): WorkspaceInspectResult | null;
+}
+
+/** Full entity resolution at a cursor position — secondary disclosure level.
+ *  Wraps the compiler's CursorResolutionResult with the document URI. */
+export interface WorkspaceInspectResult {
+  readonly uri: DocumentUri;
+  readonly resolution: CursorResolutionResult;
 }
 
 export interface WorkspaceTextEdit {

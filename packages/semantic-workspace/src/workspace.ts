@@ -46,6 +46,7 @@ import {
   type WorkspaceCompletionItem,
   type WorkspaceDiagnostics,
   type WorkspaceEdit,
+  type WorkspaceInspectResult,
   type WorkspaceLocation,
   type WorkspaceRefactorResult,
   type WorkspacePrepareRenameRequest,
@@ -178,6 +179,7 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
       completions: (pos) => this.#completionsAt(canonical.uri, pos),
       diagnostics: () => this.diagnostics(canonical.uri),
       semanticTokens: () => EMPTY_TOKENS,
+      inspect: (pos) => this.#inspectAt(canonical.uri, pos),
     };
   }
 
@@ -366,6 +368,31 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
         ...(resolution.nodeId ? { nodeId: resolution.nodeId } : {}),
       };
       return { contents, location, ...(wsConfidence ? { confidence: wsConfidence } : {}) };
+    } catch {
+      return null;
+    }
+  }
+
+  #inspectAt(uri: DocumentUri, pos: { line: number; character: number }): WorkspaceInspectResult | null {
+    try {
+      const text = this.lookupText(uri);
+      if (!text) return null;
+      const offset = offsetAtPosition(text, pos);
+      if (offset == null) return null;
+
+      const compilation = this.getCompilation(uri) ?? this.program.getCompilation(uri);
+      if (!compilation) return null;
+      const query = this.program.query;
+
+      const resolution = resolveCursorEntity({
+        compilation,
+        offset,
+        syntax: query.syntax,
+        semantics: query.model.semantics,
+      });
+      if (!resolution) return null;
+
+      return { uri, resolution };
     } catch {
       return null;
     }
