@@ -218,11 +218,23 @@ function collectOneLambdaPerExpression(
     if (!entry) continue;
 
     switch (entry.expressionType) {
-      case "IsIterator":
-        // TODO: extract iterable expression and create overlay lambda.
-        // Currently skipped — needs careful span alignment between
-        // ForOfStatement header span and iterable-only overlay.
+      case "IsIterator": {
+        // ForOfStatement: extract the iterable sub-expression and create an
+        // overlay lambda for it. The iterable is a standard IsBindingBehavior
+        // (e.g., `items` or `getItemsByStatus('active')`).
+        const forOf = entry.ast as { $kind: string; iterable?: IsBindingBehavior; semiIdx?: number };
+        if (forOf.$kind === "ForOfStatement" && forOf.iterable) {
+          const expr = renderExpressionFromAst(forOf.iterable);
+          if (expr) {
+            const lambda = `o => ${expr.code}`;
+            const exprStart = lambda.length - expr.code.length;
+            const exprSpan = spanFromBounds(exprStart, exprStart + expr.code.length);
+            const segments = shiftSegments(expr.segments, exprStart);
+            out.push({ exprId: id, lambda, exprSpan, segments });
+          }
+        }
         break;
+      }
 
       case "IsProperty":
       case "IsFunction": {

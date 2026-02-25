@@ -49,6 +49,15 @@ export function collectExprSpans(ir: IrModule): ExprIdMap<SourceSpan> {
       case "multiAttr":
         if (bindable.from) visitSource(bindable.from);
         break;
+      case "iteratorBinding":
+        // Record the ForOfStatement expression span. The ForOfStatement
+        // carries the full iterator header span (e.g., "item of items").
+        recordExprSpan(bindable.forOf.astId, bindable.forOf.loc);
+        // Also visit tail props (semicolon params like key/contextual)
+        for (const p of bindable.props ?? []) {
+          if (p.from) visitSource(p.from);
+        }
+        break;
       default:
         break;
     }

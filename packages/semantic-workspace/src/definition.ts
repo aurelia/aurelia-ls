@@ -205,15 +205,16 @@ export function collectTemplateDefinitionSlices(options: {
 
   // ── Template controller direct check ───────────────────────────────
   //
-  // CursorEntity's priority order (expression > controller > node > instruction)
-  // means expressions can shadow controllers at TC positions (e.g., the
-  // ForOfStatement mapping may cover the full repeat.for="..." attribute).
   // controllerAt is the authoritative TC check — it uses the linked instruction
-  // spans directly. This runs independently of CursorEntity to ensure TC
-  // navigation always works at any position within the TC attribute.
+  // spans directly.
+  //
+  // GUARD: Skip when cursor is inside the attribute value. The controllerAt
+  // span covers the full TC attribute (name + value). When cursor is inside
+  // the value (e.g., `getItemsByStatus` in `repeat.for="... getItemsByStatus(...)"`),
+  // the expression should navigate to the VM, not to the TC resource.
   if (resource.length === 0 && !entityOnCommand) {
     const controller = compilation.query.controllerAt(offset);
-    if (controller) {
+    if (controller && !isOffsetInAttrValue(text, controller.span?.start ?? 0, offset)) {
       const entry = findEntry(resources.controllers, controller.kind, null, preferRoots);
       const location = entry ? resourceLocation(entry) : null;
       if (location) resource.push(location);
@@ -276,6 +277,10 @@ export function collectTemplateDefinitionSlices(options: {
     });
     for (const hit of resourceHits) {
       if (!hit.symbolId || !spanContainsOffset(hit.span, offset)) continue;
+      // Skip TC/CA reference hits when cursor is inside the attribute value.
+      // These reference spans cover the full attribute (name + value), but
+      // definition should only navigate to the resource from the name portion.
+      if ((hit.referenceKind === "attribute-name") && isOffsetInAttrValue(text, hit.span.start, offset)) continue;
       const entry = resources.bySymbolId.get(hit.symbolId);
       const location = entry ? resourceLocation(entry) : null;
       if (location) resource.push(location);
@@ -316,6 +321,9 @@ function resolveResourceEntityDefinition(
       break;
     case 'binding-behavior':
       entry = findEntry(resources.bindingBehaviors, entity.name, null, preferRoots);
+      break;
+    case 'as-element':
+      entry = findEntry(resources.elements, entity.targetCEName, null, preferRoots);
       break;
     default:
       return null;
@@ -803,13 +811,15 @@ function addEntry(
   name: string,
   entry: ResourceDefinitionEntry,
 ): void {
-  const key = name.toLowerCase();
-  const list = map.get(key);
+  // Use the name verbatim as the map key. CE/CA/TC names are already kebab-case
+  // from the naming pipeline. VC/BB names are camelCase and case-sensitive.
+  // The findEntry() lookup does exact-then-lowercase fallback for tolerance.
+  const list = map.get(name);
   if (list) {
     list.push(entry);
     return;
   }
-  map.set(key, [entry]);
+  map.set(name, [entry]);
 }
 
 function readLocation(value: unknown): SourceLocation | null {
@@ -1082,7 +1092,7 @@ function findAccessScopeAtOffset(
   let best: { name: string; ancestor?: number; span?: SourceSpan } | null = null;
   const visit = (current: ExpressionAst | null | undefined) => {
     if (!current || !current.$kind) return;
-    if (current.$kind === "AccessScope") {
+    if (current.$kind === "AccessScope" || current.$kind === "CallScope") {
       const ident = readIdentifier(current.name, current.span);
       if (ident?.span && spanContainsOffset(ident.span, offset)) {
         if (!best || spanLength(ident.span) < spanLength(best.span ?? ident.span)) {
@@ -1124,7 +1134,7 @@ function collectAccessScopeNodes(
   out: AccessScopeInfo[],
 ): void {
   if (!node || !node.$kind) return;
-  if (node.$kind === "AccessScope") {
+  if (node.$kind === "AccessScope" || node.$kind === "CallScope") {
     const ident = readIdentifier(node.name, node.span);
     if (ident?.span) {
       out.push({ name: ident.name, ancestor: node.ancestor, span: ident.span });
@@ -1245,3 +1255,42 @@ function walkExprResourceRefs(
   }
 }
 
+/**
+ * Check if the offset is inside an attribute value by scanning the template text.
+ *
+ * Scans backward from the offset looking for `="` or `='`. If found without
+ * encountering an unmatched closing quote first, the cursor is inside a value.
+ * This is a heuristic — it doesn't handle edge cases like nested quotes in
+ * expressions, but it's sufficient for TC attribute value detection.
+ */
+function isOffsetInAttrValue(text: string, _spanStart: number, offset: number): boolean {
+  // Scan backward from offset to find quote context
+  let i = offset - 1;
+  while (i >= 0) {
+    const ch = text[i];
+    if (ch === '"' || ch === "'") {
+      // Found a quote — check if it's an opening quote (preceded by =)
+      const before = i > 0 ? text[i - 1] : "";
+      if (before === "=") return true; // ="... pattern → inside value
+      // Could be closing quote of a different attribute — check further back
+      // for a matching opening quote with = before it
+      const matchQuote = ch;
+      let j = i - 1;
+      while (j >= 0) {
+        if (text[j] === matchQuote) {
+          if (j > 0 && text[j - 1] === "=") return false; // matched a complete ="..." pair
+          break;
+        }
+        if (text[j] === "\n") break; // don't cross line boundaries
+        j -= 1;
+      }
+      return true; // unmatched quote → likely inside value
+    }
+    if (ch === ">" || ch === "<") return false; // hit tag boundary
+    if (ch === "\n") {
+      // Continue scanning — multi-line attributes are valid
+    }
+    i -= 1;
+  }
+  return false;
+}
