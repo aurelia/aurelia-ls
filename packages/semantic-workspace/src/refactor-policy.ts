@@ -137,7 +137,7 @@ export const DEFAULT_REFACTOR_POLICY: RefactorPolicy = {
   version: "aurelia-refactor-policy/1",
   rename: {
     strategy: "semantic-first",
-    allowedTargets: ["resource"],
+    allowedTargets: ["resource", "expression-member"],
     semantic: {
       enabled: true,
       requireProvenance: true,
@@ -237,8 +237,10 @@ export function planRenameExecution(
     }
   }
 
+  // Expression-member targets use TS provenance, not semantic provenance.
+  // They bypass the semantic provenance requirement.
   const trySemanticRename = policy.rename.semantic.enabled
-    && (!policy.rename.semantic.requireProvenance || context.hasSemanticProvenance);
+    && (context.target === "expression-member" || !policy.rename.semantic.requireProvenance || context.hasSemanticProvenance);
   const allowTypeScriptFallback = false;
 
   if (!trySemanticRename) {

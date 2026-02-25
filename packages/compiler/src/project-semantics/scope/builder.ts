@@ -218,12 +218,16 @@ export function buildResourceGraph(
 // --- Helper functions ---
 
 function createEmptyCollections(): MutableResourceCollections {
+  // All resource kinds start with builtins. Previously only controllers were
+  // seeded, which caused builtin elements (au-compose, au-slot) and attributes
+  // to be absent from scope-materialized resources — a carried-property
+  // conservation bug that dropped origin, capture, and other fields.
   return {
-    elements: {},
-    attributes: {},
+    elements: { ...BUILTIN_SEMANTICS.resources.elements },
+    attributes: { ...BUILTIN_SEMANTICS.resources.attributes },
     controllers: { ...BUILTIN_SEMANTICS.resources.controllers },
-    valueConverters: {},
-    bindingBehaviors: {},
+    valueConverters: { ...BUILTIN_SEMANTICS.resources.valueConverters },
+    bindingBehaviors: { ...BUILTIN_SEMANTICS.resources.bindingBehaviors },
   };
 }
 

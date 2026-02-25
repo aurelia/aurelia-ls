@@ -173,9 +173,11 @@ function resolveExpressionEntity(
   semantics?: MaterializedSemantics | null,
 ): CursorEntity | null {
   // Check for value converter / binding behavior at this offset.
+  // VC/BB identification comes from the expression AST (pipe/ampersand operators),
+  // not from semantics. The converter/behavior sig is optional enrichment.
   const vcHit = findValueConverterAtOffset(compilation.exprTable, offset);
-  if (vcHit && semantics) {
-    const vcSig = semantics.resources.valueConverters[vcHit.name] ?? null;
+  if (vcHit) {
+    const vcSig = semantics?.resources?.valueConverters?.[vcHit.name] ?? null;
     return {
       kind: 'value-converter',
       name: vcHit.name,
@@ -186,8 +188,8 @@ function resolveExpressionEntity(
   }
 
   const bbHit = findBindingBehaviorAtOffset(compilation.exprTable, offset);
-  if (bbHit && semantics) {
-    const bbSig = semantics.resources.bindingBehaviors[bbHit.name] ?? null;
+  if (bbHit) {
+    const bbSig = semantics?.resources?.bindingBehaviors?.[bbHit.name] ?? null;
     return {
       kind: 'binding-behavior',
       name: bbHit.name,

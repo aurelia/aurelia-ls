@@ -7,11 +7,14 @@ import {
   createBindableSymbolId,
   normalizePathForId,
   offsetAtPosition,
+  resolveCursorEntity,
+  isRenameable,
   spanContainsOffset,
   toSourceFileId,
   unwrapSourced,
   type AttributeParser,
   type BindableDef,
+  type CursorEntity,
   type DOMNode,
   type DocumentUri,
   type LinkedInstruction,
@@ -246,22 +249,66 @@ export class TemplateEditEngine {
       };
     }
 
-    for (const route of this.#semanticRenameRouteOrder()) {
-      const resourceOrigin = this.#semanticRenameTargetOrigin(route, op);
-      if (resourceOrigin) {
+    // Use CursorEntity for unified classification.
+    const resolution = resolveCursorEntity({
+      compilation: op.compilation,
+      offset: op.offset,
+      syntax: this.ctx.getAttributeSyntax().syntax ?? null,
+    });
+    if (!resolution) {
+      return {
+        targetClass: "unknown",
+        hasSemanticProvenance: false,
+      };
+    }
+
+    const entity = resolution.entity;
+
+    // Resource entities (CE, CA, VC, BB, bindable)
+    switch (entity.kind) {
+      case 'ce-tag':
         return {
           targetClass: "resource",
           hasSemanticProvenance: true,
-          resourceOrigin,
+          resourceOrigin: toRefactorResourceOrigin(entity.element.origin),
         };
-      }
-    }
-
-    if (op.compilation.query.exprAt(op.offset)) {
-      return {
-        targetClass: "expression-member",
-        hasSemanticProvenance: false,
-      };
+      case 'ca-attr':
+        return {
+          targetClass: "resource",
+          hasSemanticProvenance: true,
+          resourceOrigin: toRefactorResourceOrigin(entity.attribute.origin),
+        };
+      case 'bindable':
+        return {
+          targetClass: "resource",
+          hasSemanticProvenance: true,
+          resourceOrigin: "source",
+        };
+      case 'value-converter':
+        return {
+          targetClass: "resource",
+          hasSemanticProvenance: true,
+          resourceOrigin: entity.converter ? "source" : "unknown",
+        };
+      case 'binding-behavior':
+        return {
+          targetClass: "resource",
+          hasSemanticProvenance: true,
+          resourceOrigin: entity.behavior ? "source" : "unknown",
+        };
+      case 'local-template-name':
+        return {
+          targetClass: "resource",
+          hasSemanticProvenance: true,
+          resourceOrigin: "source",
+        };
+      // Expression entities (scope identifiers, member access)
+      case 'scope-identifier':
+      case 'member-access':
+        return {
+          targetClass: "expression-member",
+          hasSemanticProvenance: false,
+        };
     }
 
     return {
@@ -274,12 +321,78 @@ export class TemplateEditEngine {
     const op = this.#renameOperationContext({ ...request, newName: "" });
     if (!op) return null;
 
-    for (const route of this.#semanticRenameRouteOrder()) {
-      const result = this.#prepareRenameByRoute(route, request.uri, op);
-      if (result) return result;
+    // Use CursorEntity for unified entity resolution.
+    // This replaces the per-route resolution and correctly discriminates
+    // commands from bindables, CA names from bindable properties,
+    // and blocks non-renameable constructs (builtins, commands, contextual vars).
+    const resolution = resolveCursorEntity({
+      compilation: op.compilation,
+      offset: op.offset,
+      syntax: this.ctx.getAttributeSyntax().syntax ?? null,
+    });
+    if (!resolution) return null;
+
+    const entity = resolution.entity;
+    if (!isRenameable(entity)) return null;
+
+    // Workspace-level additional checks: origin gating, TC blocking
+    if (!isWorkspaceRenameable(entity)) return null;
+
+    // Extract the rename target name and span
+    const target = extractRenameTarget(entity);
+    if (!target.name || !target.span) return null;
+
+    // Compute safety assessment
+    const safety = this.#computeEntityRenameSafety(entity, request.uri, op);
+
+    return { range: target.span, placeholder: target.name, safety };
+  }
+
+  #computeEntityRenameSafety(
+    entity: CursorEntity,
+    requestUri: DocumentUri,
+    op: RenameOperationContext,
+  ): RenameSafety {
+    // For resource entities, look up the definition index for reference counts
+    // and origin-based confidence. For expression entities, use high confidence
+    // (direct observation — we can see the symbol).
+    let declarationConfidence: RenameConfidence = "high";
+    let totalReferences = 0;
+
+    switch (entity.kind) {
+      case 'ce-tag': {
+        const entry = findResourceEntry(this.ctx.definitionIndex.elements, entity.name, entity.element.file ?? null, op.preferRoots);
+        if (entry?.symbolId) {
+          const refs = this.ctx.getResourceReferencesBySymbolId(requestUri, entry.symbolId);
+          totalReferences = refs.length;
+        }
+        declarationConfidence = entity.element.origin === "source" ? "high" : "low";
+        break;
+      }
+      case 'ca-attr': {
+        const map = this.ctx.definitionIndex.attributes;
+        const entry = findResourceEntry(map, entity.name, entity.attribute.file ?? null, op.preferRoots);
+        if (entry?.symbolId) {
+          const refs = this.ctx.getResourceReferencesBySymbolId(requestUri, entry.symbolId);
+          totalReferences = refs.length;
+        }
+        declarationConfidence = entity.attribute.origin === "source" ? "high" : "low";
+        break;
+      }
+      case 'scope-identifier':
+      case 'member-access':
+        // Expression entities: high confidence (direct symbol observation)
+        declarationConfidence = "high";
+        break;
     }
 
-    return null;
+    return {
+      confidence: declarationConfidence,
+      totalReferences,
+      certainReferences: totalReferences,
+      uncertainScopes: [],
+      declarationConfidence,
+    };
   }
 
   #prepareRenameByRoute(
@@ -1907,6 +2020,64 @@ function toRefactorResourceOrigin(
       return "builtin";
     default:
       return "unknown";
+  }
+}
+
+// ============================================================================
+// CursorEntity-based rename helpers
+// ============================================================================
+
+/** Framework-provided contextual variables (not user-renameable). */
+const FRAMEWORK_CONTEXTUAL_VARS = new Set([
+  '$index', '$first', '$last', '$even', '$odd', '$length',
+  '$this', '$parent', '$event',
+]);
+
+/** Framework-owned element names. Defense-in-depth: the origin field should
+ *  be "builtin" but may not propagate through all pipeline paths due to
+ *  carried-property conservation gaps (see createEmptyCollections fix). */
+const FRAMEWORK_CE_NAMES = new Set(['au-compose', 'au-slot', 'au-render']);
+
+/**
+ * Workspace-level renameability check beyond the compiler's `isRenameable`.
+ * Blocks builtins, configs, contextual vars, and unsupported kinds (TCs).
+ */
+function isWorkspaceRenameable(entity: CursorEntity): boolean {
+  switch (entity.kind) {
+    case 'ce-tag':
+      if (FRAMEWORK_CE_NAMES.has(entity.name)) return false;
+      return entity.element.origin !== 'builtin' && entity.element.origin !== 'config';
+    case 'ca-attr':
+      return entity.attribute.origin !== 'builtin' && entity.attribute.origin !== 'config';
+    case 'tc-attr':
+      // TCs are framework-owned — no rename support yet.
+      return false;
+    case 'value-converter':
+      return true;
+    case 'binding-behavior':
+      return true;
+    case 'scope-identifier':
+      // Framework contextual variables ($index, $first, etc.) are not renameable
+      return !FRAMEWORK_CONTEXTUAL_VARS.has(entity.name);
+    default:
+      return true;
+  }
+}
+
+/**
+ * Extract the rename target name and span from a CursorEntity.
+ */
+function extractRenameTarget(entity: CursorEntity): { name: string | null; span: SourceSpan | null } {
+  switch (entity.kind) {
+    case 'ce-tag': return { name: entity.name, span: entity.span };
+    case 'ca-attr': return { name: entity.name, span: entity.span };
+    case 'bindable': return { name: entity.bindable.attribute ?? entity.bindable.name ?? null, span: entity.span };
+    case 'scope-identifier': return { name: entity.name, span: entity.span };
+    case 'member-access': return { name: entity.memberName, span: entity.span };
+    case 'local-template-name': return { name: entity.name, span: entity.span };
+    case 'value-converter': return { name: entity.name, span: entity.span };
+    case 'binding-behavior': return { name: entity.name, span: entity.span };
+    default: return { name: null, span: null };
   }
 }
 

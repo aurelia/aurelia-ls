@@ -334,6 +334,8 @@ export function isRenameable(entity: CursorEntity): boolean {
     case 'ca-attr':
     case 'tc-attr':
     case 'bindable':
+    case 'value-converter':
+    case 'binding-behavior':
     case 'scope-identifier':
     case 'member-access':
     case 'local-template-name':

@@ -92,9 +92,10 @@ describe("Scope: explicit-app", () => {
     expect(productCardScope!.label?.includes("ProductCard"), "Scope label should include class name").toBe(true);
     expect(productCardScope!.parent, "Local scope parent should be root").toBe(graph.root);
 
-    // Verify local resources in scope
+    // Verify local resources in scope (builtins are also present in every scope)
     const localElementNames = Object.keys(productCardScope!.resources?.elements ?? {}).sort();
-    expect(localElementNames, "product-card scope should have exactly these 2 local elements").toEqual(["price-tag", "stock-badge"]);
+    expect(localElementNames, "product-card scope should include locally registered elements").toContain("price-tag");
+    expect(localElementNames, "product-card scope should include locally registered elements").toContain("stock-badge");
   });
 
   it("places local resources in component-specific scopes", () => {

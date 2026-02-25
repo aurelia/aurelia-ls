@@ -320,15 +320,15 @@ describe("refactor policy", () => {
     expect(plan.allowTypeScriptFallback).toBe(false);
   });
 
-  it("denies expression-member rename targets by default", () => {
+  it("allows expression-member rename targets (VM property rename)", () => {
     const plan = planRenameExecution(DEFAULT_REFACTOR_POLICY, {
       ...defaultContext,
       target: "expression-member",
       hasSemanticProvenance: false,
     });
-    expect(plan.allowOperation).toBe(false);
-    expect(plan.reason).toBe("target-not-allowed");
-    expect(plan.allowTypeScriptFallback).toBe(false);
+    // Expression-member targets bypass semantic provenance (they use TS provenance).
+    expect(plan.allowOperation).toBe(true);
+    expect(plan.trySemanticRename).toBe(true);
   });
 
   it("denies rename when provenance is required but unavailable", () => {

@@ -82,6 +82,7 @@ import {
   type WorkspacePrepareRenameResult,
   type TextReferenceSite,
   type WorkspaceCompletionItem,
+  type WorkspaceTextEdit,
 } from "./types.js";
 import { inlineTemplatePath } from "./templates.js";
 import { collectSemanticTokens } from "./semantic-tokens.js";
@@ -537,6 +538,117 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     const edits = this.#templateEditEngine().renameAt({ ...request, uri: canonical.uri });
     if (!edits?.length) return null;
     return { edit: { edits } };
+  }
+
+  /**
+   * Rename a VM property/method across TS and template domains.
+   *
+   * Handles both template-initiated renames (cursor on expression identifier
+   * in binding/interpolation) and TS-initiated renames (cursor on property
+   * declaration or usage in TS file).
+   */
+  tryExpressionMemberRename(request: WorkspaceRenameRequest): WorkspaceRefactorResult | null {
+    const canonical = canonicalDocumentUri(request.uri);
+    const text = this.lookupText(canonical.uri);
+    if (!text) return null;
+    const offset = offsetAtPosition(text, request.position);
+    if (offset == null) return null;
+
+    let propertyName: string | null = null;
+    let vmPath: string | null = null;
+
+    if (this.#isTemplateUri(canonical.uri)) {
+      // Template-initiated: resolve the expression entity
+      this.#ensureTemplateContext(canonical.uri);
+      const compilation = this.#kernel.getCompilation(canonical.uri);
+      if (!compilation) return null;
+      const exprAt = compilation.query.exprAt(offset);
+      if (!exprAt) return null;
+      propertyName = exprAt.memberPath ?? null;
+      if (!propertyName) return null;
+      vmPath = this.#templateIndex.templateToComponent.get(canonical.uri) ?? null;
+    } else {
+      // TS-initiated: identify the symbol at cursor
+      const filePath = this.#env.paths.canonical(canonical.path);
+      propertyName = this.#symbolNameAt(filePath, offset, text);
+      vmPath = canonical.path;
+    }
+
+    if (!propertyName || !vmPath) return null;
+
+    const edits: WorkspaceTextEdit[] = [];
+
+    // TS-side edits: use TS findRenameLocations
+    const tsEdits = this.#renameTsSymbol(vmPath, offset, request.newName, canonical);
+    edits.push(...tsEdits);
+
+    // Template-side edits: find binding expressions referencing this property
+    const templateEdits = this.#renameTemplateBindings(canonical.uri, vmPath, propertyName, request.newName);
+    edits.push(...templateEdits);
+
+    if (!edits.length) return null;
+    return { edit: { edits } };
+  }
+
+  #renameTsSymbol(
+    vmPath: string,
+    offset: number,
+    newName: string,
+    canonical: { uri: DocumentUri; path: string },
+  ): WorkspaceTextEdit[] {
+    const service = this.#env.tsService.getService();
+    const filePath = this.#env.paths.canonical(vmPath);
+    let renameOffset = offset;
+
+    // For template-initiated renames, find the property declaration in the TS file
+    if (this.#isTemplateUri(canonical.uri)) {
+      const program = service.getProgram();
+      const sourceFile = program?.getSourceFile(filePath) ?? program?.getSourceFile(path.resolve(filePath));
+      if (!sourceFile || !program) return [];
+      const sourceText = sourceFile.getFullText();
+      // Find property name in the source text (simple scan)
+      const compilation = this.#kernel.getCompilation(canonical.uri);
+      if (!compilation) return [];
+      const exprAt = compilation.query.exprAt(offset);
+      const memberName = exprAt?.memberPath ?? null;
+      if (!memberName) return [];
+      const propOffset = findPropertyInTsFile(sourceFile, memberName);
+      if (propOffset == null) return [];
+      renameOffset = propOffset;
+    }
+
+    const locations = service.findRenameLocations(filePath, renameOffset, false, false) ?? [];
+    const edits: WorkspaceTextEdit[] = [];
+    for (const loc of locations) {
+      // Skip overlay files (generated TypeScript)
+      if (loc.fileName.includes('.overlay.') || loc.fileName.includes('__prelude__')) continue;
+      const locCanonical = canonicalDocumentUri(loc.fileName);
+      edits.push({
+        uri: locCanonical.uri,
+        span: normalizeSpan(
+          toSourceSpan(
+            { start: loc.textSpan.start, end: loc.textSpan.start + loc.textSpan.length },
+            locCanonical.file,
+          ),
+        ),
+        newText: newName,
+      });
+    }
+    return edits;
+  }
+
+  #renameTemplateBindings(
+    activeUri: DocumentUri,
+    vmPath: string,
+    propertyName: string,
+    newName: string,
+  ): WorkspaceTextEdit[] {
+    const refs = this.#templateReferencesForVmMember(activeUri, vmPath, propertyName);
+    return refs.map(ref => ({
+      uri: ref.uri,
+      span: ref.span,
+      newText: newName,
+    }));
   }
 
   planRename(request: WorkspaceRenameRequest) {
@@ -1569,6 +1681,10 @@ class WorkspaceRefactorProxy implements RefactorEngine {
     const resourceRename = this.engine.tryResourceRename(request);
     if (resourceRename) return resourceRename;
 
+    // Try expression-member rename (VM property/method across TS + template)
+    const exprRename = this.engine.tryExpressionMemberRename(request);
+    if (exprRename) return exprRename;
+
     return this.#policyDeniedRename({
       ...plan,
       allowOperation: false,
@@ -1924,6 +2040,30 @@ function isIdentifierChar(code: number): boolean {
     code === 95 /* _ */ ||
     code === 36 /* $ */
   );
+}
+
+/**
+ * Find the offset of a property/method declaration in a TypeScript source file.
+ * Walks class members looking for the given name.
+ */
+function findPropertyInTsFile(sourceFile: ts.SourceFile, propertyName: string): number | null {
+  let result: number | null = null;
+  const visit = (node: ts.Node) => {
+    if (result !== null) return;
+    if (ts.isClassDeclaration(node)) {
+      for (const member of node.members) {
+        if (ts.isPropertyDeclaration(member) || ts.isMethodDeclaration(member) || ts.isGetAccessorDeclaration(member) || ts.isSetAccessorDeclaration(member)) {
+          if (member.name && ts.isIdentifier(member.name) && member.name.text === propertyName) {
+            result = member.name.getStart(sourceFile);
+            return;
+          }
+        }
+      }
+    }
+    node.forEachChild(visit);
+  };
+  sourceFile.forEachChild(visit);
+  return result;
 }
 
 type ResourceReferenceOccurrence = {
