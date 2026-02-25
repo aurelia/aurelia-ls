@@ -261,6 +261,64 @@ export const UserCommandsFeature: FeatureModule = {
       }),
     );
 
+    // "Aurelia: Find Resource" — quick-pick search across all known resources
+    store.add(
+      vscode.commands.registerCommand("aurelia.findResource", () => {
+        void run("findResource", async () => {
+          const response = await ctx.lsp.getResources();
+          if (!response || response.resources.length === 0) {
+            vscode.window.showInformationMessage("No resources available");
+            return;
+          }
+
+          const KIND_LABELS: Record<string, string> = {
+            "custom-element": "element",
+            "custom-attribute": "attribute",
+            "template-controller": "controller",
+            "value-converter": "converter",
+            "binding-behavior": "behavior",
+          };
+
+          const ORIGIN_ICONS: Record<string, string> = {
+            project: "$(home)",
+            package: "$(package)",
+            framework: "$(library)",
+          };
+
+          type ResourceQuickPickItem = import("vscode").QuickPickItem & { resourceFile?: string };
+
+          const items: ResourceQuickPickItem[] = response.resources.map((r) => {
+            const kindLabel = KIND_LABELS[r.kind] ?? r.kind;
+            const originIcon = ORIGIN_ICONS[r.origin] ?? "";
+            const detailParts: string[] = [];
+            if (r.className && r.className !== r.name) detailParts.push(r.className);
+            if (r.declarationForm) detailParts.push(r.declarationForm);
+            if (r.package) detailParts.push(r.package);
+            if (r.bindableCount > 0) detailParts.push(`${r.bindableCount} bindable${r.bindableCount === 1 ? "" : "s"}`);
+            if (r.gapCount > 0) detailParts.push(`${r.gapCount} gap${r.gapCount === 1 ? "" : "s"}`);
+
+            return {
+              label: `${originIcon} ${r.name}`,
+              description: kindLabel,
+              detail: detailParts.join(" · "),
+              resourceFile: r.file,
+            };
+          });
+
+          const picked = await vscode.window.showQuickPick(items, {
+            placeHolder: "Search Aurelia resources by name, kind, or package...",
+            matchOnDescription: true,
+            matchOnDetail: true,
+          });
+
+          if (picked?.resourceFile) {
+            const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(picked.resourceFile));
+            await vscode.window.showTextDocument(doc);
+          }
+        });
+      }),
+    );
+
     return store;
   },
 };

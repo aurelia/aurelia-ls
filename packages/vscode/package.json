@@ -60,6 +60,7 @@
       { "command": "aurelia.diagnosticsReport", "title": "Diagnostics Report", "category": "Aurelia" },
       { "command": "aurelia.showSuppressedDiagnostics", "title": "Show Suppressed Diagnostics", "category": "Aurelia" },
       { "command": "aurelia.inspectAtCursor", "title": "Inspect at Cursor", "category": "Aurelia" },
+      { "command": "aurelia.findResource", "title": "Find Resource", "category": "Aurelia" },
       { "command": "aurelia.showOverlay", "title": "Show Compiled Template", "category": "Aurelia Debug" },
       { "command": "aurelia.showOverlayMapping", "title": "Show Overlay Mapping", "category": "Aurelia Debug" },
       { "command": "aurelia.dumpState", "title": "Dump Server State", "category": "Aurelia Debug" },
@@ -84,6 +85,7 @@
         { "command": "aurelia.diagnosticsReport", "when": "aurelia.active" },
         { "command": "aurelia.showSuppressedDiagnostics", "when": "aurelia.active" },
         { "command": "aurelia.inspectAtCursor", "when": "aurelia.active" },
+        { "command": "aurelia.findResource", "when": "aurelia.active" },
         { "command": "aurelia.showOverlay", "when": "aurelia.active && config.aurelia.features.debugCommands" },
         { "command": "aurelia.showOverlayMapping", "when": "aurelia.active && config.aurelia.features.debugCommands" },
         { "command": "aurelia.dumpState", "when": "aurelia.active && config.aurelia.features.debugCommands" }
