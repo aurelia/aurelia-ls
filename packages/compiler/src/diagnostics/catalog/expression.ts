@@ -25,6 +25,8 @@ export const expressionDiagnostics = {
     stages: ["bind"],
     surfaces: ["lsp", "vscode-inline", "vscode-panel", "cli", "aot"],
     defaultConfidence: "exact",
+    evidenceRegime: "grammar-deterministic",
+    fpRiskTier: "zero",
     recovery: true,
     aurCodeHints: ["AUR0151", "AUR0179"],
     description: "Expression parsing failed and recovery output is non-authoritative.",
@@ -43,6 +45,8 @@ export const expressionDiagnostics = {
     stages: ["link"],
     surfaces: ["lsp", "vscode-inline", "vscode-panel", "cli", "aot"],
     defaultConfidence: "high",
+    evidenceRegime: "catalog-dependent",
+    fpRiskTier: "medium",
     description: "Expression references an unknown symbol.",
     data: {
       required: ["symbolKind"],
@@ -59,6 +63,8 @@ export const expressionDiagnostics = {
     stages: ["typecheck"],
     surfaces: ["lsp", "vscode-inline", "vscode-panel", "cli", "aot"],
     defaultConfidence: "high",
+    evidenceRegime: "catalog-dependent",
+    fpRiskTier: "medium",
     description: "Expression type does not match the expected target type.",
     data: {
       optional: ["expected", "actual"],

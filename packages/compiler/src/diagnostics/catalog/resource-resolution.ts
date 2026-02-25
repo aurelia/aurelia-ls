@@ -24,6 +24,8 @@ export const resourceResolutionDiagnostics = {
     stages: ["link", "bind"],
     surfaces: ["lsp", "vscode-inline", "vscode-panel", "cli", "aot"],
     defaultConfidence: "high",
+    evidenceRegime: "catalog-dependent",
+    fpRiskTier: "medium",
     aurCode: "AUR0752",
     aurCodeHints: ["AUR0752", "AUR0760"],
     description: "Unknown custom element.",
@@ -42,6 +44,8 @@ export const resourceResolutionDiagnostics = {
     stages: ["link", "bind"],
     surfaces: ["lsp", "vscode-inline", "vscode-panel", "cli", "aot"],
     defaultConfidence: "high",
+    evidenceRegime: "catalog-dependent",
+    fpRiskTier: "medium",
     aurCodeHints: ["AUR0753", "AUR0759"],
     description: "Unknown custom attribute.",
     data: {
@@ -59,6 +63,8 @@ export const resourceResolutionDiagnostics = {
     stages: ["link", "bind"],
     surfaces: ["lsp", "vscode-inline", "vscode-panel", "cli", "aot"],
     defaultConfidence: "high",
+    evidenceRegime: "catalog-dependent",
+    fpRiskTier: "medium",
     aurCode: "AUR0754",
     description: "Unknown template controller.",
     data: {
@@ -76,6 +82,8 @@ export const resourceResolutionDiagnostics = {
     stages: ["link", "bind"],
     surfaces: ["lsp", "vscode-inline", "vscode-panel", "cli", "aot"],
     defaultConfidence: "high",
+    evidenceRegime: "catalog-dependent",
+    fpRiskTier: "medium",
     aurCode: "AUR0103",
     description: "Unknown value converter.",
     data: {
@@ -93,6 +101,8 @@ export const resourceResolutionDiagnostics = {
     stages: ["link", "bind"],
     surfaces: ["lsp", "vscode-inline", "vscode-panel", "cli", "aot"],
     defaultConfidence: "high",
+    evidenceRegime: "catalog-dependent",
+    fpRiskTier: "medium",
     aurCode: "AUR0101",
     description: "Unknown binding behavior.",
     data: {
@@ -110,6 +120,8 @@ export const resourceResolutionDiagnostics = {
     stages: ["lower", "link"],
     surfaces: ["lsp", "vscode-inline", "vscode-panel", "cli", "aot"],
     defaultConfidence: "high",
+    evidenceRegime: "catalog-dependent",
+    fpRiskTier: "medium",
     aurCode: "AUR0713",
     description: "Unknown binding command.",
     data: {
@@ -126,6 +138,8 @@ export const resourceResolutionDiagnostics = {
     stages: ["link", "bind"],
     surfaces: ["lsp", "vscode-inline", "vscode-panel", "cli", "aot"],
     defaultConfidence: "high",
+    evidenceRegime: "catalog-dependent",
+    fpRiskTier: "medium",
     description: "Unknown event binding target.",
     data: {
       required: ["resourceKind"],

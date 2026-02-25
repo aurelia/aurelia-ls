@@ -9,6 +9,7 @@ import type {
 } from "./types.js";
 import type { SurfaceFormatterMap, FormattedDiagnostics } from "./format.js";
 import { normalizeDiagnostics } from "./normalize.js";
+import { adjustSeverity, type DemotionResult } from "./demotion.js";
 import { buildPolicyDiagnostics, resolvePolicy } from "./policy.js";
 import { routeDiagnostics } from "./route.js";
 import { aggregateDiagnostics } from "./aggregate.js";
@@ -27,6 +28,7 @@ export type DiagnosticsPipelineOptions = {
 
 export type DiagnosticsPipelineResult = {
   readonly normalization: ReturnType<typeof normalizeDiagnostics>;
+  readonly demotion: DemotionResult;
   readonly resolved: ReturnType<typeof resolvePolicy>;
   readonly routed: ReturnType<typeof routeDiagnostics>;
   readonly aggregated: ReturnType<typeof aggregateDiagnostics>;
@@ -57,13 +59,19 @@ export function runDiagnosticsPipeline(
       dropped: [...normalization.dropped, ...policyNormalization.dropped],
     };
   }
+
+  // Confidence-based severity demotion (F8 demotion table).
+  // Applied after normalization (so specs are resolved) and before policy
+  // (so user overrides can still promote demoted diagnostics if desired).
+  const demotion = adjustSeverity(normalization.diagnostics);
+
   const resolved = resolvePolicy(
-    normalization.diagnostics,
+    demotion.diagnostics,
     options.policy,
     options.policyContext ?? {},
   );
   const routed = routeDiagnostics(resolved, options.routingContext);
   const aggregated = aggregateDiagnostics(routed, options.aggregationContext);
   const formatted = options.formatters ? formatDiagnostics(aggregated, options.formatters) : undefined;
-  return { normalization, resolved, routed, aggregated, formatted };
+  return { normalization, demotion, resolved, routed, aggregated, formatted };
 }

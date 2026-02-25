@@ -33,6 +33,8 @@ export const bindableDiagnostics = {
     stages: ["bind"],
     surfaces: ["lsp", "vscode-inline", "vscode-panel", "cli", "aot"],
     defaultConfidence: "high",
+    evidenceRegime: "catalog-dependent",
+    fpRiskTier: "medium",
     description: "A required bindable is missing.",
     data: {
       optional: ["bindable"],
@@ -48,6 +50,8 @@ export const bindableDiagnostics = {
     stages: ["bind"],
     surfaces: ["lsp", "vscode-inline", "vscode-panel", "cli", "aot"],
     defaultConfidence: "high",
+    evidenceRegime: "grammar-deterministic",
+    fpRiskTier: "zero",
     aurCodeHints: ["AUR0714"],
     description: "The same attribute appears more than once.",
     data: {
@@ -64,6 +68,8 @@ export const bindableDiagnostics = {
     stages: ["link", "bind"],
     surfaces: ["lsp", "vscode-inline", "vscode-panel", "cli", "aot"],
     defaultConfidence: "high",
+    evidenceRegime: "catalog-dependent",
+    fpRiskTier: "medium",
     aurCode: "AUR0707",
     description: "Attribute does not link to a known bindable.",
     data: {

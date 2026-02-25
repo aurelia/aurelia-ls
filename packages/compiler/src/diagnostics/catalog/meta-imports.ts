@@ -23,6 +23,8 @@ export const metaImportDiagnostics = {
     stages: ["link"],
     surfaces: ["lsp", "vscode-inline", "vscode-panel", "cli", "aot"],
     defaultConfidence: "high",
+    evidenceRegime: "catalog-dependent",
+    fpRiskTier: "medium",
     description: "Template import could not be resolved.",
     data: {
       optional: ["specifier"],
@@ -38,6 +40,8 @@ export const metaImportDiagnostics = {
     stages: ["link"],
     surfaces: ["lsp", "vscode-inline", "vscode-panel", "cli", "aot"],
     defaultConfidence: "high",
+    evidenceRegime: "grammar-deterministic",
+    fpRiskTier: "zero",
     description: "An alias conflicts with another resource or alias.",
     data: {
       optional: ["name"],
@@ -53,6 +57,8 @@ export const metaImportDiagnostics = {
     stages: ["link"],
     surfaces: ["lsp", "vscode-inline", "vscode-panel", "cli", "aot"],
     defaultConfidence: "high",
+    evidenceRegime: "grammar-deterministic",
+    fpRiskTier: "zero",
     description: "Multiple bindable declarations conflict.",
     data: {
       optional: ["name"],

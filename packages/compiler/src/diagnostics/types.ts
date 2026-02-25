@@ -20,6 +20,28 @@ export type DiagnosticSurface =
   | "ssg"
   | "hmr"
   | "telemetry";
+/**
+ * Evidence regime classifies rules by what evidence drives them.
+ * Determines whether confidence-based severity demotion applies.
+ *
+ * - grammar-deterministic: Parse/structure errors. Zero FP risk. EXEMPT from demotion.
+ * - catalog-dependent: Requires resource catalog, scope, or type info. Medium FP risk. FULL demotion.
+ * - behavioral-dependent: Requires behavioral characterization. High FP risk. CAPPED at hint.
+ */
+export type EvidenceRegime =
+  | "grammar-deterministic"
+  | "catalog-dependent"
+  | "behavioral-dependent";
+
+/**
+ * False positive risk tier per F8 §False Positive Risk Profile.
+ * Determines severity adjustment policy.
+ */
+export type FpRiskTier =
+  | "zero"   // Grammar-deterministic: always real errors
+  | "medium" // Confidence-adjusted: dynamic registration, capture, type inference
+  | "high";  // Suppress or hint-only: depends on incomplete analysis infrastructure
+
 /** Confidence expresses how trustworthy the diagnostic is, separate from severity. */
 export type DiagnosticConfidence =
   | "exact" // Deterministic: precise location and cause are known.
@@ -119,6 +141,10 @@ export type DiagnosticSpec<TData extends DiagnosticDataBase = DiagnosticDataBase
   readonly surfaces?: readonly DiagnosticSurface[];
   /** Default confidence communicates trust without per-instance overrides. */
   readonly defaultConfidence?: DiagnosticConfidence;
+  /** Evidence regime determines whether confidence-based demotion applies. */
+  readonly evidenceRegime?: EvidenceRegime;
+  /** False positive risk tier per F8. Drives adjustment policy. */
+  readonly fpRiskTier?: FpRiskTier;
   /** Primary runtime code for parity with engine error codes. */
   readonly aurCode?: string;
   /** Known equivalent runtime codes used for mapping and migration. */

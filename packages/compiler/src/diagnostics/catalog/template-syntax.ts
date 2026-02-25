@@ -13,6 +13,8 @@ export const templateSyntaxDiagnostics = {
     stages: ["lower", "link", "bind"],
     surfaces: ["lsp", "vscode-inline", "vscode-panel", "cli", "aot"],
     defaultConfidence: "exact",
+    evidenceRegime: "grammar-deterministic",
+    fpRiskTier: "zero",
     aurCodeHints: ["AUR0088", "AUR0089", "AUR0102", "AUR0106", "AUR0713", "AUR0723"],
     description: "Binding pattern is not valid for the declared syntax.",
     data: {
@@ -29,6 +31,8 @@ export const templateSyntaxDiagnostics = {
     stages: ["lower", "link", "bind"],
     surfaces: ["lsp", "vscode-inline", "vscode-panel", "cli", "aot"],
     defaultConfidence: "exact",
+    evidenceRegime: "grammar-deterministic",
+    fpRiskTier: "zero",
     aurCodeHints: ["AUR0704", "AUR0775", "AUR0810", "AUR0813", "AUR0815", "AUR0816", "AUR0821"],
     description: "Binding command usage violates syntax rules.",
     data: {
@@ -48,6 +52,8 @@ export const templateSyntaxFutureDiagnostics = {
     stages: ["link"],
     surfaces: ["lsp", "vscode-inline", "vscode-panel", "cli", "aot"],
     defaultConfidence: "exact",
+    evidenceRegime: "grammar-deterministic",
+    fpRiskTier: "zero",
     description: "Repeat binding is missing an iterator expression.",
   }),
 } as const;

@@ -16,6 +16,8 @@ export type {
   DiagnosticStatus,
   DiagnosticSurface,
   DiagnosticSpec,
+  EvidenceRegime,
+  FpRiskTier,
 } from "./types.js";
 export type { DiagnosticSeverity } from "../model/diagnostics.js";
 export * from "./emitter.js";
