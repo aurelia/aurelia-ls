@@ -111,22 +111,9 @@ test.skip("showOverlayMapping uses mapping entries when present", async () => {
   expect(mappingText).toContain("expr=1");
 });
 
-test("showTemplateInfo sends a position query with doc version", async () => {
-  const { stubVscode, recorded, lsp } = createHarness({
-    "aurelia/queryAtPosition": {
-      expr: { exprId: "e1" },
-      node: { kind: "element" },
-      controller: { kind: "repeat" },
-      bindables: [{ name: "items" }],
-      mappingSize: 5,
-    },
-  });
-  setActiveEditor(stubVscode, stubVscode.Uri.parse("file:///component.html"));
-
-  await recorded.commandHandlers.get("aurelia.showTemplateInfo")();
-
-  const call = lsp.calls.find((c) => c.method === "aurelia/queryAtPosition");
-  expect(call?.params).toHaveProperty("position");
+// showTemplateInfo moved to user-commands.ts as inspectAtCursor
+test.skip("showTemplateInfo sends a position query with doc version", async () => {
+  // This command is now registered by UserCommandsFeature, not registerCommands()
 });
 
 test.skip("showSsrPreview opens HTML and manifest documents", async () => {
@@ -146,9 +133,8 @@ test.skip("showSsrPreview opens HTML and manifest documents", async () => {
 test("commands show message when no active editor", async () => {
   const { recorded } = createHarness();
   await recorded.commandHandlers.get("aurelia.showOverlay")();
-  await recorded.commandHandlers.get("aurelia.showSsrPreview")();
-  await recorded.commandHandlers.get("aurelia.showTemplateInfo")();
-  expect(recorded.infoMessages.filter((m: string) => m === "No active editor")).toHaveLength(3);
+  // showSsrPreview and showTemplateInfo removed from debug commands
+  expect(recorded.infoMessages.filter((m: string) => m === "No active editor")).toHaveLength(1);
 });
 
 test.skip("showOverlay reports errors via error reporter", async () => {

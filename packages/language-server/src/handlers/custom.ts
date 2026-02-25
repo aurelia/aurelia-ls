@@ -226,6 +226,9 @@ export type ResourceExplorerBindable = {
   type?: string;
 };
 
+export type ResourceOrigin = "framework" | "project" | "package";
+export type ResourceScope = "global" | "local";
+
 export type ResourceExplorerItem = {
   name: string;
   kind: string;
@@ -235,6 +238,9 @@ export type ResourceExplorerItem = {
   bindableCount: number;
   bindables: ResourceExplorerBindable[];
   gapCount: number;
+  origin: ResourceOrigin;
+  scope: ResourceScope;
+  scopeOwner?: string;
 };
 
 export type ResourceExplorerResponse = {
@@ -248,34 +254,47 @@ export function handleGetResources(ctx: ServerContext): ResourceExplorerResponse
   try {
     const snapshot = ctx.workspace.snapshot();
     const catalog = snapshot.catalog;
+    const semantics = snapshot.semantics;
+    const graph = snapshot.resourceGraph;
+
+    // Build origin index from ProjectSemantics defs (carry Sourced<T> with origin)
+    const builtinNames = buildBuiltinIndex(semantics);
+
+    // Build scope index from ResourceGraph
+    const scopeIndex = buildScopeIndex(graph);
+
     const collections = catalog.resources;
     const resources: ResourceExplorerItem[] = [];
 
     // Walk elements
     for (const [name, res] of Object.entries(collections.elements)) {
-      resources.push(mapCatalogResource(name, "custom-element", res, catalog));
+      resources.push(mapCatalogResource(name, "custom-element", res, catalog, builtinNames, scopeIndex));
     }
     // Walk attributes (includes template controllers flagged as isTemplateController)
     for (const [name, res] of Object.entries(collections.attributes)) {
       const kind = res.isTemplateController ? "template-controller" : "custom-attribute";
-      resources.push(mapCatalogResource(name, kind, res, catalog));
+      resources.push(mapCatalogResource(name, kind, res, catalog, builtinNames, scopeIndex));
     }
     // Walk controllers
     for (const [name, res] of Object.entries(collections.controllers)) {
-      resources.push(mapCatalogResource(name, "template-controller", res, catalog));
+      resources.push(mapCatalogResource(name, "template-controller", res, catalog, builtinNames, scopeIndex));
     }
     // Walk value converters
     for (const [name, res] of Object.entries(collections.valueConverters)) {
-      resources.push(mapCatalogResource(name, "value-converter", res, catalog));
+      resources.push(mapCatalogResource(name, "value-converter", res, catalog, builtinNames, scopeIndex));
     }
     // Walk binding behaviors
     for (const [name, res] of Object.entries(collections.bindingBehaviors)) {
-      resources.push(mapCatalogResource(name, "binding-behavior", res, catalog));
+      resources.push(mapCatalogResource(name, "binding-behavior", res, catalog, builtinNames, scopeIndex));
     }
 
-    // Sort: elements first, then alphabetically within each kind
+    // Sort: by origin (project first, package second, framework last), then by kind, then alphabetically
+    const originOrder: ResourceOrigin[] = ["project", "package", "framework"];
     const kindOrder = ["custom-element", "template-controller", "custom-attribute", "value-converter", "binding-behavior"];
     resources.sort((a, b) => {
+      const oa = originOrder.indexOf(a.origin);
+      const ob = originOrder.indexOf(b.origin);
+      if (oa !== ob) return oa - ob;
       const ka = kindOrder.indexOf(a.kind);
       const kb = kindOrder.indexOf(b.kind);
       if (ka !== kb) return ka - kb;
@@ -294,11 +313,80 @@ export function handleGetResources(ctx: ServerContext): ResourceExplorerResponse
   }
 }
 
+/**
+ * Build a set of resource names whose defs have origin === 'builtin' in ProjectSemantics.
+ * The Sourced<T> wrappers on the defs carry the origin that the flattened catalog strips.
+ */
+function buildBuiltinIndex(
+  semantics: import("@aurelia-ls/compiler").ProjectSemantics,
+): Set<string> {
+  const builtins = new Set<string>();
+  const defMaps = [semantics.elements, semantics.attributes, semantics.controllers,
+    semantics.valueConverters, semantics.bindingBehaviors];
+  for (const defMap of defMaps) {
+    if (!defMap) continue;
+    for (const [, def] of Object.entries(defMap)) {
+      if (def && typeof def === "object" && "className" in def) {
+        const className = def.className as { origin?: string };
+        if (className?.origin === "builtin") {
+          const name = "name" in def ? (def.name as { value?: string })?.value : undefined;
+          if (name) builtins.add(name);
+        }
+      }
+    }
+  }
+  return builtins;
+}
+
+type ScopeEntry = { scope: ResourceScope; scopeOwner?: string };
+
+/**
+ * Build an index of resource name → scope info from the ResourceGraph.
+ * Resources in the root scope are global; resources in non-root scopes are local.
+ */
+function buildScopeIndex(
+  graph: import("@aurelia-ls/compiler").ResourceGraph | undefined | null,
+): Map<string, ScopeEntry> {
+  const index = new Map<string, ScopeEntry>();
+  if (!graph) return index;
+
+  for (const [scopeId, scope] of Object.entries(graph.scopes)) {
+    const isRoot = scopeId === graph.root;
+    if (isRoot) continue; // Root scope resources are global by default
+
+    // Walk resources in this non-root scope — these are local
+    const resources = scope.resources;
+    if (!resources) continue;
+    const owner = scope.label ?? scopeId;
+
+    for (const category of ["elements", "attributes", "controllers", "valueConverters", "bindingBehaviors"] as const) {
+      const records = resources[category];
+      if (!records) continue;
+      for (const name of Object.keys(records)) {
+        index.set(name, { scope: "local" as ResourceScope, scopeOwner: owner });
+      }
+    }
+  }
+  return index;
+}
+
+function detectOrigin(
+  name: string,
+  res: { file?: string; package?: string },
+  builtinNames: Set<string>,
+): ResourceOrigin {
+  if (builtinNames.has(name)) return "framework";
+  if (res.package) return "package";
+  return "project";
+}
+
 function mapCatalogResource(
   name: string,
   kind: string,
   res: { className?: string; file?: string; package?: string; bindables?: Readonly<Record<string, import("@aurelia-ls/compiler").Bindable>> },
   catalog: import("@aurelia-ls/compiler").ResourceCatalog,
+  builtinNames: Set<string>,
+  scopeIndex: Map<string, ScopeEntry>,
 ): ResourceExplorerItem {
   const bindables: ResourceExplorerBindable[] = [];
   if (res.bindables) {
@@ -314,6 +402,9 @@ function mapCatalogResource(
   }
   const gapKey = `${kind}:${name}`;
   const gaps = catalog.gapsByResource?.[gapKey] ?? [];
+  const origin = detectOrigin(name, res, builtinNames);
+  const scopeEntry = scopeIndex.get(name);
+
   return {
     name,
     kind,
@@ -323,6 +414,9 @@ function mapCatalogResource(
     bindableCount: bindables.length,
     bindables,
     gapCount: Array.isArray(gaps) ? gaps.length : 0,
+    origin,
+    scope: scopeEntry ? "local" : "global",
+    scopeOwner: scopeEntry?.scopeOwner,
   };
 }
 

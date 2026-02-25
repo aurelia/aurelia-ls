@@ -140,6 +140,9 @@ export interface ResourceExplorerBindable {
   type?: string;
 }
 
+export type ResourceOrigin = "framework" | "project" | "package";
+export type ResourceScope = "global" | "local";
+
 export interface ResourceExplorerItem {
   name: string;
   kind: string;
@@ -149,6 +152,9 @@ export interface ResourceExplorerItem {
   bindableCount: number;
   bindables: ResourceExplorerBindable[];
   gapCount: number;
+  origin: ResourceOrigin;
+  scope: ResourceScope;
+  scopeOwner?: string;
 }
 
 export interface ResourceExplorerResponse {

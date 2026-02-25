@@ -1,20 +1,42 @@
 /**
  * Resource Explorer TreeView — persistent ambient revelation surface.
  *
- * Shows all discovered Aurelia resources with kind, confidence, gap count,
- * and bindables. Organized by kind (Elements, Attributes, Controllers,
- * Value Converters, Binding Behaviors). Click to navigate to source.
+ * Shows all discovered Aurelia resources organized by origin (Project,
+ * Packages, Framework) then by kind (Elements, Attributes, etc.).
+ *
+ * Origin-awareness matters because scope and trust are different:
+ * - Project resources: your code, full confidence, navigate to source
+ * - Package resources: third-party, may have gaps, package name shown
+ * - Framework resources: built-in, always available, behavioral docs
+ *
+ * This maps to the two-level resource visibility from L1 scope-resolution:
+ * global (root container) vs local (per-CE container). Local resources
+ * show which CE owns them.
  *
  * Derived from: capability map (Visualize × IDE), experience thesis
- * (Discovery + Revelation reward types), feature principle #4 (gaps are
- * information), market thesis C6 (real-time feedback).
+ * (Discovery + Revelation), feature principle #4 (gaps are information),
+ * L1 scope-resolution (two-level lookup), F2 declaration forms (origin).
  */
 import type { TreeDataProvider, TreeItem, ProviderResult, Event } from "vscode";
 import type { VscodeApi } from "../../vscode-api.js";
 import type { LspFacade } from "../../core/lsp-facade.js";
 import type { ClientLogger } from "../../log.js";
-import type { ResourceExplorerItem, ResourceExplorerResponse } from "../../types.js";
+import type { ResourceExplorerItem, ResourceExplorerResponse, ResourceOrigin } from "../../types.js";
 import { SimpleEmitter } from "../../core/events.js";
+
+const ORIGIN_LABELS: Record<ResourceOrigin, string> = {
+  project: "Project",
+  package: "Packages",
+  framework: "Framework",
+};
+
+const ORIGIN_ICONS: Record<ResourceOrigin, string> = {
+  project: "home",
+  package: "package",
+  framework: "library",
+};
+
+const ORIGIN_ORDER: ResourceOrigin[] = ["project", "package", "framework"];
 
 const KIND_LABELS: Record<string, string> = {
   "custom-element": "Elements",
@@ -40,7 +62,7 @@ const KIND_ORDER = [
   "binding-behavior",
 ];
 
-type TreeNodeKind = "root" | "kind-group" | "resource" | "bindable" | "info";
+type TreeNodeKind = "origin-group" | "kind-group" | "resource" | "bindable" | "info";
 
 interface TreeNode {
   readonly nodeKind: TreeNodeKind;
@@ -56,44 +78,89 @@ interface TreeNode {
 }
 
 function buildTree(response: ResourceExplorerResponse): TreeNode[] {
-  const byKind = new Map<string, ResourceExplorerItem[]>();
+  // Group by origin, then by kind within each origin
+  const byOrigin = new Map<ResourceOrigin, Map<string, ResourceExplorerItem[]>>();
+
   for (const resource of response.resources) {
-    const group = byKind.get(resource.kind);
-    if (group) {
-      group.push(resource);
+    let originMap = byOrigin.get(resource.origin);
+    if (!originMap) {
+      originMap = new Map();
+      byOrigin.set(resource.origin, originMap);
+    }
+    const kindGroup = originMap.get(resource.kind);
+    if (kindGroup) {
+      kindGroup.push(resource);
     } else {
-      byKind.set(resource.kind, [resource]);
+      originMap.set(resource.kind, [resource]);
     }
   }
 
-  const groups: TreeNode[] = [];
-  for (const kind of KIND_ORDER) {
-    const items = byKind.get(kind);
-    if (!items || items.length === 0) continue;
+  const tree: TreeNode[] = [];
 
-    const children = items.map((item) => buildResourceNode(item));
-    const label = KIND_LABELS[kind] ?? kind;
-    groups.push({
-      nodeKind: "kind-group",
-      id: `kind:${kind}`,
-      label: `${label} (${items.length})`,
-      iconId: KIND_ICONS[kind] ?? "symbol-misc",
-      collapsible: true,
-      children,
-      contextValue: "kindGroup",
-    });
+  for (const origin of ORIGIN_ORDER) {
+    const originMap = byOrigin.get(origin);
+    if (!originMap || originMap.size === 0) continue;
+
+    const originCount = Array.from(originMap.values()).reduce((sum, items) => sum + items.length, 0);
+    const kindGroups: TreeNode[] = [];
+
+    for (const kind of KIND_ORDER) {
+      const items = originMap.get(kind);
+      if (!items || items.length === 0) continue;
+
+      const resourceNodes = items.map((item) => buildResourceNode(item));
+      kindGroups.push({
+        nodeKind: "kind-group",
+        id: `${origin}:kind:${kind}`,
+        label: `${KIND_LABELS[kind] ?? kind} (${items.length})`,
+        iconId: KIND_ICONS[kind] ?? "symbol-misc",
+        collapsible: true,
+        children: resourceNodes,
+        contextValue: "kindGroup",
+      });
+    }
+
+    // If only one kind group in this origin, flatten it
+    if (kindGroups.length === 1 && kindGroups[0]) {
+      tree.push({
+        nodeKind: "origin-group",
+        id: `origin:${origin}`,
+        label: `${ORIGIN_LABELS[origin]} — ${kindGroups[0].label}`,
+        iconId: ORIGIN_ICONS[origin],
+        collapsible: true,
+        children: kindGroups[0].children,
+        contextValue: "originGroup",
+      });
+    } else {
+      tree.push({
+        nodeKind: "origin-group",
+        id: `origin:${origin}`,
+        label: `${ORIGIN_LABELS[origin]} (${originCount})`,
+        iconId: ORIGIN_ICONS[origin],
+        collapsible: true,
+        children: kindGroups,
+        contextValue: "originGroup",
+      });
+    }
   }
 
-  // Summary info at the bottom
+  // Summary
   const totalResources = response.resources.length;
+  const projectCount = response.resources.filter((r) => r.origin === "project").length;
+  const packageCount = response.resources.filter((r) => r.origin === "package").length;
+  const frameworkCount = response.resources.filter((r) => r.origin === "framework").length;
   const totalGaps = response.resources.reduce((sum, r) => sum + r.gapCount, 0);
-  const totalBindables = response.resources.reduce((sum, r) => sum + r.bindableCount, 0);
+  const localCount = response.resources.filter((r) => r.scope === "local").length;
 
-  const summaryParts = [`${totalResources} resources`, `${totalBindables} bindables`];
+  const summaryParts = [`${totalResources} resources`];
+  if (projectCount > 0) summaryParts.push(`${projectCount} project`);
+  if (packageCount > 0) summaryParts.push(`${packageCount} package`);
+  if (frameworkCount > 0) summaryParts.push(`${frameworkCount} framework`);
+  if (localCount > 0) summaryParts.push(`${localCount} local`);
   if (response.templateCount > 0) summaryParts.push(`${response.templateCount} templates`);
   if (totalGaps > 0) summaryParts.push(`${totalGaps} gaps`);
 
-  groups.push({
+  tree.push({
     nodeKind: "info",
     id: "summary",
     label: summaryParts.join(" | "),
@@ -102,7 +169,7 @@ function buildTree(response: ResourceExplorerResponse): TreeNode[] {
     contextValue: "summary",
   });
 
-  return groups;
+  return tree;
 }
 
 function buildResourceNode(item: ResourceExplorerItem): TreeNode {
@@ -129,8 +196,8 @@ function buildResourceNode(item: ResourceExplorerItem): TreeNode {
     });
   }
 
-  // Source file info
-  if (item.file) {
+  // Source file info (project resources)
+  if (item.file && item.origin === "project") {
     const shortFile = item.file.replace(/^.*[\\/]packages[\\/]/, "").replace(/^.*[\\/]src[\\/]/, "src/");
     children.push({
       nodeKind: "info",
@@ -158,9 +225,12 @@ function buildResourceNode(item: ResourceExplorerItem): TreeNode {
   // Description line
   const descParts: string[] = [];
   if (item.className && item.className !== item.name) descParts.push(item.className);
+  if (item.scope === "local") {
+    descParts.push(item.scopeOwner ? `local to ${item.scopeOwner}` : "local");
+  }
   if (item.bindableCount > 0) descParts.push(`${item.bindableCount} bindable${item.bindableCount === 1 ? "" : "s"}`);
   if (item.gapCount > 0) descParts.push(`${item.gapCount} gap${item.gapCount === 1 ? "" : "s"}`);
-  if (item.package) descParts.push(item.package);
+  if (item.package && item.origin === "package") descParts.push(item.package);
 
   return {
     nodeKind: "resource",
@@ -168,7 +238,7 @@ function buildResourceNode(item: ResourceExplorerItem): TreeNode {
     label: item.name,
     description: descParts.join(" | "),
     tooltip: buildResourceTooltip(item),
-    iconId: KIND_ICONS[item.kind] ?? "symbol-misc",
+    iconId: item.scope === "local" ? "lock" : (KIND_ICONS[item.kind] ?? "symbol-misc"),
     collapsible: children.length > 0,
     children,
     resourceFile: item.file,
@@ -179,6 +249,8 @@ function buildResourceNode(item: ResourceExplorerItem): TreeNode {
 function buildResourceTooltip(item: ResourceExplorerItem): string {
   const lines = [`${item.kind}: ${item.name}`];
   if (item.className) lines.push(`Class: ${item.className}`);
+  lines.push(`Origin: ${item.origin}`);
+  lines.push(`Scope: ${item.scope}${item.scopeOwner ? ` (${item.scopeOwner})` : ""}`);
   if (item.file) lines.push(`File: ${item.file}`);
   if (item.package) lines.push(`Package: ${item.package}`);
   if (item.bindableCount > 0) lines.push(`Bindables: ${item.bindableCount}`);
@@ -191,16 +263,13 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode> {
   #lsp: LspFacade;
   #logger: ClientLogger;
   #tree: TreeNode[] = [];
-  #emitter: SimpleEmitter<void>;
   #changeEmitter: { fire: () => void; event: Event<void> };
 
   constructor(vscode: VscodeApi, lsp: LspFacade, logger: ClientLogger) {
     this.#vscode = vscode;
     this.#lsp = lsp;
     this.#logger = logger;
-    this.#emitter = new SimpleEmitter<void>();
 
-    // Create VS Code EventEmitter for tree refresh
     const eventEmitter = new vscode.EventEmitter<void>();
     this.#changeEmitter = { fire: () => eventEmitter.fire(), event: eventEmitter.event };
   }
@@ -212,41 +281,25 @@ export class ResourceExplorerProvider implements TreeDataProvider<TreeNode> {
   getTreeItem(element: TreeNode): TreeItem {
     const item: TreeItem = { label: element.label };
 
-    if (element.description) {
-      item.description = element.description;
-    }
-
-    if (element.tooltip) {
-      item.tooltip = element.tooltip;
-    }
-
-    if (element.iconId) {
-      item.iconPath = new this.#vscode.ThemeIcon(element.iconId);
-    }
+    if (element.description) item.description = element.description;
+    if (element.tooltip) item.tooltip = element.tooltip;
+    if (element.iconId) item.iconPath = new this.#vscode.ThemeIcon(element.iconId);
 
     item.collapsibleState = element.collapsible
-      ? this.#vscode.TreeItemCollapsibleState.Collapsed
+      ? (element.nodeKind === "origin-group"
+        ? this.#vscode.TreeItemCollapsibleState.Expanded
+        : this.#vscode.TreeItemCollapsibleState.Collapsed)
       : this.#vscode.TreeItemCollapsibleState.None;
 
-    // Click on resource → navigate to source file
-    if (element.resourceFile && element.contextValue === "resource") {
+    if (element.resourceFile && (element.contextValue === "resource" || element.contextValue === "fileLink")) {
       item.command = {
-        title: "Open Resource",
-        command: "vscode.open",
-        arguments: [this.#vscode.Uri.file(element.resourceFile)],
-      };
-    }
-
-    if (element.resourceFile && element.contextValue === "fileLink") {
-      item.command = {
-        title: "Open File",
+        title: "Open",
         command: "vscode.open",
         arguments: [this.#vscode.Uri.file(element.resourceFile)],
       };
     }
 
     item.contextValue = element.contextValue;
-
     return item;
   }
 
