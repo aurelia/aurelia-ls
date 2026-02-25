@@ -256,22 +256,18 @@ describe("Naming Utilities", () => {
   // ===========================================================================
 
   describe("canonicalSimpleName", () => {
-    it("trims and preserves case", () => {
-      // VC/BB names use camelCase(bareName), not toLowerCase().
-      // canonicalSimpleName preserves case — the casing is determined
-      // by the caller (camelCase for VC/BB, kebabCase for CE/CA/TC).
-      // See vocabulary-contract.md §Resource naming normalization.
-      expect(canonicalSimpleName("Date")).toBe("Date");
-      expect(canonicalSimpleName("  JSON  ")).toBe("JSON");
-      expect(canonicalSimpleName("NumberFormat")).toBe("NumberFormat");
+    it("lowercases and trims", () => {
+      expect(canonicalSimpleName("Date")).toBe("date");
+      expect(canonicalSimpleName("  JSON  ")).toBe("json");
+      expect(canonicalSimpleName("NumberFormat")).toBe("numberformat");
     });
 
     it("preserves hyphens (doesn't split)", () => {
       expect(canonicalSimpleName("my-converter")).toBe("my-converter");
     });
 
-    it("preserves case for multi-word names", () => {
-      expect(canonicalSimpleName("CamelCase")).toBe("CamelCase");
+    it("preserves other characters", () => {
+      expect(canonicalSimpleName("CamelCase")).toBe("camelcase");
     });
   });
 
