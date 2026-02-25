@@ -350,6 +350,7 @@ export function registerFeatureHandlers(ctx: ServerContext): void {
   // Inlay hints — binding mode resolution
   ctx.connection.languages.inlayHint.on((params) => handleInlayHintsRequest(ctx, params));
 
+
   ctx.connection.onRequest(SemanticTokensRequest.type, (params) => {
     const response = adaptWorkspaceCall("semanticTokens", () =>
       handleSemanticTokensFull(ctx, params),

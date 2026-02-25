@@ -20,6 +20,7 @@ import type {
 import type { WorkspaceDiagnostic, WorkspaceDiagnostics } from "@aurelia-ls/semantic-workspace";
 import type { ServerContext } from "../context.js";
 import { buildCapabilities, buildCapabilitiesFallback, type CapabilitiesResponse } from "../capabilities.js";
+import { handleCodeLens } from "./code-lens.js";
 
 type MaybeUriParam = { uri?: string } | string | null;
 
@@ -658,5 +659,8 @@ export function registerCustomHandlers(ctx: ServerContext): void {
   ctx.connection.onRequest("aurelia/getResources", () => handleGetResources(ctx));
   ctx.connection.onRequest("aurelia/inspectEntity", (params: { uri: string; position: Position }) => handleInspectEntity(ctx, params));
   ctx.connection.onRequest("aurelia/getScopeResources", (params: { uri: string }) => handleGetScopeResources(ctx, params));
+  ctx.connection.onRequest("aurelia/getCodeLens", (params: { uri: string }) =>
+    handleCodeLens(ctx, { textDocument: { uri: params.uri } }),
+  );
   ctx.connection.onRequest("aurelia/capabilities", () => handleCapabilities(ctx));
 }
