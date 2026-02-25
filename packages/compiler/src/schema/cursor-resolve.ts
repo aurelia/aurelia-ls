@@ -176,6 +176,10 @@ function resolveExpressionEntity(
     } satisfies BindingBehaviorEntity;
   }
 
+  // Derive vmRef: the owning CE's ConvergenceRef for cross-domain traversal.
+  // Walk linked rows to find the CE node whose template contains this expression.
+  const vmRef = findOwnerVmRef(compilation);
+
   // Generic expression (scope identifier, member access, etc.)
   const exprAst = findExprAstById(compilation.exprTable, expr.exprId);
   if (exprAst) {
@@ -187,6 +191,7 @@ function resolveExpressionEntity(
         kind: 'scope-identifier',
         name,
         type,
+        vmRef,
         span: expr.span,
       };
     }
@@ -196,8 +201,9 @@ function resolveExpressionEntity(
       return {
         kind: 'member-access',
         memberName,
-        parentType: undefined, // TODO: derive from parent expression
+        parentType: undefined,
         memberType,
+        vmRef,
         span: expr.span,
       };
     }
@@ -208,6 +214,7 @@ function resolveExpressionEntity(
     kind: 'scope-identifier',
     name: expr.memberPath ?? 'expression',
     type: getInferredType(compilation, expr.exprId),
+    vmRef,
     span: expr.span,
   };
 }
@@ -418,6 +425,29 @@ function computeResourceConfidence(entity: CursorEntity): ConfidenceSignals {
 // ============================================================================
 // Helpers
 // ============================================================================
+
+/**
+ * Find the owning CE's ConvergenceRef for a template compilation.
+ *
+ * A template compilation belongs to exactly one CE (the view-model class
+ * whose template this is). The CE's ConvergenceRef enables the cross-domain
+ * traversal: template expression → owning CE → resource identity → epistemic
+ * provenance → source location.
+ *
+ * Walks the linked rows looking for the first CE node with a convergence ref.
+ * Returns null if the template has no identifiable CE owner (e.g., standalone
+ * template or root template without explicit CE decoration).
+ */
+function findOwnerVmRef(compilation: TemplateCompilation): ConvergenceRef | null {
+  for (const template of compilation.linked.templates) {
+    for (const row of template.rows) {
+      if (row.node.kind === 'element' && row.node.custom?.def?.__convergenceRef) {
+        return row.node.custom.def.__convergenceRef;
+      }
+    }
+  }
+  return null;
+}
 
 function findExprAstById(exprTable: readonly ExprTableEntry[], exprId: ExprId): unknown | null {
   for (const entry of exprTable) {

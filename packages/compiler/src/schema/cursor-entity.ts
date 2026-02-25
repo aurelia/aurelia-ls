@@ -126,11 +126,17 @@ export interface CommandEntity {
 }
 
 // --- Expression entities ---
+// All expression entities carry vmRef: the ConvergenceRef of the owning
+// CE view-model class, derived by walking the scope chain to the CE boundary.
+// This enables the full cross-domain traversal: template binding → resource
+// identity → epistemic provenance → source location.
+// L1 cross-domain-provenance-mapping §Cross-domain traversals.
 
 export interface ScopeIdentifierEntity {
   readonly kind: 'scope-identifier';
   readonly name: string;
   readonly type: string | undefined;
+  readonly vmRef: ConvergenceRef | null;
   readonly span: SourceSpan;
 }
 
@@ -139,6 +145,7 @@ export interface MemberAccessEntity {
   readonly memberName: string;
   readonly parentType: string | undefined;
   readonly memberType: string | undefined;
+  readonly vmRef: ConvergenceRef | null;
   readonly span: SourceSpan;
 }
 
@@ -146,6 +153,7 @@ export interface GlobalAccessEntity {
   readonly kind: 'global-access';
   readonly globalName: string;
   readonly globalType: string;
+  readonly vmRef: ConvergenceRef | null;
   readonly span: SourceSpan;
 }
 
@@ -325,6 +333,7 @@ export function isRenameable(entity: CursorEntity): boolean {
     case 'tc-attr':
     case 'bindable':
     case 'scope-identifier':
+    case 'member-access':
     case 'local-template-name':
       return true;
     default:
@@ -335,6 +344,7 @@ export function isRenameable(entity: CursorEntity): boolean {
 /** Get the ConvergenceRef for provenance queries, if the entity has one. */
 export function entityRef(entity: CursorEntity): ConvergenceRef | null {
   switch (entity.kind) {
+    // Resource entities — direct ref
     case 'ce-tag': return entity.ref;
     case 'ca-attr': return entity.ref;
     case 'tc-attr': return entity.ref;
@@ -342,6 +352,11 @@ export function entityRef(entity: CursorEntity): ConvergenceRef | null {
     case 'value-converter': return entity.ref;
     case 'binding-behavior': return entity.ref;
     case 'as-element': return entity.ref;
+    // Expression entities — vmRef to owning CE
+    case 'scope-identifier': return entity.vmRef;
+    case 'member-access': return entity.vmRef;
+    case 'global-access': return entity.vmRef;
+    // Structural
     case 'interpolation': return entityRef(entity.innerEntity);
     default: return null;
   }
