@@ -332,59 +332,38 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
       const offset = offsetAtPosition(text, pos);
       if (offset == null) return null;
 
-      // CursorEntity is the sole authority for hover content.
-      // Identity comes from positional provenance (expression labels,
-      // resource names). Type display is NOT included in hover cards —
-      // inferredByExpr types are for type checking, not display.
-      // No overlay fallback anywhere in this path.
-      let detail = null;
-      let confidence: ConfidenceLevel = 'high';
+      // Single-path entity-driven hover:
+      // 1. Resolve CursorEntity (shared across all features)
+      // 2. Project hover cards from the entity (no second resolution)
+      // 3. Apply confidence tier rendering
 
-      try {
-        const compilation = this.getCompilation(uri) ?? this.program.getCompilation(uri);
-        const query = this.program.query;
+      const compilation = this.getCompilation(uri) ?? this.program.getCompilation(uri);
+      if (!compilation) return null;
+      const query = this.program.query;
 
-        // 1. Resolve CursorEntity — shared across all features
-        const resolution = resolveCursorEntity({
-          compilation,
-          offset,
-          syntax: query.syntax,
-          semantics: query.model.semantics,
-        });
-        if (resolution) {
-          confidence = resolution.compositeConfidence;
-        }
+      const resolution = resolveCursorEntity({
+        compilation,
+        offset,
+        syntax: query.syntax,
+        semantics: query.model.semantics,
+      });
+      if (!resolution) return null;
 
-        // 2. Build structured hover cards (resource metadata, expression labels)
-        detail = collectTemplateHover({
-          compilation,
-          text,
-          offset,
-          syntax: query.syntax,
-          semantics: query.model.semantics,
-        });
-      } catch (error) {
-        debug.workspace("hover.collect.error", {
-          message: error instanceof Error ? error.message : String(error),
-        });
-        detail = null;
-      }
+      const lines = collectTemplateHover(resolution);
+      if (!lines) return null;
 
-      let contents = mergeHoverContents(detail?.lines ?? []);
+      let contents = mergeHoverContents(lines);
       if (!contents) return null;
 
-      contents = applyConfidenceTier(contents, confidence);
+      contents = applyConfidenceTier(contents, resolution.compositeConfidence);
+      const wsConfidence = mapConfidenceToWorkspace(resolution.compositeConfidence);
 
-      const wsConfidence = mapConfidenceToWorkspace(confidence);
-
-      const span = detail?.span ?? null;
-      if (!span) return { contents, ...(wsConfidence ? { confidence: wsConfidence } : {}) };
-
+      const span = resolution.entity.span;
       const location: WorkspaceLocation = {
         uri,
         span,
-        ...(detail?.exprId ? { exprId: detail.exprId } : {}),
-        ...(detail?.nodeId ? { nodeId: detail.nodeId } : {}),
+        ...(resolution.exprId ? { exprId: resolution.exprId } : {}),
+        ...(resolution.nodeId ? { nodeId: resolution.nodeId } : {}),
       };
       return { contents, location, ...(wsConfidence ? { confidence: wsConfidence } : {}) };
     } catch {

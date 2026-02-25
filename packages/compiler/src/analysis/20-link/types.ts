@@ -104,7 +104,12 @@ export type LinkedInstruction =
   | LinkedIteratorBinding;
 
 export interface BaseLinked {
+  /** Full attribute span (name + "=" + value). Used for diagnostics underlines. */
   loc?: SourceSpan | null;
+  /** Attribute name-only span (e.g., "value.bind", "click.trigger"). Used for cursor entity identity. */
+  nameLoc?: SourceSpan | null;
+  /** Binding command name, if any (e.g., "bind", "trigger", "two-way"). Preserved from syntax analysis. */
+  command?: string | null;
 }
 
 /** Property binding to a concrete target (custom bindable / native prop / controller prop / unknown). */

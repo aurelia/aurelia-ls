@@ -145,6 +145,10 @@ export interface PropertyBindingIR {
   from: BindingSourceIR;
   mode: BindingMode;
   loc?: SourceSpan | null;
+  /** Attribute name-only span. */
+  nameLoc?: SourceSpan | null;
+  /** Binding command name (e.g., "bind", "two-way"). */
+  command?: string | null;
 }
 
 export interface SetPropertyIR {
@@ -152,6 +156,8 @@ export interface SetPropertyIR {
   to: string;
   value: JsonValue;
   loc?: SourceSpan | null;
+  /** Attribute name-only span. */
+  nameLoc?: SourceSpan | null;
 }
 
 export interface AttributeBindingIR {
@@ -160,6 +166,8 @@ export interface AttributeBindingIR {
   to: string;   // normalized target
   from: BindingSourceIR;
   loc?: SourceSpan | null;
+  /** Attribute name-only span. */
+  nameLoc?: SourceSpan | null;
 }
 
 export interface StylePropertyBindingIR {
@@ -167,6 +175,8 @@ export interface StylePropertyBindingIR {
   to: string; // CSS prop
   from: BindingSourceIR;
   loc?: SourceSpan | null;
+  /** Attribute name-only span. */
+  nameLoc?: SourceSpan | null;
 }
 
 // TODO: Only used for grouped aux. Not fully parsed yet.
@@ -215,6 +225,10 @@ export interface ListenerBindingIR {
   capture?: boolean;
   modifier?: string | null; // single modifier for MVP
   loc?: SourceSpan | null;
+  /** Attribute name-only span. */
+  nameLoc?: SourceSpan | null;
+  /** Binding command name (e.g., "trigger", "capture"). */
+  command?: string | null;
 }
 
 // TODO: Distinguish element vs view-model refs once ElementRes gains instance type info.
@@ -224,6 +238,8 @@ export interface RefBindingIR {
   to: string;
   from: ExprRef; // often just an identifier
   loc?: SourceSpan | null;
+  /** Attribute name-only span. */
+  nameLoc?: SourceSpan | null;
 }
 
 /**
@@ -244,6 +260,8 @@ export interface TranslationBindingIR {
   /** Whether value is expression (t.bind) vs literal key (t) */
   isExpression: boolean;
   loc?: SourceSpan | null;
+  /** Attribute name-only span. */
+  nameLoc?: SourceSpan | null;
 }
 
 /** Static attributes (no binding). */
@@ -252,16 +270,20 @@ export interface SetAttributeIR {
   to: string;
   value: string | null;
   loc?: SourceSpan | null;
+  /** Attribute name-only span. */
+  nameLoc?: SourceSpan | null;
 }
 export interface SetClassAttributeIR {
   type: 'setClassAttribute';
   value: string;
   loc?: SourceSpan | null;
+  nameLoc?: SourceSpan | null;
 }
 export interface SetStyleAttributeIR {
   type: 'setStyleAttribute';
   value: string;
   loc?: SourceSpan | null;
+  nameLoc?: SourceSpan | null;
 }
 
 /* ---- Context-constrained bindable subsets ---- */
@@ -314,6 +336,8 @@ export interface HydrateAttributeIR {
   alias?: string | null;
   data?: Record<string, string | null>;
   loc?: SourceSpan | null;
+  /** Attribute name-only span. */
+  nameLoc?: SourceSpan | null;
 }
 
 /* ---- Template controllers & branches ---- */
@@ -349,6 +373,8 @@ export interface HydrateTemplateControllerIR {
   branch?: ControllerBranchInfo | null;   // structural branch payload (then/catch/case/default)
   containerless?: boolean;
   loc?: SourceSpan | null;
+  /** Attribute name-only span. */
+  nameLoc?: SourceSpan | null;
 }
 
 /** Hydrate a <let> element; instructions are strictly LetBindingIR. */

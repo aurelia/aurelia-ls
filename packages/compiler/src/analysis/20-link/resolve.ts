@@ -730,7 +730,7 @@ function linkPropertyBinding(ins: PropertyBindingIR, host: NodeSem, ctx: Resolve
     mode: ins.mode,
     effectiveMode,
     target,
-    loc: ins.loc ?? null,
+    loc: ins.loc ?? null, nameLoc: (ins as { nameLoc?: SourceSpan | null }).nameLoc ?? null, command: (ins as { command?: string | null }).command ?? null,
   };
     if (target.kind === "unknown") {
       // Stub propagation: suppress unknown-target diagnostics for unknown custom elements.
@@ -768,7 +768,7 @@ function linkAttributeBinding(ins: AttributeBindingIR, host: NodeSem, ctx: Resol
       to: ins.attr,
       from: ins.from,
       target: { kind: "attribute", attr: ins.attr },
-      loc: ins.loc ?? null,
+      loc: ins.loc ?? null, nameLoc: (ins as { nameLoc?: SourceSpan | null }).nameLoc ?? null, command: (ins as { command?: string | null }).command ?? null,
     });
   }
 
@@ -784,7 +784,7 @@ function linkAttributeBinding(ins: AttributeBindingIR, host: NodeSem, ctx: Resol
     to,
     from: ins.from,
     target,
-    loc: ins.loc ?? null,
+    loc: ins.loc ?? null, nameLoc: (ins as { nameLoc?: SourceSpan | null }).nameLoc ?? null, command: (ins as { command?: string | null }).command ?? null,
   };
 
   if (target.kind === "unknown") {
@@ -828,7 +828,7 @@ function linkListenerBinding(ins: ListenerBindingIR, host: NodeSem, ctx: Resolve
     eventType,
     capture: ins.capture!,
     modifier: ins.modifier ?? null,
-    loc: ins.loc ?? null,
+    loc: ins.loc ?? null, nameLoc: (ins as { nameLoc?: SourceSpan | null }).nameLoc ?? null, command: (ins as { command?: string | null }).command ?? null,
   };
   if (eventType.kind === "unknown") {
     const d = ctx.services.diagnostics.emit("aurelia/unknown-event", {
@@ -863,7 +863,7 @@ function linkTranslationBinding(ins: TranslationBindingIR): LinkedTranslationBin
     kind: "translationBinding",
     to: ins.to,
     isExpression: ins.isExpression,
-    loc: ins.loc ?? null,
+    loc: ins.loc ?? null, nameLoc: (ins as { nameLoc?: SourceSpan | null }).nameLoc ?? null, command: (ins as { command?: string | null }).command ?? null,
   };
   // Only include from when it's an expression (t.bind)
   if (ins.from) result.from = ins.from;
@@ -921,7 +921,7 @@ function linkHydrateElement(ins: HydrateElementIR, host: NodeSem, ctx: ResolverC
     props,
     projections: ins.projections ?? null,
     containerless: ins.containerless ?? false,
-    loc: ins.loc ?? null,
+    loc: ins.loc ?? null, nameLoc: (ins as { nameLoc?: SourceSpan | null }).nameLoc ?? null, command: (ins as { command?: string | null }).command ?? null,
   };
 }
 
@@ -942,7 +942,7 @@ function linkHydrateAttribute(ins: HydrateAttributeIR, host: NodeSem, ctx: Resol
     res,
     alias: ins.alias ?? null,
     props,
-    loc: ins.loc ?? null,
+    loc: ins.loc ?? null, nameLoc: (ins as { nameLoc?: SourceSpan | null }).nameLoc ?? null, command: (ins as { command?: string | null }).command ?? null,
   };
 }
 
@@ -981,7 +981,7 @@ function linkAttributeBindable(
         mode: ins.mode,
         effectiveMode,
         target,
-        loc: ins.loc ?? null,
+        loc: ins.loc ?? null, nameLoc: (ins as { nameLoc?: SourceSpan | null }).nameLoc ?? null, command: (ins as { command?: string | null }).command ?? null,
       };
     }
     case "attributeBinding": {
@@ -995,7 +995,7 @@ function linkAttributeBindable(
         to: ins.to,
         from: ins.from,
         target,
-        loc: ins.loc ?? null,
+        loc: ins.loc ?? null, nameLoc: (ins as { nameLoc?: SourceSpan | null }).nameLoc ?? null, command: (ins as { command?: string | null }).command ?? null,
       };
     }
     case "setProperty": {
@@ -1008,7 +1008,7 @@ function linkAttributeBindable(
         to: ins.to,
         value: ins.value,
         target,
-        loc: ins.loc ?? null,
+        loc: ins.loc ?? null, nameLoc: (ins as { nameLoc?: SourceSpan | null }).nameLoc ?? null, command: (ins as { command?: string | null }).command ?? null,
       };
     }
   }
@@ -1050,7 +1050,7 @@ function linkIteratorBinding(
     to: normalizedTo,
     forOf: ins.forOf,
     aux,
-    loc: ins.loc ?? null,
+    loc: ins.loc ?? null, nameLoc: (ins as { nameLoc?: SourceSpan | null }).nameLoc ?? null, command: (ins as { command?: string | null }).command ?? null,
   };
   // If there were diagnostics, mark the result as a stub
   if (acc.diagnostics.length > 0) {
@@ -1162,7 +1162,7 @@ function linkHydrateTemplateController(
     props,
     branch: branch ?? null,
     containerless: ins.containerless ?? false,
-    loc: ins.loc ?? null,
+    loc: ins.loc ?? null, nameLoc: (ins as { nameLoc?: SourceSpan | null }).nameLoc ?? null, command: (ins as { command?: string | null }).command ?? null,
   };
 }
 
@@ -1174,7 +1174,7 @@ function linkHydrateLetElement(ins: HydrateLetElementIR): LinkedHydrateLetElemen
     kind: "hydrateLetElement",
     instructions: ins.instructions,
     toBindingContext: ins.toBindingContext,
-    loc: ins.loc ?? null,
+    loc: ins.loc ?? null, nameLoc: (ins as { nameLoc?: SourceSpan | null }).nameLoc ?? null, command: (ins as { command?: string | null }).command ?? null,
   };
 }
 

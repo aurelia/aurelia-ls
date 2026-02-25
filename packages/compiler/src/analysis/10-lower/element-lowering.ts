@@ -20,6 +20,7 @@ import type {
 import type { ExprTable, P5Element, P5Loc, ProjectionMap } from "./lower-shared.js";
 import {
   attrLoc,
+  attrNameLoc,
   attrValueLoc,
   camelCase,
   findAttr,
@@ -147,6 +148,9 @@ function parseMultiBindings(
 
       if (bindable) {
         const to = bindable.name;
+        // Multi-binding sub-spans: name covers "display-data.bind", full covers "display-data.bind: displayItems"
+        const subNameSpan = subValueLoc(valueLoc, raw, start, i);
+        const subFullSpan = subValueLoc(valueLoc, raw, start, Math.min(i + 1, len)); // includes colon+value
         if (parsed.command) {
           // Has binding command (e.g., prop.bind, prop.two-way)
           props.push({
@@ -154,7 +158,9 @@ function parseMultiBindings(
             to,
             from: toBindingSource(valuePart, subValueLoc(valueLoc, raw, valueStart, i), table, "IsProperty"),
             mode: toMode(parsed.command, parsed.mode, bindingCommands),
-            loc: toSpan(loc, table.source),
+            loc: toSpan(subFullSpan, table.source),
+            nameLoc: toSpan(subNameSpan, table.source),
+            command: parsed.command,
           });
         } else if (valuePart.includes("${")) {
           // Has interpolation
@@ -163,7 +169,8 @@ function parseMultiBindings(
             attr: propPart,
             to,
             from: toInterpIR(valuePart, subValueLoc(valueLoc, raw, valueStart, i), table),
-            loc: toSpan(loc, table.source),
+            loc: toSpan(subFullSpan, table.source),
+            nameLoc: toSpan(subNameSpan, table.source),
           });
         } else if (valuePart.length > 0) {
           // Literal value (skip empty values)
@@ -171,7 +178,8 @@ function parseMultiBindings(
             type: "setProperty",
             to,
             value: valuePart,
-            loc: toSpan(loc, table.source),
+            loc: toSpan(subFullSpan, table.source),
+            nameLoc: toSpan(subNameSpan, table.source),
           } as SetPropertyIR);
         }
       }
@@ -222,6 +230,7 @@ export function lowerElementAttributes(
     attrName: string,
     raw: string,
     loc: P5Loc,
+    attrNameSpan: P5Loc | null,
     valueLoc: P5Loc,
     command: string | null,
     patternMode: BindingMode | null
@@ -234,6 +243,8 @@ export function lowerElementAttributes(
         from: toBindingSource(raw, valueLoc, table, "IsProperty"),
         mode: toMode(command, patternMode, catalog.bindingCommands),
         loc: toSpan(loc, table.source),
+        nameLoc: toSpan(attrNameSpan, table.source),
+        command,
       });
       return;
     }
@@ -244,6 +255,7 @@ export function lowerElementAttributes(
         to,
         from: toInterpIR(raw, valueLoc, table),
         loc: toSpan(loc, table.source),
+        nameLoc: toSpan(attrNameSpan, table.source),
       });
       return;
     }
@@ -253,11 +265,13 @@ export function lowerElementAttributes(
       to,
       value: raw,
       loc: toSpan(loc, table.source),
+      nameLoc: toSpan(attrNameSpan, table.source),
     } as SetPropertyIR);
   };
 
   for (const a of attrs) {
     const loc = attrLoc(el, a.name);
+    const nameLoc = attrNameLoc(el, a.name, table.sourceText);
     const valueLoc = attrValueLoc(el, a.name, table.sourceText);
     const s = attrParser.parse(a.name, a.value ?? "");
     const raw = a.value ?? "";
@@ -291,7 +305,7 @@ export function lowerElementAttributes(
               from: toExprRef(raw, valueLoc, table, "IsFunction"),
               capture: cmdConfig.capture ?? false,
               modifier: s.parts?.[2] ?? s.parts?.[1] ?? null,
-              loc: toSpan(loc, table.source),
+              loc: toSpan(loc, table.source), nameLoc: toSpan(nameLoc, table.source), command: s.command,
             });
             continue;
 
@@ -300,7 +314,7 @@ export function lowerElementAttributes(
               type: "refBinding",
               to: s.target,
               from: toExprRef(raw, valueLoc, table, "IsProperty"),
-              loc: toSpan(loc, table.source),
+              loc: toSpan(loc, table.source), nameLoc: toSpan(nameLoc, table.source),
             });
             continue;
 
@@ -309,7 +323,7 @@ export function lowerElementAttributes(
               type: "stylePropertyBinding",
               to: s.target,
               from: toBindingSource(raw, valueLoc, table, "IsProperty"),
-              loc: toSpan(loc, table.source),
+              loc: toSpan(loc, table.source), nameLoc: toSpan(nameLoc, table.source),
             });
             continue;
 
@@ -324,7 +338,7 @@ export function lowerElementAttributes(
               attr: attrName,
               to: target,
               from: toBindingSource(raw, valueLoc, table, "IsProperty"),
-              loc: toSpan(loc, table.source),
+              loc: toSpan(loc, table.source), nameLoc: toSpan(nameLoc, table.source),
             });
             continue;
           }
@@ -342,7 +356,7 @@ export function lowerElementAttributes(
                 to: s.target,
                 from: toBindingSource(raw, valueLoc, table, "IsProperty"),
                 isExpression: true,
-                loc: toSpan(loc, table.source),
+                loc: toSpan(loc, table.source), nameLoc: toSpan(nameLoc, table.source),
               });
             } else if (hasInterpolation) {
               // t="key.${expr}" - parse interpolation at AOT time
@@ -351,7 +365,7 @@ export function lowerElementAttributes(
                 to: s.target,
                 from: toInterpIR(raw, valueLoc, table),
                 isExpression: true, // Treat as expression since it contains dynamic parts
-                loc: toSpan(loc, table.source),
+                loc: toSpan(loc, table.source), nameLoc: toSpan(nameLoc, table.source),
               });
             } else {
               // t="static.key" - literal translation key
@@ -360,7 +374,7 @@ export function lowerElementAttributes(
                 to: s.target,
                 keyValue: raw,
                 isExpression: false,
-                loc: toSpan(loc, table.source),
+                loc: toSpan(loc, table.source), nameLoc: toSpan(nameLoc, table.source),
               });
             }
             continue;
@@ -375,7 +389,7 @@ export function lowerElementAttributes(
     const bindable = elementDef?.bindables[camelCase(s.target)];
     if (bindable) {
       dbg.lower("attr.bindable", { attr: a.name, bindable: bindable.name, element: elementDef.name });
-      lowerBindable(hydrateElementProps, bindable.name, a.name, raw, loc, valueLoc, s.command, s.mode);
+      lowerBindable(hydrateElementProps, bindable.name, a.name, raw, loc, nameLoc, valueLoc, s.command, s.mode);
       continue;
     }
 
@@ -399,7 +413,7 @@ export function lowerElementAttributes(
             ? camelCase(s.target)
             : attrDef.primary ?? Object.keys(attrDef.bindables)[0] ?? null;
         if (targetBindableName) {
-          lowerBindable(props, targetBindableName, a.name, raw, loc, valueLoc, s.command, s.mode);
+          lowerBindable(props, targetBindableName, a.name, raw, loc, nameLoc, valueLoc, s.command, s.mode);
         }
       }
 
@@ -408,7 +422,7 @@ export function lowerElementAttributes(
         res: attrDef.name,
         props,
         alias: attrDef.name !== s.target ? s.target : null,
-        loc: toSpan(loc, table.source),
+        loc: toSpan(loc, table.source), nameLoc: toSpan(nameLoc, table.source),
       });
       continue;
     }
@@ -420,7 +434,7 @@ export function lowerElementAttributes(
         to: camelCase(s.target),
         from: toBindingSource(raw, valueLoc, table, "IsProperty"),
         mode: toMode(s.command, s.mode, catalog.bindingCommands),
-        loc: toSpan(loc, table.source),
+        loc: toSpan(loc, table.source), nameLoc: toSpan(nameLoc, table.source), command: s.command,
       });
       continue;
     }
@@ -432,7 +446,7 @@ export function lowerElementAttributes(
         attr: a.name,
         to: camelCase(a.name),
         from: toInterpIR(raw, valueLoc, table),
-        loc: toSpan(loc, table.source),
+        loc: toSpan(loc, table.source), nameLoc: toSpan(nameLoc, table.source),
       });
       continue;
     }
@@ -442,14 +456,14 @@ export function lowerElementAttributes(
         tail.push({
           type: "setClassAttribute",
           value: raw,
-          loc: toSpan(loc, table.source),
+          loc: toSpan(loc, table.source), nameLoc: toSpan(nameLoc, table.source),
         });
         break;
       case "style":
         tail.push({
           type: "setStyleAttribute",
           value: raw,
-          loc: toSpan(loc, table.source),
+          loc: toSpan(loc, table.source), nameLoc: toSpan(nameLoc, table.source),
         });
         break;
       default:
@@ -457,7 +471,7 @@ export function lowerElementAttributes(
           type: "setAttribute",
           to: a.name,
           value: raw || null,
-          loc: toSpan(loc, table.source),
+          loc: toSpan(loc, table.source), nameLoc: toSpan(nameLoc, table.source),
         });
         break;
     }

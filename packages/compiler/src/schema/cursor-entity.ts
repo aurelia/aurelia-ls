@@ -106,6 +106,8 @@ export interface TCAttrEntity {
   readonly name: string;
   readonly span: SourceSpan;
   readonly ref: ConvergenceRef | null;
+  /** Iterator declaration code, e.g. "item of items" (from hydrateTemplateController instruction). */
+  readonly iteratorCode: string | null;
 }
 
 export interface BindableEntity {

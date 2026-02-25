@@ -45,6 +45,7 @@ import type {
   InterpolationEntity,
   ImportFromEntity,
   PlainAttrBindingEntity,
+  RefTargetEntity,
 } from "./cursor-entity.js";
 import { spanContainsOffset } from "../model/span.js";
 
@@ -67,6 +68,12 @@ export interface CursorResolutionResult {
   readonly entity: CursorEntity;
   readonly confidence: ConfidenceSignals;
   readonly compositeConfidence: ConfidenceLevel;
+  /** Expression ID, when the entity is an expression. */
+  readonly exprId?: ExprId;
+  /** Node ID, when the entity is a DOM node (CE tag). */
+  readonly nodeId?: NodeId;
+  /** Pre-rendered expression label for hover display (e.g., "$parent.items[0].name"). */
+  readonly expressionLabel?: string;
 }
 
 // ============================================================================
@@ -94,14 +101,21 @@ export function resolveCursorEntity(
     const entity = resolveExpressionEntity(compilation, expr, offset, semantics);
     if (entity) {
       const confidence = computeExpressionConfidence(entity, compilation);
-      return { entity, confidence, compositeConfidence: computeConfidence(confidence) };
+      const exprAst = findExprAstById(compilation.exprTable, expr.exprId) as ExpressionAst | null;
+      const labelAtOffset = exprAst ? expressionLabelAtOffset(exprAst, offset) : null;
+      const expressionLabel = chooseExpressionLabel(labelAtOffset, expr.memberPath) ?? 'expression';
+      return {
+        entity, confidence, compositeConfidence: computeConfidence(confidence),
+        exprId: expr.exprId,
+        expressionLabel,
+      };
     }
   }
 
   // 2. Template controller at offset (repeat.for, if.bind, etc.)
   const controller = query.controllerAt(offset);
   if (controller) {
-    const entity = resolveControllerEntity(controller, syntax);
+    const entity = resolveControllerEntity(controller, compilation, syntax);
     if (entity) {
       const confidence = computeResourceConfidence(entity);
       return { entity, confidence, compositeConfidence: computeConfidence(confidence) };
@@ -119,16 +133,23 @@ export function resolveCursorEntity(
       const entity = resolveNodeEntity(compilation, node, offset);
       if (entity) {
         const confidence = computeResourceConfidence(entity);
-        return { entity, confidence, compositeConfidence: computeConfidence(confidence) };
+        return { entity, confidence, compositeConfidence: computeConfidence(confidence), nodeId: node.id };
       }
     }
   }
 
   // 4. Instruction hits (attribute bindings, events, property bindings)
-  const entity = resolveInstructionEntity(compilation, offset, syntax);
-  if (entity) {
-    const confidence = computeResourceConfidence(entity);
-    return { entity, confidence, compositeConfidence: computeConfidence(confidence) };
+  const instrEntity = resolveInstructionEntity(compilation, offset, syntax);
+  if (instrEntity) {
+    const confidence = computeResourceConfidence(instrEntity);
+    return { entity: instrEntity, confidence, compositeConfidence: computeConfidence(confidence) };
+  }
+
+  // 5. Special attributes (as-element) — not linked instructions, but DOM-level
+  const asElementEntity = resolveAsElementEntity(compilation, offset);
+  if (asElementEntity) {
+    const confidence = computeResourceConfidence(asElementEntity);
+    return { entity: asElementEntity, confidence, compositeConfidence: computeConfidence(confidence) };
   }
 
   return null;
@@ -231,10 +252,12 @@ interface ControllerAtResult {
 
 function resolveControllerEntity(
   controller: ControllerAtResult,
+  compilation: TemplateCompilation,
   syntax?: TemplateSyntaxRegistry | null,
 ): CursorEntity | null {
   const name = controller.name ?? controller.kind;
   const config = syntax?.controllers?.[name] ?? null;
+  const iteratorCode = findControllerIteratorCode(compilation, name, controller.span);
   return {
     kind: 'tc-attr',
     attribute: null as unknown as AttrRes, // placeholder — will be projected from view
@@ -242,6 +265,7 @@ function resolveControllerEntity(
     name,
     span: controller.span,
     ref: null,
+    iteratorCode,
   } satisfies TCAttrEntity;
 }
 
@@ -290,20 +314,96 @@ function resolveInstructionEntity(
   offset: number,
   syntax?: TemplateSyntaxRegistry | null,
 ): CursorEntity | null {
-  // Walk linked instructions looking for one that covers this offset
+  // Walk linked instructions looking for one that covers this offset.
+  // For hydrate instructions with child props (CA/TC/CE):
+  // - Child props with DISTINCT loc (multi-binding: sub-value span) take priority
+  // - Children with the SAME loc as parent (single-binding) defer to parent
+  // This ensures: CA name hover → CAAttrEntity; multi-binding prop hover → BindableEntity
   for (const template of compilation.linked.templates) {
     for (const row of template.rows) {
       for (const ins of row.instructions) {
-        const entity = matchInstruction(ins, offset, syntax);
-        if (entity) return entity;
+        const insLoc = (ins as { loc?: SourceSpan }).loc;
 
-        // Check props for hydrate instructions
+        // Check child props — only match children with DISTINCT spans from parent
         if ('props' in ins && Array.isArray((ins as { props?: unknown }).props)) {
           for (const prop of (ins as { props: LinkedInstruction[] }).props) {
-            const propEntity = matchInstruction(prop, offset, syntax);
-            if (propEntity) return propEntity;
+            const propLoc = (prop as { loc?: SourceSpan }).loc;
+            // Child has its own span (different from parent) — check it independently
+            if (propLoc && (!insLoc || propLoc.start !== insLoc.start || propLoc.end !== insLoc.end)) {
+              const propEntity = matchInstruction(prop, offset, syntax);
+              if (propEntity) return propEntity;
+            }
           }
         }
+
+        // Check the parent instruction
+        const entity = matchInstruction(ins, offset, syntax);
+        if (entity) return entity;
+      }
+    }
+  }
+  return null;
+}
+
+// ============================================================================
+// As-Element Resolution
+// ============================================================================
+
+function resolveAsElementEntity(
+  compilation: TemplateCompilation,
+  offset: number,
+): CursorEntity | null {
+  // Walk IR DOM tree looking for as-element attributes at the cursor position
+  for (const template of compilation.ir.templates ?? []) {
+    const hit = findAsElementInDom(template.dom, offset, compilation);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+function findAsElementInDom(
+  node: { kind: string; attrs?: readonly { name: string; value: string | null; loc?: SourceSpan | null; valueLoc?: SourceSpan | null }[]; children?: readonly { kind: string; attrs?: readonly { name: string; value: string | null; loc?: SourceSpan | null; valueLoc?: SourceSpan | null }[]; children?: readonly any[] }[] },
+  offset: number,
+  compilation: TemplateCompilation,
+): CursorEntity | null {
+  // Check attributes on this node
+  if (node.attrs) {
+    for (const attr of node.attrs) {
+      if (attr.name === 'as-element' && attr.value) {
+        const span = attr.loc ?? attr.valueLoc;
+        if (span && spanContainsOffset(span, offset)) {
+          // Find the target CE definition
+          const ceName = attr.value.toLowerCase();
+          const targetDef = findCEDefByName(compilation, ceName);
+          return {
+            kind: 'as-element',
+            targetCEName: attr.value,
+            targetCE: targetDef,
+            span: span,
+            ref: (targetDef as { __convergenceRef?: ConvergenceRef } | null)?.__convergenceRef ?? null,
+          } as CursorEntity;
+        }
+      }
+    }
+  }
+  // Recurse into children
+  if (node.children) {
+    for (const child of node.children) {
+      const hit = findAsElementInDom(child as typeof node, offset, compilation);
+      if (hit) return hit;
+    }
+  }
+  return null;
+}
+
+function findCEDefByName(
+  compilation: TemplateCompilation,
+  name: string,
+): ElementRes | null {
+  for (const template of compilation.linked.templates) {
+    for (const row of template.rows) {
+      if (row.node.kind === 'element' && row.node.custom?.def?.name === name) {
+        return row.node.custom.def;
       }
     }
   }
@@ -313,26 +413,62 @@ function resolveInstructionEntity(
 function matchInstruction(
   ins: LinkedInstruction,
   offset: number,
-  syntax?: TemplateSyntaxRegistry | null,
+  syntax: TemplateSyntaxRegistry | null | undefined,
 ): CursorEntity | null {
-  const loc = (ins as { loc?: SourceSpan }).loc;
+  // Use nameLoc for cursor matching when available — it covers the attribute NAME only.
+  // Falls back to loc (full attribute span) for instructions without nameLoc or when
+  // the instruction kind needs value-position matching (translation, ref, set*).
+  const insNameLoc = (ins as { nameLoc?: SourceSpan }).nameLoc;
+  const fullLoc = (ins as { loc?: SourceSpan }).loc;
+  // For most instructions, match against nameLoc. For value-centric instructions
+  // (translation, ref, static set), match against the full span.
+  const valueCentricKinds = new Set(['translationBinding', 'refBinding', 'setProperty', 'setAttribute']);
+  const loc = (valueCentricKinds.has(ins.kind) ? fullLoc : insNameLoc) ?? fullLoc;
   if (!loc || !spanContainsOffset(loc, offset)) return null;
 
   switch (ins.kind) {
     case 'propertyBinding':
     case 'attributeBinding':
     case 'stylePropertyBinding': {
-      // Check if the cursor is on the command part
-      const command = (ins as { command?: string }).command;
-      if (command && syntax?.bindingCommands?.[command]) {
-        return {
-          kind: 'command',
-          command: syntax.bindingCommands[command]!,
-          name: command,
-          span: loc,
-        } satisfies CommandEntity;
+      // Check for binding command — cursor on the command suffix (after the dot).
+      // The command name is preserved on the instruction from lowering.
+      const cmdName = (ins as { command?: string }).command;
+      const to = (ins as { to?: string }).to ?? '';
+      if (cmdName && syntax?.bindingCommands?.[cmdName]) {
+        // Attribute name is "target.command" — command starts after "target."
+        const commandStart = loc.start + to.length + 1; // +1 for the dot
+        if (offset >= commandStart) {
+          return {
+            kind: 'command',
+            command: syntax.bindingCommands[cmdName]!,
+            name: cmdName,
+            span: loc,
+          } satisfies CommandEntity;
+        }
       }
-      // On the binding target
+
+      // Check for resolved bindable target — produces BindableEntity
+      const target = (ins as { target?: BindableTarget }).target;
+      if (target?.kind === 'element.bindable' || target?.kind === 'attribute.bindable' || target?.kind === 'controller.prop') {
+        const bindable = target.bindable;
+        if (bindable) {
+          const parentName = resolveBindableParentName(target);
+          const parentKind = target.kind === 'element.bindable' ? 'element'
+            : target.kind === 'attribute.bindable' ? 'attribute'
+            : 'controller';
+          return {
+            kind: 'bindable',
+            bindable,
+            parentKind,
+            parentName,
+            effectiveMode: (ins as { effectiveMode?: BindingMode }).effectiveMode ?? bindable.mode ?? null,
+            span: loc,
+            parentRef: null,
+          } satisfies BindableEntity;
+        }
+      }
+
+      // Fallback: plain attribute binding (no resolved bindable, no command)
       return {
         kind: 'plain-attr-binding',
         attributeName: (ins as { to?: string }).to ?? '',
@@ -342,17 +478,124 @@ function matchInstruction(
       } satisfies PlainAttrBindingEntity;
     }
     case 'listenerBinding': {
+      // Listener bindings now carry the command name from lowering.
+      const lCmdName = (ins as { command?: string }).command;
+      const lTo = (ins as { to?: string }).to ?? '';
+      if (lCmdName && syntax?.bindingCommands?.[lCmdName]) {
+        const commandStart = loc.start + lTo.length + 1; // +1 for the dot
+        if (offset >= commandStart) {
+          return {
+            kind: 'command',
+            command: syntax.bindingCommands[lCmdName]!,
+            name: lCmdName,
+            span: loc,
+          } satisfies CommandEntity;
+        }
+      }
       return {
         kind: 'plain-attr-binding',
-        attributeName: (ins as { to?: string }).to ?? '',
+        attributeName: lTo,
         domProperty: undefined,
         effectiveMode: null,
         span: loc,
       } satisfies PlainAttrBindingEntity;
     }
+    case 'hydrateAttribute': {
+      const res = (ins as { res?: { def: AttrRes } }).res;
+      const def = res?.def;
+      if (def) {
+        return {
+          kind: 'ca-attr',
+          attribute: def,
+          name: def.name,
+          usedAlias: null,
+          span: loc,
+          ref: (def as { __convergenceRef?: ConvergenceRef }).__convergenceRef ?? null,
+        } satisfies CAAttrEntity;
+      }
+      return null;
+    }
+    case 'hydrateTemplateController': {
+      const controllerName = (ins as { res?: string }).res ?? '';
+      const config = syntax?.controllers?.[controllerName] ?? null;
+      const props = (ins as { props?: readonly { kind?: string; forOf?: { code?: string } }[] }).props;
+      const iteratorProp = props?.find((p) => p.kind === 'iteratorBinding');
+      return {
+        kind: 'tc-attr',
+        attribute: null as unknown as AttrRes,
+        controller: config,
+        name: controllerName,
+        span: loc,
+        ref: null,
+        iteratorCode: iteratorProp?.forOf?.code ?? null,
+      } satisfies TCAttrEntity;
+    }
+    case 'translationBinding': {
+      // Translation bindings (i18n) — produce a plain-attr-binding for now.
+      // A dedicated TranslationEntity can be added if i18n features need richer hover.
+      const tTo = (ins as { to?: string }).to ?? '';
+      const tKey = (ins as { keyValue?: string }).keyValue ?? '';
+      return {
+        kind: 'plain-attr-binding',
+        attributeName: tKey || tTo || 't',
+        domProperty: undefined,
+        effectiveMode: null,
+        span: loc,
+      } satisfies PlainAttrBindingEntity;
+    }
+    case 'refBinding': {
+      const to = (ins as { to?: string }).to ?? '';
+      return {
+        kind: 'ref-target',
+        targetName: to,
+        variableName: to,
+        span: loc,
+      } satisfies RefTargetEntity;
+    }
+    case 'setProperty':
+    case 'setAttribute': {
+      // Static binding (no command) — check for resolved bindable target
+      const target = (ins as { target?: BindableTarget }).target;
+      if (target?.kind === 'element.bindable' || target?.kind === 'attribute.bindable' || target?.kind === 'controller.prop') {
+        const bindable = target.bindable;
+        if (bindable) {
+          const parentName = resolveBindableParentName(target);
+          const parentKind = target.kind === 'element.bindable' ? 'element'
+            : target.kind === 'attribute.bindable' ? 'attribute'
+            : 'controller';
+          return {
+            kind: 'bindable',
+            bindable,
+            parentKind,
+            parentName,
+            effectiveMode: bindable.mode ?? null,
+            span: loc,
+            parentRef: null,
+          } satisfies BindableEntity;
+        }
+      }
+      // No resolved bindable — static native attribute, no entity
+      return null;
+    }
     default:
       return null;
   }
+}
+
+// Bindable target shape from linked instructions
+interface BindableTarget {
+  kind: string;
+  bindable?: Bindable;
+  element?: { def: { name: string } };
+  attribute?: { def: { name: string } };
+  controller?: { res: string };
+}
+
+function resolveBindableParentName(target: BindableTarget): string {
+  if (target.element?.def?.name) return target.element.def.name;
+  if (target.attribute?.def?.name) return target.attribute.def.name;
+  if (target.controller?.res) return target.controller.res;
+  return 'unknown';
 }
 
 // ============================================================================
@@ -438,6 +681,42 @@ function computeResourceConfidence(entity: CursorEntity): ConfidenceSignals {
  * Returns null if the template has no identifiable CE owner (e.g., standalone
  * template or root template without explicit CE decoration).
  */
+/**
+ * Find the iterator declaration code for a template controller at a given span.
+ *
+ * Walks all linked instructions looking for a hydrateTemplateController
+ * matching the controller name AND overlapping the controller span,
+ * then extracts the iterator code from its iteratorBinding child prop.
+ */
+function findControllerIteratorCode(
+  compilation: TemplateCompilation,
+  controllerName: string,
+  controllerSpan: SourceSpan,
+): string | null {
+  for (const template of compilation.linked.templates) {
+    for (const row of template.rows) {
+      for (const ins of row.instructions) {
+        if (ins.kind === 'hydrateTemplateController' && ins.res === controllerName) {
+          // Match by checking if the instruction's loc overlaps the controller span
+          const insLoc = (ins as { loc?: SourceSpan }).loc;
+          if (insLoc && insLoc.start <= controllerSpan.start && insLoc.end >= controllerSpan.end) {
+            const props = (ins as { props?: readonly { kind?: string; forOf?: { code?: string } }[] }).props;
+            const iteratorProp = props?.find((p) => p.kind === 'iteratorBinding');
+            if (iteratorProp?.forOf?.code) return iteratorProp.forOf.code;
+          }
+          // Also check row-level instruction without loc — the instruction may wrap the whole element
+          if (!insLoc) {
+            const props = (ins as { props?: readonly { kind?: string; forOf?: { code?: string } }[] }).props;
+            const iteratorProp = props?.find((p) => p.kind === 'iteratorBinding');
+            if (iteratorProp?.forOf?.code) return iteratorProp.forOf.code;
+          }
+        }
+      }
+    }
+  }
+  return null;
+}
+
 function findOwnerVmRef(compilation: TemplateCompilation): ConvergenceRef | null {
   for (const template of compilation.linked.templates) {
     for (const row of template.rows) {
@@ -530,4 +809,190 @@ function findPipeNameAtOffset(
     }
   }
   return null;
+}
+
+// ============================================================================
+// Expression Label Rendering
+// ============================================================================
+//
+// Computes a human-readable label for the expression node at the cursor.
+// This is used by hover to display e.g. "(expression) $parent.items[0].name".
+// The label captures the structural identity of the expression position.
+
+type ExpressionAst = {
+  $kind: string;
+  span?: SourceSpan;
+  name?: { $kind?: string; span?: SourceSpan; name: string };
+  expression?: ExpressionAst;
+  object?: ExpressionAst;
+  func?: ExpressionAst;
+  args?: ExpressionAst[];
+  left?: ExpressionAst;
+  right?: ExpressionAst;
+  condition?: ExpressionAst;
+  yes?: ExpressionAst;
+  no?: ExpressionAst;
+  target?: ExpressionAst;
+  value?: unknown;
+  key?: ExpressionAst;
+  parts?: ExpressionAst[];
+  expressions?: ExpressionAst[];
+  elements?: ExpressionAst[];
+  values?: ExpressionAst[];
+  body?: ExpressionAst;
+  params?: ExpressionAst[];
+  declaration?: ExpressionAst;
+  iterable?: ExpressionAst;
+  ancestor?: number;
+  optional?: boolean;
+};
+
+function expressionLabelAtOffset(ast: ExpressionAst, offset: number): string | null {
+  const hit = findLabelAst(ast, offset);
+  if (!hit) return null;
+  return renderExpressionLabel(hit);
+}
+
+function findLabelAst(node: ExpressionAst | null | undefined, offset: number): ExpressionAst | null {
+  if (!node || !node.span || !spanContainsOffset(node.span, offset)) return null;
+  // Walk children depth-first for the most specific label
+  for (const child of collectExprAstChildren(node)) {
+    const hit = findLabelAst(child, offset);
+    if (hit) return hit;
+  }
+  return isLabelCandidate(node) ? node : null;
+}
+
+function collectExprAstChildren(node: ExpressionAst): ExpressionAst[] {
+  const children: ExpressionAst[] = [];
+  const push = (child?: ExpressionAst | null) => { if (child) children.push(child); };
+  push(node.expression);
+  push(node.object);
+  push(node.func);
+  push(node.left);
+  push(node.right);
+  push(node.condition);
+  push(node.yes);
+  push(node.no);
+  push(node.target);
+  push(node.key);
+  push(node.declaration);
+  push(node.iterable);
+  push(node.body);
+  if (node.args) node.args.forEach(push);
+  if (node.parts) node.parts.forEach(push);
+  if (node.expressions) node.expressions.forEach(push);
+  if (node.elements) node.elements.forEach(push);
+  if (node.values) node.values.forEach(push);
+  if (node.params) node.params.forEach(push);
+  return children;
+}
+
+function isLabelCandidate(node: ExpressionAst): boolean {
+  switch (node.$kind) {
+    case 'AccessScope':
+    case 'AccessMember':
+    case 'AccessKeyed':
+    case 'AccessGlobal':
+    case 'AccessThis':
+    case 'AccessBoundary':
+    case 'CallScope':
+    case 'CallMember':
+    case 'CallGlobal':
+    case 'CallFunction':
+    case 'ValueConverter':
+    case 'BindingBehavior':
+    case 'Unary':
+      return true;
+    default:
+      return false;
+  }
+}
+
+function renderExpressionLabel(node: ExpressionAst): string | null {
+  switch (node.$kind) {
+    case 'AccessScope': return renderScopedName(node.ancestor, node.name?.name ?? null);
+    case 'AccessMember': return renderMemberName(node.object, node.name?.name ?? null);
+    case 'AccessKeyed': return renderKeyedName(node.object, node.key);
+    case 'AccessGlobal': return node.name?.name ?? null;
+    case 'AccessThis': return renderThisName(node.ancestor);
+    case 'AccessBoundary': return 'this';
+    case 'CallScope': return renderScopedName(node.ancestor, node.name?.name ?? null);
+    case 'CallMember': return renderMemberName(node.object, node.name?.name ?? null);
+    case 'CallGlobal': return node.name?.name ?? null;
+    case 'CallFunction': return node.func ? renderExpressionLabel(node.func) : null;
+    case 'ValueConverter':
+    case 'BindingBehavior': return node.name?.name ?? null;
+    case 'Unary': {
+      const inner = node.expression ? renderExpressionLabel(node.expression) : null;
+      const op = (node as { operation?: string }).operation ?? '';
+      if (!inner) return null;
+      const pos = (node as { pos?: number }).pos ?? 0;
+      return pos === 0 ? `${op}${inner}` : `${inner}${op}`;
+    }
+    default: return null;
+  }
+}
+
+function renderScopedName(ancestor: number | undefined, name: string | null): string | null {
+  if (!name) return null;
+  const prefix = renderAncestorPrefix(ancestor ?? 0);
+  return prefix ? `${prefix}.${name}` : name;
+}
+
+function renderThisName(ancestor: number | undefined): string {
+  const count = ancestor ?? 0;
+  if (count <= 0) return '$this';
+  return renderAncestorPrefix(count);
+}
+
+function renderAncestorPrefix(count: number): string {
+  if (count <= 0) return '';
+  return Array.from({ length: count }, () => '$parent').join('.');
+}
+
+function renderMemberName(object: ExpressionAst | null | undefined, name: string | null): string | null {
+  if (!name) return null;
+  const base = object ? renderExpressionLabel(object) : null;
+  return base ? `${base}.${name}` : name;
+}
+
+function renderKeyedName(object: ExpressionAst | null | undefined, key: ExpressionAst | null | undefined): string | null {
+  const base = object ? renderExpressionLabel(object) : null;
+  if (!base) return null;
+  const keyLabel = renderKeyLabel(key) ?? '?';
+  return `${base}[${keyLabel}]`;
+}
+
+function renderKeyLabel(node: ExpressionAst | null | undefined): string | null {
+  if (!node) return null;
+  switch (node.$kind) {
+    case 'PrimitiveLiteral': return formatLiteral(node.value);
+    case 'AccessScope':
+    case 'AccessMember':
+    case 'AccessKeyed':
+    case 'AccessGlobal':
+    case 'AccessThis':
+    case 'AccessBoundary':
+    case 'CallScope':
+    case 'CallMember':
+    case 'CallGlobal':
+    case 'CallFunction':
+      return renderExpressionLabel(node);
+    default: return null;
+  }
+}
+
+function formatLiteral(value: unknown): string {
+  if (value === undefined) return 'undefined';
+  if (value === null) return 'null';
+  if (typeof value === 'string') return JSON.stringify(value);
+  return String(value);
+}
+
+function chooseExpressionLabel(primary: string | null | undefined, secondary: string | null | undefined): string | null {
+  if (!primary && !secondary) return null;
+  if (!primary) return secondary ?? null;
+  if (!secondary) return primary ?? null;
+  return primary.length >= secondary.length ? primary : secondary;
 }

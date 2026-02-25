@@ -1,40 +1,21 @@
+// Hover Card Projection — CursorEntity → Markdown
+//
+// Given a CursorResolutionResult, projects hover cards for display.
+// This module does NO positional resolution. All entity resolution
+// happens in cursor-resolve.ts; hover only renders cards from the entity.
+
 import {
-  analyzeAttributeName,
-  createAttributeParserFromRegistry,
   debug,
   isDebugEnabled,
-  type AttributeParser,
   type AttrRes,
   type Bindable,
   type BindingMode,
+  type CursorResolutionResult,
   type ElementRes,
-  type ExprId,
-  type LinkedInstruction,
-  type LinkedRow,
-  type MaterializedSemantics,
-  type NodeId,
   type SourceSpan,
-  type TemplateCompilation,
-  type TemplateSyntaxRegistry,
   type TypeRef,
   type ValueConverterSig,
-  spanContainsOffset,
 } from "@aurelia-ls/compiler";
-import { buildDomIndex } from "./template-dom.js";
-import {
-  collectExpressionAstChildren,
-  findBindingBehaviorAtOffset,
-  findInstructionHitsAtOffset,
-  findValueConverterAtOffset,
-  type TemplateInstructionHit,
-} from "./query-helpers.js";
-
-export interface TemplateHoverDetails {
-  readonly lines: string[];
-  readonly span?: SourceSpan;
-  readonly exprId?: ExprId;
-  readonly nodeId?: NodeId;
-}
 
 // ── Hover card builder ─────────────────────────────────────────────────
 //
@@ -71,198 +52,44 @@ function renderCard(card: HoverCard): string {
   return blocks.join("\n\n");
 }
 
-export function collectTemplateHover(options: {
-  compilation: TemplateCompilation;
-  text: string;
-  offset: number;
-  syntax?: TemplateSyntaxRegistry | null;
-  attrParser?: AttributeParser;
-  semantics?: MaterializedSemantics | null;
-}): TemplateHoverDetails | null {
-  const { compilation, text, offset } = options;
-  const syntax = options.syntax ?? null;
-  const attrParser = syntax ? (options.attrParser ?? createAttributeParserFromRegistry(syntax)) : null;
+/**
+ * Project hover cards from a resolved cursor entity.
+ *
+ * Returns rendered markdown lines, or null for entity kinds
+ * that don't produce hover content.
+ */
+export function collectTemplateHover(
+  resolution: CursorResolutionResult,
+): string[] | null {
+  const { entity } = resolution;
   const debugEnabled = isDebugEnabled("workspace");
+
   if (debugEnabled) {
-    const previewStart = Math.max(0, offset - 40);
-    const previewEnd = Math.min(text.length, offset + 40);
-    debug.workspace("hover.start", {
-      offset,
-      preview: text.slice(previewStart, previewEnd),
-      bindingCommandCount: Object.keys(syntax?.bindingCommands ?? {}).length,
-      templateCount: compilation.linked.templates.length,
-      exprTableCount: compilation.exprTable.length,
+    debug.workspace("hover.entity", {
+      kind: entity.kind,
+      span: entity.span,
     });
   }
 
-  const cards: HoverCard[] = [];
-  let span: SourceSpan | undefined;
-  let exprId: ExprId | undefined;
-  let nodeId: NodeId | undefined;
-
-  // ── Expressions ──────────────────────────────────────────────────────
-  const expr = compilation.query.exprAt(offset);
-  if (debugEnabled) {
-    debug.workspace("hover.expr", {
-      hit: !!expr,
-      exprId: expr?.exprId,
-      memberPath: expr?.memberPath,
-      span: expr?.span,
-    });
-  }
-  if (expr) {
-    exprId = expr.exprId;
-    span = span ?? expr.span;
-    const exprAst = findExpressionAst(compilation.exprTable ?? [], expr.exprId);
-    const pathAtOffset = exprAst ? expressionLabelAtOffset(exprAst, offset) : null;
-    const label = chooseExpressionLabel(pathAtOffset, expr.memberPath) ?? "expression";
-
-    // Identity comes from positional provenance (memberPath).
-    // Type is NOT included in the expression card — inferredByExpr types
-    // are for type checking (precision), not display (readability). Display-
-    // quality types require a display-friendly type renderer, which is a
-    // separate concern from cursor entity resolution.
-    cards.push({ signature: `(expression) ${label}`, meta: [] });
-  }
-
-  // ── Template controllers ─────────────────────────────────────────────
-  const controller = compilation.query.controllerAt(offset);
-  if (debugEnabled) {
-    debug.workspace("hover.controller", {
-      hit: !!controller,
-      kind: controller?.kind,
-      span: controller?.span,
-    });
-  }
-  if (controller) {
-    // Only capture span here — the full card with bindables, iterator
-    // declaration, and contextual locals is built by the instruction
-    // section below (hydrateTemplateController case).
-    span = span ?? controller.span;
-  }
-
-  // ── Custom elements ──────────────────────────────────────────────────
-  const node = compilation.query.nodeAt(offset);
-  if (node) {
-    const row = findRow(compilation.linked.templates, node.templateIndex, node.id);
+  const card = projectEntityCard(resolution);
+  if (!card) {
     if (debugEnabled) {
-      debug.workspace("hover.node", {
-        hit: true,
-        nodeId: node.id,
-        hostKind: node.hostKind,
-        templateIndex: node.templateIndex,
-        rowKind: row?.node.kind,
-        tag: row?.node.kind === "element" ? row.node.tag : null,
-        custom: row?.node.kind === "element" ? row.node.custom?.def.name : null,
-        native: row?.node.kind === "element" ? row.node.native?.def.tag : null,
-      });
-    }
-    if (row?.node.kind === "element") {
-      const def = row.node.custom?.def;
-      if (def) {
-        nodeId = node.id;
-        span = span ?? node.span;
-        const card: HoverCard = {
-          signature: `(custom element) ${def.name}`,
-          meta: [],
-        };
-        appendResourceMeta(def, card.meta);
-        cards.push(card);
-      }
-    }
-  } else if (debugEnabled) {
-    debug.workspace("hover.node", { hit: false });
-  }
-
-  // ── Instructions (attributes, bindings, events, controllers) ─────────
-  const domIndex = buildDomIndex(compilation.ir.templates ?? []);
-  const instructionHits = findInstructionHitsAtOffset(
-    compilation.linked.templates,
-    compilation.ir.templates ?? [],
-    domIndex,
-    offset
-  );
-  if (debugEnabled) {
-    debug.workspace("hover.instructions", {
-      hitCount: instructionHits.length,
-      kinds: instructionHits.map((hit) => hit.instruction.kind),
-    });
-  }
-  if (instructionHits.length) {
-    const [primary] = instructionHits;
-    if (primary) {
-      span = span ?? primary.loc;
-    }
-    for (const hit of instructionHits) {
-      const instrCards = buildInstructionCards(hit.instruction, hit.attrName ?? null);
-      cards.push(...instrCards);
-    }
-
-    if (primary) {
-      const attrName = primary.attrName ?? null;
-      const command = attrName ? commandFromAttribute(attrName, syntax, attrParser) : null;
-      if (command) {
-        cards.push({ signature: `(binding command) ${command}`, meta: [] });
-      }
-    }
-  }
-
-  // ── Value converters ─────────────────────────────────────────────────
-  const converterHit = findValueConverterAtOffset(compilation.exprTable, offset);
-  if (debugEnabled) {
-    debug.workspace("hover.converter", { hit: !!converterHit, name: converterHit?.name });
-  }
-  if (converterHit) {
-    const vcSig = options.semantics?.resources.valueConverters[converterHit.name] ?? null;
-    if (vcSig) {
-      exprId = exprId ?? converterHit.exprId;
-      const card: HoverCard = {
-        signature: `(value converter) ${converterHit.name}`,
-        meta: [],
-      };
-      appendConverterMeta(vcSig, card.meta);
-      cards.push(card);
-    } else if (debugEnabled) {
-      debug.workspace("hover.unresolved.value-converter", { name: converterHit.name });
-    }
-  }
-
-  // ── Binding behaviors ────────────────────────────────────────────────
-  const behaviorHit = findBindingBehaviorAtOffset(compilation.exprTable, offset);
-  if (debugEnabled) {
-    debug.workspace("hover.behavior", { hit: !!behaviorHit, name: behaviorHit?.name });
-  }
-  if (behaviorHit) {
-    const bbSig = options.semantics?.resources.bindingBehaviors[behaviorHit.name] ?? null;
-    if (bbSig) {
-      exprId = exprId ?? behaviorHit.exprId;
-      const card: HoverCard = {
-        signature: `(binding behavior) ${behaviorHit.name}`,
-        meta: [],
-      };
-      const loc = formatSourceLocation(bbSig.file, bbSig.package);
-      if (loc) card.meta.push(`*${loc}*`);
-      cards.push(card);
-    } else if (debugEnabled) {
-      debug.workspace("hover.unresolved.binding-behavior", { name: behaviorHit.name });
-    }
-  }
-
-  if (cards.length === 0) {
-    if (debugEnabled) {
-      debug.workspace("hover.empty", { offset });
+      debug.workspace("hover.empty", { kind: entity.kind });
     }
     return null;
   }
-  if (debugEnabled) {
-    debug.workspace("hover.result", { lineCount: cards.length, exprId, nodeId, span });
-  }
 
-  // Render all cards, joining with blank line
-  const lines = cards.map(renderCard);
-  return { lines, span, exprId, nodeId };
+  const rendered = renderCard(card);
+  if (debugEnabled) {
+    debug.workspace("hover.result", { kind: entity.kind, span: entity.span });
+  }
+  return [rendered];
 }
 
+/**
+ * Merge hover detail lines into a single markdown string.
+ * Deduplicates identical blocks.
+ */
 export function mergeHoverContents(
   detailLines: readonly string[],
 ): string | null {
@@ -277,203 +104,219 @@ export function mergeHoverContents(
   return blocks.length ? blocks.join("\n\n") : null;
 }
 
-// ── Instruction card builders ──────────────────────────────────────────
+// ── Entity → Card dispatch ──────────────────────────────────────────────
 
-type InstructionHit = TemplateInstructionHit;
+function projectEntityCard(resolution: CursorResolutionResult): HoverCard | null {
+  const { entity, expressionLabel } = resolution;
 
-function buildInstructionCards(
-  instruction: LinkedInstruction,
-  attrName: string | null,
-): HoverCard[] {
-  const cards: HoverCard[] = [];
-
-  switch (instruction.kind) {
-    case "hydrateAttribute": {
-      const resolvedName = instruction.res?.def.name ?? null;
-      if (resolvedName) {
-        const card: HoverCard = {
-          signature: `(custom attribute) ${resolvedName}`,
-          meta: [],
-        };
-        const attrDef = instruction.res?.def;
-        if (attrDef) {
-          appendResourceMeta(attrDef, card.meta);
-        }
-        cards.push(card);
-      }
-      break;
-    }
-    case "propertyBinding":
-    case "attributeBinding": {
-      const target = instruction.target as { kind?: string; reason?: string; bindable?: Bindable } | null | undefined;
-      const bindableInfo = describeBindableTarget(target, instruction.to);
-      if (bindableInfo) {
-        const bindable = target?.bindable ?? null;
-        cards.push(buildBindableCard(bindableInfo, bindable));
-      }
-      break;
-    }
-    case "listenerBinding":
-      cards.push({
-        signature: `(event) ${instruction.to}`,
-        meta: [],
-      });
-      break;
-    case "hydrateTemplateController": {
+  switch (entity.kind) {
+    // --- Resource entities ---
+    case 'ce-tag': {
       const card: HoverCard = {
-        signature: `(template controller) ${instruction.res}`,
+        signature: `(custom element) ${entity.name}`,
         meta: [],
       };
-      const controllerInst = instruction as {
-        controller?: { config?: {
-          props?: Record<string, Bindable>;
-          injects?: { contextuals?: readonly string[] };
-        } };
-        props?: readonly { kind?: string; forOf?: { code?: string }; aux?: readonly { name: string }[] }[];
+      appendResourceMeta(entity.element, card.meta);
+      return card;
+    }
+    case 'ca-attr': {
+      const card: HoverCard = {
+        signature: `(custom attribute) ${entity.name}`,
+        meta: [],
       };
-
+      appendResourceMeta(entity.attribute, card.meta);
+      return card;
+    }
+    case 'tc-attr': {
+      const card: HoverCard = {
+        signature: `(template controller) ${entity.name}`,
+        meta: [],
+      };
       // Iterator declaration (repeat.for="item of items")
-      const iteratorProp = controllerInst.props?.find((p) => p.kind === "iteratorBinding");
-      if (iteratorProp?.forOf?.code) {
-        card.meta.push(`\`${iteratorProp.forOf.code}\``);
+      if (entity.iteratorCode) {
+        card.meta.push(`\`${entity.iteratorCode}\``);
       }
-
       // Config bindables (if/else value, switch.bind, etc.)
-      const tcProps = controllerInst.controller?.config?.props;
-      if (tcProps) {
-        const bindableList = formatBindableListRich(tcProps);
+      if (entity.controller?.props) {
+        const bindableList = formatBindableListRich(entity.controller.props);
         if (bindableList) card.meta.push(bindableList);
       }
-
       // Contextual locals injected by the controller ($index, $first, etc.)
-      const contextuals = controllerInst.controller?.config?.injects?.contextuals;
+      const contextuals = entity.controller?.injects?.contextuals;
       if (contextuals?.length) {
         card.meta.push(`**Locals:** ${contextuals.map((c) => `\`${c}\``).join(", ")}`);
       }
-
-      cards.push(card);
-      break;
+      return card;
     }
-    case "translationBinding": {
-      // TODO: Load translation resource files (locales/*.json) to resolve keys
-      // to actual translated text and validate key existence. This requires a
-      // new i18n resource loader subsystem (file discovery, JSON parsing, key indexing).
-      const ti = instruction as { keyValue?: string; isExpression: boolean; to: string; from?: { source?: string } };
-      const card: HoverCard = { meta: [] };
-      if (!ti.isExpression && ti.keyValue) {
-        // Literal key: t="greeting.hello" or t="[title]tooltip.msg"
-        const { target, namespace, key } = parseTranslationKey(ti.keyValue);
-        card.signature = `(translation) ${ti.keyValue}`;
-        const details: string[] = [];
-        if (namespace) details.push(`**Namespace:** \`${namespace}\``);
-        if (key) details.push(`**Key:** \`${key}\``);
-        if (target) details.push(`**Target:** \`${target}\``);
-        card.meta.push(...details);
-      } else if (ti.isExpression) {
-        // Dynamic key: t.bind="expr"
-        const exprSource = ti.from?.source ?? null;
-        card.signature = exprSource
-          ? `(translation) t.bind = ${exprSource}`
-          : `(translation) t.bind`;
-        card.meta.push("*Dynamic key — resolved at runtime*");
-      } else {
-        card.signature = `(translation) t`;
+    case 'bindable': {
+      return buildBindableCard(entity);
+    }
+    case 'command': {
+      return {
+        signature: `(binding command) ${entity.name}`,
+        meta: [],
+      };
+    }
+
+    // --- Expression entities ---
+    case 'scope-identifier':
+    case 'member-access':
+    case 'global-access': {
+      const label = expressionLabel ?? 'expression';
+      return {
+        signature: `(expression) ${label}`,
+        meta: [],
+      };
+    }
+    case 'value-converter': {
+      const card: HoverCard = {
+        signature: `(value converter) ${entity.name}`,
+        meta: [],
+      };
+      if (entity.converter) {
+        appendConverterMeta(entity.converter, card.meta);
       }
-      if (ti.to) {
-        card.meta.push(`**Target attribute:** \`${ti.to}\``);
+      return card;
+    }
+    case 'binding-behavior': {
+      const card: HoverCard = {
+        signature: `(binding behavior) ${entity.name}`,
+        meta: [],
+      };
+      if (entity.behavior) {
+        const loc = formatSourceLocation(entity.behavior.file, entity.behavior.package);
+        if (loc) card.meta.push(`*${loc}*`);
       }
-      cards.push(card);
-      break;
+      return card;
     }
-    default:
-      break;
-  }
 
-  // Show "Attribute" line only for attributeBinding
-  if (attrName && instruction.kind === "attributeBinding") {
-    cards.push({
-      signature: `(attribute) ${attrName}`,
-      meta: [],
-    });
-  }
+    // --- Binding entities ---
+    case 'plain-attr-binding': {
+      if (entity.effectiveMode === null && entity.attributeName) {
+        // Listener binding (effectiveMode null = event)
+        return {
+          signature: `(event) ${entity.attributeName}`,
+          meta: [],
+        };
+      }
+      return {
+        signature: `(property) ${entity.attributeName}`,
+        meta: [],
+      };
+    }
 
-  return cards;
-}
+    // --- Scope entities ---
+    case 'contextual-var': {
+      return {
+        signature: `(local) ${entity.name}: ${entity.type}`,
+        meta: [],
+      };
+    }
+    case 'scope-token': {
+      const label = entity.token;
+      const typePart = entity.resolvedType ? `: ${entity.resolvedType}` : '';
+      return {
+        signature: `(scope) ${label}${typePart}`,
+        meta: [],
+      };
+    }
+    case 'iterator-decl': {
+      const typePart = entity.itemType ? `: ${entity.itemType}` : '';
+      return {
+        signature: `(iterator) ${entity.iteratorVar}${typePart}`,
+        meta: [],
+      };
+    }
 
-function buildBindableCard(description: BindableDescription, bindable: Bindable | null): HoverCard {
-  const card: HoverCard = { meta: [] };
-
-  if (description.isNative) {
-    // Native HTML property — use different label to avoid confusion with Aurelia bindables
-    card.signature = `(property) ${description.name}`;
-    if (description.context) {
-      card.meta.push(`*${description.context}*`);
+    // --- Template structure entities ---
+    case 'interpolation':
+      // Recurse on inner entity
+      return projectEntityCard({ ...resolution, entity: entity.innerEntity });
+    case 'au-slot': {
+      return {
+        signature: `(slot) ${entity.slotName}`,
+        meta: entity.targetCEName ? [`*target: ${entity.targetCEName}*`] : [],
+      };
     }
-  } else {
-    // Aurelia bindable — prefer the HTML attribute name (kebab-case) over property name
-    const displayName = bindable?.attribute ?? description.name;
-    const sigParts = [`(bindable) ${displayName}`];
-    if (bindable?.type) {
-      const typeStr = formatTypeRef(bindable.type);
-      if (typeStr) sigParts[0] += `: ${typeStr}`;
+    case 'ref-target': {
+      return {
+        signature: `(ref) ${entity.variableName}`,
+        meta: [`*target: ${entity.targetName}*`],
+      };
     }
-    card.signature = sigParts[0];
-    if (description.context) {
-      card.meta.push(`*${description.context}*`);
+    case 'let-binding': {
+      const typePart = entity.expressionType ? `: ${entity.expressionType}` : '';
+      return {
+        signature: `(let) ${entity.targetName}${typePart}`,
+        meta: entity.toBindingContext ? ['*to-binding-context*'] : [],
+      };
     }
-    if (bindable) {
-      const mode = formatBindingMode(bindable.mode);
-      if (mode) card.meta.push(`**Mode:** \`${mode}\``);
-      if (bindable.doc) card.meta.push(bindable.doc);
+    case 'as-element': {
+      const card: HoverCard = {
+        signature: `(as-element) ${entity.targetCEName}`,
+        meta: [],
+      };
+      if (entity.targetCE) {
+        appendResourceMeta(entity.targetCE, card.meta);
+      }
+      return card;
     }
-  }
-  return card;
-}
-
-// ── Structured bindable description ────────────────────────────────────
-
-interface BindableDescription {
-  name: string;
-  context?: string;
-  isNative: boolean;
-}
-
-function describeBindableTarget(target: { kind?: string } | null | undefined, to?: string): BindableDescription | null {
-  if (!target || typeof target !== "object" || !("kind" in target)) return null;
-  switch (target.kind) {
-    case "element.bindable": {
-      const t = target as { bindable: { name: string }; element: { def: { name: string } } };
-      return { name: t.bindable.name, context: `component: ${t.element.def.name}`, isNative: false };
+    case 'import-from': {
+      return {
+        signature: `(import) ${entity.path}`,
+        meta: [],
+      };
     }
-    case "element.nativeProp": {
-      const name = to ?? "unknown";
-      return { name, context: "HTML element", isNative: true };
+    case 'local-template-name': {
+      return {
+        signature: `(local template) ${entity.name}`,
+        meta: [],
+      };
     }
-    case "attribute.bindable": {
-      const t = target as { bindable: { name: string }; attribute: { def: { name: string } } };
-      return { name: t.bindable.name, context: `attribute: ${t.attribute.def.name}`, isNative: false };
+    case 'spread': {
+      return {
+        signature: `(spread) ${entity.spreadKind}`,
+        meta: [],
+      };
     }
-    case "controller.prop": {
-      const t = target as { bindable: { name: string }; controller: { res: string } };
-      return { name: t.bindable.name, context: `controller: ${t.controller.res}`, isNative: false };
-    }
-    case "attribute": {
-      const t = target as { attr: string };
-      return { name: t.attr, context: "HTML element", isNative: true };
+    case 'plain-attr-fallback': {
+      return {
+        signature: `(attribute) ${entity.attributeName}`,
+        meta: [],
+      };
     }
     default:
       return null;
   }
 }
 
-function findRow(
-  templates: readonly { rows: readonly LinkedRow[] }[],
-  templateIndex: number,
-  nodeId: NodeId,
-): LinkedRow | null {
-  const template = templates[templateIndex];
-  if (!template) return null;
-  return template.rows.find((row) => row.target === nodeId) ?? null;
+// ── Bindable card builder ──────────────────────────────────────────────
+
+function buildBindableCard(entity: { bindable: Bindable; parentKind: string; parentName: string }): HoverCard {
+  const { bindable, parentKind, parentName } = entity;
+  const card: HoverCard = { meta: [] };
+
+  // Aurelia bindable — prefer the HTML attribute name (kebab-case)
+  const displayName = bindable.attribute ?? bindable.name;
+  let sig = `(bindable) ${displayName}`;
+  if (bindable.type) {
+    const typeStr = formatTypeRef(bindable.type);
+    if (typeStr) sig += `: ${typeStr}`;
+  }
+  card.signature = sig;
+
+  // Parent context
+  const contextLabel = parentKind === 'element' ? 'component'
+    : parentKind === 'attribute' ? 'attribute'
+    : parentKind === 'controller' ? 'controller'
+    : parentKind;
+  card.meta.push(`*${contextLabel}: ${parentName}*`);
+
+  const mode = formatBindingMode(bindable.mode);
+  if (mode) card.meta.push(`**Mode:** \`${mode}\``);
+  if (bindable.doc) card.meta.push(bindable.doc);
+
+  return card;
 }
 
 // ── Formatting helpers ─────────────────────────────────────────────────
@@ -527,7 +370,6 @@ function appendResourceMeta(
   if (loc) meta.push(`*${loc}*`);
   const bindableList = formatBindableListRich(def.bindables);
   if (bindableList) meta.push(bindableList);
-  // Command link to show the generated overlay for this template
   meta.push("[$(file-code) Show overlay](command:aurelia.showOverlay)");
 }
 
@@ -544,210 +386,6 @@ function appendConverterMeta(
   }
 }
 
-function commandFromAttribute(
-  attrName: string,
-  syntax: TemplateSyntaxRegistry | null,
-  attrParser: AttributeParser | null,
-): string | null {
-  if (!syntax || !attrParser) return null;
-  const analysis = analyzeAttributeName(attrName, syntax, attrParser);
-  if (!analysis.commandSpan) return null;
-  return analysis.syntax.command ?? null;
-}
-
-// ── Expression AST helpers ─────────────────────────────────────────────
-
-type IdentifierAst = {
-  $kind: "Identifier";
-  span: SourceSpan;
-  name: string;
-};
-
-type ExpressionAst = {
-  $kind: string;
-  span?: SourceSpan;
-  name?: IdentifierAst;
-  expression?: ExpressionAst;
-  object?: ExpressionAst;
-  func?: ExpressionAst;
-  args?: ExpressionAst[];
-  left?: ExpressionAst;
-  right?: ExpressionAst;
-  condition?: ExpressionAst;
-  yes?: ExpressionAst;
-  no?: ExpressionAst;
-  target?: ExpressionAst;
-  value?: unknown;
-  key?: ExpressionAst;
-  parts?: ExpressionAst[];
-  expressions?: ExpressionAst[];
-  elements?: ExpressionAst[];
-  values?: ExpressionAst[];
-  body?: ExpressionAst;
-  params?: ExpressionAst[];
-  declaration?: ExpressionAst;
-  iterable?: ExpressionAst;
-  ancestor?: number;
-  optional?: boolean;
-};
-
-function findExpressionAst(
-  exprTable: readonly { id: ExprId; ast: unknown }[],
-  exprId: ExprId,
-): ExpressionAst | null {
-  for (const entry of exprTable) {
-    if (entry.id === exprId) return entry.ast as ExpressionAst;
-  }
-  return null;
-}
-
-function expressionLabelAtOffset(ast: ExpressionAst, offset: number): string | null {
-  const hit = findLabelAst(ast, offset);
-  if (!hit) return null;
-  return renderExpressionLabel(hit);
-}
-
-function findLabelAst(node: ExpressionAst | null | undefined, offset: number): ExpressionAst | null {
-  if (!node || !node.span || !spanContainsOffset(node.span, offset)) return null;
-  const children = collectExpressionAstChildren(node) as ExpressionAst[];
-  for (const child of children) {
-    const hit = findLabelAst(child, offset);
-    if (hit) return hit;
-  }
-  return isLabelCandidate(node) ? node : null;
-}
-
-function isLabelCandidate(node: ExpressionAst): boolean {
-  switch (node.$kind) {
-    case "AccessScope":
-    case "AccessMember":
-    case "AccessKeyed":
-    case "AccessGlobal":
-    case "AccessThis":
-    case "AccessBoundary":
-    case "CallScope":
-    case "CallMember":
-    case "CallGlobal":
-    case "CallFunction":
-    case "ValueConverter":
-    case "BindingBehavior":
-    case "Unary":
-      return true;
-    default:
-      return false;
-  }
-}
-
-function renderExpressionLabel(node: ExpressionAst): string | null {
-  switch (node.$kind) {
-    case "AccessScope": {
-      const name = node.name?.name ?? null;
-      return renderScopedName(node.ancestor, name);
-    }
-    case "AccessMember": {
-      return renderMemberName(node.object, node.name?.name ?? null);
-    }
-    case "AccessKeyed": {
-      return renderKeyedName(node.object, node.key);
-    }
-    case "AccessGlobal":
-      return node.name?.name ?? null;
-    case "AccessThis":
-      return renderThisName(node.ancestor);
-    case "AccessBoundary":
-      return "this";
-    case "CallScope": {
-      const name = node.name?.name ?? null;
-      return renderScopedName(node.ancestor, name);
-    }
-    case "CallMember": {
-      return renderMemberName(node.object, node.name?.name ?? null);
-    }
-    case "CallGlobal":
-      return node.name?.name ?? null;
-    case "CallFunction":
-      return node.func ? renderExpressionLabel(node.func) : null;
-    case "ValueConverter":
-    case "BindingBehavior":
-      return node.name?.name ?? null;
-    case "Unary": {
-      const inner = node.expression ? renderExpressionLabel(node.expression) : null;
-      const op = (node as { operation?: string }).operation ?? "";
-      if (!inner) return null;
-      // pos: 0 = prefix (e.g., !x), 1 = suffix (e.g., x++)
-      const pos = (node as { pos?: number }).pos ?? 0;
-      return pos === 0 ? `${op}${inner}` : `${inner}${op}`;
-    }
-    default:
-      return null;
-  }
-}
-
-function renderScopedName(ancestor: number | undefined, name: string | null): string | null {
-  if (!name) return null;
-  const prefix = renderAncestorPrefix(ancestor ?? 0);
-  return prefix ? `${prefix}.${name}` : name;
-}
-
-function renderThisName(ancestor: number | undefined): string {
-  const count = ancestor ?? 0;
-  if (count <= 0) return "$this";
-  return renderAncestorPrefix(count);
-}
-
-function renderAncestorPrefix(count: number): string {
-  if (count <= 0) return "";
-  return Array.from({ length: count }, () => "$parent").join(".");
-}
-
-function renderMemberName(object: ExpressionAst | null | undefined, name: string | null): string | null {
-  if (!name) return null;
-  const base = object ? renderExpressionLabel(object) : null;
-  return base ? `${base}.${name}` : name;
-}
-
-function renderKeyedName(object: ExpressionAst | null | undefined, key: ExpressionAst | null | undefined): string | null {
-  const base = object ? renderExpressionLabel(object) : null;
-  if (!base) return null;
-  const keyLabel = renderKeyLabel(key) ?? "?";
-  return `${base}[${keyLabel}]`;
-}
-
-function renderKeyLabel(node: ExpressionAst | null | undefined): string | null {
-  if (!node) return null;
-  switch (node.$kind) {
-    case "PrimitiveLiteral":
-      return formatLiteral(node.value);
-    case "AccessScope":
-    case "AccessMember":
-    case "AccessKeyed":
-    case "AccessGlobal":
-    case "AccessThis":
-    case "AccessBoundary":
-    case "CallScope":
-    case "CallMember":
-    case "CallGlobal":
-    case "CallFunction":
-      return renderExpressionLabel(node);
-    default:
-      return null;
-  }
-}
-
-function formatLiteral(value: unknown): string {
-  if (value === undefined) return "undefined";
-  if (value === null) return "null";
-  if (typeof value === "string") return JSON.stringify(value);
-  return String(value);
-}
-
-function chooseExpressionLabel(primary: string | null | undefined, secondary: string | null | undefined): string | null {
-  if (!primary && !secondary) return null;
-  if (!primary) return secondary ?? null;
-  if (!secondary) return primary ?? null;
-  return primary.length >= secondary.length ? primary : secondary;
-}
-
 // ── Translation key parsing ─────────────────────────────────────────────
 
 /**
@@ -757,18 +395,16 @@ function chooseExpressionLabel(primary: string | null | undefined, secondary: st
  * - Bracket prefix `[title]` sets the target attribute
  * - Dotted path splits into namespace (first segment) and key (rest)
  */
-function parseTranslationKey(raw: string): { target: string | null; namespace: string | null; key: string | null } {
+export function parseTranslationKey(raw: string): { target: string | null; namespace: string | null; key: string | null } {
   let target: string | null = null;
   let keyPath = raw;
 
-  // Extract bracket target: [title]namespace.key → target="title", keyPath="namespace.key"
   const bracketMatch = /^\[([^\]]+)\](.*)$/.exec(keyPath);
   if (bracketMatch) {
     target = bracketMatch[1] ?? null;
     keyPath = bracketMatch[2] ?? "";
   }
 
-  // Split dotted path: "greeting.hello" → namespace="greeting", key="hello"
   const dotIndex = keyPath.indexOf(".");
   if (dotIndex >= 0) {
     return {
@@ -778,6 +414,5 @@ function parseTranslationKey(raw: string): { target: string | null; namespace: s
     };
   }
 
-  // No dot: entire string is the key, no namespace
   return { target, namespace: null, key: keyPath || null };
 }

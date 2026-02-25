@@ -20,7 +20,7 @@ import type {
 } from "../../model/ir.js";
 import { resolveControllerAttr } from "./element-lowering.js";
 import type { ExprTable, P5Element, P5Loc, P5Node, P5Template } from "./lower-shared.js";
-import { attrLoc, attrValueLoc, parseRepeatTailProps, toBindingSource, toExprRef, toMode, toSpan, tryToInterpIR } from "./lower-shared.js";
+import { attrLoc, attrNameLoc, attrValueLoc, parseRepeatTailProps, toBindingSource, toExprRef, toMode, toSpan, tryToInterpIR } from "./lower-shared.js";
 import type { RowCollector } from "./template-builders.js";
 import {
   makeWrapperTemplate,
@@ -219,6 +219,7 @@ export function collectControllers(
     if (!candidate) continue;
     const { a, s, config } = candidate;
     const loc = attrLoc(el, a.name);
+    const tcNameLoc = attrNameLoc(el, a.name, table.sourceText);
     const valueLoc = attrValueLoc(el, a.name, table.sourceText);
     const raw = a.value ?? "";
     const proto = buildControllerPrototype(a, s, table, loc, valueLoc, config, catalog.bindingCommands, services);
@@ -237,6 +238,7 @@ export function collectControllers(
         branch,
         containerless: false,
         loc: toSpan(loc, table.source),
+        nameLoc: toSpan(tcNameLoc, table.source),
       });
     }
     current = nextLayer;
