@@ -21,9 +21,11 @@ export const ViewsFeature: FeatureModule = {
       void explorer.refresh();
     });
 
-    // Refresh when catalog updates (e.g. third-party package scan completes)
-    ctx.lsp.onCatalogUpdated(() => {
-      void explorer.refresh();
+    // Refresh when workspace semantics change (third-party scan, TS project change, config reload)
+    ctx.lsp.onWorkspaceChanged((payload) => {
+      if (payload.domains.includes("resources") || payload.domains.includes("scopes")) {
+        void explorer.refresh();
+      }
     });
 
     // Refresh command

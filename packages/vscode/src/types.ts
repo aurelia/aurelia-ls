@@ -248,6 +248,6 @@ export interface CapabilitiesResponse {
   };
   notifications?: {
     overlayReady?: boolean;
-    catalogUpdated?: boolean;
+    workspaceChanged?: boolean;
   };
 }

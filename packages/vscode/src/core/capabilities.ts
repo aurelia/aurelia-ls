@@ -22,7 +22,7 @@ export const CustomCapabilityKeys = {
 
 export const NotificationKeys = {
   overlayReady: "overlayReady",
-  catalogUpdated: "catalogUpdated",
+  workspaceChanged: "workspaceChanged",
 } as const;
 
 export const OptionalLspKeys = {

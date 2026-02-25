@@ -105,20 +105,29 @@ export function handleInitialize(ctx: ServerContext, params: InitializeParams): 
     },
   });
 
-  // Fire-and-forget: async npm analysis discovers third-party Aurelia packages.
-  // When complete, refresh all open documents so they pick up the new resources.
-  void ctx.workspace.initThirdParty().then(() => {
-    ctx.logger.info("[workspace] Third-party init complete, refreshing open documents");
-    void refreshAllOpenDocuments(ctx, "change");
-    const snapshot = ctx.workspace.snapshot();
-    const resourceCount = Object.keys(snapshot.catalog?.resources?.elements ?? {}).length
-      + Object.keys(snapshot.catalog?.resources?.attributes ?? {}).length
-      + Object.keys(snapshot.catalog?.resources?.valueConverters ?? {}).length
-      + Object.keys(snapshot.catalog?.resources?.bindingBehaviors ?? {}).length;
-    void ctx.connection.sendNotification("aurelia/catalogUpdated", {
-      fingerprint: snapshot.meta.fingerprint,
-      resourceCount,
+  // Subscribe to workspace-level semantic changes (third-party scan,
+  // TS project version bump, config reload). Forward as LSP notifications
+  // so VS Code features can react to knowledge changes.
+  ctx.workspace.onDidChangeSemantics((event) => {
+    ctx.logger.info(`[workspace] semantics changed: domains=[${event.domains.join(",")}] fingerprint=${event.fingerprint}`);
+    void ctx.connection.sendNotification("aurelia/workspaceChanged", {
+      fingerprint: event.fingerprint,
+      domains: event.domains,
     });
+    // Use standard LSP refresh for cross-file effects on standard features
+    if (event.domains.includes("diagnostics") || event.domains.includes("types")) {
+      void ctx.connection.sendRequest("workspace/diagnostics/refresh").catch(() => {});
+    }
+    if (event.domains.includes("resources") || event.domains.includes("scopes")) {
+      void ctx.connection.sendRequest("workspace/semanticTokens/refresh").catch(() => {});
+    }
+    // Refresh open documents so they pick up the changed semantics
+    void refreshAllOpenDocuments(ctx, "change");
+  });
+
+  // Fire-and-forget: async npm analysis discovers third-party Aurelia packages.
+  void ctx.workspace.initThirdParty().then(() => {
+    ctx.logger.info("[workspace] Third-party init complete");
   });
 
   return {

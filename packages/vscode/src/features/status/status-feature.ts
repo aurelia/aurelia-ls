@@ -16,13 +16,15 @@ export const StatusFeature: FeatureModule = {
 
     let overlayCount = 0;
 
-    // Refresh counts when catalog updates (e.g. third-party package scan completes)
-    ctx.lsp.onCatalogUpdated(() => {
-      void ctx.lsp.getResources().then((response) => {
-        if (!response) return;
-        const gapCount = response.resources.reduce((sum, r) => sum + r.gapCount, 0);
-        status.ready(response.resources.length, response.templateCount, gapCount);
-      });
+    // Refresh counts when workspace semantics change
+    ctx.lsp.onWorkspaceChanged((payload) => {
+      if (payload.domains.includes("resources")) {
+        void ctx.lsp.getResources().then((response) => {
+          if (!response) return;
+          const gapCount = response.resources.reduce((sum, r) => sum + r.gapCount, 0);
+          status.ready(response.resources.length, response.templateCount, gapCount);
+        });
+      }
     });
 
     ctx.lsp.onOverlayReady((payload) => {

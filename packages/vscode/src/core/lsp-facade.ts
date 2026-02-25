@@ -116,7 +116,7 @@ export class LspFacade {
     this.onNotification("aurelia/overlayReady", handler);
   }
 
-  onCatalogUpdated(handler: (payload: { fingerprint: string; resourceCount: number }) => void): void {
-    this.onNotification("aurelia/catalogUpdated", handler);
+  onWorkspaceChanged(handler: (payload: { fingerprint: string; domains: string[] }) => void): void {
+    this.onNotification("aurelia/workspaceChanged", handler);
   }
 }
