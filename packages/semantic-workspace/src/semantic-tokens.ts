@@ -247,48 +247,41 @@ function findElementByLoc(elements: ElementNode[], loc: SourceSpan): ElementNode
 
 function extractElementTokens(
   rows: LinkedRow[],
-  nodeMap: Map<string, DOMNode>,
+  _nodeMap: Map<string, DOMNode>,
   resolveResourceModifiers: ResourceModifierResolver,
 ): WorkspaceToken[] {
   const tokens: WorkspaceToken[] = [];
 
   for (const row of rows) {
-    const node = nodeMap.get(row.target);
-    if (!node) continue;
     if (row.node.kind !== "element") continue;
 
-    const nodeSem = row.node as NodeSem & { kind: "element" };
-    const element = node as ElementNode;
-    if (element.tag === "let") {
-      if (element.tagLoc) {
-        tokens.push({
-          type: "aureliaMetaElement",
-          span: element.tagLoc,
-        });
+    const nodeSem = row.node;
+    // NodeSem carries positional provenance (tagSpan, closeTagSpan) from the
+    // link phase — no DOM node lookup needed for element token extraction.
+    if (nodeSem.tag === "let") {
+      if (nodeSem.tagSpan) {
+        tokens.push({ type: "aureliaMetaElement", span: nodeSem.tagSpan });
       }
-      if (element.closeTagLoc) {
-        tokens.push({
-          type: "aureliaMetaElement",
-          span: element.closeTagLoc,
-        });
+      if (nodeSem.closeTagSpan) {
+        tokens.push({ type: "aureliaMetaElement", span: nodeSem.closeTagSpan });
       }
       continue;
     }
 
     if (!nodeSem.custom) continue;
     const gapModifiers = resolveResourceModifiers("custom-element", nodeSem.custom.def.name);
-    if (element.tagLoc) {
+    if (nodeSem.tagSpan) {
       tokens.push({
         type: "aureliaElement",
         ...(gapModifiers ? { modifiers: gapModifiers } : {}),
-        span: element.tagLoc,
+        span: nodeSem.tagSpan,
       });
     }
-    if (element.closeTagLoc) {
+    if (nodeSem.closeTagSpan) {
       tokens.push({
         type: "aureliaElement",
         ...(gapModifiers ? { modifiers: gapModifiers } : {}),
-        span: element.closeTagLoc,
+        span: nodeSem.closeTagSpan,
       });
     }
   }
