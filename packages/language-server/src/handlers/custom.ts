@@ -539,6 +539,103 @@ export function handleInspectEntity(
   }
 }
 
+export type ScopeResourceItem = {
+  name: string;
+  kind: string;
+  origin: ResourceOrigin;
+  className?: string;
+  file?: string;
+  package?: string;
+  bindableCount: number;
+  scope: "global" | "local";
+};
+
+export type ScopeResourcesResponse = {
+  scopeId: string;
+  scopeLabel?: string;
+  resources: ScopeResourceItem[];
+} | null;
+
+export function handleGetScopeResources(
+  ctx: ServerContext,
+  params: { uri: string },
+): ScopeResourcesResponse {
+  try {
+    const uri = params?.uri;
+    if (!uri) return null;
+    const canonical = canonicalDocumentUri(uri);
+    ctx.ensureProgramDocument(uri);
+
+    const snapshot = ctx.workspace.snapshot();
+    const graph = snapshot.resourceGraph;
+    if (!graph) return null;
+
+    // Find the scope for this template
+    const templateInfo = ctx.workspace.templates.find(
+      (t) => canonicalDocumentUri(t.templatePath).uri === canonical.uri,
+    ) ?? ctx.workspace.inlineTemplates.find(
+      (t) => canonicalDocumentUri(t.componentPath).uri === canonical.uri,
+    );
+
+    const scopeId = templateInfo?.scopeId ?? graph.root;
+    const scope = graph.scopes[scopeId];
+    const rootScope = graph.scopes[graph.root];
+
+    const resources: ScopeResourceItem[] = [];
+    const seen = new Set<string>();
+
+    // Collect resources from both local scope and root scope (two-level lookup)
+    const collectFromScope = (scopeResources: Partial<import("@aurelia-ls/compiler").ResourceCollections> | undefined, scopeType: "local" | "global") => {
+      if (!scopeResources) return;
+      const categories = [
+        ["elements", "custom-element"],
+        ["attributes", "custom-attribute"],
+        ["controllers", "template-controller"],
+        ["valueConverters", "value-converter"],
+        ["bindingBehaviors", "binding-behavior"],
+      ] as const;
+
+      for (const [category, kind] of categories) {
+        const entries = scopeResources[category as keyof typeof scopeResources];
+        if (!entries || typeof entries !== "object") continue;
+        for (const [name, res] of Object.entries(entries as Record<string, any>)) {
+          const key = `${kind}:${name}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          resources.push({
+            name,
+            kind,
+            origin: detectOrigin(res),
+            className: res.className,
+            file: res.file,
+            package: res.package,
+            bindableCount: res.bindables ? Object.keys(res.bindables).length : res.props ? Object.keys(res.props).length : 0,
+            scope: scopeType,
+          });
+        }
+      }
+    };
+
+    // Local scope first (if different from root)
+    if (scopeId !== graph.root && scope) {
+      collectFromScope(scope.resources, "local");
+    }
+    // Then root scope (global)
+    if (rootScope) {
+      collectFromScope(rootScope.resources, "global");
+    }
+
+    return {
+      scopeId,
+      scopeLabel: scope?.label,
+      resources,
+    };
+  } catch (e) {
+    ctx.logger.error(`[getScopeResources] failed: ${formatError(e)}`);
+    return null;
+  }
+}
+
 export function handleCapabilities(ctx: ServerContext): CapabilitiesResponse {
   try {
     return buildCapabilities(ctx);
@@ -560,5 +657,6 @@ export function registerCustomHandlers(ctx: ServerContext): void {
   ctx.connection.onRequest("aurelia/dumpState", () => handleDumpState(ctx));
   ctx.connection.onRequest("aurelia/getResources", () => handleGetResources(ctx));
   ctx.connection.onRequest("aurelia/inspectEntity", (params: { uri: string; position: Position }) => handleInspectEntity(ctx, params));
+  ctx.connection.onRequest("aurelia/getScopeResources", (params: { uri: string }) => handleGetScopeResources(ctx, params));
   ctx.connection.onRequest("aurelia/capabilities", () => handleCapabilities(ctx));
 }

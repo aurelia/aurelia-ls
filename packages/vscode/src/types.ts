@@ -251,3 +251,20 @@ export interface CapabilitiesResponse {
     workspaceChanged?: boolean;
   };
 }
+
+export type ScopeResourceItem = {
+  name: string;
+  kind: string;
+  origin: string;
+  className?: string;
+  file?: string;
+  package?: string;
+  bindableCount: number;
+  scope: "global" | "local";
+};
+
+export type ScopeResourcesResponse = {
+  scopeId: string;
+  scopeLabel?: string;
+  resources: ScopeResourceItem[];
+};

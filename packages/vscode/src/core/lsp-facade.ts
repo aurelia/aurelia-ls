@@ -116,6 +116,16 @@ export class LspFacade {
     this.onNotification("aurelia/overlayReady", handler);
   }
 
+  async getScopeResources(uri: string): Promise<import("../types.js").ScopeResourcesResponse | null> {
+    try {
+      return await this.sendRequest<import("../types.js").ScopeResourcesResponse | null>("aurelia/getScopeResources", { uri });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.#logger.warn("scopeResources.request.failed", { message });
+      return null;
+    }
+  }
+
   onWorkspaceChanged(handler: (payload: { fingerprint: string; domains: string[] }) => void): void {
     this.onNotification("aurelia/workspaceChanged", handler);
   }

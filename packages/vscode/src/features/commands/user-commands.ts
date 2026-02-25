@@ -311,6 +311,76 @@ export const UserCommandsFeature: FeatureModule = {
       }),
     );
 
+    // "Aurelia: Show Available Resources" — what's visible in the current template's scope
+    store.add(
+      vscode.commands.registerCommand("aurelia.showAvailableResources", () => {
+        void run("showAvailableResources", async () => {
+          const editor = activeEditor(vscode);
+          if (!editor) {
+            vscode.window.showInformationMessage("No active editor");
+            return;
+          }
+          const uri = editor.document.uri.toString();
+
+          const response = await ctx.lsp.getScopeResources(uri);
+          if (!response || response.resources.length === 0) {
+            vscode.window.showInformationMessage("No Aurelia resources available in this scope");
+            return;
+          }
+
+          const KIND_LABELS: Record<string, string> = {
+            "custom-element": "element",
+            "custom-attribute": "attribute",
+            "template-controller": "controller",
+            "value-converter": "converter",
+            "binding-behavior": "behavior",
+          };
+
+          const ORIGIN_ICONS: Record<string, string> = {
+            project: "$(home)",
+            package: "$(package)",
+            framework: "$(library)",
+          };
+
+          type ScopeQuickPickItem = import("vscode").QuickPickItem & { resourceFile?: string };
+
+          const items: ScopeQuickPickItem[] = response.resources.map((r) => {
+            const kindLabel = KIND_LABELS[r.kind] ?? r.kind;
+            const originIcon = ORIGIN_ICONS[r.origin] ?? "";
+            const scopeTag = r.scope === "local" ? "$(lock) local" : "";
+            const detailParts: string[] = [];
+            if (r.className) detailParts.push(r.className);
+            if (r.package) detailParts.push(r.package);
+            if (r.bindableCount > 0) detailParts.push(`${r.bindableCount} bindable${r.bindableCount === 1 ? "" : "s"}`);
+            if (scopeTag) detailParts.push(scopeTag);
+
+            return {
+              label: `${originIcon} ${r.name}`,
+              description: kindLabel,
+              detail: detailParts.join(" · "),
+              resourceFile: r.file,
+            };
+          });
+
+          const title = response.scopeLabel
+            ? `Resources in scope: ${response.scopeLabel}`
+            : "Available resources";
+
+          const picked = await vscode.window.showQuickPick(items, {
+            placeHolder: `${response.resources.length} resources available in this template`,
+            title,
+            matchOnDescription: true,
+            matchOnDetail: true,
+          });
+
+          if (picked?.resourceFile) {
+            const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(picked.resourceFile));
+            await vscode.window.showTextDocument(doc);
+          }
+        });
+      }),
+    );
+
     return store;
   },
 };
