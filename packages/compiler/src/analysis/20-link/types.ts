@@ -74,7 +74,18 @@ export interface LinkedRow {
  * =========================== */
 
 export type NodeSem =
-  | { kind: "element"; tag: string; custom?: ElementResRef | null; native?: DomElementRef | null }
+  | {
+      kind: "element";
+      tag: string;
+      custom?: ElementResRef | null;
+      native?: DomElementRef | null;
+      /** Open tag name span (positional provenance — carried from IR DOM). */
+      tagSpan?: SourceSpan | null;
+      /** Close tag name span (positional provenance — carried from IR DOM). */
+      closeTagSpan?: SourceSpan | null;
+      /** as-element attribute value span, when this element uses identity override. */
+      asElementValueSpan?: SourceSpan | null;
+    }
   | { kind: "template" | "text" | "comment" };
 
 export interface ElementResRef { def: ElementRes }

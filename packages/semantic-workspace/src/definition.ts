@@ -401,79 +401,51 @@ export function collectTemplateResourceReferences(options: {
   const syntax = options.syntax;
   const preferRoots = options.preferRoots ?? [];
   const results: TextReferenceSite[] = [];
-  const domIndex = buildDomIndex(compilation.ir.templates ?? []);
   const documentUri = options.documentUri ?? null;
 
-  // Local template symbolId cache: ensures all usages of the same local
-  // template share a single symbolId within this template compilation.
-  const localSymbolIds = new Map<string, SymbolId>();
-  const localSymbolIdFor = (name: string): SymbolId => {
-    let sid = localSymbolIds.get(name);
-    if (!sid) {
-      const file = documentUri ?? "unknown";
-      sid = createLocalSymbolId({ file: String(file), frame: "root", name });
-      localSymbolIds.set(name, sid);
-    }
-    return sid;
-  };
-
-  for (let ti = 0; ti < compilation.linked.templates.length; ti += 1) {
-    const template = compilation.linked.templates[ti];
-    const domTemplate = compilation.ir.templates?.[ti];
-    if (!template || !domTemplate) continue;
+  // ── CE tag references ──
+  // NodeSem carries positional provenance (tagSpan, closeTagSpan,
+  // asElementValueSpan) from the IR DOM through the link boundary.
+  // No DOM index rebuild needed for tag references.
+  for (const template of compilation.linked.templates) {
+    if (!template) continue;
     for (const row of template.rows ?? []) {
       if (row.node.kind !== "element") continue;
-      const domNode = findDomNode(domIndex, ti, row.target);
-      if (!domNode || domNode.kind !== "element") continue;
       const entry = row.node.custom?.def
-        ? findEntry(resources.elements, row.node.custom.def.name, row.node.custom.def.file ?? null)
+        ? findEntry(resources.elements, row.node.custom.def.name, row.node.custom.def.file ?? null, preferRoots)
         : null;
-      if (!entry?.symbolId) {
-        // Local template CE: has a resolved def but no entry in the resource
-        // index (local templates are compiled from the template, not discovered
-        // through class recognition).
-        if (row.node.custom?.def) {
-          const localName = row.node.custom.def.name;
-          const localSid = localSymbolIdFor(localName);
-          if (domNode.tagLoc) {
-            const loc = spanLocation(domNode.tagLoc, documentUri);
-            if (loc) results.push({ kind: "text", referenceKind: "tag-name", nameForm: "kebab-case", ...loc, symbolId: localSid, nodeId: row.target });
-          }
-          if (domNode.closeTagLoc) {
-            const loc = spanLocation(domNode.closeTagLoc, documentUri);
-            if (loc) results.push({ kind: "text", referenceKind: "close-tag-name", nameForm: "kebab-case", ...loc, symbolId: localSid, nodeId: row.target });
-          }
-        }
-        continue;
-      }
-      // Emit separate open and close tag references with distinct referenceKinds.
-      if (domNode.tagLoc) {
-        const loc = spanLocation(domNode.tagLoc, documentUri);
+      if (!entry?.symbolId) continue;
+      if (row.node.tagSpan) {
+        const loc = spanLocation(row.node.tagSpan, documentUri);
         if (loc) results.push({ kind: "text", referenceKind: "tag-name", nameForm: "kebab-case", ...loc, symbolId: entry.symbolId, nodeId: row.target });
       }
-      if (domNode.closeTagLoc) {
-        const loc = spanLocation(domNode.closeTagLoc, documentUri);
+      if (row.node.closeTagSpan) {
+        const loc = spanLocation(row.node.closeTagSpan, documentUri);
         if (loc) results.push({ kind: "text", referenceKind: "close-tag-name", nameForm: "kebab-case", ...loc, symbolId: entry.symbolId, nodeId: row.target });
+      }
+      // as-element value span: when element identity is overridden via
+      // <div as-element="my-ce">, emit the value as an additional reference
+      // site for the target CE.
+      if (row.node.asElementValueSpan) {
+        const loc = spanLocation(row.node.asElementValueSpan, documentUri);
+        if (loc) results.push({ kind: "text", referenceKind: "as-element-value", nameForm: "kebab-case", ...loc, symbolId: entry.symbolId });
       }
     }
   }
 
-  // as-element attribute value references: walk IR DOM for as-element
-  // attributes and emit references at the value span.
-  for (const irTemplate of compilation.ir.templates ?? []) {
-    collectAsElementValueReferences(irTemplate.dom, resources, documentUri, preferRoots, results);
+  // ── Local template declaration references ──
+  // Local templates (<template as-custom-element="name">) produce IR DOM
+  // nodes (kind: "template") that don't generate linked rows (skipped by
+  // the row collector). Walk the IR DOM for these declarations and emit
+  // references using the same symbolId as the tag usages above.
+  for (const template of compilation.linked.templates) {
+    if (!template?.dom) continue;
+    collectLocalTemplateDeclarationRefsFromDom(template.dom, resources, documentUri, preferRoots, results);
   }
 
-  // Local template declaration references: for each local template that
-  // produced usage references above, scan the IR DOM for the corresponding
-  // <template as-custom-element="name"> declaration and emit a declaration
-  // reference with the same symbolId.
-  if (localSymbolIds.size > 0) {
-    for (const irTemplate of compilation.ir.templates ?? []) {
-      collectLocalTemplateDeclarationReferences(irTemplate.dom, localSymbolIds, documentUri, results);
-    }
-  }
-
+  // ── Instruction references (CA, TC, bindable) ──
+  // DOM index still needed for attribute name extraction on instructions.
+  const domIndex = buildDomIndex(compilation.ir.templates ?? []);
   const instructionHits = collectInstructionHits(compilation.linked.templates, compilation.ir.templates ?? [], domIndex);
   for (const hit of instructionHits) {
     const nameSpan = hit.attrNameSpan ?? null;
@@ -516,6 +488,7 @@ export function collectTemplateResourceReferences(options: {
     }
   }
 
+  // ── Expression references (VC, BB) ──
   const exprRefs = collectExprResources(compilation.exprTable ?? []);
   for (const ref of exprRefs) {
     const entry = ref.kind === "valueConverter"
@@ -637,7 +610,7 @@ function isNavigableSourceLocation(loc: SourceLocation): boolean {
 }
 
 // ============================================================================
-// as-element + local template reference helpers
+// Local template declaration reference helper
 // ============================================================================
 
 type IrDomNode = {
@@ -648,64 +621,30 @@ type IrDomNode = {
 };
 
 /**
- * Walk the IR DOM tree for `as-element="..."` attributes and emit reference
- * sites at the attribute value spans. This makes as-element positions
- * first-class reference sites — the as-element value position participates
- * in the same symbolId-based reference set as the target CE's tag usages.
+ * Walk the linked template's DOM for `<template as-custom-element="name">`
+ * declarations and emit reference sites. These declarations are skipped by
+ * the row collector (no linked row), but the DOM nodes survive. Looks up
+ * the local template name in the resource index to get the proper symbolId
+ * (local templates are now injected into definition.authority at the project
+ * semantics level).
  */
-function collectAsElementValueReferences(
+function collectLocalTemplateDeclarationRefsFromDom(
   node: IrDomNode,
   resources: ResourceDefinitionIndex,
   documentUri: DocumentUri | null,
   preferRoots: readonly string[],
   results: TextReferenceSite[],
 ): void {
-  if (node.attrs) {
-    for (const attr of node.attrs) {
-      if (attr.name === "as-element" && attr.value) {
-        const ceName = attr.value.toLowerCase();
-        const entry = findEntry(resources.elements, ceName, null, preferRoots);
-        if (entry?.symbolId && attr.valueLoc) {
-          const loc = spanLocation(attr.valueLoc, documentUri);
-          if (loc) results.push({ kind: "text", referenceKind: "as-element-value", nameForm: "kebab-case", ...loc, symbolId: entry.symbolId });
-        }
-      }
-    }
-  }
-  if (node.children) {
-    for (const child of node.children) {
-      collectAsElementValueReferences(child, resources, documentUri, preferRoots, results);
-    }
-  }
-}
-
-/**
- * Scan the IR DOM for `<template as-custom-element="name">` nodes and emit
- * declaration references for local templates. These declarations are skipped
- * during IR lowering (no linked row exists) but the original DOM nodes
- * survive in the IR templates.
- *
- * This function only emits references for names that appear in the
- * localSymbolIds map — i.e., names for which usage references were already
- * collected in the CE tag loop.
- */
-function collectLocalTemplateDeclarationReferences(
-  node: IrDomNode,
-  localSymbolIds: Map<string, SymbolId>,
-  documentUri: DocumentUri | null,
-  results: TextReferenceSite[],
-): void {
   if (node.kind === "template" && node.attrs) {
     for (const attr of node.attrs) {
       if (attr.name === "as-custom-element" && attr.value) {
         const localName = attr.value.toLowerCase();
-        const sid = localSymbolIds.get(localName);
-        if (sid) {
-          // Emit reference at the as-custom-element value span (the name declaration)
+        const entry = findEntry(resources.elements, localName, null, preferRoots);
+        if (entry?.symbolId) {
           const span = attr.valueLoc ?? attr.loc;
           if (span) {
             const loc = spanLocation(span, documentUri);
-            if (loc) results.push({ kind: "text", referenceKind: "local-template-attr", nameForm: "kebab-case", ...loc, symbolId: sid });
+            if (loc) results.push({ kind: "text", referenceKind: "local-template-attr", nameForm: "kebab-case", ...loc, symbolId: entry.symbolId });
           }
         }
       }
@@ -713,7 +652,7 @@ function collectLocalTemplateDeclarationReferences(
   }
   if (node.children) {
     for (const child of node.children) {
-      collectLocalTemplateDeclarationReferences(child, localSymbolIds, documentUri, results);
+      collectLocalTemplateDeclarationRefsFromDom(child, resources, documentUri, preferRoots, results);
     }
   }
 }

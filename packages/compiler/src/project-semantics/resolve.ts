@@ -348,6 +348,10 @@ function converge(
   const allResources = [
     ...characterized.resources,
     ...characterized.templateMetaCandidates,
+    // Local templates are compiled from <template as-custom-element="...">
+    // declarations. They're first-class resources with proper symbolIds,
+    // discoverable through the definition authority channel like any CE.
+    ...Array.from(characterized.localTemplateAuthorities.values()),
   ];
   const catalogGaps = characterized.gaps.map(analysisGapToCatalogGap);
   const catalogConfidence = catalogConfidenceFromGaps(characterized.gaps as AnalysisGap[]);
