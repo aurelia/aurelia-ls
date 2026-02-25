@@ -4,11 +4,13 @@ import { DiagnosticsFeatures } from "./diagnostics/index.js";
 import { InlineFeatures } from "./inline/index.js";
 import { ObservabilityFeatures } from "./observability/index.js";
 import { StatusFeatures } from "./status/index.js";
+import { InlayHintsFeatures } from "./inlay-hints/inlay-hints-feature.js";
 import { ViewFeatures } from "./views/index.js";
 
 export const DefaultFeatures: FeatureModule[] = [
   ...CommandFeatures,
   ...DiagnosticsFeatures,
+  ...InlayHintsFeatures,
   ...InlineFeatures,
   ...ObservabilityFeatures,
   ...StatusFeatures,

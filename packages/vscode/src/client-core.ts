@@ -54,6 +54,7 @@ function createMiddleware(
   logger: ClientLogger,
   diagnosticsUx: DiagnosticsUxState,
   inlineUx: InlineUxState,
+  client: AureliaLanguageClient,
 ): Middleware {
   return {
     provideHover: async (document, position, token, next) => {
@@ -86,6 +87,10 @@ function createMiddleware(
       }
       return semanticTokens;
     },
+    provideInlayHints: async (document, range, token, next) => {
+      if (!client.inlayHintsEnabled) return [];
+      return next(document, range, token);
+    },
   };
 }
 
@@ -96,6 +101,7 @@ export class AureliaLanguageClient {
   #serverEnv: Record<string, string> | null = null;
   #diagnosticsUx: DiagnosticsUxState = { enabled: false };
   #inlineUx: InlineUxState = { enabled: false, onSemanticTokens: null };
+  #inlayHintsEnabled = true;
 
   constructor(logger: ClientLogger, vscode: VscodeApi = getVscodeApi()) {
     this.#logger = logger;
@@ -112,6 +118,14 @@ export class AureliaLanguageClient {
 
   setInlineUxEnabled(enabled: boolean): void {
     this.#inlineUx.enabled = enabled;
+  }
+
+  get inlayHintsEnabled(): boolean {
+    return this.#inlayHintsEnabled;
+  }
+
+  setInlayHintsEnabled(enabled: boolean): void {
+    this.#inlayHintsEnabled = enabled;
   }
 
   setInlineUxSemanticTokensConsumer(
@@ -152,7 +166,7 @@ export class AureliaLanguageClient {
         { scheme: "untitled", language: "html" },
       ],
       synchronize: { fileEvents },
-      middleware: createMiddleware(this.#vscode, this.#logger, this.#diagnosticsUx, this.#inlineUx),
+      middleware: createMiddleware(this.#vscode, this.#logger, this.#diagnosticsUx, this.#inlineUx, this),
     };
 
     const client = new LanguageClient("aurelia-ls", "Aurelia Language Server", serverOptions, clientOptions);

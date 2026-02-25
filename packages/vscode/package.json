@@ -129,7 +129,7 @@
         "aurelia.features.commands": {
           "type": "boolean",
           "default": true,
-          "description": "Enable Aurelia commands in the command palette (diagnostics report, inspect at cursor, suppressed diagnostics)."
+          "description": "Enable Aurelia commands in the command palette (find resource, diagnostics report, inspect at cursor, suppressed diagnostics)."
         },
         "aurelia.features.debugCommands": {
           "type": "boolean",
@@ -155,6 +155,11 @@
           "type": "boolean",
           "default": true,
           "description": "Augment diagnostics with Aurelia taxonomy metadata (impact, actionability, confidence)."
+        },
+        "aurelia.features.inlayHints": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show binding mode inlay hints in templates (e.g., .bind resolved to toView or twoWay based on the target bindable)."
         },
         "aurelia.observability.logging.level": {
           "type": "string",

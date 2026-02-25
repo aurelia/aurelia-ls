@@ -38,6 +38,7 @@ export interface PresentationConfig {
     views: boolean;
     inline: boolean;
     diagnostics: boolean;
+    inlayHints: boolean;
   };
   experimental: {
     ai: boolean;
@@ -79,6 +80,7 @@ const DEFAULT_CONFIG: PresentationConfig = {
     views: true,
     inline: true,
     diagnostics: true,
+    inlayHints: true,
   },
   experimental: {
     ai: false,
@@ -131,6 +133,7 @@ function readConfig(vscode: VscodeApi): PresentationConfig {
       views: cfg.get("features.views", DEFAULT_CONFIG.features.views),
       inline: cfg.get("features.inline", DEFAULT_CONFIG.features.inline),
       diagnostics: cfg.get("features.diagnostics", DEFAULT_CONFIG.features.diagnostics),
+      inlayHints: cfg.get("features.inlayHints", DEFAULT_CONFIG.features.inlayHints),
     },
     experimental: {
       ai: cfg.get("experimental.ai", DEFAULT_CONFIG.experimental.ai),
