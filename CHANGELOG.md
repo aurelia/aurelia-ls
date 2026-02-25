@@ -6,6 +6,100 @@ For VS Code extension changelog, see [`packages/vscode/CHANGELOG.md`](packages/v
 
 ---
 
+## 0.3.0
+
+*Semantic workspace: independent semantic layer, full IDE feature suite.*
+
+### New package: @aurelia-ls/semantic-workspace
+
+Independent semantic authority that sits between the compiler and its
+consumers. The workspace owns the semantic model, orchestrates both
+analysis pipelines, handles incremental invalidation, and provides the
+feature query surface.
+
+**Feature query path:**
+- CursorEntity resolution — unified position → entity mapping for all features
+- Per-feature dispatch (hover, definition, completions, diagnostics, references, rename, semantic tokens)
+- Confidence cascade — every entity carries its confidence level through to the response
+- `FeatureResponse<T>` — typed result that's either a value, a degradation explanation, or not-applicable
+
+**Workspace engine:**
+- Orchestrates project and template pipelines
+- Incremental invalidation via DependencyGraph
+- Resource fingerprinting for detecting meaningful vs. cosmetic changes
+- TypeScript overlay management for cross-boundary type flow
+
+**Semantic authority host:**
+- Persistent runtime for interactive querying (`pnpm host:start` / `host:query`)
+- Replay and verification commands
+- Pressure sweep mode for corpus-level testing
+
+### @aurelia-ls/compiler
+
+**Project pipeline restructure:**
+
+The project analysis subsystem (`project-semantics/`) has been
+reorganized around a clear pipeline: scan → identify → characterize →
+converge → SemanticModel.
+
+- `SemanticModel` as canonical query authority, replacing scattered snapshot accessors
+- `SemanticModelQuery` resolves internal `Sourced<T>` provenance wrappers into consumer-facing `Resolved<T>` values, with `Stub<T>` for gapped fields
+- Definition convergence kernel — multiple sources (decorators, conventions, config, third-party, builtins) merge per-resource using 5 field-level operators (locked-identity, known-over-unknown, stable-union, patch-object, first-defined)
+- `ResourceView` projection boundary (Sourced → Resolved) as the clean seam between analysis and consumption
+- Per-resource gap tracking with structured reasons, propagated through the catalog and exposed via `SemanticsLookup`
+- Scope completeness propagation — dynamic registration patterns produce scope gaps that affect downstream confidence
+
+**Template pipeline:**
+
+Pipeline stages renamed for clarity: `20-resolve` → `20-link`.
+
+- Link stage resolves elements, attributes, and template controllers against the semantic model with three-way resolution status (resolved / stub / absent)
+- Bind stage validates bindings against resource definitions, resolves value converters and binding behaviors in expressions, computes effective binding modes
+- Gap-aware diagnostics across all link-stage emission sites — confidence qualifies every diagnostic
+- Confidence-based severity demotion — errors demote to warnings when analysis is incomplete
+
+**CursorEntity system:**
+- Unified cursor position → semantic entity resolution
+- Per-position confidence cascade aggregating confidence from all pipeline layers
+- Entity types: element tag, attribute name, bindable, binding command, expression identifier, member access, value converter, binding behavior, template controller contextual variable, let binding, au-slot
+
+**Diagnostics infrastructure:**
+- Diagnostic catalog with typed codes and structured data
+- Policy engine for configurable diagnostic behavior
+- Surface routing (compiler → LSP → VS Code problems panel)
+- Capture-aware bindable suppression
+
+**Incremental invalidation:**
+- `DependencyGraph` tracks input→output relationships across the full pipeline
+- `DepRecorder` wired into every pipeline stage
+- File-scoped discovery replaces full-project recomputation
+
+**Other changes:**
+- Precise spans on DOM nodes and AST identifiers
+- Symbol graph for stable cross-file definition and reference tracking
+- Referential index for cross-domain provenance traversal
+- Policy modules: query policy, resource precedence, rename, refactor, provenance projection, controller dispatch, symbol ID
+- Command and attribute pattern recognition streams with uncertainty gap handling
+- Builtin alignment with runtime metadata (repeat, portal, promise)
+- Path case normalization for Windows compatibility
+
+### @aurelia-ls/language-server
+
+The language server is now a thin LSP protocol adapter. All semantic
+knowledge construction has moved to the semantic workspace.
+
+- Handlers translate LSP requests into workspace queries and workspace results into LSP responses
+- Diagnostics taxonomy bridged into VS Code via diagnostic data records
+- Gap-aware semantic token modifiers forwarded from workspace
+- Workspace change notifications (`onDidChangeSemantics`) for live updates
+- Parity adapter for verification against the semantic authority host
+
+### @aurelia-ls/transform
+
+- Pipeline terminology alignment (resolve → link)
+
+---
+
 ## 0.2.0
 
 *Compiler hardening: config-driven template controllers and Elm-style error handling.*
