@@ -375,9 +375,11 @@ type FlatResourceLike = {
 };
 
 function detectOrigin(res: FlatResourceLike): ResourceOrigin {
+  // Check package first: a resource from an npm package is "package"
+  // regardless of how it was discovered (builtin encoding or source analysis).
+  if (res.package) return "package";
   if (res.origin === "builtin") return "framework";
   if (res.origin === "config") return "framework";
-  if (res.package) return "package";
   return "project";
 }
 
