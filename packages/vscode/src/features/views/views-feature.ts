@@ -21,6 +21,11 @@ export const ViewsFeature: FeatureModule = {
       void explorer.refresh();
     });
 
+    // Refresh when catalog updates (e.g. third-party package scan completes)
+    ctx.lsp.onCatalogUpdated(() => {
+      void explorer.refresh();
+    });
+
     // Refresh command
     store.add(
       ctx.vscode.commands.registerCommand("aurelia.refreshResourceExplorer", () => {

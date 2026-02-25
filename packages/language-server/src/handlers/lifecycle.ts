@@ -110,6 +110,15 @@ export function handleInitialize(ctx: ServerContext, params: InitializeParams): 
   void ctx.workspace.initThirdParty().then(() => {
     ctx.logger.info("[workspace] Third-party init complete, refreshing open documents");
     void refreshAllOpenDocuments(ctx, "change");
+    const snapshot = ctx.workspace.snapshot();
+    const resourceCount = Object.keys(snapshot.catalog?.resources?.elements ?? {}).length
+      + Object.keys(snapshot.catalog?.resources?.attributes ?? {}).length
+      + Object.keys(snapshot.catalog?.resources?.valueConverters ?? {}).length
+      + Object.keys(snapshot.catalog?.resources?.bindingBehaviors ?? {}).length;
+    void ctx.connection.sendNotification("aurelia/catalogUpdated", {
+      fingerprint: snapshot.meta.fingerprint,
+      resourceCount,
+    });
   });
 
   return {

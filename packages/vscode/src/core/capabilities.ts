@@ -22,6 +22,7 @@ export const CustomCapabilityKeys = {
 
 export const NotificationKeys = {
   overlayReady: "overlayReady",
+  catalogUpdated: "catalogUpdated",
 } as const;
 
 export const OptionalLspKeys = {

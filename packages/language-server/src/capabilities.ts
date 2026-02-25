@@ -24,6 +24,7 @@ export const CustomCapabilityKeys = {
 
 export const NotificationKeys = {
   overlayReady: "overlayReady",
+  catalogUpdated: "catalogUpdated",
 } as const;
 
 export const OptionalLspKeys = {
@@ -189,6 +190,7 @@ export function buildCapabilities(ctx: ServerContext): CapabilitiesResponse {
     },
     notifications: {
       overlayReady: true,
+      catalogUpdated: true,
     },
   };
 }
@@ -264,6 +266,7 @@ export function buildCapabilitiesFallback(): CapabilitiesResponse {
     },
     notifications: {
       overlayReady: false,
+      catalogUpdated: false,
     },
   };
 }
