@@ -14,22 +14,25 @@ export const StatusFeature: FeatureModule = {
     // Transition to "discovering" once capabilities are known (server is ready)
     status.discovering();
 
-    let overlayCount = 0;
+    const queryAndUpdateStatus = () => {
+      void ctx.lsp.getResources().then((response) => {
+        if (!response || response.resources.length === 0) return;
+        const gapCount = response.resources.reduce((sum, r) => sum + r.gapCount, 0);
+        status.ready(response.resources.length, response.templateCount, gapCount);
+      });
+    };
 
-    // Refresh counts when workspace semantics change
+    // Eagerly query resources — they may already be available from server init
+    queryAndUpdateStatus();
+
+    // Refresh counts when workspace semantics change (third-party scan, file changes, config)
     ctx.lsp.onWorkspaceChanged((payload) => {
       if (payload.domains.includes("resources")) {
-        void ctx.lsp.getResources().then((response) => {
-          if (!response) return;
-          const gapCount = response.resources.reduce((sum, r) => sum + r.gapCount, 0);
-          status.ready(response.resources.length, response.templateCount, gapCount);
-        });
+        queryAndUpdateStatus();
       }
     });
 
     ctx.lsp.onOverlayReady((payload) => {
-      overlayCount++;
-
       // If coverage data is available (L2 TemplateCoverage), show that
       const coverage = payload.coverage;
       if (coverage && typeof coverage.totalPositions === "number") {
@@ -43,13 +46,8 @@ export const StatusFeature: FeatureModule = {
           },
           payload.uri,
         );
-      } else if (overlayCount === 1 && status.phase !== "ready") {
-        // First overlay notification — query resources to get counts
-        void ctx.lsp.getResources().then((response) => {
-          if (!response) return;
-          const gapCount = response.resources.reduce((sum, r) => sum + r.gapCount, 0);
-          status.ready(response.resources.length, response.templateCount, gapCount);
-        });
+      } else if (status.phase !== "ready") {
+        queryAndUpdateStatus();
       }
 
       ctx.presentation.update({

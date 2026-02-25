@@ -27,7 +27,7 @@ export class StatusService {
   constructor(vscode: VscodeApi = getVscodeApi()) {
     this.#status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
     this.#status.text = "$(loading~spin) Aurelia: starting...";
-    this.#status.command = "aurelia.showOverlay";
+    this.#status.command = "aurelia.findResource";
     this.#status.show();
   }
 

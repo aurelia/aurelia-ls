@@ -75,14 +75,14 @@
     "keybindings": [
       {
         "command": "aurelia.findResource",
-        "key": "ctrl+shift+a",
-        "mac": "cmd+shift+a",
+        "key": "ctrl+alt+a",
+        "mac": "cmd+alt+a",
         "when": "aurelia.active"
       },
       {
         "command": "aurelia.inspectAtCursor",
-        "key": "ctrl+shift+i",
-        "mac": "cmd+shift+i",
+        "key": "ctrl+alt+i",
+        "mac": "cmd+alt+i",
         "when": "aurelia.active && editorTextFocus && editorLangId == html"
       }
     ],

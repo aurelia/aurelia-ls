@@ -182,7 +182,7 @@ export const UserCommandsFeature: FeatureModule = {
       }),
     );
 
-    // "Aurelia: Inspect at Cursor" — full entity resolution via BC-1 inspect()
+    // "Aurelia: Inspect at Cursor" — show entity resolution as notification
     store.add(
       vscode.commands.registerCommand("aurelia.inspectAtCursor", () => {
         void run("inspectAtCursor", async () => {
@@ -194,44 +194,42 @@ export const UserCommandsFeature: FeatureModule = {
           const uri = editor.document.uri.toString();
           const position = editor.selection.active;
 
-          // Try the new inspect API first, fall back to legacy queryAtPosition
           const entity = await ctx.lsp.inspectEntity(uri, position);
 
           if (entity) {
-            const lines: string[] = ["# Aurelia: Inspect at Cursor", ""];
-            lines.push(`**Position:** line ${position.line + 1}, character ${position.character + 1}`);
-            lines.push(`**Entity:** \`${entity.entityKind}\``);
-            lines.push("");
+            const parts: string[] = [`${entity.entityKind}`];
+            if (entity.detail.name) parts[0] += `: ${entity.detail.name}`;
+            parts.push(`confidence: ${entity.confidence.composite}`);
+            if (entity.expressionLabel) parts.push(`expr: ${entity.expressionLabel}`);
+            if (entity.detail.resourceKind) parts.push(`resource: ${entity.detail.resourceKind}`);
+            if (entity.detail.className) parts.push(`class: ${entity.detail.className}`);
 
-            // Confidence signals
-            lines.push("## Confidence", "");
-            lines.push(`| Signal | Level |`);
-            lines.push(`|--------|-------|`);
-            lines.push(`| Resource | ${entity.confidence.resource} |`);
-            lines.push(`| Type | ${entity.confidence.type} |`);
-            lines.push(`| Scope | ${entity.confidence.scope} |`);
-            lines.push(`| Expression | ${entity.confidence.expression} |`);
-            lines.push(`| **Composite** | **${entity.confidence.composite}** |`);
-            lines.push("");
-
-            if (entity.expressionLabel) {
-              lines.push(`**Expression:** \`${entity.expressionLabel}\``);
-            }
-
-            // Detail fields
-            const detailEntries = Object.entries(entity.detail).filter(([k]) => k !== "kind");
-            if (detailEntries.length > 0) {
-              lines.push("", "## Detail", "");
-              for (const [key, value] of detailEntries) {
-                lines.push(`- **${key}:** ${value ?? "—"}`);
+            const message = parts.join(" | ");
+            const action = await vscode.window.showInformationMessage(message, "Show Details");
+            if (action === "Show Details") {
+              const lines: string[] = ["# Aurelia: Inspect at Cursor", ""];
+              lines.push(`**Position:** line ${position.line + 1}, character ${position.character + 1}`);
+              lines.push(`**Entity:** \`${entity.entityKind}\``);
+              lines.push(`**Confidence:** ${entity.confidence.composite}`);
+              lines.push("");
+              lines.push("| Signal | Level |");
+              lines.push("|--------|-------|");
+              lines.push(`| Resource | ${entity.confidence.resource} |`);
+              lines.push(`| Type | ${entity.confidence.type} |`);
+              lines.push(`| Scope | ${entity.confidence.scope} |`);
+              lines.push(`| Expression | ${entity.confidence.expression} |`);
+              lines.push("");
+              if (entity.expressionLabel) lines.push(`**Expression:** \`${entity.expressionLabel}\``);
+              const detailEntries = Object.entries(entity.detail).filter(([k]) => k !== "kind");
+              if (detailEntries.length > 0) {
+                lines.push("", "## Detail", "");
+                for (const [key, value] of detailEntries) {
+                  lines.push(`- **${key}:** ${value ?? "\u2014"}`);
+                }
               }
+              logger.write("info", lines.join("\n"), undefined, { raw: true, force: true });
+              vscode.commands.executeCommand("aurelia.observability.openOutput");
             }
-
-            const doc = await vscode.workspace.openTextDocument({
-              language: "markdown",
-              content: lines.join("\n"),
-            });
-            await vscode.window.showTextDocument(doc, { preview: true });
             return;
           }
 
@@ -245,18 +243,12 @@ export const UserCommandsFeature: FeatureModule = {
             return;
           }
 
-          const lines: string[] = ["# Aurelia: Inspect at Cursor", ""];
-          lines.push(`**Position:** line ${position.line + 1}, character ${position.character + 1}`, "");
-          if (result.node?.kind) lines.push(`- **Node:** ${result.node.kind}`);
-          if (result.controller?.kind) lines.push(`- **Controller:** ${result.controller.kind}`);
-          if (result.expr?.exprId) lines.push(`- **Expression:** \`${result.expr.exprId}\``);
-          if (result.bindables && Array.isArray(result.bindables)) lines.push(`- **Bindables:** ${result.bindables.length}`);
-
-          const doc = await vscode.workspace.openTextDocument({
-            language: "markdown",
-            content: lines.join("\n"),
-          });
-          await vscode.window.showTextDocument(doc, { preview: true });
+          const parts: string[] = [];
+          if (result.node?.kind) parts.push(`node: ${result.node.kind}`);
+          if (result.controller?.kind) parts.push(`controller: ${result.controller.kind}`);
+          if (result.expr?.exprId) parts.push(`expr: ${result.expr.exprId}`);
+          if (result.bindables && Array.isArray(result.bindables)) parts.push(`${result.bindables.length} bindables`);
+          vscode.window.showInformationMessage(parts.length > 0 ? parts.join(" | ") : "No Aurelia entity at this position");
         });
       }),
     );
