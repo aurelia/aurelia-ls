@@ -79,12 +79,13 @@ The goal is that you can trust what the extension tells you.
 
 | Command | Keybinding | Description |
 |---------|------------|-------------|
-| Aurelia: Find Resource | `Ctrl+Alt+A` | Search project resources by name |
-| Aurelia: Inspect at Cursor | `Ctrl+Alt+I` | Show full semantic analysis at cursor |
+| Aurelia: Find Resource | `Ctrl+Alt+A` (`Cmd+Alt+A`) | Search project resources by name |
+| Aurelia: Inspect at Cursor | `Ctrl+Alt+I` (`Cmd+Alt+I`) | Show full semantic analysis at cursor |
 | Aurelia: Show Available Resources | | List all resources visible in current scope |
 | Aurelia: Diagnostics Report | | Summary of current diagnostics |
-| Aurelia: Show Compiled Template | | View TypeScript overlay for template |
-| Aurelia: Show Overlay Mapping | | View expression position mapping |
+| Aurelia: Show Suppressed Diagnostics | | Show diagnostics suppressed by confidence rules |
+| Aurelia: Show Compiled Template | | View TypeScript overlay for template (debug) |
+| Aurelia: Show Overlay Mapping | | View expression position mapping (debug) |
 
 ## Troubleshooting
 
