@@ -578,3 +578,76 @@ describe("diagnostics: ecosystem expression FP prevention", () => {
     expect(falseDiags).toHaveLength(0);
   });
 });
+
+// ============================================================================
+// 11. Severity — every diagnostic has a severity and it matches the regime
+//
+// Regime 1 (grammar-deterministic): always "error" — zero FP risk
+// Regime 2 (catalog-dependent): "warning" or "error" depending on confidence
+// No diagnostic should lack a severity field.
+// ============================================================================
+
+describe("diagnostics: severity", () => {
+  it("every LSP diagnostic has a severity field", () => {
+    for (const diag of lspDiagnostics) {
+      expect(diag.severity, `Diagnostic ${diag.code} at ${diag.span?.start} lacks severity`).toBeDefined();
+      expect(["error", "warning", "info"]).toContain(diag.severity);
+    }
+  });
+
+  it("expression parse error has error severity (regime 1)", async () => {
+    const off = await offset("foo(");
+    const diag = findDiag("aurelia/expr-parse-error", off);
+    expect(diag, "Parse error should exist").toBeDefined();
+    expect(diag!.severity).toBe("error");
+  });
+
+  it("unknown element has warning or error severity (regime 2)", async () => {
+    const off = await offset("missing-component", 1);
+    const diag = findDiag("aurelia/unknown-element", off);
+    expect(diag, "Unknown element should exist").toBeDefined();
+    expect(["error", "warning"]).toContain(diag!.severity);
+  });
+
+  it("unknown bindable has warning or error severity (regime 2)", async () => {
+    const off = await offset("nonexistent-prop", 1);
+    const diag = findDiag("aurelia/unknown-bindable", off);
+    expect(diag, "Unknown bindable should exist").toBeDefined();
+    expect(["error", "warning"]).toContain(diag!.severity);
+  });
+
+  it("unknown command has warning or error severity (regime 2)", async () => {
+    const off = await offset("badcommand", 1);
+    const diag = findDiag("aurelia/unknown-command", off);
+    expect(diag, "Unknown command should exist").toBeDefined();
+    expect(["error", "warning"]).toContain(diag!.severity);
+  });
+});
+
+// ============================================================================
+// 12. Carried data — diagnostic data is unconditionally present
+//
+// The testing thesis warns against conditional guards that skip invariants.
+// Diagnostic data fields are carried properties that must survive the pipeline.
+// ============================================================================
+
+describe("diagnostics: carried data", () => {
+  it("unknown element diagnostic unconditionally has data", async () => {
+    const off = await offset("missing-component", 1);
+    const diag = findDiag("aurelia/unknown-element", off);
+    expect(diag, "Diagnostic should exist").toBeDefined();
+    expect(diag!.data, "Data should be present (not behind a conditional guard)").toBeDefined();
+    const data = diag!.data as { resourceKind?: string; name?: string };
+    expect(data.resourceKind).toBe("custom-element");
+    expect(data.name).toBe("missing-component");
+  });
+
+  it("expression parse error unconditionally has data with recovery flag", async () => {
+    const off = await offset("foo(");
+    const diag = findDiag("aurelia/expr-parse-error", off);
+    expect(diag, "Diagnostic should exist").toBeDefined();
+    expect(diag!.data, "Parse error data should be present").toBeDefined();
+    const data = diag!.data as { recovery?: boolean };
+    expect(data.recovery).toBe(true);
+  });
+});
