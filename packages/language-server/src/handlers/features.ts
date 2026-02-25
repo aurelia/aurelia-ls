@@ -31,6 +31,7 @@ import type {
   WorkspaceDiagnostics,
 } from "@aurelia-ls/semantic-workspace";
 import type { ServerContext } from "../context.js";
+import { handleInlayHints as handleInlayHintsRequest } from "./inlay-hints.js";
 import {
   createCompletionGapMarker,
   mapPrepareRename,
@@ -345,6 +346,9 @@ export function registerFeatureHandlers(ctx: ServerContext): void {
   ctx.connection.onPrepareRename((params) => handlePrepareRename(ctx, params));
   ctx.connection.onRenameRequest((params) => handleRename(ctx, params));
   ctx.connection.onCodeAction((params) => handleCodeAction(ctx, params));
+
+  // Inlay hints — binding mode resolution
+  ctx.connection.languages.inlayHint.on((params) => handleInlayHintsRequest(ctx, params));
 
   ctx.connection.onRequest(SemanticTokensRequest.type, (params) => {
     const response = adaptWorkspaceCall("semanticTokens", () =>

@@ -139,6 +139,7 @@ export function handleInitialize(ctx: ServerContext, params: InitializeParams): 
       referencesProvider: true,
       renameProvider: { prepareProvider: true },
       codeActionProvider: true,
+      inlayHintProvider: true,
       semanticTokensProvider: {
         legend: SEMANTIC_TOKENS_LEGEND,
         full: true,
