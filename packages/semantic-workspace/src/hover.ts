@@ -370,7 +370,6 @@ function appendResourceMeta(
   if (loc) meta.push(`*${loc}*`);
   const bindableList = formatBindableListRich(def.bindables);
   if (bindableList) meta.push(bindableList);
-  meta.push("[$(file-code) Show overlay](command:aurelia.showOverlay)");
 }
 
 function appendConverterMeta(
