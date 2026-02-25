@@ -24,6 +24,7 @@ __au$access<((Omit<(__AU_TTC_VM), 'baz'>) & {} & { baz: NonNullable<(__AU_TTC_VM
 __au$access<((Omit<(__AU_TTC_VM), 'baz'>) & {} & { baz: NonNullable<(__AU_TTC_VM)>['qux'] } & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {}) & (__AU_DollarChangedProps<__AU_TTC_VM>)>(o => o.color);
 __au$access<((Omit<(__AU_TTC_VM), 'baz'>) & {} & { baz: NonNullable<(__AU_TTC_VM)>['qux'] } & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {}) & (__AU_DollarChangedProps<__AU_TTC_VM>)>(o => o.bg);
 __au$access<((Omit<(__AU_TTC_VM), 'baz'>) & {} & { baz: NonNullable<(__AU_TTC_VM)>['qux'] } & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {}) & (__AU_DollarChangedProps<__AU_TTC_VM>)>(o => o.title);
+__au$access<((Omit<(__AU_TTC_VM), 'baz'>) & {} & { baz: NonNullable<(__AU_TTC_VM)>['qux'] } & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {}) & (__AU_DollarChangedProps<__AU_TTC_VM>)>(o => o.items);
 __au$access<((Omit<(__AU_TTC_VM), 'baz'>) & {} & { baz: NonNullable<(__AU_TTC_VM)>['qux'] } & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {}) & (__AU_DollarChangedProps<__AU_TTC_VM>)>(o => o.item.id);
 __au$access<((Omit<(__AU_TTC_VM), 'baz'>) & {} & { baz: NonNullable<(__AU_TTC_VM)>['qux'] } & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {}) & (__AU_DollarChangedProps<__AU_TTC_VM>)>(o => o.header);
 __au$access<((Omit<(__AU_TTC_VM), 'baz'>) & {} & { baz: NonNullable<(__AU_TTC_VM)>['qux'] } & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {}) & (__AU_DollarChangedProps<__AU_TTC_VM>)>(o => o.result);

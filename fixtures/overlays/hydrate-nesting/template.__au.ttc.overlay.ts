@@ -5,6 +5,7 @@ type __AU_DollarChangedProps<T> = { [K in keyof T as K extends `$${infer Name}Ch
 type __AU_TTC_VM = AppVm;
 type __AU_TTC_T0_F0 = (__AU_TTC_VM) & {} & {} & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {};
 __au$access<((__AU_TTC_VM) & {} & {} & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {}) & (__AU_DollarChangedProps<__AU_TTC_VM>)>(o => o.cardTitle);
+__au$access<((__AU_TTC_VM) & {} & {} & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {}) & (__AU_DollarChangedProps<__AU_TTC_VM>)>(o => o.items);
 type __AU_TTC_T0_F1 = (Omit<(Omit<(__AU_TTC_VM) & {} & {} & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {}, '$parent' | '$vm' | '$this'>), 'item' | '$index' | '$first' | '$last' | '$even' | '$odd' | '$length' | '$middle' | '$previous'>) & {} & { item: (CollectionElement<NonNullable<(__AU_TTC_VM)>['items']>); $index: number; $first: boolean; $last: boolean; $even: boolean; $odd: boolean; $length: number; $middle: boolean; $previous: unknown } & { $parent: (__AU_TTC_VM) & {} & {} & { $parent: unknown } & { $vm: (__AU_TTC_VM) } & {} } & { $vm: (__AU_TTC_VM) } & {};
 __au$access<(__AU_TTC_T0_F1) & (__AU_DollarChangedProps<__AU_TTC_VM>) & { $event: MouseEvent }>(o => o.select(o.item));
 __au$access<(__AU_TTC_T0_F1) & (__AU_DollarChangedProps<__AU_TTC_VM>)>(o => o.item.label);
