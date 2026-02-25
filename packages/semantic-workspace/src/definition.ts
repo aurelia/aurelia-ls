@@ -404,6 +404,19 @@ export function collectTemplateResourceReferences(options: {
   const domIndex = buildDomIndex(compilation.ir.templates ?? []);
   const documentUri = options.documentUri ?? null;
 
+  // Local template symbolId cache: ensures all usages of the same local
+  // template share a single symbolId within this template compilation.
+  const localSymbolIds = new Map<string, SymbolId>();
+  const localSymbolIdFor = (name: string): SymbolId => {
+    let sid = localSymbolIds.get(name);
+    if (!sid) {
+      const file = documentUri ?? "unknown";
+      sid = createLocalSymbolId({ file: String(file), frame: "root", name });
+      localSymbolIds.set(name, sid);
+    }
+    return sid;
+  };
+
   for (let ti = 0; ti < compilation.linked.templates.length; ti += 1) {
     const template = compilation.linked.templates[ti];
     const domTemplate = compilation.ir.templates?.[ti];
@@ -415,7 +428,24 @@ export function collectTemplateResourceReferences(options: {
       const entry = row.node.custom?.def
         ? findEntry(resources.elements, row.node.custom.def.name, row.node.custom.def.file ?? null)
         : null;
-      if (!entry?.symbolId) continue;
+      if (!entry?.symbolId) {
+        // Local template CE: has a resolved def but no entry in the resource
+        // index (local templates are compiled from the template, not discovered
+        // through class recognition).
+        if (row.node.custom?.def) {
+          const localName = row.node.custom.def.name;
+          const localSid = localSymbolIdFor(localName);
+          if (domNode.tagLoc) {
+            const loc = spanLocation(domNode.tagLoc, documentUri);
+            if (loc) results.push({ kind: "text", referenceKind: "tag-name", nameForm: "kebab-case", ...loc, symbolId: localSid, nodeId: row.target });
+          }
+          if (domNode.closeTagLoc) {
+            const loc = spanLocation(domNode.closeTagLoc, documentUri);
+            if (loc) results.push({ kind: "text", referenceKind: "close-tag-name", nameForm: "kebab-case", ...loc, symbolId: localSid, nodeId: row.target });
+          }
+        }
+        continue;
+      }
       // Emit separate open and close tag references with distinct referenceKinds.
       if (domNode.tagLoc) {
         const loc = spanLocation(domNode.tagLoc, documentUri);
@@ -425,6 +455,22 @@ export function collectTemplateResourceReferences(options: {
         const loc = spanLocation(domNode.closeTagLoc, documentUri);
         if (loc) results.push({ kind: "text", referenceKind: "close-tag-name", nameForm: "kebab-case", ...loc, symbolId: entry.symbolId, nodeId: row.target });
       }
+    }
+  }
+
+  // as-element attribute value references: walk IR DOM for as-element
+  // attributes and emit references at the value span.
+  for (const irTemplate of compilation.ir.templates ?? []) {
+    collectAsElementValueReferences(irTemplate.dom, resources, documentUri, preferRoots, results);
+  }
+
+  // Local template declaration references: for each local template that
+  // produced usage references above, scan the IR DOM for the corresponding
+  // <template as-custom-element="name"> declaration and emit a declaration
+  // reference with the same symbolId.
+  if (localSymbolIds.size > 0) {
+    for (const irTemplate of compilation.ir.templates ?? []) {
+      collectLocalTemplateDeclarationReferences(irTemplate.dom, localSymbolIds, documentUri, results);
     }
   }
 
@@ -588,6 +634,88 @@ function isNavigableSourceLocation(loc: SourceLocation): boolean {
   if (loc.pos === 0 && loc.end === 0) return false;
   if (!loc.file || !loc.file.match(/\.[a-z]+$/i)) return false;
   return true;
+}
+
+// ============================================================================
+// as-element + local template reference helpers
+// ============================================================================
+
+type IrDomNode = {
+  kind: string;
+  tag?: string;
+  attrs?: readonly { name: string; value: string | null; loc?: SourceSpan | null; valueLoc?: SourceSpan | null }[];
+  children?: readonly IrDomNode[];
+};
+
+/**
+ * Walk the IR DOM tree for `as-element="..."` attributes and emit reference
+ * sites at the attribute value spans. This makes as-element positions
+ * first-class reference sites — the as-element value position participates
+ * in the same symbolId-based reference set as the target CE's tag usages.
+ */
+function collectAsElementValueReferences(
+  node: IrDomNode,
+  resources: ResourceDefinitionIndex,
+  documentUri: DocumentUri | null,
+  preferRoots: readonly string[],
+  results: TextReferenceSite[],
+): void {
+  if (node.attrs) {
+    for (const attr of node.attrs) {
+      if (attr.name === "as-element" && attr.value) {
+        const ceName = attr.value.toLowerCase();
+        const entry = findEntry(resources.elements, ceName, null, preferRoots);
+        if (entry?.symbolId && attr.valueLoc) {
+          const loc = spanLocation(attr.valueLoc, documentUri);
+          if (loc) results.push({ kind: "text", referenceKind: "as-element-value", nameForm: "kebab-case", ...loc, symbolId: entry.symbolId });
+        }
+      }
+    }
+  }
+  if (node.children) {
+    for (const child of node.children) {
+      collectAsElementValueReferences(child, resources, documentUri, preferRoots, results);
+    }
+  }
+}
+
+/**
+ * Scan the IR DOM for `<template as-custom-element="name">` nodes and emit
+ * declaration references for local templates. These declarations are skipped
+ * during IR lowering (no linked row exists) but the original DOM nodes
+ * survive in the IR templates.
+ *
+ * This function only emits references for names that appear in the
+ * localSymbolIds map — i.e., names for which usage references were already
+ * collected in the CE tag loop.
+ */
+function collectLocalTemplateDeclarationReferences(
+  node: IrDomNode,
+  localSymbolIds: Map<string, SymbolId>,
+  documentUri: DocumentUri | null,
+  results: TextReferenceSite[],
+): void {
+  if (node.kind === "template" && node.attrs) {
+    for (const attr of node.attrs) {
+      if (attr.name === "as-custom-element" && attr.value) {
+        const localName = attr.value.toLowerCase();
+        const sid = localSymbolIds.get(localName);
+        if (sid) {
+          // Emit reference at the as-custom-element value span (the name declaration)
+          const span = attr.valueLoc ?? attr.loc;
+          if (span) {
+            const loc = spanLocation(span, documentUri);
+            if (loc) results.push({ kind: "text", referenceKind: "local-template-attr", nameForm: "kebab-case", ...loc, symbolId: sid });
+          }
+        }
+      }
+    }
+  }
+  if (node.children) {
+    for (const child of node.children) {
+      collectLocalTemplateDeclarationReferences(child, localSymbolIds, documentUri, results);
+    }
+  }
 }
 
 function findRow(

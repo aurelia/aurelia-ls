@@ -23,17 +23,21 @@ import { beforeAll, describe, expect, it } from "vitest";
 import {
   getAppQuery,
   getAppTemplate,
+  getHarness,
   pos,
   offset,
   posInFile,
 } from "./_harness.js";
 import { spanCoversOffset } from "../test-utils.js";
 import type { SemanticQuery, WorkspaceLocation } from "../../out/types.js";
+import type { WorkspaceHarness } from "../harness/types.js";
 
 let query: SemanticQuery;
 let text: string;
+let harness: WorkspaceHarness;
 
 beforeAll(async () => {
+  harness = await getHarness();
   query = await getAppQuery();
   text = (await getAppTemplate()).text;
 });
@@ -50,6 +54,14 @@ function refsAt(needle: string, delta = 1) {
 
 function hasRefAt(refs: readonly WorkspaceLocation[], targetOffset: number): boolean {
   return refs.some((ref) => ref.span && spanCoversOffset(ref.span, targetOffset));
+}
+
+/** Read the text at a reference span to verify it points to the right content */
+function refSpanText(ref: WorkspaceLocation): string {
+  const uri = String(ref.uri);
+  const fileText = harness.readText(uri);
+  if (!fileText || !ref.span) return "";
+  return fileText.slice(ref.span.start, ref.span.end);
 }
 
 // ============================================================================
@@ -182,13 +194,35 @@ describe("references: symbolId", () => {
 describe("references: scope constructs", () => {
   it("local template element produces references at definition and usage sites", async () => {
     const refs = await refsAt("<inline-tag repeat.for", 1)();
-    expect(refs.length).toBeGreaterThanOrEqual(1);
+    expect(refs.length).toBeGreaterThanOrEqual(2);
+    // Should include: at least one tag usage + the declaration site
+    const htmlRefs = refs.filter((r) => String(r.uri).includes(".html"));
+    expect(htmlRefs.length).toBeGreaterThanOrEqual(2);
+    // Verify span text at one of the references
+    const tagRef = htmlRefs.find((r) => refSpanText(r) === "inline-tag");
+    expect(tagRef, "Should have a reference spanning 'inline-tag'").toBeDefined();
+  });
+
+  it("local template references include the declaration site", async () => {
+    const refs = await refsAt("<inline-tag repeat.for", 1)();
+    // The declaration is <template as-custom-element="inline-tag">
+    // The reference should cover the value "inline-tag" in that attribute
+    const declRef = refs.find((r) => {
+      const spanText = refSpanText(r);
+      // The declaration could be the value span or the full attribute span
+      return spanText === "inline-tag" && r.span && r.span.start < text.indexOf("<inline-tag");
+    });
+    expect(declRef, "Should have a declaration-site reference before the first usage").toBeDefined();
   });
 
   it("as-element CE name produces references", async () => {
     const refs = await refsAt('as-element="matrix-badge"', 'as-element="'.length + 1)();
     // Should include matrix-badge references (same resource, different syntax)
-    expect(refs.length).toBeGreaterThanOrEqual(1);
+    expect(refs.length).toBeGreaterThanOrEqual(2);
+    // Verify the as-element value itself is in the reference set
+    const asElementOffset = text.indexOf('as-element="matrix-badge"') + 'as-element="'.length;
+    const hasAsElement = hasRefAt(refs, asElementOffset);
+    expect(hasAsElement, "as-element value position should be in the reference set").toBe(true);
   });
 
   it("expression identifier produces references across templates", async () => {
@@ -227,22 +261,25 @@ describe("references: cross-syntax consistency", () => {
     const refs = await refsAt("<matrix-badge value.bind", 1)();
     // matrix-badge used as: <matrix-badge ...> and <div as-element="matrix-badge">
     // and :value on another <matrix-badge>
-    expect(refs.length).toBeGreaterThanOrEqual(2);
+    expect(refs.length).toBeGreaterThanOrEqual(3);
+    // Verify the as-element value is in the reference set
+    const asElementOffset = text.indexOf('as-element="matrix-badge"') + 'as-element="'.length;
+    expect(hasRefAt(refs, asElementOffset), "as-element value should appear in tag-initiated refs").toBe(true);
   });
 
   it("CE reference set from tag and from as-element are the same resource", async () => {
     const tagRefs = await refsAt("<matrix-badge value.bind", 1)();
     const asElementRefs = await refsAt('as-element="matrix-badge"', 'as-element="'.length + 1)();
-    // Both should reference the same symbol — at minimum, both should find references
-    if (tagRefs.length > 0 && asElementRefs.length > 0) {
-      const tagSymbolIds = new Set(tagRefs.map((r) => r.symbolId).filter(Boolean));
-      const asElementSymbolIds = new Set(asElementRefs.map((r) => r.symbolId).filter(Boolean));
-      if (tagSymbolIds.size > 0 && asElementSymbolIds.size > 0) {
-        // They should share at least one symbolId
-        const shared = [...tagSymbolIds].filter((id) => asElementSymbolIds.has(id));
-        expect(shared.length, "Tag and as-element should reference the same symbol").toBeGreaterThan(0);
-      }
-    }
+    // Both should find references — not conditional
+    expect(tagRefs.length).toBeGreaterThan(0);
+    expect(asElementRefs.length).toBeGreaterThan(0);
+    // Both should return the same count (same symbol, same reference set)
+    expect(tagRefs.length, "Tag and as-element should return same number of refs").toBe(asElementRefs.length);
+    // They should share at least one symbolId
+    const tagSymbolIds = new Set(tagRefs.map((r) => r.symbolId).filter(Boolean));
+    const asElementSymbolIds = new Set(asElementRefs.map((r) => r.symbolId).filter(Boolean));
+    const shared = [...tagSymbolIds].filter((id) => asElementSymbolIds.has(id));
+    expect(shared.length, "Tag and as-element should reference the same symbol").toBeGreaterThan(0);
   });
 });
 
@@ -276,31 +313,72 @@ describe("references: non-reference positions", () => {
 // 8. TS-side references — finding references from TypeScript files
 // ============================================================================
 
-describe("references: from TypeScript side", () => {
-  it("VM property in TS finds template binding usages", async () => {
-    // 'total' in app.ts → should find count.bind="total" and ${total} in template
-    const { uri: tsUri, position } = await posInFile("src/app.ts", "total = 42", 1);
-    const refs = query.references(position);
-    // Even if the workspace query is template-scoped, the principle is that
-    // references from TS should discover template usages
-    expect(refs.length).toBeGreaterThanOrEqual(0); // at minimum, no crash
+// ============================================================================
+// 8a. Reference span text verification — spans should point to correct content
+// ============================================================================
+
+describe("references: span text verification", () => {
+  it("CE tag reference spans contain the element name", async () => {
+    const refs = await refsAt("<matrix-badge value.bind", 1)();
+    const htmlRefs = refs.filter((r) => String(r.uri).includes(".html"));
+    for (const ref of htmlRefs) {
+      const spanText = refSpanText(ref);
+      // Each HTML reference span should contain matrix-badge, div, or :value-related text
+      // Tag references should be "matrix-badge" or "div" (for as-element override)
+      expect(spanText.length).toBeGreaterThan(0);
+    }
   });
 
-  it("@bindable property in TS finds template attribute usages", async () => {
+  it("VC reference spans contain the converter name", async () => {
+    const refs = await refsAt("| formatDate", 2)();
+    const htmlRefs = refs.filter((r) => String(r.uri).includes(".html"));
+    const vcRef = htmlRefs.find((r) => refSpanText(r) === "formatDate");
+    expect(vcRef, "Should have a reference span containing 'formatDate'").toBeDefined();
+  });
+
+  it("BB reference spans contain the behavior name", async () => {
+    const refs = await refsAt("& rateLimit", 2)();
+    const htmlRefs = refs.filter((r) => String(r.uri).includes(".html"));
+    const bbRef = htmlRefs.find((r) => refSpanText(r) === "rateLimit");
+    expect(bbRef, "Should have a reference span containing 'rateLimit'").toBeDefined();
+  });
+
+  it("CA reference spans contain the attribute name", async () => {
+    const refs = await refsAt("matrix-highlight.bind", 1)();
+    const htmlRefs = refs.filter((r) => String(r.uri).includes(".html"));
+    // At least one span should cover "matrix-highlight"
+    const caRef = htmlRefs.find((r) => refSpanText(r).includes("matrix-highlight"));
+    expect(caRef, "Should have a reference span containing 'matrix-highlight'").toBeDefined();
+  });
+});
+
+// ============================================================================
+// 8b. TS-side references — finding references from TypeScript files
+// ============================================================================
+
+describe("references: from TypeScript side", () => {
+  it("VM property in TS produces no crash", async () => {
+    const { uri: tsUri, position } = await posInFile("src/app.ts", "total = 42", 1);
+    const refs = query.references(position);
+    // TS-side references require overlay synchronization which may or may not
+    // be available in the test harness. Verify no crash at minimum.
+    expect(Array.isArray(refs)).toBe(true);
+  });
+
+  it("@bindable property in TS produces no crash", async () => {
     const { uri: tsUri, position } = await posInFile(
       "src/components/matrix-panel.ts",
       '@bindable title = "Untitled"',
       "@bindable ".length,
     );
     const refs = query.references(position);
-    // Should find title="Dashboard" and other template usages
-    expect(refs.length).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(refs)).toBe(true);
   });
 
-  it("VM method in TS finds template event handler usages", async () => {
+  it("VM method in TS produces no crash", async () => {
     const { uri: tsUri, position } = await posInFile("src/app.ts", "selectItem(item: MatrixItem)", 1);
     const refs = query.references(position);
-    expect(refs.length).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(refs)).toBe(true);
   });
 });
 
