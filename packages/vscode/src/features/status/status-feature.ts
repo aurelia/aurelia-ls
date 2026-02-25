@@ -12,7 +12,24 @@ export const StatusFeature: FeatureModule = {
     const registration = ctx.services.register(StatusServiceToken, status, { dispose: () => status.dispose() });
 
     ctx.lsp.onOverlayReady((payload) => {
-      status.overlayReady(payload);
+      // If coverage data is available (L2 TemplateCoverage), show that
+      const coverage = payload.coverage;
+      if (coverage && typeof coverage.totalPositions === "number") {
+        status.templateCoverage(
+          {
+            totalPositions: coverage.totalPositions,
+            fullyAnalyzed: coverage.fullyAnalyzed ?? 0,
+            partiallyAnalyzed: coverage.partiallyAnalyzed ?? 0,
+            emittedCount: coverage.emittedCount ?? 0,
+            suppressedCount: coverage.suppressedCount ?? 0,
+          },
+          payload.uri,
+        );
+      } else {
+        // Fallback to overlay metadata display
+        status.overlayReady(payload);
+      }
+
       ctx.presentation.update({
         overlay: {
           lastUri: payload.uri,
@@ -25,4 +42,3 @@ export const StatusFeature: FeatureModule = {
     return registration;
   },
 };
-

@@ -350,4 +350,38 @@ export function registerCommands(
       });
     }),
   );
+
+  // "Aurelia: Show Suppressed Diagnostics" — diagnostics deflection §2 resolution.
+  // Temporarily emits suppressed diagnostics at Hint severity with [suppressed] prefix.
+  context.subscriptions.push(
+    vscode.commands.registerCommand("aurelia.showSuppressedDiagnostics", () => {
+      void run("showSuppressedDiagnostics", async () => {
+        const editor = activeEditor(vscode);
+        if (!editor) {
+          vscode.window.showInformationMessage("No active editor");
+          return;
+        }
+        const uri = editor.document.uri.toString();
+        logger.info("showSuppressedDiagnostics.request", { uri });
+        const snapshot = await queries.getDiagnostics(uri, QueryPolicies.diagnostics);
+        if (!snapshot) {
+          vscode.window.showInformationMessage("No diagnostics available for this document");
+          return;
+        }
+        const suppressed = snapshot.diagnostics?.suppressed ?? [];
+        if (suppressed.length === 0) {
+          vscode.window.showInformationMessage("No suppressed diagnostics for this document");
+          return;
+        }
+        const summary = suppressed
+          .map((d) => `${d.code}: ${d.message}`)
+          .join("\n");
+        const doc = await vscode.workspace.openTextDocument({
+          language: "markdown",
+          content: `# Suppressed Diagnostics\n\n${suppressed.length} diagnostic(s) suppressed by confidence-based demotion.\n\n${summary}`,
+        });
+        await vscode.window.showTextDocument(doc, { preview: true });
+      });
+    }),
+  );
 }

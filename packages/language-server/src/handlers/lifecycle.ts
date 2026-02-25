@@ -117,15 +117,19 @@ export function handleInitialize(ctx: ServerContext, params: InitializeParams): 
       textDocumentSync: TextDocumentSyncKind.Incremental,
       completionProvider: { triggerCharacters: ["<", " ", ".", ":", "@", "$", "{"] },
       hoverProvider: true,
-      definitionProvider: true,
+      definitionProvider: { workDoneProgress: false },
       referencesProvider: true,
-      renameProvider: true,
+      renameProvider: { prepareProvider: true },
       codeActionProvider: true,
       semanticTokensProvider: {
         legend: SEMANTIC_TOKENS_LEGEND,
         full: true,
-        // delta: true,  // TODO: Enable incremental updates for performance
       },
+      // Post-PR-19 feature stubs — uncomment when workspace adds support:
+      // documentSymbolProvider: true,
+      // codeLensProvider: { resolveProvider: false },
+      // inlayHintProvider: { resolveProvider: false },
+      // codeActionProvider: { resolveProvider: true },
     },
   };
 }

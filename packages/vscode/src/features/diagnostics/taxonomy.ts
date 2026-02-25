@@ -1,6 +1,7 @@
 import type {
   DiagnosticActionability,
   DiagnosticCategory,
+  DiagnosticConfidence,
   DiagnosticImpact,
 } from "@aurelia-ls/compiler";
 
@@ -37,11 +38,20 @@ const DIAGNOSTIC_CATEGORIES = new Set<DiagnosticCategory>([
   "legacy",
 ]);
 
+const DIAGNOSTIC_CONFIDENCES = new Set<DiagnosticConfidence>([
+  "exact",
+  "high",
+  "partial",
+  "low",
+  "manual",
+]);
+
 export interface AureliaDiagnosticTaxonomyPayload {
   schema: typeof AURELIA_LSP_DIAGNOSTIC_TAXONOMY_SCHEMA;
   impact?: DiagnosticImpact;
   actionability?: DiagnosticActionability;
   category?: DiagnosticCategory;
+  confidence?: DiagnosticConfidence;
 }
 
 export interface MiddlewareDiagnosticLike {
@@ -75,6 +85,12 @@ function asCategory(value: unknown): DiagnosticCategory | undefined {
     : undefined;
 }
 
+function asConfidence(value: unknown): DiagnosticConfidence | undefined {
+  return typeof value === "string" && DIAGNOSTIC_CONFIDENCES.has(value as DiagnosticConfidence)
+    ? value as DiagnosticConfidence
+    : undefined;
+}
+
 export function readLspDiagnosticTaxonomy(data: unknown): AureliaDiagnosticTaxonomyPayload | null {
   const root = asRecord(data);
   if (!root) return null;
@@ -97,6 +113,9 @@ export function readLspDiagnosticTaxonomy(data: unknown): AureliaDiagnosticTaxon
   const category = asCategory(diagnostics.category);
   if (category) payload.category = category;
 
+  const confidence = asConfidence(diagnostics.confidence);
+  if (confidence) payload.confidence = confidence;
+
   return payload;
 }
 
@@ -105,6 +124,7 @@ export function formatLspDiagnosticTaxonomySummary(payload: AureliaDiagnosticTax
   if (payload.impact) segments.push(`impact=${payload.impact}`);
   if (payload.actionability) segments.push(`actionability=${payload.actionability}`);
   if (payload.category) segments.push(`category=${payload.category}`);
+  if (payload.confidence) segments.push(`confidence=${payload.confidence}`);
   if (segments.length === 0) return null;
   return `${AURELIA_DIAGNOSTIC_SUMMARY_PREFIX} ${segments.join(" | ")}`;
 }

@@ -16,6 +16,13 @@ export type OverlayReadyPayload = {
   overlayLen?: number;
   diags?: number;
   meta?: unknown;
+  coverage?: {
+    totalPositions?: number;
+    fullyAnalyzed?: number;
+    partiallyAnalyzed?: number;
+    emittedCount?: number;
+    suppressedCount?: number;
+  };
 };
 
 export type DiagnosticsSpan = SourceSpan;

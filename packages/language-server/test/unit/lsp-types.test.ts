@@ -164,6 +164,7 @@ describe("mapWorkspaceDiagnostics", () => {
           impact: "degraded",
           actionability: "manual",
           category: "toolchain",
+          confidence: "high",
         },
       },
     });
@@ -201,6 +202,7 @@ describe("mapWorkspaceDiagnostics", () => {
           impact: "degraded",
           actionability: "manual",
           category: "toolchain",
+          confidence: "partial",
         },
       },
     });

@@ -1,6 +1,7 @@
 // Canonical test-facing exports for language-server internals.
 // Keeps test imports package-based instead of reaching into ../../src paths.
 export * from "./context.js";
+export * from "./feature-response.js";
 export * from "./handlers/custom.js";
 export * from "./handlers/features.js";
 export * from "./handlers/lifecycle.js";
