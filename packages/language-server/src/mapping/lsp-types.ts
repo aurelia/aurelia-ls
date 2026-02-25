@@ -340,10 +340,14 @@ export function mapWorkspaceLocationsAsLinks(
   for (const loc of locs) {
     const range = spanToRange({ uri: loc.uri, span: loc.span }, lookupText);
     if (!range) continue;
+    // Use selectionSpan for precise name highlighting when available (BC-2)
+    const selectionRange = loc.selectionSpan
+      ? spanToRange({ uri: loc.uri, span: loc.selectionSpan }, lookupText) ?? range
+      : range;
     const link: LocationLink = {
       targetUri: toLspUri(loc.uri),
       targetRange: range,
-      targetSelectionRange: range,
+      targetSelectionRange: selectionRange,
     };
     if (originRange) link.originSelectionRange = originRange;
     mapped.push(link);

@@ -5,8 +5,9 @@
  * the LSP connection. Errors are logged and graceful fallbacks are returned.
  */
 import type { Position } from "vscode-languageserver/node.js";
-import { canonicalDocumentUri } from "@aurelia-ls/compiler";
+import { canonicalDocumentUri, computeBuiltinDiscrepancies } from "@aurelia-ls/compiler";
 import type {
+  BuiltinDiscrepancy,
   DiagnosticActionability,
   DiagnosticCategory,
   DiagnosticImpact,
@@ -238,9 +239,12 @@ export type ResourceExplorerItem = {
   bindableCount: number;
   bindables: ResourceExplorerBindable[];
   gapCount: number;
+  gapIntrinsicCount: number;
   origin: ResourceOrigin;
   scope: ResourceScope;
   scopeOwner?: string;
+  declarationForm?: string;
+  staleness?: { fieldsFromAnalysis: number; membersNotInSemantics: number };
 };
 
 export type ResourceExplorerResponse = {
@@ -257,35 +261,47 @@ export function handleGetResources(ctx: ServerContext): ResourceExplorerResponse
     const semantics = snapshot.semantics;
     const graph = snapshot.resourceGraph;
 
-    // Build origin index from ProjectSemantics defs (carry Sourced<T> with origin)
-    const builtinNames = buildBuiltinIndex(semantics);
-
     // Build scope index from ResourceGraph
     const scopeIndex = buildScopeIndex(graph);
+
+    // Compute builtin staleness (encoding vs analysis discrepancies)
+    let discrepancies: Map<string, BuiltinDiscrepancy> | null = null;
+    try {
+      discrepancies = computeBuiltinDiscrepancies(semantics);
+    } catch { /* may fail if semantics shape is unexpected */ }
 
     const collections = catalog.resources;
     const resources: ResourceExplorerItem[] = [];
 
     // Walk elements
     for (const [name, res] of Object.entries(collections.elements)) {
-      resources.push(mapCatalogResource(name, "custom-element", res, catalog, builtinNames, scopeIndex));
+      resources.push(mapCatalogResource(name, "custom-element", res, catalog, scopeIndex, discrepancies));
     }
-    // Walk attributes (includes template controllers flagged as isTemplateController)
+    // Walk attributes — skip template controllers (they appear in controllers too)
     for (const [name, res] of Object.entries(collections.attributes)) {
-      const kind = res.isTemplateController ? "template-controller" : "custom-attribute";
-      resources.push(mapCatalogResource(name, kind, res, catalog, builtinNames, scopeIndex));
+      if (res.isTemplateController) continue;
+      resources.push(mapCatalogResource(name, "custom-attribute", res, catalog, scopeIndex, discrepancies));
     }
-    // Walk controllers
+    // Walk controllers (authoritative source for TCs — avoids duplicates with attributes)
+    const seenControllers = new Set<string>();
     for (const [name, res] of Object.entries(collections.controllers)) {
-      resources.push(mapCatalogResource(name, "template-controller", res, catalog, builtinNames, scopeIndex));
+      if (seenControllers.has(name)) continue;
+      seenControllers.add(name);
+      resources.push(mapCatalogResource(name, "template-controller", res, catalog, scopeIndex, discrepancies));
+    }
+    // Pick up any TCs that are only in attributes (not in controllers)
+    for (const [name, res] of Object.entries(collections.attributes)) {
+      if (!res.isTemplateController) continue;
+      if (seenControllers.has(name)) continue;
+      resources.push(mapCatalogResource(name, "template-controller", res, catalog, scopeIndex, discrepancies));
     }
     // Walk value converters
     for (const [name, res] of Object.entries(collections.valueConverters)) {
-      resources.push(mapCatalogResource(name, "value-converter", res, catalog, builtinNames, scopeIndex));
+      resources.push(mapCatalogResource(name, "value-converter", res, catalog, scopeIndex, discrepancies));
     }
     // Walk binding behaviors
     for (const [name, res] of Object.entries(collections.bindingBehaviors)) {
-      resources.push(mapCatalogResource(name, "binding-behavior", res, catalog, builtinNames, scopeIndex));
+      resources.push(mapCatalogResource(name, "binding-behavior", res, catalog, scopeIndex, discrepancies));
     }
 
     // Sort: by origin (project first, package second, framework last), then by kind, then alphabetically
@@ -311,31 +327,6 @@ export function handleGetResources(ctx: ServerContext): ResourceExplorerResponse
     ctx.logger.error(`[getResources] failed: ${formatError(e)}`);
     return { fingerprint: "", resources: [], templateCount: 0, inlineTemplateCount: 0 };
   }
-}
-
-/**
- * Build a set of resource names whose defs have origin === 'builtin' in ProjectSemantics.
- * The Sourced<T> wrappers on the defs carry the origin that the flattened catalog strips.
- */
-function buildBuiltinIndex(
-  semantics: import("@aurelia-ls/compiler").ProjectSemantics,
-): Set<string> {
-  const builtins = new Set<string>();
-  const defMaps = [semantics.elements, semantics.attributes, semantics.controllers,
-    semantics.valueConverters, semantics.bindingBehaviors];
-  for (const defMap of defMaps) {
-    if (!defMap) continue;
-    for (const [, def] of Object.entries(defMap)) {
-      if (def && typeof def === "object" && "className" in def) {
-        const className = def.className as { origin?: string };
-        if (className?.origin === "builtin") {
-          const name = "name" in def ? (def.name as { value?: string })?.value : undefined;
-          if (name) builtins.add(name);
-        }
-      }
-    }
-  }
-  return builtins;
 }
 
 type ScopeEntry = { scope: ResourceScope; scopeOwner?: string };
@@ -370,12 +361,20 @@ function buildScopeIndex(
   return index;
 }
 
-function detectOrigin(
-  name: string,
-  res: { file?: string; package?: string },
-  builtinNames: Set<string>,
-): ResourceOrigin {
-  if (builtinNames.has(name)) return "framework";
+type FlatResourceLike = {
+  className?: string;
+  file?: string;
+  package?: string;
+  origin?: import("@aurelia-ls/compiler").ResourceOrigin;
+  declarationForm?: import("@aurelia-ls/compiler").DeclarationForm;
+  gaps?: import("@aurelia-ls/compiler").ResourceGapSummary;
+  bindables?: Readonly<Record<string, import("@aurelia-ls/compiler").Bindable>>;
+};
+
+function detectOrigin(res: FlatResourceLike): ResourceOrigin {
+  // Use direct origin field from BC-3 when available
+  if (res.origin === "builtin") return "framework";
+  if (res.origin === "config") return "framework";
   if (res.package) return "package";
   return "project";
 }
@@ -383,10 +382,10 @@ function detectOrigin(
 function mapCatalogResource(
   name: string,
   kind: string,
-  res: { className?: string; file?: string; package?: string; bindables?: Readonly<Record<string, import("@aurelia-ls/compiler").Bindable>> },
+  res: FlatResourceLike,
   catalog: import("@aurelia-ls/compiler").ResourceCatalog,
-  builtinNames: Set<string>,
   scopeIndex: Map<string, ScopeEntry>,
+  discrepancies: Map<string, BuiltinDiscrepancy> | null,
 ): ResourceExplorerItem {
   const bindables: ResourceExplorerBindable[] = [];
   if (res.bindables) {
@@ -400,12 +399,20 @@ function mapCatalogResource(
       });
     }
   }
-  const gapKey = `${kind}:${name}`;
-  const gaps = catalog.gapsByResource?.[gapKey] ?? [];
-  const origin = detectOrigin(name, res, builtinNames);
+
+  // Use direct gaps from BC-3 when available, fall back to catalog cross-reference
+  const gapTotal = res.gaps?.total ?? 0;
+  const gapIntrinsic = res.gaps?.intrinsic ?? 0;
+  const fallbackGapCount = gapTotal > 0 ? gapTotal : (() => {
+    const gapKey = `${kind}:${name}`;
+    const catalogGaps = catalog.gapsByResource?.[gapKey] ?? [];
+    return Array.isArray(catalogGaps) ? catalogGaps.length : 0;
+  })();
+
+  const origin = detectOrigin(res);
   const scopeEntry = scopeIndex.get(name);
 
-  return {
+  const item: ResourceExplorerItem = {
     name,
     kind,
     className: res.className,
@@ -413,11 +420,99 @@ function mapCatalogResource(
     package: res.package,
     bindableCount: bindables.length,
     bindables,
-    gapCount: Array.isArray(gaps) ? gaps.length : 0,
+    gapCount: fallbackGapCount,
+    gapIntrinsicCount: gapIntrinsic,
     origin,
     scope: scopeEntry ? "local" : "global",
     scopeOwner: scopeEntry?.scopeOwner,
+    declarationForm: res.declarationForm,
   };
+
+  // Attach staleness for builtin resources
+  if (origin === "framework" && discrepancies) {
+    const disc = discrepancies.get(name);
+    if (disc) {
+      item.staleness = {
+        fieldsFromAnalysis: disc.fieldsFromAnalysis.length,
+        membersNotInSemantics: disc.membersNotInSemantics.length,
+      };
+    }
+  }
+
+  return item;
+}
+
+export type InspectEntityResponse = {
+  uri: string;
+  entityKind: string;
+  confidence: {
+    resource: string;
+    type: string;
+    scope: string;
+    expression: string;
+    composite: string;
+  };
+  expressionLabel?: string;
+  exprId?: string | number;
+  nodeId?: string | number;
+  detail: Record<string, unknown>;
+} | null;
+
+export function handleInspectEntity(
+  ctx: ServerContext,
+  params: { uri: string; position: Position },
+): InspectEntityResponse {
+  try {
+    const uri = params?.uri;
+    if (!uri || !params.position) return null;
+    const doc = ctx.ensureProgramDocument(uri);
+    if (!doc) return null;
+    const canonical = canonicalDocumentUri(uri);
+    const result = ctx.workspace.query(canonical.uri).inspect(params.position);
+    if (!result) return null;
+
+    const resolution = result.resolution;
+    const entity = resolution.entity;
+
+    // Extract key fields from the entity for display
+    const detail: Record<string, unknown> = { kind: entity.kind };
+    if ("name" in entity) detail.name = (entity as { name: string }).name;
+    if ("view" in entity) {
+      const view = entity.view as { name?: string; kind?: string; className?: string };
+      detail.resourceName = view?.name;
+      detail.resourceKind = view?.kind;
+      detail.className = view?.className;
+    }
+    if ("bindable" in entity) {
+      const b = entity.bindable as { property?: string; attribute?: { value?: string } };
+      detail.bindableProperty = b?.property;
+    }
+    if ("symbol" in entity) {
+      const sym = entity.symbol as { kind?: string; name?: string; type?: string };
+      detail.symbolKind = sym?.kind;
+      detail.symbolName = sym?.name;
+      detail.symbolType = sym?.type;
+    }
+
+    return {
+      uri: result.uri,
+      entityKind: entity.kind,
+      confidence: {
+        resource: resolution.confidence.resource,
+        type: resolution.confidence.type,
+        scope: resolution.confidence.scope,
+        expression: resolution.confidence.expression,
+        composite: resolution.compositeConfidence,
+      },
+      expressionLabel: resolution.expressionLabel,
+      exprId: resolution.exprId,
+      nodeId: resolution.nodeId,
+      detail,
+    };
+  } catch (e) {
+    ctx.logger.error(`[inspectEntity] failed for ${params?.uri}: ${formatError(e)}`);
+    return null;
+  }
 }
 
 export function handleCapabilities(ctx: ServerContext): CapabilitiesResponse {
@@ -440,5 +535,6 @@ export function registerCustomHandlers(ctx: ServerContext): void {
   ctx.connection.onRequest("aurelia/getDiagnostics", (params: MaybeUriParam) => handleGetDiagnostics(ctx, params));
   ctx.connection.onRequest("aurelia/dumpState", () => handleDumpState(ctx));
   ctx.connection.onRequest("aurelia/getResources", () => handleGetResources(ctx));
+  ctx.connection.onRequest("aurelia/inspectEntity", (params: { uri: string; position: Position }) => handleInspectEntity(ctx, params));
   ctx.connection.onRequest("aurelia/capabilities", () => handleCapabilities(ctx));
 }

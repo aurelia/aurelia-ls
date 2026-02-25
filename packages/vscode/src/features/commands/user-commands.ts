@@ -182,7 +182,7 @@ export const UserCommandsFeature: FeatureModule = {
       }),
     );
 
-    // "Aurelia: Inspect at Cursor" — what does Aurelia know about this position?
+    // "Aurelia: Inspect at Cursor" — full entity resolution via BC-1 inspect()
     store.add(
       vscode.commands.registerCommand("aurelia.inspectAtCursor", () => {
         void run("inspectAtCursor", async () => {
@@ -193,6 +193,49 @@ export const UserCommandsFeature: FeatureModule = {
           }
           const uri = editor.document.uri.toString();
           const position = editor.selection.active;
+
+          // Try the new inspect API first, fall back to legacy queryAtPosition
+          const entity = await ctx.lsp.inspectEntity(uri, position);
+
+          if (entity) {
+            const lines: string[] = ["# Aurelia: Inspect at Cursor", ""];
+            lines.push(`**Position:** line ${position.line + 1}, character ${position.character + 1}`);
+            lines.push(`**Entity:** \`${entity.entityKind}\``);
+            lines.push("");
+
+            // Confidence signals
+            lines.push("## Confidence", "");
+            lines.push(`| Signal | Level |`);
+            lines.push(`|--------|-------|`);
+            lines.push(`| Resource | ${entity.confidence.resource} |`);
+            lines.push(`| Type | ${entity.confidence.type} |`);
+            lines.push(`| Scope | ${entity.confidence.scope} |`);
+            lines.push(`| Expression | ${entity.confidence.expression} |`);
+            lines.push(`| **Composite** | **${entity.confidence.composite}** |`);
+            lines.push("");
+
+            if (entity.expressionLabel) {
+              lines.push(`**Expression:** \`${entity.expressionLabel}\``);
+            }
+
+            // Detail fields
+            const detailEntries = Object.entries(entity.detail).filter(([k]) => k !== "kind");
+            if (detailEntries.length > 0) {
+              lines.push("", "## Detail", "");
+              for (const [key, value] of detailEntries) {
+                lines.push(`- **${key}:** ${value ?? "—"}`);
+              }
+            }
+
+            const doc = await vscode.workspace.openTextDocument({
+              language: "markdown",
+              content: lines.join("\n"),
+            });
+            await vscode.window.showTextDocument(doc, { preview: true });
+            return;
+          }
+
+          // Fallback to legacy queryAtPosition
           const result = await queries.queryAtPosition(uri, position, {
             ...QueryPolicies.queryAtPosition,
             docVersion: editor.document.version,
@@ -204,33 +247,10 @@ export const UserCommandsFeature: FeatureModule = {
 
           const lines: string[] = ["# Aurelia: Inspect at Cursor", ""];
           lines.push(`**Position:** line ${position.line + 1}, character ${position.character + 1}`, "");
-
-          if (result.node?.kind) {
-            lines.push(`## Template Node`, "");
-            lines.push(`- **Kind:** ${result.node.kind}`);
-          }
-
-          if (result.controller?.kind) {
-            lines.push(`- **Controller:** ${result.controller.kind}`);
-          }
-
-          if (result.expr?.exprId) {
-            lines.push("", `## Expression`, "");
-            lines.push(`- **Expression ID:** \`${result.expr.exprId}\``);
-          }
-
-          if (result.bindables && Array.isArray(result.bindables) && result.bindables.length > 0) {
-            lines.push("", `## Bindables (${result.bindables.length})`, "");
-            for (const b of result.bindables) {
-              const bindable = b as Record<string, unknown>;
-              const name = bindable.name ?? bindable.property ?? "?";
-              lines.push(`- ${name}`);
-            }
-          }
-
-          if (result.mappingSize) {
-            lines.push("", `**Overlay mappings:** ${result.mappingSize}`);
-          }
+          if (result.node?.kind) lines.push(`- **Node:** ${result.node.kind}`);
+          if (result.controller?.kind) lines.push(`- **Controller:** ${result.controller.kind}`);
+          if (result.expr?.exprId) lines.push(`- **Expression:** \`${result.expr.exprId}\``);
+          if (result.bindables && Array.isArray(result.bindables)) lines.push(`- **Bindables:** ${result.bindables.length}`);
 
           const doc = await vscode.workspace.openTextDocument({
             language: "markdown",

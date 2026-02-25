@@ -212,19 +212,36 @@ function buildResourceNode(item: ResourceExplorerItem): TreeNode {
 
   // Gap indicator
   if (item.gapCount > 0) {
+    const intrinsic = item.gapIntrinsicCount ?? 0;
+    const gapDetail = intrinsic > 0
+      ? `${item.gapCount} gap${item.gapCount === 1 ? "" : "s"} (${intrinsic} require${intrinsic === 1 ? "s" : ""} manifest)`
+      : `${item.gapCount} gap${item.gapCount === 1 ? "" : "s"}`;
     children.push({
       nodeKind: "info",
       id: `${item.kind}:${item.name}:gaps`,
-      label: `${item.gapCount} gap${item.gapCount === 1 ? "" : "s"}`,
+      label: gapDetail,
       iconId: "warning",
       collapsible: false,
       contextValue: "gapInfo",
     });
   }
 
+  // Staleness indicator (builtins only)
+  if (item.staleness && item.staleness.fieldsFromAnalysis > 0) {
+    children.push({
+      nodeKind: "info",
+      id: `${item.kind}:${item.name}:staleness`,
+      label: `${item.staleness.fieldsFromAnalysis} field${item.staleness.fieldsFromAnalysis === 1 ? "" : "s"} found by analysis but not in encoding`,
+      iconId: "info",
+      collapsible: false,
+      contextValue: "stalenessInfo",
+    });
+  }
+
   // Description line
   const descParts: string[] = [];
   if (item.className && item.className !== item.name) descParts.push(item.className);
+  if (item.declarationForm) descParts.push(item.declarationForm);
   if (item.scope === "local") {
     descParts.push(item.scopeOwner ? `local to ${item.scopeOwner}` : "local");
   }
@@ -250,11 +267,18 @@ function buildResourceTooltip(item: ResourceExplorerItem): string {
   const lines = [`${item.kind}: ${item.name}`];
   if (item.className) lines.push(`Class: ${item.className}`);
   lines.push(`Origin: ${item.origin}`);
+  if (item.declarationForm) lines.push(`Declaration: ${item.declarationForm}`);
   lines.push(`Scope: ${item.scope}${item.scopeOwner ? ` (${item.scopeOwner})` : ""}`);
   if (item.file) lines.push(`File: ${item.file}`);
   if (item.package) lines.push(`Package: ${item.package}`);
   if (item.bindableCount > 0) lines.push(`Bindables: ${item.bindableCount}`);
-  if (item.gapCount > 0) lines.push(`Gaps: ${item.gapCount}`);
+  if (item.gapCount > 0) {
+    const intrinsic = item.gapIntrinsicCount ?? 0;
+    lines.push(`Gaps: ${item.gapCount}${intrinsic > 0 ? ` (${intrinsic} intrinsic)` : ""}`);
+  }
+  if (item.staleness && item.staleness.fieldsFromAnalysis > 0) {
+    lines.push(`Staleness: ${item.staleness.fieldsFromAnalysis} undeclared fields found by analysis`);
+  }
   return lines.join("\n");
 }
 

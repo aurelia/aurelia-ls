@@ -152,9 +152,28 @@ export interface ResourceExplorerItem {
   bindableCount: number;
   bindables: ResourceExplorerBindable[];
   gapCount: number;
+  gapIntrinsicCount: number;
   origin: ResourceOrigin;
   scope: ResourceScope;
   scopeOwner?: string;
+  declarationForm?: string;
+  staleness?: { fieldsFromAnalysis: number; membersNotInSemantics: number };
+}
+
+export interface InspectEntityResponse {
+  uri: string;
+  entityKind: string;
+  confidence: {
+    resource: string;
+    type: string;
+    scope: string;
+    expression: string;
+    composite: string;
+  };
+  expressionLabel?: string;
+  exprId?: string | number;
+  nodeId?: string | number;
+  detail: Record<string, unknown>;
 }
 
 export interface ResourceExplorerResponse {

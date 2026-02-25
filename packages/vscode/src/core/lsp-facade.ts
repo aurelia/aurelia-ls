@@ -82,6 +82,16 @@ export class LspFacade {
     return this.sendRequest<unknown>("aurelia/dumpState");
   }
 
+  async inspectEntity(uri: string, position: { line: number; character: number }): Promise<import("../types.js").InspectEntityResponse | null> {
+    try {
+      return await this.sendRequest<import("../types.js").InspectEntityResponse | null>("aurelia/inspectEntity", { uri, position });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.#logger.warn("inspectEntity.request.failed", { message });
+      return null;
+    }
+  }
+
   async getResources(): Promise<import("../types.js").ResourceExplorerResponse | null> {
     try {
       return await this.sendRequest<import("../types.js").ResourceExplorerResponse | null>("aurelia/getResources");
