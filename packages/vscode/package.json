@@ -26,21 +26,7 @@
   },
   "license": "MIT",
   "activationEvents": [
-    "onLanguage:html",
-    "onCommand:aurelia.showOverlay",
-    "onCommand:aurelia.showOverlayMapping",
-    "onCommand:aurelia.showTemplateInfo",
-    "onCommand:aurelia.showSsrPreview",
-    "onCommand:aurelia.showDiagnosticsSnapshot",
-    "onCommand:aurelia.dumpState",
-    "onCommand:aurelia.showSuppressedDiagnostics",
-    "onCommand:aurelia.observability.menu",
-    "onCommand:aurelia.observability.toggleDebug",
-    "onCommand:aurelia.observability.toggleTrace",
-    "onCommand:aurelia.observability.setDebugChannels",
-    "onCommand:aurelia.observability.setLogLevel",
-    "onCommand:aurelia.observability.setTraceMinDuration",
-    "onCommand:aurelia.observability.openOutput"
+    "onLanguage:html"
   ],
   "contributes": {
     "viewsContainers": {
@@ -68,21 +54,20 @@
       }
     ],
     "commands": [
-      { "command": "aurelia.refreshResourceExplorer", "title": "Refresh", "icon": "$(refresh)" },
-      { "command": "aurelia.showOverlay", "title": "Aurelia: Show Generated Overlay" },
-      { "command": "aurelia.showOverlayMapping", "title": "Aurelia: Show Overlay Mapping" },
-      { "command": "aurelia.showTemplateInfo", "title": "Aurelia: Show Template Info" },
-      { "command": "aurelia.showSsrPreview", "title": "Aurelia: Show SSR Preview" },
-      { "command": "aurelia.showDiagnosticsSnapshot", "title": "Aurelia: Show Diagnostics Snapshot" },
-      { "command": "aurelia.dumpState", "title": "Aurelia: Dump Server State" },
-      { "command": "aurelia.showSuppressedDiagnostics", "title": "Aurelia: Show Suppressed Diagnostics" },
-      { "command": "aurelia.observability.menu", "title": "Aurelia: Observability Menu" },
-      { "command": "aurelia.observability.toggleDebug", "title": "Aurelia: Toggle Debug Channels" },
-      { "command": "aurelia.observability.toggleTrace", "title": "Aurelia: Toggle Trace" },
-      { "command": "aurelia.observability.setDebugChannels", "title": "Aurelia: Set Debug Channels" },
-      { "command": "aurelia.observability.setLogLevel", "title": "Aurelia: Set Log Level" },
-      { "command": "aurelia.observability.setTraceMinDuration", "title": "Aurelia: Set Trace Min Duration" },
-      { "command": "aurelia.observability.openOutput", "title": "Aurelia: Show Output Channel" }
+      { "command": "aurelia.refreshResourceExplorer", "title": "Refresh", "icon": "$(refresh)", "category": "Aurelia" },
+      { "command": "aurelia.diagnosticsReport", "title": "Diagnostics Report", "category": "Aurelia" },
+      { "command": "aurelia.showSuppressedDiagnostics", "title": "Show Suppressed Diagnostics", "category": "Aurelia" },
+      { "command": "aurelia.inspectAtCursor", "title": "Inspect at Cursor", "category": "Aurelia" },
+      { "command": "aurelia.showOverlay", "title": "Show Compiled Template", "category": "Aurelia Debug" },
+      { "command": "aurelia.showOverlayMapping", "title": "Show Overlay Mapping", "category": "Aurelia Debug" },
+      { "command": "aurelia.dumpState", "title": "Dump Server State", "category": "Aurelia Debug" },
+      { "command": "aurelia.observability.menu", "title": "Observability Menu", "category": "Aurelia Debug" },
+      { "command": "aurelia.observability.toggleDebug", "title": "Toggle Debug Channels", "category": "Aurelia Debug" },
+      { "command": "aurelia.observability.toggleTrace", "title": "Toggle Trace", "category": "Aurelia Debug" },
+      { "command": "aurelia.observability.setDebugChannels", "title": "Set Debug Channels", "category": "Aurelia Debug" },
+      { "command": "aurelia.observability.setLogLevel", "title": "Set Log Level", "category": "Aurelia Debug" },
+      { "command": "aurelia.observability.setTraceMinDuration", "title": "Set Trace Min Duration", "category": "Aurelia Debug" },
+      { "command": "aurelia.observability.openOutput", "title": "Show Output Channel", "category": "Aurelia Debug" }
     ],
     "menus": {
       "view/title": [
@@ -91,6 +76,15 @@
           "when": "view == aureliaResourceExplorer",
           "group": "navigation"
         }
+      ],
+      "commandPalette": [
+        { "command": "aurelia.refreshResourceExplorer", "when": "aurelia.active" },
+        { "command": "aurelia.diagnosticsReport", "when": "aurelia.active" },
+        { "command": "aurelia.showSuppressedDiagnostics", "when": "aurelia.active" },
+        { "command": "aurelia.inspectAtCursor", "when": "aurelia.active" },
+        { "command": "aurelia.showOverlay", "when": "aurelia.active && config.aurelia.features.debugCommands" },
+        { "command": "aurelia.showOverlayMapping", "when": "aurelia.active && config.aurelia.features.debugCommands" },
+        { "command": "aurelia.dumpState", "when": "aurelia.active && config.aurelia.features.debugCommands" }
       ]
     },
     "configuration": {
@@ -100,32 +94,32 @@
         "aurelia.features.commands": {
           "type": "boolean",
           "default": true,
-          "description": "Enable Aurelia command registrations."
+          "description": "Enable Aurelia commands in the command palette (diagnostics report, inspect at cursor, suppressed diagnostics)."
         },
         "aurelia.features.debugCommands": {
           "type": "boolean",
           "default": false,
-          "description": "Expose developer-only Aurelia commands."
+          "description": "Expose framework developer commands (compiled template viewer, overlay mapping, server state dump)."
         },
         "aurelia.features.statusBar": {
           "type": "boolean",
           "default": true,
-          "description": "Enable Aurelia status bar UI."
+          "description": "Show Aurelia analysis status in the status bar (resource count, gap count, analysis progress)."
         },
         "aurelia.features.views": {
           "type": "boolean",
           "default": true,
-          "description": "Enable Aurelia views and tree panels."
+          "description": "Enable the Aurelia Resource Explorer sidebar panel."
         },
         "aurelia.features.inline": {
           "type": "boolean",
           "default": true,
-          "description": "Enable inline Aurelia annotations."
+          "description": "Show inline gap confidence annotations in templates (partial/low indicators)."
         },
         "aurelia.features.diagnostics": {
           "type": "boolean",
           "default": true,
-          "description": "Enable Aurelia diagnostics UI enhancements."
+          "description": "Augment diagnostics with Aurelia taxonomy metadata (impact, actionability, confidence)."
         },
         "aurelia.observability.logging.level": {
           "type": "string",

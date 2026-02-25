@@ -17,9 +17,10 @@ describe("StatusService", () => {
     expect(statusItem.alignment).toBe(stubVscode.StatusBarAlignment.Left);
   });
 
-  test("initial text is 'Aurelia: idle'", () => {
+  test("initial text shows starting phase", () => {
     const { statusItem } = createService();
-    expect(statusItem.text).toBe("Aurelia: idle");
+    expect(statusItem.text).toContain("Aurelia");
+    expect(statusItem.text).toContain("starting");
   });
 
   test("command is set to aurelia.showOverlay", () => {
@@ -32,41 +33,47 @@ describe("StatusService", () => {
     expect(statusItem.visible).toBe(true);
   });
 
-  test("idle() resets text and clears tooltip", () => {
+  test("discovering() shows discovering phase", () => {
     const { service, statusItem } = createService();
-    service.overlayReady({ uri: "file:///test.html", calls: 5, diags: 2 });
-    service.idle();
-    expect(statusItem.text).toBe("Aurelia: idle");
-    expect(statusItem.tooltip).toBeUndefined();
+    service.discovering();
+    expect(statusItem.text).toContain("discovering");
   });
 
-  test("overlayReady() updates text with calls and diags count", () => {
+  test("analyzing() shows resource count", () => {
     const { service, statusItem } = createService();
-    service.overlayReady({ uri: "file:///component.html", calls: 10, diags: 3 });
-    expect(statusItem.text).toBe("Aurelia: overlay (calls 10, diags 3)");
+    service.analyzing(12);
+    expect(statusItem.text).toContain("12 resources");
   });
 
-  test("overlayReady() sets tooltip to uri", () => {
+  test("ready() shows summary with check icon when no gaps", () => {
     const { service, statusItem } = createService();
-    service.overlayReady({ uri: "file:///my-component.html", calls: 1, diags: 0 });
-    expect(statusItem.tooltip).toBe("file:///my-component.html");
+    service.ready(12, 3, 0);
+    expect(statusItem.text).toContain("12 resources");
+    expect(statusItem.text).toContain("3 templates");
+    expect(statusItem.text).toContain("$(check)");
   });
 
-  test("overlayReady() handles missing counts with '?'", () => {
+  test("ready() shows warning icon when gaps exist", () => {
     const { service, statusItem } = createService();
-    service.overlayReady({ uri: "file:///test.html" } as { uri: string; calls: number; diags: number });
-    expect(statusItem.text).toBe("Aurelia: overlay (calls ?, diags ?)");
-  });
-
-  test("overlayReady() handles null uri", () => {
-    const { service, statusItem } = createService();
-    service.overlayReady({ uri: null as unknown as string, calls: 5, diags: 1 });
-    expect(statusItem.tooltip).toBeUndefined();
+    service.ready(12, 3, 2);
+    expect(statusItem.text).toContain("$(warning)");
+    expect(statusItem.text).toContain("2 gaps");
   });
 
   test("dispose() disposes status bar item", () => {
     const { service, statusItem } = createService();
     service.dispose();
     expect(statusItem.disposed).toBe(true);
+  });
+
+  test("phase tracks lifecycle state", () => {
+    const { service } = createService();
+    expect(service.phase).toBe("starting");
+    service.discovering();
+    expect(service.phase).toBe("discovering");
+    service.analyzing(5);
+    expect(service.phase).toBe("analyzing");
+    service.ready(5, 2, 0);
+    expect(service.phase).toBe("ready");
   });
 });
