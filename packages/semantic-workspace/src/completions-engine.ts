@@ -1511,32 +1511,77 @@ function collectEnclosingControllers(
 ): EnclosingController[] {
   const controllers: EnclosingController[] = [];
 
-  // Use the query facade to find the controller at this offset
+  // Use the query facade to find the immediately enclosing controller at this offset.
+  // controllerAt() uses span containment (pickNarrowestContaining) so it correctly
+  // identifies which controller scope the cursor is physically inside.
   const controllerInfo = compilation.query.controllerAt(offset);
   if (controllerInfo) {
     controllers.push({ kind: controllerInfo.kind });
   }
 
-  // Also check the scope module for nested controllers with scope symbols
+  // Scope-aware collection: use the scope module to find iterator locals and
+  // contextual variables, but ONLY for frames that are ancestors of the cursor's
+  // expression position. This prevents variables from leaking outside their scope.
   if (compilation.scope?.templates) {
-    for (const tmpl of compilation.scope.templates) {
-      for (const frame of tmpl.frames) {
-        // Look for frames with iterator locals or contextual variables
-        if (frame.symbols) {
-          for (const sym of frame.symbols) {
-            if (sym.kind === "iteratorLocal") {
-              // Check if we already have a repeat-like controller
-              if (!controllers.some((c) => c.localName === sym.name)) {
-                controllers.push({
-                  kind: "repeat",
-                  localName: sym.name,
-                });
+    const exprInfo = compilation.query.exprAt(offset);
+    const cursorFrameId = exprInfo?.frameId;
+
+    // Try to resolve the cursor's expression to a specific scope frame
+    let resolvedFrameId = cursorFrameId;
+    if (!resolvedFrameId && exprInfo?.exprId) {
+      // exprAt returned an expression but no frameId directly.
+      // Try to resolve via exprToFrame maps.
+      for (const tmpl of compilation.scope.templates) {
+        const mapped = tmpl.exprToFrame.get(exprInfo.exprId);
+        if (mapped) { resolvedFrameId = mapped; break; }
+      }
+    }
+
+    if (resolvedFrameId) {
+      // Walk from the cursor's frame up to the root, collecting only ancestor frames
+      for (const tmpl of compilation.scope.templates) {
+        const frameById = new Map(tmpl.frames.map((f) => [f.id, f]));
+        const cursorFrame = frameById.get(resolvedFrameId);
+        if (!cursorFrame) continue;
+
+        let current: typeof cursorFrame | undefined = cursorFrame;
+        while (current) {
+          if (current.symbols) {
+            for (const sym of current.symbols) {
+              if (sym.kind === "iteratorLocal") {
+                if (!controllers.some((c) => c.localName === sym.name)) {
+                  controllers.push({ kind: "repeat", localName: sym.name });
+                }
+              }
+            }
+          }
+          current = current.parent ? frameById.get(current.parent) : undefined;
+        }
+        break;
+      }
+    } else if (controllerInfo) {
+      // Fallback: controllerAt found a controller via span containment but
+      // we couldn't resolve a specific scope frame. This happens when the
+      // scope module doesn't map the expression to a frame (e.g., some
+      // inline array repeats). controllerAt's span containment guarantees
+      // the cursor IS inside a TC, so adding that TC's scope locals is safe.
+      for (const tmpl of compilation.scope.templates) {
+        for (const frame of tmpl.frames) {
+          if (frame.kind === "overlay" && frame.symbols) {
+            for (const sym of frame.symbols) {
+              if (sym.kind === "iteratorLocal") {
+                if (!controllers.some((c) => c.localName === sym.name)) {
+                  controllers.push({ kind: "repeat", localName: sym.name });
+                }
               }
             }
           }
         }
       }
     }
+    // When neither exprAt nor controllerAt finds the cursor in a scoped context,
+    // no scope-based controllers are added. This correctly prevents contextual
+    // variables from appearing at positions outside any expression scope.
   }
 
   return controllers;
