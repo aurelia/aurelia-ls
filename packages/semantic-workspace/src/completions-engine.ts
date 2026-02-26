@@ -24,6 +24,7 @@ import {
   TokenType,
   AttributeParser,
   createAttributeParserFromRegistry,
+  resolveCursorEntity,
   type DocumentUri,
   type ResourceDef,
   type CustomElementDef,
@@ -43,6 +44,8 @@ import {
   type ElementNode,
   type TemplateIR,
   type PredictiveMatchResult,
+  type CursorEntity,
+  type CursorResolutionResult,
 } from "@aurelia-ls/compiler";
 import type {
   SourcePosition,
@@ -172,319 +175,369 @@ type CompletionPosition =
   | { kind: "not-applicable" };
 
 // ============================================================================
-// Position Resolution — IR-grounded + DFA-predicted + Scanner-driven
+// Position Resolution — CursorEntity-based + text-scanning fallback
 // ============================================================================
 
 /**
- * Resolve the completion position using three proper tools:
+ * Resolve the completion position.
  *
- * 1. **IR walker**: Walk the compiled template's DOM nodes to find the
- *    enclosing element, determine if we're in a tag-name, attribute-name,
- *    or attribute-value position from the IR spans.
+ * Two phases:
  *
- * 2. **Predictive DFA**: For attribute names that contain pattern separators,
- *    run the attribute parser's predictive match to determine if we're at a
- *    binding-command position and what commands could follow.
+ * 1. **CursorEntity dispatch**: When a compilation is available, use the
+ *    shared CursorEntity resolver (same as hover, definition, rename) to
+ *    identify what semantic entity the cursor is on. Map entity kind to
+ *    completion position type. This handles ALL compiled positions correctly
+ *    because CursorEntity already handles expression spans, controller spans,
+ *    tag name spans, attribute spans, and instruction-level resolution.
  *
- * 3. **Expression Scanner**: For expression positions, tokenize the expression
- *    text up to cursor. The last token type determines: Dot → member access,
- *    Bar → VC pipe, Ampersand → BB pipe, Identifier/EOF → scope root.
+ * 2. **Text-scanning fallback**: When no compilation is available (template
+ *    not yet compiled, mid-edit broken state) OR the CursorEntity returns
+ *    null (cursor at a non-semantic position like whitespace in an open tag),
+ *    fall back to text scanning to determine the structural context.
  *
- * Falls back to lightweight text scanning only for new content not yet
- * compiled into the IR (e.g., typing a new attribute that doesn't exist yet).
+ * The CursorEntity resolver eliminates the need for a custom IR walker.
+ * It already handles: nameLoc vs valueLoc priority, span containment,
+ * expression classification, controller span detection — all the bugs
+ * that the custom walker had.
  */
 function resolveCompletionPosition(ctx: CompletionEngineContext): CompletionPosition {
   const { text, offset, compilation, syntax } = ctx;
 
-  // Phase 1: Check expression context first (highest priority).
-  // The query facade's exprAt() knows exactly which expressions have spans.
+  // Phase 1: CursorEntity dispatch
   if (compilation) {
-    const exprHit = compilation.query.exprAt(offset);
-    if (exprHit) {
-      return resolveExpressionPosition(text, offset, exprHit.span);
+    const resolution = resolveCursorEntity({
+      compilation,
+      offset,
+      syntax,
+    });
+
+    if (resolution) {
+      const mapped = mapCursorEntityToCompletionPosition(resolution, text, offset, compilation, syntax);
+      if (mapped) return mapped;
+    }
+
+    // CursorEntity returned null — cursor is at a non-semantic position.
+    // Use nodeAt to determine if we're inside an element's open tag
+    // (whitespace between attributes, new attribute being typed).
+    const node = compilation.query.nodeAt(offset);
+    if (node) {
+      const tagPos = resolveNonSemanticTagPosition(node, text, offset, compilation, syntax);
+      if (tagPos) return tagPos;
     }
   }
 
-  // Phase 2: IR-grounded structural resolution.
-  // Walk the IR to find the enclosing element and determine position.
-  if (compilation?.ir?.templates) {
-    const irResult = resolveFromIR(text, offset, compilation, syntax);
-    if (irResult) return irResult;
-  }
-
-  // Phase 3: Text-scanning fallback for positions the IR doesn't cover.
-  // This handles: cursor in not-yet-compiled content, new attributes being
-  // typed, content between the last compiled state and the current edit.
+  // Phase 2: Text-scanning fallback for genuinely uncompiled content.
   return resolveFromText(text, offset, syntax);
 }
 
-// --- Phase 1: Expression Scanner ---
-
 /**
- * Given an expression span that contains the cursor, use the Scanner to
- * determine the expression-internal position.
+ * Map a CursorEntity to a CompletionPosition.
+ *
+ * The CursorEntity tells us WHAT is at the cursor. Completions needs to
+ * know WHAT COULD BE at the cursor. We use the entity to determine the
+ * position TYPE, then the generators produce the full universe for that type.
  */
-function resolveExpressionPosition(
-  text: string,
-  offset: number,
-  exprSpan: SourceSpan,
-): CompletionPosition {
-  const exprText = text.slice(exprSpan.start, Math.min(offset, exprSpan.end));
-  if (!exprText) {
-    return { kind: "expression-root", prefix: "", exprStart: exprSpan.start, exprEnd: offset, isInterpolation: false };
-  }
-
-  // Use the Scanner to tokenize up to the cursor position
-  const scanner = new Scanner(exprText);
-  let lastTokenType: TokenType = TokenType.EOF;
-  let lastTokenEnd = 0;
-  let lastIdentifier = "";
-
-  // Scan all tokens up to the cursor
-  while (true) {
-    const token = scanner.next();
-    if (token.type === TokenType.EOF) break;
-    if (token.start >= exprText.length) break;
-    lastTokenType = token.type;
-    lastTokenEnd = token.end;
-    if (token.type === TokenType.Identifier ||
-        token.type === TokenType.KeywordDollarThis ||
-        token.type === TokenType.KeywordDollarParent ||
-        token.type === TokenType.KeywordThis) {
-      lastIdentifier = typeof token.value === "string" ? token.value : exprText.slice(token.start, token.end);
-    } else {
-      lastIdentifier = "";
-    }
-  }
-
-  // Determine context from last meaningful token
-  switch (lastTokenType) {
-    case TokenType.Bar:
-      // After | → value converter name expected
-      return {
-        kind: "vc-pipe",
-        prefix: "",
-        nameStart: exprSpan.start + lastTokenEnd,
-        nameEnd: offset,
-      };
-
-    case TokenType.Ampersand:
-      // After & → binding behavior name expected
-      return {
-        kind: "bb-pipe",
-        prefix: "",
-        nameStart: exprSpan.start + lastTokenEnd,
-        nameEnd: offset,
-      };
-
-    case TokenType.Dot:
-    case TokenType.QuestionDot:
-      // After . or ?. → member access, delegate to TS overlay
-      return { kind: "not-applicable" };
-
-    case TokenType.Identifier: {
-      // Mid-identifier — check if preceded by | or &
-      const beforeIdent = exprText.slice(0, lastTokenEnd - lastIdentifier.length).trimEnd();
-      if (beforeIdent.endsWith("|")) {
-        return {
-          kind: "vc-pipe",
-          prefix: lastIdentifier,
-          nameStart: exprSpan.start + lastTokenEnd - lastIdentifier.length,
-          nameEnd: offset,
-        };
-      }
-      if (beforeIdent.endsWith("&")) {
-        return {
-          kind: "bb-pipe",
-          prefix: lastIdentifier,
-          nameStart: exprSpan.start + lastTokenEnd - lastIdentifier.length,
-          nameEnd: offset,
-        };
-      }
-      // Regular scope identifier
-      return {
-        kind: "expression-root",
-        prefix: lastIdentifier,
-        exprStart: exprSpan.start,
-        exprEnd: offset,
-        isInterpolation: false,
-      };
-    }
-
-    default:
-      // After operator, paren, bracket, etc. → scope identifier expected
-      return {
-        kind: "expression-root",
-        prefix: "",
-        exprStart: exprSpan.start,
-        exprEnd: offset,
-        isInterpolation: false,
-      };
-  }
-}
-
-// --- Phase 2: IR Walker ---
-
-/**
- * Walk the compiled template IR to find the structural position at the cursor.
- * Uses DOM node spans (tagLoc, openTagEnd, Attr.nameLoc, Attr.valueLoc) for
- * precise position classification.
- */
-function resolveFromIR(
+function mapCursorEntityToCompletionPosition(
+  resolution: CursorResolutionResult,
   text: string,
   offset: number,
   compilation: TemplateCompilation,
   syntax: TemplateSyntaxRegistry,
 ): CompletionPosition | null {
-  const templates = compilation.ir.templates;
-  if (!templates || templates.length === 0) return null;
+  const entity = resolution.entity;
+  const span = entity.span;
 
-  // Find the enclosing element by walking the IR tree
-  const hit = findEnclosingElement(templates, offset);
-  if (!hit) return null;
+  switch (entity.kind) {
+    // --- Tag-name positions ---
+    case "ce-tag":
+    case "local-template-name": {
+      // The entity span covers the full element. Use nodeAt to get the tag name span.
+      const node = compilation.query.nodeAt(offset);
+      const tagLoc = node?.tagLoc;
+      const nameStart = tagLoc ? tagLoc.start : span.start;
+      return {
+        kind: "tag-name",
+        prefix: text.slice(nameStart, offset),
+        nameStart,
+        nameEnd: offset,
+      };
+    }
 
-  const { element } = hit;
+    // --- Attribute-name positions ---
+    case "ca-attr":
+    case "tc-attr":
+    case "bindable":
+    case "plain-attr-binding":
+    case "plain-attr-fallback":
+    case "spread": {
+      // Cursor is on an attribute name. Check for binding command via DFA first.
+      const partialName = text.slice(span.start, offset);
+      const cmdPos = resolveAttributeNameWithDFA(partialName, span.start, offset, syntax);
+      if (cmdPos) return cmdPos;
 
-  // Is cursor in the tag name span?
-  if (element.tagLoc && offset >= element.tagLoc.start && offset <= element.tagLoc.end) {
-    const prefix = text.slice(element.tagLoc.start, offset);
+      // Determine the enclosing element tag name from nodeAt
+      const node = compilation.query.nodeAt(offset);
+      const tagName = resolveTagNameFromNode(node, text);
+      return {
+        kind: "attr-name",
+        tagName,
+        prefix: partialName,
+        attrStart: span.start,
+        attrEnd: offset,
+        existingAttrs: [], // Inside an existing attr name — user is editing, no exclusion
+      };
+    }
+
+    // --- Binding command position ---
+    case "command": {
+      // The command entity's span covers the full attribute name (e.g., "count.bind").
+      // The command name starts after the last separator (dot). Extract the command prefix.
+      const fullAttrText = text.slice(span.start, offset);
+      const sepIdx = findLastSeparator(fullAttrText, syntax);
+      const cmdStart = span.start + (sepIdx >= 0 ? sepIdx + 1 : 0);
+      const cmdPrefix = sepIdx >= 0 ? fullAttrText.slice(sepIdx + 1) : fullAttrText;
+      const attrTarget = sepIdx >= 0 ? fullAttrText.slice(0, sepIdx) : "";
+      return {
+        kind: "binding-command",
+        attrTarget,
+        prefix: cmdPrefix,
+        commandStart: cmdStart,
+        commandEnd: offset,
+        predictions: resolveCommandPredictions(text, span, offset, syntax),
+      };
+    }
+
+    // --- Expression positions ---
+    // For ALL expression entity types, use the expression scanner to determine
+    // the precise completion sub-position. The CursorEntity tells us we're in
+    // an expression, but the scanner's token-level analysis correctly handles:
+    // - Cursor on root identifier of `item.name` → expression-root (not member-access)
+    // - Cursor after `|` → vc-pipe
+    // - Cursor after `&` → bb-pipe
+    // - Cursor after `.` → not-applicable (delegate to TS overlay)
+    case "scope-identifier":
+    case "contextual-var":
+    case "scope-token":
+    case "iterator-decl":
+    case "global-access":
+    case "member-access":
+    case "value-converter":
+    case "binding-behavior": {
+      const exprHit = compilation.query.exprAt(offset);
+      if (exprHit) {
+        return scanExpressionPosition(text, offset, exprHit.span);
+      }
+      // Fallback: use the entity span as the expression span
+      return scanExpressionPosition(text, offset, span);
+    }
+
+    // --- Template structure positions ---
+    case "as-element":
+      return {
+        kind: "as-element-value",
+        prefix: text.slice(span.start, offset),
+        valueStart: span.start,
+        valueEnd: offset,
+      };
+
+    case "import-from":
+      // Import module specifier — resolve as attr-value with import tag context
+      return {
+        kind: "attr-value",
+        tagName: "import",
+        attrName: "from",
+        prefix: text.slice(span.start, offset),
+        valueStart: span.start,
+        valueEnd: offset,
+      };
+
+    case "au-slot":
+      // au-slot value — could offer slot name completions
+      return {
+        kind: "attr-value",
+        tagName: "",
+        attrName: "au-slot",
+        prefix: text.slice(span.start, offset),
+        valueStart: span.start,
+        valueEnd: offset,
+      };
+
+    case "interpolation":
+      // Interpolation wraps an inner entity — recurse on the inner entity
+      if (entity.innerEntity) {
+        return mapCursorEntityToCompletionPosition(
+          { ...resolution, entity: entity.innerEntity },
+          text, offset, compilation, syntax,
+        );
+      }
+      return {
+        kind: "expression-root",
+        prefix: "",
+        exprStart: span.start,
+        exprEnd: offset,
+        isInterpolation: true,
+      };
+
+    case "ref-target":
+    case "let-binding":
+      // These positions have specific value contexts but aren't general completions
+      return { kind: "not-applicable" };
+
+    default:
+      return null;
+  }
+}
+
+/**
+ * Resolve a non-semantic position within an element's open tag.
+ *
+ * When CursorEntity returns null but nodeAt finds an element, the cursor
+ * is at a position without a compiled semantic entity — typically whitespace
+ * between attributes where the user is about to type a new attribute.
+ */
+function resolveNonSemanticTagPosition(
+  node: { id: string; kind: string; span: SourceSpan; tagLoc?: SourceSpan | null; templateIndex: number },
+  text: string,
+  offset: number,
+  compilation: TemplateCompilation,
+  syntax: TemplateSyntaxRegistry,
+): CompletionPosition | null {
+  if (node.kind !== "element") return null;
+
+  // If cursor is within the tag name span, it's a tag-name position
+  if (node.tagLoc && offset >= node.tagLoc.start && offset <= node.tagLoc.end) {
     return {
       kind: "tag-name",
-      prefix,
-      nameStart: element.tagLoc.start,
+      prefix: text.slice(node.tagLoc.start, offset),
+      nameStart: node.tagLoc.start,
       nameEnd: offset,
     };
   }
 
-  // Is cursor inside the open tag (between tag name and >)?
-  const openTagEndOffset = element.openTagEnd?.start ?? element.openTagEnd?.end;
-  // When openTagEnd is available, use it as the upper bound.
-  // When missing, fall through to attribute scanning — the element may not have
-  // openTagEnd populated (e.g., some compilation paths don't record it).
-  if (openTagEndOffset && offset > openTagEndOffset) return null;
+  // Cursor is inside the element but not on the tag name and not on a semantic
+  // entity. This means it's in the attribute region (whitespace, new attribute).
+  const tagName = resolveTagNameFromNode(node, text);
 
-  const tagNameEnd = element.tagLoc ? element.tagLoc.end : (element.loc?.start ?? 0);
-  if (offset <= tagNameEnd) return null; // Before or at tag name
+  // Check if the cursor is inside (or at the start of) an existing attribute's
+  // name span in the IR. If so, the user is editing that attribute — don't
+  // exclude any attrs from completions.
+  const insideExistingAttr = isOffsetInsideAttrName(compilation, node, offset);
+  if (insideExistingAttr) {
+    const prefix = text.slice(insideExistingAttr.start, offset);
+    // Check for binding command via DFA
+    const cmdPos = resolveAttributeNameWithDFA(prefix, insideExistingAttr.start, offset, syntax);
+    if (cmdPos) return cmdPos;
 
-  // Cursor is inside the open tag's attribute region. Check if inside an
-  // existing attribute.
-  for (const attr of element.attrs) {
-    if (!attr.loc || offset < attr.loc.start || offset > attr.loc.end) continue;
-
-    // Inside this attribute's span. Check name FIRST, then value.
-    // For valueless/boolean attributes (like standalone CAs: `<div aurelia-table>`),
-    // the IR may set valueLoc to overlap with nameLoc. Checking nameLoc first ensures
-    // the cursor inside the attribute name is correctly classified as attr-name.
-    if (attr.nameLoc && offset >= attr.nameLoc.start && offset <= attr.nameLoc.end) {
-      // Inside the attribute name span — check for binding command via DFA
-      const partialName = text.slice(attr.nameLoc.start, offset);
-      const cmdPos = resolveAttributeNameWithDFA(partialName, attr.nameLoc.start, offset, element, syntax);
-      if (cmdPos) return cmdPos;
-
-      // When cursor is inside an existing attribute name, the user is editing
-      // it — show all available attributes without exclusion. The user might
-      // be replacing this attribute with a different one, or looking for
-      // alternatives.
-      return {
-        kind: "attr-name",
-        tagName: element.tag,
-        prefix: partialName,
-        attrStart: attr.nameLoc.start,
-        attrEnd: offset,
-        existingAttrs: [],
-      };
-    }
-
-    if (attr.valueLoc && offset >= attr.valueLoc.start && offset <= attr.valueLoc.end) {
-      // Inside the value span — check if it's a binding expression
-      const attrParser = createAttributeParserFromRegistry(syntax);
-      const analysis = attrParser.parseWithConfig(attr.name, "");
-      if (analysis.syntax.command) {
-        // Has a binding command → expression context
-        const exprText = text.slice(attr.valueLoc.start, offset);
-        return resolveExpressionPositionFromText(exprText, attr.valueLoc.start, offset);
-      }
-      // Plain attribute value (or special like as-element)
-      if (attr.name === "as-element" || analysis.syntax.target === "as-element") {
-        return {
-          kind: "as-element-value",
-          prefix: text.slice(attr.valueLoc.start, offset),
-          valueStart: attr.valueLoc.start,
-          valueEnd: offset,
-        };
-      }
-      return {
-        kind: "attr-value",
-        tagName: element.tag,
-        attrName: analysis.syntax.target || attr.name,
-        prefix: text.slice(attr.valueLoc.start, offset),
-        valueStart: attr.valueLoc.start,
-        valueEnd: offset,
-      };
-    }
-
-    // Inside attr span but not in name or value — likely in the `=` or quotes
-    return { kind: "not-applicable" };
-  }
-
-  // Cursor is in the open tag but NOT inside any existing attribute.
-  // The user is typing a new attribute name.
-  const currentToken = extractCurrentToken(text, offset);
-  if (!currentToken.token) {
-    // Whitespace — fresh attribute position
     return {
       kind: "attr-name",
-      tagName: element.tag,
-      prefix: "",
-      attrStart: offset,
+      tagName,
+      prefix,
+      attrStart: insideExistingAttr.start,
       attrEnd: offset,
-      existingAttrs: element.attrs.map((a) => a.name.split(".")[0] ?? a.name),
+      existingAttrs: [], // Inside existing attr → no exclusion
     };
   }
 
-  // Check for DFA match on the partial token (could be binding command)
-  const cmdPos = resolveAttributeNameWithDFA(currentToken.token, currentToken.start, offset, element, syntax);
-  if (cmdPos) return cmdPos;
+  // Extract the token being typed (backward from cursor to whitespace)
+  const currentToken = extractCurrentToken(text, offset);
+
+  // Check if the partial token matches a binding command pattern
+  if (currentToken.token && !currentToken.token.includes("=")) {
+    const cmdPos = resolveAttributeNameWithDFA(currentToken.token, currentToken.start, offset, syntax);
+    if (cmdPos) return cmdPos;
+  }
+
+  // Check if we're inside a quoted value (user typed an attr value without
+  // the attr being in the IR yet — e.g., editing a new attribute)
+  const quoteResult = detectQuotedExpression(text.slice(0, offset), offset, syntax);
+  if (quoteResult) return quoteResult;
+
+  // Collect existing attributes to exclude from suggestions
+  const existingAttrs = collectExistingAttrs(compilation, node);
 
   return {
     kind: "attr-name",
-    tagName: element.tag,
-    prefix: currentToken.token,
+    tagName,
+    prefix: currentToken.token?.trim() ?? "",
     attrStart: currentToken.start,
     attrEnd: offset,
-    existingAttrs: element.attrs.map((a) => a.name.split(".")[0] ?? a.name),
+    existingAttrs,
   };
 }
 
-/** Walk the IR tree to find the narrowest enclosing element at an offset. */
-function findEnclosingElement(
-  templates: readonly TemplateIR[],
-  offset: number,
-): { element: ElementNode; templateIndex: number } | null {
-  let best: { element: ElementNode; templateIndex: number; size: number } | null = null;
-
-  for (let ti = 0; ti < templates.length; ti++) {
-    const tmpl = templates[ti];
-    if (!tmpl) continue;
-    walkNodes(tmpl.dom.children, (node) => {
-      if (node.kind !== "element") return;
-      if (!node.loc) return;
-      if (offset < node.loc.start || offset > node.loc.end) return;
-      const size = node.loc.end - node.loc.start;
-      if (!best || size < best.size) {
-        best = { element: node as ElementNode, templateIndex: ti, size };
-      }
-    });
+/** Resolve the tag name from a nodeAt result. */
+function resolveTagNameFromNode(
+  node: { tagLoc?: SourceSpan | null; span: SourceSpan } | null,
+  text: string,
+): string {
+  if (!node) return "";
+  if (node.tagLoc) {
+    return text.slice(node.tagLoc.start, node.tagLoc.end);
   }
-
-  return best;
+  // Fallback: extract from the span start (skip `<`)
+  const match = text.slice(node.span.start).match(/^<([a-zA-Z][a-zA-Z0-9-]*)/);
+  return match?.[1] ?? "";
 }
 
-function walkNodes(nodes: readonly DOMNode[], visit: (node: DOMNode) => void): void {
-  for (const node of nodes) {
-    visit(node);
-    if ("children" in node && node.children) {
-      walkNodes(node.children, visit);
+/** Collect existing attribute names from the compilation's IR for an element. */
+function collectExistingAttrs(
+  compilation: TemplateCompilation,
+  node: { id: string; templateIndex: number },
+): string[] {
+  const templates = compilation.ir?.templates;
+  if (!templates) return [];
+  const tmpl = templates[node.templateIndex];
+  if (!tmpl) return [];
+
+  // Walk the template's DOM to find the element by id and collect its attrs
+  const attrs: string[] = [];
+  walkDOMForAttrs(tmpl.dom.children, node.id, attrs);
+  return attrs;
+}
+
+/** Check if the offset is inside any attribute's nameLoc in the IR element. */
+function isOffsetInsideAttrName(
+  compilation: TemplateCompilation,
+  node: { id: string; templateIndex: number },
+  offset: number,
+): SourceSpan | null {
+  const templates = compilation.ir?.templates;
+  if (!templates) return null;
+  const tmpl = templates[node.templateIndex];
+  if (!tmpl) return null;
+
+  const found = findDOMNodeById(tmpl.dom.children, node.id);
+  if (!found || !("attrs" in found)) return null;
+
+  for (const attr of (found as ElementNode).attrs) {
+    if (attr.nameLoc && offset >= attr.nameLoc.start && offset <= attr.nameLoc.end) {
+      return attr.nameLoc;
+    }
+  }
+  return null;
+}
+
+function findDOMNodeById(nodes: readonly DOMNode[], targetId: string): DOMNode | null {
+  for (const n of nodes) {
+    if (n.id === targetId) return n;
+    if ("children" in n && n.children) {
+      const found = findDOMNodeById(n.children, targetId);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+function walkDOMForAttrs(nodes: readonly DOMNode[], targetId: string, out: string[]): void {
+  for (const n of nodes) {
+    if (n.id === targetId && "attrs" in n) {
+      for (const attr of (n as ElementNode).attrs) {
+        out.push(attr.name.split(".")[0] ?? attr.name);
+      }
+      return;
+    }
+    if ("children" in n && n.children) {
+      walkDOMForAttrs(n.children, targetId, out);
     }
   }
 }
@@ -494,31 +547,20 @@ function walkNodes(nodes: readonly DOMNode[], visit: (node: DOMNode) => void): v
 /**
  * Use the attribute parser's predictive DFA to determine if a partial
  * attribute name is in a binding-command position.
- *
- * Multiple patterns may match the prefix. Each match produces a prediction
- * (what the next expected token is). We collect ALL predictions and derive
- * the valid binding command candidates from the union.
  */
 function resolveAttributeNameWithDFA(
   partialName: string,
   nameStart: number,
   offset: number,
-  element: ElementNode,
   syntax: TemplateSyntaxRegistry,
 ): CompletionPosition | null {
   const attrParser = createAttributeParserFromRegistry(syntax);
   const predictions = attrParser.predictCompletions(partialName);
   if (predictions.length === 0) return null;
 
-  // Collect predictions that are at a command-bearing position.
-  //
-  // Policy gate: a prediction only counts as structurally significant when at
-  // least one literal (separator) has been consumed from the input. Without a
-  // consumed separator, the match is just a bare identifier with no evidence
-  // of pattern intent — "class" matches PART in PART.PART but the user has
-  // shown no intent to use a binding command. With "click." the consumed "."
-  // provides that structural evidence. Similarly "@click" consumes "@" and
-  // ":value" consumes ":".
+  // Policy gate: only count predictions where at least one literal separator
+  // has been consumed. Without a separator, a bare identifier like "class"
+  // matches PART in PART.PART but shows no intent for a binding command.
   const commandPredictions = predictions.filter((p) => {
     if (p.consumedLiterals === 0) return false;
     const interpret = p.config.interpret;
@@ -532,7 +574,6 @@ function resolveAttributeNameWithDFA(
 
   if (commandPredictions.length === 0) return null;
 
-  // The partial name up to the last separator is the target
   const lastSepIdx = findLastSeparator(partialName, syntax);
   const attrTarget = lastSepIdx >= 0 ? partialName.slice(0, lastSepIdx) : partialName;
   const prefix = lastSepIdx >= 0 ? partialName.slice(lastSepIdx + 1) : "";
@@ -545,6 +586,21 @@ function resolveAttributeNameWithDFA(
     commandEnd: offset,
     predictions: commandPredictions,
   };
+}
+
+/** Resolve command predictions for a known command entity span. */
+function resolveCommandPredictions(
+  text: string,
+  commandSpan: SourceSpan,
+  offset: number,
+  syntax: TemplateSyntaxRegistry,
+): readonly PredictiveMatchResult[] {
+  // Walk backward from command span to find the full attribute name for DFA
+  let attrStart = commandSpan.start;
+  while (attrStart > 0 && !/[\s>]/.test(text[attrStart - 1] ?? "")) attrStart--;
+  const fullAttrName = text.slice(attrStart, offset);
+  const attrParser = createAttributeParserFromRegistry(syntax);
+  return attrParser.predictCompletions(fullAttrName).filter((p) => p.consumedLiterals > 0);
 }
 
 function findLastSeparator(name: string, syntax: TemplateSyntaxRegistry): number {
@@ -685,6 +741,64 @@ function resolveFromText(
   };
 }
 
+/**
+ * Tokenize expression text to determine expression-internal completion context.
+ * Used by both CursorEntity dispatch (for expression entities) and text-scanning fallback.
+ */
+function scanExpressionPosition(
+  text: string,
+  offset: number,
+  exprSpan: SourceSpan,
+): CompletionPosition {
+  const exprText = text.slice(exprSpan.start, Math.min(offset, exprSpan.end));
+  if (!exprText) {
+    return { kind: "expression-root", prefix: "", exprStart: exprSpan.start, exprEnd: offset, isInterpolation: false };
+  }
+
+  const scanner = new Scanner(exprText);
+  let lastTokenType: TokenType = TokenType.EOF;
+  let lastTokenEnd = 0;
+  let lastIdentifier = "";
+
+  while (true) {
+    const token = scanner.next();
+    if (token.type === TokenType.EOF) break;
+    if (token.start >= exprText.length) break;
+    lastTokenType = token.type;
+    lastTokenEnd = token.end;
+    if (token.type === TokenType.Identifier ||
+        token.type === TokenType.KeywordDollarThis ||
+        token.type === TokenType.KeywordDollarParent ||
+        token.type === TokenType.KeywordThis) {
+      lastIdentifier = typeof token.value === "string" ? token.value : exprText.slice(token.start, token.end);
+    } else {
+      lastIdentifier = "";
+    }
+  }
+
+  switch (lastTokenType) {
+    case TokenType.Bar:
+      return { kind: "vc-pipe", prefix: "", nameStart: exprSpan.start + lastTokenEnd, nameEnd: offset };
+    case TokenType.Ampersand:
+      return { kind: "bb-pipe", prefix: "", nameStart: exprSpan.start + lastTokenEnd, nameEnd: offset };
+    case TokenType.Dot:
+    case TokenType.QuestionDot:
+      return { kind: "not-applicable" };
+    case TokenType.Identifier: {
+      const beforeIdent = exprText.slice(0, lastTokenEnd - lastIdentifier.length).trimEnd();
+      if (beforeIdent.endsWith("|")) {
+        return { kind: "vc-pipe", prefix: lastIdentifier, nameStart: exprSpan.start + lastTokenEnd - lastIdentifier.length, nameEnd: offset };
+      }
+      if (beforeIdent.endsWith("&")) {
+        return { kind: "bb-pipe", prefix: lastIdentifier, nameStart: exprSpan.start + lastTokenEnd - lastIdentifier.length, nameEnd: offset };
+      }
+      return { kind: "expression-root", prefix: lastIdentifier, exprStart: exprSpan.start, exprEnd: offset, isInterpolation: false };
+    }
+    default:
+      return { kind: "expression-root", prefix: "", exprStart: exprSpan.start, exprEnd: offset, isInterpolation: false };
+  }
+}
+
 /** Resolve expression position from raw text (fallback path). */
 function resolveExpressionPositionFromText(
   exprText: string,
@@ -694,8 +808,7 @@ function resolveExpressionPositionFromText(
   if (!exprText.trim()) {
     return { kind: "expression-root", prefix: "", exprStart, exprEnd: offset, isInterpolation: false };
   }
-  // Use the Scanner on the expression text
-  return resolveExpressionPosition(exprText + " ", offset, { start: exprStart, end: offset } as SourceSpan);
+  return scanExpressionPosition(exprText + " ", offset, { start: exprStart, end: offset } as SourceSpan);
 }
 
 /** Detect if the cursor is inside a quoted attribute value with a binding command. */
