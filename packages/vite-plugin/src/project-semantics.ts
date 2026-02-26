@@ -12,6 +12,7 @@ import {
   BUILTIN_SEMANTICS,
   DiagnosticsRuntime,
   normalizePathForId,
+  buildTemplateSyntaxRegistry,
   type ResourceScopeId,
   type NormalizedPath,
   type CompileTrace,
@@ -198,11 +199,19 @@ export async function createProjectSemanticsContext(
   // Build merged semantics with discovered resources
   const semantics = finalResult.semantics;
 
-  // Create context
+  // Build snapshot once for all AOT compilations in this project
+  const snapshot = {
+    semantics,
+    catalog: semantics.catalog,
+    syntax: buildTemplateSyntaxRegistry(semantics),
+    resourceGraph: finalResult.resourceGraph,
+  };
+
   const context: ProjectSemanticsContext = {
     result: finalResult,
     resourceGraph: finalResult.resourceGraph,
     semantics,
+    snapshot,
     templates,
     getScopeForTemplate(templatePath: string): ResourceScopeId {
       const normalized = normalizePathForId(templatePath);

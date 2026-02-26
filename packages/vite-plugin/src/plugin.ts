@@ -101,12 +101,11 @@ function transformComponent(
       projectSemanticsContext.semantics.resources.elements,
     );
 
-    // Compile with AOT
     const aot = compileWithAot(templateHtml, {
       templatePath: templateInfo.templatePath,
       name: templateInfo.resourceName,
       semantics: projectSemanticsContext.semantics,
-      resourceGraph: projectSemanticsContext.resourceGraph,
+      snapshot: projectSemanticsContext.snapshot,
       resourceScope: templateInfo.scopeId,
       localImports,
       trace,

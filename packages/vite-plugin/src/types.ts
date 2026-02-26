@@ -9,7 +9,7 @@
  */
 
 import type { IncomingMessage } from "node:http";
-import type { ResourceGraph, ResourceScopeId, MaterializedSemantics, CompileTrace } from "@aurelia-ls/compiler";
+import type { ResourceGraph, ResourceScopeId, MaterializedSemantics, CompileTrace, AotSemanticSnapshot } from "@aurelia-ls/compiler";
 import type { ProjectSemanticsDiscoveryResult, TemplateInfo, RouteTree, DefineMap } from "@aurelia-ls/compiler";
 import type { SSRRequestContext } from "@aurelia-ls/ssr";
 
@@ -1095,6 +1095,8 @@ export interface ProjectSemanticsContext {
   resourceGraph: ResourceGraph;
   /** Merged semantics with discovered resources */
   semantics: MaterializedSemantics;
+  /** Cached semantic snapshot for AOT compilation. */
+  snapshot: AotSemanticSnapshot;
   /** Template info for looking up component scope */
   templates: Map<string, TemplateInfo>;
   /** Lookup scope for a template path */

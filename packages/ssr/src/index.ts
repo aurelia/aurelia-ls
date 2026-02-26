@@ -94,6 +94,7 @@ export {
   compileAot,
   type CompileAotOptions,
   type CompileAotResult,
+  type AotSemanticSnapshot,
   lowerDocument,
   linkTemplateSemantics,
   bindScopes,

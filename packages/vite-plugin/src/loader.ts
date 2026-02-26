@@ -255,12 +255,11 @@ export async function loadProjectComponents(
         projectSemantics.semantics.resources.elements,
       );
 
-      // Compile with AOT using project semantics and scope
       const aot = compileWithAot(templateHtml, {
         templatePath: templateInfo.templatePath,
         name: templateInfo.resourceName,
         semantics: projectSemantics.semantics,
-        resourceGraph: projectSemantics.resourceGraph,
+        snapshot: projectSemantics.snapshot,
         resourceScope: templateInfo.scopeId,
         localImports,
         trace,
@@ -425,7 +424,7 @@ export async function loadComponent(
       templatePath: templateInfo.templatePath,
       name: templateInfo.resourceName,
       semantics: projectSemantics.semantics,
-      resourceGraph: projectSemantics.resourceGraph,
+      snapshot: projectSemantics.snapshot,
       resourceScope: templateInfo.scopeId,
       localImports,
       trace,

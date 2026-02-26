@@ -12,7 +12,7 @@ export type { TemplateCompilation, TemplateDiagnostics, StageMetaSnapshot } from
 
 // === AOT Facade (SSR-agnostic) ===
 export { compileAot } from "./facade-aot.js";
-export type { CompileAotOptions, CompileAotResult } from "./facade-aot.js";
+export type { CompileAotOptions, CompileAotResult, AotSemanticSnapshot } from "./facade-aot.js";
 
 // === Parsing ===
 export {

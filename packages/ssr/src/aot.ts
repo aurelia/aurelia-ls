@@ -16,6 +16,7 @@ import {
   compileAot,
   BUILTIN_SEMANTICS,
   NOOP_TRACE,
+  type AotSemanticSnapshot,
   type AotPlanModule,
   type AotCodeResult,
   type ProjectSemantics,
@@ -72,6 +73,8 @@ export interface AotCompileOptions {
   deduplicateExpressions?: boolean;
   /** Optional trace for instrumentation */
   trace?: CompileTrace;
+  /** Pre-built semantic snapshot from a workspace or project pipeline. */
+  snapshot?: AotSemanticSnapshot;
 }
 
 export interface AotCompileResult {
@@ -127,16 +130,13 @@ export function compileWithAot(
   const moduleResolver = options.moduleResolver ?? ((_specifier: string, _containingFile: string) => null);
 
   return trace.span("ssr.compileWithAot", () => {
-    // 1. Run SSR-agnostic AOT compilation (analysis + synthesis)
-    // This produces serialized instructions and template HTML
-    // TODO(tech-debt): replace direct compiler facade usage with the shared
-    // workspace/program authority path once SSR wiring is migrated.
     trace.event("ssr.compile.aot");
     const aotResult = compileAot(markup, {
       templatePath: options.templatePath,
       name: options.name,
       semantics,
       moduleResolver,
+      snapshot: options.snapshot,
       resourceGraph: options.resourceGraph,
       resourceScope: options.resourceScope,
       localImports: options.localImports,
@@ -196,6 +196,8 @@ export interface CompileAndRenderAotOptions {
   ssr?: SSRProcessOptions;
   /** Optional trace for instrumentation */
   trace?: CompileTrace;
+  /** Pre-built semantic snapshot from a workspace or project pipeline. */
+  snapshot?: AotSemanticSnapshot;
 }
 
 export interface CompileAndRenderAotResult {
@@ -283,6 +285,7 @@ export async function compileAndRenderAot(
       templatePath: options.templatePath,
       semantics: options.semantics,
       moduleResolver: options.moduleResolver,
+      snapshot: options.snapshot,
       resourceGraph: options.resourceGraph,
       resourceScope: options.resourceScope,
       trace,
