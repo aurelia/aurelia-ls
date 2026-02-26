@@ -164,6 +164,7 @@ export type {
   FileReferenceSite,
   ReferenceKind,
   NameForm,
+  ExpressionExtractionContext,
 } from "./schema/index.js";
 
 export {

@@ -155,6 +155,7 @@ export class FeatureGraph {
 
         if (!this.#active.has(module.id)) {
           debug("activate.start", { id: module.id });
+          ctx.logger.info(`[features] activating: ${module.id}`);
           const result = await ctx.errors.capture(
             `feature.activate.${module.id}`,
             () => ctx.trace.spanAsync(`feature.activate.${module.id}`, async () => Promise.resolve(module.activate(ctx))),
@@ -162,6 +163,7 @@ export class FeatureGraph {
           );
           if (!result.ok) {
             debug("activate.failed", { id: module.id });
+            ctx.logger.info(`[features] FAILED to activate: ${module.id}`);
             nextStatuses.set(module.id, {
               id: module.id,
               state: "failed",
@@ -178,6 +180,7 @@ export class FeatureGraph {
             : { dispose: () => {} };
           this.#active.set(module.id, disposable);
           debug("activate.complete", { id: module.id });
+          ctx.logger.info(`[features] activated: ${module.id}`);
         }
 
         nextStatuses.set(module.id, {

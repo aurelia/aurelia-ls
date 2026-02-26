@@ -13,6 +13,7 @@
 
 import type { NormalizedPath } from "../model/identity.js";
 import type { SourceSpan } from "../model/ir.js";
+import type { ScopeFrame, ScopeTemplate } from "../model/symbols.js";
 import type { ResourceScopeId } from "./types.js";
 
 // ============================================================================
@@ -73,6 +74,16 @@ export interface TextReferenceSite {
   readonly resourceKey: string;
   /** Scope context for rename safety assessment. */
   readonly scopeId?: ResourceScopeId;
+  /**
+   * For expression-identifier sites: the VM file, class name, and property
+   * that this identifier resolves to through the scope chain. Populated at
+   * extraction time using scope-qualified resolution — only identifiers that
+   * reach the VM binding context (not shadowed by TC-injected scope) carry
+   * these fields.
+   */
+  readonly vmFile?: NormalizedPath;
+  readonly vmClassName?: string;
+  readonly vmProperty?: string;
 }
 
 /**
@@ -153,11 +164,13 @@ export class InMemoryReferentialIndex implements ReferentialIndex {
     this.removeFile(templatePath);
     this.#byFile.set(templatePath, sites);
     for (const site of sites) {
-      addToMapList(this.#byResource, site.resourceKey, site);
       if (site.kind === 'text' && site.referenceKind === 'expression-identifier') {
-        // Index expression identifiers by symbol for reverse property lookup
+        // Expression identifiers are indexed by symbol key for reverse
+        // property lookup (getReferencesForSymbol), not by resource key.
         const symKey = symbolKeyFromSite(site);
         if (symKey) addToMapList(this.#bySymbol, symKey, site);
+      } else {
+        addToMapList(this.#byResource, site.resourceKey, site);
       }
     }
   }
@@ -173,12 +186,12 @@ export class InMemoryReferentialIndex implements ReferentialIndex {
   removeFile(path: NormalizedPath): void {
     const existing = this.#byFile.get(path);
     if (!existing) return;
-    // Remove from resource index
     for (const site of existing) {
-      removeFromMapList(this.#byResource, site.resourceKey, site);
       if (site.kind === 'text' && site.referenceKind === 'expression-identifier') {
         const symKey = symbolKeyFromSite(site);
         if (symKey) removeFromMapList(this.#bySymbol, symKey, site);
+      } else {
+        removeFromMapList(this.#byResource, site.resourceKey, site);
       }
     }
     this.#byFile.delete(path);
@@ -203,6 +216,28 @@ export class InMemoryReferentialIndex implements ReferentialIndex {
 
 import type { TemplateCompilation } from "../facade.js";
 import type { LinkedRow, LinkedInstruction } from "../analysis/index.js";
+import type { FrameId } from "../model/symbols.js";
+
+/**
+ * Optional context for expression-identifier extraction. When provided,
+ * extractReferenceSites also emits expression-identifier reference sites
+ * for VM property references in binding expressions — the scope-correct
+ * reverse traversal entries that power getReferencesForSymbol.
+ *
+ * Per the L2 structural invariant, these entries are the materialized
+ * inverse of the forward cursor resolver: only identifiers that resolve
+ * through the scope chain to the VM binding context are emitted, not
+ * identifiers shadowed by TC-injected scope (iterator locals, let
+ * bindings, contextual variables, aliases).
+ */
+export interface ExpressionExtractionContext {
+  /** Resolved path to the component's .ts file (the VM). */
+  componentPath: NormalizedPath;
+  /** The class name of the component's view-model. */
+  className: string;
+  /** The resource name (kebab-case) of the owning CE — used for resourceKey. */
+  resourceName?: string;
+}
 
 /**
  * Extract all resource reference sites from a compiled template.
@@ -211,12 +246,18 @@ import type { LinkedRow, LinkedInstruction } from "../analysis/index.js";
  * for every position that references a resource (CE tag, CA attribute, TC
  * attribute, VC pipe, BB ampersand, bindable property, binding command).
  *
+ * When `exprContext` is provided, also extracts expression-identifier
+ * reference sites for VM property references in binding expressions.
+ * Each site is scope-qualified: identifiers shadowed by TC-injected scope
+ * variables (repeat iterator, let binding, contextual, alias) are excluded.
+ *
  * This is the ingestion function that feeds the referential index after
  * each template compilation.
  */
 export function extractReferenceSites(
   templatePath: NormalizedPath,
   compilation: TemplateCompilation,
+  exprContext?: ExpressionExtractionContext,
 ): ReferenceSite[] {
   const sites: ReferenceSite[] = [];
 
@@ -252,6 +293,11 @@ export function extractReferenceSites(
   // VC/BB references from expression table
   for (const entry of compilation.exprTable) {
     extractExpressionSites(templatePath, entry, sites);
+  }
+
+  // Expression-identifier references: VM property references in bindings
+  if (exprContext) {
+    extractExpressionIdentifierSites(templatePath, compilation, exprContext, sites);
   }
 
   return sites;
@@ -420,6 +466,111 @@ function findNodeInDom(
 }
 
 // ============================================================================
+// Expression-identifier extraction (scope-qualified reverse traversal)
+// ============================================================================
+
+/**
+ * Extract expression-identifier reference sites from the compiled mapping.
+ *
+ * For each mapping entry that carries segments with a `path` field (an
+ * identifier name in the binding expression), this function checks whether
+ * the identifier resolves through the scope chain to the VM binding
+ * context. Identifiers shadowed by TC-injected scope (iterator locals,
+ * let bindings, contextual variables, aliases) are excluded.
+ *
+ * This is the scope-qualified reverse traversal described in L1 Boundary 7:
+ * the referential index inherits scope-awareness from the forward resolver
+ * because extraction runs scope verification at ingestion time.
+ */
+function extractExpressionIdentifierSites(
+  templatePath: NormalizedPath,
+  compilation: TemplateCompilation,
+  ctx: ExpressionExtractionContext,
+  sites: ReferenceSite[],
+): void {
+  const mapping = compilation.mapping;
+  if (!mapping) return;
+
+  // Build a frame lookup from the scope module
+  const scopeTemplate = compilation.scope?.templates?.[0];
+  const frames = scopeTemplate?.frames;
+  const frameMap = new Map<FrameId, ScopeFrame>();
+  if (frames) {
+    for (const frame of frames) {
+      frameMap.set(frame.id, frame);
+    }
+  }
+
+  // Resource key: expression identifiers are properties on the CE's VM.
+  // These sites go into #bySymbol (not #byResource), but need a resourceKey
+  // for the TextReferenceSite interface contract.
+  const resourceKey = ctx.resourceName
+    ? `custom-element:${ctx.resourceName}`
+    : `custom-element:${ctx.className}`;
+
+  for (const entry of mapping.entries) {
+    if (!entry.segments) continue;
+
+    // Determine the scope frame for this expression
+    const frameId = entry.frameId ?? null;
+
+    for (const segment of entry.segments) {
+      if (!segment.path || !segment.htmlSpan) continue;
+
+      // Scope check: is this identifier shadowed by a TC-injected scope?
+      if (frameId && frameMap.size > 0) {
+        if (isShadowedByScope(segment.path, frameId, frameMap)) continue;
+      }
+
+      sites.push({
+        kind: 'text',
+        domain: 'template',
+        referenceKind: 'expression-identifier',
+        file: templatePath,
+        span: segment.htmlSpan,
+        nameForm: 'camelCase',
+        resourceKey,
+        vmFile: ctx.componentPath,
+        vmClassName: ctx.className,
+        vmProperty: segment.path,
+      });
+    }
+  }
+}
+
+/**
+ * Check whether an identifier name is shadowed by a scope variable in the
+ * chain from the given frame to the root.
+ *
+ * Walks parent frames looking for any ScopeSymbol whose name matches. If
+ * found, the identifier resolves to that scope variable (iterator local,
+ * let binding, contextual, alias) rather than the VM binding context.
+ *
+ * The root frame is the VM binding context — we don't check it because
+ * VM properties are NOT scope symbols (they are implicit).
+ */
+function isShadowedByScope(
+  name: string,
+  frameId: FrameId,
+  frameMap: ReadonlyMap<FrameId, ScopeFrame>,
+): boolean {
+  let current = frameMap.get(frameId);
+  while (current) {
+    // Check symbols in this frame
+    for (const sym of current.symbols) {
+      if (sym.name === name) return true;
+    }
+    // Check overlay base — 'with' scope creates an overlay where ALL
+    // identifiers resolve to the overlay object, not the VM
+    if (current.overlay) return true;
+    // Walk to parent
+    if (current.parent == null) break;
+    current = frameMap.get(current.parent);
+  }
+  return false;
+}
+
+// ============================================================================
 // Helpers
 // ============================================================================
 
@@ -427,10 +578,10 @@ function symbolKey(file: NormalizedPath, className: string, property: string): s
   return `${file}:${className}.${property}`;
 }
 
-function symbolKeyFromSite(_site: TextReferenceSite): string | null {
-  // Expression identifier sites don't directly carry class/property info yet.
-  // This will be populated when expression entities carry ConvergenceRef
-  // to the owning VM class (L1 cross-domain-provenance-mapping OQ-4).
+function symbolKeyFromSite(site: TextReferenceSite): string | null {
+  if (site.vmFile && site.vmClassName && site.vmProperty) {
+    return symbolKey(site.vmFile, site.vmClassName, site.vmProperty);
+  }
   return null;
 }
 

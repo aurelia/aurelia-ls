@@ -77,6 +77,7 @@ export interface TemplateIndex {
   readonly inlineTemplates: readonly InlineTemplateInfo[];
   readonly templateToComponent: ReadonlyMap<DocumentUri, string>;
   readonly templateToScope: ReadonlyMap<DocumentUri, ResourceScopeId>;
+  readonly templateToClassName: ReadonlyMap<DocumentUri, string>;
 }
 
 export type AttributeSyntaxContext = {

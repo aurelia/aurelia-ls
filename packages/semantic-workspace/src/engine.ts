@@ -44,6 +44,8 @@ import {
   type StyleProfile,
   type SemanticModel,
   type SemanticModelQuery,
+  type NormalizedPath,
+  type ExpressionExtractionContext,
 } from "@aurelia-ls/compiler";
 import {
   createNodeFileSystem,
@@ -266,6 +268,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       ...(this.#typescript ? { language: { typescript: this.#typescript } } : {}),
       fingerprint: this.#query.model.fingerprint,
       lookupText: (uri) => this.#lookupText?.(uri) ?? null,
+      resolveExprContext: (templateUri) => this.#resolveExprContext(templateUri),
     });
 
     this.#ensurePrelude(workspaceRoot);
@@ -1337,11 +1340,12 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
   }
 
   #templateReferencesForVmMember(activeUri: DocumentUri, vmPath: string, memberName: string): WorkspaceLocation[] {
-    const normalizedVm = normalizePathForId(path.resolve(vmPath));
-    const results: WorkspaceLocation[] = [];
+    const normalizedVm = normalizePathForId(path.resolve(vmPath)) as NormalizedPath;
+
+    // Ensure all associated templates are compiled so the referential index
+    // is populated with scope-qualified expression-identifier sites.
     const sources = this.#kernel.sources;
     let activated = false;
-
     for (const [templateUri, componentPath] of this.#templateIndex.templateToComponent.entries()) {
       const normalizedComponent = normalizePathForId(path.resolve(componentPath));
       if (normalizedComponent !== normalizedVm) continue;
@@ -1352,6 +1356,39 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       }
       this.#activateTemplate(templateUri);
       activated = true;
+      // Trigger compilation → referential index population
+      this.#kernel.getCompilation(templateUri);
+    }
+
+    // Query the referential index for scope-qualified expression-identifier
+    // sites. This is the L1 Boundary 7 fix: reverse traversal through the
+    // materialized inverse of the forward resolver, inheriting scope-awareness.
+    const className = this.#findClassName(normalizedVm);
+    if (className) {
+      const indexSites = this.referentialIndex.getReferencesForSymbol(
+        normalizedVm,
+        className,
+        memberName,
+      );
+      if (indexSites.length > 0) {
+        const results = indexSites
+          .filter((s): s is import("@aurelia-ls/compiler").TextReferenceSite => s.kind === "text")
+          .map(s => ({
+            uri: s.file as unknown as DocumentUri,
+            span: s.span,
+          }));
+        if (activated) this.#activateTemplate(activeUri);
+        return results;
+      }
+    }
+
+    // Fallback: string matching on mapping segments (for cases where the
+    // referential index doesn't have expression-identifier data, e.g. when
+    // expression context resolution wasn't available at compilation time).
+    const results: WorkspaceLocation[] = [];
+    for (const [templateUri, componentPath] of this.#templateIndex.templateToComponent.entries()) {
+      const normalizedComponent = normalizePathForId(path.resolve(componentPath));
+      if (normalizedComponent !== normalizedVm) continue;
       const compilation = this.#kernel.getCompilation(templateUri);
       const mapping = compilation?.mapping;
       if (!mapping) continue;
@@ -1375,6 +1412,15 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     return results;
   }
 
+  #findClassName(vmPath: NormalizedPath): string | null {
+    for (const [templateUri, componentPath] of this.#templateIndex.templateToComponent.entries()) {
+      if (normalizePathForId(path.resolve(componentPath)) === vmPath) {
+        return this.#templateIndex.templateToClassName.get(templateUri) ?? null;
+      }
+    }
+    return null;
+  }
+
   #referenceContext(
     uri: DocumentUri,
     pos: { line: number; character: number },
@@ -1396,6 +1442,24 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
 
   #isTemplateUri(uri: DocumentUri): boolean {
     return this.#templateIndex.templateToComponent.has(canonicalDocumentUri(uri).uri);
+  }
+
+  #resolveExprContext(templateUri: DocumentUri): ExpressionExtractionContext | null {
+    const canonical = canonicalDocumentUri(templateUri);
+    const componentPath = this.#templateIndex.templateToComponent.get(canonical.uri);
+    const className = this.#templateIndex.templateToClassName.get(canonical.uri);
+    if (!componentPath || !className) return null;
+    // Find the resource name from the templates list
+    const entry = this.#templateIndex.templates.find(
+      t => canonicalDocumentUri(t.templatePath).uri === canonical.uri,
+    ) ?? this.#templateIndex.inlineTemplates.find(
+      t => canonicalDocumentUri(inlineTemplatePath(t.componentPath)).uri === canonical.uri,
+    );
+    return {
+      componentPath: normalizePathForId(path.resolve(componentPath)) as NormalizedPath,
+      className,
+      resourceName: (entry as { resourceName?: string } | undefined)?.resourceName,
+    };
   }
 
   #resourceReferencesAtOffset(uri: DocumentUri, offset: number): TextReferenceSite[] {
@@ -1773,22 +1837,26 @@ function getActiveTemplateSetter(vm: VmReflection): ((path: string | null) => vo
 export function buildTemplateIndex(source: Pick<ProjectSemanticsDiscoveryResult, "templates" | "inlineTemplates">): TemplateIndex {
   const templateToComponent = new Map<DocumentUri, string>();
   const templateToScope = new Map<DocumentUri, ResourceScopeId>();
+  const templateToClassName = new Map<DocumentUri, string>();
   for (const entry of source.templates) {
     const uri = canonicalDocumentUri(entry.templatePath).uri;
     templateToComponent.set(uri, entry.componentPath);
     templateToScope.set(uri, entry.scopeId);
+    templateToClassName.set(uri, entry.className);
   }
   for (const entry of source.inlineTemplates) {
     const inlinePath = inlineTemplatePath(entry.componentPath);
     const uri = canonicalDocumentUri(inlinePath).uri;
     templateToComponent.set(uri, entry.componentPath);
     templateToScope.set(uri, entry.scopeId);
+    templateToClassName.set(uri, entry.className);
   }
   return {
     templates: source.templates,
     inlineTemplates: source.inlineTemplates,
     templateToComponent,
     templateToScope,
+    templateToClassName,
   };
 }
 

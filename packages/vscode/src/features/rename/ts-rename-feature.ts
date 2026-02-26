@@ -6,16 +6,15 @@
  * This feature augments those edits with template-side edits by asking
  * the Aurelia language server for binding expression references.
  *
- * Architecture: registers a VS Code RenameProvider for TypeScript files.
- * On rename, it:
- * 1. Executes the built-in TS rename to get TS edits
- * 2. Asks the Aurelia LS for template edits via aurelia/renameFromTs
- * 3. Merges both edit sets into a single WorkspaceEdit
- *
- * Reentrancy: vscode.executeDocumentRenameProvider triggers ALL registered
- * providers, including this one. A reentrancy guard prevents infinite
- * recursion — on reentrant calls, the provider returns undefined so the
- * built-in TS provider handles the request.
+ * Architecture: registers a RenameProvider for TS files with a
+ * pattern-augmented document selector (scores higher than the built-in
+ * TS provider). Our prepareRename validates the position using
+ * getWordRangeAtPosition (NOT vscode.prepareDocumentRenameProvider,
+ * which doesn't exist as a command — calling it throws silently and
+ * causes VS Code to fall back to the built-in TS provider, skipping
+ * our provideRenameEdits entirely). Our provideRenameEdits delegates
+ * to the built-in TS rename, then augments with template edits from
+ * the Aurelia LS.
  */
 import type { FeatureModule } from "../../core/feature-graph.js";
 import { DisposableStore } from "../../core/disposables.js";
@@ -31,17 +30,20 @@ export const TsRenameFeature: FeatureModule = {
   activate: (ctx) => {
     const store = new DisposableStore();
     const vscode = ctx.vscode;
+    const log = ctx.logger;
 
-    // Reentrancy guard: executeDocumentRenameProvider calls all providers
-    // including this one. On reentrant calls, return undefined to let the
-    // built-in TS provider handle it.
     let delegating = false;
 
     const provider: import("vscode").RenameProvider = {
       provideRenameEdits: async (document, position, newName, token) => {
         if (delegating) return undefined;
 
-        // Step 1: Execute the built-in TS rename (reentrancy-guarded)
+        const isTs = document.languageId === "typescript" || document.languageId === "typescriptreact";
+        if (!isTs) return undefined;
+
+        log.info(`[TsRename] rename: ${document.uri.fsPath}:${position.line}:${position.character} → "${newName}"`);
+
+        // Step 1: Delegate to the built-in TS rename (reentrancy-guarded)
         let tsEdit: import("vscode").WorkspaceEdit | undefined;
         delegating = true;
         try {
@@ -51,6 +53,9 @@ export const TsRenameFeature: FeatureModule = {
             position,
             newName,
           );
+        } catch (e) {
+          log.warn(`[TsRename] built-in TS rename failed: ${e instanceof Error ? e.message : e}`);
+          return undefined;
         } finally {
           delegating = false;
         }
@@ -66,16 +71,19 @@ export const TsRenameFeature: FeatureModule = {
               newName,
             },
           );
-        } catch {
-          // Aurelia LS not ready or request failed — proceed with TS-only rename
+        } catch (e) {
+          log.warn(`[TsRename] aurelia/renameFromTs failed: ${e instanceof Error ? e.message : e}`);
         }
 
-        // No template edits — let TS rename handle it entirely
-        if (!aureliaChanges?.changes) return tsEdit;
+        // No template edits — return TS-only edits
+        if (!aureliaChanges?.changes) {
+          log.info(`[TsRename] no template edits, TS-only rename`);
+          return tsEdit;
+        }
 
-        // Step 3: Merge edits
+        // Step 3: Merge TS + template edits
         const merged = tsEdit ?? new vscode.WorkspaceEdit();
-
+        let templateEditCount = 0;
         for (const [uri, edits] of Object.entries(aureliaChanges.changes)) {
           const fileUri = vscode.Uri.parse(uri);
           for (const edit of edits) {
@@ -87,49 +95,47 @@ export const TsRenameFeature: FeatureModule = {
               ),
               edit.newText,
             );
+            templateEditCount++;
           }
         }
 
+        log.info(`[TsRename] merged: ${merged.entries().length} files, ${templateEditCount} template edits`);
         return merged;
       },
 
       prepareRename: async (document, position, token) => {
         if (delegating) return undefined;
 
-        // Delegate to VS Code's built-in TS prepareRename
-        delegating = true;
-        try {
-          const result = await vscode.commands.executeCommand<
-            | { range: import("vscode").Range; placeholder: string }
-            | import("vscode").Range
-            | null
-          >(
-            "vscode.prepareDocumentRenameProvider",
-            document.uri,
-            position,
-          );
+        const isTs = document.languageId === "typescript" || document.languageId === "typescriptreact";
+        if (!isTs) return undefined;
 
-          if (!result) return undefined;
-          if ("range" in result && "placeholder" in result) {
-            return result;
-          }
-          return result as import("vscode").Range;
-        } finally {
-          delegating = false;
-        }
+        // Extract the word at the cursor position directly from the document.
+        // Do NOT use vscode.prepareDocumentRenameProvider — that command does
+        // not exist. Calling it throws, which causes VS Code to skip our
+        // provider and fall back to the built-in TS provider, meaning our
+        // provideRenameEdits is never called.
+        const wordRange = document.getWordRangeAtPosition(position);
+        if (!wordRange) return undefined;
+
+        const placeholder = document.getText(wordRange);
+        log.info(`[TsRename] prepare: ${document.uri.fsPath}:${position.line}:${position.character} → "${placeholder}"`);
+        return { range: wordRange, placeholder };
       },
     };
 
+    // Pattern-augmented selector scores higher than the built-in TS provider.
+    // VS Code ranks by specificity: language+scheme+pattern > language+scheme.
     store.add(
       vscode.languages.registerRenameProvider(
         [
-          { language: "typescript", scheme: "file" },
-          { language: "typescriptreact", scheme: "file" },
+          { language: "typescript", scheme: "file", pattern: "**/*.ts" },
+          { language: "typescriptreact", scheme: "file", pattern: "**/*.tsx" },
         ],
         provider,
       ),
     );
 
+    log.info("[TsRename] activated");
     return store;
   },
 };

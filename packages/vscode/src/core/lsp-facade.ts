@@ -44,15 +44,18 @@ export class LspFacade {
   sendRequest<T>(method: string, params?: unknown): Promise<T> {
     return this.#trace.spanAsync(`lsp.${method}`, async () => {
       this.#debug("request", { method });
+      this.#logger.info(`[lsp] → ${method}`);
       this.#trace.setAttribute("lsp.method", method);
       this.#trace.setAttribute("lsp.hasParams", Boolean(params));
       try {
         const result = await this.#client.sendRequest<T>(method, params);
         this.#debug("response", { method });
+        this.#logger.info(`[lsp] ← ${method} ok`);
         return result;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         this.#debug("error", { method, message });
+        this.#logger.info(`[lsp] ← ${method} ERROR: ${message}`);
         throw err;
       }
     });

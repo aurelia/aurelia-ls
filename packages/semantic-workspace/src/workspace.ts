@@ -67,6 +67,12 @@ export interface SemanticWorkspaceKernelOptions {
   readonly configHash?: string;
   readonly fingerprint?: string;
   readonly lookupText?: (uri: DocumentUri) => string | null;
+  /**
+   * Resolve expression extraction context for a template URI.
+   * When provided, the referential index is populated with scope-qualified
+   * expression-identifier sites that power getReferencesForSymbol.
+   */
+  readonly resolveExprContext?: (templateUri: DocumentUri) => import("@aurelia-ls/compiler").ExpressionExtractionContext | null;
 }
 
 const EMPTY_DIAGNOSTICS: WorkspaceDiagnostics = { bySurface: new Map(), suppressed: [] };
@@ -88,6 +94,7 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
   #configHash: string;
   #workspaceFingerprint: string;
   #lookupText: ((uri: DocumentUri) => string | null) | undefined;
+  #resolveExprContext: ((uri: DocumentUri) => import("@aurelia-ls/compiler").ExpressionExtractionContext | null) | undefined;
   #refactor: RefactorEngine;
 
   constructor(options: SemanticWorkspaceKernelOptions) {
@@ -97,6 +104,7 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
     this.#programOptions = options.program;
     this.#languageOptions = options.language ?? {};
     this.#lookupText = options.lookupText;
+    this.#resolveExprContext = options.resolveExprContext;
     this.program = this.#createProgram(this.provenance, this.#programOptions);
     this.buildService = new DefaultTemplateBuildService(this.program);
     this.languageService = new DefaultTemplateLanguageService(this.program, {
@@ -288,7 +296,10 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
         // Feed the referential index after each compilation.
         // extractReferenceSites walks the linked module and produces
         // reference sites for every resource reference in this template.
-        const sites = extractReferenceSites(canonical.uri as any, compilation);
+        // When expression context is available, also extracts scope-qualified
+        // expression-identifier sites for VM property reverse lookup.
+        const exprContext = this.#resolveExprContext?.(canonical.uri) ?? undefined;
+        const sites = extractReferenceSites(canonical.uri as any, compilation, exprContext);
         this.referentialIndex.updateFromTemplate(canonical.uri as any, sites);
       }
       return compilation;

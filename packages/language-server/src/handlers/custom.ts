@@ -670,17 +670,25 @@ export function handleRenameFromTs(
     if (!params?.uri || !params.position || !params.newName) return null;
 
     const canonical = canonicalDocumentUri(params.uri);
+
     // tryExpressionMemberRename lives on SemanticWorkspaceEngine (implementation),
     // not on the SemanticWorkspace interface. Runtime check guards the cast.
     const engine = ctx.workspace as any;
-    if (typeof engine.tryExpressionMemberRename !== "function") return null;
+    if (typeof engine.tryExpressionMemberRename !== "function") {
+      ctx.logger.warn(`[renameFromTs] tryExpressionMemberRename not available on workspace`);
+      return null;
+    }
 
     const result = engine.tryExpressionMemberRename({
       uri: canonical.uri,
       position: params.position,
       newName: params.newName,
     }) as import("@aurelia-ls/semantic-workspace").WorkspaceRefactorResult | null;
-    if (!result || !("edit" in result)) return null;
+
+    if (!result || !("edit" in result)) {
+      ctx.logger.info(`[renameFromTs] no cross-domain edits for ${canonical.path}`);
+      return null;
+    }
 
     // Filter to template-only edits (TS edits are handled by VS Code's built-in TS rename)
     const templateEdits = result.edit.edits.filter(
@@ -688,17 +696,25 @@ export function handleRenameFromTs(
     );
     if (!templateEdits.length) return null;
 
-    // Convert workspace edits to LSP format
+    // Convert workspace edits to LSP format (span offsets → line/character ranges)
     const lookupText = (uri: any) => ctx.lookupText(uri);
     const mapped = mapSemanticWorkspaceEdit({ edits: templateEdits }, lookupText);
-    if (!mapped?.changes) return null;
+    if (!mapped?.changes) {
+      ctx.logger.warn(`[renameFromTs] span→range conversion failed for ${templateEdits.length} edits`);
+      return null;
+    }
 
     const changes = mapped.changes as Record<string, { range: { start: Position; end: Position }; newText: string }[]>;
+    const fileCount = Object.keys(changes).length;
 
-    return Object.keys(changes).length ? { changes } : null;
+    if (fileCount > 0) {
+      ctx.logger.info(`[renameFromTs] propagating to ${fileCount} template(s)`);
+    }
+    return fileCount ? { changes } : null;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    ctx.logger.error(`[renameFromTs] failed: ${msg}`);
+    const stack = e instanceof Error ? e.stack : undefined;
+    ctx.logger.error(`[renameFromTs] ${msg}${stack ? `\n${stack}` : ""}`);
     return null;
   }
 }
