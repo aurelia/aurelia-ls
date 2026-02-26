@@ -1,13 +1,34 @@
 # Getting Started
 
-This guide covers setting up the project and running the demos.
+## Using the VS Code Extension
 
-## Prerequisites
+The fastest way to use this project is through the VS Code extension:
+
+```
+ext install AureliaEffect.aurelia-2
+```
+
+Open any Aurelia 2 project (one with `aurelia` or `@aurelia/*` in its
+dependencies and a `tsconfig.json`) and the language server starts
+automatically. You should see the Aurelia status bar item appear with
+resource and template counts once analysis completes.
+
+Try these to verify it's working:
+
+- **Hover** a custom element tag to see its bindable interface
+- **Ctrl+click** a tag name to jump to the component class
+- **Type `<`** inside a template to see element completions
+- Open the **Resource Explorer** in the sidebar to browse your project's resources
+- Press **Ctrl+Alt+A** to search resources by name
+
+Check the "Aurelia Language Server" output channel if anything isn't working.
+
+## Prerequisites (for building from source)
 
 - Node.js 20+
 - pnpm
 
-## Installation
+## Building from Source
 
 ```bash
 git clone --recurse-submodules https://github.com/aurelia/aurelia-ls.git
@@ -24,88 +45,62 @@ pnpm install
 pnpm run build
 ```
 
-The project uses the Aurelia framework as a git submodule. The `pnpm.overrides` in `package.json` link directly to packages inside `aurelia/`, so the submodule must be built first.
+The project uses the Aurelia framework as a git submodule. The
+`pnpm.overrides` in `package.json` link directly to packages inside
+`aurelia/`, so the submodule must be built first.
 
-> **Note:** The submodule setup is temporary during development while we work towards full bi-directional compatibility with Aurelia. This allows faster iteration on changes that span both repositories.
-
-The final build compiles all aurelia-ls packages using TypeScript project references.
-
-## Running the Demos
-
-### Todo App (SSR + Hydration)
-
-A simple todo application demonstrating server-side rendering with client hydration:
-
-```bash
-cd examples/todo-app
-pnpm install
-pnpm start
-```
-
-Open http://localhost:5173. The page is server-rendered—view source to see the pre-rendered HTML. The client hydrates without re-rendering, preserving the server output.
-
-### Router App (SSR with Routing)
-
-Demonstrates SSR with the Aurelia router:
-
-```bash
-cd examples/router-app
-pnpm install
-pnpm start
-```
-
-Navigate between routes. Each page is server-rendered with the correct content.
-
-### AOT Build (Standalone Compilation)
-
-Shows the raw AOT compilation output without a dev server:
-
-```bash
-cd examples/aot-build
-node demo.mjs
-```
-
-This prints the before/after of source transformation, showing how decorators become static `$au` definitions.
+> **Note:** The submodule setup is temporary while we work towards full
+> bi-directional compatibility with Aurelia.
 
 ## Running Tests
 
 ```bash
-# All tests
-pnpm run test
+# Everything
+pnpm test
 
-# Common focused suites
-pnpm run test:compiler
-pnpm run test:20-link
-pnpm run test:language-server
-pnpm run test:ide
-pnpm run test:ssr
+# IDE features (language server + semantic workspace)
+pnpm test:ide
+
+# Feature matrix (cross-feature × cross-resource-kind)
+pnpm test:sem-matrix
+
+# Compiler stages
+pnpm test:compiler
+pnpm test:20-link
+pnpm test:30-bind
+pnpm test:40-typecheck
+
+# SSR
+pnpm test:ssr
 ```
 
-## VS Code Extension
-
-The extension is published on the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=AureliaEffect.aurelia-2). To install:
-
-```
-ext install AureliaEffect.aurelia-2
-```
-
-### Developing the Extension Locally
-
-To test local changes to the extension:
+## Developing the Extension Locally
 
 1. Open the project in VS Code
-2. Run `pnpm run build` to compile the packages
-3. Press F5 (or use Run → Start Debugging)
+2. Run `pnpm run build`
+3. Press F5 (or Run → Start Debugging)
 4. Select "Run Extension (with Hello World workspace)"
 5. A new VS Code window opens with the extension loaded
-6. Edit `.html` templates to see completions and diagnostics
 
-The launch configuration opens the `fixtures/hello-world` test project by default. To test with a different project, modify the args in `.vscode/launch.json`.
+The launch configuration opens the `fixtures/hello-world` test project
+by default. Modify the args in `.vscode/launch.json` to test with a
+different project.
 
-To debug the language server itself, use the "Attach to Server" configuration after launching the extension.
+To debug the language server, use the "Attach to Server" configuration
+after launching the extension.
+
+## Example Apps
+
+The `examples/` directory has demo apps for the build-time features:
+
+- **todo-app** — SSR with client hydration (`pnpm start`, then view
+  source to see pre-rendered HTML)
+- **router-app** — SSR with Aurelia router
+- **aot-build** — raw AOT compilation output (`node demo.mjs`)
 
 ## Next Steps
 
 - Read the [Architecture](./architecture.md) overview
+- Check the [VS Code extension README](../packages/vscode/README.md)
+  for the full feature list
 - Explore the example apps in `examples/`
-- Check package READMEs for API details
