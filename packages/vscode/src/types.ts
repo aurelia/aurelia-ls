@@ -141,7 +141,7 @@ export interface ResourceExplorerBindable {
 }
 
 export type ResourceOrigin = "framework" | "project" | "package";
-export type ResourceScope = "global" | "local";
+export type ResourceScope = "global" | "local" | "orphan";
 
 export interface ResourceExplorerItem {
   name: string;

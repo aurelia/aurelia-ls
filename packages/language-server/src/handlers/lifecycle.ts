@@ -3,6 +3,7 @@
  */
 import {
   TextDocumentSyncKind,
+  FileChangeType,
   type InitializeParams,
   type InitializeResult,
   type DidChangeWatchedFilesParams,
@@ -22,6 +23,15 @@ const DOCUMENT_CHANGE_DEBOUNCE_MS = 300;
 
 /** Tracks pending debounced refresh operations per document URI */
 const pendingRefreshes = new Map<string, ReturnType<typeof setTimeout>>();
+
+function hasSourceFileStructuralChange(changes: readonly FileEvent[]): boolean {
+  for (const change of changes) {
+    if (change.type !== FileChangeType.Created && change.type !== FileChangeType.Deleted) continue;
+    const fsPath = URI.parse(change.uri).fsPath;
+    if (fsPath.endsWith(".ts") || fsPath.endsWith(".js")) return true;
+  }
+  return false;
+}
 
 function shouldReloadForFileChange(changes: readonly FileEvent[]): boolean {
   for (const change of changes) {
@@ -171,9 +181,19 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
 
   ctx.connection.onDidChangeWatchedFiles((e: DidChangeWatchedFilesParams) => {
     if (!e.changes?.length) return;
-    if (!shouldReloadForFileChange(e.changes)) return;
-    ctx.logger.log("didChangeWatchedFiles: tsconfig/jsconfig changed, reloading project");
-    void reloadProjectConfiguration(ctx, "watched files");
+
+    if (shouldReloadForFileChange(e.changes)) {
+      ctx.logger.log("didChangeWatchedFiles: tsconfig/jsconfig changed, reloading project");
+      void reloadProjectConfiguration(ctx, "watched files");
+      return;
+    }
+
+    // TS/JS file created or deleted — full reload to pick up new root files
+    // and clear incremental discovery cache.
+    if (hasSourceFileStructuralChange(e.changes)) {
+      ctx.logger.log("didChangeWatchedFiles: source file created/deleted, reloading project");
+      ctx.workspace.reloadProject();
+    }
   });
 
   ctx.documents.onDidChangeContent((e) => {

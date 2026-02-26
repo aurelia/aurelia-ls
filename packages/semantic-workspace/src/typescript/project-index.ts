@@ -83,6 +83,10 @@ export class AureliaProjectIndex {
     return this.#model;
   }
 
+  clearDiscoveryCache(): void {
+    this.#discovery.clear();
+  }
+
   refresh(): void {
     const prevFingerprint = this.#model.fingerprint;
     const prevGraph = this.#model.deps;

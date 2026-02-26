@@ -345,6 +345,19 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     return true;
   }
 
+  /**
+   * Full invalidation: re-read tsconfig, clear incremental discovery cache,
+   * and rebuild. Use when file structure may have changed (files added/removed).
+   */
+  reloadProject(): void {
+    // Invalidate the project program so it re-reads root files from disk
+    this.#env.project.invalidate?.("reload");
+    // Clear incremental discovery cache so new files are fully extracted
+    this.#projectIndex.clearDiscoveryCache();
+    // Reconfigure to re-read tsconfig with fresh root files
+    this.configureProject({ workspaceRoot: this.#workspaceRoot });
+  }
+
   configureProject(options: { workspaceRoot?: string | null; tsconfigPath?: string | null; configFileName?: string }): void {
     const root = options.workspaceRoot ?? null;
     if (root) {

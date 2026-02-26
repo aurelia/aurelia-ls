@@ -230,7 +230,7 @@ export type ResourceExplorerBindable = {
 };
 
 export type ResourceOrigin = "framework" | "project" | "package";
-export type ResourceScope = "global" | "local";
+export type ResourceScope = "global" | "local" | "orphan";
 
 export type ResourceExplorerItem = {
   name: string;
@@ -258,13 +258,17 @@ export type ResourceExplorerResponse = {
 
 export function handleGetResources(ctx: ServerContext): ResourceExplorerResponse {
   try {
+    // Full reload: re-read tsconfig for fresh root files, clear incremental
+    // discovery cache, and rebuild.  This ensures newly added or removed
+    // resource files are picked up.
+    ctx.workspace.reloadProject();
     const snapshot = ctx.workspace.snapshot();
     const catalog = snapshot.catalog;
     const semantics = snapshot.semantics;
     const graph = snapshot.resourceGraph;
 
     // Build scope index from ResourceGraph
-    const scopeIndex = buildScopeIndex(graph);
+    const { index: scopeIndex, allScoped } = buildScopeIndex(graph);
 
     // Compute builtin staleness (encoding vs analysis discrepancies)
     let discrepancies: Map<string, BuiltinDiscrepancy> | null = null;
@@ -277,12 +281,12 @@ export function handleGetResources(ctx: ServerContext): ResourceExplorerResponse
 
     // Walk elements
     for (const [name, res] of Object.entries(collections.elements)) {
-      resources.push(mapCatalogResource(name, "custom-element", res, catalog, scopeIndex, discrepancies));
+      resources.push(mapCatalogResource(name, "custom-element", res, catalog, scopeIndex, allScoped, discrepancies));
     }
     // Walk attributes — skip template controllers (they appear in controllers too)
     for (const [name, res] of Object.entries(collections.attributes)) {
       if (res.isTemplateController) continue;
-      resources.push(mapCatalogResource(name, "custom-attribute", res, catalog, scopeIndex, discrepancies));
+      resources.push(mapCatalogResource(name, "custom-attribute", res, catalog, scopeIndex, allScoped, discrepancies));
     }
     // Walk controllers — ControllerConfig lacks origin/declarationForm/gaps/package,
     // so merge from the corresponding AttrRes entry (which always exists for TCs).
@@ -292,21 +296,21 @@ export function handleGetResources(ctx: ServerContext): ResourceExplorerResponse
       seenControllers.add(name);
       const attrRes = collections.attributes[name];
       const merged = attrRes ? { ...controllerRes, origin: attrRes.origin, declarationForm: attrRes.declarationForm, gaps: attrRes.gaps, package: attrRes.package, className: attrRes.className ?? controllerRes.className, file: attrRes.file ?? controllerRes.file, bindables: attrRes.bindables } : controllerRes;
-      resources.push(mapCatalogResource(name, "template-controller", merged, catalog, scopeIndex, discrepancies));
+      resources.push(mapCatalogResource(name, "template-controller", merged, catalog, scopeIndex, allScoped, discrepancies));
     }
     // Pick up any TCs that are only in attributes (not in controllers)
     for (const [name, res] of Object.entries(collections.attributes)) {
       if (!res.isTemplateController) continue;
       if (seenControllers.has(name)) continue;
-      resources.push(mapCatalogResource(name, "template-controller", res, catalog, scopeIndex, discrepancies));
+      resources.push(mapCatalogResource(name, "template-controller", res, catalog, scopeIndex, allScoped, discrepancies));
     }
     // Walk value converters
     for (const [name, res] of Object.entries(collections.valueConverters)) {
-      resources.push(mapCatalogResource(name, "value-converter", res, catalog, scopeIndex, discrepancies));
+      resources.push(mapCatalogResource(name, "value-converter", res, catalog, scopeIndex, allScoped, discrepancies));
     }
     // Walk binding behaviors
     for (const [name, res] of Object.entries(collections.bindingBehaviors)) {
-      resources.push(mapCatalogResource(name, "binding-behavior", res, catalog, scopeIndex, discrepancies));
+      resources.push(mapCatalogResource(name, "binding-behavior", res, catalog, scopeIndex, allScoped, discrepancies));
     }
 
     // Sort: by origin (project first, package second, framework last), then by kind, then alphabetically
@@ -335,6 +339,7 @@ export function handleGetResources(ctx: ServerContext): ResourceExplorerResponse
 }
 
 type ScopeEntry = { scope: ResourceScope; scopeOwner?: string };
+type ScopeIndexResult = { index: Map<string, ScopeEntry>; allScoped: Set<string> };
 
 /**
  * Build an index of resource name → scope info from the ResourceGraph.
@@ -344,12 +349,17 @@ type ScopeEntry = { scope: ResourceScope; scopeOwner?: string };
  * A resource is only "local" if it appears in a non-root scope AND is NOT
  * in the root scope. Resources in both root and local scopes are global —
  * the local copy is a pre-seeded duplicate, not an independent registration.
+ *
+ * Also returns `allScoped` — the set of ALL resource names that appear in
+ * at least one scope. Resources in the catalog but NOT in this set are
+ * orphans (discovered by analysis but not registered in any container).
  */
 function buildScopeIndex(
   graph: import("@aurelia-ls/compiler").ResourceGraph | undefined | null,
-): Map<string, ScopeEntry> {
+): ScopeIndexResult {
   const index = new Map<string, ScopeEntry>();
-  if (!graph) return index;
+  const allScoped = new Set<string>();
+  if (!graph) return { index, allScoped };
 
   const categories = ["elements", "attributes", "controllers", "valueConverters", "bindingBehaviors"] as const;
 
@@ -362,6 +372,7 @@ function buildScopeIndex(
       if (!records) continue;
       for (const name of Object.keys(records)) {
         rootResources.add(name);
+        allScoped.add(name);
       }
     }
   }
@@ -378,12 +389,13 @@ function buildScopeIndex(
       const records = resources[category];
       if (!records) continue;
       for (const name of Object.keys(records)) {
+        allScoped.add(name);
         if (rootResources.has(name)) continue;
         index.set(name, { scope: "local" as ResourceScope, scopeOwner: owner });
       }
     }
   }
-  return index;
+  return { index, allScoped };
 }
 
 type FlatResourceLike = {
@@ -411,6 +423,7 @@ function mapCatalogResource(
   res: FlatResourceLike,
   catalog: import("@aurelia-ls/compiler").ResourceCatalog,
   scopeIndex: Map<string, ScopeEntry>,
+  allScoped: Set<string>,
   discrepancies: Map<string, BuiltinDiscrepancy> | null,
 ): ResourceExplorerItem {
   const bindables: ResourceExplorerBindable[] = [];
@@ -437,6 +450,10 @@ function mapCatalogResource(
 
   const origin = detectOrigin(res);
   const scopeEntry = scopeIndex.get(name);
+  // Three-way scope: local (non-root only), global (in root), orphan (not in any scope)
+  const scope: ResourceScope = scopeEntry
+    ? "local"
+    : allScoped.has(name) ? "global" : "orphan";
 
   const item: ResourceExplorerItem = {
     name,
@@ -449,7 +466,7 @@ function mapCatalogResource(
     gapCount: fallbackGapCount,
     gapIntrinsicCount: gapIntrinsic,
     origin,
-    scope: scopeEntry ? "local" : "global",
+    scope,
     scopeOwner: scopeEntry?.scopeOwner,
     declarationForm: res.declarationForm,
   };

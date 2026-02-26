@@ -244,6 +244,8 @@ function buildResourceNode(item: ResourceExplorerItem): TreeNode {
   if (item.declarationForm) descParts.push(item.declarationForm);
   if (item.scope === "local") {
     descParts.push(item.scopeOwner ? `local to ${item.scopeOwner}` : "local");
+  } else if (item.scope === "orphan") {
+    descParts.push("not registered");
   }
   if (item.bindableCount > 0) descParts.push(`${item.bindableCount} bindable${item.bindableCount === 1 ? "" : "s"}`);
   if (item.gapCount > 0) descParts.push(`${item.gapCount} gap${item.gapCount === 1 ? "" : "s"}`);
@@ -255,7 +257,7 @@ function buildResourceNode(item: ResourceExplorerItem): TreeNode {
     label: item.name,
     description: descParts.join(" | "),
     tooltip: buildResourceTooltip(item),
-    iconId: item.scope === "local" ? "lock" : (KIND_ICONS[item.kind] ?? "symbol-misc"),
+    iconId: item.scope === "local" ? "lock" : item.scope === "orphan" ? "question" : (KIND_ICONS[item.kind] ?? "symbol-misc"),
     collapsible: children.length > 0,
     children,
     resourceFile: item.file,

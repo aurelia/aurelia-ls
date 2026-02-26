@@ -158,6 +158,10 @@ export class AureliaLanguageClient {
       this.#vscode.workspace.createFileSystemWatcher("**/tsconfig.json"),
       this.#vscode.workspace.createFileSystemWatcher("**/tsconfig.*.json"),
       this.#vscode.workspace.createFileSystemWatcher("**/jsconfig.json"),
+      // Watch TS/JS files for creation/deletion so the resource explorer
+      // picks up new or removed resources without requiring a manual refresh.
+      this.#vscode.workspace.createFileSystemWatcher("**/*.ts"),
+      this.#vscode.workspace.createFileSystemWatcher("**/*.js"),
     ];
 
     const clientOptions: LanguageClientOptions = {
