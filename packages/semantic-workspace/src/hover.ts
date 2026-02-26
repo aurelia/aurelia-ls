@@ -12,7 +12,6 @@ import {
   type BindingMode,
   type CursorResolutionResult,
   type ElementRes,
-  type SourceSpan,
   type TypeRef,
   type ValueConverterSig,
 } from "@aurelia-ls/compiler";

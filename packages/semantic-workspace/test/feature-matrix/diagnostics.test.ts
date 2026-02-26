@@ -708,3 +708,176 @@ describe("diagnostics: carried data", () => {
     expect(data.recovery).toBe(true);
   });
 });
+
+// ============================================================================
+// 13. Expression span accuracy with whitespace
+//
+// When whitespace (newlines, indentation) appears inside interpolation
+// brackets, diagnostic spans must point to the actual expression text,
+// not to the surrounding whitespace.
+// ============================================================================
+
+describe("diagnostics: expression span accuracy with whitespace", () => {
+  /**
+   * Helper: inject a modified template, query diagnostics, then restore.
+   * Returns the diagnostic list from the modified template.
+   */
+  async function withModifiedTemplate(
+    replacements: [string, string][],
+    fn: (diags: readonly WorkspaceDiagnostic[], editedText: string) => void,
+  ): Promise<void> {
+    let editedText = text;
+    for (const [from, to] of replacements) {
+      editedText = editedText.replace(from, to);
+    }
+    harness.updateTemplate(uri as any, editedText, Date.now());
+    try {
+      const routed = engine.query(uri as any).diagnostics();
+      const diags = routed.bySurface.get("lsp" as DiagnosticSurface) ?? [];
+      fn(diags, editedText);
+    } finally {
+      harness.updateTemplate(uri as any, text, Date.now());
+    }
+  }
+
+  it("newline + indent in interpolation: converter span excludes whitespace", async () => {
+    await withModifiedTemplate(
+      [["${title | nonexistent}", "${\n  title | nonexistent\n}"]],
+      (diags, editedText) => {
+        const diag = diags.find((d) => d.code === "aurelia/unknown-converter");
+        expect(diag, "unknown-converter should still fire").toBeDefined();
+        if (diag?.span) {
+          const diagText = editedText.slice(diag.span.start, diag.span.end);
+          // Span should not start with whitespace
+          expect(diagText.startsWith("\n"), "span should not start with newline").toBe(false);
+          expect(diagText.startsWith(" "), "span should not start with space").toBe(false);
+        }
+      },
+    );
+  });
+
+  it("newline + indent in interpolation: behavior span excludes whitespace", async () => {
+    await withModifiedTemplate(
+      [["${title & nonexistent}", "${\n  title & nonexistent\n}"]],
+      (diags, editedText) => {
+        const diag = diags.find((d) => d.code === "aurelia/unknown-behavior");
+        expect(diag, "unknown-behavior should still fire").toBeDefined();
+        if (diag?.span) {
+          const diagText = editedText.slice(diag.span.start, diag.span.end);
+          expect(diagText.startsWith("\n"), "span should not start with newline").toBe(false);
+          expect(diagText.startsWith(" "), "span should not start with space").toBe(false);
+        }
+      },
+    );
+  });
+
+  it("spaces inside interpolation: span is tight around expression", async () => {
+    await withModifiedTemplate(
+      [["${title | nonexistent}", "${   title | nonexistent   }"]],
+      (diags, editedText) => {
+        const diag = diags.find((d) => d.code === "aurelia/unknown-converter");
+        expect(diag, "unknown-converter should still fire").toBeDefined();
+        if (diag?.span) {
+          const diagText = editedText.slice(diag.span.start, diag.span.end);
+          expect(diagText.startsWith(" "), "span should not start with space").toBe(false);
+          expect(diagText.endsWith(" "), "span should not end with space").toBe(false);
+        }
+      },
+    );
+  });
+
+  it("tab-indented expression: span excludes tabs", async () => {
+    await withModifiedTemplate(
+      [["${title | nonexistent}", "${\t\ttitle | nonexistent\t}"]],
+      (diags, editedText) => {
+        const diag = diags.find((d) => d.code === "aurelia/unknown-converter");
+        expect(diag, "unknown-converter should still fire").toBeDefined();
+        if (diag?.span) {
+          const diagText = editedText.slice(diag.span.start, diag.span.end);
+          expect(diagText.startsWith("\t"), "span should not start with tab").toBe(false);
+          expect(diagText.endsWith("\t"), "span should not end with tab").toBe(false);
+        }
+      },
+    );
+  });
+
+  it("whitespace in binding attribute value: span is tight", async () => {
+    // <div title.bind="foo("> — add whitespace around the expression
+    await withModifiedTemplate(
+      [['title.bind="foo("', 'title.bind="  foo(  "']],
+      (diags, editedText) => {
+        const diag = diags.find((d) => d.code === "aurelia/expr-parse-error");
+        expect(diag, "parse error should still fire").toBeDefined();
+        if (diag?.span) {
+          const diagText = editedText.slice(diag.span.start, diag.span.end);
+          expect(diagText.startsWith(" "), "span should not start with space").toBe(false);
+        }
+      },
+    );
+  });
+
+  it("whitespace in earlier expression does not shift later diagnostic span", async () => {
+    // Add whitespace to ${title} (line 23) — this is BEFORE ${title | nonexistent} (line 202).
+    // The diagnostic for unknown-converter should still point to the right position.
+    await withModifiedTemplate(
+      [["<h2>${title}</h2>", "<h2>${\n    title\n  }</h2>"]],
+      (diags, editedText) => {
+        const diag = diags.find((d) => d.code === "aurelia/unknown-converter");
+        expect(diag, "unknown-converter should still fire").toBeDefined();
+        if (diag?.span) {
+          const diagText = editedText.slice(diag.span.start, diag.span.end);
+          // The span should cover the converter diagnostic text, not be shifted
+          // by the whitespace added to the earlier interpolation.
+          expect(
+            diagText.includes("nonexistent") || diagText.includes("title"),
+            `diagnostic span should cover the expression, got: "${diagText}"`,
+          ).toBe(true);
+          // Verify span doesn't start with whitespace (shifted to wrong position)
+          expect(diagText.startsWith("\n"), "span shifted — starts with newline").toBe(false);
+          expect(diagText.startsWith(" "), "span shifted — starts with space").toBe(false);
+        }
+      },
+    );
+  });
+
+  it("whitespace in earlier expression does not shift type-mismatch span", async () => {
+    // expr-type-mismatch fires for item.status. Add whitespace to ${title} (earlier
+    // in the template). The type-mismatch span should still cover "item.status",
+    // not be shifted by the added whitespace.
+    await withModifiedTemplate(
+      [["<h2>${title}</h2>", "<h2>${\n    title\n  }</h2>"]],
+      (diags, editedText) => {
+        const diag = diags.find((d) => d.code === "aurelia/expr-type-mismatch");
+        expect(diag, "expr-type-mismatch should still fire").toBeDefined();
+        if (diag?.span) {
+          const diagText = editedText.slice(diag.span.start, diag.span.end);
+          expect(
+            diagText.includes("item.status") || diagText.includes("status"),
+            `type-mismatch span should cover expression, got: "${diagText}"`,
+          ).toBe(true);
+        }
+      },
+    );
+  });
+
+  it("whitespace accumulation: multiple padded expressions don't shift downstream spans", async () => {
+    // Pad two earlier expressions with whitespace, verify downstream diagnostic unaffected
+    await withModifiedTemplate(
+      [
+        ["<h2>${title}</h2>", "<h2>${\n    title\n  }</h2>"],
+        ["Total: ${total}", "Total: ${\n    total\n  }"],
+      ],
+      (diags, editedText) => {
+        const diag = diags.find((d) => d.code === "aurelia/unknown-converter");
+        expect(diag, "unknown-converter should still fire").toBeDefined();
+        if (diag?.span) {
+          const diagText = editedText.slice(diag.span.start, diag.span.end);
+          expect(
+            diagText.includes("nonexistent") || diagText.includes("title"),
+            `diagnostic span should cover the expression, got: "${diagText}"`,
+          ).toBe(true);
+        }
+      },
+    );
+  });
+});

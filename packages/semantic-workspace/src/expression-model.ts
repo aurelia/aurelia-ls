@@ -177,7 +177,7 @@ export function buildExpressionSemanticModel(deps: ExpressionModelDeps): Express
       // (`item` in `item of items`). Return the ELEMENT type, not the
       // iterable's collection type.
       if (target.$kind === "ForOfStatement") {
-        const forOf = target as ForOfStatement;
+        const forOf = target;
         const iterableTsType = evaluateType(forOf.iterable as AnyBindingExpression, scope, checker, typeScope);
         if (iterableTsType) {
           const elemType = checker.getElementTypeOfCollection(iterableTsType);
@@ -237,7 +237,7 @@ export function buildExpressionSemanticModel(deps: ExpressionModelDeps): Express
         if (node) {
           // If it's an AccessMember, use its OBJECT (not the whole thing).
           const evalTarget = (node.$kind === "AccessMember")
-            ? (node as AccessMemberExpression).object as AnyBindingExpression
+            ? (node).object as AnyBindingExpression
             : node as AnyBindingExpression;
           const objType = evaluateType(evalTarget, scope, checker, typeScope);
           if (objType) {
@@ -339,7 +339,7 @@ function evaluateType(
     // ── AccessThis ──
     // Runtime: walks ancestor parents, returns currentScope.bindingContext
     case "AccessThis": {
-      const n = node as AccessThisExpression;
+      const n = node;
       if (n.ancestor === 0) {
         // $this: innermost scope's binding context type.
         return resolveBindingContextType(scope.frameId, scope, checker, typeScope);
@@ -371,7 +371,7 @@ function evaluateType(
     // ── AccessScope ──
     // Runtime: getContext(s, name, ancestor) → obj[name]
     case "AccessScope": {
-      const n = node as AccessScopeExpression;
+      const n = node;
       // Mirror runtime: if ancestor > 0, hop first then resolve.
       if (n.ancestor > 0) {
         const frameById = new Map(scope.frames.map((f) => [f.id, f]));
@@ -401,14 +401,14 @@ function evaluateType(
     // ── AccessGlobal ──
     // Runtime: globalThis[name]
     case "AccessGlobal": {
-      const n = node as AccessGlobalExpression;
+      const n = node;
       return checker.getGlobalType(n.name.name);
     }
 
     // ── CallGlobal ──
     // Runtime: globalThis[name](...args)
     case "CallGlobal": {
-      const n = node as CallGlobalExpression;
+      const n = node;
       const globalType = checker.getGlobalType(n.name.name);
       if (!globalType) return null;
       return checker.getCallReturnType(globalType);
@@ -417,7 +417,7 @@ function evaluateType(
     // ── AccessMember ──
     // Runtime: evaluate(object)[name]
     case "AccessMember": {
-      const n = node as AccessMemberExpression;
+      const n = node;
       const objectType = evaluateType(n.object as AnyBindingExpression, scope, checker, typeScope);
       if (!objectType) return null;
       // Recovery: empty name means `obj.` with no identifier after the dot.
@@ -435,7 +435,7 @@ function evaluateType(
     // ── AccessKeyed ──
     // Runtime: evaluate(object)[evaluate(key)]
     case "AccessKeyed": {
-      const n = node as AccessKeyedExpression;
+      const n = node;
       const objectType = evaluateType(n.object as AnyBindingExpression, scope, checker, typeScope);
       if (!objectType) return null;
       // For numeric index: try element type of collection.
@@ -448,7 +448,7 @@ function evaluateType(
     // ── CallScope ──
     // Runtime: getContext(s, name, ancestor) → context[name](...args)
     case "CallScope": {
-      const n = node as CallScopeExpression;
+      const n = node;
       const funcType = resolveIdentifierToType(n.name.name, scope, checker, typeScope);
       if (!funcType) return null;
       return checker.getCallReturnType(funcType);
@@ -457,7 +457,7 @@ function evaluateType(
     // ── CallMember ──
     // Runtime: evaluate(object)[name](...args)
     case "CallMember": {
-      const n = node as CallMemberExpression;
+      const n = node;
       const objectType = evaluateType(n.object as AnyBindingExpression, scope, checker, typeScope);
       if (!objectType) return null;
       return checker.getMethodReturnType(objectType, n.name.name);
@@ -466,7 +466,7 @@ function evaluateType(
     // ── CallFunction ──
     // Runtime: evaluate(func)(...args)
     case "CallFunction": {
-      const n = node as CallFunctionExpression;
+      const n = node;
       const funcType = evaluateType(n.func as AnyBindingExpression, scope, checker, typeScope);
       if (!funcType) return null;
       return checker.getCallReturnType(funcType);
@@ -475,7 +475,7 @@ function evaluateType(
     // ── PrimitiveLiteral ──
     // Runtime: return value
     case "PrimitiveLiteral": {
-      const n = node as PrimitiveLiteralExpression;
+      const n = node;
       if (n.value === null) return checker.getPrimitiveType("null");
       if (n.value === undefined) return checker.getPrimitiveType("undefined");
       switch (typeof n.value) {
@@ -490,7 +490,7 @@ function evaluateType(
     // Runtime: elements.map(evaluate)
     case "ArrayLiteral": {
       // Try to infer element type from first element.
-      const n = node as ArrayLiteralExpression;
+      const n = node;
       if (n.elements.length > 0) {
         const firstType = evaluateType(n.elements[0] as AnyBindingExpression, scope, checker, typeScope);
         // If we got a type, return T[] — simplified but useful.
@@ -518,7 +518,7 @@ function evaluateType(
     // ── TaggedTemplate ──
     // Runtime: evaluate(func)(cooked, ...results)
     case "TaggedTemplate": {
-      const n = node as TaggedTemplateExpression;
+      const n = node;
       const funcType = evaluateType(n.func as AnyBindingExpression, scope, checker, typeScope);
       if (!funcType) return null;
       return checker.getCallReturnType(funcType);
@@ -527,7 +527,7 @@ function evaluateType(
     // ── Unary ──
     // Runtime: per-operator evaluation
     case "Unary": {
-      const n = node as UnaryExpression;
+      const n = node;
       switch (n.operation as string) {
         case "void": return checker.getPrimitiveType("undefined");
         case "typeof": return checker.getPrimitiveType("string");
@@ -544,7 +544,7 @@ function evaluateType(
     // ── Binary ──
     // Runtime: per-operator evaluation on left/right
     case "Binary": {
-      const n = node as BinaryExpression;
+      const n = node;
       switch (n.operation as string) {
         // Boolean operators
         case "==": case "===": case "!=": case "!==":
@@ -595,7 +595,7 @@ function evaluateType(
     // ── Conditional ──
     // Runtime: condition ? yes : no
     case "Conditional": {
-      const n = node as ConditionalExpression;
+      const n = node;
       const yesType = evaluateType(n.yes as AnyBindingExpression, scope, checker, typeScope);
       const noType = evaluateType(n.no as AnyBindingExpression, scope, checker, typeScope);
       if (yesType && noType) {
@@ -609,7 +609,7 @@ function evaluateType(
     // ── Assign ──
     // Runtime: evaluate(value), assign to target, return value
     case "Assign": {
-      const n = node as AssignExpression;
+      const n = node;
       return evaluateType(n.value as AnyBindingExpression, scope, checker, typeScope);
     }
 
@@ -623,7 +623,7 @@ function evaluateType(
     // ── BindingBehavior ──
     // Runtime: passthrough → evaluate(expression)
     case "BindingBehavior": {
-      const n = node as BindingBehaviorExpression;
+      const n = node;
       return evaluateType(n.expression as AnyBindingExpression, scope, checker, typeScope);
     }
 
@@ -637,7 +637,7 @@ function evaluateType(
     // ── New ──
     // Runtime: new (evaluate(func))(...args)
     case "New": {
-      const n = node as NewExpression;
+      const n = node;
       const funcType = evaluateType(n.func as AnyBindingExpression, scope, checker, typeScope);
       if (!funcType) return null;
       return checker.getConstructReturnType(funcType);
@@ -646,7 +646,7 @@ function evaluateType(
     // ── ForOfStatement ──
     // Runtime: evaluate(iterable)
     case "ForOfStatement": {
-      const n = node as ForOfStatement;
+      const n = node;
       return evaluateType(n.iterable as AnyBindingExpression, scope, checker, typeScope);
     }
 
@@ -659,7 +659,7 @@ function evaluateType(
     // ── Paren ──
     // Passthrough: evaluate inner expression
     case "Paren": {
-      const n = node as ParenExpression;
+      const n = node;
       return evaluateType(n.expression as AnyBindingExpression, scope, checker, typeScope);
     }
 
@@ -869,7 +869,7 @@ function resolveIteratorElementTsType(
   const forOfEntry = typeScope.exprIndex.get(frame.origin.forOfAstId);
   if (!forOfEntry || forOfEntry.ast.$kind !== "ForOfStatement") return null;
 
-  const forOf = forOfEntry.ast as ForOfStatement;
+  const forOf = forOfEntry.ast;
   const iterableTsType = evaluateType(forOf.iterable as AnyBindingExpression, scope, checker, typeScope);
   if (!iterableTsType) return null;
   return checker.getElementTypeOfCollection(iterableTsType);
@@ -946,7 +946,7 @@ function resolveLetSymbolTsType(
     for (const row of template.rows) {
       for (const ins of row.instructions) {
         if (ins.type === "hydrateLetElement") {
-          const letIns = ins as HydrateLetElementIR;
+          const letIns = ins;
           for (const binding of letIns.instructions) {
             if (binding.to === sym.name && binding.from && "id" in binding.from) {
               const entry = typeScope.exprIndex.get(binding.from.id);
@@ -979,7 +979,7 @@ function buildTypeInfo(
 
   switch (node.$kind) {
     case "AccessScope": {
-      const n = node as AccessScopeExpression;
+      const n = node;
       let memberOf: string | undefined;
       if (scope.vmClass && tsType) {
         const classType = checker.getClassInstanceType(scope.vmClass.file, scope.vmClass.className);
@@ -997,7 +997,7 @@ function buildTypeInfo(
     }
 
     case "AccessMember": {
-      const n = node as AccessMemberExpression;
+      const n = node;
       // Recovery: empty name means `obj.` — show the object's type info
       if (!n.name.name) {
         const objectType = evaluateType(n.object as AnyBindingExpression, scope, checker, typeScope);
@@ -1022,7 +1022,7 @@ function buildTypeInfo(
     }
 
     case "CallScope": {
-      const n = node as CallScopeExpression;
+      const n = node;
       return {
         tier: 3,
         type: typeStr,
@@ -1033,7 +1033,7 @@ function buildTypeInfo(
     }
 
     case "CallMember": {
-      const n = node as CallMemberExpression;
+      const n = node;
       const objectType = evaluateType(n.object as AnyBindingExpression, scope, checker, typeScope);
       const objectTypeStr = objectType ? checker.typeToString(objectType) : undefined;
       return {
@@ -1046,7 +1046,7 @@ function buildTypeInfo(
     }
 
     case "AccessGlobal": {
-      const n = node as AccessGlobalExpression;
+      const n = node;
       return {
         tier: 3,
         type: typeStr,
@@ -1057,7 +1057,7 @@ function buildTypeInfo(
     }
 
     case "AccessThis": {
-      const n = node as AccessThisExpression;
+      const n = node;
       return {
         tier: tsType ? 2 : 1,
         type: typeStr,
@@ -1307,7 +1307,7 @@ function materializeSymbols(
     if (iteratorBinding) {
       const forOfEntry = exprIndex.get(iteratorBinding.forOf.astId);
       if (forOfEntry && forOfEntry.ast.$kind === "ForOfStatement") {
-        const forOf = forOfEntry.ast as ForOfStatement;
+        const forOf = forOfEntry.ast;
         collectBindingNames(forOf.declaration, symbols);
       }
     }
@@ -1353,19 +1353,20 @@ function collectBindingNames(decl: ForOfStatement["declaration"], symbols: Scope
   if (!decl) return;
   switch (decl.$kind) {
     case "BindingIdentifier":
-      symbols.push({ kind: "iteratorLocal", name: (decl as BindingIdentifier).name.name });
+      symbols.push({ kind: "iteratorLocal", name: (decl).name.name });
       break;
-    case "ArrayBindingPattern":
-      for (const el of (decl as any).elements) {
-        collectBindingNames(el, symbols);
-      }
+    case "ArrayBindingPattern": {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+      for (const el of (decl as any).elements) collectBindingNames(el, symbols);
       break;
-    case "ObjectBindingPattern":
-      for (const prop of (decl as any).properties) {
-        collectBindingNames(prop.value, symbols);
-      }
+    }
+    case "ObjectBindingPattern": {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+      for (const prop of (decl as any).properties) collectBindingNames(prop.value, symbols);
       break;
+    }
     case "BindingPatternDefault":
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
       collectBindingNames((decl as any).target, symbols);
       break;
   }
@@ -1383,13 +1384,13 @@ function deriveFrameOrigin(
       (p): p is IteratorBindingIR => p.type === "iteratorBinding",
     );
     if (iteratorBinding) {
-      return {
+      const origin: FrameOrigin = {
         kind: "iterator",
         forOfAstId: iteratorBinding.forOf.astId,
         controller: ins.res,
-        file: ins.loc?.file,
-        span: ins.loc ?? undefined,
-      } as FrameOrigin;
+        fallbackSpan: ins.loc ?? undefined,
+      };
+      return origin;
     }
   }
 
@@ -1399,24 +1400,24 @@ function deriveFrameOrigin(
     );
     if (valueProp && "id" in valueProp.from) {
       const isPromise = config.branches !== undefined;
-      return {
+      const origin: FrameOrigin = {
         kind: isPromise ? "promiseValue" : "valueOverlay",
         valueExprId: valueProp.from.id,
         controller: ins.res,
-        file: ins.loc?.file,
-        span: ins.loc ?? undefined,
-      } as FrameOrigin;
+        fallbackSpan: ins.loc ?? undefined,
+      };
+      return origin;
     }
   }
 
   if (trigger.kind === "branch") {
-    return {
+    const origin: FrameOrigin = {
       kind: "promiseBranch",
       branch: ins.branch?.kind === "catch" ? "catch" : "then",
       controller: ins.res,
-      file: ins.loc?.file,
-      span: ins.loc ?? undefined,
-    } as FrameOrigin;
+      fallbackSpan: ins.loc ?? undefined,
+    };
+    return origin;
   }
 
   return null;
@@ -1481,70 +1482,70 @@ function findExpressionNodeAtOffset(
 
   switch (ast.$kind) {
     case "AccessMember": {
-      const n = ast as AccessMemberExpression;
+      const n = ast;
       return findExpressionNodeAtOffset(n.object as AnyBindingExpression, offset) ?? ast;
     }
     case "AccessKeyed": {
-      const n = ast as AccessKeyedExpression;
+      const n = ast;
       return findExpressionNodeAtOffset(n.object as AnyBindingExpression, offset)
         ?? findExpressionNodeAtOffset(n.key as AnyBindingExpression, offset)
         ?? ast;
     }
     case "CallMember": {
-      const n = ast as CallMemberExpression;
+      const n = ast;
       return findExpressionNodeAtOffset(n.object as AnyBindingExpression, offset) ?? ast;
     }
     case "CallScope": {
       return ast;
     }
     case "CallFunction": {
-      const n = ast as CallFunctionExpression;
+      const n = ast;
       return findExpressionNodeAtOffset(n.func as AnyBindingExpression, offset) ?? ast;
     }
     case "Binary": {
-      const n = ast as BinaryExpression;
+      const n = ast;
       return findExpressionNodeAtOffset(n.left as AnyBindingExpression, offset)
         ?? findExpressionNodeAtOffset(n.right as AnyBindingExpression, offset)
         ?? ast;
     }
     case "Conditional": {
-      const n = ast as ConditionalExpression;
+      const n = ast;
       return findExpressionNodeAtOffset(n.condition as AnyBindingExpression, offset)
         ?? findExpressionNodeAtOffset(n.yes as AnyBindingExpression, offset)
         ?? findExpressionNodeAtOffset(n.no as AnyBindingExpression, offset)
         ?? ast;
     }
     case "BindingBehavior": {
-      const n = ast as BindingBehaviorExpression;
+      const n = ast;
       return findExpressionNodeAtOffset(n.expression as AnyBindingExpression, offset) ?? ast;
     }
     case "ValueConverter": {
-      const n = ast as ValueConverterExpression;
+      const n = ast;
       return findExpressionNodeAtOffset(n.expression as AnyBindingExpression, offset) ?? ast;
     }
     case "ForOfStatement": {
-      const n = ast as ForOfStatement;
+      const n = ast;
       const iterableMatch = findExpressionNodeAtOffset(n.iterable as AnyBindingExpression, offset);
       if (iterableMatch) return iterableMatch;
       return ast;
     }
     case "Assign": {
-      const n = ast as AssignExpression;
+      const n = ast;
       return findExpressionNodeAtOffset(n.value as AnyBindingExpression, offset)
         ?? findExpressionNodeAtOffset(n.target as AnyBindingExpression, offset)
         ?? ast;
     }
     case "Paren": {
-      const n = ast as ParenExpression;
+      const n = ast;
       return findExpressionNodeAtOffset(n.expression as AnyBindingExpression, offset) ?? ast;
     }
     case "Unary": {
-      const n = ast as UnaryExpression;
+      const n = ast;
       return findExpressionNodeAtOffset(n.expression as AnyBindingExpression, offset) ?? ast;
     }
     case "Interpolation": {
       // Walk into the inner expressions to find the one containing the offset.
-      const n = ast as Interpolation;
+      const n = ast;
       for (const expr of n.expressions) {
         const match = findExpressionNodeAtOffset(expr as AnyBindingExpression, offset);
         if (match) return match;
@@ -1696,7 +1697,7 @@ function findMemberAccessObject(
 
   switch (ast.$kind) {
     case "AccessMember": {
-      const n = ast as AccessMemberExpression;
+      const n = ast;
       // Recovery: empty name means `obj.` — always return the object
       if (!n.name.name) {
         return n.object as AnyBindingExpression;
@@ -1707,27 +1708,27 @@ function findMemberAccessObject(
       return findMemberAccessObject(n.object as AnyBindingExpression, offset);
     }
     case "CallMember": {
-      const n = ast as CallMemberExpression;
+      const n = ast;
       if (n.name.span && offset >= n.name.span.start) {
         return n.object as AnyBindingExpression;
       }
       return findMemberAccessObject(n.object as AnyBindingExpression, offset);
     }
     case "AccessKeyed": {
-      const n = ast as AccessKeyedExpression;
+      const n = ast;
       return findMemberAccessObject(n.object as AnyBindingExpression, offset);
     }
     case "BindingBehavior": {
-      const n = ast as BindingBehaviorExpression;
+      const n = ast;
       return findMemberAccessObject(n.expression as AnyBindingExpression, offset);
     }
     case "ValueConverter": {
-      const n = ast as ValueConverterExpression;
+      const n = ast;
       return findMemberAccessObject(n.expression as AnyBindingExpression, offset);
     }
     case "Interpolation": {
       // Walk into the inner expressions to find one with a member access.
-      const n = ast as Interpolation;
+      const n = ast;
       for (const expr of n.expressions) {
         const match = findMemberAccessObject(expr as AnyBindingExpression, offset);
         if (match) return match;

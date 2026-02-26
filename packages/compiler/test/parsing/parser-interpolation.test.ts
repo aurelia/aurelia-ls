@@ -199,7 +199,8 @@ describe("interpolation splitting", () => {
     expect(split, "expected splitInterpolationText to return a result").toBeTruthy();
     expect(split.parts).toEqual(["", ""]);
     expect(split.exprSpans.length).toBe(1);
-    // The expression text includes the whitespace
+    // splitInterpolationText returns raw spans including whitespace — trimming
+    // happens downstream in tryToInterpIR.
     expect(src.slice(split.exprSpans[0].start, split.exprSpans[0].end)).toBe("  name  ");
   });
 
@@ -229,6 +230,45 @@ describe("interpolation splitting", () => {
     expect(split.parts).toEqual(["line1\n", "\nline3"]);
     expect(split.exprSpans.length).toBe(1);
     expect(src.slice(split.exprSpans[0].start, split.exprSpans[0].end)).toBe("x");
+  });
+
+  // ==========================================================================
+  // Whitespace inside interpolation brackets — raw span behavior
+  // (Downstream trimming happens in tryToInterpIR, not here.)
+  // ==========================================================================
+
+  test("newline + indent inside interpolation: ${\\n  name}", () => {
+    const src = "${\n  name}";
+    const split = splitInterpolationText(src);
+    expect(split).toBeTruthy();
+    expect(split.exprSpans.length).toBe(1);
+    // Raw span includes the whitespace
+    expect(src.slice(split.exprSpans[0].start, split.exprSpans[0].end)).toBe("\n  name");
+  });
+
+  test("newline + indent with trailing newline: ${\\n  name\\n}", () => {
+    const src = "${\n  name\n}";
+    const split = splitInterpolationText(src);
+    expect(split).toBeTruthy();
+    expect(split.exprSpans.length).toBe(1);
+    expect(src.slice(split.exprSpans[0].start, split.exprSpans[0].end)).toBe("\n  name\n");
+  });
+
+  test("tabs inside interpolation: ${\\t\\tobj.prop\\n}", () => {
+    const src = "${\t\tobj.prop\n}";
+    const split = splitInterpolationText(src);
+    expect(split).toBeTruthy();
+    expect(split.exprSpans.length).toBe(1);
+    expect(src.slice(split.exprSpans[0].start, split.exprSpans[0].end)).toBe("\t\tobj.prop\n");
+  });
+
+  test("multi-expression with whitespace: ${\\n  a} and ${\\n  b}", () => {
+    const src = "${\n  a} and ${\n  b}";
+    const split = splitInterpolationText(src);
+    expect(split).toBeTruthy();
+    expect(split.exprSpans.length).toBe(2);
+    expect(src.slice(split.exprSpans[0].start, split.exprSpans[0].end)).toBe("\n  a");
+    expect(src.slice(split.exprSpans[1].start, split.exprSpans[1].end)).toBe("\n  b");
   });
 });
 
@@ -394,5 +434,69 @@ describe("ExpressionParser / Interpolation AST", () => {
     expect(ast.expressions[0].$kind).toBe("AccessKeyed");
     expect(ast.expressions[0].object.name.name).toBe("obj");
     expect(ast.expressions[0].key.value).toBe("key");
+  });
+
+  // ==========================================================================
+  // Whitespace inside interpolation — AST span accuracy
+  // The parser trims whitespace internally; expression AST spans
+  // should point to the actual expression text.
+  // ==========================================================================
+
+  test("AST: whitespace inside interpolation preserves tight expression span", () => {
+    const src = "Hello ${\n  name\n}";
+    const parser = new ExpressionParser();
+    const ast = parser.parse(src, "Interpolation");
+
+    expect(ast.$kind).toBe("Interpolation");
+    expect(ast.expressions.length).toBe(1);
+    const expr = ast.expressions[0];
+    expect(expr.$kind).toBe("AccessScope");
+    expect(expr.name.name).toBe("name");
+
+    // Expression span should cover "name", not whitespace
+    const exprText = src.slice(expr.span.start, expr.span.end);
+    expect(exprText).toBe("name");
+  });
+
+  test("AST: whitespace inside interpolation with member access", () => {
+    const src = "${\n  obj.prop\n}";
+    const parser = new ExpressionParser();
+    const ast = parser.parse(src, "Interpolation");
+
+    expect(ast.expressions.length).toBe(1);
+    const expr = ast.expressions[0];
+    expect(expr.$kind).toBe("AccessMember");
+    expect(expr.object.name.name).toBe("obj");
+    expect(expr.name.name).toBe("prop");
+
+    // Full expression span should cover "obj.prop"
+    const exprText = src.slice(expr.span.start, expr.span.end);
+    expect(exprText).toBe("obj.prop");
+  });
+
+  test("AST: whitespace with baseSpan rebases correctly", () => {
+    const src = "Hello ${\n  name\n}";
+    const parser = new ExpressionParser();
+    const file = toSourceFileId("template.html");
+    const baseSpan = { start: 100, end: 100 + src.length, file };
+
+    const ast = parser.parse(src, "Interpolation", { baseSpan });
+    const expr = ast.expressions[0];
+    expect(expr.$kind).toBe("AccessScope");
+
+    // Rebased span should point to "name" within the template
+    const nameOffset = src.indexOf("name");
+    expect(expr.span.start).toBe(baseSpan.start + nameOffset);
+    expect(expr.span.end).toBe(baseSpan.start + nameOffset + "name".length);
+  });
+
+  test("AST: multiple expressions with whitespace", () => {
+    const src = "${\n  a\n} and ${\n  b\n}";
+    const parser = new ExpressionParser();
+    const ast = parser.parse(src, "Interpolation");
+
+    expect(ast.expressions.length).toBe(2);
+    expect(src.slice(ast.expressions[0].span.start, ast.expressions[0].span.end)).toBe("a");
+    expect(src.slice(ast.expressions[1].span.start, ast.expressions[1].span.end)).toBe("b");
   });
 });

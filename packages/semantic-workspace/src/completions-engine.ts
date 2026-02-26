@@ -22,7 +22,6 @@ import {
   unwrapSourced,
   Scanner,
   TokenType,
-  AttributeParser,
   createAttributeParserFromRegistry,
   resolveCursorEntity,
   type DocumentUri,
@@ -30,7 +29,6 @@ import {
   type CustomElementDef,
   type CustomAttributeDef,
   type TemplateControllerDef,
-  type BindableDef,
   type SourceSpan,
   type TemplateCompilation,
   type TemplateSyntaxRegistry,
@@ -38,17 +36,13 @@ import {
   type SemanticModelQuery,
   type ProjectSemantics,
   type Sourced,
-  type ScopeFrame,
-  type Attr,
   type DOMNode,
   type ElementNode,
-  type TemplateIR,
   type PredictiveMatchResult,
-  type CursorEntity,
   type CursorResolutionResult,
+  type ExpressionSemanticModel,
 } from "@aurelia-ls/compiler";
 import type {
-  SourcePosition,
   WorkspaceCompletionItem,
 } from "./types.js";
 import type {
@@ -73,7 +67,7 @@ export interface CompletionEngineContext {
   /** Base completions from the workspace kernel (TypeScript overlay). */
   readonly baseCompletions: readonly WorkspaceCompletionItem[];
   /** Expression semantic model for Tier 1-3 expression completions. */
-  readonly expressionModel?: import("@aurelia-ls/compiler").ExpressionSemanticModel | null;
+  readonly expressionModel?: ExpressionSemanticModel | null;
 }
 
 export function computeCompletions(ctx: CompletionEngineContext): readonly WorkspaceCompletionItem[] {
@@ -1027,7 +1021,7 @@ function resolveOrigin(def: ResourceDef | null): TrustOrigin {
   if (!def) return "unknown";
   const nameField = def.name;
   if (!nameField || typeof nameField !== "object") return "unknown";
-  const origin = (nameField as Sourced<string>).origin;
+  const origin = (nameField).origin;
   if (origin === "source") return "source";
   if (origin === "config") return "config";
   if (origin === "builtin") return "builtin";
@@ -2045,7 +2039,7 @@ function extractAliases(def: ResourceDef): string[] {
   if (!aliases) return [];
   if (Array.isArray(aliases)) {
     // CE and CA have readonly Sourced<string>[]
-    return aliases.map((a) => unwrapSourced(a)).filter((a): a is string => !!a);
+    return aliases.map((a: Sourced<unknown> | undefined) => unwrapSourced(a)).filter((a): a is string => !!a);
   }
   // TC has Sourced<readonly string[]>
   const unwrapped = unwrapSourced(aliases as Sourced<readonly string[]>);

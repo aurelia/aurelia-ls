@@ -223,10 +223,19 @@ export function tryToInterpIR(
   const exprs: ExprRef[] = [];
   const locStart = loc?.startOffset ?? 0;
   for (const { span, code } of split.expressions) {
+    // Trim leading/trailing whitespace so that expression spans (and
+    // downstream diagnostic squiggles) point to the actual expression
+    // text, not to surrounding whitespace inside ${...}.
+    const leadingWs = code.length - code.trimStart().length;
+    const trailingWs = code.length - code.trimEnd().length;
+    const trimmedCode = code.trim();
+    const adjustedStart = span.start + leadingWs;
+    const adjustedEnd = span.end - trailingWs;
+
     const exprLoc: P5Loc | null = loc
-      ? { ...loc, startOffset: locStart + span.start, endOffset: locStart + span.end }
+      ? { ...loc, startOffset: locStart + adjustedStart, endOffset: locStart + adjustedEnd }
       : null;
-    exprs.push(table.add(code, exprLoc, "IsProperty"));
+    exprs.push(table.add(trimmedCode, exprLoc, "IsProperty"));
   }
 
   return { kind: "interp", parts: split.parts, exprs, loc: toSpan(loc, table.source) };
@@ -252,6 +261,19 @@ export function toExprRef(
   table: ExprTable,
   parseKind: ExpressionType
 ): ExprRef {
+  // Trim leading/trailing whitespace so expression spans point to the
+  // actual expression text, not surrounding whitespace in attribute values.
+  const trimmed = code.trim();
+  if (trimmed !== code && loc) {
+    const leadingWs = code.length - code.trimStart().length;
+    const trailingWs = code.length - code.trimEnd().length;
+    const adjustedLoc: P5Loc = {
+      ...loc,
+      startOffset: loc.startOffset + leadingWs,
+      endOffset: loc.endOffset - trailingWs,
+    };
+    return table.add(trimmed, adjustedLoc, parseKind);
+  }
   return table.add(code, loc, parseKind);
 }
 

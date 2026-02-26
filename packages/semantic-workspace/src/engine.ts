@@ -20,7 +20,6 @@ import {
   stableHash,
   toSourceFileId,
   toSourceSpan,
-  unwrapSourced,
   deriveResourceConfidence,
   type DiagnosticDataRecord,
   type DiagnosticSpec,
@@ -46,6 +45,9 @@ import {
   type SemanticModelQuery,
   type NormalizedPath,
   type ExpressionExtractionContext,
+  type ExpressionTypeInfo,
+  type ExpressionSemanticModel,
+  type TextReferenceSite as CompilerTextReferenceSite,
   resolveCursorEntity,
   type CursorResolutionResult,
 } from "@aurelia-ls/compiler";
@@ -66,7 +68,7 @@ import {
   type TypeScriptEnvironment,
 } from "./typescript/environment.js";
 import { AureliaProjectIndex } from "./typescript/project-index.js";
-import { SemanticWorkspaceKernel, createSemanticWorkspaceKernel } from "./workspace.js";
+import { type SemanticWorkspaceKernel, createSemanticWorkspaceKernel } from "./workspace.js";
 import {
   type RefactorEngine,
   type SemanticQuery,
@@ -85,9 +87,11 @@ import {
   type WorkspacePrepareRenameRequest,
   type WorkspacePrepareRenameResult,
   type TextReferenceSite,
-  type WorkspaceCompletionItem,
   type WorkspaceCompletionResult,
   type WorkspaceTextEdit,
+  type SemanticChangeEvent,
+  type Disposable,
+  type SemanticChangeDomain,
 } from "./types.js";
 import { inlineTemplatePath } from "./templates.js";
 import { collectSemanticTokens } from "./semantic-tokens.js";
@@ -132,7 +136,7 @@ import {
 } from "./query-helpers.js";
 import { buildDomIndex } from "./template-dom.js";
 import { computeCompletions, type CompletionEngineContext } from "./completions-engine.js";
-import { buildExpressionSemanticModel, type ExpressionModelDeps } from "./expression-model.js";
+import { buildExpressionSemanticModel } from "./expression-model.js";
 import { collectTemplateHover, mergeHoverContents } from "./hover.js";
 
 type ProjectSemanticsDiscoveryConfigBase = Omit<ProjectSemanticsDiscoveryConfig, "diagnostics">;
@@ -194,18 +198,18 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
   readonly #refactorDecisions: RefactorDecisionSet | null;
   readonly #trace: ReturnType<typeof createTrace> | null;
   #disposed = false;
-  readonly #changeHandlers = new Set<(event: import("./types.js").SemanticChangeEvent) => void>();
+  readonly #changeHandlers = new Set<(event: SemanticChangeEvent) => void>();
 
   get referentialIndex() { return this.#kernel.referentialIndex; }
 
-  onDidChangeSemantics(handler: (event: import("./types.js").SemanticChangeEvent) => void): import("./types.js").Disposable {
+  onDidChangeSemantics(handler: (event: SemanticChangeEvent) => void): Disposable {
     this.#changeHandlers.add(handler);
     return { dispose: () => { this.#changeHandlers.delete(handler); } };
   }
 
-  #fireSemanticChange(domains: import("./types.js").SemanticChangeDomain[]): void {
+  #fireSemanticChange(domains: SemanticChangeDomain[]): void {
     if (this.#changeHandlers.size === 0) return;
-    const event: import("./types.js").SemanticChangeEvent = {
+    const event: SemanticChangeEvent = {
       fingerprint: this.#query.model.fingerprint,
       domains,
     };
@@ -999,7 +1003,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     const exprModel = this.#buildExpressionModel(uri, compilation);
     if (!exprModel) return null;
 
-    let typeInfo: import("@aurelia-ls/compiler").ExpressionTypeInfo | null = null;
+    let typeInfo: ExpressionTypeInfo | null = null;
 
     if (entity.kind === "iterator-decl") {
       // For iterator declarations, find the repeat frame that declares
@@ -1057,7 +1061,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
 
   #enrichEntityWithType(
     resolution: CursorResolutionResult,
-    typeInfo: import("@aurelia-ls/compiler").ExpressionTypeInfo,
+    typeInfo: ExpressionTypeInfo,
   ): CursorResolutionResult {
     const entity = resolution.entity;
 
@@ -1104,7 +1108,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
   #buildExpressionModel(
     uri: DocumentUri,
     compilation: TemplateCompilation | null,
-  ): import("@aurelia-ls/compiler").ExpressionSemanticModel | null {
+  ): ExpressionSemanticModel | null {
     if (!compilation?.ir) return null;
 
     // Notify the TS service that external files may have changed.
@@ -1117,7 +1121,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     const componentPath = this.#templateIndex.templateToComponent.get(canonical.uri);
     const className = this.#templateIndex.templateToClassName.get(canonical.uri);
     const vmClass = componentPath && className
-      ? { file: this.#env.paths.canonical(path.resolve(componentPath)) as NormalizedPath, className }
+      ? { file: this.#env.paths.canonical(path.resolve(componentPath)), className }
       : null;
 
     return buildExpressionSemanticModel({
@@ -1540,7 +1544,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
   }
 
   #templateReferencesForVmMember(activeUri: DocumentUri, vmPath: string, memberName: string): WorkspaceLocation[] {
-    const normalizedVm = normalizePathForId(path.resolve(vmPath)) as NormalizedPath;
+    const normalizedVm = normalizePathForId(path.resolve(vmPath));
 
     // Ensure all associated templates are compiled so the referential index
     // is populated with scope-qualified expression-identifier sites.
@@ -1572,7 +1576,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       );
       if (indexSites.length > 0) {
         const results = indexSites
-          .filter((s): s is import("@aurelia-ls/compiler").TextReferenceSite => s.kind === "text")
+          .filter((s): s is CompilerTextReferenceSite => s.kind === "text")
           .map(s => ({
             uri: s.file as unknown as DocumentUri,
             span: s.span,
@@ -1656,7 +1660,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       t => canonicalDocumentUri(inlineTemplatePath(t.componentPath)).uri === canonical.uri,
     );
     return {
-      componentPath: normalizePathForId(path.resolve(componentPath)) as NormalizedPath,
+      componentPath: normalizePathForId(path.resolve(componentPath)),
       className,
       resourceName: (entry as { resourceName?: string } | undefined)?.resourceName,
     };

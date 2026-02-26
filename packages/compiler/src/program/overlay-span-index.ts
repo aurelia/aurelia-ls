@@ -241,6 +241,10 @@ export class InMemoryOverlaySpanIndex implements OverlaySpanIndex {
     const overlay = canonicalDocumentUri(overlayUri);
     const existing = this.overlayByTemplate.get(template.uri);
     if (existing) {
+      // Remove stale edges from the previous overlay mapping for this
+      // template.  Without this, edited templates accumulate edges with
+      // outdated htmlSpan values, causing diagnostic squiggles to drift.
+      this.removeEdgesForUris(template.uri, existing.overlayUri);
       this.templateByOverlay.delete(existing.overlayUri);
     }
     const normalized = normalizeTemplateMapping(mapping, template.file, overlay.file);
@@ -531,6 +535,19 @@ export class InMemoryOverlaySpanIndex implements OverlaySpanIndex {
       keep.push(edge);
     }
     this.rebuildEdges(keep);
+  }
+
+  private removeEdgesForUris(templateUri: DocumentUri, overlayUri: DocumentUri): void {
+    const keep = this.edges.filter(
+      (edge) =>
+        edge.from.uri !== overlayUri &&
+        edge.from.uri !== templateUri &&
+        edge.to.uri !== overlayUri &&
+        edge.to.uri !== templateUri,
+    );
+    if (keep.length < this.edges.length) {
+      this.rebuildEdges(keep);
+    }
   }
 
   private storeEdge(edge: OverlaySpanEdge): void {
