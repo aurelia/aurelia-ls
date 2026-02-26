@@ -23,9 +23,9 @@ describe("StatusService", () => {
     expect(statusItem.text).toContain("starting");
   });
 
-  test("command is set to aurelia.showOverlay", () => {
+  test("command is set to aurelia.findResource", () => {
     const { statusItem } = createService();
-    expect(statusItem.command).toBe("aurelia.showOverlay");
+    expect(statusItem.command).toBe("aurelia.findResource");
   });
 
   test("status bar item is shown on creation", () => {

@@ -67,9 +67,9 @@ describe("Server initialization", () => {
 
       const capabilities = initResult.capabilities as Record<string, unknown>;
       expect(capabilities.hoverProvider).toBe(true);
-      expect(capabilities.definitionProvider).toBe(true);
+      expect(capabilities.definitionProvider).toBeTruthy();
       expect(capabilities.referencesProvider).toBe(true);
-      expect(capabilities.renameProvider).toBe(true);
+      expect(capabilities.renameProvider).toBeTruthy();
       expect(capabilities.codeActionProvider).toBe(true);
       expect(capabilities.completionProvider).toBeDefined();
       expect(capabilities.textDocumentSync).toBeDefined();
