@@ -20,8 +20,9 @@ function createStubContext(): ClientContext {
       return { ok: true, value };
     },
   };
+  const logger = { info: () => {}, warn: () => {}, error: () => {} };
 
-  return { debug, trace, errors } as unknown as ClientContext;
+  return { debug, trace, errors, logger } as unknown as ClientContext;
 }
 
 describe("FeatureGraph", () => {

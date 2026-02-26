@@ -181,7 +181,7 @@ describe("workspace template control scenarios", () => {
   it("completes repeat local properties", () => {
     const query = harness.workspace.query(localsUri);
     const pos = findPosition(localsText, "item.name", "item.".length);
-    const completions = query.completions(pos);
+    const completions = query.completions(pos).items;
     expect(hasLabel(completions, "name")).toBe(true);
     expect(hasLabel(completions, "count")).toBe(true);
   });

@@ -26,10 +26,6 @@ import {
   type CompletionParams,
 } from "vscode-languageserver/node.js";
 import { canonicalDocumentUri } from "@aurelia-ls/compiler";
-import type {
-  WorkspaceCompletionItem,
-  WorkspaceDiagnostics,
-} from "@aurelia-ls/semantic-workspace";
 import type { ServerContext } from "../context.js";
 import { handleInlayHints as handleInlayHintsRequest } from "./inlay-hints.js";
 import {
@@ -59,32 +55,6 @@ import {
 // ============================================================================
 // Helpers
 // ============================================================================
-
-function hasPartialCompletionConfidence(
-  completions: readonly WorkspaceCompletionItem[],
-): boolean {
-  return completions.some((item) => item.confidence === "partial" || item.confidence === "low");
-}
-
-function hasGapOrLowConfidenceDiagnostics(
-  diagnostics: WorkspaceDiagnostics,
-): boolean {
-  const lspDiagnostics = diagnostics.bySurface.get("lsp") ?? [];
-  return lspDiagnostics.some((diag) => {
-    const confidence = diag.data?.confidence;
-    return diag.spec.category === "gaps"
-      || confidence === "partial"
-      || confidence === "low"
-      || confidence === "manual";
-  });
-}
-
-function shouldSignalIncompleteCompletionList(
-  completions: readonly WorkspaceCompletionItem[],
-  diagnostics: WorkspaceDiagnostics,
-): boolean {
-  return hasPartialCompletionConfidence(completions) || hasGapOrLowConfidenceDiagnostics(diagnostics);
-}
 
 /**
  * Log a degradation. Always log, never swallow.
@@ -119,16 +89,12 @@ export function handleCompletion(ctx: ServerContext, params: CompletionParams): 
     return { isIncomplete: false, items: [] };
   }
 
-  const completions = response;
-  const mapped = mapWorkspaceCompletions(completions);
+  // L2 convergence: isIncomplete is now a scope-model signal from the workspace,
+  // not inferred from diagnostics at this boundary.
+  const result = response;
+  const mapped = mapWorkspaceCompletions(result.items);
 
-  // Check if we should signal incompleteness
-  const diagnosticsResponse = adaptWorkspaceCall("completions.diagnostics", () =>
-    ctx.workspace.query(canonical.uri).diagnostics(),
-  );
-  const diagnostics = isSuccess(diagnosticsResponse) ? diagnosticsResponse : null;
-
-  if (diagnostics && shouldSignalIncompleteCompletionList(completions, diagnostics)) {
+  if (result.isIncomplete) {
     if (mapped.length === 0) return { isIncomplete: true, items: [] };
     return createCompletionGapMarker(mapped);
   }

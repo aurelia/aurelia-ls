@@ -58,13 +58,13 @@ describe("completions: tag name position", () => {
     // We insert a `<` before a known element to create a tag completion context.
     // For now, test at the matrix-panel tag to verify CE completions include
     // the registered resources.
-    const completions = query.completions(await pos("<matrix-panel\n", 1));
+    const completions = query.completions(await pos("<matrix-panel\n", 1)).items;
     // At a CE tag position, we expect CEs to appear
     expect(hasLabel(completions, "matrix-panel")).toBe(true);
   });
 
   it("includes convention-discovered elements", async () => {
-    const completions = query.completions(await pos("<matrix-badge value.bind", 1));
+    const completions = query.completions(await pos("<matrix-badge value.bind", 1)).items;
     expect(hasLabel(completions, "matrix-badge")).toBe(true);
   });
 
@@ -74,7 +74,7 @@ describe("completions: tag name position", () => {
     // the compilation's linked rows but not in the resource definition index.
     // The completions engine needs to supplement tag-name completions with
     // local template names from the compilation.
-    const completions = query.completions(await pos("<inline-tag repeat.for", 1));
+    const completions = query.completions(await pos("<inline-tag repeat.for", 1)).items;
     // Check if local templates appear (product may or may not support this yet)
     if (!hasLabel(completions, "inline-tag")) {
       // Known gap: local template completions require compilation-level indexing
@@ -85,7 +85,7 @@ describe("completions: tag name position", () => {
   });
 
   it("CE completions have correct kind", async () => {
-    const completions = query.completions(await pos("<matrix-panel\n", 1));
+    const completions = query.completions(await pos("<matrix-panel\n", 1)).items;
     const item = findItem(completions, "matrix-panel");
     expect(item).toBeDefined();
     expect(item!.kind).toBe("custom-element");
@@ -103,19 +103,19 @@ describe("completions: attribute name on CE", () => {
     // inside an existing attribute name, the completions engine shows all available
     // attributes including the current one (the user may be editing/replacing it).
     // At whitespace between attributes, already-present attributes are correctly excluded.
-    const completions = query.completions(await pos("count.bind", 0));
+    const completions = query.completions(await pos("count.bind", 0)).items;
     expect(hasLabel(completions, "title")).toBe(true);
     expect(hasLabel(completions, "count")).toBe(true);
     expect(hasLabel(completions, "items")).toBe(true);
   });
 
   it("includes the on-refresh callback bindable", async () => {
-    const completions = query.completions(await pos("count.bind", 0));
+    const completions = query.completions(await pos("count.bind", 0)).items;
     expect(hasLabel(completions, "on-refresh")).toBe(true);
   });
 
   it("bindable completions have correct kind", async () => {
-    const completions = query.completions(await pos("count.bind", 0));
+    const completions = query.completions(await pos("count.bind", 0)).items;
     const item = findItem(completions, "title");
     expect(item).toBeDefined();
     expect(item!.kind).toBe("bindable-property");
@@ -139,7 +139,7 @@ describe("completions: attribute value (literal)", () => {
     // that requires a dedicated fixture attribute like level="" (plain value).
     //
     // For now, verify the expression root position works correctly at this location.
-    const completions = query.completions(await pos('level="${activeSeverity}"', 'level="'.length + 2));
+    const completions = query.completions(await pos('level="${activeSeverity}"', 'level="'.length + 2)).items;
     // Inside ${activeSeverity}, completions should include VM properties
     expect(hasLabel(completions, "activeSeverity")).toBe(true);
   });
@@ -153,12 +153,12 @@ describe("completions: attribute value (literal)", () => {
 describe("completions: binding command", () => {
   it("includes standard binding commands", async () => {
     // Position at the command part of an attribute binding
-    const completions = query.completions(await pos("count.bind", "count.".length));
+    const completions = query.completions(await pos("count.bind", "count.".length)).items;
     expect(hasLabel(completions, "bind")).toBe(true);
   });
 
   it("includes mode-specific commands", async () => {
-    const completions = query.completions(await pos("count.bind", "count.".length));
+    const completions = query.completions(await pos("count.bind", "count.".length)).items;
     // Standard mode commands should be available
     if (completions.length > 0) {
       const commandLabels = labels(completions);
@@ -175,7 +175,7 @@ describe("completions: binding command", () => {
 describe("completions: expression root (scope members)", () => {
   it("includes view model properties at expression root", async () => {
     // Inside an interpolation expression
-    const completions = query.completions(await pos("${title}", 2));
+    const completions = query.completions(await pos("${title}", 2)).items;
     expect(hasLabel(completions, "title")).toBe(true);
     expect(hasLabel(completions, "total")).toBe(true);
     expect(hasLabel(completions, "items")).toBe(true);
@@ -183,25 +183,25 @@ describe("completions: expression root (scope members)", () => {
   });
 
   it("includes view model methods at expression root", async () => {
-    const completions = query.completions(await pos("${title}", 2));
+    const completions = query.completions(await pos("${title}", 2)).items;
     expect(hasLabel(completions, "selectItem")).toBe(true);
     expect(hasLabel(completions, "refreshData")).toBe(true);
   });
 
   it("includes getter properties at expression root", async () => {
-    const completions = query.completions(await pos("${title}", 2));
+    const completions = query.completions(await pos("${title}", 2)).items;
     expect(hasLabel(completions, "filteredItems")).toBe(true);
   });
 });
 
 describe("completions: value converter pipe position", () => {
   it("includes registered value converters after pipe operator", async () => {
-    const completions = query.completions(await pos("| formatDate", 2));
+    const completions = query.completions(await pos("| formatDate", 2)).items;
     expect(hasLabel(completions, "formatDate")).toBe(true);
   });
 
   it("VC completions have correct kind", async () => {
-    const completions = query.completions(await pos("| formatDate", 2));
+    const completions = query.completions(await pos("| formatDate", 2)).items;
     const item = findItem(completions, "formatDate");
     if (item) {
       expect(item.kind).toBe("value-converter");
@@ -211,12 +211,12 @@ describe("completions: value converter pipe position", () => {
 
 describe("completions: binding behavior ampersand position", () => {
   it("includes registered binding behaviors after ampersand", async () => {
-    const completions = query.completions(await pos("& rateLimit", 2));
+    const completions = query.completions(await pos("& rateLimit", 2)).items;
     expect(hasLabel(completions, "rateLimit")).toBe(true);
   });
 
   it("BB completions have correct kind", async () => {
-    const completions = query.completions(await pos("& rateLimit", 2));
+    const completions = query.completions(await pos("& rateLimit", 2)).items;
     const item = findItem(completions, "rateLimit");
     if (item) {
       expect(item.kind).toBe("binding-behavior");
@@ -230,14 +230,14 @@ describe("completions: binding behavior ampersand position", () => {
 
 describe("completions: universe filtering", () => {
   it("tag position does not include VCs or BBs", async () => {
-    const completions = query.completions(await pos("<matrix-panel\n", 1));
+    const completions = query.completions(await pos("<matrix-panel\n", 1)).items;
     expect(hasLabel(completions, "formatDate")).toBe(false);
     expect(hasLabel(completions, "rateLimit")).toBe(false);
   });
 
   it("attribute position does not include CEs", async () => {
     // At an attribute name position on a CE, CEs should not appear
-    const completions = query.completions(await pos("count.bind=\"total\"", 1));
+    const completions = query.completions(await pos("count.bind=\"total\"", 1)).items;
     // CEs should not be in the attribute completion universe
     const ceItem = findItem(completions, "matrix-badge");
     if (ceItem) {
@@ -247,7 +247,7 @@ describe("completions: universe filtering", () => {
   });
 
   it("VC pipe position does not include CEs or CAs", async () => {
-    const completions = query.completions(await pos("| formatDate", 2));
+    const completions = query.completions(await pos("| formatDate", 2)).items;
     expect(hasLabel(completions, "matrix-panel")).toBe(false);
     expect(hasLabel(completions, "matrix-highlight")).toBe(false);
   });
@@ -259,7 +259,7 @@ describe("completions: universe filtering", () => {
 
 describe("completions: confidence metadata", () => {
   it("locally registered resources have source origin", async () => {
-    const completions = query.completions(await pos("<matrix-panel\n", 1));
+    const completions = query.completions(await pos("<matrix-panel\n", 1)).items;
     const item = findItem(completions, "matrix-panel");
     if (item?.origin) {
       expect(item.origin).toBe("source");
@@ -267,7 +267,7 @@ describe("completions: confidence metadata", () => {
   });
 
   it("VC completions carry trust metadata", async () => {
-    const completions = query.completions(await pos("| formatDate", 2));
+    const completions = query.completions(await pos("| formatDate", 2)).items;
     const item = findItem(completions, "formatDate");
     if (item?.confidence) {
       // Source-analyzed VC should have high or exact confidence
@@ -284,7 +284,7 @@ describe("completions: custom attributes", () => {
   it("includes registered CAs at attribute position on native elements", async () => {
     // Position in the attribute region of a <div> that has a CA.
     // Use the multi-binding tooltip div — position after `<div ` at the attribute area.
-    const completions = query.completions(await pos("<div matrix-tooltip=", "matrix-".length + "<div ".length));
+    const completions = query.completions(await pos("<div matrix-tooltip=", "matrix-".length + "<div ".length)).items;
     expect(hasLabel(completions, "matrix-highlight")).toBe(true);
     expect(hasLabel(completions, "matrix-tooltip")).toBe(true);
   });
@@ -296,7 +296,7 @@ describe("completions: custom attributes", () => {
 
 describe("completions: import from", () => {
   it("includes module specifiers for import elements", async () => {
-    const completions = query.completions(await pos('<import from="./components/matrix-badge">', '<import from="./'.length));
+    const completions = query.completions(await pos('<import from="./components/matrix-badge">', '<import from="./'.length)).items;
     expect(Array.isArray(completions)).toBe(true);
   });
 });
@@ -308,12 +308,12 @@ describe("completions: import from", () => {
 describe("completions: scope-aware expressions", () => {
   it("repeat scope includes iteration local 'item'", async () => {
     // Inside the repeat body, expression completions should include the local
-    const completions = query.completions(await pos("${item.name}", 2));
+    const completions = query.completions(await pos("${item.name}", 2)).items;
     expect(hasLabel(completions, "item")).toBe(true);
   });
 
   it("repeat scope includes contextual variables", async () => {
-    const completions = query.completions(await pos("${$index + 1}", 2));
+    const completions = query.completions(await pos("${$index + 1}", 2)).items;
     expect(hasLabel(completions, "$index")).toBe(true);
   });
 
@@ -321,7 +321,7 @@ describe("completions: scope-aware expressions", () => {
     // Inside with.bind="items[0]", completions should include item properties
     // (name, status, etc. from MatrixItem). This requires TypeScript type flow
     // through the overlay to resolve the with value's type.
-    const completions = query.completions(await pos("<div with.bind=\"items[0]\">\n      <span>${name}", "${name}".length - 2));
+    const completions = query.completions(await pos("<div with.bind=\"items[0]\">\n      <span>${name}", "${name}".length - 2)).items;
     // The with scope's base completions come from the TS overlay which resolves
     // the with value's type. If the overlay provides completions, name should be
     // among them. If not, this is a known gap.
@@ -335,12 +335,12 @@ describe("completions: scope-aware expressions", () => {
 
   it("nested repeat inner scope includes inner local", async () => {
     // group.items repeat: inner 'item' should be in scope
-    const completions = query.completions(await pos("${item.name}: ${item.count}", 2));
+    const completions = query.completions(await pos("${item.name}: ${item.count}", 2)).items;
     expect(hasLabel(completions, "item")).toBe(true);
   });
 
   it("$parent completions include outer scope members", async () => {
-    const completions = query.completions(await pos("${$parent.title}", "$parent.".length + 2));
+    const completions = query.completions(await pos("${$parent.title}", "$parent.".length + 2)).items;
     if (completions.length > 0) {
       expect(hasLabel(completions, "title")).toBe(true);
     }
@@ -353,14 +353,14 @@ describe("completions: scope-aware expressions", () => {
 
 describe("completions: member access", () => {
   it("dot access on item shows item properties", async () => {
-    const completions = query.completions(await pos("${item.name}", "${item.".length));
+    const completions = query.completions(await pos("${item.name}", "${item.".length)).items;
     if (completions.length > 0) {
       expect(hasLabel(completions, "name")).toBe(true);
     }
   });
 
   it("dot access on group shows group properties", async () => {
-    const completions = query.completions(await pos("${group.title}", "${group.".length));
+    const completions = query.completions(await pos("${group.title}", "${group.".length)).items;
     if (completions.length > 0) {
       expect(hasLabel(completions, "title")).toBe(true);
     }
@@ -373,12 +373,12 @@ describe("completions: member access", () => {
 
 describe("completions: binding commands context", () => {
   it("includes event commands (trigger, capture) at event position", async () => {
-    const completions = query.completions(await pos("click.trigger", "click.".length));
+    const completions = query.completions(await pos("click.trigger", "click.".length)).items;
     expect(hasLabel(completions, "trigger")).toBe(true);
   });
 
   it("includes for command at repeat position", async () => {
-    const completions = query.completions(await pos("repeat.for", "repeat.".length));
+    const completions = query.completions(await pos("repeat.for", "repeat.".length)).items;
     expect(hasLabel(completions, "for")).toBe(true);
   });
 });
@@ -389,7 +389,7 @@ describe("completions: binding commands context", () => {
 
 describe("completions: contextual variables", () => {
   it("repeat scope includes $even, $odd, $first, $last", async () => {
-    const completions = query.completions(await pos("${$first ?", 2));
+    const completions = query.completions(await pos("${$first ?", 2)).items;
     expect(hasLabel(completions, "$first")).toBe(true);
     expect(hasLabel(completions, "$last")).toBe(true);
     expect(hasLabel(completions, "$even")).toBe(true);
@@ -397,7 +397,7 @@ describe("completions: contextual variables", () => {
   });
 
   it("repeat scope includes $length and $middle", async () => {
-    const completions = query.completions(await pos("${$index + 1}", 2));
+    const completions = query.completions(await pos("${$index + 1}", 2)).items;
     expect(hasLabel(completions, "$length")).toBe(true);
     expect(hasLabel(completions, "$middle")).toBe(true);
   });
@@ -410,12 +410,12 @@ describe("completions: contextual variables", () => {
 describe("completions: promise scope", () => {
   it("then block scope includes the from-view variable", async () => {
     // Inside then.from-view="result", ${result.message} — 'result' should be in scope
-    const completions = query.completions(await pos("${result.message}", 2));
+    const completions = query.completions(await pos("${result.message}", 2)).items;
     expect(hasLabel(completions, "result")).toBe(true);
   });
 
   it("catch block scope includes the from-view variable", async () => {
-    const completions = query.completions(await pos("${err.message}", 2));
+    const completions = query.completions(await pos("${err.message}", 2)).items;
     expect(hasLabel(completions, "err")).toBe(true);
   });
 });
@@ -426,12 +426,12 @@ describe("completions: promise scope", () => {
 
 describe("completions: destructured repeat", () => {
   it("destructured variables are in scope", async () => {
-    const completions = query.completions(await pos("${idx}:", 2));
+    const completions = query.completions(await pos("${idx}:", 2)).items;
     expect(hasLabel(completions, "idx")).toBe(true);
   });
 
   it("destructured entry variable is in scope", async () => {
-    const completions = query.completions(await pos("${entry.name}", 2));
+    const completions = query.completions(await pos("${entry.name}", 2)).items;
     expect(hasLabel(completions, "entry")).toBe(true);
   });
 });
@@ -442,12 +442,12 @@ describe("completions: destructured repeat", () => {
 
 describe("completions: TC attribute positions", () => {
   it("switch.bind has completions for VM properties", async () => {
-    const completions = query.completions(await pos('switch.bind="activeSeverity"', 'switch.bind="'.length));
+    const completions = query.completions(await pos('switch.bind="activeSeverity"', 'switch.bind="'.length)).items;
     expect(hasLabel(completions, "activeSeverity")).toBe(true);
   });
 
   it("if.bind has completions for VM properties", async () => {
-    const completions = query.completions(await pos('if.bind="showDetail"', 'if.bind="'.length));
+    const completions = query.completions(await pos('if.bind="showDetail"', 'if.bind="'.length)).items;
     expect(hasLabel(completions, "showDetail")).toBe(true);
   });
 });
@@ -458,7 +458,7 @@ describe("completions: TC attribute positions", () => {
 
 describe("completions: multi-binding CA", () => {
   it("multi-binding CA attribute position includes the CA name", async () => {
-    const completions = query.completions(await pos("matrix-tooltip=", 1));
+    const completions = query.completions(await pos("matrix-tooltip=", 1)).items;
     if (completions.length > 0) {
       expect(hasLabel(completions, "matrix-tooltip")).toBe(true);
     }
@@ -475,13 +475,13 @@ describe("completions: ecosystem expression patterns", () => {
     // appears in expression completions at a scope root position.
     // The expression ${active.name} is inside the repeat body — at the expression root
     // getItemsByStatus should be a VM member.
-    const completions = query.completions(await pos("${active.name}", 2));
+    const completions = query.completions(await pos("${active.name}", 2)).items;
     expect(hasLabel(completions, "getItemsByStatus")).toBe(true);
   });
 
   it("deep property chain has member completions", async () => {
     // groups[0].items[0].name — after the final dot
-    const completions = query.completions(await pos("${groups[0].items[0].name}", "${groups[0].items[0].".length));
+    const completions = query.completions(await pos("${groups[0].items[0].name}", "${groups[0].items[0].".length)).items;
     if (completions.length > 0) {
       expect(hasLabel(completions, "name")).toBe(true);
     }
@@ -489,7 +489,7 @@ describe("completions: ecosystem expression patterns", () => {
 
   it("optional chaining base has member completions", async () => {
     // selectedItem?.name — after the ?.
-    const completions = query.completions(await pos("${selectedItem?.name}", "${selectedItem?.".length));
+    const completions = query.completions(await pos("${selectedItem?.name}", "${selectedItem?.".length)).items;
     if (completions.length > 0) {
       expect(hasLabel(completions, "name")).toBe(true);
     }
@@ -498,7 +498,7 @@ describe("completions: ecosystem expression patterns", () => {
   it("inline array repeat local has completions", async () => {
     // Inside repeat.for="label of ['alpha', ...]", ${label} should complete.
     // Position inside the ${label} interpolation expression.
-    const completions = query.completions(await pos("${label}</span>", 2));
+    const completions = query.completions(await pos("${label}</span>", 2)).items;
     // Known gap: controllerAt may not cover inline array repeat body content,
     // preventing scope-aware local resolution. When the scope module provides
     // frameId for this expression, the local will appear correctly.
@@ -511,7 +511,7 @@ describe("completions: ecosystem expression patterns", () => {
 
   it("method-sourced repeat local has member completions", async () => {
     // repeat.for="active of getItemsByStatus('active')" — ${active.name}
-    const completions = query.completions(await pos("${active.name}", "${active.".length));
+    const completions = query.completions(await pos("${active.name}", "${active.".length)).items;
     if (completions.length > 0) {
       expect(hasLabel(completions, "name")).toBe(true);
     }
@@ -532,7 +532,7 @@ describe("completions: tag-name universe correctness", () => {
   // positions only and MUST NOT appear at tag-name positions.
 
   it("tag position does NOT include scope variables", async () => {
-    const completions = query.completions(await pos("<matrix-panel\n", 1));
+    const completions = query.completions(await pos("<matrix-panel\n", 1)).items;
     // These are expression-scope items that must never appear in tag-name position
     expect(hasLabel(completions, "$parent")).toBe(false);
     expect(hasLabel(completions, "$index")).toBe(false);
@@ -542,7 +542,7 @@ describe("completions: tag-name universe correctness", () => {
   });
 
   it("tag position does NOT include scope tokens", async () => {
-    const completions = query.completions(await pos("<matrix-panel\n", 1));
+    const completions = query.completions(await pos("<matrix-panel\n", 1)).items;
     // Scope tokens belong to expression universe, not tag-name
     expect(hasLabel(completions, "this")).toBe(false);
     expect(hasLabel(completions, "Math")).toBe(false);
@@ -559,7 +559,7 @@ describe("completions: contextual variable scoping", () => {
   it("contextual variables do NOT appear outside repeat scope", async () => {
     // ${title} is at the top of the template, OUTSIDE any repeat scope.
     // It's inside matrix-panel's content but not inside any repeat.for.
-    const completions = query.completions(await pos("<h2>${title}</h2>", "<h2>${".length));
+    const completions = query.completions(await pos("<h2>${title}</h2>", "<h2>${".length)).items;
     expect(hasLabel(completions, "$index")).toBe(false);
     expect(hasLabel(completions, "$even")).toBe(false);
     expect(hasLabel(completions, "$odd")).toBe(false);
@@ -569,7 +569,7 @@ describe("completions: contextual variable scoping", () => {
 
   it("iteration variable does NOT appear outside its repeat scope", async () => {
     // Outside the repeat.for="item of items" scope, 'item' should NOT be in scope
-    const completions = query.completions(await pos("<h2>${title}</h2>", "<h2>${".length));
+    const completions = query.completions(await pos("<h2>${title}</h2>", "<h2>${".length)).items;
     expect(hasLabel(completions, "item")).toBe(false);
   });
 });
@@ -581,7 +581,7 @@ describe("completions: VM properties (unconditional)", () => {
   // These must appear unconditionally — no `if (completions.length > 0)` guards.
 
   it("expression root unconditionally includes VM properties", async () => {
-    const completions = query.completions(await pos("${title}", 2));
+    const completions = query.completions(await pos("${title}", 2)).items;
     // VM properties — MUST be present, not guarded
     expect(hasLabel(completions, "title")).toBe(true);
     expect(hasLabel(completions, "total")).toBe(true);
@@ -593,14 +593,14 @@ describe("completions: VM properties (unconditional)", () => {
   });
 
   it("expression root unconditionally includes VM methods", async () => {
-    const completions = query.completions(await pos("${title}", 2));
+    const completions = query.completions(await pos("${title}", 2)).items;
     expect(hasLabel(completions, "selectItem")).toBe(true);
     expect(hasLabel(completions, "refreshData")).toBe(true);
     expect(hasLabel(completions, "getItemsByStatus")).toBe(true);
   });
 
   it("expression root unconditionally includes VM getters", async () => {
-    const completions = query.completions(await pos("${title}", 2));
+    const completions = query.completions(await pos("${title}", 2)).items;
     expect(hasLabel(completions, "filteredItems")).toBe(true);
     expect(hasLabel(completions, "indexedItems")).toBe(true);
   });
@@ -613,7 +613,7 @@ describe("completions: ranking correctness", () => {
   // Source resources should rank above builtins.
 
   it("source-origin CEs sort before HTML elements at tag position", async () => {
-    const completions = query.completions(await pos("<matrix-panel\n", 1));
+    const completions = query.completions(await pos("<matrix-panel\n", 1)).items;
     const matrixPanel = findItem(completions, "matrix-panel");
     const divElement = findItem(completions, "div");
 
@@ -631,7 +631,7 @@ describe("completions: ranking correctness", () => {
   });
 
   it("builtins (au-compose, au-slot) have builtin origin", async () => {
-    const completions = query.completions(await pos("<matrix-panel\n", 1));
+    const completions = query.completions(await pos("<matrix-panel\n", 1)).items;
     const auCompose = findItem(completions, "au-compose");
     // Framework builtin CEs should ideally be marked as builtin origin.
     // Known gap (B3): when the framework source is included in the TS program,
@@ -646,7 +646,7 @@ describe("completions: ranking correctness", () => {
   });
 
   it("bindable completions sort before HTML attributes on CE", async () => {
-    const completions = query.completions(await pos("count.bind", 0));
+    const completions = query.completions(await pos("count.bind", 0)).items;
     const bindable = findItem(completions, "title");
     // Find an HTML attribute
     const htmlAttr = completions.find((item) => item.kind === "html-attribute");
@@ -659,7 +659,7 @@ describe("completions: ranking correctness", () => {
   });
 
   it("VC completions carry origin unconditionally", async () => {
-    const completions = query.completions(await pos("| formatDate", 2));
+    const completions = query.completions(await pos("| formatDate", 2)).items;
     const item = findItem(completions, "formatDate");
     // Remove the if-guard — origin MUST be present
     expect(item).toBeDefined();
@@ -669,7 +669,7 @@ describe("completions: ranking correctness", () => {
   });
 
   it("BB completions carry origin unconditionally", async () => {
-    const completions = query.completions(await pos("& rateLimit", 2));
+    const completions = query.completions(await pos("& rateLimit", 2)).items;
     const item = findItem(completions, "rateLimit");
     // Remove the if-guard — origin MUST be present
     expect(item).toBeDefined();
@@ -678,7 +678,7 @@ describe("completions: ranking correctness", () => {
   });
 
   it("CE completions carry origin unconditionally", async () => {
-    const completions = query.completions(await pos("<matrix-panel\n", 1));
+    const completions = query.completions(await pos("<matrix-panel\n", 1)).items;
     const item = findItem(completions, "matrix-panel");
     expect(item).toBeDefined();
     expect(item!.origin).toBe("source");
@@ -702,7 +702,7 @@ describe("completions: literal value completions for typed bindables", () => {
     // The existing test in section 3 was rewritten to test expression-root instead.
     // This test verifies the STRUCTURAL property: the bindable's type field
     // must contain the TS type string for literal extraction to work.
-    const completions = query.completions(await pos("count.bind", 0));
+    const completions = query.completions(await pos("count.bind", 0)).items;
     const levelBindable = findItem(completions, "level");
     expect(levelBindable).toBeDefined();
     // The detail string should include the type annotation showing the union type

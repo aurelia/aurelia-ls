@@ -84,6 +84,7 @@ import {
   type WorkspacePrepareRenameResult,
   type TextReferenceSite,
   type WorkspaceCompletionItem,
+  type WorkspaceCompletionResult,
   type WorkspaceTextEdit,
 } from "./types.js";
 import { inlineTemplatePath } from "./templates.js";
@@ -905,7 +906,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     uri: DocumentUri,
     pos: { line: number; character: number },
     base: SemanticQuery,
-  ): readonly WorkspaceCompletionItem[] {
+  ): WorkspaceCompletionResult {
     const text = this.lookupText(uri);
     if (!text) return base.completions(pos);
     const offset = offsetAtPosition(text, pos);
@@ -913,7 +914,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
 
     const compilation = this.#kernel.getCompilation(uri);
     const snapshot = this.#kernel.snapshot();
-    const baseCompletions = base.completions(pos);
+    const baseResult = base.completions(pos);
 
     const ctx: CompletionEngineContext = {
       text,
@@ -925,10 +926,26 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       syntax: this.#query.syntax,
       catalog: snapshot.catalog,
       semantics: snapshot.semantics,
-      baseCompletions,
+      baseCompletions: baseResult.items,
     };
 
-    return computeCompletions(ctx);
+    const items = computeCompletions(ctx);
+
+    // Scope gap detection — L2 convergence (l2/workspace.ts:199-206)
+    // Two sources: project-level scope gaps (getScopeGaps) and
+    // template-level unresolved imports (routed diagnostics pipeline).
+    // Exclude unresolved-import diagnostics whose span contains the cursor —
+    // those are imports the developer is currently editing, not scope gaps.
+    const templatePath = canonicalDocumentUri(uri).path;
+    const scopeId = this.#query.getScopeForTemplate(templatePath);
+    const hasScopeGaps = scopeId != null && this.#query.getScopeGaps(scopeId).length > 0;
+    const lspDiags = this.#diagnosticsForSurface(uri, "lsp");
+    const hasUnresolvedImports = lspDiags.some(
+      (d) => d.code === "aurelia/unresolved-import"
+        && !(d.span && offset >= d.span.start && offset <= d.span.end),
+    );
+
+    return { items, isIncomplete: hasScopeGaps || hasUnresolvedImports };
   }
 
   #attributeSyntaxContext(): AttributeSyntaxContext {

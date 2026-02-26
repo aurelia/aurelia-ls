@@ -157,7 +157,12 @@ export function normalizePathForId(
   caseSensitive: boolean = defaultPathCaseSensitivity(),
 ): NormalizedPath {
   const normalized = filePath.split("\\").join("/");
-  const canonical = caseSensitive ? normalized : normalized.toLowerCase();
+  // A path with a Windows drive letter (e.g., C:/...) originates from a
+  // case-insensitive filesystem regardless of the host platform. Always
+  // lowercase these to ensure stable identity across platforms (CI on Linux
+  // processing Windows-style paths from tests or cross-platform tooling).
+  const hasWindowsDrive = /^[a-zA-Z]:\//.test(normalized);
+  const canonical = (!caseSensitive || hasWindowsDrive) ? normalized.toLowerCase() : normalized;
   return brandString<"NormalizedPath">(canonical);
 }
 

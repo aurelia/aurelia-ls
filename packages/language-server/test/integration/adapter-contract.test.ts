@@ -388,7 +388,7 @@ describe("adapter contract (workspace-contract)", () => {
 
     const pos = findPosition(appText, "value.bind", "value.".length);
     const workspaceQuery = harness.workspace.query(appUri);
-    const expectedItems = mapWorkspaceCompletions(workspaceQuery.completions(pos));
+    const expectedItems = mapWorkspaceCompletions(workspaceQuery.completions(pos).items);
     const lspCompletions = await connection.sendRequest("textDocument/completion", {
       textDocument: { uri: appLspUri },
       position: pos,
@@ -611,7 +611,7 @@ describe("adapter contract (template control scenarios)", () => {
     expect(normalizeLocations(lspRefs)).toEqual(expectedRefs);
 
     const completionPos = findPosition(localsText, "item.name", "item.".length);
-    const expectedItems = mapWorkspaceCompletions(workspaceQuery.completions(completionPos));
+    const expectedItems = mapWorkspaceCompletions(workspaceQuery.completions(completionPos).items);
     const lspCompletions = await connection.sendRequest("textDocument/completion", {
       textDocument: { uri: localsLspUri },
       position: completionPos,
@@ -761,7 +761,7 @@ describe("adapter contract (binding shorthand syntax)", () => {
     expect(normalizeLocations(lspRefs)).toEqual(expectedRefs);
 
     const completionPos = findPosition(appText, ":class=\"state\"", ":class=\"".length + 1);
-    const expectedItems = mapWorkspaceCompletions(workspaceQuery.completions(completionPos));
+    const expectedItems = mapWorkspaceCompletions(workspaceQuery.completions(completionPos).items);
     const lspCompletions = await connection.sendRequest("textDocument/completion", {
       textDocument: { uri: appLspUri },
       position: completionPos,
@@ -873,7 +873,7 @@ describe("adapter contract (template local scopes)", () => {
     expect(normalizeLocations(lspRefs)).toEqual(expectedRefs);
 
     const completionPos = findPosition(appText, "item.name", "item.".length);
-    const expectedItems = mapWorkspaceCompletions(workspaceQuery.completions(completionPos));
+    const expectedItems = mapWorkspaceCompletions(workspaceQuery.completions(completionPos).items);
     const lspCompletions = await connection.sendRequest("textDocument/completion", {
       textDocument: { uri: appLspUri },
       position: completionPos,
@@ -986,7 +986,7 @@ describe("adapter contract (portal chain)", () => {
     expect(normalizeLocations(lspRefs)).toEqual(expectedRefs);
 
     const completionPos = findPosition(appText, "${title}", 3);
-    const expectedItems = mapWorkspaceCompletions(workspaceQuery.completions(completionPos));
+    const expectedItems = mapWorkspaceCompletions(workspaceQuery.completions(completionPos).items);
     const lspCompletions = await connection.sendRequest("textDocument/completion", {
       textDocument: { uri: appLspUri },
       position: completionPos,
@@ -1099,7 +1099,7 @@ describe("adapter contract (portal deep nesting)", () => {
     expect(normalizeLocations(lspRefs)).toEqual(expectedRefs);
 
     const completionPos = findPosition(appText, "item.label", "item.".length);
-    const expectedItems = mapWorkspaceCompletions(workspaceQuery.completions(completionPos));
+    const expectedItems = mapWorkspaceCompletions(workspaceQuery.completions(completionPos).items);
     const lspCompletions = await connection.sendRequest("textDocument/completion", {
       textDocument: { uri: appLspUri },
       position: completionPos,
@@ -1212,7 +1212,7 @@ describe("adapter contract (let edge cases)", () => {
     expect(normalizeLocations(lspRefs)).toEqual(expectedRefs);
 
     const completionPos = findPosition(appText, "entry.name", "entry.".length);
-    const expectedItems = mapWorkspaceCompletions(workspaceQuery.completions(completionPos));
+    const expectedItems = mapWorkspaceCompletions(workspaceQuery.completions(completionPos).items);
     const lspCompletions = await connection.sendRequest("textDocument/completion", {
       textDocument: { uri: appLspUri },
       position: completionPos,

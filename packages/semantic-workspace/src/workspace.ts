@@ -44,6 +44,7 @@ import {
   type SemanticWorkspace,
   type WorkspaceCodeAction,
   type WorkspaceCompletionItem,
+  type WorkspaceCompletionResult,
   type WorkspaceDiagnostics,
   type WorkspaceEdit,
   type WorkspaceInspectResult,
@@ -426,12 +427,12 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
     }
   }
 
-  #completionsAt(uri: DocumentUri, pos: { line: number; character: number }) {
+  #completionsAt(uri: DocumentUri, pos: { line: number; character: number }): WorkspaceCompletionResult {
     try {
       const items = this.languageService.getCompletions(uri, pos);
-      return mapCompletions(items ?? []);
+      return { items: mapCompletions(items ?? []), isIncomplete: false };
     } catch {
-      return EMPTY_COMPLETIONS;
+      return { items: EMPTY_COMPLETIONS, isIncomplete: false };
     }
   }
 }

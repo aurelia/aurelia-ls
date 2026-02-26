@@ -33,15 +33,8 @@ function createMockCompletionContext(input: {
     detail?: string;
     confidence?: "exact" | "high" | "partial" | "low";
   }>;
-  diagnostics?: {
-    bySurface: ReadonlyMap<string, readonly Array<{
-      spec: { category: string };
-      data?: { confidence?: string };
-    }>>;
-    suppressed: readonly unknown[];
-  };
+  isIncomplete?: boolean;
 }) {
-  const diagnostics = input.diagnostics ?? { bySurface: new Map(), suppressed: [] };
   return {
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
     ensureProgramDocument: vi.fn(() => ({
@@ -50,8 +43,7 @@ function createMockCompletionContext(input: {
     })),
     workspace: {
       query: vi.fn(() => ({
-        completions: vi.fn(() => input.completions),
-        diagnostics: vi.fn(() => diagnostics),
+        completions: vi.fn(() => ({ items: input.completions, isIncomplete: input.isIncomplete ?? false })),
       })),
     },
     lookupText: vi.fn(() => testText),
@@ -138,11 +130,12 @@ describe("handleCompletion", () => {
     );
   });
 
-  test("signals incomplete list and appends a gap marker for partial completion confidence", () => {
+  test("signals incomplete list and appends a gap marker when workspace reports scope gaps", () => {
     const ctx = createMockCompletionContext({
       completions: [
         { label: "summary-panel", kind: "custom-element", confidence: "partial" },
       ],
+      isIncomplete: true,
     });
 
     const result = handleCompletion(ctx as never, params);
@@ -153,17 +146,12 @@ describe("handleCompletion", () => {
     expect(marker?.insertText).toBe("");
   });
 
-  test("signals incomplete list from gap diagnostics even when completion confidence is high", () => {
+  test("signals incomplete list when workspace isIncomplete is true regardless of item confidence", () => {
     const ctx = createMockCompletionContext({
       completions: [
         { label: "summary-panel", kind: "custom-element", confidence: "high" },
       ],
-      diagnostics: {
-        bySurface: new Map([
-          ["lsp", [{ spec: { category: "gaps" }, data: { confidence: "partial" } }]],
-        ]),
-        suppressed: [],
-      },
+      isIncomplete: true,
     });
 
     const result = handleCompletion(ctx as never, params);

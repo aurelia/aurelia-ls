@@ -92,6 +92,13 @@ export interface WorkspaceCompletionItem {
   readonly insertText?: string;
 }
 
+/** L2 CompletionResult — carries isIncomplete as a scope-model signal. */
+export interface WorkspaceCompletionResult {
+  readonly items: readonly WorkspaceCompletionItem[];
+  /** True when scope has gaps (more items may exist). L2: workspace.ts:199-206. */
+  readonly isIncomplete: boolean;
+}
+
 export interface WorkspaceToken {
   readonly type: string;
   readonly modifiers?: readonly string[];
@@ -111,7 +118,7 @@ export interface SemanticQuery {
   hover(pos: SourcePosition): WorkspaceHover | null;
   definition(pos: SourcePosition): readonly WorkspaceLocation[];
   references(pos: SourcePosition): readonly WorkspaceLocation[];
-  completions(pos: SourcePosition): readonly WorkspaceCompletionItem[];
+  completions(pos: SourcePosition): WorkspaceCompletionResult;
   diagnostics(): WorkspaceDiagnostics;
   semanticTokens(): readonly WorkspaceToken[];
   /** Secondary disclosure: full CursorEntity resolution at a position.

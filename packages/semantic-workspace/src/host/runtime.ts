@@ -386,9 +386,10 @@ export class SemanticAuthorityHostRuntime {
     const request = args as SemanticAuthorityCommandArgs<"query.completions">;
     const session = this.#sessions.require(request.sessionId);
     const uri = canonicalDocumentUri(request.uri).uri;
-    const items = session.workspace.query(uri).completions(request.position);
-    const confidence = completionsConfidence(items);
-    const result = { items, isIncomplete: confidence === "partial" || confidence === "low" };
+    const completionResult = session.workspace.query(uri).completions(request.position);
+    const confidence = completionsConfidence(completionResult.items);
+    const isIncomplete = completionResult.isIncomplete || confidence === "partial" || confidence === "low";
+    const result = { items: completionResult.items, isIncomplete };
     if (confidence === "unknown") {
       const classification = classifyUnknownConfidence(session, uri, request.position, "completions");
       return ok(session, result, {
@@ -403,7 +404,7 @@ export class SemanticAuthorityHostRuntime {
         session.id,
         session.profile,
         result,
-        [completionGap(items.length, confidence as "partial" | "low")],
+        [completionGap(completionResult.items.length, confidence === "partial" || confidence === "low" ? confidence : "partial")],
         { confidence },
       );
     }

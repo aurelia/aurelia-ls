@@ -58,7 +58,7 @@ describe("workspace binding shorthand syntax", () => {
 
   it("completes view-model members in shorthand bindings", () => {
     const pos = findPosition(appText, ":class=\"state\"", ":class=\"".length);
-    const completions = harness.workspace.query(appUri).completions(pos);
+    const completions = harness.workspace.query(appUri).completions(pos).items;
     expect(hasLabel(completions, "state")).toBe(true);
     expect(hasLabel(completions, "message")).toBe(true);
     expect(hasLabel(completions, "isActive")).toBe(true);
@@ -138,7 +138,7 @@ describe("workspace template local scopes", () => {
 
   it("completes locals inside repeat scopes", () => {
     const pos = findPosition(appText, "item.name", "item.".length);
-    const completions = harness.workspace.query(appUri).completions(pos);
+    const completions = harness.workspace.query(appUri).completions(pos).items;
     expect(hasLabel(completions, "name")).toBe(true);
     expect(hasLabel(completions, "active")).toBe(true);
     expect(hasLabel(completions, "details")).toBe(true);
@@ -179,7 +179,7 @@ describe("workspace portal chain", () => {
 
   it("completes members in with-bound scopes", () => {
     const pos = findPosition(appText, "${title}", 3);
-    const completions = harness.workspace.query(appUri).completions(pos);
+    const completions = harness.workspace.query(appUri).completions(pos).items;
     expect(hasLabel(completions, "title")).toBe(true);
     expect(hasLabel(completions, "note")).toBe(true);
   });
@@ -249,7 +249,7 @@ describe("workspace portal deep nesting", () => {
 
   it("completes promise branch members", () => {
     const pos = findPosition(appText, "result.show", "result.".length);
-    const completions = harness.workspace.query(appUri).completions(pos);
+    const completions = harness.workspace.query(appUri).completions(pos).items;
     expect(hasLabel(completions, "show")).toBe(true);
     expect(hasLabel(completions, "items")).toBe(true);
   });
@@ -307,7 +307,7 @@ describe("workspace let edge cases", () => {
 
   it("completes repeat locals in shadowed scopes", () => {
     const pos = findPosition(appText, "entry.name", "entry.".length);
-    const completions = harness.workspace.query(appUri).completions(pos);
+    const completions = harness.workspace.query(appUri).completions(pos).items;
     expect(hasLabel(completions, "name")).toBe(true);
     expect(hasLabel(completions, "total")).toBe(true);
   });

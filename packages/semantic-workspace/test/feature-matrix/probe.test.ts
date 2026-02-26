@@ -97,7 +97,7 @@ describe("probe: definition span tightness", () => {
 
 describe("probe: completions deduplication", () => {
   it("tag name completions have no duplicates", async () => {
-    const completions = query.completions(await pos("<matrix-badge value.bind", 1));
+    const completions = query.completions(await pos("<matrix-badge value.bind", 1)).items;
     const labels = completions.map((c) => c.label);
     const unique = new Set(labels);
     const dupes = labels.filter((l, i) => labels.indexOf(l) !== i);
@@ -108,7 +108,7 @@ describe("probe: completions deduplication", () => {
   });
 
   it("attribute name completions have no duplicates", async () => {
-    const completions = query.completions(await pos("count.bind", 0));
+    const completions = query.completions(await pos("count.bind", 0)).items;
     const labels = completions.map((c) => c.label);
     const dupes = labels.filter((l, i) => labels.indexOf(l) !== i);
     if (dupes.length > 0) {
@@ -118,7 +118,7 @@ describe("probe: completions deduplication", () => {
   });
 
   it("VC pipe completions have no duplicates", async () => {
-    const completions = query.completions(await pos("| formatDate", 1));
+    const completions = query.completions(await pos("| formatDate", 1)).items;
     const labels = completions.map((c) => c.label);
     const dupes = labels.filter((l, i) => labels.indexOf(l) !== i);
     if (dupes.length > 0) {

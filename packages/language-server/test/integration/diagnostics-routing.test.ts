@@ -105,7 +105,7 @@ test("routes definitions to the view-model via provenance", async () => {
   }
 });
 
-test("hover/definition map through overlay and rename is policy-denied for expression members", async () => {
+test("hover/definition map through overlay and rename succeeds for expression members", async () => {
   const fixture = createFixture({
     "tsconfig.json": JSON.stringify({
       compilerOptions: {
@@ -156,13 +156,17 @@ test("hover/definition map through overlay and rename is policy-denied for expre
       expect(vmDef.range.start.line).toBe(1);
     }
 
-    await expect(connection.sendRequest("textDocument/rename", {
+    const renameResult = await connection.sendRequest("textDocument/rename", {
       textDocument: { uri: htmlUri },
       position: pos,
       newName: "title",
-    })).rejects.toMatchObject({
-      message: expect.stringContaining("target-not-allowed"),
     });
+    // Expression-member rename is a working feature: policy allows it,
+    // tryExpressionMemberRename produces cross-domain edits.
+    expect(renameResult, "rename should return a workspace edit").toBeTruthy();
+    const changes = (renameResult as { changes?: Record<string, unknown[]> }).changes ?? {};
+    const changedUris = Object.keys(changes);
+    expect(changedUris.length, "rename should produce edits in at least one file").toBeGreaterThan(0);
   } finally {
     dispose();
     child.kill("SIGKILL");

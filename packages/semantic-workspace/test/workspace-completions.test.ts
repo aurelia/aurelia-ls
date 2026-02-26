@@ -130,7 +130,7 @@ describe("workspace completions (workspace-contract)", () => {
 
   it("completes custom element tags", () => {
     const query = harness.workspace.query(appUri);
-    const completions = query.completions(findPosition(appText, "<summary-panel", 1));
+    const completions = query.completions(findPosition(appText, "<summary-panel", 1)).items;
     expect(hasLabel(completions, "summary-panel")).toBe(true);
     expect(hasLabel(completions, "table-panel")).toBe(true);
     expect(completions.find((item) => item.label === "summary-panel")?.kind).toBe("custom-element");
@@ -139,19 +139,19 @@ describe("workspace completions (workspace-contract)", () => {
 
   it("orders completions by relevance then label", () => {
     const query = harness.workspace.query(appUri);
-    const completions = query.completions(findPosition(appText, "<summary-panel", 1));
+    const completions = query.completions(findPosition(appText, "<summary-panel", 1)).items;
     expectOrderedCompletions(completions);
   });
 
   it("dedupes completion labels", () => {
     const query = harness.workspace.query(appUri);
-    const completions = query.completions(findPosition(appText, "<summary-panel", 1));
+    const completions = query.completions(findPosition(appText, "<summary-panel", 1)).items;
     expectUniqueLabels(completions);
   });
 
   it("completes custom element bindables", () => {
     const query = harness.workspace.query(appUri);
-    const completions = query.completions(findPosition(appText, "stats.bind", 0));
+    const completions = query.completions(findPosition(appText, "stats.bind", 0)).items;
     expect(hasLabel(completions, "stats")).toBe(true);
     expect(hasLabel(completions, "updated-at")).toBe(true);
     expect(completions.find((item) => item.label === "stats")?.kind).toBe("bindable-property");
@@ -161,7 +161,7 @@ describe("workspace completions (workspace-contract)", () => {
     // au-compose is a framework builtin CE with bindables: component, template,
     // model, scopeBehavior, composing, composition, tag, flushMode
     const query = harness.workspace.query(appUri);
-    const completions = query.completions(findPosition(appText, "component.bind", 0));
+    const completions = query.completions(findPosition(appText, "component.bind", 0)).items;
     expect(hasLabel(completions, "component")).toBe(true);
     expect(hasLabel(completions, "model")).toBe(true);
     expect(hasLabel(completions, "template")).toBe(true);
@@ -180,7 +180,7 @@ describe("workspace completions (workspace-contract)", () => {
     try {
       const query = harness.workspace.query(appUri);
       // Position at the trailing space — new attribute position
-      const completions = query.completions(findPosition(withMinimal, 'stats.bind="stats" >', 'stats.bind="stats" '.length));
+      const completions = query.completions(findPosition(withMinimal, 'stats.bind="stats" >', 'stats.bind="stats" '.length)).items;
       // updated-at and on-refresh should appear (stats is already present, excluded)
       expect(hasLabel(completions, "updated-at")).toBe(true);
       expect(hasLabel(completions, "on-refresh")).toBe(true);
@@ -193,7 +193,7 @@ describe("workspace completions (workspace-contract)", () => {
 
   it("completes native attributes", () => {
     const query = harness.workspace.query(appUri);
-    const completions = query.completions(findPosition(appText, "type=\"text\"", 0));
+    const completions = query.completions(findPosition(appText, "type=\"text\"", 0)).items;
     expect(hasLabel(completions, "type")).toBe(true);
     expect(hasLabel(completions, "value")).toBe(true);
     expect(completions.find((item) => item.label === "type")?.kind).toBe("html-attribute");
@@ -201,14 +201,14 @@ describe("workspace completions (workspace-contract)", () => {
 
   it("completes binding commands", () => {
     const query = harness.workspace.query(appUri);
-    const completions = query.completions(findPosition(appText, "value.bind", "value.".length));
+    const completions = query.completions(findPosition(appText, "value.bind", "value.".length)).items;
     expect(hasLabel(completions, "bind")).toBe(true);
     expect(completions.find((item) => item.label === "bind")?.kind).toBe("binding-command");
   });
 
   it("completes value converters", () => {
     const query = harness.workspace.query(appUri);
-    const completions = query.completions(findPosition(appText, "| titlecase", 2));
+    const completions = query.completions(findPosition(appText, "| titlecase", 2)).items;
     expect(hasLabel(completions, "titlecase")).toBe(true);
     expect(completions.find((item) => item.label === "titlecase")?.kind).toBe("value-converter");
   });
@@ -218,8 +218,8 @@ describe("workspace completions (workspace-contract)", () => {
     harness.updateTemplate(appUri, withProbe);
     try {
       const query = harness.workspace.query(appUri);
-      const titlecaseCompletions = query.completions(findPosition(withProbe, "| titlecase", 2));
-      const sanitizeCompletions = query.completions(findPosition(withProbe, "| s}", 2));
+      const titlecaseCompletions = query.completions(findPosition(withProbe, "| titlecase", 2)).items;
+      const sanitizeCompletions = query.completions(findPosition(withProbe, "| s}", 2)).items;
       const titlecase = titlecaseCompletions.find((item) => item.label === "titlecase");
       const sanitize = sanitizeCompletions.find((item) => item.label === "sanitize");
       expect(titlecase?.origin).toBe("source");
@@ -233,7 +233,7 @@ describe("workspace completions (workspace-contract)", () => {
 
   it("completes binding behaviors", () => {
     const query = harness.workspace.query(appUri);
-    const completions = query.completions(findPosition(appText, "& debounce", 2));
+    const completions = query.completions(findPosition(appText, "& debounce", 2)).items;
     expect(hasLabel(completions, "debounce")).toBe(true);
     expect(completions.find((item) => item.label === "debounce")?.kind).toBe("binding-behavior");
   });
@@ -246,7 +246,7 @@ describe("workspace completions (workspace-contract)", () => {
     harness.updateTemplate(appUri, withTone);
     try {
       const query = harness.workspace.query(appUri);
-      const completions = query.completions(findPosition(withTone, "tone=\"\"", "tone=\"".length));
+      const completions = query.completions(findPosition(withTone, "tone=\"\"", "tone=\"".length)).items;
       expect(hasLabel(completions, "info")).toBe(true);
       expect(hasLabel(completions, "warn")).toBe(true);
       expect(hasLabel(completions, "success")).toBe(true);
@@ -263,7 +263,7 @@ describe("workspace completions (workspace-contract)", () => {
     harness.updateTemplate(appUri, withImportPrefix);
     try {
       const query = harness.workspace.query(appUri);
-      const completions = query.completions(findPosition(withImportPrefix, "from=\"./views/\"", "from=\"./views/".length));
+      const completions = query.completions(findPosition(withImportPrefix, "from=\"./views/\"", "from=\"./views/".length)).items;
       expect(hasLabel(completions, "./views/summary-panel")).toBe(true);
       expect(hasLabel(completions, "./views/table-panel")).toBe(true);
     } finally {
@@ -292,27 +292,27 @@ describe("workspace completions (third-party resources)", () => {
 
   it("completes third-party element tags in template", () => {
     const query = harness.workspace.query(appUri);
-    const completions = query.completions(findPosition(appText, "<aut-pagination", 1));
+    const completions = query.completions(findPosition(appText, "<aut-pagination", 1)).items;
     expect(hasLabel(completions, "aut-pagination")).toBe(true);
   });
 
   it("completes third-party custom attributes in template", () => {
     const query = harness.workspace.query(appUri);
-    const completions = query.completions(findPosition(appText, "aurelia-table", 1));
+    const completions = query.completions(findPosition(appText, "aurelia-table", 1)).items;
     expect(hasLabel(completions, "aurelia-table")).toBe(true);
   });
 
   it("completes third-party bindables by prefix", () => {
     const query = harness.workspace.query(appUri);
-    const completions = query.completions(findPosition(appText, "current-page.bind", 1));
+    const completions = query.completions(findPosition(appText, "current-page.bind", 1)).items;
     expect(hasLabel(completions, "current-page")).toBe(true);
     expectOrderedCompletions(completions);
     expectUniqueLabels(completions);
 
-    const pageSize = query.completions(findPosition(appText, "page-size.bind", 1));
+    const pageSize = query.completions(findPosition(appText, "page-size.bind", 1)).items;
     expect(hasLabel(pageSize, "page-size")).toBe(true);
 
-    const totalItems = query.completions(findPosition(appText, "total-items.bind", 1));
+    const totalItems = query.completions(findPosition(appText, "total-items.bind", 1)).items;
     expect(hasLabel(totalItems, "total-items")).toBe(true);
   });
 });
@@ -339,7 +339,7 @@ describe("workspace completions (import alias conflicts)", () => {
     const query = harness.workspace.query(appUri);
     const completions = query.completions(
       findPosition(appText, "<button tooltip", "<button ".length),
-    );
+    ).items;
     expect(hasLabel(completions, "tooltip")).toBe(true);
     expect(hasLabel(completions, "badge")).toBe(true);
     expectOrderedCompletions(completions);

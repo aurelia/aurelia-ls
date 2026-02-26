@@ -138,7 +138,7 @@ describe("cross-feature: hover-completion kind agreement", () => {
     assertHoverContains(hover, /(custom element)/, "Hover should identify as CE");
 
     // Completions at a tag-name position should include matrix-panel as custom-element
-    const completions = query.completions(await pos("<matrix-badge value.bind", 1));
+    const completions = query.completions(await pos("<matrix-badge value.bind", 1)).items;
     const item = completions.find((c) => c.label === "matrix-panel");
     expect(item, "Completions should include the CE that hover identifies").toBeDefined();
     if (item) {
@@ -152,7 +152,7 @@ describe("cross-feature: hover-completion kind agreement", () => {
     assertHoverContains(hover, /(value converter)/, "Hover should identify as VC");
 
     // Completions at a pipe position should include formatDate
-    const completions = query.completions(await pos("| formatDate", 1));
+    const completions = query.completions(await pos("| formatDate", 1)).items;
     expect(hasLabel(completions, "formatDate"), "Completions should include the VC").toBe(true);
   });
 });
@@ -224,8 +224,8 @@ describe("cross-feature: determinism", () => {
 
   it("repeated completions query produces same items", async () => {
     const position = await pos("| formatDate", 1);
-    const comp1 = query.completions(position);
-    const comp2 = query.completions(position);
+    const comp1 = query.completions(position).items;
+    const comp2 = query.completions(position).items;
     expect(comp1.length).toBe(comp2.length);
     const labels1 = comp1.map((c) => c.label).sort();
     const labels2 = comp2.map((c) => c.label).sort();

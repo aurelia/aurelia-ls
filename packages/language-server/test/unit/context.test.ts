@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { createServerContext } from "@aurelia-ls/language-server/api";
+import { canonicalDocumentUri } from "@aurelia-ls/compiler";
 
 function createLogger() {
   return {
@@ -14,6 +15,8 @@ function createLogger() {
 describe("createServerContext", () => {
   test("ensureProgramDocument only syncs live documents when version changes", () => {
     const uri = "file:///app/component.html";
+    // ensureProgramDocument passes canonical.uri (normalized path) to workspace.update
+    const canonicalUri = canonicalDocumentUri(uri).uri;
     let live = TextDocument.create(uri, "html", 1, "<template>${name}</template>");
     const documents = {
       get: vi.fn((nextUri: string) => (nextUri === uri ? live : null)),
@@ -33,12 +36,12 @@ describe("createServerContext", () => {
     ctx.ensureProgramDocument(uri);
     ctx.ensureProgramDocument(uri);
     expect(workspace.update).toHaveBeenCalledTimes(1);
-    expect(workspace.update).toHaveBeenLastCalledWith(uri, "<template>${name}</template>", 1);
+    expect(workspace.update).toHaveBeenLastCalledWith(canonicalUri, "<template>${name}</template>", 1);
 
     live = TextDocument.create(uri, "html", 2, "<template>${firstName}</template>");
     ctx.ensureProgramDocument(uri);
     expect(workspace.update).toHaveBeenCalledTimes(2);
-    expect(workspace.update).toHaveBeenLastCalledWith(uri, "<template>${firstName}</template>", 2);
+    expect(workspace.update).toHaveBeenLastCalledWith(canonicalUri, "<template>${firstName}</template>", 2);
   });
 
   test("replacing workspace clears synced document version cache", () => {
