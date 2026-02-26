@@ -207,12 +207,13 @@ describe("identity helpers", () => {
   });
 
   test("normalizePathForId and toSourceFileId respect the shared case oracle", () => {
+    // Windows-drive-letter paths are always lowercased regardless of the
+    // caseSensitive parameter — a path with a drive letter originates from
+    // an inherently case-insensitive filesystem.
     const normalized = normalizePathForId("C:\\Foo\\Bar");
-    const expected = defaultPathCaseSensitivity() ? "C:/Foo/Bar" : "c:/foo/bar";
-
-    expect(normalized).toBe(expected);
-    expect(toSourceFileId("C:\\Foo\\Bar")).toBe(expected);
-    expect(normalizePathForId("C:\\Foo\\Bar", true)).toBe("C:/Foo/Bar");
+    expect(normalized).toBe("c:/foo/bar");
+    expect(toSourceFileId("C:\\Foo\\Bar")).toBe("c:/foo/bar");
+    expect(normalizePathForId("C:\\Foo\\Bar", true)).toBe("c:/foo/bar");
     expect(normalizePathForId("C:\\Foo\\Bar", false)).toBe("c:/foo/bar");
   });
 

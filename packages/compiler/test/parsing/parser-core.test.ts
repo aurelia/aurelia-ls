@@ -992,8 +992,10 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
 
   test("optional chain with invalid member yields BadExpression", () => {
     const ast = parseInBothModes("foo?.123");
+    // Recovery produces AccessMember(foo, "", optional=true), then 123 is
+    // unexpected after the expression — wrapping the whole thing in BadExpression.
     expect(ast.$kind).toBe("BadExpression");
-    expect(ast.message).toBe("Expected identifier after '?.'");
+    expect(ast.message).toBe("Unexpected token after end of expression");
   });
 
   test("bare '{' is rejected", () => {
@@ -1203,10 +1205,15 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     expect(ast.func.args[1].name.name).toBe("baz");
   });
 
-  test("member access without identifier yields BadExpression", () => {
+  test("member access without identifier produces recovery AccessMember", () => {
+    // Parser recovery: `foo.` produces AccessMember with empty name to enable
+    // downstream completions on the incomplete member access.
     const ast = parseInBothModes("foo.");
-    expect(ast.$kind).toBe("BadExpression");
-    expect(ast.message).toBe("Expected identifier after '.'");
+    expect(ast.$kind).toBe("AccessMember");
+    expect(ast.object.$kind).toBe("AccessScope");
+    expect(ast.object.name.name).toBe("foo");
+    expect(ast.name.name).toBe("");
+    expect(ast.optional).toBe(false);
   });
 
   test("non-optional keyed access sets optional to false", () => {

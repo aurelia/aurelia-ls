@@ -1033,8 +1033,9 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     }
 
     // Enrich the entity with the expression model's type info.
+    // Skip "unknown" — it means the type couldn't be resolved and adds no information.
     let enrichedResolution = resolution;
-    if (typeInfo?.type) {
+    if (typeInfo?.type && typeInfo.type !== "unknown") {
       enrichedResolution = this.#enrichEntityWithType(resolution, typeInfo);
     }
 

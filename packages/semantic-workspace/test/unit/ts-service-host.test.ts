@@ -30,10 +30,17 @@ function createHarness() {
 test("path utils canonicalization follows explicit case-sensitivity policy", () => {
   const sensitive = createPathUtils(true);
   const insensitive = createPathUtils(false);
-  const input = "C:\\Foo\\Bar.ts";
 
-  expect(sensitive.canonical(input)).toBe("C:/Foo/Bar.ts");
-  expect(insensitive.canonical(input)).toBe("c:/foo/bar.ts");
+  // Windows-drive-letter paths are always lowercased — the drive letter
+  // signals a case-insensitive filesystem regardless of host platform.
+  const winInput = "C:\\Foo\\Bar.ts";
+  expect(sensitive.canonical(winInput)).toBe("c:/foo/bar.ts");
+  expect(insensitive.canonical(winInput)).toBe("c:/foo/bar.ts");
+
+  // Non-drive paths respect the caseSensitive parameter.
+  const unixInput = "/Foo/Bar.ts";
+  expect(sensitive.canonical(unixInput)).toBe("/Foo/Bar.ts");
+  expect(insensitive.canonical(unixInput)).toBe("/foo/bar.ts");
 });
 
 test("configure loads tsconfig and base roots", () => {

@@ -922,7 +922,14 @@ function resolveValueOverlayType(
   if (frame.origin?.kind !== "valueOverlay") return null;
   const entry = typeScope.exprIndex.get(frame.origin.valueExprId);
   if (!entry) return null;
-  return evaluateType(entry.ast as AnyBindingExpression, scope, checker, typeScope);
+  // Evaluate the value expression in the parent scope — the with.bind
+  // expression (e.g. `obj` in `with.bind="obj"`) must resolve against the
+  // scope OUTSIDE the overlay frame, not inside it.  Without this, an
+  // identifier in the value expression that matches a property of the
+  // resolved overlay type would recurse infinitely:
+  //   resolveIdentifierToType → resolveValueOverlayType → evaluateType → resolveIdentifierToType
+  const parentScope = frame.parent ? { ...scope, frameId: frame.parent } : scope;
+  return evaluateType(entry.ast as AnyBindingExpression, parentScope, checker, typeScope);
 }
 
 /** Resolve let symbol type: find the let binding expression and evaluate it. */

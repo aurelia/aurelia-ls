@@ -161,7 +161,7 @@ function projectEntityCard(resolution: CursorResolutionResult): HoverCard | null
     // --- Expression entities ---
     case 'scope-identifier': {
       const label = expressionLabel ?? entity.name;
-      const typePart = entity.type ? `: ${entity.type}` : '';
+      const typePart = displayableType(entity.type);
       return {
         signature: `(expression) ${label}${typePart}`,
         meta: [],
@@ -169,7 +169,7 @@ function projectEntityCard(resolution: CursorResolutionResult): HoverCard | null
     }
     case 'member-access': {
       const label = expressionLabel ?? entity.memberName;
-      const typePart = entity.memberType ? `: ${entity.memberType}` : '';
+      const typePart = displayableType(entity.memberType);
       return {
         signature: `(expression) ${label}${typePart}`,
         meta: entity.parentType ? [`*member of ${entity.parentType}*`] : [],
@@ -177,7 +177,7 @@ function projectEntityCard(resolution: CursorResolutionResult): HoverCard | null
     }
     case 'global-access': {
       const label = expressionLabel ?? entity.globalName;
-      const typePart = entity.globalType ? `: ${entity.globalType}` : '';
+      const typePart = displayableType(entity.globalType);
       return {
         signature: `(expression) ${label}${typePart}`,
         meta: [],
@@ -335,6 +335,12 @@ function buildBindableCard(entity: { bindable: Bindable; parentKind: string; par
 }
 
 // ── Formatting helpers ─────────────────────────────────────────────────
+
+/** Format a type string for display, suppressing uninformative types. */
+function displayableType(type: string | undefined | null): string {
+  if (!type || type === "unknown") return "";
+  return `: ${type}`;
+}
 
 function formatSourceLocation(file?: string | null, pkg?: string | null): string | null {
   if (pkg) return pkg;
