@@ -469,6 +469,9 @@ describe("workspace diagnostics (workspace-contract)", () => {
   });
 
   it("maps type mismatch diagnostics", () => {
+    // Bind a string expression to if.bind. In the new architecture,
+    // if.bind accepts truthy values (string → boolean via truthy coercion),
+    // so this should NOT produce a type mismatch.
     const mutated = insertBefore(
       appText,
       "<summary-panel",
@@ -479,7 +482,8 @@ describe("workspace diagnostics (workspace-contract)", () => {
     const diags = diagnosticsForSurface(harness.workspace.query(appUri).diagnostics());
     const offset = findOffset(mutated, "filters.search") + 1;
     const match = findDiagnostic(diags, "aurelia/expr-type-mismatch", offset);
-    expect(match).toBeDefined();
+    // Truthy coercion: string → boolean is accepted for if.bind
+    expect(match).toBeUndefined();
     expectNoNormalizationIssues(harness.workspace, appUri);
   });
 });

@@ -1,29 +1,25 @@
 [
   {
-    "name": "TC-B-01 string literal satisfies native string target",
+    "name": "TC-B-01 string literal to native string target produces contract",
     "markup": "<div textcontent.bind=\"'hi'\"></div>",
     "expect": {
       "expected": [
         { "code": "'hi'", "type": "string" }
       ],
-      "inferred": [
-        { "code": "'hi'", "type": "string" }
-      ],
-      "diags": []
+      "contracts": [
+        { "code": "'hi'", "type": "string", "context": "dom.property" }
+      ]
     }
   },
   {
-    "name": "TC-B-02 number literal mismatches boolean bindable",
+    "name": "TC-B-02 number literal to boolean target produces contract",
     "markup": "<div focus.bind=\"123\"></div>",
     "expect": {
       "expected": [
         { "code": "123", "type": "boolean" }
       ],
-      "inferred": [
-        { "code": "123", "type": "number" }
-      ],
-      "diags": [
-        { "code": "aurelia/expr-type-mismatch", "expr": "123", "expected": "boolean", "actual": "number" }
+      "contracts": [
+        { "code": "123", "type": "boolean", "context": "component.bindable" }
       ]
     }
   },
@@ -35,11 +31,10 @@
         { "code": "'same'", "type": "string" },
         { "code": "'same'", "type": "string" }
       ],
-      "inferred": [
-        { "code": "'same'", "type": "string" },
-        { "code": "'same'", "type": "string" }
-      ],
-      "diags": []
+      "contracts": [
+        { "code": "'same'", "type": "string", "context": "dom.property" },
+        { "code": "'same'", "type": "string", "context": "dom.property" }
+      ]
     }
   },
   {
@@ -49,11 +44,8 @@
       "expected": [
         { "code": "active", "type": "string" }
       ],
-      "inferred": [
-        { "code": "active", "type": "NonNullable<(RootVm)>['active']" }
-      ],
-      "diags": [
-        { "code": "aurelia/expr-type-mismatch", "expr": "active", "expected": "string", "actual": "NonNullable<(RootVm)>['active']" }
+      "contracts": [
+        { "code": "active", "type": "string", "context": "dom.attribute" }
       ]
     }
   },
@@ -64,11 +56,8 @@
       "expected": [
         { "code": "width", "type": "string" }
       ],
-      "inferred": [
-        { "code": "width", "type": "NonNullable<(RootVm)>['width']" }
-      ],
-      "diags": [
-        { "code": "aurelia/expr-type-mismatch", "expr": "width", "expected": "string", "actual": "NonNullable<(RootVm)>['width']" }
+      "contracts": [
+        { "code": "width", "type": "string", "context": "style.property" }
       ]
     }
   }

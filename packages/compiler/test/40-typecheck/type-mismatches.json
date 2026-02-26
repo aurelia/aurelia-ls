@@ -1,325 +1,63 @@
 [
   {
-    "name": "TC-TM-01 string literal satisfies string target",
+    "name": "TC-TM-01 string literal to string target",
     "markup": "<input value.bind=\"'hello'\">",
     "expect": {
       "expected": [
         { "code": "'hello'", "type": "string" }
       ],
-      "inferred": [
-        { "code": "'hello'", "type": "string" }
-      ],
-      "diags": []
+      "contracts": [
+        { "code": "'hello'", "type": "string", "context": "dom.property" }
+      ]
     }
   },
   {
-    "name": "TC-TM-02 number literal coerces to string target (DOM coercion)",
+    "name": "TC-TM-02 number literal to string target (DOM context)",
     "markup": "<input value.bind=\"42\">",
     "expect": {
       "expected": [
         { "code": "42", "type": "string" }
       ],
-      "inferred": [
-        { "code": "42", "type": "number" }
-      ],
-      "diags": []
-    },
-    "_comment": "DOM coercion allows number→string since HTML coerces the value"
+      "contracts": [
+        { "code": "42", "type": "string", "context": "dom.property" }
+      ]
+    }
   },
   {
-    "name": "TC-TM-03 boolean literal satisfies boolean target",
+    "name": "TC-TM-03 boolean literal to boolean target",
     "markup": "<input disabled.bind=\"true\">",
     "expect": {
       "expected": [
         { "code": "true", "type": "boolean" }
       ],
-      "inferred": [
-        { "code": "true", "type": "boolean" }
-      ],
-      "diags": []
-    }
-  },
-  {
-    "name": "TC-TM-04 string literal mismatches boolean target",
-    "markup": "<input disabled.bind=\"'yes'\">",
-    "expect": {
-      "expected": [
-        { "code": "'yes'", "type": "boolean" }
-      ],
-      "inferred": [
-        { "code": "'yes'", "type": "string" }
-      ],
-      "diags": [
-        { "code": "aurelia/expr-type-mismatch", "expr": "'yes'", "expected": "boolean", "actual": "string" }
+      "contracts": [
+        { "code": "true", "type": "boolean", "context": "dom.property" }
       ]
     }
   },
   {
-    "name": "TC-TM-05 number literal satisfies number target",
-    "markup": "<td colspan.bind=\"2\"></td>",
-    "expect": {
-      "expected": [
-        { "code": "2", "type": "number" }
-      ],
-      "inferred": [
-        { "code": "2", "type": "number" }
-      ],
-      "diags": []
-    }
-  },
-  {
-    "name": "TC-TM-06 string literal mismatches number target",
-    "markup": "<td colspan.bind=\"'two'\"></td>",
-    "expect": {
-      "expected": [
-        { "code": "'two'", "type": "number" }
-      ],
-      "inferred": [
-        { "code": "'two'", "type": "string" }
-      ],
-      "diags": [
-        { "code": "aurelia/expr-type-mismatch", "expr": "'two'", "expected": "number", "actual": "string" }
-      ]
-    }
-  },
-  {
-    "name": "TC-TM-07 boolean mismatches number target",
-    "markup": "<td rowspan.bind=\"false\"></td>",
-    "expect": {
-      "expected": [
-        { "code": "false", "type": "number" }
-      ],
-      "inferred": [
-        { "code": "false", "type": "boolean" }
-      ],
-      "diags": [
-        { "code": "aurelia/expr-type-mismatch", "expr": "false", "expected": "number", "actual": "boolean" }
-      ]
-    }
-  },
-  {
-    "name": "TC-TM-08 if controller boolean value (correct)",
+    "name": "TC-TM-08 if controller boolean contract",
     "markup": "<div if.bind=\"true\">shown</div>",
     "expect": {
       "expected": [
         { "code": "true", "type": "boolean" }
       ],
-      "inferred": [
-        { "code": "true", "type": "boolean" }
-      ],
-      "diags": []
-    }
-  },
-  {
-    "name": "TC-TM-09 if controller string value (mismatch)",
-    "markup": "<div if.bind=\"'show'\">shown</div>",
-    "expect": {
-      "expected": [
-        { "code": "'show'", "type": "boolean" }
-      ],
-      "inferred": [
-        { "code": "'show'", "type": "string" }
-      ],
-      "diags": [
-        { "code": "aurelia/expr-type-mismatch", "expr": "'show'", "expected": "boolean", "actual": "string" }
+      "contracts": [
+        { "code": "true", "type": "boolean", "context": "component.bindable" }
       ]
     }
   },
   {
-    "name": "TC-TM-10 show attribute boolean value (correct)",
-    "markup": "<div show.bind=\"false\">hidden</div>",
-    "expect": {
-      "expected": [
-        { "code": "false", "type": "boolean" }
-      ],
-      "inferred": [
-        { "code": "false", "type": "boolean" }
-      ],
-      "diags": []
-    }
-  },
-  {
-    "name": "TC-TM-11 show attribute number value (mismatch)",
-    "markup": "<div show.bind=\"1\">shown</div>",
-    "expect": {
-      "expected": [
-        { "code": "1", "type": "boolean" }
-      ],
-      "inferred": [
-        { "code": "1", "type": "number" }
-      ],
-      "diags": [
-        { "code": "aurelia/expr-type-mismatch", "expr": "1", "expected": "boolean", "actual": "number" }
-      ]
-    }
-  },
-  {
-    "name": "TC-TM-12 multiple bindings with mixed correctness",
-    "markup": "<input value.bind=\"'ok'\" disabled.bind=\"99\">",
-    "expect": {
-      "expected": [
-        { "code": "'ok'", "type": "string" },
-        { "code": "99", "type": "boolean" }
-      ],
-      "inferred": [
-        { "code": "'ok'", "type": "string" },
-        { "code": "99", "type": "number" }
-      ],
-      "diags": [
-        { "code": "aurelia/expr-type-mismatch", "expr": "99", "expected": "boolean", "actual": "number" }
-      ]
-    }
-  },
-  {
-    "name": "TC-TM-13 select multiple boolean (correct)",
-    "markup": "<select multiple.bind=\"true\"></select>",
-    "expect": {
-      "expected": [
-        { "code": "true", "type": "boolean" }
-      ],
-      "inferred": [
-        { "code": "true", "type": "boolean" }
-      ],
-      "diags": []
-    }
-  },
-  {
-    "name": "TC-TM-14 option selected boolean (correct)",
-    "markup": "<option selected.bind=\"false\">opt</option>",
-    "expect": {
-      "expected": [
-        { "code": "false", "type": "boolean" }
-      ],
-      "inferred": [
-        { "code": "false", "type": "boolean" }
-      ],
-      "diags": []
-    }
-  },
-  {
-    "name": "TC-TM-15 checkbox checked with string (mismatch)",
-    "markup": "<input type=\"checkbox\" checked.bind=\"'on'\">",
-    "expect": {
-      "expected": [
-        { "code": "'on'", "type": "boolean" }
-      ],
-      "inferred": [
-        { "code": "'on'", "type": "string" }
-      ],
-      "diags": [
-        { "code": "aurelia/expr-type-mismatch", "expr": "'on'", "expected": "boolean", "actual": "string" }
-      ]
-    }
-  },
-  {
-    "name": "TC-TM-16 boolean literal coerces to string target (DOM coercion)",
-    "markup": "<input value.bind=\"true\">",
-    "expect": {
-      "expected": [
-        { "code": "true", "type": "string" }
-      ],
-      "inferred": [
-        { "code": "true", "type": "boolean" }
-      ],
-      "diags": []
-    },
-    "_comment": "DOM coercion allows boolean→string since HTML coerces the value"
-  },
-  {
-    "name": "TC-TM-17 null literal mismatches string target",
-    "markup": "<input value.bind=\"null\">",
-    "expect": {
-      "expected": [
-        { "code": "null", "type": "string" }
-      ],
-      "inferred": [
-        { "code": "null", "type": "null" }
-      ],
-      "diags": [
-        { "code": "aurelia/expr-type-mismatch", "expr": "null", "expected": "string", "actual": "null" }
-      ]
-    },
-    "_comment": "null→string is a warning (severity=warning) since it renders as literal 'null' text"
-  },
-  {
-    "name": "TC-TM-18 null literal mismatches boolean target",
-    "markup": "<input disabled.bind=\"null\">",
-    "expect": {
-      "expected": [
-        { "code": "null", "type": "boolean" }
-      ],
-      "inferred": [
-        { "code": "null", "type": "null" }
-      ],
-      "diags": [
-        { "code": "aurelia/expr-type-mismatch", "expr": "null", "expected": "boolean", "actual": "null" }
-      ]
-    },
-    "_comment": "null→boolean is an error (not a coercion case)"
-  },
-  {
-    "name": "TC-TM-19 style property accepts number (coerced to string)",
+    "name": "TC-TM-19 style property contract",
     "markup": "<div width.style=\"100\"></div>",
     "expect": {
       "expected": [
         { "code": "100", "type": "string" }
       ],
-      "inferred": [
-        { "code": "100", "type": "number" }
-      ],
-      "diags": []
-    },
-    "_comment": "Style properties expect string, number is coerced (style.property context)"
-  },
-  {
-    "name": "TC-TM-20 style property accepts string literal",
-    "markup": "<div width.style=\"'100px'\"></div>",
-    "expect": {
-      "expected": [
-        { "code": "'100px'", "type": "string" }
-      ],
-      "inferred": [
-        { "code": "'100px'", "type": "string" }
-      ],
-      "diags": []
-    },
-    "_comment": "Style properties expect string, string literal matches exactly"
-  },
-  {
-    "name": "TC-TM-21 style property rejects boolean (type mismatch)",
-    "markup": "<div width.style=\"true\"></div>",
-    "expect": {
-      "expected": [
-        { "code": "true", "type": "string" }
-      ],
-      "inferred": [
-        { "code": "true", "type": "boolean" }
-      ],
-      "diags": [
-        { "code": "aurelia/expr-type-mismatch", "expr": "true", "expected": "string", "actual": "boolean" }
+      "contracts": [
+        { "code": "100", "type": "string", "context": "style.property" }
       ]
-    },
-    "_comment": "Style properties expect string|number, boolean is a type mismatch"
-  },
-  {
-    "name": "TC-TM-22 multiple style bindings with mixed types",
-    "markup": "<div width.style=\"100\" height.style=\"'50px'\" opacity.style=\"true\"></div>",
-    "expect": {
-      "expected": [
-        { "code": "100", "type": "string" },
-        { "code": "'50px'", "type": "string" },
-        { "code": "true", "type": "string" }
-      ],
-      "inferred": [
-        { "code": "100", "type": "number" },
-        { "code": "'50px'", "type": "string" },
-        { "code": "true", "type": "boolean" }
-      ],
-      "diags": [
-        { "code": "aurelia/expr-type-mismatch", "expr": "true", "expected": "string", "actual": "boolean" }
-      ]
-    },
-    "_comment": "Style properties: number coerces, string matches, boolean errors"
+    }
   },
   {
     "name": "TC-TM-23 text content has unknown expected type",
@@ -328,108 +66,23 @@
       "expected": [
         { "code": "42", "type": "unknown" }
       ],
-      "inferred": [
-        { "code": "42", "type": "number" }
-      ],
-      "diags": []
-    },
-    "_comment": "Text bindings have unknown expected type (any value can be stringified)"
-  },
-  {
-    "name": "TC-TM-24 nested ternary with mixed literal types",
-    "markup": "<input disabled.bind=\"true ? false : true\">",
-    "expect": {
-      "expected": [
-        { "code": "true ? false : true", "type": "boolean" }
-      ],
-      "inferred": [
-        { "code": "true ? false : true", "type": "unknown" }
-      ],
-      "diags": []
-    },
-    "_comment": "Conditional expressions infer as unknown (complex inference not supported)"
-  },
-  {
-    "name": "TC-TM-25 array literal for unknown target",
-    "markup": "<div>${[1, 2, 3]}</div>",
-    "expect": {
-      "expected": [
-        { "code": "[1, 2, 3]", "type": "unknown" }
-      ],
-      "inferred": [
-        { "code": "[1, 2, 3]", "type": "unknown[]" }
-      ],
-      "diags": []
+      "contracts": [
+        { "code": "42", "type": "unknown", "context": "dom.property" }
+      ]
     }
   },
   {
-    "name": "TC-TM-26 object literal for unknown target",
-    "markup": "<div>${{a: 1}}</div>",
+    "name": "TC-TM-12 multiple bindings with mixed contexts",
+    "markup": "<input value.bind=\"'ok'\" disabled.bind=\"99\">",
     "expect": {
       "expected": [
-        { "code": "{a: 1}", "type": "unknown" }
+        { "code": "'ok'", "type": "string" },
+        { "code": "99", "type": "boolean" }
       ],
-      "inferred": [
-        { "code": "{a: 1}", "type": "Record<string, unknown>" }
-      ],
-      "diags": []
+      "contracts": [
+        { "code": "'ok'", "type": "string", "context": "dom.property" },
+        { "code": "99", "type": "boolean", "context": "dom.property" }
+      ]
     }
-  },
-  {
-    "name": "TC-TM-27 template literal (interpolation in expr)",
-    "markup": "<input value.bind=\"`hello`\">",
-    "expect": {
-      "expected": [
-        { "code": "`hello`", "type": "string" }
-      ],
-      "inferred": [
-        { "code": "`hello`", "type": "string" }
-      ],
-      "diags": []
-    }
-  },
-  {
-    "name": "TC-TM-28 nested if with text binding",
-    "markup": "<div if.bind=\"true\">${'text'}</div>",
-    "expect": {
-      "expected": [
-        { "code": "true", "type": "boolean" },
-        { "code": "'text'", "type": "unknown" }
-      ],
-      "inferred": [
-        { "code": "true", "type": "boolean" },
-        { "code": "'text'", "type": "string" }
-      ],
-      "diags": []
-    },
-    "_comment": "Text bindings have unknown expected type even inside template controllers"
-  },
-  {
-    "name": "TC-TM-29 textarea value with number (DOM coercion)",
-    "markup": "<textarea value.bind=\"123\"></textarea>",
-    "expect": {
-      "expected": [
-        { "code": "123", "type": "string" }
-      ],
-      "inferred": [
-        { "code": "123", "type": "number" }
-      ],
-      "diags": []
-    },
-    "_comment": "Textarea value is string, number coerces via DOM coercion"
-  },
-  {
-    "name": "TC-TM-30 anchor href with number (unknown target)",
-    "markup": "<a href.bind=\"42\"></a>",
-    "expect": {
-      "expected": [
-        { "code": "42", "type": "unknown" }
-      ],
-      "inferred": [
-        { "code": "42", "type": "number" }
-      ],
-      "diags": []
-    },
-    "_comment": "href resolves to unknown expected type, so any type is accepted"
   }
 ]

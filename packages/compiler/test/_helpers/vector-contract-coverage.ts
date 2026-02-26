@@ -65,7 +65,7 @@ const STAGES: readonly StageConfig[] = [
   {
     stage: "40-typecheck",
     dir: "packages/compiler/test/40-typecheck",
-    categories: ["expected", "inferred", "diags"],
+    categories: ["expected", "contracts"],
   },
 ] as const;
 

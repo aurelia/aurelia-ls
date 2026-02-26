@@ -6,7 +6,6 @@ import { linkTemplateSemantics } from "../../out/analysis/20-link/resolve.js";
 import { buildSemanticsSnapshot } from "../../out/schema/snapshot.js";
 import { bindScopes } from "../../out/analysis/30-bind/bind.js";
 import { typecheck } from "../../out/analysis/40-typecheck/typecheck.js";
-import { buildExprSpanIndex } from "../../out/shared/expr-utils.js";
 
 // --- Types ---
 
@@ -15,44 +14,32 @@ interface TypeEntry {
   type: string;
 }
 
-interface DiagEntry {
+interface ContractEntry {
   code: string;
-  expr?: string;
-  expected?: string;
-  actual?: string;
-}
-
-interface DiagExpectInput {
-  code?: string;
-  expr?: string;
-  expected?: string;
-  actual?: string;
+  type: string;
+  context: string;
 }
 
 interface TypecheckExpect {
   expected?: TypeEntry[];
-  inferred?: TypeEntry[];
-  diags?: (DiagExpectInput | string)[];
+  contracts?: ContractEntry[];
 }
 
 interface TypecheckIntent {
   expected: TypeEntry[];
-  inferred: TypeEntry[];
-  diags: DiagEntry[];
+  contracts: ContractEntry[];
 }
 
 interface TypecheckDiff {
   missingExpected: string[];
   extraExpected: string[];
-  missingInferred: string[];
-  extraInferred: string[];
-  missingDiags: string[];
-  extraDiags: string[];
+  missingContracts: string[];
+  extraContracts: string[];
 }
 
 runVectorTests<TypecheckExpect, TypecheckIntent, TypecheckDiff>({
   dirname: getDirname(import.meta.url),
-  suiteName: "Typecheck (40)",
+  suiteName: "Typecheck (40) — Binding Contracts",
   execute: (v, ctx) => {
     const ir = lowerDocument(v.markup, lowerOpts(ctx));
     const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(ctx.sem), {
@@ -64,26 +51,16 @@ runVectorTests<TypecheckExpect, TypecheckIntent, TypecheckDiff>({
     const tc = typecheck({
       linked,
       scope,
-      ir,
       rootVmType: v.rootVmType ?? "RootVm",
-      diagnostics: ctx.diagnostics.forSource("typecheck"),
-      // Use "standard" preset for tests to get full error detection
-      // (default is "lenient" for better user experience)
       config: { preset: "standard" },
     });
-    return reduceTypecheckIntent({ ir, tc, diagnostics: ctx.diagnostics.all });
+    return reduceTypecheckIntent({ ir, tc });
   },
   compare: compareTypecheckIntent,
-  categories: ["expected", "inferred", "diags"],
+  categories: ["expected", "contracts"],
   normalizeExpect: (expect) => ({
     expected: expect?.expected ?? [],
-    inferred: expect?.inferred ?? [],
-    diags: (expect?.diags ?? []).map((d) => ({
-      code: typeof d === "string" ? d : d.code,
-      expr: typeof d === "string" ? undefined : d.expr,
-      expected: typeof d === "string" ? undefined : d.expected,
-      actual: typeof d === "string" ? undefined : d.actual,
-    })),
+    contracts: expect?.contracts ?? [],
   }),
 });
 
@@ -91,46 +68,28 @@ runVectorTests<TypecheckExpect, TypecheckIntent, TypecheckDiff>({
 
 interface TypecheckResult {
   expectedByExpr?: Map<string, string>;
-  inferredByExpr?: Map<string, string>;
+  contracts?: Map<string, { type: string; context: string }>;
 }
 
 interface ReduceInput {
   ir: Parameters<typeof indexExprCodeFromIr>[0];
   tc: TypecheckResult;
-  diagnostics: readonly CompilerDiag[];
 }
 
-interface CompilerDiag {
-  code: string;
-  source?: string;
-  span?: { start: number; end: number; file?: string };
-  data?: Readonly<Record<string, unknown>>;
-}
-
-function reduceTypecheckIntent({ ir, tc, diagnostics }: ReduceInput): TypecheckIntent {
+function reduceTypecheckIntent({ ir, tc }: ReduceInput): TypecheckIntent {
   const codeIndex = indexExprCodeFromIr(ir);
-  const spanIndex = buildExprSpanIndex(ir);
-  const spanToExpr = new Map<string, string>();
-  for (const [exprId, span] of spanIndex.spans.entries()) {
-    const key = `${span.start}|${span.end}|${span.file ?? ""}`;
-    spanToExpr.set(key, exprId);
-  }
   const expected = mapEntries(tc.expectedByExpr, codeIndex);
-  const inferred = mapEntries(tc.inferredByExpr, codeIndex);
-  const diags: DiagEntry[] = (diagnostics ?? [])
-    .filter((d) => d.stage === "typecheck")
-    .map((d) => {
-      const span = d.span;
-      const key = span ? `${span.start}|${span.end}|${span.file ?? ""}` : null;
-      const exprId = key ? spanToExpr.get(key) : undefined;
-      return {
-        code: d.code,
-        expr: exprId ? (codeIndex.get(exprId) ?? `(expr:${exprId})`) : undefined,
-        expected: getDataString(d.data, "expected"),
-        actual: getDataString(d.data, "actual"),
-      };
-    });
-  return { expected, inferred, diags };
+  const contracts: ContractEntry[] = [];
+  if (tc.contracts && typeof tc.contracts.entries === "function") {
+    for (const [id, contract] of tc.contracts.entries()) {
+      contracts.push({
+        code: codeIndex.get(id) ?? `(expr:${id})`,
+        type: contract.type,
+        context: contract.context,
+      });
+    }
+  }
+  return { expected, contracts };
 }
 
 function mapEntries(mapLike: Map<string, string> | undefined, codeIndex: Map<string, string>): TypeEntry[] {
@@ -142,25 +101,13 @@ function mapEntries(mapLike: Map<string, string> | undefined, codeIndex: Map<str
   return out;
 }
 
-function getDataString(
-  data: Readonly<Record<string, unknown>> | undefined,
-  key: string,
-): string | undefined {
-  if (!data) return undefined;
-  const value = data[key];
-  return typeof value === "string" ? value : undefined;
-}
-
 // --- Intent Comparison ---
 
 function compareTypecheckIntent(actual: TypecheckIntent, expected: TypecheckIntent): TypecheckDiff {
   const { missing: missingExpected, extra: extraExpected } =
     diffByKeyCounts(actual.expected, expected.expected, (e: TypeEntry) => `${e.code ?? ""}|${e.type ?? ""}`);
-  const { missing: missingInferred, extra: extraInferred } =
-    diffByKeyCounts(actual.inferred, expected.inferred, (e: TypeEntry) => `${e.code ?? ""}|${e.type ?? ""}`);
-  const { missing: missingDiags, extra: extraDiags } =
-    diffByKeyCounts(actual.diags, expected.diags, (d: DiagEntry) => `${d.code ?? ""}|${d.expr ?? ""}|${d.expected ?? ""}|${d.actual ?? ""}`);
+  const { missing: missingContracts, extra: extraContracts } =
+    diffByKeyCounts(actual.contracts, expected.contracts, (e: ContractEntry) => `${e.code ?? ""}|${e.type ?? ""}|${e.context ?? ""}`);
 
-  return { missingExpected, extraExpected, missingInferred, extraInferred, missingDiags, extraDiags };
+  return { missingExpected, extraExpected, missingContracts, extraContracts };
 }
-

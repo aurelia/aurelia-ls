@@ -4,8 +4,6 @@ import {
   offsetAtPosition,
   positionAtOffset,
   resolveSourceSpan,
-  spanContainsOffset,
-  spanLength,
   spanToRange,
 } from "../model/index.js";
 
@@ -20,6 +18,10 @@ import type { TemplateQueryFacade, TemplateMappingArtifact } from "../synthesis/
 
 // Compiler facade
 import type { TemplateCompilation } from "../facade.js";
+
+// Analysis imports (for binding contract validation)
+import { checkTypeCompatibility, type BindingContract } from "../analysis/index.js";
+import type { ExprIdMap } from "../model/identity.js";
 
 // Program layer imports
 import type { CompletionItem } from "./completion-contracts.js";
@@ -279,24 +281,18 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
   getDiagnostics(uri: DocumentUri): TemplateLanguageDiagnostics {
     const canonical = canonicalDocumentUri(uri);
     const vmDisplayName = getVmDisplayName(this.program.options.vm);
-    const vmRootTypeExpr = getVmRootTypeExpr(this.program.options.vm);
     const typeNames = this.typeNamesFor(canonical);
     const overlayDoc = this.overlaySnapshot(canonical.uri);
-    const compiler = this.program
+    const pipelineDiags = this.program
       .getDiagnostics(canonical.uri)
       .all
       .map((diag) =>
-        mapCompilerDiagnostic(diag, canonical.uri, canonical.file, {
-          vmDisplayName,
-          vmRootTypeExpr,
-          overlay: overlayDoc,
-          provenance: this.program.provenance,
-          typescript: this.options.typescript,
-          typeNames,
-        }),
+        mapCompilerDiagnostic(diag, canonical.uri, canonical.file),
       )
       .filter((diag): diag is TemplateLanguageDiagnostic => diag != null);
 
+    const binding = this.collectBindingDiagnostics(canonical, overlayDoc, vmDisplayName, typeNames);
+    const compiler = [...pipelineDiags, ...binding];
     const typescript = this.collectTypeScriptDiagnostics(canonical.uri, overlayDoc, vmDisplayName, typeNames);
     const all = [...compiler, ...typescript];
 
@@ -750,6 +746,112 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     return raw.map((diag) => mapTypeScriptDiagnostic(diag, overlay, this.program.provenance, displayName, typeNames ?? EMPTY_TYPE_NAMES));
   }
 
+  /**
+   * Validate binding contracts against TS-resolved types.
+   *
+   * For each binding contract (ExprId → expected type + context), queries the
+   * TS language service at the overlay position to get the resolved expression
+   * type, then runs the Aurelia coercion model to check compatibility.
+   *
+   * This replaces the old string-based type inference + reconciliation approach.
+   * Types come directly from TypeScript — accurate and always fresh.
+   */
+  private collectBindingDiagnostics(
+    canonical: CanonicalDocumentUri,
+    overlayDoc: OverlayDocumentSnapshot,
+    vmDisplayName: string,
+    typeNames: TypeNameMap,
+  ): TemplateLanguageDiagnostic[] {
+    const ts = this.options.typescript;
+
+    let compilation: TemplateCompilation;
+    try {
+      compilation = this.program.getCompilation(canonical.uri);
+    } catch {
+      return [];
+    }
+
+    const contracts = compilation.typecheck?.contracts;
+    if (!contracts || contracts.size === 0) return [];
+    const config = compilation.typecheck?.config;
+    if (!config?.enabled) return [];
+
+    // Build ExprId → overlay position index from the mapping (when available)
+    const exprOverlayPositions = new Map<string, { overlayCenter: number; htmlSpan: SourceSpan; memberPath: string | null }>();
+    const mapping = compilation.mapping;
+    if (mapping) {
+      for (const entry of mapping.entries) {
+        const center = entry.overlaySpan.start + Math.max(0, Math.floor((entry.overlaySpan.end - entry.overlaySpan.start) / 2));
+        const memberPath = entry.segments?.length
+          ? entry.segments[entry.segments.length - 1]!.path
+          : null;
+        exprOverlayPositions.set(entry.exprId, { overlayCenter: center, htmlSpan: entry.htmlSpan, memberPath });
+      }
+    }
+
+    // Expression spans from compilation (fallback for location when mapping unavailable)
+    const exprSpans = compilation.exprSpans;
+
+    const diags: TemplateLanguageDiagnostic[] = [];
+
+    for (const [exprId, contract] of contracts.entries()) {
+      // Skip contracts that can't be validated via type comparison
+      if (contract.type === "unknown" || contract.type === "any") continue;
+      // Listener bindings: the overlay calls the method, so TS returns the
+      // call's return type (void), not the function type. Skip.
+      if (contract.type === "Function") continue;
+      // Iterator bindings: structural Iterable check can't be done via quickinfo
+      if (contract.type.startsWith("Iterable<")) continue;
+
+      // Resolve the actual expression type:
+      // 1. For literals, use the compile-time known type (no TS needed)
+      // 2. For non-literals, query TS at the overlay position
+      let actualType: string | null = contract.literalType ?? null;
+
+      if (!actualType) {
+        // Non-literal: requires TS language service for type resolution
+        if (!ts?.getQuickInfo) continue;
+
+        const pos = exprOverlayPositions.get(exprId);
+        if (!pos) continue;
+
+        const info = ts.getQuickInfo(overlayDoc, pos.overlayCenter);
+        if (!info?.text) continue;
+
+        const resolvedType = parseQuickInfoType(info.text);
+        if (!resolvedType) continue;
+
+        actualType = rewriteTypeNames(resolvedType, typeNames);
+      }
+
+      // Run the Aurelia coercion model
+      const result = checkTypeCompatibility(actualType, contract.type, contract.context, config);
+
+      if (result.compatible || result.severity === "off") continue;
+
+      // Build diagnostic with resolved types
+      const pos = exprOverlayPositions.get(exprId);
+      const memberPath = pos?.memberPath ?? null;
+      const subject = memberPath ? `${vmDisplayName}.${memberPath}` : vmDisplayName;
+      const message = memberPath
+        ? `Type mismatch on ${subject}: expected ${contract.type}, got ${actualType}`
+        : `Type mismatch: expected ${contract.type}, got ${actualType}`;
+
+      // Location: prefer overlay mapping (has member path), fall back to expr spans
+      const span = pos?.htmlSpan ?? exprSpans?.get(exprId) ?? null;
+      diags.push({
+        code: "aurelia/expr-type-mismatch",
+        message,
+        stage: "typecheck",
+        severity: result.severity === "error" ? "error" : "warning",
+        location: span ? { uri: canonical.uri, span } : null,
+        data: { expected: contract.type, actual: actualType },
+      });
+    }
+
+    return diags;
+  }
+
   private typeNamesFor(canonical: CanonicalDocumentUri): TypeNameMap {
     try {
       const compilation = this.program.getCompilation(canonical.uri);
@@ -807,20 +909,18 @@ function rangeKey(range: TextRange | undefined): string {
   return `${range.start.line}:${range.start.character}-${range.end.line}:${range.end.character}`;
 }
 
-type CompilerDiagnosticContext = {
-  vmDisplayName?: string;
-  vmRootTypeExpr?: string;
-  overlay?: OverlayDocumentSnapshot | null | undefined;
-  provenance?: OverlaySpanIndex | undefined;
-  typescript?: TypeScriptServices | undefined;
-  typeNames?: TypeNameMap | undefined;
-};
-
+/**
+ * Map a compiler diagnostic to a template language diagnostic.
+ *
+ * Typecheck diagnostics (aurelia/expr-type-mismatch) are no longer emitted
+ * during compilation — binding type validation happens at diagnostic
+ * collection time via collectBindingDiagnostics. This function handles
+ * all other compiler diagnostics (link, bind, etc.).
+ */
 function mapCompilerDiagnostic(
   diag: CompilerDiagnostic,
   templateUri: DocumentUri,
   templateFile: SourceFileId,
-  context?: CompilerDiagnosticContext,
 ): TemplateLanguageDiagnostic | null {
   const targetSpan = diagnosticSpan(diag);
   const location = targetSpan ? { uri: templateUri, span: resolveSourceSpan(targetSpan, templateFile) } : null;
@@ -829,49 +929,8 @@ function mapCompilerDiagnostic(
     location: rel.span ? { uri: templateUri, span: resolveSourceSpan(rel.span, templateFile) } : null,
   }));
   const code = String(diag.code);
-
-  if (isTypecheckMismatch(diag)) {
-    const vmDisplayName = context?.vmDisplayName ?? "Component";
-    const hit =
-      targetSpan && context?.provenance
-        ? context.provenance.lookupSource(templateUri, targetSpan.start)
-        : null;
-    const overlaySpan = hit?.edge.from.span ?? null;
-    // Use TS type resolution to validate the compiler's type mismatch.
-    // This is a validation check (suppress false positives), not display —
-    // the resolved type is compared, never shown to the user.
-    const quickInfoType = lookupQuickInfoType(
-      context?.typescript,
-      context?.overlay ?? null,
-      overlaySpan,
-      hit,
-      context?.typeNames ?? EMPTY_TYPE_NAMES,
-    );
-    const expected = getDataString(diag.data, "expected");
-    const actualFromData = getDataString(diag.data, "actual");
-    const actual = quickInfoType ?? actualFromData;
-
-    if (quickInfoType && expected && typeTextMatches(expected, quickInfoType)) {
-      return null;
-    }
-
-    const subject = hit?.memberPath ? `${vmDisplayName}.${hit.memberPath}` : vmDisplayName;
-    const data = withTypeMismatchData(diag.data ?? {}, expected, actual);
-    return {
-      code,
-      message: hit?.memberPath
-        ? `Type mismatch on ${subject}: expected ${expected ?? "unknown"}, got ${actual ?? "unknown"}`
-        : `Type mismatch: expected ${expected ?? "unknown"}, got ${actual ?? "unknown"}`,
-      stage: diag.stage,
-      severity: diag.severity,
-      location,
-      origin: diag.origin ?? null,
-      ...(related.length ? { related } : {}),
-      ...(data && Object.keys(data).length > 0 ? { data } : {}),
-    };
-  }
-
   const data = diag.data ?? null;
+
   return {
     code,
     message: diag.message,
@@ -884,54 +943,6 @@ function mapCompilerDiagnostic(
   };
 }
 
-function isTypecheckMismatch(diag: CompilerDiagnostic): boolean {
-  return diag.code === "aurelia/expr-type-mismatch" && diag.stage === "typecheck";
-}
-
-function getDataString(
-  data: Readonly<Record<string, unknown>> | undefined,
-  key: string,
-): string | null {
-  if (!data) return null;
-  const value = data[key];
-  return typeof value === "string" ? value : null;
-}
-
-function withTypeMismatchData(
-  data: Readonly<Record<string, unknown>>,
-  expected: string | null,
-  actual: string | null,
-): Readonly<Record<string, unknown>> {
-  if (!expected && !actual) return data;
-  const next = { ...data };
-  if (expected) next.expected = expected;
-  if (actual) next.actual = actual;
-  return next;
-}
-
-/**
- * Query TS for the resolved type at an overlay position.
- *
- * Used ONLY for validation (e.g., suppressing false-positive type
- * mismatches when TS confirms the types actually match). The result
- * is never shown to the user — it's compared against compiler data.
- */
-function lookupQuickInfoType(
-  ts: TypeScriptServices | undefined,
-  overlay: OverlayDocumentSnapshot | null,
-  overlaySpan: SourceSpan | null,
-  hit: TemplateSpanHit | null,
-  typeNames: TypeNameMap,
-): string | null {
-  if (!ts?.getQuickInfo || !overlay || !overlaySpan) return null;
-  const probe = hit?.edge.from.span ?? overlaySpan;
-  const center = probe.start + Math.max(0, Math.floor(spanLength(probe) / 2));
-  const info = ts.getQuickInfo(overlay, center);
-  if (!info?.text) return null;
-  const parsed = parseQuickInfoType(info.text);
-  return parsed ? rewriteTypeNames(parsed, typeNames) : null;
-}
-
 function parseQuickInfoType(text: string): string | null {
   const trimmed = text.trim();
   const colon = trimmed.lastIndexOf(":");
@@ -940,15 +951,6 @@ function parseQuickInfoType(text: string): string | null {
     if (typePart) return typePart;
   }
   return trimmed || null;
-}
-
-function typeTextMatches(expected: string, actual: string): boolean {
-  const norm = (t: string) => t.replace(/\s+/g, "").replace(/^\(+/, "").replace(/\)+$/, "");
-  if (norm(expected) === norm(actual)) return true;
-  if (expected.trim() === "Function") {
-    return /=>/.test(actual) || /\bFunction\b/.test(actual) || /\bfunction\b/.test(actual);
-  }
-  return false;
 }
 
 function mapTypeScriptDiagnostic(

@@ -1292,7 +1292,7 @@ describe("typecheck diagnostics integration", () => {
     expect(tcDiag?.stage).toBe("typecheck");
   });
 
-  test("if.bind expects boolean, string literal produces warning", () => {
+  test("if.bind accepts string literal via truthy coercion", () => {
     const program = new DefaultTemplateProgram({
       vm: {
         getRootVmTypeExpr() { return "TestVm"; },
@@ -1303,7 +1303,8 @@ describe("typecheck diagnostics integration", () => {
       moduleResolver: noopModuleResolver,
     });
     const uri = "/app/tc-if.html";
-    // if.bind expects boolean value
+    // if.bind expects boolean, but Aurelia accepts truthy values at runtime.
+    // string → boolean is allowed via truthy coercion in component.bindable context.
     const markup = "<template><div if.bind=\"'show'\">content</div></template>";
     program.upsertTemplate(uri, markup);
 
@@ -1313,10 +1314,7 @@ describe("typecheck diagnostics integration", () => {
 
     const diags = service.getDiagnostics(uri);
     const tcDiag = diags.compiler.find((d) => d.stage === "typecheck");
-    expect(tcDiag, "if.bind should produce typecheck warning for string→boolean").toBeTruthy();
-    // Lenient mode produces warning severity
-    expect(tcDiag?.code).toBe("aurelia/expr-type-mismatch");
-    expect(tcDiag?.severity).toBe("warning");
+    expect(tcDiag, "if.bind should NOT produce warning for string→boolean (truthy coercion)").toBeFalsy();
   });
 
   test("multiple bindings produce independent diagnostics", () => {

@@ -84,15 +84,13 @@ export function runCorePipeline(opts: CoreCompileOptions): CorePipelineResult {
   // Stage 3: Bind — validate bindings
   const scope = bindScopes(linked, { diagnostics: diag.forSource("bind") });
 
-  // Stage 4: Typecheck — expression type flow
+  // Stage 4: Typecheck — extract binding contracts
   const vm = opts.vm;
   const rootVm = hasQualifiedVm(vm) ? vm.getQualifiedRootVmTypeExpr() : vm.getRootVmTypeExpr();
   const tc = typecheck({
     linked,
     scope,
-    ir,
     rootVmType: rootVm,
-    diagnostics: diag.forSource("typecheck"),
   });
 
   return { ir, linked, scope, typecheck: tc };
@@ -171,9 +169,7 @@ export function runFullPipeline(opts: PipelineOptions): {
   const tc = trace.span("stage:typecheck", () => typecheck({
     linked,
     scope,
-    ir,
     rootVmType: rootVm,
-    diagnostics: diag.forSource("typecheck"),
     trace,
     deps: recorder,
     model: query,

@@ -753,8 +753,9 @@ function findExprAstById(exprTable: readonly ExprTableEntry[], exprId: ExprId): 
 }
 
 function getInferredType(compilation: TemplateCompilation, exprId: ExprId): string | undefined {
-  return compilation.typecheck?.inferredByExpr?.get(exprId)
-    ?? compilation.typecheck?.expectedByExpr?.get(exprId)
+  // Type resolution is now deferred to TS quickinfo at diagnostic/hover time.
+  // Return expected type as fallback for cursor entity metadata.
+  return compilation.typecheck?.expectedByExpr?.get(exprId)
     ?? undefined;
 }
 

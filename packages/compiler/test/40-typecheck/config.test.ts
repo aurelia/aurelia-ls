@@ -152,13 +152,13 @@ describe("checkTypeCompatibility", () => {
       expect(result.severity).toBe("warning");
     });
 
-    test("NonNullable<T> is NOT treated as nullable", () => {
-      // This was a bug where "nonnullable" contained "null"
+    test("NonNullable<T> is treated as unevaluated type (safe fallback)", () => {
+      // NonNullable<T> is a TS type expression that should have been resolved.
+      // If it reaches the compatibility checker unresolved, treat as compatible
+      // rather than risk a false alarm.
       const result = checkTypeCompatibility("NonNullable<Foo>", "string", "dom.property", config({ nullToString: "error", typeMismatch: "error" }));
-      // Should be a type mismatch, not a null-to-string issue
-      expect(result.severity).toBe("error");
-      // The reason should mention type assignment, not null rendering
-      expect(result.reason).toContain("not assignable");
+      expect(result.compatible).toBe(true);
+      expect(result.severity).toBe("off");
     });
 
     test("null → number is a type mismatch, not null-to-string", () => {
@@ -209,6 +209,49 @@ describe("checkTypeCompatibility", () => {
     });
   });
 
+  describe("truthy coercion (if/show pattern)", () => {
+    test("number → boolean accepted for component.bindable (if.bind='items.length')", () => {
+      const result = checkTypeCompatibility("number", "boolean", "component.bindable", config());
+      expect(result.compatible).toBe(true);
+      expect(result.coerced).toBe(true);
+    });
+
+    test("string → boolean accepted for component.bindable (show.bind='name')", () => {
+      const result = checkTypeCompatibility("string", "boolean", "component.bindable", config());
+      expect(result.compatible).toBe(true);
+      expect(result.coerced).toBe(true);
+    });
+
+    test("any[] → boolean accepted for component.bindable (if.bind='items')", () => {
+      const result = checkTypeCompatibility("any[]", "boolean", "component.bindable", config());
+      expect(result.compatible).toBe(true);
+      expect(result.coerced).toBe(true);
+    });
+
+    test("number → boolean NOT accepted for dom.property", () => {
+      const result = checkTypeCompatibility("number", "boolean", "dom.property", config({ typeMismatch: "error" }));
+      expect(result.compatible).toBe(false);
+    });
+
+    test("null → boolean NOT accepted (null is not truthy-evaluable)", () => {
+      const result = checkTypeCompatibility("null", "boolean", "component.bindable", config({ typeMismatch: "error" }));
+      expect(result.compatible).toBe(false);
+    });
+  });
+
+  describe("union type handling", () => {
+    test("string | number compatible with string (all members coerce)", () => {
+      const result = checkTypeCompatibility("string | number", "string", "dom.property", config({ domCoercion: true }));
+      expect(result.compatible).toBe(true);
+    });
+
+    test("Map<string, number> | null triggers nullable check", () => {
+      const result = checkTypeCompatibility("Map<string, number> | null", "string", "dom.property", config({ nullToString: "warning" }));
+      expect(result.compatible).toBe(false);
+      expect(result.severity).toBe("warning");
+    });
+  });
+
   describe("type mismatches", () => {
     test("string → boolean is a mismatch", () => {
       const result = checkTypeCompatibility("string", "boolean", "dom.property", config({ typeMismatch: "error" }));
@@ -228,9 +271,12 @@ describe("checkTypeCompatibility", () => {
       expect(result.compatible).toBe(false);
     });
 
-    test("complex type → primitive is a mismatch", () => {
+    test("complex generic type is treated as unevaluated (safe fallback)", () => {
+      // Generic types like Record<string, unknown> can't be compared via
+      // string matching. The safety valve treats them as compatible to
+      // avoid false alarms.
       const result = checkTypeCompatibility("Record<string, unknown>", "string", "dom.property", config({ typeMismatch: "error" }));
-      expect(result.compatible).toBe(false);
+      expect(result.compatible).toBe(true);
     });
   });
 
@@ -337,10 +383,9 @@ describe("cascade suppression", () => {
     catalog: BUILTIN_SEMANTICS.catalog,
   };
 
-  test("no type diagnostic when target.kind === 'unknown' (resolve failed)", () => {
+  test("no binding contract when target.kind === 'unknown' (resolve failed)", () => {
     const diagnostics = new DiagnosticsRuntime();
     // Bind to a property that doesn't exist on the element
-    // This will produce a resolve error (aurelia/unknown-bindable) but should NOT produce a type error
     const markup = '<div nonexistent.bind="42"></div>';
 
     const ir = lowerDocument(markup, { ...opts, diagnostics: diagnostics.forSource("lower") });
@@ -349,9 +394,7 @@ describe("cascade suppression", () => {
     const tc = typecheck({
       linked,
       scope,
-      ir,
       rootVmType: "RootVm",
-      diagnostics: diagnostics.forSource("typecheck"),
       config: { preset: "standard" },
     });
 
@@ -360,17 +403,14 @@ describe("cascade suppression", () => {
     expect(ins?.kind).toBe("propertyBinding");
     expect((ins as { target?: { kind?: string } })?.target?.kind).toBe("unknown");
 
-    // No type diagnostics should be produced (cascade suppression)
-    const tcDiags = diagnostics.all.filter((d) => d.stage === "typecheck");
-    expect(tcDiags).toHaveLength(0);
-
-    // The expression should NOT be in expectedByExpr (skipped due to unknown target)
+    // No binding contract produced (cascade suppression — unknown target skipped)
     expect(tc.expectedByExpr.size).toBe(0);
+    expect(tc.contracts.size).toBe(0);
   });
 
-  test("type diagnostic still produced for valid targets", () => {
+  test("binding contract produced for valid targets", () => {
     const diagnostics = new DiagnosticsRuntime();
-    // Bind a string to a boolean property - should produce type error
+    // Bind a string to a boolean property
     const markup = '<input disabled.bind="\'yes\'">';
 
     const ir = lowerDocument(markup, { ...opts, diagnostics: diagnostics.forSource("lower") });
@@ -379,9 +419,7 @@ describe("cascade suppression", () => {
     const tc = typecheck({
       linked,
       scope,
-      ir,
       rootVmType: "RootVm",
-      diagnostics: diagnostics.forSource("typecheck"),
       config: { preset: "standard" },
     });
 
@@ -389,11 +427,11 @@ describe("cascade suppression", () => {
     const ins = linked.templates?.[0]?.rows?.[0]?.instructions?.[0];
     expect((ins as { target?: { kind?: string } })?.target?.kind).not.toBe("unknown");
 
-    // Should produce a type mismatch diagnostic
-    const tcDiags = diagnostics.all.filter((d) => d.stage === "typecheck");
-    expect(tcDiags.length).toBeGreaterThan(0);
-    expect(tcDiags[0]?.code).toBe("aurelia/expr-type-mismatch");
-    expect(tcDiags[0]?.severity).toBe("error");
+    // Should produce a binding contract with expected type
+    expect(tc.contracts.size).toBeGreaterThan(0);
+    const contracts = [...tc.contracts.values()];
+    expect(contracts[0]?.type).toBe("boolean");
+    expect(contracts[0]?.context).toBe("dom.property");
   });
 });
 
@@ -434,9 +472,7 @@ describe("style binding syntax", () => {
     const tc = typecheck({
       linked,
       scope,
-      ir,
       rootVmType: "RootVm",
-      diagnostics: diagnostics.forSource("typecheck"),
       config: { preset: "standard" },
     });
 

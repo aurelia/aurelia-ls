@@ -55,7 +55,7 @@ export type {
 // Stage 30: Bind (LinkedSemantics -> ScopeModule)
 export { bindScopes, type BindScopesOptions } from "./30-bind/bind.js";
 
-// Stage 40: Typecheck (ScopeModule -> TypecheckModule)
+// Stage 40: Typecheck (LinkedSemantics -> TypecheckModule with binding contracts)
 export {
   typecheck,
   resolveTypecheckConfig,
@@ -64,7 +64,7 @@ export {
   TYPECHECK_PRESETS,
   type TypecheckOptions,
   type TypecheckModule,
-  type TypecheckDiagnostic,
+  type BindingContract,
   type TypecheckConfig,
   type TypecheckSeverity,
   type BindingContext,

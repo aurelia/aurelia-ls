@@ -63,11 +63,9 @@ const CLASS_SEAM_VECTORS: RequiredVector[] = [
     markupIncludes: "active.class",
     assertExpect: (expectValue) => {
       const expectRecord = asRecord(expectValue);
-      const inferred = asArray(expectRecord.inferred).map(asRecord);
-      const diags = asArray(expectRecord.diags).map(asRecord);
-      expect(inferred.some((entry) => entry.code === "active")).toBe(true);
-      expect(inferred.some((entry) => entry.type === "NonNullable<(RootVm)>['active']")).toBe(true);
-      expect(diags.some((diag) => diag.code === "aurelia/expr-type-mismatch")).toBe(true);
+      const contracts = asArray(expectRecord.contracts).map(asRecord);
+      expect(contracts.some((entry) => entry.code === "active")).toBe(true);
+      expect(contracts.some((entry) => entry.context === "dom.attribute")).toBe(true);
     },
   },
 ];
@@ -114,9 +112,9 @@ const STYLE_SEAM_VECTORS: RequiredVector[] = [
     assertExpect: (expectValue) => {
       const expectRecord = asRecord(expectValue);
       const expected = asArray(expectRecord.expected).map(asRecord);
-      const diags = asArray(expectRecord.diags).map(asRecord);
+      const contracts = asArray(expectRecord.contracts).map(asRecord);
       expect(expected.some((entry) => entry.code === "width" && entry.type === "string")).toBe(true);
-      expect(diags.some((diag) => diag.actual === "NonNullable<(RootVm)>['width']")).toBe(true);
+      expect(contracts.some((entry) => entry.context === "style.property")).toBe(true);
     },
   },
 ];
