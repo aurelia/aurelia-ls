@@ -222,7 +222,11 @@ function resolveCompletionPosition(ctx: CompletionEngineContext): CompletionPosi
     const node = compilation.query.nodeAt(offset);
     if (node) {
       const tagPos = resolveNonSemanticTagPosition(node, text, offset, compilation, syntax);
-      if (tagPos) return tagPos;
+      if (tagPos) {
+        // Verify the tag name was resolved. If empty, the compilation is stale
+        // and we should fall through to text scanning.
+        if (tagPos.kind !== "attr-name" || tagPos.tagName) return tagPos;
+      }
     }
   }
 
@@ -275,9 +279,15 @@ function mapCursorEntityToCompletionPosition(
       const cmdPos = resolveAttributeNameWithDFA(partialName, span.start, offset, syntax);
       if (cmdPos) return cmdPos;
 
-      // Determine the enclosing element tag name from nodeAt
-      const node = compilation.query.nodeAt(offset);
-      const tagName = resolveTagNameFromNode(node, text);
+      // Determine the enclosing element tag name.
+      // Use the entity's own data when available (more reliable than nodeAt,
+      // which may not find the element in TC-wrapped templates).
+      let tagName = "";
+      if (entity.kind === "bindable") tagName = entity.parentName;
+      if (!tagName) {
+        const node = compilation.query.nodeAt(offset);
+        tagName = resolveTagNameFromNode(node, text);
+      }
       return {
         kind: "attr-name",
         tagName,

@@ -157,6 +157,40 @@ describe("workspace completions (workspace-contract)", () => {
     expect(completions.find((item) => item.label === "stats")?.kind).toBe("bindable-property");
   });
 
+  it("completes builtin CE bindables (au-compose)", () => {
+    // au-compose is a framework builtin CE with bindables: component, template,
+    // model, scopeBehavior, composing, composition, tag, flushMode
+    const query = harness.workspace.query(appUri);
+    const completions = query.completions(findPosition(appText, "component.bind", 0));
+    expect(hasLabel(completions, "component")).toBe(true);
+    expect(hasLabel(completions, "model")).toBe(true);
+    expect(hasLabel(completions, "template")).toBe(true);
+    expect(completions.find((item) => item.label === "component")?.kind).toBe("bindable-property");
+  });
+
+  it("completes bindables at whitespace position on CE", () => {
+    // At whitespace between attributes on summary-panel, bindables should appear
+    // (excluding already-present attributes). Remove all existing attrs except
+    // one to verify the rest appear as suggestions.
+    const withMinimal = appText.replace(
+      '<summary-panel\n    stats.bind="stats"\n    updated-at.bind="stats.updatedAt"\n    on-refresh.call="refreshStats()">',
+      '<summary-panel\n    stats.bind="stats" >',
+    );
+    harness.updateTemplate(appUri, withMinimal);
+    try {
+      const query = harness.workspace.query(appUri);
+      // Position at the trailing space — new attribute position
+      const completions = query.completions(findPosition(withMinimal, 'stats.bind="stats" >', 'stats.bind="stats" '.length));
+      // updated-at and on-refresh should appear (stats is already present, excluded)
+      expect(hasLabel(completions, "updated-at")).toBe(true);
+      expect(hasLabel(completions, "on-refresh")).toBe(true);
+      // stats should NOT appear (already present)
+      expect(hasLabel(completions, "stats")).toBe(false);
+    } finally {
+      harness.updateTemplate(appUri, appText);
+    }
+  });
+
   it("completes native attributes", () => {
     const query = harness.workspace.query(appUri);
     const completions = query.completions(findPosition(appText, "type=\"text\"", 0));
