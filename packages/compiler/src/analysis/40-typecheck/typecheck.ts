@@ -66,9 +66,14 @@ export interface TypecheckOptions {
   /** Optional trace for instrumentation. Defaults to NOOP_TRACE. */
   trace?: CompileTrace;
   /**
-   * Optional dependency recorder for tracking which type-states are read
-   * during type checking. When provided, records type-state-read edges
-   * for dependency-graph-driven invalidation.
+   * Dependency recorder — forward infrastructure.
+   *
+   * Currently unused: the typecheck stage derives types from linked instruction
+   * metadata (target.bindable.type, rootVmType) already resolved during link.
+   * All resource dependencies are recorded by the link stage. This parameter
+   * exists for future needs (e.g., if typecheck consults the TS language service
+   * directly for type resolution, it should call readTypeState for each file
+   * whose types were queried).
    */
   deps?: import("../../schema/dependency-graph.js").DepRecorder;
   /** Semantic model for confidence cascade and definition index building. */

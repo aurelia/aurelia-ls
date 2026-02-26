@@ -77,7 +77,15 @@ export interface BindScopesOptions {
   diagnostics: BindDiagnosticEmitter;
   /** Semantic model for bindable + converter/behavior resolution. */
   model?: import("../../schema/model.js").SemanticModelQuery;
-  /** Dependency recorder for tracking resource reads during bind. */
+  /**
+   * Dependency recorder — forward infrastructure.
+   *
+   * Currently unused: the bind stage is a pure transformation of link output.
+   * All resource dependencies (controller configs, bindable types) flow through
+   * linked instructions that the link stage already recorded via readResource.
+   * This parameter exists for future needs (e.g., if bind needs independent
+   * resource graph lookups for advanced scope analysis).
+   */
   deps?: import("../../schema/dependency-graph.js").DepRecorder;
 }
 
