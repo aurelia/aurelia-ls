@@ -78,6 +78,10 @@ au-slot references.
 - **Binding mode inlay hints** — shows whether `.bind` resolves to
   two-way or to-view
 - **CodeLens** — bindable and usage counts on resource classes
+- **Open Related File** — toggle between component class and template
+  with `Alt+O`
+- **Show Available Resources** — scope-aware list of what's usable in
+  the current template
 
 ### Improvements
 

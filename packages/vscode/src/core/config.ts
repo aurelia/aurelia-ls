@@ -39,6 +39,7 @@ export interface PresentationConfig {
     inline: boolean;
     diagnostics: boolean;
     inlayHints: boolean;
+    codeLens: boolean;
   };
   experimental: {
     ai: boolean;
@@ -81,6 +82,7 @@ const DEFAULT_CONFIG: PresentationConfig = {
     inline: true,
     diagnostics: true,
     inlayHints: true,
+    codeLens: true,
   },
   experimental: {
     ai: false,
@@ -134,6 +136,7 @@ function readConfig(vscode: VscodeApi): PresentationConfig {
       inline: cfg.get("features.inline", DEFAULT_CONFIG.features.inline),
       diagnostics: cfg.get("features.diagnostics", DEFAULT_CONFIG.features.diagnostics),
       inlayHints: cfg.get("features.inlayHints", DEFAULT_CONFIG.features.inlayHints),
+      codeLens: cfg.get("features.codeLens", DEFAULT_CONFIG.features.codeLens),
     },
     experimental: {
       ai: cfg.get("experimental.ai", DEFAULT_CONFIG.experimental.ai),

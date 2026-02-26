@@ -3,7 +3,7 @@ import { DisposableStore } from "../../core/disposables.js";
 
 export const CodeLensFeature: FeatureModule = {
   id: "codeLens.resources",
-  isEnabled: () => true,
+  isEnabled: (ctx) => ctx.config.current.features.codeLens,
   activate: (ctx) => {
     const store = new DisposableStore();
     const vscode = ctx.vscode;

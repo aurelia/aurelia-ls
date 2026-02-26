@@ -119,9 +119,14 @@
           "group": "aurelia@2"
         },
         {
+          "command": "aurelia.openRelatedFile",
+          "when": "aurelia.active && (editorLangId == html || editorLangId == typescript)",
+          "group": "aurelia@3"
+        },
+        {
           "command": "aurelia.diagnosticsReport",
           "when": "aurelia.active && editorLangId == html",
-          "group": "aurelia@3"
+          "group": "aurelia@4"
         }
       ],
       "commandPalette": [
@@ -144,7 +149,7 @@
         "aurelia.features.commands": {
           "type": "boolean",
           "default": true,
-          "description": "Enable Aurelia commands in the command palette (find resource, diagnostics report, inspect at cursor, suppressed diagnostics)."
+          "description": "Enable Aurelia commands (find resource, open related file, inspect at cursor, show available resources, diagnostics report, suppressed diagnostics)."
         },
         "aurelia.features.debugCommands": {
           "type": "boolean",
@@ -175,6 +180,11 @@
           "type": "boolean",
           "default": true,
           "description": "Show binding mode inlay hints in templates (e.g., .bind resolved to toView or twoWay based on the target bindable)."
+        },
+        "aurelia.features.codeLens": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show bindable count and template usage count above Aurelia resource class declarations."
         },
         "aurelia.observability.logging.level": {
           "type": "string",

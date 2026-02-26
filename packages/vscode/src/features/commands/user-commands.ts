@@ -133,11 +133,9 @@ export const UserCommandsFeature: FeatureModule = {
             vscode.window.showInformationMessage("No diagnostics available for this document");
             return;
           }
-          const doc = await vscode.workspace.openTextDocument({
-            language: "markdown",
-            content: formatDiagnosticsReport(snapshot, uri),
-          });
-          await vscode.window.showTextDocument(doc, { preview: true });
+          const report = formatDiagnosticsReport(snapshot, uri);
+          logger.write("info", report, undefined, { raw: true, force: true });
+          vscode.commands.executeCommand("aurelia.observability.openOutput");
         });
       }),
     );
@@ -164,20 +162,17 @@ export const UserCommandsFeature: FeatureModule = {
           }
           const lines = suppressed.map((d) => {
             const reason = d.suppressionReason ? ` — ${d.suppressionReason}` : "";
-            return `- **${d.code}**: ${d.message}${reason}`;
+            return `- ${d.code}: ${d.message}${reason}`;
           });
-          const doc = await vscode.workspace.openTextDocument({
-            language: "markdown",
-            content: [
-              "# Suppressed Diagnostics",
-              "",
-              `${suppressed.length} diagnostic(s) suppressed by confidence-based demotion.`,
-              "These would fire at full severity if analysis confidence were higher.",
-              "",
-              ...lines,
-            ].join("\n"),
-          });
-          await vscode.window.showTextDocument(doc, { preview: true });
+          const report = [
+            `Suppressed Diagnostics (${suppressed.length})`,
+            "",
+            "These diagnostics were suppressed because analysis confidence is too low.",
+            "",
+            ...lines,
+          ].join("\n");
+          logger.write("info", report, undefined, { raw: true, force: true });
+          vscode.commands.executeCommand("aurelia.observability.openOutput");
         });
       }),
     );
