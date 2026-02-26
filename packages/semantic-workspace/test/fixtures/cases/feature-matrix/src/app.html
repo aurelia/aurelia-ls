@@ -183,8 +183,11 @@
 
   <!-- ═══════ Diagnostic triggers ═══════ -->
 
-  <!-- Unknown CE → aurelia/unknown-element -->
-  <missing-component></missing-component>
+  <!-- Unknown CE with Aurelia intent → aurelia/unknown-element fires -->
+  <missing-component title.bind="total"></missing-component>
+
+  <!-- Web component (no Aurelia intent) → suppressed by confidence demotion -->
+  <sl-button class="primary">Web Component</sl-button>
 
   <!-- Unknown bindable on known CE → aurelia/unknown-bindable -->
   <matrix-panel nonexistent-prop.bind="total"></matrix-panel>

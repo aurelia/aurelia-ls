@@ -290,9 +290,19 @@ function linkTemplate(t: TemplateIR, ctx: ResolverContext): LinkedTemplate {
   const idToNode = new Map<NodeId, DOMNode>();
   indexDom(t.dom, idToNode);
 
-    // Validate unknown custom elements across the entire DOM tree.
-    // This emits aurelia/unknown-element for any custom element tag that isn't registered.
-  validateUnknownElements(t.dom, ctx);
+  // Build the set of nodes that have Aurelia-intent instructions.
+  // This drives the confidence precondition for aurelia/unknown-element:
+  // elements with no intent (only standard HTML attrs) get low confidence.
+  const intentNodes = new Set<NodeId>();
+  for (const row of t.rows) {
+    if (hasAureliaIntentInstruction(row.instructions)) {
+      intentNodes.add(row.target);
+    }
+  }
+
+  // Validate unknown custom elements across the entire DOM tree.
+  // This emits aurelia/unknown-element for any custom element tag that isn't registered.
+  validateUnknownElements(t.dom, ctx, intentNodes);
 
   const rows: LinkedRow[] = t.rows.map((row) => {
     const dom = idToNode.get(row.target);
@@ -624,44 +634,88 @@ function indexDom(n: DOMNode, map: Map<NodeId, DOMNode>): void {
 }
 
 /**
+ * Aurelia-intent classification for IR instructions.
+ *
+ * An instruction signals Aurelia intent when it represents binding syntax
+ * that the developer explicitly typed (`.bind`, `.trigger`, interpolation,
+ * custom attributes, etc.). Static HTML passthrough instructions (setAttribute,
+ * setClassAttribute, setStyleAttribute) do NOT signal intent — those are
+ * standard HTML attributes that work on web components too.
+ *
+ * Used as a diagnostic precondition: unknown-element (AUR0752) confidence
+ * is demoted to "low" when the element carries no intent instructions,
+ * which causes the demotion table to suppress the diagnostic.
+ */
+function hasAureliaIntentInstruction(instructions: readonly InstructionIR[]): boolean {
+  return instructions.some((i) => {
+    switch (i.type) {
+      // Standard HTML passthrough — no Aurelia intent
+      case "setAttribute":
+      case "setClassAttribute":
+      case "setStyleAttribute":
+        return false;
+      // Everything else is Aurelia binding syntax
+      default:
+        return true;
+    }
+  });
+}
+
+/**
  * Walk the DOM tree to emit aurelia/unknown-element for truly unknown custom elements.
  * This catches elements that have no instruction rows (no bindings).
+ *
+ * Aurelia-intent precondition: when a dashed element has NO Aurelia binding
+ * syntax (only standard HTML attributes like class, id, style), confidence
+ * is demoted to "low". The demotion table suppresses low-confidence
+ * catalog-dependent errors, preventing false positives on web components
+ * (Shoelace, Lit, etc.) that coexist with Aurelia.
  *
  * TODO: For auto-import, compiler project-semantics should track a third layer:
  * resources that exist in the project or dependencies but aren't registered.
  * That would enable suggestions like "Did you mean to import 'x-widget'?"
  */
-function validateUnknownElements(n: DOMNode, ctx: ResolverContext): void {
+function validateUnknownElements(
+  n: DOMNode,
+  ctx: ResolverContext,
+  intentNodes: ReadonlySet<NodeId>,
+): void {
   if (n.kind === "element") {
     const nodeSem = resolveNodeSem(n, ctx.lookup);
-      if (nodeSem.kind === "element" && isMissingCustomElement(nodeSem)) {
-        ctx.deps?.readResource("custom-element", nodeSem.tag);
-        const existsInGraph = elementExistsInGraph(nodeSem.tag, ctx.graph);
-        const hasGapInfo = ctx.lookup.hasGaps("custom-element", nodeSem.tag);
-        const scopeComplete = ctx.lookup.isScopeComplete();
-        const qualifiers: string[] = [];
-        if (hasGapInfo) qualifiers.push("analysis gaps exist for this resource");
-        if (!scopeComplete) qualifiers.push("scope analysis is incomplete");
-        const gapQualifier = qualifiers.length > 0 ? ` (${qualifiers.join("; ")})` : "";
-        const isQualified = hasGapInfo || !scopeComplete;
-        const message = existsInGraph
-          ? `Custom element '<${nodeSem.tag}>' is not registered in this scope${gapQualifier}.`
-          : `Unknown custom element '<${nodeSem.tag}>'${gapQualifier}.`;
-        reportDiagnostic(ctx.services.diagnostics, "aurelia/unknown-element", message, {
-          span: n.loc,
-          data: {
-            resourceKind: "custom-element",
-            name: nodeSem.tag,
-            ...(isQualified ? { confidence: "partial" as const } : {}),
-          },
-        });
-      }
+    if (nodeSem.kind === "element" && isMissingCustomElement(nodeSem)) {
+      ctx.deps?.readResource("custom-element", nodeSem.tag);
+      const existsInGraph = elementExistsInGraph(nodeSem.tag, ctx.graph);
+      const hasGapInfo = ctx.lookup.hasGaps("custom-element", nodeSem.tag);
+      const scopeComplete = ctx.lookup.isScopeComplete();
+      const hasIntent = intentNodes.has(n.id);
+
+      // Confidence cascade: intent < gap < scope (monotonically non-increasing)
+      let confidence: "high" | "partial" | "low" = "high";
+      if (!hasIntent) confidence = "low";
+      else if (hasGapInfo || !scopeComplete) confidence = "partial";
+
+      const qualifiers: string[] = [];
+      if (hasGapInfo) qualifiers.push("analysis gaps exist for this resource");
+      if (!scopeComplete) qualifiers.push("scope analysis is incomplete");
+      const gapQualifier = qualifiers.length > 0 ? ` (${qualifiers.join("; ")})` : "";
+      const message = existsInGraph
+        ? `Custom element '<${nodeSem.tag}>' is not registered in this scope${gapQualifier}.`
+        : `Unknown custom element '<${nodeSem.tag}>'${gapQualifier}.`;
+      reportDiagnostic(ctx.services.diagnostics, "aurelia/unknown-element", message, {
+        span: n.loc,
+        data: {
+          resourceKind: "custom-element",
+          name: nodeSem.tag,
+          ...(confidence !== "high" ? { confidence } : {}),
+        },
+      });
+    }
   }
 
   // Recurse into children
   if (n.kind === "element" || n.kind === "template") {
     for (const c of n.children) {
-      validateUnknownElements(c, ctx);
+      validateUnknownElements(c, ctx, intentNodes);
     }
   }
 }

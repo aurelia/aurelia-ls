@@ -43,6 +43,7 @@ let uri: string;
 // Collect diagnostics once — they cover the entire template.
 let allDiagnostics: readonly WorkspaceDiagnostic[];
 let lspDiagnostics: readonly WorkspaceDiagnostic[];
+let suppressedDiagnostics: readonly WorkspaceDiagnostic[];
 
 beforeAll(async () => {
   harness = await getHarness();
@@ -53,6 +54,7 @@ beforeAll(async () => {
 
   const routed = engine.query(uri as any).diagnostics();
   lspDiagnostics = routed.bySurface.get("lsp" as DiagnosticSurface) ?? [];
+  suppressedDiagnostics = routed.suppressed;
   allDiagnostics = collectAllDiagnostics(routed);
 });
 
@@ -470,6 +472,61 @@ describe("diagnostics: extended false positive prevention", () => {
       return d.span.start >= interpOffset && d.span.start < interpOffset + 'level="${activeSeverity}"'.length;
     });
     expect(falseDiags).toHaveLength(0);
+  });
+});
+
+// ============================================================================
+// 9b. Aurelia-intent precondition — confidence demotion for web components
+//     Dashed elements with no Aurelia binding syntax get low confidence,
+//     which the demotion table suppresses. Elements with Aurelia intent fire.
+// ============================================================================
+
+describe("diagnostics: Aurelia-intent precondition", () => {
+  it("web component with only standard HTML attrs is suppressed", () => {
+    // <sl-button class="primary"> — no Aurelia binding syntax
+    const suppressed = suppressedDiagnostics.filter((d) => {
+      if (d.code !== "aurelia/unknown-element" || !d.span) return false;
+      return text.slice(d.span.start, d.span.end).includes("sl-button");
+    });
+    expect(suppressed.length, "sl-button should be suppressed by confidence demotion").toBeGreaterThanOrEqual(1);
+  });
+
+  it("web component suppression includes confidence-demotion reason", () => {
+    const suppressed = suppressedDiagnostics.filter((d) => {
+      if (d.code !== "aurelia/unknown-element" || !d.span) return false;
+      return text.slice(d.span.start, d.span.end).includes("sl-button");
+    });
+    expect(suppressed.length).toBeGreaterThanOrEqual(1);
+    const diag = suppressed[0] as any;
+    expect(diag.suppressionReason).toBe("confidence-demotion");
+  });
+
+  it("web component does NOT appear on LSP surface", () => {
+    const onLsp = diagsWithCode("aurelia/unknown-element").filter((d) => {
+      if (!d.span) return false;
+      return text.slice(d.span.start, d.span.end).includes("sl-button");
+    });
+    expect(onLsp).toHaveLength(0);
+  });
+
+  it("unknown CE with Aurelia intent fires on LSP surface", () => {
+    // <missing-component title.bind="total"> — has Aurelia binding syntax
+    const onLsp = diagsWithCode("aurelia/unknown-element").filter((d) => {
+      if (!d.span) return false;
+      return text.slice(d.span.start, d.span.end).includes("missing-component");
+    });
+    expect(onLsp.length, "missing-component with .bind should fire").toBe(1);
+  });
+
+  it("unknown CE with Aurelia intent has high confidence", async () => {
+    const off = await offset("missing-component", 1);
+    const diag = findDiag("aurelia/unknown-element", off);
+    expect(diag).toBeDefined();
+    // High confidence — no confidence demotion in data (absence = high)
+    if (diag?.data && typeof diag.data === "object") {
+      const data = diag.data as { confidence?: string };
+      expect(data.confidence).toBeUndefined();
+    }
   });
 });
 

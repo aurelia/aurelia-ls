@@ -390,7 +390,7 @@ describe("workspace diagnostics (workspace-contract)", () => {
     const mutated = insertBefore(
       appText,
       "<summary-panel",
-      "  <missing-element></missing-element>\n\n",
+      "  <missing-element title.bind=\"test\"></missing-element>\n\n",
     );
     harness.updateTemplate(appUri, mutated, 13);
 

@@ -10,9 +10,9 @@
  * - behavioral-dependent: CAPPED at hint severity
  *
  * The demotion table (fixed, not per-rule configurable):
- *   High confidence:   Error → Error,   Warning → Warning
- *   Medium confidence: Error → Warning, Warning → Information
- *   Low confidence:    Error → Info,     Warning → Suppressed
+ *   High confidence:   Error → Error,      Warning → Warning
+ *   Medium confidence: Error → Warning,    Warning → Information
+ *   Low confidence:    Error → Suppressed, Warning → Suppressed
  */
 
 import type { DiagnosticConfidence, EvidenceRegime } from "../types.js";
@@ -99,9 +99,11 @@ function computeAdjustment(
     return "unchanged";
   }
 
-  // Low confidence
-  if (currentSeverity === "error") return "info";
-  if (currentSeverity === "warning") return "suppress";
+  // Low confidence — suppress both errors and warnings.
+  // Low-evidence catalog-dependent diagnostics risk false positives;
+  // the attractor's punishment ordering (FP > fatigue > omissions) requires suppression.
+  // Suppressed diagnostics are recorded and available via "Show Suppressed Diagnostics".
+  if (currentSeverity === "error" || currentSeverity === "warning") return "suppress";
   return "unchanged";
 }
 

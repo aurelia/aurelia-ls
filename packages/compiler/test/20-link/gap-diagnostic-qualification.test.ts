@@ -106,7 +106,7 @@ describe("Pattern I: Gap-qualified unknown element", () => {
       { gaps },
     );
 
-    const diags = linkWithDiagnostics(`<data-grid></data-grid>`, BUILTIN_SEMANTICS, catalog);
+    const diags = linkWithDiagnostics(`<data-grid title.bind="x"></data-grid>`, BUILTIN_SEMANTICS, catalog);
     const d = findDiag(diags, "aurelia/unknown-element");
 
     expect(d, "aurelia/unknown-element should be emitted").toBeDefined();
@@ -122,7 +122,7 @@ describe("Pattern I: Gap-qualified unknown element", () => {
 describe("Pattern J: Non-gapped unknown element retains high confidence", () => {
   test("unknown element without gaps has no data.confidence override", () => {
     // No gaps for data-grid
-    const diags = linkWithDiagnostics(`<data-grid></data-grid>`, BUILTIN_SEMANTICS);
+    const diags = linkWithDiagnostics(`<data-grid title.bind="x"></data-grid>`, BUILTIN_SEMANTICS);
     const d = findDiag(diags, "aurelia/unknown-element");
 
     expect(d, "aurelia/unknown-element should be emitted").toBeDefined();
@@ -171,7 +171,7 @@ describe("Scope completeness qualification: unknown element", () => {
     );
 
     const diags = linkWithDiagnostics(
-      `<data-grid></data-grid>`,
+      `<data-grid title.bind="x"></data-grid>`,
       BUILTIN_SEMANTICS,
       catalog,
       { resourceGraph: graph, resourceScope: rootScope },
@@ -195,7 +195,7 @@ describe("Scope completeness qualification: unknown element", () => {
     );
 
     const diags = linkWithDiagnostics(
-      `<data-grid></data-grid>`,
+      `<data-grid title.bind="x"></data-grid>`,
       BUILTIN_SEMANTICS,
       catalog,
       { resourceGraph: graph, resourceScope: rootScope },
@@ -295,7 +295,7 @@ describe("Pattern M: Gap-qualified diagnostics for all resource kinds", () => {
       BUILTIN_SEMANTICS.catalog.attributePatterns,
       { gaps },
     );
-    const diags = linkWithDiagnostics(`<my-widget></my-widget>`, BUILTIN_SEMANTICS, catalog);
+    const diags = linkWithDiagnostics(`<my-widget title.bind="x"></my-widget>`, BUILTIN_SEMANTICS, catalog);
     const d = findDiag(diags, "aurelia/unknown-element");
     expect(d).toBeDefined();
     expect(d.data?.confidence).toBe("partial");
@@ -467,7 +467,7 @@ describe("Pattern M: Gap-qualified diagnostics for all resource kinds", () => {
     });
 
     // Unknown element
-    const elDiags = linkWithDiagnostics(`<unknown-el></unknown-el>`, sem);
+    const elDiags = linkWithDiagnostics(`<unknown-el title.bind="x"></unknown-el>`, sem);
     const elDiag = findDiag(elDiags, "aurelia/unknown-element");
     expect(elDiag).toBeDefined();
     expect(elDiag.data?.confidence).toBeUndefined();
@@ -665,7 +665,7 @@ describe("Gap qualification specificity", () => {
       BUILTIN_SEMANTICS.catalog.attributePatterns,
       { gaps },
     );
-    const diags = linkWithDiagnostics(`<data-grid></data-grid>`, BUILTIN_SEMANTICS, catalog);
+    const diags = linkWithDiagnostics(`<data-grid title.bind="x"></data-grid>`, BUILTIN_SEMANTICS, catalog);
     const d = findDiag(diags, "aurelia/unknown-element");
     expect(d, "aurelia/unknown-element should be emitted").toBeDefined();
     // Gap is for other-widget, not data-grid — confidence should NOT be partial
@@ -685,7 +685,7 @@ describe("Gap qualification specificity", () => {
       BUILTIN_SEMANTICS.catalog.attributePatterns,
       { gaps },
     );
-    const diags = linkWithDiagnostics(`<data-grid></data-grid>`, BUILTIN_SEMANTICS, catalog);
+    const diags = linkWithDiagnostics(`<data-grid title.bind="x"></data-grid>`, BUILTIN_SEMANTICS, catalog);
     const d = findDiag(diags, "aurelia/unknown-element");
     expect(d, "aurelia/unknown-element should be emitted").toBeDefined();
     // Project-level gap, not resource-targeted — confidence should NOT be partial
@@ -704,7 +704,7 @@ describe("Gap qualification specificity", () => {
       BUILTIN_SEMANTICS.catalog.attributePatterns,
       { gaps },
     );
-    const diags = linkWithDiagnostics(`<data-grid></data-grid>`, BUILTIN_SEMANTICS, catalog);
+    const diags = linkWithDiagnostics(`<data-grid title.bind="x"></data-grid>`, BUILTIN_SEMANTICS, catalog);
     const d = findDiag(diags, "aurelia/unknown-element");
     expect(d).toBeDefined();
     expect(d.data?.confidence).toBe("partial");
@@ -726,7 +726,7 @@ describe("Gap qualification invariants", () => {
       BUILTIN_SEMANTICS.catalog.attributePatterns,
       { gaps },
     );
-    const diags = linkWithDiagnostics(`<data-grid></data-grid>`, BUILTIN_SEMANTICS, catalog);
+    const diags = linkWithDiagnostics(`<data-grid title.bind="x"></data-grid>`, BUILTIN_SEMANTICS, catalog);
     const d = findDiag(diags, "aurelia/unknown-element");
     expect(d).toBeDefined();
     expect(d.data?.confidence).toBe("partial");
@@ -750,7 +750,7 @@ describe("Gap qualification invariants", () => {
     );
 
     // Unknown element
-    const elDiags = linkWithDiagnostics(`<data-grid></data-grid>`, BUILTIN_SEMANTICS, catalog);
+    const elDiags = linkWithDiagnostics(`<data-grid title.bind="x"></data-grid>`, BUILTIN_SEMANTICS, catalog);
     const elDiag = findDiag(elDiags, "aurelia/unknown-element");
     expect(elDiag.data?.resourceKind).toBe("custom-element");
     expect(elDiag.data?.name).toBe("data-grid");
@@ -814,7 +814,7 @@ describe("Gap qualification invariants", () => {
       BUILTIN_SEMANTICS.catalog.attributePatterns,
       { gaps },
     );
-    const diags = linkWithDiagnostics(`<data-grid></data-grid>`, BUILTIN_SEMANTICS, catalog);
+    const diags = linkWithDiagnostics(`<data-grid title.bind="x"></data-grid>`, BUILTIN_SEMANTICS, catalog);
     const linkDiags = diags.filter((d: any) => d.stage === "link");
     // Every diagnostic code should be a known pre-R5 code
     const knownCodes = new Set([
