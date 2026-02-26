@@ -214,25 +214,39 @@ function fileContentHash(text: string): string {
  * even if they came from different source text (e.g., method body edits, comment
  * changes, whitespace reformatting).
  *
- * The fingerprint captures: class names + decorators + members, import specifiers +
- * resolved paths, export names, variable names + kinds, function names, registration
- * arguments, define call types. It excludes: TextSpan, SourceSpan, and any other
- * source-position information.
+ * The fingerprint captures all semantically-meaningful content: class names,
+ * decorator applications WITH their arguments, static members, bindable members
+ * WITH their configs, import/export structure, registration/define call arguments.
+ * It excludes: TextSpan, SourceSpan, and any other source-position information.
  */
 function fingerprintFileFacts(facts: FileFacts): string {
   const hash = createHash("sha256");
 
-  // Classes: className, decorator applications, bindable members
+  // Classes: className, decorator applications (name + args), static members,
+  // bindable members (name + args + type)
   for (const cls of facts.classes) {
     hash.update(`class:${cls.className ?? ''}`);
     if (cls.decorators) {
       for (const dec of cls.decorators) {
         hash.update(`dec:${dec.name}`);
+        for (const arg of dec.args) {
+          hashAnalyzableValue(hash, arg);
+        }
+      }
+    }
+    if (cls.staticMembers) {
+      for (const [key, value] of cls.staticMembers) {
+        hash.update(`static:${key}`);
+        hashAnalyzableValue(hash, value);
       }
     }
     if (cls.bindableMembers) {
       for (const b of cls.bindableMembers) {
         hash.update(`bindable:${b.name}`);
+        if (b.type) hash.update(`:type:${b.type}`);
+        for (const arg of b.args) {
+          hashAnalyzableValue(hash, arg);
+        }
       }
     }
   }
@@ -277,14 +291,19 @@ function fingerprintFileFacts(facts: FileFacts): string {
     hash.update(`fn:${f.name}:${f.isExported}`);
   }
 
-  // Registration calls: receiver
+  // Registration calls: receiver + arguments
   for (const reg of facts.registrationCalls) {
     hash.update(`reg:${reg.receiver}`);
+    for (const arg of reg.arguments) {
+      hashAnalyzableValue(hash, arg);
+    }
   }
 
-  // Define calls: resource type
+  // Define calls: resource type + definition + class ref
   for (const def of facts.defineCalls) {
     hash.update(`define:${def.resourceType}`);
+    hashAnalyzableValue(hash, def.definition);
+    hashAnalyzableValue(hash, def.classRef);
   }
 
   // Gaps: kind
@@ -293,4 +312,63 @@ function fingerprintFileFacts(facts: FileFacts): string {
   }
 
   return hash.digest("hex");
+}
+
+// ============================================================================
+// AnalyzableValue hasher — position-stripping structural hash
+// ============================================================================
+
+type AnyValue = import("./evaluate/value/types.js").AnalyzableValue;
+
+/**
+ * Hash an AnalyzableValue tree into the running hash, stripping source
+ * positions (TextSpan, SourceSpan) while capturing all semantic content.
+ */
+function hashAnalyzableValue(hash: ReturnType<typeof createHash>, value: AnyValue): void {
+  hash.update(`(${value.kind}`);
+  switch (value.kind) {
+    case 'literal':
+      hash.update(`:${typeof value.value}:${String(value.value ?? 'null')}`);
+      break;
+    case 'array':
+      for (const el of value.elements) hashAnalyzableValue(hash, el);
+      break;
+    case 'object':
+      for (const [k, v] of value.properties) {
+        hash.update(`:k:${k}`);
+        hashAnalyzableValue(hash, v);
+      }
+      break;
+    case 'class':
+      hash.update(`:${value.className}`);
+      break;
+    case 'function':
+      hash.update(`:${value.name ?? ''}`);
+      break;
+    case 'reference':
+      hash.update(`:${value.name}`);
+      break;
+    case 'import':
+      hash.update(`:${value.specifier}:${value.exportName}`);
+      break;
+    case 'propertyAccess':
+      hashAnalyzableValue(hash, value.base);
+      hash.update(`:${value.property}`);
+      break;
+    case 'call':
+      hashAnalyzableValue(hash, value.callee);
+      for (const arg of value.args) hashAnalyzableValue(hash, arg);
+      break;
+    case 'spread':
+      hashAnalyzableValue(hash, value.target);
+      break;
+    case 'new':
+      hashAnalyzableValue(hash, value.callee);
+      for (const arg of value.args) hashAnalyzableValue(hash, arg);
+      break;
+    case 'unknown':
+      hash.update(`:${value.reason?.why?.kind ?? ''}`);
+      break;
+  }
+  hash.update(')');
 }
