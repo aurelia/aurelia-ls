@@ -135,6 +135,7 @@ export function runFullPipeline(opts: PipelineOptions): {
     const ap = opts.attrParser ?? createAttributeParserFromRegistry(query.syntax);
     recorder.readFile(opts.templateFilePath as any);
     recorder.readVocabulary();
+    if (ctx?.scopeId) recorder.readScope(ctx.scopeId);
     return { exprParser: ep, attrParser: ap };
   });
 

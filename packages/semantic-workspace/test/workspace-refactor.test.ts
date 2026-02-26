@@ -260,15 +260,17 @@ describe("workspace refactor (workspace-contract resources)", () => {
     }
 
     const edits = result.edit.edits;
+    // BB names in expressions and registration decorators use camelCase.
+    // "rate-limit" → "rateLimit" (canonical BB name form).
     const tableOffsets = findOffsets(tableText, /\bdebounce\b/g);
     const appOffsets = findOffsets(appText, /\bdebounce\b/g);
-    expectRenameEditsAtOffsets(edits, tableUri, tableOffsets, "rate-limit");
-    expectRenameEditsAtOffsets(edits, appUri, appOffsets, "rate-limit");
+    expectRenameEditsAtOffsets(edits, tableUri, tableOffsets, "rateLimit");
+    expectRenameEditsAtOffsets(edits, appUri, appOffsets, "rateLimit");
 
     const defOffset = behaviorText.indexOf("debounce");
     if (defOffset < 0) {
       throw new Error("Expected binding behavior name in debounce.ts");
     }
-    expectRenameEditsAtOffsets(edits, behaviorUri, [defOffset], "rate-limit");
+    expectRenameEditsAtOffsets(edits, behaviorUri, [defOffset], "rateLimit");
   });
 });

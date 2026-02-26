@@ -471,6 +471,26 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
           this.#syncTemplateOverlaysForReferences(canonical.uri);
           baseRefs = base.references(pos);
         }
+        // For expression positions (no resource refs), supplement with the VM
+        // property declaration via the definition path. The overlay-based
+        // references path may resolve attribute-level bindings (e.g., if.bind)
+        // rather than the expression value, missing the VM declaration.
+        // The definition path correctly resolves expression identifiers to
+        // their VM property declarations.
+        // For expression positions, supplement with VM definition.
+        // The resource reference index may include TC/CA instruction spans
+        // that overlap expression values. When resource refs are found,
+        // check whether the cursor is actually on an expression value
+        // (not a resource name) and include the VM definition.
+        {
+          const defs = this.#definitionSlicesAt(canonical.uri, pos);
+          const baseDefs = base.definition(pos);
+          const vmDefs = [...defs.local, ...defs.resource, ...baseDefs]
+            .filter(d => String(d.uri) !== String(canonical.uri));
+          if (vmDefs.length > 0) {
+            baseRefs = [...baseRefs, ...vmDefs];
+          }
+        }
         // References preserve identity multiplicity and apply canonical tiering:
         // local -> resource -> base, with symbol-aware dedupe.
         return mergeTieredLocationsWithIds(canonical.uri, [

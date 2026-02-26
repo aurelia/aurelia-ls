@@ -302,11 +302,17 @@ export class TemplateEditEngine {
           hasSemanticProvenance: true,
           resourceOrigin: "source",
         };
-      // Expression entities (scope identifiers, member access)
+      // Direct VM property access — renameable as an expression member.
       case 'scope-identifier':
-      case 'member-access':
         return {
           targetClass: "expression-member",
+          hasSemanticProvenance: false,
+        };
+      // Nested member access (e.g., item.rating) — not a semantic resource
+      // or direct VM property. Cannot be renamed through the semantic pipeline.
+      case 'member-access':
+        return {
+          targetClass: "unknown",
           hasSemanticProvenance: false,
         };
     }

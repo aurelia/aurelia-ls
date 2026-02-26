@@ -34,7 +34,7 @@ import type {
   ProjectSemanticsDefinitionChannels,
   SemanticSnapshot,
 } from "@aurelia-ls/compiler";
-import type { WorkspaceLocation, TextReferenceSite } from "./types.js";
+import type { WorkspaceLocation, TextReferenceSite, NameForm } from "./types.js";
 import { selectResourceCandidate } from "./resource-precedence-policy.js";
 import { buildDomIndex, elementTagSpanAtOffset, findDomNode } from "./template-dom.js";
 import {
@@ -529,19 +529,20 @@ export function collectTypeScriptResourceReferences(options: {
   const { resources } = options;
   const results: TextReferenceSite[] = [];
 
-  const collectForMap = (map: ReadonlyMap<string, ResourceDefinitionEntry[]>) => {
+  const collectForMap = (map: ReadonlyMap<string, ResourceDefinitionEntry[]>, registrationNameForm: NameForm = "kebab-case") => {
     for (const entries of map.values()) {
       for (const entry of entries) {
-        collectResourceDefReferences(entry, results);
+        collectResourceDefReferences(entry, results, registrationNameForm);
       }
     }
   };
 
-  collectForMap(resources.elements);
-  collectForMap(resources.attributes);
-  collectForMap(resources.controllers);
-  collectForMap(resources.valueConverters);
-  collectForMap(resources.bindingBehaviors);
+  // CE/CA/TC registration names are kebab-case; VC/BB registration names are camelCase.
+  collectForMap(resources.elements, "kebab-case");
+  collectForMap(resources.attributes, "kebab-case");
+  collectForMap(resources.controllers, "kebab-case");
+  collectForMap(resources.valueConverters, "camelCase");
+  collectForMap(resources.bindingBehaviors, "camelCase");
 
   return results;
 }
@@ -549,17 +550,20 @@ export function collectTypeScriptResourceReferences(options: {
 function collectResourceDefReferences(
   entry: ResourceDefinitionEntry,
   results: TextReferenceSite[],
+  registrationNameForm: NameForm = "kebab-case",
 ): void {
   const { def, symbolId } = entry;
   if (!symbolId) return;
 
-  // Declaration name site — the name property in the decorator/$au/define/local-template
+  // Declaration name site — the name property in the decorator/$au/define/local-template.
+  // The nameForm matches the resource kind's registration convention:
+  // CE/CA/TC use kebab-case, VC/BB use camelCase.
   const nameLoc = readLocation(def.name);
   if (nameLoc && isNavigableSourceLocation(nameLoc)) {
     const referenceKind = inferDeclarationReferenceKind(def);
     const uri = canonicalDocumentUri(nameLoc.file).uri;
     const span: SourceSpan = { start: nameLoc.pos, end: nameLoc.end, file: toSourceFileId(nameLoc.file) };
-    results.push({ kind: "text", referenceKind, nameForm: "kebab-case", uri, span, symbolId });
+    results.push({ kind: "text", referenceKind, nameForm: registrationNameForm, uri, span, symbolId });
   }
 
   // Class name site — the class declaration identifier

@@ -244,7 +244,7 @@ describe("workspace incremental churn (incremental-churn)", () => {
         );
       }, async () => {
         workspace.invalidateProject("alpha bindables");
-        workspace.snapshot();
+        workspace.refresh({ force: true });
 
         workspace.getCompilation(appUri);
         const appAfter = getWorkspaceDocStats(workspace, appUri);
@@ -286,7 +286,7 @@ describe("workspace incremental churn (incremental-churn)", () => {
         );
       }, async () => {
         workspace.invalidateProject("highlight bindables");
-        workspace.snapshot();
+        workspace.refresh({ force: true });
 
         workspace.getCompilation(alphaUri);
         const alphaAfter = getWorkspaceDocStats(workspace, alphaUri);
@@ -329,7 +329,7 @@ describe("workspace incremental churn (incremental-churn)", () => {
         );
       }, async () => {
         workspace.invalidateProject("converter rename");
-        workspace.snapshot();
+        workspace.refresh({ force: true });
 
         workspace.getCompilation(alphaUri);
         const alphaAfter = getWorkspaceDocStats(workspace, alphaUri);
