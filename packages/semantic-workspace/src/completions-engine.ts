@@ -358,7 +358,10 @@ function resolveFromIR(
 
   // Is cursor inside the open tag (between tag name and >)?
   const openTagEndOffset = element.openTagEnd?.start ?? element.openTagEnd?.end;
-  if (!openTagEndOffset || offset > openTagEndOffset) return null;
+  // When openTagEnd is available, use it as the upper bound.
+  // When missing, fall through to attribute scanning — the element may not have
+  // openTagEnd populated (e.g., some compilation paths don't record it).
+  if (openTagEndOffset && offset > openTagEndOffset) return null;
 
   const tagNameEnd = element.tagLoc ? element.tagLoc.end : (element.loc?.start ?? 0);
   if (offset <= tagNameEnd) return null; // Before or at tag name
@@ -368,7 +371,30 @@ function resolveFromIR(
   for (const attr of element.attrs) {
     if (!attr.loc || offset < attr.loc.start || offset > attr.loc.end) continue;
 
-    // Inside this attribute's span. Is it in the name or value?
+    // Inside this attribute's span. Check name FIRST, then value.
+    // For valueless/boolean attributes (like standalone CAs: `<div aurelia-table>`),
+    // the IR may set valueLoc to overlap with nameLoc. Checking nameLoc first ensures
+    // the cursor inside the attribute name is correctly classified as attr-name.
+    if (attr.nameLoc && offset >= attr.nameLoc.start && offset <= attr.nameLoc.end) {
+      // Inside the attribute name span — check for binding command via DFA
+      const partialName = text.slice(attr.nameLoc.start, offset);
+      const cmdPos = resolveAttributeNameWithDFA(partialName, attr.nameLoc.start, offset, element, syntax);
+      if (cmdPos) return cmdPos;
+
+      // When cursor is inside an existing attribute name, the user is editing
+      // it — show all available attributes without exclusion. The user might
+      // be replacing this attribute with a different one, or looking for
+      // alternatives.
+      return {
+        kind: "attr-name",
+        tagName: element.tag,
+        prefix: partialName,
+        attrStart: attr.nameLoc.start,
+        attrEnd: offset,
+        existingAttrs: [],
+      };
+    }
+
     if (attr.valueLoc && offset >= attr.valueLoc.start && offset <= attr.valueLoc.end) {
       // Inside the value span — check if it's a binding expression
       const attrParser = createAttributeParserFromRegistry(syntax);
@@ -394,26 +420,6 @@ function resolveFromIR(
         prefix: text.slice(attr.valueLoc.start, offset),
         valueStart: attr.valueLoc.start,
         valueEnd: offset,
-      };
-    }
-
-    if (attr.nameLoc && offset >= attr.nameLoc.start && offset <= attr.nameLoc.end) {
-      // Inside the attribute name span — check for binding command via DFA
-      const partialName = text.slice(attr.nameLoc.start, offset);
-      const cmdPos = resolveAttributeNameWithDFA(partialName, attr.nameLoc.start, offset, element, syntax);
-      if (cmdPos) return cmdPos;
-
-      // When cursor is inside an existing attribute name, the user is editing
-      // it — show all available attributes without exclusion. The user might
-      // be replacing this attribute with a different one, or looking for
-      // alternatives.
-      return {
-        kind: "attr-name",
-        tagName: element.tag,
-        prefix: partialName,
-        attrStart: attr.nameLoc.start,
-        attrEnd: offset,
-        existingAttrs: [],
       };
     }
 
@@ -587,16 +593,34 @@ function resolveFromText(
     }
   }
 
-  // Find last unclosed < tag
+  // Find last unclosed < tag. Track nesting so that closed tags (like
+  // </aut-pagination>) don't prevent finding the enclosing open tag.
   let angleBracketPos = -1;
   let inQuote = false;
   let quoteChar = "";
+  let closedTagDepth = 0;
   for (let i = before.length - 1; i >= 0; i--) {
     const ch = before[i];
     if (inQuote) { if (ch === quoteChar) inQuote = false; continue; }
     if (ch === '"' || ch === "'") { inQuote = true; quoteChar = ch!; continue; }
-    if (ch === ">") return { kind: "not-applicable" };
-    if (ch === "<" && (i + 1 >= before.length || before[i + 1] !== "/")) {
+    if (ch === ">") {
+      // Check if this is a closing tag's `>` or a self-closing `/>`.
+      // Look backward to find the matching `<` to determine tag type.
+      closedTagDepth++;
+      continue;
+    }
+    if (ch === "<") {
+      const isClosingTag = i + 1 < before.length && before[i + 1] === "/";
+      if (isClosingTag) {
+        // `</tag>` — the `<` matches a `>` we already counted
+        if (closedTagDepth > 0) closedTagDepth--;
+        continue;
+      }
+      // Opening `<tag...` — if no unmatched `>` remains, this is our target
+      if (closedTagDepth > 0) {
+        closedTagDepth--;
+        continue;
+      }
       angleBracketPos = i;
       break;
     }
