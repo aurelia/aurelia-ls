@@ -139,10 +139,13 @@
             "value": { "attribute": "value", "mode": "twoWay", "name": "value", "primary": false }
           },
           "className": "AuFieldCustomAttribute",
+          "declarationForm": "decorator",
           "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "attribute",
           "name": "au-field",
           "noMultiBindings": false,
+          "origin": "source",
           "primary": "name"
         },
         "aurelia-table": {
@@ -172,10 +175,13 @@
             "totalItems": { "attribute": "total-items", "mode": "twoWay", "name": "totalItems", "primary": false }
           },
           "className": "AureliaTableCustomAttribute",
+          "declarationForm": "decorator",
           "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "attribute",
           "name": "aurelia-table",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "source"
         },
         "aut-select": {
           "bindables": {
@@ -200,10 +206,13 @@
             }
           },
           "className": "AutSelectCustomAttribute",
+          "declarationForm": "decorator",
           "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "attribute",
           "name": "aut-select",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "source"
         },
         "aut-sort": {
           "bindables": {
@@ -212,10 +221,13 @@
             "key": { "attribute": "key", "name": "key", "primary": false }
           },
           "className": "AutSortCustomAttribute",
+          "declarationForm": "decorator",
           "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "attribute",
           "name": "aut-sort",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "source"
         },
         "case": {
           "bindables": {
@@ -233,6 +245,7 @@
           "kind": "attribute",
           "name": "case",
           "noMultiBindings": false,
+          "origin": "builtin",
           "primary": "value"
         },
         "catch": {
@@ -243,7 +256,8 @@
           "isTemplateController": true,
           "kind": "attribute",
           "name": "catch",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "builtin"
         },
         "default-case": {
           "bindables": {
@@ -259,7 +273,8 @@
           "isTemplateController": true,
           "kind": "attribute",
           "name": "default-case",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "builtin"
         },
         "else": {
           "bindables": {},
@@ -267,7 +282,8 @@
           "isTemplateController": true,
           "kind": "attribute",
           "name": "else",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "builtin"
         },
         "focus": {
           "bindables": {
@@ -280,9 +296,11 @@
             }
           },
           "className": "Focus",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "attribute",
           "name": "focus",
           "noMultiBindings": false,
+          "origin": "builtin",
           "primary": "value"
         },
         "href": {
@@ -290,9 +308,11 @@
             "value": { "attribute": "value", "mode": "toView", "name": "value", "primary": true }
           },
           "className": "Href",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "attribute",
           "name": "href",
           "noMultiBindings": true,
+          "origin": "builtin",
           "package": "@aurelia/router",
           "primary": "value"
         },
@@ -318,6 +338,7 @@
           "kind": "attribute",
           "name": "if",
           "noMultiBindings": false,
+          "origin": "builtin",
           "primary": "value"
         },
         "load": {
@@ -353,9 +374,11 @@
             "route": { "attribute": "route", "mode": "toView", "name": "route", "primary": true }
           },
           "className": "Load",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "attribute",
           "name": "load",
           "noMultiBindings": false,
+          "origin": "builtin",
           "package": "@aurelia/router",
           "primary": "route"
         },
@@ -369,10 +392,13 @@
             }
           },
           "className": "Outclick",
+          "declarationForm": "decorator",
           "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "attribute",
           "name": "outclick",
           "noMultiBindings": false,
+          "origin": "source",
           "primary": "fn"
         },
         "pending": {
@@ -389,7 +415,8 @@
           "isTemplateController": true,
           "kind": "attribute",
           "name": "pending",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "builtin"
         },
         "portal": {
           "bindables": {
@@ -456,6 +483,7 @@
           "kind": "attribute",
           "name": "portal",
           "noMultiBindings": false,
+          "origin": "builtin",
           "primary": "target"
         },
         "promise": {
@@ -472,7 +500,8 @@
           "isTemplateController": true,
           "kind": "attribute",
           "name": "promise",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "builtin"
         },
         "repeat": {
           "bindables": {
@@ -483,6 +512,7 @@
           "kind": "attribute",
           "name": "repeat",
           "noMultiBindings": false,
+          "origin": "builtin",
           "primary": "items"
         },
         "show": {
@@ -497,9 +527,11 @@
             }
           },
           "className": "Show",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "attribute",
           "name": "show",
           "noMultiBindings": false,
+          "origin": "builtin",
           "primary": "value"
         },
         "switch": {
@@ -510,7 +542,8 @@
           "isTemplateController": true,
           "kind": "attribute",
           "name": "switch",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "builtin"
         },
         "then": {
           "bindables": {
@@ -520,7 +553,8 @@
           "isTemplateController": true,
           "kind": "attribute",
           "name": "then",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "builtin"
         },
         "with": {
           "bindables": {
@@ -530,20 +564,71 @@
           "isTemplateController": true,
           "kind": "attribute",
           "name": "with",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "builtin"
         }
       },
       "bindingBehaviors": {
-        "attr": { "className": "AttrBindingBehavior", "name": "attr" },
-        "debounce": { "className": "DebounceBindingBehavior", "name": "debounce" },
-        "fromView": { "className": "FromViewBindingBehavior", "name": "fromView" },
-        "oneTime": { "className": "OneTimeBindingBehavior", "name": "oneTime" },
-        "self": { "className": "SelfBindingBehavior", "name": "self" },
-        "signal": { "className": "SignalBindingBehavior", "name": "signal" },
-        "throttle": { "className": "ThrottleBindingBehavior", "name": "throttle" },
-        "toView": { "className": "ToViewBindingBehavior", "name": "toView" },
-        "twoWay": { "className": "TwoWayBindingBehavior", "name": "twoWay" },
-        "updateTrigger": { "className": "UpdateTriggerBindingBehavior", "name": "updateTrigger" }
+        "attr": {
+          "className": "AttrBindingBehavior",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "attr",
+          "origin": "builtin"
+        },
+        "debounce": {
+          "className": "DebounceBindingBehavior",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "debounce",
+          "origin": "builtin"
+        },
+        "fromView": {
+          "className": "FromViewBindingBehavior",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "fromView",
+          "origin": "builtin"
+        },
+        "oneTime": {
+          "className": "OneTimeBindingBehavior",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "oneTime",
+          "origin": "builtin"
+        },
+        "self": {
+          "className": "SelfBindingBehavior",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "self",
+          "origin": "builtin"
+        },
+        "signal": {
+          "className": "SignalBindingBehavior",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "signal",
+          "origin": "builtin"
+        },
+        "throttle": {
+          "className": "ThrottleBindingBehavior",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "throttle",
+          "origin": "builtin"
+        },
+        "toView": {
+          "className": "ToViewBindingBehavior",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "toView",
+          "origin": "builtin"
+        },
+        "twoWay": {
+          "className": "TwoWayBindingBehavior",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "twoWay",
+          "origin": "builtin"
+        },
+        "updateTrigger": {
+          "className": "UpdateTriggerBindingBehavior",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "updateTrigger",
+          "origin": "builtin"
+        }
       },
       "controllers": {
         "case": {
@@ -822,8 +907,10 @@
           "capture": true,
           "className": "AuCompose",
           "containerless": true,
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "element",
           "name": "au-compose",
+          "origin": "builtin",
           "processContent": false
         },
         "au-form": {
@@ -864,9 +951,12 @@
           "capture": false,
           "className": "AuFormCustomElement",
           "containerless": false,
+          "declarationForm": "decorator",
           "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-form.ts",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "element",
           "name": "au-form",
+          "origin": "source",
           "processContent": false
         },
         "au-slot": {
@@ -890,8 +980,10 @@
           "capture": false,
           "className": "AuSlot",
           "containerless": true,
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "element",
           "name": "au-slot",
+          "origin": "builtin",
           "processContent": false
         },
         "au-viewport": {
@@ -929,8 +1021,10 @@
           "capture": false,
           "className": "AuViewport",
           "containerless": false,
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "element",
           "name": "au-viewport",
+          "origin": "builtin",
           "package": "@aurelia/router",
           "processContent": false
         },
@@ -987,17 +1081,22 @@
           "capture": false,
           "className": "AutPaginationCustomElement",
           "containerless": false,
+          "declarationForm": "decorator",
           "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "element",
           "name": "aut-pagination",
+          "origin": "source",
           "processContent": false
         }
       },
       "valueConverters": {
         "sanitize": {
           "className": "SanitizeValueConverter",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "in": { "kind": "ts", "name": "string" },
           "name": "sanitize",
+          "origin": "builtin",
           "out": { "kind": "ts", "name": "string | null" }
         }
       }
@@ -1143,9 +1242,11 @@
                 }
               },
               "className": "Focus",
+              "gaps": { "intrinsic": 0, "total": 0 },
               "kind": "attribute",
               "name": "focus",
               "noMultiBindings": false,
+              "origin": "builtin",
               "primary": "value"
             },
             "outclick": {
@@ -1176,23 +1277,75 @@
                 }
               },
               "className": "Show",
+              "gaps": { "intrinsic": 0, "total": 0 },
               "kind": "attribute",
               "name": "show",
               "noMultiBindings": false,
+              "origin": "builtin",
               "primary": "value"
             }
           },
           "bindingBehaviors": {
-            "attr": { "className": "AttrBindingBehavior", "name": "attr" },
-            "debounce": { "className": "DebounceBindingBehavior", "name": "debounce" },
-            "fromView": { "className": "FromViewBindingBehavior", "name": "fromView" },
-            "oneTime": { "className": "OneTimeBindingBehavior", "name": "oneTime" },
-            "self": { "className": "SelfBindingBehavior", "name": "self" },
-            "signal": { "className": "SignalBindingBehavior", "name": "signal" },
-            "throttle": { "className": "ThrottleBindingBehavior", "name": "throttle" },
-            "toView": { "className": "ToViewBindingBehavior", "name": "toView" },
-            "twoWay": { "className": "TwoWayBindingBehavior", "name": "twoWay" },
-            "updateTrigger": { "className": "UpdateTriggerBindingBehavior", "name": "updateTrigger" }
+            "attr": {
+              "className": "AttrBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "attr",
+              "origin": "builtin"
+            },
+            "debounce": {
+              "className": "DebounceBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "debounce",
+              "origin": "builtin"
+            },
+            "fromView": {
+              "className": "FromViewBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "fromView",
+              "origin": "builtin"
+            },
+            "oneTime": {
+              "className": "OneTimeBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "oneTime",
+              "origin": "builtin"
+            },
+            "self": {
+              "className": "SelfBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "self",
+              "origin": "builtin"
+            },
+            "signal": {
+              "className": "SignalBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "signal",
+              "origin": "builtin"
+            },
+            "throttle": {
+              "className": "ThrottleBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "throttle",
+              "origin": "builtin"
+            },
+            "toView": {
+              "className": "ToViewBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "toView",
+              "origin": "builtin"
+            },
+            "twoWay": {
+              "className": "TwoWayBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "twoWay",
+              "origin": "builtin"
+            },
+            "updateTrigger": {
+              "className": "UpdateTriggerBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "updateTrigger",
+              "origin": "builtin"
+            }
           },
           "controllers": {
             "case": {
@@ -1471,8 +1624,10 @@
               "capture": true,
               "className": "AuCompose",
               "containerless": true,
+              "gaps": { "intrinsic": 0, "total": 0 },
               "kind": "element",
               "name": "au-compose",
+              "origin": "builtin",
               "processContent": false
             },
             "au-form": {
@@ -1539,8 +1694,10 @@
               "capture": false,
               "className": "AuSlot",
               "containerless": true,
+              "gaps": { "intrinsic": 0, "total": 0 },
               "kind": "element",
               "name": "au-slot",
+              "origin": "builtin",
               "processContent": false
             },
             "aut-pagination": {
@@ -1605,8 +1762,10 @@
           "valueConverters": {
             "sanitize": {
               "className": "SanitizeValueConverter",
+              "gaps": { "intrinsic": 0, "total": 0 },
               "in": { "kind": "ts", "name": "string" },
               "name": "sanitize",
+              "origin": "builtin",
               "out": { "kind": "ts", "name": "string | null" }
             }
           }
@@ -1939,6 +2098,7 @@
           "state": "known",
           "value": "AuFieldCustomAttribute"
         },
+        "declarationForm": "decorator",
         "dependencies": [],
         "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-field.ts",
         "kind": "custom-attribute",
@@ -2199,6 +2359,7 @@
           "state": "known",
           "value": "AureliaTableCustomAttribute"
         },
+        "declarationForm": "decorator",
         "dependencies": [],
         "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts",
         "kind": "custom-attribute",
@@ -2350,6 +2511,7 @@
           "state": "known",
           "value": "AutSelectCustomAttribute"
         },
+        "declarationForm": "decorator",
         "dependencies": [],
         "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts",
         "kind": "custom-attribute",
@@ -2457,6 +2619,7 @@
           "state": "known",
           "value": "AutSortCustomAttribute"
         },
+        "declarationForm": "decorator",
         "dependencies": [],
         "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts",
         "kind": "custom-attribute",
@@ -2615,6 +2778,7 @@
           "state": "known",
           "value": "Outclick"
         },
+        "declarationForm": "decorator",
         "dependencies": [],
         "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts",
         "kind": "custom-attribute",
@@ -2918,6 +3082,7 @@
           "state": "known",
           "value": false
         },
+        "declarationForm": "decorator",
         "dependencies": [],
         "file": "aurelia2-plugins/packages/aurelia2-forms/src/au-form.ts",
         "kind": "custom-element",
@@ -3372,6 +3537,7 @@
           "state": "known",
           "value": false
         },
+        "declarationForm": "decorator",
         "dependencies": [],
         "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts",
         "kind": "custom-element",

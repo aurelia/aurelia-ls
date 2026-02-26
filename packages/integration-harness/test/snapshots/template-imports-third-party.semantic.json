@@ -3552,6 +3552,7 @@
           "kind": "attribute",
           "name": "case",
           "noMultiBindings": false,
+          "origin": "builtin",
           "primary": "value"
         },
         "catch": {
@@ -3559,11 +3560,13 @@
             "value": { "attribute": "value", "mode": "fromView", "name": "value", "primary": false }
           },
           "className": "RejectedTemplateController",
+          "declarationForm": "static-property",
           "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts",
           "isTemplateController": true,
           "kind": "attribute",
           "name": "catch",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "source"
         },
         "default-case": {
           "bindables": {
@@ -3579,16 +3582,19 @@
           "isTemplateController": true,
           "kind": "attribute",
           "name": "default-case",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "builtin"
         },
         "else": {
           "bindables": {},
           "className": "Else",
+          "declarationForm": "static-property",
           "file": "aurelia/packages/runtime-html/src/resources/template-controllers/if.ts",
           "isTemplateController": true,
           "kind": "attribute",
           "name": "else",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "source"
         },
         "focus": {
           "bindables": {
@@ -3601,10 +3607,13 @@
             }
           },
           "className": "Focus",
+          "declarationForm": "static-property",
           "file": "aurelia/packages/runtime-html/src/resources/custom-attributes/focus.ts",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "attribute",
           "name": "focus",
           "noMultiBindings": false,
+          "origin": "source",
           "primary": "value"
         },
         "highlight": {
@@ -3617,10 +3626,13 @@
             }
           },
           "className": "HighlightAttribute",
+          "declarationForm": "decorator",
           "file": "packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/index.ts",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "attribute",
           "name": "highlight",
           "noMultiBindings": false,
+          "origin": "source",
           "primary": "color"
         },
         "href": {
@@ -3628,9 +3640,11 @@
             "value": { "attribute": "value", "mode": "toView", "name": "value", "primary": true }
           },
           "className": "Href",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "attribute",
           "name": "href",
           "noMultiBindings": true,
+          "origin": "builtin",
           "package": "@aurelia/router",
           "primary": "value"
         },
@@ -3652,11 +3666,13 @@
             }
           },
           "className": "If",
+          "declarationForm": "static-property",
           "file": "aurelia/packages/runtime-html/src/resources/template-controllers/if.ts",
           "isTemplateController": true,
           "kind": "attribute",
           "name": "if",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "source"
         },
         "load": {
           "bindables": {
@@ -3691,9 +3707,11 @@
             "route": { "attribute": "route", "mode": "toView", "name": "route", "primary": true }
           },
           "className": "Load",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "attribute",
           "name": "load",
           "noMultiBindings": false,
+          "origin": "builtin",
           "package": "@aurelia/router",
           "primary": "route"
         },
@@ -3708,11 +3726,13 @@
             }
           },
           "className": "PendingTemplateController",
+          "declarationForm": "static-property",
           "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts",
           "isTemplateController": true,
           "kind": "attribute",
           "name": "pending",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "source"
         },
         "portal": {
           "bindables": {
@@ -3775,11 +3795,13 @@
             }
           },
           "className": "Portal",
+          "declarationForm": "static-property",
           "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts",
           "isTemplateController": true,
           "kind": "attribute",
           "name": "portal",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "source"
         },
         "promise": {
           "bindables": {
@@ -3792,22 +3814,26 @@
             }
           },
           "className": "PromiseTemplateController",
+          "declarationForm": "static-property",
           "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts",
           "isTemplateController": true,
           "kind": "attribute",
           "name": "promise",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "source"
         },
         "repeat": {
           "bindables": {
             "items": { "attribute": "items", "mode": "default", "name": "items", "primary": false }
           },
           "className": "Repeat",
+          "declarationForm": "static-property",
           "file": "aurelia/packages/runtime-html/src/resources/template-controllers/repeat.ts",
           "isTemplateController": true,
           "kind": "attribute",
           "name": "repeat",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "source"
         },
         "show": {
           "aliases": [ "hide" ],
@@ -3821,10 +3847,13 @@
             }
           },
           "className": "Show",
+          "declarationForm": "static-property",
           "file": "aurelia/packages/runtime-html/src/resources/custom-attributes/show.ts",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "attribute",
           "name": "show",
           "noMultiBindings": false,
+          "origin": "source",
           "primary": "value"
         },
         "switch": {
@@ -3832,51 +3861,122 @@
             "value": { "attribute": "value", "mode": "default", "name": "value", "primary": false }
           },
           "className": "Switch",
+          "declarationForm": "static-property",
           "file": "aurelia/packages/runtime-html/src/resources/template-controllers/switch.ts",
           "isTemplateController": true,
           "kind": "attribute",
           "name": "switch",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "source"
         },
         "then": {
           "bindables": {
             "value": { "attribute": "value", "mode": "fromView", "name": "value", "primary": false }
           },
           "className": "FulfilledTemplateController",
+          "declarationForm": "static-property",
           "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts",
           "isTemplateController": true,
           "kind": "attribute",
           "name": "then",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "source"
         },
         "with": {
           "bindables": {
             "value": { "attribute": "value", "mode": "default", "name": "value", "primary": false }
           },
           "className": "With",
+          "declarationForm": "static-property",
           "file": "aurelia/packages/runtime-html/src/resources/template-controllers/with.ts",
           "isTemplateController": true,
           "kind": "attribute",
           "name": "with",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "source"
         }
       },
       "bindingBehaviors": {
-        "attr": { "className": "AttrBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/attr.ts", "name": "attr" },
-        "debounce": { "className": "DebounceBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/debounce.ts", "name": "debounce" },
-        "fromview": { "className": "FromViewBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "name": "fromview" },
-        "fromView": { "className": "FromViewBindingBehavior", "name": "fromView" },
-        "onetime": { "className": "OneTimeBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "name": "onetime" },
-        "oneTime": { "className": "OneTimeBindingBehavior", "name": "oneTime" },
-        "self": { "className": "SelfBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/self.ts", "name": "self" },
-        "signal": { "className": "SignalBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/signals.ts", "name": "signal" },
-        "throttle": { "className": "ThrottleBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/throttle.ts", "name": "throttle" },
-        "toview": { "className": "ToViewBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "name": "toview" },
-        "toView": { "className": "ToViewBindingBehavior", "name": "toView" },
-        "twoway": { "className": "TwoWayBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "name": "twoway" },
-        "twoWay": { "className": "TwoWayBindingBehavior", "name": "twoWay" },
-        "updatetrigger": { "className": "UpdateTriggerBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/update-trigger.ts", "name": "updatetrigger" },
-        "updateTrigger": { "className": "UpdateTriggerBindingBehavior", "name": "updateTrigger" }
+        "attr": {
+          "className": "AttrBindingBehavior",
+          "declarationForm": "static-property",
+          "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/attr.ts",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "attr",
+          "origin": "source"
+        },
+        "debounce": {
+          "className": "DebounceBindingBehavior",
+          "declarationForm": "static-property",
+          "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/debounce.ts",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "debounce",
+          "origin": "source"
+        },
+        "fromView": {
+          "className": "FromViewBindingBehavior",
+          "declarationForm": "convention",
+          "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "fromView",
+          "origin": "source"
+        },
+        "oneTime": {
+          "className": "OneTimeBindingBehavior",
+          "declarationForm": "convention",
+          "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "oneTime",
+          "origin": "source"
+        },
+        "self": {
+          "className": "SelfBindingBehavior",
+          "declarationForm": "static-property",
+          "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/self.ts",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "self",
+          "origin": "source"
+        },
+        "signal": {
+          "className": "SignalBindingBehavior",
+          "declarationForm": "static-property",
+          "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/signals.ts",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "signal",
+          "origin": "source"
+        },
+        "throttle": {
+          "className": "ThrottleBindingBehavior",
+          "declarationForm": "static-property",
+          "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/throttle.ts",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "throttle",
+          "origin": "source"
+        },
+        "toView": {
+          "className": "ToViewBindingBehavior",
+          "declarationForm": "convention",
+          "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "toView",
+          "origin": "source"
+        },
+        "twoWay": {
+          "className": "TwoWayBindingBehavior",
+          "declarationForm": "convention",
+          "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "twoWay",
+          "origin": "source"
+        },
+        "updateTrigger": {
+          "className": "UpdateTriggerBindingBehavior",
+          "declarationForm": "static-property",
+          "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/update-trigger.ts",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "updateTrigger",
+          "origin": "source"
+        }
       },
       "controllers": {
         "case": {
@@ -4155,9 +4255,12 @@
           "capture": false,
           "className": "AuCompose",
           "containerless": true,
+          "declarationForm": "static-property",
           "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "element",
           "name": "au-compose",
+          "origin": "source",
           "processContent": false
         },
         "au-slot": {
@@ -4181,9 +4284,12 @@
           "capture": false,
           "className": "AuSlot",
           "containerless": true,
+          "declarationForm": "static-property",
           "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-slot.ts",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "element",
           "name": "au-slot",
+          "origin": "source",
           "processContent": false
         },
         "au-viewport": {
@@ -4221,8 +4327,10 @@
           "capture": false,
           "className": "AuViewport",
           "containerless": false,
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "element",
           "name": "au-viewport",
+          "origin": "builtin",
           "package": "@aurelia/router",
           "processContent": false
         },
@@ -4232,9 +4340,12 @@
           "capture": false,
           "className": "MyAppCustomElement",
           "containerless": false,
+          "declarationForm": "convention",
           "file": "packages/integration-harness/test/fixtures/template-imports-pkg/src/my-app.ts",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "element",
           "name": "my-app",
+          "origin": "source",
           "processContent": false
         },
         "sub-card": {
@@ -4250,9 +4361,12 @@
           "capture": false,
           "className": "SubCard",
           "containerless": false,
+          "declarationForm": "decorator",
           "file": "packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/subpath/index.ts",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "element",
           "name": "sub-card",
+          "origin": "source",
           "processContent": false
         },
         "user-card": {
@@ -4274,18 +4388,24 @@
           "capture": false,
           "className": "UserCard",
           "containerless": false,
+          "declarationForm": "decorator",
           "file": "packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/index.ts",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "element",
           "name": "user-card",
+          "origin": "source",
           "processContent": false
         }
       },
       "valueConverters": {
         "sanitize": {
           "className": "SanitizeValueConverter",
+          "declarationForm": "static-property",
           "file": "aurelia/packages/runtime-html/src/resources/value-converters/sanitize.ts",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "in": { "kind": "ts", "name": "string" },
           "name": "sanitize",
+          "origin": "source",
           "out": { "kind": "ts", "name": "string | null" }
         }
       }
@@ -6021,6 +6141,24 @@
         "parent": "root",
         "resources": {
           "attributes": {
+            "focus": {
+              "bindables": {
+                "value": {
+                  "attribute": "value",
+                  "mode": "twoWay",
+                  "name": "value",
+                  "primary": true,
+                  "type": { "kind": "ts", "name": "boolean" }
+                }
+              },
+              "className": "Focus",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "kind": "attribute",
+              "name": "focus",
+              "noMultiBindings": false,
+              "origin": "builtin",
+              "primary": "value"
+            },
             "highlight": {
               "bindables": {
                 "color": {
@@ -6036,9 +6174,89 @@
               "name": "highlight",
               "noMultiBindings": false,
               "primary": "color"
+            },
+            "show": {
+              "aliases": [ "hide" ],
+              "bindables": {
+                "value": {
+                  "attribute": "value",
+                  "mode": "toView",
+                  "name": "value",
+                  "primary": true,
+                  "type": { "kind": "ts", "name": "boolean" }
+                }
+              },
+              "className": "Show",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "kind": "attribute",
+              "name": "show",
+              "noMultiBindings": false,
+              "origin": "builtin",
+              "primary": "value"
             }
           },
-          "bindingBehaviors": {},
+          "bindingBehaviors": {
+            "attr": {
+              "className": "AttrBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "attr",
+              "origin": "builtin"
+            },
+            "debounce": {
+              "className": "DebounceBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "debounce",
+              "origin": "builtin"
+            },
+            "fromView": {
+              "className": "FromViewBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "fromView",
+              "origin": "builtin"
+            },
+            "oneTime": {
+              "className": "OneTimeBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "oneTime",
+              "origin": "builtin"
+            },
+            "self": {
+              "className": "SelfBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "self",
+              "origin": "builtin"
+            },
+            "signal": {
+              "className": "SignalBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "signal",
+              "origin": "builtin"
+            },
+            "throttle": {
+              "className": "ThrottleBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "throttle",
+              "origin": "builtin"
+            },
+            "toView": {
+              "className": "ToViewBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "toView",
+              "origin": "builtin"
+            },
+            "twoWay": {
+              "className": "TwoWayBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "twoWay",
+              "origin": "builtin"
+            },
+            "updateTrigger": {
+              "className": "UpdateTriggerBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "updateTrigger",
+              "origin": "builtin"
+            }
+          },
           "controllers": {
             "case": {
               "cardinality": "zero-one",
@@ -6266,6 +6484,89 @@
             }
           },
           "elements": {
+            "au-compose": {
+              "bindables": {
+                "component": {
+                  "attribute": "component",
+                  "mode": "toView",
+                  "name": "component",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "string | Constructable | object | Promise<string | Constructable | object>" }
+                },
+                "composing": {
+                  "attribute": "composing",
+                  "mode": "fromView",
+                  "name": "composing",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "Promise<void> | void" }
+                },
+                "composition": {
+                  "attribute": "composition",
+                  "mode": "fromView",
+                  "name": "composition",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "ICompositionController | undefined" }
+                },
+                "model": { "attribute": "model", "mode": "toView", "name": "model", "primary": false },
+                "scopeBehavior": {
+                  "attribute": "scopeBehavior",
+                  "mode": "toView",
+                  "name": "scopeBehavior",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "'auto' | 'scoped'" }
+                },
+                "tag": {
+                  "attribute": "tag",
+                  "mode": "toView",
+                  "name": "tag",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "string | null | undefined" }
+                },
+                "template": {
+                  "attribute": "template",
+                  "mode": "toView",
+                  "name": "template",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "string | Promise<string>" }
+                }
+              },
+              "boundary": true,
+              "capture": true,
+              "className": "AuCompose",
+              "containerless": true,
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "kind": "element",
+              "name": "au-compose",
+              "origin": "builtin",
+              "processContent": false
+            },
+            "au-slot": {
+              "bindables": {
+                "expose": {
+                  "attribute": "expose",
+                  "mode": "toView",
+                  "name": "expose",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "object | null" }
+                },
+                "slotchange": {
+                  "attribute": "slotchange",
+                  "mode": "toView",
+                  "name": "slotchange",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "((name: string, nodes: readonly Node[]) => void) | null" }
+                }
+              },
+              "boundary": false,
+              "capture": false,
+              "className": "AuSlot",
+              "containerless": true,
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "kind": "element",
+              "name": "au-slot",
+              "origin": "builtin",
+              "processContent": false
+            },
             "user-card": {
               "bindables": {
                 "avatar": {
@@ -6291,7 +6592,16 @@
               "processContent": false
             }
           },
-          "valueConverters": {}
+          "valueConverters": {
+            "sanitize": {
+              "className": "SanitizeValueConverter",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "in": { "kind": "ts", "name": "string" },
+              "name": "sanitize",
+              "origin": "builtin",
+              "out": { "kind": "ts", "name": "string | null" }
+            }
+          }
         }
       },
       "root": {
@@ -7506,19 +7816,14 @@
           "bindingBehaviors": {
             "attr": { "className": "AttrBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/attr.ts", "name": "attr" },
             "debounce": { "className": "DebounceBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/debounce.ts", "name": "debounce" },
-            "fromview": { "className": "FromViewBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "name": "fromview" },
-            "fromView": { "className": "FromViewBindingBehavior", "name": "fromView" },
-            "onetime": { "className": "OneTimeBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "name": "onetime" },
-            "oneTime": { "className": "OneTimeBindingBehavior", "name": "oneTime" },
+            "fromView": { "className": "FromViewBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "name": "fromView" },
+            "oneTime": { "className": "OneTimeBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "name": "oneTime" },
             "self": { "className": "SelfBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/self.ts", "name": "self" },
             "signal": { "className": "SignalBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/signals.ts", "name": "signal" },
             "throttle": { "className": "ThrottleBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/throttle.ts", "name": "throttle" },
-            "toview": { "className": "ToViewBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "name": "toview" },
-            "toView": { "className": "ToViewBindingBehavior", "name": "toView" },
-            "twoway": { "className": "TwoWayBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "name": "twoway" },
-            "twoWay": { "className": "TwoWayBindingBehavior", "name": "twoWay" },
-            "updatetrigger": { "className": "UpdateTriggerBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/update-trigger.ts", "name": "updatetrigger" },
-            "updateTrigger": { "className": "UpdateTriggerBindingBehavior", "name": "updateTrigger" }
+            "toView": { "className": "ToViewBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "name": "toView" },
+            "twoWay": { "className": "TwoWayBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "name": "twoWay" },
+            "updateTrigger": { "className": "UpdateTriggerBindingBehavior", "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/update-trigger.ts", "name": "updateTrigger" }
           },
           "controllers": {
             "case": {
@@ -7881,6 +8186,7 @@
           "state": "known",
           "value": "AttrBindingBehavior"
         },
+        "declarationForm": "static-property",
         "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/attr.ts",
         "kind": "binding-behavior",
         "name": {
@@ -7903,6 +8209,7 @@
           "state": "known",
           "value": "DebounceBindingBehavior"
         },
+        "declarationForm": "static-property",
         "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/debounce.ts",
         "kind": "binding-behavior",
         "name": {
@@ -7919,45 +8226,26 @@
     },
     {
       "data": {
-        "className": { "origin": "builtin", "value": "FromViewBindingBehavior" },
-        "kind": "binding-behavior",
-        "name": { "origin": "builtin", "value": "fromView" }
-      },
-      "id": "sym:3743c2a2c4272b28530c528ca79a85b3904d6e0a1916f3a6fa95214176194dce",
-      "kind": "binding-behavior",
-      "name": "fromView"
-    },
-    {
-      "data": {
         "className": {
           "location": { "end": 1565, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "pos": 1357 },
           "origin": "source",
           "state": "known",
           "value": "FromViewBindingBehavior"
         },
+        "declarationForm": "convention",
         "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts",
         "kind": "binding-behavior",
         "name": {
           "location": { "end": 1565, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "pos": 1357 },
           "origin": "source",
           "state": "known",
-          "value": "fromview"
+          "value": "fromView"
         }
       },
-      "id": "sym:de6493a91910f48d85682954e9eee0de01b7da9342af055369af368abb71b077",
+      "id": "sym:f61adabf82a9bb52d168e9b82c4a55d82d6e3d60143c987ba91d9687e5ce4cbf",
       "kind": "binding-behavior",
-      "name": "fromview",
+      "name": "fromView",
       "source": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts"
-    },
-    {
-      "data": {
-        "className": { "origin": "builtin", "value": "OneTimeBindingBehavior" },
-        "kind": "binding-behavior",
-        "name": { "origin": "builtin", "value": "oneTime" }
-      },
-      "id": "sym:07b86e4d397b03adfac781fc7d9d31de22cac391d475b378130f87e1f5f9b840",
-      "kind": "binding-behavior",
-      "name": "oneTime"
     },
     {
       "data": {
@@ -7967,18 +8255,19 @@
           "state": "known",
           "value": "OneTimeBindingBehavior"
         },
+        "declarationForm": "convention",
         "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts",
         "kind": "binding-behavior",
         "name": {
           "location": { "end": 1153, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "pos": 949 },
           "origin": "source",
           "state": "known",
-          "value": "onetime"
+          "value": "oneTime"
         }
       },
-      "id": "sym:b6b32a538fd513861acc555ca0c9b0ccd8d66163d8f691b48d1b12c030c6f4c0",
+      "id": "sym:cb6f6b43c928e73ac84f654d764ae8547630b4ad4f27ed25976fd490f96770df",
       "kind": "binding-behavior",
-      "name": "onetime",
+      "name": "oneTime",
       "source": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts"
     },
     {
@@ -7989,6 +8278,7 @@
           "state": "known",
           "value": "SelfBindingBehavior"
         },
+        "declarationForm": "static-property",
         "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/self.ts",
         "kind": "binding-behavior",
         "name": {
@@ -8011,6 +8301,7 @@
           "state": "known",
           "value": "SignalBindingBehavior"
         },
+        "declarationForm": "static-property",
         "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/signals.ts",
         "kind": "binding-behavior",
         "name": {
@@ -8033,6 +8324,7 @@
           "state": "known",
           "value": "ThrottleBindingBehavior"
         },
+        "declarationForm": "static-property",
         "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/throttle.ts",
         "kind": "binding-behavior",
         "name": {
@@ -8049,45 +8341,26 @@
     },
     {
       "data": {
-        "className": { "origin": "builtin", "value": "ToViewBindingBehavior" },
-        "kind": "binding-behavior",
-        "name": { "origin": "builtin", "value": "toView" }
-      },
-      "id": "sym:474b44c55fa7519f95eb6153807557c2ff2f5496dcd7e8398c2e6a3677e28d9c",
-      "kind": "binding-behavior",
-      "name": "toView"
-    },
-    {
-      "data": {
         "className": {
           "location": { "end": 1355, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "pos": 1155 },
           "origin": "source",
           "state": "known",
           "value": "ToViewBindingBehavior"
         },
+        "declarationForm": "convention",
         "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts",
         "kind": "binding-behavior",
         "name": {
           "location": { "end": 1355, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "pos": 1155 },
           "origin": "source",
           "state": "known",
-          "value": "toview"
+          "value": "toView"
         }
       },
-      "id": "sym:aaef51fb84995cb97b1aef1749cbecdcd1bf9b52f3976686bb605eeab0368c4b",
+      "id": "sym:a772248c15731f9ba0d164593e3916aa4fba84b1c9b385842663419806705109",
       "kind": "binding-behavior",
-      "name": "toview",
+      "name": "toView",
       "source": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts"
-    },
-    {
-      "data": {
-        "className": { "origin": "builtin", "value": "TwoWayBindingBehavior" },
-        "kind": "binding-behavior",
-        "name": { "origin": "builtin", "value": "twoWay" }
-      },
-      "id": "sym:3fe8afab67220e522132b10561ed1ad9af956ed9b6d9b882434e5306244cb9da",
-      "kind": "binding-behavior",
-      "name": "twoWay"
     },
     {
       "data": {
@@ -8097,29 +8370,20 @@
           "state": "known",
           "value": "TwoWayBindingBehavior"
         },
+        "declarationForm": "convention",
         "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts",
         "kind": "binding-behavior",
         "name": {
           "location": { "end": 1767, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts", "pos": 1567 },
           "origin": "source",
           "state": "known",
-          "value": "twoway"
+          "value": "twoWay"
         }
       },
-      "id": "sym:59e06474122eb2dbee420957d36ca35862ac6c5dedbc6d3f36b412619b1326cb",
+      "id": "sym:d0ae47ccc2466d3a0168f5bd4cef8ac533e9b109227b114db76725a060079a26",
       "kind": "binding-behavior",
-      "name": "twoway",
+      "name": "twoWay",
       "source": "aurelia/packages/runtime-html/src/resources/binding-behaviors/binding-mode.ts"
-    },
-    {
-      "data": {
-        "className": { "origin": "builtin", "value": "UpdateTriggerBindingBehavior" },
-        "kind": "binding-behavior",
-        "name": { "origin": "builtin", "value": "updateTrigger" }
-      },
-      "id": "sym:955beefbe8ec3f23bfec6a3478b177f237e964ec54b594cb8c4c7545a3c79d60",
-      "kind": "binding-behavior",
-      "name": "updateTrigger"
     },
     {
       "data": {
@@ -8129,18 +8393,19 @@
           "state": "known",
           "value": "UpdateTriggerBindingBehavior"
         },
+        "declarationForm": "static-property",
         "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/update-trigger.ts",
         "kind": "binding-behavior",
         "name": {
           "location": { "end": 737, "file": "aurelia/packages/runtime-html/src/resources/binding-behaviors/update-trigger.ts", "pos": 722 },
           "origin": "source",
           "state": "known",
-          "value": "updatetrigger"
+          "value": "updateTrigger"
         }
       },
-      "id": "sym:8acbec4fa5ddaf769ec368513c34c408c705b4f887369a0ede2e8e47992017ad",
+      "id": "sym:9d74f383a322b9f06b085795d132ab799af668f96fc474c3c39d2017680b45da",
       "kind": "binding-behavior",
-      "name": "updatetrigger",
+      "name": "updateTrigger",
       "source": "aurelia/packages/runtime-html/src/resources/binding-behaviors/update-trigger.ts"
     },
     {
@@ -8176,6 +8441,7 @@
           "state": "known",
           "value": "Focus"
         },
+        "declarationForm": "static-property",
         "dependencies": [],
         "file": "aurelia/packages/runtime-html/src/resources/custom-attributes/focus.ts",
         "kind": "custom-attribute",
@@ -8245,6 +8511,7 @@
           "state": "known",
           "value": "HighlightAttribute"
         },
+        "declarationForm": "decorator",
         "dependencies": [],
         "file": "packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/index.ts",
         "kind": "custom-attribute",
@@ -8385,6 +8652,7 @@
           "state": "known",
           "value": "Show"
         },
+        "declarationForm": "static-property",
         "dependencies": [],
         "file": "aurelia/packages/runtime-html/src/resources/custom-attributes/show.ts",
         "kind": "custom-attribute",
@@ -8594,6 +8862,7 @@
           "state": "known",
           "value": true
         },
+        "declarationForm": "static-property",
         "dependencies": [],
         "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-compose.ts",
         "kind": "custom-element",
@@ -8693,6 +8962,7 @@
           "state": "known",
           "value": true
         },
+        "declarationForm": "static-property",
         "dependencies": [],
         "file": "aurelia/packages/runtime-html/src/resources/custom-elements/au-slot.ts",
         "kind": "custom-element",
@@ -8795,6 +9065,7 @@
           "state": "known",
           "value": false
         },
+        "declarationForm": "convention",
         "dependencies": [],
         "file": "packages/integration-harness/test/fixtures/template-imports-pkg/src/my-app.ts",
         "kind": "custom-element",
@@ -8881,6 +9152,7 @@
           "state": "known",
           "value": false
         },
+        "declarationForm": "decorator",
         "dependencies": [],
         "file": "packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/subpath/index.ts",
         "kind": "custom-element",
@@ -8998,6 +9270,7 @@
           "state": "known",
           "value": false
         },
+        "declarationForm": "decorator",
         "dependencies": [],
         "file": "packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/index.ts",
         "kind": "custom-element",
@@ -9095,6 +9368,7 @@
           "state": "known",
           "value": "RejectedTemplateController"
         },
+        "declarationForm": "static-property",
         "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts",
         "kind": "template-controller",
         "name": {
@@ -9168,6 +9442,7 @@
           "state": "known",
           "value": "Else"
         },
+        "declarationForm": "static-property",
         "file": "aurelia/packages/runtime-html/src/resources/template-controllers/if.ts",
         "kind": "template-controller",
         "name": {
@@ -9255,6 +9530,7 @@
           "state": "known",
           "value": "If"
         },
+        "declarationForm": "static-property",
         "file": "aurelia/packages/runtime-html/src/resources/template-controllers/if.ts",
         "kind": "template-controller",
         "name": {
@@ -9320,6 +9596,7 @@
           "state": "known",
           "value": "PendingTemplateController"
         },
+        "declarationForm": "static-property",
         "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts",
         "kind": "template-controller",
         "name": {
@@ -9560,6 +9837,7 @@
           "state": "known",
           "value": "Portal"
         },
+        "declarationForm": "static-property",
         "file": "aurelia/packages/runtime-html/src/resources/template-controllers/portal.ts",
         "kind": "template-controller",
         "name": {
@@ -9625,6 +9903,7 @@
           "state": "known",
           "value": "PromiseTemplateController"
         },
+        "declarationForm": "static-property",
         "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts",
         "kind": "template-controller",
         "name": {
@@ -9689,6 +9968,7 @@
           "state": "known",
           "value": "Repeat"
         },
+        "declarationForm": "static-property",
         "file": "aurelia/packages/runtime-html/src/resources/template-controllers/repeat.ts",
         "kind": "template-controller",
         "name": {
@@ -9757,6 +10037,7 @@
           "state": "known",
           "value": "Switch"
         },
+        "declarationForm": "static-property",
         "file": "aurelia/packages/runtime-html/src/resources/template-controllers/switch.ts",
         "kind": "template-controller",
         "name": {
@@ -9821,6 +10102,7 @@
           "state": "known",
           "value": "FulfilledTemplateController"
         },
+        "declarationForm": "static-property",
         "file": "aurelia/packages/runtime-html/src/resources/template-controllers/promise.ts",
         "kind": "template-controller",
         "name": {
@@ -9888,6 +10170,7 @@
           "state": "known",
           "value": "With"
         },
+        "declarationForm": "static-property",
         "file": "aurelia/packages/runtime-html/src/resources/template-controllers/with.ts",
         "kind": "template-controller",
         "name": {
@@ -9925,6 +10208,7 @@
           "state": "known",
           "value": "SanitizeValueConverter"
         },
+        "declarationForm": "static-property",
         "file": "aurelia/packages/runtime-html/src/resources/value-converters/sanitize.ts",
         "fromType": { "origin": "builtin", "value": "string" },
         "kind": "value-converter",
