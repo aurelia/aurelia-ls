@@ -1028,8 +1028,15 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     const confidence = derived.level === "exact" || derived.level === "high" ? undefined : derived.level;
     const confidenceReason = confidence ? derived.reason : undefined;
 
-    // Augment content with provenance, then confidence indicator
+    // Append overlay link for resource entities (always last in card).
+    // augmentHoverContent inserts provenance/confidence BEFORE this link.
     let contents = baseResult.contents;
+    const overlay = this.#kernel.program.getOverlay(uri);
+    if (overlay?.text) {
+      contents = contents + "\n\n[$(file-code) Show overlay]";
+    }
+
+    // Augment content with provenance, then confidence indicator
     if (provenanceLine) {
       contents = augmentHoverContent(contents, provenanceLine);
     }
