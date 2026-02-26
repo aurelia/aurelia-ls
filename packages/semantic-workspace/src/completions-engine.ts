@@ -743,9 +743,19 @@ function detectQuotedExpression(
     };
   }
 
-  // Plain attribute value (no binding command) — find the enclosing tag for context
-  const tagMatch = before.slice(0, attrStart).match(/<([a-zA-Z][a-zA-Z0-9-]*)/);
-  const tagName = tagMatch?.[1] ?? "";
+  // Plain attribute value (no binding command) — find the enclosing tag for context.
+  // Use the nearest unclosed opening tag, not the first in the file.
+  const beforeAttr = before.slice(0, attrStart);
+  let tagName = "";
+  for (let j = beforeAttr.length - 1; j >= 0; j--) {
+    if (beforeAttr[j] === "<" && j + 1 < beforeAttr.length && beforeAttr[j + 1] !== "/") {
+      const tagMatch = beforeAttr.slice(j + 1).match(/^([a-zA-Z][a-zA-Z0-9-]*)/);
+      if (tagMatch) tagName = tagMatch[1]!;
+      break;
+    }
+    // Stop at > — this means we've exited the current tag context
+    if (beforeAttr[j] === ">") break;
+  }
   return {
     kind: "attr-value",
     tagName,
@@ -1814,8 +1824,9 @@ function formatTypeRef(type: string | undefined): string {
 }
 
 function extractStringLiteralsFromTypeString(typeStr: string): string[] {
-  // Parse type strings like "'open' | 'closed'" or "'left' | 'right' | 'center'"
-  const matches = typeStr.match(/'([^']+)'/g);
+  // Parse type strings like '"open" | "closed"' or "'left' | 'right' | 'center'"
+  // TypeScript's checker.typeToString() produces double-quoted literals.
+  const matches = typeStr.match(/["']([^"']+)["']/g);
   if (!matches) return [];
   return matches.map((m) => m.slice(1, -1));
 }
