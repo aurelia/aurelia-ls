@@ -397,7 +397,10 @@ export const UserCommandsFeature: FeatureModule = {
             return;
           }
 
-          const doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(related.uri));
+          const targetUri = related.uri.startsWith("file://")
+            ? vscode.Uri.parse(related.uri)
+            : vscode.Uri.file(related.uri);
+          const doc = await vscode.workspace.openTextDocument(targetUri);
           await vscode.window.showTextDocument(doc);
         });
       }),
