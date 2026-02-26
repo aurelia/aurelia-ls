@@ -77,15 +77,7 @@ export interface BindScopesOptions {
   diagnostics: BindDiagnosticEmitter;
   /** Semantic model for bindable + converter/behavior resolution. */
   model?: import("../../schema/model.js").SemanticModelQuery;
-  /**
-   * Dependency recorder — forward infrastructure.
-   *
-   * Currently unused: the bind stage is a pure transformation of link output.
-   * All resource dependencies (controller configs, bindable types) flow through
-   * linked instructions that the link stage already recorded via readResource.
-   * This parameter exists for future needs (e.g., if bind needs independent
-   * resource graph lookups for advanced scope analysis).
-   */
+  /** Dependency recorder for tracking resource reads during scope construction. */
   deps?: import("../../schema/dependency-graph.js").DepRecorder;
 }
 
@@ -99,6 +91,7 @@ export function bindScopes(linked: LinkModule, opts?: BindScopesOptions): ScopeM
   if (!diagEmitter) {
     throw new Error("bindScopes requires diagnostics emitter; missing emitter is a wiring error.");
   }
+  const deps = opts?.deps ?? null;
 
   return trace.span("bind.scopes", () => {
     trace.setAttributes({
@@ -139,7 +132,7 @@ export function bindScopes(linked: LinkModule, opts?: BindScopesOptions): ScopeM
     trace.event("bind.buildScopes.start");
     const roots: LinkedTemplate[] = linked.templates.length > 0 ? [linked.templates[0]!] : [];
     for (const t of roots) {
-      templates.push(buildTemplateScopes(t, emitter, domToLinked, forOfIndex, exprIndex, reportedBadExprs));
+      templates.push(buildTemplateScopes(t, emitter, domToLinked, forOfIndex, exprIndex, reportedBadExprs, deps));
     }
     trace.event("bind.buildScopes.complete");
 
@@ -171,6 +164,8 @@ export function bindScopes(linked: LinkModule, opts?: BindScopesOptions): ScopeM
  * Template traversal
  * ============================================================================= */
 
+type DepRecorder = import("../../schema/dependency-graph.js").DepRecorder;
+
 function buildTemplateScopes(
   t: LinkedTemplate,
   diagEmitter: BindDiagnosticEmitter,
@@ -178,6 +173,7 @@ function buildTemplateScopes(
   forOfIndex: ReadonlyExprIdMap<ForOfStatement | BadExpression>,
   exprIndex: ReadonlyExprIdMap<ExprTableEntry>,
   reportedBadExprs: Set<ExprId>,
+  deps: DepRecorder | null,
 ): ScopeTemplate {
   const frames: ScopeFrame[] = [];
   const frameIds = new FrameIdAllocator();
@@ -196,7 +192,7 @@ function buildTemplateScopes(
   });
 
   // Walk rows at the root template
-  walkRows(t.rows, rootId, frames, frameIds, exprToFrame, diagEmitter, domToLinked, forOfIndex, exprIndex, reportedBadExprs, /*allowLets*/ true);
+  walkRows(t.rows, rootId, frames, frameIds, exprToFrame, diagEmitter, domToLinked, forOfIndex, exprIndex, reportedBadExprs, /*allowLets*/ true, deps);
 
   return { name: t.name!, frames, root: rootId, exprToFrame };
 }
@@ -213,6 +209,7 @@ function walkRows(
   exprIndex: ReadonlyExprIdMap<ExprTableEntry>,
   reportedBadExprs: Set<ExprId>,
   allowLets: boolean,
+  deps: DepRecorder | null,
 ): void {
   const badCtx: BadExprContext = { exprIndex, reported: reportedBadExprs, emitter: diagEmitter };
   for (const r of rows) {
@@ -269,6 +266,10 @@ function walkRows(
 
         // ---- Template controllers ----
         case "hydrateTemplateController": {
+          // Record TC config dependency — scope frame structure depends on the
+          // controller's config (scope, trigger.kind, injects).
+          deps?.readResource("template-controller", ins.res);
+
           // For linking controllers (then/catch/pending/else/case/default-case), props are forwarded
           // from parent and should be evaluated in the grandparent frame (parent's outer frame).
           const isLinkingController = !!ins.controller.config.linksTo;
@@ -325,7 +326,7 @@ function walkRows(
             // - overlay scope (repeat/with/promise): their <let> belong to that overlay frame
             // - reuse scope (if/switch/portal): their <let> must not leak to the whole frame
             const childAllowsLets = ins.controller.config.scope === "overlay";
-            walkRows(linkedNested.rows, nextFrame, frames, frameIds, exprToFrame, diagEmitter, domToLinked, forOfIndex, exprIndex, reportedBadExprs, childAllowsLets);
+            walkRows(linkedNested.rows, nextFrame, frames, frameIds, exprToFrame, diagEmitter, domToLinked, forOfIndex, exprIndex, reportedBadExprs, childAllowsLets, deps);
           }
           break;
         }
@@ -352,6 +353,7 @@ function walkRows(
                   exprIndex,
                   reportedBadExprs,
                   allowLets,
+                  deps,
                 );
               }
             }

@@ -177,6 +177,7 @@ export function runFullPipeline(opts: PipelineOptions): {
     trace,
     deps: recorder,
     model: query,
+    templateFilePath: opts.templateFilePath as any,
   }));
 
   const usage = trace.span("stage:usage", () => collectFeatureUsage(linked, { syntax: query.syntax, attrParser }));

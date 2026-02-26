@@ -65,17 +65,10 @@ export interface TypecheckOptions {
   config?: Partial<TypecheckConfig>;
   /** Optional trace for instrumentation. Defaults to NOOP_TRACE. */
   trace?: CompileTrace;
-  /**
-   * Dependency recorder — forward infrastructure.
-   *
-   * Currently unused: the typecheck stage derives types from linked instruction
-   * metadata (target.bindable.type, rootVmType) already resolved during link.
-   * All resource dependencies are recorded by the link stage. This parameter
-   * exists for future needs (e.g., if typecheck consults the TS language service
-   * directly for type resolution, it should call readTypeState for each file
-   * whose types were queried).
-   */
+  /** Dependency recorder for tracking type-state reads during type checking. */
   deps?: import("../../schema/dependency-graph.js").DepRecorder;
+  /** Template file path — used to record type-state dependency. */
+  templateFilePath?: import("../../model/ir.js").NormalizedPath;
   /** Semantic model for confidence cascade and definition index building. */
   model?: import("../../schema/model.js").SemanticModelQuery;
 }
@@ -106,6 +99,13 @@ export function typecheck(opts: TypecheckOptions): TypecheckModule {
     }
 
     debug.typecheck("start", { rootVmType: opts.rootVmType });
+
+    // Record type-state dependency: type inference results depend on the TS
+    // type signatures at the template's component file. If the VM's property
+    // types, method signatures, or return types change, inferred types change.
+    if (opts.deps && opts.templateFilePath) {
+      opts.deps.readTypeState(opts.templateFilePath);
+    }
 
     // Collect expected types from linked semantics
     trace.event("typecheck.collectExpected.start");
