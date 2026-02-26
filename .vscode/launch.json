@@ -2,36 +2,6 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Dump Template (cortex all-table)",
-      "type": "node",
-      "request": "launch",
-      "cwd": "${workspaceFolder}",
-      "program": "${workspaceFolder}/scripts/dump-template.mjs",
-      "args": [
-        "../cortex-device-list",
-        "src/views/all-table.html",
-        "dumps/cortex-all-table"
-      ],
-      "console": "integratedTerminal",
-      "skipFiles": ["<node_internals>/**"],
-      "preLaunchTask": "build:tsc"
-    },
-    {
-      "name": "Dump Template (cortex devices)",
-      "type": "node",
-      "request": "launch",
-      "cwd": "${workspaceFolder}",
-      "program": "${workspaceFolder}/scripts/dump-template.mjs",
-      "args": [
-        "../cortex-device-list",
-        "src/cortex-devices.html",
-        "dumps/cortex-devices"
-      ],
-      "console": "integratedTerminal",
-      "skipFiles": ["<node_internals>/**"],
-      "preLaunchTask": "build:tsc"
-    },
-    {
       "name": "Run Extension (with Hello World workspace)",
       "type": "extensionHost",
       "request": "launch",
@@ -53,21 +23,6 @@
       "restart": true,
       "protocol": "inspector",
       "skipFiles": ["<node_internals>/**"]
-    },
-    {
-      "name": "Debug Integration Harness Tests",
-      "type": "node",
-      "request": "launch",
-      "cwd": "${workspaceFolder}",
-      "program": "${workspaceFolder}/node_modules/vitest/vitest.mjs",
-      "args": [
-        "run",
-        "packages/integration-harness/test/harness.integration.test.ts",
-        "--threads=false"
-      ],
-      "console": "integratedTerminal",
-      "autoAttachChildProcesses": true,
-      "preLaunchTask": "build:tsc"
     }
   ]
 }
