@@ -62,6 +62,7 @@
       { "command": "aurelia.inspectAtCursor", "title": "Inspect at Cursor", "category": "Aurelia" },
       { "command": "aurelia.findResource", "title": "Find Resource", "icon": "$(search)", "category": "Aurelia" },
       { "command": "aurelia.showAvailableResources", "title": "Show Available Resources", "category": "Aurelia" },
+      { "command": "aurelia.openRelatedFile", "title": "Open Related File", "category": "Aurelia" },
       { "command": "aurelia.showOverlay", "title": "Show Compiled Template", "category": "Aurelia Debug" },
       { "command": "aurelia.showOverlayMapping", "title": "Show Overlay Mapping", "category": "Aurelia Debug" },
       { "command": "aurelia.dumpState", "title": "Dump Server State", "category": "Aurelia Debug" },
@@ -85,6 +86,12 @@
         "key": "ctrl+alt+i",
         "mac": "cmd+alt+i",
         "when": "aurelia.active && editorTextFocus && editorLangId == html"
+      },
+      {
+        "command": "aurelia.openRelatedFile",
+        "key": "alt+o",
+        "mac": "alt+o",
+        "when": "aurelia.active && editorTextFocus"
       }
     ],
     "menus": {
@@ -124,6 +131,7 @@
         { "command": "aurelia.inspectAtCursor", "when": "aurelia.active" },
         { "command": "aurelia.findResource", "when": "aurelia.active" },
         { "command": "aurelia.showAvailableResources", "when": "aurelia.active" },
+        { "command": "aurelia.openRelatedFile", "when": "aurelia.active" },
         { "command": "aurelia.showOverlay", "when": "aurelia.active && config.aurelia.features.debugCommands" },
         { "command": "aurelia.showOverlayMapping", "when": "aurelia.active && config.aurelia.features.debugCommands" },
         { "command": "aurelia.dumpState", "when": "aurelia.active && config.aurelia.features.debugCommands" }

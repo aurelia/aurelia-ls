@@ -703,6 +703,47 @@ export function handleRenameFromTs(
   }
 }
 
+export function handleGetRelatedFile(
+  ctx: ServerContext,
+  params: { uri: string },
+): { uri: string; kind: "template" | "component" } | null {
+  try {
+    const uri = params?.uri;
+    if (!uri) return null;
+    const canonical = canonicalDocumentUri(uri);
+
+    // Check if this is a template → find its component
+    const asTemplate = ctx.workspace.templates.find(
+      (t) => canonicalDocumentUri(t.templatePath).uri === canonical.uri,
+    );
+    if (asTemplate) {
+      return { uri: canonicalDocumentUri(asTemplate.componentPath).uri, kind: "component" };
+    }
+
+    // Check if this is a component → find its template
+    const asComponent = ctx.workspace.templates.find(
+      (t) => canonicalDocumentUri(t.componentPath).uri === canonical.uri,
+    );
+    if (asComponent) {
+      return { uri: canonicalDocumentUri(asComponent.templatePath).uri, kind: "template" };
+    }
+
+    // Check inline templates (component file IS the template)
+    const asInline = ctx.workspace.inlineTemplates.find(
+      (t) => canonicalDocumentUri(t.componentPath).uri === canonical.uri,
+    );
+    if (asInline) {
+      // Inline template — no separate file to navigate to
+      return null;
+    }
+
+    return null;
+  } catch (e) {
+    ctx.logger.error(`[getRelatedFile] failed: ${formatError(e)}`);
+    return null;
+  }
+}
+
 /**
  * Registers all custom Aurelia request handlers on the connection.
  */
@@ -719,6 +760,7 @@ export function registerCustomHandlers(ctx: ServerContext): void {
   ctx.connection.onRequest("aurelia/getCodeLens", (params: { uri: string }) =>
     handleCodeLens(ctx, { textDocument: { uri: params.uri } }),
   );
+  ctx.connection.onRequest("aurelia/getRelatedFile", (params: { uri: string }) => handleGetRelatedFile(ctx, params));
   ctx.connection.onRequest("aurelia/capabilities", () => handleCapabilities(ctx));
   ctx.connection.onRequest("aurelia/renameFromTs", (params: RenameFromTsParams) => handleRenameFromTs(ctx, params));
 }

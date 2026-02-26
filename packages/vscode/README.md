@@ -81,6 +81,7 @@ The goal is that you can trust what the extension tells you.
 |---------|------------|-------------|
 | Aurelia: Find Resource | `Ctrl+Alt+A` (`Cmd+Alt+A`) | Search project resources by name |
 | Aurelia: Inspect at Cursor | `Ctrl+Alt+I` (`Cmd+Alt+I`) | Show full semantic analysis at cursor |
+| Aurelia: Open Related File | `Alt+O` | Toggle between component class and template |
 | Aurelia: Show Available Resources | | List all resources visible in current scope |
 | Aurelia: Diagnostics Report | | Summary of current diagnostics |
 | Aurelia: Show Suppressed Diagnostics | | Show diagnostics suppressed by confidence rules |

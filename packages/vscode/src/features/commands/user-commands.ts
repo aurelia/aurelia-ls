@@ -381,6 +381,28 @@ export const UserCommandsFeature: FeatureModule = {
       }),
     );
 
+    // "Aurelia: Open Related File" — toggle between component class and template
+    store.add(
+      vscode.commands.registerCommand("aurelia.openRelatedFile", () => {
+        void run("openRelatedFile", async () => {
+          const editor = activeEditor(vscode);
+          if (!editor) {
+            vscode.window.showInformationMessage("No active editor");
+            return;
+          }
+          const uri = editor.document.uri.toString();
+          const related = await ctx.lsp.getRelatedFile(uri);
+          if (!related) {
+            vscode.window.showInformationMessage("No related Aurelia file found");
+            return;
+          }
+
+          const doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(related.uri));
+          await vscode.window.showTextDocument(doc);
+        });
+      }),
+    );
+
     return store;
   },
 };

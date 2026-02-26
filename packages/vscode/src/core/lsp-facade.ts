@@ -126,6 +126,14 @@ export class LspFacade {
     }
   }
 
+  async getRelatedFile(uri: string): Promise<{ uri: string; kind: "template" | "component" } | null> {
+    try {
+      return await this.sendRequest<{ uri: string; kind: "template" | "component" } | null>("aurelia/getRelatedFile", { uri });
+    } catch {
+      return null;
+    }
+  }
+
   onWorkspaceChanged(handler: (payload: { fingerprint: string; domains: string[] }) => void): void {
     this.onNotification("aurelia/workspaceChanged", handler);
   }
