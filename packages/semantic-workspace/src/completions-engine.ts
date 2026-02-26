@@ -72,6 +72,8 @@ export interface CompletionEngineContext {
   readonly semantics: ProjectSemantics;
   /** Base completions from the workspace kernel (TypeScript overlay). */
   readonly baseCompletions: readonly WorkspaceCompletionItem[];
+  /** Expression semantic model for Tier 1-3 expression completions. */
+  readonly expressionModel?: import("@aurelia-ls/compiler").ExpressionSemanticModel | null;
 }
 
 export function computeCompletions(ctx: CompletionEngineContext): readonly WorkspaceCompletionItem[] {
@@ -168,7 +170,7 @@ type CompletionPosition =
   | { kind: "attr-name"; tagName: string; prefix: string; attrStart: number; attrEnd: number; existingAttrs: string[] }
   | { kind: "binding-command"; attrTarget: string; prefix: string; commandStart: number; commandEnd: number; predictions?: readonly PredictiveMatchResult[] }
   | { kind: "attr-value"; tagName: string; attrName: string; prefix: string; valueStart: number; valueEnd: number }
-  | { kind: "expression-root"; prefix: string; exprStart: number; exprEnd: number; isInterpolation: boolean }
+  | { kind: "expression-root"; prefix: string; exprStart: number; exprEnd: number; isInterpolation: boolean; isMemberAccess?: boolean }
   | { kind: "vc-pipe"; prefix: string; nameStart: number; nameEnd: number }
   | { kind: "bb-pipe"; prefix: string; nameStart: number; nameEnd: number }
   | { kind: "as-element-value"; prefix: string; valueStart: number; valueEnd: number }
@@ -793,7 +795,9 @@ function scanExpressionPosition(
       return { kind: "bb-pipe", prefix: "", nameStart: exprSpan.start + lastTokenEnd, nameEnd: offset };
     case TokenType.Dot:
     case TokenType.QuestionDot:
-      return { kind: "not-applicable" };
+      // Member access: `item.` — the expression model resolves members
+      // of the left-hand expression's type at the cursor position.
+      return { kind: "expression-root", prefix: "", exprStart: exprSpan.start, exprEnd: offset, isInterpolation: false, isMemberAccess: true };
     case TokenType.Identifier: {
       const beforeIdent = exprText.slice(0, lastTokenEnd - lastIdentifier.length).trimEnd();
       if (beforeIdent.endsWith("|")) {
@@ -818,7 +822,59 @@ function resolveExpressionPositionFromText(
   if (!exprText.trim()) {
     return { kind: "expression-root", prefix: "", exprStart, exprEnd: offset, isInterpolation: false };
   }
-  return scanExpressionPosition(exprText + " ", offset, { start: exprStart, end: offset } as SourceSpan);
+  // scanExpressionPosition expects text to be sliceable at exprSpan offsets.
+  // The exprText is already extracted — use zero-based span so the slice works.
+  const result = scanExpressionPosition(exprText + " ", exprText.length, { start: 0, end: exprText.length } as SourceSpan);
+  // Rebase the result offsets back to template-relative positions.
+  if (result.kind === "expression-root") {
+    return { ...result, exprStart, exprEnd: offset };
+  }
+  if (result.kind === "vc-pipe" || result.kind === "bb-pipe") {
+    return { ...result, nameStart: result.nameStart + exprStart, nameEnd: offset };
+  }
+  return result;
+}
+
+/**
+ * Find the expression text before the cursor by searching backwards for
+ * the expression boundary (${ for interpolations, opening quote for bindings).
+ * Returns the expression text and its template-relative start position.
+ */
+function findExpressionTextBeforeCursor(
+  templateText: string,
+  cursorOffset: number,
+): { text: string; templateStart: number } | null {
+  const before = templateText.slice(0, cursorOffset);
+
+  // Check for interpolation: find matching ${
+  let depth = 0;
+  for (let i = before.length - 1; i >= 0; i--) {
+    if (before[i] === "}" && i > 0 && before[i - 1] !== "$") { depth++; continue; }
+    if (before[i] === "{" && i > 0 && before[i - 1] === "$") {
+      if (depth === 0) {
+        return { text: before.slice(i + 1), templateStart: i + 1 };
+      }
+      depth--;
+    }
+  }
+
+  // Check for quoted attribute value: find matching opening quote
+  for (let i = before.length - 1; i >= 0; i--) {
+    const ch = before[i]!;
+    if (ch === '"' || ch === "'") {
+      // Found potential opening quote — verify it's an attribute value
+      // by checking if there's an `=` before it (possibly with whitespace).
+      const beforeQuote = before.slice(0, i).trimEnd();
+      if (beforeQuote.endsWith("=")) {
+        return { text: before.slice(i + 1), templateStart: i + 1 };
+      }
+      break;
+    }
+    // Stop at angle brackets (we've left the attribute)
+    if (ch === ">" || ch === "<") break;
+  }
+
+  return null;
 }
 
 /** Detect if the cursor is inside a quoted attribute value with a binding command. */
@@ -1563,6 +1619,81 @@ function generateExpressionRootItems(
   const items: WorkspaceCompletionItem[] = [];
   const seen = new Set<string>();
 
+  // ── Member access: return ONLY members of the left-hand type ──
+  // The expression scanner confirmed this is after a dot. Resolve the
+  // expression before the dot and enumerate its type's members.
+  if (pos.isMemberAccess && ctx.expressionModel) {
+    // Strategy 1: AST-based — works when the parser produced a complete AccessMember.
+    let memberCompletions = ctx.expressionModel.getMemberCompletionsAt(pos.exprEnd);
+
+    // Strategy 2: Text-based — works when the parser produced a recovery node
+    // or BadExpression (e.g., `obj.` with no identifier after the dot).
+    // Use the Scanner to tokenize the expression text and extract everything
+    // before the final dot/question-dot.
+    if (memberCompletions.length === 0) {
+      // Find the expression text by searching backwards for the expression
+      // boundary (${, opening quote, or expression attribute start).
+      const exprText = findExpressionTextBeforeCursor(ctx.text, pos.exprEnd);
+      if (exprText) {
+        const scanner = new Scanner(exprText.text);
+        const tokens: { type: TokenType; start: number; end: number }[] = [];
+        while (true) {
+          const tok = scanner.next();
+          if (tok.type === TokenType.EOF) break;
+          if (tok.start >= exprText.text.length) break;
+          tokens.push({ type: tok.type, start: tok.start, end: tok.end });
+        }
+
+        // Find the last Dot or QuestionDot token.
+        let dotIdx = -1;
+        for (let i = tokens.length - 1; i >= 0; i--) {
+          if (tokens[i]!.type === TokenType.Dot || tokens[i]!.type === TokenType.QuestionDot) {
+            dotIdx = i;
+            break;
+          }
+        }
+
+        if (dotIdx >= 0 && dotIdx > 0) {
+          // Everything before the dot token is the left-hand expression.
+          const dotToken = tokens[dotIdx]!;
+          const chainText = exprText.text.slice(0, dotToken.start).trim();
+          if (chainText) {
+            // Normalize ?. to . for chain splitting
+            const normalized = chainText.replace(/\?\./g, ".");
+            memberCompletions = ctx.expressionModel.getMemberCompletionsForChain(
+              normalized, exprText.templateStart,
+            );
+          }
+        }
+      }
+    }
+
+    if (memberCompletions.length > 0) {
+      for (const c of memberCompletions) {
+        if (!matchesPrefix(c.label, prefix)) continue;
+        const typeSuffix = c.type ? `: ${c.type}` : "";
+        items.push({
+          label: c.label,
+          kind: c.kind === "method" ? "method" : "property",
+          detail: `${c.label}${typeSuffix}`,
+          sortText: `0~${String(c.sortPriority).padStart(2, "0")}~${c.label}`,
+        });
+      }
+      if (items.length > 0) return items;
+    }
+    // Fall through to scope-root if both strategies failed.
+  } else {
+  }
+
+  // ── Scope root ──
+  // The expression model is the PRIMARY source for scope-root completions.
+  // It provides: iterator locals, let bindings, aliases, overlay value members,
+  // VM class properties, and contextual variables — all in the correct order
+  // (inner scope → VM properties → contextuals).
+  //
+  // The completions engine adds only: scope tokens ($this, $parent, this)
+  // and the global allow-list, which the expression model doesn't provide.
+
   // Scope tokens ($this, $parent, this)
   for (const [token, detail] of SCOPE_TOKENS) {
     if (!matchesPrefix(token, prefix) || seen.has(token)) continue;
@@ -1575,35 +1706,20 @@ function generateExpressionRootItems(
     });
   }
 
-  // Contextual variables — determine from the compilation what TCs wrap this position
-  if (ctx.compilation) {
-    const controllers = collectEnclosingControllers(ctx.compilation, pos.exprStart);
-    for (const controller of controllers) {
-      const vars = CONTEXTUAL_VARIABLES[controller.kind];
-      if (!vars) continue;
-      for (const [varName, varDetail] of vars) {
-        if (!matchesPrefix(varName, prefix) || seen.has(varName)) continue;
-        seen.add(varName);
-        items.push({
-          label: varName,
-          kind: "variable",
-          detail: varDetail,
-          sortText: encodeSortText("exact", "local", "contextualVar", varName),
-        });
-      }
-      // Add the iteration variable for repeat
-      if (controller.kind === "repeat" && controller.localName) {
-        const localName = controller.localName;
-        if (matchesPrefix(localName, prefix) && !seen.has(localName)) {
-          seen.add(localName);
-          items.push({
-            label: localName,
-            kind: "variable",
-            detail: "Iteration variable",
-            sortText: encodeSortText("exact", "local", "contextualVar", localName),
-          });
-        }
-      }
+  // Expression model completions (the primary source).
+  if (ctx.expressionModel) {
+    const exprCompletions = ctx.expressionModel.getCompletionsAt(pos.exprEnd);
+    for (const c of exprCompletions) {
+      if (!matchesPrefix(c.label, prefix) || seen.has(c.label)) continue;
+      seen.add(c.label);
+      const typeSuffix = c.type ? `: ${c.type}` : "";
+      const priorityKey = String(c.sortPriority).padStart(2, "0");
+      items.push({
+        label: c.label,
+        kind: c.kind === "method" ? "method" : c.kind === "contextual" ? "variable" : "property",
+        detail: `${c.label}${typeSuffix}`,
+        sortText: `0~${priorityKey}~${c.label}`,
+      });
     }
   }
 

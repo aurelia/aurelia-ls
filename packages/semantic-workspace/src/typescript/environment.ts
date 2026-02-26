@@ -5,6 +5,7 @@ import { OverlayFs } from "./overlay-fs.js";
 import { TsService, type TsServiceConfig } from "./ts-service.js";
 import { TsServicesAdapter } from "./typescript-services.js";
 import { VmReflectionService } from "./vm-reflection.js";
+import { ExpressionTypeChecker } from "./expression-checker.js";
 import { ProjectProgram, type TypeScriptProject } from "./project.js";
 
 export interface TypeScriptEnvironment {
@@ -13,6 +14,7 @@ export interface TypeScriptEnvironment {
   readonly tsService: TsService;
   readonly typescript: TypeScriptServices;
   readonly vmReflection: VmReflectionService;
+  readonly expressionChecker: ExpressionTypeChecker;
   readonly project: TypeScriptProject;
   dispose(): void;
 }
@@ -41,12 +43,14 @@ export function createTypeScriptEnvironment(options: TypeScriptEnvironmentOption
   }
   const typescript = new TsServicesAdapter(tsService, paths);
   const vmReflection = new VmReflectionService(tsService, paths, options.logger);
+  const expressionChecker = new ExpressionTypeChecker(tsService);
   return {
     paths,
     overlayFs,
     tsService,
     typescript,
     vmReflection,
+    expressionChecker,
     project,
     dispose: () => {
       tsService.dispose();

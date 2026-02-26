@@ -46,6 +46,8 @@ import {
   type SemanticModelQuery,
   type NormalizedPath,
   type ExpressionExtractionContext,
+  resolveCursorEntity,
+  type CursorResolutionResult,
 } from "@aurelia-ls/compiler";
 import {
   createNodeFileSystem,
@@ -130,6 +132,8 @@ import {
 } from "./query-helpers.js";
 import { buildDomIndex } from "./template-dom.js";
 import { computeCompletions, type CompletionEngineContext } from "./completions-engine.js";
+import { buildExpressionSemanticModel, type ExpressionModelDeps } from "./expression-model.js";
+import { collectTemplateHover, mergeHoverContents } from "./hover.js";
 
 type ProjectSemanticsDiscoveryConfigBase = Omit<ProjectSemanticsDiscoveryConfig, "diagnostics">;
 
@@ -444,6 +448,9 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
         this.#ensureTemplateContext(canonical.uri);
         const metaResult = this.#metaHover(canonical.uri, pos);
         if (metaResult) return metaResult;
+        // Try expression-enriched hover first (Tiers 1-3).
+        const exprHover = this.#expressionHover(canonical.uri, pos);
+        if (exprHover) return exprHover;
         const baseResult = base.hover(pos);
         if (!baseResult) return null;
         return this.#augmentHover(canonical.uri, pos, baseResult);
@@ -916,6 +923,9 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     const snapshot = this.#kernel.snapshot();
     const baseResult = base.completions(pos);
 
+    // Build expression model for expression-level completions (Tiers 1-3).
+    const expressionModel = this.#buildExpressionModel(uri, compilation);
+
     const ctx: CompletionEngineContext = {
       text,
       uri,
@@ -927,6 +937,7 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       catalog: snapshot.catalog,
       semantics: snapshot.semantics,
       baseCompletions: baseResult.items,
+      expressionModel,
     };
 
     const items = computeCompletions(ctx);
@@ -946,6 +957,177 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
     );
 
     return { items, isIncomplete: hasScopeGaps || hasUnresolvedImports };
+  }
+
+  /**
+   * Expression-enriched hover: resolve cursor entity, then use the expression
+   * model to fill in types that the typecheck stage couldn't resolve.
+   * Returns null for non-expression entities (fall through to base hover).
+   */
+  #expressionHover(
+    uri: DocumentUri,
+    pos: { line: number; character: number },
+  ): WorkspaceHover | null {
+    const text = this.lookupText(uri);
+    if (!text) return null;
+    const offset = offsetAtPosition(text, pos);
+    if (offset == null) return null;
+
+    const compilation = this.#kernel.getCompilation(uri);
+    if (!compilation) return null;
+
+    const resolution = resolveCursorEntity({
+      compilation,
+      offset,
+      syntax: this.#query.syntax,
+      semantics: this.#query.model.semantics,
+    });
+    if (!resolution) return null;
+
+    const entity = resolution.entity;
+    const isExpressionEntity =
+      entity.kind === "scope-identifier" ||
+      entity.kind === "member-access" ||
+      entity.kind === "global-access" ||
+      entity.kind === "iterator-decl" ||
+      entity.kind === "contextual-var" ||
+      entity.kind === "scope-token";
+
+    if (!isExpressionEntity) return null;
+
+    // Build the expression model and resolve the type.
+    const exprModel = this.#buildExpressionModel(uri, compilation);
+    if (!exprModel) return null;
+
+    let typeInfo: import("@aurelia-ls/compiler").ExpressionTypeInfo | null = null;
+
+    if (entity.kind === "iterator-decl") {
+      // For iterator declarations, find the repeat frame that declares
+      // this variable and resolve the element type from its ForOfStatement.
+      // Can't use getScopeAt — cursor is ON the attribute, not in the
+      // repeat's content scope.
+      const scope = exprModel.getScopeAt(offset);
+      // Search all frames for the one that has this iterator local.
+      for (const frame of scope.frames) {
+        if (frame.origin?.kind === "iterator") {
+          const hasLocal = frame.symbols.some(
+            (s) => s.kind === "iteratorLocal" && s.name === entity.iteratorVar,
+          );
+          if (hasLocal) {
+            // Found the frame. Resolve the iterable → element type.
+            // Use resolveIdentifier with a scope that includes this frame.
+            const innerScope = { ...scope, frameId: frame.id };
+            typeInfo = exprModel.resolveIdentifier(entity.iteratorVar, innerScope);
+            break;
+          }
+        }
+      }
+    } else if (entity.kind === "contextual-var") {
+      const scope = exprModel.getScopeAt(offset);
+      typeInfo = exprModel.resolveIdentifier(entity.name, scope);
+    } else if (entity.kind === "scope-token" && entity.token) {
+      const scope = exprModel.getScopeAt(offset);
+      typeInfo = exprModel.resolveIdentifier(entity.token, scope);
+    } else {
+      typeInfo = exprModel.getTypeAt(offset);
+    }
+
+    // Enrich the entity with the expression model's type info.
+    let enrichedResolution = resolution;
+    if (typeInfo?.type) {
+      enrichedResolution = this.#enrichEntityWithType(resolution, typeInfo);
+    }
+
+    const lines = collectTemplateHover(enrichedResolution);
+    if (!lines) return null;
+
+    const contents = mergeHoverContents(lines);
+    if (!contents) return null;
+
+    const span = resolution.entity.span;
+    const location: WorkspaceLocation = {
+      uri,
+      span,
+      ...(resolution.exprId ? { exprId: resolution.exprId } : {}),
+      ...(resolution.nodeId ? { nodeId: resolution.nodeId } : {}),
+    };
+    return { contents, location };
+  }
+
+  #enrichEntityWithType(
+    resolution: CursorResolutionResult,
+    typeInfo: import("@aurelia-ls/compiler").ExpressionTypeInfo,
+  ): CursorResolutionResult {
+    const entity = resolution.entity;
+
+    switch (entity.kind) {
+      case "scope-identifier": {
+        return {
+          ...resolution,
+          entity: { ...entity, type: typeInfo.type ?? entity.type },
+        };
+      }
+      case "member-access": {
+        return {
+          ...resolution,
+          entity: {
+            ...entity,
+            memberType: typeInfo.type ?? entity.memberType,
+            parentType: typeInfo.memberOf ?? entity.parentType,
+          },
+        };
+      }
+      case "iterator-decl": {
+        return {
+          ...resolution,
+          entity: { ...entity, itemType: typeInfo.type ?? entity.itemType },
+        };
+      }
+      case "contextual-var": {
+        return {
+          ...resolution,
+          entity: { ...entity, type: typeInfo.type ?? entity.type },
+        };
+      }
+      case "scope-token": {
+        return {
+          ...resolution,
+          entity: { ...entity, resolvedType: typeInfo.type ?? entity.resolvedType },
+        };
+      }
+      default:
+        return resolution;
+    }
+  }
+
+  #buildExpressionModel(
+    uri: DocumentUri,
+    compilation: TemplateCompilation | null,
+  ): import("@aurelia-ls/compiler").ExpressionSemanticModel | null {
+    if (!compilation?.ir) return null;
+
+    // Notify the TS service that external files may have changed.
+    // This bumps the project version so TS re-checks getScriptVersion
+    // for each file and re-reads any that changed on disk.
+    this.#env.tsService.notifyPossibleExternalChanges();
+
+    // Resolve the VM class for this template.
+    const canonical = canonicalDocumentUri(uri);
+    const componentPath = this.#templateIndex.templateToComponent.get(canonical.uri);
+    const className = this.#templateIndex.templateToClassName.get(canonical.uri);
+    const vmClass = componentPath && className
+      ? { file: this.#env.paths.canonical(path.resolve(componentPath)) as NormalizedPath, className }
+      : null;
+
+    return buildExpressionSemanticModel({
+      ir: compilation.ir,
+      checker: this.#env.expressionChecker,
+      vmClass,
+      // Uses builtin getControllerConfig by default.
+      // Custom controller configs from the semantic model would need
+      // adaptation from TemplateControllerDef → ControllerConfig.
+      compilationCurrent: true, // TODO: detect staleness
+    });
   }
 
   #attributeSyntaxContext(): AttributeSyntaxContext {
@@ -1845,6 +2027,18 @@ type HoveredResourceIdentity = {
 
 type TemplateMeta = NonNullable<TemplateCompilation["linked"]["templates"][0]["templateMeta"]>;
 const EMPTY_DEFINITION_SLICES: TemplateDefinitionSlices = { local: [], resource: [] };
+
+function extractElementTypeString(collectionType: string): string | undefined {
+  if (collectionType.endsWith("[]")) return collectionType.slice(0, -2);
+  const arrayMatch = /^(?:readonly\s+)?Array<(.+)>$/.exec(collectionType);
+  if (arrayMatch) return arrayMatch[1];
+  const readonlyMatch = /^readonly\s+(.+)\[\]$/.exec(collectionType);
+  if (readonlyMatch) return readonlyMatch[1];
+  // Set<T>, Map<K,V> etc — first type arg
+  const genericMatch = /^[A-Za-z]+<(.+?)(?:,.*)?>\s*$/.exec(collectionType);
+  if (genericMatch) return genericMatch[1];
+  return undefined;
+}
 
 function getActiveTemplateSetter(vm: VmReflection): ((path: string | null) => void) | null {
   const maybe = vm as VmReflection & { setActiveTemplate?: (path: string | null) => void };

@@ -159,12 +159,27 @@ function projectEntityCard(resolution: CursorResolutionResult): HoverCard | null
     }
 
     // --- Expression entities ---
-    case 'scope-identifier':
-    case 'member-access':
-    case 'global-access': {
-      const label = expressionLabel ?? 'expression';
+    case 'scope-identifier': {
+      const label = expressionLabel ?? entity.name;
+      const typePart = entity.type ? `: ${entity.type}` : '';
       return {
-        signature: `(expression) ${label}`,
+        signature: `(expression) ${label}${typePart}`,
+        meta: [],
+      };
+    }
+    case 'member-access': {
+      const label = expressionLabel ?? entity.memberName;
+      const typePart = entity.memberType ? `: ${entity.memberType}` : '';
+      return {
+        signature: `(expression) ${label}${typePart}`,
+        meta: entity.parentType ? [`*member of ${entity.parentType}*`] : [],
+      };
+    }
+    case 'global-access': {
+      const label = expressionLabel ?? entity.globalName;
+      const typePart = entity.globalType ? `: ${entity.globalType}` : '';
+      return {
+        signature: `(expression) ${label}${typePart}`,
         meta: [],
       };
     }

@@ -398,11 +398,28 @@ export class CoreParser {
       const t = this.peekToken();
 
       if (t.type === TokenType.Dot) {
-        // obj.prop
+        // obj.prop — or obj. (incomplete, recovery)
         this.nextToken(); // '.'
         const nameTok = this.peekToken();
         if (!this.isIdentifierNameToken(nameTok)) {
-          return this.error("Expected identifier after '.'", nameTok);
+          // Recovery: produce a partial AccessMember with an empty identifier.
+          // This preserves the object expression for downstream consumers
+          // (completions, hover) that need to resolve the type before the dot.
+          const emptyName: Identifier = {
+            $kind: "Identifier",
+            span: this.span(this.lastTokenEnd, this.lastTokenEnd),
+            name: "",
+          };
+          const span = this.spanFrom(expr, this.lastTokenEnd);
+          const member: AccessMemberExpression = {
+            $kind: "AccessMember",
+            span,
+            object: expr,
+            name: emptyName,
+            optional: false,
+          };
+          expr = member;
+          break;
         }
         this.nextToken();
         const name = this.identifierFromToken(nameTok);
@@ -474,9 +491,24 @@ export class CoreParser {
           continue;
         }
 
-        // obj?.prop
+        // obj?.prop — or obj?. (incomplete, recovery)
         if (!this.isIdentifierNameToken(next)) {
-          return this.error("Expected identifier after '?.'", next);
+          // Recovery: produce a partial AccessMember with an empty identifier.
+          const emptyName: Identifier = {
+            $kind: "Identifier",
+            span: this.span(this.lastTokenEnd, this.lastTokenEnd),
+            name: "",
+          };
+          const span = this.spanFrom(expr, this.lastTokenEnd);
+          const member: AccessMemberExpression = {
+            $kind: "AccessMember",
+            span,
+            object: expr,
+            name: emptyName,
+            optional: true,
+          };
+          expr = member;
+          break;
         }
         this.nextToken();
         const name = this.identifierFromToken(next);

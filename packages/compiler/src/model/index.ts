@@ -24,3 +24,6 @@ export * from "./symbols.js";
 // Diagnostics - foundation diagnostic types
 export * from "./diagnostics.js";
 
+// Expression semantic model - demand-driven type resolution (Tiers 1-3)
+export * from "./expression-semantic.js";
+

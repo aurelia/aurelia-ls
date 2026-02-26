@@ -228,6 +228,8 @@ export {
   getCommandMode,
   // Attribute pattern configuration (values)
   BUILTIN_ATTRIBUTE_PATTERNS,
+  // Controller config lookup (for expression model scope chain construction)
+  getControllerConfig,
 } from "./schema/index.js";
 
 // === Synthesis (Overlay) ===
@@ -435,7 +437,18 @@ export {
 } from "./model/index.js";
 export type { SpanLike, SourceSpan, TextSpan, NormalizedPath, SourceFileId, ExprId, FrameId, BindingMode, ScopeFrame, ScopeSymbol } from "./model/index.js";
 
-// IR types (DOM tree)
+// Expression Semantic Model (Tiers 1-3 — demand-driven expression type resolution)
+export type {
+  ExpressionSemanticModel,
+  ExpressionScopeContext,
+  ExpressionTypeInfo,
+  ExpressionCompletion,
+  ExpressionResolutionTier,
+  LightweightScopeFrame,
+  VmClassRef,
+} from "./model/index.js";
+
+// IR types (DOM tree + instructions)
 export type {
   DOMNode,
   ElementNode,
@@ -445,6 +458,17 @@ export type {
   BaseNode,
   Attr,
   TemplateIR,
+  IrModule,
+  InstructionRow,
+  InstructionIR,
+  HydrateTemplateControllerIR,
+  HydrateLetElementIR,
+  IteratorBindingIR,
+  PropertyBindingIR,
+  LetBindingIR,
+  BindingSourceIR,
+  ExprRef,
+  ForOfIR,
   NodeId,
 } from "./model/index.js";
 
@@ -472,6 +496,14 @@ export type {
   AccessMemberExpression,
   AccessKeyedExpression,
   AccessThisExpression,
+  AccessBoundaryExpression,
+  AccessGlobalExpression,
+  CallGlobalExpression,
+  ValueConverterExpression,
+  BindingBehaviorExpression,
+  AssignExpression,
+  ArrowFunction,
+  BadExpression,
   Identifier,
   PrimitiveLiteralExpression,
   BinaryExpression,
@@ -485,9 +517,16 @@ export type {
   Interpolation,
   ForOfStatement,
   TemplateExpression,
+  TaggedTemplateExpression,
+  NewExpression,
+  ParenExpression,
+  CustomExpression,
   BindingIdentifier,
   ExprTableEntry,
 } from "./model/index.js";
+
+// Scope graph types (for expression model)
+export type { FrameOrigin, OverlayBase, ScopeTemplate, ScopeModule } from "./model/index.js";
 
 // === Program ===
 export * from "./program/index.js";

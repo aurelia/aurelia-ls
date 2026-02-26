@@ -103,6 +103,16 @@ export class TsService {
     return this.#projectVersion;
   }
 
+  /**
+   * Bump the project version to force TS to re-check file versions.
+   * Call before expression model queries to ensure TS picks up .ts file edits.
+   * Cheap: just increments a counter. TS then calls getScriptVersion for
+   * each file and only re-reads files whose version (mtime) has changed.
+   */
+  notifyPossibleExternalChanges(): void {
+    this.#projectVersion++;
+  }
+
   dispose(): void {
     try {
       this.#service.dispose();
@@ -160,7 +170,20 @@ export class TsService {
       useCaseSensitiveFileNames: () => paths.isCaseSensitive(),
 
       getScriptFileNames: () => overlay.listScriptRoots(),
-      getScriptVersion: (f) => overlay.snapshot(f)?.version.toString() ?? "0",
+      getScriptVersion: (f) => {
+        const snap = overlay.snapshot(f);
+        if (snap) return snap.version.toString();
+        // For non-overlay files (e.g., VM .ts sources), use the file's
+        // modification time as the version. This ensures TS re-reads the
+        // file after edits, which is critical for the expression model's
+        // demand-driven type resolution (Tiers 2-3).
+        try {
+          const stat = fs.statSync(f);
+          return stat.mtimeMs.toString();
+        } catch {
+          return "0";
+        }
+      },
 
       getScriptSnapshot: (f) => {
         const snap = overlay.snapshot(f);
