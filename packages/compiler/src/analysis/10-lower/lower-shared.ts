@@ -10,7 +10,8 @@ import type {
   IrDiagCode,
   SourceSpan,
 } from "../../model/ir.js";
-import { diagnosticsCatalog, type DiagnosticDataFor } from "../../diagnostics/catalog/index.js";
+import type { DiagnosticDataFor } from "../../diagnostics/catalog/index.js";
+import type { diagnosticsCatalog } from "../../diagnostics/catalog/index.js";
 import type { DiagnosticEmitter } from "../../diagnostics/emitter.js";
 import { reportDiagnostic } from "../../diagnostics/report.js";
 import type { ExpressionParseContext, ExpressionType, IExpressionParser } from "../../parsing/expression-parser.js";

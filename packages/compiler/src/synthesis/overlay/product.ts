@@ -2,11 +2,12 @@ import path from "node:path";
 import { buildTemplateMapping } from "./mapping.js";
 import { buildTemplateQuery } from "./query.js";
 import type { FrameOverlayPlan, OverlayPlanModule } from "./types.js";
-import type { EmitResult as OverlayEmitResult } from "./emit.js";
+import type { EmitResult as OverlayEmitResult, OverlayEmitMappingEntry } from "./emit.js";
 import type { TemplateQueryFacade } from "./query.js";
 import type { TemplateMappingArtifact } from "./mapping.js";
-import type { ExprId, ExprTableEntry, SourceSpan } from "../../model/ir.js";
-import type { FrameId, FrameOrigin } from "../../model/symbols.js";
+import type { ExprId, ExprTableEntry, IrModule, SourceSpan } from "../../model/ir.js";
+import type { FrameId, FrameOrigin, ScopeModule } from "../../model/symbols.js";
+import type { LinkModule } from "../../analysis/index.js";
 import { resolveSourceFile } from "../../model/source.js";
 import type { ExprSpanIndex } from "../../shared/expr-utils.js";
 import { normalizePathForId, type ExprIdMap } from "../../model/identity.js";
@@ -40,9 +41,9 @@ export interface OverlayProductResult {
  * Build overlay product from pre-computed stage outputs (no PipelineSession needed).
  */
 export function buildOverlayProductFromStages(
-  ir: import("../../model/index.js").IrModule,
-  linked: import("../../analysis/index.js").LinkModule,
-  scope: import("../../model/index.js").ScopeModule,
+  ir: IrModule,
+  linked: LinkModule,
+  scope: ScopeModule,
   planOut: OverlayPlanModule,
   overlayEmit: OverlayEmitResult,
   opts: OverlayProductOptions,
@@ -64,7 +65,7 @@ export function buildOverlayProductFromStages(
     frameOrigins,
   });
 
-  const calls = overlayEmit.mapping.map((m: import("./emit.js").OverlayEmitMappingEntry) => ({
+  const calls = overlayEmit.mapping.map((m: OverlayEmitMappingEntry) => ({
     exprId: m.exprId,
     overlayStart: m.span.start,
     overlayEnd: m.span.end,
@@ -72,7 +73,7 @@ export function buildOverlayProductFromStages(
   }));
 
   const overlay: OverlayProductResult = { overlayPath, text: overlayEmit.text, calls, mapping };
-  const query = buildTemplateQuery(ir, linked, mapping, null as any);
+  const query = buildTemplateQuery(ir, linked, mapping, null);
   return { plan: planOut, overlay, mapping, query, exprSpans, exprTable: ir.exprTable ?? [], spanIndex };
 }
 

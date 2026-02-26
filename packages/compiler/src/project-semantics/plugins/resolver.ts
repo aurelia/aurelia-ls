@@ -73,7 +73,7 @@ export function createPluginResolverWithManifests(
 export function isCustomizeCall(
   origin: ImportOrigin,
   method: string,
-  manifests: PluginManifestRegistry = DEFAULT_PLUGIN_MANIFESTS
+  _manifests: PluginManifestRegistry = DEFAULT_PLUGIN_MANIFESTS
 ): boolean {
   if (method !== "customize") {
     return false;

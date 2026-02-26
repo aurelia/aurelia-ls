@@ -92,7 +92,7 @@ export type GapReason =
   // Package structure issues (package scanning domain)
   | { kind: 'package-not-found'; packagePath: string }
   | { kind: 'invalid-package-json'; path: string; parseError: string }
-  | { kind: 'missing-package-field'; field: 'name' | 'version' | 'main' | 'exports' | string }
+  | { kind: 'missing-package-field'; field: string }
   | { kind: 'entry-point-not-found'; specifier: string; resolvedPath: string }
   | { kind: 'no-entry-points' }
   | { kind: 'complex-exports'; reason: string }

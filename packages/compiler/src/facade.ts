@@ -4,7 +4,10 @@
 // pipeline functions in pipeline/stages.ts.
 
 // Model imports
-import type { ExprTableEntry, SourceSpan, ExprIdMap } from "./model/index.js";
+import type { ExprTableEntry, IrModule, ScopeModule, SourceSpan, ExprIdMap } from "./model/index.js";
+
+// Analysis imports
+import type { LinkModule, TypecheckModule } from "./analysis/index.js";
 
 // Language imports
 import type { FeatureUsageSet, TemplateContext } from "./schema/index.js";
@@ -23,6 +26,7 @@ import type { StageKey, StageArtifactMeta } from "./pipeline/engine.js";
 import {
   buildOverlayProductFromStages,
   computeOverlayBaseName,
+  type OverlayPlanModule,
   type OverlayProductResult,
   type TemplateMappingArtifact,
   type TemplateQueryFacade,
@@ -49,7 +53,7 @@ export interface CompileOptions {
   /** Trace context for per-stage timing instrumentation. */
   trace?: CompileTrace;
   /** Pre-computed IR to skip the lower stage (per-stage caching). */
-  seededIr?: import("./model/index.js").IrModule;
+  seededIr?: IrModule;
 }
 
 // ============================================================================
@@ -66,12 +70,12 @@ export interface TemplateDiagnostics {
 export type StageMetaSnapshot = Partial<Record<StageKey, StageArtifactMeta>>;
 
 export interface TemplateCompilation {
-  ir: import("./model/index.js").IrModule;
-  linked: import("./analysis/index.js").LinkModule;
-  scope: import("./model/index.js").ScopeModule;
-  typecheck: import("./analysis/index.js").TypecheckModule;
+  ir: IrModule;
+  linked: LinkModule;
+  scope: ScopeModule;
+  typecheck: TypecheckModule;
   usage: FeatureUsageSet;
-  overlayPlan: import("./synthesis/index.js").OverlayPlanModule;
+  overlayPlan: OverlayPlanModule;
   overlay: CompileOverlayResult;
   mapping: TemplateMappingArtifact;
   query: TemplateQueryFacade;

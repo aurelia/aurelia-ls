@@ -76,10 +76,12 @@ export function isConservativeGap(kind: string): boolean {
     case "workspace-no-source-dir":
     case "workspace-entry-not-found":
     // Import/resolution failures.
+    // falls through
     case "unresolved-import":
     case "circular-import":
     case "external-package":
     // Format/parse failures.
+    // falls through
     case "unsupported-format":
     case "no-source":
     case "minified-code":

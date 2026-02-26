@@ -59,7 +59,6 @@ export { detectMonorepo, resolveWorkspaceImport, resolveWorkspaceImportWithReaso
 import {
   detectMonorepo,
   resolveWorkspaceImport,
-  resolveWorkspaceImportWithReason,
   isRelativeImport,
   isPackageImport,
   type MonorepoContext,
@@ -89,7 +88,6 @@ import {
   fullyResolve,
   isRegistryShape,
   getRegisterMethod,
-  getResolvedValue,
   type LexicalScope,
   type ClassValue,
 } from '../evaluate/value/index.js';
@@ -110,7 +108,6 @@ import type {
   AnalysisOptions,
   ExtractedConfiguration,
   ConfigurationRegistration,
-  SourceLocation,
   InspectionResult,
   InspectedResource,
   InspectedBindable,
@@ -120,7 +117,7 @@ import type {
   InspectedGap,
 } from './types.js';
 import type { Logger } from '../types.js';
-import { success, partial, highConfidence, gap, combine } from './types.js';
+import { success as _success, partial, highConfidence, gap, combine as _combine } from './types.js';
 import {
   debug,
   type NormalizedPath,
@@ -860,7 +857,7 @@ async function discoverPackageFiles(
       }
     } catch (err) {
       // File might not exist (bad import/re-export) or parse error
-      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+      if ((err as { code?: string }).code !== 'ENOENT') {
         gaps.push(gap(
           `file "${basename(filePath)}"`,
           { kind: 'parse-error', message: err instanceof Error ? err.message : String(err) },
@@ -997,7 +994,7 @@ async function extractFromCompiledJS(
       }
     } catch (err) {
       // File might not exist (bad re-export) or parse error
-      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+      if ((err as { code?: string }).code !== 'ENOENT') {
         gaps.push(gap(
           `file "${basename(filePath)}"`,
           { kind: 'parse-error', message: err instanceof Error ? err.message : String(err) },
@@ -1175,8 +1172,8 @@ function analyzeConfigurations(
  */
 function createClassResolver(
   existingResources: AnalyzedResource[],
-  allFacts: ReadonlyMap<NormalizedPath, FileFacts>,
-  packagePath: string
+  _allFacts: ReadonlyMap<NormalizedPath, FileFacts>,
+  _packagePath: string
 ): (classVal: ClassValue) => AnalyzedResource | null {
   // Build lookup map by className
   const resourceMap = new Map<string, AnalyzedResource>();

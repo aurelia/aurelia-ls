@@ -9,7 +9,6 @@
  * This module provides matching and configuration for directory conventions.
  */
 
-import type { NormalizedPath } from '../compiler.js';
 import type {
   DirectoryConvention,
   DirectoryMatch,

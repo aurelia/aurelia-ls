@@ -1,7 +1,6 @@
 import type {
   DiagnosticDataByCode as CatalogDataByCode,
   DiagnosticStage,
-  DiagnosticsCatalog,
   DiagnosticsCatalogStrict,
 } from "../types.js";
 import { bindableDiagnostics } from "./bindables.js";
@@ -72,9 +71,9 @@ export const diagnosticsByCategoryFuture = {
   legacy: legacyDiagnostics,
 } as const;
 
-export type DiagnosticCode = keyof typeof diagnosticsCatalog & string;
-export type DiagnosticCanonicalCode = keyof typeof diagnosticsCanonical & string;
-export type DiagnosticFutureCode = keyof typeof diagnosticsFuture & string;
+export type DiagnosticCode = keyof typeof diagnosticsCatalog;
+export type DiagnosticCanonicalCode = keyof typeof diagnosticsCanonical;
+export type DiagnosticFutureCode = keyof typeof diagnosticsFuture;
 export type DiagnosticDataByCode = CatalogDataByCode<typeof diagnosticsCatalog>;
 export type DiagnosticCanonicalDataByCode = CatalogDataByCode<typeof diagnosticsCanonical>;
 export type DiagnosticFutureDataByCode = CatalogDataByCode<typeof diagnosticsFuture>;

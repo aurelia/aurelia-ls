@@ -39,6 +39,7 @@ import type {
 } from "../../model/ir.js";
 
 import { getControllerConfig, type ControllerConfig, type SemanticsLookupOptions } from "../../schema/registry.js";
+import type { DepRecorder } from "../../schema/dependency-graph.js";
 import type { ResourceGraph } from "../../schema/resource-graph.js";
 import type { ModuleResolver } from "../../shared/module-resolver.js";
 
@@ -159,14 +160,14 @@ export interface LinkOptions {
    * during link resolution. When provided, records resource-read edges
    * for dependency-graph-driven invalidation.
    */
-  deps?: import("../../schema/dependency-graph.js").DepRecorder;
+  deps?: DepRecorder;
   /**
    * L2 path: pre-resolved SemanticsLookup (e.g., from SemanticModelQuery).
    * When provided, the snapshot parameter is not used for lookup creation.
    */
   lookup?: SemanticsLookup;
   /** L2 path: resource graph for scope-aware resolution. */
-  graph?: import("../../schema/resource-graph.js").ResourceGraph | null;
+  graph?: ResourceGraph | null;
 }
 
 /**

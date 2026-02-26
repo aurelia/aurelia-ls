@@ -25,10 +25,6 @@ import type {
   ValueConverterSig,
   BindingBehaviorSig,
   BindingCommandConfig,
-  ConfidenceLevel,
-  ConfidenceSignals,
-  ResourceView,
-  BindableView,
   ConvergenceRef,
 } from "./types.js";
 import type { SourceSpan } from "../model/ir.js";

@@ -1,9 +1,9 @@
 import type {
   BindingSourceIR,
-  ExprId,
   ExprRef,
   ExprTableEntry,
   InterpIR,
+  NormalizedPath,
 } from "../../model/ir.js";
 import type { ScopeModule } from "../../model/symbols.js";
 import type {
@@ -12,13 +12,14 @@ import type {
   TargetSem,
   LinkedElementBindable,
 } from "../20-link/types.js";
+import type { DepRecorder } from "../../schema/dependency-graph.js";
+import type { SemanticModelQuery } from "../../schema/model.js";
 import type { TypeRef } from "../../schema/registry.js";
 import { exprIdsOf, indexExprTable } from "../../shared/expr-utils.js";
 import type { ExprIdMap } from "../../model/identity.js";
 import { isStub } from "../../shared/diagnosed.js";
 import {
   type TypecheckConfig,
-  type TypecheckSeverity,
   type BindingContext,
   resolveTypecheckConfig,
 } from "./config.js";
@@ -64,11 +65,11 @@ export interface TypecheckOptions {
   /** Optional trace for instrumentation. Defaults to NOOP_TRACE. */
   trace?: CompileTrace;
   /** Dependency recorder for tracking type-state reads during type checking. */
-  deps?: import("../../schema/dependency-graph.js").DepRecorder;
+  deps?: DepRecorder;
   /** Template file path — used to record type-state dependency. */
-  templateFilePath?: import("../../model/ir.js").NormalizedPath;
+  templateFilePath?: NormalizedPath;
   /** Semantic model for confidence cascade and definition index building. */
-  model?: import("../../schema/model.js").SemanticModelQuery;
+  model?: SemanticModelQuery;
 }
 
 /**

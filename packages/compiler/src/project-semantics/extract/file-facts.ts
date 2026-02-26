@@ -12,7 +12,6 @@ import type {
   NormalizedPath,
   TextSpan,
   SourceSpan,
-  BindingMode,
   Located,
   TemplateMetaIR,
 } from '../compiler.js';

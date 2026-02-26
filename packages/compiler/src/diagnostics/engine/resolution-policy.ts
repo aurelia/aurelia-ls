@@ -33,19 +33,20 @@ export function resolveConditionalAuMappingWithPolicy(
   raw: RawDiagnostic,
   policy: DiagnosticResolutionPolicy = DEFAULT_DIAGNOSTIC_RESOLUTION_POLICY,
 ): ConditionalAuMappingDecision {
-  if (!Array.isArray(mapping.canonical)) {
-    const code = mapping.canonical as DiagnosticCode;
+  const { canonical } = mapping;
+  if (typeof canonical === "string") {
     return {
-      code,
+      code: canonical,
       aurCode: pickMappingValue(mapping.aurCode, 0),
       data: mapping.data,
     };
   }
+  const candidates = canonical;
   const data = toRecord(raw.data);
   if (data) {
     const resourceKind = getStringValue(data, "resourceKind");
     if (resourceKind === "custom-attribute" || resourceKind === "template-controller") {
-      const code = mapping.canonical[1] ?? mapping.canonical[0] ?? null;
+      const code = candidates[1] ?? candidates[0] ?? null;
       return {
         code,
         aurCode: pickMappingValue(mapping.aurCode, 1),
@@ -53,7 +54,7 @@ export function resolveConditionalAuMappingWithPolicy(
       };
     }
     if (Object.prototype.hasOwnProperty.call(data, "bindable")) {
-      const code = mapping.canonical[0] ?? null;
+      const code = candidates[0] ?? null;
       return {
         code,
         aurCode: pickMappingValue(mapping.aurCode, 0),
@@ -61,19 +62,19 @@ export function resolveConditionalAuMappingWithPolicy(
       };
     }
   }
-  const fallbackCode = mapping.canonical[0] ?? null;
+  const fallbackCode = candidates[0] ?? null;
   const fallbackAurCode = pickMappingValue(mapping.aurCode, 0);
   // TODO(tech-debt): remove legacy-first-candidate fallback once AU diagnostics
   // always carry sufficient discriminator data for unambiguous mapping.
   const fallbackAllowed = policy.conditionalAu.onMissingDiscriminator === "legacy-first-candidate";
-  const issue = conditionalMappingIssue(raw.code, mapping.canonical, fallbackAllowed ? fallbackCode : null);
+  const issue = conditionalMappingIssue(raw.code, candidates, fallbackAllowed ? fallbackCode : null);
   if (!fallbackAllowed) {
     return {
       code: AMBIGUOUS_CONDITIONAL_AU_CODE,
       issue,
       data: mergeData(mapping.data, {
         rawCode: raw.code,
-        candidates: [...mapping.canonical],
+        candidates: [...candidates],
         reason: "missing-discriminator",
       }),
     };

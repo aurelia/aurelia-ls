@@ -2,7 +2,6 @@ import path from "node:path";
 import {
   positionAtOffset,
   spanContainsOffset,
-  spanToRange,
   type SourceSpan,
   type TextRange,
 } from "../model/index.js";
@@ -103,7 +102,7 @@ type TagContext =
 
 function resolveCompletionContext(
   program: TemplateProgram,
-  uri: DocumentUri,
+  _uri: DocumentUri,
 ): { sem: MaterializedSemantics; resources: ResourceCollections; syntax: TemplateSyntaxRegistry; catalog: ResourceCatalog } {
   const query = program.query;
   return {
@@ -583,8 +582,8 @@ function resourceAliases(def: ResourceDef): readonly string[] {
     return def.aliases.map((alias) => unwrapSourced(alias)).filter((value): value is string => !!value);
   }
   if (def.kind === "template-controller") {
-    const aliases = unwrapSourced(def.aliases) ?? [];
-    return Array.isArray(aliases) ? aliases : [];
+    const aliases: readonly string[] | undefined = unwrapSourced(def.aliases);
+    return aliases ?? [];
   }
   return [];
 }

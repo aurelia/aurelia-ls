@@ -559,20 +559,6 @@ function diffRecords<T extends Record<string, unknown>>(base: T, overlay: T): T 
   return Object.keys(additions).length ? (additions as T) : undefined;
 }
 
-function cloneResourceGraph(graph: ResourceGraph): ResourceGraph {
-  const scopes: Record<ResourceScopeId, ResourceScope> = {};
-  for (const [id, scope] of Object.entries(graph.scopes)) {
-    scopes[id as ResourceScopeId] = {
-      id: scope.id,
-      parent: scope.parent,
-      ...(scope.label ? { label: scope.label } : {}),
-      resources: clonePartialResources(scope.resources),
-      ...(scope.completeness ? { completeness: cloneScopeCompleteness(scope.completeness) } : {}),
-    };
-  }
-  return { version: graph.version, root: graph.root, scopes };
-}
-
 /**
  * Clone a ResourceGraph, filtering out plugin resources that aren't activated.
  *

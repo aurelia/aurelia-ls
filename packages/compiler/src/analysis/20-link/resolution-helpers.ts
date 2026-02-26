@@ -28,7 +28,6 @@ export function resolvePropertyTarget(
   to: string,
   mode: BindingMode,
 ): { target: TargetSem; effectiveMode: BindingMode } {
-  const lookup = ctx.lookup;
   // 1) Custom element bindable (component prop)
   if (host.kind === "element" && host.custom) {
     const bindable = host.custom.def.bindables[to];

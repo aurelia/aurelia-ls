@@ -214,7 +214,7 @@ export function buildTemplateFrom(
   ctx: TemplateBuildContext,
   origin: TemplateOrigin,
 ): TemplateIR {
-  const { attrParser, table, catalog } = lowerCtx;
+  const { table } = lowerCtx;
   const templateId = ctx.templateIds.allocate();
   const templateCtx: TemplateBuildContext = { templateId, templateIds: ctx.templateIds };
   const domIdMap = idMap ?? new WeakMap<P5Node, NodeId>();
@@ -290,7 +290,6 @@ function extractProjections(
   entries: ProjectionEntry[],
   skipTags?: Set<string>,
 ): void {
-  const { attrParser, table, catalog } = lowerCtx;
   const kids = rootLike.childNodes ?? [];
   for (const kid of kids) {
     if (!isElement(kid)) continue;
@@ -345,7 +344,7 @@ function extractElementProjections(
   collectRows: RowCollector,
   ctx: TemplateBuildContext,
 ): ProjectionDef[] | null {
-  const { attrParser, table, catalog } = lowerCtx;
+  const { catalog } = lowerCtx;
   const authoredTag = el.nodeName.toLowerCase();
   const asElement = findAttr(el, "as-element");
   const effectiveTag = (asElement?.value ?? authoredTag).toLowerCase();

@@ -14,11 +14,9 @@ import type {
   AttributePatternDef,
   PatternInterpret,
   CatalogGap,
-  ConvergenceRef,
   CustomElementDef,
   CustomAttributeDef,
   ElementRes,
-  ResourceCatalog,
   ResourceCollections,
   ResourceKind,
   ResourceScopeId,
@@ -35,7 +33,6 @@ import type {
   MaterializedSemantics,
   TypeRef,
 } from "./types.js";
-import type { ConvergenceEntry } from "./model.js";
 import {
   buildAttributePatternConfigs,
   buildBindingCommandConfigs,
@@ -754,7 +751,8 @@ export function createSemanticsLookup(sem: ProjectSemantics, opts?: SemanticsLoo
     const key = `${kind}:${res.name}`;
     const entry = entries.get(key);
     if (entry) {
-      return { ...res, __convergenceRef: entry.ref } as T;
+      const result: T = { ...res, __convergenceRef: entry.ref };
+      return result;
     }
     return res;
   }

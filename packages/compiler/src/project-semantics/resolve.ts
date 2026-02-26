@@ -336,8 +336,6 @@ function converge(
   config: ProjectSemanticsDiscoveryConfig | undefined,
   diagEmitter: ProjectSemanticsDiscoveryDiagnosticEmitter,
 ): ProjectSemanticsDiscoveryResult {
-  const trace = config?.trace ?? NOOP_TRACE;
-
   // Prepare convergence inputs
   const candidateOverrides = createDiscoveryConvergenceOverrides(
     characterized.resources as ResourceDef[],
@@ -365,7 +363,7 @@ function converge(
     definitionConvergence,
     mergeUncertaintyGaps,
   } = buildSemanticsArtifacts(
-    allResources as ResourceDef[],
+    allResources,
     config?.baseSemantics,
     {
       confidence: catalogConfidence,
@@ -440,7 +438,7 @@ function converge(
     apiSurfaceSnapshot,
     definition: {
       authority: definitionAuthority,
-      evidence: allResources as ResourceDef[],
+      evidence: allResources,
       convergence: definitionConvergence,
     },
     registration,

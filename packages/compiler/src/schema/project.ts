@@ -10,9 +10,7 @@
 import type {
   Sourced,
   Resolved,
-  Stub,
   GapCategory,
-  GapRef,
   ConvergenceRef,
   ResourceView,
   BindableView,
@@ -96,7 +94,7 @@ function projectSourced<T>(
   if (sourced.origin === 'source' && sourced.state === 'unknown') {
     return createStub(fallback, 'unknown-source' as GapCategory, resourceKey, field);
   }
-  return sourced.value as T;
+  return sourced.value;
 }
 
 function projectSourcedOptional<T>(
@@ -172,8 +170,8 @@ function baseView(def: ResourceDef, ref: ConvergenceRef, resourceKey: string): O
       def.file,
       resourceKey,
       'file',
-    ) as Resolved<NormalizedPath | undefined>,
-    package: def.package as Resolved<string | undefined>,
+    ),
+    package: def.package,
     ref,
   };
 }
@@ -189,7 +187,10 @@ export function projectCustomElement(
     aliases: unwrapSourcedArray(def.aliases),
     capture: projectSourced(def.capture, false, key, 'capture'),
     containerless: projectSourced(def.containerless, false, key, 'containerless'),
-    shadowOptions: projectSourced(def.shadowOptions, null, key, 'shadowOptions') as Resolved<{ readonly mode: 'open' | 'closed' } | null>,
+    shadowOptions: projectSourced<{ readonly mode: 'open' | 'closed' } | null>(
+      def.shadowOptions as Sourced<{ readonly mode: 'open' | 'closed' } | null> | undefined,
+      null, key, 'shadowOptions',
+    ),
     processContent: projectSourced(def.processContent, false, key, 'processContent'),
     bindables: projectBindables(def.bindables, key),
     dependencies: unwrapSourcedArray(def.dependencies),
@@ -206,7 +207,7 @@ export function projectCustomAttribute(
     ...baseView(def, ref, key),
     aliases: unwrapSourcedArray(def.aliases),
     noMultiBindings: projectSourced(def.noMultiBindings, false, key, 'noMultiBindings'),
-    defaultProperty: projectSourcedOptional<string | undefined>(def.primary, undefined, key, 'primary') as Resolved<string | undefined>,
+    defaultProperty: projectSourcedOptional<string | undefined>(def.primary, undefined, key, 'primary'),
     bindables: projectBindables(def.bindables, key),
     dependencies: unwrapSourcedArray(def.dependencies),
   };
@@ -222,7 +223,7 @@ export function projectTemplateController(
     ...baseView(def, ref, key),
     aliases: Array.isArray(def.aliases)
       ? unwrapSourcedArray(def.aliases as readonly Sourced<string>[])
-      : (unwrapSourcedValue(def.aliases as Sourced<readonly string[]>) ?? []) as string[],
+      : [...(unwrapSourcedValue(def.aliases) ?? [])],
     noMultiBindings: projectSourced(def.noMultiBindings, false, key, 'noMultiBindings'),
     bindables: projectBindables(def.bindables, key),
     semantics: def.semantics,

@@ -15,7 +15,7 @@
 import type { NormalizedPath } from '../compiler.js';
 import { debug } from '../compiler.js';
 import type { FileFacts } from "../extract/file-facts.js";
-import type { ExportBindingMap, FileExportBindings, ResolvedExport } from "./types.js";
+import type { ExportBindingMap, ResolvedExport } from "./types.js";
 
 /**
  * Build the complete export binding map for all files.

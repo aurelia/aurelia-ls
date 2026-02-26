@@ -75,7 +75,7 @@ export function normalizeDiagnostics(
     const normalized: NormalizedDiagnostic = {
       raw: entry,
       code: resolvedCode,
-      spec: spec as DiagnosticSpec<DiagnosticDataRecord>,
+      spec,
       message: entry.message,
       severity: severityResult.severity,
       impact: spec.impact,

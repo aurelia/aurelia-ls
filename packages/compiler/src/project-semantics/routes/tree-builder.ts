@@ -429,9 +429,10 @@ function collectPaths(
       // Handle path aliases
       if (Array.isArray(node.path)) {
         for (let i = 1; i < node.path.length; i++) {
+          const alias = String(node.path[i]);
           const aliasPath = node.fullPath.replace(
             new RegExp(`${node.path[0]}$`),
-            node.path[i]!
+            alias
           );
           if (aliasPath !== node.fullPath) {
             staticPaths.push(aliasPath);

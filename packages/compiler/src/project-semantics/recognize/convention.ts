@@ -30,7 +30,6 @@ import {
   buildBindingBehaviorDef,
   buildCustomAttributeDef,
   buildCustomElementDef,
-  buildTemplateControllerDef,
   buildValueConverterDef,
 } from '../assemble/resource-def.js';
 import {

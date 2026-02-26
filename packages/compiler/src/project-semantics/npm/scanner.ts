@@ -282,7 +282,7 @@ async function resolveEntryPoints(packagePath: string, pkgJson: PackageJson): Pr
           await tryResolve(value, key, false);
         } else if (value && typeof value === 'object') {
           // "exports": { ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" } }
-          const conditions = value as PackageExportConditions;
+          const conditions = value;
 
           // Prefer import over require
           const mainPath = conditions.import ?? conditions.require ?? conditions.default;

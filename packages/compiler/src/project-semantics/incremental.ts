@@ -11,7 +11,7 @@
  */
 
 import { createHash } from "node:crypto";
-import ts from "typescript";
+import type ts from "typescript";
 import type { NormalizedPath } from "./compiler.js";
 import type { FileFacts } from "./extract/file-facts.js";
 import { extractFileFacts, type ExtractionOptions } from "./extract/file-facts-extractor.js";
@@ -19,6 +19,7 @@ import { discoverFromFacts, type ProjectSemanticsDiscoveryConfig, type ProjectSe
 import type { Logger } from "./types.js";
 import { canonicalPath } from "./util/naming.js";
 import { debug } from "./compiler.js";
+import type { AnalyzableValue as AnyValue } from "./evaluate/value/types.js";
 
 interface CachedFileFacts {
   readonly contentHash: string;
@@ -317,8 +318,6 @@ function fingerprintFileFacts(facts: FileFacts): string {
 // ============================================================================
 // AnalyzableValue hasher — position-stripping structural hash
 // ============================================================================
-
-type AnyValue = import("./evaluate/value/types.js").AnalyzableValue;
 
 /**
  * Hash an AnalyzableValue tree into the running hash, stripping source

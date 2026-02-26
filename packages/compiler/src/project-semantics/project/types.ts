@@ -6,6 +6,7 @@
  */
 
 import type { NormalizedPath, CompileTrace } from '../compiler.js';
+import type { FileSystemContext } from "./context.js";
 
 // ============================================================================
 // Sibling Detection
@@ -278,7 +279,7 @@ export const DEFAULT_SCANNER_OPTIONS: Omit<Required<ProjectScannerOptions>, "roo
  */
 export interface ExtractionOptions {
   /** File system context for sibling detection */
-  readonly fileSystem?: import("./context.js").FileSystemContext;
+  readonly fileSystem?: FileSystemContext;
 
   /** Template extensions to look for as siblings */
   readonly templateExtensions?: readonly string[];

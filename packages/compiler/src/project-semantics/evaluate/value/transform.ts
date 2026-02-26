@@ -867,7 +867,7 @@ function transformForOfStatement(
 /**
  * Get the loop variable name from a for-of/for-in initializer.
  */
-function getLoopVariable(initializer: ts.ForInitializer, sf: ts.SourceFile): string {
+function getLoopVariable(initializer: ts.ForInitializer, _sf: ts.SourceFile): string {
   if (ts.isVariableDeclarationList(initializer)) {
     const decl = initializer.declarations[0];
     if (decl && ts.isIdentifier(decl.name)) {

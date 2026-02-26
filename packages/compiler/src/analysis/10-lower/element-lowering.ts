@@ -92,11 +92,12 @@ function subValueLoc(valueLoc: P5Loc, raw: string, rawStart: number, rawEnd: num
   const trimLeft = slice.length - slice.trimStart().length;
   const trimRight = slice.length - slice.trimEnd().length;
   const base = valueLoc.startOffset;
-  return {
+  const result: typeof valueLoc = {
     ...valueLoc,
     startOffset: base + rawStart + trimLeft,
     endOffset: base + rawEnd - trimRight,
-  } as typeof valueLoc;
+  };
+  return result;
 }
 
 /**

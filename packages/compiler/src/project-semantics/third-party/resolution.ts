@@ -23,7 +23,6 @@ import {
   type Bindable,
   type BindableDef,
   type BindingBehaviorDef,
-  type BindingMode,
   type ControllerConfig,
   type CustomAttributeDef,
   type CustomElementDef,
@@ -60,7 +59,6 @@ import type {
 } from "./types.js";
 import {
   buildThirdPartyResources,
-  hasThirdPartyResources,
   mergeResourceCollections,
   mergeScopeResources,
 } from "./merge.js";
@@ -429,7 +427,8 @@ function lookupPackageRoot(
 ): string | null {
   if (!packageRoots) return null;
   if (packageRoots instanceof Map) {
-    return packageRoots.get(packageName) ?? null;
+    const map: ReadonlyMap<string, string> = packageRoots;
+    return map.get(packageName) ?? null;
   }
   const record = packageRoots as Readonly<Record<string, string>>;
   return record[packageName] ?? null;

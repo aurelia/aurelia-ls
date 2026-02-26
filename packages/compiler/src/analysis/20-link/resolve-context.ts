@@ -5,7 +5,8 @@ import type { ModuleResolver } from "../../shared/module-resolver.js";
 import { NOOP_TRACE, type CompileTrace } from "../../shared/trace.js";
 import { debug } from "../../shared/debug.js";
 import type { DiagnosticEmitter } from "../../diagnostics/emitter.js";
-import { diagnosticsCatalog } from "../../diagnostics/catalog/index.js";
+import type { diagnosticsCatalog } from "../../diagnostics/catalog/index.js";
+import type { DepRecorder } from "../../schema/dependency-graph.js";
 import type { SemDiagCode } from "./types.js";
 
 export type ResolveDiagnosticEmitter = DiagnosticEmitter<typeof diagnosticsCatalog, SemDiagCode>;
@@ -23,7 +24,7 @@ export interface ResolveContext {
   readonly services: ResolveServices;
   readonly moduleResolver: ModuleResolver;
   readonly templateFilePath: string;
-  readonly deps?: import("../../schema/dependency-graph.js").DepRecorder;
+  readonly deps?: DepRecorder;
 }
 
 export function createResolveServices(opts: {

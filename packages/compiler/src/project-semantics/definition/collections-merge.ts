@@ -238,7 +238,7 @@ function mergeControllerConfig(
 function mergeValueConverterSig(
   primary: ValueConverterSig,
   secondary: ValueConverterSig,
-  key: string,
+  _key: string,
 ): ValueConverterSig {
   const reasons: DefinitionReductionReason[] = [];
   return {

@@ -8,7 +8,7 @@
 
 import type ts from "typescript";
 import type { NormalizedPath, CompileTrace } from '../compiler.js';
-import { normalizePathForId, debug, NOOP_TRACE } from '../compiler.js';
+import { debug, NOOP_TRACE } from '../compiler.js';
 import type { FileSystemContext } from "./context.js";
 import { getBaseName, getExtension, getDirectory, getFileType, createProjectFile } from "./context.js";
 import {
@@ -18,7 +18,6 @@ import {
   type ProjectFileType,
   type ProjectStructure,
   type FilePair,
-  type DirectoryConvention,
   type DirectoryMatch,
   type ProjectScannerOptions,
 } from "./types.js";

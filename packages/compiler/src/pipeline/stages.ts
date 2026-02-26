@@ -8,22 +8,21 @@
 // Caching is the responsibility of the caller (TemplateProgram).
 
 import path from "node:path";
-import type { IrModule, ScopeModule } from "../model/index.js";
+import type { IrModule, NormalizedPath, ScopeModule } from "../model/index.js";
 import type { TemplateContext } from "../schema/index.js";
 import type { SemanticModelQuery } from "../schema/model.js";
-import type { DependencyGraph, DepRecorder } from "../schema/dependency-graph.js";
+import type { DepRecorder } from "../schema/dependency-graph.js";
 import { createDepRecorder, NOOP_DEP_RECORDER } from "../schema/dependency-graph.js";
 import { createAttributeParserFromRegistry, getExpressionParser, type AttributeParser, type IExpressionParser } from "../parsing/index.js";
 import type { VmReflection, SynthesisOptions, ModuleResolver } from "../shared/index.js";
-import { NOOP_TRACE, type CompileTrace } from "../shared/trace.js";
+import { NOOP_TRACE } from "../shared/trace.js";
 import { lowerDocument, linkTemplateSemantics, bindScopes, typecheck, collectFeatureUsage } from "../analysis/index.js";
-import { planOverlay, emitOverlayFile, type OverlayEmitOptions, planAot, type AotPlanOptions } from "../synthesis/index.js";
+import { planOverlay, emitOverlayFile, type OverlayEmitOptions } from "../synthesis/index.js";
 import { DiagnosticsRuntime } from "../diagnostics/runtime.js";
 import type { LinkModule, TypecheckModule } from "../analysis/index.js";
 import type { FeatureUsageSet } from "../schema/index.js";
-import type { OverlayPlanModule, OverlayEmitResult, AotPlanModule } from "../synthesis/index.js";
+import type { OverlayPlanModule, OverlayEmitResult } from "../synthesis/index.js";
 import type { PipelineOptions, StageKey, StageArtifactMeta } from "./engine.js";
-import { stableHash, stableHashSemantics } from "./hash.js";
 
 // ============================================================================
 // Core Pipeline Options (simplified)
@@ -131,7 +130,7 @@ export function runFullPipeline(opts: PipelineOptions): {
   const { exprParser, attrParser } = trace.span("pipeline:setup", () => {
     const ep = opts.exprParser ?? getExpressionParser();
     const ap = opts.attrParser ?? createAttributeParserFromRegistry(query.syntax);
-    recorder.readFile(opts.templateFilePath as any);
+    recorder.readFile(opts.templateFilePath as NormalizedPath);
     recorder.readVocabulary();
     if (ctx?.scopeId) recorder.readScope(ctx.scopeId);
     return { exprParser: ep, attrParser: ap };
@@ -173,7 +172,7 @@ export function runFullPipeline(opts: PipelineOptions): {
     trace,
     deps: recorder,
     model: query,
-    templateFilePath: opts.templateFilePath as any,
+    templateFilePath: opts.templateFilePath as NormalizedPath,
   }));
 
   const usage = trace.span("stage:usage", () => collectFeatureUsage(linked, { syntax: query.syntax, attrParser }));

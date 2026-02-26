@@ -120,7 +120,8 @@ function lookupPackageRoot(
 ): string | null {
   if (!roots) return null;
   if (roots instanceof Map) {
-    return roots.get(name) ?? null;
+    const map: ReadonlyMap<string, string> = roots;
+    return map.get(name) ?? null;
   }
   const record = roots as Readonly<Record<string, string>>;
   return record[name] ?? null;

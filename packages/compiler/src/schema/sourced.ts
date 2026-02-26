@@ -39,7 +39,7 @@ export function sanitizeSourcedSnapshotValue(value: unknown): unknown {
     return value;
   }
   const sourceEnvelope = isSourceEnvelope(value);
-  const record = value as Record<string, unknown>;
+  const record = value;
   const out: Record<string, unknown> = {};
   for (const key of Object.keys(record)) {
     if (sourceEnvelope && key === "node") continue;

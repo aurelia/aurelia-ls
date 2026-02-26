@@ -45,11 +45,13 @@ import type {
   ScopeModule, ScopeTemplate, ScopeFrame, FrameId, ScopeSymbol, ScopeDiagCode, OverlayBase, FrameOrigin,
 } from "../../model/symbols.js";
 
+import type { DepRecorder } from "../../schema/dependency-graph.js";
+import type { SemanticModelQuery } from "../../schema/model.js";
 import type { ControllerConfig } from "../../schema/registry.js";
 
 import { FrameIdAllocator, type ExprIdMap, type ReadonlyExprIdMap } from "../../model/identity.js";
 import { preferOrigin, provenanceFromSpan, provenanceSpan } from "../../model/origin.js";
-import { diagnosticsCatalog } from "../../diagnostics/catalog/index.js";
+import type { diagnosticsCatalog } from "../../diagnostics/catalog/index.js";
 import type { DiagnosticEmitter } from "../../diagnostics/emitter.js";
 import { reportDiagnostic } from "../../diagnostics/report.js";
 import { exprIdsOf, collectBindingNames, findBadInPattern } from "../../shared/expr-utils.js";
@@ -76,9 +78,9 @@ export interface BindScopesOptions {
   trace?: CompileTrace;
   diagnostics: BindDiagnosticEmitter;
   /** Semantic model for bindable + converter/behavior resolution. */
-  model?: import("../../schema/model.js").SemanticModelQuery;
+  model?: SemanticModelQuery;
   /** Dependency recorder for tracking resource reads during scope construction. */
-  deps?: import("../../schema/dependency-graph.js").DepRecorder;
+  deps?: DepRecorder;
 }
 
 /* =============================================================================
@@ -163,8 +165,6 @@ export function bindScopes(linked: LinkModule, opts?: BindScopesOptions): ScopeM
 /* =============================================================================
  * Template traversal
  * ============================================================================= */
-
-type DepRecorder = import("../../schema/dependency-graph.js").DepRecorder;
 
 function buildTemplateScopes(
   t: LinkedTemplate,

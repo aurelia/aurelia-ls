@@ -12,7 +12,6 @@ import type {
   DiagnosticSurface,
   DiagnosticSpec,
   DiagnosticsCatalog,
-  DiagnosticDataBase,
   DiagnosticDataRecord,
 } from "../types.js";
 

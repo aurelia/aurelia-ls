@@ -9,25 +9,17 @@
 // consume the result.
 
 import type { SourceSpan, ExprId, NodeId, ExprTableEntry } from "../model/ir.js";
-import type { NormalizedPath } from "../model/index.js";
 import type {
   TemplateCompilation,
-  TemplateDiagnostics,
 } from "../facade.js";
-import type { LinkModule, LinkedRow, LinkedInstruction, LinkedTemplate } from "../analysis/index.js";
-import type { IrModule, TemplateIR } from "../model/ir.js";
+import type { LinkedRow, LinkedInstruction, LinkedTemplate } from "../analysis/index.js";
 import type {
   ElementRes,
   AttrRes,
   Bindable,
-  BindingCommandConfig,
-  ControllerConfig,
-  ValueConverterSig,
-  BindingBehaviorSig,
   BindingMode,
   ConfidenceLevel,
   ConfidenceSignals,
-  ResourceScopeId,
   ConvergenceRef,
   TemplateSyntaxRegistry,
   MaterializedSemantics,
@@ -39,11 +31,9 @@ import type {
   CAAttrEntity,
   TCAttrEntity,
   BindableEntity,
-  CommandEntity,
   ValueConverterEntity,
   BindingBehaviorEntity,
-  InterpolationEntity,
-  ImportFromEntity,
+  AsElementEntity,
   PlainAttrBindingEntity,
   RefTargetEntity,
 } from "./cursor-entity.js";
@@ -285,7 +275,7 @@ interface NodeAtResult {
 function resolveNodeEntity(
   compilation: TemplateCompilation,
   node: NodeAtResult,
-  offset: number,
+  _offset: number,
 ): CursorEntity | null {
   const row = findRowByNodeId(compilation.linked.templates, node.templateIndex, node.id);
   if (!row) return null;
@@ -363,8 +353,14 @@ function resolveAsElementEntity(
   return null;
 }
 
+interface DomNodeShape {
+  kind: string;
+  attrs?: readonly { name: string; value: string | null; loc?: SourceSpan | null; valueLoc?: SourceSpan | null }[];
+  children?: readonly DomNodeShape[];
+}
+
 function findAsElementInDom(
-  node: { kind: string; attrs?: readonly { name: string; value: string | null; loc?: SourceSpan | null; valueLoc?: SourceSpan | null }[]; children?: readonly { kind: string; attrs?: readonly { name: string; value: string | null; loc?: SourceSpan | null; valueLoc?: SourceSpan | null }[]; children?: readonly any[] }[] },
+  node: DomNodeShape,
   offset: number,
   compilation: TemplateCompilation,
 ): CursorEntity | null {
@@ -383,7 +379,7 @@ function findAsElementInDom(
             targetCE: targetDef,
             span: span,
             ref: (targetDef as { __convergenceRef?: ConvergenceRef } | null)?.__convergenceRef ?? null,
-          } as CursorEntity;
+          } satisfies AsElementEntity;
         }
       }
     }
@@ -391,7 +387,7 @@ function findAsElementInDom(
   // Recurse into children
   if (node.children) {
     for (const child of node.children) {
-      const hit = findAsElementInDom(child as typeof node, offset, compilation);
+      const hit = findAsElementInDom(child, offset, compilation);
       if (hit) return hit;
     }
   }
@@ -442,10 +438,10 @@ function matchInstruction(
         if (offset >= commandStart) {
           return {
             kind: 'command',
-            command: syntax.bindingCommands[cmdName]!,
+            command: syntax.bindingCommands[cmdName],
             name: cmdName,
             span: loc,
-          } satisfies CommandEntity;
+          };
         }
       }
 
@@ -488,10 +484,10 @@ function matchInstruction(
         if (offset >= commandStart) {
           return {
             kind: 'command',
-            command: syntax.bindingCommands[lCmdName]!,
+            command: syntax.bindingCommands[lCmdName],
             name: lCmdName,
             span: loc,
-          } satisfies CommandEntity;
+          };
         }
       }
       return {
@@ -529,10 +525,10 @@ function matchInstruction(
         if (offset >= commandStart) {
           return {
             kind: 'command',
-            command: syntax.bindingCommands[tcCmdName]!,
+            command: syntax.bindingCommands[tcCmdName],
             name: tcCmdName,
             span: loc,
-          } satisfies CommandEntity;
+          };
         }
       }
       const props = (ins as { props?: readonly { kind?: string; forOf?: { code?: string } }[] }).props;
@@ -621,7 +617,7 @@ function resolveBindableParentName(target: BindableTarget): string {
 
 function computeExpressionConfidence(
   entity: CursorEntity,
-  compilation: TemplateCompilation,
+  _compilation: TemplateCompilation,
 ): ConfidenceSignals {
   // Expression confidence: did it parse? do we have type info?
   const hasType = entity.kind === 'scope-identifier'
@@ -745,7 +741,7 @@ function findOwnerVmRef(compilation: TemplateCompilation): ConvergenceRef | null
   return null;
 }
 
-function findExprAstById(exprTable: readonly ExprTableEntry[], exprId: ExprId): unknown | null {
+function findExprAstById(exprTable: readonly ExprTableEntry[], exprId: ExprId): unknown {
   for (const entry of exprTable) {
     if (entry.id === exprId) return entry.ast;
   }
@@ -1005,7 +1001,8 @@ function formatLiteral(value: unknown): string {
   if (value === undefined) return 'undefined';
   if (value === null) return 'null';
   if (typeof value === 'string') return JSON.stringify(value);
-  return String(value);
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return JSON.stringify(value);
 }
 
 function chooseExpressionLabel(primary: string | null | undefined, secondary: string | null | undefined): string | null {

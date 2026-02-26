@@ -12,7 +12,7 @@
 
 import { readFile, stat, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { join, dirname, basename, resolve } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
 import { debug } from '../compiler.js';
 
 // =============================================================================
@@ -449,7 +449,7 @@ function getPackageNameFromSpecifier(specifier: string): string {
     // Scoped package: @scope/name or @scope/name/subpath
     const parts = specifier.split('/');
     if (parts.length >= 2) {
-      return `${parts[0]}/${parts[1]}`;
+      return `${parts[0] ?? ""}/${parts[1] ?? ""}`;
     }
     return specifier;
   }

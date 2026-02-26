@@ -20,7 +20,7 @@ import type {
   TemplateFactOwnerRecord,
 } from "../extract/template-facts.js";
 import type { ClassValue, AnalyzableValue } from "../evaluate/value/types.js";
-import { extractStringArrayProp, getProperty } from "../evaluate/value/types.js";
+import { getProperty } from "../evaluate/value/types.js";
 import type { ExportBindingMap } from "../exports/types.js";
 import { lookupExportBinding } from "../exports/export-resolver.js";
 import type { PluginManifest, PluginResolver } from "../plugins/types.js";

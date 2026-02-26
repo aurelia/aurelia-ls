@@ -13,7 +13,7 @@ import type {
   WatchCallback,
   Disposable,
 } from "./context.js";
-import { getBaseName, getExtension, getDirectory } from "./context.js";
+import { getBaseName, getDirectory } from "./context.js";
 import type { SiblingFile } from "./types.js";
 
 /**
@@ -336,10 +336,11 @@ export function createMockFileSystem(options?: MockFileSystemOptions): MockFileS
       }
       pathWatchers.add(callback);
 
+      const watcherSet = pathWatchers;
       return {
         dispose() {
-          pathWatchers!.delete(callback);
-          if (pathWatchers!.size === 0) {
+          watcherSet.delete(callback);
+          if (watcherSet.size === 0) {
             watchers.delete(key);
           }
         },

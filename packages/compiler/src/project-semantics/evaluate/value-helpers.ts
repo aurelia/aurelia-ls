@@ -210,7 +210,7 @@ function resolveModuleToSourceFile(
     return undefined;
   }
 
-  let resolvedPath = result.resolvedModule.resolvedFileName;
+  const resolvedPath = result.resolvedModule.resolvedFileName;
 
   // Handle .js -> .ts mapping for ESM imports
   if (resolvedPath.endsWith(".js")) {

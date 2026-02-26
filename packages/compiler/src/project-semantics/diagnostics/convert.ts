@@ -258,13 +258,13 @@ function refToDiagnostic(ref: UnresolvedResourceInfo, emitter: ProjectSemanticsD
   return withUri(diag, uri);
 }
 
-const PROJECT_CATALOG = {
+const _PROJECT_CATALOG = {
   ...diagnosticsByCategoryFuture.project,
   ...diagnosticsByCategory.gaps,
   ...diagnosticsByCategory.policy,
 } as const satisfies DiagnosticsCatalog;
 
-type ProjectCode = keyof typeof PROJECT_CATALOG & string;
+type ProjectCode = keyof typeof _PROJECT_CATALOG;
 
 function withUri(diag: RawDiagnostic, uri?: DocumentUri): ProjectSemanticsDiscoveryDiagnostic {
   return uri ? { ...diag, uri } : diag;

@@ -202,7 +202,7 @@ export class InMemoryReferentialIndex implements ReferentialIndex {
 // ============================================================================
 
 import type { TemplateCompilation } from "../facade.js";
-import type { LinkedRow, LinkedInstruction, LinkedTemplate } from "../analysis/index.js";
+import type { LinkedRow, LinkedInstruction } from "../analysis/index.js";
 
 /**
  * Extract all resource reference sites from a compiled template.
@@ -398,8 +398,15 @@ function findTagLoc(
   return null;
 }
 
+interface IrDomNode {
+  id?: unknown;
+  loc?: SourceSpan | null;
+  tagLoc?: SourceSpan | null;
+  children?: readonly IrDomNode[];
+}
+
 function findNodeInDom(
-  node: { id?: unknown; loc?: SourceSpan | null; tagLoc?: SourceSpan | null; children?: readonly { id?: unknown; loc?: SourceSpan | null; tagLoc?: SourceSpan | null; children?: readonly any[] }[] },
+  node: IrDomNode,
   targetId: unknown,
 ): SourceSpan | null {
   if (node.id === targetId) return node.tagLoc ?? node.loc ?? null;
@@ -420,7 +427,7 @@ function symbolKey(file: NormalizedPath, className: string, property: string): s
   return `${file}:${className}.${property}`;
 }
 
-function symbolKeyFromSite(site: TextReferenceSite): string | null {
+function symbolKeyFromSite(_site: TextReferenceSite): string | null {
   // Expression identifier sites don't directly carry class/property info yet.
   // This will be populated when expression entities carry ConvergenceRef
   // to the owning VM class (L1 cross-domain-provenance-mapping OQ-4).

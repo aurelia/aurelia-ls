@@ -8,6 +8,7 @@ import type { TemplateContext } from "../schema/index.js";
 import type { AttributeParser, IExpressionParser } from "../parsing/index.js";
 import type { VmReflection, CompileTrace, ModuleResolver } from "../shared/index.js";
 import type { SemanticModelQuery } from "../schema/model.js";
+import type { IrModule } from "../model/index.js";
 import type { DependencyGraph } from "../schema/dependency-graph.js";
 
 // ============================================================================
@@ -51,7 +52,7 @@ export interface PipelineOptions {
   /** Trace context for instrumentation. */
   trace?: CompileTrace;
   /** Pre-computed IR from a previous lower pass (skip re-lowering when provided). */
-  seededIr?: import("../model/index.js").IrModule;
+  seededIr?: IrModule;
 }
 
 // ============================================================================

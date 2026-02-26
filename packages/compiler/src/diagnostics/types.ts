@@ -1,4 +1,5 @@
 import type { DiagnosticSeverity, DiagnosticStage } from "../model/diagnostics.js";
+import type { CatalogConfidence as SchemaCatalogConfidence } from "../schema/types.js";
 export type { DiagnosticStage } from "../model/diagnostics.js";
 
 /** Impact captures the real consequence if ignored, which can differ from UI severity. */
@@ -50,7 +51,7 @@ export type DiagnosticConfidence =
   | "low" // Weak evidence; likely heuristic.
   | "manual"; // Human judgment required to validate.
 /** Diagnostics inherit catalog confidence from registry semantics when needed. */
-export type CatalogConfidence = import("../schema/types.js").CatalogConfidence;
+export type CatalogConfidence = SchemaCatalogConfidence;
 /** Some diagnostics require a span, others can be project-scoped. */
 export type DiagnosticSpanRequirement =
   | "span" // Must point to a source location to be actionable.
@@ -114,7 +115,7 @@ export type DiagnosticBindableOwnerKind =
   | "controller";
 
 /** Required/optional data fields are validated to catch emitter mistakes. */
-export type DiagnosticDataRequirement<TData extends DiagnosticDataBase = DiagnosticDataBase> = {
+export type DiagnosticDataRequirement<_TData extends DiagnosticDataBase = DiagnosticDataBase> = {
   readonly required?: readonly string[];
   readonly optional?: readonly string[];
   /** Examples feed docs and UI previews without hardcoding in consumers. */

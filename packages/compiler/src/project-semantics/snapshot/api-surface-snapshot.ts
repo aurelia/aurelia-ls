@@ -4,7 +4,6 @@ import type {
   ApiSurfaceSymbol,
   ResourceDef,
   MaterializedSemantics,
-  SymbolId,
 } from '../compiler.js';
 import { unwrapSourced } from "../assemble/sourced.js";
 import { collectSnapshotResources, type SnapshotIdOptions, type SnapshotResource } from "./shared.js";

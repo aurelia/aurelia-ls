@@ -2,6 +2,7 @@ import type ts from "typescript";
 import type { BindingMode } from "../model/ir.js";
 export type { BindingMode } from "../model/ir.js";
 import type { NormalizedPath, StringId } from "../model/identity.js";
+import type { ConvergenceEntry } from "./model.js";
 
 // ============================================================================
 // L2 Gap Primitives — Stub<T> and Resolved<T>
@@ -55,7 +56,7 @@ export type Resolved<T> = T | Stub<T>;
 
 /** Type guard for Stub<T>. */
 export function isStub<T>(value: Resolved<T>): value is Stub<T> {
-  return value !== null && typeof value === 'object' && '__stub' in value && (value as Stub<T>).__stub === true;
+  return value !== null && typeof value === 'object' && '__stub' in value && value.__stub === true;
 }
 
 /** Extract the usable value from a Resolved<T> (actual value or stub fallback). */
@@ -65,11 +66,12 @@ export function resolveValue<T>(value: Resolved<T>): T {
 
 /** Create a stub for a gapped field. */
 export function createStub<T>(fallback: T, gapCategory: GapCategory, resourceKey: string, field: string): Stub<T> {
+  const gapRef: GapRef = { resourceKey, field, __brand: 'GapRef' };
   return {
     __stub: true,
     fallback,
     gapCategory,
-    gapRef: { resourceKey, field, __brand: 'GapRef' } as GapRef,
+    gapRef,
   };
 }
 
@@ -739,7 +741,7 @@ export interface SemanticsLookupOptions {
    * When provided, lookup results carry ConvergenceRef for provenance queries
    * and gap state is derived from entry Sourced<T> fields (not just catalog).
    */
-  readonly entries?: ReadonlyMap<string, import("./model.js").ConvergenceEntry>;
+  readonly entries?: ReadonlyMap<string, ConvergenceEntry>;
 }
 
 export interface SemanticsLookup {

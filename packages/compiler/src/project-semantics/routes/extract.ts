@@ -112,7 +112,7 @@ function extractFromRouteConfigObject(
   const title = readStringProp(obj, "title");
   const redirectTo = readStringProp(obj, "redirectTo");
   const viewport = readStringProp(obj, "viewport");
-  const nav = readBooleanProp(obj, "nav"); // Not used but parsed for completeness
+  const _nav = readBooleanProp(obj, "nav"); // Not used but parsed for completeness
 
   // Extract routes array
   const routesProp = getProp(obj, "routes");
@@ -131,8 +131,13 @@ function extractFromRouteConfigObject(
     : undefined;
 
   // Extract params from path
-  const pathStr = typeof path === "string" ? path : (Array.isArray(path) ? path[0] : undefined);
-  const params = pathStr ? extractPathParams(pathStr) : undefined;
+  let pathStr: string | undefined;
+  if (typeof path === "string") {
+    pathStr = path;
+  } else if (Array.isArray(path) && path.length > 0) {
+    pathStr = String(path[0]);
+  }
+  const params = pathStr !== undefined ? extractPathParams(pathStr) : undefined;
 
   return {
     ...(path !== undefined ? { path } : {}),

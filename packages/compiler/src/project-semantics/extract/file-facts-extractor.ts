@@ -28,8 +28,8 @@ import type {
   LocalTemplateImport,
   TemplateImport,
 } from './file-facts.js';
-import { emptyFileFacts, emptyFileContext } from './file-facts.js';
-import type { ClassValue, LexicalScope, AnalyzableValue } from '../evaluate/value/types.js';
+import { emptyFileContext } from './file-facts.js';
+import type { ClassValue } from '../evaluate/value/types.js';
 import type { AnalysisGap } from '../evaluate/types.js';
 import { gap } from '../evaluate/types.js';
 import { extractClassValue } from '../evaluate/value/class-extraction.js';

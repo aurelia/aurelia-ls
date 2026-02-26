@@ -17,14 +17,9 @@
  */
 
 import type {
-  BindingBehaviorDef,
-  CustomAttributeDef,
-  CustomElementDef,
   NormalizedPath,
   ResourceKind,
   TextSpan,
-  ValueConverterDef,
-  TemplateControllerDef,
   ResourceDef,
 } from '../compiler.js';
 import type { AnalysisGap } from '../evaluate/types.js';

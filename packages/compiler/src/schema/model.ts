@@ -25,9 +25,6 @@ import type {
   ResourceKindLike,
   SemanticSnapshot,
   ApiSurfaceSnapshot,
-  ElementRes,
-  AttrRes,
-  Bindable,
   ResourceCollections,
   ConvergenceRef,
 } from "./types.js";
@@ -52,9 +49,6 @@ import {
   projectResourceDef,
   projectBindables as projectBindableDefs,
   type AnyResourceView,
-  type CustomElementView,
-  type CustomAttributeView,
-  type TemplateControllerView,
 } from "./project.js";
 
 // ============================================================================
@@ -280,7 +274,7 @@ export function createSemanticModel(
     const name = unwrapSourced(def.name);
     if (!name) continue;
     const key = `${def.kind}:${name}`;
-    const ref = { resourceKey: key, __brand: 'ConvergenceRef' } as ConvergenceRef;
+    const ref: ConvergenceRef = { resourceKey: key, __brand: 'ConvergenceRef' };
     entries.set(key, { kind: def.kind, name, key, def, file: def.file, ref });
   }
 
@@ -563,7 +557,7 @@ function buildModelDependencyGraph(
 
 /** Get the resource collection for a given kind from partial collections. */
 function getResourceCollection(
-  resources: Partial<import("./types.js").ResourceCollections>,
+  resources: Partial<ResourceCollections>,
   kind: ResourceKind,
 ): Readonly<Record<string, unknown>> | undefined {
   switch (kind) {

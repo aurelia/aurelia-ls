@@ -259,16 +259,18 @@ function resolveStatementCrossFile(
   fromFile: NormalizedPath
 ): StatementValue {
   switch (stmt.kind) {
-    case 'return':
+    case 'return': {
       if (stmt.value === null) return stmt;
       const returnValue = resolveValueCrossFile(stmt.value, ctx, fromFile);
       if (returnValue === stmt.value) return stmt;
       return { ...stmt, value: returnValue };
+    }
 
-    case 'expression':
+    case 'expression': {
       const exprValue = resolveValueCrossFile(stmt.value, ctx, fromFile);
       if (exprValue === stmt.value) return stmt;
       return { ...stmt, value: exprValue };
+    }
 
     case 'variable': {
       let changed = false;

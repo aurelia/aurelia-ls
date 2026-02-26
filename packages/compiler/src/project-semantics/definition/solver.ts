@@ -120,7 +120,7 @@ export function reduceDefinitionAtoms<T>(
     reasons.push({
       code: "source-shadowed",
       field,
-      detail: `${atom.atomId} shadowed by ${winner}`,
+      detail: `${atom.atomId} shadowed by ${winner ?? "unknown"}`,
     });
   }
 

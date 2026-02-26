@@ -170,7 +170,7 @@ function extractFromStatement(
       }
       break;
 
-    case 'forOf':
+    case 'forOf': {
       // For-of loops - try to analyze if iterable is known
       gaps.push(gap(
         'loop registration',
@@ -189,6 +189,7 @@ function extractFromStatement(
         extractFromStatement(bodyStmt, containerParam, resources, gaps, ctx);
       }
       break;
+    }
 
     case 'unknownStatement':
       // Already has a gap in the reason
@@ -259,8 +260,8 @@ function extractFromValue(
   debug.project('extractFromValue', {
     valueKind: value.kind,
     resolvedKind: resolved.kind,
-    hasResolvedField: value.kind === 'import' ? !!(value as any).resolved : undefined,
-    importDetails: value.kind === 'import' ? { specifier: (value as any).specifier, exportName: (value as any).exportName } : undefined,
+    hasResolvedField: value.kind === 'import' ? !!value.resolved : undefined,
+    importDetails: value.kind === 'import' ? { specifier: value.specifier, exportName: value.exportName } : undefined,
   });
 
   switch (resolved.kind) {
@@ -304,7 +305,7 @@ function extractFromValue(
       ));
       break;
 
-    case 'import':
+    case 'import': {
       // Unresolved import
       const imp = value.kind === 'import' ? value : resolved;
       if (imp.kind === 'import') {
@@ -315,6 +316,7 @@ function extractFromValue(
         ));
       }
       break;
+    }
 
     case 'object':
       // Object literal - might be a configuration object, not a resource

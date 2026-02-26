@@ -32,7 +32,6 @@ import type {
   AnalyzableValue,
   CallValue,
   FunctionValue,
-  MethodValue,
   StatementValue,
   LexicalScope,
   ValueResolutionContext,

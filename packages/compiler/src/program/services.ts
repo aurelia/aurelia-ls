@@ -2,7 +2,6 @@
 import type { NormalizedPath, SourceFileId, SourceSpan, Position, TextRange, Origin } from "../model/index.js";
 import {
   offsetAtPosition,
-  positionAtOffset,
   resolveSourceSpan,
   spanToRange,
 } from "../model/index.js";
@@ -20,8 +19,7 @@ import type { TemplateQueryFacade, TemplateMappingArtifact } from "../synthesis/
 import type { TemplateCompilation } from "../facade.js";
 
 // Analysis imports (for binding contract validation)
-import { checkTypeCompatibility, type BindingContract } from "../analysis/index.js";
-import type { ExprIdMap } from "../model/identity.js";
+import { checkTypeCompatibility } from "../analysis/index.js";
 
 // Program layer imports
 import type { CompletionItem } from "./completion-contracts.js";
@@ -896,15 +894,6 @@ function getVmDisplayName(vm: TemplateProgram["options"]["vm"]): string {
   return vm.getRootVmTypeExpr ? vm.getRootVmTypeExpr() : "Component";
 }
 
-function getVmRootTypeExpr(vm: TemplateProgram["options"]["vm"]): string {
-  if (!vm) return "Component";
-  if (typeof vm.getQualifiedRootVmTypeExpr === "function") {
-    const qualified = vm.getQualifiedRootVmTypeExpr();
-    if (qualified) return qualified;
-  }
-  return vm.getRootVmTypeExpr();
-}
-
 function dedupeCompletions(items: readonly CompletionItem[]): CompletionItem[] {
   const seen = new Set<string>();
   const results: CompletionItem[] = [];
@@ -1122,7 +1111,6 @@ function formatTypeScriptMessage(
 ): string {
   const code = normalizeTsDiagnosticCode(diag.code);
   const member = hit?.memberPath;
-  const subject = member ? `${vmDisplayName}.${member}` : vmDisplayName;
 
   // Property does not exist (TS2339, TS2551)
   if (member && (code === 2339 || code === 2551)) {
@@ -1134,7 +1122,7 @@ function formatTypeScriptMessage(
     const raw = flattenTsMessage(diag.messageText);
     const cleaned = rewriteTypeNames(raw, typeNames);
     // Replace TS's container type references with the VM display name
-    return cleaned.replace(/type '([^']+)'/gi, (match, type) => {
+    return cleaned.replace(/type '([^']+)'/gi, (_match: string, type: string) => {
       const cleanType = rewriteTypeNames(type, typeNames);
       return `type '${cleanType}'`;
     });
@@ -1144,7 +1132,7 @@ function formatTypeScriptMessage(
   if (code === 2345) {
     const raw = flattenTsMessage(diag.messageText);
     const cleaned = rewriteTypeNames(raw, typeNames);
-    return cleaned.replace(/type '([^']+)'/gi, (match, type) => {
+    return cleaned.replace(/type '([^']+)'/gi, (_match: string, type: string) => {
       const cleanType = rewriteTypeNames(type, typeNames);
       return `type '${cleanType}'`;
     });

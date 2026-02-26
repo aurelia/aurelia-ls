@@ -8,24 +8,24 @@
 
 import {
   compileTemplate,
-  type CompileOptions,
   type CompileOverlayResult,
   type TemplateCompilation,
   type TemplateDiagnostics,
 } from "../facade.js";
 
-import type { NormalizedPath } from "../model/index.js";
-import type { DependencyGraph, TemplateContext, ResourceScopeId } from "../schema/index.js";
+import type { IrModule } from "../model/index.js";
+import type { TemplateContext } from "../schema/index.js";
+import type { DepNodeId } from "../schema/dependency-graph.js";
 import type { SemanticModelQuery } from "../schema/model.js";
 import type { AttributeParser, IExpressionParser } from "../parsing/index.js";
-import { debug, createTrace, createConsoleExporter, NOOP_TRACE, type VmReflection, type ModuleResolver, type CompileTrace } from "../shared/index.js";
+import { NOOP_TRACE, type VmReflection, type ModuleResolver, type CompileTrace } from "../shared/index.js";
 import { stableHash } from "../pipeline/index.js";
 import type { TemplateMappingArtifact, TemplateQueryFacade } from "../synthesis/index.js";
 
-import type { DocumentSnapshot, DocumentUri } from "./primitives.js";
+import type { DocumentUri } from "./primitives.js";
 import { InMemorySourceStore, type SourceStore } from "./sources.js";
 import { InMemoryOverlaySpanIndex, type OverlaySpanIndex } from "./overlay-span-index.js";
-import { canonicalDocumentUri, deriveTemplatePaths, normalizeDocumentUri, type CanonicalDocumentUri } from "./paths.js";
+import { canonicalDocumentUri, deriveTemplatePaths, normalizeDocumentUri } from "./paths.js";
 
 // ============================================================================
 // Options
@@ -129,7 +129,7 @@ interface CachedCompilation {
 }
 
 interface CachedLowerResult {
-  readonly ir: import("../model/index.js").IrModule;
+  readonly ir: IrModule;
   readonly contentHash: string;
   readonly vocabFingerprint: string;
 }
@@ -319,7 +319,7 @@ export class DefaultTemplateProgram implements TemplateProgram {
     const nextEntries = options.query.model.entries;
     const depGraph = prevModel.deps;
 
-    const changedNodeIds: import("../schema/dependency-graph.js").DepNodeId[] = [];
+    const changedNodeIds: DepNodeId[] = [];
     // Find added or modified entries
     for (const [key, nextEntry] of nextEntries) {
       const prevEntry = prevEntries.get(key);

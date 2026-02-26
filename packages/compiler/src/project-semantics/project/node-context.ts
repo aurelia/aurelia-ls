@@ -16,7 +16,7 @@ import type {
   WatchCallback,
   Disposable,
 } from "./context.js";
-import { getBaseName, getExtension, getDirectory } from "./context.js";
+import { getBaseName, getDirectory } from "./context.js";
 import type { SiblingFile } from "./types.js";
 
 /**

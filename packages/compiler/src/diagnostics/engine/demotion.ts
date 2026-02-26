@@ -128,7 +128,7 @@ function toConfidenceLevel(confidence: DiagnosticConfidence): ConfidenceLevel {
  * Per-instance data.confidence overrides spec.defaultConfidence.
  */
 function resolveConfidence(diag: NormalizedDiagnostic): ConfidenceLevel {
-  const instanceConfidence = diag.data?.confidence as DiagnosticConfidence | undefined;
+  const instanceConfidence = diag.data?.confidence;
   const specConfidence = diag.spec.defaultConfidence;
   const raw = instanceConfidence ?? specConfidence ?? "high";
   return toConfidenceLevel(raw);

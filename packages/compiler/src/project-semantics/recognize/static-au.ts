@@ -17,17 +17,11 @@
  */
 
 import type {
-  BindingBehaviorDef,
-  CustomAttributeDef,
-  CustomElementDef,
-  ValueConverterDef,
-  TemplateControllerDef,
   ResourceDef,
 } from '../compiler.js';
 import type { AnalysisGap } from '../evaluate/types.js';
 import type { ClassValue, AnalyzableValue } from '../evaluate/value/types.js';
 import {
-  extractStringWithSpan,
   extractStringProp,
   extractStringPropWithSpan,
   extractBooleanProp,

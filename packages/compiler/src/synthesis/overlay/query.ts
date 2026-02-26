@@ -71,7 +71,7 @@ export function buildTemplateQuery(
   const domIndex = indexDomAll(irModule.templates);
   const originCandidates = indexTemplateOrigins(irModule.templates, domIndex.templateIndexById, domIndex.domByTemplate);
   const rowsByTarget = indexRowsAll(linked);
-  const expectedByExpr = typecheck?.expectedByExpr ?? new Map();
+  const expectedByExpr = typecheck?.expectedByExpr ?? new Map<ExprId, string>();
   const controllers = indexControllers(linked);
 
   return {
