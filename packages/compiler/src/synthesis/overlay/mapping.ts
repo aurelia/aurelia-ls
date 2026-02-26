@@ -16,6 +16,9 @@ export interface TemplateMappingEntry {
   exprId: ExprId;
   htmlSpan: SourceSpan;
   overlaySpan: TextSpan;
+  /** Span of the full __au$access call in the overlay. Probe here for the
+   *  expression result type (the call's return type per TS). */
+  callSpan?: TextSpan | undefined;
   frameId?: FrameId | undefined;
   frameOrigin?: FrameOrigin | undefined;
   segments?: readonly TemplateMappingSegment[] | undefined;
@@ -66,6 +69,7 @@ export function buildTemplateMapping(inputs: BuildMappingInputs): BuildMappingRe
     exprId: ExprId;
     htmlSpan: SourceSpan;
     overlaySpan: TextSpan;
+    callSpan?: TextSpan;
     frameId?: FrameId;
     frameOrigin?: FrameOrigin;
     segments: OwnedSegment[];
@@ -76,6 +80,9 @@ export function buildTemplateMapping(inputs: BuildMappingInputs): BuildMappingRe
     const overlaySpan = inputs.overlayFile
       ? resolveSourceSpan(m.span as SourceSpan, inputs.overlayFile)
       : normalizeSpan(m.span);
+    const callSpan = m.callSpan
+      ? (inputs.overlayFile ? resolveSourceSpan(m.callSpan as SourceSpan, inputs.overlayFile) : normalizeSpan(m.callSpan))
+      : undefined;
     const htmlSegments = memberHtmlSegments.get(m.exprId) ?? [];
     const frameId = exprIdMapGet(inputs.exprToFrame ?? null, m.exprId) ?? undefined;
     const frameOrigin = frameId !== undefined ? inputs.frameOrigins?.get(frameId) : undefined;
@@ -92,6 +99,7 @@ export function buildTemplateMapping(inputs: BuildMappingInputs): BuildMappingRe
       exprId: m.exprId,
       htmlSpan,
       overlaySpan,
+      ...(callSpan ? { callSpan } : {}),
       ...(frameId !== undefined ? { frameId } : {}),
       ...(frameOrigin !== undefined ? { frameOrigin } : {}),
       segments,
@@ -111,6 +119,7 @@ export function buildTemplateMapping(inputs: BuildMappingInputs): BuildMappingRe
       exprId: entry.exprId,
       htmlSpan: entry.htmlSpan,
       overlaySpan: entry.overlaySpan,
+      ...(entry.callSpan ? { callSpan: entry.callSpan } : {}),
       ...(entry.frameId !== undefined ? { frameId: entry.frameId } : {}),
       ...(entry.frameOrigin !== undefined ? { frameOrigin: entry.frameOrigin } : {}),
       ...(aggregatedSegments.get(entry.exprId)?.length ? { segments: aggregatedSegments.get(entry.exprId) } : {}),

@@ -13,6 +13,9 @@ import { debug } from "../../shared/debug.js";
 export interface OverlayEmitMappingEntry {
   exprId: ExprId;
   span: TextSpan;
+  /** Span of the full __au$access<T>(...) call expression in the overlay.
+   *  Used to query TS for the expression result type (call return type). */
+  callSpan?: TextSpan;
   segments?: readonly OverlayEmitSegment[] | undefined;
 }
 
@@ -105,7 +108,9 @@ export function emitOverlay(
             const lambdaStart = requireSubsequenceOffset(line, l.lambda, "ts-lambda");
             const start = offset + lambdaStart;
             const span = spanFromBounds(start, start + l.lambda.length);
-            mapping.push({ exprId: l.exprId, span, segments: mapSegments(l.segments, start) });
+            // Call span covers the entire __au$access<T>(...) expression (without trailing ;)
+            const callSpan = spanFromBounds(offset, offset + line.length - 1);
+            mapping.push({ exprId: l.exprId, span, callSpan, segments: mapSegments(l.segments, start) });
             out.push(line);
             offset += line.length + 1;
           }
@@ -126,7 +131,8 @@ export function emitOverlay(
             const start = offset + lambdaStart;
             const shift = computeSegmentShift(l.lambda, lambdaWithDoc, l.exprSpan);
             const span = spanFromBounds(start, start + lambdaWithDoc.length);
-            mapping.push({ exprId: l.exprId, span, segments: mapSegments(l.segments, start, shift) });
+            const callSpan = spanFromBounds(offset, offset + line.length - 1);
+            mapping.push({ exprId: l.exprId, span, callSpan, segments: mapSegments(l.segments, start, shift) });
             out.push(line);
             offset += line.length + 1;
           }

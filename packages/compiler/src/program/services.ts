@@ -777,15 +777,25 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     if (!config?.enabled) return [];
 
     // Build ExprId → overlay position index from the mapping (when available)
-    const exprOverlayPositions = new Map<string, { overlayCenter: number; htmlSpan: SourceSpan; memberPath: string | null }>();
+    const exprOverlayPositions = new Map<string, { overlayProbe: number; htmlSpan: SourceSpan; memberPath: string | null }>();
     const mapping = compilation.mapping;
     if (mapping) {
       for (const entry of mapping.entries) {
-        const center = entry.overlaySpan.start + Math.max(0, Math.floor((entry.overlaySpan.end - entry.overlaySpan.start) / 2));
+        // Probe at the END of the __au$access call span.
+        //
+        // __au$access<T, R>(fn: (o: T) => R): R — the call's return type IS
+        // the expression result type. Probing at the closing `)` of the call
+        // gives TS the outermost expression context, avoiding the subexpression
+        // problem (e.g., hitting the condition in a ternary instead of the result).
+        //
+        // Fallback: end of the lambda span (for overlays without callSpan).
+        const probe = entry.callSpan
+          ? Math.max(entry.callSpan.start, entry.callSpan.end - 1)
+          : Math.max(entry.overlaySpan.start, entry.overlaySpan.end - 1);
         const memberPath = entry.segments?.length
           ? entry.segments[entry.segments.length - 1]!.path
           : null;
-        exprOverlayPositions.set(entry.exprId, { overlayCenter: center, htmlSpan: entry.htmlSpan, memberPath });
+        exprOverlayPositions.set(entry.exprId, { overlayProbe: probe, htmlSpan: entry.htmlSpan, memberPath });
       }
     }
 
@@ -802,6 +812,9 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
       if (contract.type === "Function") continue;
       // Iterator bindings: structural Iterable check can't be done via quickinfo
       if (contract.type.startsWith("Iterable<")) continue;
+      // DOM interface types where Aurelia provides runtime coercion
+      // (e.g., style.bind accepts strings that Aurelia parses into CSS)
+      if (contract.type === "CSSStyleDeclaration") continue;
 
       // Resolve the actual expression type:
       // 1. For literals, use the compile-time known type (no TS needed)
@@ -815,7 +828,7 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
         const pos = exprOverlayPositions.get(exprId);
         if (!pos) continue;
 
-        const info = ts.getQuickInfo(overlayDoc, pos.overlayCenter);
+        const info = ts.getQuickInfo(overlayDoc, pos.overlayProbe);
         if (!info?.text) continue;
 
         const resolvedType = parseQuickInfoType(info.text);
