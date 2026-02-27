@@ -13,5 +13,11 @@ export function lowerTextNode(node: P5Text, table: ExprTable): InstructionIR[] {
     : (node.value ?? "");
   if (!raw.includes("${")) return [];
   const from = toInterpIR(raw, loc, table);
+  // The raw source text preserves \r\n for correct offset alignment, but
+  // HTML spec requires text content to be normalized (\r\n → \n, \r → \n).
+  // Normalize the interpolation parts so the compiled output matches spec.
+  for (let i = 0; i < from.parts.length; i++) {
+    from.parts[i] = from.parts[i]!.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  }
   return [{ type: "textBinding", from, loc: toSpan(loc, table.source) }];
 }
