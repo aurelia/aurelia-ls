@@ -1,0 +1,9 @@
+<template>
+  <let total.bind="baseTotal"></let>
+  <span>${total}</span>
+  <div repeat.for="entry of entries">
+    <span>${entry.name}</span>
+    <let total.bind="entry.total"></let>
+    <span>${total}</span>
+  </div>
+</template>

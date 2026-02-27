@@ -43,6 +43,7 @@ import type {
 } from "./types.js";
 import { INSTRUCTION_TYPE, BINDING_MODE, type BindingModeValue } from "./constants.js";
 import type { ExprId, BindingMode, TemplateMetaIR } from "../../model/index.js";
+import { toRuntimeExpression } from "./runtime-ast.js";
 
 /* =============================================================================
  * Public API
@@ -153,9 +154,10 @@ class EmitContext {
   }
 
   getExpressions(): SerializedExpression[] {
+    const includeSpans = !(this.options.stripSpans ?? false);
     return this.plan.expressions.map((e) => ({
       id: e.id,
-      ast: this.options.stripSpans ? stripSpansFromAst(e.ast) : e.ast,
+      ast: toRuntimeExpression(e.ast, { includeSpans }),
     }));
   }
 

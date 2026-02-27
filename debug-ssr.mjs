@@ -1,29 +1,18 @@
-import { getExpressionParser, DEFAULT_SYNTAX } from "./packages/compiler/out/index.js";
-import { lowerDocument } from "./packages/compiler/out/compiler/phases/10-lower/lower.js";
-import { resolveHost } from "./packages/compiler/out/compiler/phases/20-resolve-host/resolve.js";
-import { bindScopes } from "./packages/compiler/out/compiler/phases/30-bind/bind.js";
-import { planSsr } from "./packages/compiler/out/compiler/phases/50-plan/ssr/plan.js";
-import { emitSsr } from "./packages/compiler/out/compiler/phases/60-emit/ssr/emit.js";
-import { DEFAULT as SEM_DEFAULT } from "./packages/compiler/out/compiler/language/registry.js";
+import { compileAot, BUILTIN_SEMANTICS } from "./packages/compiler/out/index.js";
 
-const markup = '<div>${message}</div>';
-const ir = lowerDocument(markup, {
-  attrParser: DEFAULT_SYNTAX,
-  exprParser: getExpressionParser(),
-  file: "test.html",
+const markup = "<div>${message}</div>";
+const result = compileAot(markup, {
+  templatePath: "test.html",
   name: "test",
-  sem: SEM_DEFAULT,
+  semantics: BUILTIN_SEMANTICS,
+  moduleResolver: () => null,
 });
-const linked = resolveHost(ir, SEM_DEFAULT);
-const scope = bindScopes(linked);
-const plan = planSsr(linked, scope);
-const { html, manifest } = emitSsr(plan, linked);
 
-console.log("HTML Skeleton:");
-console.log(html);
-console.log("\nHTML (JSON):");
-console.log(JSON.stringify(html));
+console.log("Template HTML:");
+console.log(result.template);
 
-const parsed = JSON.parse(manifest);
+console.log("\nAOT Definition:");
+console.log(JSON.stringify(result.codeResult.definition, null, 2));
+
 console.log("\nExpressions:");
-console.log(JSON.stringify(parsed.expressions, null, 2));
+console.log(JSON.stringify(result.codeResult.expressions, null, 2));

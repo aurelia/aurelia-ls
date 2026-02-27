@@ -1,348 +1,201 @@
+// Template Pipeline Stages — L2 Architecture
+//
+// Pure sequential functions matching the L2 template pipeline contract:
+//   lower → link → bind → typecheck → usage → overlay
+//
+// Each stage is a stateless function called with explicit inputs.
+// No engine, no session, no stage graph, no per-stage caching.
+// Caching is the responsibility of the caller (TemplateProgram).
+
 import path from "node:path";
-
-// Model imports (via barrel)
-import { resolveSourceFile } from "../model/index.js";
-
-// Language imports (via barrel)
-import {
-  buildTemplateSyntaxRegistry,
-  materializeSemanticsForScope,
-  type LocalImportDef,
-  type ResourceCatalog,
-  type ResourceGraph,
-  type ResourceScopeId,
-  type Semantics,
-  type TemplateSyntaxRegistry,
-} from "../language/index.js";
-
-// Parsing imports (via barrel)
+import type { IrModule, NormalizedPath, ScopeModule } from "../model/index.js";
+import type { TemplateContext } from "../schema/index.js";
+import type { SemanticModelQuery } from "../schema/model.js";
+import type { DepRecorder } from "../schema/dependency-graph.js";
+import { createDepRecorder, NOOP_DEP_RECORDER } from "../schema/dependency-graph.js";
 import { createAttributeParserFromRegistry, getExpressionParser, type AttributeParser, type IExpressionParser } from "../parsing/index.js";
+import type { VmReflection, SynthesisOptions, ModuleResolver } from "../shared/index.js";
+import { NOOP_TRACE } from "../shared/trace.js";
+import { lowerDocument, linkTemplateSemantics, bindScopes, typecheck, collectFeatureUsage } from "../analysis/index.js";
+import { planOverlay, emitOverlayFile, type OverlayEmitOptions } from "../synthesis/index.js";
+import { DiagnosticsRuntime } from "../diagnostics/runtime.js";
+import type { LinkModule, TypecheckModule } from "../analysis/index.js";
+import type { FeatureUsageSet } from "../schema/index.js";
+import type { OverlayPlanModule, OverlayEmitResult } from "../synthesis/index.js";
+import type { PipelineOptions, StageKey, StageArtifactMeta } from "./engine.js";
 
-// Shared imports (via barrel)
-import type { VmReflection, SynthesisOptions } from "../shared/index.js";
-
-// Analysis imports (via barrel)
-import { lowerDocument, resolveHost, bindScopes, typecheck, collectFeatureUsage } from "../analysis/index.js";
-
-// Synthesis imports (via barrel)
-import { planOverlay, emitOverlayFile, type OverlayEmitOptions, planAot, type AotPlanOptions } from "../synthesis/index.js";
-
-// Local imports
-import { PipelineEngine } from "./engine.js";
-import type { StageDefinition, StageKey, StageOutputs, PipelineOptions, CacheOptions, FingerprintHints } from "./engine.js";
-import { stableHash, stableHashSemantics } from "./hash.js";
-
-/* =======================================================================================
- * CORE PIPELINE TYPES & FACTORIES
- * ======================================================================================= */
+// ============================================================================
+// Core Pipeline Options (simplified)
+// ============================================================================
 
 export interface CoreCompileOptions {
   html: string;
   templateFilePath: string;
-  semantics: Semantics;
-  catalog?: ResourceCatalog;
-  syntax?: TemplateSyntaxRegistry;
-  resourceGraph?: ResourceGraph;
-  resourceScope?: ResourceScopeId | null;
-  localImports?: readonly LocalImportDef[];
+  query: SemanticModelQuery;
+  templateContext?: TemplateContext;
   attrParser?: AttributeParser;
   exprParser?: IExpressionParser;
   vm: VmReflection;
-  cache?: CacheOptions;
-  fingerprints?: FingerprintHints;
+  moduleResolver: ModuleResolver;
 }
 
 export interface CorePipelineResult {
-  ir: StageOutputs["10-lower"];
-  linked: StageOutputs["20-resolve"];
-  scope: StageOutputs["30-bind"];
-  typecheck: StageOutputs["40-typecheck"];
+  ir: IrModule;
+  linked: LinkModule;
+  scope: ScopeModule;
+  typecheck: TypecheckModule;
 }
 
-/**
- * Create a pipeline engine with the default stage graph.
- */
-export function createDefaultEngine(): PipelineEngine {
-  return new PipelineEngine(createDefaultStageDefinitions());
-}
+// ============================================================================
+// Pure Pipeline Functions
+// ============================================================================
 
 /**
- * Run the pure pipeline up to typecheck (10 -> 40).
+ * Run the core analysis pipeline: lower → link → bind → typecheck.
+ *
+ * Pure function. No caching, no engine. Same inputs → same outputs.
  */
 export function runCorePipeline(opts: CoreCompileOptions): CorePipelineResult {
-  const engine = createDefaultEngine();
-  const pipelineOpts: PipelineOptions = {
-    html: opts.html,
+  const diag = new DiagnosticsRuntime();
+  const query = opts.query;
+  const exprParser = opts.exprParser ?? getExpressionParser();
+  const attrParser = opts.attrParser ?? createAttributeParserFromRegistry(query.syntax);
+
+  // Stage 1: Lower — HTML → instruction IR
+  const ir = lowerDocument(opts.html, {
+    file: opts.templateFilePath,
+    name: path.basename(opts.templateFilePath),
+    attrParser,
+    exprParser,
+    catalog: query.model.catalog,
+    diagnostics: diag.forSource("lower"),
+  });
+
+  // Stage 2: Link — resolve resource references
+  const linked = linkTemplateSemantics(ir, null, {
+    moduleResolver: opts.moduleResolver,
     templateFilePath: opts.templateFilePath,
-    vm: opts.vm,
-    semantics: opts.semantics,
-  };
-  if (opts.catalog) pipelineOpts.catalog = opts.catalog;
-  if (opts.syntax) pipelineOpts.syntax = opts.syntax;
-  if (opts.resourceGraph) pipelineOpts.resourceGraph = opts.resourceGraph;
-  if (opts.resourceScope !== undefined) pipelineOpts.resourceScope = opts.resourceScope;
-  if (opts.localImports) pipelineOpts.localImports = opts.localImports;
-  if (opts.cache) pipelineOpts.cache = opts.cache;
-  if (opts.fingerprints) pipelineOpts.fingerprints = opts.fingerprints;
-  if (opts.attrParser) pipelineOpts.attrParser = opts.attrParser;
-  if (opts.exprParser) pipelineOpts.exprParser = opts.exprParser;
-  const session = engine.createSession(pipelineOpts);
-  return {
-    ir: session.run("10-lower"),
-    linked: session.run("20-resolve"),
-    scope: session.run("30-bind"),
-    typecheck: session.run("40-typecheck"),
-  };
-}
+    diagnostics: diag.forSource("link"),
+    lookup: query,
+    graph: query.graph,
+  });
 
-function assertOption<T>(value: T | undefined, name: string): T {
-  if (value === undefined || value === null) {
-    throw new Error(`Missing required pipeline option '${name}'`);
-  }
-  return value;
+  // Stage 3: Bind — validate bindings
+  const scope = bindScopes(linked, { diagnostics: diag.forSource("bind") });
+
+  // Stage 4: Typecheck — extract binding contracts
+  const vm = opts.vm;
+  const rootVm = hasQualifiedVm(vm) ? vm.getQualifiedRootVmTypeExpr() : vm.getRootVmTypeExpr();
+  const tc = typecheck({
+    linked,
+    scope,
+    rootVmType: rootVm,
+  });
+
+  return { ir, linked, scope, typecheck: tc };
 }
 
 /**
- * Default stage implementations wired to the current phases.
+ * Run the full template compilation pipeline including overlay synthesis.
+ *
+ * This is the L2 `compileTemplate` — a pure function that produces the
+ * complete TemplateCompilation from a template path and semantic query.
  */
-export function createDefaultStageDefinitions(): StageDefinition<StageKey>[] {
-  const definitions: StageDefinition<StageKey>[] = [];
+export function runFullPipeline(opts: PipelineOptions): {
+  ir: IrModule;
+  linked: LinkModule;
+  scope: ScopeModule;
+  typecheck: TypecheckModule;
+  usage: FeatureUsageSet;
+  overlayPlan: OverlayPlanModule;
+  overlayEmit: OverlayEmitResult;
+  diagnostics: DiagnosticsRuntime;
+  recorder: DepRecorder;
+} {
+  const diag = new DiagnosticsRuntime();
+  // Create scope-parameterized query if templateContext provides a scope.
+  // This ensures the link stage resolves resources visible in the template's
+  // scope (e.g., local imports from <import> tags) rather than only the default scope.
+  const ctx = opts.templateContext;
+  const query = (ctx?.scopeId || ctx?.localImports?.length)
+    ? opts.query.model.query({ scope: ctx.scopeId, localImports: ctx.localImports })
+    : opts.query;
+  const depGraph = opts.depGraph;
+  const recorder = depGraph
+    ? createDepRecorder(depGraph, depGraph.addNode('template-compilation', opts.templateFilePath))
+    : NOOP_DEP_RECORDER;
 
-  const resolveSemanticsInputs = (options: PipelineOptions) => {
-    const base = assertOption(options.semantics, "semantics");
-    const graph = options.resourceGraph ?? base.resourceGraph ?? null;
-    const scopeId = options.resourceScope ?? base.defaultScope ?? null;
-    const sem = materializeSemanticsForScope(base, graph, scopeId, options.localImports);
-    const hasLocalImports = !!(options.localImports && options.localImports.length > 0);
-    const useCatalogOverride = !!(options.catalog && !hasLocalImports);
-    const catalog = useCatalogOverride ? options.catalog! : sem.catalog;
-    const semWithCatalog = useCatalogOverride ? { ...sem, catalog } : sem;
-    const syntax = options.syntax ?? buildTemplateSyntaxRegistry(semWithCatalog);
-    return {
-      sem: semWithCatalog,
-      resources: sem.resources,
-      catalog,
-      syntax,
-      scopeId: scopeId ?? null,
-    };
+  const trace = opts.trace ?? NOOP_TRACE;
+
+  const { exprParser, attrParser } = trace.span("pipeline:setup", () => {
+    const ep = opts.exprParser ?? getExpressionParser();
+    const ap = opts.attrParser ?? createAttributeParserFromRegistry(query.syntax);
+    recorder.readFile(opts.templateFilePath as NormalizedPath);
+    recorder.readVocabulary();
+    if (ctx?.scopeId) recorder.readScope(ctx.scopeId);
+    return { exprParser: ep, attrParser: ap };
+  });
+
+  const ir = opts.seededIr ?? trace.span("stage:lower", () => lowerDocument(opts.html, {
+    file: opts.templateFilePath,
+    name: path.basename(opts.templateFilePath),
+    attrParser,
+    exprParser,
+    catalog: query.model.catalog,
+    diagnostics: diag.forSource("lower"),
+    trace,
+  }));
+
+  const linked = trace.span("stage:link", () => linkTemplateSemantics(ir, null, {
+    moduleResolver: opts.moduleResolver,
+    templateFilePath: opts.templateFilePath,
+    diagnostics: diag.forSource("link"),
+    trace,
+    deps: recorder,
+    lookup: query,
+    graph: query.graph,
+  }));
+
+  const scope = trace.span("stage:bind", () => bindScopes(linked, {
+    trace,
+    diagnostics: diag.forSource("bind"),
+    model: query,
+    deps: recorder,
+  }));
+
+  const vm = opts.vm;
+  const rootVm = vm ? (hasQualifiedVm(vm) ? vm.getQualifiedRootVmTypeExpr() : vm.getRootVmTypeExpr()) : "unknown";
+  const tc = trace.span("stage:typecheck", () => typecheck({
+    linked,
+    scope,
+    rootVmType: rootVm,
+    trace,
+    deps: recorder,
+    model: query,
+    templateFilePath: opts.templateFilePath as NormalizedPath,
+  }));
+
+  const usage = trace.span("stage:usage", () => collectFeatureUsage(linked, { syntax: query.syntax, attrParser }));
+
+  const overlayOpts: SynthesisOptions = {
+    isJs: opts.overlay?.isJs ?? false,
+    vm: vm!,
+    syntheticPrefix: opts.overlay?.syntheticPrefix ?? vm?.getSyntheticPrefix?.() ?? "__AU_TTC_",
   };
+  const overlayPlan = trace.span("stage:overlay-plan", () => planOverlay(linked, scope, overlayOpts));
 
-  const scopeFingerprint = (options: PipelineOptions) => {
-    const graph = options.resourceGraph ?? options.semantics.resourceGraph ?? null;
-    if (!graph) return null;
-    const scope = options.resourceScope ?? options.semantics.defaultScope ?? graph.root ?? null;
-    return { graph: stableHash(graph), scope };
-  };
+  const emitOpts: OverlayEmitOptions & { isJs: boolean } = { isJs: opts.overlay?.isJs ?? false };
+  if (opts.overlay?.eol) emitOpts.eol = opts.overlay.eol;
+  if (opts.overlay?.banner) emitOpts.banner = opts.overlay.banner;
+  if (opts.overlay?.filename) emitOpts.filename = opts.overlay.filename;
+  const overlayEmit = trace.span("stage:overlay-emit", () => emitOverlayFile(overlayPlan, emitOpts));
 
-  definitions.push({
-    key: "10-lower",
-    version: "2",
-    deps: [],
-    fingerprint(ctx) {
-      const options = ctx.options;
-      const { catalog, syntax } = resolveSemanticsInputs(options);
-      const source = resolveSourceFile(options.templateFilePath);
-      const attrParserFingerprint = options.fingerprints?.attrParser
-        ?? options.fingerprints?.syntax
-        ?? (options.attrParser ? "custom" : stableHash(syntax.attributePatterns));
-      return {
-        html: stableHash(options.html),
-        file: source.hashKey,
-        catalog: options.fingerprints?.catalog ?? stableHash(catalog),
-        attrParser: attrParserFingerprint,
-        exprParser: options.fingerprints?.exprParser ?? (options.exprParser ? "custom" : "default"),
-      };
-    },
-    run(ctx) {
-      const options = ctx.options;
-      const exprParser = options.exprParser ?? getExpressionParser();
-      const { catalog, syntax } = resolveSemanticsInputs(options);
-      const attrParser = options.attrParser ?? createAttributeParserFromRegistry(syntax);
-      return lowerDocument(options.html, {
-        file: options.templateFilePath,
-        name: path.basename(options.templateFilePath),
-        attrParser,
-        exprParser,
-        catalog,
-        trace: options.trace,
-      });
-    },
-  });
-
-  definitions.push({
-    key: "20-resolve",
-    version: "2",
-    deps: ["10-lower"],
-    fingerprint(ctx) {
-      const { sem } = resolveSemanticsInputs(ctx.options);
-      return {
-        sem: ctx.options.fingerprints?.semantics ?? stableHashSemantics(sem),
-        resourceGraph: scopeFingerprint(ctx.options),
-        localImports: ctx.options.localImports ? stableHash(ctx.options.localImports) : null,
-      };
-    },
-    run(ctx) {
-      const scoped = resolveSemanticsInputs(ctx.options);
-      const ir = ctx.require("10-lower");
-      const resolveOpts = {
-        resources: scoped.resources,
-        scope: scoped.scopeId,
-        ...(ctx.options.resourceGraph !== undefined ? { graph: ctx.options.resourceGraph } : {}),
-        ...(ctx.options.localImports ? { localImports: ctx.options.localImports } : {}),
-        trace: ctx.options.trace,
-      };
-      return resolveHost(ir, scoped.sem, resolveOpts);
-    },
-  });
-
-  definitions.push({
-    key: "30-bind",
-    version: "1",
-    deps: ["20-resolve"],
-    fingerprint() {
-      return "scope@1";
-    },
-    run(ctx) {
-      const linked = ctx.require("20-resolve");
-      return bindScopes(linked, { trace: ctx.options.trace });
-    },
-  });
-
-  definitions.push({
-    key: "40-typecheck",
-    version: "1",
-    deps: ["10-lower", "20-resolve", "30-bind"],
-    fingerprint(ctx) {
-      const vm = assertOption(ctx.options.vm, "vm");
-      const rootVm = hasQualifiedVm(vm) ? vm.getQualifiedRootVmTypeExpr() : vm.getRootVmTypeExpr();
-      const vmToken = ctx.options.fingerprints?.vm ?? rootVm;
-      return { vm: vmToken, root: rootVm };
-    },
-    run(ctx) {
-      const linked = ctx.require("20-resolve");
-      const scope = ctx.require("30-bind");
-      const ir = ctx.require("10-lower");
-      const vm = assertOption(ctx.options.vm, "vm");
-      // TODO(productize): expose a diagnostics-only typecheck product/DAG once editor flows need it.
-      const rootVm = hasQualifiedVm(vm) ? vm.getQualifiedRootVmTypeExpr() : vm.getRootVmTypeExpr();
-      return typecheck({ linked, scope, ir, rootVmType: rootVm, trace: ctx.options.trace });
-    },
-  });
-
-  definitions.push({
-    key: "50-usage",
-    version: "1",
-    deps: ["20-resolve"],
-    fingerprint(ctx) {
-      const { syntax } = resolveSemanticsInputs(ctx.options);
-      const attrParserFingerprint = ctx.options.fingerprints?.attrParser
-        ?? ctx.options.fingerprints?.syntax
-        ?? (ctx.options.attrParser ? "custom" : stableHash(syntax.attributePatterns));
-      return { attrParser: attrParserFingerprint };
-    },
-    run(ctx) {
-      const scoped = resolveSemanticsInputs(ctx.options);
-      const attrParser = ctx.options.attrParser ?? createAttributeParserFromRegistry(scoped.syntax);
-      const linked = ctx.require("20-resolve");
-      return collectFeatureUsage(linked, { syntax: scoped.syntax, attrParser });
-    },
-  });
-
-  definitions.push({
-    key: "overlay:plan",
-    version: "1",
-    deps: ["20-resolve", "30-bind"],
-    fingerprint(ctx) {
-      const vm = assertOption(ctx.options.vm, "vm");
-      const overlayOpts = ctx.options.overlay ?? { isJs: false };
-      const vmToken = ctx.options.fingerprints?.vm ?? (hasQualifiedVm(vm) ? vm.getQualifiedRootVmTypeExpr() : vm.getRootVmTypeExpr());
-      return {
-        vm: vmToken,
-        overlay: ctx.options.fingerprints?.overlay ?? {
-          isJs: overlayOpts.isJs ?? false,
-          syntheticPrefix: overlayOpts.syntheticPrefix ?? vm.getSyntheticPrefix?.() ?? "__AU_TTC_",
-        },
-      };
-    },
-    run(ctx) {
-      const linked = ctx.require("20-resolve");
-      const scope = ctx.require("30-bind");
-      const vm = assertOption(ctx.options.vm, "vm");
-      const overlayOpts: SynthesisOptions = {
-        isJs: ctx.options.overlay?.isJs ?? false,
-        vm,
-        syntheticPrefix: ctx.options.overlay?.syntheticPrefix ?? vm.getSyntheticPrefix?.() ?? "__AU_TTC_",
-      };
-      return planOverlay(linked, scope, overlayOpts);
-    },
-  });
-
-  definitions.push({
-    key: "overlay:emit",
-    version: "1",
-    deps: ["overlay:plan"],
-    fingerprint(ctx) {
-      const overlayOpts = ctx.options.overlay ?? { isJs: false };
-      return {
-        isJs: overlayOpts.isJs ?? false,
-        banner: overlayOpts.banner ?? null,
-        eol: overlayOpts.eol ?? "\n",
-        filename: overlayOpts.filename ?? null,
-      };
-    },
-    run(ctx) {
-      const plan = ctx.require("overlay:plan");
-      const overlayOpts = ctx.options.overlay ?? { isJs: false };
-      const emitOpts: OverlayEmitOptions & { isJs: boolean } = { isJs: overlayOpts.isJs };
-      if (overlayOpts.eol) emitOpts.eol = overlayOpts.eol;
-      if (overlayOpts.banner) emitOpts.banner = overlayOpts.banner;
-      if (overlayOpts.filename) emitOpts.filename = overlayOpts.filename;
-      return emitOverlayFile(plan, emitOpts);
-    },
-  });
-
-  /* ===========================================================================
-   * AOT synthesis stages
-   * =========================================================================== */
-
-  definitions.push({
-    key: "aot:plan",
-    version: "1",
-    deps: ["20-resolve", "30-bind"],
-    fingerprint(ctx) {
-      const aotOpts = ctx.options.aot ?? {};
-      return {
-        includeLocations: aotOpts.includeLocations ?? false,
-      };
-    },
-    run(ctx) {
-      const linked = ctx.require("20-resolve");
-      const scope = ctx.require("30-bind");
-      const aotOpts: AotPlanOptions = {
-        templateFilePath: ctx.options.templateFilePath,
-        includeLocations: ctx.options.aot?.includeLocations ?? false,
-      };
-      return planAot(linked, scope, aotOpts);
-    },
-  });
-
-  return definitions;
-}
-
-/**
- * Shape used by tests/clients that only need the pure pipeline (up to typecheck).
- */
-export function runCoreStages(options: PipelineOptions): Pick<StageOutputs, "10-lower" | "20-resolve" | "30-bind" | "40-typecheck"> {
-  const engine = new PipelineEngine(createDefaultStageDefinitions());
-  const session = engine.createSession(options);
-  return {
-    "10-lower": session.run("10-lower"),
-    "20-resolve": session.run("20-resolve"),
-    "30-bind": session.run("30-bind"),
-    "40-typecheck": session.run("40-typecheck"),
-  };
+  return { ir, linked, scope, typecheck: tc, usage, overlayPlan, overlayEmit, diagnostics: diag, recorder };
 }
 
 function hasQualifiedVm(vm: VmReflection): vm is VmReflection & { getQualifiedRootVmTypeExpr: () => string } {
   return typeof (vm as { getQualifiedRootVmTypeExpr?: unknown }).getQualifiedRootVmTypeExpr === "function";
 }
+
+// Re-exports for backward compatibility during migration
+export type { PipelineOptions, StageKey, StageArtifactMeta };

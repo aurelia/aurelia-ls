@@ -108,7 +108,7 @@
       ],
       "bindings": [],
       "controllers": [
-        { "kind": "repeat", "frameId": 1, "hasTarget": true, "locals": [ "item" ], "contextuals": [ "$index", "$first", "$last", "$even", "$odd", "$length", "$middle" ] }
+        { "kind": "repeat", "frameId": 1, "hasTarget": true, "locals": [ "item" ], "contextuals": [ "$index", "$first", "$last", "$even", "$odd", "$length", "$middle", "$previous" ] }
       ],
       "expressions": [
         { "kind": "ForOfStatement", "frameId": 0 },
@@ -116,7 +116,7 @@
       ],
       "scopes": [
         { "frameId": 0, "parentFrameId": null, "kind": "root", "locals": [], "overrideContext": [] },
-        { "frameId": 1, "parentFrameId": 0, "kind": "repeat", "locals": [ "iterator:item" ], "overrideContext": [ "$index", "$first", "$last", "$even", "$odd", "$length", "$middle" ] }
+        { "frameId": 1, "parentFrameId": 0, "kind": "repeat", "locals": [ "iterator:item" ], "overrideContext": [ "$index", "$first", "$last", "$even", "$odd", "$length", "$middle", "$previous" ] }
       ]
     }
   },

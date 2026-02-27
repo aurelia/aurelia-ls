@@ -13,22 +13,20 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { createFailureRecorder, fmtList, diffByKey } from "../../_helpers/test-utils.js";
+import { createFailureRecorder, fmtList, diffByKey, noopModuleResolver } from "../../_helpers/test-utils.js";
 import { deepMergeSemantics } from "../../_helpers/semantics-merge.js";
 
-import {
-  lowerDocument,
-  resolveHost,
-  bindScopes,
-  planAot,
-  emitAotCode,
-  getExpressionParser,
-  DEFAULT_SYNTAX,
-  DEFAULT_SEMANTICS as SEM_DEFAULT,
-  prepareSemantics,
-  INSTRUCTION_TYPE,
-  BINDING_MODE,
-} from "@aurelia-ls/compiler";
+import { lowerDocument } from "../../../out/analysis/10-lower/lower.js";
+import { linkTemplateSemantics } from "../../../out/analysis/20-link/resolve.js";
+import { buildSemanticsSnapshot } from "../../../out/schema/snapshot.js";
+import { bindScopes } from "../../../out/analysis/30-bind/bind.js";
+import { planAot } from "../../../out/synthesis/aot/plan.js";
+import { emitAotCode } from "../../../out/synthesis/aot/emit.js";
+import { getExpressionParser } from "../../../out/parsing/expression-parser.js";
+import { DEFAULT_SYNTAX } from "../../../out/parsing/attribute-parser.js";
+import { BUILTIN_SEMANTICS as SEM_DEFAULT, prepareProjectSemantics } from "../../../out/schema/registry.js";
+import { DiagnosticsRuntime } from "../../../out/diagnostics/runtime.js";
+import { INSTRUCTION_TYPE, BINDING_MODE } from "../../../out/synthesis/aot/constants.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -119,7 +117,7 @@ function createCompilerContext(vector: TestVector): CompilerContext {
   const baseSem = vector.semOverrides
     ? deepMergeSemantics(SEM_DEFAULT, vector.semOverrides)
     : SEM_DEFAULT;
-  const sem = prepareSemantics(baseSem);
+  const sem = prepareProjectSemantics(baseSem);
 
   return {
     sem,
@@ -130,15 +128,21 @@ function createCompilerContext(vector: TestVector): CompilerContext {
 
 // Run full pipeline: markup → emit
 function runPipeline(markup: string, ctx: CompilerContext): unknown {
+  const diagnostics = new DiagnosticsRuntime();
   const ir = lowerDocument(markup, {
     attrParser: ctx.attrParser,
     exprParser: ctx.exprParser,
     file: "test.html",
     name: "test",
     catalog: ctx.sem.catalog,
+    diagnostics: diagnostics.forSource("lower"),
   });
-  const linked = resolveHost(ir, ctx.sem);
-  const scope = bindScopes(linked);
+  const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(ctx.sem), {
+    moduleResolver: noopModuleResolver,
+    templateFilePath: "test.html",
+    diagnostics: diagnostics.forSource("link"),
+  });
+  const scope = bindScopes(linked, { diagnostics: diagnostics.forSource("bind") });
   const plan = planAot(linked, scope, { templateFilePath: "test.html" });
   const result = emitAotCode(plan, { name: "test" });
   return result;
@@ -544,3 +548,5 @@ describe("AOT Emit (aot:emit)", () => {
     });
   }
 });
+
+

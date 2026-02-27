@@ -8,36 +8,66 @@
  * This is SSR-agnostic - it produces serialized instructions that can be:
  * - Written to JS files for CSR-only builds
  * - Fed to the SSR package's instruction translator for server rendering
+ *
+ * Two semantic authority modes:
+ * - Pass `semantics` for standalone compilation (snapshot built internally).
+ * - Pass `snapshot` when a workspace or project pipeline already holds
+ *   materialized semantics. The snapshot's data is used directly, skipping
+ *   re-materialization. Compatible with WorkspaceSnapshot.
  */
 
-import { lowerDocument, resolveHost, bindScopes } from "./analysis/index.js";
+import { lowerDocument, linkTemplateSemantics, bindScopes } from "./analysis/index.js";
 import { planAot, emitAotCode, emitTemplate, collectNestedTemplateHtmlTree } from "./synthesis/index.js";
 import { createAttributeParserFromRegistry, getExpressionParser, type AttributeParser } from "./parsing/index.js";
 import {
-  buildTemplateSyntaxRegistry,
-  materializeSemanticsForScope,
-  prepareSemantics,
+  buildProjectSnapshot,
+  buildSemanticsSnapshotFromProject,
+  type SemanticsSnapshot,
   type ResourceCatalog,
-  type Semantics,
+  type ProjectSemantics,
   type ResourceGraph,
   type ResourceScopeId,
   type LocalImportDef,
   type TemplateSyntaxRegistry,
-} from "./language/index.js";
-import { NOOP_TRACE, CompilerAttributes, type CompileTrace } from "./shared/index.js";
+} from "./schema/index.js";
+import { NOOP_TRACE, CompilerAttributes, type CompileTrace, type ModuleResolver } from "./shared/index.js";
+import { DiagnosticsRuntime } from "./diagnostics/runtime.js";
 import type { AotPlanModule, AotCodeResult, NestedTemplateHtmlNode } from "./synthesis/index.js";
 
 // =============================================================================
 // Types
 // =============================================================================
 
+/**
+ * Pre-built semantic snapshot for AOT compilation.
+ *
+ * Structurally compatible with WorkspaceSnapshot from
+ * @aurelia-ls/semantic-workspace. When a workspace or project pipeline
+ * has already materialized these artifacts, pass them here to avoid
+ * redundant re-materialization in the AOT facade.
+ */
+export interface AotSemanticSnapshot {
+  readonly semantics: ProjectSemantics;
+  readonly catalog: ResourceCatalog;
+  readonly syntax: TemplateSyntaxRegistry;
+  readonly resourceGraph?: ResourceGraph | null;
+}
+
 export interface CompileAotOptions {
   /** Template file path (for provenance tracking and error messages) */
   templatePath?: string;
   /** Component name (kebab-case, e.g., "my-app") */
   name?: string;
-  /** Semantics (built-ins + project-specific resources) */
-  semantics: Semantics;
+  /** Semantics (built-ins + project-specific resources). Required when no snapshot. */
+  semantics: ProjectSemantics;
+  /** Module resolver for template meta imports. */
+  moduleResolver: ModuleResolver;
+  /**
+   * Pre-built semantic snapshot from a workspace or project pipeline.
+   * When provided, `semantics`, `catalog`, `syntax`, and `resourceGraph`
+   * fields are ignored — the snapshot's data is used directly.
+   */
+  snapshot?: AotSemanticSnapshot;
   /** Precomputed catalog for lowering (scope-specific if provided) */
   catalog?: ResourceCatalog;
   /** Precomputed syntax registry for parsing/emitting */
@@ -70,6 +100,8 @@ export interface CompileAotOptions {
   deduplicateExpressions?: boolean;
   /** Optional trace for instrumentation */
   trace?: CompileTrace;
+  /** Optional diagnostics runtime (defaults to a new instance per call). */
+  diagnostics?: DiagnosticsRuntime;
 }
 
 export interface CompileAotResult {
@@ -92,7 +124,7 @@ export interface CompileAotResult {
  *
  * This runs the full compilation pipeline:
  * 1. Parse and lower (10-lower)
- * 2. Resolve semantics (20-resolve)
+ * 2. Resolve semantics (20-link)
  * 3. Bind scopes (30-bind)
  * 4. Build AOT plan
  * 5. Emit serialized instructions and template HTML
@@ -107,23 +139,19 @@ export interface CompileAotResult {
  *
  * @example
  * ```typescript
- * import { compileAot, DEFAULT_SEMANTICS } from "@aurelia-ls/compiler";
- * import { transform } from "@aurelia-ls/transform";
- *
- * // Compile template
+ * // Standalone: pass semantics directly
  * const aot = compileAot('<div>${message}</div>', {
  *   name: 'my-component',
- *   semantics: DEFAULT_SEMANTICS,
+ *   semantics: BUILTIN_SEMANTICS,
+ *   moduleResolver,
  * });
  *
- * // Transform TypeScript source to inject $au
- * const result = transform({
- *   source: classSource,
- *   filePath: 'my-component.ts',
- *   aot: aot.codeResult,
- *   template: aot.template,
- *   nestedHtmlTree: aot.nestedHtmlTree,
- *   // ...
+ * // Workspace-mediated: pass pre-built snapshot
+ * const aot = compileAot('<div>${message}</div>', {
+ *   name: 'my-component',
+ *   snapshot: workspace.snapshot(),
+ *   semantics: workspace.snapshot().semantics,
+ *   moduleResolver,
  * });
  * ```
  */
@@ -134,22 +162,19 @@ export function compileAot(
   const trace = options.trace ?? NOOP_TRACE;
 
   return trace.span("compiler.compileAot", () => {
+    const diagnostics = options.diagnostics ?? new DiagnosticsRuntime();
     const templatePath = options.templatePath ?? "template.html";
     const name = options.name ?? "template";
-    const baseSemantics = options.semantics;
-    const hasLocalImports = !!(options.localImports && options.localImports.length > 0);
-    const semantics = options.resourceGraph || options.resourceScope !== undefined || hasLocalImports
-      ? materializeSemanticsForScope(
-          baseSemantics,
-          options.resourceGraph ?? null,
-          options.resourceScope ?? null,
-          options.localImports,
-        )
-      : prepareSemantics(baseSemantics);
-    const useCatalogOverride = !!(options.catalog && !hasLocalImports);
-    const catalog = useCatalogOverride ? options.catalog! : semantics.catalog;
-    const semWithCatalog = useCatalogOverride ? { ...semantics, catalog } : semantics;
-    const syntax = options.syntax ?? buildTemplateSyntaxRegistry(semWithCatalog);
+
+    // Build the semantics snapshot. When a pre-built snapshot is provided,
+    // use its already-materialized data directly. Otherwise, materialize
+    // from the raw semantics.
+    const snapshot = options.snapshot
+      ? buildSnapshotFromAuthority(options.snapshot, options)
+      : buildSnapshotFromSemantics(options);
+
+    const catalog = snapshot.catalog;
+    const syntax = snapshot.syntax;
     const attrParser = options.attrParser ?? createAttributeParserFromRegistry(syntax);
 
     trace.setAttributes({
@@ -168,20 +193,17 @@ export function compileAot(
       file: templatePath,
       name,
       catalog,
+      diagnostics: diagnostics.forSource("lower"),
       trace,
     });
 
-    // Build resolve options for resource graph and local imports
-    const resolveOpts = options.resourceGraph || options.localImports || options.resourceScope !== undefined
-      ? {
-          ...(options.resourceGraph ? { graph: options.resourceGraph } : {}),
-          ...(options.resourceScope !== undefined ? { scope: options.resourceScope ?? null } : {}),
-          ...(options.localImports ? { localImports: options.localImports } : {}),
-        }
-      : undefined;
-
-    const linked = resolveHost(ir, semWithCatalog, { ...resolveOpts, trace });
-    const scoped = bindScopes(linked, { trace });
+    const linked = linkTemplateSemantics(ir, snapshot, {
+      moduleResolver: options.moduleResolver,
+      templateFilePath: templatePath,
+      diagnostics: diagnostics.forSource("link"),
+      trace,
+    });
+    const scoped = bindScopes(linked, { trace, diagnostics: diagnostics.forSource("bind") });
     trace.event("compiler.aot.analysis.done");
 
     // 2. Build AOT plan
@@ -189,6 +211,8 @@ export function compileAot(
     const plan = planAot(linked, scoped, {
       templateFilePath: templatePath,
       trace,
+      syntax,
+      attrParser,
     });
     trace.event("compiler.aot.plan.done");
 
@@ -217,5 +241,47 @@ export function compileAot(
       plan,
       nestedHtmlTree,
     };
+  });
+}
+
+// =============================================================================
+// Snapshot construction (internal)
+// =============================================================================
+
+/** Build a SemanticsSnapshot from raw semantics options (standalone path). */
+function buildSnapshotFromSemantics(options: CompileAotOptions): SemanticsSnapshot {
+  const project = buildProjectSnapshot(options.semantics, {
+    resourceGraph: options.resourceGraph ?? null,
+    ...(options.resourceScope !== undefined ? { defaultScope: options.resourceScope } : {}),
+    catalog: options.catalog,
+    syntax: options.syntax,
+  });
+  return buildSemanticsSnapshotFromProject(project, {
+    ...(options.resourceScope !== undefined ? { scopeId: options.resourceScope } : {}),
+    ...(options.localImports ? { localImports: options.localImports } : {}),
+  });
+}
+
+/**
+ * Build a SemanticsSnapshot from a pre-built authority snapshot.
+ *
+ * Routes through buildProjectSnapshot which is idempotent when the
+ * authority's semantics are already materialized (the common case for
+ * workspace snapshots). The catalog and syntax from the authority are
+ * reused directly, avoiding any redundant computation.
+ */
+function buildSnapshotFromAuthority(
+  authority: AotSemanticSnapshot,
+  options: CompileAotOptions,
+): SemanticsSnapshot {
+  const project = buildProjectSnapshot(authority.semantics, {
+    resourceGraph: authority.resourceGraph ?? null,
+    catalog: authority.catalog,
+    syntax: authority.syntax,
+    ...(options.resourceScope !== undefined ? { defaultScope: options.resourceScope } : {}),
+  });
+  return buildSemanticsSnapshotFromProject(project, {
+    ...(options.resourceScope !== undefined ? { scopeId: options.resourceScope } : {}),
+    ...(options.localImports ? { localImports: options.localImports } : {}),
   });
 }

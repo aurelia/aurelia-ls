@@ -8,8 +8,10 @@ import {
   DefaultTemplateProgram,
   canonicalDocumentUri,
   deriveTemplatePaths,
+  DEFAULT_SYNTAX,
+  getExpressionParser,
 } from "@aurelia-ls/compiler";
-import { DEFAULT_SEMANTICS, DEFAULT_SYNTAX, getExpressionParser } from "@aurelia-ls/compiler";
+import { createTestQuery, noopModuleResolver } from "../_helpers/test-utils.js";
 
 const overlayFixtures = [
   { name: "kitchen-sink", dir: new URL("../../../../fixtures/overlays/kitchen-sink/", import.meta.url), vmType: "any" },
@@ -79,8 +81,9 @@ function createProgram(vmType = "RootVm") {
       getSyntheticPrefix: () => "__AU_TTC_",
     },
     isJs: false,
-    semantics: DEFAULT_SEMANTICS,
+    query: createTestQuery(),
     attrParser: DEFAULT_SYNTAX,
     exprParser: getExpressionParser(),
+    moduleResolver: noopModuleResolver,
   });
 }

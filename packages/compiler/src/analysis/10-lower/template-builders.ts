@@ -1,17 +1,19 @@
 import type { AttributeParser } from "../../parsing/attribute-parser.js";
-import type { ResourceCatalog } from "../../language/registry.js";
+import type { ResourceCatalog } from "../../schema/registry.js";
 import type {
   HydrateTemplateControllerIR,
   InstructionRow,
   TemplateIR,
   TemplateNode,
   NodeId,
+  TemplateId,
+  TemplateOrigin,
 } from "../../model/ir.js";
+import type { TemplateIdAllocator } from "../../model/identity.js";
 import { buildDomChildren } from "./dom-builder.js";
 import { isControllerAttr } from "./element-lowering.js";
 import { resolveElementDef } from "./resource-utils.js";
 import type {
-  ExprTable,
   P5Element,
   P5Node,
   P5Template,
@@ -19,90 +21,105 @@ import type {
   ProjectionMap,
 } from "./lower-shared.js";
 import { DomIdAllocator, findAttr, isElement, isText } from "./lower-shared.js";
+import type { LowerContext } from "./lower-context.js";
 
 export type RowCollector = (
   rootLike: { childNodes?: P5Node[] },
   ids: DomIdAllocator,
-  attrParser: AttributeParser,
-  table: ExprTable,
+  lowerCtx: LowerContext,
   nestedTemplates: TemplateIR[],
   rows: InstructionRow[],
-  catalog: ResourceCatalog,
+  ctx: TemplateBuildContext,
   skipTags?: Set<string>,
   projectionMap?: ProjectionMap,
 ) => void;
 
+export type TemplateBuildContext = {
+  templateId: TemplateId;
+  templateIds: TemplateIdAllocator;
+};
+
+export type ProjectionEntry = {
+  host: P5Element;
+  projections: ProjectionDef[];
+};
+
+export type ProjectionIndex = {
+  map: ProjectionMap;
+  entries: ProjectionEntry[];
+};
+
 const DEFAULT_SLOT_NAME = "default";
 
-export function buildProjectionMap(
+export function buildProjectionIndex(
   rootLike: { childNodes?: P5Node[] },
-  attrParser: AttributeParser,
-  table: ExprTable,
+  lowerCtx: LowerContext,
   nestedTemplates: TemplateIR[],
-  catalog: ResourceCatalog,
   collectRows: RowCollector,
+  ctx: TemplateBuildContext,
   skipTags?: Set<string>,
-): ProjectionMap {
+): ProjectionIndex {
   const projectionMap: ProjectionMap = new WeakMap();
+  const entries: ProjectionEntry[] = [];
   extractProjections(
     rootLike,
-    attrParser,
-    table,
+    lowerCtx,
     nestedTemplates,
-    catalog,
     collectRows,
+    ctx,
     projectionMap,
+    entries,
     skipTags,
   );
-  return projectionMap;
+  return { map: projectionMap, entries };
 }
 
 export function templateOfElementChildren(
   el: P5Element,
-  attrParser: AttributeParser,
-  table: ExprTable,
+  lowerCtx: LowerContext,
   nestedTemplates: TemplateIR[],
-  catalog: ResourceCatalog,
-  collectRows: RowCollector
+  collectRows: RowCollector,
+  ctx: TemplateBuildContext,
+  origin: TemplateOrigin,
 ): TemplateIR {
   const ids = new DomIdAllocator();
   const idMap = new WeakMap<P5Node, NodeId>();
-  const host = stripControllerAttrsFromElement(el, attrParser, catalog);
+  const host = stripControllerAttrsFromElement(el, lowerCtx.attrParser, lowerCtx.catalog);
   const syntheticRoot: { childNodes: P5Node[] } = { childNodes: [host as P5Node] };
   return buildTemplateFrom(
     syntheticRoot,
     ids,
     idMap,
-    attrParser,
-    table,
+    lowerCtx,
     nestedTemplates,
-    catalog,
-    collectRows
+    collectRows,
+    ctx,
+    origin,
   );
 }
 
 export function templateOfElementChildrenWithMap(
   el: P5Element,
-  attrParser: AttributeParser,
-  table: ExprTable,
+  lowerCtx: LowerContext,
   nestedTemplates: TemplateIR[],
-  catalog: ResourceCatalog,
-  collectRows: RowCollector
+  collectRows: RowCollector,
+  ctx: TemplateBuildContext,
+  origin: TemplateOrigin,
 ): { def: TemplateIR; idMap: WeakMap<P5Node, NodeId> } {
   const ids = new DomIdAllocator();
   const idMap = new WeakMap<P5Node, NodeId>();
-  const host = stripControllerAttrsFromElement(el, attrParser, catalog);
+  const host = stripControllerAttrsFromElement(el, lowerCtx.attrParser, lowerCtx.catalog);
   const syntheticRoot: { childNodes: P5Node[] } = { childNodes: [host as P5Node] };
 
   const def = buildTemplateFrom(
     syntheticRoot,
     ids,
     idMap,
-    attrParser,
-    table,
+    lowerCtx,
     nestedTemplates,
-    catalog,
-    collectRows
+    collectRows,
+    ctx,
+    origin,
   );
   return { def, idMap };
 }
@@ -140,28 +157,29 @@ export function stripControllerAttrsFromElement(
 
 export function templateOfTemplateContent(
   t: P5Template,
-  attrParser: AttributeParser,
-  table: ExprTable,
+  lowerCtx: LowerContext,
   nestedTemplates: TemplateIR[],
-  catalog: ResourceCatalog,
-  collectRows: RowCollector
+  collectRows: RowCollector,
+  ctx: TemplateBuildContext,
+  origin: TemplateOrigin,
 ): TemplateIR {
   const ids = new DomIdAllocator();
   return buildTemplateFrom(
     t.content,
     ids,
     undefined,
-    attrParser,
-    table,
+    lowerCtx,
     nestedTemplates,
-    catalog,
-    collectRows
+    collectRows,
+    ctx,
+    origin,
   );
 }
 
 export function makeWrapperTemplate(
   inner: HydrateTemplateControllerIR,
-  nestedTemplates: TemplateIR[]
+  nestedTemplates: TemplateIR[],
+  ctx: TemplateBuildContext,
 ): TemplateIR {
   const ids = new DomIdAllocator();
   const commentId = ids.withinChildren(() => ids.nextComment());
@@ -179,7 +197,9 @@ export function makeWrapperTemplate(
       instructions: [inner],
     },
   ];
-  const t: TemplateIR = { dom, rows };
+  const host = "host" in inner.def.origin ? inner.def.origin.host : undefined;
+  const origin: TemplateOrigin = { kind: "synthetic", reason: "controller-wrapper", ...(host ? { host } : {}) };
+  const t: TemplateIR = { id: ctx.templateIds.allocate(), dom, rows, origin };
   nestedTemplates.push(t);
   return t;
 }
@@ -188,19 +208,23 @@ export function buildTemplateFrom(
   rootLike: { childNodes?: P5Node[] } | P5Template["content"],
   ids: DomIdAllocator,
   idMap: WeakMap<P5Node, NodeId> | undefined,
-  attrParser: AttributeParser,
-  table: ExprTable,
+  lowerCtx: LowerContext,
   nestedTemplates: TemplateIR[],
-  catalog: ResourceCatalog,
-  collectRows: RowCollector
+  collectRows: RowCollector,
+  ctx: TemplateBuildContext,
+  origin: TemplateOrigin,
 ): TemplateIR {
-  const projectionMap = buildProjectionMap(
+  const { table } = lowerCtx;
+  const templateId = ctx.templateIds.allocate();
+  const templateCtx: TemplateBuildContext = { templateId, templateIds: ctx.templateIds };
+  const domIdMap = idMap ?? new WeakMap<P5Node, NodeId>();
+
+  const projectionIndex = buildProjectionIndex(
     rootLike as { childNodes?: P5Node[] },
-    attrParser,
-    table,
+    lowerCtx,
     nestedTemplates,
-    catalog,
     collectRows,
+    templateCtx,
   );
   const dom: TemplateNode = {
     kind: "template",
@@ -211,9 +235,10 @@ export function buildTemplateFrom(
       rootLike as { childNodes?: P5Node[] },
       ids,
       table.source,
-      idMap,
+      table.sourceText,
+      domIdMap,
       undefined,
-      projectionMap,
+      projectionIndex.map,
     ),
     loc: null,
   };
@@ -221,27 +246,48 @@ export function buildTemplateFrom(
   collectRows(
     rootLike as { childNodes?: P5Node[] },
     ids,
-    attrParser,
-    table,
+    lowerCtx,
     nestedTemplates,
     rows,
-    catalog,
+    templateCtx,
     undefined,
-    projectionMap,
+    projectionIndex.map,
   );
-  const t: TemplateIR = { dom, rows };
+  applyProjectionOrigins(projectionIndex.entries, domIdMap, templateId);
+  const t: TemplateIR = { id: templateId, dom, rows, origin };
   nestedTemplates.push(t);
   return t;
 }
 
+export function applyProjectionOrigins(
+  entries: ProjectionEntry[],
+  idMap: WeakMap<P5Node, NodeId>,
+  templateId: TemplateId,
+): void {
+  if (entries.length === 0) return;
+  for (const entry of entries) {
+    const hostId = idMap.get(entry.host as P5Node);
+    if (!hostId) {
+      throw new Error(`Projection origin host node not found for template ${templateId}.`);
+    }
+    for (const projection of entry.projections) {
+      projection.def.origin = {
+        kind: "projection",
+        host: { templateId, nodeId: hostId },
+        slot: projection.slot ?? null,
+      };
+    }
+  }
+}
+
 function extractProjections(
   rootLike: { childNodes?: P5Node[] },
-  attrParser: AttributeParser,
-  table: ExprTable,
+  lowerCtx: LowerContext,
   nestedTemplates: TemplateIR[],
-  catalog: ResourceCatalog,
   collectRows: RowCollector,
+  ctx: TemplateBuildContext,
   projectionMap: ProjectionMap,
+  entries: ProjectionEntry[],
   skipTags?: Set<string>,
 ): void {
   const kids = rootLike.childNodes ?? [];
@@ -252,12 +298,12 @@ function extractProjections(
     if (skipTags?.has(tag)) {
       extractProjections(
         kid,
-        attrParser,
-        table,
+        lowerCtx,
         nestedTemplates,
-        catalog,
         collectRows,
+        ctx,
         projectionMap,
+        entries,
         skipTags,
       );
       continue;
@@ -265,14 +311,14 @@ function extractProjections(
 
     const projections = extractElementProjections(
       kid,
-      attrParser,
-      table,
+      lowerCtx,
       nestedTemplates,
-      catalog,
       collectRows,
+      ctx,
     );
     if (projections && projections.length > 0) {
       projectionMap.set(kid, projections);
+      entries.push({ host: kid, projections });
     }
 
     const childRoot = kid.nodeName === "template"
@@ -280,12 +326,12 @@ function extractProjections(
       : kid;
     extractProjections(
       childRoot,
-      attrParser,
-      table,
+      lowerCtx,
       nestedTemplates,
-      catalog,
       collectRows,
+      ctx,
       projectionMap,
+      entries,
       skipTags,
     );
   }
@@ -293,12 +339,12 @@ function extractProjections(
 
 function extractElementProjections(
   el: P5Element,
-  attrParser: AttributeParser,
-  table: ExprTable,
+  lowerCtx: LowerContext,
   nestedTemplates: TemplateIR[],
-  catalog: ResourceCatalog,
   collectRows: RowCollector,
+  ctx: TemplateBuildContext,
 ): ProjectionDef[] | null {
+  const { catalog } = lowerCtx;
   const authoredTag = el.nodeName.toLowerCase();
   const asElement = findAttr(el, "as-element");
   const effectiveTag = (asElement?.value ?? authoredTag).toLowerCase();
@@ -361,11 +407,11 @@ function extractElementProjections(
       { childNodes: normalizedNodes },
       ids,
       undefined,
-      attrParser,
-      table,
+      lowerCtx,
       nestedTemplates,
-      catalog,
       collectRows,
+      ctx,
+      { kind: "synthetic", reason: "projection" },
     );
     defs.push({ slot: slotName, def });
   }

@@ -1,0 +1,7 @@
+<template>
+  <my-card title.bind="title">
+    <template au-slot="header">Hello ${title}</template>
+    <input value.bind="query">
+    <div repeat.for="item of items">${item.label}</div>
+  </my-card>
+</template>

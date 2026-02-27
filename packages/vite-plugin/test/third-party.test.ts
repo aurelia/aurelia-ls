@@ -3,8 +3,8 @@ import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, readdirSyn
 import { join, resolve as resolvePath } from "node:path";
 import { tmpdir } from "node:os";
 import { normalizePathForId, type NormalizedPath } from "@aurelia-ls/compiler";
-import type { AureliaPluginOptions, ResolutionContext } from "../src/types.js";
-import { createResolutionContext } from "../src/resolution.js";
+import type { AureliaPluginOptions, ProjectSemanticsContext } from "../src/types.js";
+import { createProjectSemanticsContext } from "../src/project-semantics.js";
 import { loadConfigFile, mergeConfigs, normalizeOptions } from "../src/defaults.js";
 
 type Workspace = {
@@ -135,7 +135,7 @@ describe("config precedence (config file vs inline)", () => {
         root: workspace.appRoot,
       });
 
-      const ctx = await createResolutionContext(workspace.tsconfigPath, LOGGER, {
+      const ctx = await createProjectSemanticsContext(workspace.tsconfigPath, LOGGER, {
         thirdParty: resolved.conventions.thirdParty,
         conventions: resolved.conventions.config,
         packagePath: resolved.packagePath,
@@ -318,8 +318,7 @@ describe("third-party error paths", () => {
       });
 
       expect(ctx).not.toBeNull();
-      const codes = ctx!.result.diagnostics.map((d) => d.code);
-      expect(codes).toContain("gap:package-not-found");
+      expect(hasGap(ctx!, "package-not-found", "aurelia/gap/partial-eval")).toBe(true);
       expect(ctx!.result.catalog.confidence).toBe("conservative");
     } finally {
       cleanupWorkspace(workspace);
@@ -345,8 +344,7 @@ describe("third-party error paths", () => {
       });
 
       expect(ctx).not.toBeNull();
-      const codes = ctx!.result.diagnostics.map((d) => d.code);
-      expect(codes).toContain("gap:invalid-package-json");
+      expect(hasGap(ctx!, "invalid-package-json", "aurelia/gap/partial-eval")).toBe(true);
       expect(ctx!.result.catalog.confidence).toBe("conservative");
     } finally {
       cleanupWorkspace(workspace);
@@ -381,8 +379,7 @@ describe("third-party error paths", () => {
       });
 
       expect(missingNameCtx).not.toBeNull();
-      const missingNameCodes = missingNameCtx!.result.diagnostics.map((d) => d.code);
-      expect(missingNameCodes).toContain("gap:missing-package-field");
+      expect(hasGap(missingNameCtx!, "missing-package-field", "aurelia/gap/partial-eval")).toBe(true);
 
       const missingVersion = createPackageRoot(workspace.root, "missing-version");
       writeFileSync(
@@ -409,8 +406,7 @@ describe("third-party error paths", () => {
       });
 
       expect(missingVersionCtx).not.toBeNull();
-      const missingVersionCodes = missingVersionCtx!.result.diagnostics.map((d) => d.code);
-      expect(missingVersionCodes).toContain("gap:missing-package-field");
+      expect(hasGap(missingVersionCtx!, "missing-package-field", "aurelia/gap/partial-eval")).toBe(true);
     } finally {
       cleanupWorkspace(workspace);
     }
@@ -444,8 +440,7 @@ describe("third-party error paths", () => {
       });
 
       expect(ctx).not.toBeNull();
-      const codes = ctx!.result.diagnostics.map((d) => d.code);
-      expect(codes).toContain("gap:no-entry-points");
+      expect(hasGap(ctx!, "no-entry-points", "aurelia/gap/partial-eval")).toBe(true);
     } finally {
       cleanupWorkspace(workspace);
     }
@@ -479,8 +474,7 @@ describe("third-party error paths", () => {
       });
 
       expect(ctx).not.toBeNull();
-      const codes = ctx!.result.diagnostics.map((d) => d.code);
-      expect(codes).toContain("gap:entry-point-not-found");
+      expect(hasGap(ctx!, "entry-point-not-found", "aurelia/gap/partial-eval")).toBe(true);
       expect(ctx!.result.catalog.confidence).toBe("conservative");
     } finally {
       cleanupWorkspace(workspace);
@@ -520,7 +514,6 @@ describe("third-party error paths", () => {
 
       updateResource(workspace.packageRoots["aurelia-fixture"], "external-thing-next");
       const second = await resolveWithOptions(workspace, options);
-      const codes = second!.result.diagnostics.map((d) => d.code);
       const cacheEntriesAfter = readdirSync(cacheDir).filter((entry) => entry.endsWith(".json"));
       const cacheGapKinds = cacheEntriesAfter.flatMap((entry) => {
         const content = readFileSync(join(cacheDir, entry), "utf-8");
@@ -529,7 +522,7 @@ describe("third-party error paths", () => {
       });
 
       expect(cacheGapKinds).toContain("cache-corrupt");
-      expect(codes).toContain("cache:corrupt");
+      expect(hasGap(second!, "cache-corrupt", "aurelia/gap/cache-corrupt")).toBe(true);
       expect(hasElement(second, "external-thing-next")).toBe(true);
     } finally {
       cleanupWorkspace(workspace);
@@ -558,8 +551,7 @@ describe("third-party error paths", () => {
       );
 
       expect(ctx).not.toBeNull();
-      const codes = ctx!.result.diagnostics.map((d) => d.code);
-      expect(codes).toContain("gap:analysis-failed");
+      expect(hasGap(ctx!, "analysis-failed", "aurelia/gap/partial-eval")).toBe(true);
       expect(ctx!.result.catalog.confidence).toBe("conservative");
     } finally {
       cleanupWorkspace(workspace);
@@ -590,8 +582,7 @@ describe("third-party error paths", () => {
       });
 
       expect(ctx).not.toBeNull();
-      const codes = ctx!.result.diagnostics.map((d) => d.code);
-      expect(codes).toContain("gap:no-source");
+      expect(hasGap(ctx!, "no-source", "aurelia/gap/partial-eval")).toBe(true);
       expect(ctx!.result.catalog.confidence).toBe("conservative");
 
       const resources = ctx!.resourceGraph.scopes[ctx!.resourceGraph.root]?.resources?.elements ?? {};
@@ -615,7 +606,7 @@ function resolveWithOptions(
     root: workspace.appRoot,
   });
   const tsconfigPath = resolvePath(workspace.appRoot, resolved.tsconfig ?? "tsconfig.json");
-  return createResolutionContext(tsconfigPath, LOGGER, {
+  return createProjectSemanticsContext(tsconfigPath, LOGGER, {
     thirdParty: resolved.conventions.thirdParty,
     conventions: resolved.conventions.config,
     packagePath: resolved.packagePath,
@@ -626,10 +617,20 @@ function resolveWithOptions(
   });
 }
 
-function hasElement(ctx: ResolutionContext | null, name: string): boolean {
+function hasElement(ctx: ProjectSemanticsContext | null, name: string): boolean {
   if (!ctx) return false;
   const rootScope = ctx.resourceGraph.scopes[ctx.resourceGraph.root];
   return Boolean(rootScope?.resources?.elements?.[name]);
+}
+
+function hasGap(
+  ctx: ProjectSemanticsContext,
+  kind: string,
+  code: string,
+): boolean {
+  return ctx.result.diagnostics.some((diag) =>
+    diag.code === code && diag.data?.gapKind === kind
+  );
 }
 
 function createWorkspace(): Workspace {
@@ -806,7 +807,7 @@ function writeLocalResources(appRoot: string): void {
   writeFileSync(join(appRoot, "src", "main.ts"), "import \"./my-app\";\n", "utf-8");
 }
 
-function collectLocalScopes(ctx: ResolutionContext): string[] {
+function collectLocalScopes(ctx: ProjectSemanticsContext): string[] {
   return Object.keys(ctx.resourceGraph.scopes).filter((id) => id.startsWith("local:"));
 }
 

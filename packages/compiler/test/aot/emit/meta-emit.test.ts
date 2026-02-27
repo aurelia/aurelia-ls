@@ -6,29 +6,36 @@
  */
 
 import { describe, it, expect } from "vitest";
-import {
-  lowerDocument,
-  resolveHost,
-  bindScopes,
-  planAot,
-  emitAotCode,
-  getExpressionParser,
-  DEFAULT_SYNTAX,
-  DEFAULT_SEMANTICS,
-} from "@aurelia-ls/compiler";
+import { lowerDocument } from "../../../out/analysis/10-lower/lower.js";
+import { linkTemplateSemantics } from "../../../out/analysis/20-link/resolve.js";
+import { buildSemanticsSnapshot } from "../../../out/schema/snapshot.js";
+import { bindScopes } from "../../../out/analysis/30-bind/bind.js";
+import { planAot } from "../../../out/synthesis/aot/plan.js";
+import { emitAotCode } from "../../../out/synthesis/aot/emit.js";
+import { getExpressionParser } from "../../../out/parsing/expression-parser.js";
+import { DEFAULT_SYNTAX } from "../../../out/parsing/attribute-parser.js";
+import { BUILTIN_SEMANTICS } from "../../../out/schema/registry.js";
+import { DiagnosticsRuntime } from "../../../out/diagnostics/runtime.js";
+import { noopModuleResolver } from "../../_helpers/test-utils.js";
 
 // Run full pipeline: markup → SerializedDefinition
 function compileTemplate(markup: string) {
   const exprParser = getExpressionParser();
+  const diagnostics = new DiagnosticsRuntime();
   const ir = lowerDocument(markup, {
     attrParser: DEFAULT_SYNTAX,
     exprParser,
     file: "test.html",
     name: "test",
-    catalog: DEFAULT_SEMANTICS.catalog,
+    catalog: BUILTIN_SEMANTICS.catalog,
+    diagnostics: diagnostics.forSource("lower"),
   });
-  const linked = resolveHost(ir, DEFAULT_SEMANTICS);
-  const scope = bindScopes(linked);
+  const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(BUILTIN_SEMANTICS), {
+    moduleResolver: noopModuleResolver,
+    templateFilePath: "test.html",
+    diagnostics: diagnostics.forSource("link"),
+  });
+  const scope = bindScopes(linked, { diagnostics: diagnostics.forSource("bind") });
   const plan = planAot(linked, scope, { templateFilePath: "test.html" });
   const result = emitAotCode(plan, { name: "test" });
   return result.definition;
@@ -218,3 +225,5 @@ describe("Meta Element Emission", () => {
     });
   });
 });
+
+

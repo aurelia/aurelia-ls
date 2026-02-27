@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { build, createServer, type InlineConfig, type ResolvedConfig } from "vite";
 import { aurelia } from "../src/plugin.js";
 import type { AureliaPluginOptions } from "../src/types.js";
-import { createResolutionContext } from "../src/resolution.js";
+import { createProjectSemanticsContext } from "../src/project-semantics.js";
 import { normalizeOptions } from "../src/defaults.js";
 import { compileWithAot, patchComponentDefinition, render } from "@aurelia-ls/ssr";
 
@@ -87,7 +87,7 @@ describe("vite plugin transform integration", () => {
         root: workspace.appRoot,
       });
 
-      const ctx = await createResolutionContext(workspace.tsconfigPath, LOGGER, {
+      const ctx = await createProjectSemanticsContext(workspace.tsconfigPath, LOGGER, {
         thirdParty: resolved.conventions.thirdParty,
         conventions: resolved.conventions.config,
         packagePath: resolved.packagePath,

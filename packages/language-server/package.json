@@ -5,6 +5,16 @@
   "type": "module",
   "main": "./out/main.js",
   "types": "./out/main.d.ts",
+  "exports": {
+    ".": {
+      "import": "./out/main.js",
+      "types": "./out/main.d.ts"
+    },
+    "./api": {
+      "import": "./out/api.js",
+      "types": "./out/api.d.ts"
+    }
+  },
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -17,10 +27,12 @@
   },
   "dependencies": {
     "@aurelia-ls/compiler": "workspace:*",
-    "@aurelia-ls/resolution": "workspace:*",
-    "typescript": "^5.5.4",
+    "@aurelia-ls/semantic-workspace": "workspace:*",
     "vscode-languageserver": "^9.0.1",
     "vscode-languageserver-textdocument": "^1.0.11",
     "vscode-uri": "^3.0.8"
+  },
+  "peerDependencies": {
+    "typescript": "^5.5.4"
   }
 }

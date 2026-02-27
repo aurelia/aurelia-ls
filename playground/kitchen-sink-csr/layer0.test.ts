@@ -19,7 +19,7 @@ import { transformSync } from "esbuild";
 
 // AOT pipeline imports
 // Use compileAot from compiler directly - no SSR dependency needed for CSR-only AOT
-import { compileAot, DEFAULT_SEMANTICS } from "@aurelia-ls/compiler";
+import { compileAot, BUILTIN_SEMANTICS } from "@aurelia-ls/compiler";
 import { transform, transformSimpleEntryPoint } from "@aurelia-ls/transform";
 
 // =============================================================================
@@ -125,7 +125,8 @@ function compileComponent(fileName: string): string {
   const aot = compileAot(template, {
     templatePath: htmlPath,
     name: resourceName,
-    semantics: DEFAULT_SEMANTICS,
+    semantics: BUILTIN_SEMANTICS,
+    moduleResolver: () => null,
   });
 
   // Transform TypeScript source to inject $au

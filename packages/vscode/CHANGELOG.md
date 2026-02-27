@@ -1,5 +1,96 @@
 # Changelog
 
+## 0.4.0
+
+The extension has been rebuilt around a new semantic workspace
+architecture. The language server now delegates all analysis to an
+independent semantic layer, which means every feature goes through
+the same resolution and confidence path.
+
+### Hover
+
+Rich semantic cards for all Aurelia template constructs:
+
+- Custom elements show their bindable interface with types and binding modes
+- Template controllers show contextual variables ($index, $first, $even, etc.)
+- Expressions show resolved types from TypeScript
+- Confidence indicators when the system's knowledge is partial
+- Declaration form and source location for provenance
+
+Covers custom elements, custom attributes, template controllers,
+bindables, binding commands, value converters, binding behaviors,
+expression identifiers, member access chains, let bindings, and
+au-slot references.
+
+### Diagnostics
+
+- Unknown element and attribute detection
+- Binding target mismatches
+- Scope violations
+- Confidence-based severity demotion — errors demote to warnings when
+  analysis is incomplete, preventing false positives on valid code
+- Capture-aware bindable suppression (won't flag a missing bindable
+  when the component captures spreads)
+
+### Completions
+
+- Context-aware suggestions for element tags, attribute names, binding
+  command suffixes, expression members, and value converter/binding
+  behavior names
+- Scope-aware filtering — only suggests resources that are registered
+  and visible
+- Import suggestions for unregistered resources
+- Gap markers when the completion list may be incomplete
+
+### Go to Definition
+
+- Jump from template usage to source definition for all resource types
+- Works across the HTML/TypeScript boundary
+- Local scope variables (let bindings, repeat iterator variables)
+
+### Find References
+
+- Find all usages of a component, attribute, or bindable across templates
+- Cross-file reference tracking via TypeScript overlay synchronization
+
+### Rename
+
+- Cross-file rename for custom elements, custom attributes, value
+  converters, binding behaviors, and bindable properties
+- Confidence-gated safety — denies the rename with a structured
+  explanation when it can't guarantee full reference coverage
+
+### Semantic Tokens
+
+- Semantic coloring that distinguishes custom elements from HTML
+  elements, bindable attributes from plain attributes, template
+  controller attributes, value converters, binding behaviors, binding
+  commands, and expression identifiers
+- Gap-aware modifiers signal when coverage is partial
+
+### New extension features
+
+- **Resource Explorer** — tree view sidebar showing all Aurelia resources
+  with origin (local vs. package) and scope awareness
+- **Find Resource** — quick-pick search across all project resources
+- **Inspect at Cursor** — reveals the full semantic analysis at the
+  current cursor position
+- **Binding mode inlay hints** — shows whether `.bind` resolves to
+  two-way or to-view
+- **CodeLens** — bindable and usage counts on resource classes
+- **Open Related File** — toggle between component class and template
+  with `Alt+O`
+- **Show Available Resources** — scope-aware list of what's usable in
+  the current template
+
+### Improvements
+
+- Feature-based extension architecture (per-feature modules)
+- Keybindings and context menu integration for Aurelia commands
+- Improved status bar with analysis state indicator
+- Windows workspace activation fixes
+- Workspace change notifications for live updates
+
 ## 0.3.1
 
 ### Fixes

@@ -6,6 +6,8 @@
  * - Small helpers for hierarchical ids (templates/dom tree)
  * ======================================================================================= */
 
+import ts from "typescript";
+
 export type Brand<T extends string> = { readonly __brand: T };
 export type Branded<TValue, TBrand extends string> = TValue & Brand<TBrand>;
 
@@ -144,9 +146,23 @@ export function deterministicStringId<TBrand extends string>(
   return `${prefix}_${hashForId(payload)}` as StringId<TBrand>;
 }
 
-export function normalizePathForId(filePath: string): NormalizedPath {
+export function defaultPathCaseSensitivity(): boolean {
+  const hostCaseSensitivity = ts.sys.useCaseSensitiveFileNames;
+  if (typeof hostCaseSensitivity === "boolean") return hostCaseSensitivity;
+  return process.platform !== "win32";
+}
+
+export function normalizePathForId(
+  filePath: string,
+  caseSensitive: boolean = defaultPathCaseSensitivity(),
+): NormalizedPath {
   const normalized = filePath.split("\\").join("/");
-  const canonical = process.platform === "win32" ? normalized.toLowerCase() : normalized;
+  // A path with a Windows drive letter (e.g., C:/...) originates from a
+  // case-insensitive filesystem regardless of the host platform. Always
+  // lowercase these to ensure stable identity across platforms (CI on Linux
+  // processing Windows-style paths from tests or cross-platform tooling).
+  const hasWindowsDrive = /^[a-zA-Z]:\//.test(normalized);
+  const canonical = (!caseSensitive || hasWindowsDrive) ? normalized.toLowerCase() : normalized;
   return brandString<"NormalizedPath">(canonical);
 }
 
@@ -301,3 +317,14 @@ export class SequentialIdAllocator<TBrand extends string> {
 }
 
 export class FrameIdAllocator extends SequentialIdAllocator<"FrameId"> {}
+
+/** Sequential allocator for TemplateId to keep template identity stable within a module. */
+export class TemplateIdAllocator {
+  private next = 0;
+
+  public allocate(): TemplateId {
+    const id = brandString<"TemplateId">(`t${this.next}`);
+    this.next += 1;
+    return id;
+  }
+}

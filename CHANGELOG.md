@@ -1,8 +1,122 @@
 # Changelog
 
-Core packages changelog for `@aurelia-ls/*` (compiler, resolution, transform, build, language-server).
+Core packages changelog for `@aurelia-ls/*` (compiler, transform, build, language-server).
 
 For VS Code extension changelog, see [`packages/vscode/CHANGELOG.md`](packages/vscode/CHANGELOG.md).
+
+---
+
+## 0.3.0
+
+*Semantic workspace: independent semantic layer, full IDE feature suite.*
+
+### New package: @aurelia-ls/semantic-workspace
+
+Independent semantic authority that sits between the compiler and its
+consumers. The workspace owns the semantic model, orchestrates both
+analysis pipelines, handles incremental invalidation, and provides the
+feature query surface.
+
+**Feature query path:**
+- CursorEntity resolution — unified position → entity mapping for all features
+- Per-feature dispatch (hover, definition, completions, diagnostics, references, rename, semantic tokens)
+- Confidence cascade — every entity carries its confidence level through to the response
+- `FeatureResponse<T>` — typed result that's either a value, a degradation explanation, or not-applicable
+
+**Workspace engine:**
+- Orchestrates project and template pipelines
+- Incremental invalidation via DependencyGraph
+- Resource fingerprinting for detecting meaningful vs. cosmetic changes
+- TypeScript overlay management for cross-boundary type flow
+
+**Semantic authority host:**
+- Persistent runtime for interactive querying (`pnpm host:start` / `host:query`)
+- Replay and verification commands
+- Pressure sweep mode for corpus-level testing
+
+### @aurelia-ls/compiler
+
+**Project pipeline restructure:**
+
+The project analysis subsystem (`project-semantics/`) has been
+reorganized around a clear pipeline: scan → identify → characterize →
+converge → SemanticModel.
+
+- `SemanticModel` as canonical query authority, replacing scattered snapshot accessors
+- `SemanticModelQuery` resolves internal `Sourced<T>` provenance wrappers into consumer-facing `Resolved<T>` values, with `Stub<T>` for gapped fields
+- Definition convergence kernel — multiple sources (decorators, conventions, config, third-party, builtins) merge per-resource using 5 field-level operators (locked-identity, known-over-unknown, stable-union, patch-object, first-defined)
+- `ResourceView` projection boundary (Sourced → Resolved) as the clean seam between analysis and consumption
+- Per-resource gap tracking with structured reasons, propagated through the catalog and exposed via `SemanticsLookup`
+- Scope completeness propagation — dynamic registration patterns produce scope gaps that affect downstream confidence
+
+**Template pipeline:**
+
+Pipeline stages renamed for clarity: `20-resolve` → `20-link`.
+`PipelineEngine` removed — pipeline stages now query `SemanticModel` directly.
+
+- Link stage resolves elements, attributes, and template controllers against the semantic model with three-way resolution status (resolved / stub / absent)
+- Bind stage validates bindings against resource definitions, resolves value converters and binding behaviors in expressions, computes effective binding modes
+- Synthetic writeback locals for two-way/from-view bindings targeting `$`-prefixed expressions
+- `.class`/`.style` command binding targets preserved through the pipeline
+- Gap-aware diagnostics across all link-stage emission sites — confidence qualifies every diagnostic
+- Confidence-based severity demotion — errors demote to warnings when analysis is incomplete
+
+**CursorEntity system:**
+- Unified cursor position → semantic entity resolution
+- Per-position confidence cascade aggregating confidence from all pipeline layers
+- Entity types: element tag, attribute name, bindable, binding command, expression identifier, member access, value converter, binding behavior, template controller contextual variable, let binding, au-slot
+
+**Diagnostics infrastructure:**
+- Diagnostic catalog with typed codes and structured data
+- Policy engine for configurable diagnostic behavior
+- Surface routing (compiler → LSP → VS Code problems panel)
+- Capture-aware bindable suppression
+
+**Incremental invalidation:**
+- `DependencyGraph` tracks input→output relationships across the full pipeline
+- `DepRecorder` wired into every pipeline stage
+- File-scoped discovery replaces full-project recomputation
+
+**Completions engine:**
+- Predictive DFA for attribute state machine completion
+- IR walker for context-aware element and attribute suggestions
+- Expression scanner for member access and scope-aware completions
+
+**Code actions:**
+- Add-import for unregistered elements and attributes
+- Multi-form bindable declaration support (decorator, array, object forms)
+
+**Other changes:**
+- `DomSchema.base` for HTMLElement global properties inherited by all elements
+- Precise spans on DOM nodes and AST identifiers
+- Symbol graph for stable cross-file definition and reference tracking
+- Referential index for cross-domain provenance traversal
+- Import alias handling with conflict detection
+- VC/BB name canonicalization to match `@aurelia/kernel` camelCase behavior
+- Overlay leakage elimination from all user-facing surfaces
+- Policy modules: query policy, resource precedence, rename, refactor, provenance projection, controller dispatch, symbol ID
+- Command and attribute pattern recognition streams with uncertainty gap handling
+- Builtin alignment with runtime metadata (repeat, portal, promise)
+- Path case normalization for Windows compatibility
+
+### @aurelia-ls/language-server
+
+The language server is now a thin LSP protocol adapter. All semantic
+knowledge construction has moved to the semantic workspace.
+
+- Handlers translate LSP requests into workspace queries and workspace results into LSP responses
+- Diagnostics taxonomy bridged into VS Code via diagnostic data records
+- Gap-aware semantic token modifiers forwarded from workspace
+- Workspace change notifications (`onDidChangeSemantics`) for live updates
+- Parity adapter for verification against the semantic authority host
+
+### @aurelia-ls/vscode
+
+- TS-side rename propagation — renaming a property in TypeScript updates template usages
+
+### @aurelia-ls/transform
+
+- Pipeline terminology alignment (resolve → link)
 
 ---
 
@@ -76,7 +190,7 @@ Expression parser with full Aurelia syntax support:
 - Arrow functions, optional chaining, nullish coalescing
 - All binary/unary operators
 
-### @aurelia-ls/resolution
+### Resolution (merged into @aurelia-ls/compiler)
 
 Resource discovery and dependency analysis:
 
@@ -145,6 +259,6 @@ Compiler diagnostics implemented:
 
 ## Versioning Policy
 
-Core packages (`@aurelia-ls/compiler`, `@aurelia-ls/resolution`, `@aurelia-ls/transform`, `@aurelia-ls/build`, `@aurelia-ls/language-server`) share a unified version number. They are tightly coupled and changes typically cascade across packages.
+Core packages (`@aurelia-ls/compiler`, `@aurelia-ls/transform`, `@aurelia-ls/build`, `@aurelia-ls/language-server`) share a unified version number. They are tightly coupled and changes typically cascade across packages.
 
 The VS Code extension (`aurelia-2`) has an independent version and release cycle. See its [changelog](packages/vscode/CHANGELOG.md) for extension-specific changes.

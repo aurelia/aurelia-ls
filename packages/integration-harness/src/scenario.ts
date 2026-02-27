@@ -1,6 +1,6 @@
-import type { IntegrationScenario, NormalizedScenario, CompileTargetSpec, ResolutionHarnessOptions, CompilerHarnessOptions } from "./schema.js";
+import type { IntegrationScenario, NormalizedScenario, CompileTargetSpec, DiscoveryHarnessOptions, CompilerHarnessOptions } from "./schema.js";
 
-const DEFAULT_RESOLUTION: ResolutionHarnessOptions = {
+const DEFAULT_DISCOVERY: DiscoveryHarnessOptions = {
   fileSystem: "mock",
 };
 
@@ -11,7 +11,7 @@ export function normalizeScenario(input: IntegrationScenario): NormalizedScenari
   const compile = input.compile ? [...input.compile] : [];
   const externalPackages = input.externalPackages ? [...input.externalPackages] : [];
   const externalResourcePolicy = input.externalResourcePolicy ?? (externalPackages.length ? "root-scope" : "none");
-  const resolution = { ...DEFAULT_RESOLUTION, ...(input.resolution ?? {}) };
+  const discovery = { ...DEFAULT_DISCOVERY, ...(input.discovery ?? {}) };
   const compiler = { ...DEFAULT_COMPILER, ...(input.compiler ?? {}) };
 
   return {
@@ -20,7 +20,7 @@ export function normalizeScenario(input: IntegrationScenario): NormalizedScenari
     compile,
     externalPackages,
     externalResourcePolicy,
-    resolution,
+    discovery,
     compiler,
   };
 }

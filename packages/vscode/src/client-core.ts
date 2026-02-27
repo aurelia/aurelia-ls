@@ -1,8 +1,9 @@
 import { LanguageClient, TransportKind } from "vscode-languageclient/node.js";
-import type { LanguageClientOptions, ServerOptions } from "vscode-languageclient/node.js";
+import type { LanguageClientOptions, ServerOptions, Middleware } from "vscode-languageclient/node.js";
 import { type ClientLogger } from "./log.js";
 import { getVscodeApi, type VscodeApi } from "./vscode-api.js";
-import type { ExtensionContext } from "vscode";
+import type { ExtensionContext, MarkdownString, SemanticTokens, TextDocument } from "vscode";
+import { applyDiagnosticsUxAugmentation } from "./features/diagnostics/taxonomy.js";
 
 async function fileExists(vscode: VscodeApi, p: string): Promise<boolean> {
   try {
@@ -39,29 +40,128 @@ async function resolveServerModule(context: ExtensionContext, logger: ClientLogg
   throw new Error(msg);
 }
 
+type DiagnosticsUxState = {
+  enabled: boolean;
+};
+
+type InlineUxState = {
+  enabled: boolean;
+  onSemanticTokens: ((document: TextDocument, tokens: SemanticTokens) => void) | null;
+};
+
+function createMiddleware(
+  vscode: VscodeApi,
+  logger: ClientLogger,
+  diagnosticsUx: DiagnosticsUxState,
+  inlineUx: InlineUxState,
+  client: AureliaLanguageClient,
+): Middleware {
+  return {
+    provideHover: async (document, position, token, next) => {
+      const hover = await next(document, position, token);
+      if (!hover) return hover;
+      // Upgrade MarkdownString contents to enable command links and theme icons
+      hover.contents = hover.contents.map((c) => {
+        if (typeof c === "string" || !("value" in c)) return c;
+        const md = new vscode.MarkdownString(c.value) as MarkdownString;
+        md.isTrusted = true;
+        md.supportThemeIcons = true;
+        return md;
+      });
+      return hover;
+    },
+    handleDiagnostics: (uri, diagnostics, next) => {
+      if (diagnosticsUx.enabled) {
+        applyDiagnosticsUxAugmentation(diagnostics);
+      }
+      next(uri, diagnostics);
+    },
+    provideDocumentSemanticTokens: async (document, token, next) => {
+      const semanticTokens = await next(document, token);
+      if (semanticTokens && inlineUx.enabled && inlineUx.onSemanticTokens) {
+        try {
+          inlineUx.onSemanticTokens(document, semanticTokens);
+        } catch (error) {
+          logger.warn(`[client] inline semantic token hook failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+      return semanticTokens;
+    },
+    provideInlayHints: async (document, range, token, next) => {
+      if (!client.inlayHintsEnabled) return [];
+      return next(document, range, token);
+    },
+  };
+}
+
 export class AureliaLanguageClient {
   #client: LanguageClient | undefined;
   #logger: ClientLogger;
   #vscode: VscodeApi;
+  #serverEnv: Record<string, string> | null = null;
+  #diagnosticsUx: DiagnosticsUxState = { enabled: false };
+  #inlineUx: InlineUxState = { enabled: false, onSemanticTokens: null };
+  #inlayHintsEnabled = true;
 
   constructor(logger: ClientLogger, vscode: VscodeApi = getVscodeApi()) {
     this.#logger = logger;
     this.#vscode = vscode;
   }
 
-  async start(context: ExtensionContext): Promise<LanguageClient> {
+  setServerEnv(env: Record<string, string> | null): void {
+    this.#serverEnv = env;
+  }
+
+  setDiagnosticsUxEnabled(enabled: boolean): void {
+    this.#diagnosticsUx.enabled = enabled;
+  }
+
+  setInlineUxEnabled(enabled: boolean): void {
+    this.#inlineUx.enabled = enabled;
+  }
+
+  get inlayHintsEnabled(): boolean {
+    return this.#inlayHintsEnabled;
+  }
+
+  setInlayHintsEnabled(enabled: boolean): void {
+    this.#inlayHintsEnabled = enabled;
+  }
+
+  setInlineUxSemanticTokensConsumer(
+    consumer: ((document: TextDocument, tokens: SemanticTokens) => void) | null,
+  ): void {
+    this.#inlineUx.onSemanticTokens = consumer;
+  }
+
+  async start(context: ExtensionContext, options: { serverEnv?: Record<string, string> } = {}): Promise<LanguageClient> {
     if (this.#client) return this.#client;
     const serverModule = await resolveServerModule(context, this.#logger, this.#vscode);
+    if (options.serverEnv) {
+      this.#serverEnv = options.serverEnv;
+    }
+    const serverEnv = options.serverEnv ?? this.#serverEnv;
+    const execOptions = serverEnv ? { env: { ...process.env, ...serverEnv } } : undefined;
 
     const serverOptions: ServerOptions = {
-      run: { module: serverModule, transport: TransportKind.ipc },
-      debug: { module: serverModule, transport: TransportKind.ipc, options: { execArgv: ["--inspect=6009"] } },
+      run: { module: serverModule, transport: TransportKind.ipc, options: execOptions },
+      debug: {
+        module: serverModule,
+        transport: TransportKind.ipc,
+        options: execOptions
+          ? { ...execOptions, execArgv: ["--inspect=6009"] }
+          : { execArgv: ["--inspect=6009"] },
+      },
     };
 
     const fileEvents = [
       this.#vscode.workspace.createFileSystemWatcher("**/tsconfig.json"),
       this.#vscode.workspace.createFileSystemWatcher("**/tsconfig.*.json"),
       this.#vscode.workspace.createFileSystemWatcher("**/jsconfig.json"),
+      // Watch TS/JS files for creation/deletion so the resource explorer
+      // picks up new or removed resources without requiring a manual refresh.
+      this.#vscode.workspace.createFileSystemWatcher("**/*.ts"),
+      this.#vscode.workspace.createFileSystemWatcher("**/*.js"),
     ];
 
     const clientOptions: LanguageClientOptions = {
@@ -70,12 +170,29 @@ export class AureliaLanguageClient {
         { scheme: "untitled", language: "html" },
       ],
       synchronize: { fileEvents },
+      middleware: createMiddleware(this.#vscode, this.#logger, this.#diagnosticsUx, this.#inlineUx, this),
     };
 
-    this.#client = new LanguageClient("aurelia-ls", "Aurelia Language Server", serverOptions, clientOptions);
-    await this.#client.start();
+    const client = new LanguageClient("aurelia-ls", "Aurelia Language Server", serverOptions, clientOptions);
+    await client.start();
+    this.#client = client;
     this.#logger.log("[client] started");
-    return this.#client;
+    return client;
+  }
+
+  async restart(context: ExtensionContext, options: { serverEnv?: Record<string, string> } = {}): Promise<LanguageClient> {
+    const existing = this.#client;
+    this.#client = undefined;
+    try {
+      const started = await this.start(context, options);
+      if (existing) {
+        try { await existing.stop(); } catch {}
+      }
+      return started;
+    } catch (err) {
+      this.#client = existing;
+      throw err;
+    }
   }
 
   async stop(): Promise<void> {

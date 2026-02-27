@@ -15,12 +15,12 @@
       "aurelia": ["aurelia/packages/aurelia/src"],
       "@aurelia/kernel": ["aurelia/packages/kernel/src"],
       "@aurelia/runtime-html": ["aurelia/packages/runtime-html/src"],
-      "@test/multi-class": ["packages/resolution/test/npm/fixtures/multi-class/src/index.ts"],
-      "@test/multi-class/subpath": ["packages/resolution/test/npm/fixtures/multi-class/src/subpath/index.ts"]
+      "@test/multi-class": ["packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/index.ts"],
+      "@test/multi-class/subpath": ["packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/subpath/index.ts"]
     }
   },
   "include": [
     "src/**/*.ts",
-    "../../../../../packages/resolution/test/npm/fixtures/multi-class/src/**/*.ts"
+    "../../../../../packages/compiler/test/project-semantics/npm/fixtures/multi-class/src/**/*.ts"
   ]
 }

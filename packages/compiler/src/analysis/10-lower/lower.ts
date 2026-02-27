@@ -1,16 +1,18 @@
 import { parseFragment } from "parse5";
 
-import type { IrModule, TemplateIR, InstructionRow, TemplateNode, DOMNode } from "../../model/ir.js";
+import type { IrModule, TemplateIR, InstructionRow, TemplateNode, DOMNode, NodeId } from "../../model/ir.js";
 import type { AttributeParser } from "../../parsing/attribute-parser.js";
-import type { ResourceCatalog } from "../../language/registry.js";
+import type { ResourceCatalog } from "../../schema/registry.js";
 import type { IExpressionParser } from "../../parsing/expression-parser.js";
 import { buildDomRoot, META_ELEMENT_TAGS } from "./dom-builder.js";
 import { collectRows } from "./row-collector.js";
-import { ExprTable, DomIdAllocator } from "./lower-shared.js";
+import { ExprTable, DomIdAllocator, type P5Node, type LowerDiagnosticEmitter } from "./lower-shared.js";
 import { resolveSourceFile } from "../../model/source.js";
-import { NOOP_TRACE, CompilerAttributes, type CompileTrace } from "../../shared/trace.js";
+import { CompilerAttributes, type CompileTrace } from "../../shared/trace.js";
 import { extractMeta, stripMetaFromHtml } from "./meta-extraction.js";
-import { buildProjectionMap } from "./template-builders.js";
+import { applyProjectionOrigins, buildProjectionIndex, type TemplateBuildContext } from "./template-builders.js";
+import { TemplateIdAllocator } from "../../model/identity.js";
+import { createLowerServices, type LowerContext } from "./lower-context.js";
 
 export interface BuildIrOptions {
   file?: string;
@@ -18,12 +20,14 @@ export interface BuildIrOptions {
   attrParser: AttributeParser;
   exprParser: IExpressionParser;
   catalog: ResourceCatalog;
+  diagnostics: LowerDiagnosticEmitter;
   /** Optional trace for instrumentation. Defaults to NOOP_TRACE. */
   trace?: CompileTrace;
 }
 
 export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
-  const trace = opts.trace ?? NOOP_TRACE;
+  const { services, diagCount } = createLowerServices(opts);
+  const trace = services.trace;
 
   return trace.span("lower.document", () => {
     trace.setAttributes({
@@ -39,8 +43,17 @@ export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
     const catalog = opts.catalog;
     const source = resolveSourceFile(opts.file ?? opts.name ?? "");
     const ids = new DomIdAllocator();
-    const table = new ExprTable(opts.exprParser, source, html);
+    const table = new ExprTable(opts.exprParser, source, html, services.diagnostics);
     const nestedTemplates: TemplateIR[] = [];
+    const templateIds = new TemplateIdAllocator();
+    const rootTemplateId = templateIds.allocate();
+    const rootCtx: TemplateBuildContext = { templateId: rootTemplateId, templateIds };
+    const lowerCtx: LowerContext = {
+      services,
+      attrParser: opts.attrParser,
+      catalog,
+      table,
+    };
 
     // Extract meta elements (<import>, <bindable>, etc.) before DOM building
     trace.event("lower.meta.start");
@@ -50,33 +63,37 @@ export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
     // Tags to skip during DOM building and row collection
     const skipTags = META_ELEMENT_TAGS;
 
-    const projectionMap = buildProjectionMap(
+    const projectionIndex = buildProjectionIndex(
       p5,
-      opts.attrParser,
-      table,
+      lowerCtx,
       nestedTemplates,
-      catalog,
       collectRows,
+      rootCtx,
       skipTags,
     );
 
     // Build DOM tree (skipping meta elements)
     trace.event("lower.dom.start");
-    const domRoot: TemplateNode = buildDomRoot(p5, ids, table.source, undefined, skipTags, projectionMap);
+    const domIdMap = new WeakMap<P5Node, NodeId>();
+    const domRoot: TemplateNode = buildDomRoot(p5, ids, table.source, html, domIdMap, skipTags, projectionIndex.map);
     trace.event("lower.dom.complete");
 
     // Collect instruction rows (skipping meta elements)
     trace.event("lower.rows.start");
     const rows: InstructionRow[] = [];
-    collectRows(p5, ids, opts.attrParser, table, nestedTemplates, rows, catalog, skipTags, projectionMap);
+    collectRows(p5, ids, lowerCtx, nestedTemplates, rows, rootCtx, skipTags, projectionIndex.map);
     trace.event("lower.rows.complete");
+
+    applyProjectionOrigins(projectionIndex.entries, domIdMap, rootTemplateId);
 
     // Build root template with meta
     const root: TemplateIR = {
+      id: rootTemplateId,
       dom: domRoot,
       rows,
       name: opts.name!,
       templateMeta,
+      origin: { kind: "root", file: table.source.id },
     };
 
     const result: IrModule = {
@@ -90,11 +107,6 @@ export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
         : undefined,
     };
 
-    // Include diagnostics if any were collected
-    if (table.diags.length > 0) {
-      result.diags = table.diags;
-    }
-
     // Record output metrics
     trace.setAttributes({
       [CompilerAttributes.NODE_COUNT]: countNodes(domRoot),
@@ -103,7 +115,7 @@ export function lowerDocument(html: string, opts: BuildIrOptions): IrModule {
       "lower.templateCount": result.templates.length,
       "lower.metaImports": templateMeta.imports.length,
       "lower.metaBindables": templateMeta.bindables.length,
-      [CompilerAttributes.DIAG_COUNT]: result.diags?.length ?? 0,
+      [CompilerAttributes.DIAG_COUNT]: diagCount(),
     });
 
     return result;

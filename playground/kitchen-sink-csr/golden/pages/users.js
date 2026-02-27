@@ -10,6 +10,7 @@ const users__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "user",
@@ -22,6 +23,7 @@ const users__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "user",

@@ -5,8 +5,14 @@
     "outDir": "out"
   },
   "references": [
-    { "path": "../compiler" },
-    { "path": "../resolution" }
+    {
+      "path": "../compiler"
+    },
+    {
+      "path": "../semantic-workspace"
+    }
   ],
-  "include": ["src"]
+  "include": [
+    "src"
+  ]
 }

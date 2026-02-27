@@ -46,6 +46,7 @@ export interface MappedExpressionEmitResult {
   readonly span: TextSpan;
   readonly mappings: readonly SpanMapping[];
   readonly segments: readonly OverlayLambdaSegment[];
+  readonly path?: string;
 }
 
 export interface SpanMapping {
@@ -81,7 +82,7 @@ export function emitMappedExpression(expr: MappableExpression): MappedExpression
 export function emitPrintedExpression(expr: IsBindingBehavior): PrintedExpressionLike | null {
   try {
     const emitted = emitMappedExpression(expr);
-    const path = emitted.segments.length ? emitted.segments[emitted.segments.length - 1]!.path : undefined;
+    const path = emitted.path ?? (emitted.segments.length ? emitted.segments[emitted.segments.length - 1]!.path : undefined);
     return { code: emitted.code, segments: emitted.segments, ...(path ? { path } : {}) };
   } catch {
     return null;
@@ -97,6 +98,7 @@ type EmitResult = {
   mappings: SpanMapping[];
   segments: OverlayLambdaSegment[];
   span: TextSpan;
+  path?: string;
 };
 
 function emitBindingBehavior(node: MappableExpression): EmitResult {
@@ -110,7 +112,7 @@ function emitBindingBehavior(node: MappableExpression): EmitResult {
     case "Conditional":
       return emitConditional(node);
     case "AccessGlobal":
-      return simpleToken(node, node.name);
+      return simpleToken(node, node.name.name);
     case "AccessThis":
       return simpleToken(node, ancestorChain(node.ancestor));
     case "AccessBoundary":
@@ -167,7 +169,7 @@ function emitBindingBehavior(node: MappableExpression): EmitResult {
 function emitBindingBehaviorExpr(node: BindingBehaviorExpression): EmitResult {
   const expr = emitBindingBehavior(node.expression);
   const args = emitArgsParts(node.args);
-  const parts: (string | EmitResult)[] = ["__au_bb(", expr, ", ", JSON.stringify(node.name)];
+  const parts: (string | EmitResult)[] = ["__au_bb(", expr, ", ", JSON.stringify(node.name.name)];
   if (args.length) parts.push(", ", ...args);
   parts.push(")");
   return combine(node, parts);
@@ -176,7 +178,7 @@ function emitBindingBehaviorExpr(node: BindingBehaviorExpression): EmitResult {
 function emitValueConverter(node: ValueConverterExpression): EmitResult {
   const expr = emitBindingBehavior(node.expression);
   const args = emitArgsParts(node.args);
-  const parts: (string | EmitResult)[] = ["__au_vc(", expr, ", ", JSON.stringify(node.name)];
+  const parts: (string | EmitResult)[] = ["__au_vc(", expr, ", ", JSON.stringify(node.name.name)];
   if (args.length) parts.push(", ", ...args);
   parts.push(")");
   return combine(node, parts);
@@ -197,9 +199,9 @@ function emitConditional(node: ConditionalExpression): EmitResult {
 
 function emitAccessScope(node: AccessScopeExpression): EmitResult {
   const base = ancestorChain(node.ancestor);
-  const code = node.name ? `${base}.${node.name}` : base;
+  const code = node.name ? `${base}.${node.name.name}` : base;
   const pathBase = pathPrefix(node.ancestor);
-  const path = node.name ? (pathBase ? `${pathBase}.${node.name}` : node.name) : pathBase || undefined;
+  const path = node.name ? (pathBase ? `${pathBase}.${node.name.name}` : node.name.name) : pathBase || undefined;
   const segments: OverlayLambdaSegment[] = [];
   if (pathBase) {
     segments.push({ kind: "member", path: pathBase, span: spanFromBounds(2, base.length) });
@@ -208,21 +210,23 @@ function emitAccessScope(node: AccessScopeExpression): EmitResult {
     segments.push({
       kind: "member",
       path,
-      span: spanFromBounds(base.length + 1, base.length + 1 + node.name.length),
+      span: spanFromBounds(base.length + 1, base.length + 1 + node.name.name.length),
     });
   }
-  return combine(node, [code], segments);
+  return combine(node, [code], segments, path);
 }
 
 function emitAccessMember(node: AccessMemberExpression): EmitResult {
   const obj = emitBindingBehavior(node.object);
-  const head = `${obj.code}${node.optional ? "?." : "."}`;
-  const memberStart = head.length;
-  const memberSpan = spanFromBounds(memberStart, memberStart + node.name.length);
-  const basePath = deepestPath(obj.segments);
-  const path = basePath ? `${basePath}.${node.name}` : node.name;
+  const dot = node.optional ? "?." : ".";
+  const head = `${obj.code}${dot}`;
+  // Include the dot in the member segment for symmetric mapping with HTML spans
+  const memberStart = obj.code.length;
+  const memberSpan = spanFromBounds(memberStart, head.length + node.name.name.length);
+  const basePath = obj.path;
+  const path = basePath ? `${basePath}.${node.name.name}` : node.name.name;
   const segments: OverlayLambdaSegment[] = [{ kind: "member", path, span: memberSpan }];
-  return combine(node, [obj, head.slice(obj.code.length), node.name], segments);
+  return combine(node, [obj, dot, node.name.name], segments, path);
 }
 
 function emitAccessKeyed(node: AccessKeyedExpression): EmitResult {
@@ -231,16 +235,20 @@ function emitAccessKeyed(node: AccessKeyedExpression): EmitResult {
   const head = `${obj.code}${node.optional ? "?." : ""}[`;
   const close = "]";
   const memberSpan = spanFromBounds(head.length, head.length + key.code.length);
-  const keyPath = deepestPath(key.segments) ?? key.code;
-  const basePath = deepestPath(obj.segments);
-  const path = basePath ? `${basePath}.${keyPath}` : keyPath;
-  const segments: OverlayLambdaSegment[] = [{ kind: "member", path, span: memberSpan }];
-  return combine(node, [obj, head.slice(obj.code.length), key, close], segments);
+  const basePath = obj.path;
+  // Keep dynamic keyed access on the base path and let the key expression carry
+  // its own segments. Only literal keys get a stable bracket-path segment.
+  const literalPath = keyedLiteralPath(basePath, node.key);
+  const path = literalPath ?? basePath;
+  const segments: OverlayLambdaSegment[] = literalPath
+    ? [{ kind: "member", path: literalPath, span: memberSpan }]
+    : [];
+  return combine(node, [obj, head.slice(obj.code.length), key, close], segments, path);
 }
 
 function emitParen(node: ParenExpression): EmitResult {
   const inner = emitBindingBehavior(node.expression);
-  return combine(node, ["(", inner, ")"]);
+  return combine(node, ["(", inner, ")"], [], inner.path);
 }
 
 function emitNew(node: NewExpression): EmitResult {
@@ -251,39 +259,44 @@ function emitNew(node: NewExpression): EmitResult {
 
 function emitCallScope(node: CallScopeExpression): EmitResult {
   const base = ancestorChain(node.ancestor);
-  const head = `${base}${node.optional ? "?." : "."}${node.name}`;
+  const dot = node.optional ? "?." : ".";
   const args = emitArgsParts(node.args);
-  const path = ancestorPath(node.ancestor, node.name);
-  const memberSpan = spanFromBounds(base.length + 1, base.length + 1 + node.name.length);
+  const path = ancestorPath(node.ancestor, node.name.name);
+  // Exclude dot from member segment to match emitAccessScope — the name-only span
+  // projects cleanly to the HTML expression (which has no "o." prefix).
+  const memberSpan = spanFromBounds(base.length + dot.length, base.length + dot.length + node.name.name.length);
   const segments: OverlayLambdaSegment[] = [{ kind: "member", path, span: memberSpan }];
-  return combine(node, [head, "(", ...args, ")"], segments);
+  return combine(node, [base, dot, node.name.name, "(", ...args, ")"], segments, path);
 }
 
 function emitCallMember(node: CallMemberExpression): EmitResult {
   const obj = emitBindingBehavior(node.object);
-  const head = `${obj.code}${node.optionalMember ? "?." : "."}${node.name}${node.optionalCall ? "?." : ""}`;
+  const dot = node.optionalMember ? "?." : ".";
+  const optCall = node.optionalCall ? "?." : "";
   const args = emitArgsParts(node.args);
-  const memberStart = obj.code.length + (node.optionalMember ? 2 : 1);
-  const memberSpan = spanFromBounds(memberStart, memberStart + node.name.length);
-  const basePath = lastPath(obj.segments);
-  const path = basePath ? `${basePath}.${node.name}` : node.name;
+  // Exclude dot from member segment — name-only span projects cleanly to HTML
+  const memberStart = obj.code.length + dot.length;
+  const memberEnd = obj.code.length + dot.length + node.name.name.length;
+  const memberSpan = spanFromBounds(memberStart, memberEnd);
+  const basePath = obj.path;
+  const path = basePath ? `${basePath}.${node.name.name}` : node.name.name;
   const segments: OverlayLambdaSegment[] = [{ kind: "member", path, span: memberSpan }];
-  return combine(node, [obj, head.slice(obj.code.length), "(", ...args, ")"], segments);
+  return combine(node, [obj, dot, node.name.name, optCall, "(", ...args, ")"], segments, path);
 }
 
 function emitCallFunction(node: CallFunctionExpression): EmitResult {
   const fn = emitBindingBehavior(node.func);
   const args = emitArgsParts(node.args);
-  const path = lastPath(fn.segments);
-    const segments: OverlayLambdaSegment[] = path ? [{ kind: "member", path, span: spanFromBounds(0, fn.code.length) }] : [];
-  return combine(node, [fn, node.optional ? "?." : "", "(", ...args, ")"], segments);
+  const path = fn.path;
+  const segments: OverlayLambdaSegment[] = path ? [{ kind: "member", path, span: spanFromBounds(0, fn.code.length) }] : [];
+  return combine(node, [fn, node.optional ? "?." : "", "(", ...args, ")"], segments, path);
 }
 
 function emitCallGlobal(node: CallGlobalExpression): EmitResult {
   const args = emitArgsParts(node.args);
-  const memberSpan = spanFromBounds(0, node.name.length);
-  const segments: OverlayLambdaSegment[] = [{ kind: "member", path: node.name, span: memberSpan }];
-  return combine(node, [node.name, "(", ...args, ")"], segments);
+  const memberSpan = spanFromBounds(0, node.name.name.length);
+  const segments: OverlayLambdaSegment[] = [{ kind: "member", path: node.name.name, span: memberSpan }];
+  return combine(node, [node.name.name, "(", ...args, ")"], segments, node.name.name);
 }
 
 function emitBinary(node: BinaryExpression): EmitResult {
@@ -342,7 +355,7 @@ function emitTaggedTemplate(node: TaggedTemplateExpression): EmitResult {
 function emitDestructuring(node: DestructuringAssignmentExpression): EmitResult {
   const pattern = emitBindingPattern(node.pattern);
   const source = emitBindingBehavior(node.source);
-  return combine(node, [pattern, " = ", source], [...pattern.segments, ...source.segments]);
+  return combine(node, [pattern, " = ", source], [...pattern.segments, ...source.segments], source.path);
 }
 
 function emitInterpolation(node: Interpolation): EmitResult {
@@ -363,7 +376,7 @@ function emitInterpolation(node: Interpolation): EmitResult {
 function emitBindingPattern(node: BindingPattern): EmitResult {
   switch (node.$kind) {
     case "BindingIdentifier":
-      return simpleToken(node, node.name);
+      return simpleToken(node, node.name.name);
     case "BindingPatternDefault": {
       const target = emitBindingPattern(node.target);
       const def = emitBindingBehavior(node.default);
@@ -403,9 +416,9 @@ function emitBindingPattern(node: BindingPattern): EmitResult {
 }
 
 function emitArrow(node: ArrowFunction): EmitResult {
-  const args = node.args.map((a) => a.name).join(", ");
+  const args = node.args.map((a) => a.name.name).join(", ");
   const body = emitBindingBehavior(node.body);
-  return combine(node, [`(${args}) => `, body], body.segments);
+  return combine(node, [`(${args}) => `, body], body.segments, body.path);
 }
 
 function emitArgsParts(args: IsAssign[]): (string | EmitResult)[] {
@@ -422,7 +435,12 @@ function emitArgsParts(args: IsAssign[]): (string | EmitResult)[] {
  * Helpers
  * --------------------------------------------------------------------------- */
 
-function combine(node: { span: SourceSpan }, parts: (string | EmitResult)[], segments: OverlayLambdaSegment[] = []): EmitResult {
+function combine(
+  node: { span: SourceSpan },
+  parts: (string | EmitResult)[],
+  segments: OverlayLambdaSegment[] = [],
+  path?: string,
+): EmitResult {
   let code = "";
   const mappings: SpanMapping[] = [];
   const mergedSegments: OverlayLambdaSegment[] = [...segments];
@@ -448,17 +466,21 @@ function combine(node: { span: SourceSpan }, parts: (string | EmitResult)[], seg
   const span = { start: 0, end: code.length };
   mappings.push({ source: node.span, target: span });
 
-  return { code, mappings, segments: mergedSegments, span };
+  const result: EmitResult = { code, mappings, segments: mergedSegments, span };
+  if (path) result.path = path;
+  return result;
 }
 
-function simpleToken(node: { span: SourceSpan }, text: string): EmitResult {
+function simpleToken(node: { span: SourceSpan }, text: string, path?: string): EmitResult {
   const span = { start: 0, end: text.length };
-  return {
+  const result: EmitResult = {
     code: text,
     mappings: [{ source: node.span, target: span }],
     segments: [],
     span,
   };
+  if (path) result.path = path;
+  return result;
 }
 
 function badToken(node: BadExpression, text: string): EmitResult {
@@ -493,20 +515,14 @@ function ancestorPath(ancestor: number, name: string): string {
   return prefix ? `${prefix}.${name}` : name;
 }
 
-function lastPath(segments: readonly OverlayLambdaSegment[]): string | undefined {
-  return segments.length ? segments[segments.length - 1]!.path : undefined;
-}
-
 function pathPrefix(ancestor: number): string {
   if (ancestor <= 0) return "";
   return Array.from({ length: ancestor }, () => "$parent").join(".");
 }
 
-function deepestPath(segments: readonly OverlayLambdaSegment[]): string | undefined {
-  let best: string | undefined;
-  for (const seg of segments) {
-    if (!seg.path) continue;
-    if (!best || seg.path.length > best.length) best = seg.path;
-  }
-  return best;
+function keyedLiteralPath(basePath: string | undefined, key: IsAssign): string | undefined {
+  if (!basePath) return undefined;
+  if (key.$kind !== "PrimitiveLiteral") return undefined;
+  const literal = String(key.value ?? "");
+  return `${basePath}[${JSON.stringify(literal)}]`;
 }

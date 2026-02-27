@@ -517,14 +517,14 @@
     }
   },
   {
-    "name": "LB-58 unknown binding command emits AU0705",
+    "name": "LB-58 unknown binding command emits aurelia/unknown-command",
     "markup": "<div foo.unknowncommand=\"bar\"></div>",
     "expect": {
       "expressions": [
         { "kind": "propCommand", "command": "bind", "code": "bar" }
       ],
       "diags": [
-        { "code": "AU0705" }
+        { "code": "aurelia/unknown-command" }
       ]
     }
   },
@@ -536,8 +536,42 @@
         { "kind": "propCommand", "command": "bind", "code": "bar" }
       ],
       "diags": [
-        { "code": "AU0705" }
+        { "code": "aurelia/unknown-command" }
       ]
+    }
+  },
+  {
+    "name": "LB-60 duplicate text interpolation expressions preserve cardinality",
+    "markup": "<div>${item}${item}</div>",
+    "expect": {
+      "expressions": [
+        { "kind": "text", "code": "item" },
+        { "kind": "text", "code": "item" }
+      ]
+    }
+  },
+  {
+    "name": "LB-61 non-interpolation attribute commands preserve attr/to channel",
+    "markup": "<div active.class=\"isActive\" title.attr=\"titleExpr\"></div>",
+    "expect": {
+      "expressions": [
+        { "kind": "propCommand", "command": "bind", "code": "isActive" },
+        { "kind": "propCommand", "command": "bind", "code": "titleExpr" }
+      ],
+      "attributeCommands": [
+        { "attr": "class", "to": "active", "command": "bind", "code": "isActive" },
+        { "attr": "title", "to": "title", "command": "bind", "code": "titleExpr" }
+      ]
+    }
+  },
+  {
+    "name": "LB-62 interpolation attr does not emit non-interpolation attribute command channel",
+    "markup": "<div title=\"pre ${name} post\"></div>",
+    "expect": {
+      "expressions": [
+        { "kind": "attrInterpolation", "on": "title", "code": "name" }
+      ],
+      "attributeCommands": []
     }
   }
 ]

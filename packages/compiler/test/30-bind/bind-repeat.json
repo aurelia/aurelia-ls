@@ -15,7 +15,8 @@
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$even" },
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
-        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" }
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$previous" }
       ],
       "exprs": [
         { "kind": "forOfHeader", "frame": "root" },
@@ -41,7 +42,8 @@
         { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$even" },
         { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$odd" },
         { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$length" },
-        { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$middle" }
+        { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$middle" },
+        { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$previous" }
       ],
       "exprs": [
         { "kind": "expr", "code": "ctx", "frame": "root" },
@@ -69,6 +71,7 @@
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$previous" },
         { "frame": "overlay:iterator@2", "kind": "iteratorLocal", "name": "j" },
         { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$index" },
         { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$first" },
@@ -76,7 +79,8 @@
         { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$even" },
         { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$odd" },
         { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$length" },
-        { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$middle" }
+        { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$middle" },
+        { "frame": "overlay:iterator@2", "kind": "contextual", "name": "$previous" }
       ],
       "exprs": [
         { "kind": "forOfHeader", "frame": "root" },
@@ -104,7 +108,8 @@
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$even" },
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
-        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" }
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$previous" }
       ],
       "exprs": [
         { "kind": "forOfHeader", "frame": "root" },
@@ -131,7 +136,8 @@
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$even" },
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
-        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" }
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$previous" }
       ],
       "exprs": [
         { "kind": "forOfHeader", "frame": "root" },
@@ -157,7 +163,8 @@
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$even" },
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
-        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" }
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$previous" }
       ],
       "exprs": [
         { "kind": "forOfHeader", "frame": "root" },
@@ -185,7 +192,8 @@
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$even" },
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
-        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" }
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$previous" }
       ],
       "exprs": [
         { "kind": "forOfHeader", "frame": "root" },
@@ -213,7 +221,8 @@
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$even" },
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
-        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" }
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$previous" }
       ],
       "exprs": [
         { "kind": "forOfHeader", "frame": "root" },

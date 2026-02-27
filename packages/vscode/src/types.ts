@@ -1,3 +1,14 @@
+import type {
+  DiagnosticActionability,
+  DiagnosticCategory,
+  DiagnosticImpact,
+  DiagnosticSeverity,
+  DiagnosticStage,
+  DiagnosticStatus,
+  DiagnosticSurface,
+  SourceSpan,
+} from "@aurelia-ls/compiler";
+
 export type OverlayReadyPayload = {
   uri?: string;
   overlayPath?: string;
@@ -5,6 +16,60 @@ export type OverlayReadyPayload = {
   overlayLen?: number;
   diags?: number;
   meta?: unknown;
+  coverage?: {
+    totalPositions?: number;
+    fullyAnalyzed?: number;
+    partiallyAnalyzed?: number;
+    emittedCount?: number;
+    suppressedCount?: number;
+  };
+};
+
+export type DiagnosticsSpan = SourceSpan;
+
+export type DiagnosticsSnapshotIssue = {
+  kind: string;
+  message: string;
+  code?: string;
+  rawCode?: string;
+  field?: string;
+};
+
+export type DiagnosticsSnapshotRelated = {
+  code?: string;
+  message: string;
+  span?: DiagnosticsSpan;
+};
+
+export type DiagnosticsSnapshotItem = {
+  code: string;
+  message: string;
+  severity?: DiagnosticSeverity;
+  impact?: DiagnosticImpact;
+  actionability?: DiagnosticActionability;
+  category?: DiagnosticCategory;
+  status?: DiagnosticStatus;
+  stage?: DiagnosticStage;
+  source?: string;
+  uri?: string;
+  span?: DiagnosticsSpan;
+  data?: Readonly<Record<string, unknown>>;
+  related?: readonly DiagnosticsSnapshotRelated[];
+  surfaces?: readonly DiagnosticSurface[];
+  suppressed?: boolean;
+  suppressionReason?: string;
+  issues?: readonly DiagnosticsSnapshotIssue[];
+};
+
+export type DiagnosticsSnapshotBundle = {
+  bySurface: Record<string, readonly DiagnosticsSnapshotItem[]>;
+  suppressed: readonly DiagnosticsSnapshotItem[];
+};
+
+export type DiagnosticsSnapshotResponse = {
+  uri?: string;
+  fingerprint?: string;
+  diagnostics: DiagnosticsSnapshotBundle;
 };
 
 export interface MappingSpan {
@@ -66,3 +131,140 @@ export interface SsrResponse {
   artifact?: SsrArtifactShape | null;
   ssr?: SsrArtifactShape | null;
 }
+
+export interface ResourceExplorerBindable {
+  name: string;
+  attribute?: string;
+  mode?: string;
+  primary?: boolean;
+  type?: string;
+}
+
+export type ResourceOrigin = "framework" | "project" | "package";
+export type ResourceScope = "global" | "local" | "orphan";
+
+export interface ResourceExplorerItem {
+  name: string;
+  kind: string;
+  className?: string;
+  file?: string;
+  package?: string;
+  bindableCount: number;
+  bindables: ResourceExplorerBindable[];
+  gapCount: number;
+  gapIntrinsicCount: number;
+  origin: ResourceOrigin;
+  scope: ResourceScope;
+  scopeOwner?: string;
+  declarationForm?: string;
+  staleness?: { fieldsFromAnalysis: number; membersNotInSemantics: number };
+}
+
+export interface InspectEntityResponse {
+  uri: string;
+  entityKind: string;
+  confidence: {
+    resource: string;
+    type: string;
+    scope: string;
+    expression: string;
+    composite: string;
+  };
+  expressionLabel?: string;
+  exprId?: string | number;
+  nodeId?: string | number;
+  detail: Record<string, unknown>;
+}
+
+export interface ResourceExplorerResponse {
+  fingerprint?: string;
+  resources: ResourceExplorerItem[];
+  templateCount: number;
+  inlineTemplateCount: number;
+}
+
+export interface CapabilitiesResponse {
+  schema?: "aurelia.capabilities/1";
+  server?: {
+    version?: string;
+    workspaceVersion?: string;
+  };
+  contracts?: {
+    query?: { version?: string };
+    refactor?: { version?: string };
+    diagnostics?: { version?: string; taxonomy?: string };
+    semanticTokens?: { version?: string; legendHash?: string };
+    presentation?: { version?: string };
+    mapping?: { version?: string };
+  };
+  workspace?: {
+    meta?: {
+      fingerprint?: string;
+      configHash?: string;
+      docCount?: number;
+    };
+    artifacts?: {
+      semantics?: boolean;
+      catalog?: boolean;
+      syntax?: boolean;
+      resourceGraph?: boolean;
+      provenance?: boolean;
+      semanticSnapshot?: boolean;
+      apiSurface?: boolean;
+      featureUsage?: boolean;
+      registrationPlan?: boolean;
+    };
+    indexes?: {
+      resourceIndex?: boolean;
+      symbolGraph?: boolean;
+      usageIndex?: boolean;
+      scopeIndex?: boolean;
+      templateIndex?: boolean;
+    };
+  };
+  lsp?: {
+    optional?: {
+      documentSymbol?: boolean;
+      workspaceSymbol?: boolean;
+      documentHighlight?: boolean;
+      selectionRange?: boolean;
+      linkedEditingRange?: boolean;
+      foldingRange?: boolean;
+      inlayHint?: boolean;
+      codeLens?: boolean;
+      documentLink?: boolean;
+      callHierarchy?: boolean;
+      documentColor?: boolean;
+      semanticTokensDelta?: boolean;
+    };
+  };
+  custom?: {
+    overlay?: boolean;
+    mapping?: boolean;
+    queryAtPosition?: boolean;
+    ssr?: boolean;
+    diagnostics?: boolean;
+    dumpState?: boolean;
+  };
+  notifications?: {
+    overlayReady?: boolean;
+    workspaceChanged?: boolean;
+  };
+}
+
+export type ScopeResourceItem = {
+  name: string;
+  kind: string;
+  origin: string;
+  className?: string;
+  file?: string;
+  package?: string;
+  bindableCount: number;
+  scope: "global" | "local";
+};
+
+export type ScopeResourcesResponse = {
+  scopeId: string;
+  scopeLabel?: string;
+  resources: ScopeResourceItem[];
+};

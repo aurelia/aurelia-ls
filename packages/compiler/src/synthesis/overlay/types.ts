@@ -1,4 +1,4 @@
-import type { FrameId, ExprId, TextSpan } from "../../model/index.js";
+import type { FrameId, ExprId, TextSpan, FrameOrigin } from "../../model/index.js";
 
 /* ===========================
  * Overlay planning output
@@ -34,6 +34,8 @@ export interface FrameOverlayPlan {
   typeExpr: string;
   /** Unique property-path lambdas to validate against this frame's overlay type. */
   lambdas: OverlayLambdaPlan[]; // e.g., [{ exprId, lambda: "o => o.user.name", segments: [...] }]
+  /** Origin metadata from the scope frame, when available. */
+  origin?: FrameOrigin | undefined;
 }
 
 export interface OverlayLambdaPlan {
@@ -41,6 +43,11 @@ export interface OverlayLambdaPlan {
   lambda: string;
   /** Start/end (within `lambda`) of the expression body (after `=>`). */
   exprSpan: TextSpan;
+  /**
+   * Optional event type for listener expressions.
+   * When present, emit augments the lambda context with `$event: <eventType>`.
+   */
+  eventType?: string;
   /** Optional member segments for rename/refs mapping (relative to `lambda`). */
   segments?: readonly OverlayLambdaSegment[] | undefined;
 }

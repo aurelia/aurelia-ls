@@ -8,15 +8,20 @@ import type {
   InterpIR,
   TemplateIR,
   IrDiagCode,
-  IrDiagnostic,
   SourceSpan,
 } from "../../model/ir.js";
+import type { DiagnosticDataFor } from "../../diagnostics/catalog/index.js";
+import type { diagnosticsCatalog } from "../../diagnostics/catalog/index.js";
+import type { DiagnosticEmitter } from "../../diagnostics/emitter.js";
+import { reportDiagnostic } from "../../diagnostics/report.js";
 import type { ExpressionParseContext, ExpressionType, IExpressionParser } from "../../parsing/expression-parser.js";
 import { extractInterpolationSegments } from "../../parsing/expression-parser.js";
 import { deterministicStringId } from "../../model/identity.js";
 import type { SourceFile } from "../../model/source.js";
 import { spanFromOffsets } from "../../model/source.js";
 export { DomIdAllocator } from "../../model/identity.js";
+
+export type LowerDiagnosticEmitter = DiagnosticEmitter<typeof diagnosticsCatalog, IrDiagCode>;
 
 export type P5Node = DefaultTreeAdapterMap["childNode"];
 export type P5Element = DefaultTreeAdapterMap["element"];
@@ -45,22 +50,27 @@ export function isComment(n: P5Node): n is DefaultTreeAdapterMap["commentNode"] 
 
 export class ExprTable {
   public entries: ExprTableEntry[] = [];
-  public diags: IrDiagnostic[] = [];
   private readonly seen = new Map<string, ExprId>();
+  private readonly emitter: LowerDiagnosticEmitter;
 
   public constructor(
     private readonly parser: IExpressionParser,
     public readonly source: SourceFile,
     public readonly sourceText: string,
-  ) {}
+    emitter: LowerDiagnosticEmitter,
+  ) {
+    this.emitter = emitter;
+  }
 
-  public addDiag(code: IrDiagCode, message: string, loc: P5Loc | null): void {
-    this.diags.push({
-      code,
-      message,
-      source: "lower",
-      severity: "error",
+  public reportDiagnostic<Code extends IrDiagCode>(
+    code: Code,
+    message: string,
+    loc: P5Loc | null,
+    data?: DiagnosticDataFor<Code>,
+  ): void {
+    reportDiagnostic(this.emitter, code, message, {
       span: toSpan(loc, this.source),
+      data,
     });
   }
 
@@ -121,6 +131,32 @@ export function attrLoc(el: P5Element, attrName: string): P5Loc | null {
   const loc = el.sourceCodeLocation;
   const attrLocTable = loc?.attrs;
   return (attrLocTable?.[attrName] ?? loc) ?? null;
+}
+
+/**
+ * Returns the location of just the attribute name.
+ * Parse5's attrLoc covers the full `name="value"` span.
+ */
+export function attrNameLoc(el: P5Element, attrName: string, sourceText: string): P5Loc | null {
+  const loc = attrLoc(el, attrName);
+  if (!loc || loc.startOffset == null || loc.endOffset == null) return loc;
+
+  const attrStart = loc.startOffset;
+  const attrEnd = loc.endOffset;
+  const attrText = sourceText.slice(attrStart, attrEnd);
+
+  let i = 0;
+  while (i < attrText.length && /\s/.test(attrText[i]!)) i++;
+  const nameStart = i;
+  while (i < attrText.length) {
+    const ch = attrText[i]!;
+    if (ch === "=" || /\s/.test(ch)) break;
+    i++;
+  }
+  const nameEnd = i;
+  if (nameEnd <= nameStart) return null;
+
+  return { ...loc, startOffset: attrStart + nameStart, endOffset: attrStart + nameEnd };
 }
 
 /**
@@ -187,10 +223,19 @@ export function tryToInterpIR(
   const exprs: ExprRef[] = [];
   const locStart = loc?.startOffset ?? 0;
   for (const { span, code } of split.expressions) {
+    // Trim leading/trailing whitespace so that expression spans (and
+    // downstream diagnostic squiggles) point to the actual expression
+    // text, not to surrounding whitespace inside ${...}.
+    const leadingWs = code.length - code.trimStart().length;
+    const trailingWs = code.length - code.trimEnd().length;
+    const trimmedCode = code.trim();
+    const adjustedStart = span.start + leadingWs;
+    const adjustedEnd = span.end - trailingWs;
+
     const exprLoc: P5Loc | null = loc
-      ? { ...loc, startOffset: locStart + span.start, endOffset: locStart + span.end }
+      ? { ...loc, startOffset: locStart + adjustedStart, endOffset: locStart + adjustedEnd }
       : null;
-    exprs.push(table.add(code, exprLoc, "IsProperty"));
+    exprs.push(table.add(trimmedCode, exprLoc, "IsProperty"));
   }
 
   return { kind: "interp", parts: split.parts, exprs, loc: toSpan(loc, table.source) };
@@ -216,6 +261,19 @@ export function toExprRef(
   table: ExprTable,
   parseKind: ExpressionType
 ): ExprRef {
+  // Trim leading/trailing whitespace so expression spans point to the
+  // actual expression text, not surrounding whitespace in attribute values.
+  const trimmed = code.trim();
+  if (trimmed !== code && loc) {
+    const leadingWs = code.length - code.trimStart().length;
+    const trailingWs = code.length - code.trimEnd().length;
+    const adjustedLoc: P5Loc = {
+      ...loc,
+      startOffset: loc.startOffset + leadingWs,
+      endOffset: loc.endOffset - trailingWs,
+    };
+    return table.add(trimmed, adjustedLoc, parseKind);
+  }
   return table.add(code, loc, parseKind);
 }
 

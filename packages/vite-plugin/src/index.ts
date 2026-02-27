@@ -149,17 +149,17 @@ export type {
   SSRManifestOptions,
   SSRHydrationOptions,
   ResolvedSSRConfig,
-  ResolutionContext,
+  ProjectSemanticsContext,
 } from "./types.js";
 
 // =============================================================================
 // Type Exports - Convention Options
 // =============================================================================
 
-// Convention types are now defined in @aurelia-ls/resolution (canonical source)
+// Convention types are now defined in @aurelia-ls/compiler (canonical source)
 // and re-exported from types.ts for convenience
 export type {
-  // From resolution (re-exported)
+  // From project semantics (re-exported)
   ConventionConfig,
   SuffixConfig,
   FilePatternConfig,
@@ -203,7 +203,6 @@ export type {
 
 export type {
   ExperimentalOptions,
-  ExperimentalPolicy,
   PluginHooks,
   HookContext,
   ResolvedAureliaOptions,

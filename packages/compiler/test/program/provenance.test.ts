@@ -1,11 +1,15 @@
 import { test, expect } from "vitest";
 
 import {
-  InMemoryProvenanceIndex,
+  collectOverlayUrisFromProvenance,
+  InMemoryOverlaySpanIndex,
+  projectGeneratedLocationToDocumentSpanWithOffsetFallback,
   projectGeneratedOffsetToDocumentSpan,
   projectGeneratedSpanToDocumentSpan,
-  provenanceHitToDocumentSpan,
+  projectGeneratedSpanToDocumentSpanWithOffsetFallback,
+  overlayHitToDocumentSpan,
   projectOverlaySpanToTemplateSpan,
+  resolveTemplateUriForGenerated,
 } from "@aurelia-ls/compiler";
 
 const templateUri = "/app/components/example.html";
@@ -39,7 +43,7 @@ const mapping = {
 };
 
 test("overlay mappings expand to provenance edges and offset-aware lookups", () => {
-  const provenance = new InMemoryProvenanceIndex();
+  const provenance = new InMemoryOverlaySpanIndex();
   provenance.addOverlayMapping(templateUri, overlayUri, mapping);
 
   const generatedEdges = provenance.findByGenerated(overlayUri, 22);
@@ -68,7 +72,7 @@ test("overlay mappings expand to provenance edges and offset-aware lookups", () 
 });
 
 test("overlay projection via projectGeneratedSpan/projectGeneratedOffset", () => {
-  const provenance = new InMemoryProvenanceIndex();
+  const provenance = new InMemoryOverlaySpanIndex();
   provenance.addOverlayMapping(templateUri, overlayUri, mapping);
 
   // Full slice across the entire expression range -> maps to full HTML span.
@@ -101,7 +105,7 @@ test("overlay projection via projectGeneratedSpan/projectGeneratedOffset", () =>
 });
 
 test("projectGeneratedSpanToDocumentSpan materializes mapped document spans", () => {
-  const provenance = new InMemoryProvenanceIndex();
+  const provenance = new InMemoryOverlaySpanIndex();
   provenance.addOverlayMapping(templateUri, overlayUri, mapping);
 
   const mapped = projectGeneratedSpanToDocumentSpan(provenance, overlayUri, { start: 21, end: 26 });
@@ -114,7 +118,7 @@ test("projectGeneratedSpanToDocumentSpan materializes mapped document spans", ()
 });
 
 test("projectOverlaySpanToTemplateSpan respects covering vs sliced spans", () => {
-  const provenance = new InMemoryProvenanceIndex();
+  const provenance = new InMemoryOverlaySpanIndex();
   provenance.addOverlayMapping(templateUri, overlayUri, mapping);
 
   const edges = provenance.findByGenerated(overlayUri, 22);
@@ -136,7 +140,7 @@ test("projectOverlaySpanToTemplateSpan respects covering vs sliced spans", () =>
 });
 
 test("overlay projection scales proportionally when overlay and template spans differ", () => {
-  const provenance = new InMemoryProvenanceIndex();
+  const provenance = new InMemoryOverlaySpanIndex();
   const scaledMapping = {
     kind: "mapping",
     entries: [
@@ -158,7 +162,7 @@ test("overlay projection scales proportionally when overlay and template spans d
 });
 
 test("projectGeneratedSpan breaks ties on member depth after overlap and span length", () => {
-  const provenance = new InMemoryProvenanceIndex();
+  const provenance = new InMemoryOverlaySpanIndex();
   const tieMapping = {
     kind: "mapping",
     entries: [
@@ -202,7 +206,7 @@ test("projectGeneratedSpan breaks ties on member depth after overlap and span le
 });
 
 test("member selection prefers narrower spans before deeper paths", () => {
-  const provenance = new InMemoryProvenanceIndex();
+  const provenance = new InMemoryOverlaySpanIndex();
   const narrowVsDeep = {
     kind: "mapping",
     entries: [
@@ -237,8 +241,49 @@ test("member selection prefers narrower spans before deeper paths", () => {
   expect(hit?.memberPath).toBe("user");
 });
 
+test("member depth ranking uses structural path depth instead of raw string length", () => {
+  const provenance = new InMemoryOverlaySpanIndex();
+  const depthMapping = {
+    kind: "mapping",
+    entries: [
+      {
+        exprId: "long-shallow",
+        htmlSpan: { start: 100, end: 120, file: templateUri },
+        overlaySpan: { start: 0, end: 20 },
+        segments: [
+          {
+            kind: "member",
+            path: "abcdefghijkl.mnop",
+            htmlSpan: { start: 100, end: 110, file: templateUri },
+            overlaySpan: { start: 0, end: 10 },
+          },
+        ],
+      },
+      {
+        exprId: "short-deep",
+        htmlSpan: { start: 200, end: 220, file: templateUri },
+        overlaySpan: { start: 0, end: 20 },
+        segments: [
+          {
+            kind: "member",
+            path: "a.b.c",
+            htmlSpan: { start: 200, end: 210, file: templateUri },
+            overlaySpan: { start: 0, end: 10 },
+          },
+        ],
+      },
+    ],
+  };
+  provenance.addOverlayMapping(templateUri, overlayUri, depthMapping);
+
+  const hit = provenance.projectGeneratedSpan(overlayUri, { start: 2, end: 6 });
+  expect(hit).toBeTruthy();
+  expect(hit?.memberPath).toBe("a.b.c");
+  expect(hit?.exprId).toBe("short-deep");
+});
+
 test("member specificity prefers deeper member segments when multiple match", () => {
-  const provenance = new InMemoryProvenanceIndex();
+  const provenance = new InMemoryOverlaySpanIndex();
   provenance.addOverlayMapping(templateUri, overlayUri, mapping);
 
   const offset = 22; // inside both 'user' and 'user.name'
@@ -254,7 +299,7 @@ test("member specificity prefers deeper member segments when multiple match", ()
 });
 
 test("lookupGenerated falls back to overlayExpr when no member segment covers offset", () => {
-  const provenance = new InMemoryProvenanceIndex();
+  const provenance = new InMemoryOverlaySpanIndex();
   const localMapping = {
     kind: "mapping",
     entries: [
@@ -292,7 +337,7 @@ test("lookupGenerated falls back to overlayExpr when no member segment covers of
 });
 
 test("provenance stats aggregate edges by kind and document", () => {
-  const provenance = new InMemoryProvenanceIndex();
+  const provenance = new InMemoryOverlaySpanIndex();
   provenance.addOverlayMapping(templateUri, overlayUri, mapping);
 
   const stats = provenance.stats();
@@ -321,10 +366,105 @@ test("provenance stats aggregate edges by kind and document", () => {
   expect(templateStats.overlayUri).toBe(overlayUri);
   expect(templateStats.totalEdges).toBe(3);
   expect(templateStats.overlayEdges).toBe(3);
+  expect(templateStats.runtimeUri).toBeNull();
+  expect(templateStats.runtimeStatus).toBe("unsupported");
+  expect(templateStats.runtimeReason).toBe("runtime-synthesis-not-implemented");
+});
+
+test("runtime provenance stats report tracked runtime uri when runtime edges are present", () => {
+  const provenance = new InMemoryOverlaySpanIndex();
+  provenance.addOverlayMapping(templateUri, overlayUri, mapping);
+  provenance.addEdges([
+    {
+      kind: "runtimeExpr",
+      from: { uri: "/app/runtime/template.runtime.js", span: { start: 0, end: 20 }, exprId: "expr1" },
+      to: { uri: templateUri, span: { start: 100, end: 130, file: templateUri }, exprId: "expr1" },
+    },
+  ]);
+
+  const stats = provenance.templateStats(templateUri);
+  expect(stats.runtimeUri).toBe("/app/runtime/template.runtime.js");
+  expect(stats.runtimeStatus).toBe("tracked");
+  expect(stats.runtimeReason).toBe("runtime-uri-tracked");
+  expect(stats.runtimeEdges).toBe(1);
+});
+
+test("runtime provenance stats report missing runtime uri when runtime edges never leave template/overlay", () => {
+  const provenance = new InMemoryOverlaySpanIndex();
+  provenance.addOverlayMapping(templateUri, overlayUri, mapping);
+  provenance.addEdges([
+    {
+      kind: "runtimeExpr",
+      from: { uri: overlayUri, span: { start: 0, end: 20 }, exprId: "expr1" },
+      to: { uri: templateUri, span: { start: 100, end: 130, file: templateUri }, exprId: "expr1" },
+    },
+  ]);
+
+  const stats = provenance.templateStats(templateUri);
+  expect(stats.runtimeUri).toBeNull();
+  expect(stats.runtimeStatus).toBe("unsupported");
+  expect(stats.runtimeReason).toBe("runtime-edges-without-uri");
+  expect(stats.runtimeEdges).toBe(1);
+});
+
+test("runtime provenance stats report ambiguous runtime uri when multiple candidates exist", () => {
+  const provenance = new InMemoryOverlaySpanIndex();
+  provenance.addOverlayMapping(templateUri, overlayUri, mapping);
+  provenance.addEdges([
+    {
+      kind: "runtimeExpr",
+      from: { uri: "/app/runtime-a.js", span: { start: 0, end: 20 }, exprId: "expr1" },
+      to: { uri: templateUri, span: { start: 100, end: 130, file: templateUri }, exprId: "expr1" },
+    },
+    {
+      kind: "runtimeMember",
+      from: { uri: "/app/runtime-b.js", span: { start: 0, end: 10 }, exprId: "expr1" },
+      to: { uri: templateUri, span: { start: 110, end: 120, file: templateUri }, exprId: "expr1" },
+      tag: "user.name",
+    },
+  ]);
+
+  const stats = provenance.templateStats(templateUri);
+  expect(stats.runtimeUri).toBeNull();
+  expect(stats.runtimeStatus).toBe("unsupported");
+  expect(stats.runtimeReason).toBe("runtime-edges-ambiguous-uri");
+  expect(stats.runtimeEdges).toBe(2);
+});
+
+test("degraded member evidence is preserved on provenance edges", () => {
+  const provenance = new InMemoryOverlaySpanIndex();
+  const degradedMapping = {
+    kind: "mapping",
+    entries: [
+      {
+        exprId: "expr-degraded",
+        htmlSpan: { start: 300, end: 330, file: templateUri },
+        overlaySpan: { start: 50, end: 80 },
+        segments: [
+          {
+            kind: "member",
+            path: "item.value",
+            htmlSpan: { start: 305, end: 320, file: templateUri },
+            overlaySpan: { start: 55, end: 70 },
+            degradation: {
+              reason: "missing-html-member-span" as const,
+              projection: "proportional" as const,
+            },
+          },
+        ],
+      },
+    ],
+  };
+  provenance.addOverlayMapping(templateUri, overlayUri, degradedMapping);
+
+  const hit = provenance.projectGeneratedSpan(overlayUri, { start: 56, end: 60 });
+  expect(hit?.edge.kind).toBe("overlayMember");
+  expect(hit?.edge.evidence?.level).toBe("degraded");
+  expect(hit?.edge.evidence?.reason).toBe("missing-html-member-span");
 });
 
 test("provenance pruning drops edges and overlay cache entries", () => {
-  const provenance = new InMemoryProvenanceIndex();
+  const provenance = new InMemoryOverlaySpanIndex();
   provenance.addOverlayMapping(templateUri, overlayUri, mapping);
 
   expect(provenance.findByGenerated(overlayUri, 22).length > 0).toBeTruthy();
@@ -337,4 +477,123 @@ test("provenance pruning drops edges and overlay cache entries", () => {
   provenance.addOverlayMapping(templateUri, overlayUri, mapping);
   provenance.removeDocument(overlayUri);
   expect(provenance.findBySource(templateUri, 115).length).toBe(0);
+});
+
+test("provenance exposes generated->template lookup and overlay uri inventory", () => {
+  const provenance = new InMemoryOverlaySpanIndex();
+  provenance.addOverlayMapping(templateUri, overlayUri, mapping);
+
+  expect(resolveTemplateUriForGenerated(provenance, overlayUri)).toBe(templateUri);
+  const overlays = collectOverlayUrisFromProvenance(provenance);
+  expect(overlays.has(overlayUri)).toBe(true);
+});
+
+test("generated location projection maps range-based locations through provenance", () => {
+  const provenance = new InMemoryOverlaySpanIndex();
+  provenance.addOverlayMapping(templateUri, overlayUri, mapping);
+
+  const generatedText = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const mapped = projectGeneratedLocationToDocumentSpanWithOffsetFallback(provenance, {
+    generatedUri: overlayUri,
+    generatedText,
+    range: {
+      start: { line: 0, character: 20 },
+      end: { line: 0, character: 30 },
+    },
+  });
+
+  expect(mapped).toBeTruthy();
+  expect(mapped?.uri).toBe(templateUri);
+  expect(mapped?.memberPath).toBe("user.name");
+  expect(mapped?.span.start).toBe(110);
+  expect(mapped?.span.end).toBe(120);
+});
+
+test("generated->template lookup canonicalizes the mapped template URI", () => {
+  const provenance = {
+    getTemplateUriForGenerated() {
+      return "C:\\APP\\COMPONENT.HTML";
+    },
+  };
+
+  expect(resolveTemplateUriForGenerated(provenance, overlayUri)).toBe("c:/app/component.html");
+});
+
+test("offset fallback projects generated spans when direct span projection misses", () => {
+  const provenance = {
+    projectGeneratedSpan() {
+      return null;
+    },
+    projectGeneratedOffset(_uri: string, offset: number) {
+      if (offset === 10) {
+        return {
+          edge: {
+            kind: "overlayExpr" as const,
+            from: { uri: overlayUri, span: { start: 10, end: 20 } },
+            to: { uri: templateUri, span: { start: 100, end: 110, file: templateUri } },
+          },
+        };
+      }
+      if (offset === 19) {
+        return {
+          edge: {
+            kind: "overlayExpr" as const,
+            from: { uri: overlayUri, span: { start: 10, end: 20 } },
+            to: { uri: templateUri, span: { start: 109, end: 120, file: templateUri } },
+          },
+        };
+      }
+      return null;
+    },
+  };
+
+  const mapped = projectGeneratedSpanToDocumentSpanWithOffsetFallback(provenance, overlayUri, {
+    start: 10,
+    end: 20,
+  });
+  expect(mapped).toBeTruthy();
+  expect(mapped?.uri).toBe(templateUri);
+  expect(mapped?.span.start).toBe(100);
+  expect(mapped?.span.end).toBe(120);
+});
+
+test("offset fallback returns the start projection when endpoints map to different template documents", () => {
+  const provenance = {
+    projectGeneratedSpan() {
+      return null;
+    },
+    projectGeneratedOffset(_uri: string, offset: number) {
+      if (offset === 10) {
+        return {
+          edge: {
+            kind: "overlayExpr" as const,
+            from: { uri: overlayUri, span: { start: 10, end: 20 } },
+            to: { uri: "/app/a.html", span: { start: 100, end: 110, file: "/app/a.html" } },
+          },
+          exprId: "expr-a",
+        };
+      }
+      if (offset === 19) {
+        return {
+          edge: {
+            kind: "overlayExpr" as const,
+            from: { uri: overlayUri, span: { start: 10, end: 20 } },
+            to: { uri: "/app/b.html", span: { start: 200, end: 210, file: "/app/b.html" } },
+          },
+          exprId: "expr-b",
+        };
+      }
+      return null;
+    },
+  };
+
+  const mapped = projectGeneratedSpanToDocumentSpanWithOffsetFallback(provenance, overlayUri, {
+    start: 10,
+    end: 20,
+  });
+  expect(mapped).toBeTruthy();
+  expect(mapped?.uri).toBe("/app/a.html");
+  expect(mapped?.span.start).toBe(100);
+  expect(mapped?.span.end).toBe(110);
+  expect(mapped?.exprId).toBe("expr-a");
 });

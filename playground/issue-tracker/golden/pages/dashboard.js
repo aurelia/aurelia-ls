@@ -14,6 +14,7 @@ const dashboard__e = [
     values: [
       {
         $kind: "AccessMember",
+        accessGlobal: false,
         object: {
           $kind: "AccessScope",
           name: "user",
@@ -28,6 +29,7 @@ const dashboard__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "stats",
@@ -40,6 +42,7 @@ const dashboard__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "stats",
@@ -52,6 +55,7 @@ const dashboard__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "stats",
@@ -64,6 +68,7 @@ const dashboard__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "stats",
@@ -76,6 +81,7 @@ const dashboard__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "stats",
@@ -100,6 +106,7 @@ const dashboard__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "issue",
@@ -112,6 +119,7 @@ const dashboard__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "issue",
@@ -124,6 +132,7 @@ const dashboard__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "issue",
@@ -136,6 +145,7 @@ const dashboard__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "issue",

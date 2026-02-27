@@ -7,6 +7,10 @@
 import { describe, test, expect } from "vitest";
 import fs from "node:fs";
 import {
+  WORKSPACE_TOKEN_MODIFIER_GAP_AWARE,
+  WORKSPACE_TOKEN_MODIFIER_GAP_CONSERVATIVE,
+} from "@aurelia-ls/semantic-workspace";
+import {
   createFixture,
   startServer,
   waitForExit,
@@ -63,9 +67,9 @@ describe("Server initialization", () => {
 
       const capabilities = initResult.capabilities as Record<string, unknown>;
       expect(capabilities.hoverProvider).toBe(true);
-      expect(capabilities.definitionProvider).toBe(true);
+      expect(capabilities.definitionProvider).toBeTruthy();
       expect(capabilities.referencesProvider).toBe(true);
-      expect(capabilities.renameProvider).toBe(true);
+      expect(capabilities.renameProvider).toBeTruthy();
       expect(capabilities.codeActionProvider).toBe(true);
       expect(capabilities.completionProvider).toBeDefined();
       expect(capabilities.textDocumentSync).toBeDefined();
@@ -75,8 +79,10 @@ describe("Server initialization", () => {
       expect(semanticTokensProvider).toBeDefined();
       expect(semanticTokensProvider?.full).toBe(true);
       const legend = semanticTokensProvider?.legend as { tokenTypes: string[]; tokenModifiers: string[] } | undefined;
-      expect(legend?.tokenTypes).toContain("namespace");
+      expect(legend?.tokenTypes).toContain("aureliaElement");
       expect(legend?.tokenModifiers).toContain("declaration");
+      expect(legend?.tokenModifiers).toContain(WORKSPACE_TOKEN_MODIFIER_GAP_AWARE);
+      expect(legend?.tokenModifiers).toContain(WORKSPACE_TOKEN_MODIFIER_GAP_CONSERVATIVE);
     } finally {
       dispose();
       child.kill("SIGKILL");

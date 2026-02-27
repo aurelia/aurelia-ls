@@ -73,7 +73,7 @@ export interface Span {
   // Identity
   // ─────────────────────────────────────────────────────────────────────────
 
-  /** Human-readable name (e.g., "stage:10-lower", "resolve.element") */
+  /** Human-readable name (e.g., "stage:10-lower", "link.element") */
   readonly name: string;
 
   /** Unique identifier for this span within the trace */

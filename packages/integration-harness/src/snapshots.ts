@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { stableStringify } from "@aurelia-ls/resolution";
+import { stableStringify } from "@aurelia-ls/compiler";
 import type { CompileRunResult, IntegrationRun } from "./runner.js";
 
 export interface SnapshotPaths {

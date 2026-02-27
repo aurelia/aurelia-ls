@@ -1,0 +1,49 @@
+[
+  {
+    "name": "R-M-01 ref=el -> element ref",
+    "markup": "<div ref=el></div>",
+    "expect": {
+      "items": [
+        { "kind": "ref", "on": "element" }
+      ]
+    }
+  },
+  {
+    "name": "R-M-02 view-model.ref -> component ref (aurelia/unknown-element for unknown element)",
+    "markup": "<my-el view-model.ref=\"vm\"></my-el>",
+    "expect": {
+      "items": [
+        { "kind": "ref", "on": "component" }
+      ],
+      "diags": [
+        { "code": "aurelia/unknown-element" }
+      ]
+    }
+  },
+  {
+    "name": "R-M-03 ref=el -> element ref",
+    "markup": "<span ref=el></span>",
+    "expect": {
+      "items": [
+        { "kind": "ref", "on": "element" }
+      ]
+    }
+  },
+  {
+    "name": "R-M-04 view-model.ref -> component ref (aurelia/unknown-element for unknown element)",
+    "markup": "<my-card view-model.ref=\"vm\"></my-card>",
+    "expect": {
+      "items": [
+        { "kind": "ref", "on": "component" }
+      ],
+      "diags": [
+        { "code": "aurelia/unknown-element" }
+      ]
+    }
+  },
+  {
+    "name": "R-M-05 text node interpolation (node semantics text)",
+    "markup": "${msg}",
+    "expect": { "items": [] }
+  }
+]

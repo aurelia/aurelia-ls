@@ -17,7 +17,7 @@ function createPluginState(overrides: Partial<PluginState> = {}): PluginState {
     include: ["**"],
     exclude: [],
     htmlShell: "<html><body><!--ssr-outlet--><!--ssr-state--></body></html>",
-    resolution: {} as any,
+    projectSemantics: {} as any,
     baseHref: "/",
     register: null,
     ssg: {
@@ -78,7 +78,7 @@ describe("createSSRMiddleware", () => {
 
   it("skips non-GET and asset requests", async () => {
     const handler = createSSRMiddleware(
-      createServerStub({ renderWithComponents: vi.fn() }),
+      createServerStub({ render: vi.fn() }),
       createPluginState(),
     );
 
@@ -92,7 +92,7 @@ describe("createSSRMiddleware", () => {
   });
 
   it("renders SSR output and injects hydration payload", async () => {
-    const renderWithComponents = vi.fn(async () => ({
+    const render = vi.fn(async () => ({
       html: "<div>SSR</div>",
       manifest: { manifest: { root: [] } },
     }));
@@ -113,7 +113,7 @@ describe("createSSRMiddleware", () => {
     });
 
     const handler = createSSRMiddleware(
-      createServerStub({ renderWithComponents }),
+      createServerStub({ render }),
       createPluginState(),
       () => Promise.resolve({} as any),
     );
@@ -131,11 +131,11 @@ describe("createSSRMiddleware", () => {
     expect(res.writeHead).toHaveBeenCalledWith(200, expect.any(Object));
     expect(res.end).toHaveBeenCalledWith(expect.stringContaining("<div>SSR</div>"));
     expect(res.end).toHaveBeenCalledWith(expect.stringContaining("window.__AU_DEF__"));
-    expect(renderWithComponents).toHaveBeenCalledTimes(1);
+    expect(render).toHaveBeenCalledTimes(1);
   });
 
   it("errors when register module does not export register", async () => {
-    const renderWithComponents = vi.fn(async () => ({
+    const render = vi.fn(async () => ({
       html: "<div>SSR</div>",
       manifest: { manifest: {} },
     }));
@@ -156,7 +156,7 @@ describe("createSSRMiddleware", () => {
     });
 
     const handler = createSSRMiddleware(
-      createServerStub({ renderWithComponents }, {}),
+      createServerStub({ render }, {}),
       createPluginState({ register: "/src/register.ts" }),
       () => Promise.resolve({} as any),
     );
@@ -175,7 +175,7 @@ describe("createSSRMiddleware", () => {
 
   it("skips excluded routes even when include matches", async () => {
     const handler = createSSRMiddleware(
-      createServerStub({ renderWithComponents: vi.fn() }),
+      createServerStub({ render: vi.fn() }),
       createPluginState({ include: ["**"], exclude: ["/api/**"] }),
     );
 

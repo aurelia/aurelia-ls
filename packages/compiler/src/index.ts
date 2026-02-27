@@ -12,7 +12,7 @@ export type { TemplateCompilation, TemplateDiagnostics, StageMetaSnapshot } from
 
 // === AOT Facade (SSR-agnostic) ===
 export { compileAot } from "./facade-aot.js";
-export type { CompileAotOptions, CompileAotResult } from "./facade-aot.js";
+export type { CompileAotOptions, CompileAotResult, AotSemanticSnapshot } from "./facade-aot.js";
 
 // === Parsing ===
 export {
@@ -25,40 +25,68 @@ export {
   TokenType,
   splitInterpolationText,
   AttrSyntax,
+  analyzeAttributeName,
   AttributeParser,
   createDefaultSyntax,
   createAttributeParserFromRegistry,
   registerBuiltins,
 } from "./parsing/index.js";
-export type { ExpressionParseContext, IExpressionParser, Token } from "./parsing/index.js";
+export type { AttrCommandSpan, AttrPartSpan, AttributeNameAnalysis, ExpressionParseContext, IExpressionParser, PredictiveMatchResult, Token } from "./parsing/index.js";
 
 // === Language / Semantics ===
 export {
-  DEFAULT as DEFAULT_SEMANTICS,
-  prepareSemantics,
+  BUILTIN_SEMANTICS,
+  prepareProjectSemantics,
   createSemanticsLookup,
+  createSemanticModel,
+  createDependencyGraph,
+  createDepRecorder,
+  NOOP_DEP_RECORDER,
+  resourceKeyToDepKey,
   buildResourceCatalog,
   buildResourceGraphFromSemantics,
   materializeResourcesForScope,
   materializeSemanticsForScope,
+  buildProjectSnapshot,
+  buildSemanticsSnapshot,
+  buildSemanticsSnapshotFromProject,
   buildTemplateSyntaxRegistry,
-} from "./language/index.js";
+  createResourceSymbolId,
+  createLocalSymbolId,
+  createBindableSymbolId,
+  parseSymbolId,
+  symbolIdNamespace,
+  isSymbolId,
+  isSymbolIdNamespace,
+  unwrapSourced,
+  stripSourcedNode,
+  sanitizeSourcedSnapshotValue,
+  deriveResourceConfidence,
+  isConservativeGap,
+} from "./schema/index.js";
 export type {
   SourceLocation,
   Configured,
   Sourced,
-  Semantics,
-  SemanticsWithCaches,
+  ProjectSemantics,
+  MaterializedSemantics,
   ResourceGraph,
   ResourceScope,
   ResourceScopeId,
   ResourceCollections,
   ScopedResources,
+  SemanticsLookup,
   SemanticsLookupOptions,
   LocalImportDef,
   ResourceCatalog,
   CatalogGap,
   CatalogConfidence,
+  ResourceConfidenceResult,
+  ProjectSnapshot,
+  ProjectSnapshotOptions,
+  SemanticsSnapshot,
+  TemplateContext,
+  SemanticsSnapshotOptions,
   TemplateSyntaxRegistry,
   TemplateSyntaxMatcher,
   TemplateSyntaxEmitter,
@@ -88,10 +116,76 @@ export type {
   BindingBehaviorDef,
   BindableDef,
   ResourceKey,
+  SymbolIdNamespace,
+  ResourceSymbolIdInput,
+  LocalSymbolIdInput,
+  BindableSymbolIdInput,
   SymbolId,
-} from "./language/index.js";
+  SemanticModel,
+  SemanticModelQuery,
+  SemanticModelQueryOptions,
+  CreateSemanticModelOptions,
+  DependencyGraph,
+  DepNode,
+  DepNodeId,
+  DepNodeKind,
+  DepRecorder,
+  // L2 convergence types
+  ConvergenceEntry,
+  ConvergenceProvenanceInfo,
+  ConvergenceDecisionInfo,
+  GapDetailInfo,
+  // L2 gap primitives
+  Stub,
+  Resolved,
+  GapCategory,
+  GapRef,
+  // L2 resource views
+  ResourceView,
+  BindableView,
+  ConvergenceRef,
+  // L2 confidence cascade
+  ConfidenceLevel,
+  ConfidenceSignals,
+  // L2 invalidation + feature response
+  InvalidationScope,
+  FeatureResponse,
+  Degradation,
+  NotApplicable,
+  // L2 cursor entity (shared feature resolution)
+  CursorEntity,
+  ResolveCursorEntity,
+  CursorResolutionInput,
+  CursorResolutionResult,
+  // L2 referential index (workspace-level cross-domain provenance)
+  ReferentialIndex,
+  ReferenceSite,
+  TextReferenceSite,
+  FileReferenceSite,
+  ReferenceKind,
+  NameForm,
+  ExpressionExtractionContext,
+} from "./schema/index.js";
 
-// Resource definitions (for resolution package and external tooling)
+export {
+  // L2 utility functions
+  isStub,
+  resolveValue,
+  createStub,
+  computeConfidence,
+  isDegradation,
+  isNotApplicable,
+  resolveCursorEntity,
+  // L2 cursor entity utilities
+  isNavigable,
+  isRenameable,
+  entityRef,
+  // L2 referential index implementation
+  InMemoryReferentialIndex,
+  extractReferenceSites,
+} from "./schema/index.js";
+
+// Resource definitions (for compiler project-semantics and external tooling)
 export type {
   ElementRes,
   AttrRes,
@@ -117,7 +211,14 @@ export type {
   // Attribute pattern configuration
   AttributePatternConfig,
   PatternInterpret,
-} from "./language/index.js";
+  // Boundary conservation: carried properties through flattening
+  ResourceOrigin,
+  ResourceGapSummary,
+  DeclarationForm,
+  // Builtin staleness: derived comparison (not carried property)
+  BuiltinDiscrepancy,
+} from "./schema/index.js";
+export { computeBuiltinDiscrepancies } from "./schema/index.js";
 
 // Binding command configuration (values)
 export {
@@ -127,7 +228,9 @@ export {
   getCommandMode,
   // Attribute pattern configuration (values)
   BUILTIN_ATTRIBUTE_PATTERNS,
-} from "./language/index.js";
+  // Controller config lookup (for expression model scope chain construction)
+  getControllerConfig,
+} from "./schema/index.js";
 
 // === Synthesis (Overlay) ===
 export {
@@ -150,7 +253,7 @@ export type {
 } from "./synthesis/index.js";
 
 // VmReflection and SynthesisOptions are from shared (cross-cutting)
-export type { VmReflection, SynthesisOptions } from "./shared/index.js";
+export type { VmReflection, SynthesisOptions, ModuleResolver } from "./shared/index.js";
 
 // === Synthesis (AOT) ===
 export {
@@ -218,7 +321,7 @@ export type {
 // === Analysis ===
 export {
   lowerDocument,
-  resolveHost,
+  linkTemplateSemantics,
   bindScopes,
   typecheck,
   collectFeatureUsage,
@@ -227,15 +330,15 @@ export {
   checkTypeCompatibility,
   DEFAULT_TYPECHECK_CONFIG,
   TYPECHECK_PRESETS,
-  // Meta element extraction (for resolution package)
+  // Meta element extraction (for compiler project-semantics)
   extractMeta,
   extractTemplateMeta,
   stripMetaFromHtml,
 } from "./analysis/index.js";
 export type { BuildIrOptions, FeatureUsageOptions, TypecheckConfig, TypecheckSeverity, BindingContext, TypeCompatibilityResult } from "./analysis/index.js";
 export type {
-  // Linked semantics (for semantic tokens, etc.)
-  LinkedSemanticsModule,
+  // Link module (for semantic tokens, etc.)
+  LinkModule,
   LinkedTemplate,
   LinkedRow,
   NodeSem,
@@ -245,9 +348,15 @@ export type {
   LinkedHydrateTemplateController,
 } from "./analysis/index.js";
 
+// === Project Semantics (Code-driven resource discovery) ===
+export * from "./project-semantics/index.js";
+
 // === Shared Infrastructure ===
 export { diagnosticSpan, buildExprSpanIndex, exprIdsOf, isInterpolation, primaryExprId } from "./shared/index.js";
 export type { CompilerDiagnostic, ExprSpanIndex } from "./shared/index.js";
+
+// === Diagnostics Catalog ===
+export * from "./diagnostics/index.js";
 
 // === Instrumentation (Tracing) ===
 export {
@@ -274,6 +383,7 @@ export {
 // === Debug Channels ===
 export {
   debug,
+  getDebugChannel,
   refreshDebugChannels,
   configureDebug,
   isDebugEnabled,
@@ -310,19 +420,35 @@ export {
   normalizeSpanMaybe,
   narrowestContainingSpan,
   pickNarrowestContaining,
+  offsetAtPosition,
+  positionAtOffset,
+  spanToRange,
+  rangeToSpan,
   offsetSpan,
   toSourceSpan,
   toSourceLoc,
   idKey,
   idFromKey,
+  defaultPathCaseSensitivity,
   normalizePathForId,
   toSourceFileId,
   provenanceSpan,
   preferOrigin,
 } from "./model/index.js";
-export type { SpanLike, SourceSpan, TextSpan, NormalizedPath, SourceFileId, ExprId, FrameId, BindingMode } from "./model/index.js";
+export type { SpanLike, SourceSpan, TextSpan, NormalizedPath, SourceFileId, ExprId, FrameId, BindingMode, ScopeFrame, ScopeSymbol } from "./model/index.js";
 
-// IR types (DOM tree)
+// Expression Semantic Model (Tiers 1-3 — demand-driven expression type resolution)
+export type {
+  ExpressionSemanticModel,
+  ExpressionScopeContext,
+  ExpressionTypeInfo,
+  ExpressionCompletion,
+  ExpressionResolutionTier,
+  LightweightScopeFrame,
+  VmClassRef,
+} from "./model/index.js";
+
+// IR types (DOM tree + instructions)
 export type {
   DOMNode,
   ElementNode,
@@ -331,6 +457,18 @@ export type {
   CommentNode,
   BaseNode,
   Attr,
+  TemplateIR,
+  IrModule,
+  InstructionRow,
+  InstructionIR,
+  HydrateTemplateControllerIR,
+  HydrateLetElementIR,
+  IteratorBindingIR,
+  PropertyBindingIR,
+  LetBindingIR,
+  BindingSourceIR,
+  ExprRef,
+  ForOfIR,
   NodeId,
 } from "./model/index.js";
 
@@ -358,6 +496,15 @@ export type {
   AccessMemberExpression,
   AccessKeyedExpression,
   AccessThisExpression,
+  AccessBoundaryExpression,
+  AccessGlobalExpression,
+  CallGlobalExpression,
+  ValueConverterExpression,
+  BindingBehaviorExpression,
+  AssignExpression,
+  ArrowFunction,
+  BadExpression,
+  Identifier,
   PrimitiveLiteralExpression,
   BinaryExpression,
   UnaryExpression,
@@ -370,9 +517,16 @@ export type {
   Interpolation,
   ForOfStatement,
   TemplateExpression,
+  TaggedTemplateExpression,
+  NewExpression,
+  ParenExpression,
+  CustomExpression,
   BindingIdentifier,
   ExprTableEntry,
 } from "./model/index.js";
+
+// Scope graph types (for expression model)
+export type { FrameOrigin, OverlayBase, ScopeTemplate, ScopeModule } from "./model/index.js";
 
 // === Program ===
 export * from "./program/index.js";

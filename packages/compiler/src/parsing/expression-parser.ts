@@ -35,6 +35,7 @@ import type {
   AccessGlobalExpression,
   AccessMemberExpression,
   AccessKeyedExpression,
+  Identifier,
   PrimitiveLiteralExpression,
   ArrayLiteralExpression,
   ObjectLiteralExpression,
@@ -397,14 +398,31 @@ export class CoreParser {
       const t = this.peekToken();
 
       if (t.type === TokenType.Dot) {
-        // obj.prop
+        // obj.prop — or obj. (incomplete, recovery)
         this.nextToken(); // '.'
         const nameTok = this.peekToken();
         if (!this.isIdentifierNameToken(nameTok)) {
-          return this.error("Expected identifier after '.'", nameTok);
+          // Recovery: produce a partial AccessMember with an empty identifier.
+          // This preserves the object expression for downstream consumers
+          // (completions, hover) that need to resolve the type before the dot.
+          const emptyName: Identifier = {
+            $kind: "Identifier",
+            span: this.span(this.lastTokenEnd, this.lastTokenEnd),
+            name: "",
+          };
+          const span = this.spanFrom(expr, this.lastTokenEnd);
+          const member: AccessMemberExpression = {
+            $kind: "AccessMember",
+            span,
+            object: expr,
+            name: emptyName,
+            optional: false,
+          };
+          expr = member;
+          break;
         }
         this.nextToken();
-        const name = this.tokenToIdentifierName(nameTok);
+        const name = this.identifierFromToken(nameTok);
         const span = this.spanFrom(expr, nameTok.end);
         const member: AccessMemberExpression = {
           $kind: "AccessMember",
@@ -473,12 +491,27 @@ export class CoreParser {
           continue;
         }
 
-        // obj?.prop
+        // obj?.prop — or obj?. (incomplete, recovery)
         if (!this.isIdentifierNameToken(next)) {
-          return this.error("Expected identifier after '?.'", next);
+          // Recovery: produce a partial AccessMember with an empty identifier.
+          const emptyName: Identifier = {
+            $kind: "Identifier",
+            span: this.span(this.lastTokenEnd, this.lastTokenEnd),
+            name: "",
+          };
+          const span = this.spanFrom(expr, this.lastTokenEnd);
+          const member: AccessMemberExpression = {
+            $kind: "AccessMember",
+            span,
+            object: expr,
+            name: emptyName,
+            optional: true,
+          };
+          expr = member;
+          break;
         }
         this.nextToken();
-        const name = this.tokenToIdentifierName(next);
+        const name = this.identifierFromToken(next);
         const span = this.spanFrom(expr, next.end);
         const member: AccessMemberExpression = {
           $kind: "AccessMember",
@@ -722,16 +755,17 @@ export class CoreParser {
     }
     this.nextToken();
 
-    const name = t.value as string;
+    const name = this.tokenToIdentifierName(t);
     if (name === "import") {
       return this.error("Bare 'import' is not allowed in binding expressions", t);
     }
+    const identifier = this.identifierFromToken(t);
 
     if (CoreParser.globalNames.has(name)) {
       const node: AccessGlobalExpression = {
         $kind: "AccessGlobal",
         span: this.spanFromToken(t),
-        name,
+        name: identifier,
       };
       return node;
     }
@@ -739,7 +773,7 @@ export class CoreParser {
     const node: AccessScopeExpression = {
       $kind: "AccessScope",
       span: this.spanFromToken(t),
-      name,
+      name: identifier,
       ancestor: 0,
     };
     return node;
@@ -768,7 +802,7 @@ export class CoreParser {
           return this.error("Expected identifier after '$this.'", nameTok);
         }
         this.nextToken();
-        const name = this.tokenToIdentifierName(nameTok);
+        const name = this.identifierFromToken(nameTok);
         const span = this.span(start, nameTok.end);
         const node: AccessScopeExpression = {
           $kind: "AccessScope",
@@ -811,7 +845,7 @@ export class CoreParser {
         return this.error("Expected identifier after '$parent.'", maybeParent);
       }
       this.nextToken();
-      const name = this.tokenToIdentifierName(maybeParent);
+      const name = this.identifierFromToken(maybeParent);
       const span = this.span(start, maybeParent.end);
       const node: AccessScopeExpression = {
         $kind: "AccessScope",
@@ -996,7 +1030,7 @@ export class CoreParser {
         return this.error("Expected identifier after '|'", nameTok);
       }
       this.nextToken();
-      const name = nameTok.value as string;
+      const name = this.identifierFromToken(nameTok);
 
       const args: IsAssign[] = [];
       while (this.peekToken().type === TokenType.Colon) {
@@ -1025,7 +1059,7 @@ export class CoreParser {
         return this.error("Expected identifier after '&'", nameTok);
       }
       this.nextToken();
-      const name = nameTok.value as string;
+      const name = this.identifierFromToken(nameTok);
 
       const args: IsAssign[] = [];
       while (this.peekToken().type === TokenType.Colon) {
@@ -1091,6 +1125,14 @@ export class CoreParser {
     return this.bindingIdentifierFromToken(t);
   }
 
+  private identifierFromToken(t: Token): Identifier {
+    return {
+      $kind: "Identifier",
+      span: this.spanFromToken(t),
+      name: this.tokenToIdentifierName(t),
+    };
+  }
+
   /**
    * Create a BindingIdentifier from an already-consumed identifier token,
    * enforcing the same 'import' restriction as identifier primaries.
@@ -1100,10 +1142,11 @@ export class CoreParser {
     if (name === "import") {
       return this.error("Bare 'import' is not allowed in binding expressions", t);
     }
+    const identifier = this.identifierFromToken(t);
     const id: BindingIdentifier = {
       $kind: "BindingIdentifier",
-      span: this.spanFromToken(t),
-      name,
+      span: identifier.span,
+      name: identifier,
     };
     return id;
   }
@@ -1574,17 +1617,15 @@ export class CoreParser {
 
   private parseArrowFromLeft(left: IsBinary | ConditionalExpression): ArrowFunction | BadExpression {
     if (this.isBad(left)) return left;
-    const paramSpan = left.span;
-
-    let name: string | null = null;
+    let identifier: Identifier | null = null;
     if (
       (left as Partial<AccessScopeExpression>).$kind === "AccessScope" ||
       (left as Partial<AccessGlobalExpression>).$kind === "AccessGlobal"
     ) {
-      name = (left as AccessScopeExpression | AccessGlobalExpression).name;
+      identifier = (left as AccessScopeExpression | AccessGlobalExpression).name;
     }
 
-    if (name == null) {
+    if (identifier == null) {
       const arrowTok = this.peekToken();
       return this.error(
         "Arrow functions currently support only a single identifier parameter in the LSP parser",
@@ -1601,12 +1642,12 @@ export class CoreParser {
 
     const arg: BindingIdentifier = {
       $kind: "BindingIdentifier",
-      span: paramSpan,
-      name,
+      span: identifier.span,
+      name: identifier,
     };
 
     const body = this.parseAssignExpr();
-    const span = this.spanFrom({ span: paramSpan }, body);
+    const span = this.spanFrom({ span: identifier.span }, body);
 
     const fn: ArrowFunction = {
       $kind: "ArrowFunction",
@@ -1729,10 +1770,11 @@ export class CoreParser {
           this.nextToken(); // identifier
         }
 
+        const identifier = this.identifierFromToken(idTok);
         const param: BindingIdentifier = {
           $kind: "BindingIdentifier",
-          span: this.spanFromToken(idTok),
-          name: idTok.value as string,
+          span: identifier.span,
+          name: identifier,
         };
         params.push(param);
 
@@ -2343,4 +2385,3 @@ export function getExpressionParser(): IExpressionParser {
   }
   return singleton;
 }
-

@@ -6,6 +6,9 @@ export * from "./identity.js";
 // Spans - source locations and span utilities
 export * from "./span.js";
 
+// Text - line/character conversion helpers
+export * from "./text.js";
+
 // Source files - file resolution and span helpers
 export * from "./source.js";
 
@@ -20,4 +23,7 @@ export * from "./symbols.js";
 
 // Diagnostics - foundation diagnostic types
 export * from "./diagnostics.js";
+
+// Expression semantic model - demand-driven type resolution (Tiers 1-3)
+export * from "./expression-semantic.js";
 

@@ -160,7 +160,10 @@ export async function compileFromEntry({
     DefaultTemplateProgram,
     DefaultTemplateBuildService,
     canonicalDocumentUri,
-    DEFAULT_SEMANTICS,
+    BUILTIN_SEMANTICS,
+    createSemanticModel,
+    buildTemplateSyntaxRegistry,
+    buildResourceCatalog,
   } = await import(compilerIndexUrl.href);
 
   const vm = {
@@ -168,6 +171,32 @@ export async function compileFromEntry({
     getRootVmTypeExpr: () => className,
     getSyntheticPrefix: () => "__AU_TTC_",
   };
+  const moduleResolver = (_specifier: string, _containingFile: string) => null;
+
+  // Build a minimal SemanticModelQuery from BUILTIN_SEMANTICS
+  const syntax = buildTemplateSyntaxRegistry(BUILTIN_SEMANTICS);
+  const catalog = buildResourceCatalog(
+    BUILTIN_SEMANTICS.resources,
+    syntax.bindingCommands,
+    syntax.attributePatterns,
+  );
+  const minimalDiscovery = {
+    semantics: BUILTIN_SEMANTICS,
+    catalog,
+    syntax,
+    resourceGraph: { root: null, scopes: {} },
+    semanticSnapshot: { version: "test", symbols: [], catalog: { resources: {} }, graph: null, gaps: [], confidence: "complete" },
+    apiSurfaceSnapshot: { version: "test", symbols: [] },
+    definition: { authority: [], evidence: [], convergence: [] },
+    registration: { sites: [], orphans: [], unresolved: [] },
+    templates: [],
+    inlineTemplates: [],
+    diagnostics: [],
+    recognizedBindingCommands: [],
+    recognizedAttributePatterns: [],
+    facts: new Map(),
+  };
+  const query = createSemanticModel(minimalDiscovery).query();
 
   const program = new DefaultTemplateProgram({
     vm,
@@ -175,7 +204,8 @@ export async function compileFromEntry({
     exprParser,
     attrParser,
     overlayBaseName,
-    semantics: DEFAULT_SEMANTICS,
+    query,
+    moduleResolver,
   });
   const uri = canonicalDocumentUri(`C:/mem/${markupFile}`).uri;
   program.upsertTemplate(uri, html);

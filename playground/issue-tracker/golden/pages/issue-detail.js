@@ -34,24 +34,10 @@ const issueDetail__e = [
     value: "Issue not found"
   },
   /* 3 */
-  // BadExpression
+  // PrimitiveLiteral
   {
-    $kind: "BadExpression",
-    text: "",
-    message: "Unexpected token after end of expression",
-    origin: {
-      origin: {
-        kind: "authored",
-        trace: [
-          {
-            by: "parse"
-          }
-        ]
-      },
-      fallbackSpan: {
-        file: "playground/issue-tracker/src/pages/issue-detail.html"
-      }
-    }
+    $kind: "PrimitiveLiteral",
+    value: "The issue you're looking for doesn't exist or has been deleted"
   },
   /* 4 */
   // CallScope
@@ -66,6 +52,7 @@ const issueDetail__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "issue",
@@ -78,6 +65,7 @@ const issueDetail__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "issue",
@@ -90,6 +78,7 @@ const issueDetail__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "issue",
@@ -102,6 +91,7 @@ const issueDetail__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "issue",
@@ -114,6 +104,7 @@ const issueDetail__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "issue",
@@ -126,6 +117,7 @@ const issueDetail__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "issue",
@@ -138,6 +130,7 @@ const issueDetail__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "issue",
@@ -163,6 +156,7 @@ const issueDetail__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "issue",
@@ -175,6 +169,7 @@ const issueDetail__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "issue",
@@ -207,6 +202,7 @@ const issueDetail__e = [
     $kind: "CallMember",
     object: {
       $kind: "AccessMember",
+      accessGlobal: false,
       object: {
         $kind: "AccessScope",
         name: "issue",
@@ -231,6 +227,7 @@ const issueDetail__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "issue",
@@ -246,6 +243,7 @@ const issueDetail__e = [
     operation: ">",
     left: {
       $kind: "AccessMember",
+      accessGlobal: false,
       object: {
         $kind: "AccessScope",
         name: "issue",
@@ -263,6 +261,7 @@ const issueDetail__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "issue",
@@ -282,6 +281,7 @@ const issueDetail__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "issue",
@@ -367,6 +367,7 @@ const issueDetail__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "comment",
@@ -379,6 +380,7 @@ const issueDetail__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "comment",
@@ -391,8 +393,10 @@ const issueDetail__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessMember",
+      accessGlobal: false,
       object: {
         $kind: "AccessScope",
         name: "comment",
@@ -408,6 +412,7 @@ const issueDetail__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "comment",
@@ -420,6 +425,7 @@ const issueDetail__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "comment",
@@ -438,6 +444,7 @@ const issueDetail__e = [
     },
     iterable: {
       $kind: "AccessMember",
+      accessGlobal: false,
       object: {
         $kind: "AccessScope",
         name: "issue",

@@ -6,29 +6,25 @@
  *
  * Key scenarios:
  * - Custom elements from @aurelia/router resolve correctly
- * - Resolution uses DEFAULT_SEMANTICS properly
+ * - Resolution uses BUILTIN_SEMANTICS properly
  * - Emitted instructions have correct structure for runtime consumption
  */
 
 import { test, describe, expect } from "vitest";
-import {
-  lowerDocument,
-  resolveHost,
-  bindScopes,
-  planAot,
-  emitAotCode,
-  emitTemplate,
-  collectNestedTemplateHtmlTree,
-  getExpressionParser,
-  DEFAULT_SYNTAX,
-  DEFAULT_SEMANTICS,
-  INSTRUCTION_TYPE,
-  type SerializedDefinition,
-  type SerializedInstruction,
-  type SerializedHydrateElement,
-  type SerializedHydrateTemplateController,
-  type NestedTemplateHtmlNode,
-} from "@aurelia-ls/compiler";
+import { lowerDocument } from "../../../out/analysis/10-lower/lower.js";
+import { linkTemplateSemantics } from "../../../out/analysis/20-link/resolve.js";
+import { buildSemanticsSnapshot } from "../../../out/schema/snapshot.js";
+import { bindScopes } from "../../../out/analysis/30-bind/bind.js";
+import { planAot } from "../../../out/synthesis/aot/plan.js";
+import { emitAotCode } from "../../../out/synthesis/aot/emit.js";
+import { emitTemplate, collectNestedTemplateHtmlTree, type NestedTemplateHtmlNode } from "../../../out/synthesis/aot/emit-template.js";
+import { getExpressionParser } from "../../../out/parsing/expression-parser.js";
+import { DEFAULT_SYNTAX } from "../../../out/parsing/attribute-parser.js";
+import { BUILTIN_SEMANTICS } from "../../../out/schema/registry.js";
+import { DiagnosticsRuntime } from "../../../out/diagnostics/runtime.js";
+import { INSTRUCTION_TYPE } from "../../../out/synthesis/aot/constants.js";
+import type { SerializedDefinition, SerializedInstruction, SerializedHydrateElement, SerializedHydrateTemplateController } from "../../../out/synthesis/aot/types.js";
+import { noopModuleResolver } from "../../_helpers/test-utils.js";
 
 // =============================================================================
 // Test Helpers
@@ -47,16 +43,22 @@ interface CompileResult {
 
 function compileTemplate(markup: string): CompileResult {
   const exprParser = getExpressionParser();
+  const diagnostics = new DiagnosticsRuntime();
 
   const ir = lowerDocument(markup, {
     attrParser: DEFAULT_SYNTAX,
     exprParser,
     file: "test.html",
     name: "test",
-    catalog: DEFAULT_SEMANTICS.catalog,
+    catalog: BUILTIN_SEMANTICS.catalog,
+    diagnostics: diagnostics.forSource("lower"),
   });
-  const linked = resolveHost(ir, DEFAULT_SEMANTICS);
-  const scope = bindScopes(linked);
+  const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(BUILTIN_SEMANTICS), {
+    moduleResolver: noopModuleResolver,
+    templateFilePath: "test.html",
+    diagnostics: diagnostics.forSource("link"),
+  });
+  const scope = bindScopes(linked, { diagnostics: diagnostics.forSource("bind") });
   const plan = planAot(linked, scope, { templateFilePath: "test.html" });
 
   // Emit both instructions AND template HTML (both are needed for runtime)
@@ -123,9 +125,9 @@ describe("au-viewport Resolution", () => {
     expect(hydrateElements[0]!.res).toBe("au-viewport");
   });
 
-  test("au-viewport in DEFAULT_SEMANTICS has correct structure", () => {
+  test("au-viewport in BUILTIN_SEMANTICS has correct structure", () => {
     // Directly verify the semantics entry
-    const viewport = DEFAULT_SEMANTICS.resources.elements["au-viewport"];
+    const viewport = BUILTIN_SEMANTICS.resources.elements["au-viewport"];
 
     expect(viewport).toBeDefined();
     expect(viewport?.kind).toBe("element");
@@ -325,3 +327,5 @@ describe("Debug Output Inspection", () => {
     expect(hydrateElements.length).toBe(1);
   });
 });
+
+

@@ -5,13 +5,9 @@ import type {
   ControllerConfig,
   ControllerName,
   ResourceCatalog,
-} from "../../language/registry.js";
-import { debug } from "../../shared/debug.js";
+} from "../../schema/registry.js";
+import { getControllerConfig } from "../../schema/registry.js";
 import { formatSuggestion } from "../../shared/suggestions.js";
-import {
-  BUILTIN_CONTROLLER_CONFIGS,
-  createCustomControllerConfig,
-} from "../../language/registry.js";
 import type {
   AttributeBindableIR,
   BindingMode,
@@ -21,10 +17,10 @@ import type {
   InstructionIR,
   SetPropertyIR,
 } from "../../model/ir.js";
-import type { ExprTable, P5Element, P5Loc } from "./lower-shared.js";
-import type { ProjectionMap } from "./lower-shared.js";
+import type { ExprTable, P5Element, P5Loc, ProjectionMap } from "./lower-shared.js";
 import {
   attrLoc,
+  attrNameLoc,
   attrValueLoc,
   camelCase,
   findAttr,
@@ -35,6 +31,19 @@ import {
   toSpan,
 } from "./lower-shared.js";
 import { resolveAttrDef, resolveElementDef } from "./resource-utils.js";
+import type { LowerContext } from "./lower-context.js";
+import {
+  planControllerAttribute,
+  resolvePromiseBranchKind,
+} from "../shared/controller-decisions.js";
+
+function isPromiseBranchAttr(
+  parsed: ReturnType<AttributeParser["parse"]>,
+  catalog: ResourceCatalog,
+): boolean {
+  const controller = getControllerConfig(parsed.target) ?? catalog.resources.controllers[parsed.target];
+  return resolvePromiseBranchKind(controller) != null;
+}
 
 // Character codes for multi-binding parsing
 const Char_Backslash = 0x5C;  // \
@@ -62,6 +71,33 @@ function hasInlineBindings(value: string): boolean {
     }
   }
   return false;
+}
+
+function normalizeClassCommandTarget(target: string): string {
+  if (!target.includes(",")) return target;
+  const classes = target
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+  return classes.length > 0 ? classes.join(" ") : target;
+}
+
+/**
+ * Computes a sub-span within a multi-binding attribute value for a single binding expression.
+ * Trims leading/trailing whitespace from the slice to produce a tight span.
+ */
+function subValueLoc(valueLoc: P5Loc, raw: string, rawStart: number, rawEnd: number): P5Loc {
+  if (!valueLoc || valueLoc.startOffset == null) return valueLoc;
+  const slice = raw.slice(rawStart, rawEnd);
+  const trimLeft = slice.length - slice.trimStart().length;
+  const trimRight = slice.length - slice.trimEnd().length;
+  const base = valueLoc.startOffset;
+  const result: typeof valueLoc = {
+    ...valueLoc,
+    startOffset: base + rawStart + trimLeft,
+    endOffset: base + rawEnd - trimRight,
+  };
+  return result;
 }
 
 /**
@@ -113,14 +149,19 @@ function parseMultiBindings(
 
       if (bindable) {
         const to = bindable.name;
+        // Multi-binding sub-spans: name covers "display-data.bind", full covers "display-data.bind: displayItems"
+        const subNameSpan = subValueLoc(valueLoc, raw, start, i);
+        const subFullSpan = subValueLoc(valueLoc, raw, start, Math.min(i + 1, len)); // includes colon+value
         if (parsed.command) {
           // Has binding command (e.g., prop.bind, prop.two-way)
           props.push({
             type: "propertyBinding",
             to,
-            from: toBindingSource(valuePart, valueLoc, table, "IsProperty"),
+            from: toBindingSource(valuePart, subValueLoc(valueLoc, raw, valueStart, i), table, "IsProperty"),
             mode: toMode(parsed.command, parsed.mode, bindingCommands),
-            loc: toSpan(loc, table.source),
+            loc: toSpan(subFullSpan, table.source),
+            nameLoc: toSpan(subNameSpan, table.source),
+            command: parsed.command,
           });
         } else if (valuePart.includes("${")) {
           // Has interpolation
@@ -128,8 +169,9 @@ function parseMultiBindings(
             type: "attributeBinding",
             attr: propPart,
             to,
-            from: toInterpIR(valuePart, valueLoc, table),
-            loc: toSpan(loc, table.source),
+            from: toInterpIR(valuePart, subValueLoc(valueLoc, raw, valueStart, i), table),
+            loc: toSpan(subFullSpan, table.source),
+            nameLoc: toSpan(subNameSpan, table.source),
           });
         } else if (valuePart.length > 0) {
           // Literal value (skip empty values)
@@ -137,11 +179,12 @@ function parseMultiBindings(
             type: "setProperty",
             to,
             value: valuePart,
-            loc: toSpan(loc, table.source),
+            loc: toSpan(subFullSpan, table.source),
+            nameLoc: toSpan(subNameSpan, table.source),
           } as SetPropertyIR);
         }
       }
-      // Note: Unknown bindables are silently ignored here; diagnostics are handled in resolve phase
+      // Note: Unknown bindables are silently ignored here; diagnostics are handled in link phase
 
       // Skip whitespace after semicolon
       while (i < len && raw.charCodeAt(i + 1) <= Char_Space) i++;
@@ -159,11 +202,11 @@ export interface ElementLoweringResult {
 
 export function lowerElementAttributes(
   el: P5Element,
-  attrParser: AttributeParser,
-  table: ExprTable,
-  catalog: ResourceCatalog,
+  lowerCtx: LowerContext,
   projectionMap?: ProjectionMap,
 ): ElementLoweringResult {
+  const { attrParser, table, catalog, services } = lowerCtx;
+  const dbg = services.debug;
   const attrs = el.attrs ?? [];
   const authoredTag = el.nodeName.toLowerCase();
   const asElement = findAttr(el, "as-element");
@@ -171,7 +214,7 @@ export function lowerElementAttributes(
   const elementDef = resolveElementDef(effectiveTag, catalog);
   const containerless = !!elementDef?.containerless || !!findAttr(el, "containerless");
 
-  debug.lower("element.start", {
+  dbg.lower("element.start", {
     tag: authoredTag,
     effectiveTag: effectiveTag !== authoredTag ? effectiveTag : undefined,
     isCustomElement: !!elementDef,
@@ -188,6 +231,7 @@ export function lowerElementAttributes(
     attrName: string,
     raw: string,
     loc: P5Loc,
+    attrNameSpan: P5Loc | null,
     valueLoc: P5Loc,
     command: string | null,
     patternMode: BindingMode | null
@@ -200,6 +244,8 @@ export function lowerElementAttributes(
         from: toBindingSource(raw, valueLoc, table, "IsProperty"),
         mode: toMode(command, patternMode, catalog.bindingCommands),
         loc: toSpan(loc, table.source),
+        nameLoc: toSpan(attrNameSpan, table.source),
+        command,
       });
       return;
     }
@@ -210,6 +256,7 @@ export function lowerElementAttributes(
         to,
         from: toInterpIR(raw, valueLoc, table),
         loc: toSpan(loc, table.source),
+        nameLoc: toSpan(attrNameSpan, table.source),
       });
       return;
     }
@@ -219,17 +266,20 @@ export function lowerElementAttributes(
       to,
       value: raw,
       loc: toSpan(loc, table.source),
+      nameLoc: toSpan(attrNameSpan, table.source),
     } as SetPropertyIR);
   };
 
   for (const a of attrs) {
     const loc = attrLoc(el, a.name);
+    const nameLoc = attrNameLoc(el, a.name, table.sourceText);
     const valueLoc = attrValueLoc(el, a.name, table.sourceText);
     const s = attrParser.parse(a.name, a.value ?? "");
     const raw = a.value ?? "";
 
     if (a.name === "as-element" || a.name === "containerless") continue;
     if (isControllerAttr(s, catalog)) continue;
+    if (isPromiseBranchAttr(s, catalog)) continue;
 
     // Config-driven command handling
     if (s.command) {
@@ -238,24 +288,25 @@ export function lowerElementAttributes(
         // Unknown binding command - emit diagnostic with suggestion
         const knownCommands = Object.keys(catalog.bindingCommands);
         const suggestion = formatSuggestion(s.command, knownCommands);
-        table.addDiag(
-          "AU0705",
+        table.reportDiagnostic(
+          "aurelia/unknown-command",
           `Unknown binding command '${s.command}'.${suggestion}`,
-          loc
+          loc,
+          { command: s.command },
         );
         // Fall through to treat as property binding for graceful degradation
       }
       if (cmdConfig) {
         switch (cmdConfig.kind) {
           case "listener":
-            debug.lower("attr.listener", { attr: a.name, event: s.target, command: s.command });
+            dbg.lower("attr.listener", { attr: a.name, event: s.target, command: s.command });
             tail.push({
               type: "listenerBinding",
               to: s.target,
               from: toExprRef(raw, valueLoc, table, "IsFunction"),
               capture: cmdConfig.capture ?? false,
               modifier: s.parts?.[2] ?? s.parts?.[1] ?? null,
-              loc: toSpan(loc, table.source),
+              loc: toSpan(loc, table.source), nameLoc: toSpan(nameLoc, table.source), command: s.command,
             });
             continue;
 
@@ -264,7 +315,7 @@ export function lowerElementAttributes(
               type: "refBinding",
               to: s.target,
               from: toExprRef(raw, valueLoc, table, "IsProperty"),
-              loc: toSpan(loc, table.source),
+              loc: toSpan(loc, table.source), nameLoc: toSpan(nameLoc, table.source),
             });
             continue;
 
@@ -273,19 +324,22 @@ export function lowerElementAttributes(
               type: "stylePropertyBinding",
               to: s.target,
               from: toBindingSource(raw, valueLoc, table, "IsProperty"),
-              loc: toSpan(loc, table.source),
+              loc: toSpan(loc, table.source), nameLoc: toSpan(nameLoc, table.source),
             });
             continue;
 
           case "attribute": {
             // Use forceAttribute if specified (e.g., "class" command always uses "class")
             const attrName = cmdConfig.forceAttribute ?? s.target;
+            const target = s.command === "class"
+              ? normalizeClassCommandTarget(s.target)
+              : s.target;
             tail.push({
               type: "attributeBinding",
               attr: attrName,
-              to: attrName,
+              to: target,
               from: toBindingSource(raw, valueLoc, table, "IsProperty"),
-              loc: toSpan(loc, table.source),
+              loc: toSpan(loc, table.source), nameLoc: toSpan(nameLoc, table.source),
             });
             continue;
           }
@@ -303,7 +357,7 @@ export function lowerElementAttributes(
                 to: s.target,
                 from: toBindingSource(raw, valueLoc, table, "IsProperty"),
                 isExpression: true,
-                loc: toSpan(loc, table.source),
+                loc: toSpan(loc, table.source), nameLoc: toSpan(nameLoc, table.source),
               });
             } else if (hasInterpolation) {
               // t="key.${expr}" - parse interpolation at AOT time
@@ -312,7 +366,7 @@ export function lowerElementAttributes(
                 to: s.target,
                 from: toInterpIR(raw, valueLoc, table),
                 isExpression: true, // Treat as expression since it contains dynamic parts
-                loc: toSpan(loc, table.source),
+                loc: toSpan(loc, table.source), nameLoc: toSpan(nameLoc, table.source),
               });
             } else {
               // t="static.key" - literal translation key
@@ -321,7 +375,7 @@ export function lowerElementAttributes(
                 to: s.target,
                 keyValue: raw,
                 isExpression: false,
-                loc: toSpan(loc, table.source),
+                loc: toSpan(loc, table.source), nameLoc: toSpan(nameLoc, table.source),
               });
             }
             continue;
@@ -335,14 +389,14 @@ export function lowerElementAttributes(
 
     const bindable = elementDef?.bindables[camelCase(s.target)];
     if (bindable) {
-      debug.lower("attr.bindable", { attr: a.name, bindable: bindable.name, element: elementDef.name });
-      lowerBindable(hydrateElementProps, bindable.name, a.name, raw, loc, valueLoc, s.command, s.mode);
+      dbg.lower("attr.bindable", { attr: a.name, bindable: bindable.name, element: elementDef.name });
+      lowerBindable(hydrateElementProps, bindable.name, a.name, raw, loc, nameLoc, valueLoc, s.command, s.mode);
       continue;
     }
 
     const attrDef = resolveAttrDef(s.target, catalog);
     if (attrDef && !attrDef.isTemplateController) {
-      debug.lower("attr.customAttribute", { attr: a.name, customAttr: attrDef.name });
+      dbg.lower("attr.customAttribute", { attr: a.name, customAttr: attrDef.name });
       // Check for multi-binding syntax: attr="prop1: val; prop2.bind: expr"
       // Multi-binding requires: no noMultiBindings flag, no command on the attr, and colon before interpolation
       const isMultiBinding =
@@ -360,7 +414,7 @@ export function lowerElementAttributes(
             ? camelCase(s.target)
             : attrDef.primary ?? Object.keys(attrDef.bindables)[0] ?? null;
         if (targetBindableName) {
-          lowerBindable(props, targetBindableName, a.name, raw, loc, valueLoc, s.command, s.mode);
+          lowerBindable(props, targetBindableName, a.name, raw, loc, nameLoc, valueLoc, s.command, s.mode);
         }
       }
 
@@ -369,31 +423,31 @@ export function lowerElementAttributes(
         res: attrDef.name,
         props,
         alias: attrDef.name !== s.target ? s.target : null,
-        loc: toSpan(loc, table.source),
+        loc: toSpan(loc, table.source), nameLoc: toSpan(nameLoc, table.source),
       });
       continue;
     }
 
     if (s.command) {
-      debug.lower("attr.binding", { attr: a.name, target: s.target, command: s.command });
+      dbg.lower("attr.binding", { attr: a.name, target: s.target, command: s.command });
       tail.push({
         type: "propertyBinding",
         to: camelCase(s.target),
         from: toBindingSource(raw, valueLoc, table, "IsProperty"),
         mode: toMode(s.command, s.mode, catalog.bindingCommands),
-        loc: toSpan(loc, table.source),
+        loc: toSpan(loc, table.source), nameLoc: toSpan(nameLoc, table.source), command: s.command,
       });
       continue;
     }
 
     if (raw.includes("${")) {
-      debug.lower("attr.interpolation", { attr: a.name, value: raw });
+      dbg.lower("attr.interpolation", { attr: a.name, value: raw });
       tail.push({
         type: "attributeBinding",
         attr: a.name,
         to: camelCase(a.name),
         from: toInterpIR(raw, valueLoc, table),
-        loc: toSpan(loc, table.source),
+        loc: toSpan(loc, table.source), nameLoc: toSpan(nameLoc, table.source),
       });
       continue;
     }
@@ -403,14 +457,14 @@ export function lowerElementAttributes(
         tail.push({
           type: "setClassAttribute",
           value: raw,
-          loc: toSpan(loc, table.source),
+          loc: toSpan(loc, table.source), nameLoc: toSpan(nameLoc, table.source),
         });
         break;
       case "style":
         tail.push({
           type: "setStyleAttribute",
           value: raw,
-          loc: toSpan(loc, table.source),
+          loc: toSpan(loc, table.source), nameLoc: toSpan(nameLoc, table.source),
         });
         break;
       default:
@@ -418,7 +472,7 @@ export function lowerElementAttributes(
           type: "setAttribute",
           to: a.name,
           value: raw || null,
-          loc: toSpan(loc, table.source),
+          loc: toSpan(loc, table.source), nameLoc: toSpan(nameLoc, table.source),
         });
         break;
     }
@@ -446,9 +500,8 @@ export function lowerElementAttributes(
  * Resolve an attribute to its controller configuration.
  *
  * Resolution order:
- * 1. Built-in controller configs (if, repeat, with, etc.)
- * 2. Custom template controllers in attributes (via @templateController decorator)
- * 3. Legacy controllers in catalog.resources.controllers (for backward compat)
+ * 1. Built-in controller configs (canonical controller semantics).
+ * 2. Scoped controller configs from semantic catalogs.
  *
  * Note: Branch controllers (else, case, then, catch, pending, default-case) are NOT
  * resolved here. They are only valid as children/siblings of their parent controller
@@ -462,45 +515,25 @@ export function resolveControllerAttr(
 ): ControllerConfig | null {
   const target = s.target;
 
-  // 1. Check built-in controller configs first
-  const builtin = BUILTIN_CONTROLLER_CONFIGS[target];
-  if (builtin) {
-    // Promise branch controllers (then, catch, pending) are NOT resolved here.
-    // They are detected by detectPromiseBranch() which handles the special
-    // branch injection logic. Other branch controllers (else, case, default-case)
-    // ARE resolved here and handled normally by collectControllers().
-    if (builtin.linksTo === "promise") {
-      return null;
-    }
-
-    // Special case: repeat requires "for" command
-    if (target === "repeat") {
-      return s.command === "for" ? builtin : null;
-    }
-    return builtin;
+  // 1. Built-ins first: avoid degrading known controllers (repeat/promise branches)
+  // when scoped resources only contain attribute-style template controller metadata.
+  const builtin = getControllerConfig(target);
+  const builtinDecision = planControllerAttribute(builtin, s.command);
+  if (builtinDecision.accepted) {
+    return builtin ?? null;
+  }
+  if (builtinDecision.reason !== "missing-controller") {
+    return null;
   }
 
-  // 2. Check custom TCs in attributes (discovered via @templateController decorator)
-  const customAttr = resolveAttrDef(target, catalog);
-  if (customAttr?.isTemplateController) {
-    // Create a config for this custom TC
-    return createCustomControllerConfig(
-      customAttr.name,
-      customAttr.primary,
-      customAttr.bindables
-    );
+  // 2. Fall back to scoped controller catalogs for project-defined controllers.
+  const scoped = catalog.resources.controllers[target];
+  const decision = planControllerAttribute(scoped, s.command);
+  if (decision.accepted) {
+    return scoped ?? null;
   }
-
-  // 3. Legacy fallback: check catalog.resources.controllers
-  // This maintains backward compatibility with existing code that adds to controllers directly
-  const legacyController = catalog.resources.controllers[target];
-  if (legacyController) {
-    // For legacy controllers, create a minimal config
-    // The toControllerConfig() function handles full conversion if needed
-    if (target === "repeat") {
-      return s.command === "for" ? BUILTIN_CONTROLLER_CONFIGS["repeat"]! : null;
-    }
-    return BUILTIN_CONTROLLER_CONFIGS[target] ?? null;
+  if (decision.reason !== "missing-controller") {
+    return null;
   }
 
   return null;

@@ -151,6 +151,8 @@ function assertGaps(run: IntegrationRun, expectations: ScenarioExpectations): As
       if (gap.kind !== expected.kind) return false;
       if (expected.contains && !gap.message.includes(expected.contains)) return false;
       if (expected.file && gap.resource !== expected.file) return false;
+      if (expected.resourceKind && gap.resourceKind !== expected.resourceKind) return false;
+      if (expected.resourceName && gap.resourceName !== expected.resourceName) return false;
       return true;
     });
     if (!match) {
@@ -292,7 +294,7 @@ function resolveScopeKey(key: string, run: IntegrationRun): string {
   if (key.startsWith("local:")) {
     return key;
   }
-  const byName = run.resolution.templates.find((t) => t.resourceName === key);
+  const byName = run.discovery.templates.find((t) => t.resourceName === key);
   if (byName) {
     return `local:${byName.componentPath}`;
   }

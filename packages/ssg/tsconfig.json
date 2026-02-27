@@ -4,8 +4,15 @@
     "rootDir": "src",
     "outDir": "out"
   },
-  "include": ["src"],
+  "include": [
+    "src"
+  ],
   "references": [
-    { "path": "../ssr" }
+    {
+      "path": "../compiler"
+    },
+    {
+      "path": "../ssr"
+    }
   ]
 }

@@ -5,21 +5,26 @@
  * with various type combinations, binding contexts, and configurations.
  */
 import { describe, test, expect } from "vitest";
+import { lowerDocument } from "../../out/analysis/10-lower/lower.js";
+import { linkTemplateSemantics } from "../../out/analysis/20-link/resolve.js";
+import { buildSemanticsSnapshot } from "../../out/schema/snapshot.js";
+import { bindScopes } from "../../out/analysis/30-bind/bind.js";
+import { typecheck } from "../../out/analysis/40-typecheck/typecheck.js";
 import {
-  lowerDocument,
-  resolveHost,
-  bindScopes,
-  typecheck,
-  getExpressionParser,
-  DEFAULT_SYNTAX,
-  DEFAULT_SEMANTICS,
   checkTypeCompatibility,
   resolveTypecheckConfig,
   DEFAULT_TYPECHECK_CONFIG,
   TYPECHECK_PRESETS,
   type BindingContext,
   type TypecheckConfig,
-} from "@aurelia-ls/compiler";
+} from "../../out/analysis/40-typecheck/config.js";
+import { getExpressionParser } from "../../out/parsing/expression-parser.js";
+import { DEFAULT_SYNTAX } from "../../out/parsing/attribute-parser.js";
+import { BUILTIN_SEMANTICS } from "../../out/schema/registry.js";
+import { DiagnosticsRuntime } from "../../out/diagnostics/runtime.js";
+import { noopModuleResolver } from "../_helpers/test-utils.js";
+
+const RESOLVE_OPTS = { moduleResolver: noopModuleResolver, templateFilePath: "test.html" };
 
 // Helper to create config with specific overrides
 function config(overrides: Partial<TypecheckConfig> = {}): TypecheckConfig {
@@ -147,13 +152,13 @@ describe("checkTypeCompatibility", () => {
       expect(result.severity).toBe("warning");
     });
 
-    test("NonNullable<T> is NOT treated as nullable", () => {
-      // This was a bug where "nonnullable" contained "null"
+    test("NonNullable<T> is treated as unevaluated type (safe fallback)", () => {
+      // NonNullable<T> is a TS type expression that should have been resolved.
+      // If it reaches the compatibility checker unresolved, treat as compatible
+      // rather than risk a false alarm.
       const result = checkTypeCompatibility("NonNullable<Foo>", "string", "dom.property", config({ nullToString: "error", typeMismatch: "error" }));
-      // Should be a type mismatch, not a null-to-string issue
-      expect(result.severity).toBe("error");
-      // The reason should mention type assignment, not null rendering
-      expect(result.reason).toContain("not assignable");
+      expect(result.compatible).toBe(true);
+      expect(result.severity).toBe("off");
     });
 
     test("null → number is a type mismatch, not null-to-string", () => {
@@ -204,6 +209,49 @@ describe("checkTypeCompatibility", () => {
     });
   });
 
+  describe("truthy coercion (if/show pattern)", () => {
+    test("number → boolean accepted for component.bindable (if.bind='items.length')", () => {
+      const result = checkTypeCompatibility("number", "boolean", "component.bindable", config());
+      expect(result.compatible).toBe(true);
+      expect(result.coerced).toBe(true);
+    });
+
+    test("string → boolean accepted for component.bindable (show.bind='name')", () => {
+      const result = checkTypeCompatibility("string", "boolean", "component.bindable", config());
+      expect(result.compatible).toBe(true);
+      expect(result.coerced).toBe(true);
+    });
+
+    test("any[] → boolean accepted for component.bindable (if.bind='items')", () => {
+      const result = checkTypeCompatibility("any[]", "boolean", "component.bindable", config());
+      expect(result.compatible).toBe(true);
+      expect(result.coerced).toBe(true);
+    });
+
+    test("number → boolean NOT accepted for dom.property", () => {
+      const result = checkTypeCompatibility("number", "boolean", "dom.property", config({ typeMismatch: "error" }));
+      expect(result.compatible).toBe(false);
+    });
+
+    test("null → boolean NOT accepted (null is not truthy-evaluable)", () => {
+      const result = checkTypeCompatibility("null", "boolean", "component.bindable", config({ typeMismatch: "error" }));
+      expect(result.compatible).toBe(false);
+    });
+  });
+
+  describe("union type handling", () => {
+    test("string | number compatible with string (all members coerce)", () => {
+      const result = checkTypeCompatibility("string | number", "string", "dom.property", config({ domCoercion: true }));
+      expect(result.compatible).toBe(true);
+    });
+
+    test("Map<string, number> | null triggers nullable check", () => {
+      const result = checkTypeCompatibility("Map<string, number> | null", "string", "dom.property", config({ nullToString: "warning" }));
+      expect(result.compatible).toBe(false);
+      expect(result.severity).toBe("warning");
+    });
+  });
+
   describe("type mismatches", () => {
     test("string → boolean is a mismatch", () => {
       const result = checkTypeCompatibility("string", "boolean", "dom.property", config({ typeMismatch: "error" }));
@@ -223,9 +271,12 @@ describe("checkTypeCompatibility", () => {
       expect(result.compatible).toBe(false);
     });
 
-    test("complex type → primitive is a mismatch", () => {
+    test("complex generic type is treated as unevaluated (safe fallback)", () => {
+      // Generic types like Record<string, unknown> can't be compared via
+      // string matching. The safety valve treats them as compatible to
+      // avoid false alarms.
       const result = checkTypeCompatibility("Record<string, unknown>", "string", "dom.property", config({ typeMismatch: "error" }));
-      expect(result.compatible).toBe(false);
+      expect(result.compatible).toBe(true);
     });
   });
 
@@ -329,21 +380,20 @@ describe("cascade suppression", () => {
     exprParser: getExpressionParser(),
     file: "test.html",
     name: "test",
-    catalog: DEFAULT_SEMANTICS.catalog,
+    catalog: BUILTIN_SEMANTICS.catalog,
   };
 
-  test("no type diagnostic when target.kind === 'unknown' (resolve failed)", () => {
+  test("no binding contract when target.kind === 'unknown' (resolve failed)", () => {
+    const diagnostics = new DiagnosticsRuntime();
     // Bind to a property that doesn't exist on the element
-    // This will produce a resolve error (AU1104) but should NOT produce a type error
     const markup = '<div nonexistent.bind="42"></div>';
 
-    const ir = lowerDocument(markup, opts);
-    const linked = resolveHost(ir, DEFAULT_SEMANTICS);
-    const scope = bindScopes(linked);
+    const ir = lowerDocument(markup, { ...opts, diagnostics: diagnostics.forSource("lower") });
+    const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(BUILTIN_SEMANTICS), { ...RESOLVE_OPTS, diagnostics: diagnostics.forSource("link") });
+    const scope = bindScopes(linked, { diagnostics: diagnostics.forSource("bind") });
     const tc = typecheck({
       linked,
       scope,
-      ir,
       rootVmType: "RootVm",
       config: { preset: "standard" },
     });
@@ -353,24 +403,22 @@ describe("cascade suppression", () => {
     expect(ins?.kind).toBe("propertyBinding");
     expect((ins as { target?: { kind?: string } })?.target?.kind).toBe("unknown");
 
-    // No type diagnostics should be produced (cascade suppression)
-    expect(tc.diags).toHaveLength(0);
-
-    // The expression should NOT be in expectedByExpr (skipped due to unknown target)
+    // No binding contract produced (cascade suppression — unknown target skipped)
     expect(tc.expectedByExpr.size).toBe(0);
+    expect(tc.contracts.size).toBe(0);
   });
 
-  test("type diagnostic still produced for valid targets", () => {
-    // Bind a string to a boolean property - should produce type error
+  test("binding contract produced for valid targets", () => {
+    const diagnostics = new DiagnosticsRuntime();
+    // Bind a string to a boolean property
     const markup = '<input disabled.bind="\'yes\'">';
 
-    const ir = lowerDocument(markup, opts);
-    const linked = resolveHost(ir, DEFAULT_SEMANTICS);
-    const scope = bindScopes(linked);
+    const ir = lowerDocument(markup, { ...opts, diagnostics: diagnostics.forSource("lower") });
+    const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(BUILTIN_SEMANTICS), { ...RESOLVE_OPTS, diagnostics: diagnostics.forSource("link") });
+    const scope = bindScopes(linked, { diagnostics: diagnostics.forSource("bind") });
     const tc = typecheck({
       linked,
       scope,
-      ir,
       rootVmType: "RootVm",
       config: { preset: "standard" },
     });
@@ -379,9 +427,11 @@ describe("cascade suppression", () => {
     const ins = linked.templates?.[0]?.rows?.[0]?.instructions?.[0];
     expect((ins as { target?: { kind?: string } })?.target?.kind).not.toBe("unknown");
 
-    // Should produce a type mismatch diagnostic
-    expect(tc.diags.length).toBeGreaterThan(0);
-    expect(tc.diags[0]?.code).toBe("AU1301");
+    // Should produce a binding contract with expected type
+    expect(tc.contracts.size).toBeGreaterThan(0);
+    const contracts = [...tc.contracts.values()];
+    expect(contracts[0]?.type).toBe("boolean");
+    expect(contracts[0]?.context).toBe("dom.property");
   });
 });
 
@@ -401,12 +451,13 @@ describe("style binding syntax", () => {
     exprParser: getExpressionParser(),
     file: "test.html",
     name: "test",
-    catalog: DEFAULT_SEMANTICS.catalog,
+    catalog: BUILTIN_SEMANTICS.catalog,
   };
 
   test("width.style produces stylePropertyBinding with target.kind=style", () => {
-    const ir = lowerDocument('<div width.style="100"></div>', opts);
-    const linked = resolveHost(ir, DEFAULT_SEMANTICS);
+    const diagnostics = new DiagnosticsRuntime();
+    const ir = lowerDocument('<div width.style="100"></div>', { ...opts, diagnostics: diagnostics.forSource("lower") });
+    const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(BUILTIN_SEMANTICS), { ...RESOLVE_OPTS, diagnostics: diagnostics.forSource("link") });
     const ins = linked.templates?.[0]?.rows?.[0]?.instructions?.[0];
 
     expect(ins?.kind).toBe("stylePropertyBinding");
@@ -414,10 +465,16 @@ describe("style binding syntax", () => {
   });
 
   test("width.style expects type string (style.property context)", () => {
-    const ir = lowerDocument('<div width.style="100"></div>', opts);
-    const linked = resolveHost(ir, DEFAULT_SEMANTICS);
-    const scope = bindScopes(linked);
-    const tc = typecheck({ linked, scope, ir, rootVmType: "RootVm", config: { preset: "standard" } });
+    const diagnostics = new DiagnosticsRuntime();
+    const ir = lowerDocument('<div width.style="100"></div>', { ...opts, diagnostics: diagnostics.forSource("lower") });
+    const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(BUILTIN_SEMANTICS), { ...RESOLVE_OPTS, diagnostics: diagnostics.forSource("link") });
+    const scope = bindScopes(linked, { diagnostics: diagnostics.forSource("bind") });
+    const tc = typecheck({
+      linked,
+      scope,
+      rootVmType: "RootVm",
+      config: { preset: "standard" },
+    });
 
     const expectedTypes = [...(tc.expectedByExpr?.values() ?? [])];
     expect(expectedTypes).toContain("string");
@@ -425,10 +482,13 @@ describe("style binding syntax", () => {
 
   test("style.width.bind is INVALID - produces propertyBinding not stylePropertyBinding", () => {
     // Documents that style.width.bind does NOT work as expected
-    const ir = lowerDocument('<div style.width.bind="100"></div>', opts);
+    const diagnostics = new DiagnosticsRuntime();
+    const ir = lowerDocument('<div style.width.bind="100"></div>', { ...opts, diagnostics: diagnostics.forSource("lower") });
     const ins = ir.templates?.[0]?.rows?.[0]?.instructions?.[0];
 
     // Parses as: target="style.width", command="bind" → propertyBinding
     expect(ins?.type).toBe("propertyBinding");
   });
 });
+
+

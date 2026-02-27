@@ -1,11 +1,15 @@
 import { test, expect } from "vitest";
 
 import {
-  DEFAULT_SEMANTICS,
+  InMemoryOverlaySpanIndex,
+  emitOverlay,
   DefaultTemplateLanguageService,
   DefaultTemplateProgram,
   canonicalDocumentUri,
 } from "@aurelia-ls/compiler";
+import { resolveSourceFile } from "../../out/model/source.js";
+import { buildTemplateMapping } from "../../out/synthesis/overlay/mapping.js";
+import { createTestQuery, noopModuleResolver } from "../_helpers/test-utils.js";
 
 function createVmReflection() {
   return {
@@ -22,7 +26,8 @@ function createProgram() {
   return new DefaultTemplateProgram({
     vm: createVmReflection(),
     isJs: false,
-    semantics: DEFAULT_SEMANTICS,
+    query: createTestQuery(),
+    moduleResolver: noopModuleResolver,
   });
 }
 
@@ -64,11 +69,11 @@ test("merges compiler and TypeScript diagnostics via provenance", () => {
   });
 
   const diags = service.getDiagnostics(uri);
-  const compilerDiag = diags.compiler.find((d) => d.source === "resolve-host");
+  const compilerDiag = diags.compiler.find((d) => d.stage === "link");
   expect(compilerDiag, "compiler diagnostics should be preserved").toBeTruthy();
   expect(compilerDiag.location?.uri).toBe(canonicalDocumentUri(uri).uri);
 
-  const tsDiag = diags.typescript.find((d) => d.source === "typescript");
+  const tsDiag = diags.typescript.find((d) => d.stage === "typescript");
   expect(tsDiag, "typescript diagnostics should be present").toBeTruthy();
   const projected = program.provenance.projectGeneratedSpan(overlayUri, diagSpan);
   expect(projected, "typescript diagnostic should map through provenance").toBeTruthy();
@@ -80,7 +85,7 @@ test("merges compiler and TypeScript diagnostics via provenance", () => {
   expect(diags.all.length).toBe(diags.compiler.length + diags.typescript.length);
 });
 
-test("BadExpression still produces AU1203 and a mapped overlay span", () => {
+test("BadExpression still produces aurelia/expr-parse-error and a mapped overlay span", () => {
   const program = createProgram();
   const uri = "/app/bad-expr.html";
   const markup = "<template><div title.bind=\"foo(\"></div></template>";
@@ -104,8 +109,8 @@ test("BadExpression still produces AU1203 and a mapped overlay span", () => {
   });
 
   const diags = service.getDiagnostics(uri);
-  const badExpr = diags.compiler.find((d) => d.code === "AU1203");
-  expect(badExpr, "bad expression should surface AU1203").toBeTruthy();
+  const badExpr = diags.compiler.find((d) => d.code === "aurelia/expr-parse-error");
+  expect(badExpr, "bad expression should surface aurelia/expr-parse-error").toBeTruthy();
   expect(badExpr.location?.uri).toBe(canonicalDocumentUri(uri).uri);
 });
 
@@ -118,7 +123,8 @@ test("diagnostics use VM display name for missing members", () => {
       getSyntheticPrefix() { return "__AU_TTC_"; },
     },
     isJs: false,
-    semantics: DEFAULT_SEMANTICS,
+    query: createTestQuery(),
+    moduleResolver: noopModuleResolver,
   });
   const uri = "/app/diag-display.html";
   program.upsertTemplate(uri, "<template>${missing}</template>");
@@ -144,7 +150,7 @@ test("diagnostics use VM display name for missing members", () => {
   });
 
   const diags = service.getDiagnostics(uri);
-  const tsDiag = diags.typescript.find((d) => d.source === "typescript");
+  const tsDiag = diags.typescript.find((d) => d.stage === "typescript");
   expect(tsDiag, "typescript diagnostic should be present").toBeTruthy();
   expect(tsDiag.message).toBe("Property 'missing' does not exist on MyVm");
 });
@@ -158,7 +164,8 @@ test("TypeScript diagnostics replace overlay aliases with VM display names", () 
       getSyntheticPrefix() { return "__AU_TTC_"; },
     },
     isJs: false,
-    semantics: DEFAULT_SEMANTICS,
+    query: createTestQuery(),
+    moduleResolver: noopModuleResolver,
   });
   const uri = "/app/noisy.html";
   program.upsertTemplate(uri, "<template>${value}</template>");
@@ -211,14 +218,14 @@ test("suppresses typecheck mismatch when TypeScript confirms matching type", () 
       getSyntheticPrefix() { return "__AU_TTC_"; },
     },
     isJs: false,
-    semantics: DEFAULT_SEMANTICS,
+    query: createTestQuery(),
+    moduleResolver: noopModuleResolver,
   });
   const uri = "/app/typecheck-noise.html";
   const markup = "<template><div class.bind=\"greeting\"></div></template>";
   program.upsertTemplate(uri, markup);
 
   const compilation = program.getCompilation(uri);
-
   const mappingEntry = compilation.mapping.entries[0];
   const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
 
@@ -277,37 +284,9 @@ test("falls back to template URI when provenance has no mapping", () => {
   expect(tsDiag.location?.uri).toBe(templateUri);
 });
 
-test("hover merges template query and TypeScript quick info mapped to template span", () => {
-  const program = createProgram();
-  const uri = "/app/hover.html";
-  const markup = "<template><div foo.bind=\"bar\"></div></template>";
-  program.upsertTemplate(uri, markup);
-
-  const compilation = program.getCompilation(uri);
-  const mappingEntry = compilation.mapping.entries[0];
-  const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
-
-  const service = new DefaultTemplateLanguageService(program, {
-    typescript: {
-      getDiagnostics() { return []; },
-      getQuickInfo(overlay, offset) {
-        expect(overlay.uri).toBe(overlayUri);
-        expect(offset >= mappingEntry.overlaySpan.start && offset <= mappingEntry.overlaySpan.end).toBeTruthy();
-        return {
-          text: "bar: string",
-          documentation: "vm member",
-          start: mappingEntry.overlaySpan.start,
-          length: mappingEntry.overlaySpan.end - mappingEntry.overlaySpan.start,
-        };
-      },
-    },
-  });
-
-  const hover = service.getHover(uri, positionAtOffset(markup, mappingEntry.htmlSpan.start + 1));
-  expect(hover, "hover should be produced").toBeTruthy();
-  expect(hover.contents.includes("bar: string"), "TS quick info should be present").toBeTruthy();
-  expect(hover.range).toEqual(spanToRange(mappingEntry.htmlSpan, markup));
-});
+// Hover is now workspace-layer-only (CursorEntity-driven).
+// Compiler-layer hover tests removed — see feature-matrix/hover.test.ts
+// and workspace-hover.test.ts for the current hover test suite.
 
 test("definitions map overlay ranges back to template and pass through VM files", () => {
   const program = createProgram();
@@ -378,6 +357,36 @@ test("references de-duplicate overlay hits and keep VM references", () => {
   const templateRef = refs.find((loc) => loc.uri === canonicalDocumentUri(uri).uri);
   expect(templateRef, "overlay references should map back to template spans").toBeTruthy();
   expect(templateRef.range).toEqual(spanToRange(mappingEntry.htmlSpan, markup));
+});
+
+test("references drop unmapped overlay-only locations by policy", () => {
+  const program = createProgram();
+  const uri = "/app/refs-unmapped-overlay.html";
+  const markup = "<template><span>${value}</span></template>";
+  program.upsertTemplate(uri, markup);
+
+  const compilation = program.getCompilation(uri);
+  const mappingEntry = compilation.mapping.entries[0];
+  const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
+
+  const service = new DefaultTemplateLanguageService(program, {
+    typescript: {
+      getDiagnostics() { return []; },
+      getReferences(overlay, offset) {
+        expect(overlay.uri).toBe(overlayUri);
+        expect(offset >= mappingEntry.overlaySpan.start && offset <= mappingEntry.overlaySpan.end).toBeTruthy();
+        return [
+          // Overlay prelude has no provenance mapping; should be dropped.
+          { fileName: overlay.uri, range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } } },
+          { fileName: "/app/vm.ts", range: { start: { line: 1, character: 0 }, end: { line: 1, character: 5 } } },
+        ];
+      },
+    },
+  });
+
+  const refs = service.getReferences(uri, positionAtOffset(markup, mappingEntry.htmlSpan.start + 1));
+  expect(refs.some((loc) => loc.uri === overlayUri), "unmapped overlay locations should be dropped").toBeFalsy();
+  expect(refs.some((loc) => loc.uri === canonicalDocumentUri("/app/vm.ts").uri), "VM references should remain").toBeTruthy();
 });
 
 test("references map overlay hits from other templates via provenance", () => {
@@ -510,7 +519,7 @@ test("completions map partial replacement spans to the matching slice of the tem
   // Simulate a TS completion that only replaces a subset of the overlay member span.
   const partialOverlaySpan = {
     start: memberSeg.overlaySpan.start + 2,
-    length: 3,
+    length: 2,
   };
 
   const service = new DefaultTemplateLanguageService(program, {
@@ -578,6 +587,44 @@ test("completions map TypeScript entries without replacement spans to template s
   expect(item.insertText).toBe("vmProp");
   expect(item.source).toBe("typescript");
   expect(item.range).toEqual(spanToRange(mappingEntry.htmlSpan, markup));
+});
+
+test("completions omit range when replacement spans are unmapped", () => {
+  const program = createProgram();
+  const uri = "/app/completions-unmapped-replace.html";
+  const markup = "<template><span>${vmProp}</span></template>";
+  program.upsertTemplate(uri, markup);
+
+  const compilation = program.getCompilation(uri);
+  const mappingEntry = compilation.mapping.entries[0];
+  const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
+
+  const service = new DefaultTemplateLanguageService(program, {
+    typescript: {
+      getDiagnostics() { return []; },
+      getCompletions(overlay, offset) {
+        expect(overlay.uri).toBe(overlayUri);
+        expect(offset >= mappingEntry.overlaySpan.start && offset <= mappingEntry.overlaySpan.end).toBeTruthy();
+        return [
+          {
+            name: "vmProp",
+            replacementSpan: {
+              start: mappingEntry.overlaySpan.end + 128,
+              length: 3,
+            },
+          },
+        ];
+      },
+    },
+  });
+
+  const pos = positionAtOffset(markup, mappingEntry.htmlSpan.start + 2);
+  const completions = service.getCompletions(uri, pos);
+  expect(completions.length).toBe(1);
+  const [item] = completions;
+  expect(item.label).toBe("vmProp");
+  expect(item.source).toBe("typescript");
+  expect(item.range).toBeUndefined();
 });
 
 test("completions do not invoke TypeScript when provenance misses", () => {
@@ -674,6 +721,56 @@ test("code actions drop edits when overlay changes cannot be mapped", () => {
 
   const actions = service.getCodeActions(uri, spanToRange(mappingEntry.htmlSpan, markup));
   expect(actions, "code actions should drop when overlay edits cannot be mapped").toEqual([]);
+});
+
+test("code actions map range-only edits from other template overlays", () => {
+  const program = createProgram();
+  const uriA = "/app/code-actions-cross-a.html";
+  const uriB = "/app/code-actions-cross-b.html";
+  const markup = "<template>${shared}</template>";
+  program.upsertTemplate(uriA, markup);
+  program.upsertTemplate(uriB, markup);
+
+  const compilationA = program.getCompilation(uriA);
+  const compilationB = program.getCompilation(uriB);
+  const mappingA = compilationA.mapping.entries[0];
+  const mappingB = compilationB.mapping.entries[0];
+  const overlayUriA = canonicalDocumentUri(compilationA.overlay.overlayPath).uri;
+  const overlayUriB = canonicalDocumentUri(compilationB.overlay.overlayPath).uri;
+  const overlayRangeA = spanToRange(mappingA.overlaySpan, compilationA.overlay.text);
+  const overlayRangeB = spanToRange(mappingB.overlaySpan, compilationB.overlay.text);
+
+  const service = new DefaultTemplateLanguageService(program, {
+    typescript: {
+      getDiagnostics() { return []; },
+      getCodeActions(tsOverlay) {
+        expect(tsOverlay.uri).toBe(overlayUriA);
+        return [
+          {
+            title: "cross-overlay fix",
+            edits: [
+              { fileName: overlayUriA, range: overlayRangeA, newText: "fixed" },
+              { fileName: overlayUriB, range: overlayRangeB, newText: "fixed" },
+            ],
+          },
+        ];
+      },
+    },
+  });
+
+  const actions = service.getCodeActions(uriA, spanToRange(mappingA.htmlSpan, markup));
+  expect(actions.length).toBe(1);
+  const [action] = actions;
+  expect(action.title).toBe("cross-overlay fix");
+
+  const templateUriA = canonicalDocumentUri(uriA).uri;
+  const templateUriB = canonicalDocumentUri(uriB).uri;
+  const editA = action.edits.find((edit) => edit.uri === templateUriA);
+  const editB = action.edits.find((edit) => edit.uri === templateUriB);
+  expect(editA, "primary overlay edit should map to template A").toBeTruthy();
+  expect(editB, "secondary overlay edit should map to template B").toBeTruthy();
+  expect(editA?.range).toEqual(spanToRange(mappingA.htmlSpan, markup));
+  expect(editB?.range).toEqual(spanToRange(mappingB.htmlSpan, markup));
 });
 
 test("rename maps overlay edits back to the template and preserves external edits", () => {
@@ -797,31 +894,6 @@ test("rename aborts when overlay edits cannot be mapped to the template", () => 
   expect(edits, "rename should abort when overlay edits cannot be mapped").toEqual([]);
 });
 
-test("hover uses overlay offset when TS quick info lacks span data", () => {
-  const program = createProgram();
-  const uri = "/app/hover-fallback.html";
-  const markup = "<template><em>${value}</em></template>";
-  program.upsertTemplate(uri, markup);
-
-  const compilation = program.getCompilation(uri);
-  const mappingEntry = compilation.mapping.entries[0];
-  const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
-
-  const service = new DefaultTemplateLanguageService(program, {
-    typescript: {
-      getDiagnostics() { return []; },
-      getQuickInfo(overlay) {
-        expect(overlay.uri).toBe(overlayUri);
-        return { text: "value: number" }; // no start/length provided
-      },
-    },
-  });
-
-  const hover = service.getHover(uri, positionAtOffset(markup, mappingEntry.htmlSpan.start + 1));
-  expect(hover, "hover should map quick info without span data").toBeTruthy();
-  expect(hover.range).toEqual(spanToRange(mappingEntry.htmlSpan, markup));
-});
-
 test("navigation is empty when TS services are absent", () => {
   const program = createProgram();
   const uri = "/app/nav-none.html";
@@ -905,6 +977,100 @@ test("buildTemplateMapping preserves all member segments for multi-member expres
   expect(nameSeg.htmlSpan.end <= ageSeg.htmlSpan.start || ageSeg.htmlSpan.end <= nameSeg.htmlSpan.start).toBeTruthy();
 });
 
+test("buildTemplateMapping keeps dynamic keyed chains rooted on the object path", () => {
+  const program = createProgram();
+  const uri = "/app/dynamic-keyed-paths.html";
+  const markup = "<template>${x[reallyLongName].value}</template>";
+  program.upsertTemplate(uri, markup);
+
+  const compilation = program.getCompilation(uri);
+  const entry = compilation.mapping.entries[0];
+  const paths = (entry.segments ?? []).map((s) => s.path);
+
+  expect(paths).toContain("x");
+  expect(paths).toContain("reallyLongName");
+  expect(paths).toContain("x.value");
+  expect(paths).not.toContain("reallyLongName.value");
+  expect(paths).not.toContain('x["o.reallyLongName"]');
+
+  const valueSeg = entry.segments?.find((s) => s.path === "x.value");
+  expect(valueSeg, "x.value segment should be present").toBeTruthy();
+  expect(markup.slice(valueSeg!.htmlSpan.start, valueSeg!.htmlSpan.end)).toBe(".value");
+});
+
+test("buildTemplateMapping aligns $parent chain segments to authored spans", () => {
+  const program = createProgram();
+  const uri = "/app/parent-chain-paths.html";
+  const markup = "<template>${$parent.$parent.vm.foo}</template>";
+  program.upsertTemplate(uri, markup);
+
+  const compilation = program.getCompilation(uri);
+  const entry = compilation.mapping.entries[0];
+
+  const parentSeg = entry.segments?.find((s) => s.path === "$parent.$parent");
+  const vmSeg = entry.segments?.find((s) => s.path === "$parent.$parent.vm");
+  const fullSeg = entry.segments?.find((s) => s.path === "$parent.$parent.vm.foo");
+
+  expect(parentSeg, "parent chain segment should be present").toBeTruthy();
+  expect(vmSeg, "vm segment should be present").toBeTruthy();
+  expect(fullSeg, "full member segment should be present").toBeTruthy();
+
+  expect(markup.slice(parentSeg!.htmlSpan.start, parentSeg!.htmlSpan.end)).toBe("$parent.$parent");
+  expect(markup.slice(vmSeg!.htmlSpan.start, vmSeg!.htmlSpan.end)).toBe("vm");
+  expect(markup.slice(fullSeg!.htmlSpan.start, fullSeg!.htmlSpan.end)).toBe(".foo");
+});
+
+test("buildTemplateMapping preserves degradation evidence through grouping and provenance", () => {
+  const program = createProgram();
+  const uri = "/app/mapping-degradation.html";
+  const markup = "<template>${person.name}</template>";
+  program.upsertTemplate(uri, markup);
+
+  const compilation = program.getCompilation(uri);
+  const emitted = emitOverlay(compilation.overlayPlan, { isJs: false });
+  const first = emitted.mapping[0];
+  expect(first, "overlay emit should produce at least one mapping entry").toBeTruthy();
+  expect(first!.segments?.length, "overlay mapping entry should include member segments").toBeGreaterThan(0);
+
+  const firstSeg = first!.segments![0]!;
+  const degradedPath = `${firstSeg.path}.__missing__`;
+  const mutatedOverlayMapping = emitted.mapping.map((entry, idx) => {
+    if (idx !== 0 || !entry.segments?.length) return entry;
+    return {
+      ...entry,
+      segments: entry.segments.map((seg, segIdx) => (segIdx === 0 ? { ...seg, path: degradedPath } : seg)),
+    };
+  });
+
+  const rebuilt = buildTemplateMapping({
+    overlayMapping: mutatedOverlayMapping,
+    ir: compilation.ir,
+    exprTable: compilation.exprTable,
+    fallbackFile: resolveSourceFile(uri),
+    overlayFile: resolveSourceFile(compilation.overlay.overlayPath),
+    exprToFrame: compilation.scope.templates?.[0]?.exprToFrame ?? null,
+  });
+
+  const rebuiltEntry = rebuilt.mapping.entries.find((entry) => entry.exprId === first!.exprId);
+  const degradedSeg = rebuiltEntry?.segments?.find((seg) => seg.path === degradedPath);
+  expect(degradedSeg, "degraded segment should survive mapping normalization/grouping").toBeTruthy();
+  expect(degradedSeg?.degradation?.reason).toBe("missing-html-member-span");
+  expect(degradedSeg?.degradation?.projection).toBe("proportional");
+
+  const templateUri = canonicalDocumentUri(uri).uri;
+  const overlayUri = canonicalDocumentUri(compilation.overlay.overlayPath).uri;
+  const provenance = new InMemoryOverlaySpanIndex();
+  provenance.addOverlayMapping(templateUri, overlayUri, rebuilt.mapping);
+
+  const hit = provenance.projectGeneratedSpan(overlayUri, {
+    start: degradedSeg!.overlaySpan.start,
+    end: degradedSeg!.overlaySpan.end,
+  });
+  expect(hit?.edge.kind).toBe("overlayMember");
+  expect(hit?.edge.evidence?.level).toBe("degraded");
+  expect(hit?.edge.evidence?.reason).toBe("missing-html-member-span");
+});
+
 function positionAtOffset(text, offset) {
   const clamped = Math.max(0, Math.min(offset, text.length));
   let line = 0;
@@ -930,7 +1096,7 @@ function spanToRange(span, text) {
 // =============================================================================
 // Typecheck Phase Integration Tests
 // =============================================================================
-// These tests verify that typecheck diagnostics (AU1301/AU1302/AU1303) surface
+// These tests verify that typecheck diagnostics (aurelia/expr-type-mismatch) surface
 // correctly through the language service layer.
 
 import { describe } from "vitest";
@@ -938,17 +1104,18 @@ import { resolveTypecheckConfig } from "@aurelia-ls/compiler";
 
 describe("typecheck diagnostics integration", () => {
   // Note: Default config is "lenient" which produces:
-  // - AU1302 (warning) for type mismatches
-  // - AU1301 (error) only with strict/standard configs
+  // - warning severity for type mismatches
+  // - error severity only with strict/standard configs
 
-  test("AU1302 (warning) surfaces for boolean target with string value in lenient mode", () => {
+  test("expr-type-mismatch (warning) surfaces for boolean target with string value in lenient mode", () => {
     const program = new DefaultTemplateProgram({
       vm: {
         getRootVmTypeExpr() { return "TestVm"; },
         getSyntheticPrefix() { return "__AU_TTC_"; },
       },
       isJs: false,
-      semantics: DEFAULT_SEMANTICS,
+      query: createTestQuery(),
+      moduleResolver: noopModuleResolver,
     });
     const uri = "/app/tc-warning.html";
     // disabled expects boolean, but we give it a string literal
@@ -960,9 +1127,9 @@ describe("typecheck diagnostics integration", () => {
     });
 
     const diags = service.getDiagnostics(uri);
-    const tcDiag = diags.compiler.find((d) => d.code === "AU1302");
-    expect(tcDiag, "AU1302 should surface for string→boolean mismatch in lenient mode").toBeTruthy();
-    expect(tcDiag.source).toBe("typecheck");
+    const tcDiag = diags.compiler.find((d) => d.code === "aurelia/expr-type-mismatch");
+    expect(tcDiag, "expr-type-mismatch should surface for string→boolean mismatch in lenient mode").toBeTruthy();
+    expect(tcDiag.stage).toBe("typecheck");
     expect(tcDiag.severity).toBe("warning");
     expect(tcDiag.location?.uri).toBe(canonicalDocumentUri(uri).uri);
     expect(tcDiag.message).toContain("expected boolean");
@@ -976,7 +1143,8 @@ describe("typecheck diagnostics integration", () => {
         getSyntheticPrefix() { return "__AU_TTC_"; },
       },
       isJs: false,
-      semantics: DEFAULT_SEMANTICS,
+      query: createTestQuery(),
+      moduleResolver: noopModuleResolver,
     });
     const uri = "/app/tc-location.html";
     // The 'yes' literal is at offset 32-37 in: <template><input disabled.bind="'yes'"></template>
@@ -988,7 +1156,7 @@ describe("typecheck diagnostics integration", () => {
     });
 
     const diags = service.getDiagnostics(uri);
-    const tcDiag = diags.compiler.find((d) => d.source === "typecheck");
+    const tcDiag = diags.compiler.find((d) => d.stage === "typecheck");
     expect(tcDiag, "typecheck diagnostic should be present").toBeTruthy();
     expect(tcDiag.location).toBeTruthy();
     // Location should point to the expression 'yes' not the whole binding
@@ -1004,7 +1172,8 @@ describe("typecheck diagnostics integration", () => {
         getSyntheticPrefix() { return "__AU_TTC_"; },
       },
       isJs: false,
-      semantics: DEFAULT_SEMANTICS,
+      query: createTestQuery(),
+      moduleResolver: noopModuleResolver,
     });
     const uri = "/app/tc-null.html";
     // value expects string, null would be problematic in strict mode
@@ -1017,7 +1186,7 @@ describe("typecheck diagnostics integration", () => {
 
     const diags = service.getDiagnostics(uri);
     // With lenient defaults, nullToString is "off" so no warning
-    const nullDiag = diags.compiler.find((d) => d.source === "typecheck");
+    const nullDiag = diags.compiler.find((d) => d.stage === "typecheck");
     expect(nullDiag, "lenient mode should NOT emit null→string warning").toBeFalsy();
   });
 
@@ -1028,7 +1197,8 @@ describe("typecheck diagnostics integration", () => {
         getSyntheticPrefix() { return "__AU_TTC_"; },
       },
       isJs: false,
-      semantics: DEFAULT_SEMANTICS,
+      query: createTestQuery(),
+      moduleResolver: noopModuleResolver,
     });
     const uri = "/app/tc-coerce.html";
     // value expects string, number should coerce without error
@@ -1040,7 +1210,7 @@ describe("typecheck diagnostics integration", () => {
     });
 
     const diags = service.getDiagnostics(uri);
-    const tcDiags = diags.compiler.filter((d) => d.source === "typecheck");
+    const tcDiags = diags.compiler.filter((d) => d.stage === "typecheck");
     expect(tcDiags.length, "DOM coercion should allow number→string").toBe(0);
   });
 
@@ -1051,7 +1221,8 @@ describe("typecheck diagnostics integration", () => {
         getSyntheticPrefix() { return "__AU_TTC_"; },
       },
       isJs: false,
-      semantics: DEFAULT_SEMANTICS,
+      query: createTestQuery(),
+      moduleResolver: noopModuleResolver,
     });
     const uri = "/app/tc-cascade.html";
     // nonexistent is not a valid property - resolve will set target.kind = "unknown"
@@ -1063,11 +1234,11 @@ describe("typecheck diagnostics integration", () => {
     });
 
     const diags = service.getDiagnostics(uri);
-    // Should have resolve diagnostic (AU1201) but no typecheck diagnostic
-    const resolveDiag = diags.compiler.find((d) => d.source === "resolve-host");
+    // Should have resolve diagnostic (aurelia/invalid-binding-pattern) but no typecheck diagnostic
+    const resolveDiag = diags.compiler.find((d) => d.stage === "link");
     expect(resolveDiag, "resolve should emit diagnostic for unknown property").toBeTruthy();
 
-    const tcDiags = diags.compiler.filter((d) => d.source === "typecheck");
+    const tcDiags = diags.compiler.filter((d) => d.stage === "typecheck");
     expect(tcDiags.length, "typecheck should not emit when target.kind is unknown").toBe(0);
   });
 
@@ -1078,7 +1249,8 @@ describe("typecheck diagnostics integration", () => {
         getSyntheticPrefix() { return "__AU_TTC_"; },
       },
       isJs: false,
-      semantics: DEFAULT_SEMANTICS,
+      query: createTestQuery(),
+      moduleResolver: noopModuleResolver,
     });
     const uri = "/app/tc-style.html";
     // width.style expects string, number should coerce without error
@@ -1090,7 +1262,7 @@ describe("typecheck diagnostics integration", () => {
     });
 
     const diags = service.getDiagnostics(uri);
-    const tcDiags = diags.compiler.filter((d) => d.source === "typecheck");
+    const tcDiags = diags.compiler.filter((d) => d.stage === "typecheck");
     expect(tcDiags.length, "style coercion should allow number→string").toBe(0);
   });
 
@@ -1101,7 +1273,8 @@ describe("typecheck diagnostics integration", () => {
         getSyntheticPrefix() { return "__AU_TTC_"; },
       },
       isJs: false,
-      semantics: DEFAULT_SEMANTICS,
+      query: createTestQuery(),
+      moduleResolver: noopModuleResolver,
     });
     const uri = "/app/tc-style-bool.html";
     // width.style expects string, boolean should error
@@ -1113,23 +1286,25 @@ describe("typecheck diagnostics integration", () => {
     });
 
     const diags = service.getDiagnostics(uri);
-    const tcDiag = diags.compiler.find((d) => d.code === "AU1301" || d.code === "AU1302");
+    const tcDiag = diags.compiler.find((d) => d.code === "aurelia/expr-type-mismatch");
     // This should produce a mismatch since boolean→string isn't a style coercion
     expect(tcDiag, "style binding should reject boolean→string").toBeTruthy();
-    expect(tcDiag?.source).toBe("typecheck");
+    expect(tcDiag?.stage).toBe("typecheck");
   });
 
-  test("if.bind expects boolean, string literal produces warning", () => {
+  test("if.bind accepts string literal via truthy coercion", () => {
     const program = new DefaultTemplateProgram({
       vm: {
         getRootVmTypeExpr() { return "TestVm"; },
         getSyntheticPrefix() { return "__AU_TTC_"; },
       },
       isJs: false,
-      semantics: DEFAULT_SEMANTICS,
+      query: createTestQuery(),
+      moduleResolver: noopModuleResolver,
     });
     const uri = "/app/tc-if.html";
-    // if.bind expects boolean value
+    // if.bind expects boolean, but Aurelia accepts truthy values at runtime.
+    // string → boolean is allowed via truthy coercion in component.bindable context.
     const markup = "<template><div if.bind=\"'show'\">content</div></template>";
     program.upsertTemplate(uri, markup);
 
@@ -1138,11 +1313,8 @@ describe("typecheck diagnostics integration", () => {
     });
 
     const diags = service.getDiagnostics(uri);
-    const tcDiag = diags.compiler.find((d) => d.source === "typecheck");
-    expect(tcDiag, "if.bind should produce typecheck warning for string→boolean").toBeTruthy();
-    // Lenient mode produces AU1302 (warning), not AU1301 (error)
-    expect(tcDiag?.code).toBe("AU1302");
-    expect(tcDiag?.severity).toBe("warning");
+    const tcDiag = diags.compiler.find((d) => d.stage === "typecheck");
+    expect(tcDiag, "if.bind should NOT produce warning for string→boolean (truthy coercion)").toBeFalsy();
   });
 
   test("multiple bindings produce independent diagnostics", () => {
@@ -1152,7 +1324,8 @@ describe("typecheck diagnostics integration", () => {
         getSyntheticPrefix() { return "__AU_TTC_"; },
       },
       isJs: false,
-      semantics: DEFAULT_SEMANTICS,
+      query: createTestQuery(),
+      moduleResolver: noopModuleResolver,
     });
     const uri = "/app/tc-multi.html";
     // value.bind is fine (string→string), disabled.bind is mismatch (number→boolean)
@@ -1164,11 +1337,11 @@ describe("typecheck diagnostics integration", () => {
     });
 
     const diags = service.getDiagnostics(uri);
-    const tcDiags = diags.compiler.filter((d) => d.source === "typecheck");
+    const tcDiags = diags.compiler.filter((d) => d.stage === "typecheck");
     // Should have exactly one diagnostic for disabled.bind (number→boolean mismatch)
     expect(tcDiags.length, "should have one typecheck diagnostic for disabled").toBe(1);
-    // Lenient mode produces AU1302 (warning)
-    expect(tcDiags[0]?.code).toBe("AU1302");
+    // Lenient mode produces warning severity
+    expect(tcDiags[0]?.code).toBe("aurelia/expr-type-mismatch");
     expect(tcDiags[0]?.severity).toBe("warning");
   });
 
@@ -1179,7 +1352,8 @@ describe("typecheck diagnostics integration", () => {
         getSyntheticPrefix() { return "__AU_TTC_"; },
       },
       isJs: false,
-      semantics: DEFAULT_SEMANTICS,
+      query: createTestQuery(),
+      moduleResolver: noopModuleResolver,
     });
     const uri = "/app/tc-text.html";
     // Text bindings accept anything - they stringify the value
@@ -1191,7 +1365,7 @@ describe("typecheck diagnostics integration", () => {
     });
 
     const diags = service.getDiagnostics(uri);
-    const tcDiags = diags.compiler.filter((d) => d.source === "typecheck");
+    const tcDiags = diags.compiler.filter((d) => d.stage === "typecheck");
     expect(tcDiags.length, "text interpolation should accept any type").toBe(0);
   });
 
@@ -1237,7 +1411,8 @@ describe("Elm-style error propagation", () => {
         getSyntheticPrefix() { return "__AU_TTC_"; },
       },
       isJs: false,
-      semantics: DEFAULT_SEMANTICS,
+      query: createTestQuery(),
+      moduleResolver: noopModuleResolver,
     });
     const service = new DefaultTemplateLanguageService(program, {
       typescript: { getDiagnostics() { return []; } },
@@ -1256,11 +1431,11 @@ describe("Elm-style error propagation", () => {
       const diags = service.getDiagnostics(uri);
 
       // Should have exactly ONE error from resolve phase
-      const resolveErrors = diags.compiler.filter((d) => d.source === "resolve-host");
+      const resolveErrors = diags.compiler.filter((d) => d.stage === "link");
       expect(resolveErrors.length).toBeGreaterThanOrEqual(1);
 
       // Should have ZERO errors from typecheck (cascade suppressed)
-      const typecheckErrors = diags.compiler.filter((d) => d.source === "typecheck");
+      const typecheckErrors = diags.compiler.filter((d) => d.stage === "typecheck");
       expect(typecheckErrors.length, "typecheck should not cascade on unknown property").toBe(0);
     });
 
@@ -1274,11 +1449,11 @@ describe("Elm-style error propagation", () => {
       const diags = service.getDiagnostics(uri);
 
       // Each unknown property should produce exactly one resolve error
-      const resolveErrors = diags.compiler.filter((d) => d.source === "resolve-host");
+      const resolveErrors = diags.compiler.filter((d) => d.stage === "link");
       expect(resolveErrors.length).toBe(2);
 
       // No typecheck cascades
-      const typecheckErrors = diags.compiler.filter((d) => d.source === "typecheck");
+      const typecheckErrors = diags.compiler.filter((d) => d.stage === "typecheck");
       expect(typecheckErrors.length, "no typecheck cascades for multiple unknowns").toBe(0);
     });
   });
@@ -1295,14 +1470,15 @@ describe("Elm-style error propagation", () => {
       const diags = service.getDiagnostics(uri);
 
       // Should have resolve error for 'unknown'
-      const resolveErrors = diags.compiler.filter((d) => d.source === "resolve-host");
+      const resolveErrors = diags.compiler.filter((d) => d.stage === "link");
       expect(resolveErrors.length).toBeGreaterThanOrEqual(1);
 
       // Should ALSO have typecheck warning for disabled (string → boolean mismatch)
       // This proves we don't over-suppress - valid targets still get checked
-      const typecheckErrors = diags.compiler.filter((d) => d.source === "typecheck");
+      const typecheckErrors = diags.compiler.filter((d) => d.stage === "typecheck");
       expect(typecheckErrors.length, "valid binding should still be type-checked").toBe(1);
-      expect(typecheckErrors[0]?.code).toBe("AU1302"); // warning in lenient mode
+      expect(typecheckErrors[0]?.code).toBe("aurelia/expr-type-mismatch");
+      expect(typecheckErrors[0]?.severity).toBe("warning");
     });
 
     test("stub on one element doesn't affect sibling elements", () => {
@@ -1319,11 +1495,11 @@ describe("Elm-style error propagation", () => {
       const diags = service.getDiagnostics(uri);
 
       // Resolve error for unknown
-      const resolveErrors = diags.compiler.filter((d) => d.source === "resolve-host");
+      const resolveErrors = diags.compiler.filter((d) => d.stage === "link");
       expect(resolveErrors.length).toBeGreaterThanOrEqual(1);
 
       // Typecheck error for disabled on SIBLING element
-      const typecheckErrors = diags.compiler.filter((d) => d.source === "typecheck");
+      const typecheckErrors = diags.compiler.filter((d) => d.stage === "typecheck");
       expect(typecheckErrors.length, "sibling element should still be type-checked").toBe(1);
     });
   });
@@ -1345,11 +1521,11 @@ describe("Elm-style error propagation", () => {
       const diags = service.getDiagnostics(uri);
 
       // Should have resolve error for inner unknown
-      const resolveErrors = diags.compiler.filter((d) => d.source === "resolve-host");
+      const resolveErrors = diags.compiler.filter((d) => d.stage === "link");
       expect(resolveErrors.length).toBeGreaterThanOrEqual(1);
 
       // Should have typecheck error for outer disabled (not suppressed by inner stub)
-      const typecheckErrors = diags.compiler.filter((d) => d.source === "typecheck");
+      const typecheckErrors = diags.compiler.filter((d) => d.stage === "typecheck");
       expect(typecheckErrors.length, "outer scope type errors not affected by inner stub").toBe(1);
     });
 
@@ -1368,12 +1544,12 @@ describe("Elm-style error propagation", () => {
 
       // Should have exactly one resolve error for 'unknown'
       const resolveErrors = diags.compiler.filter((d) =>
-        d.source === "resolve-host" && d.message?.includes("unknown")
+        d.stage === "link" && d.message?.includes("unknown")
       );
       expect(resolveErrors.length, "should have one error for unknown property").toBe(1);
 
       // No typecheck cascades
-      const typecheckErrors = diags.compiler.filter((d) => d.source === "typecheck");
+      const typecheckErrors = diags.compiler.filter((d) => d.stage === "typecheck");
       expect(typecheckErrors.length, "no typecheck cascades in repeat").toBe(0);
     });
   });
@@ -1392,9 +1568,10 @@ describe("Elm-style error propagation", () => {
       const diags = service.getDiagnostics(uri);
 
       // Should have exactly 2 typecheck warnings (one per binding)
-      const typecheckErrors = diags.compiler.filter((d) => d.source === "typecheck");
+      const typecheckErrors = diags.compiler.filter((d) => d.stage === "typecheck");
       expect(typecheckErrors.length, "each type error independent").toBe(2);
-      expect(typecheckErrors.every((d) => d.code === "AU1302")).toBe(true);
+      expect(typecheckErrors.every((d) => d.code === "aurelia/expr-type-mismatch")).toBe(true);
+      expect(typecheckErrors.every((d) => d.severity === "warning")).toBe(true);
     });
 
     test("mixed valid and invalid bindings on same element", () => {
@@ -1408,11 +1585,11 @@ describe("Elm-style error propagation", () => {
 
       // value.bind: string→string is valid, no error
       // disabled.bind: string→boolean is invalid, one error
-      const typecheckErrors = diags.compiler.filter((d) => d.source === "typecheck");
+      const typecheckErrors = diags.compiler.filter((d) => d.stage === "typecheck");
       expect(typecheckErrors.length, "only invalid binding produces error").toBe(1);
 
       // No resolve errors (both properties are valid targets)
-      const resolveErrors = diags.compiler.filter((d) => d.source === "resolve-host");
+      const resolveErrors = diags.compiler.filter((d) => d.stage === "link");
       expect(resolveErrors.length).toBe(0);
     });
   });
@@ -1425,7 +1602,7 @@ describe("Elm-style error propagation", () => {
       program.upsertTemplate(uri, markup);
 
       const diags = service.getDiagnostics(uri);
-      const error = diags.compiler.find((d) => d.source === "resolve-host");
+      const error = diags.compiler.find((d) => d.stage === "link");
 
       expect(error).toBeTruthy();
       // Error message should mention what couldn't be found
@@ -1440,7 +1617,7 @@ describe("Elm-style error propagation", () => {
       program.upsertTemplate(uri, markup);
 
       const diags = service.getDiagnostics(uri);
-      const error = diags.compiler.find((d) => d.source === "resolve-host");
+      const error = diags.compiler.find((d) => d.stage === "link");
 
       expect(error?.location).toBeTruthy();
       // Span should be within the binding, not at element start
@@ -1499,7 +1676,7 @@ describe("Elm-style error propagation", () => {
 
       const diags = service.getDiagnostics(uri);
       // Text interpolation accepts any type - no errors expected
-      const typecheckErrors = diags.compiler.filter((d) => d.source === "typecheck");
+      const typecheckErrors = diags.compiler.filter((d) => d.stage === "typecheck");
       expect(typecheckErrors.length).toBe(0);
     });
 
@@ -1520,11 +1697,11 @@ describe("Elm-style error propagation", () => {
       const diags = service.getDiagnostics(uri);
 
       // Should have exactly one resolve error at the leaf
-      const resolveErrors = diags.compiler.filter((d) => d.source === "resolve-host");
+      const resolveErrors = diags.compiler.filter((d) => d.stage === "link");
       expect(resolveErrors.length).toBe(1);
 
       // No cascades from any level
-      const typecheckErrors = diags.compiler.filter((d) => d.source === "typecheck");
+      const typecheckErrors = diags.compiler.filter((d) => d.stage === "typecheck");
       expect(typecheckErrors.length).toBe(0);
     });
   });

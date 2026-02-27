@@ -26,9 +26,29 @@
   },
   "license": "MIT",
   "activationEvents": [
-    "onLanguage:html"
+    "onLanguage:html",
+    "workspaceContains:node_modules/@aurelia/runtime-html/package.json",
+    "workspaceContains:node_modules/aurelia/package.json"
   ],
   "contributes": {
+    "viewsContainers": {
+      "activityBar": [
+        {
+          "id": "aurelia",
+          "title": "Aurelia",
+          "icon": "images/logo.png"
+        }
+      ]
+    },
+    "views": {
+      "aurelia": [
+        {
+          "id": "aureliaResourceExplorer",
+          "name": "Resource Explorer",
+          "when": "aurelia.active"
+        }
+      ]
+    },
     "snippets": [
       {
         "language": "html",
@@ -36,11 +56,222 @@
       }
     ],
     "commands": [
-      { "command": "aurelia.showOverlay", "title": "Aurelia: Show Generated Overlay" },
-      { "command": "aurelia.showOverlayMapping", "title": "Aurelia: Show Overlay Mapping" },
-      { "command": "aurelia.showTemplateInfo", "title": "Aurelia: Show Template Info" },
-      { "command": "aurelia.dumpState", "title": "Aurelia: Dump Server State" }
-    ]
+      { "command": "aurelia.refreshResourceExplorer", "title": "Refresh", "icon": "$(refresh)", "category": "Aurelia" },
+      { "command": "aurelia.diagnosticsReport", "title": "Diagnostics Report", "category": "Aurelia" },
+      { "command": "aurelia.showSuppressedDiagnostics", "title": "Show Suppressed Diagnostics", "category": "Aurelia" },
+      { "command": "aurelia.inspectAtCursor", "title": "Inspect at Cursor", "category": "Aurelia" },
+      { "command": "aurelia.findResource", "title": "Find Resource", "icon": "$(search)", "category": "Aurelia" },
+      { "command": "aurelia.showAvailableResources", "title": "Show Available Resources", "category": "Aurelia" },
+      { "command": "aurelia.openRelatedFile", "title": "Open Related File", "category": "Aurelia" },
+      { "command": "aurelia.showOverlay", "title": "Show Compiled Template", "category": "Aurelia Debug" },
+      { "command": "aurelia.showOverlayMapping", "title": "Show Overlay Mapping", "category": "Aurelia Debug" },
+      { "command": "aurelia.dumpState", "title": "Dump Server State", "category": "Aurelia Debug" },
+      { "command": "aurelia.observability.menu", "title": "Observability Menu", "category": "Aurelia Debug" },
+      { "command": "aurelia.observability.toggleDebug", "title": "Toggle Debug Channels", "category": "Aurelia Debug" },
+      { "command": "aurelia.observability.toggleTrace", "title": "Toggle Trace", "category": "Aurelia Debug" },
+      { "command": "aurelia.observability.setDebugChannels", "title": "Set Debug Channels", "category": "Aurelia Debug" },
+      { "command": "aurelia.observability.setLogLevel", "title": "Set Log Level", "category": "Aurelia Debug" },
+      { "command": "aurelia.observability.setTraceMinDuration", "title": "Set Trace Min Duration", "category": "Aurelia Debug" },
+      { "command": "aurelia.observability.openOutput", "title": "Show Output Channel", "category": "Aurelia Debug" }
+    ],
+    "keybindings": [
+      {
+        "command": "aurelia.findResource",
+        "key": "ctrl+alt+a",
+        "mac": "cmd+alt+a",
+        "when": "aurelia.active"
+      },
+      {
+        "command": "aurelia.inspectAtCursor",
+        "key": "ctrl+alt+i",
+        "mac": "cmd+alt+i",
+        "when": "aurelia.active && editorTextFocus && editorLangId == html"
+      },
+      {
+        "command": "aurelia.openRelatedFile",
+        "key": "alt+o",
+        "mac": "alt+o",
+        "when": "aurelia.active && editorTextFocus"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "aurelia.findResource",
+          "when": "view == aureliaResourceExplorer",
+          "group": "navigation"
+        },
+        {
+          "command": "aurelia.refreshResourceExplorer",
+          "when": "view == aureliaResourceExplorer",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "aurelia.inspectAtCursor",
+          "when": "aurelia.active && editorLangId == html",
+          "group": "aurelia@1"
+        },
+        {
+          "command": "aurelia.showAvailableResources",
+          "when": "aurelia.active && editorLangId == html",
+          "group": "aurelia@2"
+        },
+        {
+          "command": "aurelia.openRelatedFile",
+          "when": "aurelia.active && (editorLangId == html || editorLangId == typescript)",
+          "group": "aurelia@3"
+        },
+        {
+          "command": "aurelia.diagnosticsReport",
+          "when": "aurelia.active && editorLangId == html",
+          "group": "aurelia@4"
+        }
+      ],
+      "commandPalette": [
+        { "command": "aurelia.refreshResourceExplorer", "when": "aurelia.active" },
+        { "command": "aurelia.diagnosticsReport", "when": "aurelia.active" },
+        { "command": "aurelia.showSuppressedDiagnostics", "when": "aurelia.active" },
+        { "command": "aurelia.inspectAtCursor", "when": "aurelia.active" },
+        { "command": "aurelia.findResource", "when": "aurelia.active" },
+        { "command": "aurelia.showAvailableResources", "when": "aurelia.active" },
+        { "command": "aurelia.openRelatedFile", "when": "aurelia.active" },
+        { "command": "aurelia.showOverlay", "when": "aurelia.active && config.aurelia.features.debugCommands" },
+        { "command": "aurelia.showOverlayMapping", "when": "aurelia.active && config.aurelia.features.debugCommands" },
+        { "command": "aurelia.dumpState", "when": "aurelia.active && config.aurelia.features.debugCommands" }
+      ]
+    },
+    "configuration": {
+      "type": "object",
+      "title": "Aurelia",
+      "properties": {
+        "aurelia.features.commands": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Aurelia commands (find resource, open related file, inspect at cursor, show available resources, diagnostics report, suppressed diagnostics)."
+        },
+        "aurelia.features.debugCommands": {
+          "type": "boolean",
+          "default": false,
+          "description": "Expose framework developer commands (compiled template viewer, overlay mapping, server state dump)."
+        },
+        "aurelia.features.statusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show Aurelia analysis status in the status bar (resource count, gap count, analysis progress)."
+        },
+        "aurelia.features.views": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the Aurelia Resource Explorer sidebar panel."
+        },
+        "aurelia.features.inline": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show inline gap confidence annotations in templates (partial/low indicators)."
+        },
+        "aurelia.features.diagnostics": {
+          "type": "boolean",
+          "default": true,
+          "description": "Augment diagnostics with Aurelia taxonomy metadata (impact, actionability, confidence)."
+        },
+        "aurelia.features.inlayHints": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show binding mode inlay hints in templates (e.g., .bind resolved to toView or twoWay based on the target bindable)."
+        },
+        "aurelia.features.codeLens": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show bindable count and template usage count above Aurelia resource class declarations."
+        },
+        "aurelia.observability.logging.level": {
+          "type": "string",
+          "enum": ["trace", "debug", "info", "warn", "error"],
+          "default": "info",
+          "description": "Minimum log level for client output."
+        },
+        "aurelia.observability.logging.format": {
+          "type": "string",
+          "enum": ["pretty", "json"],
+          "default": "pretty",
+          "description": "Log output format."
+        },
+        "aurelia.observability.logging.timestamps": {
+          "type": "boolean",
+          "default": false,
+          "description": "Include timestamps in client logs."
+        },
+        "aurelia.observability.debug.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable structured debug channels for Aurelia tooling."
+        },
+        "aurelia.observability.debug.channels": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Debug channels to enable (comma-separated if entered as a string)."
+        },
+        "aurelia.observability.debug.format": {
+          "type": "string",
+          "enum": ["pretty", "json"],
+          "default": "pretty",
+          "description": "Debug output format."
+        },
+        "aurelia.observability.debug.timestamps": {
+          "type": "boolean",
+          "default": false,
+          "description": "Include timestamps in debug output."
+        },
+        "aurelia.observability.trace.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable trace spans for client operations."
+        },
+        "aurelia.observability.trace.minDurationMs": {
+          "type": "number",
+          "default": 0,
+          "description": "Minimum duration for trace spans to be logged (ms)."
+        },
+        "aurelia.observability.trace.logEvents": {
+          "type": "boolean",
+          "default": false,
+          "description": "Log trace events in addition to spans."
+        },
+        "aurelia.observability.trace.logAttributes": {
+          "type": "boolean",
+          "default": true,
+          "description": "Log trace attributes for spans and events."
+        },
+        "aurelia.observability.errors.notify": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show error notifications for client failures."
+        },
+        "aurelia.observability.errors.showOutput": {
+          "type": "boolean",
+          "default": true,
+          "description": "Reveal the Aurelia output channel on errors."
+        },
+        "aurelia.observability.statusBar.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the Aurelia observability status bar item."
+        },
+        "aurelia.observability.statusBar.alwaysVisible": {
+          "type": "boolean",
+          "default": false,
+          "description": "Keep the observability status bar visible even when debug/trace are off."
+        },
+        "aurelia.experimental.ai": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable experimental AI features."
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run bundle",
@@ -51,7 +282,8 @@
     "typecheck:test": "tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {
-    "typescript": "^5.7.0",
+    "@aurelia-ls/compiler": "workspace:*",
+    "typescript": "^5.5.4",
     "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {

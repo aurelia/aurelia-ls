@@ -31,7 +31,8 @@
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$even" },
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
-        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" }
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$previous" }
       ],
       "exprs": [
         { "kind": "forOfHeader", "frame": "root" },
@@ -73,7 +74,8 @@
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$even" },
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
-        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" }
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$previous" }
       ],
       "exprs": [
         { "kind": "forOfHeader", "frame": "root" },
@@ -94,6 +96,22 @@
       "exprs": [
         { "kind": "expr", "code": "ctx", "frame": "root" },
         { "kind": "expr", "code": "vm", "frame": "overlay:valueOverlay@1" }
+      ],
+      "diags": []
+    }
+  },
+  {
+    "name": "ER-06 class.prop binding in with overlay keeps expression semantics",
+    "markup": "<div with.bind=\"ctx\"><span active.class=\"active\"></span></div>",
+    "expect": {
+      "frames": [
+        { "label": "root", "parent": null, "kind": "root", "overlay": null, "origin": null },
+        { "label": "overlay:valueOverlay@1", "parent": "root", "kind": "overlay", "overlay": "value", "origin": "valueOverlay" }
+      ],
+      "locals": [],
+      "exprs": [
+        { "kind": "expr", "code": "ctx", "frame": "root" },
+        { "kind": "expr", "code": "active", "frame": "overlay:valueOverlay@1" }
       ],
       "diags": []
     }

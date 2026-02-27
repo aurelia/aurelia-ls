@@ -26,6 +26,6 @@ type TupleElement<T, I extends number> =
   T extends Array<infer E> ? E :
   never;
 
-/** Internal - used as a type-check anchor. */
-declare function __au$access<T>(_fn: (o: T) => unknown): void;
+/** Internal - type-check anchor. TS infers R from the lambda return type. */
+declare function __au$access<T, R = void>(_fn: (o: T) => R): R;
 `;

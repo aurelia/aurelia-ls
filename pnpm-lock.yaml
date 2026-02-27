@@ -204,7 +204,7 @@ importers:
         specifier: ^8.0.0
         version: 8.0.0
       typescript:
-        specifier: ^5.0.0
+        specifier: ^5.5.4
         version: 5.9.3
 
   packages/integration-harness:
@@ -212,11 +212,8 @@ importers:
       '@aurelia-ls/compiler':
         specifier: workspace:*
         version: link:../compiler
-      '@aurelia-ls/resolution':
-        specifier: workspace:*
-        version: link:../resolution
       typescript:
-        specifier: ^5.0.0
+        specifier: ^5.5.4
         version: 5.9.3
     devDependencies:
       '@aurelia/kernel':
@@ -243,9 +240,9 @@ importers:
       '@aurelia-ls/compiler':
         specifier: workspace:*
         version: link:../compiler
-      '@aurelia-ls/resolution':
+      '@aurelia-ls/semantic-workspace':
         specifier: workspace:*
-        version: link:../resolution
+        version: link:../semantic-workspace
       typescript:
         specifier: ^5.5.4
         version: 5.9.3
@@ -259,20 +256,20 @@ importers:
         specifier: ^3.0.8
         version: 3.1.0
 
-  packages/resolution:
+  packages/semantic-workspace:
     dependencies:
       '@aurelia-ls/compiler':
         specifier: workspace:*
         version: link:../compiler
       typescript:
-        specifier: ^5.0.0
+        specifier: ^5.5.4
         version: 5.9.3
 
   packages/ssg:
     dependencies:
-      '@aurelia-ls/resolution':
+      '@aurelia-ls/compiler':
         specifier: workspace:*
-        version: link:../resolution
+        version: link:../compiler
 
   packages/ssr:
     dependencies:
@@ -319,11 +316,8 @@ importers:
       '@aurelia-ls/compiler':
         specifier: workspace:*
         version: link:../compiler
-      '@aurelia-ls/resolution':
-        specifier: workspace:*
-        version: link:../resolution
       typescript:
-        specifier: ^5.0.0
+        specifier: ^5.5.4
         version: 5.9.3
 
   packages/vite-plugin:
@@ -331,9 +325,6 @@ importers:
       '@aurelia-ls/compiler':
         specifier: workspace:*
         version: link:../compiler
-      '@aurelia-ls/resolution':
-        specifier: workspace:*
-        version: link:../resolution
       '@aurelia-ls/ssg':
         specifier: workspace:*
         version: link:../ssg
@@ -350,7 +341,7 @@ importers:
         specifier: link:../../aurelia/packages/runtime-html
         version: link:../../aurelia/packages/runtime-html
       typescript:
-        specifier: ^5.0.0
+        specifier: ^5.5.4
         version: 5.9.3
     devDependencies:
       vite:
@@ -359,8 +350,11 @@ importers:
 
   packages/vscode:
     dependencies:
+      '@aurelia-ls/compiler':
+        specifier: workspace:*
+        version: link:../compiler
       typescript:
-        specifier: ^5.7.0
+        specifier: ^5.5.4
         version: 5.9.3
       vscode-languageclient:
         specifier: ^9.0.1

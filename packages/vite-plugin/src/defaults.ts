@@ -43,11 +43,11 @@ import type {
   DirectoryConventionConfig,
   TemplatePairingConfig,
   StylesheetPairingConfig,
-} from "@aurelia-ls/resolution";
+} from "@aurelia-ls/compiler";
 import {
   DEFAULT_CONVENTION_CONFIG,
   DEFAULT_SUFFIXES,
-} from "@aurelia-ls/resolution";
+} from "@aurelia-ls/compiler";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, extname, join, resolve as resolvePath } from "node:path";
@@ -173,7 +173,7 @@ export const DEFAULT_THIRD_PARTY_OPTIONS: {
 /**
  * Default convention options.
  *
- * Uses DEFAULT_CONVENTION_CONFIG from resolution as the base,
+ * Uses DEFAULT_CONVENTION_CONFIG from project semantics as the base,
  * plus vite-plugin specific thirdParty options.
  */
 export const DEFAULT_CONVENTION_OPTIONS: ResolvedConventionOptions = {
@@ -219,14 +219,16 @@ export const DEFAULT_TRACE_OPTIONS: ResolvedTraceOptions = {
  */
 export const ALL_DEBUG_CHANNELS: readonly DebugChannel[] = [
   "lower",
-  "resolve",
+  "link",
   "bind",
   "typecheck",
   "aot",
   "overlay",
   "ssr",
   "transform",
-  "resolution",
+  "project",
+  "workspace",
+  "vite",
 ];
 
 /**
@@ -363,7 +365,7 @@ export function normalizeSSGOptions(
 /**
  * Normalize convention options.
  *
- * Converts user-provided ConventionConfig (from resolution package)
+ * Converts user-provided ConventionConfig (from compiler project-semantics)
  * to the internal ResolvedConventionOptions structure.
  */
 export function normalizeConventionOptions(
@@ -542,7 +544,7 @@ export interface NormalizeOptionsContext {
 export function normalizeOptions(
   options: AureliaPluginOptions | undefined,
   context: NormalizeOptionsContext,
-): Omit<ResolvedAureliaOptions, "resolution" | "routeTree"> {
+): Omit<ResolvedAureliaOptions, "projectSemantics" | "routeTree"> {
   const isDev = context.command === "serve";
   const opts = options ?? {};
   const packagePath = opts.packagePath
@@ -564,7 +566,6 @@ export function normalizeOptions(
     conventions: normalizeConventionOptions(opts.conventions, opts.thirdParty),
     compiler: normalizeCompilerOptions(opts.compiler),
     debug: normalizeDebugOptions(opts.debug, context.root),
-    policy: opts.policy,
     experimental: { ...DEFAULT_EXPERIMENTAL_OPTIONS, ...opts.experimental },
     hooks: { ...DEFAULT_HOOKS, ...opts.hooks },
   };
@@ -857,7 +858,6 @@ export function mergeConfigs(
 
   merged.compiler = { ...fileConfig.compiler, ...inlineConfig.compiler };
   merged.debug = { ...fileConfig.debug, ...inlineConfig.debug };
-  merged.policy = inlineConfig.policy ?? fileConfig.policy;
   merged.experimental = { ...fileConfig.experimental, ...inlineConfig.experimental };
   merged.hooks = { ...fileConfig.hooks, ...inlineConfig.hooks };
 

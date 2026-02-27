@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "verbatimModuleSyntax": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": false,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "rootDir": "src",
+    "baseUrl": ".",
+    "paths": {
+      "aurelia": ["../../../../../../aurelia/packages/aurelia/src/index.ts"],
+      "@aurelia/kernel": ["../../../../../../aurelia/packages/kernel/src/index.ts"],
+      "@aurelia/runtime": ["../../../../../../aurelia/packages/runtime/src/index.ts"],
+      "@aurelia/runtime-html": ["../../../../../../aurelia/packages/runtime-html/src/index.ts"],
+      "@aurelia/template-compiler": ["../../../../../../aurelia/packages/template-compiler/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

@@ -1,8 +1,0 @@
-{
-  "extends": "../../tsconfig.test.base.json",
-  "include": ["test/**/*.ts"],
-  "exclude": ["test/apps/**"],
-  "references": [
-    { "path": "." }
-  ]
-}

@@ -10,35 +10,35 @@
  */
 import { describe, test, expect, beforeEach } from "vitest";
 import {
-  // Core trace infrastructure
   createTrace,
-  createCollectingExporter,
-  createConsoleExporter,
-  createJSONExporter,
-  createMultiExporter,
   NOOP_TRACE,
   CompilerAttributes,
   formatDuration,
   type CompileTrace,
+} from "../../out/shared/trace.js";
+import {
+  createCollectingExporter,
+  createConsoleExporter,
+  createJSONExporter,
+  createMultiExporter,
   type CollectingExporter,
   type JSONExporter,
-
-  // Compiler pipeline
-  DefaultTemplateProgram,
-  DefaultTemplateBuildService,
-  lowerDocument,
-  resolveHost,
-  bindScopes,
-  typecheck,
-  planAot,
-  emitAotCode,
-  planOverlay,
-
-  // Support
-  DEFAULT_SEMANTICS,
-  getExpressionParser,
-  DEFAULT_SYNTAX,
-} from "@aurelia-ls/compiler";
+} from "../../out/shared/trace-exporters.js";
+import { DefaultTemplateProgram } from "../../out/program/program.js";
+import { DefaultTemplateBuildService } from "../../out/program/services.js";
+import { lowerDocument } from "../../out/analysis/10-lower/lower.js";
+import { linkTemplateSemantics } from "../../out/analysis/20-link/resolve.js";
+import { buildSemanticsSnapshot } from "../../out/schema/snapshot.js";
+import { bindScopes } from "../../out/analysis/30-bind/bind.js";
+import { typecheck } from "../../out/analysis/40-typecheck/typecheck.js";
+import { planAot } from "../../out/synthesis/aot/plan.js";
+import { emitAotCode } from "../../out/synthesis/aot/emit.js";
+import { planOverlay } from "../../out/synthesis/overlay/index.js";
+import { BUILTIN_SEMANTICS } from "../../out/schema/registry.js";
+import { getExpressionParser } from "../../out/parsing/expression-parser.js";
+import { DEFAULT_SYNTAX } from "../../out/parsing/attribute-parser.js";
+import { DiagnosticsRuntime } from "../../out/diagnostics/runtime.js";
+import { noopModuleResolver, createTestQuery } from "../_helpers/test-utils.js";
 
 // =============================================================================
 // Test Fixtures
@@ -65,6 +65,7 @@ const COMPLEX_TEMPLATE = `<template>
 </template>`;
 
 const SIMPLE_TEMPLATE = `<template>\${message}</template>`;
+const RESOLVE_OPTS_BASE = { moduleResolver: noopModuleResolver, templateFilePath: "test.html" };
 
 function createVmReflection() {
   return {
@@ -77,7 +78,8 @@ function createProgram(trace?: CompileTrace) {
   return new DefaultTemplateProgram({
     vm: createVmReflection(),
     isJs: false,
-    semantics: DEFAULT_SEMANTICS,
+    query: createTestQuery(),
+    moduleResolver: noopModuleResolver,
     trace,
   });
 }
@@ -101,24 +103,29 @@ describe("Trace Integration: Full Compiler Pipeline", () => {
     // Run complete analysis pipeline
     trace.span("compile", () => {
       // Stage 1: Lower
+      const diagnostics = new DiagnosticsRuntime();
       const ir = lowerDocument(COMPLEX_TEMPLATE, {
         trace,
         exprParser,
         attrParser,
         file: "test.html",
-        catalog: DEFAULT_SEMANTICS.catalog,
+        catalog: BUILTIN_SEMANTICS.catalog,
+        diagnostics: diagnostics.forSource("lower"),
       });
 
-      expect(ir.diags?.length ?? 0).toBe(0);
+      const lowerDiags = diagnostics.all.filter((d) => d.stage === "lower");
+      expect(lowerDiags.length).toBe(0);
 
       // Stage 2: Resolve
-      const linked = resolveHost(ir, DEFAULT_SEMANTICS, {
+      const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(BUILTIN_SEMANTICS), {
+        ...RESOLVE_OPTS_BASE,
         trace,
         resourceScope: null,
+        diagnostics: diagnostics.forSource("link"),
       });
 
       // Stage 3: Bind
-      const scope = bindScopes(linked, { trace });
+      const scope = bindScopes(linked, { trace, diagnostics: diagnostics.forSource("bind") });
 
       // Stage 4: Typecheck
       typecheck({
@@ -127,6 +134,7 @@ describe("Trace Integration: Full Compiler Pipeline", () => {
         ir,
         rootVmType: "TestVm",
         trace,
+        diagnostics: diagnostics.forSource("typecheck"),
       });
     });
 
@@ -135,7 +143,7 @@ describe("Trace Integration: Full Compiler Pipeline", () => {
 
     // Verify all pipeline stages
     const lowerSpan = exporter.findSpans("lower.document")[0];
-    const resolveSpan = exporter.findSpans("resolve.host")[0];
+    const resolveSpan = exporter.findSpans("link.template")[0];
     const bindSpan = exporter.findSpans("bind.scopes")[0];
     const typecheckSpan = exporter.findSpans("typecheck")[0];
 
@@ -156,17 +164,21 @@ describe("Trace Integration: Full Compiler Pipeline", () => {
 
   test("traces events throughout pipeline", () => {
     trace.span("compile", () => {
+      const diagnostics = new DiagnosticsRuntime();
       const ir = lowerDocument(COMPLEX_TEMPLATE, {
         trace,
         exprParser,
         attrParser,
         file: "test.html",
-        catalog: DEFAULT_SEMANTICS.catalog,
+        catalog: BUILTIN_SEMANTICS.catalog,
+        diagnostics: diagnostics.forSource("lower"),
       });
 
-      resolveHost(ir, DEFAULT_SEMANTICS, {
+      linkTemplateSemantics(ir, buildSemanticsSnapshot(BUILTIN_SEMANTICS), {
+        ...RESOLVE_OPTS_BASE,
         trace,
         resourceScope: null,
+        diagnostics: diagnostics.forSource("link"),
       });
     });
 
@@ -185,17 +197,21 @@ describe("Trace Integration: Full Compiler Pipeline", () => {
 
   test("maintains span hierarchy across stages", () => {
     const compileSpan = trace.span("compile", () => {
+      const diagnostics = new DiagnosticsRuntime();
       const ir = lowerDocument(SIMPLE_TEMPLATE, {
         trace,
         exprParser,
         attrParser,
         file: "test.html",
-        catalog: DEFAULT_SEMANTICS.catalog,
+        catalog: BUILTIN_SEMANTICS.catalog,
+        diagnostics: diagnostics.forSource("lower"),
       });
 
-      resolveHost(ir, DEFAULT_SEMANTICS, {
+      linkTemplateSemantics(ir, buildSemanticsSnapshot(BUILTIN_SEMANTICS), {
+        ...RESOLVE_OPTS_BASE,
         trace,
         resourceScope: null,
+        diagnostics: diagnostics.forSource("link"),
       });
 
       return "done";
@@ -203,7 +219,7 @@ describe("Trace Integration: Full Compiler Pipeline", () => {
 
     // All pipeline spans should be children of compile
     const lowerSpan = exporter.findSpans("lower.document")[0];
-    const resolveSpan = exporter.findSpans("resolve.host")[0];
+    const resolveSpan = exporter.findSpans("link.template")[0];
 
     expect(lowerSpan?.parent?.name).toBe("compile");
     expect(resolveSpan?.parent?.name).toBe("compile");
@@ -214,12 +230,14 @@ describe("Trace Integration: Full Compiler Pipeline", () => {
 
   test("records template metrics in attributes", () => {
     trace.span("compile", () => {
+      const diagnostics = new DiagnosticsRuntime();
       lowerDocument(COMPLEX_TEMPLATE, {
         trace,
         exprParser,
         attrParser,
         file: "test.html",
-        catalog: DEFAULT_SEMANTICS.catalog,
+        catalog: BUILTIN_SEMANTICS.catalog,
+        diagnostics: diagnostics.forSource("lower"),
       });
     });
 
@@ -244,21 +262,25 @@ describe("Trace Integration: AOT Synthesis", () => {
     const trace = createTrace({ name: "aot-test", exporter });
 
     trace.span("aot", () => {
+      const diagnostics = new DiagnosticsRuntime();
       // Run full analysis first
       const ir = lowerDocument(SIMPLE_TEMPLATE, {
         trace,
         exprParser,
         attrParser,
         file: "test.html",
-        catalog: DEFAULT_SEMANTICS.catalog,
+        catalog: BUILTIN_SEMANTICS.catalog,
+        diagnostics: diagnostics.forSource("lower"),
       });
 
-      const linked = resolveHost(ir, DEFAULT_SEMANTICS, {
+      const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(BUILTIN_SEMANTICS), {
+        ...RESOLVE_OPTS_BASE,
         trace,
         resourceScope: null,
+        diagnostics: diagnostics.forSource("link"),
       });
 
-      const scope = bindScopes(linked, { trace });
+      const scope = bindScopes(linked, { trace, diagnostics: diagnostics.forSource("bind") });
 
       // AOT synthesis
       const plan = planAot(linked, scope, {
@@ -304,20 +326,24 @@ describe("Trace Integration: Overlay Synthesis", () => {
     const trace = createTrace({ name: "overlay-test", exporter });
 
     trace.span("overlay", () => {
+      const diagnostics = new DiagnosticsRuntime();
       const ir = lowerDocument(SIMPLE_TEMPLATE, {
         trace,
         exprParser,
         attrParser,
         file: "test.html",
-        catalog: DEFAULT_SEMANTICS.catalog,
+        catalog: BUILTIN_SEMANTICS.catalog,
+        diagnostics: diagnostics.forSource("lower"),
       });
 
-      const linked = resolveHost(ir, DEFAULT_SEMANTICS, {
+      const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(BUILTIN_SEMANTICS), {
+        ...RESOLVE_OPTS_BASE,
         trace,
         resourceScope: null,
+        diagnostics: diagnostics.forSource("link"),
       });
 
-      const scope = bindScopes(linked, { trace });
+      const scope = bindScopes(linked, { trace, diagnostics: diagnostics.forSource("bind") });
 
       // Overlay synthesis
       const plan = planOverlay(linked, scope, {
@@ -581,12 +607,14 @@ describe("Trace Integration: NOOP_TRACE Zero-Cost", () => {
 
   test("NOOP_TRACE allows pipeline execution", () => {
     // Just verify it doesn't crash and returns proper results
+    const diagnostics = new DiagnosticsRuntime();
     const ir = lowerDocument(SIMPLE_TEMPLATE, {
       trace: NOOP_TRACE,
       exprParser,
       attrParser,
       file: "test.html",
-      catalog: DEFAULT_SEMANTICS.catalog,
+      catalog: BUILTIN_SEMANTICS.catalog,
+      diagnostics: diagnostics.forSource("lower"),
     });
 
     expect(ir).toBeDefined();
@@ -864,15 +892,22 @@ describe("Trace Integration: Multiple Template Compilation", () => {
     trace.span("compile-all", () => {
       for (const { file, content } of templates) {
         trace.span(`compile:${file}`, () => {
+          const diagnostics = new DiagnosticsRuntime();
           const ir = lowerDocument(content, {
             trace,
             exprParser,
             attrParser,
             file,
-            catalog: DEFAULT_SEMANTICS.catalog,
+            catalog: BUILTIN_SEMANTICS.catalog,
+            diagnostics: diagnostics.forSource("lower"),
           });
 
-          resolveHost(ir, DEFAULT_SEMANTICS, { trace });
+          linkTemplateSemantics(ir, buildSemanticsSnapshot(BUILTIN_SEMANTICS), {
+            moduleResolver: noopModuleResolver,
+            templateFilePath: file,
+            trace,
+            diagnostics: diagnostics.forSource("link"),
+          });
         });
       }
     });
@@ -917,3 +952,5 @@ describe("Trace Integration: Exporter Lifecycle", () => {
     expect(collector.spans.length).toBe(0);
   });
 });
+
+

@@ -94,6 +94,8 @@
       "trigger": { "capture": false, "kind": "listener", "name": "trigger" },
       "two-way": { "kind": "property", "mode": "twoWay", "name": "two-way" }
     },
+    "gapsByResource": {},
+    "projectLevelGaps": [],
     "resources": {
       "attributes": {
         "case": {
@@ -112,15 +114,19 @@
           "kind": "attribute",
           "name": "case",
           "noMultiBindings": false,
+          "origin": "builtin",
           "primary": "value"
         },
         "catch": {
-          "bindables": {},
+          "bindables": {
+            "value": { "attribute": "value", "mode": "fromView", "name": "value", "primary": false }
+          },
           "className": "Catch",
           "isTemplateController": true,
           "kind": "attribute",
           "name": "catch",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "builtin"
         },
         "default-case": {
           "bindables": {
@@ -136,7 +142,8 @@
           "isTemplateController": true,
           "kind": "attribute",
           "name": "default-case",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "builtin"
         },
         "else": {
           "bindables": {},
@@ -144,7 +151,8 @@
           "isTemplateController": true,
           "kind": "attribute",
           "name": "else",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "builtin"
         },
         "focus": {
           "bindables": {
@@ -157,9 +165,11 @@
             }
           },
           "className": "Focus",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "attribute",
           "name": "focus",
           "noMultiBindings": false,
+          "origin": "builtin",
           "primary": "value"
         },
         "href": {
@@ -167,9 +177,11 @@
             "value": { "attribute": "value", "mode": "toView", "name": "value", "primary": true }
           },
           "className": "Href",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "attribute",
           "name": "href",
           "noMultiBindings": true,
+          "origin": "builtin",
           "package": "@aurelia/router",
           "primary": "value"
         },
@@ -195,6 +207,7 @@
           "kind": "attribute",
           "name": "if",
           "noMultiBindings": false,
+          "origin": "builtin",
           "primary": "value"
         },
         "load": {
@@ -230,9 +243,11 @@
             "route": { "attribute": "route", "mode": "toView", "name": "route", "primary": true }
           },
           "className": "Load",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "attribute",
           "name": "load",
           "noMultiBindings": false,
+          "origin": "builtin",
           "package": "@aurelia/router",
           "primary": "route"
         },
@@ -246,22 +261,70 @@
             }
           },
           "className": "Outclick",
+          "declarationForm": "decorator",
           "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "attribute",
           "name": "outclick",
           "noMultiBindings": false,
+          "origin": "source",
           "primary": "fn"
         },
         "pending": {
-          "bindables": {},
+          "bindables": {
+            "value": {
+              "attribute": "value",
+              "mode": "toView",
+              "name": "value",
+              "primary": false,
+              "type": { "kind": "ts", "name": "Promise<unknown>" }
+            }
+          },
           "className": "Pending",
           "isTemplateController": true,
           "kind": "attribute",
           "name": "pending",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "builtin"
         },
         "portal": {
           "bindables": {
+            "activated": {
+              "attribute": "activated",
+              "mode": "default",
+              "name": "activated",
+              "primary": false,
+              "type": { "kind": "ts", "name": "(target: string | Element | null | undefined, view: unknown) => void | Promise<void>" }
+            },
+            "activating": {
+              "attribute": "activating",
+              "mode": "default",
+              "name": "activating",
+              "primary": false,
+              "type": { "kind": "ts", "name": "(target: string | Element | null | undefined, view: unknown) => void | Promise<void>" }
+            },
+            "callbackContext": { "attribute": "callbackContext", "mode": "default", "name": "callbackContext", "primary": false },
+            "deactivated": {
+              "attribute": "deactivated",
+              "mode": "default",
+              "name": "deactivated",
+              "primary": false,
+              "type": { "kind": "ts", "name": "(target: string | Element | null | undefined, view: unknown) => void | Promise<void>" }
+            },
+            "deactivating": {
+              "attribute": "deactivating",
+              "mode": "default",
+              "name": "deactivating",
+              "primary": false,
+              "type": { "kind": "ts", "name": "(target: string | Element | null | undefined, view: unknown) => void | Promise<void>" }
+            },
+            "position": {
+              "attribute": "position",
+              "mode": "default",
+              "name": "position",
+              "primary": false,
+              "type": { "kind": "ts", "name": "'beforebegin' | 'afterbegin' | 'beforeend' | 'afterend'" }
+            },
             "renderContext": {
               "attribute": "renderContext",
               "mode": "default",
@@ -289,6 +352,7 @@
           "kind": "attribute",
           "name": "portal",
           "noMultiBindings": false,
+          "origin": "builtin",
           "primary": "target"
         },
         "promise": {
@@ -305,15 +369,20 @@
           "isTemplateController": true,
           "kind": "attribute",
           "name": "promise",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "builtin"
         },
         "repeat": {
-          "bindables": {},
+          "bindables": {
+            "items": { "attribute": "items", "mode": "default", "name": "items", "primary": true }
+          },
           "className": "Repeat",
           "isTemplateController": true,
           "kind": "attribute",
           "name": "repeat",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "builtin",
+          "primary": "items"
         },
         "show": {
           "aliases": [ "hide" ],
@@ -327,9 +396,11 @@
             }
           },
           "className": "Show",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "attribute",
           "name": "show",
           "noMultiBindings": false,
+          "origin": "builtin",
           "primary": "value"
         },
         "switch": {
@@ -340,15 +411,19 @@
           "isTemplateController": true,
           "kind": "attribute",
           "name": "switch",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "builtin"
         },
         "then": {
-          "bindables": {},
+          "bindables": {
+            "value": { "attribute": "value", "mode": "fromView", "name": "value", "primary": false }
+          },
           "className": "Then",
           "isTemplateController": true,
           "kind": "attribute",
           "name": "then",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "builtin"
         },
         "with": {
           "bindables": {
@@ -358,20 +433,71 @@
           "isTemplateController": true,
           "kind": "attribute",
           "name": "with",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "builtin"
         }
       },
       "bindingBehaviors": {
-        "attr": { "className": "AttrBindingBehavior", "name": "attr" },
-        "debounce": { "className": "DebounceBindingBehavior", "name": "debounce" },
-        "fromView": { "className": "FromViewBindingBehavior", "name": "fromView" },
-        "oneTime": { "className": "OneTimeBindingBehavior", "name": "oneTime" },
-        "self": { "className": "SelfBindingBehavior", "name": "self" },
-        "signal": { "className": "SignalBindingBehavior", "name": "signal" },
-        "throttle": { "className": "ThrottleBindingBehavior", "name": "throttle" },
-        "toView": { "className": "ToViewBindingBehavior", "name": "toView" },
-        "twoWay": { "className": "TwoWayBindingBehavior", "name": "twoWay" },
-        "updateTrigger": { "className": "UpdateTriggerBindingBehavior", "name": "updateTrigger" }
+        "attr": {
+          "className": "AttrBindingBehavior",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "attr",
+          "origin": "builtin"
+        },
+        "debounce": {
+          "className": "DebounceBindingBehavior",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "debounce",
+          "origin": "builtin"
+        },
+        "fromView": {
+          "className": "FromViewBindingBehavior",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "fromView",
+          "origin": "builtin"
+        },
+        "oneTime": {
+          "className": "OneTimeBindingBehavior",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "oneTime",
+          "origin": "builtin"
+        },
+        "self": {
+          "className": "SelfBindingBehavior",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "self",
+          "origin": "builtin"
+        },
+        "signal": {
+          "className": "SignalBindingBehavior",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "signal",
+          "origin": "builtin"
+        },
+        "throttle": {
+          "className": "ThrottleBindingBehavior",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "throttle",
+          "origin": "builtin"
+        },
+        "toView": {
+          "className": "ToViewBindingBehavior",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "toView",
+          "origin": "builtin"
+        },
+        "twoWay": {
+          "className": "TwoWayBindingBehavior",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "twoWay",
+          "origin": "builtin"
+        },
+        "updateTrigger": {
+          "className": "UpdateTriggerBindingBehavior",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "updateTrigger",
+          "origin": "builtin"
+        }
       },
       "controllers": {
         "case": {
@@ -394,11 +520,13 @@
         "catch": {
           "cardinality": "zero-one",
           "injects": {
-            "alias": { "defaultName": "error", "prop": "value" }
+            "alias": { "defaultName": "catch", "prop": "value" }
           },
           "linksTo": "promise",
           "name": "catch",
-          "props": {},
+          "props": {
+            "value": { "attribute": "value", "mode": "fromView", "name": "value", "primary": false }
+          },
           "scope": "overlay",
           "trigger": { "kind": "branch", "parent": "promise" }
         },
@@ -453,7 +581,15 @@
           "cardinality": "zero-one",
           "linksTo": "promise",
           "name": "pending",
-          "props": {},
+          "props": {
+            "value": {
+              "attribute": "value",
+              "mode": "toView",
+              "name": "value",
+              "primary": false,
+              "type": { "kind": "ts", "name": "Promise<unknown>" }
+            }
+          },
           "scope": "reuse",
           "trigger": { "kind": "branch", "parent": "promise" }
         },
@@ -462,6 +598,42 @@
           "name": "portal",
           "placement": "teleported",
           "props": {
+            "activated": {
+              "attribute": "activated",
+              "mode": "default",
+              "name": "activated",
+              "primary": false,
+              "type": { "kind": "ts", "name": "(target: string | Element | null | undefined, view: unknown) => void | Promise<void>" }
+            },
+            "activating": {
+              "attribute": "activating",
+              "mode": "default",
+              "name": "activating",
+              "primary": false,
+              "type": { "kind": "ts", "name": "(target: string | Element | null | undefined, view: unknown) => void | Promise<void>" }
+            },
+            "callbackContext": { "attribute": "callbackContext", "mode": "default", "name": "callbackContext", "primary": false },
+            "deactivated": {
+              "attribute": "deactivated",
+              "mode": "default",
+              "name": "deactivated",
+              "primary": false,
+              "type": { "kind": "ts", "name": "(target: string | Element | null | undefined, view: unknown) => void | Promise<void>" }
+            },
+            "deactivating": {
+              "attribute": "deactivating",
+              "mode": "default",
+              "name": "deactivating",
+              "primary": false,
+              "type": { "kind": "ts", "name": "(target: string | Element | null | undefined, view: unknown) => void | Promise<void>" }
+            },
+            "position": {
+              "attribute": "position",
+              "mode": "default",
+              "name": "position",
+              "primary": false,
+              "type": { "kind": "ts", "name": "'beforebegin' | 'afterbegin' | 'beforeend' | 'afterend'" }
+            },
             "renderContext": {
               "attribute": "renderContext",
               "mode": "default",
@@ -505,9 +677,11 @@
         },
         "repeat": {
           "cardinality": "zero-many",
-          "injects": { "contextuals": [ "$index", "$first", "$last", "$even", "$odd", "$length", "$middle" ] },
+          "injects": { "contextuals": [ "$index", "$first", "$last", "$even", "$odd", "$length", "$middle", "$previous" ] },
           "name": "repeat",
-          "props": {},
+          "props": {
+            "items": { "attribute": "items", "mode": "default", "name": "items", "primary": true }
+          },
           "scope": "overlay",
           "tailProps": {
             "contextual": { "accepts": [ "bind", null ], "name": "contextual" },
@@ -528,11 +702,13 @@
         "then": {
           "cardinality": "zero-one",
           "injects": {
-            "alias": { "defaultName": "data", "prop": "value" }
+            "alias": { "defaultName": "then", "prop": "value" }
           },
           "linksTo": "promise",
           "name": "then",
-          "props": {},
+          "props": {
+            "value": { "attribute": "value", "mode": "fromView", "name": "value", "primary": false }
+          },
           "scope": "overlay",
           "trigger": { "kind": "branch", "parent": "promise" }
         },
@@ -600,8 +776,10 @@
           "capture": true,
           "className": "AuCompose",
           "containerless": true,
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "element",
           "name": "au-compose",
+          "origin": "builtin",
           "processContent": false
         },
         "au-slot": {
@@ -625,8 +803,10 @@
           "capture": false,
           "className": "AuSlot",
           "containerless": true,
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "element",
           "name": "au-slot",
+          "origin": "builtin",
           "processContent": false
         },
         "au-viewport": {
@@ -664,8 +844,10 @@
           "capture": false,
           "className": "AuViewport",
           "containerless": false,
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "element",
           "name": "au-viewport",
+          "origin": "builtin",
           "package": "@aurelia/router",
           "processContent": false
         }
@@ -673,12 +855,15 @@
       "valueConverters": {
         "sanitize": {
           "className": "SanitizeValueConverter",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "in": { "kind": "ts", "name": "string" },
           "name": "sanitize",
+          "origin": "builtin",
           "out": { "kind": "ts", "name": "string | null" }
         }
       }
-    }
+    },
+    "scopeCompleteness": {}
   },
   "graph": {
     "root": "root",
@@ -700,9 +885,11 @@
                 }
               },
               "className": "Focus",
+              "gaps": { "intrinsic": 0, "total": 0 },
               "kind": "attribute",
               "name": "focus",
               "noMultiBindings": false,
+              "origin": "builtin",
               "primary": "value"
             },
             "outclick": {
@@ -733,23 +920,75 @@
                 }
               },
               "className": "Show",
+              "gaps": { "intrinsic": 0, "total": 0 },
               "kind": "attribute",
               "name": "show",
               "noMultiBindings": false,
+              "origin": "builtin",
               "primary": "value"
             }
           },
           "bindingBehaviors": {
-            "attr": { "className": "AttrBindingBehavior", "name": "attr" },
-            "debounce": { "className": "DebounceBindingBehavior", "name": "debounce" },
-            "fromView": { "className": "FromViewBindingBehavior", "name": "fromView" },
-            "oneTime": { "className": "OneTimeBindingBehavior", "name": "oneTime" },
-            "self": { "className": "SelfBindingBehavior", "name": "self" },
-            "signal": { "className": "SignalBindingBehavior", "name": "signal" },
-            "throttle": { "className": "ThrottleBindingBehavior", "name": "throttle" },
-            "toView": { "className": "ToViewBindingBehavior", "name": "toView" },
-            "twoWay": { "className": "TwoWayBindingBehavior", "name": "twoWay" },
-            "updateTrigger": { "className": "UpdateTriggerBindingBehavior", "name": "updateTrigger" }
+            "attr": {
+              "className": "AttrBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "attr",
+              "origin": "builtin"
+            },
+            "debounce": {
+              "className": "DebounceBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "debounce",
+              "origin": "builtin"
+            },
+            "fromView": {
+              "className": "FromViewBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "fromView",
+              "origin": "builtin"
+            },
+            "oneTime": {
+              "className": "OneTimeBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "oneTime",
+              "origin": "builtin"
+            },
+            "self": {
+              "className": "SelfBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "self",
+              "origin": "builtin"
+            },
+            "signal": {
+              "className": "SignalBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "signal",
+              "origin": "builtin"
+            },
+            "throttle": {
+              "className": "ThrottleBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "throttle",
+              "origin": "builtin"
+            },
+            "toView": {
+              "className": "ToViewBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "toView",
+              "origin": "builtin"
+            },
+            "twoWay": {
+              "className": "TwoWayBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "twoWay",
+              "origin": "builtin"
+            },
+            "updateTrigger": {
+              "className": "UpdateTriggerBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "updateTrigger",
+              "origin": "builtin"
+            }
           },
           "controllers": {
             "case": {
@@ -772,11 +1011,13 @@
             "catch": {
               "cardinality": "zero-one",
               "injects": {
-                "alias": { "defaultName": "error", "prop": "value" }
+                "alias": { "defaultName": "catch", "prop": "value" }
               },
               "linksTo": "promise",
               "name": "catch",
-              "props": {},
+              "props": {
+                "value": { "attribute": "value", "mode": "fromView", "name": "value", "primary": false }
+              },
               "scope": "overlay",
               "trigger": { "kind": "branch", "parent": "promise" }
             },
@@ -831,7 +1072,15 @@
               "cardinality": "zero-one",
               "linksTo": "promise",
               "name": "pending",
-              "props": {},
+              "props": {
+                "value": {
+                  "attribute": "value",
+                  "mode": "toView",
+                  "name": "value",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "Promise<unknown>" }
+                }
+              },
               "scope": "reuse",
               "trigger": { "kind": "branch", "parent": "promise" }
             },
@@ -840,6 +1089,42 @@
               "name": "portal",
               "placement": "teleported",
               "props": {
+                "activated": {
+                  "attribute": "activated",
+                  "mode": "default",
+                  "name": "activated",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "(target: string | Element | null | undefined, view: unknown) => void | Promise<void>" }
+                },
+                "activating": {
+                  "attribute": "activating",
+                  "mode": "default",
+                  "name": "activating",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "(target: string | Element | null | undefined, view: unknown) => void | Promise<void>" }
+                },
+                "callbackContext": { "attribute": "callbackContext", "mode": "default", "name": "callbackContext", "primary": false },
+                "deactivated": {
+                  "attribute": "deactivated",
+                  "mode": "default",
+                  "name": "deactivated",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "(target: string | Element | null | undefined, view: unknown) => void | Promise<void>" }
+                },
+                "deactivating": {
+                  "attribute": "deactivating",
+                  "mode": "default",
+                  "name": "deactivating",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "(target: string | Element | null | undefined, view: unknown) => void | Promise<void>" }
+                },
+                "position": {
+                  "attribute": "position",
+                  "mode": "default",
+                  "name": "position",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "'beforebegin' | 'afterbegin' | 'beforeend' | 'afterend'" }
+                },
                 "renderContext": {
                   "attribute": "renderContext",
                   "mode": "default",
@@ -883,9 +1168,11 @@
             },
             "repeat": {
               "cardinality": "zero-many",
-              "injects": { "contextuals": [ "$index", "$first", "$last", "$even", "$odd", "$length", "$middle" ] },
+              "injects": { "contextuals": [ "$index", "$first", "$last", "$even", "$odd", "$length", "$middle", "$previous" ] },
               "name": "repeat",
-              "props": {},
+              "props": {
+                "items": { "attribute": "items", "mode": "default", "name": "items", "primary": true }
+              },
               "scope": "overlay",
               "tailProps": {
                 "contextual": { "accepts": [ "bind", null ], "name": "contextual" },
@@ -906,11 +1193,13 @@
             "then": {
               "cardinality": "zero-one",
               "injects": {
-                "alias": { "defaultName": "data", "prop": "value" }
+                "alias": { "defaultName": "then", "prop": "value" }
               },
               "linksTo": "promise",
               "name": "then",
-              "props": {},
+              "props": {
+                "value": { "attribute": "value", "mode": "fromView", "name": "value", "primary": false }
+              },
               "scope": "overlay",
               "trigger": { "kind": "branch", "parent": "promise" }
             },
@@ -978,8 +1267,10 @@
               "capture": true,
               "className": "AuCompose",
               "containerless": true,
+              "gaps": { "intrinsic": 0, "total": 0 },
               "kind": "element",
               "name": "au-compose",
+              "origin": "builtin",
               "processContent": false
             },
             "au-slot": {
@@ -1003,16 +1294,20 @@
               "capture": false,
               "className": "AuSlot",
               "containerless": true,
+              "gaps": { "intrinsic": 0, "total": 0 },
               "kind": "element",
               "name": "au-slot",
+              "origin": "builtin",
               "processContent": false
             }
           },
           "valueConverters": {
             "sanitize": {
               "className": "SanitizeValueConverter",
+              "gaps": { "intrinsic": 0, "total": 0 },
               "in": { "kind": "ts", "name": "string" },
               "name": "sanitize",
+              "origin": "builtin",
               "out": { "kind": "ts", "name": "string | null" }
             }
           }
@@ -1135,6 +1430,7 @@
           }
         },
         "className": { "origin": "builtin", "value": "Focus" },
+        "dependencies": [],
         "kind": "custom-attribute",
         "name": { "origin": "builtin", "value": "focus" },
         "noMultiBindings": { "origin": "builtin", "value": false }
@@ -1155,6 +1451,7 @@
           }
         },
         "className": { "origin": "builtin", "value": "Href" },
+        "dependencies": [],
         "kind": "custom-attribute",
         "name": { "origin": "builtin", "value": "href" },
         "noMultiBindings": { "origin": "builtin", "value": true },
@@ -1204,6 +1501,7 @@
           }
         },
         "className": { "origin": "builtin", "value": "Load" },
+        "dependencies": [],
         "kind": "custom-attribute",
         "name": { "origin": "builtin", "value": "load" },
         "noMultiBindings": { "origin": "builtin", "value": false },
@@ -1222,25 +1520,30 @@
             "attribute": {
               "location": { "end": 325, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 286 },
               "origin": "source",
+              "state": "known",
               "value": "fn"
             },
             "mode": {
               "location": { "end": 325, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 286 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 325, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 286 },
               "origin": "source",
+              "state": "known",
               "value": true
             },
             "property": {
               "location": { "end": 325, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 286 },
               "origin": "source",
+              "state": "known",
               "value": "fn"
             },
             "type": {
               "location": { "end": 325, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 286 },
               "origin": "source",
+              "state": "known",
               "value": "(event?: any) => string"
             }
           }
@@ -1248,23 +1551,29 @@
         "className": {
           "location": { "end": 1055, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 144 },
           "origin": "source",
+          "state": "known",
           "value": "Outclick"
         },
+        "declarationForm": "decorator",
+        "dependencies": [],
         "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts",
         "kind": "custom-attribute",
         "name": {
-          "location": { "end": 1055, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 144 },
+          "location": { "end": 179, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 169 },
           "origin": "source",
+          "state": "known",
           "value": "outclick"
         },
         "noMultiBindings": {
           "location": { "end": 1055, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 144 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "primary": {
           "location": { "end": 1055, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 144 },
           "origin": "source",
+          "state": "known",
           "value": "fn"
         }
       },
@@ -1288,6 +1597,7 @@
           }
         },
         "className": { "origin": "builtin", "value": "Show" },
+        "dependencies": [],
         "kind": "custom-attribute",
         "name": { "origin": "builtin", "value": "show" },
         "noMultiBindings": { "origin": "builtin", "value": false }
@@ -1481,7 +1791,14 @@
     {
       "data": {
         "aliases": { "origin": "builtin", "value": [] },
-        "bindables": {},
+        "bindables": {
+          "value": {
+            "attribute": { "origin": "builtin", "value": "value" },
+            "mode": { "origin": "builtin", "value": "fromView" },
+            "primary": { "origin": "builtin", "value": false },
+            "property": { "origin": "builtin", "value": "value" }
+          }
+        },
         "className": { "origin": "builtin", "value": "Catch" },
         "kind": "template-controller",
         "name": { "origin": "builtin", "value": "catch" },
@@ -1489,7 +1806,7 @@
         "semantics": {
           "cardinality": "zero-one",
           "injects": {
-            "alias": { "defaultName": "error", "prop": "value" }
+            "alias": { "defaultName": "catch", "prop": "value" }
           },
           "linksTo": "promise",
           "origin": "catch",
@@ -1587,7 +1904,15 @@
     {
       "data": {
         "aliases": { "origin": "builtin", "value": [] },
-        "bindables": {},
+        "bindables": {
+          "value": {
+            "attribute": { "origin": "builtin", "value": "value" },
+            "mode": { "origin": "builtin", "value": "toView" },
+            "primary": { "origin": "builtin", "value": false },
+            "property": { "origin": "builtin", "value": "value" },
+            "type": { "origin": "builtin", "value": "Promise<unknown>" }
+          }
+        },
         "className": { "origin": "builtin", "value": "Pending" },
         "kind": "template-controller",
         "name": { "origin": "builtin", "value": "pending" },
@@ -1608,6 +1933,47 @@
       "data": {
         "aliases": { "origin": "builtin", "value": [] },
         "bindables": {
+          "activated": {
+            "attribute": { "origin": "builtin", "value": "activated" },
+            "mode": { "origin": "builtin", "value": "default" },
+            "primary": { "origin": "builtin", "value": false },
+            "property": { "origin": "builtin", "value": "activated" },
+            "type": { "origin": "builtin", "value": "(target: string | Element | null | undefined, view: unknown) => void | Promise<void>" }
+          },
+          "activating": {
+            "attribute": { "origin": "builtin", "value": "activating" },
+            "mode": { "origin": "builtin", "value": "default" },
+            "primary": { "origin": "builtin", "value": false },
+            "property": { "origin": "builtin", "value": "activating" },
+            "type": { "origin": "builtin", "value": "(target: string | Element | null | undefined, view: unknown) => void | Promise<void>" }
+          },
+          "callbackContext": {
+            "attribute": { "origin": "builtin", "value": "callbackContext" },
+            "mode": { "origin": "builtin", "value": "default" },
+            "primary": { "origin": "builtin", "value": false },
+            "property": { "origin": "builtin", "value": "callbackContext" }
+          },
+          "deactivated": {
+            "attribute": { "origin": "builtin", "value": "deactivated" },
+            "mode": { "origin": "builtin", "value": "default" },
+            "primary": { "origin": "builtin", "value": false },
+            "property": { "origin": "builtin", "value": "deactivated" },
+            "type": { "origin": "builtin", "value": "(target: string | Element | null | undefined, view: unknown) => void | Promise<void>" }
+          },
+          "deactivating": {
+            "attribute": { "origin": "builtin", "value": "deactivating" },
+            "mode": { "origin": "builtin", "value": "default" },
+            "primary": { "origin": "builtin", "value": false },
+            "property": { "origin": "builtin", "value": "deactivating" },
+            "type": { "origin": "builtin", "value": "(target: string | Element | null | undefined, view: unknown) => void | Promise<void>" }
+          },
+          "position": {
+            "attribute": { "origin": "builtin", "value": "position" },
+            "mode": { "origin": "builtin", "value": "default" },
+            "primary": { "origin": "builtin", "value": false },
+            "property": { "origin": "builtin", "value": "position" },
+            "type": { "origin": "builtin", "value": "'beforebegin' | 'afterbegin' | 'beforeend' | 'afterend'" }
+          },
           "renderContext": {
             "attribute": { "origin": "builtin", "value": "renderContext" },
             "mode": { "origin": "builtin", "value": "default" },
@@ -1677,14 +2043,21 @@
     {
       "data": {
         "aliases": { "origin": "builtin", "value": [] },
-        "bindables": {},
+        "bindables": {
+          "items": {
+            "attribute": { "origin": "builtin", "value": "items" },
+            "mode": { "origin": "builtin", "value": "default" },
+            "primary": { "origin": "builtin", "value": true },
+            "property": { "origin": "builtin", "value": "items" }
+          }
+        },
         "className": { "origin": "builtin", "value": "Repeat" },
         "kind": "template-controller",
         "name": { "origin": "builtin", "value": "repeat" },
         "noMultiBindings": { "origin": "builtin", "value": false },
         "semantics": {
           "cardinality": "zero-many",
-          "injects": { "contextuals": [ "$index", "$first", "$last", "$even", "$odd", "$length", "$middle" ] },
+          "injects": { "contextuals": [ "$index", "$first", "$last", "$even", "$odd", "$length", "$middle", "$previous" ] },
           "origin": "repeat",
           "scope": "overlay",
           "tailProps": {
@@ -1728,7 +2101,14 @@
     {
       "data": {
         "aliases": { "origin": "builtin", "value": [] },
-        "bindables": {},
+        "bindables": {
+          "value": {
+            "attribute": { "origin": "builtin", "value": "value" },
+            "mode": { "origin": "builtin", "value": "fromView" },
+            "primary": { "origin": "builtin", "value": false },
+            "property": { "origin": "builtin", "value": "value" }
+          }
+        },
         "className": { "origin": "builtin", "value": "Then" },
         "kind": "template-controller",
         "name": { "origin": "builtin", "value": "then" },
@@ -1736,7 +2116,7 @@
         "semantics": {
           "cardinality": "zero-one",
           "injects": {
-            "alias": { "defaultName": "data", "prop": "value" }
+            "alias": { "defaultName": "then", "prop": "value" }
           },
           "linksTo": "promise",
           "origin": "then",

@@ -1,179 +1,160 @@
-// Pipeline imports (via barrel)
-import { createDefaultEngine } from "./pipeline/index.js";
+// Template Compilation Facade
+//
+// Public entry point for template compilation. Delegates to the pure
+// pipeline functions in pipeline/stages.ts.
 
-// Model imports (via barrel)
-import type { ExprTableEntry, SourceSpan, ExprIdMap } from "./model/index.js";
+// Model imports
+import type { ExprTableEntry, IrModule, ScopeModule, SourceSpan, ExprIdMap } from "./model/index.js";
 
-// Language imports (via barrel)
-import type {
-  FeatureUsageSet,
-  LocalImportDef,
-  ResourceCatalog,
-  ResourceGraph,
-  ResourceScopeId,
-  Semantics,
-  TemplateSyntaxRegistry,
-} from "./language/index.js";
+// Analysis imports
+import type { LinkModule, TypecheckModule } from "./analysis/index.js";
 
-// Parsing imports (via barrel)
+// Language imports
+import type { FeatureUsageSet, TemplateContext } from "./schema/index.js";
+
+// Parsing imports
 import type { AttributeParser, IExpressionParser } from "./parsing/index.js";
 
-// Shared imports (via barrel)
-import type { VmReflection, CompilerDiagnostic } from "./shared/index.js";
+// Shared imports
+import { NOOP_TRACE, type CompilerDiagnostic, type VmReflection, type ModuleResolver, type CompileTrace } from "./shared/index.js";
 
-// Pipeline imports (via barrel)
-import type { StageOutputs, PipelineOptions, CacheOptions, FingerprintHints, StageArtifactMeta, StageKey, PipelineSession } from "./pipeline/index.js";
+// Pipeline imports
+import { runFullPipeline } from "./pipeline/stages.js";
+import type { StageKey, StageArtifactMeta } from "./pipeline/engine.js";
 
-// Synthesis imports (via barrel)
+// Synthesis imports
 import {
-  buildOverlayProduct,
+  buildOverlayProductFromStages,
   computeOverlayBaseName,
+  type OverlayPlanModule,
   type OverlayProductResult,
   type TemplateMappingArtifact,
   type TemplateQueryFacade,
 } from "./synthesis/index.js";
+
+import type { SemanticModelQuery } from "./schema/model.js";
+
+// ============================================================================
+// Compile Options
+// ============================================================================
 
 export interface CompileOptions {
   html: string;
   templateFilePath: string;
   isJs: boolean;
   vm: VmReflection;
-  semantics: Semantics;
-  catalog?: ResourceCatalog;
-  syntax?: TemplateSyntaxRegistry;
-  resourceGraph?: ResourceGraph;
-  resourceScope?: ResourceScopeId | null;
-  localImports?: readonly LocalImportDef[];
+  /** Semantic authority — the query IS the model. */
+  query: SemanticModelQuery;
+  templateContext?: TemplateContext;
   attrParser?: AttributeParser;
   exprParser?: IExpressionParser;
+  moduleResolver: ModuleResolver;
   overlayBaseName?: string;
-  cache?: CacheOptions;
-  fingerprints?: FingerprintHints;
+  /** Trace context for per-stage timing instrumentation. */
+  trace?: CompileTrace;
+  /** Pre-computed IR to skip the lower stage (per-stage caching). */
+  seededIr?: IrModule;
 }
+
+// ============================================================================
+// Compilation Result Types
+// ============================================================================
 
 export type CompileOverlayResult = OverlayProductResult;
 
 export interface TemplateDiagnostics {
-  /** Flat list of all diagnostics from the pipeline. */
   all: CompilerDiagnostic[];
-  /** Per-stage view keyed by diagnostic source. */
-  bySource: Partial<Record<CompilerDiagnostic["source"], CompilerDiagnostic[]>>;
+  byStage: Partial<Record<CompilerDiagnostic["stage"], CompilerDiagnostic[]>>;
 }
 
 export type StageMetaSnapshot = Partial<Record<StageKey, StageArtifactMeta>>;
 
 export interface TemplateCompilation {
-  ir: StageOutputs["10-lower"];
-  linked: StageOutputs["20-resolve"];
-  scope: StageOutputs["30-bind"];
-  typecheck: StageOutputs["40-typecheck"];
+  ir: IrModule;
+  linked: LinkModule;
+  scope: ScopeModule;
+  typecheck: TypecheckModule;
   usage: FeatureUsageSet;
-  overlayPlan: StageOutputs["overlay:plan"];
+  overlayPlan: OverlayPlanModule;
   overlay: CompileOverlayResult;
   mapping: TemplateMappingArtifact;
   query: TemplateQueryFacade;
-  /** Authored expression table + spans for tooling (hover/refs). */
   exprTable: readonly ExprTableEntry[];
   exprSpans: ExprIdMap<SourceSpan>;
   diagnostics: TemplateDiagnostics;
   meta: StageMetaSnapshot;
 }
 
-function buildPipelineOptions(opts: CompileOptions, overlayBaseName: string): PipelineOptions {
-  const base: PipelineOptions = {
+// ============================================================================
+// Public API
+// ============================================================================
+
+/**
+ * Compile a template.
+ *
+ * Pure function: query + html + options → TemplateCompilation.
+ * No engine, no session. Delegates to runFullPipeline.
+ */
+export function compileTemplate(opts: CompileOptions): TemplateCompilation {
+  const trace = opts.trace ?? NOOP_TRACE;
+  const overlayBase = computeOverlayBaseName(opts.templateFilePath, opts.overlayBaseName);
+
+  const result = trace.span("facade:pipeline", () => runFullPipeline({
     html: opts.html,
     templateFilePath: opts.templateFilePath,
+    query: opts.query,
+    moduleResolver: opts.moduleResolver,
     vm: opts.vm,
-    semantics: opts.semantics,
+    templateContext: opts.templateContext,
+    depGraph: opts.query.model.deps,
+    attrParser: opts.attrParser,
+    exprParser: opts.exprParser,
+    trace,
+    seededIr: opts.seededIr,
     overlay: {
       isJs: opts.isJs,
-      filename: overlayBaseName,
+      filename: overlayBase,
       syntheticPrefix: opts.vm.getSyntheticPrefix?.() ?? "__AU_TTC_",
     },
-  };
-  if (opts.catalog) base.catalog = opts.catalog;
-  if (opts.syntax) base.syntax = opts.syntax;
-  if (opts.resourceGraph) base.resourceGraph = opts.resourceGraph;
-  if (opts.resourceScope !== undefined) base.resourceScope = opts.resourceScope;
-  if (opts.localImports) base.localImports = opts.localImports;
-  if (opts.cache) base.cache = opts.cache;
-  if (opts.fingerprints) base.fingerprints = opts.fingerprints;
-  if (opts.attrParser) base.attrParser = opts.attrParser;
-  if (opts.exprParser) base.exprParser = opts.exprParser;
-  return base;
-}
+  }));
 
-/** Full pipeline (lower -> link -> bind -> plan -> emit) plus mapping/query scaffolding. */
-export function compileTemplate(
-  opts: CompileOptions,
-  seed?: Partial<Record<StageKey, StageOutputs[StageKey]>>,
-): TemplateCompilation {
-  const overlayBase = computeOverlayBaseName(opts.templateFilePath, opts.overlayBaseName);
-  const engine = createDefaultEngine();
-  const session = engine.createSession(buildPipelineOptions(opts, overlayBase), seed);
-
-  const overlayArtifacts = buildOverlayProduct(session, { templateFilePath: opts.templateFilePath });
-
-  const ir = session.run("10-lower");
-  const linked = session.run("20-resolve");
-  const scope = session.run("30-bind");
-  const typecheck = session.run("40-typecheck");
-  const usage = session.run("50-usage");
-  const overlayPlan = overlayArtifacts.plan;
+  // Build overlay product from stage results
+  const overlayArtifacts = trace.span("facade:overlay-product", () => buildOverlayProductFromStages(
+    result.ir,
+    result.linked,
+    result.scope,
+    result.overlayPlan,
+    result.overlayEmit,
+    { templateFilePath: opts.templateFilePath },
+  ));
 
   return {
-    ir,
-    linked,
-    scope,
-    typecheck,
-    usage,
-    overlayPlan,
+    ir: result.ir,
+    linked: result.linked,
+    scope: result.scope,
+    typecheck: result.typecheck,
+    usage: result.usage,
+    overlayPlan: result.overlayPlan,
     overlay: overlayArtifacts.overlay,
     mapping: overlayArtifacts.mapping,
     query: overlayArtifacts.query,
     exprTable: overlayArtifacts.exprTable,
     exprSpans: overlayArtifacts.exprSpans,
-    diagnostics: buildDiagnostics(linked, scope, typecheck),
-    meta: collectStageMeta(session, [
-      "10-lower",
-      "20-resolve",
-      "30-bind",
-      "40-typecheck",
-      "50-usage",
-      "overlay:plan",
-      "overlay:emit",
-    ]),
+    diagnostics: buildDiagnostics(result.diagnostics.all),
+    meta: {},
   };
 }
 
-/* --------------------------
- * Helpers
- * ------------------------ */
+// ============================================================================
+// Helpers
+// ============================================================================
 
-function buildDiagnostics(
-  linked: StageOutputs["20-resolve"],
-  scope: StageOutputs["30-bind"],
-  typecheck: StageOutputs["40-typecheck"],
-): TemplateDiagnostics {
-  const flat = [
-    ...(linked?.diags ?? []),
-    ...(scope?.diags ?? []),
-    ...(typecheck?.diags ?? []),
-  ];
-
-  const bySource: Partial<Record<CompilerDiagnostic["source"], CompilerDiagnostic[]>> = {};
-  for (const d of flat) {
-    if (!bySource[d.source]) bySource[d.source] = [];
-    bySource[d.source]!.push(d);
+function buildDiagnostics(diagnostics: readonly CompilerDiagnostic[]): TemplateDiagnostics {
+  const byStage: Partial<Record<CompilerDiagnostic["stage"], CompilerDiagnostic[]>> = {};
+  for (const d of diagnostics) {
+    if (!byStage[d.stage]) byStage[d.stage] = [];
+    byStage[d.stage]!.push(d);
   }
-  return { all: flat, bySource };
+  return { all: [...diagnostics], byStage };
 }
 
-function collectStageMeta(session: PipelineSession, keys: StageKey[]): StageMetaSnapshot {
-  const meta: StageMetaSnapshot = {};
-  for (const k of keys) {
-    const m = session.meta(k);
-    if (m) meta[k] = m;
-  }
-  return meta;
-}

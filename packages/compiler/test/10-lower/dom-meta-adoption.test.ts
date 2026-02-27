@@ -13,20 +13,21 @@
  */
 
 import { describe, it, expect } from "vitest";
-import {
-  lowerDocument,
-  DEFAULT_SYNTAX,
-  getExpressionParser,
-  DEFAULT_SEMANTICS,
-} from "@aurelia-ls/compiler";
+import { lowerDocument } from "../../out/analysis/10-lower/lower.js";
+import { DEFAULT_SYNTAX } from "../../out/parsing/attribute-parser.js";
+import { getExpressionParser } from "../../out/parsing/expression-parser.js";
+import { BUILTIN_SEMANTICS } from "../../out/schema/registry.js";
+import { DiagnosticsRuntime } from "../../out/diagnostics/runtime.js";
 
 function lower(html: string) {
+  const diagnostics = new DiagnosticsRuntime();
   return lowerDocument(html, {
     attrParser: DEFAULT_SYNTAX,
     exprParser: getExpressionParser(),
     file: "test.html",
     name: "test",
-    catalog: DEFAULT_SEMANTICS.catalog,
+    catalog: BUILTIN_SEMANTICS.catalog,
+    diagnostics: diagnostics.forSource("lower"),
   });
 }
 

@@ -30,6 +30,7 @@ const issues__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "opt",
@@ -42,6 +43,7 @@ const issues__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "opt",
@@ -120,6 +122,7 @@ const issues__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "user",
@@ -132,6 +135,7 @@ const issues__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "user",
@@ -201,6 +205,7 @@ const issues__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "issue",
@@ -213,6 +218,7 @@ const issues__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "issue",
@@ -225,6 +231,7 @@ const issues__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "issue",
@@ -237,6 +244,7 @@ const issues__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "issue",
@@ -252,8 +260,10 @@ const issues__e = [
     operation: ">",
     left: {
       $kind: "AccessMember",
+      accessGlobal: false,
       object: {
         $kind: "AccessMember",
+        accessGlobal: false,
         object: {
           $kind: "AccessScope",
           name: "issue",
@@ -274,6 +284,7 @@ const issues__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "issue",
@@ -286,6 +297,7 @@ const issues__e = [
   // AccessMember
   {
     $kind: "AccessMember",
+    accessGlobal: false,
     object: {
       $kind: "AccessScope",
       name: "issue",
@@ -301,6 +313,7 @@ const issues__e = [
     operation: "!",
     expression: {
       $kind: "AccessMember",
+      accessGlobal: false,
       object: {
         $kind: "AccessScope",
         name: "issue",

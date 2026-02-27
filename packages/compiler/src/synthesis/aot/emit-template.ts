@@ -185,30 +185,6 @@ function collectNestedFromControllers(
   return results;
 }
 
-/**
- * Get all templates from a controller.
- * Config-driven: uses ctrl.branches for child branch controllers.
- */
-function getControllerTemplates(ctrl: PlanController): PlanNode[] {
-  const templates: PlanNode[] = [];
-
-  // Main template (most controllers have one)
-  if (ctrl.template) {
-    templates.push(ctrl.template);
-  }
-
-  // Child branch templates (switch cases, promise branches)
-  if (ctrl.branches) {
-    for (const branch of ctrl.branches) {
-      if (branch.template) {
-        templates.push(branch.template);
-      }
-    }
-  }
-
-  return templates;
-}
-
 /* =============================================================================
  * Emit Context
  * ============================================================================= */

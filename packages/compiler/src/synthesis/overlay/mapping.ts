@@ -1,5 +1,5 @@
 import type { BindingSourceIR, ExprId, ExprTableEntry, IrModule, SourceSpan, TextSpan } from "../../model/ir.js";
-import type { FrameId } from "../../model/symbols.js";
+import type { FrameId, FrameOrigin } from "../../model/symbols.js";
 import type { OverlayEmitMappingEntry } from "./emit.js";
 import {
   buildExprSpanIndex,
@@ -16,7 +16,11 @@ export interface TemplateMappingEntry {
   exprId: ExprId;
   htmlSpan: SourceSpan;
   overlaySpan: TextSpan;
+  /** Span of the full __au$access call in the overlay. Probe here for the
+   *  expression result type (the call's return type per TS). */
+  callSpan?: TextSpan | undefined;
   frameId?: FrameId | undefined;
+  frameOrigin?: FrameOrigin | undefined;
   segments?: readonly TemplateMappingSegment[] | undefined;
 }
 
@@ -30,6 +34,12 @@ export interface TemplateMappingSegment {
   path: string;
   htmlSpan: SourceSpan;
   overlaySpan: TextSpan;
+  degradation?: TemplateMappingDegradation | undefined;
+}
+
+export interface TemplateMappingDegradation {
+  readonly reason: "missing-html-member-span";
+  readonly projection: "proportional";
 }
 
 export interface BuildMappingInputs {
@@ -39,6 +49,7 @@ export interface BuildMappingInputs {
   fallbackFile: SourceFile;
   overlayFile?: SourceFile | null;
   exprToFrame?: ExprIdMapLike<FrameId> | null;
+  frameOrigins?: ReadonlyMap<FrameId, FrameOrigin> | null;
 }
 
 export interface BuildMappingResult {
@@ -58,7 +69,9 @@ export function buildTemplateMapping(inputs: BuildMappingInputs): BuildMappingRe
     exprId: ExprId;
     htmlSpan: SourceSpan;
     overlaySpan: TextSpan;
+    callSpan?: TextSpan;
     frameId?: FrameId;
+    frameOrigin?: FrameOrigin;
     segments: OwnedSegment[];
   };
 
@@ -67,8 +80,12 @@ export function buildTemplateMapping(inputs: BuildMappingInputs): BuildMappingRe
     const overlaySpan = inputs.overlayFile
       ? resolveSourceSpan(m.span as SourceSpan, inputs.overlayFile)
       : normalizeSpan(m.span);
+    const callSpan = m.callSpan
+      ? (inputs.overlayFile ? resolveSourceSpan(m.callSpan as SourceSpan, inputs.overlayFile) : normalizeSpan(m.callSpan))
+      : undefined;
     const htmlSegments = memberHtmlSegments.get(m.exprId) ?? [];
     const frameId = exprIdMapGet(inputs.exprToFrame ?? null, m.exprId) ?? undefined;
+    const frameOrigin = frameId !== undefined ? inputs.frameOrigins?.get(frameId) : undefined;
 
     const segments = buildSegmentPairs(
       m.segments ?? [],
@@ -82,7 +99,9 @@ export function buildTemplateMapping(inputs: BuildMappingInputs): BuildMappingRe
       exprId: m.exprId,
       htmlSpan,
       overlaySpan,
+      ...(callSpan ? { callSpan } : {}),
       ...(frameId !== undefined ? { frameId } : {}),
+      ...(frameOrigin !== undefined ? { frameOrigin } : {}),
       segments,
     };
   });
@@ -100,7 +119,9 @@ export function buildTemplateMapping(inputs: BuildMappingInputs): BuildMappingRe
       exprId: entry.exprId,
       htmlSpan: entry.htmlSpan,
       overlaySpan: entry.overlaySpan,
+      ...(entry.callSpan ? { callSpan: entry.callSpan } : {}),
       ...(entry.frameId !== undefined ? { frameId: entry.frameId } : {}),
+      ...(entry.frameOrigin !== undefined ? { frameOrigin: entry.frameOrigin } : {}),
       ...(aggregatedSegments.get(entry.exprId)?.length ? { segments: aggregatedSegments.get(entry.exprId) } : {}),
     }),
   );
@@ -131,6 +152,7 @@ function buildSegmentPairs(
   for (const overlaySeg of overlaySegments) {
     const candidates = htmlByPath.get(overlaySeg.path);
     let htmlSpan: SourceSpan;
+    let degradation: TemplateMappingDegradation | undefined;
 
     if (candidates && candidates.length > 0) {
       // Prefer the first unused HTML segment for this path; fall back to the last one.
@@ -141,6 +163,10 @@ function buildSegmentPairs(
       // No AST-derived HTML span for this path; synthesize one by projecting
       // the overlay slice proportionally into the full expression HTML span.
       htmlSpan = projectOverlayMemberSegmentToHtml(overlaySeg.span, exprOverlaySpan, exprHtmlSpan);
+      degradation = {
+        reason: "missing-html-member-span",
+        projection: "proportional",
+      };
     }
 
     out.push({
@@ -148,6 +174,7 @@ function buildSegmentPairs(
       path: overlaySeg.path,
       htmlSpan,
       overlaySpan: overlayFile ? resolveSourceSpan(overlaySeg.span as SourceSpan, overlayFile) : normalizeSpan(overlaySeg.span),
+      ...(degradation ? { degradation } : {}),
     });
   }
 
@@ -165,6 +192,7 @@ function normalizeMappingEntry(entry: TemplateMappingEntry): TemplateMappingEntr
     path: seg.path,
     htmlSpan: normalizeSpan(seg.htmlSpan),
     overlaySpan: normalizeSpan(seg.overlaySpan),
+    ...(seg.degradation ? { degradation: seg.degradation } : {}),
   }));
   return { ...entry, htmlSpan, overlaySpan, segments };
 }
@@ -299,6 +327,12 @@ function mergeGroupSegments(
     let best = candidates[0]!;
     for (let i = 1; i < candidates.length; i += 1) {
       const current = candidates[i]!;
+      // Prefer exact mappings over degraded projections for the same path.
+      if (!current.degradation && best.degradation) {
+        best = current;
+        continue;
+      }
+      if (!best.degradation && current.degradation) continue;
       // Prefer segments that belong to the current expression.
       if (current.exprId === exprId && best.exprId !== exprId) {
         best = current;
@@ -323,7 +357,13 @@ function mergeGroupSegments(
   for (const [path, segs] of paths.entries()) {
     if (leavesOnly && !isLeaf(path)) continue;
     const chosen = pickBest(segs);
-    results.push({ kind: "member", path, htmlSpan: chosen.htmlSpan, overlaySpan: chosen.overlaySpan });
+    results.push({
+      kind: "member",
+      path,
+      htmlSpan: chosen.htmlSpan,
+      overlaySpan: chosen.overlaySpan,
+      ...(chosen.degradation ? { degradation: chosen.degradation } : {}),
+    });
   }
 
   return results;

@@ -38,7 +38,6 @@ import {
 } from "@aurelia/template-compiler";
 import {
   createInterpolation,
-  CustomExpression,
   type IsBindingBehavior,
   type ForOfStatement,
   type Interpolation,
@@ -66,7 +65,6 @@ import {
   type SerializedLetBinding,
   type NestedTemplateHtmlNode,
   type ExprId,
-  type AnyBindingExpression,
 } from "@aurelia-ls/compiler";
 
 /* =============================================================================
@@ -75,7 +73,7 @@ import {
 
 export interface TranslationContext {
   /** Map of expression IDs to ASTs */
-  exprMap: Map<ExprId, AnyBindingExpression>;
+  exprMap: Map<ExprId, SerializedExpression["ast"]>;
   /** Nested template definitions (translated) */
   nestedDefs: NestedDefinition[];
 }
@@ -112,7 +110,7 @@ export function translateInstructions(
   nestedDefs: NestedDefinition[];
 } {
   // Build expression lookup map
-  const exprMap = new Map<ExprId, AnyBindingExpression>();
+  const exprMap = new Map<ExprId, SerializedExpression["ast"]>();
   for (const expr of expressions) {
     exprMap.set(expr.id, expr.ast);
   }
@@ -533,9 +531,9 @@ function translateTranslationBinding(
  * ============================================================================= */
 
 function getExpr(
-  exprMap: Map<ExprId, AnyBindingExpression>,
+  exprMap: Map<ExprId, SerializedExpression["ast"]>,
   id: ExprId,
-): AnyBindingExpression {
+): SerializedExpression["ast"] {
   const expr = exprMap.get(id);
   if (!expr) {
     throw new Error(`Expression not found: ${id}`);

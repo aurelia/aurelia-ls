@@ -177,7 +177,7 @@
         { "kind": "text", "content": "A" }
       ],
       "controllers": [
-        { "kind": "repeat", "frameId": 1, "hasTarget": true, "locals": [ "item" ], "contextuals": [ "$index", "$first", "$last", "$even", "$odd", "$length", "$middle" ] },
+        { "kind": "repeat", "frameId": 1, "hasTarget": true, "locals": [ "item" ], "contextuals": [ "$index", "$first", "$last", "$even", "$odd", "$length", "$middle", "$previous" ] },
         { "kind": "switch", "frameId": 1, "hasTarget": true, "caseCount": 1, "hasDefault": false },
         { "kind": "case", "frameId": 1, "hasTarget": false }
       ],
@@ -188,7 +188,7 @@
       ],
       "scopes": [
         { "frameId": 0, "parentFrameId": null, "kind": "root", "locals": [], "overrideContext": [] },
-        { "frameId": 1, "parentFrameId": 0, "kind": "repeat", "locals": [ "iterator:item" ], "overrideContext": [ "$index", "$first", "$last", "$even", "$odd", "$length", "$middle" ] }
+        { "frameId": 1, "parentFrameId": 0, "kind": "repeat", "locals": [ "iterator:item" ], "overrideContext": [ "$index", "$first", "$last", "$even", "$odd", "$length", "$middle", "$previous" ] }
       ]
     }
   }

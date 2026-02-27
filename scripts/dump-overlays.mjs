@@ -20,21 +20,23 @@ const programMod = await import(pathToFileURL(path.resolve(
   "packages/compiler/out/program/index.js"
 )).href);
 
-const { DEFAULT_SYNTAX, getExpressionParser } = compilerMod;
+const { BUILTIN_SEMANTICS, DEFAULT_SYNTAX, getExpressionParser } = compilerMod;
 const {
   DefaultTemplateProgram,
   DefaultTemplateBuildService,
   canonicalDocumentUri,
 } = programMod;
 
+const vmType = process.env.AURELIA_OVERLAY_VM ?? "any";
 const VM = {
-  getRootVmTypeExpr: () => "any",
+  getRootVmTypeExpr: () => vmType,
   getSyntheticPrefix: () => "__AU_TTC_",
 };
 
 const program = new DefaultTemplateProgram({
   vm: VM,
   isJs: false,
+  semantics: BUILTIN_SEMANTICS,
   attrParser: DEFAULT_SYNTAX,
   exprParser: getExpressionParser(),
 });

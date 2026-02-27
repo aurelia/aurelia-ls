@@ -3,7 +3,7 @@
  */
 import {
   TextDocumentSyncKind,
-  SemanticTokensRegistrationType,
+  FileChangeType,
   type InitializeParams,
   type InitializeResult,
   type DidChangeWatchedFilesParams,
@@ -12,19 +12,26 @@ import {
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import { URI } from "vscode-uri";
 import path from "node:path";
-import { canonicalDocumentUri, deriveTemplatePaths } from "@aurelia-ls/compiler";
-import { DiagnosticSeverity } from "vscode-languageserver/node.js";
-import { AureliaProjectIndex } from "../services/project-index.js";
-import { TemplateWorkspace } from "../services/template-workspace.js";
+import { canonicalDocumentUri } from "@aurelia-ls/compiler";
+import { createSemanticWorkspace } from "@aurelia-ls/semantic-workspace";
 import type { ServerContext } from "../context.js";
-import { mapDiagnostics, type LookupTextFn } from "../mapping/lsp-types.js";
-import { SEMANTIC_TOKENS_LEGEND, validateTemplateImports } from "./features.js";
+import { mapWorkspaceDiagnostics, type LookupTextFn } from "../mapping/lsp-types.js";
+import { SEMANTIC_TOKENS_LEGEND } from "./semantic-tokens.js";
 
 /** Debounce delay for document changes (ms). Waits for typing to pause before processing. */
 const DOCUMENT_CHANGE_DEBOUNCE_MS = 300;
 
 /** Tracks pending debounced refresh operations per document URI */
 const pendingRefreshes = new Map<string, ReturnType<typeof setTimeout>>();
+
+function hasSourceFileStructuralChange(changes: readonly FileEvent[]): boolean {
+  for (const change of changes) {
+    if (change.type !== FileChangeType.Created && change.type !== FileChangeType.Deleted) continue;
+    const fsPath = URI.parse(change.uri).fsPath;
+    if (fsPath.endsWith(".ts") || fsPath.endsWith(".js")) return true;
+  }
+  return false;
+}
 
 function shouldReloadForFileChange(changes: readonly FileEvent[]): boolean {
   for (const change of changes) {
@@ -38,22 +45,10 @@ function shouldReloadForFileChange(changes: readonly FileEvent[]): boolean {
 }
 
 async function reloadProjectConfiguration(ctx: ServerContext, reason: string): Promise<void> {
-  if (!ctx.projectIndex || !ctx.workspace) return;
-  const beforeVersion = ctx.tsService.getProjectVersion();
-
-  ctx.tsService.configure({ workspaceRoot: ctx.workspaceRoot });
-  ctx.syncWorkspaceWithIndex({ force: true });  // Force sync on config reload
-
-  const versionChanged = ctx.tsService.getProjectVersion() !== beforeVersion;
-  const label = `${reason}; version=${ctx.tsService.getProjectVersion()} fingerprint=${ctx.workspace.fingerprint}`;
-
-  if (versionChanged) {
-    ctx.logger.info(`[workspace] tsconfig reload (${label})`);
-  } else {
-    ctx.logger.info(`[workspace] tsconfig reload (${label}) [no host change]`);
-  }
-
-  await refreshAllOpenDocuments(ctx, "change", { skipSync: true });
+  if (!ctx.workspace) return;
+  ctx.workspace.configureProject({ workspaceRoot: ctx.workspaceRoot });
+  ctx.logger.info(`[workspace] tsconfig reload (${reason}; fingerprint=${ctx.workspace.snapshot().meta.fingerprint})`);
+  await refreshAllOpenDocuments(ctx, "change");
 }
 
 async function refreshAllOpenDocuments(
@@ -71,106 +66,99 @@ export async function refreshDocument(
   ctx: ServerContext,
   doc: TextDocument,
   reason: "open" | "change",
-  options?: { skipSync?: boolean }
+  _options?: { skipSync?: boolean }
 ): Promise<void> {
   try {
-    if (!options?.skipSync) {
-      ctx.syncWorkspaceWithIndex();
-    }
     const canonical = canonicalDocumentUri(doc.uri);
     if (reason === "open") {
-      ctx.workspace.open(doc);
+      ctx.workspace.open(canonical.uri, doc.getText(), doc.version);
     } else {
-      ctx.workspace.change(doc);
+      ctx.workspace.update(canonical.uri, doc.getText(), doc.version);
     }
-    const overlay = ctx.materializeOverlay(canonical.uri);
 
     const lookupText: LookupTextFn = (uri) => ctx.lookupText(uri);
 
-    const diagnostics = ctx.workspace.languageService.getDiagnostics(canonical.uri);
-    const lspDiagnostics = mapDiagnostics(diagnostics, lookupText);
+    const diagnostics = ctx.workspace.diagnostics(canonical.uri);
+    const lspDiagnostics = mapWorkspaceDiagnostics(canonical.uri, diagnostics, lookupText);
+    await ctx.connection.sendDiagnostics({ uri: doc.uri, diagnostics: lspDiagnostics });
 
-    // Add template import diagnostics
-    const templateImportDiags = validateTemplateImports(ctx, doc, canonical.path);
-    const importDiagsLsp = templateImportDiags.map((diag) => ({
-      range: diag.range,
-      message: diag.message,
-      severity: diag.severity === "error" ? DiagnosticSeverity.Error : DiagnosticSeverity.Warning,
-      code: diag.code,
-      source: "aurelia",
-    }));
+    let overlay: ReturnType<ServerContext["workspace"]["getOverlay"]> | null = null;
+    let compilation: ReturnType<ServerContext["workspace"]["getCompilation"]> | null = null;
+    try {
+      overlay = ctx.workspace.getOverlay(canonical.uri);
+      compilation = ctx.workspace.getCompilation(canonical.uri);
+    } catch {}
 
-    await ctx.connection.sendDiagnostics({ uri: doc.uri, diagnostics: [...lspDiagnostics, ...importDiagsLsp] });
-
-    const compilation = ctx.workspace.program.getCompilation(canonical.uri);
     await ctx.connection.sendNotification("aurelia/overlayReady", {
       uri: doc.uri,
       overlayPath: overlay?.overlay.path,
       calls: overlay?.calls.length ?? 0,
       overlayLen: overlay?.overlay.text.length ?? 0,
       diags: lspDiagnostics.length,
-      meta: compilation.meta,
+      meta: compilation?.meta,
     });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.stack ?? e.message : String(e);
     ctx.logger.error(`refreshDocument failed: ${message}`);
-    await ctx.connection.sendDiagnostics({ uri: doc.uri, diagnostics: [] });
   }
-}
-
-function createWorkspaceFromIndex(ctx: ServerContext): TemplateWorkspace {
-  const semantics = ctx.projectIndex.currentSemantics();
-  const catalog = ctx.projectIndex.currentCatalog();
-  const syntax = ctx.projectIndex.currentSyntax();
-  const resourceGraph = ctx.projectIndex.currentResourceGraph();
-  const options: {
-    vm: typeof ctx.vmReflection;
-    isJs: boolean;
-    semantics: typeof semantics;
-    catalog: typeof catalog;
-    syntax: typeof syntax;
-    resourceGraph: typeof resourceGraph;
-    resourceScope?: typeof resourceGraph.root | null;
-  } = {
-    vm: ctx.vmReflection,
-    isJs: false,
-    semantics,
-    catalog,
-    syntax,
-    resourceGraph,
-  };
-  const resourceScope = semantics.defaultScope ?? resourceGraph.root ?? null;
-  if (resourceScope !== null) options.resourceScope = resourceScope;
-
-  return new TemplateWorkspace({
-    program: options,
-    language: { typescript: ctx.tsAdapter },
-    fingerprint: ctx.projectIndex.currentFingerprint(),
-  });
 }
 
 export function handleInitialize(ctx: ServerContext, params: InitializeParams): InitializeResult {
   ctx.workspaceRoot = params.rootUri ? URI.parse(params.rootUri).fsPath : null;
-  ctx.logger.info(`initialize: root=${ctx.workspaceRoot ?? "<cwd>"} caseSensitive=${ctx.paths.isCaseSensitive()}`);
-  ctx.tsService.configure({ workspaceRoot: ctx.workspaceRoot });
-  ctx.ensurePrelude();
-  ctx.projectIndex = new AureliaProjectIndex({ ts: ctx.tsService, logger: ctx.logger });
-  ctx.projectIndex.refresh();
-  ctx.workspace = createWorkspaceFromIndex(ctx);
+  ctx.logger.info(`initialize: root=${ctx.workspaceRoot ?? "<cwd>"}`);
+  const stripSourcedNodes = process.env["AURELIA_RESOLUTION_STRIP_SOURCED_NODES"] === "1";
+  ctx.workspace = createSemanticWorkspace({
+    logger: ctx.logger,
+    workspaceRoot: ctx.workspaceRoot,
+    discovery: {
+      stripSourcedNodes,
+    },
+  });
+
+  // Subscribe to workspace-level semantic changes (third-party scan,
+  // TS project version bump, config reload). Forward as LSP notifications
+  // so VS Code features can react to knowledge changes.
+  ctx.workspace.onDidChangeSemantics((event) => {
+    ctx.logger.info(`[workspace] semantics changed: domains=[${event.domains.join(",")}] fingerprint=${event.fingerprint}`);
+    void ctx.connection.sendNotification("aurelia/workspaceChanged", {
+      fingerprint: event.fingerprint,
+      domains: event.domains,
+    });
+    // Use standard LSP refresh for cross-file effects on standard features
+    if (event.domains.includes("diagnostics") || event.domains.includes("types")) {
+      void ctx.connection.sendRequest("workspace/diagnostics/refresh").catch(() => {});
+    }
+    if (event.domains.includes("resources") || event.domains.includes("scopes")) {
+      void ctx.connection.sendRequest("workspace/semanticTokens/refresh").catch(() => {});
+    }
+    // Refresh open documents so they pick up the changed semantics
+    void refreshAllOpenDocuments(ctx, "change");
+  });
+
+  // Fire-and-forget: async npm analysis discovers third-party Aurelia packages.
+  void ctx.workspace.initThirdParty().then(() => {
+    ctx.logger.info("[workspace] Third-party init complete");
+  });
+
   return {
     capabilities: {
       textDocumentSync: TextDocumentSyncKind.Incremental,
       completionProvider: { triggerCharacters: ["<", " ", ".", ":", "@", "$", "{"] },
       hoverProvider: true,
-      definitionProvider: true,
+      definitionProvider: { workDoneProgress: false },
       referencesProvider: true,
-      renameProvider: true,
+      renameProvider: { prepareProvider: true },
       codeActionProvider: true,
+      inlayHintProvider: true,
       semanticTokensProvider: {
         legend: SEMANTIC_TOKENS_LEGEND,
         full: true,
-        // delta: true,  // TODO: Enable incremental updates for performance
       },
+      // Post-PR-19 feature stubs — uncomment when workspace adds support:
+      // documentSymbolProvider: true,
+      // codeLensProvider: { resolveProvider: false },
+      // inlayHintProvider: { resolveProvider: false },
+      // codeActionProvider: { resolveProvider: true },
     },
   };
 }
@@ -193,9 +181,19 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
 
   ctx.connection.onDidChangeWatchedFiles((e: DidChangeWatchedFilesParams) => {
     if (!e.changes?.length) return;
-    if (!shouldReloadForFileChange(e.changes)) return;
-    ctx.logger.log("didChangeWatchedFiles: tsconfig/jsconfig changed, reloading project");
-    void reloadProjectConfiguration(ctx, "watched files");
+
+    if (shouldReloadForFileChange(e.changes)) {
+      ctx.logger.log("didChangeWatchedFiles: tsconfig/jsconfig changed, reloading project");
+      void reloadProjectConfiguration(ctx, "watched files");
+      return;
+    }
+
+    // TS/JS file created or deleted — full reload to pick up new root files
+    // and clear incremental discovery cache.
+    if (hasSourceFileStructuralChange(e.changes)) {
+      ctx.logger.log("didChangeWatchedFiles: source file created/deleted, reloading project");
+      ctx.workspace.reloadProject();
+    }
   });
 
   ctx.documents.onDidChangeContent((e) => {
@@ -231,8 +229,6 @@ export function registerLifecycleHandlers(ctx: ServerContext): void {
 
     const canonical = canonicalDocumentUri(e.document.uri);
     ctx.workspace.close(canonical.uri);
-    const derived = deriveTemplatePaths(canonical.uri, ctx.overlayPathOptions());
-    ctx.tsService.deleteOverlay(derived.overlay.path);
     void ctx.connection.sendDiagnostics({ uri: e.document.uri, diagnostics: [] });
   });
 }

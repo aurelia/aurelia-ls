@@ -34,7 +34,7 @@
     }
   },
   {
-    "name": "LET-03 duplicate <let> in same frame → AU1202",
+    "name": "LET-03 duplicate <let> in same frame → aurelia/invalid-binding-pattern",
     "markup": "<template><let a.bind=\"x\"></let><let a.bind=\"y\"></let></template>",
     "expect": {
       "frames": [
@@ -48,7 +48,7 @@
         { "kind": "expr", "code": "y", "frame": "root" }
       ],
       "diags": [
-        { "code": "AU1202" }
+        { "code": "aurelia/invalid-binding-pattern" }
       ]
     }
   },
@@ -89,6 +89,7 @@
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$previous" },
         { "frame": "overlay:iterator@1", "kind": "let", "name": "a" }
       ],
       "exprs": [
@@ -116,7 +117,7 @@
     }
   },
   {
-    "name": "LET-07 if reuses scope: duplicate <let> in if does NOT trigger AU1202 (no locals declared)",
+    "name": "LET-07 if reuses scope: duplicate <let> in if does NOT trigger aurelia/invalid-binding-pattern (no locals declared)",
     "markup": "<template><div if.bind=\"cond\"><let a.bind=\"x\"></let><let a.bind=\"y\"></let></div></template>",
     "expect": {
       "frames": [
@@ -166,6 +167,7 @@
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$previous" },
         { "frame": "overlay:iterator@1", "kind": "let", "name": "a" }
       ],
       "exprs": [
@@ -193,6 +195,7 @@
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$previous" },
         { "frame": "overlay:iterator@1", "kind": "let", "name": "a" }
       ],
       "exprs": [
@@ -220,7 +223,8 @@
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$even" },
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$odd" },
         { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$length" },
-        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" }
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$middle" },
+        { "frame": "overlay:iterator@1", "kind": "contextual", "name": "$previous" }
       ],
       "exprs": [
         { "kind": "forOfHeader", "frame": "root" },

@@ -1,21 +1,19 @@
 import { describe, test, expect } from "vitest";
 
-import {
-  lowerDocument,
-  resolveHost,
-  bindScopes,
-  planAot,
-  emitAotCode,
-  emitTemplate,
-  collectNestedTemplateHtmlTree,
-  getExpressionParser,
-  DEFAULT_SYNTAX,
-  DEFAULT_SEMANTICS,
-  INSTRUCTION_TYPE,
-  type SerializedDefinition,
-  type SerializedHydrateTemplateController,
-  type NestedTemplateHtmlNode,
-} from "@aurelia-ls/compiler";
+import { lowerDocument } from "../../../out/analysis/10-lower/lower.js";
+import { linkTemplateSemantics } from "../../../out/analysis/20-link/resolve.js";
+import { buildSemanticsSnapshot } from "../../../out/schema/snapshot.js";
+import { bindScopes } from "../../../out/analysis/30-bind/bind.js";
+import { planAot } from "../../../out/synthesis/aot/plan.js";
+import { emitAotCode } from "../../../out/synthesis/aot/emit.js";
+import { emitTemplate, collectNestedTemplateHtmlTree, type NestedTemplateHtmlNode } from "../../../out/synthesis/aot/emit-template.js";
+import { getExpressionParser } from "../../../out/parsing/expression-parser.js";
+import { DEFAULT_SYNTAX } from "../../../out/parsing/attribute-parser.js";
+import { BUILTIN_SEMANTICS } from "../../../out/schema/registry.js";
+import { DiagnosticsRuntime } from "../../../out/diagnostics/runtime.js";
+import { INSTRUCTION_TYPE } from "../../../out/synthesis/aot/constants.js";
+import type { SerializedDefinition, SerializedHydrateTemplateController } from "../../../out/synthesis/aot/types.js";
+import { noopModuleResolver } from "../../_helpers/test-utils.js";
 
 type DefinitionTree = {
   definition: SerializedDefinition;
@@ -57,15 +55,21 @@ describe("AOT Emit Invariants", () => {
 
 function compileDefinitionTree(markup: string): DefinitionTree {
   const exprParser = getExpressionParser();
+  const diagnostics = new DiagnosticsRuntime();
   const ir = lowerDocument(markup, {
     attrParser: DEFAULT_SYNTAX,
     exprParser,
     file: "test.html",
     name: "test",
-    catalog: DEFAULT_SEMANTICS.catalog,
+    catalog: BUILTIN_SEMANTICS.catalog,
+    diagnostics: diagnostics.forSource("lower"),
   });
-  const linked = resolveHost(ir, DEFAULT_SEMANTICS);
-  const scope = bindScopes(linked);
+  const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(BUILTIN_SEMANTICS), {
+    moduleResolver: noopModuleResolver,
+    templateFilePath: "test.html",
+    diagnostics: diagnostics.forSource("link"),
+  });
+  const scope = bindScopes(linked, { diagnostics: diagnostics.forSource("bind") });
   const plan = planAot(linked, scope, { templateFilePath: "test.html" });
   const code = emitAotCode(plan, { name: "test" });
   const template = emitTemplate(plan);
@@ -131,3 +135,5 @@ function collectControllers(definition: SerializedDefinition): SerializedHydrate
   }
   return controllers;
 }
+
+

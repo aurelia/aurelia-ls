@@ -1,196 +1,78 @@
-// Compiler facade
+// Template Program — L2 Architecture
+//
+// Owns document lifecycle and compilation caching for a set of templates.
+// Invalidation is driven by the dependency graph at the model level.
+// The program is a thin wrapper over compileTemplate (facade.ts) with
+// per-document content-hash caching. No fingerprint-based invalidation,
+// no per-stage caching, no dependency index — the dep graph handles all of that.
+
 import {
   compileTemplate,
   type CompileOverlayResult,
   type TemplateCompilation,
   type TemplateDiagnostics,
-  type StageMetaSnapshot,
 } from "../facade.js";
 
-// Model imports (via barrel)
-import type { NormalizedPath } from "../model/index.js";
-
-// Language imports (via barrel)
-import {
-  prepareSemantics,
-  type ResourceCatalog,
-  type ResourceGraph,
-  type ResourceScopeId,
-  type Semantics,
-  type TemplateSyntaxRegistry,
-} from "../language/index.js";
-
-// Parsing imports (via barrel)
+import type { IrModule } from "../model/index.js";
+import type { TemplateContext } from "../schema/index.js";
+import type { DepNodeId } from "../schema/dependency-graph.js";
+import type { SemanticModelQuery } from "../schema/model.js";
 import type { AttributeParser, IExpressionParser } from "../parsing/index.js";
-
-// Shared imports (via barrel)
-import type { VmReflection } from "../shared/index.js";
-
-// Pipeline imports (via barrel)
-import type { CacheOptions, FingerprintHints, FingerprintToken, StageOutputs, StageKey } from "../pipeline/index.js";
-import { stableHash, stableHashSemantics } from "../pipeline/index.js";
-
-// Synthesis imports (via barrel)
+import { NOOP_TRACE, type VmReflection, type ModuleResolver, type CompileTrace } from "../shared/index.js";
+import { stableHash } from "../pipeline/index.js";
 import type { TemplateMappingArtifact, TemplateQueryFacade } from "../synthesis/index.js";
 
-// Program layer imports
-import type { DocumentSnapshot, DocumentUri } from "./primitives.js";
+import type { DocumentUri } from "./primitives.js";
 import { InMemorySourceStore, type SourceStore } from "./sources.js";
-import { InMemoryProvenanceIndex, type ProvenanceIndex } from "./provenance.js";
-import { canonicalDocumentUri, deriveTemplatePaths, normalizeDocumentUri, type CanonicalDocumentUri } from "./paths.js";
+import { InMemoryOverlaySpanIndex, type OverlaySpanIndex } from "./overlay-span-index.js";
+import { canonicalDocumentUri, deriveTemplatePaths, normalizeDocumentUri } from "./paths.js";
+
+// ============================================================================
+// Options
+// ============================================================================
+
+export type TemplateContextResolver = (uri: DocumentUri) => TemplateContext | null | undefined;
 
 export interface TemplateProgramOptions {
   readonly vm: VmReflection;
   readonly isJs: boolean;
-  readonly semantics: Semantics;
-  readonly catalog?: ResourceCatalog;
-  readonly syntax?: TemplateSyntaxRegistry;
-  readonly resourceGraph?: ResourceGraph;
-  readonly resourceScope?: ResourceScopeId | null;
+  /** Semantic authority — the query IS the model. */
+  readonly query: SemanticModelQuery;
+  /** Per-template scope/local-import resolver. */
+  readonly templateContext?: TemplateContextResolver;
+  readonly moduleResolver: ModuleResolver;
   readonly attrParser?: AttributeParser;
   readonly exprParser?: IExpressionParser;
-  readonly cache?: CacheOptions;
-  readonly fingerprints?: FingerprintHints;
   readonly overlayBaseName?: string;
   readonly sourceStore?: SourceStore;
-  readonly provenance?: ProvenanceIndex;
-  readonly telemetry?: TemplateProgramTelemetry;
+  readonly provenance?: OverlaySpanIndex;
+  /** Trace for per-compilation instrumentation. */
+  readonly trace?: CompileTrace;
 }
 
-type ProgramOptions = Omit<TemplateProgramOptions, "sourceStore" | "provenance" | "telemetry">;
-type ResolvedProgramOptions = ProgramOptions & { readonly fingerprints: FingerprintHints };
+// ============================================================================
+// Update Result
+// ============================================================================
 
-interface CachedCompilation {
-  readonly compilation: TemplateCompilation;
-  readonly version: number;
-  readonly contentHash: string;
-  readonly optionsFingerprint: string;
+export interface TemplateProgramUpdateResult {
+  readonly changed: boolean;
+  /** How invalidation was determined: "dependency" for selective, "full" for brute-force. */
+  readonly mode?: "dependency" | "full";
+  readonly invalidated: readonly DocumentUri[];
+  readonly retained: readonly DocumentUri[];
 }
 
-interface CoreStageCacheEntry {
-  readonly stages: Pick<StageOutputs, "10-lower" | "20-resolve" | "30-bind" | "40-typecheck">;
-  readonly version: number;
-  readonly contentHash: string;
-  readonly optionsFingerprint: string;
-}
+// ============================================================================
+// Template Program Interface
+// ============================================================================
 
-const STAGE_ORDER: readonly StageKey[] = [
-  "10-lower",
-  "20-resolve",
-  "30-bind",
-  "40-typecheck",
-  "50-usage",
-  "overlay:plan",
-  "overlay:emit",
-] as const;
-
-const CORE_STAGE_KEYS: readonly StageKey[] = ["10-lower", "20-resolve", "30-bind", "40-typecheck"];
-
-interface CacheAccessEntry {
-  readonly programCacheHit: boolean;
-  readonly stageMeta: StageMetaSnapshot;
-  readonly version: number;
-  readonly contentHash: string;
-}
-
-interface CacheAccessRecord {
-  overlay?: CacheAccessEntry;
-}
-
-export interface StageReuseSummary {
-  readonly seeded: readonly StageKey[];
-  readonly fromCache: readonly StageKey[];
-  readonly computed: readonly StageKey[];
-  readonly meta: StageMetaSnapshot;
-}
-
-export interface TemplateProgramCacheEntryStats {
-  readonly version: number;
-  readonly contentHash: string;
-  readonly optionsFingerprint: string;
-  readonly programCacheHit: boolean;
-  readonly stageReuse: StageReuseSummary | null;
-}
-
-export interface TemplateProgramCoreCacheEntryStats extends TemplateProgramCacheEntryStats {
-  readonly stages: readonly StageKey[];
-}
-
-export interface TemplateProgramProvenanceStats {
-  readonly totalEdges: number;
-  readonly overlayEdges: number;
-  readonly runtimeEdges: number;
-  readonly overlayUri: DocumentUri | null;
-  readonly runtimeUri: DocumentUri | null;
-}
-
-export interface TemplateProgramDocumentStats {
-  readonly uri: DocumentUri;
-  readonly version: number | null;
-  readonly contentHash: string | null;
-  readonly compilation?: TemplateProgramCacheEntryStats;
-  readonly core?: TemplateProgramCoreCacheEntryStats;
-  readonly provenance: TemplateProgramProvenanceStats;
-}
-
-export interface TemplateProgramCacheStats {
-  readonly optionsFingerprint: string;
-  readonly totals: {
-    readonly sources: number;
-    readonly compilation: number;
-    readonly core: number;
-    readonly provenanceEdges: number;
-  };
-  readonly documents: readonly TemplateProgramDocumentStats[];
-}
-
-export interface TemplateProgramCacheAccessEvent {
-  readonly kind: "overlay";
-  readonly uri: DocumentUri;
-  readonly version: number;
-  readonly contentHash: string;
-  readonly optionsFingerprint: string;
-  readonly programCacheHit: boolean;
-  readonly stageReuse: StageReuseSummary;
-}
-
-export interface TemplateProgramMaterializationEvent {
-  readonly kind: "overlay";
-  readonly uri: DocumentUri;
-  readonly durationMs: number;
-  readonly programCacheHit: boolean;
-  readonly stageReuse: StageReuseSummary;
-}
-
-export interface TemplateProgramProvenanceEvent {
-  readonly templateUri: DocumentUri;
-  readonly overlayUri: DocumentUri | null;
-  readonly runtimeUri: DocumentUri | null;
-  readonly overlayEdges: number;
-  readonly runtimeEdges: number;
-  readonly totalEdges: number;
-}
-
-export interface TemplateProgramTelemetry {
-  readonly onCacheAccess?: (event: TemplateProgramCacheAccessEvent) => void;
-  readonly onMaterialization?: (event: TemplateProgramMaterializationEvent) => void;
-  readonly onProvenance?: (event: TemplateProgramProvenanceEvent) => void;
-}
-
-/**
- * High-level facade over the Aurelia template pipeline.
- * Owns documents, compilation cache, provenance ingestion, and product helpers.
- *
- * Construction options are assumed stable for the lifetime of the program.
- * Hosts should compare `optionsFingerprint` to detect option drift and recreate
- * a program instead of mutating it in place.
- */
 export interface TemplateProgram {
-  readonly options: ResolvedProgramOptions;
-  readonly optionsFingerprint: string;
+  readonly query: SemanticModelQuery;
   readonly sources: SourceStore;
-  readonly provenance: ProvenanceIndex;
-  readonly telemetry: TemplateProgramTelemetry | undefined;
+  readonly provenance: OverlaySpanIndex;
+  readonly options: TemplateProgramOptions;
+  /** Model fingerprint — changes when semantics change. */
+  readonly optionsFingerprint: string;
 
   upsertTemplate(uri: DocumentUri, text: string, version?: number): void;
   invalidateTemplate(uri: DocumentUri): void;
@@ -203,127 +85,175 @@ export interface TemplateProgram {
   getQuery(uri: DocumentUri): TemplateQueryFacade;
   getMapping(uri: DocumentUri): TemplateMappingArtifact | null;
   getCompilation(uri: DocumentUri): TemplateCompilation;
-  getCacheStats(target?: DocumentUri): TemplateProgramCacheStats;
+  updateOptions(options: TemplateProgramOptions): TemplateProgramUpdateResult;
+  getCacheStats(uri?: DocumentUri): CacheStats;
 }
 
-export class DefaultTemplateProgram implements TemplateProgram {
-  readonly options: ResolvedProgramOptions;
-  readonly optionsFingerprint: string;
-  readonly sources: SourceStore;
-  readonly provenance: ProvenanceIndex;
-  readonly telemetry: TemplateProgramTelemetry | undefined;
+// ============================================================================
+// Cache Stats
+// ============================================================================
 
-  private readonly fingerprintHints: FingerprintHints;
-  private readonly compilationCache = new Map<DocumentUri, CachedCompilation>();
-  private readonly coreCache = new Map<DocumentUri, CoreStageCacheEntry>();
-  private readonly accessTrace = new Map<DocumentUri, CacheAccessRecord>();
+export interface CacheStatsDocument {
+  readonly version: number;
+  readonly compilation?: {
+    readonly programCacheHit: boolean;
+    readonly stageReuse?: { readonly seeded: readonly string[]; readonly computed: readonly string[] };
+  };
+  readonly core?: unknown;
+  readonly provenance: {
+    readonly totalEdges: number;
+    readonly overlayEdges?: number;
+  };
+}
+
+export interface CacheStats {
+  readonly documents: readonly CacheStatsDocument[];
+  readonly totals: {
+    readonly sources: number;
+    readonly compilation: number;
+    /** Core pipeline cache count (currently mirrors compilation). */
+    readonly core: number;
+    readonly provenanceEdges: number;
+  };
+}
+
+// ============================================================================
+// Cached Compilation
+// ============================================================================
+
+interface CachedCompilation {
+  readonly compilation: TemplateCompilation;
+  readonly contentHash: string;
+  readonly programCacheHit: boolean;
+  readonly stageReuse: { readonly seeded: readonly string[]; readonly computed: readonly string[] };
+}
+
+interface CachedLowerResult {
+  readonly ir: IrModule;
+  readonly contentHash: string;
+  readonly vocabFingerprint: string;
+}
+
+// ============================================================================
+// Default Implementation
+// ============================================================================
+
+export class DefaultTemplateProgram implements TemplateProgram {
+  query: SemanticModelQuery;
+  options: TemplateProgramOptions;
+  optionsFingerprint: string;
+  readonly sources: SourceStore;
+  readonly provenance: OverlaySpanIndex;
+
+  #modelFingerprint: string;
+  #vocabFingerprint: string;
+  readonly #compilationCache = new Map<DocumentUri, CachedCompilation>();
+  readonly #lowerCache = new Map<DocumentUri, CachedLowerResult>();
 
   constructor(options: TemplateProgramOptions) {
-    const { sourceStore, provenance, telemetry, ...rest } = options;
-    this.fingerprintHints = normalizeFingerprintHints(rest);
-    this.options = { ...rest, fingerprints: this.fingerprintHints };
-    this.optionsFingerprint = computeProgramOptionsFingerprint(rest, this.fingerprintHints);
-    this.sources = sourceStore ?? new InMemorySourceStore();
-    this.provenance = provenance ?? new InMemoryProvenanceIndex();
-    this.telemetry = telemetry;
+    this.options = options;
+    this.query = options.query;
+    this.#modelFingerprint = options.query.model.fingerprint;
+    this.#vocabFingerprint = stableHash(options.query.model.syntax);
+    this.optionsFingerprint = this.#modelFingerprint;
+    this.sources = options.sourceStore ?? new InMemorySourceStore();
+    this.provenance = options.provenance ?? new InMemoryOverlaySpanIndex();
   }
 
   upsertTemplate(uri: DocumentUri, text: string, version?: number): void {
-    const canonical = this.canonicalUri(uri);
-    this.resetDocumentState(canonical, false);
+    const canonical = canonicalDocumentUri(uri);
+    const prev = this.sources.get(canonical.uri);
+    if (prev) {
+      if (version !== undefined && version < prev.version) return;
+      const unchangedVersion = version === undefined || version === prev.version;
+      if (unchangedVersion && prev.text === text) return;
+    }
+    this.#compilationCache.delete(canonical.uri);
     this.sources.set(canonical.uri, text, version);
   }
 
   invalidateTemplate(uri: DocumentUri): void {
-    const canonical = this.canonicalUri(uri);
-    this.resetDocumentState(canonical, false);
+    const canonical = canonicalDocumentUri(uri);
+    this.#compilationCache.delete(canonical.uri);
+    this.provenance.removeDocument(canonical.uri);
   }
 
   invalidateAll(): void {
-    for (const uri of this.collectKnownUris()) {
-      this.resetDocumentState(this.canonicalUri(uri), false);
+    for (const uri of this.#compilationCache.keys()) {
+      this.provenance.removeDocument(uri);
     }
+    this.#compilationCache.clear();
   }
 
   closeTemplate(uri: DocumentUri): void {
-    const canonical = this.canonicalUri(uri);
-    this.resetDocumentState(canonical, true);
-  }
-
-  private snapshot(uri: DocumentUri): DocumentSnapshot {
-    const canonical = this.canonicalUri(uri);
-    const snap = this.sources.get(canonical.uri);
-    if (!snap) {
-      throw new Error(`TemplateProgram: no snapshot for document ${String(canonical.uri)}. Call upsertTemplate(...) first.`);
-    }
-    return snap;
+    const canonical = canonicalDocumentUri(uri);
+    this.#compilationCache.delete(canonical.uri);
+    this.#lowerCache.delete(canonical.uri);
+    this.provenance.removeDocument(canonical.uri);
+    this.sources.delete(canonical.uri);
   }
 
   getCompilation(uri: DocumentUri): TemplateCompilation {
-    const canonical = this.canonicalUri(uri);
-    const snap = this.snapshot(canonical.uri);
-    const startedAt = nowMs();
-    const contentHash = hashSnapshotContent(snap);
-    const cached = this.compilationCache.get(canonical.uri);
-    if (cached && cached.optionsFingerprint === this.optionsFingerprint && cached.contentHash === contentHash) {
-      if (cached.version !== snap.version) {
-        this.compilationCache.set(canonical.uri, { ...cached, version: snap.version });
-      }
-      this.recordAccess(canonical.uri, "overlay", {
-        programCacheHit: true,
-        stageMeta: cached.compilation.meta,
-        version: snap.version,
-        contentHash,
-      });
-      const stageReuse = summarizeStageMeta(cached.compilation.meta);
-      const durationMs = elapsedMs(startedAt);
-      this.emitCacheAccess("overlay", canonical.uri, snap.version, contentHash, stageReuse, true);
-      this.emitMaterialization("overlay", canonical.uri, durationMs, stageReuse, true);
+    const canonical = canonicalDocumentUri(uri);
+    const snap = this.sources.get(canonical.uri);
+    if (!snap) {
+      throw new Error(`TemplateProgram: no document for ${String(canonical.uri)}. Call upsertTemplate first.`);
+    }
+
+    const contentHash = stableHash(snap.text);
+    const cached = this.#compilationCache.get(canonical.uri);
+    if (cached && cached.contentHash === contentHash) {
+      // Mark as cache hit for stats
+      this.#compilationCache.set(canonical.uri, { ...cached, programCacheHit: true });
       return cached.compilation;
     }
 
-    // NOTE: program-level cache is guarded by content hash + options fingerprint.
+    // Check per-stage lower cache: reuse IR if content + vocabulary unchanged
+    const cachedLower = this.#lowerCache.get(canonical.uri);
+    const canReuseLower = cachedLower
+      && cachedLower.contentHash === contentHash
+      && cachedLower.vocabFingerprint === this.#vocabFingerprint;
+    const seededIr = canReuseLower ? cachedLower.ir : undefined;
+
+    // Compile (skip lower stage when seeded IR available)
     const templatePaths = deriveTemplatePaths(
       canonical.uri,
-      withOverlayBase(this.options.isJs, this.options.overlayBaseName),
+      { isJs: this.options.isJs, overlayBaseName: this.options.overlayBaseName },
     );
-    const compileOpts = this.buildCompileOptions(snap, templatePaths.template.path);
-    const seed = this.coreSeed(canonical.uri, contentHash);
-    const compilation = compileTemplate(compileOpts, seed ?? undefined);
+    const templateContext = this.options.templateContext?.(canonical.uri) ?? undefined;
+    const trace = this.options.trace ?? NOOP_TRACE;
+    const compilation = trace.span("program:compile", () => compileTemplate({
+      html: snap.text,
+      templateFilePath: templatePaths.template.path,
+      isJs: this.options.isJs,
+      vm: this.options.vm,
+      query: this.query,
+      moduleResolver: this.options.moduleResolver,
+      templateContext: templateContext ?? undefined,
+      attrParser: this.options.attrParser,
+      exprParser: this.options.exprParser,
+      overlayBaseName: this.options.overlayBaseName,
+      trace,
+      seededIr,
+    }));
 
-    // Feed overlay mapping into provenance for downstream features.
+    // Cache the lowered IR for future reuse
+    if (!canReuseLower) {
+      this.#lowerCache.set(canonical.uri, {
+        ir: compilation.ir,
+        contentHash,
+        vocabFingerprint: this.#vocabFingerprint,
+      });
+    }
+    const stageReuse = canReuseLower
+      ? { seeded: ["10-lower"] as const, computed: ["20-link", "30-bind", "40-typecheck", "50-usage", "overlay:plan", "overlay:emit"] as const }
+      : { seeded: [] as const, computed: ["10-lower", "20-link", "30-bind", "40-typecheck", "50-usage", "overlay:plan", "overlay:emit"] as const };
+
+    // Feed overlay mapping into provenance
     const overlayUri = normalizeDocumentUri(compilation.overlay.overlayPath);
     this.provenance.addOverlayMapping(canonical.uri, overlayUri, compilation.mapping);
 
-    this.coreCache.set(canonical.uri, {
-      stages: {
-        "10-lower": compilation.ir,
-        "20-resolve": compilation.linked,
-        "30-bind": compilation.scope,
-        "40-typecheck": compilation.typecheck,
-      },
-      version: snap.version,
-      contentHash,
-      optionsFingerprint: this.optionsFingerprint,
-    });
-
-    const stageReuse = summarizeStageMeta(compilation.meta);
-    const durationMs = elapsedMs(startedAt);
-    this.compilationCache.set(canonical.uri, {
-      compilation,
-      version: snap.version,
-      contentHash,
-      optionsFingerprint: this.optionsFingerprint,
-    });
-    this.recordAccess(canonical.uri, "overlay", {
-      programCacheHit: false,
-      stageMeta: compilation.meta,
-      version: snap.version,
-      contentHash,
-    });
-    this.emitCacheAccess("overlay", canonical.uri, snap.version, contentHash, stageReuse, false);
-    this.emitMaterialization("overlay", canonical.uri, durationMs, stageReuse, false);
-    this.emitProvenanceStats(canonical.uri);
+    this.#compilationCache.set(canonical.uri, { compilation, contentHash, programCacheHit: false, stageReuse });
     return compilation;
   }
 
@@ -338,8 +268,7 @@ export class DefaultTemplateProgram implements TemplateProgram {
   buildAllOverlays(): ReadonlyMap<DocumentUri, CompileOverlayResult> {
     const results = new Map<DocumentUri, CompileOverlayResult>();
     for (const snap of this.sources.all()) {
-      const canonical = this.canonicalUri(snap.uri);
-      results.set(canonical.uri, this.getOverlay(canonical.uri));
+      results.set(snap.uri, this.getOverlay(snap.uri));
     }
     return results;
   }
@@ -352,329 +281,150 @@ export class DefaultTemplateProgram implements TemplateProgram {
     return this.getCompilation(uri).mapping ?? null;
   }
 
-  getCacheStats(target?: DocumentUri): TemplateProgramCacheStats {
-    const filterUri = target ? this.canonicalUri(target).uri : null;
-    const provenanceStats = this.provenance.stats();
-    const documents: TemplateProgramDocumentStats[] = [];
-    const uris = filterUri ? [filterUri] : Array.from(this.collectKnownUris());
+  /**
+   * Update the semantic authority. Uses the dependency graph to selectively
+   * invalidate only templates that depend on changed resources.
+   *
+   * Algorithm:
+   * 1. Diff old vs new model entries to find changed convergence-entry nodes.
+   * 2. Walk the dep graph (getAffected) to find template-compilation nodes
+   *    that transitively depend on the changed entries.
+   * 3. Invalidate only those templates; retain the rest.
+   */
+  updateOptions(options: TemplateProgramOptions): TemplateProgramUpdateResult {
+    const nextFingerprint = options.query.model.fingerprint;
+    const changed = nextFingerprint !== this.#modelFingerprint;
+    const prevModel = this.query.model;
 
-    for (const uri of uris) {
-      const canonical = this.canonicalUri(uri);
+    const nextVocabFingerprint = stableHash(options.query.model.syntax);
+    const vocabChanged = nextVocabFingerprint !== this.#vocabFingerprint;
+
+    this.options = options;
+    this.query = options.query;
+    this.#modelFingerprint = nextFingerprint;
+    this.#vocabFingerprint = nextVocabFingerprint;
+    this.optionsFingerprint = nextFingerprint;
+
+    // Vocabulary change (frozen tier) → clear lower caches so all templates re-lower
+    if (vocabChanged) {
+      this.#lowerCache.clear();
+    }
+
+    if (!changed) {
+      return { changed: false, invalidated: [], retained: Array.from(this.#compilationCache.keys()) };
+    }
+
+    // Diff model entries to find which convergence-entry nodes changed
+    const prevEntries = prevModel.entries;
+    const nextEntries = options.query.model.entries;
+    const depGraph = prevModel.deps;
+
+    const changedNodeIds: DepNodeId[] = [];
+    // Find added or modified entries
+    for (const [key, nextEntry] of nextEntries) {
+      const prevEntry = prevEntries.get(key);
+      if (!prevEntry || stableHash(prevEntry.def) !== stableHash(nextEntry.def)) {
+        const nodeId = depGraph.findNode('convergence-entry', key);
+        if (nodeId) changedNodeIds.push(nodeId);
+      }
+    }
+    // Find removed entries
+    for (const key of prevEntries.keys()) {
+      if (!nextEntries.has(key)) {
+        const nodeId = depGraph.findNode('convergence-entry', key);
+        if (nodeId) changedNodeIds.push(nodeId);
+      }
+    }
+
+    // If no specific resource changes identified (e.g., vocabulary or config change),
+    // or if the dep graph has no recorded edges, fall back to full invalidation.
+    if (changedNodeIds.length === 0 || depGraph.edgeCount === 0) {
+      const invalidated = Array.from(this.#compilationCache.keys());
+      this.invalidateAll();
+      return { changed: true, mode: "full", invalidated, retained: [] };
+    }
+
+    // Walk the dep graph to find affected template-compilation nodes
+    const affected = depGraph.getAffected(changedNodeIds);
+    const affectedTemplates = new Set<string>();
+    for (const nodeId of affected) {
+      const node = depGraph.nodes.get(nodeId);
+      if (node?.kind === 'template-compilation') {
+        affectedTemplates.add(node.key);
+      }
+    }
+
+    // Selectively invalidate only affected templates
+    const invalidated: DocumentUri[] = [];
+    const retained: DocumentUri[] = [];
+    for (const uri of this.#compilationCache.keys()) {
+      // Match by checking if the template's compilation path is in the affected set.
+      // The dep graph keys template-compilation nodes by templateFilePath, while
+      // the compilation cache keys by DocumentUri. We need to check both forms.
+      const paths = deriveTemplatePaths(uri, { isJs: this.options.isJs, overlayBaseName: this.options.overlayBaseName });
+      if (affectedTemplates.has(paths.template.path) || affectedTemplates.has(uri)) {
+        this.#compilationCache.delete(uri);
+        this.provenance.removeDocument(uri);
+        invalidated.push(uri);
+      } else {
+        retained.push(uri);
+      }
+    }
+
+    return { changed: true, mode: "dependency", invalidated, retained };
+  }
+
+  getCacheStats(uri?: DocumentUri): CacheStats {
+    if (uri) {
+      const canonical = canonicalDocumentUri(uri);
       const snap = this.sources.get(canonical.uri);
-      const compilation = this.compilationCache.get(canonical.uri);
-      const core = this.coreCache.get(canonical.uri);
-      const provenance = this.provenance.templateStats(canonical.uri);
+      const cached = this.#compilationCache.get(canonical.uri);
+      const pStats = this.provenance.templateStats(canonical.uri);
 
-      const contentHash =
-        (snap ? hashSnapshotContent(snap) : null) ??
-        compilation?.contentHash ??
-        core?.contentHash ??
-        null;
-
-      documents.push({
-        uri: canonical.uri,
-        version: snap?.version ?? null,
-        contentHash,
-        ...(compilation ? { compilation: this.overlayCacheStats(canonical.uri, compilation) } : {}),
-        ...(core ? { core: this.coreCacheStats(core) } : {}),
+      const doc: CacheStatsDocument = {
+        version: snap?.version ?? 0,
+        ...(cached ? {
+          compilation: {
+            programCacheHit: cached.programCacheHit,
+            stageReuse: cached.stageReuse,
+          },
+        } : {}),
         provenance: {
-          totalEdges: provenance.totalEdges,
-          overlayEdges: provenance.overlayEdges,
-          runtimeEdges: provenance.runtimeEdges,
-          overlayUri: provenance.overlayUri,
-          runtimeUri: provenance.runtimeUri,
+          totalEdges: pStats.totalEdges,
+          ...(pStats.overlayEdges > 0 ? { overlayEdges: pStats.overlayEdges } : {}),
         },
-      });
+      };
+
+      return {
+        documents: [doc],
+        totals: {
+          sources: snap ? 1 : 0,
+          compilation: cached ? 1 : 0,
+          core: cached ? 1 : 0,
+          provenanceEdges: pStats.totalEdges,
+        },
+      };
     }
 
-    documents.sort((a, b) => a.uri.localeCompare(b.uri));
+    // Aggregate totals across all documents
+    let totalSources = 0;
+    let totalCompilations = 0;
+    let totalProvenanceEdges = 0;
 
-    return {
-      optionsFingerprint: this.optionsFingerprint,
-      totals: {
-        sources: this.countSources(),
-        compilation: this.compilationCache.size,
-        core: this.coreCache.size,
-        provenanceEdges: provenanceStats.totalEdges,
-      },
-      documents,
-    };
-  }
-
-  private coreSeed(
-    uri: DocumentUri,
-    contentHash: string,
-  ): Partial<Record<StageKey, StageOutputs[StageKey]>> | null {
-    const cached = this.coreCache.get(uri);
-    if (!cached) return null;
-    if (cached.optionsFingerprint !== this.optionsFingerprint) return null;
-    if (cached.contentHash !== contentHash) return null;
-    return {
-      "10-lower": cached.stages["10-lower"],
-      "20-resolve": cached.stages["20-resolve"],
-      "30-bind": cached.stages["30-bind"],
-      "40-typecheck": cached.stages["40-typecheck"],
-    };
-  }
-
-  private overlayCacheStats(uri: DocumentUri, cached: CachedCompilation): TemplateProgramCacheEntryStats {
-    const access = this.accessTrace.get(uri)?.overlay;
-    return {
-      version: cached.version,
-      contentHash: cached.contentHash,
-      optionsFingerprint: cached.optionsFingerprint,
-      programCacheHit: access?.programCacheHit ?? false,
-      stageReuse: summarizeStageMeta(cached.compilation.meta),
-    };
-  }
-
-  private coreCacheStats(cached: CoreStageCacheEntry): TemplateProgramCoreCacheEntryStats {
-    return {
-      version: cached.version,
-      contentHash: cached.contentHash,
-      optionsFingerprint: cached.optionsFingerprint,
-      programCacheHit: false,
-      stageReuse: null,
-      stages: CORE_STAGE_KEYS,
-    };
-  }
-
-  private recordAccess(uri: DocumentUri, kind: "overlay", access: CacheAccessEntry): void {
-    const existing = this.accessTrace.get(uri) ?? {};
-    this.accessTrace.set(uri, { ...existing, [kind]: access });
-  }
-
-  private emitCacheAccess(
-    kind: TemplateProgramCacheAccessEvent["kind"],
-    uri: DocumentUri,
-    version: number,
-    contentHash: string,
-    stageReuse: StageReuseSummary,
-    programCacheHit: boolean,
-  ): void {
-    this.telemetry?.onCacheAccess?.({
-      kind,
-      uri,
-      version,
-      contentHash,
-      optionsFingerprint: this.optionsFingerprint,
-      programCacheHit,
-      stageReuse,
-    });
-  }
-
-  private emitMaterialization(
-    kind: TemplateProgramMaterializationEvent["kind"],
-    uri: DocumentUri,
-    durationMs: number,
-    stageReuse: StageReuseSummary,
-    programCacheHit: boolean,
-  ): void {
-    this.telemetry?.onMaterialization?.({
-      kind,
-      uri,
-      durationMs,
-      programCacheHit,
-      stageReuse,
-    });
-  }
-
-  private emitProvenanceStats(templateUri: DocumentUri): void {
-    const handler = this.telemetry?.onProvenance;
-    if (!handler) return;
-    const stats = this.provenance.templateStats(templateUri);
-    handler({
-      templateUri: stats.templateUri,
-      overlayUri: stats.overlayUri,
-      runtimeUri: stats.runtimeUri,
-      overlayEdges: stats.overlayEdges,
-      runtimeEdges: stats.runtimeEdges,
-      totalEdges: stats.totalEdges,
-    });
-  }
-
-  private resetDocumentState(canonical: CanonicalDocumentUri, dropSource: boolean): void {
-    this.compilationCache.delete(canonical.uri);
-    this.coreCache.delete(canonical.uri);
-    this.accessTrace.delete(canonical.uri);
-    this.provenance.removeDocument(canonical.uri);
-    if (dropSource) this.sources.delete(canonical.uri);
-  }
-
-  private collectKnownUris(): Set<DocumentUri> {
-    const uris = new Set<DocumentUri>();
     for (const snap of this.sources.all()) {
-      uris.add(this.canonicalUri(snap.uri).uri);
+      totalSources++;
+      if (this.#compilationCache.has(snap.uri)) totalCompilations++;
+      totalProvenanceEdges += this.provenance.templateStats(snap.uri).totalEdges;
     }
-    for (const key of this.compilationCache.keys()) uris.add(this.canonicalUri(key).uri);
-    for (const key of this.coreCache.keys()) uris.add(this.canonicalUri(key).uri);
-    const prov = this.provenance.stats();
-    for (const doc of prov.documents) uris.add(this.canonicalUri(doc.uri).uri);
-    return uris;
-  }
 
-  private countSources(): number {
-    let count = 0;
-    for (const _ of this.sources.all()) count += 1;
-    return count;
-  }
-
-  private canonicalUri(input: DocumentUri): CanonicalDocumentUri {
-    return canonicalDocumentUri(input);
-  }
-
-  private buildCompileOptions(snap: DocumentSnapshot, templatePath: NormalizedPath) {
-    const opts: {
-      html: string;
-      templateFilePath: string;
-      isJs: boolean;
-      vm: VmReflection;
-      semantics: Semantics;
-      catalog?: ResourceCatalog;
-      syntax?: TemplateSyntaxRegistry;
-      resourceGraph?: ResourceGraph;
-      resourceScope?: ResourceScopeId | null;
-      attrParser?: AttributeParser;
-      exprParser?: IExpressionParser;
-      overlayBaseName?: string;
-      cache?: CacheOptions;
-      fingerprints?: FingerprintHints;
-    } = {
-      html: snap.text,
-      templateFilePath: templatePath,
-      isJs: this.options.isJs,
-      vm: this.options.vm,
-      semantics: this.options.semantics,
+    return {
+      documents: [],
+      totals: {
+        sources: totalSources,
+        compilation: totalCompilations,
+        core: totalCompilations,
+        provenanceEdges: totalProvenanceEdges,
+      },
     };
-
-    if (this.options.catalog !== undefined) opts.catalog = this.options.catalog;
-    if (this.options.syntax !== undefined) opts.syntax = this.options.syntax;
-    if (this.options.resourceGraph !== undefined) opts.resourceGraph = this.options.resourceGraph;
-    if (this.options.resourceScope !== undefined) opts.resourceScope = this.options.resourceScope ?? null;
-    if (this.options.attrParser !== undefined) opts.attrParser = this.options.attrParser;
-    if (this.options.exprParser !== undefined) opts.exprParser = this.options.exprParser;
-    if (this.options.overlayBaseName !== undefined) opts.overlayBaseName = this.options.overlayBaseName;
-    if (this.options.cache !== undefined) opts.cache = this.options.cache;
-    opts.fingerprints = this.fingerprintHints;
-
-    return opts;
   }
-}
-
-function nowMs(): number {
-  return Date.now();
-}
-
-function elapsedMs(startedAt: number): number {
-  return nowMs() - startedAt;
-}
-
-function withOverlayBase(
-  isJs: boolean,
-  overlayBaseName: string | undefined,
-): { isJs: boolean; overlayBaseName?: string } {
-  const base: { isJs: boolean; overlayBaseName?: string } = { isJs };
-  if (overlayBaseName !== undefined) base.overlayBaseName = overlayBaseName;
-  return base;
-}
-
-function summarizeStageMeta(meta: StageMetaSnapshot): StageReuseSummary {
-  const seeded: StageKey[] = [];
-  const fromCache: StageKey[] = [];
-  const computed: StageKey[] = [];
-  for (const key of STAGE_ORDER) {
-    const entry = meta[key];
-    if (!entry) continue;
-    if (entry.source === "seed") {
-      seeded.push(key);
-    } else if (entry.source === "cache") {
-      fromCache.push(key);
-    } else {
-      computed.push(key);
-    }
-  }
-  return { seeded, fromCache, computed, meta };
-}
-
-function hashSnapshotContent(snap: DocumentSnapshot): string {
-  return stableHash(snap.text);
-}
-
-function computeProgramOptionsFingerprint(options: ProgramOptions, hints: FingerprintHints): string {
-  const sem = options.semantics;
-  const overlayHint = hints.overlay ?? { isJs: options.isJs, syntheticPrefix: options.vm.getSyntheticPrefix?.() ?? "__AU_TTC_" };
-  const catalogHint = hints.catalog
-    ?? (options.catalog ? stableHash(options.catalog) : stableHash(prepareSemantics(sem).catalog));
-  const syntaxHint = hints.syntax ?? (options.syntax ? stableHash(options.syntax) : null);
-  const fingerprint: Record<string, FingerprintHints[keyof FingerprintHints]> = {
-    isJs: options.isJs,
-    overlayBaseName: options.overlayBaseName ?? null,
-    semantics: hints.semantics ?? stableHashSemantics(sem),
-    catalog: catalogHint,
-    syntax: syntaxHint,
-    resourceGraph: fingerprintResourceGraph(options, sem),
-    attrParser: hints.attrParser ?? (options.attrParser ? "custom" : "default"),
-    exprParser: hints.exprParser ?? (options.exprParser ? "custom" : "default"),
-    vm: hints.vm ?? fingerprintVm(options.vm),
-    overlay: overlayHint,
-    analyze: hints.analyze ?? null,
-    extra: extractExtraFingerprintHints(hints),
-  };
-  return stableHash(fingerprint);
-}
-
-function normalizeFingerprintHints(options: ProgramOptions): FingerprintHints {
-  const base: FingerprintHints = { ...(options.fingerprints ?? {}) };
-  const sem = options.semantics;
-  if (base.semantics === undefined) base.semantics = stableHashSemantics(sem);
-  if (base.catalog === undefined && options.catalog) base.catalog = stableHash(options.catalog);
-  if (base.syntax === undefined && options.syntax) base.syntax = stableHash(options.syntax);
-  if (base.attrParser === undefined) base.attrParser = options.attrParser ? "custom" : "default";
-  if (base.exprParser === undefined) base.exprParser = options.exprParser ? "custom" : "default";
-  if (base.vm === undefined) base.vm = fingerprintVm(options.vm);
-  if (base.overlay === undefined) {
-    const syntheticPrefix = options.vm.getSyntheticPrefix?.() ?? "__AU_TTC_";
-    base.overlay = { isJs: options.isJs, syntheticPrefix };
-  }
-  return base;
-}
-
-function fingerprintResourceGraph(
-  options: ProgramOptions,
-  sem: Semantics,
-): { readonly graph: string; readonly scope: ResourceScopeId | null } | null {
-  const graph = options.resourceGraph ?? sem.resourceGraph ?? null;
-  if (!graph) return null;
-  const scope = options.resourceScope ?? sem.defaultScope ?? graph.root ?? null;
-  return { graph: stableHash(graph), scope };
-}
-
-function fingerprintVm(vm: VmReflection): string {
-  if (hasQualifiedVm(vm)) return vm.getQualifiedRootVmTypeExpr();
-  return vm.getRootVmTypeExpr();
-}
-
-function hasQualifiedVm(vm: VmReflection): vm is VmReflection & { getQualifiedRootVmTypeExpr: () => string } {
-  return typeof (vm as { getQualifiedRootVmTypeExpr?: unknown }).getQualifiedRootVmTypeExpr === "function";
-}
-
-function extractExtraFingerprintHints(hints: FingerprintHints): Record<string, FingerprintToken> | null {
-  const extras: Record<string, FingerprintToken> = {};
-  for (const [key, value] of Object.entries(hints)) {
-    if (
-      key === "attrParser" ||
-      key === "exprParser" ||
-      key === "catalog" ||
-      key === "syntax" ||
-      key === "semantics" ||
-      key === "vm" ||
-      key === "overlay" ||
-      key === "analyze"
-    ) {
-      continue;
-    }
-    if (value === undefined) continue;
-    extras[key] = value;
-  }
-  return Object.keys(extras).length ? extras : null;
 }

@@ -18,7 +18,7 @@
  *                            emitStaticAu({ ..., dependencies })
  * ```
  *
- * See docs/transform-architecture.md for full architecture.
+ * Extraction focuses on decorator payloads needed for emitted static definitions.
  */
 
 import ts from "typescript";

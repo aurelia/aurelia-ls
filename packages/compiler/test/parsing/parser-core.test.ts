@@ -47,8 +47,9 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     const ast = parseInBothModes(src);
 
     expect(ast.$kind).toBe("AccessScope");
-    expect(ast.name).toBe("foo");
+    expect(ast.name.name).toBe("foo");
     expect(ast.ancestor).toBe(0);
+    expect(src.slice(ast.name.span.start, ast.name.span.end)).toBe("foo");
     expect(src.slice(ast.span.start, ast.span.end)).toBe(src);
   });
 
@@ -57,7 +58,7 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     const ast = parseInBothModes(src);
 
     expect(ast.$kind).toBe("AccessScope");
-    expect(ast.name).toBe("foo");
+    expect(ast.name.name).toBe("foo");
     expect(ast.ancestor).toBe(0);
     expect(src.slice(ast.span.start, ast.span.end)).toBe(src);
   });
@@ -67,7 +68,7 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     const ast = parseInBothModes(src);
 
     expect(ast.$kind).toBe("AccessScope");
-    expect(ast.name).toBe("bar");
+    expect(ast.name.name).toBe("bar");
     expect(ast.ancestor).toBe(1);
     expect(src.slice(ast.span.start, ast.span.end)).toBe(src);
   });
@@ -77,7 +78,7 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     const ast = parseInBothModes(src);
 
     expect(ast.$kind).toBe("AccessScope");
-    expect(ast.name).toBe("baz");
+    expect(ast.name.name).toBe("baz");
     expect(ast.ancestor).toBe(2);
     expect(src.slice(ast.span.start, ast.span.end)).toBe(src);
   });
@@ -113,7 +114,7 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     const ast = parseInBothModes(src);
 
     expect(ast.$kind).toBe("AccessScope");
-    expect(ast.name).toBe("\u00C9foo");
+    expect(ast.name.name).toBe("\u00C9foo");
   });
 
   //
@@ -124,12 +125,12 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     const ast = parseInBothModes(src);
 
     expect(ast.$kind).toBe("CallGlobal");
-    expect(ast.name).toBe("parseInt");
+    expect(ast.name.name).toBe("parseInt");
     expect(ast.args.length).toBe(1);
 
     const arg0 = ast.args[0];
     expect(arg0.$kind).toBe("AccessScope");
-    expect(arg0.name).toBe("x");
+    expect(arg0.name.name).toBe("x");
     expect(arg0.ancestor).toBe(0);
 
     expect(src.slice(ast.span.start, ast.span.end)).toBe(src);
@@ -140,19 +141,19 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     const ast = parseInBothModes(src);
 
     expect(ast.$kind).toBe("CallMember");
-    expect(ast.name).toBe("max");
+    expect(ast.name.name).toBe("max");
     expect(ast.optionalMember).toBe(false);
     expect(ast.optionalCall).toBe(false);
 
     expect(ast.object).toBeTruthy();
     expect(ast.object.$kind).toBe("AccessGlobal");
-    expect(ast.object.name).toBe("Math");
+    expect(ast.object.name.name).toBe("Math");
 
     expect(ast.args.length).toBe(2);
     expect(ast.args[0].$kind).toBe("AccessScope");
-    expect(ast.args[0].name).toBe("a");
+    expect(ast.args[0].name.name).toBe("a");
     expect(ast.args[1].$kind).toBe("AccessScope");
-    expect(ast.args[1].name).toBe("b");
+    expect(ast.args[1].name.name).toBe("b");
 
     expect(src.slice(ast.span.start, ast.span.end)).toBe(src);
   });
@@ -162,11 +163,11 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     const ast = parseInBothModes(src);
 
     expect(ast.$kind).toBe("CallScope");
-    expect(ast.name).toBe("foo");
+    expect(ast.name.name).toBe("foo");
     expect(ast.ancestor).toBe(0);
     expect(ast.args.length).toBe(1);
     expect(ast.args[0].$kind).toBe("AccessScope");
-    expect(ast.args[0].name).toBe("x");
+    expect(ast.args[0].name.name).toBe("x");
     expect(src.slice(ast.span.start, ast.span.end)).toBe(src);
   });
 
@@ -175,7 +176,7 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     const ast = parseInBothModes(src);
 
     expect(ast.$kind).toBe("CallScope");
-    expect(ast.name).toBe("foo");
+    expect(ast.name.name).toBe("foo");
     expect(ast.optional).toBe(true);
     expect(ast.ancestor).toBe(0);
     expect(ast.args.length).toBe(0);
@@ -186,16 +187,16 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     const ast = parseInBothModes(src);
 
     expect(ast.$kind).toBe("CallMember");
-    expect(ast.name).toBe("get");
+    expect(ast.name.name).toBe("get");
     expect(ast.optionalMember).toBe(false);
     expect(ast.optionalCall).toBe(true);
 
     expect(ast.object.$kind).toBe("AccessScope");
-    expect(ast.object.name).toBe("user");
+    expect(ast.object.name.name).toBe("user");
 
     expect(ast.args.length).toBe(1);
     expect(ast.args[0].$kind).toBe("AccessScope");
-    expect(ast.args[0].name).toBe("id");
+    expect(ast.args[0].name.name).toBe("id");
   });
 
   test("optional chaining + optional call: user?.get?.()", () => {
@@ -203,12 +204,12 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     const ast = parseInBothModes(src);
 
     expect(ast.$kind).toBe("CallMember");
-    expect(ast.name).toBe("get");
+    expect(ast.name.name).toBe("get");
     expect(ast.optionalMember).toBe(true);
     expect(ast.optionalCall).toBe(true);
 
     expect(ast.object.$kind).toBe("AccessScope");
-    expect(ast.object.name).toBe("user");
+    expect(ast.object.name.name).toBe("user");
     expect(ast.args.length).toBe(0);
   });
 
@@ -223,7 +224,7 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     expect(ast.operation).toBe("!");
     expect(ast.pos).toBe(0);
     expect(ast.expression.$kind).toBe("AccessScope");
-    expect(ast.expression.name).toBe("foo");
+    expect(ast.expression.name.name).toBe("foo");
     expect(src.slice(ast.span.start, ast.span.end)).toBe(src);
   });
 
@@ -235,7 +236,7 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     expect(ast.operation).toBe("-");
     expect(ast.pos).toBe(0);
     expect(ast.expression.$kind).toBe("AccessScope");
-    expect(ast.expression.name).toBe("x");
+    expect(ast.expression.name.name).toBe("x");
     expect(src.slice(ast.span.start, ast.span.end)).toBe(src);
   });
 
@@ -247,7 +248,7 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     expect(ast.operation).toBe("+");
     expect(ast.pos).toBe(0);
     expect(ast.expression.$kind).toBe("AccessScope");
-    expect(ast.expression.name).toBe("x");
+    expect(ast.expression.name.name).toBe("x");
   });
 
   test("unary: typeof foo", () => {
@@ -255,7 +256,7 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     expect(ast.$kind).toBe("Unary");
     expect(ast.operation).toBe("typeof");
     expect(ast.expression.$kind).toBe("AccessScope");
-    expect(ast.expression.name).toBe("foo");
+    expect(ast.expression.name.name).toBe("foo");
   });
 
   test("unary: void foo", () => {
@@ -263,7 +264,7 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     expect(ast.$kind).toBe("Unary");
     expect(ast.operation).toBe("void");
     expect(ast.expression.$kind).toBe("AccessScope");
-    expect(ast.expression.name).toBe("foo");
+    expect(ast.expression.name.name).toBe("foo");
   });
 
   test("unary prefix: ++i", () => {
@@ -274,7 +275,7 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     expect(ast.operation).toBe("++");
     expect(ast.pos).toBe(0);
     expect(ast.expression.$kind).toBe("AccessScope");
-    expect(ast.expression.name).toBe("i");
+    expect(ast.expression.name.name).toBe("i");
     expect(src.slice(ast.span.start, ast.span.end)).toBe(src);
   });
 
@@ -286,7 +287,7 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     expect(ast.operation).toBe("++");
     expect(ast.pos).toBe(1);
     expect(ast.expression.$kind).toBe("AccessScope");
-    expect(ast.expression.name).toBe("i");
+    expect(ast.expression.name.name).toBe("i");
     expect(src.slice(ast.span.start, ast.span.end)).toBe(src);
   });
 
@@ -299,7 +300,7 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
 
     expect(ast.$kind).toBe("Paren");
     expect(ast.expression.$kind).toBe("AccessScope");
-    expect(ast.expression.name).toBe("foo");
+    expect(ast.expression.name.name).toBe("foo");
     expect(ast.span.start).toBe(0);
     expect(ast.span.end).toBe(src.length);
     expect(src.slice(ast.expression.span.start, ast.expression.span.end)).toBe("foo");
@@ -310,12 +311,13 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     const ast = parseInBothModes(src);
 
     expect(ast.$kind).toBe("AccessMember");
-    expect(ast.name).toBe("bar");
+    expect(ast.name.name).toBe("bar");
+    expect(src.slice(ast.name.span.start, ast.name.span.end)).toBe("bar");
 
     const obj = ast.object;
     expect(obj.$kind).toBe("Paren");
     expect(obj.expression.$kind).toBe("AccessScope");
-    expect(obj.expression.name).toBe("foo");
+    expect(obj.expression.name.name).toBe("foo");
   });
 
   //
@@ -360,13 +362,13 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     expect(left.$kind).toBe("Binary");
     expect(left.operation).toBe("&&");
     expect(left.left.$kind).toBe("AccessScope");
-    expect(left.left.name).toBe("a");
+    expect(left.left.name.name).toBe("a");
     expect(left.right.$kind).toBe("AccessScope");
-    expect(left.right.name).toBe("b");
+    expect(left.right.name.name).toBe("b");
 
     const right = ast.right;
     expect(right.$kind).toBe("AccessScope");
-    expect(right.name).toBe("c");
+    expect(right.name.name).toBe("c");
 
     expect(src.slice(ast.span.start, ast.span.end)).toBe(src);
   });
@@ -389,9 +391,9 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     expect(ast.$kind).toBe("Binary");
     expect(ast.operation).toBe(">=");
     expect(ast.left.$kind).toBe("AccessScope");
-    expect(ast.left.name).toBe("a");
+    expect(ast.left.name.name).toBe("a");
     expect(ast.right.$kind).toBe("AccessScope");
-    expect(ast.right.name).toBe("b");
+    expect(ast.right.name.name).toBe("b");
     expect(src.slice(ast.span.start, ast.span.end)).toBe(src);
   });
 
@@ -486,9 +488,9 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     expect(right.expression.$kind).toBe("Binary");
     expect(right.expression.operation).toBe("||");
     expect(right.expression.left.$kind).toBe("AccessScope");
-    expect(right.expression.left.name).toBe("b");
+    expect(right.expression.left.name.name).toBe("b");
     expect(right.expression.right.$kind).toBe("AccessScope");
-    expect(right.expression.right.name).toBe("c");
+    expect(right.expression.right.name.name).toBe("c");
     expect(src.slice(right.span.start, right.span.end)).toBe("(b || c)");
 
     expect(src.slice(ast.span.start, ast.span.end)).toBe(src);
@@ -503,11 +505,11 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
 
     expect(ast.$kind).toBe("Conditional");
     expect(ast.condition.$kind).toBe("AccessScope");
-    expect(ast.condition.name).toBe("cond");
+    expect(ast.condition.name.name).toBe("cond");
     expect(ast.yes.$kind).toBe("AccessScope");
-    expect(ast.yes.name).toBe("a");
+    expect(ast.yes.name.name).toBe("a");
     expect(ast.no.$kind).toBe("AccessScope");
-    expect(ast.no.name).toBe("b");
+    expect(ast.no.name.name).toBe("b");
 
     expect(src.slice(ast.span.start, ast.span.end)).toBe(src);
   });
@@ -522,9 +524,9 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     expect(ast.$kind).toBe("Assign");
     expect(ast.op).toBe("=");
     expect(ast.target.$kind).toBe("AccessScope");
-    expect(ast.target.name).toBe("a");
+    expect(ast.target.name.name).toBe("a");
     expect(ast.value.$kind).toBe("AccessScope");
-    expect(ast.value.name).toBe("b");
+    expect(ast.value.name.name).toBe("b");
 
     expect(src.slice(ast.span.start, ast.span.end)).toBe(src);
   });
@@ -554,9 +556,9 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     expect(ast.$kind).toBe("Assign");
     expect(ast.op).toBe("+=");
     expect(ast.target.$kind).toBe("AccessScope");
-    expect(ast.target.name).toBe("a");
+    expect(ast.target.name.name).toBe("a");
     expect(ast.value.$kind).toBe("AccessScope");
-    expect(ast.value.name).toBe("b");
+    expect(ast.value.name.name).toBe("b");
 
     expect(src.slice(ast.span.start, ast.span.end)).toBe(src);
   });
@@ -568,15 +570,15 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     expect(ast.$kind).toBe("Assign");
     expect(ast.op).toBe("=");
     expect(ast.target.$kind).toBe("AccessScope");
-    expect(ast.target.name).toBe("a");
+    expect(ast.target.name.name).toBe("a");
 
     const inner = ast.value;
     expect(inner.$kind).toBe("Assign");
     expect(inner.op).toBe("=");
     expect(inner.target.$kind).toBe("AccessScope");
-    expect(inner.target.name).toBe("b");
+    expect(inner.target.name.name).toBe("b");
     expect(inner.value.$kind).toBe("AccessScope");
-    expect(inner.value.name).toBe("c");
+    expect(inner.value.name.name).toBe("c");
 
     expect(src.slice(ast.span.start, ast.span.end)).toBe(src);
   });
@@ -591,12 +593,12 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     expect(ast.$kind).toBe("ArrowFunction");
     expect(ast.args.length).toBe(1);
     expect(ast.args[0].$kind).toBe("BindingIdentifier");
-    expect(ast.args[0].name).toBe("x");
+    expect(ast.args[0].name.name).toBe("x");
 
     expect(ast.body.$kind).toBe("Binary");
     expect(ast.body.operation).toBe("+");
     expect(ast.body.left.$kind).toBe("AccessScope");
-    expect(ast.body.left.name).toBe("x");
+    expect(ast.body.left.name.name).toBe("x");
     expect(ast.body.right.$kind).toBe("PrimitiveLiteral");
     expect(ast.body.right.value).toBe(1);
 
@@ -611,16 +613,16 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     expect(ast.$kind).toBe("ArrowFunction");
     expect(ast.args.length).toBe(2);
     expect(ast.args[0].$kind).toBe("BindingIdentifier");
-    expect(ast.args[0].name).toBe("a");
+    expect(ast.args[0].name.name).toBe("a");
     expect(ast.args[1].$kind).toBe("BindingIdentifier");
-    expect(ast.args[1].name).toBe("b");
+    expect(ast.args[1].name.name).toBe("b");
 
     expect(ast.body.$kind).toBe("Binary");
     expect(ast.body.operation).toBe("+");
     expect(ast.body.left.$kind).toBe("AccessScope");
-    expect(ast.body.left.name).toBe("a");
+    expect(ast.body.left.name.name).toBe("a");
     expect(ast.body.right.$kind).toBe("AccessScope");
-    expect(ast.body.right.name).toBe("b");
+    expect(ast.body.right.name.name).toBe("b");
 
     expect(ast.rest).toBe(false);
     expect(src.slice(ast.span.start, ast.span.end)).toBe(src);
@@ -633,9 +635,9 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     expect(ast.$kind).toBe("ArrowFunction");
     expect(ast.args.length).toBe(2);
     expect(ast.args[0].$kind).toBe("BindingIdentifier");
-    expect(ast.args[0].name).toBe("a");
+    expect(ast.args[0].name.name).toBe("a");
     expect(ast.args[1].$kind).toBe("BindingIdentifier");
-    expect(ast.args[1].name).toBe("rest");
+    expect(ast.args[1].name.name).toBe("rest");
     expect(ast.rest).toBe(true);
   });
 
@@ -646,7 +648,7 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     expect(ast.$kind).toBe("ArrowFunction");
     expect(ast.args.length).toBe(1);
     expect(ast.args[0].$kind).toBe("BindingIdentifier");
-    expect(ast.args[0].name).toBe("rest");
+    expect(ast.args[0].name.name).toBe("rest");
     expect(ast.rest).toBe(true);
   });
 
@@ -657,7 +659,7 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     expect(ast.$kind).toBe("ArrowFunction");
     expect(ast.args.length).toBe(0);
     expect(ast.body.$kind).toBe("AccessScope");
-    expect(ast.body.name).toBe("x");
+    expect(ast.body.name.name).toBe("x");
     expect(ast.rest).toBe(false);
     expect(src.slice(ast.span.start, ast.span.end)).toBe(src);
   });
@@ -669,12 +671,12 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     expect(ast.$kind).toBe("ArrowFunction");
     expect(ast.args.length).toBe(1);
     expect(ast.args[0].$kind).toBe("BindingIdentifier");
-    expect(ast.args[0].name).toBe("x");
+    expect(ast.args[0].name.name).toBe("x");
 
     expect(ast.body.$kind).toBe("Binary");
     expect(ast.body.operation).toBe("+");
     expect(ast.body.left.$kind).toBe("AccessScope");
-    expect(ast.body.left.name).toBe("x");
+    expect(ast.body.left.name.name).toBe("x");
     expect(ast.body.right.$kind).toBe("PrimitiveLiteral");
     expect(ast.body.right.value).toBe(1);
 
@@ -690,9 +692,10 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     const ast = parseInBothModes(src);
 
     expect(ast.$kind).toBe("ValueConverter");
-    expect(ast.name).toBe("currency");
+    expect(ast.name.name).toBe("currency");
+    expect(src.slice(ast.name.span.start, ast.name.span.end)).toBe("currency");
     expect(ast.expression.$kind).toBe("AccessScope");
-    expect(ast.expression.name).toBe("amount");
+    expect(ast.expression.name.name).toBe("amount");
     expect(ast.args.length).toBe(1);
     expect(ast.args[0].$kind).toBe("PrimitiveLiteral");
     expect(ast.args[0].value).toBe("USD");
@@ -706,7 +709,8 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     const ast = parseInBothModes(src);
 
     expect(ast.$kind).toBe("BindingBehavior");
-    expect(ast.name).toBe("throttle");
+    expect(ast.name.name).toBe("throttle");
+    expect(src.slice(ast.name.span.start, ast.name.span.end)).toBe("throttle");
     expect(ast.args.length).toBe(1);
     expect(ast.args[0].$kind).toBe("PrimitiveLiteral");
     expect(ast.args[0].value).toBe(100);
@@ -714,9 +718,9 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     // Inner value converter
     const vc = ast.expression;
     expect(vc.$kind).toBe("ValueConverter");
-    expect(vc.name).toBe("currency");
+    expect(vc.name.name).toBe("currency");
     expect(vc.expression.$kind).toBe("AccessScope");
-    expect(vc.expression.name).toBe("amount");
+    expect(vc.expression.name.name).toBe("amount");
     expect(vc.args.length).toBe(1);
     expect(vc.args[0].$kind).toBe("PrimitiveLiteral");
     expect(vc.args[0].value).toBe("USD");
@@ -733,14 +737,14 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     const ast = parseInBothModes(src);
 
     expect(ast.$kind).toBe("BindingBehavior");
-    expect(ast.name).toBe("throttle");
+    expect(ast.name.name).toBe("throttle");
     expect(ast.args.length).toBe(1);
     expect(ast.args[0].$kind).toBe("PrimitiveLiteral");
     expect(ast.args[0].value).toBe(100);
 
     const expr = ast.expression;
     expect(expr.$kind).toBe("AccessScope");
-    expect(expr.name).toBe("amount");
+    expect(expr.name.name).toBe("amount");
 
     expect(src.slice(ast.span.start, ast.span.end)).toBe(src);
   });
@@ -750,21 +754,21 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     const ast = parseInBothModes(src);
 
     expect(ast.$kind).toBe("BindingBehavior");
-    expect(ast.name).toBe("debounce");
+    expect(ast.name.name).toBe("debounce");
     expect(ast.args.length).toBe(1);
     expect(ast.args[0].$kind).toBe("PrimitiveLiteral");
     expect(ast.args[0].value).toBe(50);
 
     const first = ast.expression;
     expect(first.$kind).toBe("BindingBehavior");
-    expect(first.name).toBe("throttle");
+    expect(first.name.name).toBe("throttle");
     expect(first.args.length).toBe(1);
     expect(first.args[0].$kind).toBe("PrimitiveLiteral");
     expect(first.args[0].value).toBe(100);
 
     const innerExpr = first.expression;
     expect(innerExpr.$kind).toBe("AccessScope");
-    expect(innerExpr.name).toBe("amount");
+    expect(innerExpr.name.name).toBe("amount");
 
     expect(src.slice(ast.span.start, ast.span.end)).toBe(src);
   });
@@ -780,7 +784,7 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     expect(ast.cooked).toEqual(["hello ", "!"]);
     expect(ast.expressions.length).toBe(1);
     expect(ast.expressions[0].$kind).toBe("AccessScope");
-    expect(ast.expressions[0].name).toBe("name");
+    expect(ast.expressions[0].name.name).toBe("name");
     expect(src.slice(ast.span.start, ast.span.end)).toBe(src);
   });
 
@@ -810,9 +814,9 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     expect(ast.cooked).toEqual(["a", "b", "c"]);
     expect(ast.expressions.length).toBe(2);
     expect(ast.expressions[0].$kind).toBe("AccessScope");
-    expect(ast.expressions[0].name).toBe("x");
+    expect(ast.expressions[0].name.name).toBe("x");
     expect(ast.expressions[1].$kind).toBe("AccessScope");
-    expect(ast.expressions[1].name).toBe("y");
+    expect(ast.expressions[1].name.name).toBe("y");
   });
 
   test("tagged template literal", () => {
@@ -821,11 +825,11 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
 
     expect(ast.$kind).toBe("TaggedTemplate");
     expect(ast.func.$kind).toBe("AccessScope");
-    expect(ast.func.name).toBe("format");
+    expect(ast.func.name.name).toBe("format");
     expect(ast.cooked).toEqual(["a", "b"]);
     expect(ast.expressions.length).toBe(1);
     expect(ast.expressions[0].$kind).toBe("AccessScope");
-    expect(ast.expressions[0].name).toBe("x");
+    expect(ast.expressions[0].name.name).toBe("x");
   });
 
   test("tagged template literal with multiple expressions", () => {
@@ -834,13 +838,13 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
 
     expect(ast.$kind).toBe("TaggedTemplate");
     expect(ast.func.$kind).toBe("AccessScope");
-    expect(ast.func.name).toBe("fmt");
+    expect(ast.func.name.name).toBe("fmt");
     expect(ast.cooked).toEqual(["a", "b", "c"]);
     expect(ast.expressions.length).toBe(2);
     expect(ast.expressions[0].$kind).toBe("AccessScope");
-    expect(ast.expressions[0].name).toBe("x");
+    expect(ast.expressions[0].name.name).toBe("x");
     expect(ast.expressions[1].$kind).toBe("AccessScope");
-    expect(ast.expressions[1].name).toBe("y");
+    expect(ast.expressions[1].name.name).toBe("y");
   });
 
   test("malformed expression returns BadExpression (no throw)", () => {
@@ -988,8 +992,10 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
 
   test("optional chain with invalid member yields BadExpression", () => {
     const ast = parseInBothModes("foo?.123");
+    // Recovery produces AccessMember(foo, "", optional=true), then 123 is
+    // unexpected after the expression — wrapping the whole thing in BadExpression.
     expect(ast.$kind).toBe("BadExpression");
-    expect(ast.message).toBe("Expected identifier after '?.'");
+    expect(ast.message).toBe("Unexpected token after end of expression");
   });
 
   test("bare '{' is rejected", () => {
@@ -1102,17 +1108,17 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     const src = "user?.profile?.getName()?.toUpperCase() | upper:'en' & throttle:100";
     const ast = parseInBothModes(src);
     expect(ast.$kind).toBe("BindingBehavior");
-    expect(ast.name).toBe("throttle");
+    expect(ast.name.name).toBe("throttle");
     expect(ast.args.length).toBe(1);
 
     const vc = ast.expression;
     expect(vc.$kind).toBe("ValueConverter");
-    expect(vc.name).toBe("upper");
+    expect(vc.name.name).toBe("upper");
     expect(vc.args.length).toBe(1);
 
     const call = vc.expression;
     expect(call.$kind).toBe("CallMember");
-    expect(call.name).toBe("toUpperCase");
+    expect(call.name.name).toBe("toUpperCase");
     expect(call.optionalCall).toBe(false);
     expect(call.optionalMember).toBe(true);
 
@@ -1123,7 +1129,7 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
 
     const member = innerCall.object;
     expect(member.$kind).toBe("AccessMember");
-    expect(member.name).toBe("profile");
+    expect(member.name.name).toBe("profile");
     expect(member.optional).toBe(true);
   });
 
@@ -1133,9 +1139,9 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     expect(ast.$kind).toBe("CallMember");
     expect(ast.optionalMember).toBe(true);
     expect(ast.optionalCall).toBe(true);
-    expect(ast.name).toBe("getName");
+    expect(ast.name.name).toBe("getName");
     expect(ast.object.$kind).toBe("AccessScope");
-    expect(ast.object.name).toBe("user");
+    expect(ast.object.name.name).toBe("user");
   });
 
   test("tuple-like nested optional chaining renders correctly", () => {
@@ -1150,9 +1156,9 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     expect(keyed.key.optional).toBe(true);
     const member = keyed.key;
     expect(member.$kind).toBe("AccessMember");
-    expect(member.name).toBe("c");
+    expect(member.name.name).toBe("c");
     expect(member.object.$kind).toBe("AccessScope");
-    expect(member.object.name).toBe("b");
+    expect(member.object.name.name).toBe("b");
   });
 
   test("value converter with multiple args parses", () => {
@@ -1162,10 +1168,10 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     expect(ast.args.length).toBe(3);
     expect(ast.args[0].$kind).toBe("PrimitiveLiteral");
     expect(ast.args[1].$kind).toBe("AccessScope");
-    expect(ast.args[1].name).toBe("two");
+    expect(ast.args[1].name.name).toBe("two");
     expect(ast.args[2].$kind).toBe("PrimitiveLiteral");
     expect(ast.expression.$kind).toBe("AccessScope");
-    expect(ast.expression.name).toBe("value");
+    expect(ast.expression.name.name).toBe("value");
   });
 
   test("trailing tokens after a valid expression return BadExpression", () => {
@@ -1179,7 +1185,7 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     expect(ast.$kind).toBe("New");
     expect(ast.args.length).toBe(0);
     expect(ast.func.$kind).toBe("AccessScope");
-    expect(ast.func.name).toBe("Foo");
+    expect(ast.func.name.name).toBe("Foo");
   });
 
   test("new expression with member and args parses", () => {
@@ -1188,21 +1194,26 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     expect(ast.args.length).toBe(0);
     expect(ast.func.$kind).toBe("CallMember");
     expect(ast.func.object.$kind).toBe("AccessScope");
-    expect(ast.func.object.name).toBe("foo");
-    expect(ast.func.name).toBe("bar");
+    expect(ast.func.object.name.name).toBe("foo");
+    expect(ast.func.name.name).toBe("bar");
     expect(ast.func.optionalMember).toBe(false);
     expect(ast.func.optionalCall).toBe(false);
     expect(ast.func.args.length).toBe(2);
     expect(ast.func.args[0].$kind).toBe("PrimitiveLiteral");
     expect(ast.func.args[0].value).toBe(1);
     expect(ast.func.args[1].$kind).toBe("AccessScope");
-    expect(ast.func.args[1].name).toBe("baz");
+    expect(ast.func.args[1].name.name).toBe("baz");
   });
 
-  test("member access without identifier yields BadExpression", () => {
+  test("member access without identifier produces recovery AccessMember", () => {
+    // Parser recovery: `foo.` produces AccessMember with empty name to enable
+    // downstream completions on the incomplete member access.
     const ast = parseInBothModes("foo.");
-    expect(ast.$kind).toBe("BadExpression");
-    expect(ast.message).toBe("Expected identifier after '.'");
+    expect(ast.$kind).toBe("AccessMember");
+    expect(ast.object.$kind).toBe("AccessScope");
+    expect(ast.object.name.name).toBe("foo");
+    expect(ast.name.name).toBe("");
+    expect(ast.optional).toBe(false);
   });
 
   test("non-optional keyed access sets optional to false", () => {
@@ -1210,9 +1221,9 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     expect(ast.$kind).toBe("AccessKeyed");
     expect(ast.optional).toBe(false);
     expect(ast.object.$kind).toBe("AccessScope");
-    expect(ast.object.name).toBe("items");
+    expect(ast.object.name.name).toBe("items");
     expect(ast.key.$kind).toBe("AccessScope");
-    expect(ast.key.name).toBe("index");
+    expect(ast.key.name.name).toBe("index");
   });
 
   test("parenthesized callee produces CallFunction with inner expression intact", () => {
@@ -1223,12 +1234,12 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     expect(ast.func.expression.$kind).toBe("Binary");
     expect(ast.func.expression.operation).toBe("+");
     expect(ast.func.expression.left.$kind).toBe("AccessScope");
-    expect(ast.func.expression.left.name).toBe("foo");
+    expect(ast.func.expression.left.name.name).toBe("foo");
     expect(ast.func.expression.right.$kind).toBe("AccessScope");
-    expect(ast.func.expression.right.name).toBe("bar");
+    expect(ast.func.expression.right.name.name).toBe("bar");
     expect(ast.args.length).toBe(1);
     expect(ast.args[0].$kind).toBe("AccessScope");
-    expect(ast.args[0].name).toBe("baz");
+    expect(ast.args[0].name.name).toBe("baz");
   });
 
   test("trailing comma in call arguments is allowed", () => {
@@ -1236,7 +1247,7 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     expect(ast.$kind).toBe("CallScope");
     expect(ast.args.length).toBe(1);
     expect(ast.args[0].$kind).toBe("AccessScope");
-    expect(ast.args[0].name).toBe("a");
+    expect(ast.args[0].name.name).toBe("a");
   });
 
   test("missing closing paren in grouped expression yields BadExpression", () => {
@@ -1289,9 +1300,9 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     expect(ast.keys).toEqual(["foo", 1, "three"]);
     expect(ast.values.length).toBe(3);
     expect(ast.values[0].$kind).toBe("AccessScope");
-    expect(ast.values[0].name).toBe("bar");
+    expect(ast.values[0].name.name).toBe("bar");
     expect(ast.values[1].$kind).toBe("AccessScope");
-    expect(ast.values[1].name).toBe("two");
+    expect(ast.values[1].name.name).toBe("two");
     expect(ast.values[2].$kind).toBe("PrimitiveLiteral");
     expect(ast.values[2].value).toBe(3);
   });
@@ -1302,7 +1313,7 @@ describe("expression-parser / core (IsProperty & IsFunction)", () => {
     expect(ast.keys).toEqual(["foo"]);
     expect(ast.values.length).toBe(1);
     expect(ast.values[0].$kind).toBe("AccessScope");
-    expect(ast.values[0].name).toBe("bar");
+    expect(ast.values[0].name.name).toBe("bar");
   });
 
   test("empty object literal parses", () => {

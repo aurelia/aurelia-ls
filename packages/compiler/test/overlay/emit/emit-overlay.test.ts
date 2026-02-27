@@ -1,6 +1,7 @@
 import { runVectorTests, getDirname, lowerOpts } from "../../_helpers/vector-runner.js";
+import { noopModuleResolver } from "../../_helpers/test-utils.js";
 
-import { lowerDocument, resolveHost, bindScopes, planOverlay, emitOverlay } from "@aurelia-ls/compiler";
+import { lowerDocument, linkTemplateSemantics, buildSemanticsSnapshot, bindScopes, planOverlay, emitOverlay } from "@aurelia-ls/compiler";
 
 // --- Types ---
 
@@ -22,13 +23,18 @@ interface EmitDiff {
   extraTextIncludes: string[];
 }
 
+const RESOLVE_OPTS = { moduleResolver: noopModuleResolver, templateFilePath: "mem.html" };
+
 runVectorTests<EmitExpect, EmitIntent, EmitDiff>({
   dirname: getDirname(import.meta.url),
   suiteName: "Emit Overlay (60)",
   execute: (v, ctx) => {
     const ir = lowerDocument(v.markup, lowerOpts(ctx));
-    const linked = resolveHost(ir, ctx.sem);
-    const scope = bindScopes(linked);
+    const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(ctx.sem), {
+      ...RESOLVE_OPTS,
+      diagnostics: ctx.diagnostics.forSource("link"),
+    });
+    const scope = bindScopes(linked, { diagnostics: ctx.diagnostics.forSource("bind") });
     const plan = planOverlay(linked, scope, { isJs: false, vm: mockVm() });
     const emit = emitOverlay(plan, { isJs: false });
     return reduceEmitIntent(emit, v.expect);
@@ -96,3 +102,5 @@ function compareEmitIntent(actual: EmitIntent, expected: EmitExpect): EmitDiff {
 
   return { missingMapping, extraMapping, missingTextIncludes, extraTextIncludes };
 }
+
+

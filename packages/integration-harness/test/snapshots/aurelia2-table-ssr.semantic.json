@@ -94,12 +94,14 @@
       "trigger": { "capture": false, "kind": "listener", "name": "trigger" },
       "two-way": { "kind": "property", "mode": "twoWay", "name": "two-way" }
     },
+    "gapsByResource": {},
+    "projectLevelGaps": [],
     "resources": {
       "attributes": {
         "aurelia-table": {
           "bindables": {
             "api": { "attribute": "api", "mode": "twoWay", "name": "api", "primary": false },
-            "currentPage": { "attribute": "currentPage", "mode": "twoWay", "name": "currentPage", "primary": false },
+            "currentPage": { "attribute": "current-page", "mode": "twoWay", "name": "currentPage", "primary": false },
             "data": {
               "attribute": "data",
               "name": "data",
@@ -107,26 +109,29 @@
               "type": { "kind": "ts", "name": "any[]" }
             },
             "dataSource": {
-              "attribute": "dataSource",
+              "attribute": "data-source",
               "name": "dataSource",
               "primary": false,
               "type": { "kind": "ts", "name": "string" }
             },
-            "displayData": { "attribute": "displayData", "mode": "twoWay", "name": "displayData", "primary": false },
+            "displayData": { "attribute": "display-data", "mode": "twoWay", "name": "displayData", "primary": false },
             "filters": {
               "attribute": "filters",
               "name": "filters",
               "primary": false,
               "type": { "kind": "ts", "name": "any[]" }
             },
-            "pageSize": { "attribute": "pageSize", "name": "pageSize", "primary": false },
-            "totalItems": { "attribute": "totalItems", "mode": "twoWay", "name": "totalItems", "primary": false }
+            "pageSize": { "attribute": "page-size", "name": "pageSize", "primary": false },
+            "totalItems": { "attribute": "total-items", "mode": "twoWay", "name": "totalItems", "primary": false }
           },
           "className": "AureliaTableCustomAttribute",
+          "declarationForm": "decorator",
           "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "attribute",
           "name": "aurelia-table",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "source"
         },
         "aut-select": {
           "bindables": {
@@ -144,17 +149,20 @@
             },
             "row": { "attribute": "row", "mode": "twoWay", "name": "row", "primary": false },
             "selectedClass": {
-              "attribute": "selectedClass",
+              "attribute": "selected-class",
               "name": "selectedClass",
               "primary": false,
               "type": { "kind": "ts", "name": "string" }
             }
           },
           "className": "AutSelectCustomAttribute",
+          "declarationForm": "decorator",
           "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "attribute",
           "name": "aut-select",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "source"
         },
         "aut-sort": {
           "bindables": {
@@ -163,10 +171,13 @@
             "key": { "attribute": "key", "name": "key", "primary": false }
           },
           "className": "AutSortCustomAttribute",
+          "declarationForm": "decorator",
           "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "attribute",
           "name": "aut-sort",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "source"
         },
         "case": {
           "bindables": {
@@ -184,15 +195,19 @@
           "kind": "attribute",
           "name": "case",
           "noMultiBindings": false,
+          "origin": "builtin",
           "primary": "value"
         },
         "catch": {
-          "bindables": {},
+          "bindables": {
+            "value": { "attribute": "value", "mode": "fromView", "name": "value", "primary": false }
+          },
           "className": "Catch",
           "isTemplateController": true,
           "kind": "attribute",
           "name": "catch",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "builtin"
         },
         "default-case": {
           "bindables": {
@@ -208,7 +223,8 @@
           "isTemplateController": true,
           "kind": "attribute",
           "name": "default-case",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "builtin"
         },
         "else": {
           "bindables": {},
@@ -216,7 +232,8 @@
           "isTemplateController": true,
           "kind": "attribute",
           "name": "else",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "builtin"
         },
         "focus": {
           "bindables": {
@@ -229,9 +246,11 @@
             }
           },
           "className": "Focus",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "attribute",
           "name": "focus",
           "noMultiBindings": false,
+          "origin": "builtin",
           "primary": "value"
         },
         "href": {
@@ -239,9 +258,11 @@
             "value": { "attribute": "value", "mode": "toView", "name": "value", "primary": true }
           },
           "className": "Href",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "attribute",
           "name": "href",
           "noMultiBindings": true,
+          "origin": "builtin",
           "package": "@aurelia/router",
           "primary": "value"
         },
@@ -267,6 +288,7 @@
           "kind": "attribute",
           "name": "if",
           "noMultiBindings": false,
+          "origin": "builtin",
           "primary": "value"
         },
         "load": {
@@ -302,22 +324,69 @@
             "route": { "attribute": "route", "mode": "toView", "name": "route", "primary": true }
           },
           "className": "Load",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "attribute",
           "name": "load",
           "noMultiBindings": false,
+          "origin": "builtin",
           "package": "@aurelia/router",
           "primary": "route"
         },
         "pending": {
-          "bindables": {},
+          "bindables": {
+            "value": {
+              "attribute": "value",
+              "mode": "toView",
+              "name": "value",
+              "primary": false,
+              "type": { "kind": "ts", "name": "Promise<unknown>" }
+            }
+          },
           "className": "Pending",
           "isTemplateController": true,
           "kind": "attribute",
           "name": "pending",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "builtin"
         },
         "portal": {
           "bindables": {
+            "activated": {
+              "attribute": "activated",
+              "mode": "default",
+              "name": "activated",
+              "primary": false,
+              "type": { "kind": "ts", "name": "(target: string | Element | null | undefined, view: unknown) => void | Promise<void>" }
+            },
+            "activating": {
+              "attribute": "activating",
+              "mode": "default",
+              "name": "activating",
+              "primary": false,
+              "type": { "kind": "ts", "name": "(target: string | Element | null | undefined, view: unknown) => void | Promise<void>" }
+            },
+            "callbackContext": { "attribute": "callbackContext", "mode": "default", "name": "callbackContext", "primary": false },
+            "deactivated": {
+              "attribute": "deactivated",
+              "mode": "default",
+              "name": "deactivated",
+              "primary": false,
+              "type": { "kind": "ts", "name": "(target: string | Element | null | undefined, view: unknown) => void | Promise<void>" }
+            },
+            "deactivating": {
+              "attribute": "deactivating",
+              "mode": "default",
+              "name": "deactivating",
+              "primary": false,
+              "type": { "kind": "ts", "name": "(target: string | Element | null | undefined, view: unknown) => void | Promise<void>" }
+            },
+            "position": {
+              "attribute": "position",
+              "mode": "default",
+              "name": "position",
+              "primary": false,
+              "type": { "kind": "ts", "name": "'beforebegin' | 'afterbegin' | 'beforeend' | 'afterend'" }
+            },
             "renderContext": {
               "attribute": "renderContext",
               "mode": "default",
@@ -345,6 +414,7 @@
           "kind": "attribute",
           "name": "portal",
           "noMultiBindings": false,
+          "origin": "builtin",
           "primary": "target"
         },
         "promise": {
@@ -361,15 +431,20 @@
           "isTemplateController": true,
           "kind": "attribute",
           "name": "promise",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "builtin"
         },
         "repeat": {
-          "bindables": {},
+          "bindables": {
+            "items": { "attribute": "items", "mode": "default", "name": "items", "primary": true }
+          },
           "className": "Repeat",
           "isTemplateController": true,
           "kind": "attribute",
           "name": "repeat",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "builtin",
+          "primary": "items"
         },
         "show": {
           "aliases": [ "hide" ],
@@ -383,9 +458,11 @@
             }
           },
           "className": "Show",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "attribute",
           "name": "show",
           "noMultiBindings": false,
+          "origin": "builtin",
           "primary": "value"
         },
         "switch": {
@@ -396,15 +473,19 @@
           "isTemplateController": true,
           "kind": "attribute",
           "name": "switch",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "builtin"
         },
         "then": {
-          "bindables": {},
+          "bindables": {
+            "value": { "attribute": "value", "mode": "fromView", "name": "value", "primary": false }
+          },
           "className": "Then",
           "isTemplateController": true,
           "kind": "attribute",
           "name": "then",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "builtin"
         },
         "with": {
           "bindables": {
@@ -414,20 +495,71 @@
           "isTemplateController": true,
           "kind": "attribute",
           "name": "with",
-          "noMultiBindings": false
+          "noMultiBindings": false,
+          "origin": "builtin"
         }
       },
       "bindingBehaviors": {
-        "attr": { "className": "AttrBindingBehavior", "name": "attr" },
-        "debounce": { "className": "DebounceBindingBehavior", "name": "debounce" },
-        "fromView": { "className": "FromViewBindingBehavior", "name": "fromView" },
-        "oneTime": { "className": "OneTimeBindingBehavior", "name": "oneTime" },
-        "self": { "className": "SelfBindingBehavior", "name": "self" },
-        "signal": { "className": "SignalBindingBehavior", "name": "signal" },
-        "throttle": { "className": "ThrottleBindingBehavior", "name": "throttle" },
-        "toView": { "className": "ToViewBindingBehavior", "name": "toView" },
-        "twoWay": { "className": "TwoWayBindingBehavior", "name": "twoWay" },
-        "updateTrigger": { "className": "UpdateTriggerBindingBehavior", "name": "updateTrigger" }
+        "attr": {
+          "className": "AttrBindingBehavior",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "attr",
+          "origin": "builtin"
+        },
+        "debounce": {
+          "className": "DebounceBindingBehavior",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "debounce",
+          "origin": "builtin"
+        },
+        "fromView": {
+          "className": "FromViewBindingBehavior",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "fromView",
+          "origin": "builtin"
+        },
+        "oneTime": {
+          "className": "OneTimeBindingBehavior",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "oneTime",
+          "origin": "builtin"
+        },
+        "self": {
+          "className": "SelfBindingBehavior",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "self",
+          "origin": "builtin"
+        },
+        "signal": {
+          "className": "SignalBindingBehavior",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "signal",
+          "origin": "builtin"
+        },
+        "throttle": {
+          "className": "ThrottleBindingBehavior",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "throttle",
+          "origin": "builtin"
+        },
+        "toView": {
+          "className": "ToViewBindingBehavior",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "toView",
+          "origin": "builtin"
+        },
+        "twoWay": {
+          "className": "TwoWayBindingBehavior",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "twoWay",
+          "origin": "builtin"
+        },
+        "updateTrigger": {
+          "className": "UpdateTriggerBindingBehavior",
+          "gaps": { "intrinsic": 0, "total": 0 },
+          "name": "updateTrigger",
+          "origin": "builtin"
+        }
       },
       "controllers": {
         "case": {
@@ -450,11 +582,13 @@
         "catch": {
           "cardinality": "zero-one",
           "injects": {
-            "alias": { "defaultName": "error", "prop": "value" }
+            "alias": { "defaultName": "catch", "prop": "value" }
           },
           "linksTo": "promise",
           "name": "catch",
-          "props": {},
+          "props": {
+            "value": { "attribute": "value", "mode": "fromView", "name": "value", "primary": false }
+          },
           "scope": "overlay",
           "trigger": { "kind": "branch", "parent": "promise" }
         },
@@ -509,7 +643,15 @@
           "cardinality": "zero-one",
           "linksTo": "promise",
           "name": "pending",
-          "props": {},
+          "props": {
+            "value": {
+              "attribute": "value",
+              "mode": "toView",
+              "name": "value",
+              "primary": false,
+              "type": { "kind": "ts", "name": "Promise<unknown>" }
+            }
+          },
           "scope": "reuse",
           "trigger": { "kind": "branch", "parent": "promise" }
         },
@@ -518,6 +660,42 @@
           "name": "portal",
           "placement": "teleported",
           "props": {
+            "activated": {
+              "attribute": "activated",
+              "mode": "default",
+              "name": "activated",
+              "primary": false,
+              "type": { "kind": "ts", "name": "(target: string | Element | null | undefined, view: unknown) => void | Promise<void>" }
+            },
+            "activating": {
+              "attribute": "activating",
+              "mode": "default",
+              "name": "activating",
+              "primary": false,
+              "type": { "kind": "ts", "name": "(target: string | Element | null | undefined, view: unknown) => void | Promise<void>" }
+            },
+            "callbackContext": { "attribute": "callbackContext", "mode": "default", "name": "callbackContext", "primary": false },
+            "deactivated": {
+              "attribute": "deactivated",
+              "mode": "default",
+              "name": "deactivated",
+              "primary": false,
+              "type": { "kind": "ts", "name": "(target: string | Element | null | undefined, view: unknown) => void | Promise<void>" }
+            },
+            "deactivating": {
+              "attribute": "deactivating",
+              "mode": "default",
+              "name": "deactivating",
+              "primary": false,
+              "type": { "kind": "ts", "name": "(target: string | Element | null | undefined, view: unknown) => void | Promise<void>" }
+            },
+            "position": {
+              "attribute": "position",
+              "mode": "default",
+              "name": "position",
+              "primary": false,
+              "type": { "kind": "ts", "name": "'beforebegin' | 'afterbegin' | 'beforeend' | 'afterend'" }
+            },
             "renderContext": {
               "attribute": "renderContext",
               "mode": "default",
@@ -561,9 +739,11 @@
         },
         "repeat": {
           "cardinality": "zero-many",
-          "injects": { "contextuals": [ "$index", "$first", "$last", "$even", "$odd", "$length", "$middle" ] },
+          "injects": { "contextuals": [ "$index", "$first", "$last", "$even", "$odd", "$length", "$middle", "$previous" ] },
           "name": "repeat",
-          "props": {},
+          "props": {
+            "items": { "attribute": "items", "mode": "default", "name": "items", "primary": true }
+          },
           "scope": "overlay",
           "tailProps": {
             "contextual": { "accepts": [ "bind", null ], "name": "contextual" },
@@ -584,11 +764,13 @@
         "then": {
           "cardinality": "zero-one",
           "injects": {
-            "alias": { "defaultName": "data", "prop": "value" }
+            "alias": { "defaultName": "then", "prop": "value" }
           },
           "linksTo": "promise",
           "name": "then",
-          "props": {},
+          "props": {
+            "value": { "attribute": "value", "mode": "fromView", "name": "value", "primary": false }
+          },
           "scope": "overlay",
           "trigger": { "kind": "branch", "parent": "promise" }
         },
@@ -656,8 +838,10 @@
           "capture": true,
           "className": "AuCompose",
           "containerless": true,
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "element",
           "name": "au-compose",
+          "origin": "builtin",
           "processContent": false
         },
         "au-slot": {
@@ -681,8 +865,10 @@
           "capture": false,
           "className": "AuSlot",
           "containerless": true,
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "element",
           "name": "au-slot",
+          "origin": "builtin",
           "processContent": false
         },
         "au-viewport": {
@@ -720,79 +906,87 @@
           "capture": false,
           "className": "AuViewport",
           "containerless": false,
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "element",
           "name": "au-viewport",
+          "origin": "builtin",
           "package": "@aurelia/router",
           "processContent": false
         },
         "aut-pagination": {
           "bindables": {
             "boundaryLinks": {
-              "attribute": "boundaryLinks",
+              "attribute": "boundary-links",
               "name": "boundaryLinks",
               "primary": false,
               "type": { "kind": "ts", "name": "boolean" }
             },
-            "currentPage": { "attribute": "currentPage", "mode": "twoWay", "name": "currentPage", "primary": false },
+            "currentPage": { "attribute": "current-page", "mode": "twoWay", "name": "currentPage", "primary": false },
             "directionLinks": {
-              "attribute": "directionLinks",
+              "attribute": "direction-links",
               "name": "directionLinks",
               "primary": false,
               "type": { "kind": "ts", "name": "boolean" }
             },
             "firstText": {
-              "attribute": "firstText",
+              "attribute": "first-text",
               "name": "firstText",
               "primary": false,
               "type": { "kind": "ts", "name": "string" }
             },
             "hideSinglePage": {
-              "attribute": "hideSinglePage",
+              "attribute": "hide-single-page",
               "name": "hideSinglePage",
               "primary": false,
               "type": { "kind": "ts", "name": "boolean" }
             },
             "lastText": {
-              "attribute": "lastText",
+              "attribute": "last-text",
               "name": "lastText",
               "primary": false,
               "type": { "kind": "ts", "name": "string" }
             },
             "nextText": {
-              "attribute": "nextText",
+              "attribute": "next-text",
               "name": "nextText",
               "primary": false,
               "type": { "kind": "ts", "name": "string" }
             },
-            "pageSize": { "attribute": "pageSize", "name": "pageSize", "primary": false },
-            "paginationSize": { "attribute": "paginationSize", "name": "paginationSize", "primary": false },
+            "pageSize": { "attribute": "page-size", "name": "pageSize", "primary": false },
+            "paginationSize": { "attribute": "pagination-size", "name": "paginationSize", "primary": false },
             "previousText": {
-              "attribute": "previousText",
+              "attribute": "previous-text",
               "name": "previousText",
               "primary": false,
               "type": { "kind": "ts", "name": "string" }
             },
-            "totalItems": { "attribute": "totalItems", "name": "totalItems", "primary": false }
+            "totalItems": { "attribute": "total-items", "name": "totalItems", "primary": false }
           },
           "boundary": true,
           "capture": false,
           "className": "AutPaginationCustomElement",
           "containerless": false,
+          "declarationForm": "decorator",
           "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "kind": "element",
           "name": "aut-pagination",
+          "origin": "source",
           "processContent": false
         }
       },
       "valueConverters": {
         "sanitize": {
           "className": "SanitizeValueConverter",
+          "gaps": { "intrinsic": 0, "total": 0 },
           "in": { "kind": "ts", "name": "string" },
           "name": "sanitize",
+          "origin": "builtin",
           "out": { "kind": "ts", "name": "string | null" }
         }
       }
-    }
+    },
+    "scopeCompleteness": {}
   },
   "graph": {
     "root": "root",
@@ -806,7 +1000,7 @@
             "aurelia-table": {
               "bindables": {
                 "api": { "attribute": "api", "mode": "twoWay", "name": "api", "primary": false },
-                "currentPage": { "attribute": "currentPage", "mode": "twoWay", "name": "currentPage", "primary": false },
+                "currentPage": { "attribute": "current-page", "mode": "twoWay", "name": "currentPage", "primary": false },
                 "data": {
                   "attribute": "data",
                   "name": "data",
@@ -814,20 +1008,20 @@
                   "type": { "kind": "ts", "name": "any[]" }
                 },
                 "dataSource": {
-                  "attribute": "dataSource",
+                  "attribute": "data-source",
                   "name": "dataSource",
                   "primary": false,
                   "type": { "kind": "ts", "name": "string" }
                 },
-                "displayData": { "attribute": "displayData", "mode": "twoWay", "name": "displayData", "primary": false },
+                "displayData": { "attribute": "display-data", "mode": "twoWay", "name": "displayData", "primary": false },
                 "filters": {
                   "attribute": "filters",
                   "name": "filters",
                   "primary": false,
                   "type": { "kind": "ts", "name": "any[]" }
                 },
-                "pageSize": { "attribute": "pageSize", "name": "pageSize", "primary": false },
-                "totalItems": { "attribute": "totalItems", "mode": "twoWay", "name": "totalItems", "primary": false }
+                "pageSize": { "attribute": "page-size", "name": "pageSize", "primary": false },
+                "totalItems": { "attribute": "total-items", "mode": "twoWay", "name": "totalItems", "primary": false }
               },
               "className": "AureliaTableCustomAttribute",
               "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts",
@@ -851,7 +1045,7 @@
                 },
                 "row": { "attribute": "row", "mode": "twoWay", "name": "row", "primary": false },
                 "selectedClass": {
-                  "attribute": "selectedClass",
+                  "attribute": "selected-class",
                   "name": "selectedClass",
                   "primary": false,
                   "type": { "kind": "ts", "name": "string" }
@@ -886,9 +1080,11 @@
                 }
               },
               "className": "Focus",
+              "gaps": { "intrinsic": 0, "total": 0 },
               "kind": "attribute",
               "name": "focus",
               "noMultiBindings": false,
+              "origin": "builtin",
               "primary": "value"
             },
             "show": {
@@ -903,23 +1099,75 @@
                 }
               },
               "className": "Show",
+              "gaps": { "intrinsic": 0, "total": 0 },
               "kind": "attribute",
               "name": "show",
               "noMultiBindings": false,
+              "origin": "builtin",
               "primary": "value"
             }
           },
           "bindingBehaviors": {
-            "attr": { "className": "AttrBindingBehavior", "name": "attr" },
-            "debounce": { "className": "DebounceBindingBehavior", "name": "debounce" },
-            "fromView": { "className": "FromViewBindingBehavior", "name": "fromView" },
-            "oneTime": { "className": "OneTimeBindingBehavior", "name": "oneTime" },
-            "self": { "className": "SelfBindingBehavior", "name": "self" },
-            "signal": { "className": "SignalBindingBehavior", "name": "signal" },
-            "throttle": { "className": "ThrottleBindingBehavior", "name": "throttle" },
-            "toView": { "className": "ToViewBindingBehavior", "name": "toView" },
-            "twoWay": { "className": "TwoWayBindingBehavior", "name": "twoWay" },
-            "updateTrigger": { "className": "UpdateTriggerBindingBehavior", "name": "updateTrigger" }
+            "attr": {
+              "className": "AttrBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "attr",
+              "origin": "builtin"
+            },
+            "debounce": {
+              "className": "DebounceBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "debounce",
+              "origin": "builtin"
+            },
+            "fromView": {
+              "className": "FromViewBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "fromView",
+              "origin": "builtin"
+            },
+            "oneTime": {
+              "className": "OneTimeBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "oneTime",
+              "origin": "builtin"
+            },
+            "self": {
+              "className": "SelfBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "self",
+              "origin": "builtin"
+            },
+            "signal": {
+              "className": "SignalBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "signal",
+              "origin": "builtin"
+            },
+            "throttle": {
+              "className": "ThrottleBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "throttle",
+              "origin": "builtin"
+            },
+            "toView": {
+              "className": "ToViewBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "toView",
+              "origin": "builtin"
+            },
+            "twoWay": {
+              "className": "TwoWayBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "twoWay",
+              "origin": "builtin"
+            },
+            "updateTrigger": {
+              "className": "UpdateTriggerBindingBehavior",
+              "gaps": { "intrinsic": 0, "total": 0 },
+              "name": "updateTrigger",
+              "origin": "builtin"
+            }
           },
           "controllers": {
             "case": {
@@ -942,11 +1190,13 @@
             "catch": {
               "cardinality": "zero-one",
               "injects": {
-                "alias": { "defaultName": "error", "prop": "value" }
+                "alias": { "defaultName": "catch", "prop": "value" }
               },
               "linksTo": "promise",
               "name": "catch",
-              "props": {},
+              "props": {
+                "value": { "attribute": "value", "mode": "fromView", "name": "value", "primary": false }
+              },
               "scope": "overlay",
               "trigger": { "kind": "branch", "parent": "promise" }
             },
@@ -1001,7 +1251,15 @@
               "cardinality": "zero-one",
               "linksTo": "promise",
               "name": "pending",
-              "props": {},
+              "props": {
+                "value": {
+                  "attribute": "value",
+                  "mode": "toView",
+                  "name": "value",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "Promise<unknown>" }
+                }
+              },
               "scope": "reuse",
               "trigger": { "kind": "branch", "parent": "promise" }
             },
@@ -1010,6 +1268,42 @@
               "name": "portal",
               "placement": "teleported",
               "props": {
+                "activated": {
+                  "attribute": "activated",
+                  "mode": "default",
+                  "name": "activated",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "(target: string | Element | null | undefined, view: unknown) => void | Promise<void>" }
+                },
+                "activating": {
+                  "attribute": "activating",
+                  "mode": "default",
+                  "name": "activating",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "(target: string | Element | null | undefined, view: unknown) => void | Promise<void>" }
+                },
+                "callbackContext": { "attribute": "callbackContext", "mode": "default", "name": "callbackContext", "primary": false },
+                "deactivated": {
+                  "attribute": "deactivated",
+                  "mode": "default",
+                  "name": "deactivated",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "(target: string | Element | null | undefined, view: unknown) => void | Promise<void>" }
+                },
+                "deactivating": {
+                  "attribute": "deactivating",
+                  "mode": "default",
+                  "name": "deactivating",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "(target: string | Element | null | undefined, view: unknown) => void | Promise<void>" }
+                },
+                "position": {
+                  "attribute": "position",
+                  "mode": "default",
+                  "name": "position",
+                  "primary": false,
+                  "type": { "kind": "ts", "name": "'beforebegin' | 'afterbegin' | 'beforeend' | 'afterend'" }
+                },
                 "renderContext": {
                   "attribute": "renderContext",
                   "mode": "default",
@@ -1053,9 +1347,11 @@
             },
             "repeat": {
               "cardinality": "zero-many",
-              "injects": { "contextuals": [ "$index", "$first", "$last", "$even", "$odd", "$length", "$middle" ] },
+              "injects": { "contextuals": [ "$index", "$first", "$last", "$even", "$odd", "$length", "$middle", "$previous" ] },
               "name": "repeat",
-              "props": {},
+              "props": {
+                "items": { "attribute": "items", "mode": "default", "name": "items", "primary": true }
+              },
               "scope": "overlay",
               "tailProps": {
                 "contextual": { "accepts": [ "bind", null ], "name": "contextual" },
@@ -1076,11 +1372,13 @@
             "then": {
               "cardinality": "zero-one",
               "injects": {
-                "alias": { "defaultName": "data", "prop": "value" }
+                "alias": { "defaultName": "then", "prop": "value" }
               },
               "linksTo": "promise",
               "name": "then",
-              "props": {},
+              "props": {
+                "value": { "attribute": "value", "mode": "fromView", "name": "value", "primary": false }
+              },
               "scope": "overlay",
               "trigger": { "kind": "branch", "parent": "promise" }
             },
@@ -1148,8 +1446,10 @@
               "capture": true,
               "className": "AuCompose",
               "containerless": true,
+              "gaps": { "intrinsic": 0, "total": 0 },
               "kind": "element",
               "name": "au-compose",
+              "origin": "builtin",
               "processContent": false
             },
             "au-slot": {
@@ -1173,58 +1473,60 @@
               "capture": false,
               "className": "AuSlot",
               "containerless": true,
+              "gaps": { "intrinsic": 0, "total": 0 },
               "kind": "element",
               "name": "au-slot",
+              "origin": "builtin",
               "processContent": false
             },
             "aut-pagination": {
               "bindables": {
                 "boundaryLinks": {
-                  "attribute": "boundaryLinks",
+                  "attribute": "boundary-links",
                   "name": "boundaryLinks",
                   "primary": false,
                   "type": { "kind": "ts", "name": "boolean" }
                 },
-                "currentPage": { "attribute": "currentPage", "mode": "twoWay", "name": "currentPage", "primary": false },
+                "currentPage": { "attribute": "current-page", "mode": "twoWay", "name": "currentPage", "primary": false },
                 "directionLinks": {
-                  "attribute": "directionLinks",
+                  "attribute": "direction-links",
                   "name": "directionLinks",
                   "primary": false,
                   "type": { "kind": "ts", "name": "boolean" }
                 },
                 "firstText": {
-                  "attribute": "firstText",
+                  "attribute": "first-text",
                   "name": "firstText",
                   "primary": false,
                   "type": { "kind": "ts", "name": "string" }
                 },
                 "hideSinglePage": {
-                  "attribute": "hideSinglePage",
+                  "attribute": "hide-single-page",
                   "name": "hideSinglePage",
                   "primary": false,
                   "type": { "kind": "ts", "name": "boolean" }
                 },
                 "lastText": {
-                  "attribute": "lastText",
+                  "attribute": "last-text",
                   "name": "lastText",
                   "primary": false,
                   "type": { "kind": "ts", "name": "string" }
                 },
                 "nextText": {
-                  "attribute": "nextText",
+                  "attribute": "next-text",
                   "name": "nextText",
                   "primary": false,
                   "type": { "kind": "ts", "name": "string" }
                 },
-                "pageSize": { "attribute": "pageSize", "name": "pageSize", "primary": false },
-                "paginationSize": { "attribute": "paginationSize", "name": "paginationSize", "primary": false },
+                "pageSize": { "attribute": "page-size", "name": "pageSize", "primary": false },
+                "paginationSize": { "attribute": "pagination-size", "name": "paginationSize", "primary": false },
                 "previousText": {
-                  "attribute": "previousText",
+                  "attribute": "previous-text",
                   "name": "previousText",
                   "primary": false,
                   "type": { "kind": "ts", "name": "string" }
                 },
-                "totalItems": { "attribute": "totalItems", "name": "totalItems", "primary": false }
+                "totalItems": { "attribute": "total-items", "name": "totalItems", "primary": false }
               },
               "boundary": true,
               "capture": false,
@@ -1239,8 +1541,10 @@
           "valueConverters": {
             "sanitize": {
               "className": "SanitizeValueConverter",
+              "gaps": { "intrinsic": 0, "total": 0 },
               "in": { "kind": "ts", "name": "string" },
               "name": "sanitize",
+              "origin": "builtin",
               "out": { "kind": "ts", "name": "string | null" }
             }
           }
@@ -1358,21 +1662,25 @@
             "attribute": {
               "location": { "end": 505, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 461 },
               "origin": "source",
+              "state": "known",
               "value": "api"
             },
             "mode": {
               "location": { "end": 505, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 461 },
               "origin": "source",
+              "state": "known",
               "value": "twoWay"
             },
             "primary": {
               "location": { "end": 505, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 461 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 505, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 461 },
               "origin": "source",
+              "state": "known",
               "value": "api"
             }
           },
@@ -1380,21 +1688,25 @@
             "attribute": {
               "location": { "end": 371, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 319 },
               "origin": "source",
-              "value": "currentPage"
+              "state": "known",
+              "value": "current-page"
             },
             "mode": {
               "location": { "end": 371, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 319 },
               "origin": "source",
+              "state": "known",
               "value": "twoWay"
             },
             "primary": {
               "location": { "end": 371, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 319 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 371, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 319 },
               "origin": "source",
+              "state": "known",
               "value": "currentPage"
             }
           },
@@ -1402,25 +1714,30 @@
             "attribute": {
               "location": { "end": 222, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 202 },
               "origin": "source",
+              "state": "known",
               "value": "data"
             },
             "mode": {
               "location": { "end": 222, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 202 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 222, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 202 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 222, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 202 },
               "origin": "source",
+              "state": "known",
               "value": "data"
             },
             "type": {
               "location": { "end": 222, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 202 },
               "origin": "source",
+              "state": "known",
               "value": "any[]"
             }
           },
@@ -1428,25 +1745,30 @@
             "attribute": {
               "location": { "end": 190, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 159 },
               "origin": "source",
-              "value": "dataSource"
+              "state": "known",
+              "value": "data-source"
             },
             "mode": {
               "location": { "end": 190, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 159 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 190, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 159 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 190, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 159 },
               "origin": "source",
+              "state": "known",
               "value": "dataSource"
             },
             "type": {
               "location": { "end": 190, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 159 },
               "origin": "source",
+              "state": "known",
               "value": "string"
             }
           },
@@ -1454,21 +1776,25 @@
             "attribute": {
               "location": { "end": 280, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 228 },
               "origin": "source",
-              "value": "displayData"
+              "state": "known",
+              "value": "display-data"
             },
             "mode": {
               "location": { "end": 280, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 228 },
               "origin": "source",
+              "state": "known",
               "value": "twoWay"
             },
             "primary": {
               "location": { "end": 280, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 228 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 280, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 228 },
               "origin": "source",
+              "state": "known",
               "value": "displayData"
             }
           },
@@ -1476,25 +1802,30 @@
             "attribute": {
               "location": { "end": 311, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 288 },
               "origin": "source",
+              "state": "known",
               "value": "filters"
             },
             "mode": {
               "location": { "end": 311, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 288 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 311, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 288 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 311, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 288 },
               "origin": "source",
+              "state": "known",
               "value": "filters"
             },
             "type": {
               "location": { "end": 311, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 288 },
               "origin": "source",
+              "state": "known",
               "value": "any[]"
             }
           },
@@ -1502,20 +1833,24 @@
             "attribute": {
               "location": { "end": 396, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 377 },
               "origin": "source",
-              "value": "pageSize"
+              "state": "known",
+              "value": "page-size"
             },
             "mode": {
               "location": { "end": 396, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 377 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 396, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 377 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 396, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 377 },
               "origin": "source",
+              "state": "known",
               "value": "pageSize"
             }
           },
@@ -1523,21 +1858,25 @@
             "attribute": {
               "location": { "end": 453, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 402 },
               "origin": "source",
-              "value": "totalItems"
+              "state": "known",
+              "value": "total-items"
             },
             "mode": {
               "location": { "end": 453, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 402 },
               "origin": "source",
+              "state": "known",
               "value": "twoWay"
             },
             "primary": {
               "location": { "end": 453, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 402 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 453, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 402 },
               "origin": "source",
+              "state": "known",
               "value": "totalItems"
             }
           }
@@ -1545,18 +1884,23 @@
         "className": {
           "location": { "end": 7054, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 76 },
           "origin": "source",
+          "state": "known",
           "value": "AureliaTableCustomAttribute"
         },
+        "declarationForm": "decorator",
+        "dependencies": [],
         "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts",
         "kind": "custom-attribute",
         "name": {
-          "location": { "end": 7054, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 76 },
+          "location": { "end": 108, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 93 },
           "origin": "source",
+          "state": "known",
           "value": "aurelia-table"
         },
         "noMultiBindings": {
           "location": { "end": 7054, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 76 },
           "origin": "source",
+          "state": "known",
           "value": false
         }
       },
@@ -1573,25 +1917,30 @@
             "attribute": {
               "location": { "end": 449, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 424 },
               "origin": "source",
+              "state": "known",
               "value": "custom"
             },
             "mode": {
               "location": { "end": 449, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 424 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 449, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 424 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 449, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 424 },
               "origin": "source",
+              "state": "known",
               "value": "custom"
             },
             "type": {
               "location": { "end": 449, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 424 },
               "origin": "source",
+              "state": "known",
               "value": "boolean"
             }
           },
@@ -1599,25 +1948,30 @@
             "attribute": {
               "location": { "end": 373, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 347 },
               "origin": "source",
+              "state": "known",
               "value": "mode"
             },
             "mode": {
               "location": { "end": 373, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 347 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 373, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 347 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 373, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 347 },
               "origin": "source",
+              "state": "known",
               "value": "mode"
             },
             "type": {
               "location": { "end": 373, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 347 },
               "origin": "source",
+              "state": "known",
               "value": "string"
             }
           },
@@ -1625,21 +1979,25 @@
             "attribute": {
               "location": { "end": 344, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 302 },
               "origin": "source",
+              "state": "known",
               "value": "row"
             },
             "mode": {
               "location": { "end": 344, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 302 },
               "origin": "source",
+              "state": "known",
               "value": "twoWay"
             },
             "primary": {
               "location": { "end": 344, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 302 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 344, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 302 },
               "origin": "source",
+              "state": "known",
               "value": "row"
             }
           },
@@ -1647,25 +2005,30 @@
             "attribute": {
               "location": { "end": 421, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 376 },
               "origin": "source",
-              "value": "selectedClass"
+              "state": "known",
+              "value": "selected-class"
             },
             "mode": {
               "location": { "end": 421, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 376 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 421, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 376 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 421, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 376 },
               "origin": "source",
+              "state": "known",
               "value": "selectedClass"
             },
             "type": {
               "location": { "end": 421, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 376 },
               "origin": "source",
+              "state": "known",
               "value": "string"
             }
           }
@@ -1673,18 +2036,23 @@
         "className": {
           "location": { "end": 2026, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 175 },
           "origin": "source",
+          "state": "known",
           "value": "AutSelectCustomAttribute"
         },
+        "declarationForm": "decorator",
+        "dependencies": [],
         "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts",
         "kind": "custom-attribute",
         "name": {
-          "location": { "end": 2026, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 175 },
+          "location": { "end": 204, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 192 },
           "origin": "source",
+          "state": "known",
           "value": "aut-select"
         },
         "noMultiBindings": {
           "location": { "end": 2026, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 175 },
           "origin": "source",
+          "state": "known",
           "value": false
         }
       },
@@ -1701,20 +2069,24 @@
             "attribute": {
               "location": { "end": 317, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 300 },
               "origin": "source",
+              "state": "known",
               "value": "custom"
             },
             "mode": {
               "location": { "end": 317, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 300 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 317, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 300 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 317, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 300 },
               "origin": "source",
+              "state": "known",
               "value": "custom"
             }
           },
@@ -1722,20 +2094,24 @@
             "attribute": {
               "location": { "end": 340, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 322 },
               "origin": "source",
+              "state": "known",
               "value": "default"
             },
             "mode": {
               "location": { "end": 340, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 322 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 340, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 322 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 340, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 322 },
               "origin": "source",
+              "state": "known",
               "value": "default"
             }
           },
@@ -1743,20 +2119,24 @@
             "attribute": {
               "location": { "end": 295, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 281 },
               "origin": "source",
+              "state": "known",
               "value": "key"
             },
             "mode": {
               "location": { "end": 295, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 281 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 295, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 281 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 295, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 281 },
               "origin": "source",
+              "state": "known",
               "value": "key"
             }
           }
@@ -1764,18 +2144,23 @@
         "className": {
           "location": { "end": 2391, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 156 },
           "origin": "source",
+          "state": "known",
           "value": "AutSortCustomAttribute"
         },
+        "declarationForm": "decorator",
+        "dependencies": [],
         "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts",
         "kind": "custom-attribute",
         "name": {
-          "location": { "end": 2391, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 156 },
+          "location": { "end": 183, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 173 },
           "origin": "source",
+          "state": "known",
           "value": "aut-sort"
         },
         "noMultiBindings": {
           "location": { "end": 2391, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 156 },
           "origin": "source",
+          "state": "known",
           "value": false
         }
       },
@@ -1797,6 +2182,7 @@
           }
         },
         "className": { "origin": "builtin", "value": "Focus" },
+        "dependencies": [],
         "kind": "custom-attribute",
         "name": { "origin": "builtin", "value": "focus" },
         "noMultiBindings": { "origin": "builtin", "value": false }
@@ -1817,6 +2203,7 @@
           }
         },
         "className": { "origin": "builtin", "value": "Href" },
+        "dependencies": [],
         "kind": "custom-attribute",
         "name": { "origin": "builtin", "value": "href" },
         "noMultiBindings": { "origin": "builtin", "value": true },
@@ -1866,6 +2253,7 @@
           }
         },
         "className": { "origin": "builtin", "value": "Load" },
+        "dependencies": [],
         "kind": "custom-attribute",
         "name": { "origin": "builtin", "value": "load" },
         "noMultiBindings": { "origin": "builtin", "value": false },
@@ -1891,6 +2279,7 @@
           }
         },
         "className": { "origin": "builtin", "value": "Show" },
+        "dependencies": [],
         "kind": "custom-attribute",
         "name": { "origin": "builtin", "value": "show" },
         "noMultiBindings": { "origin": "builtin", "value": false }
@@ -2055,25 +2444,30 @@
             "attribute": {
               "location": { "end": 519, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 487 },
               "origin": "source",
-              "value": "boundaryLinks"
+              "state": "known",
+              "value": "boundary-links"
             },
             "mode": {
               "location": { "end": 519, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 487 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 519, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 487 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 519, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 487 },
               "origin": "source",
+              "state": "known",
               "value": "boundaryLinks"
             },
             "type": {
               "location": { "end": 519, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 487 },
               "origin": "source",
+              "state": "known",
               "value": "boolean"
             }
           },
@@ -2081,21 +2475,25 @@
             "attribute": {
               "location": { "end": 365, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 315 },
               "origin": "source",
-              "value": "currentPage"
+              "state": "known",
+              "value": "current-page"
             },
             "mode": {
               "location": { "end": 365, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 315 },
               "origin": "source",
+              "state": "known",
               "value": "twoWay"
             },
             "primary": {
               "location": { "end": 365, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 315 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 365, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 315 },
               "origin": "source",
+              "state": "known",
               "value": "currentPage"
             }
           },
@@ -2103,25 +2501,30 @@
             "attribute": {
               "location": { "end": 624, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 592 },
               "origin": "source",
-              "value": "directionLinks"
+              "state": "known",
+              "value": "direction-links"
             },
             "mode": {
               "location": { "end": 624, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 592 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 624, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 592 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 624, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 592 },
               "origin": "source",
+              "state": "known",
               "value": "directionLinks"
             },
             "type": {
               "location": { "end": 624, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 592 },
               "origin": "source",
+              "state": "known",
               "value": "boolean"
             }
           },
@@ -2129,25 +2532,30 @@
             "attribute": {
               "location": { "end": 554, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 524 },
               "origin": "source",
-              "value": "firstText"
+              "state": "known",
+              "value": "first-text"
             },
             "mode": {
               "location": { "end": 554, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 524 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 554, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 524 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 554, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 524 },
               "origin": "source",
+              "state": "known",
               "value": "firstText"
             },
             "type": {
               "location": { "end": 554, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 524 },
               "origin": "source",
+              "state": "known",
               "value": "string"
             }
           },
@@ -2155,25 +2563,30 @@
             "attribute": {
               "location": { "end": 452, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 420 },
               "origin": "source",
-              "value": "hideSinglePage"
+              "state": "known",
+              "value": "hide-single-page"
             },
             "mode": {
               "location": { "end": 452, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 420 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 452, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 420 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 452, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 420 },
               "origin": "source",
+              "state": "known",
               "value": "hideSinglePage"
             },
             "type": {
               "location": { "end": 452, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 420 },
               "origin": "source",
+              "state": "known",
               "value": "boolean"
             }
           },
@@ -2181,25 +2594,30 @@
             "attribute": {
               "location": { "end": 587, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 559 },
               "origin": "source",
-              "value": "lastText"
+              "state": "known",
+              "value": "last-text"
             },
             "mode": {
               "location": { "end": 587, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 559 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 587, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 559 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 587, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 559 },
               "origin": "source",
+              "state": "known",
               "value": "lastText"
             },
             "type": {
               "location": { "end": 587, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 559 },
               "origin": "source",
+              "state": "known",
               "value": "string"
             }
           },
@@ -2207,25 +2625,30 @@
             "attribute": {
               "location": { "end": 688, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 663 },
               "origin": "source",
-              "value": "nextText"
+              "state": "known",
+              "value": "next-text"
             },
             "mode": {
               "location": { "end": 688, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 663 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 688, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 663 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 688, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 663 },
               "origin": "source",
+              "state": "known",
               "value": "nextText"
             },
             "type": {
               "location": { "end": 688, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 663 },
               "origin": "source",
+              "state": "known",
               "value": "string"
             }
           },
@@ -2233,20 +2656,24 @@
             "attribute": {
               "location": { "end": 389, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 370 },
               "origin": "source",
-              "value": "pageSize"
+              "state": "known",
+              "value": "page-size"
             },
             "mode": {
               "location": { "end": 389, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 370 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 389, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 370 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 389, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 370 },
               "origin": "source",
+              "state": "known",
               "value": "pageSize"
             }
           },
@@ -2254,20 +2681,24 @@
             "attribute": {
               "location": { "end": 482, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 457 },
               "origin": "source",
-              "value": "paginationSize"
+              "state": "known",
+              "value": "pagination-size"
             },
             "mode": {
               "location": { "end": 482, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 457 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 482, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 457 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 482, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 457 },
               "origin": "source",
+              "state": "known",
               "value": "paginationSize"
             }
           },
@@ -2275,25 +2706,30 @@
             "attribute": {
               "location": { "end": 658, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 629 },
               "origin": "source",
-              "value": "previousText"
+              "state": "known",
+              "value": "previous-text"
             },
             "mode": {
               "location": { "end": 658, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 629 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 658, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 629 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 658, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 629 },
               "origin": "source",
+              "state": "known",
               "value": "previousText"
             },
             "type": {
               "location": { "end": 658, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 629 },
               "origin": "source",
+              "state": "known",
               "value": "string"
             }
           },
@@ -2301,20 +2737,24 @@
             "attribute": {
               "location": { "end": 415, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 394 },
               "origin": "source",
-              "value": "totalItems"
+              "state": "known",
+              "value": "total-items"
             },
             "mode": {
               "location": { "end": 415, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 394 },
-              "origin": "source"
+              "origin": "source",
+              "state": "unknown"
             },
             "primary": {
               "location": { "end": 415, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 394 },
               "origin": "source",
+              "state": "known",
               "value": false
             },
             "property": {
               "location": { "end": 415, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 394 },
               "origin": "source",
+              "state": "known",
               "value": "totalItems"
             }
           }
@@ -2322,39 +2762,47 @@
         "boundary": {
           "location": { "end": 3629, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 162 },
           "origin": "source",
+          "state": "known",
           "value": true
         },
         "capture": {
           "location": { "end": 3629, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 162 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "className": {
           "location": { "end": 3629, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 162 },
           "origin": "source",
+          "state": "known",
           "value": "AutPaginationCustomElement"
         },
         "containerless": {
           "location": { "end": 3629, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 162 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
+        "declarationForm": "decorator",
         "dependencies": [],
         "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts",
         "kind": "custom-element",
         "name": {
-          "location": { "end": 3629, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 162 },
+          "location": { "end": 203, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 187 },
           "origin": "source",
+          "state": "known",
           "value": "aut-pagination"
         },
         "processContent": {
           "location": { "end": 3629, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 162 },
           "origin": "source",
+          "state": "known",
           "value": false
         },
         "shadowOptions": {
           "location": { "end": 3629, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-pagination.ts", "pos": 162 },
-          "origin": "source"
+          "origin": "source",
+          "state": "known"
         }
       },
       "id": "sym:84f2d481b557f318a76fc5489068cd4509b55e402a56c3065a5f1150835f72aa",
@@ -2399,7 +2847,14 @@
     {
       "data": {
         "aliases": { "origin": "builtin", "value": [] },
-        "bindables": {},
+        "bindables": {
+          "value": {
+            "attribute": { "origin": "builtin", "value": "value" },
+            "mode": { "origin": "builtin", "value": "fromView" },
+            "primary": { "origin": "builtin", "value": false },
+            "property": { "origin": "builtin", "value": "value" }
+          }
+        },
         "className": { "origin": "builtin", "value": "Catch" },
         "kind": "template-controller",
         "name": { "origin": "builtin", "value": "catch" },
@@ -2407,7 +2862,7 @@
         "semantics": {
           "cardinality": "zero-one",
           "injects": {
-            "alias": { "defaultName": "error", "prop": "value" }
+            "alias": { "defaultName": "catch", "prop": "value" }
           },
           "linksTo": "promise",
           "origin": "catch",
@@ -2505,7 +2960,15 @@
     {
       "data": {
         "aliases": { "origin": "builtin", "value": [] },
-        "bindables": {},
+        "bindables": {
+          "value": {
+            "attribute": { "origin": "builtin", "value": "value" },
+            "mode": { "origin": "builtin", "value": "toView" },
+            "primary": { "origin": "builtin", "value": false },
+            "property": { "origin": "builtin", "value": "value" },
+            "type": { "origin": "builtin", "value": "Promise<unknown>" }
+          }
+        },
         "className": { "origin": "builtin", "value": "Pending" },
         "kind": "template-controller",
         "name": { "origin": "builtin", "value": "pending" },
@@ -2526,6 +2989,47 @@
       "data": {
         "aliases": { "origin": "builtin", "value": [] },
         "bindables": {
+          "activated": {
+            "attribute": { "origin": "builtin", "value": "activated" },
+            "mode": { "origin": "builtin", "value": "default" },
+            "primary": { "origin": "builtin", "value": false },
+            "property": { "origin": "builtin", "value": "activated" },
+            "type": { "origin": "builtin", "value": "(target: string | Element | null | undefined, view: unknown) => void | Promise<void>" }
+          },
+          "activating": {
+            "attribute": { "origin": "builtin", "value": "activating" },
+            "mode": { "origin": "builtin", "value": "default" },
+            "primary": { "origin": "builtin", "value": false },
+            "property": { "origin": "builtin", "value": "activating" },
+            "type": { "origin": "builtin", "value": "(target: string | Element | null | undefined, view: unknown) => void | Promise<void>" }
+          },
+          "callbackContext": {
+            "attribute": { "origin": "builtin", "value": "callbackContext" },
+            "mode": { "origin": "builtin", "value": "default" },
+            "primary": { "origin": "builtin", "value": false },
+            "property": { "origin": "builtin", "value": "callbackContext" }
+          },
+          "deactivated": {
+            "attribute": { "origin": "builtin", "value": "deactivated" },
+            "mode": { "origin": "builtin", "value": "default" },
+            "primary": { "origin": "builtin", "value": false },
+            "property": { "origin": "builtin", "value": "deactivated" },
+            "type": { "origin": "builtin", "value": "(target: string | Element | null | undefined, view: unknown) => void | Promise<void>" }
+          },
+          "deactivating": {
+            "attribute": { "origin": "builtin", "value": "deactivating" },
+            "mode": { "origin": "builtin", "value": "default" },
+            "primary": { "origin": "builtin", "value": false },
+            "property": { "origin": "builtin", "value": "deactivating" },
+            "type": { "origin": "builtin", "value": "(target: string | Element | null | undefined, view: unknown) => void | Promise<void>" }
+          },
+          "position": {
+            "attribute": { "origin": "builtin", "value": "position" },
+            "mode": { "origin": "builtin", "value": "default" },
+            "primary": { "origin": "builtin", "value": false },
+            "property": { "origin": "builtin", "value": "position" },
+            "type": { "origin": "builtin", "value": "'beforebegin' | 'afterbegin' | 'beforeend' | 'afterend'" }
+          },
           "renderContext": {
             "attribute": { "origin": "builtin", "value": "renderContext" },
             "mode": { "origin": "builtin", "value": "default" },
@@ -2595,14 +3099,21 @@
     {
       "data": {
         "aliases": { "origin": "builtin", "value": [] },
-        "bindables": {},
+        "bindables": {
+          "items": {
+            "attribute": { "origin": "builtin", "value": "items" },
+            "mode": { "origin": "builtin", "value": "default" },
+            "primary": { "origin": "builtin", "value": true },
+            "property": { "origin": "builtin", "value": "items" }
+          }
+        },
         "className": { "origin": "builtin", "value": "Repeat" },
         "kind": "template-controller",
         "name": { "origin": "builtin", "value": "repeat" },
         "noMultiBindings": { "origin": "builtin", "value": false },
         "semantics": {
           "cardinality": "zero-many",
-          "injects": { "contextuals": [ "$index", "$first", "$last", "$even", "$odd", "$length", "$middle" ] },
+          "injects": { "contextuals": [ "$index", "$first", "$last", "$even", "$odd", "$length", "$middle", "$previous" ] },
           "origin": "repeat",
           "scope": "overlay",
           "tailProps": {
@@ -2646,7 +3157,14 @@
     {
       "data": {
         "aliases": { "origin": "builtin", "value": [] },
-        "bindables": {},
+        "bindables": {
+          "value": {
+            "attribute": { "origin": "builtin", "value": "value" },
+            "mode": { "origin": "builtin", "value": "fromView" },
+            "primary": { "origin": "builtin", "value": false },
+            "property": { "origin": "builtin", "value": "value" }
+          }
+        },
         "className": { "origin": "builtin", "value": "Then" },
         "kind": "template-controller",
         "name": { "origin": "builtin", "value": "then" },
@@ -2654,7 +3172,7 @@
         "semantics": {
           "cardinality": "zero-one",
           "injects": {
-            "alias": { "defaultName": "data", "prop": "value" }
+            "alias": { "defaultName": "then", "prop": "value" }
           },
           "linksTo": "promise",
           "origin": "then",

@@ -9,8 +9,8 @@
  */
 
 import type { IncomingMessage } from "node:http";
-import type { ResourceGraph, ResourceScopeId, SemanticsWithCaches, CompileTrace } from "@aurelia-ls/compiler";
-import type { ResolutionResult, TemplateInfo, RouteTree, DefineMap, ExperimentalPolicy } from "@aurelia-ls/resolution";
+import type { ResourceGraph, ResourceScopeId, MaterializedSemantics, CompileTrace, AotSemanticSnapshot } from "@aurelia-ls/compiler";
+import type { ProjectSemanticsDiscoveryResult, TemplateInfo, RouteTree, DefineMap } from "@aurelia-ls/compiler";
 import type { SSRRequestContext } from "@aurelia-ls/ssr";
 
 // ============================================================================
@@ -18,11 +18,11 @@ import type { SSRRequestContext } from "@aurelia-ls/ssr";
 // ============================================================================
 
 /**
- * Re-export convention types from resolution package.
+ * Re-export convention types from compiler.
  * Users can import these directly from vite-plugin for convenience.
  *
  * ConventionConfig is the canonical type for all convention configuration.
- * See resolution package for the authoritative definitions.
+ * Compiler exports remain the authoritative definitions.
  */
 export type {
   // Core convention config
@@ -40,9 +40,8 @@ export type {
   DirectoryConvention,
   DirectoryScope,
   DirectoryMatch,
-} from "@aurelia-ls/resolution";
+} from "@aurelia-ls/compiler";
 
-export type { ExperimentalPolicy };
 
 // Local imports for internal use
 import type {
@@ -50,7 +49,7 @@ import type {
   DirectoryConventionConfig,
   TemplatePairingConfig,
   StylesheetPairingConfig,
-} from "@aurelia-ls/resolution";
+} from "@aurelia-ls/compiler";
 
 /**
  * Re-export SSG types from ssg package.
@@ -320,7 +319,7 @@ export interface SSROptions {
 
   /**
    * Compile-time defines for conditional registration guards.
-   * Used by resolution partial evaluation (e.g. window.__AU_DEF__).
+   * Used by discovery partial evaluation (e.g. window.__AU_DEF__).
    *
    * @example
    * defines: ssrDefines()
@@ -407,7 +406,7 @@ export interface ExplicitAttributeConfig {
 }
 
 /**
- * Policy for merging third-party resources into the resolution artifacts.
+ * Policy for merging third-party resources into discovery artifacts.
  *
  * Controls how aggressively artifacts are rebuilt when third-party resources
  * are added. Trade-off is scope correctness vs rebuild cost.
@@ -430,10 +429,6 @@ export interface ExplicitAttributeConfig {
  * **`rebuild-graph`**: Most thorough. Rebuilds everything including the
  * ResourceGraph from scratch based on the new semantics. Use when third-party
  * resources must introduce scope structure changes (rare).
- *
- * **Not to be confused with `ExperimentalPolicy`** (top-level `policy` option),
- * which controls gap/confidence diagnostic behavior. This is a separate concern
- * specific to third-party resource merging.
  *
  * @default "root-scope"
  */
@@ -535,7 +530,7 @@ export interface ThirdPartyOptions {
   resources?: ExplicitResourceConfig;
 
   /**
-   * Policy for how third-party resources are merged into resolution artifacts.
+   * Policy for how third-party resources are merged into discovery artifacts.
    *
    * - `"root-scope"` (default): Rebuild semantics and merge into root scope
    * - `"semantics"`: Rebuild semantics/catalog/syntax but keep graph
@@ -549,7 +544,7 @@ export interface ThirdPartyOptions {
 }
 
 // NOTE: Convention types (ConventionConfig, DirectoryConventionConfig, etc.)
-// are now defined in @aurelia-ls/resolution and re-exported above.
+// are now defined in @aurelia-ls/compiler and re-exported above.
 // This ensures a single source of truth for convention configuration.
 
 // ============================================================================
@@ -617,14 +612,16 @@ export interface CompilerOptions {
  */
 export type DebugChannel =
   | "lower"      // 10-lower: element/attr classification
-  | "resolve"    // 20-resolve: binding resolution
+  | "link"       // 20-link: binding resolution
   | "bind"       // 30-bind: scope frame creation
   | "typecheck"  // 40-typecheck: type inference
   | "aot"        // AOT synthesis
   | "overlay"    // LSP overlay synthesis
   | "ssr"        // SSR rendering
   | "transform"  // Transform edits
-  | "resolution"; // Resource discovery
+  | "project"    // Project semantics (resource discovery)
+  | "workspace"  // Semantic workspace (editor/LSP)
+  | "vite";      // Vite plugin lifecycle
 
 /**
  * Trace output destination.
@@ -759,7 +756,7 @@ export interface HookContext {
   readonly command: "serve" | "build";
 
   /** Resolution context (when tsconfig provided) */
-  readonly resolution: ResolutionContext | null;
+  readonly projectSemantics: ProjectSemanticsContext | null;
 }
 
 /**
@@ -894,7 +891,7 @@ export interface AureliaPluginOptions {
 
   /**
    * Path to tsconfig.json for TypeScript project.
-   * Required for resource resolution (discovering custom elements).
+   * Required for resource discovery (discovering custom elements).
    * Auto-detected if not provided.
    *
    * @example './tsconfig.json'
@@ -902,7 +899,7 @@ export interface AureliaPluginOptions {
   tsconfig?: string;
 
   /**
-   * Package root path for resolution snapshots and npm analysis context.
+   * Package root path for discovery snapshots and npm analysis context.
    * Defaults to the Vite project root when not provided.
    */
   packagePath?: string;
@@ -964,7 +961,7 @@ export interface AureliaPluginOptions {
    * Convention configuration.
    * Controls resource discovery and classification.
    *
-   * Uses ConventionConfig from resolution package (canonical type).
+   * Uses ConventionConfig from compiler (canonical type).
    */
   conventions?: ConventionConfig;
 
@@ -989,27 +986,7 @@ export interface AureliaPluginOptions {
    */
   debug?: DebugOptions;
 
-  /**
-   * Experimental policy for gap/confidence diagnostic control.
-   *
-   * - `gaps`: Promote `gap:*` diagnostics to a configured severity (info/warning/error)
-   * - `confidence.min`: Emit diagnostic when catalog confidence falls below threshold
-   *
-   * Behavior is diagnostic-only — resources are never skipped or excluded.
-   *
-   * **Not to be confused with `thirdParty.policy`**, which controls merge strategy.
-   *
-   * @example
-   * ```ts
-   * policy: {
-   *   gaps: "error",                  // Treat gaps as errors
-   *   confidence: { min: "high" },    // Warn if confidence < high
-   * }
-   * ```
-   *
-   * @experimental
-   */
-  policy?: ExperimentalPolicy;
+ 
 
   // ---------------------------------------------------------------------------
   // Advanced
@@ -1111,13 +1088,15 @@ export interface ResolvedTraceOptions {
  * Resolution context containing discovered resources.
  * Created when tsconfig is provided to the plugin.
  */
-export interface ResolutionContext {
-  /** The full resolution result */
-  result: ResolutionResult;
+export interface ProjectSemanticsContext {
+  /** The full project-semantics discovery result */
+  result: ProjectSemanticsDiscoveryResult;
   /** Resource graph for compilation */
   resourceGraph: ResourceGraph;
   /** Merged semantics with discovered resources */
-  semantics: SemanticsWithCaches;
+  semantics: MaterializedSemantics;
+  /** Cached semantic snapshot for AOT compilation. */
+  snapshot: AotSemanticSnapshot;
   /** Template info for looking up component scope */
   templates: Map<string, TemplateInfo>;
   /** Lookup scope for a template path */
@@ -1157,12 +1136,12 @@ export interface ResolvedSSRConfig {
 /**
  * Resolved convention options with defaults applied.
  *
- * This is the internal resolved form. Input uses ConventionConfig from resolution.
+ * This is the internal resolved form. Input uses ConventionConfig from discovery.
  */
 export interface ResolvedConventionOptions {
   /** Whether conventions are enabled */
   enabled: boolean;
-  /** Resolved ConventionConfig from resolution (with defaults applied) */
+  /** Resolved ConventionConfig from discovery (with defaults applied) */
   config: Required<Omit<ConventionConfig, "directories" | "templatePairing" | "stylesheetPairing">> & {
     directories: DirectoryConventionConfig;
     templatePairing: TemplatePairingConfig;
@@ -1225,8 +1204,6 @@ export interface ResolvedAureliaOptions {
   /** Resolved debug options */
   debug: ResolvedDebugOptions;
 
-  /** Experimental policy (gap/confidence consumption) */
-  policy?: ExperimentalPolicy;
 
   /** Experimental options (as-is, no expansion) */
   experimental: ExperimentalOptions;
@@ -1235,7 +1212,7 @@ export interface ResolvedAureliaOptions {
   hooks: PluginHooks;
 
   /** Resolution context (when tsconfig provided) */
-  resolution: ResolutionContext | null;
+  projectSemantics: ProjectSemanticsContext | null;
 
   /** Discovered route tree (when ssg enabled) */
   routeTree: RouteTree | null;
@@ -1265,7 +1242,7 @@ export interface PluginState {
   /** HTML shell template */
   htmlShell: string;
   /** Resolution context (when tsconfig provided) */
-  resolution: ResolutionContext | null;
+  projectSemantics: ProjectSemanticsContext | null;
   /** Base href for routing */
   baseHref: string;
   /** Path to registration module */

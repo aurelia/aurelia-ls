@@ -82,12 +82,14 @@ function processPath(p) {
       if (entry === "node_modules" || entry.startsWith(".")) continue;
       processPath(path.join(p, entry));
     }
-  } else if (p.endsWith(".json")) {
+  } else if (p.endsWith(".json") && !p.endsWith("package.json") && !p.endsWith("tsconfig.json")) {
     const raw = fs.readFileSync(p, "utf8");
     const json = JSON.parse(raw);
     const out = format(json, 0) + "\n";
-    if (out !== raw) fs.writeFileSync(p, out, "utf8");
-    console.log(`formatted: ${p}`);
+    if (out !== raw) {
+      fs.writeFileSync(p, out, "utf8");
+      console.log(`formatted: ${p}`);
+    }
   }
 }
 

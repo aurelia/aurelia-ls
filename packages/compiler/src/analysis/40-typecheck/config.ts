@@ -229,8 +229,11 @@ export interface TypeCompatibilityResult {
 }
 
 /**
- * Check if an actual type is compatible with an expected type,
+ * Check if an actual (TS-resolved) type is compatible with an expected type,
  * considering the binding context and configuration.
+ *
+ * The actual type comes from the TypeScript language service (fully resolved).
+ * The expected type comes from binding contract extraction (semantic model).
  */
 export function checkTypeCompatibility(
   actual: string,
@@ -251,13 +254,22 @@ export function checkTypeCompatibility(
     return { compatible: true, severity: "off" };
   }
 
-  // Function type checking - be lenient for now
-  // Note: e is already lowercased by normalizeType
+  // Function type checking — accept any function-like for Function target
   if (e === "function" && isFunctionType(actual)) {
     return { compatible: true, severity: "off" };
   }
 
   // === Coercion Rules ===
+
+  // Truthy coercion: boolean targets in component context accept any
+  // truthy-evaluable type. This handles `if.bind="items.length"` (number),
+  // `show.bind="name"` (string), etc. At runtime, Aurelia coerces to boolean
+  // via truthiness evaluation.
+  if (e === "boolean" && context === "component.bindable") {
+    if (isTruthyEvaluable(a)) {
+      return { compatible: true, severity: "off", coerced: true };
+    }
+  }
 
   // DOM coercion: number/boolean → string
   if (config.domCoercion && isDomContext(context)) {
@@ -275,7 +287,7 @@ export function checkTypeCompatibility(
     return {
       compatible: false,
       severity,
-      reason: `${a} will render as literal text "${a}" - use nullish coalescing (??) or provide a default`,
+      reason: `${actual} will render as literal text "${actual}" - use nullish coalescing (??) or provide a default`,
     };
   }
 
@@ -284,6 +296,24 @@ export function checkTypeCompatibility(
     if ((e === "string" && a === "number") || (e === "number" && a === "string")) {
       return { compatible: true, severity: "off", coerced: true };
     }
+  }
+
+  // Union type handling: if actual is a union, check if all members are compatible
+  if (a.includes("|")) {
+    const members = splitUnionType(a);
+    const allCompatible = members.every((member) => {
+      const memberResult = checkTypeCompatibility(member.trim(), expected, context, config);
+      return memberResult.compatible;
+    });
+    if (allCompatible) {
+      return { compatible: true, severity: "off" };
+    }
+  }
+
+  // Safety valve: complex TS types that string comparison can't handle.
+  // Rather than risk a false alarm, treat as compatible.
+  if (isUnevaluatedTypeExpr(a)) {
+    return { compatible: true, severity: "off" };
   }
 
   // No coercion rule matched - it's a type mismatch
@@ -299,15 +329,30 @@ export function checkTypeCompatibility(
  * ============================================================================= */
 
 function normalizeType(t: string): string {
-  // Remove whitespace, parentheses, and normalize common patterns
-  return t.replace(/[\s()]/g, "").toLowerCase();
+  return t.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+/**
+ * Detect complex TypeScript type expressions that string comparison can't handle.
+ *
+ * When the TS language service returns a type like `Omit<MyVm, 'key'> & { key: string }`,
+ * simple string comparison against `string` would incorrectly flag a mismatch.
+ * Rather than risk a false alarm, treat unresolvable types as compatible.
+ */
+function isUnevaluatedTypeExpr(normalized: string): boolean {
+  // Any type with generic brackets is too complex for string comparison
+  if (normalized.includes("<")) return true;
+  // Type queries
+  if (normalized.includes("typeof ")) return true;
+  // Intersection/mapped types from overlay frame type expressions
+  if (normalized.includes(" & ")) return true;
+  return false;
 }
 
 function isFunctionType(t: string): boolean {
   const normalized = t.replace(/\s+/g, "").toLowerCase();
   if (/\bfunction\b/i.test(t)) return true;
   if (normalized.includes("=>")) return true;
-  if (normalized.includes("returntype<")) return true;
   return false;
 }
 
@@ -315,8 +360,52 @@ function isDomContext(context: BindingContext): boolean {
   return context === "dom.attribute" || context === "dom.property";
 }
 
+/**
+ * Check if a type is truthy-evaluable at runtime.
+ * These types have meaningful boolean coercion in JavaScript:
+ * number (0 = false, non-zero = true), string (empty = false),
+ * object (always truthy), arrays, etc.
+ */
+function isTruthyEvaluable(normalized: string): boolean {
+  // Primitive types that have truthy/falsy semantics
+  if (normalized === "number" || normalized === "string") return true;
+  // Arrays and objects are always truthy
+  if (normalized.endsWith("[]")) return true;
+  // Any non-primitive type (class instances, objects) — truthy
+  if (!isPrimitiveKeyword(normalized)) return true;
+  return false;
+}
+
+function isPrimitiveKeyword(t: string): boolean {
+  return t === "string" || t === "number" || t === "boolean"
+    || t === "null" || t === "undefined" || t === "void"
+    || t === "never" || t === "symbol" || t === "bigint";
+}
+
 function isNullableType(t: string): boolean {
   const normalized = t.toLowerCase();
-  // Use word boundary to avoid matching "nonnullable" as nullable
   return /\bnull\b/.test(normalized) || /\bundefined\b/.test(normalized);
+}
+
+/**
+ * Split a union type string into its members, handling nested generics.
+ * "string | number" → ["string", "number"]
+ * "Map<string, number> | null" → ["Map<string, number>", "null"]
+ */
+function splitUnionType(t: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let current = "";
+  for (const ch of t) {
+    if (ch === "<" || ch === "(") depth++;
+    else if (ch === ">" || ch === ")") depth--;
+    else if (ch === "|" && depth === 0) {
+      parts.push(current);
+      current = "";
+      continue;
+    }
+    current += ch;
+  }
+  if (current) parts.push(current);
+  return parts;
 }

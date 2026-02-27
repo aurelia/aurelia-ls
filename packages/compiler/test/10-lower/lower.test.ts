@@ -5,9 +5,9 @@ import {
   type TestVector,
   type CompilerContext,
 } from "../_helpers/vector-runner.js";
-import { diffByKey } from "../_helpers/test-utils.js";
+import { diffByKeyCounts } from "../_helpers/test-utils.js";
 
-import { lowerDocument } from "@aurelia-ls/compiler";
+import { lowerDocument } from "../../out/analysis/10-lower/lower.js";
 
 interface DiagIntent {
   code: string;
@@ -16,6 +16,7 @@ interface DiagIntent {
 
 interface LowerIntent {
   expressions: ExpressionIntent[];
+  attributeCommands: AttributeCommandIntent[];
   controllers: ControllerIntent[];
   lets: LetIntent[];
   elements: ElementIntent[];
@@ -55,9 +56,18 @@ interface AttributeIntent {
   props: string[];
 }
 
+interface AttributeCommandIntent {
+  attr?: string;
+  to?: string;
+  command?: string;
+  code?: string;
+}
+
 interface LowerDiff {
   missingExpressions: string[];
   extraExpressions: string[];
+  missingAttributeCommands: string[];
+  extraAttributeCommands: string[];
   missingControllers: string[];
   extraControllers: string[];
   missingLets: string[];
@@ -75,10 +85,20 @@ type LowerExpect = Partial<LowerIntent>;
 runVectorTests<LowerExpect, LowerIntent, LowerDiff>({
   dirname: getDirname(import.meta.url),
   suiteName: "Lower (10)",
-  execute: (v: TestVector, ctx: CompilerContext) =>
-    reduceIrToLowerIntent(lowerDocument(v.markup, lowerOpts(ctx))),
+  execute: (v: TestVector, ctx: CompilerContext) => {
+    const ir = lowerDocument(v.markup, lowerOpts(ctx));
+    return reduceIrToLowerIntent(ir, ctx.diagnostics.all);
+  },
   compare: compareLowerIntent,
-  categories: ["expressions", "controllers", "lets", "elements", "attributes", "diags"],
+  categories: [
+    "expressions",
+    "attributeCommands",
+    "controllers",
+    "lets",
+    "elements",
+    "attributes",
+    "diags",
+  ],
 });
 
 // --- Intent Reduction ---
@@ -172,6 +192,12 @@ function reduceTemplate(t: TemplateIr, out: LowerIntent): void {
           } else {
             out.expressions.push({
               kind: "propCommand",
+              command: "bind",
+              code: ins.from?.code,
+            });
+            out.attributeCommands.push({
+              attr: ins.attr,
+              to: ins.to,
               command: "bind",
               code: ins.from?.code,
             });
@@ -279,6 +305,14 @@ function reduceTemplate(t: TemplateIr, out: LowerIntent): void {
                 p.attr,
                 p.from
               );
+              if (p.from && p.from.kind !== "interp") {
+                out.attributeCommands.push({
+                  attr: p.attr,
+                  to: p.to,
+                  command: modeToCommand(p.mode),
+                  code: p.from.code,
+                });
+              }
             }
           }
           if (ins.projections) {
@@ -308,6 +342,14 @@ function reduceTemplate(t: TemplateIr, out: LowerIntent): void {
                 p.attr,
                 p.from
               );
+              if (p.from && p.from.kind !== "interp") {
+                out.attributeCommands.push({
+                  attr: p.attr,
+                  to: p.to,
+                  command: modeToCommand(p.mode),
+                  code: p.from.code,
+                });
+              }
             }
           }
           break;
@@ -332,17 +374,18 @@ function reduceTemplate(t: TemplateIr, out: LowerIntent): void {
 
 interface IrDiag {
   code: string;
-  message: string;
+  message?: string;
+  source?: string;
 }
 
 interface IrModule {
   templates?: TemplateIr[];
-  diags?: IrDiag[];
 }
 
-function reduceIrToLowerIntent(irModule: IrModule): LowerIntent {
+function reduceIrToLowerIntent(irModule: IrModule, diagnostics: readonly IrDiag[]): LowerIntent {
   const out: LowerIntent = {
     expressions: [],
+    attributeCommands: [],
     controllers: [],
     lets: [],
     elements: [],
@@ -352,7 +395,8 @@ function reduceIrToLowerIntent(irModule: IrModule): LowerIntent {
   const root = irModule.templates?.[0];
   if (root) reduceTemplate(root, out);
   // Reduce diagnostics
-  for (const d of irModule.diags ?? []) {
+  for (const d of diagnostics) {
+    if (d.stage !== "lower") continue;
     out.diags.push({ code: d.code });
   }
   return out;
@@ -367,34 +411,50 @@ function compareLowerIntent(actual: LowerIntent, expected: Partial<LowerIntent>)
     `${e.res ?? ""}|${e.containerless ? 1 : 0}|${(e.props ?? []).join(",")}`;
   const keyAttr = (e: AttributeIntent) =>
     `${e.res ?? ""}|${e.alias ?? ""}|${(e.props ?? []).join(",")}`;
+  const keyAttrCommand = (e: AttributeCommandIntent) =>
+    `${e.attr ?? ""}|${e.to ?? ""}|${e.command ?? ""}|${e.code ?? ""}`;
   const keyDiag = (d: DiagIntent) => d.code;
 
-  const { missing: missingExpressions, extra: extraExpressions } = diffByKey(
+  const { missing: missingExpressions, extra: extraExpressions } = diffByKeyCounts(
     actual.expressions,
     expected.expressions,
     keyExpr
   );
-  const { missing: missingControllers, extra: extraControllers } = diffByKey(
+  const { missing: missingControllers, extra: extraControllers } = diffByKeyCounts(
     actual.controllers,
     expected.controllers,
     keyExpr as (e: ControllerIntent) => string
   );
-  const { missing: missingLets, extra: extraLets } = diffByKey(
+  const { missing: missingLets, extra: extraLets } = diffByKeyCounts(
     actual.lets,
     expected.lets,
     keyExpr as (e: LetIntent) => string
   );
-  const { missing: missingElements, extra: extraElements } = diffByKey(
+  const { missing: missingElements, extra: extraElements } = diffByKeyCounts(
     actual.elements,
     expected.elements,
     keyElem
   );
-  const { missing: missingAttributes, extra: extraAttributes } = diffByKey(
+  const { missing: missingAttributes, extra: extraAttributes } = diffByKeyCounts(
     actual.attributes,
     expected.attributes,
     keyAttr
   );
-  const { missing: missingDiags, extra: extraDiags } = diffByKey(
+  const enforceAttributeCommands = Object.prototype.hasOwnProperty.call(
+    expected,
+    "attributeCommands"
+  );
+  const {
+    missing: missingAttributeCommands,
+    extra: extraAttributeCommands,
+  } = enforceAttributeCommands
+    ? diffByKeyCounts(
+        actual.attributeCommands,
+        expected.attributeCommands,
+        keyAttrCommand
+      )
+    : { missing: [], extra: [] };
+  const { missing: missingDiags, extra: extraDiags } = diffByKeyCounts(
     actual.diags,
     expected.diags,
     keyDiag
@@ -403,6 +463,8 @@ function compareLowerIntent(actual: LowerIntent, expected: Partial<LowerIntent>)
   return {
     missingExpressions,
     extraExpressions,
+    missingAttributeCommands,
+    extraAttributeCommands,
     missingControllers,
     extraControllers,
     missingLets,

@@ -1,10 +1,9 @@
 import { describe, test, expect } from "vitest";
-import path from "node:path";
 
 import {
   compileAot,
-  DEFAULT_SEMANTICS,
-  prepareSemantics,
+  BUILTIN_SEMANTICS,
+  prepareProjectSemantics,
   buildTemplateSyntaxRegistry,
   createAttributeParserFromRegistry,
   materializeSemanticsForScope,
@@ -12,6 +11,8 @@ import {
   BINDING_MODE,
   toSourceFileId,
 } from "@aurelia-ls/compiler";
+
+const NOOP_MODULE_RESOLVER = (_specifier: string, _containingFile: string) => null;
 
 function hasSpan(value: unknown): boolean {
   if (!value) return false;
@@ -28,10 +29,11 @@ function hasSpan(value: unknown): boolean {
 
 describe("compileAot facade", () => {
   test("strips spans by default and respects catalog overrides", () => {
-    const sem = prepareSemantics(DEFAULT_SEMANTICS);
+    const sem = prepareProjectSemantics(BUILTIN_SEMANTICS);
     const result = compileAot("<div>${msg}</div>", {
-      semantics: DEFAULT_SEMANTICS,
+      semantics: BUILTIN_SEMANTICS,
       catalog: sem.catalog,
+      moduleResolver: NOOP_MODULE_RESOLVER,
     });
 
     expect(result.template).toBe("<div><!--au--> </div>");
@@ -46,28 +48,29 @@ describe("compileAot facade", () => {
   test("retains spans when stripSpans is false", () => {
     const templatePath = "/app/template.html";
     const result = compileAot("<div>${msg}</div>", {
-      semantics: DEFAULT_SEMANTICS,
+      semantics: BUILTIN_SEMANTICS,
       templatePath,
       stripSpans: false,
+      moduleResolver: NOOP_MODULE_RESOLVER,
     });
 
     const expr = result.codeResult.expressions[0];
     expect(expr).toBeDefined();
     expect(hasSpan(expr?.ast)).toBe(true);
-    const resolved = path.resolve(process.cwd(), templatePath);
-    const relative = path.isAbsolute(resolved) ? path.relative(process.cwd(), resolved) : resolved;
-    expect(expr?.ast.span?.file).toBe(toSourceFileId(relative));
+    expect(expr?.ast.span?.file).toBe(toSourceFileId(templatePath));
   });
 
   test("deduplicates expressions when enabled", () => {
     const markup = "<div>${msg}</div><div>${msg}</div>";
     const deduped = compileAot(markup, {
-      semantics: DEFAULT_SEMANTICS,
+      semantics: BUILTIN_SEMANTICS,
       deduplicateExpressions: true,
+      moduleResolver: NOOP_MODULE_RESOLVER,
     });
     const noDedup = compileAot(markup, {
-      semantics: DEFAULT_SEMANTICS,
+      semantics: BUILTIN_SEMANTICS,
       deduplicateExpressions: false,
+      moduleResolver: NOOP_MODULE_RESOLVER,
     });
 
     expect(deduped.codeResult.expressions.length).toBe(1);
@@ -79,7 +82,7 @@ describe("compileAot facade", () => {
       { name: "foo-bar", bindables: { value: { name: "value", mode: "toView" } } },
     ];
     const scopedSemantics = materializeSemanticsForScope(
-      DEFAULT_SEMANTICS,
+      BUILTIN_SEMANTICS,
       null,
       null,
       localImports
@@ -88,10 +91,11 @@ describe("compileAot facade", () => {
     const attrParser = createAttributeParserFromRegistry(syntax);
 
     const result = compileAot("<foo-bar value.bind=\"msg\"></foo-bar>", {
-      semantics: DEFAULT_SEMANTICS,
+      semantics: BUILTIN_SEMANTICS,
       localImports,
       syntax,
       attrParser,
+      moduleResolver: NOOP_MODULE_RESOLVER,
     });
 
     const [hydrate] = result.codeResult.definition.instructions[0] ?? [];

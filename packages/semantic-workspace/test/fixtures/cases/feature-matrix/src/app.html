@@ -1,0 +1,209 @@
+<template>
+  <!-- ═══════ Meta elements ═══════ -->
+  <import from="./components/matrix-badge"></import>
+  <bindable name="external-count" mode="two-way"></bindable>
+  <let total-display.bind="total"></let>
+  <let is-active.bind="true" to-binding-context></let>
+
+  <!-- ═══════ Local template definition ═══════ -->
+  <template as-custom-element="inline-tag">
+    <bindable name="label"></bindable>
+    <span class="tag">${label}</span>
+  </template>
+
+  <!-- ═══════ Position type 1: CE tag name ═══════ -->
+  <matrix-panel
+    title="Dashboard"
+    count.bind="total"
+    level="${activeSeverity}"
+    items.bind="items"
+    on-refresh.trigger="refreshData()"
+  >
+    <!-- ═══════ Position type 5a: interpolation expression ═══════ -->
+    <h2>${title}</h2>
+    <p>Total: ${total} items (${filteredItems.length} active)</p>
+
+    <!-- ═══════ $this reference ═══════ -->
+    <span>${$this.title}</span>
+
+    <!-- ═══════ Template controller: repeat (scope creation) ═══════ -->
+    <ul>
+      <li repeat.for="item of items">
+        <!-- Position type 5b: scope local (from repeat) -->
+        <span>${item.name}</span>
+        <!-- Position type 5c: contextual variables -->
+        <span class="index">${$index + 1}</span>
+        <span class="meta">${$first ? 'first' : ''} ${$last ? 'last' : ''}</span>
+
+        <!-- $parent: cross-boundary scope traversal -->
+        <span>${$parent.title}</span>
+
+        <!-- CA with binding (position type 2: attribute on CA) -->
+        <span matrix-highlight.bind="item.status">${item.label}</span>
+
+        <!-- VC in expression (position type 5d: pipe operator) -->
+        <time>${item.date | formatDate}</time>
+
+        <!-- BB in expression (position type 5e: ampersand operator) -->
+        <em>${item.name & rateLimit}</em>
+
+        <!-- CE tag inside repeat scope -->
+        <matrix-badge value.bind="item.severity"></matrix-badge>
+
+        <!-- Local template usage -->
+        <inline-tag repeat.for="tag of item.tags" label.bind="tag"></inline-tag>
+
+        <!-- Click handler (position type 6: event binding) -->
+        <button click.trigger="selectItem(item)">Select</button>
+      </li>
+    </ul>
+
+    <!-- ═══════ Template controller: if (conditional) ═══════ -->
+    <template if.bind="showDetail">
+      <section class="detail">
+        <h3>Detail view</h3>
+        <p>${noteMessage}</p>
+      </section>
+    </template>
+
+    <!-- ═══════ Template controller: with (scope overlay) ═══════ -->
+    <div with.bind="items[0]">
+      <span>${name}</span>
+      <span>${status}</span>
+      <!-- $parent to escape with scope -->
+      <span>${$parent.title}</span>
+    </div>
+
+    <!-- ═══════ Promise branches (then/catch data flow) ═══════ -->
+    <template promise.bind="Promise.resolve({ message: 'done' })">
+      <span pending>Loading...</span>
+      <span then.from-view="result">${result.message}</span>
+      <span catch.from-view="err">${err.message}</span>
+    </template>
+
+    <!-- ═══════ Nested groups with repeat + if ═══════ -->
+    <div repeat.for="group of groups">
+      <h4>${group.title}</h4>
+      <ul if.bind="!group.collapsed">
+        <li repeat.for="item of group.items">
+          <span matrix-highlight="active">${item.name}: ${item.count}</span>
+        </li>
+      </ul>
+    </div>
+
+    <!-- ═══════ Multi-binding CA ═══════ -->
+    <div matrix-tooltip="text.bind: noteMessage; position: top; delay: 500">
+      Hover for tooltip
+    </div>
+
+    <!-- ═══════ Ref binding ═══════ -->
+    <input ref="searchInput" type="text" value.bind="noteMessage">
+
+    <!-- ═══════ Two-way binding (position type 4: binding command) ═══════ -->
+    <input value.two-way="noteMessage">
+
+    <!-- ═══════ au-slot: content projection ═══════ -->
+    <au-slot name="footer">
+      <footer>Default footer content</footer>
+    </au-slot>
+
+    <!-- ═══════ au-compose ═══════ -->
+    <au-compose component.bind="null"></au-compose>
+
+    <!-- ═══════ switch/case/default-case (branch TCs with linking) ═══════ -->
+    <template switch.bind="activeSeverity">
+      <span case="info">Information</span>
+      <span case="warn">Warning</span>
+      <span case="error">Error</span>
+      <span default-case>Unknown severity</span>
+    </template>
+
+    <!-- ═══════ as-element (identity override) ═══════ -->
+    <div as-element="matrix-badge" value.bind="title"></div>
+
+    <!-- ═══════ Shorthand bindings (attribute pattern: :PART → .bind) ═══════ -->
+    <matrix-badge :value="title"></matrix-badge>
+
+    <!-- ═══════ Shorthand event (@PART → .trigger) ═══════ -->
+    <button @click="refreshData()">Refresh</button>
+
+    <!-- ═══════ Destructured repeat (array destructuring) ═══════ -->
+    <ul>
+      <li repeat.for="[idx, entry] of indexedItems">
+        <span>${idx}: ${entry.name}</span>
+      </li>
+    </ul>
+
+    <!-- ═══════ Ecosystem patterns (from cortex-device-list) ═══════ -->
+
+    <!-- Deep property chain (3+ levels) -->
+    <span>${groups[0].items[0].name}</span>
+
+    <!-- Method call as repeat source -->
+    <ul>
+      <li repeat.for="active of getItemsByStatus('active')">
+        <span>${active.name}</span>
+      </li>
+    </ul>
+
+    <!-- && chain in if.bind -->
+    <div if.bind="showDetail && items.length">Both conditions met</div>
+
+    <!-- Comparison operator in if.bind -->
+    <div if.bind="items.length > 0">Has items</div>
+
+    <!-- Optional chaining -->
+    <span>${selectedItem?.name}</span>
+
+    <!-- $event in trigger -->
+    <button click.trigger="selectItem($event)">Event select</button>
+
+    <!-- String concatenation in expression -->
+    <span>${noteMessage + ' (' + total + ')'}</span>
+
+    <!-- Negation in if.bind -->
+    <div if.bind="!showDetail">Hidden when detail shown</div>
+
+    <!-- Inline array literal in repeat -->
+    <ul>
+      <li repeat.for="label of ['alpha', 'beta', 'gamma']">
+        <span>${label}</span>
+      </li>
+    </ul>
+
+    <!-- Keyed access with expression -->
+    <span>${items[0].name}</span>
+
+    <!-- Getter property in interpolation -->
+    <span>Active: ${filteredItems.length}</span>
+
+    <!-- Nested ternary -->
+    <span class="${activeSeverity === 'error' ? 'danger' : activeSeverity === 'warn' ? 'warning' : 'normal'}">severity indicator</span>
+  </matrix-panel>
+
+  <!-- ═══════ Diagnostic triggers ═══════ -->
+
+  <!-- Unknown CE with Aurelia intent → aurelia/unknown-element fires -->
+  <missing-component title.bind="total"></missing-component>
+
+  <!-- Web component (no Aurelia intent) → suppressed by confidence demotion -->
+  <sl-button class="primary">Web Component</sl-button>
+
+  <!-- Unknown bindable on known CE → aurelia/unknown-bindable -->
+  <matrix-panel nonexistent-prop.bind="total"></matrix-panel>
+
+  <!-- Unknown binding command → aurelia/unknown-command -->
+  <div title.badcommand="test"></div>
+
+  <!-- Expression parse error → aurelia/expr-parse-error -->
+  <div title.bind="foo("></div>
+
+  <!-- Unknown VC → aurelia/unknown-converter -->
+  <span>${title | nonexistent}</span>
+
+  <!-- Unknown BB → aurelia/unknown-behavior -->
+  <span>${title & nonexistent}</span>
+
+  <!-- Unknown CA on known element → aurelia/unknown-attribute -->
+  <div missing-attr="${title}"></div>
+</template>

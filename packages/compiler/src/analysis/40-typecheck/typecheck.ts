@@ -1,33 +1,27 @@
 import type {
   BindingSourceIR,
-  ExprId,
   ExprRef,
   ExprTableEntry,
   InterpIR,
-  IrModule,
-  SourceSpan,
+  NormalizedPath,
 } from "../../model/ir.js";
-import type { ScopeModule, FrameId } from "../../model/symbols.js";
+import type { ScopeModule } from "../../model/symbols.js";
 import type {
   LinkedInstruction,
-  LinkedSemanticsModule,
+  LinkModule,
   TargetSem,
   LinkedElementBindable,
-} from "../20-resolve/types.js";
-import type { TypeRef } from "../../language/registry.js";
-import { buildExprSpanIndex, exprIdsOf, indexExprTable } from "../../shared/expr-utils.js";
-import { buildFrameAnalysis, typeFromExprAst } from "../shared/type-analysis.js";
-import type { CompilerDiagnostic } from "../../shared/diagnostics.js";
-import { buildDiagnostic } from "../../shared/diagnostics.js";
-import { exprIdMapGet, type ExprIdMap, type ReadonlyExprIdMap } from "../../model/identity.js";
-import { buildScopeLookup } from "../shared/scope-lookup.js";
+} from "../20-link/types.js";
+import type { DepRecorder } from "../../schema/dependency-graph.js";
+import type { SemanticModelQuery } from "../../schema/model.js";
+import type { TypeRef } from "../../schema/registry.js";
+import { exprIdsOf, indexExprTable } from "../../shared/expr-utils.js";
+import type { ExprIdMap } from "../../model/identity.js";
 import { isStub } from "../../shared/diagnosed.js";
 import {
   type TypecheckConfig,
-  type TypecheckSeverity,
   type BindingContext,
   resolveTypecheckConfig,
-  checkTypeCompatibility,
 } from "./config.js";
 import { NOOP_TRACE, CompilerAttributes, type CompileTrace } from "../../shared/trace.js";
 import { debug } from "../../shared/debug.js";
@@ -36,37 +30,55 @@ import { debug } from "../../shared/debug.js";
 export type { TypecheckConfig, TypecheckSeverity, BindingContext, TypeCompatibilityResult } from "./config.js";
 export { resolveTypecheckConfig, DEFAULT_TYPECHECK_CONFIG, TYPECHECK_PRESETS, checkTypeCompatibility } from "./config.js";
 
-/** Diagnostic codes for typecheck phase */
-export type TypecheckDiagCode = "AU1301" | "AU1302" | "AU1303";
-
-export type TypecheckDiagnostic = CompilerDiagnostic<TypecheckDiagCode> & {
-  exprId?: ExprId;
-  expected?: string;
-  actual?: string;
-  severity: TypecheckSeverity;
-};
+/**
+ * A binding contract: what type does a binding target expect, and in what context?
+ *
+ * Binding contracts are extracted from linked semantics during compilation.
+ * They are validated against TS-resolved types at diagnostic collection time.
+ *
+ * For literal expressions, `literalType` carries the compile-time known type
+ * (no TS service needed). For non-literals, the language service queries TS.
+ */
+export interface BindingContract {
+  type: string;
+  context: BindingContext;
+  /** For primitive literal expressions, the known type (string/number/boolean/null). */
+  literalType?: string;
+}
 
 export interface TypecheckModule {
-  version: "aurelia-typecheck@1";
-  inferredByExpr: ExprIdMap<string>;
+  version: "aurelia-typecheck@2";
+  /** Binding contracts: ExprId → expected type + binding context. */
+  contracts: ExprIdMap<BindingContract>;
+  /** Expected types by expression (derived from contracts, for backward compat). */
   expectedByExpr: ExprIdMap<string>;
-  diags: TypecheckDiagnostic[];
   /** The resolved config used for this typecheck run */
   config: TypecheckConfig;
 }
 
 export interface TypecheckOptions {
-  linked: LinkedSemanticsModule;
+  linked: LinkModule;
   scope: ScopeModule;
-  ir: IrModule;
   rootVmType: string;
   /** Optional typecheck configuration. Uses lenient defaults if not provided. */
   config?: Partial<TypecheckConfig>;
   /** Optional trace for instrumentation. Defaults to NOOP_TRACE. */
   trace?: CompileTrace;
+  /** Dependency recorder for tracking type-state reads during type checking. */
+  deps?: DepRecorder;
+  /** Template file path — used to record type-state dependency. */
+  templateFilePath?: NormalizedPath;
+  /** Semantic model for confidence cascade and definition index building. */
+  model?: SemanticModelQuery;
 }
 
-/** Phase 40: derive expected + inferred types and surface lightweight diagnostics. */
+/**
+ * Phase 40: extract binding contracts from linked semantics.
+ *
+ * Binding contracts record what type each binding target expects and in what
+ * context (DOM property, component bindable, style, etc.). Type validation
+ * against TS-resolved types happens later, at diagnostic collection time.
+ */
 export function typecheck(opts: TypecheckOptions): TypecheckModule {
   const trace = opts.trace ?? NOOP_TRACE;
 
@@ -84,167 +96,71 @@ export function typecheck(opts: TypecheckOptions): TypecheckModule {
       debug.typecheck("disabled", { reason: "config.enabled=false" });
       trace.event("typecheck.disabled");
       return {
-        version: "aurelia-typecheck@1",
-        inferredByExpr: new Map(),
+        version: "aurelia-typecheck@2" as const,
+        contracts: new Map(),
         expectedByExpr: new Map(),
-        diags: [],
         config,
       };
     }
 
     debug.typecheck("start", { rootVmType: opts.rootVmType });
 
-    // Collect expected types from linked semantics
-    trace.event("typecheck.collectExpected.start");
-    const expectedInfo = collectExpectedTypes(opts.linked);
-    trace.event("typecheck.collectExpected.complete", { count: expectedInfo.size });
-    debug.typecheck("expected.collected", { count: expectedInfo.size });
-
-    // Collect inferred types from expression ASTs
-    trace.event("typecheck.collectInferred.start");
-    const inferredByExpr = collectInferredTypes(opts);
-    trace.event("typecheck.collectInferred.complete", { count: inferredByExpr.size });
-    debug.typecheck("inferred.collected", { count: inferredByExpr.size });
-
-    // Build span index and collect diagnostics
-    trace.event("typecheck.diagnostics.start");
-    const exprSpanIndex = buildExprSpanIndex(opts.ir);
-    const diags = collectDiagnostics(expectedInfo, inferredByExpr, exprSpanIndex.spans, config);
-    trace.event("typecheck.diagnostics.complete", { count: diags.length });
-
-    // Extract just the types for the module output (without context)
-    const expectedByExpr: ExprIdMap<string> = new Map();
-    for (const [id, info] of expectedInfo.entries()) {
-      expectedByExpr.set(id, info.type);
+    // Record type-state dependency for incremental invalidation.
+    if (opts.deps && opts.templateFilePath) {
+      opts.deps.readTypeState(opts.templateFilePath);
     }
 
-    // Record output metrics
+    // Collect binding contracts from linked semantics
+    trace.event("typecheck.collectContracts.start");
+    const exprIndex = indexExprTable(opts.linked.exprTable as readonly ExprTableEntry[] | undefined);
+    const contracts = collectBindingContracts(opts.linked, exprIndex);
+    trace.event("typecheck.collectContracts.complete", { count: contracts.size });
+    debug.typecheck("contracts.collected", { count: contracts.size });
+
+    // Derive expectedByExpr view for backward compat (query facade uses it)
+    const expectedByExpr: ExprIdMap<string> = new Map();
+    for (const [id, contract] of contracts.entries()) {
+      expectedByExpr.set(id, contract.type);
+    }
+
     trace.setAttributes({
-      "typecheck.expectedCount": expectedByExpr.size,
-      "typecheck.inferredCount": inferredByExpr.size,
-      [CompilerAttributes.DIAG_COUNT]: diags.length,
-      [CompilerAttributes.DIAG_ERROR_COUNT]: diags.filter(d => d.severity === "error").length,
-      [CompilerAttributes.DIAG_WARNING_COUNT]: diags.filter(d => d.severity === "warning").length,
+      "typecheck.contractCount": contracts.size,
     });
 
-    return { version: "aurelia-typecheck@1", inferredByExpr, expectedByExpr, diags, config };
+    return { version: "aurelia-typecheck@2" as const, contracts, expectedByExpr, config };
   });
 }
 
-/** Expected type info with binding context for coercion rules. */
-interface ExpectedTypeInfo {
-  type: string;
-  context: BindingContext;
-}
+type ExprIndex = ReturnType<typeof indexExprTable>;
 
-function collectExpectedTypes(linked: LinkedSemanticsModule): ExprIdMap<ExpectedTypeInfo> {
-  const expectedByExpr: ExprIdMap<ExpectedTypeInfo> = new Map();
+function collectBindingContracts(linked: LinkModule, exprIndex: ExprIndex): ExprIdMap<BindingContract> {
+  const contracts: ExprIdMap<BindingContract> = new Map();
   for (const t of linked.templates ?? []) {
     for (const row of t.rows ?? []) {
       for (const ins of row.instructions ?? []) {
-        visitInstruction(ins, expectedByExpr);
+        visitInstruction(ins, contracts);
       }
     }
   }
-  return expectedByExpr;
-}
-
-function collectInferredTypes(opts: TypecheckOptions): ExprIdMap<string> {
-  const inferred: ExprIdMap<string> = new Map();
-  const exprIndex = indexExprTable(opts.linked.exprTable as readonly ExprTableEntry[] | undefined);
-  const scopeTemplate = opts.scope.templates[0];
-  if (!scopeTemplate) return inferred;
-
-  const scope = buildScopeLookup(scopeTemplate);
-  const analysis = buildFrameAnalysis(scopeTemplate, exprIndex, opts.rootVmType);
-
-  const resolveEnv = (frameId: FrameId, depth: number) => {
-    const ancestor = scope.ancestorOf(frameId, depth);
-    return ancestor != null ? analysis.envs.get(ancestor) : undefined;
-  };
-
-  for (const [exprId, frameId] of scope.exprToFrame.entries()) {
-    const entry = exprIndex.get(exprId);
+  // Populate literalType for primitive literal expressions
+  for (const [id, contract] of contracts.entries()) {
+    const entry = exprIndex.get(id);
     if (!entry) continue;
-    if (entry.expressionType !== "IsProperty" && entry.expressionType !== "IsFunction") continue;
-    const type = typeFromExprAst(entry.ast, {
-      rootVm: opts.rootVmType,
-      resolveEnv: (depth: number) => resolveEnv(frameId, depth),
-    });
-    inferred.set(exprId, type);
+    const ast = entry.ast;
+    if (ast && ast.$kind === "PrimitiveLiteral") {
+      const v = (ast as { value?: unknown }).value;
+      switch (typeof v) {
+        case "string": contract.literalType = "string"; break;
+        case "number": contract.literalType = "number"; break;
+        case "boolean": contract.literalType = "boolean"; break;
+        default: if (v === null) contract.literalType = "null"; break;
+      }
+    }
   }
-
-  return inferred;
+  return contracts;
 }
 
-function collectDiagnostics(
-  expected: ReadonlyExprIdMap<ExpectedTypeInfo>,
-  inferred: ReadonlyExprIdMap<string>,
-  spans: ReadonlyExprIdMap<SourceSpan>,
-  config: TypecheckConfig,
-): TypecheckDiagnostic[] {
-  const diags: TypecheckDiagnostic[] = [];
-
-  for (const [id, expectedInfo] of expected.entries()) {
-    const actual = exprIdMapGet(inferred, id);
-    if (!actual) continue;
-
-    const result = checkTypeCompatibility(
-      actual,
-      expectedInfo.type,
-      expectedInfo.context,
-      config,
-    );
-
-    // Skip if compatible or severity is off
-    if (result.compatible || result.severity === "off") continue;
-
-    debug.typecheck("mismatch", {
-      exprId: id,
-      expected: expectedInfo.type,
-      actual,
-      severity: result.severity,
-      context: expectedInfo.context,
-    });
-
-    const span = exprIdMapGet(spans, id) ?? null;
-    const code = severityToCode(result.severity);
-    const message = result.reason ?? `Type mismatch: expected ${expectedInfo.type}, got ${actual}`;
-
-    const diag = buildDiagnostic({
-      code,
-      message,
-      span,
-      source: "typecheck",
-      severity: result.severity,
-    });
-
-    diags.push({
-      ...diag,
-      exprId: id,
-      expected: expectedInfo.type,
-      actual,
-      severity: result.severity,
-    });
-  }
-
-  return diags;
-}
-
-/**
- * Map severity to diagnostic code.
- * AU1301 = error, AU1302 = warning, AU1303 = info
- */
-function severityToCode(severity: TypecheckSeverity): TypecheckDiagCode {
-  switch (severity) {
-    case "error": return "AU1301";
-    case "warning": return "AU1302";
-    case "info": return "AU1303";
-    default: return "AU1301";
-  }
-}
-
-function visitInstruction(ins: LinkedInstruction, expected: ExprIdMap<ExpectedTypeInfo>): void {
+function visitInstruction(ins: LinkedInstruction, expected: ExprIdMap<BindingContract>): void {
   switch (ins.kind) {
     case "propertyBinding":
       recordExpected(ins.from, targetType(ins.target), contextFromTarget(ins.target), expected, ins.target);
@@ -299,7 +215,7 @@ function visitInstruction(ins: LinkedInstruction, expected: ExprIdMap<ExpectedTy
   }
 }
 
-function recordLinkedBindable(b: LinkedElementBindable, expected: ExprIdMap<ExpectedTypeInfo>): void {
+function recordLinkedBindable(b: LinkedElementBindable, expected: ExprIdMap<BindingContract>): void {
   switch (b.kind) {
     case "propertyBinding":
       recordExpected(b.from, targetType(b.target), contextFromTarget(b.target), expected, b.target);
@@ -327,7 +243,7 @@ function recordExpected(
   src: BindingSourceIR | ExprRef | InterpIR,
   type: string | null | undefined,
   context: BindingContext,
-  expected: ExprIdMap<ExpectedTypeInfo>,
+  contracts: ExprIdMap<BindingContract>,
   target?: TargetSem | TypeRef | { kind: "style" },
 ): void {
   // Skip if no type info
@@ -340,12 +256,12 @@ function recordExpected(
   if (isUnknownTarget(target)) return;
 
   const ids = exprIdsOf(src);
-  for (const id of ids) expected.set(id, { type, context });
+  for (const id of ids) contracts.set(id, { type, context });
 }
 
 /**
  * Check if a target represents a failed resolution (cascade suppression).
- * When target.kind === "unknown", the resolve phase already emitted a diagnostic.
+ * When target.kind === "unknown", the link phase already emitted a diagnostic.
  */
 function isUnknownTarget(target: TargetSem | TypeRef | { kind: "style" } | undefined): boolean {
   if (!target) return false;

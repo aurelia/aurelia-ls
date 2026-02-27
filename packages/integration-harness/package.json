@@ -16,8 +16,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@aurelia-ls/compiler": "workspace:*",
-    "@aurelia-ls/resolution": "workspace:*"
+    "@aurelia-ls/compiler": "workspace:*"
   },
   "devDependencies": {
     "@aurelia/kernel": "file:../../aurelia/packages/kernel",
@@ -28,6 +27,6 @@
     "jsdom": "^25.0.1"
   },
   "peerDependencies": {
-    "typescript": "^5.0.0"
+    "typescript": "^5.5.4"
   }
 }

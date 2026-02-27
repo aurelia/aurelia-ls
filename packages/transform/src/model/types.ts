@@ -5,7 +5,7 @@
  * into a unified representation for transformation.
  */
 
-import type { AotCodeResult, SerializedDefinition, SerializedExpression } from "@aurelia-ls/compiler";
+import type { AotCodeResult, BindingMode, SerializedDefinition, SerializedExpression } from "@aurelia-ls/compiler";
 
 /* =============================================================================
  * RESOURCE TYPES
@@ -84,12 +84,7 @@ export interface BindableDefinition {
   default?: unknown;
 }
 
-export type BindingMode =
-  | "default"
-  | "oneTime"
-  | "toView"
-  | "fromView"
-  | "twoWay";
+export type { BindingMode };
 
 export interface TemplateSource {
   /** Template source type */

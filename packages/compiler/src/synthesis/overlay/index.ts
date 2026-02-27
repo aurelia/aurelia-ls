@@ -17,5 +17,5 @@ export { emitOverlayFile, emitOverlay } from "./emit.js";
 export { emitMappedExpression, emitPrintedExpression } from "./mapped-emitter.js";
 export { buildTemplateMapping } from "./mapping.js";
 export { buildTemplateQuery } from "./query.js";
-export { buildOverlayProduct } from "./product.js";
+export { buildOverlayProductFromStages } from "./product.js";
 export { computeOverlayBaseName, overlayFilename, overlayPath } from "./paths.js";

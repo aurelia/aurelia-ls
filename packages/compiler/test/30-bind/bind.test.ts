@@ -1,6 +1,10 @@
 import { runVectorTests, getDirname, lowerOpts, indexExprCodeFromIr } from "../_helpers/vector-runner.js";
+import { diffByKeyCounts, noopModuleResolver } from "../_helpers/test-utils.js";
 
-import { lowerDocument, resolveHost, bindScopes } from "@aurelia-ls/compiler";
+import { lowerDocument } from "../../out/analysis/10-lower/lower.js";
+import { linkTemplateSemantics } from "../../out/analysis/20-link/resolve.js";
+import { buildSemanticsSnapshot } from "../../out/schema/snapshot.js";
+import { bindScopes } from "../../out/analysis/30-bind/bind.js";
 
 // --- Types ---
 
@@ -53,14 +57,19 @@ interface BindDiff {
   extraDiags: string[];
 }
 
+const RESOLVE_OPTS = { moduleResolver: noopModuleResolver, templateFilePath: "mem.html" };
+
 runVectorTests<BindExpect, BindIntent, BindDiff>({
   dirname: getDirname(import.meta.url),
   suiteName: "Bind (30)",
   execute: (v, ctx) => {
     const ir = lowerDocument(v.markup, lowerOpts(ctx));
-    const linked = resolveHost(ir, ctx.sem);
-    const scope = bindScopes(linked);
-    return reduceScopeToBindIntent({ ir, linked, scope });
+    const linked = linkTemplateSemantics(ir, buildSemanticsSnapshot(ctx.sem), {
+      ...RESOLVE_OPTS,
+      diagnostics: ctx.diagnostics.forSource("link"),
+    });
+    const scope = bindScopes(linked, { diagnostics: ctx.diagnostics.forSource("bind") });
+    return reduceScopeToBindIntent({ ir, linked, scope, diagnostics: ctx.diagnostics.all });
   },
   compare: compareBindIntent,
   categories: ["frames", "locals", "exprs", "diags"],
@@ -92,7 +101,6 @@ interface ScopeTemplate {
 
 interface ScopeModule {
   templates?: ScopeTemplate[];
-  diags?: Array<{ code: string }>;
 }
 
 interface IrExprEntry {
@@ -109,6 +117,7 @@ interface ReduceInput {
   ir: IrDocument;
   linked: unknown;
   scope: ScopeModule;
+  diagnostics: readonly { code: string; source?: string }[];
 }
 
 /**
@@ -125,7 +134,7 @@ interface ReduceInput {
  *     globally per overlay appearance order (not per kind)
  * - "forOfHeader" uses exprTable.expressionType === "IsIterator"
  */
-export function reduceScopeToBindIntent({ ir, linked, scope }: ReduceInput): BindIntent {
+export function reduceScopeToBindIntent({ ir, linked, scope, diagnostics }: ReduceInput): BindIntent {
   const out: BindIntent = { frames: [], locals: [], exprs: [], diags: [] };
   const st = scope?.templates?.[0];
   if (!st) return out;
@@ -169,7 +178,8 @@ export function reduceScopeToBindIntent({ ir, linked, scope }: ReduceInput): Bin
   }
 
   // diags
-  for (const d of scope.diags ?? []) {
+  for (const d of diagnostics ?? []) {
+    if (d.stage !== "bind") continue;
     out.diags.push({ code: d.code });
   }
 
@@ -220,29 +230,15 @@ export function compareBindIntent(actual: BindIntent, expected: BindExpect): Bin
 
   const kExpr = (e: ExprIntent): string => [e.kind ?? "", e.frame ?? "", e.code ?? ""].join("|");
 
-  const setOf = <T>(arr: T[] | undefined, key: (item: T) => string): Set<string> => new Set((arr ?? []).map(key));
-
-  const aF = setOf(actual.frames, kFrame);
-  const eF = setOf(expected.frames, kFrame);
-
-  const aL = setOf(actual.locals, kLocal);
-  const eL = setOf(expected.locals, kLocal);
-
-  const aE = setOf(actual.exprs,  kExpr);
-  const eE = setOf(expected.exprs, kExpr);
-
-  const aD = setOf(actual.diags, (d: DiagIntent) => d.code);
-  const eD = setOf(expected.diags, (d: DiagIntent) => d.code);
-
-  const diff = (A: Set<string>, E: Set<string>): { missing: string[]; extra: string[] } => ({
-    missing: [...E].filter(x => !A.has(x)),
-    extra:   [...A].filter(x => !E.has(x)),
-  });
-
-  const { missing: missingFrames, extra: extraFrames } = diff(aF, eF);
-  const { missing: missingLocals, extra: extraLocals } = diff(aL, eL);
-  const { missing: missingExprs,  extra: extraExprs  } = diff(aE, eE);
-  const { missing: missingDiags,  extra: extraDiags  } = diff(aD, eD);
+  const { missing: missingFrames, extra: extraFrames } =
+    diffByKeyCounts(actual.frames, expected.frames, kFrame);
+  const { missing: missingLocals, extra: extraLocals } =
+    diffByKeyCounts(actual.locals, expected.locals, kLocal);
+  const { missing: missingExprs, extra: extraExprs } =
+    diffByKeyCounts(actual.exprs, expected.exprs, kExpr);
+  const { missing: missingDiags, extra: extraDiags } =
+    diffByKeyCounts(actual.diags, expected.diags, (d: DiagIntent) => d.code);
 
   return { missingFrames, extraFrames, missingLocals, extraLocals, missingExprs, extraExprs, missingDiags, extraDiags };
 }
+
