@@ -47,6 +47,7 @@ import {
   toTypeRef,
   toValueConverterSig,
 } from "./convert.js";
+import { GENERATED_DOM, GENERATED_EVENTS, GENERATED_SVG } from "./dom-registry.generated.js";
 import { buildResourceCatalog } from "./catalog.js";
 import {
   applyLocalImports,
@@ -454,11 +455,18 @@ export const BUILTIN_ATTRIBUTE_PATTERNS: readonly AttributePatternConfig[] =
 // DOM Schema (static config)
 // ============================================================================
 
-const DOM: DomSchema = {
+// Binding-mode overrides and Aurelia-specific properties.
+// These are the hand-maintained entries that mirror the subject runtime's
+// attribute-mapper.ts — they specify WHERE the default binding mode is
+// non-obvious (e.g., input value → twoWay) and Aurelia-specific properties
+// (e.g., css → StyleAttributeAccessor).
+//
+// The comprehensive DOM property/event registry is generated from lib.dom.d.ts
+// (see dom-registry.generated.ts).  These overrides take precedence.
+const DOM_OVERRIDES: DomSchema = {
   ns: 'html',
-  // HTMLElement.prototype — every element inherits these.
-  // Includes Aurelia global override accessors (css, style, class) that the
-  // subject runtime registers via overrideAccessorGlobal() in observer-locator.
+  // Aurelia global override accessors (css) and binding-mode overrides for
+  // properties where the default (toView) is wrong.
   base: {
     tag: '*',
     props: {
@@ -565,7 +573,10 @@ const DOM: DomSchema = {
 // Event Schema (static config)
 // ============================================================================
 
-const EVENTS: EventSchema = {
+// Hand-maintained event overrides (currently empty — all events come from
+// the generated registry).  Keep this in case per-element event overrides
+// or Aurelia-specific events are needed in the future.
+const EVENT_OVERRIDES: EventSchema = {
   byName: {
     click: 'MouseEvent',
     input: 'InputEvent',
@@ -578,6 +589,44 @@ const EVENTS: EventSchema = {
   },
   byElement: {},
 };
+
+// ============================================================================
+// Merged Schema (generated + overrides)
+// ============================================================================
+
+function mergeDomSchema(generated: DomSchema, overrides: DomSchema): DomSchema {
+  // Base: generated props + override props (overrides win for mode/attrToProp)
+  const baseProps = { ...generated.base.props, ...overrides.base.props };
+  const baseAttrToProp = { ...generated.base.attrToProp, ...overrides.base.attrToProp };
+
+  // Elements: merge each tag's props; overrides win
+  const allTags = new Set([...Object.keys(generated.elements), ...Object.keys(overrides.elements)]);
+  const elements: Record<string, { tag: string; props: Record<string, { type: string; mode?: BindingMode }>; attrToProp?: Record<string, string> }> = {};
+  for (const tag of allTags) {
+    const gen = generated.elements[tag];
+    const ovr = overrides.elements[tag];
+    elements[tag] = {
+      tag,
+      props: { ...gen?.props, ...ovr?.props },
+      ...(gen?.attrToProp || ovr?.attrToProp
+        ? { attrToProp: { ...gen?.attrToProp, ...ovr?.attrToProp } }
+        : {}),
+    };
+  }
+
+  return { ns: 'html', base: { tag: '*', props: baseProps, attrToProp: baseAttrToProp }, elements };
+}
+
+function mergeEventSchema(generated: EventSchema, overrides: EventSchema): EventSchema {
+  return {
+    byName: { ...generated.byName, ...overrides.byName },
+    byElement: { ...generated.byElement, ...overrides.byElement },
+  };
+}
+
+// Merge: generated HTML + generated SVG + hand-maintained overrides (overrides win)
+const DOM: DomSchema = mergeDomSchema(mergeDomSchema(GENERATED_DOM, GENERATED_SVG), DOM_OVERRIDES);
+const EVENTS: EventSchema = mergeEventSchema(GENERATED_EVENTS, EVENT_OVERRIDES);
 
 // ============================================================================
 // Naming Conventions (static config)

@@ -54,26 +54,20 @@
     }
   },
   {
-    "name": "R-A-07 input inputmode interpolation -> inputMode (unknown target)",
+    "name": "R-A-07 input inputmode interpolation -> inputMode (native via generated DOM schema)",
     "markup": "<input inputmode=\"x ${y}\">",
     "expect": {
       "items": [
-        { "kind": "attr", "attr": "inputmode", "to": "inputMode", "target": "unknown" }
-      ],
-      "diags": [
-        { "code": "aurelia/unknown-attribute" }
+        { "kind": "attr", "attr": "inputmode", "to": "inputMode", "target": "native" }
       ]
     }
   },
   {
-    "name": "R-A-08 div contenteditable interpolation -> contentEditable (unknown target)",
+    "name": "R-A-08 div contenteditable interpolation -> contentEditable (native via generated DOM schema)",
     "markup": "<div contenteditable=\"a ${b}\"></div>",
     "expect": {
       "items": [
-        { "kind": "attr", "attr": "contenteditable", "to": "contentEditable", "target": "unknown" }
-      ],
-      "diags": [
-        { "code": "aurelia/unknown-attribute" }
+        { "kind": "attr", "attr": "contenteditable", "to": "contentEditable", "target": "native" }
       ]
     }
   },
@@ -105,14 +99,11 @@
     }
   },
   {
-    "name": "R-A-12 input minlength interpolation -> minLength (unknown target)",
+    "name": "R-A-12 input minlength interpolation -> minLength (native via generated DOM schema)",
     "markup": "<input minlength=\"x ${y}\">",
     "expect": {
       "items": [
-        { "kind": "attr", "attr": "minlength", "to": "minLength", "target": "unknown" }
-      ],
-      "diags": [
-        { "code": "aurelia/unknown-attribute" }
+        { "kind": "attr", "attr": "minlength", "to": "minLength", "target": "native" }
       ]
     }
   },
@@ -265,14 +256,11 @@
     }
   },
   {
-    "name": "R-A-23 textarea maxlength interpolation -> maxLength (unknown target)",
+    "name": "R-A-23 textarea maxlength interpolation -> maxLength (native via generated DOM schema)",
     "markup": "<textarea maxlength=\"a ${b}\"></textarea>",
     "expect": {
       "items": [
-        { "kind": "attr", "attr": "maxlength", "to": "maxLength", "target": "unknown" }
-      ],
-      "diags": [
-        { "code": "aurelia/unknown-attribute" }
+        { "kind": "attr", "attr": "maxlength", "to": "maxLength", "target": "native" }
       ]
     }
   },

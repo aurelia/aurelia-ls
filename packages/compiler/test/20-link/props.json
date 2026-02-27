@@ -93,14 +93,11 @@
     }
   },
   {
-    "name": "R-P-10 input readonly.bind -> readOnly (toView, unknown target)",
+    "name": "R-P-10 input readonly.bind -> readOnly (native via generated DOM schema)",
     "markup": "<input readonly.bind=\"r\">",
     "expect": {
       "items": [
-        { "kind": "prop", "to": "readOnly", "target": "unknown", "effectiveMode": "toView" }
-      ],
-      "diags": [
-        { "code": "aurelia/unknown-bindable" }
+        { "kind": "prop", "to": "readOnly", "target": "native", "effectiveMode": "toView" }
       ]
     }
   },
@@ -114,14 +111,11 @@
     }
   },
   {
-    "name": "R-P-12 input minlength.bind -> minLength (toView, unknown target)",
+    "name": "R-P-12 input minlength.bind -> minLength (native via generated DOM schema)",
     "markup": "<input minlength.bind=\"x\">",
     "expect": {
       "items": [
-        { "kind": "prop", "to": "minLength", "target": "unknown", "effectiveMode": "toView" }
-      ],
-      "diags": [
-        { "code": "aurelia/unknown-bindable" }
+        { "kind": "prop", "to": "minLength", "target": "native", "effectiveMode": "toView" }
       ]
     }
   },
@@ -135,14 +129,11 @@
     }
   },
   {
-    "name": "R-P-14 outerhtml.bind -> outerHTML (unknown on <div>)",
+    "name": "R-P-14 outerhtml.bind -> outerHTML (native via generated DOM schema)",
     "markup": "<div outerhtml.bind=\"s\"></div>",
     "expect": {
       "items": [
-        { "kind": "prop", "to": "outerHTML", "target": "unknown", "effectiveMode": "toView" }
-      ],
-      "diags": [
-        { "code": "aurelia/unknown-bindable" }
+        { "kind": "prop", "to": "outerHTML", "target": "native", "effectiveMode": "toView" }
       ]
     }
   },
@@ -183,26 +174,20 @@
     }
   },
   {
-    "name": "R-P-19 input formtarget.bind -> formTarget (unknown target)",
+    "name": "R-P-19 input formtarget.bind -> formTarget (native via generated DOM schema)",
     "markup": "<input formtarget.bind=\"t\">",
     "expect": {
       "items": [
-        { "kind": "prop", "to": "formTarget", "target": "unknown", "effectiveMode": "toView" }
-      ],
-      "diags": [
-        { "code": "aurelia/unknown-bindable" }
+        { "kind": "prop", "to": "formTarget", "target": "native", "effectiveMode": "toView" }
       ]
     }
   },
   {
-    "name": "R-P-20 textarea maxlength.bind -> maxLength (unknown target)",
+    "name": "R-P-20 textarea maxlength.bind -> maxLength (native via generated DOM schema)",
     "markup": "<textarea maxlength.bind=\"n\"></textarea>",
     "expect": {
       "items": [
-        { "kind": "prop", "to": "maxLength", "target": "unknown", "effectiveMode": "toView" }
-      ],
-      "diags": [
-        { "code": "aurelia/unknown-bindable" }
+        { "kind": "prop", "to": "maxLength", "target": "native", "effectiveMode": "toView" }
       ]
     }
   },
@@ -333,14 +318,11 @@
     }
   },
   {
-    "name": "R-P-35 input readonly.bind -> readOnly (toView, unknown target)",
+    "name": "R-P-35 input readonly.bind -> readOnly (native via generated DOM schema)",
     "markup": "<input readonly.bind=\"r\">",
     "expect": {
       "items": [
-        { "kind": "prop", "to": "readOnly", "target": "unknown", "effectiveMode": "toView" }
-      ],
-      "diags": [
-        { "code": "aurelia/unknown-bindable" }
+        { "kind": "prop", "to": "readOnly", "target": "native", "effectiveMode": "toView" }
       ]
     }
   },
@@ -363,14 +345,11 @@
     }
   },
   {
-    "name": "R-P-38 input inputmode.bind -> inputMode (unknown target)",
+    "name": "R-P-38 input inputmode.bind -> inputMode (native via generated DOM schema)",
     "markup": "<input inputmode.bind=\"m\">",
     "expect": {
       "items": [
-        { "kind": "prop", "to": "inputMode", "target": "unknown", "effectiveMode": "toView" }
-      ],
-      "diags": [
-        { "code": "aurelia/unknown-bindable" }
+        { "kind": "prop", "to": "inputMode", "target": "native", "effectiveMode": "toView" }
       ]
     }
   },

@@ -138,10 +138,10 @@
   },
   {
     "name": "R-E-14 unknown event name produces aurelia/unknown-event",
-    "markup": "<div @transitionend=\"onEnd()\"></div>",
+    "markup": "<div @fakecustomevent=\"onEnd()\"></div>",
     "expect": {
       "items": [
-        { "kind": "event", "to": "transitionend", "type": "unknown" }
+        { "kind": "event", "to": "fakecustomevent", "type": "unknown" }
       ],
       "diags": [
         { "code": "aurelia/unknown-event" }
