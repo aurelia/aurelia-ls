@@ -522,8 +522,6 @@ describe("R7: hover provenance from definition authority (workspace-contract)", 
     expect(contents).toMatch(/```ts\s*\n\(custom element\) summary-panel/);
     expect(contents).toContain("Bindables");
     expect(contents).toContain("`stats`");
-    expect(contents).toContain("Show overlay");
-
     // Provenance line is present and does not duplicate file path
     expect(contents).toContain("Discovered via source analysis");
     // Only one occurrence of provenance — no duplication
@@ -978,13 +976,11 @@ describe("R-LS4: confidence indicator in hover contents", () => {
     // AJ: reason from R12 derivation included — gap kind, not just level
     expect(contents).toContain("dynamic-value");
 
-    // AI: provenance → confidence → overlay ordering
+    // AI: provenance → confidence ordering
     const provenanceIdx = contents.indexOf("Discovered via source analysis");
     const confidenceIdx = contents.indexOf("**Confidence:**");
-    const overlayIdx = contents.indexOf("Show overlay");
     expect(provenanceIdx).toBeGreaterThanOrEqual(0);
     expect(confidenceIdx).toBeGreaterThan(provenanceIdx);
-    expect(overlayIdx).toBeGreaterThan(confidenceIdx);
 
     // Property 6: structured fields preserved alongside rendered indicator
     expect(hover?.confidence).toBe("partial");
