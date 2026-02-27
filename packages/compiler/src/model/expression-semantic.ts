@@ -12,9 +12,8 @@
  *   l2: models/attractor/l2/types.ts §Expression Semantic Model
  * ======================================================================================= */
 
-import type { SourceSpan } from "./ir.js";
 import type { NormalizedPath } from "./identity.js";
-import type { ScopeFrame, FrameOrigin } from "./symbols.js";
+import type { FrameOrigin, ScopeSymbol } from "./symbols.js";
 
 // ============================================================================
 // Resolution Tiers
@@ -77,7 +76,7 @@ export interface LightweightScopeFrame {
   id: string;
   parent: string | null;
   kind: "root" | "overlay";
-  symbols: import("./symbols.js").ScopeSymbol[];
+  symbols: ScopeSymbol[];
   isBoundary: boolean;
   /** Frame origin metadata — same as ScopeFrame.origin from the bind stage. */
   origin?: FrameOrigin | null;
