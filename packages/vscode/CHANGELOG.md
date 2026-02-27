@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1
+
+### Fixes
+
+- Fixed language server failing to start in published extension
+
 ## 0.4.0
 
 The extension has been rebuilt around a new semantic workspace
