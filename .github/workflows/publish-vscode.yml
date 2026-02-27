@@ -53,7 +53,7 @@ jobs:
 
       - name: Bump version
         if: ${{ inputs.version != 'skip' }}
-        run: npm version ${{ inputs.version }} --no-git-tag-version
+        run: npm --ignore-scripts version ${{ inputs.version }} --no-git-tag-version
 
       - name: Bundle extension
         run: npm run bundle:minify
