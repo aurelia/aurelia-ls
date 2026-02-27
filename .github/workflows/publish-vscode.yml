@@ -53,7 +53,7 @@ jobs:
 
       - name: Bump version
         if: ${{ inputs.version != 'skip' }}
-        run: npm --ignore-scripts version ${{ inputs.version }} --no-git-tag-version
+        run: node -e "const p=require('./package.json');const[M,m,P]=p.version.split('.').map(Number);p.version={'patch':[M,m,P+1],'minor':[M,m+1,0],'major':[M+1,0,0]}['${{ inputs.version }}'].join('.');require('fs').writeFileSync('package.json',JSON.stringify(p,null,2)+'\n');console.log('v'+p.version)"
 
       - name: Bundle extension
         run: npm run bundle:minify
