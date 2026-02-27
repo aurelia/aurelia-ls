@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.2
+
+### Fixes
+
+- Fixed infinite refresh loop that caused high CPU usage after startup
+
 ## 0.4.1
 
 ### Fixes
