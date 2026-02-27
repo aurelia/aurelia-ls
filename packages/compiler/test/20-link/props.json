@@ -18,6 +18,15 @@
     }
   },
   {
+    "name": "R-P-02b css.bind stays as css (toView) - Aurelia alias for style (StyleAttributeAccessor)",
+    "markup": "<div css.bind=\"c\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "prop", "to": "css", "target": "native", "effectiveMode": "toView" }
+      ]
+    }
+  },
+  {
     "name": "R-P-03 colon shorthand :class -> class (toView)",
     "markup": "<div :class=\"c\"></div>",
     "expect": {

@@ -457,11 +457,14 @@ export const BUILTIN_ATTRIBUTE_PATTERNS: readonly AttributePatternConfig[] =
 const DOM: DomSchema = {
   ns: 'html',
   // HTMLElement.prototype — every element inherits these.
+  // Includes Aurelia global override accessors (css, style, class) that the
+  // subject runtime registers via overrideAccessorGlobal() in observer-locator.
   base: {
     tag: '*',
     props: {
       class: { type: 'string' },
       className: { type: 'string' },
+      css: { type: 'CSSStyleDeclaration' },  // Aurelia alias for style (StyleAttributeAccessor)
       id: { type: 'string' },
       style: { type: 'CSSStyleDeclaration' },
       title: { type: 'string' },

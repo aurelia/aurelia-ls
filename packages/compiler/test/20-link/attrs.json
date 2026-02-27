@@ -390,6 +390,24 @@
     }
   },
   {
+    "name": "R-A-29d css interpolation on <div> resolves as native (Aurelia style alias)",
+    "markup": "<div css=\"color: ${clr}\"></div>",
+    "expect": {
+      "items": [
+        { "kind": "attr", "attr": "css", "to": "css", "target": "native" }
+      ]
+    }
+  },
+  {
+    "name": "R-A-29e css interpolation on element not in DOM schema resolves as native",
+    "markup": "<i css=\"color: ${clr}\"></i>",
+    "expect": {
+      "items": [
+        { "kind": "attr", "attr": "css", "to": "css", "target": "native" }
+      ]
+    }
+  },
+  {
     "name": "R-A-29c class interpolation on custom element resolves as native",
     "semOverrides": {
       "resources": {
