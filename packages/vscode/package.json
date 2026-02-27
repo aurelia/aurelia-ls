@@ -2,7 +2,7 @@
   "name": "aurelia-2",
   "displayName": "Aurelia 2",
   "description": "Language tooling for Aurelia 2 templates — diagnostics, completions, go-to-definition, and more.",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "publisher": "AureliaEffect",
   "icon": "images/logo.png",
   "type": "module",

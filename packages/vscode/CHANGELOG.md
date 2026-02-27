@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.4
+
+### Fixes
+
+- Fixed false positive for `css` attribute binding ([#21](https://github.com/aurelia/aurelia-ls/issues/21))
+- Fixed diagnostic position drift on CRLF line endings
+- Fixed false positives for standard HTML attributes and events (`src`, `alt`, `error`, `load`, etc.) ([#23](https://github.com/aurelia/aurelia-ls/issues/23), [#24](https://github.com/aurelia/aurelia-ls/issues/24), [#26](https://github.com/aurelia/aurelia-ls/issues/26))
+- Added SVG element attribute support ([#25](https://github.com/aurelia/aurelia-ls/issues/25))
+
 ## 0.4.3
 
 ### Fixes
