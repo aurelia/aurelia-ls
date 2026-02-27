@@ -81,7 +81,7 @@ const DEFAULT_CONFIG: PresentationConfig = {
     views: true,
     inline: true,
     diagnostics: true,
-    inlayHints: true,
+    inlayHints: false,
     codeLens: true,
   },
   experimental: {

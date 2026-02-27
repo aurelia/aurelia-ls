@@ -278,7 +278,7 @@
         },
         "aurelia.features.inlayHints": {
           "type": "boolean",
-          "default": true,
+          "default": false,
           "description": "Show binding mode inlay hints in templates (e.g., .bind resolved to toView or twoWay based on the target bindable)."
         },
         "aurelia.features.codeLens": {
