@@ -48,7 +48,7 @@ jobs:
           PNPM_APPROVE_BUILDS: esbuild
 
       - name: Build packages
-        run: npx tsc -b packages/vscode
+        run: npx tsc -b packages/compiler packages/semantic-workspace packages/language-server packages/vscode
         working-directory: .
 
       - name: Bump version
