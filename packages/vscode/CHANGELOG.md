@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.3
+
+### Fixes
+
+- Removed stale overlay link from hover cards
+
 ## 0.4.2
 
 ### Fixes
