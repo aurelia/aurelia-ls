@@ -21,22 +21,31 @@ import type { TreeDataProvider, TreeItem, ProviderResult, Event } from "vscode";
 import type { VscodeApi } from "../../vscode-api.js";
 import type { LspFacade } from "../../core/lsp-facade.js";
 import type { ClientLogger } from "../../log.js";
-import type { ResourceExplorerItem, ResourceExplorerResponse, ResourceOrigin } from "../../types.js";
+import type { ResourceExplorerItem, ResourceExplorerResponse } from "../../types.js";
 import { SimpleEmitter } from "../../core/events.js";
 
-const ORIGIN_LABELS: Record<ResourceOrigin, string> = {
+/** Display grouping for the Resource Explorer tree — derived from compiler origin + package fields. */
+type ExplorerGroup = "project" | "package" | "framework";
+
+function toExplorerGroup(item: ResourceExplorerItem): ExplorerGroup {
+  if (item.package) return "package";
+  if (item.origin === "builtin" || item.origin === "config") return "framework";
+  return "project";
+}
+
+const GROUP_LABELS: Record<ExplorerGroup, string> = {
   project: "Project",
   package: "Packages",
   framework: "Framework",
 };
 
-const ORIGIN_ICONS: Record<ResourceOrigin, string> = {
+const GROUP_ICONS: Record<ExplorerGroup, string> = {
   project: "home",
   package: "package",
   framework: "library",
 };
 
-const ORIGIN_ORDER: ResourceOrigin[] = ["project", "package", "framework"];
+const GROUP_ORDER: ExplorerGroup[] = ["project", "package", "framework"];
 
 const KIND_LABELS: Record<string, string> = {
   "custom-element": "Elements",
@@ -78,27 +87,28 @@ interface TreeNode {
 }
 
 function buildTree(response: ResourceExplorerResponse): TreeNode[] {
-  // Group by origin, then by kind within each origin
-  const byOrigin = new Map<ResourceOrigin, Map<string, ResourceExplorerItem[]>>();
+  // Group by display group (derived from origin + package), then by kind
+  const byGroup = new Map<ExplorerGroup, Map<string, ResourceExplorerItem[]>>();
 
   for (const resource of response.resources) {
-    let originMap = byOrigin.get(resource.origin);
-    if (!originMap) {
-      originMap = new Map();
-      byOrigin.set(resource.origin, originMap);
+    const group = toExplorerGroup(resource);
+    let groupMap = byGroup.get(group);
+    if (!groupMap) {
+      groupMap = new Map();
+      byGroup.set(group, groupMap);
     }
-    const kindGroup = originMap.get(resource.kind);
+    const kindGroup = groupMap.get(resource.kind);
     if (kindGroup) {
       kindGroup.push(resource);
     } else {
-      originMap.set(resource.kind, [resource]);
+      groupMap.set(resource.kind, [resource]);
     }
   }
 
   const tree: TreeNode[] = [];
 
-  for (const origin of ORIGIN_ORDER) {
-    const originMap = byOrigin.get(origin);
+  for (const origin of GROUP_ORDER) {
+    const originMap = byGroup.get(origin);
     if (!originMap || originMap.size === 0) continue;
 
     const originCount = Array.from(originMap.values()).reduce((sum, items) => sum + items.length, 0);
@@ -125,8 +135,8 @@ function buildTree(response: ResourceExplorerResponse): TreeNode[] {
       tree.push({
         nodeKind: "origin-group",
         id: `origin:${origin}`,
-        label: `${ORIGIN_LABELS[origin]} — ${kindGroups[0].label}`,
-        iconId: ORIGIN_ICONS[origin],
+        label: `${GROUP_LABELS[origin]} — ${kindGroups[0].label}`,
+        iconId: GROUP_ICONS[origin],
         collapsible: true,
         children: kindGroups[0].children,
         contextValue: "originGroup",
@@ -135,8 +145,8 @@ function buildTree(response: ResourceExplorerResponse): TreeNode[] {
       tree.push({
         nodeKind: "origin-group",
         id: `origin:${origin}`,
-        label: `${ORIGIN_LABELS[origin]} (${originCount})`,
-        iconId: ORIGIN_ICONS[origin],
+        label: `${GROUP_LABELS[origin]} (${originCount})`,
+        iconId: GROUP_ICONS[origin],
         collapsible: true,
         children: kindGroups,
         contextValue: "originGroup",

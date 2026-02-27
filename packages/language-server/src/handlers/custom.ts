@@ -24,6 +24,7 @@ import type {
   ResourceCollections,
   ResourceGapSummary,
   ResourceGraph,
+  ResourceOrigin,
 } from "@aurelia-ls/compiler/schema/types.js";
 import type { WorkspaceDiagnostic, WorkspaceDiagnostics } from "@aurelia-ls/semantic-workspace/types.js";
 import type { ServerContext } from "../context.js";
@@ -237,7 +238,6 @@ export type ResourceExplorerBindable = {
   type?: string;
 };
 
-export type ResourceOrigin = "framework" | "project" | "package";
 export type ResourceScope = "global" | "local" | "orphan";
 
 export type ResourceExplorerItem = {
@@ -250,7 +250,7 @@ export type ResourceExplorerItem = {
   bindables: ResourceExplorerBindable[];
   gapCount: number;
   gapIntrinsicCount: number;
-  origin: ResourceOrigin;
+  origin?: ResourceOrigin;
   scope: ResourceScope;
   scopeOwner?: string;
   declarationForm?: string;
@@ -323,13 +323,9 @@ export function handleGetResources(ctx: ServerContext): ResourceExplorerResponse
       resources.push(mapCatalogResource(name, "binding-behavior", res, catalog, scopeIndex, allScoped, discrepancies));
     }
 
-    // Sort: by origin (project first, package second, framework last), then by kind, then alphabetically
-    const originOrder: ResourceOrigin[] = ["project", "package", "framework"];
+    // Sort by kind, then alphabetically — origin-based grouping is the consumer's concern
     const kindOrder = ["custom-element", "template-controller", "custom-attribute", "value-converter", "binding-behavior"];
     resources.sort((a, b) => {
-      const oa = originOrder.indexOf(a.origin);
-      const ob = originOrder.indexOf(b.origin);
-      if (oa !== ob) return oa - ob;
       const ka = kindOrder.indexOf(a.kind);
       const kb = kindOrder.indexOf(b.kind);
       if (ka !== kb) return ka - kb;
@@ -418,15 +414,6 @@ type FlatResourceLike = {
   bindables?: Readonly<Record<string, Bindable>>;
 };
 
-function detectOrigin(res: FlatResourceLike): ResourceOrigin {
-  // Check package first: a resource from an npm package is "package"
-  // regardless of how it was discovered (builtin encoding or source analysis).
-  if (res.package) return "package";
-  if (res.origin === "builtin") return "framework";
-  if (res.origin === "config") return "framework";
-  return "project";
-}
-
 function mapCatalogResource(
   name: string,
   kind: string,
@@ -458,7 +445,6 @@ function mapCatalogResource(
     return Array.isArray(catalogGaps) ? catalogGaps.length : 0;
   })();
 
-  const origin = detectOrigin(res);
   const scopeEntry = scopeIndex.get(name);
   // Three-way scope: local (non-root only), global (in root), orphan (not in any scope)
   const scope: ResourceScope = scopeEntry
@@ -475,14 +461,14 @@ function mapCatalogResource(
     bindables,
     gapCount: fallbackGapCount,
     gapIntrinsicCount: gapIntrinsic,
-    origin,
+    origin: res.origin,
     scope,
     scopeOwner: scopeEntry?.scopeOwner,
     declarationForm: res.declarationForm,
   };
 
   // Attach staleness for builtin resources
-  if (origin === "framework" && discrepancies) {
+  if ((res.origin === "builtin" || res.origin === "config") && discrepancies) {
     const disc = discrepancies.get(name);
     if (disc) {
       item.staleness = {
@@ -571,7 +557,7 @@ export function handleInspectEntity(
 export type ScopeResourceItem = {
   name: string;
   kind: string;
-  origin: ResourceOrigin;
+  origin?: ResourceOrigin;
   className?: string;
   file?: string;
   package?: string;
@@ -634,7 +620,7 @@ export function handleGetScopeResources(
           resources.push({
             name,
             kind,
-            origin: detectOrigin(res),
+            origin: res.origin,
             className: res.className,
             file: res.file,
             package: res.package,

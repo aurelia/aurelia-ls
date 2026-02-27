@@ -266,7 +266,7 @@ export const UserCommandsFeature: FeatureModule = {
             "binding-behavior": "behavior",
           };
 
-          const ORIGIN_ICONS: Record<string, string> = {
+          const GROUP_ICONS: Record<string, string> = {
             project: "$(home)",
             package: "$(package)",
             framework: "$(library)",
@@ -276,7 +276,8 @@ export const UserCommandsFeature: FeatureModule = {
 
           const items: ResourceQuickPickItem[] = response.resources.map((r) => {
             const kindLabel = KIND_LABELS[r.kind] ?? r.kind;
-            const originIcon = ORIGIN_ICONS[r.origin] ?? "";
+            const group = r.package ? "package" : (r.origin === "builtin" || r.origin === "config") ? "framework" : "project";
+            const originIcon = GROUP_ICONS[group] ?? "";
             const detailParts: string[] = [];
             if (r.className && r.className !== r.name) detailParts.push(r.className);
             if (r.declarationForm) detailParts.push(r.declarationForm);
@@ -331,7 +332,7 @@ export const UserCommandsFeature: FeatureModule = {
             "binding-behavior": "behavior",
           };
 
-          const ORIGIN_ICONS: Record<string, string> = {
+          const GROUP_ICONS: Record<string, string> = {
             project: "$(home)",
             package: "$(package)",
             framework: "$(library)",
@@ -341,7 +342,8 @@ export const UserCommandsFeature: FeatureModule = {
 
           const items: ScopeQuickPickItem[] = response.resources.map((r) => {
             const kindLabel = KIND_LABELS[r.kind] ?? r.kind;
-            const originIcon = ORIGIN_ICONS[r.origin] ?? "";
+            const group = r.package ? "package" : (r.origin === "builtin" || r.origin === "config") ? "framework" : "project";
+            const originIcon = GROUP_ICONS[group] ?? "";
             const scopeTag = r.scope === "local" ? "$(lock) local" : "";
             const detailParts: string[] = [];
             if (r.className) detailParts.push(r.className);
