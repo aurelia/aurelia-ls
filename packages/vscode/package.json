@@ -2,7 +2,7 @@
   "name": "aurelia-2",
   "displayName": "Aurelia 2",
   "description": "Language tooling for Aurelia 2 templates — diagnostics, completions, go-to-definition, and more.",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "publisher": "AureliaEffect",
   "icon": "images/logo.png",
   "type": "module",
@@ -56,23 +56,93 @@
       }
     ],
     "commands": [
-      { "command": "aurelia.refreshResourceExplorer", "title": "Refresh", "icon": "$(refresh)", "category": "Aurelia" },
-      { "command": "aurelia.diagnosticsReport", "title": "Diagnostics Report", "category": "Aurelia" },
-      { "command": "aurelia.showSuppressedDiagnostics", "title": "Show Suppressed Diagnostics", "category": "Aurelia" },
-      { "command": "aurelia.inspectAtCursor", "title": "Inspect at Cursor", "category": "Aurelia" },
-      { "command": "aurelia.findResource", "title": "Find Resource", "icon": "$(search)", "category": "Aurelia" },
-      { "command": "aurelia.showAvailableResources", "title": "Show Available Resources", "category": "Aurelia" },
-      { "command": "aurelia.openRelatedFile", "title": "Open Related File", "category": "Aurelia" },
-      { "command": "aurelia.showOverlay", "title": "Show Compiled Template", "category": "Aurelia Debug" },
-      { "command": "aurelia.showOverlayMapping", "title": "Show Overlay Mapping", "category": "Aurelia Debug" },
-      { "command": "aurelia.dumpState", "title": "Dump Server State", "category": "Aurelia Debug" },
-      { "command": "aurelia.observability.menu", "title": "Observability Menu", "category": "Aurelia Debug" },
-      { "command": "aurelia.observability.toggleDebug", "title": "Toggle Debug Channels", "category": "Aurelia Debug" },
-      { "command": "aurelia.observability.toggleTrace", "title": "Toggle Trace", "category": "Aurelia Debug" },
-      { "command": "aurelia.observability.setDebugChannels", "title": "Set Debug Channels", "category": "Aurelia Debug" },
-      { "command": "aurelia.observability.setLogLevel", "title": "Set Log Level", "category": "Aurelia Debug" },
-      { "command": "aurelia.observability.setTraceMinDuration", "title": "Set Trace Min Duration", "category": "Aurelia Debug" },
-      { "command": "aurelia.observability.openOutput", "title": "Show Output Channel", "category": "Aurelia Debug" }
+      {
+        "command": "aurelia.refreshResourceExplorer",
+        "title": "Refresh",
+        "icon": "$(refresh)",
+        "category": "Aurelia"
+      },
+      {
+        "command": "aurelia.diagnosticsReport",
+        "title": "Diagnostics Report",
+        "category": "Aurelia"
+      },
+      {
+        "command": "aurelia.showSuppressedDiagnostics",
+        "title": "Show Suppressed Diagnostics",
+        "category": "Aurelia"
+      },
+      {
+        "command": "aurelia.inspectAtCursor",
+        "title": "Inspect at Cursor",
+        "category": "Aurelia"
+      },
+      {
+        "command": "aurelia.findResource",
+        "title": "Find Resource",
+        "icon": "$(search)",
+        "category": "Aurelia"
+      },
+      {
+        "command": "aurelia.showAvailableResources",
+        "title": "Show Available Resources",
+        "category": "Aurelia"
+      },
+      {
+        "command": "aurelia.openRelatedFile",
+        "title": "Open Related File",
+        "category": "Aurelia"
+      },
+      {
+        "command": "aurelia.showOverlay",
+        "title": "Show Compiled Template",
+        "category": "Aurelia Debug"
+      },
+      {
+        "command": "aurelia.showOverlayMapping",
+        "title": "Show Overlay Mapping",
+        "category": "Aurelia Debug"
+      },
+      {
+        "command": "aurelia.dumpState",
+        "title": "Dump Server State",
+        "category": "Aurelia Debug"
+      },
+      {
+        "command": "aurelia.observability.menu",
+        "title": "Observability Menu",
+        "category": "Aurelia Debug"
+      },
+      {
+        "command": "aurelia.observability.toggleDebug",
+        "title": "Toggle Debug Channels",
+        "category": "Aurelia Debug"
+      },
+      {
+        "command": "aurelia.observability.toggleTrace",
+        "title": "Toggle Trace",
+        "category": "Aurelia Debug"
+      },
+      {
+        "command": "aurelia.observability.setDebugChannels",
+        "title": "Set Debug Channels",
+        "category": "Aurelia Debug"
+      },
+      {
+        "command": "aurelia.observability.setLogLevel",
+        "title": "Set Log Level",
+        "category": "Aurelia Debug"
+      },
+      {
+        "command": "aurelia.observability.setTraceMinDuration",
+        "title": "Set Trace Min Duration",
+        "category": "Aurelia Debug"
+      },
+      {
+        "command": "aurelia.observability.openOutput",
+        "title": "Show Output Channel",
+        "category": "Aurelia Debug"
+      }
     ],
     "keybindings": [
       {
@@ -130,16 +200,46 @@
         }
       ],
       "commandPalette": [
-        { "command": "aurelia.refreshResourceExplorer", "when": "aurelia.active" },
-        { "command": "aurelia.diagnosticsReport", "when": "aurelia.active" },
-        { "command": "aurelia.showSuppressedDiagnostics", "when": "aurelia.active" },
-        { "command": "aurelia.inspectAtCursor", "when": "aurelia.active" },
-        { "command": "aurelia.findResource", "when": "aurelia.active" },
-        { "command": "aurelia.showAvailableResources", "when": "aurelia.active" },
-        { "command": "aurelia.openRelatedFile", "when": "aurelia.active" },
-        { "command": "aurelia.showOverlay", "when": "aurelia.active && config.aurelia.features.debugCommands" },
-        { "command": "aurelia.showOverlayMapping", "when": "aurelia.active && config.aurelia.features.debugCommands" },
-        { "command": "aurelia.dumpState", "when": "aurelia.active && config.aurelia.features.debugCommands" }
+        {
+          "command": "aurelia.refreshResourceExplorer",
+          "when": "aurelia.active"
+        },
+        {
+          "command": "aurelia.diagnosticsReport",
+          "when": "aurelia.active"
+        },
+        {
+          "command": "aurelia.showSuppressedDiagnostics",
+          "when": "aurelia.active"
+        },
+        {
+          "command": "aurelia.inspectAtCursor",
+          "when": "aurelia.active"
+        },
+        {
+          "command": "aurelia.findResource",
+          "when": "aurelia.active"
+        },
+        {
+          "command": "aurelia.showAvailableResources",
+          "when": "aurelia.active"
+        },
+        {
+          "command": "aurelia.openRelatedFile",
+          "when": "aurelia.active"
+        },
+        {
+          "command": "aurelia.showOverlay",
+          "when": "aurelia.active && config.aurelia.features.debugCommands"
+        },
+        {
+          "command": "aurelia.showOverlayMapping",
+          "when": "aurelia.active && config.aurelia.features.debugCommands"
+        },
+        {
+          "command": "aurelia.dumpState",
+          "when": "aurelia.active && config.aurelia.features.debugCommands"
+        }
       ]
     },
     "configuration": {
@@ -188,13 +288,22 @@
         },
         "aurelia.observability.logging.level": {
           "type": "string",
-          "enum": ["trace", "debug", "info", "warn", "error"],
+          "enum": [
+            "trace",
+            "debug",
+            "info",
+            "warn",
+            "error"
+          ],
           "default": "info",
           "description": "Minimum log level for client output."
         },
         "aurelia.observability.logging.format": {
           "type": "string",
-          "enum": ["pretty", "json"],
+          "enum": [
+            "pretty",
+            "json"
+          ],
           "default": "pretty",
           "description": "Log output format."
         },
@@ -210,13 +319,18 @@
         },
         "aurelia.observability.debug.channels": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "Debug channels to enable (comma-separated if entered as a string)."
         },
         "aurelia.observability.debug.format": {
           "type": "string",
-          "enum": ["pretty", "json"],
+          "enum": [
+            "pretty",
+            "json"
+          ],
           "default": "pretty",
           "description": "Debug output format."
         },
