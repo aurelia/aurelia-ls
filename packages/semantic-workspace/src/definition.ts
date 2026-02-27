@@ -26,7 +26,9 @@ import type {
 import { debug, isDebugEnabled } from "@aurelia-ls/compiler/shared/debug.js";
 import type { ProjectSemanticsDefinitionChannels } from "@aurelia-ls/compiler/project-semantics/resolve.js";
 import type { SemanticSnapshot } from "@aurelia-ls/compiler/schema/types.js";
-import type { WorkspaceLocation, TextReferenceSite, NameForm } from "./types.js";
+import type { NameForm, TextReferenceSite } from "@aurelia-ls/compiler/schema/referential-index.js";
+import type { NormalizedPath } from "@aurelia-ls/compiler/model/identity.js";
+import type { WorkspaceLocation } from "./types.js";
 import { selectResourceCandidate } from "./resource-precedence-policy.js";
 import { buildDomIndex, elementTagSpanAtOffset, findDomNode } from "./template-dom.js";
 import {
@@ -403,9 +405,6 @@ export function collectTemplateResourceReferences(options: {
   const documentUri = options.documentUri ?? null;
 
   // ── CE tag references ──
-  // NodeSem carries positional provenance (tagSpan, closeTagSpan,
-  // asElementValueSpan) from the IR DOM through the link boundary.
-  // No DOM index rebuild needed for tag references.
   for (const template of compilation.linked.templates) {
     if (!template) continue;
     for (const row of template.rows ?? []) {
@@ -414,20 +413,18 @@ export function collectTemplateResourceReferences(options: {
         ? findEntry(resources.elements, row.node.custom.def.name, row.node.custom.def.file ?? null, preferRoots)
         : null;
       if (!entry?.symbolId) continue;
+      const rk = resourceKey(entry.def);
       if (row.node.tagSpan) {
-        const loc = spanLocation(row.node.tagSpan, documentUri);
-        if (loc) results.push({ kind: "text", referenceKind: "tag-name", nameForm: "kebab-case", ...loc, symbolId: entry.symbolId, nodeId: row.target });
+        const base = siteBase(row.node.tagSpan, documentUri, 'template');
+        if (base) results.push({ kind: "text", referenceKind: "tag-name", nameForm: "kebab-case", ...base, resourceKey: rk, symbolId: entry.symbolId, nodeId: row.target });
       }
       if (row.node.closeTagSpan) {
-        const loc = spanLocation(row.node.closeTagSpan, documentUri);
-        if (loc) results.push({ kind: "text", referenceKind: "close-tag-name", nameForm: "kebab-case", ...loc, symbolId: entry.symbolId, nodeId: row.target });
+        const base = siteBase(row.node.closeTagSpan, documentUri, 'template');
+        if (base) results.push({ kind: "text", referenceKind: "close-tag-name", nameForm: "kebab-case", ...base, resourceKey: rk, symbolId: entry.symbolId, nodeId: row.target });
       }
-      // as-element value span: when element identity is overridden via
-      // <div as-element="my-ce">, emit the value as an additional reference
-      // site for the target CE.
       if (row.node.asElementValueSpan) {
-        const loc = spanLocation(row.node.asElementValueSpan, documentUri);
-        if (loc) results.push({ kind: "text", referenceKind: "as-element-value", nameForm: "kebab-case", ...loc, symbolId: entry.symbolId });
+        const base = siteBase(row.node.asElementValueSpan, documentUri, 'template');
+        if (base) results.push({ kind: "text", referenceKind: "as-element-value", nameForm: "kebab-case", ...base, resourceKey: rk, symbolId: entry.symbolId });
       }
     }
   }
@@ -448,13 +445,11 @@ export function collectTemplateResourceReferences(options: {
   const instructionHits = collectInstructionHits(compilation.linked.templates, compilation.ir.templates ?? [], domIndex);
   for (const hit of instructionHits) {
     const nameSpan = hit.attrNameSpan ?? null;
-    // TC attributes are consumed during compilation — attrNameSpan will
-    // be null. Use the instruction's loc span directly for TC references.
     if (hit.instruction.kind === "hydrateTemplateController") {
       const entry = findEntry(resources.controllers, hit.instruction.res, null, preferRoots);
       if (!entry?.symbolId) continue;
-      const loc = spanLocation(hit.loc, documentUri);
-      if (loc) results.push({ kind: "text", referenceKind: "attribute-name", nameForm: "kebab-case", ...loc, symbolId: entry.symbolId });
+      const base = siteBase(hit.loc, documentUri, 'template');
+      if (base) results.push({ kind: "text", referenceKind: "attribute-name", nameForm: "kebab-case", ...base, resourceKey: resourceKey(entry.def), symbolId: entry.symbolId });
       continue;
     }
     if (!nameSpan) continue;
@@ -467,8 +462,8 @@ export function collectTemplateResourceReferences(options: {
           ? findEntry(resources.attributes, res.name, res.file ?? null)
           : null;
         if (!entry?.symbolId) break;
-        const loc = spanLocation(span, documentUri);
-        if (loc) results.push({ kind: "text", referenceKind: "attribute-name", nameForm: "kebab-case", ...loc, symbolId: entry.symbolId });
+        const base = siteBase(span, documentUri, 'template');
+        if (base) results.push({ kind: "text", referenceKind: "attribute-name", nameForm: "kebab-case", ...base, resourceKey: resourceKey(entry.def), symbolId: entry.symbolId });
         break;
       }
       case "propertyBinding":
@@ -476,10 +471,10 @@ export function collectTemplateResourceReferences(options: {
       case "setProperty": {
         const target = hit.instruction.target as { kind?: string } | null | undefined;
         if (!target || typeof target !== "object" || !("kind" in target)) break;
-        const symbolId = bindableSymbolIdForTarget(target, hit.instruction.to, resources);
-        if (!symbolId) break;
-        const loc = spanLocation(span, documentUri);
-        if (loc) results.push({ kind: "text", referenceKind: "attribute-name", nameForm: "kebab-case", ...loc, symbolId });
+        const bid = bindableSymbolIdForTarget(target, hit.instruction.to, resources);
+        if (!bid) break;
+        const base = siteBase(span, documentUri, 'template');
+        if (base) results.push({ kind: "text", referenceKind: "attribute-name", nameForm: "kebab-case", ...base, resourceKey: `bindable:${hit.instruction.to}`, symbolId: bid });
         break;
       }
       default:
@@ -494,10 +489,10 @@ export function collectTemplateResourceReferences(options: {
       ? findEntry(resources.valueConverters, ref.name, null, preferRoots)
       : findEntry(resources.bindingBehaviors, ref.name, null, preferRoots);
     if (!entry?.symbolId) continue;
-    const loc = spanLocation(ref.span, documentUri);
-    if (!loc) continue;
+    const base = siteBase(ref.span, documentUri, 'template');
+    if (!base) continue;
     const referenceKind = ref.kind === "valueConverter" ? "expression-pipe" as const : "expression-behavior" as const;
-    results.push({ kind: "text", referenceKind, nameForm: "camelCase", ...loc, symbolId: entry.symbolId, exprId: ref.exprId });
+    results.push({ kind: "text", referenceKind, nameForm: "camelCase", ...base, resourceKey: resourceKey(entry.def), symbolId: entry.symbolId, exprId: ref.exprId });
   }
 
   return results;
@@ -547,45 +542,43 @@ function collectResourceDefReferences(
   const { def, symbolId } = entry;
   if (!symbolId) return;
 
-  // Declaration name site — the name property in the decorator/$au/define/local-template.
-  // The nameForm matches the resource kind's registration convention:
-  // CE/CA/TC use kebab-case, VC/BB use camelCase.
+  const rk = resourceKey(def);
+
+  // Declaration name site
   const nameLoc = readLocation(def.name);
   if (nameLoc && isNavigableSourceLocation(nameLoc)) {
     const referenceKind = inferDeclarationReferenceKind(def);
-    const uri = canonicalDocumentUri(nameLoc.file).uri;
+    const file = normalizePathForId(nameLoc.file) as NormalizedPath;
     const span: SourceSpan = { start: nameLoc.pos, end: nameLoc.end, file: toSourceFileId(nameLoc.file) };
-    results.push({ kind: "text", referenceKind, nameForm: registrationNameForm, uri, span, symbolId });
+    results.push({ kind: "text", domain: "script", referenceKind, nameForm: registrationNameForm, file, span, resourceKey: rk, symbolId });
   }
 
-  // Class name site — the class declaration identifier
+  // Class name site
   const classNameLoc = readLocation(def.className);
   if (classNameLoc && isNavigableSourceLocation(classNameLoc)) {
-    const uri = canonicalDocumentUri(classNameLoc.file).uri;
+    const file = normalizePathForId(classNameLoc.file) as NormalizedPath;
     const span: SourceSpan = { start: classNameLoc.pos, end: classNameLoc.end, file: toSourceFileId(classNameLoc.file) };
-    results.push({ kind: "text", referenceKind: "class-name", nameForm: "PascalCase", uri, span, symbolId });
+    results.push({ kind: "text", domain: "script", referenceKind: "class-name", nameForm: "PascalCase", file, span, resourceKey: rk, symbolId });
   }
 
   // Bindable property sites
   if ("bindables" in def && def.bindables) {
     const bindables = def.bindables as Readonly<Record<string, BindableDef>>;
     for (const [propName, bindable] of Object.entries(bindables)) {
-      const bindableSymbolId = createBindableSymbolId({ owner: symbolId, property: propName });
+      const bindableSymId = createBindableSymbolId({ owner: symbolId, property: propName });
 
-      // The @bindable property declaration
       const propLoc = readLocation(bindable.property);
       if (propLoc && isNavigableSourceLocation(propLoc)) {
-        const uri = canonicalDocumentUri(propLoc.file).uri;
+        const file = normalizePathForId(propLoc.file) as NormalizedPath;
         const span: SourceSpan = { start: propLoc.pos, end: propLoc.end, file: toSourceFileId(propLoc.file) };
-        results.push({ kind: "text", referenceKind: "bindable-property", nameForm: "camelCase", uri, span, symbolId: bindableSymbolId });
+        results.push({ kind: "text", domain: "script", referenceKind: "bindable-property", nameForm: "camelCase", file, span, resourceKey: rk, symbolId: bindableSymId });
       }
 
-      // The attribute declaration site (from definition object bindable config)
       const attrLoc = readLocation(bindable.attribute);
       if (attrLoc && isNavigableSourceLocation(attrLoc)) {
-        const uri = canonicalDocumentUri(attrLoc.file).uri;
+        const file = normalizePathForId(attrLoc.file) as NormalizedPath;
         const span: SourceSpan = { start: attrLoc.pos, end: attrLoc.end, file: toSourceFileId(attrLoc.file) };
-        results.push({ kind: "text", referenceKind: "bindable-config-key", nameForm: "kebab-case", uri, span, symbolId: bindableSymbolId });
+        results.push({ kind: "text", domain: "script", referenceKind: "bindable-config-key", nameForm: "kebab-case", file, span, resourceKey: rk, symbolId: bindableSymId });
       }
     }
   }
@@ -646,8 +639,8 @@ function collectLocalTemplateDeclarationRefsFromDom(
         if (entry?.symbolId) {
           const span = attr.valueLoc ?? attr.loc;
           if (span) {
-            const loc = spanLocation(span, documentUri);
-            if (loc) results.push({ kind: "text", referenceKind: "local-template-attr", nameForm: "kebab-case", ...loc, symbolId: entry.symbolId });
+            const base = siteBase(span, documentUri, 'template');
+            if (base) results.push({ kind: "text", referenceKind: "local-template-attr", nameForm: "kebab-case", ...base, resourceKey: resourceKey(entry.def), symbolId: entry.symbolId });
           }
         }
       }
@@ -1069,14 +1062,32 @@ function findSymbolInScope(
   return null;
 }
 
-function spanLocation(span: SourceSpan, documentUri: DocumentUri | null): WorkspaceLocation | null {
+/**
+ * Resolve a span + documentUri into the structural base fields shared by
+ * all TextReferenceSite instances. Returns null if the location can't be
+ * resolved (missing file identity).
+ */
+function siteBase(span: SourceSpan, documentUri: DocumentUri | null, domain: 'template' | 'script'): { file: NormalizedPath; span: SourceSpan; domain: 'template' | 'script' } | null {
   if (documentUri) {
     const canonical = canonicalDocumentUri(documentUri);
-    return { uri: canonical.uri, span: { ...span, file: canonical.file } };
+    return { file: normalizePathForId(canonical.file), span: { ...span, file: canonical.file }, domain };
   }
   if (!span.file) return null;
   const canonical = canonicalDocumentUri(span.file);
-  return { uri: canonical.uri, span };
+  return { file: normalizePathForId(canonical.file), span, domain };
+}
+
+/** Compute resource key from kind + name (e.g., "custom-element:my-component"). */
+function resourceKey(def: ResourceDef): string {
+  return `${def.kind}:${unwrapSourced(def.name) ?? "unknown"}`;
+}
+
+/** Legacy compatibility: project a site base to WorkspaceLocation for APIs that still need it. */
+function spanLocation(span: SourceSpan, documentUri: DocumentUri | null): WorkspaceLocation | null {
+  const base = siteBase(span, documentUri, 'template');
+  if (!base) return null;
+  const canonical = canonicalDocumentUri(base.file);
+  return { uri: canonical.uri, span: base.span };
 }
 
 function localSymbolId(documentUri: DocumentUri | null, match: ScopeSymbolMatch): SymbolId | null {

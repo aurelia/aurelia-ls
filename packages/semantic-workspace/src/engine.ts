@@ -73,7 +73,6 @@ import {
   type WorkspaceRenameRequest,
   type WorkspacePrepareRenameRequest,
   type WorkspacePrepareRenameResult,
-  type TextReferenceSite,
   type WorkspaceCompletionResult,
   type WorkspaceTextEdit,
   type SemanticChangeEvent,
@@ -1573,9 +1572,9 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       );
       if (indexSites.length > 0) {
         const results = indexSites
-          .filter((s): s is CompilerTextReferenceSite => s.kind === "text")
+          .filter((s): s is TextReferenceSite => s.kind === "text")
           .map(s => ({
-            uri: s.file as unknown as DocumentUri,
+            uri: canonicalDocumentUri(s.file).uri,
             span: s.span,
           }));
         if (activated) this.#activateTemplate(activeUri);
@@ -1638,7 +1637,11 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
   #resourceReferencesAt(uri: DocumentUri, pos: { line: number; character: number }): WorkspaceLocation[] {
     const ctx = this.#referenceContext(uri, pos);
     if (!ctx) return [];
-    return this.#resourceReferencesAtOffset(uri, ctx.offset);
+    return this.#resourceReferencesAtOffset(uri, ctx.offset).map(site => ({
+      uri: canonicalDocumentUri(site.file).uri,
+      span: site.span,
+      symbolId: site.symbolId,
+    }));
   }
 
   #isTemplateUri(uri: DocumentUri): boolean {

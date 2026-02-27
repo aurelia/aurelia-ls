@@ -510,7 +510,7 @@ function normalizeOptions(
   };
 }
 
-function mapCompletions(items: readonly TemplateCompletionItem[]): WorkspaceCompletionItem[] {
+function mapCompletions(items: readonly CompletionItem[]): WorkspaceCompletionItem[] {
   const mapped = items.map((item, index) => ({
     label: item.label,
     ...(item.kind ? { kind: item.kind } : {}),
@@ -573,7 +573,7 @@ function completionOriginRank(
 }
 
 function mapLocations(
-  locs: readonly TemplateLocation[],
+  locs: readonly Location[],
   lookupText: (uri: DocumentUri) => string | null,
 ): WorkspaceLocation[] {
   const results: WorkspaceLocation[] = [];
@@ -586,7 +586,7 @@ function mapLocations(
 }
 
 function mapTextEdits(
-  edits: readonly TemplateTextEdit[],
+  edits: readonly TextEdit[],
   lookupText: (uri: DocumentUri) => string | null,
 ): WorkspaceEdit["edits"] {
   const results: WorkspaceTextEdit[] = [];

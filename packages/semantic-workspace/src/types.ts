@@ -263,58 +263,15 @@ export interface Disposable {
 // Reference Sites — Unified cross-boundary reference model
 // ============================================================================
 
-// Name form determines the casing convention at each reference site.
-// Rename must derive all forms from the input form.
-export type NameForm = "kebab-case" | "camelCase" | "PascalCase";
-
-// Reference kind discriminates what source code construct the reference lives in.
-// This determines: (a) name transformation rules, (b) annotation grouping,
-// (c) edit mechanics (string literal vs identifier vs file path).
-export type ReferenceKind =
-  // Declaration sites (annotation group: "declaration")
-  | "decorator-name-property"    // { name: 'my-el' } in decorator arg
-  | "decorator-string-arg"       // @customElement('my-el')
-  | "static-au-name"             // static $au = { name: 'my-el' }
-  | "define-name"                // CustomElement.define({ name: 'my-el' })
-  | "local-template-attr"        // <template as-custom-element="my-local">
-  // Template reference sites (annotation group: "template-refs")
-  | "tag-name"                   // <my-element ...>
-  | "close-tag-name"             // </my-element>
-  | "attribute-name"             // my-attr.bind="..." or value.bind="..."
-  | "as-element-value"           // <div as-element="my-element">
-  | "expression-pipe"            // ${ value | myConverter }
-  | "expression-behavior"        // value.bind="x & myBehavior"
-  | "import-element-from"        // <import from="./my-element">
-  // Script reference sites (annotation group: "ts-refs")
-  | "import-path"                // import { MyEl } from './my-element'
-  | "dependencies-class"         // dependencies: [MyElement]
-  | "dependencies-string"        // dependencies: ['my-element']
-  | "class-name"                 // class MyElement (convention form)
-  | "bindable-property"          // @bindable myProp on the class
-  | "bindable-config-key"        // bindables: { myProp: ... }
-  | "bindable-callback"          // myPropChanged() method
-  | "property-access";           // this.myProp or instance.myProp in TS
-
-// A text reference site: a span in a source file that contains the name.
-export interface TextReferenceSite {
-  readonly kind: "text";
-  readonly referenceKind: ReferenceKind;
-  readonly uri: DocumentUri;
-  readonly span: SourceSpan;
-  readonly nameForm: NameForm;
-  readonly symbolId?: SymbolId;
-  readonly exprId?: ExprId;
-  readonly nodeId?: NodeId;
-}
-
-// A file reference site: a file whose path embeds the resource name (convention form).
-export interface FileReferenceSite {
-  readonly kind: "file-rename";
-  readonly oldPath: string;
-  readonly extension: string;
-}
-
-export type ReferenceSite = TextReferenceSite | FileReferenceSite;
+// Reference types are canonical from the compiler's referential index.
+// Re-exported here for convenience — no workspace-specific variants.
+export type {
+  ReferenceKind,
+  NameForm,
+  TextReferenceSite,
+  FileReferenceSite,
+  ReferenceSite,
+} from "@aurelia-ls/compiler/schema/referential-index.js";
 
 // ============================================================================
 // Rename Safety — Inverted degradation model

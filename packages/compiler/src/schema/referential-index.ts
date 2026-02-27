@@ -11,10 +11,10 @@
 //
 // L2 reference: models/attractor/l2/types.ts §Referential Index
 
-import type { NormalizedPath } from "../model/identity.js";
+import type { ExprId, NormalizedPath, NodeId } from "../model/identity.js";
 import type { SourceSpan } from "../model/ir.js";
 import type { ScopeFrame, ScopeTemplate } from "../model/symbols.js";
-import type { ResourceScopeId } from "./types.js";
+import type { ResourceScopeId, SymbolId } from "./types.js";
 
 // ============================================================================
 // Reference taxonomy — 20 kinds spanning both domains
@@ -52,6 +52,7 @@ export type ReferenceKind =
   | 'dependencies-string'     // dependencies: ['my-element']
   | 'class-name'              // class MyElement { }
   | 'property-access'         // this.myProp, instance.myProp
+  | 'bindable-property'       // @bindable myProp declaration
   | 'bindable-config-key'     // bindables: { myProp: { ... } }
   | 'bindable-callback';      // myPropChanged() { }
 
@@ -62,6 +63,11 @@ export type ReferenceKind =
 /**
  * A reference to a named entity in text — carries enough information for
  * both find-references (display) and rename (edit computation).
+ *
+ * This is the single reference site type across both compiler and workspace
+ * layers. The compiler populates structural fields (domain, file, resourceKey,
+ * scope/VM provenance). The workspace layer populates entity-linkage fields
+ * (symbolId, exprId, nodeId) during reference collection.
  */
 export interface TextReferenceSite {
   readonly kind: 'text';
@@ -84,6 +90,12 @@ export interface TextReferenceSite {
   readonly vmFile?: NormalizedPath;
   readonly vmClassName?: string;
   readonly vmProperty?: string;
+  /** Workspace-layer entity linkage: stable content-addressed resource ID. */
+  readonly symbolId?: SymbolId;
+  /** Workspace-layer entity linkage: expression table index. */
+  readonly exprId?: ExprId;
+  /** Workspace-layer entity linkage: DOM node identity. */
+  readonly nodeId?: NodeId;
 }
 
 /**

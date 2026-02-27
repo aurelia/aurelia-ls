@@ -840,7 +840,7 @@ export class TemplateEditEngine {
     for (const ref of refs) {
       // Apply per-site name transformation when we have form information.
       const transformed = transform ? selectNameForSite(ref, transform) : newName;
-      out.push({ uri: ref.uri, span: ref.span, newText: transformed });
+      out.push({ uri: canonicalDocumentUri(ref.file).uri, span: ref.span, newText: transformed });
     }
   }
 }
