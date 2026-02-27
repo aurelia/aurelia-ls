@@ -99,4 +99,4 @@ export function createServerContext(init: ServerContextInit): ServerContext {
   };
 }
 
-export { canonicalDocumentUri } from "@aurelia-ls/compiler";
+export { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";

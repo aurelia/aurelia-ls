@@ -24,14 +24,14 @@ import type { TemplateQueryFacade } from "../synthesis/overlay/query.js";
 import type { DocumentSnapshot, DocumentUri } from "./primitives.js";
 import { canonicalDocumentUri } from "./paths.js";
 import type { TemplateProgram } from "./program.js";
-import type { CompletionConfidence, CompletionItem, CompletionOrigin } from "./completion-contracts.js";
+import type { CompletionConfidence, TemplateCompletionItem, CompletionOrigin } from "./completion-contracts.js";
 
 export function collectTemplateCompletionsForProgram(
   program: TemplateProgram,
   query: TemplateQueryFacade,
   snapshot: DocumentSnapshot,
   offset: number,
-): CompletionItem[] {
+): TemplateCompletionItem[] {
   const { sem, resources, syntax, catalog } = resolveCompletionContext(program, snapshot.uri);
   const attrParser = createAttributeParserFromRegistry(syntax);
 
@@ -124,7 +124,7 @@ function collectExpressionCompletions(
   resources: ResourceCollections,
   sem: MaterializedSemantics,
   catalog: ResourceCatalog,
-): CompletionItem[] {
+): TemplateCompletionItem[] {
   if (!spanContainsOffset(exprSpan, offset)) return [];
   const exprText = text.slice(exprSpan.start, exprSpan.end);
   const relativeOffset = offset - exprSpan.start;
@@ -163,10 +163,10 @@ function collectTagNameCompletions(
   resources: ResourceCollections,
   sem: MaterializedSemantics,
   catalog: ResourceCatalog,
-): CompletionItem[] {
+): TemplateCompletionItem[] {
   const range = rangeFromOffsets(text, context.nameStart, context.nameEnd);
   const prefix = context.prefix.toLowerCase();
-  const items: CompletionItem[] = [];
+  const items: TemplateCompletionItem[] = [];
   const seen = new Set<string>();
 
   for (const [key, element] of Object.entries(resources.elements)) {
@@ -213,7 +213,7 @@ function collectAttributeNameCompletions(
   syntax: TemplateSyntaxRegistry,
   attrParser: AttributeParser,
   catalog: ResourceCatalog,
-): CompletionItem[] {
+): TemplateCompletionItem[] {
   const typed = context.prefix;
   const command = parseBindingCommandContext(typed, context.attrName, syntax);
   if (command) {
@@ -237,14 +237,14 @@ function collectAttributeNameCompletions(
   const range = rangeFromOffsets(text, context.attrStart + targetSpan.start, context.attrStart + targetSpan.end);
   const lowerPrefix = typed.slice(targetSpan.start, Math.min(typed.length, targetSpan.end)).toLowerCase();
 
-  const items: CompletionItem[] = [];
+  const items: TemplateCompletionItem[] = [];
   const seen = new Set<string>();
   const push = (
     label: string,
     detail?: string,
     documentation?: string,
     trust?: CompletionTrust,
-    kind?: CompletionItem["kind"],
+    kind?: TemplateCompletionItem["kind"],
   ) => {
     if (!label.toLowerCase().startsWith(lowerPrefix)) return;
     if (seen.has(label)) return;
@@ -321,7 +321,7 @@ function collectAttributeValueCompletions(
   syntax: TemplateSyntaxRegistry,
   attrParser: AttributeParser,
   catalog: ResourceCatalog,
-): CompletionItem[] {
+): TemplateCompletionItem[] {
   const attrTarget = normalizeAttributeTarget(context.attrName, syntax, attrParser);
   if (!attrTarget) return [];
 
@@ -362,7 +362,7 @@ function collectBindingCommandCompletions(
   syntax: TemplateSyntaxRegistry,
   prefix: string,
   range: TextRange,
-): CompletionItem[] {
+): TemplateCompletionItem[] {
   const lowerPrefix = prefix.toLowerCase();
   return Object.entries(syntax.bindingCommands ?? {})
     .filter(([name, cmd]) => !name.includes(".") && cmd.kind !== "translation")
@@ -395,7 +395,7 @@ type CompletionTrust = {
 
 function completionKindForResourceKind(
   kind: CompletionResourceKind,
-): CompletionItem["kind"] {
+): TemplateCompletionItem["kind"] {
   switch (kind) {
     case "custom-element":
       return TEMPLATE_COMPLETION_KIND.customElement;
@@ -412,7 +412,7 @@ function completionKindForResourceKind(
 
 function completionTrustProps(
   trust: CompletionTrust | undefined,
-): Pick<CompletionItem, "confidence" | "origin"> {
+): Pick<TemplateCompletionItem, "confidence" | "origin"> {
   if (!trust) return {};
   return {
     confidence: trust.confidence,
@@ -590,10 +590,10 @@ function collectImportModuleSpecifierCompletions(
   sem: MaterializedSemantics,
   range: TextRange,
   catalog: ResourceCatalog,
-): CompletionItem[] {
+): TemplateCompletionItem[] {
   const templatePath = canonicalDocumentUri(templateUri).path;
-  const candidates = new Map<string, { trust: CompletionTrust; kind: CompletionItem["kind"] }>();
-  const addCandidate = (label: string, trust: CompletionTrust, kind: CompletionItem["kind"]): void => {
+  const candidates = new Map<string, { trust: CompletionTrust; kind: TemplateCompletionItem["kind"] }>();
+  const addCandidate = (label: string, trust: CompletionTrust, kind: TemplateCompletionItem["kind"]): void => {
     if (!label) return;
     const current = candidates.get(label);
     if (!current) {

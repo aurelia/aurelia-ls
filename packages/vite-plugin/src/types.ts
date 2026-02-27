@@ -29,29 +29,27 @@ import type { SSRRequestContext } from "@aurelia-ls/ssr";
  * ConventionConfig is the canonical type for all convention configuration.
  * Compiler exports remain the authoritative definitions.
  */
-export type {
-  // Core convention config
-  ConventionConfig,
-  SuffixConfig,
-  FilePatternConfig,
-  // Directory conventions (user-friendly)
-  DirectoryConventionConfig,
-  DirectoryRule,
-  DirectoryScopeKind,
-  // File pairing
-  TemplatePairingConfig,
-  StylesheetPairingConfig,
-  // Internal types (for advanced use)
-  DirectoryConvention,
-  DirectoryScope,
-  DirectoryMatch,
-} from "@aurelia-ls/compiler";
 import type {
   ConventionConfig,
   DirectoryConventionConfig,
-  StylesheetPairingConfig,
   TemplatePairingConfig,
+  StylesheetPairingConfig,
 } from "@aurelia-ls/compiler/project-semantics/conventions/types.js";
+export type {
+  ConventionConfig,
+  SuffixConfig,
+  FilePatternConfig,
+  DirectoryConventionConfig,
+  DirectoryRule,
+  DirectoryScopeKind,
+  TemplatePairingConfig,
+  StylesheetPairingConfig,
+} from "@aurelia-ls/compiler/project-semantics/conventions/types.js";
+export type {
+  DirectoryConvention,
+  DirectoryScope,
+  DirectoryMatch,
+} from "@aurelia-ls/compiler/project-semantics/project/types.js";
 /**
  * Re-export SSG types from ssg package.
  */

@@ -16,7 +16,15 @@ import type {
 } from "@aurelia-ls/compiler/diagnostics/types.js";
 import type { DiagnosticSeverity, DiagnosticStage } from "@aurelia-ls/compiler/model/diagnostics.js";
 import type { SourceSpan } from "@aurelia-ls/compiler/model/span.js";
-import type { BuiltinDiscrepancy } from "@aurelia-ls/compiler/schema/types.js";
+import type {
+  Bindable,
+  BuiltinDiscrepancy,
+  DeclarationForm,
+  ResourceCatalog,
+  ResourceCollections,
+  ResourceGapSummary,
+  ResourceGraph,
+} from "@aurelia-ls/compiler/schema/types.js";
 import type { WorkspaceDiagnostic, WorkspaceDiagnostics } from "@aurelia-ls/semantic-workspace/types.js";
 import type { ServerContext } from "../context.js";
 import { buildCapabilities, buildCapabilitiesFallback, type CapabilitiesResponse } from "../capabilities.js";
@@ -357,7 +365,7 @@ type ScopeIndexResult = { index: Map<string, ScopeEntry>; allScoped: Set<string>
  * orphans (discovered by analysis but not registered in any container).
  */
 function buildScopeIndex(
-  graph: import("@aurelia-ls/compiler").ResourceGraph | undefined | null,
+  graph: ResourceGraph | undefined | null,
 ): ScopeIndexResult {
   const index = new Map<string, ScopeEntry>();
   const allScoped = new Set<string>();
@@ -404,10 +412,10 @@ type FlatResourceLike = {
   className?: string;
   file?: string;
   package?: string;
-  origin?: import("@aurelia-ls/compiler").ResourceOrigin;
-  declarationForm?: import("@aurelia-ls/compiler").DeclarationForm;
-  gaps?: import("@aurelia-ls/compiler").ResourceGapSummary;
-  bindables?: Readonly<Record<string, import("@aurelia-ls/compiler").Bindable>>;
+  origin?: ResourceOrigin;
+  declarationForm?: DeclarationForm;
+  gaps?: ResourceGapSummary;
+  bindables?: Readonly<Record<string, Bindable>>;
 };
 
 function detectOrigin(res: FlatResourceLike): ResourceOrigin {
@@ -423,7 +431,7 @@ function mapCatalogResource(
   name: string,
   kind: string,
   res: FlatResourceLike,
-  catalog: import("@aurelia-ls/compiler").ResourceCatalog,
+  catalog: ResourceCatalog,
   scopeIndex: Map<string, ScopeEntry>,
   allScoped: Set<string>,
   discrepancies: Map<string, BuiltinDiscrepancy> | null,
@@ -606,7 +614,7 @@ export function handleGetScopeResources(
     const seen = new Set<string>();
 
     // Collect resources from both local scope and root scope (two-level lookup)
-    const collectFromScope = (scopeResources: Partial<import("@aurelia-ls/compiler").ResourceCollections> | undefined, scopeType: "local" | "global") => {
+    const collectFromScope = (scopeResources: Partial<ResourceCollections> | undefined, scopeType: "local" | "global") => {
       if (!scopeResources) return;
       const categories = [
         ["elements", "custom-element"],

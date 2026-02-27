@@ -34,7 +34,7 @@ import type {
   WorkspaceCompletionItem,
   WorkspaceDiagnostic,
   WorkspaceDiagnostics,
-  WorkspaceEdit,
+  WorkspaceEdit as SemanticWorkspaceEdit,
   WorkspaceHover,
   WorkspaceLocation,
 } from "@aurelia-ls/semantic-workspace/types.js";

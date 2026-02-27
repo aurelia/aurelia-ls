@@ -13,7 +13,7 @@ import type { TemplateQueryFacade } from "../synthesis/overlay/query.js";
 import type { TemplateCompilation } from "../facade.js";
 import { checkTypeCompatibility } from "../analysis/40-typecheck/config.js";
 // Program layer imports
-import type { CompletionItem } from "./completion-contracts.js";
+import type { TemplateCompletionItem } from "./completion-contracts.js";
 import type { DocumentSnapshot, DocumentUri, TemplateExprId } from "./primitives.js";
 import { canonicalDocumentUri, deriveTemplatePaths, type CanonicalDocumentUri } from "./paths.js";
 import { collectTemplateCompletionsForProgram } from "./completions.js";
@@ -41,11 +41,11 @@ import {
 
 export type { DocumentSpan } from "./overlay-span-index.js";
 export type { Position, TextRange } from "../model/text.js";
-export type { CompletionConfidence, CompletionItem, CompletionOrigin } from "./completion-contracts.js";
+export type { CompletionConfidence, TemplateCompletionItem, CompletionOrigin } from "./completion-contracts.js";
 
 const PROVENANCE_POLICY = DEFAULT_PROVENANCE_PROJECTION_POLICY;
 
-export interface TextEdit {
+export interface TemplateTextEdit {
   uri: DocumentUri;
   range: TextRange;
   newText: string;
@@ -53,12 +53,12 @@ export interface TextEdit {
 
 export interface TemplateCodeAction {
   title: string;
-  edits: readonly TextEdit[];
+  edits: readonly TemplateTextEdit[];
   kind?: string;
   source: "template" | "typescript";
 }
 
-export interface Location {
+export interface TemplateLocation {
   uri: DocumentUri;
   range: TextRange;
 }
@@ -205,11 +205,11 @@ type TypeNameMap = ReadonlyMap<string, string>;
 
 export interface TemplateLanguageService {
   getDiagnostics(uri: DocumentUri): TemplateLanguageDiagnostics;
-  getCompletions(uri: DocumentUri, position: Position): CompletionItem[];
-  getDefinition(uri: DocumentUri, position: Position): Location[];
-  getReferences(uri: DocumentUri, position: Position): Location[];
+  getCompletions(uri: DocumentUri, position: Position): TemplateCompletionItem[];
+  getDefinition(uri: DocumentUri, position: Position): TemplateLocation[];
+  getReferences(uri: DocumentUri, position: Position): TemplateLocation[];
   getCodeActions(uri: DocumentUri, range: TextRange): TemplateCodeAction[];
-  renameSymbol(uri: DocumentUri, position: Position, newName: string): TextEdit[];
+  renameSymbol(uri: DocumentUri, position: Position, newName: string): TemplateTextEdit[];
 }
 
 export interface TemplateBuildService {
@@ -292,7 +292,7 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     return this.build.getOverlay(uri);
   }
 
-  getCompletions(uri: DocumentUri, position: Position): CompletionItem[] {
+  getCompletions(uri: DocumentUri, position: Position): TemplateCompletionItem[] {
     const canonical = canonicalDocumentUri(uri);
     const snapshot = this.requireSnapshot(canonical);
     const offset = offsetAtPosition(snapshot.text, position);
@@ -304,7 +304,7 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     return dedupeCompletions([...template, ...typescript]);
   }
 
-  getDefinition(uri: DocumentUri, position: Position): Location[] {
+  getDefinition(uri: DocumentUri, position: Position): TemplateLocation[] {
     const canonical = canonicalDocumentUri(uri);
     const snapshot = this.requireSnapshot(canonical);
     const offset = offsetAtPosition(snapshot.text, position);
@@ -322,7 +322,7 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     return this.mapTypeScriptLocations(results, overlay);
   }
 
-  getReferences(uri: DocumentUri, position: Position): Location[] {
+  getReferences(uri: DocumentUri, position: Position): TemplateLocation[] {
     const canonical = canonicalDocumentUri(uri);
     const snapshot = this.requireSnapshot(canonical);
     const offset = offsetAtPosition(snapshot.text, position);
@@ -351,7 +351,7 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     return actions;
   }
 
-  renameSymbol(uri: DocumentUri, position: Position, newName: string): TextEdit[] {
+  renameSymbol(uri: DocumentUri, position: Position, newName: string): TemplateTextEdit[] {
     const ts = this.options.typescript;
     if (!ts?.getRenameEdits) return [];
 
@@ -376,7 +376,7 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     if (!locations.length) return mapped;
 
     const seen = new Set(mapped.map((edit) => `${edit.uri}:${rangeKey(edit.range)}`));
-    const extras: TextEdit[] = [];
+    const extras: TemplateTextEdit[] = [];
     for (const loc of locations) {
       if (!loc.range) continue;
       if (!this.program.sources.get(loc.uri)) continue;
@@ -386,14 +386,14 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
       extras.push({ uri: loc.uri, range: loc.range, newText: newName });
     }
 
-    return extras.length ? dedupeTextEdits([...mapped, ...extras]) : mapped;
+    return extras.length ? dedupeTemplateTextEdits([...mapped, ...extras]) : mapped;
   }
 
   private collectTemplateCompletions(
     query: TemplateQueryFacade,
     snapshot: DocumentSnapshot,
     offset: number,
-  ): CompletionItem[] {
+  ): TemplateCompletionItem[] {
     return collectTemplateCompletionsForProgram(this.program, query, snapshot, offset);
   }
 
@@ -401,7 +401,7 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     canonical: CanonicalDocumentUri,
     snapshot: DocumentSnapshot,
     offset: number,
-  ): CompletionItem[] {
+  ): TemplateCompletionItem[] {
     const ts = this.options.typescript;
     if (!ts?.getCompletions) return [];
 
@@ -415,7 +415,7 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
 
     const fallbackSpan = overlayHit.edge.to.span;
     const typeNames = this.typeNamesFor(canonical);
-    const results: CompletionItem[] = [];
+    const results: TemplateCompletionItem[] = [];
     for (const entry of entries) {
       const overlaySpan = entry.replacementSpan
         ? resolveSourceSpan(
@@ -500,8 +500,8 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     };
   }
 
-  private mapTypeScriptLocations(locations: readonly TsLocation[], overlay: OverlayDocumentSnapshot): Location[] {
-    const results: Location[] = [];
+  private mapTypeScriptLocations(locations: readonly TsLocation[], overlay: OverlayDocumentSnapshot): TemplateLocation[] {
+    const results: TemplateLocation[] = [];
     const seen = new Set<string>();
     const overlaySnapshots = new Map<DocumentUri, OverlayDocumentSnapshot>([[overlay.uri, overlay]]);
     for (const loc of locations ?? []) {
@@ -513,7 +513,7 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
         ? this.getGeneratedOverlaySnapshot(generated.uri, templateUri, overlaySnapshots)
         : null;
       const generatedText = generatedOverlay?.text ?? (generated.uri === overlay.uri ? overlay.text : null);
-      const generatedLocation = {
+      const generatedTemplateLocation = {
         generatedUri: generated.uri,
         generatedFile: generatedOverlay?.file ?? generated.file,
         generatedText,
@@ -521,25 +521,25 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
         length: loc.length ?? null,
         range,
       };
-      const generatedSpan = resolveGeneratedLocationSpan(generatedLocation, generated.file);
+      const generatedSpan = resolveGeneratedLocationSpan(generatedTemplateLocation, generated.file);
       const projectedHit = generatedSpan
         ? this.program.provenance.projectGeneratedSpan(generated.uri, generatedSpan)
         : null;
-      const projectedLocation = projectedHit
+      const projectedTemplateLocation = projectedHit
         ? overlayHitToDocumentSpan(projectedHit)
-        : projectGeneratedLocationToDocumentSpanWithOffsetFallback(this.program.provenance, generatedLocation);
-      const projectedEvidence = projectedHit?.edge.evidence?.level ?? (projectedLocation ? "degraded" : null);
+        : projectGeneratedLocationToDocumentSpanWithOffsetFallback(this.program.provenance, generatedTemplateLocation);
+      const projectedEvidence = projectedHit?.edge.evidence?.level ?? (projectedTemplateLocation ? "degraded" : null);
       const decision = resolveGeneratedReferenceLocationWithPolicy({
         generatedUri: generated.uri,
         generatedSpan,
-        mappedLocation: projectedLocation,
+        mappedLocation: projectedTemplateLocation,
         mappedEvidence: projectedEvidence,
         provenance: this.provenanceForReferenceDecision(generated.uri, templateUri),
         policy: PROVENANCE_POLICY,
       });
       const target = this.locationFromReferenceDecision(
         decision.location,
-        generatedLocation.generatedUri,
+        generatedTemplateLocation.generatedUri,
         range,
         generatedText,
       ) ?? (templateUri == null && range ? { uri: generated.uri, range } : null);
@@ -556,8 +556,8 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     edits: readonly TsTextEdit[],
     overlay: OverlayDocumentSnapshot,
     requireOverlayMapping: boolean,
-  ): TextEdit[] | null {
-    const results: TextEdit[] = [];
+  ): TemplateTextEdit[] | null {
+    const results: TemplateTextEdit[] = [];
     const overlaySnapshots = new Map<DocumentUri, OverlayDocumentSnapshot>([[overlay.uri, overlay]]);
     let mappedOverlayEdits = 0;
     let unmappedOverlayEdits = 0;
@@ -597,7 +597,7 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     ) {
       return null;
     }
-    return results.length ? dedupeTextEdits(results) : null;
+    return results.length ? dedupeTemplateTextEdits(results) : null;
   }
 
   private mapGeneratedEdit(
@@ -605,8 +605,8 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     generated: CanonicalDocumentUri,
     range: TextRange | null,
     generatedOverlay: OverlayDocumentSnapshot | null,
-  ): TextEdit | null {
-    const mapped = this.mapGeneratedLocation({
+  ): TemplateTextEdit | null {
+    const mapped = this.mapGeneratedTemplateLocation({
       generatedUri: generated.uri,
       generatedFile: generatedOverlay?.file ?? generated.file,
       generatedText: generatedOverlay?.text ?? null,
@@ -618,14 +618,14 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     return { uri: mapped.uri, range: mapped.range, newText: edit.newText };
   }
 
-  private mapGeneratedLocation(args: {
+  private mapGeneratedTemplateLocation(args: {
     generatedUri: DocumentUri;
     generatedFile: SourceFileId;
     generatedText: string | null;
     start?: number | null;
     length?: number | null;
     range?: TextRange | null;
-  }): Location | null {
+  }): TemplateLocation | null {
     const mapped = projectGeneratedLocationToDocumentSpanWithOffsetFallback(this.program.provenance, {
       generatedUri: args.generatedUri,
       generatedFile: args.generatedFile,
@@ -645,7 +645,7 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
     generatedUri: DocumentUri,
     fallbackRange: TextRange | null,
     generatedText: string | null,
-  ): Location | null {
+  ): TemplateLocation | null {
     if (!location) return null;
     const snap = this.program.sources.get(location.uri);
     if (snap) {
@@ -839,7 +839,7 @@ export class DefaultTemplateLanguageService implements TemplateLanguageService, 
         ? `Type mismatch on ${subject}: expected ${contract.type}, got ${actualType}`
         : `Type mismatch: expected ${contract.type}, got ${actualType}`;
 
-      // Location: prefer overlay mapping (has member path), fall back to expr spans
+      // TemplateLocation: prefer overlay mapping (has member path), fall back to expr spans
       const span = pos?.htmlSpan ?? exprSpans?.get(exprId) ?? null;
       diags.push({
         code: "aurelia/expr-type-mismatch",
@@ -885,9 +885,9 @@ function getVmDisplayName(vm: TemplateProgram["options"]["vm"]): string {
   return vm.getRootVmTypeExpr ? vm.getRootVmTypeExpr() : "Component";
 }
 
-function dedupeCompletions(items: readonly CompletionItem[]): CompletionItem[] {
+function dedupeCompletions(items: readonly TemplateCompletionItem[]): TemplateCompletionItem[] {
   const seen = new Set<string>();
-  const results: CompletionItem[] = [];
+  const results: TemplateCompletionItem[] = [];
   for (const item of items) {
     const key = `${item.source}:${item.label}:${rangeKey(item.range)}`;
     if (seen.has(key)) continue;
@@ -954,8 +954,8 @@ function mapTypeScriptDiagnostic(
   typeNames: TypeNameMap,
 ): TemplateLanguageDiagnostic {
   const overlaySpan = tsSpan(diag, overlay.file);
-  // Note: We intentionally do NOT use overlayLocation - the overlay file is an internal implementation detail.
-  const _overlayLocation = overlaySpan ? { uri: overlay.uri, span: overlaySpan } : null;
+  // Note: We intentionally do NOT use overlayTemplateLocation - the overlay file is an internal implementation detail.
+  const _overlayTemplateLocation = overlaySpan ? { uri: overlay.uri, span: overlaySpan } : null;
   const provenanceHit = overlaySpan ? provenance.projectGeneratedSpan(overlay.uri, overlaySpan) : null;
   const mappedLocation = overlaySpan
     ? projectGeneratedSpanToDocumentSpanWithOffsetFallback(provenance, overlay.uri, overlaySpan)
@@ -973,7 +973,7 @@ function mapTypeScriptDiagnostic(
       ? projectGeneratedSpanToDocumentSpanWithOffsetFallback(provenance, relUri, relSpan)
       : null;
     const relatedTemplateUri = resolveTemplateUriForGenerated(provenance, relUri);
-    const relatedLocation = resolveRelatedDiagnosticLocationWithPolicy({
+    const relatedTemplateLocation = resolveRelatedDiagnosticLocationWithPolicy({
       relUri,
       relSpan,
       mappedLocation: relMapped,
@@ -985,7 +985,7 @@ function mapTypeScriptDiagnostic(
 
     related.push({
       message: rewriteTypeNames(flattenTsMessage(rel.messageText), typeNames),
-      location: relatedLocation.location,
+      location: relatedTemplateLocation.location,
     });
   }
 
@@ -1153,7 +1153,7 @@ function normalizeRange(range: TextRange | null | undefined): TextRange | null {
   };
 }
 
-function locationKey(loc: Location): string {
+function locationKey(loc: TemplateLocation): string {
   return `${loc.uri}:${loc.range.start.line}:${loc.range.start.character}-${loc.range.end.line}:${loc.range.end.character}`;
 }
 
@@ -1172,9 +1172,9 @@ function tsCategoryToSeverity(cat: TsDiagnosticCategory): DiagnosticSeverity {
   }
 }
 
-function dedupeTextEdits(edits: readonly TextEdit[]): TextEdit[] {
+function dedupeTemplateTextEdits(edits: readonly TemplateTextEdit[]): TemplateTextEdit[] {
   const seen = new Set<string>();
-  const results: TextEdit[] = [];
+  const results: TemplateTextEdit[] = [];
   for (const edit of edits) {
     const key = `${edit.uri}:${rangeKey(edit.range)}:${edit.newText}`;
     if (seen.has(key)) continue;

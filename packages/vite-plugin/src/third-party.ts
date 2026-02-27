@@ -9,4 +9,4 @@ export {
   hasThirdPartyResources,
   mergeResourceCollections,
   mergeScopeResources,
-} from "@aurelia-ls/compiler";
+} from "@aurelia-ls/compiler/project-semantics/third-party/merge.js";

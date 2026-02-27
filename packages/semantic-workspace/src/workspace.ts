@@ -8,7 +8,7 @@ import {
   type TextRange,
 } from "@aurelia-ls/compiler/model/text.js";
 import { stableHash, stableHashSemantics } from "@aurelia-ls/compiler/pipeline/hash.js";
-import type { CompletionItem } from "@aurelia-ls/compiler/program/completion-contracts.js";
+import type { TemplateCompletionItem } from "@aurelia-ls/compiler/program/completion-contracts.js";
 import { InMemoryOverlaySpanIndex, type OverlaySpanIndex } from "@aurelia-ls/compiler/program/overlay-span-index.js";
 import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
 import type { DocumentSnapshot, DocumentUri } from "@aurelia-ls/compiler/program/primitives.js";
@@ -16,12 +16,12 @@ import { DefaultTemplateProgram, type TemplateProgram, type TemplateProgramOptio
 import {
   DefaultTemplateBuildService,
   DefaultTemplateLanguageService,
-  type Location,
+  type TemplateLocation,
   type OverlayBuildArtifact,
   type TemplateCodeAction,
   type TemplateLanguageService,
   type TemplateLanguageServiceOptions,
-  type TextEdit,
+  type TemplateTextEdit,
 } from "@aurelia-ls/compiler/program/services.js";
 import { InMemorySourceStore, type SourceStore } from "@aurelia-ls/compiler/program/sources.js";
 import { resolveCursorEntity } from "@aurelia-ls/compiler/schema/cursor-resolve.js";
@@ -510,7 +510,7 @@ function normalizeOptions(
   };
 }
 
-function mapCompletions(items: readonly CompletionItem[]): WorkspaceCompletionItem[] {
+function mapCompletions(items: readonly TemplateCompletionItem[]): WorkspaceCompletionItem[] {
   const mapped = items.map((item, index) => ({
     label: item.label,
     ...(item.kind ? { kind: item.kind } : {}),
@@ -573,7 +573,7 @@ function completionOriginRank(
 }
 
 function mapLocations(
-  locs: readonly Location[],
+  locs: readonly TemplateLocation[],
   lookupText: (uri: DocumentUri) => string | null,
 ): WorkspaceLocation[] {
   const results: WorkspaceLocation[] = [];
@@ -586,7 +586,7 @@ function mapLocations(
 }
 
 function mapTextEdits(
-  edits: readonly TextEdit[],
+  edits: readonly TemplateTextEdit[],
   lookupText: (uri: DocumentUri) => string | null,
 ): WorkspaceEdit["edits"] {
   const results: WorkspaceTextEdit[] = [];

@@ -26,6 +26,7 @@ import {
   type CompletionParams,
 } from "vscode-languageserver/node.js";
 import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
+import type { RenameResult } from "@aurelia-ls/semantic-workspace/types.js";
 import type { ServerContext } from "../context.js";
 import { handleInlayHints as handleInlayHintsRequest } from "./inlay-hints.js";
 import {
@@ -248,7 +249,7 @@ export function handleRename(ctx: ServerContext, params: RenameParams): Workspac
     // If the workspace returns a rich RenameResult (with annotations, file renames),
     // use the rich mapping. Otherwise fall through to basic mapping.
     if ("rename" in result) {
-      const renameResult = (result as { rename: import("@aurelia-ls/semantic-workspace").RenameResult }).rename;
+      const renameResult = (result as { rename: RenameResult }).rename;
       return mapRenameResult(renameResult, lookupText);
     }
 

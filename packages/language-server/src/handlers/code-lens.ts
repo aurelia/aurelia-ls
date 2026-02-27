@@ -10,6 +10,7 @@ import type {
   CodeLensParams,
 } from "vscode-languageserver/node.js";
 import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
+import type { TextReferenceSite } from "@aurelia-ls/compiler/schema/referential-index.js";
 import type { ServerContext } from "../context.js";
 
 export function handleCodeLens(
@@ -30,12 +31,13 @@ export function handleCodeLens(
     const lenses: CodeLens[] = [];
 
     // Find resources whose source file matches this document
+    type AnyRes = { file?: string; className?: string; bindables?: Record<string, unknown> };
     const categories = [
-      { entries: catalog.resources.elements, kind: "custom-element", kindLabel: "element" },
-      { entries: catalog.resources.attributes, kind: "custom-attribute", kindLabel: "attribute" },
-      { entries: catalog.resources.valueConverters, kind: "value-converter", kindLabel: "converter" },
-      { entries: catalog.resources.bindingBehaviors, kind: "binding-behavior", kindLabel: "behavior" },
-    ] as const;
+      { entries: (catalog.resources.elements ?? {}) as Record<string, AnyRes>, kind: "custom-element", kindLabel: "element" },
+      { entries: (catalog.resources.attributes ?? {}) as Record<string, AnyRes>, kind: "custom-attribute", kindLabel: "attribute" },
+      { entries: (catalog.resources.valueConverters ?? {}) as Record<string, AnyRes>, kind: "value-converter", kindLabel: "converter" },
+      { entries: (catalog.resources.bindingBehaviors ?? {}) as Record<string, AnyRes>, kind: "binding-behavior", kindLabel: "behavior" },
+    ];
 
     for (const { entries, kind, kindLabel } of categories) {
       for (const [name, res] of Object.entries(entries)) {
@@ -62,7 +64,7 @@ export function handleCodeLens(
         // Get usage count from referential index
         const resourceKey = `${kind}:${name}`;
         const refs = referentialIndex.getReferencesForResource(resourceKey);
-        const templateRefs = refs.filter((r): r is import("@aurelia-ls/compiler").TextReferenceSite => r.kind === "text" && r.domain === "template");
+        const templateRefs = refs.filter((r): r is TextReferenceSite => r.kind === "text" && r.domain === "template");
         const uniqueTemplates = new Set(templateRefs.map((r) => r.file));
         const usageCount = uniqueTemplates.size;
 
