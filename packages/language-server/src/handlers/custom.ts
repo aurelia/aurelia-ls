@@ -258,10 +258,12 @@ export type ResourceExplorerResponse = {
 
 export function handleGetResources(ctx: ServerContext): ResourceExplorerResponse {
   try {
-    // Full reload: re-read tsconfig for fresh root files, clear incremental
-    // discovery cache, and rebuild.  This ensures newly added or removed
-    // resource files are picked up.
-    ctx.workspace.reloadProject();
+    // Ensure the index is current without a full reload.  reloadProject()
+    // clears the discovery cache and forces a full re-extraction, which is
+    // too expensive for a query that may be called on every workspace-changed
+    // event.  refresh() is sufficient: it rebuilds incrementally if the
+    // project version has changed, and is a no-op if already current.
+    ctx.workspace.refresh({ force: false });
     const snapshot = ctx.workspace.snapshot();
     const catalog = snapshot.catalog;
     const semantics = snapshot.semantics;

@@ -338,10 +338,13 @@ export class SemanticWorkspaceEngine implements SemanticWorkspace {
       return false;
     }
 
+    const prevFingerprint = this.#query.model.fingerprint;
     this.#projectIndex.refresh();
     this.#projectVersion = version;
     this.#rebuildFromModel(this.#projectIndex.currentModel());
-    this.#fireSemanticChange(["resources", "types", "scopes", "diagnostics"]);
+    if (this.#query.model.fingerprint !== prevFingerprint) {
+      this.#fireSemanticChange(["resources", "types", "scopes", "diagnostics"]);
+    }
     return true;
   }
 

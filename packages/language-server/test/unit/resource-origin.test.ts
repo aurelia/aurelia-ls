@@ -34,6 +34,7 @@ function createMockContext(catalog: ReturnType<typeof createCatalog>, semantics:
   return {
     logger: { log: vi.fn(), info: vi.fn(), error: vi.fn(), warn: vi.fn() },
     workspace: {
+      refresh: vi.fn(),
       snapshot: vi.fn(() => ({
         meta: { fingerprint: "test" },
         catalog,
