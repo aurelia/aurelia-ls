@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { convertToLocalImports } from "../src/local-imports.js";
-import type { ImportMetaIR } from "@aurelia-ls/compiler";
-import type { ElementRes } from "@aurelia-ls/compiler";
-
+import type { ImportMetaIR } from "@aurelia-ls/compiler/model/ir.js";
+import type { ElementRes } from "@aurelia-ls/compiler/schema/types.js";
 function createImport(from: string, defaultAlias?: string): ImportMetaIR {
   return {
     kind: "import",

@@ -1,4 +1,6 @@
-import { canonicalDocumentUri, type DocumentUri, type Logger } from "@aurelia-ls/compiler";
+import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
+import type { DocumentUri } from "@aurelia-ls/compiler/program/primitives.js";
+import type { Logger } from "@aurelia-ls/compiler/project-semantics/types.js";
 import { HostReplayLog, hashEnvelopeForReplay } from "./replay-log.js";
 import { runPressureSweep } from "./pressure-sweep.js";
 import { HostSessionManager, type HostSessionState, type HostWorkspaceFactory } from "./session-manager.js";

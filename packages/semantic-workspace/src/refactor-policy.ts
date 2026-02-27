@@ -1,17 +1,4 @@
-/**
- * Internal refactor policy contract.
- *
- * This is intentionally config-driven (declarative data + planner helpers),
- * but not user-configurable at this stage. It centralizes trust-boundary
- * decisions so rename/code-action behavior does not drift across call sites.
- *
- * TODO(refactor-policy hardening):
- * 1) Expose unresolved decision points via an interactive prepare/resolve API
- *    for adapters that can prompt users before execution.
- */
-
-import { stableHash } from "@aurelia-ls/compiler";
-
+import { stableHash } from "@aurelia-ls/compiler/pipeline/hash.js";
 export type RefactorOperation = "rename" | "code-action";
 export type RefactorTargetClass = "resource" | "expression-member" | "unknown";
 export type RefactorResourceOrigin = "source" | "config" | "builtin" | "unknown";

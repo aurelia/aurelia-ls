@@ -10,7 +10,7 @@ import {
   extractTemplateImports,
   extractLocalTemplateImports,
 } from "../../../out/project-semantics/extract/template-imports.js";
-import type { NormalizedPath } from "@aurelia-ls/compiler";
+import type { NormalizedPath } from "@aurelia-ls/compiler/model/identity.js";
 import type { FileSystemContext } from "../../../out/project-semantics/project/context.js";
 
 // Mock file system

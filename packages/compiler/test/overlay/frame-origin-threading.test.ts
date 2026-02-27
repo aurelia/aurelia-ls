@@ -1,7 +1,9 @@
 import { describe, test, expect } from "vitest";
-
-import type { ExprId, FrameId, FrameOrigin, IrModule, SourceSpan, TextSpan } from "@aurelia-ls/compiler";
-import { planOverlay } from "@aurelia-ls/compiler";
+import type { ExprId, FrameId } from "@aurelia-ls/compiler/model/identity.js";
+import type { IrModule } from "@aurelia-ls/compiler/model/ir.js";
+import type { SourceSpan, TextSpan } from "@aurelia-ls/compiler/model/span.js";
+import type { FrameOrigin } from "@aurelia-ls/compiler/model/symbols.js";
+import { planOverlay } from "@aurelia-ls/compiler/synthesis/overlay/plan.js";
 import type { OverlayEmitMappingEntry } from "../../out/synthesis/overlay/emit.js";
 import type { BuildMappingInputs } from "../../out/synthesis/overlay/mapping.js";
 import { buildTemplateMapping } from "../../out/synthesis/overlay/mapping.js";

@@ -42,31 +42,30 @@ import {
   type ForOfStatement,
   type Interpolation,
 } from "@aurelia/expression-parser";
-import {
-  INSTRUCTION_TYPE,
-  debug,
-  type SerializedDefinition,
-  type SerializedInstruction,
-  type SerializedExpression,
-  type SerializedPropertyBinding,
-  type SerializedTextBinding,
-  type SerializedInterpolation,
-  type SerializedListenerBinding,
-  type SerializedRefBinding,
-  type SerializedSetProperty,
-  type SerializedSetAttribute,
-  type SerializedHydrateElement,
-  type SerializedProjection,
-  type SerializedHydrateAttribute,
-  type SerializedHydrateTemplateController,
-  type SerializedHydrateLetElement,
-  type SerializedIteratorBinding,
-  type SerializedTranslationBinding,
-  type SerializedLetBinding,
-  type NestedTemplateHtmlNode,
-  type ExprId,
-} from "@aurelia-ls/compiler";
-
+import type { ExprId } from "@aurelia-ls/compiler/model/identity.js";
+import { debug } from "@aurelia-ls/compiler/shared/debug.js";
+import { INSTRUCTION_TYPE } from "@aurelia-ls/compiler/synthesis/aot/constants.js";
+import type { NestedTemplateHtmlNode } from "@aurelia-ls/compiler/synthesis/aot/emit-template.js";
+import type {
+  SerializedDefinition,
+  SerializedExpression,
+  SerializedHydrateAttribute,
+  SerializedHydrateElement,
+  SerializedHydrateLetElement,
+  SerializedHydrateTemplateController,
+  SerializedInstruction,
+  SerializedInterpolation,
+  SerializedIteratorBinding,
+  SerializedLetBinding,
+  SerializedListenerBinding,
+  SerializedProjection,
+  SerializedPropertyBinding,
+  SerializedRefBinding,
+  SerializedSetAttribute,
+  SerializedSetProperty,
+  SerializedTextBinding,
+  SerializedTranslationBinding,
+} from "@aurelia-ls/compiler/synthesis/aot/types.js";
 /* =============================================================================
  * Public API
  * ============================================================================= */

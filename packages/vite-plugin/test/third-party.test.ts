@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, readdirSync } from "node:fs";
 import { join, resolve as resolvePath } from "node:path";
 import { tmpdir } from "node:os";
-import { normalizePathForId, type NormalizedPath } from "@aurelia-ls/compiler";
+import { normalizePathForId, type NormalizedPath } from "@aurelia-ls/compiler/model/identity.js";
 import type { AureliaPluginOptions, ProjectSemanticsContext } from "../src/types.js";
 import { createProjectSemanticsContext } from "../src/project-semantics.js";
 import { loadConfigFile, mergeConfigs, normalizeOptions } from "../src/defaults.js";

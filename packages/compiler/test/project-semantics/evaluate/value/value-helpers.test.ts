@@ -9,7 +9,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import ts from "typescript";
-import type { NormalizedPath } from "@aurelia-ls/compiler";
+import type { NormalizedPath } from "@aurelia-ls/compiler/model/identity.js";
 import {
   buildContextWithProgram,
   buildSimpleContext,

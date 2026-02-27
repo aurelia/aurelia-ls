@@ -1,18 +1,17 @@
+import type { LinkedInstruction, LinkedRow, NodeSem } from "@aurelia-ls/compiler/analysis/20-link/types.js";
+import type { TemplateCompilation } from "@aurelia-ls/compiler/facade.js";
 import type {
   Attr,
-  AttributeParser,
   DOMNode,
   ElementNode,
   ExprTableEntry,
-  LinkedInstruction,
-  LinkedRow,
-  NodeSem,
-  SourceSpan,
-  TemplateCompilation,
   TemplateMetaIR,
-  TemplateSyntaxRegistry,
-} from "@aurelia-ls/compiler";
-import { analyzeAttributeName, createAttributeParserFromRegistry, spanContainsOffset, spanLength } from "@aurelia-ls/compiler";
+} from "@aurelia-ls/compiler/model/ir.js";
+import type { SourceSpan } from "@aurelia-ls/compiler/model/span.js";
+import type { AttributeParser } from "@aurelia-ls/compiler/parsing/attribute-parser.js";
+import type { TemplateSyntaxRegistry } from "@aurelia-ls/compiler/schema/types.js";
+import { spanContainsOffset, spanLength } from "@aurelia-ls/compiler/model/span.js";
+import { analyzeAttributeName, createAttributeParserFromRegistry } from "@aurelia-ls/compiler/parsing/attribute-parser.js";
 import {
   WORKSPACE_TOKEN_MODIFIER_GAP_AWARE,
   WORKSPACE_TOKEN_MODIFIER_GAP_CONSERVATIVE,

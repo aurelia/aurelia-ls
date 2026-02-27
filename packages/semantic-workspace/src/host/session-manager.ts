@@ -1,5 +1,8 @@
 import path from "node:path";
-import { canonicalDocumentUri, stableHash, type DocumentUri, type Logger } from "@aurelia-ls/compiler";
+import { stableHash } from "@aurelia-ls/compiler/pipeline/hash.js";
+import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
+import type { DocumentUri } from "@aurelia-ls/compiler/program/primitives.js";
+import type { Logger } from "@aurelia-ls/compiler/project-semantics/types.js";
 import { createSemanticWorkspace, type SemanticWorkspaceEngine } from "../engine.js";
 import type {
   SemanticAuthorityPolicyProfile,

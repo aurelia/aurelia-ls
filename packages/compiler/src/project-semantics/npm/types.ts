@@ -73,7 +73,7 @@ export interface ExtractedConfiguration {
   /** Whether this is a factory function result */
   isFactory: boolean;
   /** Source location */
-  source: SourceLocation;
+  source: PackageSourceLocation;
 }
 
 /**
@@ -91,7 +91,7 @@ export interface ConfigurationRegistration {
 /**
  * Source location for npm package analysis.
  */
-export interface SourceLocation {
+export interface PackageSourceLocation {
   /** File path relative to package root */
   file: string;
   /** Line number if available */

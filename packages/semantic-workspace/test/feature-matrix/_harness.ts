@@ -16,8 +16,7 @@ import { findPosition, findOffset, positionAt, spanCoversOffset } from "../test-
 import type { WorkspaceHarness } from "../harness/types.js";
 import type { SemanticQuery, WorkspaceHover, WorkspaceLocation, WorkspaceCompletionItem } from "../../out/types.js";
 import type { SemanticWorkspaceEngine } from "../../out/engine.js";
-import type { DocumentUri } from "@aurelia-ls/compiler";
-
+import type { DocumentUri } from "@aurelia-ls/compiler/program/primitives.js";
 // ============================================================================
 // Harness singleton (shared across all feature-matrix test files)
 // ============================================================================

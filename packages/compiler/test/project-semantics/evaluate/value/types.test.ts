@@ -5,43 +5,38 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import type { NormalizedPath } from '@aurelia-ls/compiler';
+import type { NormalizedPath } from "@aurelia-ls/compiler/model/identity.js";
 import { gap } from '../../../../src/project-semantics/evaluate/types.js';
+import { unknown } from "../../../../src/project-semantics/evaluate/value/index.js";
 import {
-  // Value constructors
-  literal,
   array,
-  object,
-  ref,
-  importVal,
-  propAccess,
   call,
-  spread,
   classVal,
-  unknown,
-  method,
-  getPropertyKeySpan,
-  // Statement constructors
-  returnStmt,
   exprStmt,
-  varStmt,
-  varDecl,
-  ifStmt,
   forOfStmt,
-  unknownStmt,
-  // Type guards
-  isResolved,
-  hasMethod,
-  isRegistryShape,
-  isClassValue,
-  isResolvedClassRef,
+  getPropertyKeySpan,
   getResolvedValue,
-  // Types
+  hasMethod,
+  ifStmt,
+  importVal,
+  isClassValue,
+  isRegistryShape,
+  isResolved,
+  isResolvedClassRef,
+  literal,
+  method,
+  object,
+  propAccess,
+  ref,
+  returnStmt,
+  spread,
+  unknownStmt,
+  varDecl,
+  varStmt,
   type AnalyzableValue,
-  type ObjectValue,
   type MethodValue,
-} from '../../../../src/project-semantics/evaluate/value/index.js';
-
+  type ObjectValue,
+} from "../../../../src/project-semantics/evaluate/value/types.js";
 describe('Value Model Types', () => {
   // ===========================================================================
   // Value Constructors

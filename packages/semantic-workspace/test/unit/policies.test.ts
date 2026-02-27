@@ -1,6 +1,6 @@
 import { describe, expect, it, test } from "vitest";
-import { asDocumentUri, type DocumentUri } from "@aurelia-ls/compiler";
-import type { ResourceDef, SourceLocation, Sourced } from "@aurelia-ls/compiler";
+import { asDocumentUri, type DocumentUri } from "@aurelia-ls/compiler/program/primitives.js";
+import type { ResourceDef, SourceLocation, Sourced } from "@aurelia-ls/compiler/schema/types.js";
 import { decideRenameMappedProvenance } from "../../out/provenance-gate-policy.js";
 import { mergeTieredLocations, mergeTieredLocationsWithIds } from "../../out/query-policy.js";
 import type { WorkspaceLocation } from "../../out/types.js";

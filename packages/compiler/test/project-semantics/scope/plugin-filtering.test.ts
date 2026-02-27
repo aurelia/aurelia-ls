@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { buildResourceGraph, ROUTER_MANIFEST } from "@aurelia-ls/compiler";
-import { materializeResourcesForScope, BUILTIN_SEMANTICS } from "@aurelia-ls/compiler";
-import type { RegistrationAnalysis } from "@aurelia-ls/compiler";
-
+import { ROUTER_MANIFEST } from "@aurelia-ls/compiler/project-semantics/plugins/manifests.js";
+import { buildResourceGraph } from "@aurelia-ls/compiler/project-semantics/scope/builder.js";
+import { BUILTIN_SEMANTICS } from "@aurelia-ls/compiler/schema/registry.js";
+import { materializeResourcesForScope } from "@aurelia-ls/compiler/schema/resource-graph.js";
+import type { RegistrationAnalysis } from "@aurelia-ls/compiler/project-semantics/register/types.js";
 /**
  * Tests for plugin-based resource filtering in the scope builder.
  *

@@ -1,37 +1,25 @@
-// Template Compilation Facade
-//
-// Public entry point for template compilation. Delegates to the pure
-// pipeline functions in pipeline/stages.ts.
-
-// Model imports
-import type { ExprTableEntry, IrModule, ScopeModule, SourceSpan, ExprIdMap } from "./model/index.js";
-
-// Analysis imports
-import type { LinkModule, TypecheckModule } from "./analysis/index.js";
-
-// Language imports
-import type { FeatureUsageSet, TemplateContext } from "./schema/index.js";
-
-// Parsing imports
-import type { AttributeParser, IExpressionParser } from "./parsing/index.js";
-
-// Shared imports
-import { NOOP_TRACE, type CompilerDiagnostic, type VmReflection, type ModuleResolver, type CompileTrace } from "./shared/index.js";
-
+import type { ExprIdMap } from "./model/identity.js";
+import type { ExprTableEntry, IrModule } from "./model/ir.js";
+import type { SourceSpan } from "./model/span.js";
+import type { ScopeModule } from "./model/symbols.js";
+import type { LinkModule } from "./analysis/20-link/types.js";
+import type { TypecheckModule } from "./analysis/40-typecheck/typecheck.js";
+import type { TemplateContext } from "./schema/snapshot.js";
+import type { FeatureUsageSet } from "./schema/types.js";
+import type { AttributeParser } from "./parsing/attribute-parser.js";
+import type { IExpressionParser } from "./parsing/expression-parser.js";
+import type { CompilerDiagnostic } from "./model/diagnostics.js";
+import type { ModuleResolver } from "./shared/module-resolver.js";
+import { NOOP_TRACE, type CompileTrace } from "./shared/trace.js";
+import type { VmReflection } from "./shared/vm-reflection.js";
 // Pipeline imports
 import { runFullPipeline } from "./pipeline/stages.js";
 import type { StageKey, StageArtifactMeta } from "./pipeline/engine.js";
-
-// Synthesis imports
-import {
-  buildOverlayProductFromStages,
-  computeOverlayBaseName,
-  type OverlayPlanModule,
-  type OverlayProductResult,
-  type TemplateMappingArtifact,
-  type TemplateQueryFacade,
-} from "./synthesis/index.js";
-
+import type { TemplateMappingArtifact } from "./synthesis/overlay/mapping.js";
+import { computeOverlayBaseName } from "./synthesis/overlay/paths.js";
+import { buildOverlayProductFromStages, type OverlayProductResult } from "./synthesis/overlay/product.js";
+import type { TemplateQueryFacade } from "./synthesis/overlay/query.js";
+import type { OverlayPlanModule } from "./synthesis/overlay/types.js";
 import type { SemanticModelQuery } from "./schema/model.js";
 
 // ============================================================================

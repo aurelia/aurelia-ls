@@ -1,8 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import ts from "typescript";
-import { type NormalizedPath, type VmReflection, normalizePathForId } from "@aurelia-ls/compiler";
-import type { Logger } from "@aurelia-ls/compiler";
+import { normalizePathForId, type NormalizedPath } from "@aurelia-ls/compiler/model/identity.js";
+import type { VmReflection } from "@aurelia-ls/compiler/shared/vm-reflection.js";
+import type { Logger } from "@aurelia-ls/compiler/project-semantics/types.js";
 import type { PathUtils } from "./paths.js";
 import type { TsService } from "./ts-service.js";
 

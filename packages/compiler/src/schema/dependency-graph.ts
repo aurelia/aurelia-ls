@@ -1,19 +1,4 @@
-// Dependency Graph — L2 convergence infrastructure for invalidation
-//
-// This module implements the DependencyGraph (input→output tracking) and
-// DepRecorder (read-edge recording during pipeline execution) from the
-// L2 architecture target.
-//
-// The graph tracks which outputs depend on which inputs. When an input changes,
-// getAffected() walks the reverse edges to identify all stale outputs.
-//
-// Architectural commitment:
-// - The graph is part of SemanticModel (created during model building).
-// - Template compilations add edges via DepRecorder.
-// - The graph enables targeted invalidation (convergence route step 3).
-// - Until step 3 is active, the graph coexists with fingerprint-based invalidation.
-
-import type { NormalizedPath } from "../model/index.js";
+import type { NormalizedPath } from "../model/identity.js";
 import type { ResourceKey, ResourceScopeId } from "./types.js";
 
 // ============================================================================

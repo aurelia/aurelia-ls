@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { asDocumentUri } from "@aurelia-ls/compiler";
+import { asDocumentUri } from "@aurelia-ls/compiler/program/primitives.js";
 import { describe, expect, it } from "vitest";
 import { createSemanticAuthorityHostRuntime } from "../out/host/runtime.js";
 import { asFixtureId, getFixture, resolveFixtureRoot } from "./fixtures/index.js";

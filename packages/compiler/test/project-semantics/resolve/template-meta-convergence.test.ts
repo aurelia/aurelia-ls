@@ -1,12 +1,10 @@
 import { describe, expect, it } from "vitest";
 import ts from "typescript";
-import {
-  discoverProjectSemantics,
-  DiagnosticsRuntime,
-  materializeResourcesForScope,
-  unwrapSourced,
-  type NormalizedPath,
-} from "@aurelia-ls/compiler";
+import { DiagnosticsRuntime } from "@aurelia-ls/compiler/diagnostics/runtime.js";
+import type { NormalizedPath } from "@aurelia-ls/compiler/model/identity.js";
+import { discoverProjectSemantics } from "@aurelia-ls/compiler/project-semantics/resolve.js";
+import { materializeResourcesForScope } from "@aurelia-ls/compiler/schema/resource-graph.js";
+import { unwrapSourced } from "@aurelia-ls/compiler/schema/sourced.js";
 import type { FileSystemContext } from "../../../out/project-semantics/project/context.js";
 
 function createProgramFromFiles(files: Record<string, string>): ts.Program {

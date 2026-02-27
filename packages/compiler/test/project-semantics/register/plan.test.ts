@@ -1,18 +1,16 @@
 import { describe, it, expect } from "vitest";
-
-import {
-  buildRegistrationPlan,
-  type FeatureUsageSet,
-  type ResourceCollections,
-  type ResourceGraph,
-  type ResourceScopeId,
-  type ControllerConfig,
-  type ElementRes,
-  type AttrRes,
-  type ValueConverterSig,
-  type BindingBehaviorSig,
-} from "@aurelia-ls/compiler";
-
+import { buildRegistrationPlan } from "@aurelia-ls/compiler/project-semantics/register/plan.js";
+import type {
+  AttrRes,
+  BindingBehaviorSig,
+  ControllerConfig,
+  ElementRes,
+  FeatureUsageSet,
+  ResourceCollections,
+  ResourceGraph,
+  ResourceScopeId,
+  ValueConverterSig,
+} from "@aurelia-ls/compiler/schema/types.js";
 function element(name: string): ElementRes {
   return { kind: "element", name, bindables: {} };
 }

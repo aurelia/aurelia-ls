@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
 import path from "node:path";
 import ts from "typescript";
-import type { NormalizedPath } from "@aurelia-ls/compiler";
-import type { Logger } from "@aurelia-ls/compiler";
+import type { NormalizedPath } from "@aurelia-ls/compiler/model/identity.js";
+import type { Logger } from "@aurelia-ls/compiler/project-semantics/types.js";
 import type { OverlayFs } from "./overlay-fs.js";
 import type { PathUtils } from "./paths.js";
 import { applyDefaultCompilerOptions, loadTsConfig } from "./tsconfig.js";

@@ -34,21 +34,20 @@ import type {
   WorkspaceCompletionItem,
   WorkspaceDiagnostic,
   WorkspaceDiagnostics,
-  WorkspaceEdit as SemanticWorkspaceEdit,
+  WorkspaceEdit,
   WorkspaceHover,
   WorkspaceLocation,
-} from "@aurelia-ls/semantic-workspace";
-import {
-  canonicalDocumentUri,
-  type DiagnosticActionability,
-  type DiagnosticCategory,
-  type DiagnosticConfidence,
-  type DiagnosticImpact,
-  type DiagnosticSurface,
-  type DocumentSpan,
-  type DocumentUri,
-} from "@aurelia-ls/compiler";
-
+} from "@aurelia-ls/semantic-workspace/types.js";
+import type {
+  DiagnosticActionability,
+  DiagnosticCategory,
+  DiagnosticConfidence,
+  DiagnosticImpact,
+  DiagnosticSurface,
+} from "@aurelia-ls/compiler/diagnostics/types.js";
+import type { DocumentSpan } from "@aurelia-ls/compiler/program/overlay-span-index.js";
+import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
+import type { DocumentUri } from "@aurelia-ls/compiler/program/primitives.js";
 export type LookupTextFn = (uri: DocumentUri) => string | null;
 export const AURELIA_LSP_DIAGNOSTIC_NAMESPACE_KEY = "__aurelia" as const;
 export const AURELIA_LSP_DIAGNOSTIC_TAXONOMY_SCHEMA = "diagnostics-taxonomy/1" as const;

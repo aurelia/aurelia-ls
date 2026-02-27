@@ -5,19 +5,19 @@
  * the LSP connection. Errors are logged and graceful fallbacks are returned.
  */
 import type { Position } from "vscode-languageserver/node.js";
-import { canonicalDocumentUri, computeBuiltinDiscrepancies } from "@aurelia-ls/compiler";
+import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
+import { computeBuiltinDiscrepancies } from "@aurelia-ls/compiler/schema/convert.js";
 import type {
-  BuiltinDiscrepancy,
   DiagnosticActionability,
   DiagnosticCategory,
   DiagnosticImpact,
-  DiagnosticSeverity,
-  DiagnosticStage,
   DiagnosticStatus,
   DiagnosticSurface,
-  SourceSpan,
-} from "@aurelia-ls/compiler";
-import type { WorkspaceDiagnostic, WorkspaceDiagnostics } from "@aurelia-ls/semantic-workspace";
+} from "@aurelia-ls/compiler/diagnostics/types.js";
+import type { DiagnosticSeverity, DiagnosticStage } from "@aurelia-ls/compiler/model/diagnostics.js";
+import type { SourceSpan } from "@aurelia-ls/compiler/model/span.js";
+import type { BuiltinDiscrepancy } from "@aurelia-ls/compiler/schema/types.js";
+import type { WorkspaceDiagnostic, WorkspaceDiagnostics } from "@aurelia-ls/semantic-workspace/types.js";
 import type { ServerContext } from "../context.js";
 import { buildCapabilities, buildCapabilitiesFallback, type CapabilitiesResponse } from "../capabilities.js";
 import { mapSemanticWorkspaceEdit } from "../mapping/lsp-types.js";

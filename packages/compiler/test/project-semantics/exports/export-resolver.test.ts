@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { buildExportBindingMap, lookupExportBinding, extractAllFileFacts } from "@aurelia-ls/compiler";
+import { buildExportBindingMap, lookupExportBinding } from "@aurelia-ls/compiler/project-semantics/exports/export-resolver.js";
+import { extractAllFileFacts } from "@aurelia-ls/compiler/project-semantics/extract/file-facts-extractor.js";
 import { createProgramFromMemory } from "../_helpers/inline-program.js";
 
 /**

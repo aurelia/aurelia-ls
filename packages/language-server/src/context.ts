@@ -1,14 +1,10 @@
 import type { Connection, TextDocuments } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import {
-  canonicalDocumentUri,
-  createConsoleExporter,
-  createTrace,
-  NOOP_TRACE,
-  type CompileTrace,
-  type DocumentUri,
-} from "@aurelia-ls/compiler";
-import type { SemanticWorkspaceEngine } from "@aurelia-ls/semantic-workspace";
+import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
+import type { DocumentUri } from "@aurelia-ls/compiler/program/primitives.js";
+import { createConsoleExporter } from "@aurelia-ls/compiler/shared/trace-exporters.js";
+import { NOOP_TRACE, createTrace, type CompileTrace } from "@aurelia-ls/compiler/shared/trace.js";
+import type { SemanticWorkspaceEngine } from "@aurelia-ls/semantic-workspace/engine.js";
 import type { Logger } from "./services/types.js";
 
 /**

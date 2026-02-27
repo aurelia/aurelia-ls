@@ -6,33 +6,31 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import ts from 'typescript';
-import type { NormalizedPath } from '@aurelia-ls/compiler';
+import type { NormalizedPath } from "@aurelia-ls/compiler/model/identity.js";
 import {
-  // Value constructors
-  literal,
+  buildValueResolutionContext,
+  fullyResolve,
+  resolveImport,
+  resolveImportsCrossFile,
+} from "../../../../src/project-semantics/evaluate/value/resolve.js";
+import {
   array,
-  object,
-  ref,
-  importVal,
-  propAccess,
   call,
-  spread,
   classVal,
-  method,
-  // Statement constructors
   exprStmt,
+  importVal,
+  literal,
+  method,
+  object,
+  propAccess,
+  ref,
   returnStmt,
-  // Types
+  spread,
   type AnalyzableValue,
   type LexicalScope,
   type ValueResolutionContext,
-  type ExportBindingMap,
-  // Layer 3
-  buildValueResolutionContext,
-  resolveImportsCrossFile,
-  resolveImport,
-  fullyResolve,
-} from '../../../../src/project-semantics/evaluate/value/index.js';
+} from "../../../../src/project-semantics/evaluate/value/types.js";
+import type { ExportBindingMap } from "../../../../src/project-semantics/exports/types.js";
 import type { FileFacts, ImportDeclaration } from '../../../../src/project-semantics/extract/file-facts.js';
 import type { ResolvedExport } from '../../../../src/project-semantics/exports/types.js';
 

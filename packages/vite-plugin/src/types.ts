@@ -9,8 +9,13 @@
  */
 
 import type { IncomingMessage } from "node:http";
-import type { ResourceGraph, ResourceScopeId, MaterializedSemantics, CompileTrace, AotSemanticSnapshot } from "@aurelia-ls/compiler";
-import type { ProjectSemanticsDiscoveryResult, TemplateInfo, RouteTree, DefineMap } from "@aurelia-ls/compiler";
+import type { AotSemanticSnapshot } from "@aurelia-ls/compiler/facade-aot.js";
+import type { MaterializedSemantics, ResourceGraph, ResourceScopeId } from "@aurelia-ls/compiler/schema/types.js";
+import type { CompileTrace } from "@aurelia-ls/compiler/shared/trace.js";
+import type { DefineMap } from "@aurelia-ls/compiler/project-semantics/defines.js";
+import type { ProjectSemanticsDiscoveryResult } from "@aurelia-ls/compiler/project-semantics/resolve.js";
+import type { RouteTree } from "@aurelia-ls/compiler/project-semantics/routes/types.js";
+import type { TemplateInfo } from "@aurelia-ls/compiler/project-semantics/templates/types.js";
 import type { SSRRequestContext } from "@aurelia-ls/ssr";
 
 // ============================================================================
@@ -41,16 +46,12 @@ export type {
   DirectoryScope,
   DirectoryMatch,
 } from "@aurelia-ls/compiler";
-
-
-// Local imports for internal use
 import type {
   ConventionConfig,
   DirectoryConventionConfig,
-  TemplatePairingConfig,
   StylesheetPairingConfig,
-} from "@aurelia-ls/compiler";
-
+  TemplatePairingConfig,
+} from "@aurelia-ls/compiler/project-semantics/conventions/types.js";
 /**
  * Re-export SSG types from ssg package.
  */

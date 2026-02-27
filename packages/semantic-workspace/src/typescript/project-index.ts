@@ -1,24 +1,15 @@
-import {
-  BUILTIN_SEMANTICS,
-  prepareProjectSemantics,
-  createSemanticModel,
-  IncrementalDiscovery,
-  DiagnosticsRuntime,
-  type MaterializedSemantics,
-  type ResourceScopeId,
-  type SemanticModel,
-  type NormalizedPath,
-  type DependencyGraph,
-  type DepNodeId,
-} from "@aurelia-ls/compiler";
-import {
-  applyThirdPartyResources,
-  hasThirdPartyResources,
-  type ProjectSemanticsDiscoveryConfig,
-  type ProjectSemanticsDiscoveryResult,
-  type Logger,
-  type ThirdPartyDiscoveryResult,
-} from "@aurelia-ls/compiler";
+import { DiagnosticsRuntime } from "@aurelia-ls/compiler/diagnostics/runtime.js";
+import type { NormalizedPath } from "@aurelia-ls/compiler/model/identity.js";
+import { IncrementalDiscovery } from "@aurelia-ls/compiler/project-semantics/incremental.js";
+import type { DepNodeId, DependencyGraph } from "@aurelia-ls/compiler/schema/dependency-graph.js";
+import { createSemanticModel, type SemanticModel } from "@aurelia-ls/compiler/schema/model.js";
+import { BUILTIN_SEMANTICS, prepareProjectSemantics } from "@aurelia-ls/compiler/schema/registry.js";
+import type { MaterializedSemantics, ResourceScopeId } from "@aurelia-ls/compiler/schema/types.js";
+import type { ProjectSemanticsDiscoveryConfig, ProjectSemanticsDiscoveryResult } from "@aurelia-ls/compiler/project-semantics/resolve.js";
+import { hasThirdPartyResources } from "@aurelia-ls/compiler/project-semantics/third-party/merge.js";
+import { applyThirdPartyResources } from "@aurelia-ls/compiler/project-semantics/third-party/resolution.js";
+import type { ThirdPartyDiscoveryResult } from "@aurelia-ls/compiler/project-semantics/third-party/types.js";
+import type { Logger } from "@aurelia-ls/compiler/project-semantics/types.js";
 import type { TypeScriptProject } from "./project.js";
 
 export interface AureliaProjectIndexOptions {

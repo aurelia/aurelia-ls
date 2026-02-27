@@ -1,12 +1,10 @@
-import type {
-  DocumentUri,
-  NormalizedPath,
-  ResourceScopeId,
-  StyleProfile,
-  TypeScriptServices,
-  VmReflection,
-} from "@aurelia-ls/compiler";
-import type { ProjectSemanticsDiscoveryConfig, ProjectSemanticsDiscoveryResult, Logger as CompilerLogger } from "@aurelia-ls/compiler";
+import type { NormalizedPath } from "@aurelia-ls/compiler/model/identity.js";
+import type { DocumentUri } from "@aurelia-ls/compiler/program/primitives.js";
+import type { TypeScriptServices } from "@aurelia-ls/compiler/program/services.js";
+import type { ResourceScopeId, StyleProfile } from "@aurelia-ls/compiler/schema/types.js";
+import type { VmReflection } from "@aurelia-ls/compiler/shared/vm-reflection.js";
+import type { ProjectSemanticsDiscoveryConfig, ProjectSemanticsDiscoveryResult } from "@aurelia-ls/compiler/project-semantics/resolve.js";
+import type { Logger } from "@aurelia-ls/compiler/project-semantics/types.js";
 import type { SemanticWorkspaceEngine } from "../../out/engine.js";
 import type { RefactorDecisionSet, RefactorPolicy } from "../../out/refactor-policy.js";
 import type { RefactorOverrides } from "../../out/style-profile.js";

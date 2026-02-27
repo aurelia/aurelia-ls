@@ -6,35 +6,35 @@
 
 import { describe, it, expect } from 'vitest';
 import ts from 'typescript';
-import type { NormalizedPath } from '@aurelia-ls/compiler';
+import type { NormalizedPath } from "@aurelia-ls/compiler/model/identity.js";
 import {
   buildFileScope,
-  enterFunctionScope,
   createChildScope,
-  lookupBinding,
+  enterFunctionScope,
   isImportBinding,
+  lookupBinding,
   resolveInScope,
-  type LexicalScope,
-  type ImportBinding,
-  type AnalyzableValue,
-  type ParameterInfo,
-  // Value constructors for building test values
-  literal,
+} from "../../../../src/project-semantics/evaluate/value/scope.js";
+import {
   array,
-  object,
-  ref,
-  propAccess,
   call,
-  spread,
-  method,
   exprStmt,
-  returnStmt,
-  varStmt,
-  varDecl,
-  ifStmt,
   forOfStmt,
-} from '../../../../src/project-semantics/evaluate/value/index.js';
-
+  ifStmt,
+  literal,
+  method,
+  object,
+  propAccess,
+  ref,
+  returnStmt,
+  spread,
+  varDecl,
+  varStmt,
+  type AnalyzableValue,
+  type ImportBinding,
+  type LexicalScope,
+  type ParameterInfo,
+} from "../../../../src/project-semantics/evaluate/value/types.js";
 // =============================================================================
 // Test Helpers
 // =============================================================================

@@ -1,20 +1,4 @@
-// Cursor Entity — L2 Shared Entity Resolution
-//
-// Every cursor position in a template maps to at most one CursorEntity.
-// All features (hover, definition, references, rename, semantic tokens)
-// resolve the SAME entity for a given position, then project what they need.
-//
-// This replaces per-feature resolveHoverPosition / resolveNavigablePosition /
-// resolveRenameableSymbol with a single shared resolution.
-//
-// L2 reference: models/attractor/l2/types.ts lines 1530-1553
-//
-// The entity types cover the full template position taxonomy from F3:
-// elements, attributes, bindings, commands, expressions, scope tokens,
-// contextual variables, ref targets, let bindings, interpolations,
-// au-slot, as-element, import-from, local-template, spread.
-
-import type { NormalizedPath } from "../model/index.js";
+import type { NormalizedPath } from "../model/identity.js";
 import type {
   BindingMode,
   ResourceScopeId,

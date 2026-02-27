@@ -27,13 +27,9 @@ import {
   compareAttributePatternRecognition,
   compareBindingCommandRecognition,
 } from "../recognize/extensions.js";
-import {
-  mergeResourceDefinitionCandidates,
-  type DefinitionReductionReason,
-  type DefinitionSourceKind,
-  type ResourceDefinitionCandidate,
-} from "../definition/index.js";
-
+import type { ResourceDefinitionCandidate } from "../definition/candidate-order.js";
+import { mergeResourceDefinitionCandidates } from "../definition/resource-merge.js";
+import type { DefinitionReductionReason, DefinitionSourceKind } from "../definition/solver.js";
 const BUILTIN_DEFINITION_BY_KEY = buildBuiltinDefinitionIndex();
 
 export interface DefinitionConvergenceCandidate {

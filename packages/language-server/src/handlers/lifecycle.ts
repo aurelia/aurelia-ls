@@ -12,8 +12,8 @@ import {
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import { URI } from "vscode-uri";
 import path from "node:path";
-import { canonicalDocumentUri } from "@aurelia-ls/compiler";
-import { createSemanticWorkspace } from "@aurelia-ls/semantic-workspace";
+import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
+import { createSemanticWorkspace } from "@aurelia-ls/semantic-workspace/engine.js";
 import type { ServerContext } from "../context.js";
 import { mapWorkspaceDiagnostics, type LookupTextFn } from "../mapping/lsp-types.js";
 import { SEMANTIC_TOKENS_LEGEND } from "./semantic-tokens.js";

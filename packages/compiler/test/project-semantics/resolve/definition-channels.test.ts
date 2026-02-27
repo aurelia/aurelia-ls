@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { discoverProjectSemantics, DiagnosticsRuntime, unwrapSourced } from "@aurelia-ls/compiler";
+import { DiagnosticsRuntime } from "@aurelia-ls/compiler/diagnostics/runtime.js";
+import { discoverProjectSemantics } from "@aurelia-ls/compiler/project-semantics/resolve.js";
+import { unwrapSourced } from "@aurelia-ls/compiler/schema/sourced.js";
 import { createProgramFromMemory } from "../_helpers/index.js";
 
 function discoverWithRoots(rootNames: string[]) {

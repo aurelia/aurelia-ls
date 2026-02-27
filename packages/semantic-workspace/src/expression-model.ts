@@ -1,92 +1,62 @@
-/**
- * Expression Semantic Model — demand-driven expression type resolution (Tiers 1-3).
- *
- * Provides type-enriched expression resolution without requiring full template compilation.
- * The model is ALWAYS available during editing because its inputs (DOM tree, VM class type,
- * TS checker) are always available.
- *
- * STATELESS with respect to TypeScript types: every query goes fresh to the TS checker.
- * Currency is inherited from TypeScript's own language service caching.
- *
- * The evaluateType function is ISOMORPHIC to the Aurelia runtime's astEvaluate:
- * same switch structure, same scope walk semantics, but operating on ts.Type instead
- * of runtime values. Completeness comes from structural correspondence with the runtime.
- *
- * derived_from:
- *   l1: models/attractor/l1/template-analysis.md §The Expression Semantic Model
- *   l2: models/attractor/l2/template-pipeline.ts §Expression Semantic Model
- *   runtime: aurelia-60/packages/runtime/src/ast.eval.ts (astEvaluate)
- *   runtime: aurelia-60/packages/runtime/src/scope.ts (Scope.getContext)
- */
-
+import type { ExprId, NormalizedPath } from "@aurelia-ls/compiler/model/identity.js";
 import type {
-  IrModule,
-  TemplateIR,
-  InstructionRow,
-  InstructionIR,
-  HydrateTemplateControllerIR,
-  HydrateLetElementIR,
-  IteratorBindingIR,
-  PropertyBindingIR,
-  ExprTableEntry,
-  ForOfStatement,
-  DOMNode,
-  SourceSpan,
-  NormalizedPath,
-  ExprId,
-  ScopeSymbol,
-  FrameOrigin,
-  ControllerConfig,
-  ControllerTrigger,
-  ControllerInjects,
-
-  // Expression AST types — mirrors runtime's $kind discriminants
-  AccessScopeExpression,
-  AccessMemberExpression,
-  AccessKeyedExpression,
-  AccessThisExpression,
   AccessBoundaryExpression,
   AccessGlobalExpression,
-  CallScopeExpression,
-  CallMemberExpression,
-  CallGlobalExpression,
-  CallFunctionExpression,
-  BinaryExpression,
-  ConditionalExpression,
-  UnaryExpression,
-  PrimitiveLiteralExpression,
-  ValueConverterExpression,
-  BindingBehaviorExpression,
+  AccessKeyedExpression,
+  AccessMemberExpression,
+  AccessScopeExpression,
+  AccessThisExpression,
+  AnyBindingExpression,
   ArrayLiteralExpression,
-  ObjectLiteralExpression,
-  TemplateExpression,
-  TaggedTemplateExpression,
-  NewExpression,
-  ParenExpression,
   ArrowFunction,
   AssignExpression,
-  Interpolation,
   BadExpression,
-  CustomExpression,
+  BinaryExpression,
+  BindingBehaviorExpression,
   BindingIdentifier,
+  CallFunctionExpression,
+  CallGlobalExpression,
+  CallMemberExpression,
+  CallScopeExpression,
+  ConditionalExpression,
+  CustomExpression,
+  DOMNode,
+  ExprTableEntry,
+  ForOfStatement,
+  HydrateLetElementIR,
+  HydrateTemplateControllerIR,
+  InstructionIR,
+  InstructionRow,
+  Interpolation,
+  IrModule,
+  IsAssign,
   IsBindingBehavior,
   IsLeftHandSide,
-  IsAssign,
-  AnyBindingExpression,
-} from "@aurelia-ls/compiler";
-
-import { getControllerConfig } from "@aurelia-ls/compiler";
-
+  IteratorBindingIR,
+  NewExpression,
+  ObjectLiteralExpression,
+  ParenExpression,
+  PrimitiveLiteralExpression,
+  PropertyBindingIR,
+  TaggedTemplateExpression,
+  TemplateExpression,
+  TemplateIR,
+  UnaryExpression,
+  ValueConverterExpression,
+} from "@aurelia-ls/compiler/model/ir.js";
+import type { SourceSpan } from "@aurelia-ls/compiler/model/span.js";
+import type { FrameOrigin, ScopeSymbol } from "@aurelia-ls/compiler/model/symbols.js";
+import type { ControllerConfig, ControllerInjects, ControllerTrigger } from "@aurelia-ls/compiler/schema/types.js";
+import { getControllerConfig } from "@aurelia-ls/compiler/schema/registry.js";
 import type {
-  ExpressionSemanticModel,
-  ExpressionScopeContext,
-  ExpressionTypeInfo,
   ExpressionCompletion,
   ExpressionResolutionTier,
+  ExpressionScopeContext,
+  ExpressionSemanticModel,
+  ExpressionTypeInfo,
   LightweightScopeFrame,
   VmClassRef,
-} from "@aurelia-ls/compiler";
-
+} from "@aurelia-ls/compiler/model/expression-semantic.js";
 import type { ExpressionTypeChecker, PropertyInfo } from "./typescript/expression-checker.js";
 
 import type ts from "typescript";

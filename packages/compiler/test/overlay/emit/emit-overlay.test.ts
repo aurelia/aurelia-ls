@@ -1,8 +1,11 @@
 import { runVectorTests, getDirname, lowerOpts } from "../../_helpers/vector-runner.js";
 import { noopModuleResolver } from "../../_helpers/test-utils.js";
-
-import { lowerDocument, linkTemplateSemantics, buildSemanticsSnapshot, bindScopes, planOverlay, emitOverlay } from "@aurelia-ls/compiler";
-
+import { lowerDocument } from "@aurelia-ls/compiler/analysis/10-lower/lower.js";
+import { linkTemplateSemantics } from "@aurelia-ls/compiler/analysis/20-link/resolve.js";
+import { bindScopes } from "@aurelia-ls/compiler/analysis/30-bind/bind.js";
+import { buildSemanticsSnapshot } from "@aurelia-ls/compiler/schema/snapshot.js";
+import { emitOverlay } from "@aurelia-ls/compiler/synthesis/overlay/emit.js";
+import { planOverlay } from "@aurelia-ls/compiler/synthesis/overlay/plan.js";
 // --- Types ---
 
 interface EmitExpect {

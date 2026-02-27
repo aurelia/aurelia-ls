@@ -1,34 +1,26 @@
 import path from "node:path";
-import {
-  positionAtOffset,
-  spanContainsOffset,
-  type SourceSpan,
-  type TextRange,
-} from "../model/index.js";
-import {
-  deriveResourceConfidence,
-  unwrapSourced,
-  type AttrRes,
-  type Bindable,
-  type BindingBehaviorDef,
-  type CustomAttributeDef,
-  type CustomElementDef,
-  type ElementRes,
-  type MaterializedSemantics,
-  type ResourceCatalog,
-  type ResourceCollections,
-  type ResourceDef,
-  type TemplateControllerDef,
-  type TemplateSyntaxRegistry,
-  type TypeRef,
-  type ValueConverterDef,
-} from "../schema/index.js";
-import {
-  analyzeAttributeName,
-  createAttributeParserFromRegistry,
-  type AttributeParser,
-} from "../parsing/index.js";
-import type { TemplateQueryFacade } from "../synthesis/index.js";
+import { spanContainsOffset, type SourceSpan } from "../model/span.js";
+import { positionAtOffset, type TextRange } from "../model/text.js";
+import { deriveResourceConfidence } from "../schema/confidence.js";
+import { unwrapSourced } from "../schema/sourced.js";
+import type {
+  AttrRes,
+  Bindable,
+  BindingBehaviorDef,
+  CustomAttributeDef,
+  CustomElementDef,
+  ElementRes,
+  MaterializedSemantics,
+  ResourceCatalog,
+  ResourceCollections,
+  ResourceDef,
+  TemplateControllerDef,
+  TemplateSyntaxRegistry,
+  TypeRef,
+  ValueConverterDef,
+} from "../schema/types.js";
+import { analyzeAttributeName, createAttributeParserFromRegistry, type AttributeParser } from "../parsing/attribute-parser.js";
+import type { TemplateQueryFacade } from "../synthesis/overlay/query.js";
 import type { DocumentSnapshot, DocumentUri } from "./primitives.js";
 import { canonicalDocumentUri } from "./paths.js";
 import type { TemplateProgram } from "./program.js";

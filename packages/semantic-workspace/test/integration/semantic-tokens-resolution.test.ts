@@ -12,19 +12,15 @@ import { describe, it, beforeAll, expect } from "vitest";
 import * as ts from "typescript";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-
-import { discoverProjectSemantics, DiagnosticsRuntime } from "@aurelia-ls/compiler";
-import {
-  buildTemplateSyntaxRegistry,
-  buildResourceCatalog,
-  compileTemplate,
-  createSemanticModel,
-  prepareProjectSemantics,
-  BUILTIN_SEMANTICS,
-  materializeSemanticsForScope,
-  type NodeSem,
-  type MaterializedSemantics,
-} from "@aurelia-ls/compiler";
+import { DiagnosticsRuntime } from "@aurelia-ls/compiler/diagnostics/runtime.js";
+import { discoverProjectSemantics } from "@aurelia-ls/compiler/project-semantics/resolve.js";
+import type { NodeSem } from "@aurelia-ls/compiler/analysis/20-link/types.js";
+import { compileTemplate } from "@aurelia-ls/compiler/facade.js";
+import { buildResourceCatalog } from "@aurelia-ls/compiler/schema/catalog.js";
+import { createSemanticModel } from "@aurelia-ls/compiler/schema/model.js";
+import { BUILTIN_SEMANTICS, buildTemplateSyntaxRegistry, prepareProjectSemantics } from "@aurelia-ls/compiler/schema/registry.js";
+import { materializeSemanticsForScope } from "@aurelia-ls/compiler/schema/resource-graph.js";
+import type { MaterializedSemantics } from "@aurelia-ls/compiler/schema/types.js";
 import { collectSemanticTokens } from "../../out/semantic-tokens.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

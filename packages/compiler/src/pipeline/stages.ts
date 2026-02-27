@@ -8,20 +8,31 @@
 // Caching is the responsibility of the caller (TemplateProgram).
 
 import path from "node:path";
-import type { IrModule, NormalizedPath, ScopeModule } from "../model/index.js";
-import type { TemplateContext } from "../schema/index.js";
+import type { NormalizedPath } from "../model/identity.js";
+import type { IrModule } from "../model/ir.js";
+import type { ScopeModule } from "../model/symbols.js";
+import type { TemplateContext } from "../schema/snapshot.js";
 import type { SemanticModelQuery } from "../schema/model.js";
 import type { DepRecorder } from "../schema/dependency-graph.js";
 import { createDepRecorder, NOOP_DEP_RECORDER } from "../schema/dependency-graph.js";
-import { createAttributeParserFromRegistry, getExpressionParser, type AttributeParser, type IExpressionParser } from "../parsing/index.js";
-import type { VmReflection, SynthesisOptions, ModuleResolver } from "../shared/index.js";
+import { createAttributeParserFromRegistry, type AttributeParser } from "../parsing/attribute-parser.js";
+import { getExpressionParser, type IExpressionParser } from "../parsing/expression-parser.js";
+import type { ModuleResolver } from "../shared/module-resolver.js";
+import type { SynthesisOptions, VmReflection } from "../shared/vm-reflection.js";
 import { NOOP_TRACE } from "../shared/trace.js";
-import { lowerDocument, linkTemplateSemantics, bindScopes, typecheck, collectFeatureUsage } from "../analysis/index.js";
-import { planOverlay, emitOverlayFile, type OverlayEmitOptions } from "../synthesis/index.js";
+import { lowerDocument } from "../analysis/10-lower/lower.js";
+import { linkTemplateSemantics } from "../analysis/20-link/resolve.js";
+import { bindScopes } from "../analysis/30-bind/bind.js";
+import { typecheck } from "../analysis/40-typecheck/typecheck.js";
+import { collectFeatureUsage } from "../analysis/50-usage/usage.js";
+import { emitOverlayFile, type OverlayEmitOptions } from "../synthesis/overlay/emit.js";
+import { planOverlay } from "../synthesis/overlay/plan.js";
 import { DiagnosticsRuntime } from "../diagnostics/runtime.js";
-import type { LinkModule, TypecheckModule } from "../analysis/index.js";
-import type { FeatureUsageSet } from "../schema/index.js";
-import type { OverlayPlanModule, OverlayEmitResult } from "../synthesis/index.js";
+import type { LinkModule } from "../analysis/20-link/types.js";
+import type { TypecheckModule } from "../analysis/40-typecheck/typecheck.js";
+import type { FeatureUsageSet } from "../schema/types.js";
+import type { OverlayEmitResult } from "../synthesis/overlay/emit.js";
+import type { OverlayPlanModule } from "../synthesis/overlay/types.js";
 import type { PipelineOptions, StageKey, StageArtifactMeta } from "./engine.js";
 
 // ============================================================================

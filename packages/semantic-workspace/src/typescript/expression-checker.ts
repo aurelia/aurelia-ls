@@ -9,7 +9,7 @@
  */
 
 import ts from "typescript";
-import type { NormalizedPath } from "@aurelia-ls/compiler";
+import type { NormalizedPath } from "@aurelia-ls/compiler/model/identity.js";
 import type { TsService } from "./ts-service.js";
 
 export interface PropertyInfo {

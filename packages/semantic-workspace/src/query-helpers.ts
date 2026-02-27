@@ -1,14 +1,8 @@
-import {
-  analyzeAttributeName,
-  spanContainsOffset,
-  spanLength,
-  type AttributeParser,
-  type LinkedInstruction,
-  type LinkedRow,
-  type SourceSpan,
-  type TemplateIR,
-  type TemplateSyntaxRegistry,
-} from "@aurelia-ls/compiler";
+import type { LinkedInstruction, LinkedRow } from "@aurelia-ls/compiler/analysis/20-link/types.js";
+import type { TemplateIR } from "@aurelia-ls/compiler/model/ir.js";
+import { spanContainsOffset, spanLength, type SourceSpan } from "@aurelia-ls/compiler/model/span.js";
+import { analyzeAttributeName, type AttributeParser } from "@aurelia-ls/compiler/parsing/attribute-parser.js";
+import type { TemplateSyntaxRegistry } from "@aurelia-ls/compiler/schema/types.js";
 import type { DomIndex } from "./template-dom.js";
 import { findAttrForSpan, findDomNode } from "./template-dom.js";
 

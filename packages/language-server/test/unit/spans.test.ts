@@ -5,8 +5,7 @@ import {
   spanToRangeOrNull,
   diagnosticToRange,
 } from "@aurelia-ls/language-server/api";
-import type { CompilerDiagnostic } from "@aurelia-ls/compiler";
-
+import type { CompilerDiagnostic } from "@aurelia-ls/compiler/model/diagnostics.js";
 function createDoc(content: string): TextDocument {
   return TextDocument.create("file:///test.html", "html", 1, content);
 }

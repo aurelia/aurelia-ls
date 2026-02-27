@@ -1,10 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  lookupElementPluginHint,
-  lookupAttributePluginHint,
-  formatPluginHintMessage,
-} from "@aurelia-ls/compiler";
-
+import { formatPluginHintMessage, lookupAttributePluginHint, lookupElementPluginHint } from "@aurelia-ls/compiler/project-semantics/diagnostics/plugin-hints.js";
 describe("Plugin Hints", () => {
   describe("lookupElementPluginHint", () => {
     it("returns hint for au-viewport (router element)", () => {

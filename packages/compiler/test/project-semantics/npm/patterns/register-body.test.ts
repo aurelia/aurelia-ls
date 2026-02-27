@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import type { NormalizedPath } from '@aurelia-ls/compiler';
+import type { NormalizedPath } from "@aurelia-ls/compiler/model/identity.js";
 import type { AnalyzedResource } from '../../../../src/project-semantics/npm/types.js';
 import { explicitEvidence } from '../../../../src/project-semantics/npm/evidence.js';
 import { buildCustomAttributeDef, buildCustomElementDef } from '../../../../src/project-semantics/assemble/resource-def.js';

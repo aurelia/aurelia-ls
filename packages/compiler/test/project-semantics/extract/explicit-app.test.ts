@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { extractAllFileFacts } from "@aurelia-ls/compiler";
-import type { FileFacts, ClassValue } from "@aurelia-ls/compiler";
-import type { NormalizedPath } from "@aurelia-ls/compiler";
+import { extractAllFileFacts } from "@aurelia-ls/compiler/project-semantics/extract/file-facts-extractor.js";
+import type { ClassValue } from "@aurelia-ls/compiler/project-semantics/evaluate/value/types.js";
+import type { FileFacts } from "@aurelia-ls/compiler/project-semantics/extract/file-facts.js";
+import type { NormalizedPath } from "@aurelia-ls/compiler/model/identity.js";
 import {
   createProgramFromApp,
   getTestAppPath,

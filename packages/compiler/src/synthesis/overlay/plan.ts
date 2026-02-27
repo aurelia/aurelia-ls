@@ -10,9 +10,9 @@
  * ============================================================================= */
 
 import type { OverlayPlanModule, TemplateOverlayPlan, FrameOverlayPlan, OverlayLambdaPlan, OverlayLambdaSegment } from "./types.js";
-import type { VmReflection, SynthesisOptions } from "../../shared/index.js";
-import { NOOP_TRACE, debug } from "../../shared/index.js";
-
+import type { SynthesisOptions, VmReflection } from "../../shared/vm-reflection.js";
+import { debug } from "../../shared/debug.js";
+import { NOOP_TRACE } from "../../shared/trace.js";
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
 // Model imports
@@ -20,11 +20,13 @@ import { offsetSpan, spanFromBounds } from "../../model/span.js";
 import type { ScopeModule, ScopeTemplate, ScopeFrame, FrameId } from "../../model/symbols.js";
 import type { ReadonlyExprIdMap } from "../../model/identity.js";
 import type { ExprId, IsBindingBehavior, ExprTableEntry } from "../../model/ir.js";
-
-// Analysis imports (via barrel)
-import type { LinkModule, LinkedInstruction } from "../../analysis/index.js";
-import { buildFrameAnalysis, wrap, type FrameTypingHints, type Env } from "../../analysis/index.js";
-
+import type { LinkModule, LinkedInstruction } from "../../analysis/20-link/types.js";
+import {
+  buildFrameAnalysis,
+  wrap,
+  type Env,
+  type FrameTypingHints,
+} from "../../analysis/shared/type-analysis.js";
 // Shared imports
 import { indexExprTable } from "../../shared/expr-utils.js";
 
@@ -37,7 +39,7 @@ function assertUnreachable(x: never): never { throw new Error("unreachable"); }
 /* Public API                                                                             */
 /* ===================================================================================== */
 
-export function plan(linked: LinkModule, scope: ScopeModule, opts: SynthesisOptions): OverlayPlanModule {
+export function planOverlay(linked: LinkModule, scope: ScopeModule, opts: SynthesisOptions): OverlayPlanModule {
   const trace = opts.trace ?? NOOP_TRACE;
 
   return trace.span("overlay.plan", () => {

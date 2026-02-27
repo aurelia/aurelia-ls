@@ -1,8 +1,10 @@
 import { runVectorTests, getDirname, lowerOpts, indexExprCodeFromIr } from "../../_helpers/vector-runner.js";
 import { diffByKey, noopModuleResolver } from "../../_helpers/test-utils.js";
-
-import { lowerDocument, linkTemplateSemantics, buildSemanticsSnapshot, bindScopes, planOverlay } from "@aurelia-ls/compiler";
-
+import { lowerDocument } from "@aurelia-ls/compiler/analysis/10-lower/lower.js";
+import { linkTemplateSemantics } from "@aurelia-ls/compiler/analysis/20-link/resolve.js";
+import { bindScopes } from "@aurelia-ls/compiler/analysis/30-bind/bind.js";
+import { buildSemanticsSnapshot } from "@aurelia-ls/compiler/schema/snapshot.js";
+import { planOverlay } from "@aurelia-ls/compiler/synthesis/overlay/plan.js";
 // --- Types ---
 
 interface FrameEntry {

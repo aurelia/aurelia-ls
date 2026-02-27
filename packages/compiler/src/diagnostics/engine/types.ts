@@ -1,4 +1,4 @@
-import type { SourceSpan } from "../../model/index.js";
+import type { SourceSpan } from "../../model/span.js";
 import type { DiagnosticRelated, DiagnosticSeverity } from "../../model/diagnostics.js";
 import type { Origin } from "../../model/origin.js";
 import type { DocumentUri } from "../../program/primitives.js";

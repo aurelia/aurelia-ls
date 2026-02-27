@@ -2,15 +2,11 @@ import { describe, test, expect } from "vitest";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-
-import {
-  DefaultTemplateBuildService,
-  DefaultTemplateProgram,
-  canonicalDocumentUri,
-  deriveTemplatePaths,
-  DEFAULT_SYNTAX,
-  getExpressionParser,
-} from "@aurelia-ls/compiler";
+import { DEFAULT_SYNTAX } from "@aurelia-ls/compiler/parsing/attribute-parser.js";
+import { getExpressionParser } from "@aurelia-ls/compiler/parsing/expression-parser.js";
+import { canonicalDocumentUri, deriveTemplatePaths } from "@aurelia-ls/compiler/program/paths.js";
+import { DefaultTemplateProgram } from "@aurelia-ls/compiler/program/program.js";
+import { DefaultTemplateBuildService } from "@aurelia-ls/compiler/program/services.js";
 import { createTestQuery, noopModuleResolver } from "../_helpers/test-utils.js";
 
 const overlayFixtures = [

@@ -1,42 +1,36 @@
 import fs from "node:fs";
+import type { TemplateCompilation } from "@aurelia-ls/compiler/facade.js";
+import type { SourceSpan } from "@aurelia-ls/compiler/model/span.js";
 import {
-  DefaultTemplateBuildService,
-  DefaultTemplateLanguageService,
-  DefaultTemplateProgram,
-  InMemoryOverlaySpanIndex,
-  InMemorySourceStore,
-  buildResourceGraphFromSemantics,
-  canonicalDocumentUri,
-  debug,
   offsetAtPosition,
   rangeToSpan,
   spanToRange,
-  stableHash,
-  stableHashSemantics,
-  type CompletionItem as TemplateCompletionItem,
-  type DocumentSnapshot,
-  type DocumentUri,
-  type Location as TemplateLocation,
+  type TextRange,
+} from "@aurelia-ls/compiler/model/text.js";
+import { stableHash, stableHashSemantics } from "@aurelia-ls/compiler/pipeline/hash.js";
+import type { CompletionItem } from "@aurelia-ls/compiler/program/completion-contracts.js";
+import { InMemoryOverlaySpanIndex, type OverlaySpanIndex } from "@aurelia-ls/compiler/program/overlay-span-index.js";
+import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
+import type { DocumentSnapshot, DocumentUri } from "@aurelia-ls/compiler/program/primitives.js";
+import { DefaultTemplateProgram, type TemplateProgram, type TemplateProgramOptions } from "@aurelia-ls/compiler/program/program.js";
+import {
+  DefaultTemplateBuildService,
+  DefaultTemplateLanguageService,
+  type Location,
   type OverlayBuildArtifact,
-  type OverlaySpanIndex,
-  type SourceSpan,
-  type SourceStore,
   type TemplateCodeAction,
-  type TemplateCompilation,
   type TemplateLanguageService,
   type TemplateLanguageServiceOptions,
-  type TemplateMappingArtifact,
-  type TemplateProgram,
-  type TemplateProgramOptions,
-  type TemplateQueryFacade,
-  type TextEdit as TemplateTextEdit,
-  type TextRange,
-  type ConfidenceLevel,
-  type ReferentialIndex,
-  InMemoryReferentialIndex,
-  extractReferenceSites,
-  resolveCursorEntity,
-} from "@aurelia-ls/compiler";
+  type TextEdit,
+} from "@aurelia-ls/compiler/program/services.js";
+import { InMemorySourceStore, type SourceStore } from "@aurelia-ls/compiler/program/sources.js";
+import { resolveCursorEntity } from "@aurelia-ls/compiler/schema/cursor-resolve.js";
+import { InMemoryReferentialIndex, extractReferenceSites, type ReferentialIndex, type ExpressionExtractionContext } from "@aurelia-ls/compiler/schema/referential-index.js";
+import { buildResourceGraphFromSemantics } from "@aurelia-ls/compiler/schema/resource-graph.js";
+import type { ConfidenceLevel } from "@aurelia-ls/compiler/schema/types.js";
+import { debug } from "@aurelia-ls/compiler/shared/debug.js";
+import type { TemplateMappingArtifact } from "@aurelia-ls/compiler/synthesis/overlay/mapping.js";
+import type { TemplateQueryFacade } from "@aurelia-ls/compiler/synthesis/overlay/query.js";
 import {
   asWorkspaceFingerprint,
   type RefactorEngine,
@@ -73,7 +67,7 @@ export interface SemanticWorkspaceKernelOptions {
    * When provided, the referential index is populated with scope-qualified
    * expression-identifier sites that power getReferencesForSymbol.
    */
-  readonly resolveExprContext?: (templateUri: DocumentUri) => import("@aurelia-ls/compiler").ExpressionExtractionContext | null;
+  readonly resolveExprContext?: (templateUri: DocumentUri) => ExpressionExtractionContext | null;
 }
 
 const EMPTY_DIAGNOSTICS: WorkspaceDiagnostics = { bySurface: new Map(), suppressed: [] };
@@ -95,7 +89,7 @@ export class SemanticWorkspaceKernel implements SemanticWorkspace {
   #configHash: string;
   #workspaceFingerprint: string;
   #lookupText: ((uri: DocumentUri) => string | null) | undefined;
-  #resolveExprContext: ((uri: DocumentUri) => import("@aurelia-ls/compiler").ExpressionExtractionContext | null) | undefined;
+  #resolveExprContext: ((uri: DocumentUri) => ExpressionExtractionContext | null) | undefined;
   #refactor: RefactorEngine;
 
   constructor(options: SemanticWorkspaceKernelOptions) {

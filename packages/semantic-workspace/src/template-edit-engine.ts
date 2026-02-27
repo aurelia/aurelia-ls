@@ -1,50 +1,45 @@
 import fs from "node:fs";
 import path from "node:path";
 import ts from "typescript";
+import type { LinkedInstruction, LinkedRow } from "@aurelia-ls/compiler/analysis/20-link/types.js";
+import type { TemplateCompilation } from "@aurelia-ls/compiler/facade.js";
+import { normalizePathForId, toSourceFileId, type NormalizedPath } from "@aurelia-ls/compiler/model/identity.js";
+import type {
+  DOMNode,
+  TemplateIR,
+  TemplateMetaIR,
+  TemplateNode,
+} from "@aurelia-ls/compiler/model/ir.js";
+import { spanContainsOffset, type SourceSpan, type TextSpan } from "@aurelia-ls/compiler/model/span.js";
+import { offsetAtPosition } from "@aurelia-ls/compiler/model/text.js";
+import { analyzeAttributeName, type AttributeParser } from "@aurelia-ls/compiler/parsing/attribute-parser.js";
+import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
+import type { DocumentUri } from "@aurelia-ls/compiler/program/primitives.js";
+import { isRenameable, type CursorEntity } from "@aurelia-ls/compiler/schema/cursor-entity.js";
+import { resolveCursorEntity } from "@aurelia-ls/compiler/schema/cursor-resolve.js";
+import { unwrapSourced } from "@aurelia-ls/compiler/schema/sourced.js";
+import { createBindableSymbolId } from "@aurelia-ls/compiler/schema/symbol-id.js";
+import type {
+  BindableDef,
+  ResourceDef,
+  ResourceScopeId,
+  SourceLocation,
+  StyleProfile,
+  SymbolId,
+  TemplateSyntaxRegistry,
+} from "@aurelia-ls/compiler/schema/types.js";
+import { DECORATOR_NAMES } from "@aurelia-ls/compiler/project-semantics/conventions/aurelia-defaults.js";
 import {
-  analyzeAttributeName,
-  canonicalDocumentUri,
-  createBindableSymbolId,
-  normalizePathForId,
-  offsetAtPosition,
-  resolveCursorEntity,
-  isRenameable,
-  spanContainsOffset,
-  toSourceFileId,
-  unwrapSourced,
-  type AttributeParser,
-  type BindableDef,
-  type CursorEntity,
-  type DOMNode,
-  type DocumentUri,
-  type LinkedInstruction,
-  type LinkedRow,
-  type NormalizedPath,
-  type ResourceDef,
-  type ResourceScopeId,
-  type SourceLocation,
-  type SourceSpan,
-  type SymbolId,
-  type TextSpan,
-  type StyleProfile,
-  type TemplateCompilation,
-  type TemplateIR,
-  type TemplateMetaIR,
-  type TemplateNode,
-  type TemplateSyntaxRegistry,
-} from "@aurelia-ls/compiler";
-import {
-  DECORATOR_NAMES,
   extractStringProp,
   getProperty,
   type AnalyzableValue,
   type ArrayValue,
   type ClassValue,
   type DecoratorApplication,
-  type FileFacts,
   type ObjectValue,
-} from "@aurelia-ls/compiler";
-import type { InlineTemplateInfo, TemplateInfo } from "@aurelia-ls/compiler";
+} from "@aurelia-ls/compiler/project-semantics/evaluate/value/types.js";
+import type { FileFacts } from "@aurelia-ls/compiler/project-semantics/extract/file-facts.js";
+import type { InlineTemplateInfo, TemplateInfo } from "@aurelia-ls/compiler/project-semantics/templates/types.js";
 import type { ResourceDefinitionIndex } from "./definition.js";
 import { selectResourceCandidate } from "./resource-precedence-policy.js";
 import { buildDomIndex, elementTagSpanAtOffset, findDomNode } from "./template-dom.js";

@@ -1,5 +1,6 @@
-import type { FrameId, ExprId, TextSpan, FrameOrigin } from "../../model/index.js";
-
+import type { ExprId, FrameId } from "../../model/identity.js";
+import type { TextSpan } from "../../model/span.js";
+import type { FrameOrigin } from "../../model/symbols.js";
 /* ===========================
  * Overlay planning output
  * =========================== */

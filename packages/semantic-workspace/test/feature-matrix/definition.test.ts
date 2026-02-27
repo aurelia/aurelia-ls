@@ -15,7 +15,7 @@
  */
 
 import { beforeAll, describe, expect, it } from "vitest";
-import { symbolIdNamespace } from "@aurelia-ls/compiler";
+import { symbolIdNamespace } from "@aurelia-ls/compiler/schema/symbol-id.js";
 import {
   getHarness,
   getAppQuery,

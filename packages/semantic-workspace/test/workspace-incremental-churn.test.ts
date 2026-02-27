@@ -3,15 +3,10 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { createWorkspaceHarness } from "./harness/index.js";
 import { asFixtureId } from "./fixtures/index.js";
 import { createSemanticWorkspaceKernel } from "../out/workspace.js";
-import {
-  createSemanticModel,
-  type DependencyGraph,
-  type DocumentUri,
-  type ResourceGraph,
-  type ResourceScopeId,
-  type TemplateProgramCacheStats,
-} from "@aurelia-ls/compiler";
-
+import type { DocumentUri } from "@aurelia-ls/compiler/program/primitives.js";
+import type { DependencyGraph } from "@aurelia-ls/compiler/schema/dependency-graph.js";
+import { createSemanticModel } from "@aurelia-ls/compiler/schema/model.js";
+import type { ResourceGraph, ResourceScopeId } from "@aurelia-ls/compiler/schema/types.js";
 type Kernel = ReturnType<typeof createSemanticWorkspaceKernel>;
 
 function createVmReflection() {

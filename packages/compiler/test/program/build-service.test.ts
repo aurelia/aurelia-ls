@@ -1,12 +1,7 @@
 import { test, expect } from "vitest";
-
-import {
-  DefaultTemplateBuildService,
-  DefaultTemplateLanguageService,
-  DefaultTemplateProgram,
-  canonicalDocumentUri,
-  deriveTemplatePaths,
-} from "@aurelia-ls/compiler";
+import { canonicalDocumentUri, deriveTemplatePaths } from "@aurelia-ls/compiler/program/paths.js";
+import { DefaultTemplateProgram } from "@aurelia-ls/compiler/program/program.js";
+import { DefaultTemplateBuildService, DefaultTemplateLanguageService } from "@aurelia-ls/compiler/program/services.js";
 import { createTestQuery, noopModuleResolver } from "../_helpers/test-utils.js";
 
 test("build service exposes canonical overlay artifacts", () => {

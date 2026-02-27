@@ -6,10 +6,7 @@
  */
 import { describe, test, expect } from "vitest";
 import fs from "node:fs";
-import {
-  WORKSPACE_TOKEN_MODIFIER_GAP_AWARE,
-  WORKSPACE_TOKEN_MODIFIER_GAP_CONSERVATIVE,
-} from "@aurelia-ls/semantic-workspace";
+import { WORKSPACE_TOKEN_MODIFIER_GAP_AWARE, WORKSPACE_TOKEN_MODIFIER_GAP_CONSERVATIVE } from "@aurelia-ls/semantic-workspace/types.js";
 import {
   createFixture,
   startServer,

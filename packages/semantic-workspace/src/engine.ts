@@ -1,68 +1,55 @@
 import fs from "node:fs";
 import path from "node:path";
 import ts from "typescript";
+import { diagnosticsCatalog } from "@aurelia-ls/compiler/diagnostics/catalog/index.js";
+import { runDiagnosticsPipeline, type DiagnosticsPipelineResult } from "@aurelia-ls/compiler/diagnostics/engine/pipeline.js";
+import { createDefaultCodeResolver } from "@aurelia-ls/compiler/diagnostics/engine/resolver.js";
+import type { RawDiagnostic } from "@aurelia-ls/compiler/diagnostics/engine/types.js";
+import type { DiagnosticDataRecord, DiagnosticSpec, DiagnosticSurface } from "@aurelia-ls/compiler/diagnostics/types.js";
+import type { TemplateCompilation } from "@aurelia-ls/compiler/facade.js";
+import type { ExpressionSemanticModel, ExpressionTypeInfo } from "@aurelia-ls/compiler/model/expression-semantic.js";
+import { normalizePathForId, toSourceFileId, type NormalizedPath } from "@aurelia-ls/compiler/model/identity.js";
 import {
-  PRELUDE_TS,
-  canonicalDocumentUri,
-  createAttributeParserFromRegistry,
-  createDefaultCodeResolver,
-  createTrace,
-  createConsoleExporter,
-  debug,
-  diagnosticsCatalog,
-  normalizePathForId,
   normalizeSpan,
-  offsetAtPosition,
-  overlayHitToDocumentSpan,
-  resolveGeneratedReferenceLocationWithPolicy,
-  runDiagnosticsPipeline,
   spanContainsOffset,
-  stableHash,
-  toSourceFileId,
   toSourceSpan,
-  deriveResourceConfidence,
-  type DiagnosticDataRecord,
-  type DiagnosticSpec,
-  type DiagnosticSurface,
-  type DiagnosticsPipelineResult,
-  type DocumentUri,
-  type OverlayBuildArtifact,
-  type OverlayDocumentSnapshot,
-  type AttributeParser,
-  type RawDiagnostic,
-  type TemplateLanguageDiagnostic,
   type SourceSpan,
-  type TemplateCompilation,
-  type TemplateMappingArtifact,
-  type TemplateQueryFacade,
-  type TemplateSyntaxRegistry,
-  type VmReflection,
-  type ResourceScopeId,
-  type Sourced,
-  type SymbolId,
-  type StyleProfile,
-  type SemanticModel,
-  type SemanticModelQuery,
-  type NormalizedPath,
-  type ExpressionExtractionContext,
-  type ExpressionTypeInfo,
-  type ExpressionSemanticModel,
-  type TextReferenceSite as CompilerTextReferenceSite,
-  resolveCursorEntity,
-  type CursorResolutionResult,
-} from "@aurelia-ls/compiler";
-import {
-  createNodeFileSystem,
-  resolveThirdPartyResources,
-  hasThirdPartyResources,
-  type InlineTemplateInfo,
-  type Logger,
-  type ProjectSemanticsDiscoveryConfig,
-  type ProjectSemanticsDiscoveryResult,
-  type TemplateInfo,
-  type ThirdPartyOptions,
-} from "@aurelia-ls/compiler";
-import type { ModuleResolver, TypeScriptServices } from "@aurelia-ls/compiler";
+} from "@aurelia-ls/compiler/model/span.js";
+import { offsetAtPosition } from "@aurelia-ls/compiler/model/text.js";
+import { createAttributeParserFromRegistry, type AttributeParser } from "@aurelia-ls/compiler/parsing/attribute-parser.js";
+import { stableHash } from "@aurelia-ls/compiler/pipeline/hash.js";
+import { PRELUDE_TS } from "@aurelia-ls/compiler/prelude.js";
+import { overlayHitToDocumentSpan } from "@aurelia-ls/compiler/program/overlay-span-index.js";
+import { resolveGeneratedReferenceLocationWithPolicy } from "@aurelia-ls/compiler/program/overlay-span-policy.js";
+import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
+import type { DocumentUri } from "@aurelia-ls/compiler/program/primitives.js";
+import type { OverlayBuildArtifact, OverlayDocumentSnapshot, TemplateLanguageDiagnostic } from "@aurelia-ls/compiler/program/services.js";
+import { deriveResourceConfidence } from "@aurelia-ls/compiler/schema/confidence.js";
+import { resolveCursorEntity, type CursorResolutionResult } from "@aurelia-ls/compiler/schema/cursor-resolve.js";
+import type { SemanticModel, SemanticModelQuery } from "@aurelia-ls/compiler/schema/model.js";
+import type { ExpressionExtractionContext, TextReferenceSite } from "@aurelia-ls/compiler/schema/referential-index.js";
+import type {
+  ResourceScopeId,
+  Sourced,
+  StyleProfile,
+  SymbolId,
+  TemplateSyntaxRegistry,
+} from "@aurelia-ls/compiler/schema/types.js";
+import { debug } from "@aurelia-ls/compiler/shared/debug.js";
+import { createConsoleExporter } from "@aurelia-ls/compiler/shared/trace-exporters.js";
+import { createTrace } from "@aurelia-ls/compiler/shared/trace.js";
+import type { VmReflection } from "@aurelia-ls/compiler/shared/vm-reflection.js";
+import type { TemplateMappingArtifact } from "@aurelia-ls/compiler/synthesis/overlay/mapping.js";
+import type { TemplateQueryFacade } from "@aurelia-ls/compiler/synthesis/overlay/query.js";
+import { createNodeFileSystem } from "@aurelia-ls/compiler/project-semantics/project/node-context.js";
+import type { ProjectSemanticsDiscoveryConfig, ProjectSemanticsDiscoveryResult } from "@aurelia-ls/compiler/project-semantics/resolve.js";
+import type { InlineTemplateInfo, TemplateInfo } from "@aurelia-ls/compiler/project-semantics/templates/types.js";
+import { hasThirdPartyResources } from "@aurelia-ls/compiler/project-semantics/third-party/merge.js";
+import { resolveThirdPartyResources } from "@aurelia-ls/compiler/project-semantics/third-party/resolution.js";
+import type { ThirdPartyOptions } from "@aurelia-ls/compiler/project-semantics/third-party/types.js";
+import type { Logger } from "@aurelia-ls/compiler/project-semantics/types.js";
+import type { TypeScriptServices } from "@aurelia-ls/compiler/program/services.js";
+import type { ModuleResolver } from "@aurelia-ls/compiler/shared/module-resolver.js";
 import {
   createTypeScriptEnvironment,
   type TypeScriptEnvironment,

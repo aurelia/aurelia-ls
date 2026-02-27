@@ -3,7 +3,7 @@ import type {
   SemanticAuthorityParityAdapter,
   SemanticAuthorityParityNormalizationInput,
   SemanticAuthorityParityNormalizedResult,
-} from "@aurelia-ls/semantic-workspace";
+} from "@aurelia-ls/semantic-workspace/host/types.js";
 import { handleGetDiagnostics } from "../handlers/custom.js";
 import type { ServerContext } from "../context.js";
 

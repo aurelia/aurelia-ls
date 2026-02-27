@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
-import type { NormalizedPath, RegistrationAnalysis, SourceSpan } from "@aurelia-ls/compiler";
-import { buildResourceGraph, toSourceFileId } from "@aurelia-ls/compiler";
+import type { NormalizedPath } from "@aurelia-ls/compiler/model/identity.js";
+import type { SourceSpan } from "@aurelia-ls/compiler/model/span.js";
+import type { RegistrationAnalysis } from "@aurelia-ls/compiler/project-semantics/register/types.js";
+import { toSourceFileId } from "@aurelia-ls/compiler/model/identity.js";
+import { buildResourceGraph } from "@aurelia-ls/compiler/project-semantics/scope/builder.js";
 import { buildCustomElementDef } from "../../../out/project-semantics/assemble/resource-def.js";
 
 function span(file: NormalizedPath): SourceSpan {

@@ -1,14 +1,13 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import {
-  asDocumentUri,
-  canonicalDocumentUri,
-  type DocumentUri,
-  type ResourceScopeId,
-} from "@aurelia-ls/compiler";
-import { createNodeFileSystem, type ProjectSemanticsDiscoveryConfig, type ProjectSemanticsDiscoveryResult, type Logger as CompilerLogger } from "@aurelia-ls/compiler";
-import { buildPackageRootMap, detectMonorepo } from "@aurelia-ls/compiler";
+import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
+import { asDocumentUri, type DocumentUri } from "@aurelia-ls/compiler/program/primitives.js";
+import type { ResourceScopeId } from "@aurelia-ls/compiler/schema/types.js";
+import { createNodeFileSystem } from "@aurelia-ls/compiler/project-semantics/project/node-context.js";
+import type { ProjectSemanticsDiscoveryConfig, ProjectSemanticsDiscoveryResult } from "@aurelia-ls/compiler/project-semantics/resolve.js";
+import type { Logger } from "@aurelia-ls/compiler/project-semantics/types.js";
+import { buildPackageRootMap, detectMonorepo } from "@aurelia-ls/compiler/project-semantics/npm/monorepo.js";
 import { createSemanticWorkspace, type SemanticWorkspaceEngine } from "../../out/engine.js";
 import { inlineTemplatePath } from "../../out/templates.js";
 import { getFixture, resolveFixtureRoot } from "../fixtures/index.js";

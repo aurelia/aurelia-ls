@@ -8,33 +8,21 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import ts from "typescript";
-import {
-  BUILTIN_SEMANTICS,
-  DiagnosticsRuntime,
-  normalizePathForId,
-  buildTemplateSyntaxRegistry,
-  type ResourceScopeId,
-  type NormalizedPath,
-  type CompileTrace,
-} from "@aurelia-ls/compiler";
-import {
-  discoverProjectSemantics,
-  buildRouteTree,
-  createNodeFileSystem,
-  type ProjectSemanticsDiscoveryResult,
-  type TemplateInfo,
-  type RouteTree,
-  type DefineMap,
-  type ConventionConfig,
-} from "@aurelia-ls/compiler";
-import {
-  buildPackageRootMap,
-  detectMonorepo,
-  resolveThirdPartyResources,
-  applyThirdPartyResources,
-  hasThirdPartyResources,
-  buildAnalysisFingerprint,
-} from "@aurelia-ls/compiler";
+import { DiagnosticsRuntime } from "@aurelia-ls/compiler/diagnostics/runtime.js";
+import { normalizePathForId, type NormalizedPath } from "@aurelia-ls/compiler/model/identity.js";
+import { BUILTIN_SEMANTICS, buildTemplateSyntaxRegistry } from "@aurelia-ls/compiler/schema/registry.js";
+import type { ResourceScopeId } from "@aurelia-ls/compiler/schema/types.js";
+import type { CompileTrace } from "@aurelia-ls/compiler/shared/trace.js";
+import type { ConventionConfig } from "@aurelia-ls/compiler/project-semantics/conventions/types.js";
+import type { DefineMap } from "@aurelia-ls/compiler/project-semantics/defines.js";
+import { createNodeFileSystem } from "@aurelia-ls/compiler/project-semantics/project/node-context.js";
+import { discoverProjectSemantics, type ProjectSemanticsDiscoveryResult } from "@aurelia-ls/compiler/project-semantics/resolve.js";
+import { buildRouteTree } from "@aurelia-ls/compiler/project-semantics/routes/tree-builder.js";
+import type { RouteTree } from "@aurelia-ls/compiler/project-semantics/routes/types.js";
+import type { TemplateInfo } from "@aurelia-ls/compiler/project-semantics/templates/types.js";
+import { buildPackageRootMap, detectMonorepo } from "@aurelia-ls/compiler/project-semantics/npm/monorepo.js";
+import { hasThirdPartyResources } from "@aurelia-ls/compiler/project-semantics/third-party/merge.js";
+import { applyThirdPartyResources, buildAnalysisFingerprint, resolveThirdPartyResources } from "@aurelia-ls/compiler/project-semantics/third-party/resolution.js";
 import type { ProjectSemanticsContext, ThirdPartyOptions } from "./types.js";
 
 /**

@@ -1,11 +1,4 @@
-/**
- * Static Site Generation Types
- *
- * Type definitions for the Aurelia SSG system.
- */
-
-import type { RouteTree, ParameterizedRoute } from "@aurelia-ls/compiler";
-
+import type { ParameterizedRoute, RouteTree } from "@aurelia-ls/compiler/project-semantics/routes/types.js";
 /**
  * SSG configuration options.
  */

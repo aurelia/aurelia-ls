@@ -1,6 +1,7 @@
 import { describe, test, expect, vi } from "vitest";
 import { CompletionItemKind, ResponseError } from "vscode-languageserver/node.js";
-import { asDocumentUri, canonicalDocumentUri } from "@aurelia-ls/compiler";
+import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
+import { asDocumentUri } from "@aurelia-ls/compiler/program/primitives.js";
 import {
   COMPLETION_GAP_MARKER_LABEL,
   handleCompletion,

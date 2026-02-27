@@ -9,19 +9,16 @@
  * - Exporter integration
  */
 import { describe, test, expect, beforeEach } from "vitest";
+import { createCollectingExporter, createConsoleExporter, createMultiExporter } from "@aurelia-ls/compiler/shared/trace-exporters.js";
 import {
-  createTrace,
-  NOOP_TRACE,
-  NOOP_SPAN,
   CompilerAttributes,
+  NOOP_SPAN,
+  NOOP_TRACE,
+  createTrace,
   formatDuration,
-  createCollectingExporter,
-  createConsoleExporter,
-  createMultiExporter,
   type CompileTrace,
   type Span,
-} from "@aurelia-ls/compiler";
-
+} from "@aurelia-ls/compiler/shared/trace.js";
 // =============================================================================
 // Core Trace Tests
 // =============================================================================

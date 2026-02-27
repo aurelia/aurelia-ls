@@ -14,7 +14,7 @@
 import { test, describe, expect } from "vitest";
 
 import { compileAndRenderAot, compileWithAot } from "@aurelia-ls/ssr";
-import { INSTRUCTION_TYPE } from "@aurelia-ls/compiler";
+import { INSTRUCTION_TYPE } from "@aurelia-ls/compiler/synthesis/aot/constants.js";
 import { createComponent } from "./_helpers/test-utils.js";
 
 // =============================================================================

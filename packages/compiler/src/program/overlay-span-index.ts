@@ -1,14 +1,9 @@
-// Model imports (via barrel)
-import type { ExprId, NodeId, SourceFileId, SourceSpan } from "../model/index.js";
-import { offsetAtPosition, spanContainsOffset, spanEquals, spanLength, resolveSourceSpan, type TextRange } from "../model/index.js";
-
-// Synthesis imports (via barrel)
-import type {
-  TemplateMappingArtifact,
-  TemplateMappingEntry,
-  TemplateMappingSegment,
-} from "../synthesis/index.js";
-
+import type { ExprId, NodeId, SourceFileId } from "../model/identity.js";
+import type { SourceSpan } from "../model/span.js";
+import { resolveSourceSpan } from "../model/source.js";
+import { spanContainsOffset, spanEquals, spanLength } from "../model/span.js";
+import { offsetAtPosition, type TextRange } from "../model/text.js";
+import type { TemplateMappingArtifact, TemplateMappingEntry, TemplateMappingSegment } from "../synthesis/overlay/mapping.js";
 // Program layer imports
 import type { DocumentUri, TemplateExprId, TemplateNodeId } from "./primitives.js";
 import { canonicalDocumentUri } from "./paths.js";

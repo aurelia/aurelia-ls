@@ -1,17 +1,16 @@
 import { describe, it, expect, beforeEach } from "vitest";
+import { createMockFileSystem } from "@aurelia-ls/compiler/project-semantics/project/mock-context.js";
 import {
-  createMockFileSystem,
-  detectSiblings,
-  findTemplateSibling,
-  findStylesheetSibling,
-  classMatchesFileName,
   buildFilePair,
+  classMatchesFileName,
+  detectSiblings,
   detectSiblingsBatch,
   findOrphanTemplates,
   findSourcesWithoutTemplates,
-} from "@aurelia-ls/compiler";
-import type { MockFileSystemContext } from "@aurelia-ls/compiler";
-
+  findStylesheetSibling,
+  findTemplateSibling,
+} from "@aurelia-ls/compiler/project-semantics/project/sibling-detector.js";
+import type { MockFileSystemContext } from "@aurelia-ls/compiler/project-semantics/project/mock-context.js";
 /**
  * Unit tests for sibling file detection.
  *

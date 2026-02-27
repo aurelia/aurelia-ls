@@ -5,9 +5,9 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { transform, type TemplateImport } from "../../src/transform/index.js";
-import type { AotCodeResult } from "@aurelia-ls/compiler";
-
+import type { TemplateImport } from "../../../compiler/src/project-semantics/extract/file-facts.js";
+import { transform } from "../../src/transform/transform.js";
+import type { AotCodeResult } from "@aurelia-ls/compiler/synthesis/aot/types.js";
 // Minimal AOT result for testing
 function createMinimalAot(): AotCodeResult {
   return {

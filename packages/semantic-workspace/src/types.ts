@@ -1,22 +1,21 @@
+import type { ResolvedDiagnostic, RoutedDiagnostics } from "@aurelia-ls/compiler/diagnostics/engine/types.js";
+import type { ExprId, NodeId } from "@aurelia-ls/compiler/model/identity.js";
+import type { SourceSpan } from "@aurelia-ls/compiler/model/span.js";
+import type { OverlaySpanIndex } from "@aurelia-ls/compiler/program/overlay-span-index.js";
+import type { DocumentUri } from "@aurelia-ls/compiler/program/primitives.js";
+import type { CursorResolutionResult } from "@aurelia-ls/compiler/schema/cursor-resolve.js";
+import type { ReferentialIndex } from "@aurelia-ls/compiler/schema/referential-index.js";
 import type {
   ApiSurfaceSnapshot,
-  CursorResolutionResult,
-  DocumentUri,
-  ExprId,
   FeatureUsageSet,
-  NodeId,
-  OverlaySpanIndex,
-  ResolvedDiagnostic,
-  RoutedDiagnostics,
+  ProjectSemantics,
   RegistrationPlan,
   ResourceCatalog,
   ResourceGraph,
   SemanticSnapshot,
-  ProjectSemantics,
-  SourceSpan,
   SymbolId,
   TemplateSyntaxRegistry,
-} from "@aurelia-ls/compiler";
+} from "@aurelia-ls/compiler/schema/types.js";
 import type { RefactorDecisionSet } from "./refactor-policy.js";
 
 // Workspace contracts are headless and LSP-agnostic. These shapes intentionally
@@ -220,7 +219,7 @@ export interface SemanticWorkspace {
   refactor(): RefactorEngine;
 
   /** Workspace-level referential index (L2 cross-domain provenance). */
-  readonly referentialIndex: import("@aurelia-ls/compiler").ReferentialIndex;
+  readonly referentialIndex: ReferentialIndex;
 
   /**
    * Fires when the workspace's semantic model changes outside the

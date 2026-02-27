@@ -1,16 +1,14 @@
-// Analysis imports (via barrel)
 import type {
-  TypecheckModule,
+  LinkModule,
   LinkedAttributeBinding,
   LinkedElementBindable,
   LinkedPropertyBinding,
   LinkedRow,
-  LinkModule,
   LinkedStylePropertyBinding,
   NodeSem,
   TargetSem,
-} from "../../analysis/index.js";
-
+} from "../../analysis/20-link/types.js";
+import type { TypecheckModule } from "../../analysis/40-typecheck/typecheck.js";
 // Language imports
 import type { TypeRef } from "../../schema/registry.js";
 

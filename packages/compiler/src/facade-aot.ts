@@ -1,39 +1,25 @@
-/**
- * AOT Compilation Facade
- *
- * High-level function for ahead-of-time compilation of Aurelia templates.
- * This runs the full analysis + synthesis pipeline and produces output
- * that can be injected into component classes via the transform package.
- *
- * This is SSR-agnostic - it produces serialized instructions that can be:
- * - Written to JS files for CSR-only builds
- * - Fed to the SSR package's instruction translator for server rendering
- *
- * Two semantic authority modes:
- * - Pass `semantics` for standalone compilation (snapshot built internally).
- * - Pass `snapshot` when a workspace or project pipeline already holds
- *   materialized semantics. The snapshot's data is used directly, skipping
- *   re-materialization. Compatible with WorkspaceSnapshot.
- */
-
-import { lowerDocument, linkTemplateSemantics, bindScopes } from "./analysis/index.js";
-import { planAot, emitAotCode, emitTemplate, collectNestedTemplateHtmlTree } from "./synthesis/index.js";
-import { createAttributeParserFromRegistry, getExpressionParser, type AttributeParser } from "./parsing/index.js";
-import {
-  buildProjectSnapshot,
-  buildSemanticsSnapshotFromProject,
-  type SemanticsSnapshot,
-  type ResourceCatalog,
-  type ProjectSemantics,
-  type ResourceGraph,
-  type ResourceScopeId,
-  type LocalImportDef,
-  type TemplateSyntaxRegistry,
-} from "./schema/index.js";
-import { NOOP_TRACE, CompilerAttributes, type CompileTrace, type ModuleResolver } from "./shared/index.js";
+import { lowerDocument } from "./analysis/10-lower/lower.js";
+import { linkTemplateSemantics } from "./analysis/20-link/resolve.js";
+import { bindScopes } from "./analysis/30-bind/bind.js";
+import { collectNestedTemplateHtmlTree, emitTemplate } from "./synthesis/aot/emit-template.js";
+import { emitAotCode } from "./synthesis/aot/emit.js";
+import { planAot } from "./synthesis/aot/plan.js";
+import { createAttributeParserFromRegistry, type AttributeParser } from "./parsing/attribute-parser.js";
+import { getExpressionParser } from "./parsing/expression-parser.js";
+import { buildProjectSnapshot, buildSemanticsSnapshotFromProject, type SemanticsSnapshot } from "./schema/snapshot.js";
+import type {
+  LocalImportDef,
+  ProjectSemantics,
+  ResourceCatalog,
+  ResourceGraph,
+  ResourceScopeId,
+  TemplateSyntaxRegistry,
+} from "./schema/types.js";
+import type { ModuleResolver } from "./shared/module-resolver.js";
+import { CompilerAttributes, NOOP_TRACE, type CompileTrace } from "./shared/trace.js";
 import { DiagnosticsRuntime } from "./diagnostics/runtime.js";
-import type { AotPlanModule, AotCodeResult, NestedTemplateHtmlNode } from "./synthesis/index.js";
-
+import type { NestedTemplateHtmlNode } from "./synthesis/aot/emit-template.js";
+import type { AotCodeResult, AotPlanModule } from "./synthesis/aot/types.js";
 // =============================================================================
 // Types
 // =============================================================================

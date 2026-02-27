@@ -1,4 +1,4 @@
-import type { DocumentUri } from "@aurelia-ls/compiler";
+import type { DocumentUri } from "@aurelia-ls/compiler/program/primitives.js";
 import type {
   SourcePosition,
   WorkspaceCodeAction,

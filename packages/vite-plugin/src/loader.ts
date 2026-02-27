@@ -16,7 +16,9 @@
 
 import type { ViteDevServer } from "vite";
 import { readFile } from "node:fs/promises";
-import { debug, extractTemplateMeta, type CompileTrace } from "@aurelia-ls/compiler";
+import { extractTemplateMeta } from "@aurelia-ls/compiler/analysis/10-lower/meta-extraction.js";
+import { debug } from "@aurelia-ls/compiler/shared/debug.js";
+import type { CompileTrace } from "@aurelia-ls/compiler/shared/trace.js";
 import type { ProjectSemanticsContext } from "./types.js";
 import { compileWithAot, type AotCompileResult, type ComponentClass } from "@aurelia-ls/ssr";
 import { convertToLocalImports } from "./local-imports.js";

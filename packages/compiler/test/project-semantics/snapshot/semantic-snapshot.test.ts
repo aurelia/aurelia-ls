@@ -2,10 +2,12 @@ import { describe, it, expect } from "vitest";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-
-import type { CatalogGap, ResourceGraph, ResourceScopeId, Semantics } from "@aurelia-ls/compiler";
-import { BUILTIN_SEMANTICS, normalizePathForId, stableHash } from "@aurelia-ls/compiler";
-import { buildSemanticSnapshot, buildSemanticsArtifacts } from "@aurelia-ls/compiler";
+import type { CatalogGap, ResourceGraph, ResourceScopeId } from "@aurelia-ls/compiler/schema/types.js";
+import { normalizePathForId } from "@aurelia-ls/compiler/model/identity.js";
+import { stableHash } from "@aurelia-ls/compiler/pipeline/hash.js";
+import { BUILTIN_SEMANTICS } from "@aurelia-ls/compiler/schema/registry.js";
+import { buildSemanticsArtifacts } from "@aurelia-ls/compiler/project-semantics/assemble/build.js";
+import { buildSemanticSnapshot } from "@aurelia-ls/compiler/project-semantics/snapshot/semantic-snapshot.js";
 import { buildBindableDefs, buildCustomAttributeDef, buildCustomElementDef } from "../../../out/project-semantics/assemble/resource-def.js";
 import { buildPackageRootMap, detectMonorepo } from "../../../out/project-semantics/npm/index.js";
 

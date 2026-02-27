@@ -14,25 +14,21 @@ import { describe, it, beforeAll, expect, assert } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-
-import { discoverProjectSemantics } from "@aurelia-ls/compiler";
+import { discoverProjectSemantics } from "@aurelia-ls/compiler/project-semantics/resolve.js";
 import { createProgramFromApp, getTestAppPath } from "../_helpers/index.js";
-import {
-  BUILTIN_SEMANTICS,
-  normalizePathForId,
-  materializeSemanticsForScope,
-  lowerDocument,
-  linkTemplateSemantics, buildSemanticsSnapshot,
-  bindScopes,
-  planAot,
-  emitAotCode,
-  DEFAULT_SYNTAX,
-  getExpressionParser,
-  DiagnosticsRuntime,
-  INSTRUCTION_TYPE,
-  BINDING_MODE,
-} from "@aurelia-ls/compiler";
-
+import { lowerDocument } from "@aurelia-ls/compiler/analysis/10-lower/lower.js";
+import { linkTemplateSemantics } from "@aurelia-ls/compiler/analysis/20-link/resolve.js";
+import { bindScopes } from "@aurelia-ls/compiler/analysis/30-bind/bind.js";
+import { DiagnosticsRuntime } from "@aurelia-ls/compiler/diagnostics/runtime.js";
+import { normalizePathForId } from "@aurelia-ls/compiler/model/identity.js";
+import { DEFAULT_SYNTAX } from "@aurelia-ls/compiler/parsing/attribute-parser.js";
+import { getExpressionParser } from "@aurelia-ls/compiler/parsing/expression-parser.js";
+import { BUILTIN_SEMANTICS } from "@aurelia-ls/compiler/schema/registry.js";
+import { materializeSemanticsForScope } from "@aurelia-ls/compiler/schema/resource-graph.js";
+import { buildSemanticsSnapshot } from "@aurelia-ls/compiler/schema/snapshot.js";
+import { BINDING_MODE, INSTRUCTION_TYPE } from "@aurelia-ls/compiler/synthesis/aot/constants.js";
+import { emitAotCode } from "@aurelia-ls/compiler/synthesis/aot/emit.js";
+import { planAot } from "@aurelia-ls/compiler/synthesis/aot/plan.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const STRESS_APP = getTestAppPath("stress-test-app", import.meta.url);
 const EXPECTED_DIR = path.resolve(__dirname, "expected/stress");

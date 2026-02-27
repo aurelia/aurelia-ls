@@ -24,15 +24,10 @@ import { fileURLToPath } from "node:url";
 
 import { createFailureRecorder, fmtList } from "./test-utils.js";
 import { deepMergeSemantics } from "./semantics-merge.js";
-
-import {
-  getExpressionParser,
-  DEFAULT_SYNTAX,
-  BUILTIN_SEMANTICS as SEM_DEFAULT,
-  prepareProjectSemantics,
-  DiagnosticsRuntime,
-} from "@aurelia-ls/compiler";
-
+import { DiagnosticsRuntime } from "@aurelia-ls/compiler/diagnostics/runtime.js";
+import { DEFAULT_SYNTAX } from "@aurelia-ls/compiler/parsing/attribute-parser.js";
+import { getExpressionParser } from "@aurelia-ls/compiler/parsing/expression-parser.js";
+import { BUILTIN_SEMANTICS, prepareProjectSemantics } from "@aurelia-ls/compiler/schema/registry.js";
 /**
  * Base test vector structure. TExpect allows stage-specific typing of the expect field.
  */

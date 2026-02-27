@@ -19,15 +19,10 @@ import {
   mapSemanticWorkspaceEdit,
   type LookupTextFn,
 } from "@aurelia-ls/language-server/api";
-import {
-  asDocumentUri,
-  canonicalDocumentUri,
-  type DocumentUri,
-  type DiagnosticDataRecord,
-  type DiagnosticSpec,
-  type DiagnosticSurface,
-  type SourceSpan,
-} from "@aurelia-ls/compiler";
+import type { DiagnosticDataRecord, DiagnosticSpec, DiagnosticSurface } from "@aurelia-ls/compiler/diagnostics/types.js";
+import type { SourceSpan } from "@aurelia-ls/compiler/model/span.js";
+import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
+import { asDocumentUri, type DocumentUri } from "@aurelia-ls/compiler/program/primitives.js";
 import type {
   WorkspaceCompletionItem,
   WorkspaceDiagnostic,
@@ -35,8 +30,7 @@ import type {
   WorkspaceEdit,
   WorkspaceHover,
   WorkspaceLocation,
-} from "@aurelia-ls/semantic-workspace";
-
+} from "@aurelia-ls/semantic-workspace/types.js";
 const spanUri = asDocumentUri("file:///C:/projects/app/src/span.html");
 const otherUri = asDocumentUri("file:///C:/projects/app/src/other.html");
 

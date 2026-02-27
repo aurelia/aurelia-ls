@@ -1,12 +1,9 @@
 import { test, expect } from "vitest";
-
-import {
-  InMemoryOverlaySpanIndex,
-  emitOverlay,
-  DefaultTemplateLanguageService,
-  DefaultTemplateProgram,
-  canonicalDocumentUri,
-} from "@aurelia-ls/compiler";
+import { InMemoryOverlaySpanIndex } from "@aurelia-ls/compiler/program/overlay-span-index.js";
+import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
+import { DefaultTemplateProgram } from "@aurelia-ls/compiler/program/program.js";
+import { DefaultTemplateLanguageService } from "@aurelia-ls/compiler/program/services.js";
+import { emitOverlay } from "@aurelia-ls/compiler/synthesis/overlay/emit.js";
 import { resolveSourceFile } from "../../out/model/source.js";
 import { buildTemplateMapping } from "../../out/synthesis/overlay/mapping.js";
 import { createTestQuery, noopModuleResolver } from "../_helpers/test-utils.js";
@@ -1100,8 +1097,7 @@ function spanToRange(span, text) {
 // correctly through the language service layer.
 
 import { describe } from "vitest";
-import { resolveTypecheckConfig } from "@aurelia-ls/compiler";
-
+import { resolveTypecheckConfig } from "@aurelia-ls/compiler/analysis/40-typecheck/config.js";
 describe("typecheck diagnostics integration", () => {
   // Note: Default config is "lenient" which produces:
   // - warning severity for type mismatches

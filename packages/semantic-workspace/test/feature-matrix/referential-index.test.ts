@@ -29,8 +29,7 @@ import {
   pos,
 } from "./_harness.js";
 import type { SemanticQuery, SemanticWorkspace } from "../../out/types.js";
-import type { ReferentialIndex, ReferenceSite, TextReferenceSite } from "@aurelia-ls/compiler";
-
+import type { ReferenceSite, ReferentialIndex, TextReferenceSite } from "@aurelia-ls/compiler/schema/referential-index.js";
 let query: SemanticQuery;
 let text: string;
 let workspace: SemanticWorkspace;

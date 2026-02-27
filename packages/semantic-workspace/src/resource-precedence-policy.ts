@@ -1,5 +1,6 @@
-import { normalizePathForId, unwrapSourced, type ResourceDef } from "@aurelia-ls/compiler";
-
+import { normalizePathForId } from "@aurelia-ls/compiler/model/identity.js";
+import { unwrapSourced } from "@aurelia-ls/compiler/schema/sourced.js";
+import type { ResourceDef } from "@aurelia-ls/compiler/schema/types.js";
 export interface ResourceCandidate {
   readonly def: ResourceDef;
 }

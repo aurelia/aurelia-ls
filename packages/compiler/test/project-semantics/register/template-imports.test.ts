@@ -7,8 +7,8 @@
 
 import { describe, it, expect, beforeAll } from "vitest";
 import ts from "typescript";
-import type { NormalizedPath } from "@aurelia-ls/compiler";
-import { DiagnosticsRuntime } from "@aurelia-ls/compiler";
+import type { NormalizedPath } from "@aurelia-ls/compiler/model/identity.js";
+import { DiagnosticsRuntime } from "@aurelia-ls/compiler/diagnostics/runtime.js";
 import { discoverProjectSemantics, type ProjectSemanticsDiscoveryResult } from "../../../out/project-semantics/resolve.js";
 import type { FileSystemContext } from "../../../out/project-semantics/project/context.js";
 

@@ -8,15 +8,17 @@
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
-  createTrace,
   createConsoleExporter,
   createJSONExporter,
   createMultiExporter,
+  type JSONExporter,
+} from "@aurelia-ls/compiler/shared/trace-exporters.js";
+import {
   NOOP_TRACE,
+  createTrace,
   type CompileTrace,
   type TraceExporter,
-  type JSONExporter,
-} from "@aurelia-ls/compiler";
+} from "@aurelia-ls/compiler/shared/trace.js";
 import type { ResolvedTraceOptions, TraceOptions } from "./types.js";
 
 /**

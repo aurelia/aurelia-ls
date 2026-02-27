@@ -9,14 +9,9 @@ import type {
   SemanticTokensParams,
   SemanticTokensLegend,
 } from "vscode-languageserver/node.js";
-import { canonicalDocumentUri } from "@aurelia-ls/compiler";
+import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
 import type { ServerContext } from "../context.js";
-import {
-  WORKSPACE_TOKEN_MODIFIER_GAP_AWARE,
-  WORKSPACE_TOKEN_MODIFIER_GAP_CONSERVATIVE,
-  type WorkspaceToken,
-} from "@aurelia-ls/semantic-workspace";
-
+import { WORKSPACE_TOKEN_MODIFIER_GAP_AWARE, WORKSPACE_TOKEN_MODIFIER_GAP_CONSERVATIVE, type WorkspaceToken } from "@aurelia-ls/semantic-workspace/types.js";
 export const TOKEN_TYPES = [
   "aureliaElement",
   "aureliaAttribute",

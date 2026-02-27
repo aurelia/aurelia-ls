@@ -1,7 +1,7 @@
 import type ts from "typescript";
-import type { LocalImportDef, ResourceCollections, ResourceScopeId } from "@aurelia-ls/compiler";
-import type { ConventionConfig, DefineMap } from "@aurelia-ls/compiler";
-
+import type { LocalImportDef, ResourceCollections, ResourceScopeId } from "@aurelia-ls/compiler/schema/types.js";
+import type { ConventionConfig } from "@aurelia-ls/compiler/project-semantics/conventions/types.js";
+import type { DefineMap } from "@aurelia-ls/compiler/project-semantics/defines.js";
 export type ScenarioTag = string;
 
 export type ScenarioSource =

@@ -25,7 +25,7 @@ import {
   type CodeActionParams,
   type CompletionParams,
 } from "vscode-languageserver/node.js";
-import { canonicalDocumentUri } from "@aurelia-ls/compiler";
+import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
 import type { ServerContext } from "../context.js";
 import { handleInlayHints as handleInlayHintsRequest } from "./inlay-hints.js";
 import {

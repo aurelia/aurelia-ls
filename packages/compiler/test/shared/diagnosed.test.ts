@@ -1,6 +1,5 @@
 import { describe, test, expect } from "vitest";
-
-import type { CompilerDiagnostic } from "@aurelia-ls/compiler";
+import type { CompilerDiagnostic } from "@aurelia-ls/compiler/model/diagnostics.js";
 import {
   all,
   anyStub,

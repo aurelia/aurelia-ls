@@ -1,4 +1,4 @@
-import { stableHash } from "@aurelia-ls/compiler";
+import { stableHash } from "@aurelia-ls/compiler/pipeline/hash.js";
 import type {
   HostReplayRecord,
   HostReplayRunExport,

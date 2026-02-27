@@ -1,6 +1,6 @@
 import { describe, test, expect } from "vitest";
-
-import type { ExprId, FrameId, ScopeFrame, ScopeTemplate, FrameOrigin } from "@aurelia-ls/compiler";
+import type { ExprId, FrameId } from "@aurelia-ls/compiler/model/identity.js";
+import type { FrameOrigin, ScopeFrame, ScopeTemplate } from "@aurelia-ls/compiler/model/symbols.js";
 import { buildScopeLookup } from "../../out/analysis/shared/scope-lookup.js";
 
 /**

@@ -9,8 +9,10 @@
  */
 
 import { describe, test, expect } from "vitest";
-import { ExpressionParser } from "@aurelia-ls/compiler";
-import type { ExprTableEntry, SourceSpan, ExprIdMap } from "@aurelia-ls/compiler";
+import { ExpressionParser } from "@aurelia-ls/compiler/parsing/expression-parser.js";
+import type { ExprIdMap } from "@aurelia-ls/compiler/model/identity.js";
+import type { ExprTableEntry } from "@aurelia-ls/compiler/model/ir.js";
+import type { SourceSpan } from "@aurelia-ls/compiler/model/span.js";
 import { collectExprMemberSegments } from "../../out/shared/expr-utils.js";
 
 // Helper to parse an expression and build an ExprTableEntry

@@ -20,11 +20,7 @@ import type {
   ExplicitElementConfig,
   ExplicitAttributeConfig,
 } from "./types.js";
-import {
-  mergePartialResourceCollections as mergeDefinitionPartialResourceCollections,
-  mergeResolvedResourceCollections as mergeDefinitionResolvedResourceCollections,
-} from "../definition/index.js";
-
+import { mergePartialResourceCollections, mergeResolvedResourceCollections } from "../definition/collections-merge.js";
 type MutableResourceCollections = {
   elements?: Record<string, ElementRes>;
   attributes?: Record<string, AttrRes>;
@@ -88,7 +84,7 @@ export function mergeResourceCollections(
   base: ResourceCollections,
   extra: Partial<ResourceCollections>,
 ): ResourceCollections {
-  return mergeDefinitionResolvedResourceCollections(base, extra);
+  return mergeResolvedResourceCollections(base, extra);
 }
 
 /**
@@ -98,7 +94,7 @@ export function mergeScopeResources(
   base: Partial<ResourceCollections> | undefined,
   extra: Partial<ResourceCollections>,
 ): Partial<ResourceCollections> {
-  return mergeDefinitionPartialResourceCollections(base, extra);
+  return mergePartialResourceCollections(base, extra);
 }
 
 // ============================================================================

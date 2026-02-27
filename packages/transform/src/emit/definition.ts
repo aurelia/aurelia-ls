@@ -1,35 +1,24 @@
-/**
- * Transform Package - Definition Emission
- *
- * Generates JavaScript source for static $au definitions.
- * Handles the main component definition and nested templates.
- *
- * Instruction codes and binding modes are imported from compiler
- * to avoid duplication.
- */
-
-import {
-  INSTRUCTION_TYPE,
-  type SerializedDefinition,
-  type SerializedInstruction,
-  type SerializedExpression,
-  type SerializedTextBinding,
-  type SerializedPropertyBinding,
-  type SerializedInterpolation,
-  type SerializedListenerBinding,
-  type SerializedRefBinding,
-  type SerializedSetProperty,
-  type SerializedSetAttribute,
-  type SerializedHydrateElement,
-  type SerializedHydrateAttribute,
-  type SerializedHydrateTemplateController,
-  type SerializedHydrateLetElement,
-  type SerializedIteratorBinding,
-  type SerializedTranslationBinding,
-  type ExprId,
-  type BindingModeValue,
-  type NestedTemplateHtmlNode,
-} from "@aurelia-ls/compiler";
+import type { ExprId } from "@aurelia-ls/compiler/model/identity.js";
+import { INSTRUCTION_TYPE, type BindingModeValue } from "@aurelia-ls/compiler/synthesis/aot/constants.js";
+import type { NestedTemplateHtmlNode } from "@aurelia-ls/compiler/synthesis/aot/emit-template.js";
+import type {
+  SerializedDefinition,
+  SerializedExpression,
+  SerializedHydrateAttribute,
+  SerializedHydrateElement,
+  SerializedHydrateLetElement,
+  SerializedHydrateTemplateController,
+  SerializedInstruction,
+  SerializedInterpolation,
+  SerializedIteratorBinding,
+  SerializedListenerBinding,
+  SerializedPropertyBinding,
+  SerializedRefBinding,
+  SerializedSetAttribute,
+  SerializedSetProperty,
+  SerializedTextBinding,
+  SerializedTranslationBinding,
+} from "@aurelia-ls/compiler/synthesis/aot/types.js";
 import { formatValue, escapeString, indent as indentText } from "./format.js";
 import { getExpressionRef, buildExpressionIndexMap } from "./expression-table.js";
 

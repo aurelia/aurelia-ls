@@ -24,7 +24,7 @@
  */
 
 import { beforeAll, describe, expect, it } from "vitest";
-import type { DiagnosticSurface } from "@aurelia-ls/compiler";
+import type { DiagnosticSurface } from "@aurelia-ls/compiler/diagnostics/types.js";
 import {
   getHarness,
   getAppTemplate,

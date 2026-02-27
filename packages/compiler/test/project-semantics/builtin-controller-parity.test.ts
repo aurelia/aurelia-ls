@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { BUILTIN_SEMANTICS, createSemanticsLookup } from "@aurelia-ls/compiler";
-
+import { BUILTIN_SEMANTICS, createSemanticsLookup } from "@aurelia-ls/compiler/schema/registry.js";
 describe("Builtin controller parity", () => {
   it("repeat carries formal items bindable and $previous contextual", () => {
     const repeatDef = BUILTIN_SEMANTICS.controllers.repeat;

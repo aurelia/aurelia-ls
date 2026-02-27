@@ -24,7 +24,7 @@ import type {
   BindableDef,
   ControllerSemantics,
 } from "./types.js";
-import type { NormalizedPath } from "../model/index.js";
+import type { NormalizedPath } from "../model/identity.js";
 import { createStub } from "./types.js";
 
 // ============================================================================

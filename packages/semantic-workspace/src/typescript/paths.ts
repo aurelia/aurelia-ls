@@ -1,5 +1,4 @@
-import { defaultPathCaseSensitivity, normalizePathForId, type NormalizedPath } from "@aurelia-ls/compiler";
-
+import { defaultPathCaseSensitivity, normalizePathForId, type NormalizedPath } from "@aurelia-ls/compiler/model/identity.js";
 export class PathUtils {
   constructor(private readonly caseSensitive: boolean) {}
 

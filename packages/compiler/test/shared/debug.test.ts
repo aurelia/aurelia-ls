@@ -10,13 +10,12 @@
  */
 import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
 import {
-  debug,
-  refreshDebugChannels,
   configureDebug,
+  debug,
   isDebugEnabled,
+  refreshDebugChannels,
   type DebugConfig,
-} from "@aurelia-ls/compiler";
-
+} from "@aurelia-ls/compiler/shared/debug.js";
 // =============================================================================
 // Test Helpers
 // =============================================================================

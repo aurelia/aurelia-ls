@@ -1,5 +1,5 @@
-import type { TypeScriptServices } from "@aurelia-ls/compiler";
-import type { Logger } from "@aurelia-ls/compiler";
+import type { TypeScriptServices } from "@aurelia-ls/compiler/program/services.js";
+import type { Logger } from "@aurelia-ls/compiler/project-semantics/types.js";
 import { createPathUtils, type PathUtils } from "./paths.js";
 import { OverlayFs } from "./overlay-fs.js";
 import { TsService, type TsServiceConfig } from "./ts-service.js";

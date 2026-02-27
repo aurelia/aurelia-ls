@@ -1,4 +1,5 @@
-import { canonicalDocumentUri, type DocumentUri } from "@aurelia-ls/compiler";
+import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
+import type { DocumentUri } from "@aurelia-ls/compiler/program/primitives.js";
 import type { WorkspaceLocation } from "./types.js";
 
 export type QueryLocationTier = "meta" | "local" | "resource" | "base";

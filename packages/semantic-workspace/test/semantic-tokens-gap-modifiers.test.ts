@@ -1,12 +1,8 @@
 import { describe, it, expect } from "vitest";
-import {
-  BUILTIN_SEMANTICS,
-  buildTemplateSyntaxRegistry,
-  buildResourceCatalog,
-  compileTemplate,
-  createSemanticModel,
-  prepareProjectSemantics,
-} from "@aurelia-ls/compiler";
+import { compileTemplate } from "@aurelia-ls/compiler/facade.js";
+import { buildResourceCatalog } from "@aurelia-ls/compiler/schema/catalog.js";
+import { createSemanticModel } from "@aurelia-ls/compiler/schema/model.js";
+import { BUILTIN_SEMANTICS, buildTemplateSyntaxRegistry, prepareProjectSemantics } from "@aurelia-ls/compiler/schema/registry.js";
 import { collectSemanticTokens } from "../out/semantic-tokens.js";
 import {
   WORKSPACE_TOKEN_MODIFIER_GAP_AWARE,

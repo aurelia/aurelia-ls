@@ -1,11 +1,10 @@
-import type { StyleProfile } from "@aurelia-ls/compiler";
+import type { StyleProfile } from "@aurelia-ls/compiler/schema/types.js";
 import {
   canonicalAttrName,
   canonicalElementName,
   canonicalSimpleName,
   toKebabCase,
-} from "@aurelia-ls/compiler";
-
+} from "@aurelia-ls/compiler/project-semantics/util/naming.js";
 export type RenameStyle = "preserve" | "attribute" | "property";
 export type BindableDeclarationKind =
   | "template"

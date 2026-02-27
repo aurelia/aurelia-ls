@@ -17,15 +17,15 @@
  */
 
 import { describe, it, expect } from "vitest";
+import type { NormalizedPath } from "@aurelia-ls/compiler/model/identity.js";
+import type { RegistrationAnalysis } from "@aurelia-ls/compiler/project-semantics/register/types.js";
 import type {
   CatalogGap,
-  NormalizedPath,
-  RegistrationAnalysis,
   ResourceKind,
   ResourceScopeId,
   ScopeCompleteness,
-} from "@aurelia-ls/compiler";
-import { toSourceFileId } from "@aurelia-ls/compiler";
+} from "@aurelia-ls/compiler/schema/types.js";
+import { toSourceFileId } from "@aurelia-ls/compiler/model/identity.js";
 import { buildResourceCatalog } from "../../out/schema/catalog.js";
 import { createSemanticsLookup, prepareProjectSemantics, BUILTIN_SEMANTICS } from "../../out/schema/registry.js";
 import { gap, type AnalysisGap } from "../../out/project-semantics/evaluate/types.js";

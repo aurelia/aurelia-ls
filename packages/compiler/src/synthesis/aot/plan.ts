@@ -1,58 +1,38 @@
-/* =============================================================================
- * AOT PLAN - Transform analysis output to AotPlanModule
- * -----------------------------------------------------------------------------
- * Consumes: LinkModule (20-link), ScopeModule (30-bind)
- * Produces: AotPlanModule (abstract instruction graph)
- *
- * Key responsibilities:
- * - Walk linked template structure and build PlanNodes
- * - Assign hydration target indices to elements with bindings/controllers
- * - Collect expressions into expression table with frame mappings
- * - Transform scope frames into PlanScopes with locals and override context
- * - Handle template controllers and their nested templates
- * ============================================================================= */
-
+import type { ExprId, FrameId, NodeId } from "../../model/identity.js";
 import type {
   BindingSourceIR,
   CommentNode,
   DOMNode,
   ElementNode,
-  ExprId,
   ExprTableEntry,
-  FrameId,
-  NodeId,
-  SourceSpan,
   TemplateNode,
   TextNode,
-} from "../../model/index.js";
-
+} from "../../model/ir.js";
+import type { SourceSpan } from "../../model/span.js";
 import type { ScopeModule, ScopeTemplate, ScopeFrame, ScopeSymbol } from "../../model/symbols.js";
 import type { ReadonlyExprIdMap } from "../../model/identity.js";
-
 import type {
   LinkModule,
-  LinkedTemplate,
-  LinkedInstruction,
-  LinkedPropertyBinding,
   LinkedAttributeBinding,
-  LinkedStylePropertyBinding,
+  LinkedHydrateAttribute,
+  LinkedHydrateElement,
+  LinkedHydrateLetElement,
+  LinkedHydrateTemplateController,
+  LinkedInstruction,
+  LinkedIteratorBinding,
   LinkedListenerBinding,
+  LinkedPropertyBinding,
   LinkedRefBinding,
+  LinkedStylePropertyBinding,
+  LinkedTemplate,
   LinkedTextBinding,
   LinkedTranslationBinding,
-  LinkedHydrateElement,
-  LinkedHydrateAttribute,
-  LinkedHydrateTemplateController,
-  LinkedHydrateLetElement,
-  LinkedIteratorBinding,
-} from "../../analysis/index.js";
-
+} from "../../analysis/20-link/types.js";
 import { indexExprTable, collectBindingNames } from "../../shared/expr-utils.js";
-import { NOOP_TRACE, CompilerAttributes } from "../../shared/index.js";
+import { CompilerAttributes, NOOP_TRACE } from "../../shared/trace.js";
 import { debug } from "../../shared/debug.js";
 import { BUILTIN_SEMANTICS, buildTemplateSyntaxRegistry, type TemplateSyntaxRegistry } from "../../schema/registry.js";
-import { analyzeAttributeName, createAttributeParserFromRegistry, type AttributeParser } from "../../parsing/index.js";
-
+import { analyzeAttributeName, createAttributeParserFromRegistry, type AttributeParser } from "../../parsing/attribute-parser.js";
 import type {
   AotPlanModule,
   AotPlanOptions,

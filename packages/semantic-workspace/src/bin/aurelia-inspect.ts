@@ -18,8 +18,7 @@
  */
 
 import { resolve } from 'node:path';
-import { inspect } from '@aurelia-ls/compiler';
-
+import { inspect } from "@aurelia-ls/compiler/project-semantics/npm/index.js";
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
 

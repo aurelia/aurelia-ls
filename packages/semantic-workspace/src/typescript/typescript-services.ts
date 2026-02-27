@@ -1,18 +1,18 @@
 import ts from "typescript";
-import {
-  canonicalDocumentUri,
-  type OverlayDocumentSnapshot,
-  type TextRange,
-  type TsCompletionEntry,
-  type TsDiagnostic,
-  type TsLocation,
-  type TsMessageChain,
-  type TsQuickInfo,
-  type TsDiagnosticRelated,
-  type TsTextEdit,
-  type TsCodeAction,
-  type TypeScriptServices,
-} from "@aurelia-ls/compiler";
+import type { TextRange } from "@aurelia-ls/compiler/model/text.js";
+import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
+import type {
+  OverlayDocumentSnapshot,
+  TsCodeAction,
+  TsCompletionEntry,
+  TsDiagnostic,
+  TsDiagnosticRelated,
+  TsLocation,
+  TsMessageChain,
+  TsQuickInfo,
+  TsTextEdit,
+  TypeScriptServices,
+} from "@aurelia-ls/compiler/program/services.js";
 import type { TsService } from "./ts-service.js";
 import type { PathUtils } from "./paths.js";
 

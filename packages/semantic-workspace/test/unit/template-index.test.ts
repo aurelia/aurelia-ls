@@ -1,12 +1,10 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, test } from "vitest";
-import {
-  canonicalDocumentUri,
-  type DocumentUri,
-  type ProjectSemanticsDiscoveryResult,
-  type ResourceScopeId,
-} from "@aurelia-ls/compiler";
+import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
+import type { DocumentUri } from "@aurelia-ls/compiler/program/primitives.js";
+import type { ProjectSemanticsDiscoveryResult } from "@aurelia-ls/compiler/project-semantics/resolve.js";
+import type { ResourceScopeId } from "@aurelia-ls/compiler/schema/types.js";
 import { buildTemplateIndex } from "../../out/engine.js";
 import { inlineTemplatePath } from "../../out/templates.js";
 

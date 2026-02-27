@@ -1,14 +1,13 @@
+import type { NodeId } from "@aurelia-ls/compiler/model/identity.js";
 import type {
   Attr,
   DOMNode,
   ElementNode,
-  NodeId,
-  SourceSpan,
   TemplateIR,
   TemplateNode,
-} from "@aurelia-ls/compiler";
-import { spanContainsOffset, spanLength } from "@aurelia-ls/compiler";
-
+} from "@aurelia-ls/compiler/model/ir.js";
+import type { SourceSpan } from "@aurelia-ls/compiler/model/span.js";
+import { spanContainsOffset, spanLength } from "@aurelia-ls/compiler/model/span.js";
 export type DomIndex = Map<string, DOMNode>;
 
 export function domKey(templateIndex: number, nodeId: NodeId): string {

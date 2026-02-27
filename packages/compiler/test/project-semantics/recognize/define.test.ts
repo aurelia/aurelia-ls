@@ -5,7 +5,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import type { NormalizedPath, TextSpan } from "@aurelia-ls/compiler";
+import type { NormalizedPath } from "@aurelia-ls/compiler/model/identity.js";
+import type { TextSpan } from "@aurelia-ls/compiler/model/span.js";
 import { matchDefine } from "../../../out/project-semantics/recognize/define.js";
 import {
   array,

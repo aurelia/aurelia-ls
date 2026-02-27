@@ -8,7 +8,7 @@
  */
 
 import ts from "typescript";
-import { RESOURCE_DECORATOR_NAMES } from "@aurelia-ls/compiler";
+import { RESOURCE_DECORATOR_NAMES } from "@aurelia-ls/compiler/project-semantics/conventions/aurelia-defaults.js";
 import type {
   ClassInfo,
   DecoratorInfo,

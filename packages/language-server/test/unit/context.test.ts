@@ -1,8 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { createServerContext } from "@aurelia-ls/language-server/api";
-import { canonicalDocumentUri } from "@aurelia-ls/compiler";
-
+import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
 function createLogger() {
   return {
     log: vi.fn(),

@@ -1,7 +1,6 @@
 import { test, describe, expect } from "vitest";
-
-import { ExpressionParser, toSourceFileId } from "@aurelia-ls/compiler";
-
+import { toSourceFileId } from "@aurelia-ls/compiler/model/identity.js";
+import { ExpressionParser } from "@aurelia-ls/compiler/parsing/expression-parser.js";
 /**
  * Helper: strip span information recursively from an AST node.
  * This lets us deep-compare structure without being brittle on offsets.

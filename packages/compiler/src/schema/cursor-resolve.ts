@@ -12,7 +12,7 @@ import type { SourceSpan, ExprId, NodeId, ExprTableEntry } from "../model/ir.js"
 import type {
   TemplateCompilation,
 } from "../facade.js";
-import type { LinkedRow, LinkedInstruction, LinkedTemplate } from "../analysis/index.js";
+import type { LinkedInstruction, LinkedRow, LinkedTemplate } from "../analysis/20-link/types.js";
 import type {
   ElementRes,
   AttrRes,

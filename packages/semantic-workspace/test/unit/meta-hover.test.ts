@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { asDocumentUri } from "@aurelia-ls/compiler";
+import { asDocumentUri } from "@aurelia-ls/compiler/program/primitives.js";
 import { createSemanticWorkspace } from "../../out/engine.js";
 
 const logger = {

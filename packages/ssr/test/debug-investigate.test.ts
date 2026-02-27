@@ -8,8 +8,9 @@ import { describe, it, expect } from "vitest";
 import { JSDOM } from "jsdom";
 import { compileAndRenderAot, compileWithAot } from "@aurelia-ls/ssr";
 import { createComponent } from "./_helpers/test-utils.js";
-import { compileTemplate, BUILTIN_SEMANTICS, type VmReflection } from "@aurelia-ls/compiler";
-
+import { compileTemplate } from "@aurelia-ls/compiler/facade.js";
+import { BUILTIN_SEMANTICS } from "@aurelia-ls/compiler/schema/registry.js";
+import type { VmReflection } from "@aurelia-ls/compiler/shared/vm-reflection.js";
 const NOOP_MODULE_RESOLVER = (_specifier: string, _containingFile: string) => null;
 
 describe("INVESTIGATION: Checkbox vs Radio binding behavior", () => {

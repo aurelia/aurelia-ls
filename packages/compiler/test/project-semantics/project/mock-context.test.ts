@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { createMockFileSystem } from "@aurelia-ls/compiler";
-import type { MockFileSystemContext } from "@aurelia-ls/compiler";
-
+import { createMockFileSystem } from "@aurelia-ls/compiler/project-semantics/project/mock-context.js";
+import type { MockFileSystemContext } from "@aurelia-ls/compiler/project-semantics/project/mock-context.js";
 /**
  * Unit tests for MockFileSystemContext.
  *

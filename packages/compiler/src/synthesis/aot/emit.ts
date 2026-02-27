@@ -42,15 +42,11 @@ import type {
   PlanController,
 } from "./types.js";
 import { INSTRUCTION_TYPE, BINDING_MODE, type BindingModeValue } from "./constants.js";
-import type { ExprId, BindingMode, TemplateMetaIR } from "../../model/index.js";
+import type { ExprId } from "../../model/identity.js";
+import type { BindingMode, TemplateMetaIR } from "../../model/ir.js";
 import { toRuntimeExpression } from "./runtime-ast.js";
-
-/* =============================================================================
- * Public API
- * ============================================================================= */
-
-import type { CompileTrace } from "../../shared/index.js";
-import { NOOP_TRACE, CompilerAttributes } from "../../shared/index.js";
+import type { CompileTrace } from "../../shared/trace.js";
+import { CompilerAttributes, NOOP_TRACE } from "../../shared/trace.js";
 import { debug } from "../../shared/debug.js";
 
 export interface AotEmitOptions {

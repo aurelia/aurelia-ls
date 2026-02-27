@@ -1,14 +1,11 @@
-// Template Pipeline — L2 Architecture
-//
-// Pure sequential pipeline: lower → link → bind → typecheck → usage → synthesis.
-// Each stage is a stateless function. No caching engine — invalidation is handled
-// by the dependency graph at the model level.
-
-import type { TemplateContext } from "../schema/index.js";
-import type { AttributeParser, IExpressionParser } from "../parsing/index.js";
-import type { VmReflection, CompileTrace, ModuleResolver } from "../shared/index.js";
+import type { TemplateContext } from "../schema/snapshot.js";
+import type { AttributeParser } from "../parsing/attribute-parser.js";
+import type { IExpressionParser } from "../parsing/expression-parser.js";
+import type { ModuleResolver } from "../shared/module-resolver.js";
+import type { CompileTrace } from "../shared/trace.js";
+import type { VmReflection } from "../shared/vm-reflection.js";
 import type { SemanticModelQuery } from "../schema/model.js";
-import type { IrModule } from "../model/index.js";
+import type { IrModule } from "../model/ir.js";
 import type { DependencyGraph } from "../schema/dependency-graph.js";
 
 // ============================================================================

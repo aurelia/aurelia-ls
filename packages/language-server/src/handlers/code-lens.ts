@@ -9,7 +9,7 @@ import type {
   CodeLens,
   CodeLensParams,
 } from "vscode-languageserver/node.js";
-import { canonicalDocumentUri } from "@aurelia-ls/compiler";
+import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
 import type { ServerContext } from "../context.js";
 
 export function handleCodeLens(

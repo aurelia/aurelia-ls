@@ -16,7 +16,7 @@ import type ts from 'typescript';
 import type { FileFacts, FileContext } from './extract/file-facts.js';
 import type { AnalysisGap } from './evaluate/types.js';
 import { extractAllFileFacts, extractFileFacts, extractFileContext, type ExtractionOptions } from './extract/file-facts-extractor.js';
-import { evaluateFileFacts } from './evaluate/index.js';
+import { evaluateFileFacts } from "./evaluate/partial-evaluation.js";
 import { buildExportBindingMap } from './exports/export-resolver.js';
 import { matchFileFacts } from './recognize/pipeline.js';
 import { canonicalPath } from './util/naming.js';

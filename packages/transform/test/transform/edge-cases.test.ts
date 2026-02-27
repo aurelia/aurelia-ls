@@ -5,11 +5,11 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { transform } from "../../src/transform/index.js";
+import { transform } from "../../src/transform/transform.js";
 import { TransformError, TransformErrorCode } from "../../src/transform/types.js";
 import { loadFixture } from "../fixtures/index.js";
-import type { AotCodeResult, ExprId } from "@aurelia-ls/compiler";
-
+import type { ExprId } from "@aurelia-ls/compiler/model/identity.js";
+import type { AotCodeResult } from "@aurelia-ls/compiler/synthesis/aot/types.js";
 function createAot(name: string, withExpression = false): AotCodeResult {
   return {
     definition: {

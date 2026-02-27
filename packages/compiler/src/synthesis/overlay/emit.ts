@@ -1,8 +1,8 @@
 import type { OverlayLambdaSegment, OverlayPlanModule } from "./types.js";
 import type { ExprId } from "../../model/ir.js";
 import { offsetSpan, spanFromBounds, type TextSpan } from "../../model/span.js";
-import type { CompileTrace } from "../../shared/index.js";
-import { NOOP_TRACE } from "../../shared/index.js";
+import type { CompileTrace } from "../../shared/trace.js";
+import { NOOP_TRACE } from "../../shared/trace.js";
 import { debug } from "../../shared/debug.js";
 
 /**
@@ -25,7 +25,7 @@ export interface OverlayEmitSegment {
   span: TextSpan;
 }
 
-export interface OverlayEmitResult {
+export interface OverlayOverlayEmitResult {
   text: string;
   mapping: OverlayEmitMappingEntry[];
 }
@@ -33,7 +33,7 @@ export interface OverlayEmitResult {
 export function emitOverlay(
   plan: OverlayPlanModule,
   { isJs, trace }: { isJs: boolean; trace?: CompileTrace },
-): OverlayEmitResult {
+): OverlayOverlayEmitResult {
   const t = trace ?? NOOP_TRACE;
 
   return t.span("overlay.emit", () => {
@@ -198,14 +198,14 @@ function requireSubsequenceOffset(line: string, segment: string, label: string):
  * - filename: suggested filename (auto-chosen when omitted)
  * - trace: optional trace for instrumentation
  */
-export interface EmitOptions {
+export interface OverlayEmitOptions {
   eol?: "\n" | "\r\n";
   banner?: string;
   filename?: string;
   trace?: CompileTrace;
 }
 
-export interface EmitResult {
+export interface OverlayEmitResult {
   /** Suggested filename for the overlay artifact (purely informational). */
   filename: string;
   /** Full overlay text. */
@@ -220,8 +220,8 @@ export interface EmitResult {
  */
 export function emitOverlayFile(
   plan: OverlayPlanModule,
-  opts: EmitOptions & { isJs: boolean }
-): EmitResult {
+  opts: OverlayEmitOptions & { isJs: boolean }
+): OverlayEmitResult {
   const eol = opts.eol ?? "\n";
   const { text, mapping } = emitOverlay(plan, { isJs: opts.isJs, trace: opts.trace });
   const adjustedMapping = eol === "\n" ? mapping : adjustMappingForEol(mapping, text, eol);

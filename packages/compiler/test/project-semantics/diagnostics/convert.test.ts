@@ -1,12 +1,11 @@
 import { describe, it, expect } from "vitest";
-import {
-  orphansToDiagnostics,
-  unresolvedToDiagnostics,
-  unresolvedRefsToDiagnostics,
-} from "@aurelia-ls/compiler";
-import type { OrphanResource, UnresolvedRegistration, UnresolvedResourceInfo } from "@aurelia-ls/compiler";
-import { DiagnosticsRuntime, toSourceFileId, type CustomElementDef, type NormalizedPath, type SourceSpan, type Sourced } from "@aurelia-ls/compiler";
-
+import { orphansToDiagnostics, unresolvedRefsToDiagnostics, unresolvedToDiagnostics } from "@aurelia-ls/compiler/project-semantics/diagnostics/convert.js";
+import type { UnresolvedResourceInfo } from "@aurelia-ls/compiler/project-semantics/diagnostics/convert.js";
+import type { OrphanResource, UnresolvedRegistration } from "@aurelia-ls/compiler/project-semantics/register/types.js";
+import { DiagnosticsRuntime } from "@aurelia-ls/compiler/diagnostics/runtime.js";
+import { toSourceFileId, type NormalizedPath } from "@aurelia-ls/compiler/model/identity.js";
+import type { SourceSpan } from "@aurelia-ls/compiler/model/span.js";
+import type { CustomElementDef, Sourced } from "@aurelia-ls/compiler/schema/types.js";
 // Helper to create a mock source span
 function mockSpan(file: NormalizedPath): SourceSpan {
   return {

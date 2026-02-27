@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { normalizePathForId } from "@aurelia-ls/compiler";
-import { discoverProjectSemantics, ssrDefines, DiagnosticsRuntime } from "@aurelia-ls/compiler";
+import { normalizePathForId } from "@aurelia-ls/compiler/model/identity.js";
+import { DiagnosticsRuntime } from "@aurelia-ls/compiler/diagnostics/runtime.js";
+import { ssrDefines } from "@aurelia-ls/compiler/project-semantics/defines.js";
+import { discoverProjectSemantics } from "@aurelia-ls/compiler/project-semantics/resolve.js";
 import { createProgramFromMemory } from "../_helpers/index.js";
 
 describe("Full Pipeline: conditional registration guards", () => {

@@ -1,8 +1,5 @@
 import { test, expect } from "vitest";
-
-import {
-  DefaultTemplateProgram,
-} from "@aurelia-ls/compiler";
+import { DefaultTemplateProgram } from "@aurelia-ls/compiler/program/program.js";
 import { createTestQuery, noopModuleResolver } from "../_helpers/test-utils.js";
 
 function createProgram() {

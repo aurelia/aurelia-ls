@@ -20,7 +20,8 @@ import {
   type ICustomElementController,
   type ISSRManifest,
 } from "@aurelia/runtime-html";
-import { NOOP_TRACE, debug, type CompileTrace } from "@aurelia-ls/compiler";
+import { debug } from "@aurelia-ls/compiler/shared/debug.js";
+import { NOOP_TRACE, type CompileTrace } from "@aurelia-ls/compiler/shared/trace.js";
 import { recordManifest } from "./manifest-recorder.js";
 import { createServerPlatform, getDocument, type SSRRequestContext } from "./platform.js";
 import {

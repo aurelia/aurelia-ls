@@ -14,8 +14,8 @@ import {
   toIdentifierPrefix,
   formatValue,
 } from "@aurelia-ls/transform";
-import type { AotCodeResult, SerializedExpression, SerializedDefinition, ExprId } from "@aurelia-ls/compiler";
-
+import type { ExprId } from "@aurelia-ls/compiler/model/identity.js";
+import type { AotCodeResult, SerializedDefinition, SerializedExpression } from "@aurelia-ls/compiler/synthesis/aot/types.js";
 // Helper to create mock expressions
 function mockExpr(id: string, kind: string, name: string): SerializedExpression {
   return {

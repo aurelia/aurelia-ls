@@ -1,12 +1,5 @@
-/**
- * Transform Package - Model Types
- *
- * Canonical resource model that normalizes all Aurelia declaration forms
- * into a unified representation for transformation.
- */
-
-import type { AotCodeResult, BindingMode, SerializedDefinition, SerializedExpression } from "@aurelia-ls/compiler";
-
+import type { BindingMode } from "@aurelia-ls/compiler/model/ir.js";
+import type { AotCodeResult, SerializedDefinition, SerializedExpression } from "@aurelia-ls/compiler/synthesis/aot/types.js";
 /* =============================================================================
  * RESOURCE TYPES
  * ============================================================================= */

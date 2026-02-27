@@ -1,32 +1,15 @@
-/**
- * AOT Compilation API
- *
- * Provides high-level functions for ahead-of-time compilation of Aurelia templates.
- * This integrates the AOT compiler with the instruction translator to produce
- * output that can be rendered directly by the Aurelia runtime.
- *
- * Architecture:
- * - `compileAot` (from @aurelia-ls/compiler) - SSR-agnostic: analysis + synthesis → serialized output
- * - `compileWithAot` (this file) - SSR-specific: adds instruction translation for server execution
- *
- * For CSR-only AOT builds (no server rendering), use `compileAot` directly from @aurelia-ls/compiler.
- */
-
-import {
-  compileAot,
-  BUILTIN_SEMANTICS,
-  NOOP_TRACE,
-  type AotSemanticSnapshot,
-  type AotPlanModule,
-  type AotCodeResult,
-  type ProjectSemantics,
-  type ResourceGraph,
-  type ResourceScopeId,
-  type NestedTemplateHtmlNode,
-  type CompileTrace,
-  type LocalImportDef,
-  type ModuleResolver,
-} from "@aurelia-ls/compiler";
+import { compileAot, type AotSemanticSnapshot } from "@aurelia-ls/compiler/facade-aot.js";
+import { BUILTIN_SEMANTICS } from "@aurelia-ls/compiler/schema/registry.js";
+import type {
+  LocalImportDef,
+  ProjectSemantics,
+  ResourceGraph,
+  ResourceScopeId,
+} from "@aurelia-ls/compiler/schema/types.js";
+import type { ModuleResolver } from "@aurelia-ls/compiler/shared/module-resolver.js";
+import { NOOP_TRACE, type CompileTrace } from "@aurelia-ls/compiler/shared/trace.js";
+import type { NestedTemplateHtmlNode } from "@aurelia-ls/compiler/synthesis/aot/emit-template.js";
+import type { AotCodeResult, AotPlanModule } from "@aurelia-ls/compiler/synthesis/aot/types.js";
 import type { IInstruction } from "@aurelia/template-compiler";
 import { translateInstructions, type NestedDefinition } from "./instruction-translator.js";
 import type { SSRProcessOptions } from "./ssr-processor.js";

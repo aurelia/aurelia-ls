@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
-import { asDocumentUri, canonicalDocumentUri } from "@aurelia-ls/compiler";
-import type { ReplayableCommandInvocation } from "@aurelia-ls/semantic-workspace";
+import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
+import { asDocumentUri } from "@aurelia-ls/compiler/program/primitives.js";
+import type { ReplayableCommandInvocation } from "@aurelia-ls/semantic-workspace/host/types.js";
 import { createDiagnosticsParityAdapter } from "@aurelia-ls/language-server/api";
 
 const testUri = asDocumentUri("file:///app/src/my-app.html");

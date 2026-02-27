@@ -1,25 +1,11 @@
-// Canonical Response Envelope — L2 Semantic Authority API
-//
-// Every command through the semantic authority host returns this envelope.
-// The envelope wraps any result with epistemic metadata (confidence, gaps,
-// provenance), policy profile, and operational metadata.
-//
-// This is the bridge between workspace query methods and the AI-facing
-// host surface. Features project their results into the `result` field;
-// the envelope carries the epistemic context that makes those results
-// trustworthy and actionable.
-//
-// L2 reference: models/attractor/l2/semantic-authority-api.md
-
 import type {
   ConfidenceLevel,
-  GapRef,
   ConvergenceRef,
-  FeatureResponse,
   Degradation,
+  FeatureResponse,
+  GapRef,
   NotApplicable,
-} from "@aurelia-ls/compiler";
-
+} from "@aurelia-ls/compiler/schema/types.js";
 // ============================================================================
 // Envelope Types
 // ============================================================================

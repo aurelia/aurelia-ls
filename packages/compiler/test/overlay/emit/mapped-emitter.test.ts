@@ -1,7 +1,6 @@
 import { test, describe, expect } from "vitest";
-
-import { ExpressionParser, emitMappedExpression } from "@aurelia-ls/compiler";
-
+import { ExpressionParser } from "@aurelia-ls/compiler/parsing/expression-parser.js";
+import { emitMappedExpression } from "@aurelia-ls/compiler/synthesis/overlay/mapped-emitter.js";
 // --- Types ---
 
 interface ExpectSegment {

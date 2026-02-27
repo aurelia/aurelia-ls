@@ -17,8 +17,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import type { ProjectSemanticsDiscoveryResult } from "@aurelia-ls/compiler";
-
+import type { ProjectSemanticsDiscoveryResult } from "@aurelia-ls/compiler/project-semantics/resolve.js";
 const CACHE_DIR = path.resolve(
   process.cwd(),
   "node_modules",

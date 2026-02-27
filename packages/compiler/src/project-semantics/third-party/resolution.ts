@@ -48,7 +48,7 @@ import {
   createReplayConvergenceOverrides,
   mergeDefinitionCandidateOverrides,
 } from "../definition/candidate-overrides.js";
-import { hashObject } from "../fingerprint/index.js";
+import { hashObject } from "../fingerprint/fingerprint.js";
 import type { ConventionConfig } from "../conventions/types.js";
 import type {
   ThirdPartyOptions,

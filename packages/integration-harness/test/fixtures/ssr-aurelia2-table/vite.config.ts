@@ -1,7 +1,6 @@
 import { defineConfig } from "vite";
 import { resolve } from "node:path";
-import { aurelia } from "../../../../vite-plugin/src/index";
-
+import { aurelia } from "../../../../vite-plugin/src/plugin.js";
 const repoRoot = resolve(import.meta.dirname, "../../../../../");
 const aureliaRoot = resolve(repoRoot, "aurelia/packages");
 const aurelia2PluginsRoot = resolve(repoRoot, "aurelia2-plugins/packages");

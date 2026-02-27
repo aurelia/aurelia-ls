@@ -1,12 +1,8 @@
 import { test, expect } from "vitest";
-
-import {
-  BUILTIN_SEMANTICS,
-  DefaultTemplateProgram,
-  type BindingMode,
-  type BindableDef,
-  type ProjectSemantics,
-} from "@aurelia-ls/compiler";
+import type { BindingMode } from "@aurelia-ls/compiler/model/ir.js";
+import { DefaultTemplateProgram } from "@aurelia-ls/compiler/program/program.js";
+import { BUILTIN_SEMANTICS } from "@aurelia-ls/compiler/schema/registry.js";
+import type { BindableDef, ProjectSemantics } from "@aurelia-ls/compiler/schema/types.js";
 import { createTestQuery, noopModuleResolver } from "../_helpers/test-utils.js";
 
 test("cache stats track hits and invalidation", () => {

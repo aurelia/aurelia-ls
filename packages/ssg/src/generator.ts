@@ -8,7 +8,7 @@
 
 import { writeFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { RouteTree, RouteNode, ParameterizedRoute } from "@aurelia-ls/compiler";
+import type { ParameterizedRoute, RouteNode, RouteTree } from "@aurelia-ls/compiler/project-semantics/routes/types.js";
 import type { ResolvedSSGOptions, SSGResult, SSGError, ExpandedRoute } from "./types.js";
 
 /**

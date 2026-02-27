@@ -3,8 +3,9 @@ import path from "node:path";
 import ts from "typescript";
 
 import { AureliaProjectIndex } from "../../out/typescript/project-index.js";
-import { BUILTIN_SEMANTICS, buildResourceGraphFromSemantics, type ResourceScopeId } from "@aurelia-ls/compiler";
-
+import { BUILTIN_SEMANTICS } from "@aurelia-ls/compiler/schema/registry.js";
+import { buildResourceGraphFromSemantics } from "@aurelia-ls/compiler/schema/resource-graph.js";
+import type { ResourceScopeId } from "@aurelia-ls/compiler/schema/types.js";
 const logger = { log() {}, info() {}, warn() {}, error() {} };
 
 function createTsProject(source: string | Record<string, string> = "export class Example {}", compilerOptions = {}) {

@@ -1,11 +1,10 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import {
-  extractAllFileFacts,
-  buildExportBindingMap,
-  createRegistrationAnalyzer,
-  matchFileFacts,
-} from "@aurelia-ls/compiler";
-import type { RegistrationAnalysis, RegistrationSite, ResourceDef } from "@aurelia-ls/compiler";
+import { buildExportBindingMap } from "@aurelia-ls/compiler/project-semantics/exports/export-resolver.js";
+import { extractAllFileFacts } from "@aurelia-ls/compiler/project-semantics/extract/file-facts-extractor.js";
+import { matchFileFacts } from "@aurelia-ls/compiler/project-semantics/recognize/pipeline.js";
+import { createRegistrationAnalyzer } from "@aurelia-ls/compiler/project-semantics/register/analyzer.js";
+import type { RegistrationAnalysis, RegistrationSite } from "@aurelia-ls/compiler/project-semantics/register/types.js";
+import type { ResourceDef } from "@aurelia-ls/compiler/schema/types.js";
 import {
   createProgramFromApp,
   getTestAppPath,

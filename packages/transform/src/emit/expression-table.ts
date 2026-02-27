@@ -1,11 +1,5 @@
-/**
- * Transform Package - Expression Table Emission
- *
- * Generates JavaScript source for expression tables.
- * Expression tables allow sharing AST objects across instructions.
- */
-
-import type { SerializedExpression, ExprId } from "@aurelia-ls/compiler";
+import type { ExprId } from "@aurelia-ls/compiler/model/identity.js";
+import type { SerializedExpression } from "@aurelia-ls/compiler/synthesis/aot/types.js";
 import { formatAst, toIdentifierPrefix } from "./format.js";
 
 /* =============================================================================

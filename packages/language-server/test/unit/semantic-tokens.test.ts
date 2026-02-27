@@ -1,16 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { NOOP_TRACE } from "@aurelia-ls/compiler";
+import { NOOP_TRACE } from "@aurelia-ls/compiler/shared/trace.js";
 import {
   handleSemanticTokensFull,
   SEMANTIC_TOKENS_LEGEND,
   type ServerContext,
 } from "@aurelia-ls/language-server/api";
-import {
-  WORKSPACE_TOKEN_MODIFIER_GAP_AWARE,
-  WORKSPACE_TOKEN_MODIFIER_GAP_CONSERVATIVE,
-} from "@aurelia-ls/semantic-workspace";
-
+import { WORKSPACE_TOKEN_MODIFIER_GAP_AWARE, WORKSPACE_TOKEN_MODIFIER_GAP_CONSERVATIVE } from "@aurelia-ls/semantic-workspace/types.js";
 type WorkspaceToken = {
   type: string;
   span: { start: number; end: number };

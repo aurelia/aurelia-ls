@@ -1,15 +1,14 @@
 import { describe, it, expect } from "vitest";
 import {
-  toKebabCase,
-  toCamelCase,
-  canonicalElementName,
-  canonicalAttrName,
-  canonicalSimpleName,
-  canonicalBindableName,
   canonicalAliases,
+  canonicalAttrName,
+  canonicalBindableName,
+  canonicalElementName,
+  canonicalSimpleName,
   isKindOfSame,
-} from "@aurelia-ls/compiler";
-
+  toCamelCase,
+  toKebabCase,
+} from "@aurelia-ls/compiler/project-semantics/util/naming.js";
 /**
  * Tests for naming utility functions.
  *

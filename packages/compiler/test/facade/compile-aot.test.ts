@@ -1,17 +1,10 @@
 import { describe, test, expect } from "vitest";
-
-import {
-  compileAot,
-  BUILTIN_SEMANTICS,
-  prepareProjectSemantics,
-  buildTemplateSyntaxRegistry,
-  createAttributeParserFromRegistry,
-  materializeSemanticsForScope,
-  INSTRUCTION_TYPE,
-  BINDING_MODE,
-  toSourceFileId,
-} from "@aurelia-ls/compiler";
-
+import { compileAot } from "@aurelia-ls/compiler/facade-aot.js";
+import { toSourceFileId } from "@aurelia-ls/compiler/model/identity.js";
+import { createAttributeParserFromRegistry } from "@aurelia-ls/compiler/parsing/attribute-parser.js";
+import { BUILTIN_SEMANTICS, buildTemplateSyntaxRegistry, prepareProjectSemantics } from "@aurelia-ls/compiler/schema/registry.js";
+import { materializeSemanticsForScope } from "@aurelia-ls/compiler/schema/resource-graph.js";
+import { BINDING_MODE, INSTRUCTION_TYPE } from "@aurelia-ls/compiler/synthesis/aot/constants.js";
 const NOOP_MODULE_RESOLVER = (_specifier: string, _containingFile: string) => null;
 
 function hasSpan(value: unknown): boolean {

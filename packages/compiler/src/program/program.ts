@@ -12,16 +12,18 @@ import {
   type TemplateCompilation,
   type TemplateDiagnostics,
 } from "../facade.js";
-
-import type { IrModule } from "../model/index.js";
-import type { TemplateContext } from "../schema/index.js";
+import type { IrModule } from "../model/ir.js";
+import type { TemplateContext } from "../schema/snapshot.js";
 import type { DepNodeId } from "../schema/dependency-graph.js";
 import type { SemanticModelQuery } from "../schema/model.js";
-import type { AttributeParser, IExpressionParser } from "../parsing/index.js";
-import { NOOP_TRACE, type VmReflection, type ModuleResolver, type CompileTrace } from "../shared/index.js";
-import { stableHash } from "../pipeline/index.js";
-import type { TemplateMappingArtifact, TemplateQueryFacade } from "../synthesis/index.js";
-
+import type { AttributeParser } from "../parsing/attribute-parser.js";
+import type { IExpressionParser } from "../parsing/expression-parser.js";
+import type { ModuleResolver } from "../shared/module-resolver.js";
+import { NOOP_TRACE, type CompileTrace } from "../shared/trace.js";
+import type { VmReflection } from "../shared/vm-reflection.js";
+import { stableHash } from "../pipeline/hash.js";
+import type { TemplateMappingArtifact } from "../synthesis/overlay/mapping.js";
+import type { TemplateQueryFacade } from "../synthesis/overlay/query.js";
 import type { DocumentUri } from "./primitives.js";
 import { InMemorySourceStore, type SourceStore } from "./sources.js";
 import { InMemoryOverlaySpanIndex, type OverlaySpanIndex } from "./overlay-span-index.js";

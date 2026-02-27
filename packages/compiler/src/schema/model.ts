@@ -33,17 +33,12 @@ import { buildProjectSnapshot } from "./snapshot.js";
 import { createSemanticsLookup } from "./registry.js";
 import type { DependencyGraph } from "./dependency-graph.js";
 import { createDependencyGraph } from "./dependency-graph.js";
-import type {
-  ProjectSemanticsDiscoveryResult,
-  ProjectSemanticsDefinitionChannels,
-  ProjectSemanticsDiscoveryDiagnostic,
-  TemplateInfo,
-  InlineTemplateInfo,
-  FileFacts,
-} from "../project-semantics/index.js";
-import type { NormalizedPath } from "../model/index.js";
+import type { FileFacts } from "../project-semantics/extract/file-facts.js";
+import type { ProjectSemanticsDefinitionChannels, ProjectSemanticsDiscoveryDiagnostic, ProjectSemanticsDiscoveryResult } from "../project-semantics/resolve.js";
+import type { InlineTemplateInfo, TemplateInfo } from "../project-semantics/templates/types.js";
+import type { NormalizedPath } from "../model/identity.js";
 import type { ResourceDef, BindableView } from "./types.js";
-import { stableHash, stableHashSemantics } from "../pipeline/index.js";
+import { stableHash, stableHashSemantics } from "../pipeline/hash.js";
 import { unwrapSourced } from "./sourced.js";
 import {
   projectResourceDef,

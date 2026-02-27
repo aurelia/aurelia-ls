@@ -1,8 +1,11 @@
 import { describe, it, expect } from "vitest";
 
 import type { Semantics } from "@aurelia-ls/compiler";
-import { BUILTIN_SEMANTICS, normalizePathForId } from "@aurelia-ls/compiler";
-import { buildApiSurfaceSnapshot, buildSemanticSnapshot, buildSemanticsArtifacts } from "@aurelia-ls/compiler";
+import { normalizePathForId } from "@aurelia-ls/compiler/model/identity.js";
+import { BUILTIN_SEMANTICS } from "@aurelia-ls/compiler/schema/registry.js";
+import { buildSemanticsArtifacts } from "@aurelia-ls/compiler/project-semantics/assemble/build.js";
+import { buildApiSurfaceSnapshot } from "@aurelia-ls/compiler/project-semantics/snapshot/api-surface-snapshot.js";
+import { buildSemanticSnapshot } from "@aurelia-ls/compiler/project-semantics/snapshot/semantic-snapshot.js";
 import { buildBindableDefs, buildCustomAttributeDef, buildCustomElementDef } from "../../../out/project-semantics/assemble/resource-def.js";
 
 function baseSemantics(): Semantics {

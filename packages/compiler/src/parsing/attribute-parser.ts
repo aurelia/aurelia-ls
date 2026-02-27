@@ -1,5 +1,5 @@
 import type { BindingMode } from "../model/ir.js";
-import type { TextSpan } from "../model/index.js";
+import type { TextSpan } from "../model/span.js";
 import type { AttributePatternConfig, TemplateSyntaxRegistry } from "../schema/registry.js";
 import { BUILTIN_ATTRIBUTE_PATTERNS, buildTemplateSyntaxRegistry, BUILTIN_SEMANTICS } from "../schema/registry.js";
 

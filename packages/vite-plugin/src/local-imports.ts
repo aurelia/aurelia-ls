@@ -1,5 +1,5 @@
-import type { ElementRes, ImportMetaIR, LocalImportDef } from "@aurelia-ls/compiler";
-
+import type { ImportMetaIR } from "@aurelia-ls/compiler/model/ir.js";
+import type { ElementRes, LocalImportDef } from "@aurelia-ls/compiler/schema/types.js";
 function deriveImportName(specifier: string): string {
   const lastSegment = specifier.split(/[/\\]/).pop() ?? specifier;
   return lastSegment.replace(/\.(ts|js|html)$/, "");

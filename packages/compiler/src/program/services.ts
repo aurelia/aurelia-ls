@@ -1,26 +1,17 @@
-// Model imports (via barrel)
-import type { NormalizedPath, SourceFileId, SourceSpan, Position, TextRange, Origin } from "../model/index.js";
-import {
-  offsetAtPosition,
-  resolveSourceSpan,
-  spanToRange,
-} from "../model/index.js";
-
-// Shared imports (via barrel)
-import { diagnosticSpan, type CompilerDiagnostic, type DiagnosticSeverity } from "../shared/index.js";
-
-// Pipeline imports (via barrel)
-import { stableHash } from "../pipeline/index.js";
-
-// Synthesis imports (via barrel)
-import type { TemplateQueryFacade, TemplateMappingArtifact } from "../synthesis/index.js";
-
+import type { NormalizedPath, SourceFileId } from "../model/identity.js";
+import type { Origin } from "../model/origin.js";
+import type { SourceSpan } from "../model/span.js";
+import type { Position, TextRange } from "../model/text.js";
+import { resolveSourceSpan } from "../model/source.js";
+import { offsetAtPosition, spanToRange } from "../model/text.js";
+import type { CompilerDiagnostic, DiagnosticSeverity } from "../model/diagnostics.js";
+import { diagnosticSpan } from "../shared/diagnostics.js";
+import { stableHash } from "../pipeline/hash.js";
+import type { TemplateMappingArtifact } from "../synthesis/overlay/mapping.js";
+import type { TemplateQueryFacade } from "../synthesis/overlay/query.js";
 // Compiler facade
 import type { TemplateCompilation } from "../facade.js";
-
-// Analysis imports (for binding contract validation)
-import { checkTypeCompatibility } from "../analysis/index.js";
-
+import { checkTypeCompatibility } from "../analysis/40-typecheck/config.js";
 // Program layer imports
 import type { CompletionItem } from "./completion-contracts.js";
 import type { DocumentSnapshot, DocumentUri, TemplateExprId } from "./primitives.js";
@@ -49,7 +40,7 @@ import {
 } from "./overlay-span-policy.js";
 
 export type { DocumentSpan } from "./overlay-span-index.js";
-export type { Position, TextRange } from "../model/index.js";
+export type { Position, TextRange } from "../model/text.js";
 export type { CompletionConfidence, CompletionItem, CompletionOrigin } from "./completion-contracts.js";
 
 const PROVENANCE_POLICY = DEFAULT_PROVENANCE_PROJECTION_POLICY;

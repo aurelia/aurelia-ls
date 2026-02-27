@@ -1,4 +1,4 @@
-import type { SourceSpan } from "../model/index.js";
+import type { SourceSpan } from "../model/span.js";
 import { canonicalDocumentUri } from "./paths.js";
 import type { DocumentUri } from "./primitives.js";
 import {

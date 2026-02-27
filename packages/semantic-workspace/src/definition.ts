@@ -1,39 +1,31 @@
+import type { LinkedInstruction, LinkedRow } from "@aurelia-ls/compiler/analysis/20-link/types.js";
+import type { TemplateCompilation } from "@aurelia-ls/compiler/facade.js";
 import {
-  analyzeAttributeName,
-  canonicalDocumentUri,
-  createBindableSymbolId,
-  createLocalSymbolId,
-  debug,
-  isDebugEnabled,
   normalizePathForId,
-  resolveCursorEntity,
-  spanContainsOffset,
-  spanLength,
   toSourceFileId,
-  unwrapSourced,
-  type BindableDef,
-  type CursorEntity,
-  type CursorResolutionResult,
   type ExprId,
-  type LinkedInstruction,
-  type LinkedRow,
   type FrameId,
   type NodeId,
-  type ResourceDef,
-  type ScopeFrame,
-  type ScopeSymbol,
-  type SourceLocation,
-  type SourceSpan,
-  type SymbolId,
-  type TemplateCompilation,
-  type AttributeParser,
-  type DocumentUri,
-  type TemplateSyntaxRegistry,
-} from "@aurelia-ls/compiler";
+} from "@aurelia-ls/compiler/model/identity.js";
+import { spanContainsOffset, spanLength, type SourceSpan } from "@aurelia-ls/compiler/model/span.js";
+import type { ScopeFrame, ScopeSymbol } from "@aurelia-ls/compiler/model/symbols.js";
+import { analyzeAttributeName, type AttributeParser } from "@aurelia-ls/compiler/parsing/attribute-parser.js";
+import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
+import type { DocumentUri } from "@aurelia-ls/compiler/program/primitives.js";
+import type { CursorEntity } from "@aurelia-ls/compiler/schema/cursor-entity.js";
+import { resolveCursorEntity, type CursorResolutionResult } from "@aurelia-ls/compiler/schema/cursor-resolve.js";
+import { unwrapSourced } from "@aurelia-ls/compiler/schema/sourced.js";
+import { createBindableSymbolId, createLocalSymbolId } from "@aurelia-ls/compiler/schema/symbol-id.js";
 import type {
-  ProjectSemanticsDefinitionChannels,
-  SemanticSnapshot,
-} from "@aurelia-ls/compiler";
+  BindableDef,
+  ResourceDef,
+  SourceLocation,
+  SymbolId,
+  TemplateSyntaxRegistry,
+} from "@aurelia-ls/compiler/schema/types.js";
+import { debug, isDebugEnabled } from "@aurelia-ls/compiler/shared/debug.js";
+import type { ProjectSemanticsDefinitionChannels } from "@aurelia-ls/compiler/project-semantics/resolve.js";
+import type { SemanticSnapshot } from "@aurelia-ls/compiler/schema/types.js";
 import type { WorkspaceLocation, TextReferenceSite, NameForm } from "./types.js";
 import { selectResourceCandidate } from "./resource-precedence-policy.js";
 import { buildDomIndex, elementTagSpanAtOffset, findDomNode } from "./template-dom.js";

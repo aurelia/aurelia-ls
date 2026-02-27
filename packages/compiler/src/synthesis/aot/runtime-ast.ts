@@ -1,34 +1,23 @@
-/* =============================================================================
- * Runtime AST - Compiler to Runtime Translation
- * -----------------------------------------------------------------------------
- * The compiler AST carries provenance (spans, Identifier nodes, Paren nodes).
- * The runtime AST is a compact, JSON-friendly shape used by AOT/SSR.
- *
- * This module defines runtime-compatible AST types and a conversion function
- * from compiler AST to runtime AST.
- * ============================================================================= */
-
 import type {
   AnyBindingExpression,
-  IsBindingBehavior,
-  IsValueConverter,
-  IsAssign,
-  IsBinary,
-  IsLeftHandSide,
-  IsAssignable,
-  BindingPattern,
-  BindingIdentifier,
   ArrayBindingPattern,
-  ObjectBindingPattern,
-  ForOfStatement,
-  Interpolation,
-  Identifier,
-  UnaryOperator,
-  BinaryOperator,
   AssignmentOperator,
-  SourceSpan,
-} from "../../model/index.js";
-
+  BinaryOperator,
+  BindingIdentifier,
+  BindingPattern,
+  ForOfStatement,
+  Identifier,
+  Interpolation,
+  IsAssign,
+  IsAssignable,
+  IsBinary,
+  IsBindingBehavior,
+  IsLeftHandSide,
+  IsValueConverter,
+  ObjectBindingPattern,
+  UnaryOperator,
+} from "../../model/ir.js";
+import type { SourceSpan } from "../../model/span.js";
 /* =============================================================================
  * Runtime AST Types (shape-compatible with @aurelia/expression-parser)
  * ============================================================================= */

@@ -45,7 +45,7 @@ import type { Logger } from "./types.js";
 import type { FileSystemContext } from "./project/context.js";
 import { extractAllFileFacts, extractFileContext } from "./extract/file-facts-extractor.js";
 import { collectTemplateFactCollection, type TemplateFactCollection } from "./extract/template-facts.js";
-import { evaluateFileFacts } from "./evaluate/index.js";
+import { evaluateFileFacts } from "./evaluate/partial-evaluation.js";
 import { buildExportBindingMap } from "./exports/export-resolver.js";
 import type { ExportBindingMap } from "./exports/types.js";
 import {
@@ -63,10 +63,10 @@ import { buildResourceGraph } from "./scope/builder.js";
 import {
   definitionConvergenceToDiagnostics,
   orphansToDiagnostics,
-  unresolvedToDiagnostics,
   unresolvedRefsToDiagnostics,
+  unresolvedToDiagnostics,
   type UnresolvedResourceInfo,
-} from "./diagnostics/index.js";
+} from "./diagnostics/convert.js";
 import { buildSemanticsArtifacts } from "./assemble/build.js";
 import type {
   DefinitionConvergenceRecord,
@@ -74,10 +74,10 @@ import type {
 import { createDiscoveryConvergenceOverrides } from "./definition/candidate-overrides.js";
 import { collectTemplateMetaDefinitionCandidates } from "./definition/template-meta-candidates.js";
 import { stripSourcedNodes } from "./assemble/strip.js";
-import { discoverTemplates } from "./templates/index.js";
+import { discoverTemplates } from "./templates/discover.js";
 import type { InlineTemplateInfo, TemplateInfo } from "./templates/types.js";
-import { buildApiSurfaceSnapshot, buildSemanticSnapshot } from "./snapshot/index.js";
-
+import { buildApiSurfaceSnapshot } from "./snapshot/api-surface-snapshot.js";
+import { buildSemanticSnapshot } from "./snapshot/semantic-snapshot.js";
 export type { InlineTemplateInfo, TemplateInfo } from "./templates/types.js";
 
 // ============================================================================

@@ -9,11 +9,8 @@
  */
 
 import ts from "typescript";
-import {
-  RESOURCE_DECORATOR_NAMES,
-  toKebabCase,
-  stripResourceSuffix,
-} from "@aurelia-ls/compiler";
+import { RESOURCE_DECORATOR_NAMES, stripResourceSuffix } from "@aurelia-ls/compiler/project-semantics/conventions/aurelia-defaults.js";
+import { toKebabCase } from "@aurelia-ls/compiler/project-semantics/util/naming.js";
 import type {
   ClassInfo,
   DecoratorInfo,

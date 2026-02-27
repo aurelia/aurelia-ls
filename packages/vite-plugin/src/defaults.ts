@@ -39,15 +39,12 @@ import type {
 import type { ResolvedSSGOptions } from "@aurelia-ls/ssg";
 import type {
   ConventionConfig,
-  SuffixConfig,
   DirectoryConventionConfig,
-  TemplatePairingConfig,
   StylesheetPairingConfig,
-} from "@aurelia-ls/compiler";
-import {
-  DEFAULT_CONVENTION_CONFIG,
-  DEFAULT_SUFFIXES,
-} from "@aurelia-ls/compiler";
+  SuffixConfig,
+  TemplatePairingConfig,
+} from "@aurelia-ls/compiler/project-semantics/conventions/types.js";
+import { DEFAULT_CONVENTION_CONFIG, DEFAULT_SUFFIXES } from "@aurelia-ls/compiler/project-semantics/conventions/aurelia-defaults.js";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, extname, join, resolve as resolvePath } from "node:path";

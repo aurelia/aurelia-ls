@@ -23,7 +23,11 @@
 import type { Plugin, ResolvedConfig } from "vite";
 import { resolve, join, dirname } from "node:path";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { normalizePathForId, debug, extractTemplateMeta, type CompileTrace, type ImportMetaIR } from "@aurelia-ls/compiler";
+import { extractTemplateMeta } from "@aurelia-ls/compiler/analysis/10-lower/meta-extraction.js";
+import { normalizePathForId } from "@aurelia-ls/compiler/model/identity.js";
+import type { ImportMetaIR } from "@aurelia-ls/compiler/model/ir.js";
+import { debug } from "@aurelia-ls/compiler/shared/debug.js";
+import type { CompileTrace } from "@aurelia-ls/compiler/shared/trace.js";
 import {
   transform,
   transformEntryPoint,
@@ -33,7 +37,9 @@ import {
 } from "@aurelia-ls/transform";
 import { compileWithAot, isSSRHandler, type SSRHandler } from "@aurelia-ls/ssr";
 import { generateStaticSite, type SSGResult } from "@aurelia-ls/ssg";
-import { mergeDefines, ssrDefines, type TemplateInfo, type RouteTree } from "@aurelia-ls/compiler";
+import { mergeDefines, ssrDefines } from "@aurelia-ls/compiler/project-semantics/defines.js";
+import type { RouteTree } from "@aurelia-ls/compiler/project-semantics/routes/types.js";
+import type { TemplateInfo } from "@aurelia-ls/compiler/project-semantics/templates/types.js";
 import { createSSRMiddleware } from "./middleware.js";
 import { createProjectSemanticsContext, discoverRoutes } from "./project-semantics.js";
 import { componentCache } from "./loader.js";

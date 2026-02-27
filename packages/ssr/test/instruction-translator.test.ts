@@ -8,19 +8,18 @@
 import { describe, it, expect } from "vitest";
 
 import { compileWithAot } from "@aurelia-ls/ssr";
-import {
-  INSTRUCTION_TYPE,
-  type SerializedInstruction,
-  type SerializedListenerBinding,
-  type SerializedRefBinding,
-  type SerializedSetAttribute,
-  type SerializedHydrateLetElement,
-  type SerializedInterpolation,
-  type SerializedPropertyBinding,
-  type SerializedTextBinding,
-  type SerializedTranslationBinding,
-} from "@aurelia-ls/compiler";
-
+import { INSTRUCTION_TYPE } from "@aurelia-ls/compiler/synthesis/aot/constants.js";
+import type {
+  SerializedHydrateLetElement,
+  SerializedInstruction,
+  SerializedInterpolation,
+  SerializedListenerBinding,
+  SerializedPropertyBinding,
+  SerializedRefBinding,
+  SerializedSetAttribute,
+  SerializedTextBinding,
+  SerializedTranslationBinding,
+} from "@aurelia-ls/compiler/synthesis/aot/types.js";
 /**
  * Helper to find instruction by type in flat instruction list.
  */

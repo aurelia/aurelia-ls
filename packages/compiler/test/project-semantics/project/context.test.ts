@@ -1,14 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
-  getFileType,
   createProjectFile,
-  pathsEqual,
   getBaseName,
-  getExtension,
   getDirectory,
-} from "@aurelia-ls/compiler";
-import type { NormalizedPath } from "@aurelia-ls/compiler";
-
+  getExtension,
+  getFileType,
+  pathsEqual,
+} from "@aurelia-ls/compiler/project-semantics/project/context.js";
+import type { NormalizedPath } from "@aurelia-ls/compiler/model/identity.js";
 /**
  * Unit tests for context.ts utility functions.
  *

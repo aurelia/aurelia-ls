@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { stableStringify } from "@aurelia-ls/compiler";
+import { stableStringify } from "@aurelia-ls/compiler/project-semantics/fingerprint/fingerprint.js";
 import type { CompileRunResult, IntegrationRun } from "./runner.js";
 
 export interface SnapshotPaths {

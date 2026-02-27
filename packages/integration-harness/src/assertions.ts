@@ -1,5 +1,6 @@
-import { INSTRUCTION_TYPE } from "@aurelia-ls/compiler";
-import type { ResourceCollections, SerializedDefinition } from "@aurelia-ls/compiler";
+import { INSTRUCTION_TYPE } from "@aurelia-ls/compiler/synthesis/aot/constants.js";
+import type { ResourceCollections } from "@aurelia-ls/compiler/schema/types.js";
+import type { SerializedDefinition } from "@aurelia-ls/compiler/synthesis/aot/types.js";
 import type { AssertionFailure, RegistrationPlanResourceSet, RegistrationPlanScopeExpectation, ScenarioExpectations } from "./schema.js";
 import type { IntegrationRun } from "./runner.js";
 

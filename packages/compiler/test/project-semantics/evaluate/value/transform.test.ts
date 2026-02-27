@@ -8,14 +8,11 @@ import { describe, it, expect } from 'vitest';
 import ts from 'typescript';
 import {
   transformExpression,
-  transformStatement,
   transformMethod,
   transformModuleExports,
-  getPropertyKeySpan,
-  type AnalyzableValue,
-  type StatementValue,
-} from '../../../../src/project-semantics/evaluate/value/index.js';
-
+  transformStatement,
+} from "../../../../src/project-semantics/evaluate/value/transform.js";
+import { getPropertyKeySpan, type AnalyzableValue, type StatementValue } from "../../../../src/project-semantics/evaluate/value/types.js";
 // =============================================================================
 // Test Helpers
 // =============================================================================

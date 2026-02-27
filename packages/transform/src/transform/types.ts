@@ -1,10 +1,8 @@
-/**
- * Transform Package - Transform Types
- *
- * Core types for the transformation pipeline.
- */
-
-import type { AotCodeResult, NestedTemplateHtmlNode, CompileTrace, NormalizedPath, TextSpan } from "@aurelia-ls/compiler";
+import type { NormalizedPath } from "@aurelia-ls/compiler/model/identity.js";
+import type { TextSpan } from "@aurelia-ls/compiler/model/span.js";
+import type { CompileTrace } from "@aurelia-ls/compiler/shared/trace.js";
+import type { NestedTemplateHtmlNode } from "@aurelia-ls/compiler/synthesis/aot/emit-template.js";
+import type { AotCodeResult } from "@aurelia-ls/compiler/synthesis/aot/types.js";
 import type { ResourceDefinition } from "../model/types.js";
 import type { TypedSourceEdit } from "../ts/types.js";
 

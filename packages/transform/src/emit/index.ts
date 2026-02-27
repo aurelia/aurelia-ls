@@ -1,11 +1,5 @@
-/**
- * Transform Package - Emit Layer
- *
- * Generates JavaScript source code from AOT compilation results.
- * This is pure string generation - no TypeScript AST involved.
- */
-
-import type { AotCodeResult, SerializedDefinition, SerializedExpression, NestedTemplateHtmlNode } from "@aurelia-ls/compiler";
+import type { NestedTemplateHtmlNode } from "@aurelia-ls/compiler/synthesis/aot/emit-template.js";
+import type { AotCodeResult, SerializedDefinition, SerializedExpression } from "@aurelia-ls/compiler/synthesis/aot/types.js";
 import { emitExpressionTable } from "./expression-table.js";
 import { emitDefinition } from "./definition.js";
 import { toIdentifierPrefix } from "./format.js";

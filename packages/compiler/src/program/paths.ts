@@ -1,12 +1,12 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-
-// Model imports (via barrel)
-import { normalizePathForId, toSourceFileId, type NormalizedPath, type SourceFileId } from "../model/index.js";
-
-// Synthesis imports (via barrel)
-import { computeOverlayBaseName } from "../synthesis/index.js";
-
+import {
+  normalizePathForId,
+  toSourceFileId,
+  type NormalizedPath,
+  type SourceFileId,
+} from "../model/identity.js";
+import { computeOverlayBaseName } from "../synthesis/overlay/paths.js";
 // Program layer imports
 import { asDocumentUri, type DocumentUri } from "./primitives.js";
 

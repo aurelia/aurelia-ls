@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { asDocumentUri, type DocumentUri } from "@aurelia-ls/compiler";
+import { asDocumentUri, type DocumentUri } from "@aurelia-ls/compiler/program/primitives.js";
 import type {
   PressureObservationAnchor,
   PressureObservationInputSummary,

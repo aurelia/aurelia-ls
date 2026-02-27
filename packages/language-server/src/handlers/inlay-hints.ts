@@ -16,7 +16,7 @@ import {
   InlayHintKind,
   type InlayHintParams,
 } from "vscode-languageserver/node.js";
-import { canonicalDocumentUri } from "@aurelia-ls/compiler";
+import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
 import type { ServerContext } from "../context.js";
 
 const BINDING_MODE_LABELS: Record<string, string> = {

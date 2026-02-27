@@ -21,11 +21,8 @@ import {
   toLspUri,
   type LookupTextFn,
 } from "@aurelia-ls/language-server/api";
-import {
-  asDocumentUri,
-  type DocumentUri,
-} from "@aurelia-ls/compiler";
-import type { WorkspaceToken } from "@aurelia-ls/semantic-workspace";
+import { asDocumentUri, type DocumentUri } from "@aurelia-ls/compiler/program/primitives.js";
+import type { WorkspaceToken } from "@aurelia-ls/semantic-workspace/types.js";
 import { createWorkspaceHarness } from "../../../semantic-workspace/test/harness/index.js";
 import { asFixtureId } from "../../../semantic-workspace/test/fixtures/index.js";
 

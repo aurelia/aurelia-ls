@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { unwrapSourced } from "@aurelia-ls/compiler";
+import { unwrapSourced } from "@aurelia-ls/compiler/schema/sourced.js";
 import type { IntegrationScenario } from "@aurelia-ls/integration-harness";
 import { runIntegrationScenario } from "@aurelia-ls/integration-harness";
 

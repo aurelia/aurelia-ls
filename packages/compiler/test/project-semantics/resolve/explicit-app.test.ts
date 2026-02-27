@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { discoverProjectSemantics, DiagnosticsRuntime } from "@aurelia-ls/compiler";
-import { materializeResourcesForScope, BUILTIN_SEMANTICS } from "@aurelia-ls/compiler";
+import { DiagnosticsRuntime } from "@aurelia-ls/compiler/diagnostics/runtime.js";
+import { discoverProjectSemantics } from "@aurelia-ls/compiler/project-semantics/resolve.js";
+import { BUILTIN_SEMANTICS } from "@aurelia-ls/compiler/schema/registry.js";
+import { materializeResourcesForScope } from "@aurelia-ls/compiler/schema/resource-graph.js";
 import { createProgramFromApp, getTestAppPath } from "../_helpers/index.js";
 
 const EXPLICIT_APP = getTestAppPath("explicit-app", import.meta.url);

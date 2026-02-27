@@ -1,18 +1,16 @@
 import { describe, expect, it } from "vitest";
-
+import { normalizePathForId } from "@aurelia-ls/compiler/model/identity.js";
+import { stableHash } from "@aurelia-ls/compiler/pipeline/hash.js";
 import {
   createBindableSymbolId,
   createLocalSymbolId,
   createResourceSymbolId,
   isSymbolId,
   isSymbolIdNamespace,
-  normalizePathForId,
   parseSymbolId,
-  stableHash,
   symbolIdNamespace,
-  type SymbolId,
-} from "@aurelia-ls/compiler";
-
+} from "@aurelia-ls/compiler/schema/symbol-id.js";
+import type { SymbolId } from "@aurelia-ls/compiler/schema/types.js";
 describe("symbol id policy", () => {
   it("creates resource ids with sym namespace and stable payload hash", () => {
     const id = createResourceSymbolId({

@@ -1,21 +1,13 @@
-// Hover Card Projection — CursorEntity → Markdown
-//
-// Given a CursorResolutionResult, projects hover cards for display.
-// This module does NO positional resolution. All entity resolution
-// happens in cursor-resolve.ts; hover only renders cards from the entity.
-
-import {
-  debug,
-  isDebugEnabled,
-  type AttrRes,
-  type Bindable,
-  type BindingMode,
-  type CursorResolutionResult,
-  type ElementRes,
-  type TypeRef,
-  type ValueConverterSig,
-} from "@aurelia-ls/compiler";
-
+import type { BindingMode } from "@aurelia-ls/compiler/model/ir.js";
+import type { CursorResolutionResult } from "@aurelia-ls/compiler/schema/cursor-resolve.js";
+import type {
+  AttrRes,
+  Bindable,
+  ElementRes,
+  TypeRef,
+  ValueConverterSig,
+} from "@aurelia-ls/compiler/schema/types.js";
+import { debug, isDebugEnabled } from "@aurelia-ls/compiler/shared/debug.js";
 // ── Hover card builder ─────────────────────────────────────────────────
 //
 // A HoverCard accumulates structured sections that render to markdown

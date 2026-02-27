@@ -1,5 +1,5 @@
 import { test, expect, describe, vi } from "vitest";
-import { canonicalDocumentUri } from "@aurelia-ls/compiler";
+import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
 import {
   handleGetOverlay,
   handleGetMapping,

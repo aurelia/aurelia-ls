@@ -1,16 +1,15 @@
 import { describe, it, expect } from "vitest";
 import {
   DEFAULT_CONVENTIONS,
-  matchDirectoryConventions,
-  matchDirectoryConvention,
   buildConventionList,
+  conventionBuilder,
   describeScope,
   isGlobalScope,
   isRouterScope,
-  conventionBuilder,
-} from "@aurelia-ls/compiler";
-import type { DirectoryConvention, DirectoryScope } from "@aurelia-ls/compiler";
-
+  matchDirectoryConvention,
+  matchDirectoryConventions,
+} from "@aurelia-ls/compiler/project-semantics/project/directory-conventions.js";
+import type { DirectoryConvention, DirectoryScope } from "@aurelia-ls/compiler/project-semantics/project/types.js";
 /**
  * Unit tests for directory convention matching.
  *

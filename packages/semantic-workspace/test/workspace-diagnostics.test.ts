@@ -1,6 +1,6 @@
 import path from "node:path";
-import { canonicalPath } from "@aurelia-ls/compiler";
-import type { DiagnosticSurface } from "@aurelia-ls/compiler";
+import { canonicalPath } from "@aurelia-ls/compiler/project-semantics/util/naming.js";
+import type { DiagnosticSurface } from "@aurelia-ls/compiler/diagnostics/types.js";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { SemanticWorkspaceEngine } from "../out/engine.js";
 import type { WorkspaceDiagnostic, WorkspaceDiagnostics } from "../out/types.js";

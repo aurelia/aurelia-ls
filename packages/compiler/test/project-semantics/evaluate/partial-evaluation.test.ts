@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { NormalizedPath } from "@aurelia-ls/compiler";
+import type { NormalizedPath } from "@aurelia-ls/compiler/model/identity.js";
 import type { AnalyzableValue, LexicalScope } from "../../../out/project-semantics/evaluate/value/types.js";
 import type { ExportBindingMap } from "../../../out/project-semantics/exports/types.js";
 import { evaluateFileFacts } from "../../../out/project-semantics/evaluate/index.js";

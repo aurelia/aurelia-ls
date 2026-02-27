@@ -1,47 +1,24 @@
-/**
- * Completions Engine — IR-grounded, DFA-predicted, scanner-driven.
- *
- * Three proper tools replace ad-hoc text scanning:
- *
- * 1. **IR walker** — walks the compiled template's DOM nodes (ElementNode.tagLoc,
- *    Attr.nameLoc, Attr.valueLoc, openTagEnd) to determine structural cursor
- *    position. Falls back to text scanning only for new content not yet in the IR.
- *
- * 2. **Predictive DFA** — extends the attribute parser's CompiledPattern with a
- *    partial-input mode. When the user types `click.`, the DFA matches this as a
- *    prefix of `PART.PART` and predicts that a binding command should follow.
- *    Entirely config-driven through PatternInterpret.
- *
- * 3. **Expression Scanner** — tokenizes expression text up to the cursor. The
- *    last meaningful token type determines the completion context: Dot → member
- *    access, Bar → VC pipe, Ampersand → BB pipe, Identifier/EOF → scope root.
- */
-
-import {
-  deriveResourceConfidence,
-  unwrapSourced,
-  Scanner,
-  TokenType,
-  createAttributeParserFromRegistry,
-  resolveCursorEntity,
-  type DocumentUri,
-  type ResourceDef,
-  type CustomElementDef,
-  type CustomAttributeDef,
-  type TemplateControllerDef,
-  type SourceSpan,
-  type TemplateCompilation,
-  type TemplateSyntaxRegistry,
-  type ResourceCatalog,
-  type SemanticModelQuery,
-  type ProjectSemantics,
-  type Sourced,
-  type DOMNode,
-  type ElementNode,
-  type PredictiveMatchResult,
-  type CursorResolutionResult,
-  type ExpressionSemanticModel,
-} from "@aurelia-ls/compiler";
+import type { TemplateCompilation } from "@aurelia-ls/compiler/facade.js";
+import type { ExpressionSemanticModel } from "@aurelia-ls/compiler/model/expression-semantic.js";
+import type { DOMNode, ElementNode } from "@aurelia-ls/compiler/model/ir.js";
+import type { SourceSpan } from "@aurelia-ls/compiler/model/span.js";
+import { createAttributeParserFromRegistry, type PredictiveMatchResult } from "@aurelia-ls/compiler/parsing/attribute-parser.js";
+import { Scanner, TokenType } from "@aurelia-ls/compiler/parsing/expression-scanner.js";
+import type { DocumentUri } from "@aurelia-ls/compiler/program/primitives.js";
+import { deriveResourceConfidence } from "@aurelia-ls/compiler/schema/confidence.js";
+import { resolveCursorEntity, type CursorResolutionResult } from "@aurelia-ls/compiler/schema/cursor-resolve.js";
+import type { SemanticModelQuery } from "@aurelia-ls/compiler/schema/model.js";
+import { unwrapSourced } from "@aurelia-ls/compiler/schema/sourced.js";
+import type {
+  CustomAttributeDef,
+  CustomElementDef,
+  ProjectSemantics,
+  ResourceCatalog,
+  ResourceDef,
+  Sourced,
+  TemplateControllerDef,
+  TemplateSyntaxRegistry,
+} from "@aurelia-ls/compiler/schema/types.js";
 import type {
   WorkspaceCompletionItem,
 } from "./types.js";

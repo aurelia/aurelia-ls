@@ -1,32 +1,16 @@
-/* =============================================================================
- * AOT SYNTHESIS TYPES
- * -----------------------------------------------------------------------------
- * Abstract intermediate representation for AOT compilation.
- *
- * The AotPlanModule is target-agnostic: it captures everything needed to
- * generate Aurelia instructions without being coupled to the runtime's
- * serialization format. The emit stage adapts the plan to the concrete
- * instruction format.
- *
- * Key design principles:
- * - Expressions referenced by ExprId, stored in separate table
- * - Node-centric organization (vs instruction rows)
- * - Hydration target indices assigned during planning
- * - Scopes captured from analysis, enriched with runtime metadata
- * ============================================================================= */
-
 import type {
   ExprId,
-  NodeId,
   FrameId,
+  NodeId,
   SourceFileId,
-  SourceSpan,
-  TextSpan,
+} from "../../model/identity.js";
+import type {
+  AnyBindingExpression,
   BindingMode,
   JsonValue,
-  AnyBindingExpression,
   TemplateMetaIR,
-} from "../../model/index.js";
+} from "../../model/ir.js";
+import type { SourceSpan, TextSpan } from "../../model/span.js";
 import type { ControllerConfig } from "../../schema/registry.js";
 import type { RuntimeAnyBindingExpression } from "./runtime-ast.js";
 
@@ -826,15 +810,9 @@ export interface AotMappingEntry {
   /** Node ID (for node entries) */
   nodeId?: NodeId;
 }
-
-/* =============================================================================
- * PLANNING OPTIONS
- * ============================================================================= */
-
-import type { TemplateSyntaxRegistry } from "../../schema/index.js";
-import type { AttributeParser } from "../../parsing/index.js";
-import type { CompileTrace } from "../../shared/index.js";
-
+import type { TemplateSyntaxRegistry } from "../../schema/types.js";
+import type { AttributeParser } from "../../parsing/attribute-parser.js";
+import type { CompileTrace } from "../../shared/trace.js";
 /**
  * Options for AOT plan generation.
  */

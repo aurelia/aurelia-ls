@@ -1,4 +1,4 @@
-import { stableHash } from "@aurelia-ls/compiler";
+import { stableHash } from "@aurelia-ls/compiler/pipeline/hash.js";
 import { hashEnvelopeForReplay } from "./replay-log.js";
 import type {
   ReplayableCommandInvocation,

@@ -5,8 +5,9 @@
  */
 
 import ts from "typescript";
-import type { AotCodeResult } from "@aurelia-ls/compiler";
-import { NOOP_TRACE, debug } from "@aurelia-ls/compiler";
+import type { AotCodeResult } from "@aurelia-ls/compiler/synthesis/aot/types.js";
+import { debug } from "@aurelia-ls/compiler/shared/debug.js";
+import { NOOP_TRACE } from "@aurelia-ls/compiler/shared/trace.js";
 import type { ResourceDefinition } from "../model/types.js";
 import { emitStaticAu } from "../emit/index.js";
 import { findClassByName, detectDeclarationForm } from "../ts/analyze.js";

@@ -2,57 +2,51 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve as resolvePath } from "node:path";
 import { performance } from "node:perf_hooks";
 import * as ts from "typescript";
-
+import { DiagnosticsRuntime } from "@aurelia-ls/compiler/diagnostics/runtime.js";
+import { buildSemanticsArtifacts } from "@aurelia-ls/compiler/project-semantics/assemble/build.js";
+import { createReplayConvergenceOverrides } from "@aurelia-ls/compiler/project-semantics/definition/candidate-overrides.js";
+import type { AnalysisResult } from "@aurelia-ls/compiler/project-semantics/evaluate/types.js";
+import { analyzePackage } from "@aurelia-ls/compiler/project-semantics/npm/index.js";
+import type { PackageAnalysis } from "@aurelia-ls/compiler/project-semantics/npm/types.js";
+import type { FileSystemContext } from "@aurelia-ls/compiler/project-semantics/project/context.js";
+import { createMockFileSystem } from "@aurelia-ls/compiler/project-semantics/project/mock-context.js";
+import { createNodeFileSystem } from "@aurelia-ls/compiler/project-semantics/project/node-context.js";
+import { buildRegistrationPlan, type UsageByScope } from "@aurelia-ls/compiler/project-semantics/register/plan.js";
 import {
-  analyzePackage,
-  buildApiSurfaceSnapshot,
-  buildSemanticSnapshot,
-  buildSemanticsArtifacts,
-  createReplayConvergenceOverrides,
-  createMockFileSystem,
-  createNodeFileSystem,
-  DiagnosticsRuntime,
   discoverProjectSemantics,
-  buildRegistrationPlan,
-  type AnalysisResult,
-  type FileSystemContext,
-  type PackageAnalysis,
   type ProjectSemanticsDiscoveryConfig,
   type ProjectSemanticsDiscoveryDiagnostic,
   type ProjectSemanticsDiscoveryResult,
-  type UsageByScope,
-} from "@aurelia-ls/compiler";
-import {
-  compileAot,
-  compileTemplate,
-  createSemanticModel,
-  buildResourceGraphFromSemantics,
-  buildTemplateSyntaxRegistry,
-  prepareProjectSemantics,
-  unwrapSourced,
-  type ApiSurfaceSnapshot,
-  type AotCodeResult,
-  type CompileAotResult,
-  type FeatureUsageSet,
-  type ResourceCatalog,
-  type ResourceCollections,
-  type ResourceDef,
-  type ResourceGraph,
-  type ResourceScopeId,
-  type MaterializedSemantics,
-  type TemplateCompilation,
-  type TemplateSyntaxRegistry,
-  type BindableDef,
-  type Bindable,
-  type TypeRef,
-  type ValueConverterDef,
-  type BindingBehaviorDef,
-  type CustomElementDef,
-  type CustomAttributeDef,
-  type TemplateControllerDef,
-  type ModuleResolver,
-} from "@aurelia-ls/compiler";
-
+} from "@aurelia-ls/compiler/project-semantics/resolve.js";
+import { buildApiSurfaceSnapshot } from "@aurelia-ls/compiler/project-semantics/snapshot/api-surface-snapshot.js";
+import { buildSemanticSnapshot } from "@aurelia-ls/compiler/project-semantics/snapshot/semantic-snapshot.js";
+import { compileAot, type CompileAotResult } from "@aurelia-ls/compiler/facade-aot.js";
+import { compileTemplate, type TemplateCompilation } from "@aurelia-ls/compiler/facade.js";
+import { createSemanticModel } from "@aurelia-ls/compiler/schema/model.js";
+import { buildTemplateSyntaxRegistry, prepareProjectSemantics } from "@aurelia-ls/compiler/schema/registry.js";
+import { buildResourceGraphFromSemantics } from "@aurelia-ls/compiler/schema/resource-graph.js";
+import { unwrapSourced } from "@aurelia-ls/compiler/schema/sourced.js";
+import type {
+  ApiSurfaceSnapshot,
+  Bindable,
+  BindableDef,
+  BindingBehaviorDef,
+  CustomAttributeDef,
+  CustomElementDef,
+  FeatureUsageSet,
+  MaterializedSemantics,
+  ResourceCatalog,
+  ResourceCollections,
+  ResourceDef,
+  ResourceGraph,
+  ResourceScopeId,
+  TemplateControllerDef,
+  TemplateSyntaxRegistry,
+  TypeRef,
+  ValueConverterDef,
+} from "@aurelia-ls/compiler/schema/types.js";
+import type { ModuleResolver } from "@aurelia-ls/compiler/shared/module-resolver.js";
+import type { AotCodeResult } from "@aurelia-ls/compiler/synthesis/aot/types.js";
 import {
   ensureCompileTarget,
   normalizeScenario,

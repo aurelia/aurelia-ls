@@ -1,17 +1,15 @@
 import { test, expect } from "vitest";
-
 import {
-  collectOverlayUrisFromProvenance,
   InMemoryOverlaySpanIndex,
+  collectOverlayUrisFromProvenance,
+  overlayHitToDocumentSpan,
   projectGeneratedLocationToDocumentSpanWithOffsetFallback,
   projectGeneratedOffsetToDocumentSpan,
   projectGeneratedSpanToDocumentSpan,
   projectGeneratedSpanToDocumentSpanWithOffsetFallback,
-  overlayHitToDocumentSpan,
   projectOverlaySpanToTemplateSpan,
   resolveTemplateUriForGenerated,
-} from "@aurelia-ls/compiler";
-
+} from "@aurelia-ls/compiler/program/overlay-span-index.js";
 const templateUri = "/app/components/example.html";
 const overlayUri = "/app/components/example.__au.ttc.ts";
 

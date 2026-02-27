@@ -29,7 +29,7 @@ export type {
   AnalysisOptions,
   ExtractedConfiguration,
   ConfigurationRegistration,
-  SourceLocation,
+  PackageSourceLocation,
   // Inspection types
   InspectionResult,
   InspectedResource,
@@ -75,24 +75,20 @@ import { matchConvention } from '../recognize/convention.js';
 import { matchDefine } from '../recognize/define.js';
 import { canonicalPath } from '../util/naming.js';
 import type { FileFacts, FileContext, DefineCall } from '../extract/file-facts.js';
-import { evaluateFileFacts } from '../evaluate/index.js';
-
+import { evaluateFileFacts } from "../evaluate/partial-evaluation.js";
 // Import export resolver for cross-file resolution
 import { buildExportBindingMap } from '../exports/export-resolver.js';
-
-// Import value model (Layers 1-3) and pattern matching (Layer 4)
+import { buildValueResolutionContext, fullyResolve } from "../evaluate/value/resolve.js";
+import { buildFileScope } from "../evaluate/value/scope.js";
+import { transformModuleExports } from "../evaluate/value/transform.js";
 import {
-  buildFileScope,
-  transformModuleExports,
-  buildValueResolutionContext,
-  fullyResolve,
-  isRegistryShape,
   getRegisterMethod,
-  type LexicalScope,
+  isRegistryShape,
   type ClassValue,
-} from '../evaluate/value/index.js';
-import { extractRegisterBodyResources, tryResolveAsFactory, type RegisterBodyContext } from './patterns/index.js';
-
+  type LexicalScope,
+} from "../evaluate/value/types.js";
+import { tryResolveAsFactory } from "./patterns/factory.js";
+import { extractRegisterBodyResources, type RegisterBodyContext } from "./patterns/register-body.js";
 // =============================================================================
 // Main API
 // =============================================================================
@@ -127,13 +123,9 @@ import type { AnalyzedResource, ResourceEvidence, ResourcePattern } from './type
 import { explicitEvidence, inferredEvidence } from './evidence.js';
 import { unwrapSourced } from '../assemble/sourced.js';
 import { hashObject } from '../fingerprint/fingerprint.js';
-import {
-  mergeResourceDefinitionCandidates,
-  sortResourceDefinitionCandidates,
-  type DefinitionSourceKind,
-  type ResourceDefinitionCandidate,
-} from "../definition/index.js";
-
+import { sortResourceDefinitionCandidates, type ResourceDefinitionCandidate } from "../definition/candidate-order.js";
+import { mergeResourceDefinitionCandidates } from "../definition/resource-merge.js";
+import type { DefinitionSourceKind } from "../definition/solver.js";
 /**
  * Analyze an npm package to extract Aurelia resource semantics.
  *

@@ -10,8 +10,9 @@ import type {
 } from '../compiler.js';
 import type { FileContext, FileFacts } from "../extract/file-facts.js";
 import type { TemplateFactCollection } from "../extract/template-facts.js";
-import type { ExportBindingMap } from "../exports/index.js";
-import type { AnalysisGap, PartialEvaluationResult } from "../evaluate/index.js";
+import type { ExportBindingMap } from "../exports/types.js";
+import type { PartialEvaluationResult } from "../evaluate/partial-evaluation.js";
+import type { AnalysisGap } from "../evaluate/types.js";
 import type { RegistrationAnalysis } from "../register/types.js";
 import type { InlineTemplateInfo, TemplateInfo } from "../templates/types.js";
 import type { DefinitionConvergenceRecord } from "../assemble/build.js";

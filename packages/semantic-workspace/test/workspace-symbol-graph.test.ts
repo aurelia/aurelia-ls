@@ -1,5 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { spanContainsOffset, symbolIdNamespace, type DOMNode, type SourceSpan } from "@aurelia-ls/compiler";
+import type { DOMNode } from "@aurelia-ls/compiler/model/ir.js";
+import { spanContainsOffset, type SourceSpan } from "@aurelia-ls/compiler/model/span.js";
+import { symbolIdNamespace } from "@aurelia-ls/compiler/schema/symbol-id.js";
 import { createWorkspaceHarness } from "./harness/index.js";
 import { asFixtureId } from "./fixtures/index.js";
 

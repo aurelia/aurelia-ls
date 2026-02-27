@@ -215,7 +215,7 @@ export class InMemoryReferentialIndex implements ReferentialIndex {
 // ============================================================================
 
 import type { TemplateCompilation } from "../facade.js";
-import type { LinkedRow, LinkedInstruction } from "../analysis/index.js";
+import type { LinkedInstruction, LinkedRow } from "../analysis/20-link/types.js";
 import type { FrameId } from "../model/symbols.js";
 
 /**

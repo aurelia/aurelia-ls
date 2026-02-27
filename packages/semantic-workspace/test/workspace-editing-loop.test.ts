@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { createWorkspaceHarness } from "./harness/index.js";
 import { asFixtureId } from "./fixtures/index.js";
-import type { DiagnosticSurface } from "@aurelia-ls/compiler";
+import type { DiagnosticSurface } from "@aurelia-ls/compiler/diagnostics/types.js";
 import type { SemanticWorkspaceEngine } from "../out/engine.js";
 import type { WorkspaceDiagnostic, WorkspaceDiagnostics } from "../out/types.js";
 

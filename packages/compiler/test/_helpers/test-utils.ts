@@ -1,20 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
-import type {
-  ModuleResolver,
-  MaterializedSemantics,
-  ProjectSemantics,
-  ResourceCatalog,
-  SemanticModelQuery,
-} from "@aurelia-ls/compiler";
-import {
-  createSemanticModel,
-  prepareProjectSemantics,
-  buildTemplateSyntaxRegistry,
-  buildResourceCatalog,
-  BUILTIN_SEMANTICS,
-} from "@aurelia-ls/compiler";
-
+import type { SemanticModelQuery } from "@aurelia-ls/compiler/schema/model.js";
+import type { MaterializedSemantics, ProjectSemantics, ResourceCatalog } from "@aurelia-ls/compiler/schema/types.js";
+import type { ModuleResolver } from "@aurelia-ls/compiler/shared/module-resolver.js";
+import { buildResourceCatalog } from "@aurelia-ls/compiler/schema/catalog.js";
+import { createSemanticModel } from "@aurelia-ls/compiler/schema/model.js";
+import { BUILTIN_SEMANTICS, buildTemplateSyntaxRegistry, prepareProjectSemantics } from "@aurelia-ls/compiler/schema/registry.js";
 export const noopModuleResolver: ModuleResolver = () => null;
 
 /**

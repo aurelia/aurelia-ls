@@ -1,16 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import {
-  createMockFileSystem,
-  createProjectScanner,
-  DEFAULT_CONVENTIONS,
-} from "@aurelia-ls/compiler";
-import type {
-  MockFileSystemContext,
-  ProjectScanner,
-  ProjectScannerOptions,
-  ProjectFile,
-} from "@aurelia-ls/compiler";
-
+import { DEFAULT_CONVENTIONS } from "@aurelia-ls/compiler/project-semantics/project/directory-conventions.js";
+import { createMockFileSystem } from "@aurelia-ls/compiler/project-semantics/project/mock-context.js";
+import { createProjectScanner } from "@aurelia-ls/compiler/project-semantics/project/scanner.js";
+import type { MockFileSystemContext } from "@aurelia-ls/compiler/project-semantics/project/mock-context.js";
+import type { ProjectScanner } from "@aurelia-ls/compiler/project-semantics/project/scanner.js";
+import type { ProjectFile, ProjectScannerOptions } from "@aurelia-ls/compiler/project-semantics/project/types.js";
 // ============================================================================
 // Test Fixtures
 // ============================================================================

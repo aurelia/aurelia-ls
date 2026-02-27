@@ -1,10 +1,6 @@
 import { describe, expect, test } from "vitest";
-
-import type {
-  ControllerBindableIR,
-  ExprId,
-  ExprRef,
-} from "@aurelia-ls/compiler";
+import type { ExprId } from "@aurelia-ls/compiler/model/identity.js";
+import type { ControllerBindableIR, ExprRef } from "@aurelia-ls/compiler/model/ir.js";
 import type { ControllerConfig } from "../../out/schema/registry.js";
 import {
   isPromiseParentController,

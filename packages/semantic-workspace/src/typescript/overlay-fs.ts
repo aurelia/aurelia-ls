@@ -1,5 +1,5 @@
 import * as fs from "node:fs";
-import type { NormalizedPath } from "@aurelia-ls/compiler";
+import type { NormalizedPath } from "@aurelia-ls/compiler/model/identity.js";
 import type { PathUtils } from "./paths.js";
 
 export interface Snapshot {
