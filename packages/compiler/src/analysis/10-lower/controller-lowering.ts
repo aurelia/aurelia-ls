@@ -20,7 +20,7 @@ import type {
 } from "../../model/ir.js";
 import { resolveControllerAttr } from "./element-lowering.js";
 import type { ExprTable, P5Element, P5Loc, P5Node, P5Template } from "./lower-shared.js";
-import { attrLoc, attrNameLoc, attrValueLoc, parseRepeatTailProps, toBindingSource, toExprRef, toMode, toSpan, tryToInterpIR } from "./lower-shared.js";
+import { attrLoc, attrNameLoc, attrValueLoc, parseRepeatTailProps, sourceAttrValue, toBindingSource, toExprRef, toMode, toSpan, tryToInterpIR, type SourceAlignedText } from "./lower-shared.js";
 import type { RowCollector } from "./template-builders.js";
 import {
   makeWrapperTemplate,
@@ -55,7 +55,7 @@ function hasPromiseBranches(config: ControllerConfig): boolean {
 // -----------------------------------------------------------------------------
 
 function buildIteratorProps(
-  raw: string,
+  raw: SourceAlignedText,
   valueLoc: P5Loc,
   loc: P5Loc,
   table: ExprTable,
@@ -76,7 +76,7 @@ function buildIteratorProps(
 }
 
 function buildLiteralOrBindingProps(
-  raw: string,
+  raw: SourceAlignedText,
   valueLoc: P5Loc,
   loc: P5Loc,
   table: ExprTable,
@@ -90,7 +90,8 @@ function buildLiteralOrBindingProps(
     to: "value",
     from: isBinding
       ? toExprRef(raw, valueLoc, table, "IsProperty")
-      : toExprRef(JSON.stringify(raw), valueLoc, table, "IsProperty"),
+      // Synthetic: JSON.stringify wraps the literal — not a source slice.
+      : toExprRef(JSON.stringify(raw) as SourceAlignedText, valueLoc, table, "IsProperty"),
     mode: "default",
     loc: toSpan(loc, table.source),
   };
@@ -111,7 +112,7 @@ function buildLiteralOrBindingProps(
  */
 function buildValueProps(
   config: ControllerConfig,
-  raw: string,
+  raw: SourceAlignedText,
   valueLoc: P5Loc,
   loc: P5Loc,
   table: ExprTable,
@@ -122,7 +123,9 @@ function buildValueProps(
 ): ControllerBindableIR {
   const locSpan = toSpan(loc, table.source);
   const controllerName = config.name;
-  const exprText = raw.length === 0 ? controllerName : raw;
+  // Synthetic fallback: when value is empty, use controller name as expression.
+  // The cast is explicit — this text does not come from the source file.
+  const exprText = (raw.length === 0 ? controllerName : raw) as SourceAlignedText;
   const bareValue = planControllerBareValue(config);
 
   // Case 1: Has binding command (e.g., if.bind="expr")
@@ -150,11 +153,12 @@ function buildValueProps(
 
   // Some controllers (for example teleported controllers) treat bare values as
   // literal strings so runtime selectors remain valid.
+  // Synthetic: JSON.stringify wraps the value — not a source slice.
   if (raw.length > 0 && bareValue.mode === "literal-string") {
     return {
       type: "propertyBinding",
       to: propName,
-      from: toBindingSource(JSON.stringify(raw), valueLoc, table, "IsProperty"),
+      from: toBindingSource(JSON.stringify(raw) as SourceAlignedText, valueLoc, table, "IsProperty"),
       mode: "default",
       loc: locSpan,
     };
@@ -221,7 +225,7 @@ export function collectControllers(
     const loc = attrLoc(el, a.name);
     const tcNameLoc = attrNameLoc(el, a.name, table.sourceText);
     const valueLoc = attrValueLoc(el, a.name, table.sourceText);
-    const raw = a.value ?? "";
+    const raw = sourceAttrValue(a, valueLoc, table.sourceText);
     const proto = buildControllerPrototype(a, s, table, loc, valueLoc, config, catalog.bindingCommands, services);
 
     const branch = planControllerBranchInfo(config, raw, proto.props).branch;
@@ -266,7 +270,7 @@ function buildControllerPrototype(
   bindingCommands: Record<string, BindingCommandConfig>,
   services: LowerServices,
 ): ControllerPrototype {
-  const raw = a.value ?? "";
+  const raw = sourceAttrValue(a, valueLoc, table.sourceText);
   const name = config.name;
   const trigger = config.trigger;
 
@@ -320,7 +324,7 @@ function buildRightmostController(
   const { a, s, config } = rightmost;
   const loc = attrLoc(el, a.name);
   const valueLoc = attrValueLoc(el, a.name, table.sourceText);
-  const raw = a.value ?? "";
+  const raw = sourceAttrValue(a, valueLoc, table.sourceText);
   const locSpan = toSpan(loc, table.source);
   const name = config.name;
 
@@ -360,7 +364,7 @@ function buildRightmostController(
 
 function buildPropsForConfig(
   config: ControllerConfig,
-  raw: string,
+  raw: SourceAlignedText,
   valueLoc: P5Loc,
   loc: P5Loc,
   table: ExprTable,
@@ -433,7 +437,7 @@ function buildPromiseController(
 // -----------------------------------------------------------------------------
 
 function toRepeatTailIR(
-  raw: string,
+  raw: SourceAlignedText,
   loc: P5Loc,
   table: ExprTable,
   bindingCommands: Record<string, BindingCommandConfig>

@@ -181,6 +181,27 @@
     <span class="${activeSeverity === 'error' ? 'danger' : activeSeverity === 'warn' ? 'warning' : 'normal'}">severity indicator</span>
   </matrix-panel>
 
+    <!-- ═══════ Style/CSS interpolation (hairy patterns) ═══════ -->
+
+    <!-- Nested function calls in style interpolation -->
+    <div
+      style="width: ${Math.min(Math.max(( cooldowns )))}%;"></div>
+
+    <!-- css alias with interpolation (Aurelia StyleAttributeAccessor) -->
+    <div css="background-color: ${activeSeverity === 'error' ? 'red' : 'green'}; opacity: ${total / 100}"></div>
+
+    <!-- Multi-expression style interpolation -->
+    <div style="width: ${total}px; height: ${total * 2}px; color: ${activeSeverity}"></div>
+
+    <!-- css.bind on native element -->
+    <div css.bind="'color: red; display: block'"></div>
+
+    <!-- style.bind on native element -->
+    <div style.bind="'font-size: 14px'"></div>
+
+    <!-- Style command (.style) with expression -->
+    <div background-color.style="activeSeverity === 'error' ? 'red' : 'green'"></div>
+
   <!-- ═══════ Diagnostic triggers ═══════ -->
 
   <!-- Unknown CE with Aurelia intent → aurelia/unknown-element fires -->

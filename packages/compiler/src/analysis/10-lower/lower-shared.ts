@@ -17,9 +17,66 @@ import { reportDiagnostic } from "../../diagnostics/report.js";
 import type { ExpressionParseContext, ExpressionType, IExpressionParser } from "../../parsing/expression-parser.js";
 import { extractInterpolationSegments } from "../../parsing/expression-parser.js";
 import { deterministicStringId } from "../../model/identity.js";
+import type { Branded } from "../../model/identity.js";
 import type { SourceFile } from "../../model/source.js";
 import { spanFromOffsets } from "../../model/source.js";
 export { DomIdAllocator } from "../../model/identity.js";
+
+/**
+ * Text whose byte offsets align with parse5 `sourceCodeLocation` offsets.
+ *
+ * HTML spec preprocessing normalizes `\r\n` → `\n` and resolves character
+ * references before tokenization.  Parse5 node values (`a.value`,
+ * `node.value`) contain post-preprocessing text, but `sourceCodeLocation`
+ * reports pre-preprocessing byte offsets.  These are different coordinate
+ * systems.
+ *
+ * Span-producing functions (`toInterpIR`, `tryToInterpIR`, `toExprRef`,
+ * `toBindingSource`) compute relative offsets into the text they receive,
+ * then rebase those offsets against a `sourceCodeLocation` base.  If the
+ * text comes from the wrong coordinate system, every preprocessing
+ * normalization before the span's position introduces cumulative drift.
+ *
+ * This brand makes the coordinate-system decision visible at compile time:
+ * only text produced by `sourceSlice()` (which slices from the canonical
+ * source string using `sourceCodeLocation` offsets) carries this brand.
+ * Parse5 node values (`a.value`) are plain `string` and will not type-check
+ * where `SourceAlignedText` is required.
+ *
+ * See: L1 template-analysis.md §Source Coordinate Fidelity.
+ */
+export type SourceAlignedText = Branded<string, "SourceAlignedText">;
+
+/**
+ * Slice the canonical source text using parse5 source-code-location offsets.
+ * Returns `SourceAlignedText` — the only safe input for span-producing functions.
+ *
+ * This is the single cast point.  All coordinate-system trust flows from here.
+ */
+export function sourceSlice(loc: P5Loc | null, sourceText: string): SourceAlignedText {
+  if (!loc || loc.startOffset == null || loc.endOffset == null) return "" as SourceAlignedText;
+  return sourceText.slice(loc.startOffset, loc.endOffset) as SourceAlignedText;
+}
+
+/**
+ * Get source-aligned text for an attribute value.
+ *
+ * For attributes WITH a value (`foo="bar"`), returns the value text sliced
+ * from the canonical source.  For boolean attributes WITHOUT a value
+ * (`<div portal>`), returns empty `SourceAlignedText` — the attribute has
+ * no value text in the source, so there is nothing to slice.
+ *
+ * Use `attrValueLoc` for the loc and this for the text.  Together they
+ * stay in the same coordinate system.
+ */
+export function sourceAttrValue(attr: Token.Attribute, valueLoc: P5Loc | null, sourceText: string): SourceAlignedText {
+  // Boolean attributes (no '=' in source) have attr.value === "" from parse5.
+  // attrValueLoc returns the full attribute loc as fallback, which would give
+  // the attribute NAME text.  Guard against that: if parse5 says no value,
+  // return empty.
+  if (attr.value === undefined || attr.value === "") return "" as SourceAlignedText;
+  return sourceSlice(valueLoc, sourceText);
+}
 
 export type LowerDiagnosticEmitter = DiagnosticEmitter<typeof diagnosticsCatalog, IrDiagCode>;
 
@@ -197,7 +254,7 @@ export function attrValueLoc(el: P5Element, attrName: string, sourceText: string
 }
 
 export function toBindingSource(
-  val: string,
+  val: SourceAlignedText,
   loc: P5Loc,
   table: ExprTable,
   exprKind: Exclude<ExpressionType, "Interpolation" | "IsIterator">
@@ -213,7 +270,7 @@ export function toBindingSource(
  * where null means literal value, non-null means interpolation.
  */
 export function tryToInterpIR(
-  text: string,
+  text: SourceAlignedText,
   loc: P5Loc | null,
   table: ExprTable
 ): InterpIR | null {
@@ -248,7 +305,7 @@ export function tryToInterpIR(
  * Use `tryToInterpIR` when you need to distinguish literals from interpolations.
  */
 export function toInterpIR(
-  text: string,
+  text: SourceAlignedText,
   loc: P5Loc | null,
   table: ExprTable
 ): InterpIR {
@@ -256,7 +313,7 @@ export function toInterpIR(
 }
 
 export function toExprRef(
-  code: string,
+  code: SourceAlignedText,
   loc: P5Loc | null,
   table: ExprTable,
   parseKind: ExpressionType
@@ -278,7 +335,7 @@ export function toExprRef(
 }
 
 export function parseRepeatTailProps(
-  raw: string,
+  raw: SourceAlignedText,
   loc: P5Loc,
   table: ExprTable
 ): { to: string; from: ExprRef; value: string }[] | null {
@@ -296,7 +353,7 @@ export function parseRepeatTailProps(
     if (!m) continue;
     const to = m[1]!.trim();
     const val = m[2]!.trim();
-    const from = toExprRef(val, loc, table, "IsProperty");
+    const from = toExprRef(val as SourceAlignedText, loc, table, "IsProperty");
     results.push({ to, from, value: val });
   }
 

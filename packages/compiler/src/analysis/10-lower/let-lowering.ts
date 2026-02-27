@@ -2,7 +2,7 @@ import type { AttributeParser } from "../../parsing/attribute-parser.js";
 import type { ResourceCatalog } from "../../schema/registry.js";
 import type { LetBindingIR, HydrateLetElementIR } from "../../model/ir.js";
 import type { P5Element } from "./lower-shared.js";
-import { attrLoc, attrValueLoc, toBindingSource, toInterpIR, toSpan } from "./lower-shared.js";
+import { attrLoc, attrValueLoc, sourceAttrValue, toBindingSource, toInterpIR, toSpan } from "./lower-shared.js";
 import type { LowerContext } from "./lower-context.js";
 import type { ExprTable } from "./lower-shared.js";
 
@@ -46,7 +46,7 @@ function compileLet(
       out.push({
         type: "letBinding",
         to: s.target,
-        from: toBindingSource(a.value ?? "", valueLoc, table, "IsProperty"),
+        from: toBindingSource(sourceAttrValue(a, valueLoc, table.sourceText), valueLoc, table, "IsProperty"),
         loc: toSpan(loc, table.source),
       });
       continue;
@@ -55,10 +55,10 @@ function compileLet(
     // Static value (no command) - only interpolations are processed
     // Note: Plain static values like foo="bar" require PrimitiveLiteralExpression handling (not yet implemented)
     if (s.command === null) {
-      const raw = a.value ?? "";
+      const loc = attrLoc(el, a.name);
+      const valueLoc = attrValueLoc(el, a.name, table.sourceText);
+      const raw = sourceAttrValue(a, valueLoc, table.sourceText);
       if (raw.includes("${")) {
-        const loc = attrLoc(el, a.name);
-        const valueLoc = attrValueLoc(el, a.name, table.sourceText);
         out.push({
           type: "letBinding",
           to: s.target,

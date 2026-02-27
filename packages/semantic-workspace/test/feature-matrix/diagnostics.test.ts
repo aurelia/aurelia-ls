@@ -476,6 +476,77 @@ describe("diagnostics: extended false positive prevention", () => {
 });
 
 // ============================================================================
+// 9c. Style/CSS interpolation — no false positives on hairy patterns
+// ============================================================================
+
+describe("diagnostics: style/css interpolation FP prevention", () => {
+  it("nested Math calls in style interpolation produce no diagnostics", async () => {
+    const interpOffset = text.indexOf('Math.min(Math.max(( cooldowns )))');
+    expect(interpOffset, "fixture should contain nested Math calls").toBeGreaterThan(-1);
+    // Check the entire style attribute range for any diagnostics
+    const attrStart = text.lastIndexOf('style="width:', interpOffset);
+    const attrEnd = text.indexOf('"></div>', interpOffset) + 1;
+    const falseDiags = lspDiagnostics.filter((d) => {
+      if (!d.span) return false;
+      return d.span.start >= attrStart && d.span.start < attrEnd;
+    });
+    expect(falseDiags, `No diagnostics expected in nested-call style interpolation, got: ${JSON.stringify(falseDiags.map(d => ({ code: d.code, span: d.span, text: text.slice(d.span!.start, d.span!.end) })))}`).toHaveLength(0);
+  });
+
+  it("css alias interpolation produces no diagnostics", async () => {
+    const cssOffset = text.indexOf("css=\"background-color:");
+    expect(cssOffset, "fixture should contain css interpolation").toBeGreaterThan(-1);
+    const attrEnd = text.indexOf('"></div>', cssOffset) + 1;
+    const falseDiags = lspDiagnostics.filter((d) => {
+      if (!d.span) return false;
+      return d.span.start >= cssOffset && d.span.start < attrEnd;
+    });
+    expect(falseDiags, "css interpolation should produce no diagnostics").toHaveLength(0);
+  });
+
+  it("multi-expression style interpolation produces no diagnostics", async () => {
+    const multiOffset = text.indexOf('style="width: ${total}px');
+    expect(multiOffset, "fixture should contain multi-expression style").toBeGreaterThan(-1);
+    const attrEnd = text.indexOf('"></div>', multiOffset) + 1;
+    const falseDiags = lspDiagnostics.filter((d) => {
+      if (!d.span) return false;
+      return d.span.start >= multiOffset && d.span.start < attrEnd;
+    });
+    expect(falseDiags, "multi-expression style should produce no diagnostics").toHaveLength(0);
+  });
+
+  it("css.bind produces no diagnostics", async () => {
+    const cssBind = text.indexOf("css.bind=");
+    expect(cssBind, "fixture should contain css.bind").toBeGreaterThan(-1);
+    const falseDiags = lspDiagnostics.filter((d) => {
+      if (!d.span) return false;
+      return d.span.start >= cssBind && d.span.start < cssBind + 40;
+    });
+    expect(falseDiags, "css.bind should produce no diagnostics").toHaveLength(0);
+  });
+
+  it("style.bind produces no diagnostics", async () => {
+    const styleBind = text.indexOf("style.bind=");
+    expect(styleBind, "fixture should contain style.bind").toBeGreaterThan(-1);
+    const falseDiags = lspDiagnostics.filter((d) => {
+      if (!d.span) return false;
+      return d.span.start >= styleBind && d.span.start < styleBind + 40;
+    });
+    expect(falseDiags, "style.bind should produce no diagnostics").toHaveLength(0);
+  });
+
+  it("style command (.style) produces no diagnostics", async () => {
+    const styleCmd = text.indexOf("background-color.style=");
+    expect(styleCmd, "fixture should contain .style command").toBeGreaterThan(-1);
+    const falseDiags = lspDiagnostics.filter((d) => {
+      if (!d.span) return false;
+      return d.span.start >= styleCmd && d.span.start < styleCmd + 70;
+    });
+    expect(falseDiags, ".style command should produce no diagnostics").toHaveLength(0);
+  });
+});
+
+// ============================================================================
 // 9b. Aurelia-intent precondition — confidence demotion for web components
 //     Dashed elements with no Aurelia binding syntax get low confidence,
 //     which the demotion table suppresses. Elements with Aurelia intent fire.

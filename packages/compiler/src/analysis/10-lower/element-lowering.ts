@@ -24,11 +24,13 @@ import {
   attrValueLoc,
   camelCase,
   findAttr,
+  sourceAttrValue,
   toBindingSource,
   toExprRef,
   toInterpIR,
   toMode,
   toSpan,
+  type SourceAlignedText,
 } from "./lower-shared.js";
 import { resolveAttrDef, resolveElementDef } from "./resource-utils.js";
 import type { LowerContext } from "./lower-context.js";
@@ -140,7 +142,7 @@ function parseMultiBindings(
         }
       }
 
-      const valuePart = raw.slice(valueStart, i).trim();
+      const valuePart = raw.slice(valueStart, i).trim() as SourceAlignedText; // substring of source-aligned text
 
       // Parse the property name to extract any binding command
       const parsed = attrParser.parse(propPart, valuePart);
@@ -229,7 +231,7 @@ export function lowerElementAttributes(
     sink: ElementBindableIR[],
     target: string,
     attrName: string,
-    raw: string,
+    raw: SourceAlignedText,
     loc: P5Loc,
     attrNameSpan: P5Loc | null,
     valueLoc: P5Loc,
@@ -275,7 +277,7 @@ export function lowerElementAttributes(
     const nameLoc = attrNameLoc(el, a.name, table.sourceText);
     const valueLoc = attrValueLoc(el, a.name, table.sourceText);
     const s = attrParser.parse(a.name, a.value ?? "");
-    const raw = a.value ?? "";
+    const raw = sourceAttrValue(a, valueLoc, table.sourceText);
 
     if (a.name === "as-element" || a.name === "containerless") continue;
     if (isControllerAttr(s, catalog)) continue;

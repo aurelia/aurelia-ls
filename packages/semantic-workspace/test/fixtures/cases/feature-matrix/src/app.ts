@@ -60,6 +60,9 @@ export class App {
   // Ref binding target (ref="searchInput" assigns the element to this property)
   searchInput!: HTMLInputElement;
 
+  // Numeric value for style interpolation with nested Math calls
+  cooldowns = 50;
+
   // Nullable for optional chaining tests
   selectedItem: MatrixItem | null = null;
 
