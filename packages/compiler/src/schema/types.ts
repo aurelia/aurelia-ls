@@ -1,8 +1,9 @@
-import type ts from "typescript";
 import type { BindingMode } from "../model/ir.js";
 export type { BindingMode } from "../model/ir.js";
 import type { NormalizedPath, StringId } from "../model/identity.js";
 import type { ConvergenceEntry } from "./model.js";
+import type { SourceLocation, Configured, Sourced } from "../value/sourced.js";
+export type { SourceLocation, Configured, Sourced } from "../value/sourced.js";
 
 // ============================================================================
 // L2 Gap Primitives — Stub<T> and Resolved<T>
@@ -201,24 +202,6 @@ export function isDegradation<T>(response: FeatureResponse<T>): response is Degr
 export function isNotApplicable<T>(response: FeatureResponse<T>): response is NotApplicable {
   return response !== null && typeof response === 'object' && '__notApplicable' in response;
 }
-
-export interface SourceLocation {
-  readonly file: NormalizedPath;
-  readonly pos: number;
-  readonly end: number;
-}
-
-// Extensible via config, but always has a known value
-export type Configured<T> =
-  | { origin: 'builtin'; value: T }
-  | { origin: 'config'; value: T; location: SourceLocation };
-
-// Full provenance - source analysis can result in unknown
-export type Sourced<T> =
-  | { origin: 'builtin'; value: T }
-  | { origin: 'config'; value: T; location: SourceLocation }
-  | { origin: 'source'; state: 'known'; value: T; node?: ts.Node; location?: SourceLocation }
-  | { origin: 'source'; state: 'unknown'; value?: undefined; node?: ts.Node; location?: SourceLocation };
 
 
 export type TypeRef =
