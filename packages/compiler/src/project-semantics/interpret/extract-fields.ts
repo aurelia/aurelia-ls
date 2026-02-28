@@ -91,52 +91,67 @@ function extractCustomElementFields(
 ): void {
   const config = recognized.config;
 
+  // Scalar fields: first-defined-wins per Definition.create() priority.
+  // Priority: 1. sub-decorators (annotations), 2. definition object, 3. static properties
+  const emitted = new Set<string>();
+
+  // Priority 1: sub-decorators (highest for scalars)
+  for (const dec of cls.decorators) {
+    switch (dec.name) {
+      case 'containerless':
+        emitScalar(registrar, recognized, 'containerless', true, evalNode, cls, emitted);
+        break;
+      case 'useShadowDOM':
+        emitScalar(registrar, recognized, 'shadowOptions', { mode: 'open' as const }, evalNode, cls, emitted);
+        break;
+      case 'capture':
+        emitScalar(registrar, recognized, 'capture', true, evalNode, cls, emitted);
+        break;
+      case 'processContent':
+        emitScalar(registrar, recognized, 'processContent', true, evalNode, cls, emitted);
+        break;
+    }
+  }
+
+  // Priority 2: definition object (decorator arg / $au / define() arg)
   if (config?.kind === 'object') {
-    emitIfPresent(registrar, recognized, 'containerless', extractBoolean(getProperty(config, 'containerless')), evalNode, cls);
-    emitIfPresent(registrar, recognized, 'capture', extractBoolean(getProperty(config, 'capture')), evalNode, cls);
-    emitIfPresent(registrar, recognized, 'processContent', extractBoolean(getProperty(config, 'processContent')), evalNode, cls);
-
-    const aliases = extractStringArray(getProperty(config, 'aliases'));
-    if (aliases.length > 0) {
-      emitObservation(registrar, recognized, 'aliases', aliases, evalNode, cls);
-    }
-
-    const deps = extractStringArray(getProperty(config, 'dependencies'));
-    if (deps.length > 0) {
-      emitObservation(registrar, recognized, 'dependencies', deps, evalNode, cls);
-    }
+    emitScalarIfPresent(registrar, recognized, 'containerless', extractBoolean(getProperty(config, 'containerless')), evalNode, cls, emitted);
+    emitScalarIfPresent(registrar, recognized, 'capture', extractBoolean(getProperty(config, 'capture')), evalNode, cls, emitted);
+    emitScalarIfPresent(registrar, recognized, 'processContent', extractBoolean(getProperty(config, 'processContent')), evalNode, cls, emitted);
 
     const shadowOpts = getProperty(config, 'shadowOptions');
     if (shadowOpts) {
-      emitObservation(registrar, recognized, 'shadowOptions', extractShadowOptions(shadowOpts), evalNode, cls);
+      emitScalar(registrar, recognized, 'shadowOptions', extractShadowOptions(shadowOpts), evalNode, cls, emitted);
     }
 
     const template = extractString(getProperty(config, 'template'));
     if (template !== undefined) {
-      emitObservation(registrar, recognized, 'inlineTemplate', template, evalNode, cls);
+      emitScalar(registrar, recognized, 'inlineTemplate', template, evalNode, cls, emitted);
     }
   }
 
-  // Check sub-decorators on the class
-  for (const dec of cls.decorators) {
-    switch (dec.name) {
-      case 'containerless':
-        emitObservation(registrar, recognized, 'containerless', true, evalNode, cls);
-        break;
-      case 'useShadowDOM':
-        emitObservation(registrar, recognized, 'shadowOptions', { mode: 'open' as const }, evalNode, cls);
-        break;
-      case 'capture':
-        emitObservation(registrar, recognized, 'capture', true, evalNode, cls);
-        break;
-      case 'processContent':
-        emitObservation(registrar, recognized, 'processContent', true, evalNode, cls);
-        break;
-    }
-  }
+  // Priority 3: static $au fields (if not already from decorator config)
+  extractStaticAuScalarFields(recognized, cls, registrar, evalNode, emitted);
 
-  // Static members
-  extractStaticAuFields(recognized, cls, registrar, evalNode);
+  // Array fields: merged from all sources (not first-defined-wins)
+  const aliases: string[] = [];
+  const deps: string[] = [];
+  if (config?.kind === 'object') {
+    aliases.push(...extractStringArray(getProperty(config, 'aliases')));
+    deps.push(...extractStringArray(getProperty(config, 'dependencies')));
+  }
+  // Merge from static $au if present
+  const au = cls.staticMembers.get('$au');
+  if (au?.kind === 'object') {
+    aliases.push(...extractStringArray(getProperty(au, 'aliases')));
+    deps.push(...extractStringArray(getProperty(au, 'dependencies')));
+  }
+  if (aliases.length > 0) {
+    emitObservation(registrar, recognized, 'aliases', aliases, evalNode, cls);
+  }
+  if (deps.length > 0) {
+    emitObservation(registrar, recognized, 'dependencies', deps, evalNode, cls);
+  }
 }
 
 function extractCustomAttributeFields(
@@ -146,17 +161,28 @@ function extractCustomAttributeFields(
   evalNode: ProjectDepNodeId,
 ): void {
   const config = recognized.config;
+  const emitted = new Set<string>();
 
+  // Priority 2: definition object
   if (config?.kind === 'object') {
-    emitIfPresent(registrar, recognized, 'noMultiBindings', extractBoolean(getProperty(config, 'noMultiBindings')), evalNode, cls);
-
-    const aliases = extractStringArray(getProperty(config, 'aliases'));
-    if (aliases.length > 0) {
-      emitObservation(registrar, recognized, 'aliases', aliases, evalNode, cls);
-    }
+    emitScalarIfPresent(registrar, recognized, 'noMultiBindings', extractBoolean(getProperty(config, 'noMultiBindings')), evalNode, cls, emitted);
   }
 
-  extractStaticAuFields(recognized, cls, registrar, evalNode);
+  // Priority 3: static $au
+  extractStaticAuScalarFields(recognized, cls, registrar, evalNode, emitted);
+
+  // Array fields: merged
+  const aliases: string[] = [];
+  if (config?.kind === 'object') {
+    aliases.push(...extractStringArray(getProperty(config, 'aliases')));
+  }
+  const au = cls.staticMembers.get('$au');
+  if (au?.kind === 'object') {
+    aliases.push(...extractStringArray(getProperty(au, 'aliases')));
+  }
+  if (aliases.length > 0) {
+    emitObservation(registrar, recognized, 'aliases', aliases, evalNode, cls);
+  }
 }
 
 function extractValueConverterFields(
@@ -290,34 +316,48 @@ function extractBindableObservations(
 }
 
 // =============================================================================
-// Static $au Field Extraction
+// Static $au Scalar Field Extraction (Priority 3)
 // =============================================================================
 
-function extractStaticAuFields(
+/**
+ * Extract scalar fields from static $au at priority 3 (lowest for scalars).
+ * Only emits fields not already set by sub-decorators or definition object.
+ */
+function extractStaticAuScalarFields(
   recognized: RecognizedResource,
   cls: ClassValue,
   registrar: ObservationRegistrar,
   evalNode: ProjectDepNodeId,
+  emitted: Set<string>,
 ): void {
   const au = cls.staticMembers.get('$au');
   if (!au || au.kind !== 'object') return;
 
-  // $au can provide all the same fields as the decorator config
-  // Last-writer-wins: if decorator already provided the field,
-  // $au should NOT override (decorator has higher intra-source priority
-  // for scalar fields per Definition.create() — first-defined-wins)
-  // BUT: we emit both observations. Convergence handles the merge.
-  // Intra-source priority is within one Definition.create() call,
-  // not between separate observation registrations.
+  // $au has the same shape as a decorator definition object
+  emitScalarIfPresent(registrar, recognized, 'containerless', extractBoolean(getProperty(au, 'containerless')), evalNode, cls, emitted);
+  emitScalarIfPresent(registrar, recognized, 'capture', extractBoolean(getProperty(au, 'capture')), evalNode, cls, emitted);
+  emitScalarIfPresent(registrar, recognized, 'processContent', extractBoolean(getProperty(au, 'processContent')), evalNode, cls, emitted);
+  emitScalarIfPresent(registrar, recognized, 'noMultiBindings', extractBoolean(getProperty(au, 'noMultiBindings')), evalNode, cls, emitted);
 
-  // For now, we let convergence handle duplicates.
-  // The evidence source distinguishes decorator from $au.
+  const shadowOpts = getProperty(au, 'shadowOptions');
+  if (shadowOpts && !emitted.has('shadowOptions')) {
+    emitScalar(registrar, recognized, 'shadowOptions', extractShadowOptions(shadowOpts), evalNode, cls, emitted);
+  }
+
+  const template = extractString(getProperty(au, 'template'));
+  if (template !== undefined && !emitted.has('inlineTemplate')) {
+    emitScalar(registrar, recognized, 'inlineTemplate', template, evalNode, cls, emitted);
+  }
 }
 
 // =============================================================================
 // Observation Emission Helpers
 // =============================================================================
 
+/**
+ * Emit an observation for a field. Does NOT check deduplication —
+ * use emitScalar for scalar fields that follow first-defined-wins.
+ */
 function emitObservation<T>(
   registrar: ObservationRegistrar,
   recognized: RecognizedResource,
@@ -327,7 +367,7 @@ function emitObservation<T>(
   sourceNode: AnalyzableValue,
 ): void {
   const green = internPool.intern(valueToGreen(value));
-  const red = valueToSourced(value, sourceNode);
+  const red = valueToSourced(value, sourceNode, recognized);
 
   registrar.registerObservation(
     recognized.resourceKey,
@@ -339,16 +379,38 @@ function emitObservation<T>(
   );
 }
 
-function emitIfPresent<T>(
+/**
+ * Emit a scalar observation with first-defined-wins deduplication.
+ * If the field has already been emitted, skip silently.
+ */
+function emitScalar<T>(
+  registrar: ObservationRegistrar,
+  recognized: RecognizedResource,
+  fieldPath: string,
+  value: T,
+  evalNode: ProjectDepNodeId,
+  sourceNode: AnalyzableValue,
+  emitted: Set<string>,
+): void {
+  if (emitted.has(fieldPath)) return;
+  emitted.add(fieldPath);
+  emitObservation(registrar, recognized, fieldPath, value, evalNode, sourceNode);
+}
+
+/**
+ * Emit a scalar observation if the value is defined, with deduplication.
+ */
+function emitScalarIfPresent<T>(
   registrar: ObservationRegistrar,
   recognized: RecognizedResource,
   fieldPath: string,
   value: T | undefined,
   evalNode: ProjectDepNodeId,
   sourceNode: AnalyzableValue,
+  emitted: Set<string>,
 ): void {
   if (value !== undefined) {
-    emitObservation(registrar, recognized, fieldPath, value, evalNode, sourceNode);
+    emitScalar(registrar, recognized, fieldPath, value, evalNode, sourceNode, emitted);
   }
 }
 
@@ -370,9 +432,18 @@ function valueToGreen(value: unknown): GreenValue {
   return { kind: 'unknown', reasonKind: 'unsupported-value' };
 }
 
-function valueToSourced<T>(value: T, sourceNode: AnalyzableValue): Sourced<T> {
-  const location = sourceNode.span
-    ? { file: '' as NormalizedPath, pos: sourceNode.span.start, end: sourceNode.span.end }
+/**
+ * Create a Sourced<T> red wrapper with proper file path provenance.
+ */
+function valueToSourced<T>(
+  value: T,
+  sourceNode: AnalyzableValue,
+  recognized: RecognizedResource,
+): Sourced<T> {
+  // Use the class's filePath for location provenance
+  const filePath = sourceNode.kind === 'class' ? sourceNode.filePath : undefined;
+  const location = sourceNode.span && filePath
+    ? { file: filePath, pos: sourceNode.span.start, end: sourceNode.span.end }
     : undefined;
 
   return location

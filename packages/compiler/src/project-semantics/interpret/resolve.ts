@@ -54,16 +54,32 @@ export function createTracingResolver(
     const targetSf = program.getSourceFile(resolvedModule.resolvedFileName);
     if (!targetSf) return null;
 
-    // Record tracer events (D2 decomposition)
+    // D2 decomposition: file access and evaluation access are separate events
+    // 1. Record file dependency
     tracer.readFile(targetPath);
-    tracer.readEvaluation(targetPath, exportName);
 
-    // Cycle detection
+    // 2. Push evaluation context for the target unit
+    const handle = tracer.pushContext(targetPath, exportName);
+    if (handle.isCycle) {
+      // Circular import — record the cross-evaluation edge and return null
+      // (forward ref resolution will be added with ForwardRef integration)
+      tracer.readEvaluation(targetPath, exportName);
+      return null;
+    }
+
+    // Cycle detection (in-progress resolution within this resolver instance)
     const cycleKey = `${targetPath}#${exportName}`;
-    if (resolving.has(cycleKey)) return null;
+    if (resolving.has(cycleKey)) {
+      tracer.popContext(handle);
+      tracer.readEvaluation(targetPath, exportName);
+      return null;
+    }
     resolving.add(cycleKey);
 
     try {
+      // Record file read within B's context (B depends on its own file)
+      tracer.readFile(targetPath);
+
       // Build or retrieve scope for target file
       let scope = scopeCache.get(targetPath);
       if (!scope) {
@@ -72,19 +88,28 @@ export function createTracingResolver(
       }
 
       // Look up the exported value
+      let result: AnalyzableValue | null = null;
       const binding = scope.bindings.get(exportName);
-      if (!binding) {
-        // Try 'default' for default exports
-        if (exportName === 'default') {
-          const defaultBinding = scope.bindings.get('default');
-          if (defaultBinding) {
-            return resolveInScope(defaultBinding, scope);
-          }
+      if (binding) {
+        result = resolveInScope(binding, scope);
+      } else if (exportName === 'default') {
+        const defaultBinding = scope.bindings.get('default');
+        if (defaultBinding) {
+          result = resolveInScope(defaultBinding, scope);
         }
-        return null;
       }
 
-      return resolveInScope(binding, scope);
+      // Pop B's evaluation context
+      tracer.popContext(handle);
+
+      // 3. Record cross-evaluation dependency (A depends on B's result)
+      tracer.readEvaluation(targetPath, exportName);
+
+      return result;
+    } catch (e) {
+      tracer.popContext(handle);
+      tracer.readEvaluation(targetPath, exportName);
+      throw e;
     } finally {
       resolving.delete(cycleKey);
     }

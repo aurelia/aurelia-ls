@@ -166,6 +166,7 @@ function recognizeConvention(
   filePath: NormalizedPath,
 ): RecognizedResource | null {
   const className = cls.className;
+  const fileBaseName = extractFileBaseName(filePath);
 
   // Try suffix match first
   const suffixMatch = SUFFIX_REGEX.exec(className);
@@ -184,15 +185,32 @@ function recognizeConvention(
     }
   }
 
-  // No suffix → default to custom-element if class is exported
-  // (convention: any exported class without a suffix is a CE)
-  const name = conventionName(className, 'custom-element');
-  return {
-    kind: 'custom-element',
-    resourceKey: `custom-element:${name}`,
-    name,
-    source: { tier: 'analysis-convention', form: 'convention' },
-  };
+  // No suffix → CE only when the derived name matches the filename.
+  // F2 §Form 4: "Only the first exported class whose convention name
+  // matches the filename name."
+  const candidateName = conventionName(className, 'custom-element');
+  if (fileBaseName && candidateName === fileBaseName) {
+    return {
+      kind: 'custom-element',
+      resourceKey: `custom-element:${candidateName}`,
+      name: candidateName,
+      source: { tier: 'analysis-convention', form: 'convention' },
+    };
+  }
+
+  // No match — this class is not a resource by convention
+  return null;
+}
+
+/**
+ * Extract the base filename without extension from a normalized path.
+ * e.g., '/src/my-component.ts' → 'my-component'
+ */
+function extractFileBaseName(filePath: NormalizedPath): string | null {
+  const lastSlash = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
+  const fileName = lastSlash >= 0 ? filePath.slice(lastSlash + 1) : filePath;
+  const dotIdx = fileName.lastIndexOf('.');
+  return dotIdx > 0 ? fileName.slice(0, dotIdx) : fileName;
 }
 
 // =============================================================================
