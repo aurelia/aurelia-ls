@@ -1,10 +1,13 @@
 /**
  * Project Analysis Dependency Model — Types
  *
- * Implements L2: project-analysis-deps.ts.
- * Three node kinds: input, evaluation, field-claim.
- * Push side marks staleness eagerly. Pull side re-evaluates lazily
- * with value-sensitive cutoff at field claims.
+ * Four node layers: input → evaluation → observation → conclusion.
+ * Push side marks staleness eagerly. Pull side re-evaluates and
+ * re-converges lazily with value-sensitive cutoff at conclusions.
+ *
+ * Observations are evidence records — multiple per (resourceKey, fieldPath)
+ * from different evidence sources. Conclusions are the converged answer —
+ * one per (resourceKey, fieldPath), produced by the convergence callback.
  */
 
 import type { NormalizedPath } from '../../model/identity.js';
@@ -23,7 +26,36 @@ export type ProjectDepNodeKind =
   | 'config'
   | 'manifest'
   | 'evaluation'
-  | 'field-claim';
+  | 'observation'
+  | 'conclusion';
+
+// =============================================================================
+// Evidence Source
+// =============================================================================
+
+/**
+ * Five-tier evidence ranking for convergence.
+ * Higher tiers have more authority when observations compete.
+ */
+export type EvidenceTier =
+  | 'builtin'
+  | 'config'
+  | 'manifest'
+  | 'analysis-explicit'
+  | 'analysis-convention';
+
+/**
+ * How an observation was produced.
+ *
+ * `tier` is the ranking axis — convergence reads only this.
+ * `form` is provenance metadata — diagnostics and refactoring read this.
+ * form is an open string: 'decorator', 'static-$au', 'define-call',
+ * 'convention', 'local-template', 'field-decorator', etc.
+ */
+export interface EvidenceSource {
+  readonly tier: EvidenceTier;
+  readonly form?: string;
+}
 
 // =============================================================================
 // Node ID Constructors
@@ -49,9 +81,20 @@ export function evaluationNodeId(file: NormalizedPath, unitKey: string): Project
   return `eval:${file}#${unitKey}` as ProjectDepNodeId;
 }
 
-export function fieldClaimNodeId(resourceKey: string, fieldPath: string): ProjectDepNodeId {
-  return `claim:${resourceKey}:${fieldPath}` as ProjectDepNodeId;
+export function observationNodeId(
+  resourceKey: string,
+  fieldPath: string,
+  sourceId: string,
+): ProjectDepNodeId {
+  return `obs:${resourceKey}:${fieldPath}:${sourceId}` as ProjectDepNodeId;
 }
+
+export function conclusionNodeId(resourceKey: string, fieldPath: string): ProjectDepNodeId {
+  return `conclusion:${resourceKey}:${fieldPath}` as ProjectDepNodeId;
+}
+
+/** Well-known config node for convergence parameters. */
+export const CONVERGENCE_CONFIG_NODE = configNodeId('convergence-ranking');
 
 // =============================================================================
 // EvaluationTracer — what the interpreter reports as it runs
@@ -73,18 +116,40 @@ export interface EvaluationTracer {
 }
 
 // =============================================================================
-// FieldClaimRegistrar — registers per-field claims with green/red values
+// ObservationRegistrar — registers per-field observations
 // =============================================================================
 
-export interface FieldClaimRegistrar {
-  registerClaim<T>(
+export interface ObservationRegistrar {
+  registerObservation<T>(
     resourceKey: string,
     fieldPath: string,
+    source: EvidenceSource,
     green: GreenValue,
     red: Sourced<T>,
     evaluationNode: ProjectDepNodeId,
   ): ProjectDepNodeId;
 }
+
+// =============================================================================
+// Convergence
+// =============================================================================
+
+/** A single observation's data, passed to the convergence function. */
+export interface ObservationEntry {
+  readonly green: GreenValue;
+  readonly red: Sourced<unknown>;
+  readonly source: EvidenceSource;
+}
+
+/**
+ * Convergence function: merges an observation set into a single conclusion.
+ * The graph calls this when pulling a stale conclusion node.
+ */
+export type ConvergenceFunction = (
+  resourceKey: string,
+  fieldPath: string,
+  observations: readonly ObservationEntry[],
+) => { green: GreenValue; red: Sourced<unknown> };
 
 // =============================================================================
 // ProjectInvalidationEngine — push side (eager marking)
@@ -96,21 +161,18 @@ export interface ProjectInvalidationEngine {
   markConfigStale(configKey: string): void;
   markAllTypeStateStale(): void;
   isStale(nodeId: ProjectDepNodeId): boolean;
-  staleFieldClaims(): ProjectDepNodeId[];
+  staleConclusions(): ProjectDepNodeId[];
 }
 
 // =============================================================================
-// ProjectEvaluationEngine — pull side (lazy re-evaluation)
+// ProjectEvaluationEngine — pull side (lazy re-evaluation + convergence)
 // =============================================================================
 
-/**
- * Callback that re-evaluates a unit. The evaluator runs the interpreter,
- * which calls tracer methods and registrar methods to update the graph.
- */
 export type UnitEvaluator = (file: NormalizedPath, unitKey: string) => void;
 
 export interface ProjectEvaluationEngine {
-  pull<T>(claimId: ProjectDepNodeId): Sourced<T> | undefined;
+  /** Pull the converged conclusion for a field. Re-evaluates and re-converges if stale. */
+  pull<T>(conclusionId: ProjectDepNodeId): Sourced<T> | undefined;
 }
 
 // =============================================================================
@@ -119,7 +181,7 @@ export interface ProjectEvaluationEngine {
 
 export interface ProjectDepGraph {
   readonly tracer: EvaluationTracer;
-  readonly claims: FieldClaimRegistrar;
+  readonly observations: ObservationRegistrar;
   readonly invalidation: ProjectInvalidationEngine;
   readonly evaluation: ProjectEvaluationEngine;
 

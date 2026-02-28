@@ -1,12 +1,13 @@
 /**
  * Project Analysis Dependency Graph — Implementation
  *
- * Three node layers: input → evaluation → field-claim.
+ * Four node layers: input → evaluation → observation → conclusion.
  * Push side propagates staleness eagerly through edges.
- * Pull side re-evaluates lazily with value-sensitive cutoff.
+ * Pull side re-evaluates and re-converges lazily with value-sensitive cutoff.
  *
- * The graph does not own evaluation logic — it receives a UnitEvaluator
- * callback that the interpreter provides.
+ * The graph delegates evaluation and convergence to callbacks provided
+ * at construction. It owns the graph topology, staleness propagation,
+ * and cutoff comparison — not the domain logic.
  */
 
 import type { NormalizedPath } from '../../model/identity.js';
@@ -19,16 +20,21 @@ import {
   type ProjectDepGraph,
   type EvaluationTracer,
   type EvaluationHandle,
-  type FieldClaimRegistrar,
+  type ObservationRegistrar,
+  type ObservationEntry,
+  type EvidenceSource,
   type ProjectInvalidationEngine,
   type ProjectEvaluationEngine,
   type UnitEvaluator,
+  type ConvergenceFunction,
   fileNodeId,
   typeStateNodeId,
   configNodeId,
   manifestNodeId,
   evaluationNodeId,
-  fieldClaimNodeId,
+  observationNodeId,
+  conclusionNodeId,
+  CONVERGENCE_CONFIG_NODE,
 } from './types.js';
 
 // =============================================================================
@@ -39,24 +45,36 @@ interface NodeEntry {
   readonly kind: ProjectDepNodeKind;
   readonly key: string;
   stale: boolean;
-  /** For field-claim nodes: the interned green value (cutoff token). */
+  /** For observation nodes: the interned green value (cutoff token). */
   green?: GreenValue;
-  /** For field-claim nodes: the red (provenance) value. */
+  /** For observation nodes: the red (provenance) value. */
   red?: Sourced<unknown>;
-  /** For field-claim nodes: which evaluation produced this claim. */
+  /** For observation nodes: evidence source. */
+  evidenceSource?: EvidenceSource;
+  /** For observation nodes: which evaluation produced this. */
   sourceEvaluation?: ProjectDepNodeId;
+  /** For conclusion nodes: the converged green value (cutoff token). */
+  concludedGreen?: GreenValue;
+  /** For conclusion nodes: the converged red value. */
+  concludedRed?: Sourced<unknown>;
 }
 
 // =============================================================================
 // Graph Implementation
 // =============================================================================
 
-export function createProjectDepGraph(evaluator: UnitEvaluator): ProjectDepGraph {
+export function createProjectDepGraph(
+  evaluator: UnitEvaluator,
+  converge: ConvergenceFunction,
+): ProjectDepGraph {
   const nodes = new Map<ProjectDepNodeId, NodeEntry>();
   const forwardEdges = new Map<ProjectDepNodeId, Set<ProjectDepNodeId>>();
   const backwardEdges = new Map<ProjectDepNodeId, Set<ProjectDepNodeId>>();
   const evaluationStack: ProjectDepNodeId[] = [];
   let totalEdges = 0;
+
+  // Create the convergence config node at construction
+  ensureNode(CONVERGENCE_CONFIG_NODE, 'config', 'convergence-ranking');
 
   // ── Node management ──────────────────────────────────────────────────
 
@@ -91,9 +109,7 @@ export function createProjectDepGraph(evaluator: UnitEvaluator): ProjectDepGraph
     pushContext(file: NormalizedPath, unitKey: string): EvaluationHandle {
       const nodeId = evaluationNodeId(file, unitKey);
 
-      // Cycle detection: if already on the stack, don't push
       if (evaluationStack.includes(nodeId)) {
-        // Record cycle edge from current context to the re-entered one
         const current = currentEvaluation();
         if (current) addEdge(nodeId, current);
         return { isCycle: true, nodeId };
@@ -101,7 +117,6 @@ export function createProjectDepGraph(evaluator: UnitEvaluator): ProjectDepGraph
 
       ensureNode(nodeId, 'evaluation', `${file}#${unitKey}`);
 
-      // If there's a parent context, record cross-evaluation edge
       const parent = currentEvaluation();
       if (parent) addEdge(nodeId, parent);
 
@@ -110,7 +125,7 @@ export function createProjectDepGraph(evaluator: UnitEvaluator): ProjectDepGraph
     },
 
     popContext(handle: EvaluationHandle): void {
-      if (handle.isCycle) return; // cycle handles were never pushed
+      if (handle.isCycle) return;
       const top = evaluationStack.pop();
       if (top !== handle.nodeId) {
         throw new Error(`EvaluationTracer: popped ${top} but expected ${handle.nodeId}`);
@@ -158,23 +173,37 @@ export function createProjectDepGraph(evaluator: UnitEvaluator): ProjectDepGraph
     },
   };
 
-  // ── FieldClaimRegistrar ──────────────────────────────────────────────
+  // ── ObservationRegistrar ─────────────────────────────────────────────
 
-  const claims: FieldClaimRegistrar = {
-    registerClaim<T>(
+  const observations: ObservationRegistrar = {
+    registerObservation<T>(
       resourceKey: string,
       fieldPath: string,
+      source: EvidenceSource,
       green: GreenValue,
       red: Sourced<T>,
       evalNode: ProjectDepNodeId,
     ): ProjectDepNodeId {
-      const claimId = fieldClaimNodeId(resourceKey, fieldPath);
-      const entry = ensureNode(claimId, 'field-claim', `${resourceKey}:${fieldPath}`);
+      // Observation keyed by field + producing evaluation
+      const obsId = observationNodeId(resourceKey, fieldPath, evalNode);
+      const entry = ensureNode(obsId, 'observation', `${resourceKey}:${fieldPath}`);
       entry.green = green;
       entry.red = red;
+      entry.evidenceSource = source;
       entry.sourceEvaluation = evalNode;
-      addEdge(evalNode, claimId);
-      return claimId;
+
+      // Edge: evaluation → observation
+      addEdge(evalNode, obsId);
+
+      // Ensure conclusion node exists and wire observation → conclusion
+      const concId = conclusionNodeId(resourceKey, fieldPath);
+      ensureNode(concId, 'conclusion', `${resourceKey}:${fieldPath}`);
+      addEdge(obsId, concId);
+
+      // Wire convergence config → conclusion (static dependency)
+      addEdge(CONVERGENCE_CONFIG_NODE, concId);
+
+      return obsId;
     },
   };
 
@@ -213,10 +242,10 @@ export function createProjectDepGraph(evaluator: UnitEvaluator): ProjectDepGraph
       return nodes.get(nodeId)?.stale ?? false;
     },
 
-    staleFieldClaims(): ProjectDepNodeId[] {
+    staleConclusions(): ProjectDepNodeId[] {
       const result: ProjectDepNodeId[] = [];
       for (const [id, entry] of nodes) {
-        if (entry.kind === 'field-claim' && entry.stale) result.push(id);
+        if (entry.kind === 'conclusion' && entry.stale) result.push(id);
       }
       return result;
     },
@@ -225,7 +254,6 @@ export function createProjectDepGraph(evaluator: UnitEvaluator): ProjectDepGraph
   // ── ProjectEvaluationEngine ──────────────────────────────────────────
 
   function parseEvaluationKey(nodeId: ProjectDepNodeId): { file: NormalizedPath; unitKey: string } | null {
-    // eval:file#unitKey
     if (!nodeId.startsWith('eval:')) return null;
     const rest = nodeId.slice(5);
     const hashIdx = rest.indexOf('#');
@@ -236,43 +264,101 @@ export function createProjectDepGraph(evaluator: UnitEvaluator): ProjectDepGraph
     };
   }
 
-  const evaluation: ProjectEvaluationEngine = {
-    pull<T>(claimId: ProjectDepNodeId): Sourced<T> | undefined {
-      const entry = nodes.get(claimId);
-      if (!entry || entry.kind !== 'field-claim') return undefined;
+  function ensureObservationsFresh(concId: ProjectDepNodeId): void {
+    const obsNodes = backwardEdges.get(concId);
+    if (!obsNodes) return;
 
-      if (!entry.stale) {
-        return entry.red as Sourced<T> | undefined;
-      }
+    for (const obsId of obsNodes) {
+      const obsEntry = nodes.get(obsId);
+      if (!obsEntry || obsEntry.kind !== 'observation' || !obsEntry.stale) continue;
 
-      // Stale: re-evaluate the source evaluation node
-      if (entry.sourceEvaluation) {
-        const evalEntry = nodes.get(entry.sourceEvaluation);
+      // This observation is stale — re-evaluate its source
+      if (obsEntry.sourceEvaluation) {
+        const evalEntry = nodes.get(obsEntry.sourceEvaluation);
         if (evalEntry?.stale) {
-          const parsed = parseEvaluationKey(entry.sourceEvaluation);
+          const parsed = parseEvaluationKey(obsEntry.sourceEvaluation);
           if (parsed) {
-            const oldGreen = entry.green;
-
-            // Clear edges from this evaluation (they'll be re-recorded)
-            clearOutgoingEdges(entry.sourceEvaluation);
-
-            // Re-evaluate (the evaluator calls tracer + registrar)
+            clearOutgoingEdges(obsEntry.sourceEvaluation);
             evaluator(parsed.file, parsed.unitKey);
-
-            // Mark evaluation node fresh
             evalEntry.stale = false;
-
-            // Value-sensitive cutoff: if green hasn't changed, stop propagation
-            if (oldGreen && entry.green === oldGreen) {
-              entry.stale = false;
-              // Don't propagate — dependents stay as they are
-            }
           }
         }
       }
+      obsEntry.stale = false;
+    }
+  }
 
-      entry.stale = false;
-      return entry.red as Sourced<T> | undefined;
+  function collectObservations(concId: ProjectDepNodeId): ObservationEntry[] {
+    const result: ObservationEntry[] = [];
+    const obsNodes = backwardEdges.get(concId);
+    if (!obsNodes) return result;
+
+    for (const obsId of obsNodes) {
+      const obsEntry = nodes.get(obsId);
+      if (!obsEntry || obsEntry.kind !== 'observation') continue;
+      if (obsEntry.green && obsEntry.red && obsEntry.evidenceSource) {
+        result.push({
+          green: obsEntry.green,
+          red: obsEntry.red,
+          source: obsEntry.evidenceSource,
+        });
+      }
+    }
+    return result;
+  }
+
+  function parseConclusionKey(nodeId: ProjectDepNodeId): { resourceKey: string; fieldPath: string } | null {
+    if (!nodeId.startsWith('conclusion:')) return null;
+    const rest = nodeId.slice(11);
+    const colonIdx = rest.indexOf(':');
+    if (colonIdx === -1) return null;
+    return {
+      resourceKey: rest.slice(0, colonIdx),
+      fieldPath: rest.slice(colonIdx + 1),
+    };
+  }
+
+  const evaluation: ProjectEvaluationEngine = {
+    pull<T>(concId: ProjectDepNodeId): Sourced<T> | undefined {
+      const entry = nodes.get(concId);
+      if (!entry || entry.kind !== 'conclusion') return undefined;
+
+      if (!entry.stale) {
+        return entry.concludedRed as Sourced<T> | undefined;
+      }
+
+      // Ensure all upstream observations are fresh
+      ensureObservationsFresh(concId);
+
+      // Re-converge
+      const obs = collectObservations(concId);
+      if (obs.length === 0) {
+        entry.stale = false;
+        return undefined;
+      }
+
+      const parsed = parseConclusionKey(concId);
+      if (!parsed) {
+        entry.stale = false;
+        return undefined;
+      }
+
+      const oldGreen = entry.concludedGreen;
+      const result = converge(parsed.resourceKey, parsed.fieldPath, obs);
+
+      entry.concludedGreen = result.green;
+      entry.concludedRed = result.red;
+
+      // Value-sensitive cutoff at conclusion level
+      if (oldGreen && result.green === oldGreen) {
+        // Same conclusion — don't propagate staleness to downstream
+        entry.stale = false;
+      } else {
+        entry.stale = false;
+        // Different conclusion — downstream remains stale
+      }
+
+      return entry.concludedRed as Sourced<T> | undefined;
     },
   };
 
@@ -290,11 +376,9 @@ export function createProjectDepGraph(evaluator: UnitEvaluator): ProjectDepGraph
   }
 
   function removeNode(nodeId: ProjectDepNodeId): void {
-    // Remove forward edges from this node
     clearOutgoingEdges(nodeId);
     forwardEdges.delete(nodeId);
 
-    // Remove backward edges to this node
     const bwd = backwardEdges.get(nodeId);
     if (bwd) {
       for (const dep of bwd) {
@@ -308,17 +392,16 @@ export function createProjectDepGraph(evaluator: UnitEvaluator): ProjectDepGraph
   }
 
   function removeFile(file: NormalizedPath): void {
-    // Remove input nodes for this file
     removeNode(fileNodeId(file));
     removeNode(typeStateNodeId(file));
 
-    // Remove evaluation nodes and their field claims
+    // Collect evaluation + observation nodes for this file
     const toRemove: ProjectDepNodeId[] = [];
     for (const [id, entry] of nodes) {
       if (entry.kind === 'evaluation' && entry.key.startsWith(`${file}#`)) {
         toRemove.push(id);
       }
-      if (entry.kind === 'field-claim' && entry.sourceEvaluation) {
+      if (entry.kind === 'observation' && entry.sourceEvaluation) {
         const srcEntry = nodes.get(entry.sourceEvaluation);
         if (srcEntry && srcEntry.key.startsWith(`${file}#`)) {
           toRemove.push(id);
@@ -326,13 +409,26 @@ export function createProjectDepGraph(evaluator: UnitEvaluator): ProjectDepGraph
       }
     }
     for (const id of toRemove) removeNode(id);
+
+    // Clean up empty conclusion nodes (no remaining observations)
+    const emptyConclusions: ProjectDepNodeId[] = [];
+    for (const [id, entry] of nodes) {
+      if (entry.kind !== 'conclusion') continue;
+      const obs = backwardEdges.get(id);
+      // Only convergence-config remains as a backward edge
+      const hasObservations = obs && [...obs].some(
+        obsId => nodes.get(obsId)?.kind === 'observation'
+      );
+      if (!hasObservations) emptyConclusions.push(id);
+    }
+    for (const id of emptyConclusions) removeNode(id);
   }
 
   // ── Graph aggregate ──────────────────────────────────────────────────
 
   return {
     tracer,
-    claims,
+    observations,
     invalidation,
     evaluation,
     removeFile,
