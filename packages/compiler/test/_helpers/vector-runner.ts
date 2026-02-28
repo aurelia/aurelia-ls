@@ -27,7 +27,7 @@ import { deepMergeSemantics } from "./semantics-merge.js";
 import { DiagnosticsRuntime } from "@aurelia-ls/compiler/diagnostics/runtime.js";
 import { DEFAULT_SYNTAX } from "@aurelia-ls/compiler/parsing/attribute-parser.js";
 import { getExpressionParser } from "@aurelia-ls/compiler/parsing/expression-parser.js";
-import { BUILTIN_SEMANTICS, prepareProjectSemantics } from "@aurelia-ls/compiler/schema/registry.js";
+import { BUILTIN_SEMANTICS as SEM_DEFAULT, prepareProjectSemantics } from "@aurelia-ls/compiler/schema/registry.js";
 /**
  * Base test vector structure. TExpect allows stage-specific typing of the expect field.
  */

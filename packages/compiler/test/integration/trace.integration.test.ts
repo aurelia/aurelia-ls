@@ -33,7 +33,7 @@ import { bindScopes } from "../../out/analysis/30-bind/bind.js";
 import { typecheck } from "../../out/analysis/40-typecheck/typecheck.js";
 import { planAot } from "../../out/synthesis/aot/plan.js";
 import { emitAotCode } from "../../out/synthesis/aot/emit.js";
-import { planOverlay } from "../../out/synthesis/overlay/index.js";
+import { planOverlay } from "../../out/synthesis/overlay/plan.js";
 import { BUILTIN_SEMANTICS } from "../../out/schema/registry.js";
 import { getExpressionParser } from "../../out/parsing/expression-parser.js";
 import { DEFAULT_SYNTAX } from "../../out/parsing/attribute-parser.js";

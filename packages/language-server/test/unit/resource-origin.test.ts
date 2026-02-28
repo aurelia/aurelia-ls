@@ -2,13 +2,12 @@ import { test, expect, describe, vi } from "vitest";
 import { handleGetResources } from "@aurelia-ls/language-server/api";
 
 /**
- * Property: origin classification is deterministic and complete.
- * Every resource gets exactly one origin based on: package field → origin field → default.
+ * Property: origin passthrough is faithful to compiler's ResourceOrigin.
+ * The language server passes through the compiler's origin field without
+ * display-layer mapping. Display grouping (project/package/framework)
+ * is the VS Code extension's concern.
  *
  * Boundary: catalog resources → ResourceExplorerItem.origin
- *
- * Silent failure being tested: a resource with package set but no origin
- * could silently classify as "project" if detectOrigin checks origin before package.
  */
 
 function createCatalog(resources: {
@@ -47,8 +46,8 @@ function createMockContext(catalog: ReturnType<typeof createCatalog>, semantics:
   };
 }
 
-describe("resource origin classification property", () => {
-  test("resource with package field → origin 'package' regardless of origin field", () => {
+describe("resource origin passthrough", () => {
+  test("resource with package field passes through compiler origin as-is", () => {
     const ctx = createMockContext(createCatalog({
       elements: {
         "my-el": { name: "my-el", className: "MyEl", package: "my-plugin", origin: undefined, bindables: {} },
@@ -56,51 +55,52 @@ describe("resource origin classification property", () => {
     }));
     const result = handleGetResources(ctx as never);
     expect(result.resources).toHaveLength(1);
-    expect(result.resources[0].origin).toBe("package");
+    expect(result.resources[0].origin).toBeUndefined();
+    expect(result.resources[0].package).toBe("my-plugin");
   });
 
-  test("resource with origin 'builtin' and no package → origin 'framework'", () => {
+  test("builtin origin is passed through", () => {
     const ctx = createMockContext(createCatalog({
       elements: {
         "au-slot": { name: "au-slot", className: "AuSlot", origin: "builtin", bindables: {} },
       },
     }));
     const result = handleGetResources(ctx as never);
-    expect(result.resources[0].origin).toBe("framework");
+    expect(result.resources[0].origin).toBe("builtin");
   });
 
-  test("resource with origin 'config' and no package → origin 'framework'", () => {
+  test("config origin is passed through", () => {
     const ctx = createMockContext(createCatalog({
       attributes: {
         "my-attr": { kind: "attribute", name: "my-attr", origin: "config", bindables: {} },
       },
     }));
     const result = handleGetResources(ctx as never);
-    expect(result.resources[0].origin).toBe("framework");
+    expect(result.resources[0].origin).toBe("config");
   });
 
-  test("resource with no origin and no package → origin 'project'", () => {
+  test("resource with no origin passes through as undefined", () => {
     const ctx = createMockContext(createCatalog({
       elements: {
         "my-el": { name: "my-el", className: "MyEl", file: "/src/my-el.ts", bindables: {} },
       },
     }));
     const result = handleGetResources(ctx as never);
-    expect(result.resources[0].origin).toBe("project");
+    expect(result.resources[0].origin).toBeUndefined();
   });
 
-  test("package field takes precedence over builtin origin", () => {
-    // Router resources: origin may be "builtin" but they come from @aurelia/router package
+  test("package field is available for consumer-side grouping", () => {
     const ctx = createMockContext(createCatalog({
       elements: {
         "au-viewport": { name: "au-viewport", className: "AuViewport", origin: "builtin", package: "@aurelia/router", bindables: {} },
       },
     }));
     const result = handleGetResources(ctx as never);
-    expect(result.resources[0].origin).toBe("package");
+    expect(result.resources[0].origin).toBe("builtin");
+    expect(result.resources[0].package).toBe("@aurelia/router");
   });
 
-  test("every resource in the catalog gets exactly one origin", () => {
+  test("every resource in the catalog is present in the response", () => {
     const ctx = createMockContext(createCatalog({
       elements: {
         "project-el": { name: "project-el", className: "ProjectEl", file: "/src/el.ts", bindables: {} },
@@ -112,10 +112,6 @@ describe("resource origin classification property", () => {
       },
     }));
     const result = handleGetResources(ctx as never);
-    const validOrigins = ["project", "package", "framework"];
-    for (const resource of result.resources) {
-      expect(validOrigins).toContain(resource.origin);
-    }
     expect(result.resources).toHaveLength(4);
   });
 });
@@ -133,7 +129,7 @@ describe("template controller origin via attribute cross-reference", () => {
     const result = handleGetResources(ctx as never);
     const ifTC = result.resources.find((r) => r.name === "if" && r.kind === "template-controller");
     expect(ifTC).toBeDefined();
-    expect(ifTC!.origin).toBe("framework");
+    expect(ifTC!.origin).toBe("builtin");
   });
 
   test("TC is not duplicated when present in both controllers and attributes", () => {
