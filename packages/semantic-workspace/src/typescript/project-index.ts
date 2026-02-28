@@ -10,6 +10,10 @@ import { hasThirdPartyResources } from "@aurelia-ls/compiler/project-semantics/t
 import { applyThirdPartyResources } from "@aurelia-ls/compiler/project-semantics/third-party/resolution.js";
 import type { ThirdPartyDiscoveryResult } from "@aurelia-ls/compiler/project-semantics/third-party/types.js";
 import type { Logger } from "@aurelia-ls/compiler/project-semantics/types.js";
+import { createProjectDepGraph } from "@aurelia-ls/compiler/project-semantics/deps/graph.js";
+import type { ProjectDepGraph } from "@aurelia-ls/compiler/project-semantics/deps/types.js";
+import { interpretProject, createUnitEvaluator } from "@aurelia-ls/compiler/project-semantics/interpret/interpreter.js";
+import { canonicalPath } from "@aurelia-ls/compiler/project-semantics/util/naming.js";
 import type { TypeScriptProject } from "./project.js";
 
 export interface AureliaProjectIndexOptions {
@@ -46,6 +50,7 @@ export class AureliaProjectIndex {
 
   #model: SemanticModel;
   #thirdPartyOverlay: ThirdPartyDiscoveryResult | null = null;
+  #depGraph: ProjectDepGraph | null = null;
 
   constructor(options: AureliaProjectIndexOptions) {
     this.#ts = options.ts;
@@ -209,8 +214,75 @@ export class AureliaProjectIndex {
       this.#logger,
     );
 
+    // Populate the project dep graph in parallel with the existing pipeline.
+    // The dep graph runs the new interpreter and records observations +
+    // dependencies. It does not affect the existing SemanticModel yet —
+    // consumers continue to read from the model. The dep graph is available
+    // for future consumer migration.
+    this.#populateDepGraph(program);
+
     return createSemanticModel(result.discovery, {
       defaultScope: this.#defaultScope,
     });
+  }
+
+  /** Populate the project dep graph via the new interpreter. */
+  #populateDepGraph(program: import("typescript").Program): void {
+    try {
+      const config = {
+        program,
+        graph: this.#ensureDepGraph(program),
+        packagePath: this.#discoveryConfig.packagePath ?? '',
+        enableConventions: this.#discoveryConfig.conventions?.enabled,
+      };
+
+      const files = program
+        .getSourceFiles()
+        .filter(sf => !sf.isDeclarationFile)
+        .map(sf => canonicalPath(sf.fileName) as NormalizedPath);
+
+      interpretProject(files, config);
+      this.#logger.info(
+        `[index] dep graph populated: ${config.graph.nodeCount} nodes, ${config.graph.edgeCount} edges`,
+      );
+    } catch (e) {
+      // Don't let dep graph failures break the existing pipeline
+      this.#logger.info(
+        `[index] dep graph population failed (non-blocking): ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+  }
+
+  /** Create or return the project dep graph. */
+  #ensureDepGraph(program: import("typescript").Program): ProjectDepGraph {
+    if (!this.#depGraph) {
+      const evaluator = createUnitEvaluator({
+        program,
+        graph: null!, // Will be set below
+        packagePath: this.#discoveryConfig.packagePath ?? '',
+        enableConventions: this.#discoveryConfig.conventions?.enabled,
+      });
+
+      // Trivial convergence: pick the highest-tier observation.
+      // The full convergence algebra will replace this when consumers
+      // migrate from SemanticModel to dep graph pull().
+      this.#depGraph = createProjectDepGraph(evaluator, (_resourceKey, _fieldPath, observations) => {
+        if (observations.length === 0) {
+          return { green: { kind: 'unknown', reasonKind: 'no-observations' }, red: { origin: 'source', state: 'unknown' } };
+        }
+        const tierOrder: Record<string, number> = {
+          'builtin': 0,
+          'analysis-convention': 1,
+          'analysis-explicit': 2,
+          'manifest': 3,
+          'config': 4,
+        };
+        const sorted = [...observations].sort((a, b) =>
+          (tierOrder[b.source.tier] ?? 0) - (tierOrder[a.source.tier] ?? 0)
+        );
+        return { green: sorted[0]!.green, red: sorted[0]!.red };
+      });
+    }
+    return this.#depGraph;
   }
 }
