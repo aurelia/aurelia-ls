@@ -1,16 +1,18 @@
 import {
   NOOP_TRACE,
   createTrace,
-  configureDebug,
-  getDebugChannel,
-  refreshDebugChannels,
   type AttributeValue,
   type CompileTrace,
-  type DebugChannel as CompilerDebugChannel,
   type Span,
   type SpanEvent,
   type TraceExporter,
-} from "@aurelia-ls/compiler";
+} from "@aurelia-ls/compiler/shared/trace.js";
+import {
+  configureDebug,
+  getDebugChannel,
+  refreshDebugChannels,
+  type DebugChannel as CompilerDebugChannel,
+} from "@aurelia-ls/compiler/shared/debug.js";
 import type { VscodeApi } from "../vscode-api.js";
 import type { ClientLogger, LogLevel } from "../log.js";
 import type { PresentationConfig } from "./config.js";

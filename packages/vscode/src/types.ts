@@ -2,12 +2,12 @@ import type {
   DiagnosticActionability,
   DiagnosticCategory,
   DiagnosticImpact,
-  DiagnosticSeverity,
   DiagnosticStage,
   DiagnosticStatus,
   DiagnosticSurface,
-  SourceSpan,
-} from "@aurelia-ls/compiler";
+} from "@aurelia-ls/compiler/diagnostics/types.js";
+import type { DiagnosticSeverity } from "@aurelia-ls/compiler/model/diagnostics.js";
+import type { SourceSpan } from "@aurelia-ls/compiler/model/span.js";
 
 export type OverlayReadyPayload = {
   uri?: string;

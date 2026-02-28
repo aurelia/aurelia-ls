@@ -18,14 +18,10 @@ export default defineConfig({
     },
     // Aliases for package imports in tests
     alias: [
-      // Package-level aliases: @aurelia-ls/<pkg> → pre-compiled out/
-      { find: "@aurelia-ls/compiler", replacement: path.join(packagesDir, "compiler/out/index.js") },
-      { find: "@aurelia-ls/integration-harness", replacement: path.join(packagesDir, "integration-harness/out/index.js") },
-      { find: "@aurelia-ls/transform", replacement: path.join(packagesDir, "transform/out/index.js") },
-      { find: "@aurelia-ls/semantic-workspace", replacement: path.join(packagesDir, "semantic-workspace/out/index.js") },
-      { find: "@aurelia-ls/ssr", replacement: path.join(packagesDir, "ssr/out/index.js") },
-      { find: "@aurelia-ls/ssg", replacement: path.join(packagesDir, "ssg/out/index.js") },
-      { find: "@aurelia-ls/vite-plugin", replacement: path.join(packagesDir, "vite-plugin/out/index.js") },
+      // Deep imports: @aurelia-ls/<pkg>/<path>.js → packages/<pkg>/out/<path>.js
+      { find: /^@aurelia-ls\/([^/]+)\/(.+)\.js$/, replacement: path.join(packagesDir, "$1/out/$2.js") },
+      // Bare package imports: @aurelia-ls/<pkg> → packages/<pkg>/out/index.js
+      { find: /^@aurelia-ls\/([^/]+)$/, replacement: path.join(packagesDir, "$1/out/index.js") },
       // Internal src/ → out/ rewrite: skip vitest transform for pre-compiled code
       { find: /^(\.\.?\/.*)\/src\/(.*)\.js$/, replacement: "$1/out/$2.js" },
     ],

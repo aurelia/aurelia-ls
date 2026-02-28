@@ -696,7 +696,7 @@ export function handleRenameFromTs(
       uri: canonical.uri,
       position: params.position,
       newName: params.newName,
-    }) as import("@aurelia-ls/semantic-workspace").WorkspaceRefactorResult | null;
+    }) as import("@aurelia-ls/semantic-workspace/types.js").WorkspaceRefactorResult | null;
 
     if (!result || !("edit" in result)) {
       ctx.logger.info(`[renameFromTs] no cross-domain edits for ${canonical.path}`);

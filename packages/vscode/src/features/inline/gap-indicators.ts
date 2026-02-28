@@ -1,4 +1,4 @@
-import { stableHash } from "@aurelia-ls/compiler";
+import { stableHash } from "@aurelia-ls/compiler/pipeline/hash.js";
 import type { CapabilitiesResponse } from "../../types.js";
 
 export const INLINE_TOKEN_MODIFIER_GAP_AWARE = "aureliaGapAware" as const;

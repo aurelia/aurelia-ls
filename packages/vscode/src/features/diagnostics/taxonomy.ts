@@ -3,7 +3,7 @@ import type {
   DiagnosticCategory,
   DiagnosticConfidence,
   DiagnosticImpact,
-} from "@aurelia-ls/compiler";
+} from "@aurelia-ls/compiler/diagnostics/types.js";
 
 export const AURELIA_LSP_DIAGNOSTIC_NAMESPACE_KEY = "__aurelia" as const;
 export const AURELIA_LSP_DIAGNOSTIC_TAXONOMY_SCHEMA = "diagnostics-taxonomy/1" as const;
