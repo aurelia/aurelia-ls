@@ -428,7 +428,7 @@ function validateExpressionResources(
 
           // Check if registered
           ctx.deps?.readResource("binding-behavior", ref.name);
-          if (!ctx.lookup.sem.resources.bindingBehaviors[ref.name]) {
+          if (!ctx.lookup.bindingBehavior(ref.name)) {
             const hasGapInfo = ctx.lookup.hasGaps("binding-behavior", ref.name);
             const gapQualifier = hasGapInfo ? " (analysis gaps exist for this resource)" : "";
             reportDiagnostic(ctx.services.diagnostics, "aurelia/unknown-behavior", `Binding behavior '${ref.name}' not found${gapQualifier}.`, {
@@ -444,7 +444,7 @@ function validateExpressionResources(
       } else {
         // valueConverter
         ctx.deps?.readResource("value-converter", ref.name);
-        if (!ctx.lookup.sem.resources.valueConverters[ref.name]) {
+        if (!ctx.lookup.valueConverter(ref.name)) {
           const hasGapInfo = ctx.lookup.hasGaps("value-converter", ref.name);
           const gapQualifier = hasGapInfo ? " (analysis gaps exist for this resource)" : "";
           reportDiagnostic(ctx.services.diagnostics, "aurelia/unknown-converter", `Value converter '${ref.name}' not found${gapQualifier}.`, {

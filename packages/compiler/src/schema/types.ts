@@ -747,6 +747,16 @@ export interface SemanticsLookup {
   scopeCompleteness(scope?: ResourceScopeId | null): ScopeCompleteness;
   /** Returns true when scope analysis is complete for the active scope (or explicitly provided scope). */
   isScopeComplete(scope?: ResourceScopeId | null): boolean;
+  /** Look up a value converter by registration name. */
+  valueConverter(name: string): ValueConverterSig | null;
+  /** Look up a binding behavior by registration name. */
+  bindingBehavior(name: string): BindingBehaviorSig | null;
+  /** Resolve attr→prop mapping via naming/dom config chain.
+   *  Priority: naming.perTag > dom.attrToProp > naming.global.
+   *  Returns null when no config-level mapping exists. */
+  attrToProp(tag: string, attr: string): string | null;
+  /** Check if a property is a two-way default (by tag or globally). */
+  isTwoWayDefault(propName: string, tag?: string): boolean;
 }
 
 // ============================================================================

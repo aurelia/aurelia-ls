@@ -11,20 +11,10 @@ export function normalizeAttrToProp(host: NodeSem, rawAttr: string, lookup: Sema
   if (host.kind !== "element") return camelCase(attr);
 
   const tag = host.tag;
-  const sem = lookup.sem;
 
-  // 1) naming.perTag (highest precedence)
-  const perTag = sem.naming.perTag?.[tag]?.[attr];
-  if (perTag) return perTag;
-
-  // 2) dom.elements[tag].attrToProp overrides
-  const elt = sem.dom.elements[tag];
-  const domOverride = elt?.attrToProp?.[attr];
-  if (domOverride) return domOverride;
-
-  // 3) naming.global
-  const global = sem.naming.attrToPropGlobal[attr];
-  if (global) return global;
+  // 1-3) naming/dom config lookup via method (perTag > dom.attrToProp > global)
+  const configResult = lookup.attrToProp(tag, rawAttr);
+  if (configResult) return configResult;
 
   // 4) host-aware case-insensitive canonicalization
   //    (handles 'classname' → 'className', 'valueasnumber' → 'valueAsNumber', etc.)

@@ -909,6 +909,31 @@ export function createSemanticsLookup(sem: ProjectSemantics, opts?: SemanticsLoo
     isScopeComplete(scopeId?: ResourceScopeId | null): boolean {
       return resolveScopeCompleteness(scopeId).complete;
     },
+    valueConverter(name: string) {
+      return semWithCaches.resources.valueConverters[name] ?? null;
+    },
+    bindingBehavior(name: string) {
+      return semWithCaches.resources.bindingBehaviors[name] ?? null;
+    },
+    attrToProp(tag: string, attr: string): string | null {
+      const a = attr.toLowerCase();
+      const t = tag.toLowerCase();
+      // 1) naming.perTag (highest precedence)
+      const perTag = semWithCaches.naming.perTag?.[t]?.[a];
+      if (perTag) return perTag;
+      // 2) dom.elements[tag].attrToProp (per-tag only, not base-merged)
+      const domOverride = semWithCaches.dom.elements[t]?.attrToProp?.[a];
+      if (domOverride) return domOverride;
+      // 3) naming.global
+      return semWithCaches.naming.attrToPropGlobal[a] ?? null;
+    },
+    isTwoWayDefault(propName: string, tag?: string): boolean {
+      if (tag) {
+        const byTag = semWithCaches.twoWayDefaults.byTag[tag] ?? [];
+        if (byTag.includes(propName)) return true;
+      }
+      return semWithCaches.twoWayDefaults.globalProps.includes(propName);
+    },
   };
 }
 

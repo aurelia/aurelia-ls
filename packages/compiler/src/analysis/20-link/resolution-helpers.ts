@@ -146,7 +146,6 @@ export function resolveEffectiveMode(
 ): BindingMode {
   if (mode !== "default") return mode;
 
-  const sem = ctx.lookup.sem;
   const bindableMode = (value: BindingMode | undefined): BindingMode => {
     if (!value || value === "default") return "toView";
     return value;
@@ -161,11 +160,9 @@ export function resolveEffectiveMode(
       if (explicit) return explicit;
 
       const name = propName ?? "";
-      if (host.kind === "element") {
-        const byTag = sem.twoWayDefaults.byTag[host.tag] ?? [];
-        if (byTag.includes(name)) return "twoWay";
+      if (ctx.lookup.isTwoWayDefault(name, host.kind === "element" ? host.tag : undefined)) {
+        return "twoWay";
       }
-      if (sem.twoWayDefaults.globalProps.includes(name)) return "twoWay";
 
       return "toView";
     }
