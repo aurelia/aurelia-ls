@@ -14,7 +14,7 @@ export {
   stripSourcedNode,
   sanitizeSourcedSnapshotValue,
 } from "../schema/sourced.js";
-export { isConservativeGap } from "../schema/confidence.js";
+export { isConservativeGap } from "../convergence/confidence.js";
 export {
   createResourceSymbolId,
   createLocalSymbolId,

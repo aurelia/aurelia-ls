@@ -1,7 +1,7 @@
 import path from "node:path";
 import { spanContainsOffset, type SourceSpan } from "../model/span.js";
 import { positionAtOffset, type TextRange } from "../model/text.js";
-import { deriveResourceConfidence } from "../schema/confidence.js";
+import { deriveResourceConfidence } from "../convergence/confidence.js";
 import { unwrapSourced } from "../schema/sourced.js";
 import type {
   AttrRes,

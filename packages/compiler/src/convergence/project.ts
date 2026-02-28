@@ -23,9 +23,9 @@ import type {
   BindingBehaviorDef,
   BindableDef,
   ControllerSemantics,
-} from "./types.js";
+} from "../schema/types.js";
 import type { NormalizedPath } from "../model/identity.js";
-import { createStub } from "./types.js";
+import { createStub } from "../schema/types.js";
 
 // ============================================================================
 // L2 View Types (consumer-facing)

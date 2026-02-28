@@ -24,7 +24,7 @@ import { resolveGeneratedReferenceLocationWithPolicy } from "@aurelia-ls/compile
 import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
 import type { DocumentUri } from "@aurelia-ls/compiler/program/primitives.js";
 import type { OverlayBuildArtifact, OverlayDocumentSnapshot, TemplateLanguageDiagnostic } from "@aurelia-ls/compiler/program/services.js";
-import { deriveResourceConfidence } from "@aurelia-ls/compiler/schema/confidence.js";
+import { deriveResourceConfidence } from "@aurelia-ls/compiler/convergence/confidence.js";
 import { resolveCursorEntity, type CursorResolutionResult } from "@aurelia-ls/compiler/schema/cursor-resolve.js";
 import type { SemanticModel, SemanticModelQuery } from "@aurelia-ls/compiler/schema/model.js";
 import type { ExpressionExtractionContext, TextReferenceSite } from "@aurelia-ls/compiler/schema/referential-index.js";

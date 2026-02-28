@@ -6,7 +6,7 @@
  */
 import type { Position } from "vscode-languageserver/node.js";
 import { canonicalDocumentUri } from "@aurelia-ls/compiler/program/paths.js";
-import { computeBuiltinDiscrepancies } from "@aurelia-ls/compiler/schema/convert.js";
+import { computeBuiltinDiscrepancies } from "@aurelia-ls/compiler/convergence/convert.js";
 import type {
   DiagnosticActionability,
   DiagnosticCategory,

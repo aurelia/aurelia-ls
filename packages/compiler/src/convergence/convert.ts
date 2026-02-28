@@ -20,8 +20,8 @@ import type {
   TypeRef,
   ValueConverterDef,
   ValueConverterSig,
-} from "./types.js";
-import { unwrapSourced as unwrapSourcedValue } from "./sourced.js";
+} from "../schema/types.js";
+import { unwrapSourced as unwrapSourcedValue } from "../schema/sourced.js";
 
 // ── Gap counting ────────────────────────────────────────────────────────
 //
@@ -360,7 +360,7 @@ export function buildResourceCollectionsFromSemantics(sem: ProjectSemantics): Re
 // observations for framework resources. A derived comparison — not a
 // carried property. See deflection-builtin-staleness-detection.md.
 
-import type { BuiltinDiscrepancy, ResourceDef } from "./types.js";
+import type { BuiltinDiscrepancy, ResourceDef } from "../schema/types.js";
 
 /** Walk a resource def's Sourced<T> fields and find those where analysis won over builtin. */
 function computeFieldsFromAnalysis(def: ResourceDef): string[] {

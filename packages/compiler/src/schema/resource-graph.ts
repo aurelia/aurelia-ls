@@ -15,7 +15,7 @@ import {
   buildBindingCommandConfigs,
   buildResourceCollectionsFromSemantics,
   normalizeResourceCollections,
-} from "./convert.js";
+} from "../convergence/convert.js";
 import { buildResourceCatalog } from "./catalog.js";
 
 export type { ResourceCollections, ResourceGraph, ResourceScope, ResourceScopeId, ScopedResources };

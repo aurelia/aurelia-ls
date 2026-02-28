@@ -1,4 +1,4 @@
-import type { CatalogGap } from "./types.js";
+import type { CatalogGap } from "../schema/types.js";
 
 /**
  * Result of per-resource confidence derivation.

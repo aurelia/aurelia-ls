@@ -1,7 +1,7 @@
 import type { SourceSpan } from "../../model/ir.js";
 import type { BindingMode, HydrateAttributeIR, HydrateElementIR } from "../../model/ir.js";
 import type { Bindable, ControllerConfig } from "../../schema/registry.js";
-import { toTypeRefOptional } from "../../schema/convert.js";
+import { toTypeRefOptional } from "../../convergence/convert.js";
 import {
   getControllerConfig,
   STUB_CONTROLLER_CONFIG,

@@ -5,7 +5,7 @@ import type { SourceSpan } from "@aurelia-ls/compiler/model/span.js";
 import { createAttributeParserFromRegistry, type PredictiveMatchResult } from "@aurelia-ls/compiler/parsing/attribute-parser.js";
 import { Scanner, TokenType } from "@aurelia-ls/compiler/parsing/expression-scanner.js";
 import type { DocumentUri } from "@aurelia-ls/compiler/program/primitives.js";
-import { deriveResourceConfidence } from "@aurelia-ls/compiler/schema/confidence.js";
+import { deriveResourceConfidence } from "@aurelia-ls/compiler/convergence/confidence.js";
 import { resolveCursorEntity, type CursorResolutionResult } from "@aurelia-ls/compiler/schema/cursor-resolve.js";
 import type { SemanticModelQuery } from "@aurelia-ls/compiler/schema/model.js";
 import { unwrapSourced } from "@aurelia-ls/compiler/schema/sourced.js";

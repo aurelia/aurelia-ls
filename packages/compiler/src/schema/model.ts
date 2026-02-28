@@ -44,29 +44,10 @@ import {
   projectResourceDef,
   projectBindables as projectBindableDefs,
   type AnyResourceView,
-} from "./project.js";
+} from "../convergence/project.js";
 
-// ============================================================================
-// Convergence Entry (L2 target: entries IS the model)
-// ============================================================================
-
-/**
- * A convergence entry: the resolved state of a single resource.
- *
- * In the L2 target, the SemanticModel stores entries directly as
- * `Map<string, ConvergenceEntry>`. Currently backed by ResourceDef
- * from the discovery result. This bridge type will evolve toward the
- * full L2 ConvergenceEntry (observations, decision, gaps, ref).
- */
-export interface ConvergenceEntry {
-  readonly kind: string;
-  readonly name: string;
-  readonly key: string;
-  readonly def: ResourceDef;
-  readonly file?: NormalizedPath;
-  /** Opaque identity ref for provenance queries. */
-  readonly ref: ConvergenceRef;
-}
+import type { ConvergenceEntry } from "../convergence/entry.js";
+export type { ConvergenceEntry } from "../convergence/entry.js";
 
 // ============================================================================
 // Semantic Model

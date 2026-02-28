@@ -46,7 +46,7 @@ import {
   toAttrRes,
   toTypeRef,
   toValueConverterSig,
-} from "./convert.js";
+} from "../convergence/convert.js";
 import { GENERATED_DOM, GENERATED_EVENTS, GENERATED_SVG } from "./dom-registry.generated.js";
 import { buildResourceCatalog } from "./catalog.js";
 import {
