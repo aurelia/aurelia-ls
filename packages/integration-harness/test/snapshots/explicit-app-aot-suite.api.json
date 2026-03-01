@@ -74,6 +74,7 @@
         { "attribute": "component", "mode": "toView", "name": "component" },
         { "attribute": "composing", "mode": "fromView", "name": "composing" },
         { "attribute": "composition", "mode": "fromView", "name": "composition" },
+        { "attribute": "flush-mode", "name": "flushMode" },
         { "attribute": "model", "mode": "toView", "name": "model" },
         { "attribute": "scope-behavior", "mode": "toView", "name": "scopeBehavior" },
         { "attribute": "tag", "mode": "toView", "name": "tag" },

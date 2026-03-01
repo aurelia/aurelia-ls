@@ -1549,7 +1549,7 @@
           }
         },
         "className": {
-          "location": { "end": 1055, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 144 },
+          "location": { "end": 724, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 144 },
           "origin": "source",
           "state": "known",
           "value": "Outclick"
@@ -1565,13 +1565,13 @@
           "value": "outclick"
         },
         "noMultiBindings": {
-          "location": { "end": 1055, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 144 },
+          "location": { "end": 724, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 144 },
           "origin": "source",
           "state": "known",
           "value": false
         },
         "primary": {
-          "location": { "end": 1055, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 144 },
+          "location": { "end": 724, "file": "aurelia2-plugins/packages/aurelia2-outclick/src/aurelia-outclick.ts", "pos": 144 },
           "origin": "source",
           "state": "known",
           "value": "fn"
