@@ -97,7 +97,7 @@
     { "id": "sym:fee5792ba05ccff6d58f4c6005cf9f326b9d3857e112ff71abc9fd0cbd257549", "kind": "custom-element", "name": "my-app", "source": "packages/integration-harness/test/fixtures/template-imports-pkg/src/my-app.ts" },
     {
       "bindables": [
-        { "attribute": "label", "name": "label", "primary": true }
+        { "attribute": "label", "name": "label" }
       ],
       "id": "sym:23086c056151807673079f07dd222521ea1a8e2c874815bee2905b209a82b480",
       "kind": "custom-element",

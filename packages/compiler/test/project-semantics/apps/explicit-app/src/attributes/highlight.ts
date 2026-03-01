@@ -2,13 +2,14 @@ import { customAttribute } from "@aurelia/runtime-html";
 import type { INode } from "@aurelia/runtime-html";
 
 /**
- * Pattern: Custom attribute with primary bindable (implicit value)
- * Usage: <div highlight="yellow"> - color is the primary bindable
+ * Pattern: Custom attribute with defaultProperty designating primary bindable
+ * Usage: <div highlight="yellow"> - color is the default (primary) bindable
  */
 @customAttribute({
   name: "highlight",
+  defaultProperty: "color",
   bindables: [
-    { name: "color", primary: true },
+    { name: "color" },
     { name: "intensity" },
   ],
 })

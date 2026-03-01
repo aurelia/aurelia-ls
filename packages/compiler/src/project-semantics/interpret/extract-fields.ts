@@ -227,7 +227,6 @@ function extractBindableObservations(
     name: string;
     attribute?: string;
     mode?: string;
-    primary?: boolean;
     type?: string;
   }>();
 
@@ -245,8 +244,6 @@ function extractBindableObservations(
         if (attr) entry.attribute = attr;
         const mode = extractBindingMode(getProperty(arg, 'mode'));
         if (mode) entry.mode = mode;
-        const primary = extractBoolean(getProperty(arg, 'primary'));
-        if (primary !== undefined) entry.primary = primary;
       }
     }
 
@@ -268,8 +265,6 @@ function extractBindableObservations(
         if (attr) existing.attribute = attr;
         const mode = extractBindingMode(getProperty(propValue, 'mode'));
         if (mode) existing.mode = mode;
-        const primary = extractBoolean(getProperty(propValue, 'primary'));
-        if (primary !== undefined) existing.primary = primary;
         bindables.set(propName, existing);
       }
     }
@@ -288,8 +283,6 @@ function extractBindableObservations(
           if (attr) existing.attribute = attr;
           const mode = extractBindingMode(getProperty(propValue, 'mode'));
           if (mode) existing.mode = mode;
-          const primary = extractBoolean(getProperty(propValue, 'primary'));
-          if (primary !== undefined) existing.primary = primary;
           bindables.set(propName, existing);
         }
       }
@@ -305,9 +298,6 @@ function extractBindableObservations(
     }
     if (bindable.mode) {
       emitObservation(registrar, recognized, `${prefix}:mode`, bindable.mode, evalNode, cls);
-    }
-    if (bindable.primary !== undefined) {
-      emitObservation(registrar, recognized, `${prefix}:primary`, bindable.primary, evalNode, cls);
     }
     if (bindable.type) {
       emitObservation(registrar, recognized, `${prefix}:type`, bindable.type, evalNode, cls);

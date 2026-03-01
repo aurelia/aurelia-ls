@@ -1,7 +1,7 @@
 import { customAttribute, bindable } from 'aurelia';
 
-@customAttribute('icon')
+@customAttribute({ name: 'icon', defaultProperty: 'name' })
 export class IconCustomAttribute {
-  @bindable({ primary: true }) name: string = '';
+  @bindable() name: string = '';
   @bindable() size: 'sm' | 'md' | 'lg' = 'md';
 }

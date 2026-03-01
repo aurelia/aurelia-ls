@@ -131,7 +131,7 @@ test("discovers Aurelia resources from decorators and bindable members", () => {
       export class Panel {}
 
       @templateController
-      @customAttribute({ name: 'if-not', aliases: ['unless'], noMultiBindings: true })
+      @customAttribute({ name: 'if-not', aliases: ['unless'], noMultiBindings: true, defaultProperty: 'toggle' })
       export class IfNot {
         @bindable toggle!: boolean;
       }

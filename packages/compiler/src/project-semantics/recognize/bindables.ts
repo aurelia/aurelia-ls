@@ -2,7 +2,6 @@ import type { TextSpan } from '../compiler.js';
 import type { AnalyzableValue, BindableMember, ClassValue } from "../evaluate/value/types.js";
 import {
   extractBindingModeProp,
-  extractBooleanProp,
   getPropertyKeySpan,
   extractStringPropWithSpan,
   extractStringWithSpan,
@@ -28,7 +27,6 @@ export function parseBindablesValue(value: AnalyzableValue): BindableInput[] {
             name: nameProp.value,
             span: nameProp.span,
             mode: extractBindingModeProp(element, "mode"),
-            primary: extractBooleanProp(element, "primary"),
             attribute: attrProp?.value,
             attributeSpan: attrProp?.span,
           });
@@ -46,7 +44,6 @@ export function parseBindablesValue(value: AnalyzableValue): BindableInput[] {
           name,
           span: keySpan,
           mode: extractBindingModeProp(propValue, "mode"),
-          primary: extractBooleanProp(propValue, "primary"),
           attribute: attrProp?.value,
           attributeSpan: attrProp?.span,
         });
@@ -87,7 +84,6 @@ export function mergeBindableInputs(
     merged.set(member.name, {
       name: existing.name,
       mode: existing.mode ?? memberInput.mode,
-      primary: existing.primary ?? memberInput.primary,
       attribute: existing.attribute ?? memberInput.attribute,
       attributeSpan: existing.attributeSpan ?? memberInput.attributeSpan,
       type: memberInput.type ?? existing.type,
@@ -98,26 +94,8 @@ export function mergeBindableInputs(
   return [...merged.values()];
 }
 
-export function applyImplicitPrimary(bindables: readonly BindableInput[]): BindableInput[] {
-  if (bindables.length !== 1) return [...bindables];
-  const only = bindables[0];
-  if (!only || only.primary) return [...bindables];
-  return [{ ...only, primary: true }];
-}
-
-export function findPrimaryBindable(bindables: readonly BindableInput[]): string | undefined {
-  for (const bindable of bindables) {
-    if (bindable.primary) return bindable.name;
-  }
-  if (bindables.length === 1) {
-    return bindables[0]?.name;
-  }
-  return undefined;
-}
-
 function buildMemberBindableInput(member: BindableMember): BindableInput {
   let mode: BindableInput["mode"];
-  let primary: boolean | undefined;
   let attribute: string | undefined;
   let attributeSpan: TextSpan | undefined;
 
@@ -125,7 +103,6 @@ function buildMemberBindableInput(member: BindableMember): BindableInput {
     const arg = member.args[0];
     if (arg?.kind === "object") {
       mode = extractBindingModeProp(arg, "mode");
-      primary = extractBooleanProp(arg, "primary");
       const attrProp = extractStringPropWithSpan(arg, "attribute");
       attribute = attrProp?.value;
       attributeSpan = attrProp?.span;
@@ -135,7 +112,6 @@ function buildMemberBindableInput(member: BindableMember): BindableInput {
   return {
     name: member.name,
     mode,
-    primary,
     attribute,
     attributeSpan,
     type: member.type,

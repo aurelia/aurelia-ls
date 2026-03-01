@@ -37,7 +37,7 @@ import {
   canonicalAttrName,
   canonicalSimpleName,
 } from '../util/naming.js';
-import { findPrimaryBindable, getStaticBindableInputs, mergeBindableInputs } from './bindables.js';
+import { getStaticBindableInputs, mergeBindableInputs } from './bindables.js';
 
 // =============================================================================
 // Main Export
@@ -154,7 +154,7 @@ function buildAttributeDef(
   const staticBindables = getStaticBindableInputs(cls);
   const bindables = mergeBindableInputs(staticBindables, cls.bindableMembers)
     .sort((a, b) => a.name.localeCompare(b.name));
-  const primary = findPrimaryBindable(bindables);
+  const primary = 'value';
 
   return buildCustomAttributeDef({
     name,

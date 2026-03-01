@@ -839,7 +839,7 @@
             "label": {
               "attribute": "label",
               "name": "label",
-              "primary": true,
+              "primary": false,
               "type": { "kind": "ts", "name": "string" }
             }
           },
@@ -1309,7 +1309,7 @@
                 "label": {
                   "attribute": "label",
                   "name": "label",
-                  "primary": true,
+                  "primary": false,
                   "type": { "kind": "ts", "name": "string" }
                 }
               },
@@ -2166,7 +2166,7 @@
               "location": { "end": 283, "file": "playground/template-imports/src/counter.ts", "pos": 250 },
               "origin": "source",
               "state": "known",
-              "value": true
+              "value": false
             },
             "property": {
               "location": { "end": 283, "file": "playground/template-imports/src/counter.ts", "pos": 250 },

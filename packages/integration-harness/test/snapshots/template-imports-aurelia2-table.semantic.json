@@ -3712,7 +3712,8 @@
               "type": { "kind": "ts", "name": "never[]" }
             },
             "pageSize": { "attribute": "page-size", "name": "pageSize", "primary": false },
-            "totalItems": { "attribute": "total-items", "mode": "twoWay", "name": "totalItems", "primary": false }
+            "totalItems": { "attribute": "total-items", "mode": "twoWay", "name": "totalItems", "primary": false },
+            "value": { "attribute": "value", "name": "value", "primary": true }
           },
           "className": "AureliaTableCustomAttribute",
           "declarationForm": "decorator",
@@ -3721,7 +3722,8 @@
           "kind": "attribute",
           "name": "aurelia-table",
           "noMultiBindings": false,
-          "origin": "source"
+          "origin": "source",
+          "primary": "value"
         },
         "aut-select": {
           "bindables": {
@@ -3743,7 +3745,8 @@
               "name": "selectedClass",
               "primary": false,
               "type": { "kind": "ts", "name": "string" }
-            }
+            },
+            "value": { "attribute": "value", "name": "value", "primary": true }
           },
           "className": "AutSelectCustomAttribute",
           "declarationForm": "decorator",
@@ -3752,13 +3755,15 @@
           "kind": "attribute",
           "name": "aut-select",
           "noMultiBindings": false,
-          "origin": "source"
+          "origin": "source",
+          "primary": "value"
         },
         "aut-sort": {
           "bindables": {
             "custom": { "attribute": "custom", "name": "custom", "primary": false },
             "default": { "attribute": "default", "name": "default", "primary": false },
-            "key": { "attribute": "key", "name": "key", "primary": false }
+            "key": { "attribute": "key", "name": "key", "primary": false },
+            "value": { "attribute": "value", "name": "value", "primary": true }
           },
           "className": "AutSortCustomAttribute",
           "declarationForm": "decorator",
@@ -3767,7 +3772,8 @@
           "kind": "attribute",
           "name": "aut-sort",
           "noMultiBindings": false,
-          "origin": "source"
+          "origin": "source",
+          "primary": "value"
         },
         "case": {
           "bindables": {
@@ -6468,13 +6474,15 @@
                   "type": { "kind": "ts", "name": "never[]" }
                 },
                 "pageSize": { "attribute": "page-size", "name": "pageSize", "primary": false },
-                "totalItems": { "attribute": "total-items", "mode": "twoWay", "name": "totalItems", "primary": false }
+                "totalItems": { "attribute": "total-items", "mode": "twoWay", "name": "totalItems", "primary": false },
+                "value": { "attribute": "value", "name": "value", "primary": true }
               },
               "className": "AureliaTableCustomAttribute",
               "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts",
               "kind": "attribute",
               "name": "aurelia-table",
-              "noMultiBindings": false
+              "noMultiBindings": false,
+              "primary": "value"
             },
             "aut-select": {
               "bindables": {
@@ -6496,25 +6504,29 @@
                   "name": "selectedClass",
                   "primary": false,
                   "type": { "kind": "ts", "name": "string" }
-                }
+                },
+                "value": { "attribute": "value", "name": "value", "primary": true }
               },
               "className": "AutSelectCustomAttribute",
               "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts",
               "kind": "attribute",
               "name": "aut-select",
-              "noMultiBindings": false
+              "noMultiBindings": false,
+              "primary": "value"
             },
             "aut-sort": {
               "bindables": {
                 "custom": { "attribute": "custom", "name": "custom", "primary": false },
                 "default": { "attribute": "default", "name": "default", "primary": false },
-                "key": { "attribute": "key", "name": "key", "primary": false }
+                "key": { "attribute": "key", "name": "key", "primary": false },
+                "value": { "attribute": "value", "name": "value", "primary": true }
               },
               "className": "AutSortCustomAttribute",
               "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts",
               "kind": "attribute",
               "name": "aut-sort",
-              "noMultiBindings": false
+              "noMultiBindings": false,
+              "primary": "value"
             },
             "focus": {
               "bindables": {
@@ -9050,6 +9062,31 @@
               "state": "known",
               "value": "totalItems"
             }
+          },
+          "value": {
+            "attribute": {
+              "location": { "end": 109, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 76 },
+              "origin": "source",
+              "state": "known",
+              "value": "value"
+            },
+            "mode": {
+              "location": { "end": 109, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 76 },
+              "origin": "source",
+              "state": "unknown"
+            },
+            "primary": {
+              "location": { "end": 109, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 76 },
+              "origin": "source",
+              "state": "known",
+              "value": true
+            },
+            "property": {
+              "location": { "end": 109, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 76 },
+              "origin": "source",
+              "state": "known",
+              "value": "value"
+            }
           }
         },
         "className": {
@@ -9073,6 +9110,12 @@
           "origin": "source",
           "state": "known",
           "value": false
+        },
+        "primary": {
+          "location": { "end": 7054, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-attribute.ts", "pos": 76 },
+          "origin": "source",
+          "state": "known",
+          "value": "value"
         }
       },
       "id": "sym:6be4920de68876d4461c3884a47d70b7538608c5e67869fa6da505fc1366823f",
@@ -9202,6 +9245,31 @@
               "state": "known",
               "value": "string"
             }
+          },
+          "value": {
+            "attribute": {
+              "location": { "end": 205, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 175 },
+              "origin": "source",
+              "state": "known",
+              "value": "value"
+            },
+            "mode": {
+              "location": { "end": 205, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 175 },
+              "origin": "source",
+              "state": "unknown"
+            },
+            "primary": {
+              "location": { "end": 205, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 175 },
+              "origin": "source",
+              "state": "known",
+              "value": true
+            },
+            "property": {
+              "location": { "end": 205, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 175 },
+              "origin": "source",
+              "state": "known",
+              "value": "value"
+            }
           }
         },
         "className": {
@@ -9225,6 +9293,12 @@
           "origin": "source",
           "state": "known",
           "value": false
+        },
+        "primary": {
+          "location": { "end": 2026, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-select.ts", "pos": 175 },
+          "origin": "source",
+          "state": "known",
+          "value": "value"
         }
       },
       "id": "sym:d69897e8e972d18d64ff2ee53b07d3a58cdf32f16344ab764b32fcc2c64bd5fa",
@@ -9310,6 +9384,31 @@
               "state": "known",
               "value": "key"
             }
+          },
+          "value": {
+            "attribute": {
+              "location": { "end": 184, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 156 },
+              "origin": "source",
+              "state": "known",
+              "value": "value"
+            },
+            "mode": {
+              "location": { "end": 184, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 156 },
+              "origin": "source",
+              "state": "unknown"
+            },
+            "primary": {
+              "location": { "end": 184, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 156 },
+              "origin": "source",
+              "state": "known",
+              "value": true
+            },
+            "property": {
+              "location": { "end": 184, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 156 },
+              "origin": "source",
+              "state": "known",
+              "value": "value"
+            }
           }
         },
         "className": {
@@ -9333,6 +9432,12 @@
           "origin": "source",
           "state": "known",
           "value": false
+        },
+        "primary": {
+          "location": { "end": 2391, "file": "aurelia2-plugins/packages/aurelia2-table/src/aurelia-table-sort.ts", "pos": 156 },
+          "origin": "source",
+          "state": "known",
+          "value": "value"
         }
       },
       "id": "sym:599849ddcfd813e83b3b76ebf50e883502683a241ddcfafc217a18c0c4f17319",

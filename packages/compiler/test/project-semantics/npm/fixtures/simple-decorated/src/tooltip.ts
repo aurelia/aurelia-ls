@@ -4,10 +4,10 @@ import { customAttribute, bindable } from 'aurelia';
  * A simple tooltip attribute.
  * Test fixture demonstrating basic decorator usage.
  */
-@customAttribute('tooltip')
+@customAttribute({ name: 'tooltip', defaultProperty: 'content' })
 export class TooltipCustomAttribute {
   /** The tooltip content - primary bindable */
-  @bindable({ primary: true })
+  @bindable()
   content: string = '';
 
   /** Position of the tooltip */

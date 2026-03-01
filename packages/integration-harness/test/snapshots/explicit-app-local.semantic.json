@@ -3981,9 +3981,10 @@
             "text": {
               "attribute": "text",
               "name": "text",
-              "primary": true,
+              "primary": false,
               "type": { "kind": "ts", "name": "string" }
-            }
+            },
+            "value": { "attribute": "value", "name": "value", "primary": true }
           },
           "className": "TooltipCustomAttribute",
           "declarationForm": "decorator",
@@ -3993,7 +3994,7 @@
           "name": "tooltip",
           "noMultiBindings": false,
           "origin": "source",
-          "primary": "text"
+          "primary": "value"
         },
         "with": {
           "bindables": {
@@ -8189,16 +8190,17 @@
                 "text": {
                   "attribute": "text",
                   "name": "text",
-                  "primary": true,
+                  "primary": false,
                   "type": { "kind": "ts", "name": "string" }
-                }
+                },
+                "value": { "attribute": "value", "name": "value", "primary": true }
               },
               "className": "TooltipCustomAttribute",
               "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/tooltip.ts",
               "kind": "attribute",
               "name": "tooltip",
               "noMultiBindings": false,
-              "primary": "text"
+              "primary": "value"
             },
             "with": {
               "bindables": {
@@ -8980,24 +8982,24 @@
         "bindables": {
           "color": {
             "attribute": {
-              "location": { "end": 337, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 330 },
+              "location": { "end": 387, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 380 },
               "origin": "source",
               "state": "known",
               "value": "color"
             },
             "mode": {
-              "location": { "end": 337, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 330 },
+              "location": { "end": 387, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 380 },
               "origin": "source",
               "state": "unknown"
             },
             "primary": {
-              "location": { "end": 337, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 330 },
+              "location": { "end": 387, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 380 },
               "origin": "source",
               "state": "known",
               "value": true
             },
             "property": {
-              "location": { "end": 337, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 330 },
+              "location": { "end": 387, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 380 },
               "origin": "source",
               "state": "known",
               "value": "color"
@@ -9005,24 +9007,24 @@
           },
           "intensity": {
             "attribute": {
-              "location": { "end": 380, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 369 },
+              "location": { "end": 415, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 404 },
               "origin": "source",
               "state": "known",
               "value": "intensity"
             },
             "mode": {
-              "location": { "end": 380, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 369 },
+              "location": { "end": 415, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 404 },
               "origin": "source",
               "state": "unknown"
             },
             "primary": {
-              "location": { "end": 380, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 369 },
+              "location": { "end": 415, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 404 },
               "origin": "source",
               "state": "known",
               "value": false
             },
             "property": {
-              "location": { "end": 380, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 369 },
+              "location": { "end": 415, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 404 },
               "origin": "source",
               "state": "known",
               "value": "intensity"
@@ -9030,7 +9032,7 @@
           }
         },
         "className": {
-          "location": { "end": 881, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 260 },
+          "location": { "end": 916, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 281 },
           "origin": "source",
           "state": "known",
           "value": "HighlightCustomAttribute"
@@ -9040,19 +9042,19 @@
         "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts",
         "kind": "custom-attribute",
         "name": {
-          "location": { "end": 299, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 288 },
+          "location": { "end": 320, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 309 },
           "origin": "source",
           "state": "known",
           "value": "highlight"
         },
         "noMultiBindings": {
-          "location": { "end": 881, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 260 },
+          "location": { "end": 916, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 281 },
           "origin": "source",
           "state": "known",
           "value": false
         },
         "primary": {
-          "location": { "end": 881, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 260 },
+          "location": { "end": 916, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/highlight.ts", "pos": 281 },
           "origin": "source",
           "state": "known",
           "value": "color"
@@ -9224,7 +9226,7 @@
               "location": { "end": 285, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/tooltip.ts", "pos": 257 },
               "origin": "source",
               "state": "known",
-              "value": true
+              "value": false
             },
             "property": {
               "location": { "end": 285, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/tooltip.ts", "pos": 257 },
@@ -9237,6 +9239,31 @@
               "origin": "source",
               "state": "known",
               "value": "string"
+            }
+          },
+          "value": {
+            "attribute": {
+              "location": { "end": 214, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/tooltip.ts", "pos": 187 },
+              "origin": "source",
+              "state": "known",
+              "value": "value"
+            },
+            "mode": {
+              "location": { "end": 214, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/tooltip.ts", "pos": 187 },
+              "origin": "source",
+              "state": "unknown"
+            },
+            "primary": {
+              "location": { "end": 214, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/tooltip.ts", "pos": 187 },
+              "origin": "source",
+              "state": "known",
+              "value": true
+            },
+            "property": {
+              "location": { "end": 214, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/tooltip.ts", "pos": 187 },
+              "origin": "source",
+              "state": "known",
+              "value": "value"
             }
           }
         },
@@ -9266,7 +9293,7 @@
           "location": { "end": 501, "file": "packages/compiler/test/project-semantics/apps/explicit-app/src/attributes/tooltip.ts", "pos": 187 },
           "origin": "source",
           "state": "known",
-          "value": "text"
+          "value": "value"
         }
       },
       "id": "sym:3b0a25d25f28a5683757fa813c90341f530bc265268523c3a0feee2b24efd1ac",

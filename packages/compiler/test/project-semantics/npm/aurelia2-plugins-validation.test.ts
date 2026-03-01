@@ -51,13 +51,14 @@ describe('aurelia2-plugins: re-export pattern', () => {
       expect(aureliaTable!.kind).toBe('custom-attribute');
       expect(aureliaTable!.className).toBe('AureliaTableCustomAttribute');
       expect(aureliaTable!.evidence).toBe('decorator'); // WP 1.10: should be decorator, not convention
-      expect(aureliaTable!.bindables).toHaveLength(8);
+      // 8 declared + implicit 'value' (defaultProperty defaults to 'value')
+      expect(aureliaTable!.bindables).toHaveLength(9);
 
       // Verify specific bindables exist
       const bindableNames = aureliaTable!.bindables.map(b => b.name).sort();
       expect(bindableNames).toEqual([
         'api', 'currentPage', 'data', 'dataSource',
-        'displayData', 'filters', 'pageSize', 'totalItems'
+        'displayData', 'filters', 'pageSize', 'totalItems', 'value'
       ]);
     });
 
@@ -75,7 +76,8 @@ describe('aurelia2-plugins: re-export pattern', () => {
       const autSort = result.resources.find(r => r.name === 'aut-sort');
       expect(autSort).toBeDefined();
       expect(autSort!.kind).toBe('custom-attribute');
-      expect(autSort!.bindables.map(b => b.name).sort()).toEqual(['custom', 'default', 'key']);
+      // 3 declared + implicit 'value' (defaultProperty defaults to 'value')
+      expect(autSort!.bindables.map(b => b.name).sort()).toEqual(['custom', 'default', 'key', 'value']);
     });
 
     it('finds aut-select custom attribute with row twoWay', () => {

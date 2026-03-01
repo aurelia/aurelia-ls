@@ -19,7 +19,8 @@
         { "attribute": "display-data", "mode": "twoWay", "name": "displayData" },
         { "attribute": "filters", "name": "filters" },
         { "attribute": "page-size", "name": "pageSize" },
-        { "attribute": "total-items", "mode": "twoWay", "name": "totalItems" }
+        { "attribute": "total-items", "mode": "twoWay", "name": "totalItems" },
+        { "attribute": "value", "name": "value", "primary": true }
       ],
       "id": "sym:6be4920de68876d4461c3884a47d70b7538608c5e67869fa6da505fc1366823f",
       "kind": "custom-attribute",
@@ -31,7 +32,8 @@
         { "attribute": "custom", "name": "custom" },
         { "attribute": "mode", "name": "mode" },
         { "attribute": "row", "mode": "twoWay", "name": "row" },
-        { "attribute": "selected-class", "name": "selectedClass" }
+        { "attribute": "selected-class", "name": "selectedClass" },
+        { "attribute": "value", "name": "value", "primary": true }
       ],
       "id": "sym:d69897e8e972d18d64ff2ee53b07d3a58cdf32f16344ab764b32fcc2c64bd5fa",
       "kind": "custom-attribute",
@@ -42,7 +44,8 @@
       "bindables": [
         { "attribute": "custom", "name": "custom" },
         { "attribute": "default", "name": "default" },
-        { "attribute": "key", "name": "key" }
+        { "attribute": "key", "name": "key" },
+        { "attribute": "value", "name": "value", "primary": true }
       ],
       "id": "sym:599849ddcfd813e83b3b76ebf50e883502683a241ddcfafc217a18c0c4f17319",
       "kind": "custom-attribute",

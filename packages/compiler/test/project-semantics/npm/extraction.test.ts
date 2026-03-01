@@ -65,7 +65,7 @@ describe('npm extraction', () => {
       const tooltip = result.value.resources[0]!;
       expect(resourceName(tooltip)).toBe('tooltip');
 
-      // Should still find primary bindable from decorator call
+      // Should still find primary bindable from defaultProperty
       const content = resourceBindables(tooltip).find(b => b.name === 'content');
       expect(content?.primary).toBe(true);
     });
@@ -161,7 +161,7 @@ describe('npm extraction', () => {
       expect(userBindables).toHaveLength(2);
       expect(userBindables.map(b => b.name).sort()).toEqual(['avatar', 'name']);
 
-      // HighlightAttribute should have color bindable (with primary: true)
+      // HighlightAttribute should have color bindable (primary via defaultProperty)
       const highlight = result.value.resources.find((r) => resourceName(r) === 'highlight');
       expect(highlight).toBeDefined();
       expect(resourceClassName(highlight!)).toBe('HighlightAttribute');
@@ -213,9 +213,9 @@ describe('npm extraction', () => {
       const dataGrid = result.value.resources.find((r) => resourceName(r) === 'data-grid');
       expect(dataGrid).toBeDefined();
 
-      // Should have 4 bindables
+      // 4 declared bindables + implicit 'value' (defaultProperty defaults to 'value')
       const dataBindables = resourceBindables(dataGrid!);
-      expect(dataBindables).toHaveLength(4);
+      expect(dataBindables).toHaveLength(5);
 
       // 'data' should be two-way
       const data = dataBindables.find(b => b.name === 'data');
@@ -223,7 +223,7 @@ describe('npm extraction', () => {
       // BindingMode.twoWay = 6 in Aurelia
       expect(data!.mode).toBeDefined();
 
-      // grid-sort should have primary bindable
+      // grid-sort should have primary bindable (via defaultProperty)
       const gridSort = result.value.resources.find((r) => resourceName(r) === 'grid-sort');
       const key = resourceBindables(gridSort!).find(b => b.name === 'key');
       expect(key?.primary).toBe(true);
@@ -348,8 +348,9 @@ describe('npm extraction', () => {
       expect(resourceClassName(badge!)).toBe('BadgeCustomElement');
       const badgeBindables = resourceBindables(badge!);
       expect(badgeBindables).toHaveLength(2);
+      // CEs don't have defaultProperty — no primary bindable
       const primaryBadge = badgeBindables.find(b => b.primary);
-      expect(primaryBadge?.name).toBe('value');
+      expect(primaryBadge).toBeUndefined();
 
       // Custom attribute
       const icon = result.value.resources.find((r) => resourceName(r) === 'icon');

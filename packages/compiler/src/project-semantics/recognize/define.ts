@@ -52,7 +52,6 @@ import {
   canonicalAliases,
 } from '../util/naming.js';
 import {
-  findPrimaryBindable,
   getStaticBindableInputs,
   mergeBindableInputs,
   parseBindablesValue,
@@ -324,7 +323,7 @@ function buildAttributeDef(
   const isTemplateController = extractBooleanProp(def, 'isTemplateController') ?? false;
   const noMultiBindings = extractBooleanProp(def, 'noMultiBindings') ?? false;
   const defaultProperty = extractStringProp(def, 'defaultProperty');
-  const primary = resolvePrimaryName(mergedBindables, defaultProperty);
+  const primary = resolvePrimaryName(defaultProperty);
   const bindablesWithPrimary = applyPrimaryBindable(mergedBindables, primary);
 
   if (isTemplateController) {
@@ -655,14 +654,10 @@ function toDefineMatchResult(result: ResourceDefineMatchResult): DefineMatchResu
 }
 
 function resolvePrimaryName(
-  bindables: BindableInput[],
   defaultProperty: string | undefined,
-): string | undefined {
+): string {
   const canonical = defaultProperty ? canonicalBindableName(defaultProperty) ?? defaultProperty.trim() : undefined;
-  if (canonical) {
-    return canonical;
-  }
-  return findPrimaryBindable(bindables);
+  return canonical ?? 'value';
 }
 
 function applyPrimaryBindable(

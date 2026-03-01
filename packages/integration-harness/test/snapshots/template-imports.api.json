@@ -83,7 +83,7 @@
     },
     {
       "bindables": [
-        { "attribute": "label", "name": "label", "primary": true }
+        { "attribute": "label", "name": "label" }
       ],
       "id": "sym:3c923f1d7cbbc24d325d2ffedadb2c71998956d76c07d1490c7735f4423d38a7",
       "kind": "custom-element",

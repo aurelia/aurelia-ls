@@ -3,10 +3,10 @@ import { customAttribute, bindable } from 'aurelia';
 /**
  * A sort attribute for grid columns.
  */
-@customAttribute('grid-sort')
+@customAttribute({ name: 'grid-sort', defaultProperty: 'key' })
 export class GridSortCustomAttribute {
   /** Sort key */
-  @bindable({ primary: true })
+  @bindable()
   key: string = '';
 
   /** Default sort direction */

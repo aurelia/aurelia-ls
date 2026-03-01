@@ -61,7 +61,8 @@
     },
     {
       "bindables": [
-        { "attribute": "text", "name": "text", "primary": true }
+        { "attribute": "text", "name": "text" },
+        { "attribute": "value", "name": "value", "primary": true }
       ],
       "id": "sym:3b0a25d25f28a5683757fa813c90341f530bc265268523c3a0feee2b24efd1ac",
       "kind": "custom-attribute",

@@ -6,7 +6,7 @@ export class UserCard {
   @bindable avatar: string = '';
 }
 
-@customAttribute('highlight')
+@customAttribute({ name: 'highlight', defaultProperty: 'color' })
 export class HighlightAttribute {
-  @bindable({ primary: true }) color: string = 'yellow';
+  @bindable color: string = 'yellow';
 }

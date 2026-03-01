@@ -516,10 +516,34 @@ function buildResource(
   }
 
   const file = fileName as NormalizedPath;
-  const bindableInputs = bindables;
-  const bindableDefs = buildBindableDefs(bindableInputs, file);
-  const primaryBindable = findPrimaryBindableName(bindableInputs);
   const isTemplateController = resourceDecorator.decoratorName === 'templateController';
+
+  // Extract defaultProperty from CA decorator (defaults to 'value')
+  let defaultProperty: string | undefined;
+  if (resourceDecorator.args.length > 0 && resourceDecorator.args[0]?.kind === 'object') {
+    const dp = resourceDecorator.args[0].properties.get('defaultProperty');
+    if (typeof dp === 'string') {
+      defaultProperty = dp;
+    }
+  }
+  const primaryBindable = (kind === 'custom-attribute' || isTemplateController)
+    ? (defaultProperty ?? 'value')
+    : undefined;
+
+  // Apply primary designation to bindable list
+  let bindableInputs = bindables;
+  if (primaryBindable) {
+    let found = false;
+    bindableInputs = bindables.map(b => {
+      const isPrimary = b.name === primaryBindable;
+      if (isPrimary) found = true;
+      return { ...b, primary: isPrimary };
+    });
+    if (!found) {
+      bindableInputs.push({ name: primaryBindable, primary: true });
+    }
+  }
+  const bindableDefs = buildBindableDefs(bindableInputs, file);
 
   let resource = null;
   switch (kind) {
@@ -592,12 +616,6 @@ function extractBindable(
   // Check for options object
   if (decorator.args.length > 0 && decorator.args[0]?.kind === 'object') {
     const props = decorator.args[0].properties;
-
-    // Primary flag
-    const primaryValue = props.get('primary');
-    if (primaryValue === true) {
-      primary = true;
-    }
 
     // Attribute name
     const attributeValue = props.get('attribute');

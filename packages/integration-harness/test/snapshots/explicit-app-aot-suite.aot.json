@@ -119,7 +119,7 @@
         [
           {
             "instructions": [
-              { "to": "text", "type": 10, "value": "This is a tooltip" }
+              { "to": "value", "type": 10, "value": "This is a tooltip" }
             ],
             "res": "tooltip",
             "type": 1

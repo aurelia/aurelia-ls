@@ -67,7 +67,6 @@ describe("matchDefine - CustomElement", () => {
         object(new Map([
           ["name", literal("active")],
           ["mode", literal("twoWay")],
-          ["primary", literal(true)],
           ["attribute", literal("active")],
         ])),
       ])],
@@ -90,7 +89,7 @@ describe("matchDefine - CustomElement", () => {
 
     const bindables = result.resource?.bindables ?? {};
     expect(Object.keys(bindables).sort()).toEqual(["active", "value"]);
-    expect(unwrapSourced(bindables.active?.primary)).toBe(true);
+    expect(unwrapSourced(bindables.active?.primary)).toBe(false);
     expect(unwrapSourced(bindables.active?.mode)).toBe("twoWay");
     expect(unwrapSourced(bindables.active?.attribute)).toBe("active");
     expect(unwrapSourced(bindables.value?.primary)).toBe(false);
@@ -105,7 +104,6 @@ describe("matchDefine - CustomElement", () => {
       ["name", literal("au-field")],
       ["bindables", object(new Map([
         ["value", object(new Map([
-          ["primary", literal(true)],
           ["mode", literal("twoWay")],
         ]))],
         ["format", object(new Map([
@@ -125,7 +123,7 @@ describe("matchDefine - CustomElement", () => {
 
     const bindables = result.resource?.bindables ?? {};
     expect(Object.keys(bindables).sort()).toEqual(["format", "value"]);
-    expect(unwrapSourced(bindables.value?.primary)).toBe(true);
+    expect(unwrapSourced(bindables.value?.primary)).toBe(false);
     expect(unwrapSourced(bindables.value?.mode)).toBe("twoWay");
     expect(unwrapSourced(bindables.format?.attribute)).toBe("format");
   });
@@ -278,7 +276,7 @@ describe("matchDefine - CustomElement", () => {
 // =============================================================================
 
 describe("matchDefine - CustomAttribute", () => {
-  it("infers primary bindable when a single bindable exists", () => {
+  it("defaults primary to 'value' when no defaultProperty specified", () => {
     const def = object(new Map([
       ["name", literal("router-link")],
       ["bindables", array([literal("href")])],
@@ -291,19 +289,22 @@ describe("matchDefine - CustomAttribute", () => {
 
     expect(result.gaps.length).toBe(0);
     expect(result.resource?.kind).toBe("custom-attribute");
-    expect(unwrapSourced(result.resource?.primary)).toBe("href");
+    expect(unwrapSourced(result.resource?.primary)).toBe("value");
 
     const bindables = result.resource?.bindables ?? {};
-    expect(unwrapSourced(bindables.href?.primary)).toBe(true);
+    // Implicit 'value' bindable created because defaultProperty defaults to 'value'
+    expect(Object.keys(bindables).sort()).toEqual(["href", "value"]);
+    expect(unwrapSourced(bindables.value?.primary)).toBe(true);
+    expect(unwrapSourced(bindables.href?.primary)).toBe(false);
   });
 
-  it("respects explicit primary bindable without defaultProperty", () => {
+  it("respects explicit defaultProperty on CA definition", () => {
     const def = object(new Map([
       ["name", literal("tooltip")],
+      ["defaultProperty", literal("text")],
       ["bindables", array([
         object(new Map([
           ["name", literal("text")],
-          ["primary", literal(true)],
         ])),
         literal("placement"),
       ])],

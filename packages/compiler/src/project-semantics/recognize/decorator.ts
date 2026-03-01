@@ -53,8 +53,6 @@ import {
   canonicalAliases,
 } from '../util/naming.js';
 import {
-  applyImplicitPrimary,
-  findPrimaryBindable,
   getStaticBindableInputs,
   mergeBindableInputs,
   parseBindablesValue,
@@ -554,8 +552,7 @@ function buildElementDef(
     [...elementMeta.bindables, ...staticBindables],
     cls.bindableMembers,
   );
-  const sortedBindables = [...mergedBindables].sort((a, b) => a.name.localeCompare(b.name));
-  const bindables = applyImplicitPrimary(sortedBindables);
+  const bindables = [...mergedBindables].sort((a, b) => a.name.localeCompare(b.name));
 
   return buildCustomElementDef({
     name,
@@ -597,9 +594,8 @@ function buildAttributeDef(
     [...attrMeta.bindables, ...staticBindables],
     cls.bindableMembers,
   );
-  const sortedBindables = [...mergedBindables].sort((a, b) => a.name.localeCompare(b.name));
-  const bindables = applyImplicitPrimary(sortedBindables);
-  const primary = resolvePrimaryName(bindables, attrMeta.defaultProperty);
+  const bindables = [...mergedBindables].sort((a, b) => a.name.localeCompare(b.name));
+  const primary = resolvePrimaryName(attrMeta.defaultProperty);
   const bindablesWithPrimary = applyPrimaryBindable(bindables, primary);
   const isTC = attrMeta.isTemplateController || meta.templateController;
 
@@ -690,16 +686,12 @@ function buildBindingBehaviorDefFromMeta(
 // =============================================================================
 
 function resolvePrimaryName(
-  bindables: BindableInput[],
   defaultProperty: string | undefined,
-): string | undefined {
+): string {
   const canonical = defaultProperty
     ? canonicalBindableName(defaultProperty) ?? defaultProperty.trim()
     : undefined;
-  if (canonical) {
-    return canonical;
-  }
-  return findPrimaryBindable(bindables);
+  return canonical ?? 'value';
 }
 
 function applyPrimaryBindable(
