@@ -176,6 +176,37 @@ export interface ProjectEvaluationEngine {
 }
 
 // =============================================================================
+// Graph Event Protocol — Incremental Instrumentation
+// =============================================================================
+
+/**
+ * Structured event emitted by the graph during staleness propagation,
+ * re-evaluation, and convergence. These events are the foundation for:
+ * - Tier 7 incremental correctness testing
+ * - Production performance profiling
+ * - Debugging unexpected re-evaluation cascades
+ *
+ * Zero-cost when no listener is attached: the graph checks
+ * `listener !== undefined` before constructing event objects.
+ */
+export type GraphEvent =
+  | { readonly type: 'staleness-propagated'; readonly nodeId: ProjectDepNodeId; readonly sourceNodeId: ProjectDepNodeId | null }
+  | { readonly type: 'evaluation-invoked'; readonly nodeId: ProjectDepNodeId; readonly file: NormalizedPath; readonly unitKey: string }
+  | { readonly type: 'convergence-ran'; readonly conclusionId: ProjectDepNodeId; readonly resourceKey: string; readonly fieldPath: string; readonly observationCount: number }
+  | { readonly type: 'cutoff-fired'; readonly conclusionId: ProjectDepNodeId; readonly resourceKey: string; readonly fieldPath: string }
+  | { readonly type: 'conclusion-changed'; readonly conclusionId: ProjectDepNodeId; readonly resourceKey: string; readonly fieldPath: string }
+  | { readonly type: 'observation-refreshed'; readonly observationId: ProjectDepNodeId; readonly sourceEvaluation: ProjectDepNodeId };
+
+/**
+ * Listener for graph events. Attached via `createProjectDepGraph` options.
+ * Called synchronously during graph operations — implementations must
+ * be fast (append to array, increment counter, etc.).
+ */
+export interface GraphEventListener {
+  onEvent(event: GraphEvent): void;
+}
+
+// =============================================================================
 // ProjectDepGraph — the aggregate
 // =============================================================================
 

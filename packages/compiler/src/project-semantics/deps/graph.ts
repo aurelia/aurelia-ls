@@ -13,6 +13,7 @@
 import type { NormalizedPath } from '../../model/identity.js';
 import type { GreenValue } from '../../value/green.js';
 import type { Sourced } from '../../value/sourced.js';
+import { InternPool } from '../../value/intern.js';
 
 import {
   type ProjectDepNodeId,
@@ -66,12 +67,19 @@ interface NodeEntry {
 export function createProjectDepGraph(
   evaluator: UnitEvaluator,
   converge: ConvergenceFunction,
+  listener?: import('./types.js').GraphEventListener,
 ): ProjectDepGraph {
   const nodes = new Map<ProjectDepNodeId, NodeEntry>();
   const forwardEdges = new Map<ProjectDepNodeId, Set<ProjectDepNodeId>>();
   const backwardEdges = new Map<ProjectDepNodeId, Set<ProjectDepNodeId>>();
   const evaluationStack: ProjectDepNodeId[] = [];
   let totalEdges = 0;
+
+  // Intern pool for green values (L1 value-representation §S2).
+  // All green values stored in the graph go through this pool.
+  // Structurally identical values become the same object.
+  // Cutoff comparison is then pointer equality, O(1).
+  const internPool = new InternPool();
 
   // Create the convergence config node at construction
   ensureNode(CONVERGENCE_CONFIG_NODE, 'config', 'convergence-ranking');
@@ -187,7 +195,7 @@ export function createProjectDepGraph(
       // Observation keyed by field + producing evaluation
       const obsId = observationNodeId(resourceKey, fieldPath, evalNode);
       const entry = ensureNode(obsId, 'observation', `${resourceKey}:${fieldPath}`);
-      entry.green = green;
+      entry.green = internPool.intern(green);
       entry.red = red;
       entry.evidenceSource = source;
       entry.sourceEvaluation = evalNode;
@@ -212,10 +220,16 @@ export function createProjectDepGraph(
 
   // ── ProjectInvalidationEngine ────────────────────────────────────────
 
+  /** Current source of staleness propagation (for event attribution). */
+  let stalenessSource: ProjectDepNodeId | null = null;
+
   function propagateStale(nodeId: ProjectDepNodeId): void {
     const entry = nodes.get(nodeId);
     if (!entry || entry.stale) return;
     entry.stale = true;
+    if (listener) {
+      listener.onEvent({ type: 'staleness-propagated', nodeId, sourceNodeId: stalenessSource });
+    }
     const dependents = forwardEdges.get(nodeId);
     if (dependents) {
       for (const dep of dependents) propagateStale(dep);
@@ -224,21 +238,34 @@ export function createProjectDepGraph(
 
   const invalidation: ProjectInvalidationEngine = {
     markFileStale(file: NormalizedPath): void {
-      propagateStale(fileNodeId(file));
+      const id = fileNodeId(file);
+      stalenessSource = id;
+      propagateStale(id);
+      stalenessSource = null;
     },
 
     markTypeStateStale(file: NormalizedPath): void {
-      propagateStale(typeStateNodeId(file));
+      const id = typeStateNodeId(file);
+      stalenessSource = id;
+      propagateStale(id);
+      stalenessSource = null;
     },
 
     markConfigStale(configKey: string): void {
-      propagateStale(configNodeId(configKey));
+      const id = configNodeId(configKey);
+      stalenessSource = id;
+      propagateStale(id);
+      stalenessSource = null;
     },
 
     markAllTypeStateStale(): void {
       for (const [id, entry] of nodes) {
-        if (entry.kind === 'type-state') propagateStale(id);
+        if (entry.kind === 'type-state') {
+          stalenessSource = id;
+          propagateStale(id);
+        }
       }
+      stalenessSource = null;
     },
 
     isStale(nodeId: ProjectDepNodeId): boolean {
@@ -282,10 +309,16 @@ export function createProjectDepGraph(
           const parsed = parseEvaluationKey(obsEntry.sourceEvaluation);
           if (parsed) {
             clearOutgoingEdges(obsEntry.sourceEvaluation);
+            if (listener) {
+              listener.onEvent({ type: 'evaluation-invoked', nodeId: obsEntry.sourceEvaluation, file: parsed.file, unitKey: parsed.unitKey });
+            }
             evaluator(parsed.file, parsed.unitKey);
             evalEntry.stale = false;
           }
         }
+      }
+      if (listener) {
+        listener.onEvent({ type: 'observation-refreshed', observationId: obsId, sourceEvaluation: obsEntry.sourceEvaluation ?? ('' as ProjectDepNodeId) });
       }
       obsEntry.stale = false;
     }
@@ -348,17 +381,29 @@ export function createProjectDepGraph(
 
       const oldGreen = entry.concludedGreen;
       const result = converge(parsed.resourceKey, parsed.fieldPath, obs);
+      const internedGreen = internPool.intern(result.green);
 
-      entry.concludedGreen = result.green;
+      if (listener) {
+        listener.onEvent({ type: 'convergence-ran', conclusionId: concId, resourceKey: parsed.resourceKey, fieldPath: parsed.fieldPath, observationCount: obs.length });
+      }
+
+      entry.concludedGreen = internedGreen;
       entry.concludedRed = result.red;
 
-      // Value-sensitive cutoff at conclusion level
-      if (oldGreen && result.green === oldGreen) {
+      // Value-sensitive cutoff at conclusion level (S2: pointer equality
+      // on interned values — O(1) regardless of value complexity)
+      if (oldGreen && internedGreen === oldGreen) {
         // Same conclusion — don't propagate staleness to downstream
         entry.stale = false;
+        if (listener) {
+          listener.onEvent({ type: 'cutoff-fired', conclusionId: concId, resourceKey: parsed.resourceKey, fieldPath: parsed.fieldPath });
+        }
       } else {
         entry.stale = false;
         // Different conclusion — downstream remains stale
+        if (listener) {
+          listener.onEvent({ type: 'conclusion-changed', conclusionId: concId, resourceKey: parsed.resourceKey, fieldPath: parsed.fieldPath });
+        }
       }
 
       return entry.concludedRed as Sourced<T> | undefined;

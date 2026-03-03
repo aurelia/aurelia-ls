@@ -21,6 +21,7 @@ import {
   type ObservationEntry,
   type ConvergenceFunction,
   type EvidenceSource,
+  type UnitEvaluator,
 } from "../../out/project-semantics/deps/types.js";
 import {
   interpretProject,
@@ -1422,4 +1423,375 @@ export function assertTcOrder(
       `  Actual:   [${actual.join(', ')}]`
     );
   }
+}
+
+// =============================================================================
+// Tier 7: Incremental Evaluation Infrastructure
+// =============================================================================
+
+import type {
+  GraphEvent,
+  GraphEventListener,
+} from "../../out/project-semantics/deps/types.js";
+
+export type { GraphEvent };
+
+/**
+ * A structured trace of one edit cycle: file change → staleness
+ * propagation → re-evaluation → cutoff/change detection.
+ *
+ * The trace captures graph events as a structured log. It is the
+ * foundation for tier 7 assertions AND production-grade incremental
+ * debugging. Designed to scale to 1000+ node graphs without changing
+ * the API.
+ *
+ * Events are partitioned by type for O(1) query by the assertion
+ * helpers. The raw event stream is preserved for debugging.
+ */
+export class EditCycleTrace implements GraphEventListener {
+  /** All events in emission order. */
+  readonly events: GraphEvent[] = [];
+
+  // ── Partitioned indexes (built lazily from events) ──────────────────
+
+  private _staleNodes?: Set<string>;
+  private _evaluatedNodes?: Set<string>;
+  private _cutoffNodes?: Set<string>;
+  private _changedNodes?: Set<string>;
+  private _refreshedObs?: Set<string>;
+
+  onEvent(event: GraphEvent): void {
+    this.events.push(event);
+    // Invalidate lazy indexes
+    this._staleNodes = undefined;
+    this._evaluatedNodes = undefined;
+    this._cutoffNodes = undefined;
+    this._changedNodes = undefined;
+    this._refreshedObs = undefined;
+  }
+
+  /** Nodes that received staleness propagation. */
+  get staleNodes(): ReadonlySet<string> {
+    if (!this._staleNodes) {
+      this._staleNodes = new Set(
+        this.events
+          .filter(e => e.type === 'staleness-propagated')
+          .map(e => (e as any).nodeId)
+      );
+    }
+    return this._staleNodes;
+  }
+
+  /** Evaluation nodes whose callback was actually invoked. */
+  get evaluatedNodes(): ReadonlySet<string> {
+    if (!this._evaluatedNodes) {
+      this._evaluatedNodes = new Set(
+        this.events
+          .filter(e => e.type === 'evaluation-invoked')
+          .map(e => (e as any).nodeId)
+      );
+    }
+    return this._evaluatedNodes;
+  }
+
+  /** Conclusion nodes where cutoff fired (re-converged, same green). */
+  get cutoffNodes(): ReadonlySet<string> {
+    if (!this._cutoffNodes) {
+      this._cutoffNodes = new Set(
+        this.events
+          .filter(e => e.type === 'cutoff-fired')
+          .map(e => (e as any).conclusionId)
+      );
+    }
+    return this._cutoffNodes;
+  }
+
+  /** Conclusion nodes where convergence produced a different green. */
+  get changedNodes(): ReadonlySet<string> {
+    if (!this._changedNodes) {
+      this._changedNodes = new Set(
+        this.events
+          .filter(e => e.type === 'conclusion-changed')
+          .map(e => (e as any).conclusionId)
+      );
+    }
+    return this._changedNodes;
+  }
+
+  /** Observation nodes that were refreshed (source re-evaluated). */
+  get refreshedObservations(): ReadonlySet<string> {
+    if (!this._refreshedObs) {
+      this._refreshedObs = new Set(
+        this.events
+          .filter(e => e.type === 'observation-refreshed')
+          .map(e => (e as any).observationId)
+      );
+    }
+    return this._refreshedObs;
+  }
+
+  /** Clear all recorded events (for multi-edit-cycle tests). */
+  clear(): void {
+    this.events.length = 0;
+    this._staleNodes = undefined;
+    this._evaluatedNodes = undefined;
+    this._cutoffNodes = undefined;
+    this._changedNodes = undefined;
+    this._refreshedObs = undefined;
+  }
+}
+
+/**
+ * A mutable interpreter session that supports file edits and
+ * incremental re-evaluation. This is the tier 7 test harness.
+ *
+ * Usage:
+ *   const session = createMutableSession(files);
+ *   // Initial state assertions (tiers 1-6)
+ *   const trace = session.editFile('/src/counter.ts', newContent);
+ *   // Post-edit assertions using trace
+ *   assertCutoff(trace, 'conclusion:custom-element:counter::name');
+ */
+export interface MutableSession {
+  /** The interpreter result (graph, program, evidence). Mutable. */
+  readonly result: InterpreterResult;
+
+  /**
+   * Edit a file and perform incremental re-evaluation.
+   *
+   * 1. Updates the in-memory file content
+   * 2. Creates a new TS program with the updated file
+   * 3. Marks the file as stale in the graph
+   * 4. Returns a trace of the edit cycle
+   *
+   * The trace records graph events ONLY for this edit cycle.
+   * Pull conclusions after editFile() to trigger lazy re-evaluation.
+   */
+  editFile(path: string, newContent: string): EditCycleTrace;
+
+  /**
+   * Pull a conclusion and trigger any pending re-evaluation.
+   * Events are recorded on the most recent edit's trace.
+   */
+  pull(resourceKey: string, fieldPath: string): unknown;
+
+  /** The trace from the most recent editFile() call. */
+  readonly currentTrace: EditCycleTrace;
+}
+
+/**
+ * A stable event listener that delegates to the current EditCycleTrace.
+ * The graph captures this at construction time — it never changes.
+ * The `target` is swapped per edit cycle.
+ */
+class TraceProxy implements GraphEventListener {
+  target: EditCycleTrace;
+  constructor(initial: EditCycleTrace) { this.target = initial; }
+  onEvent(event: GraphEvent): void { this.target.onEvent(event); }
+}
+
+/**
+ * Create a mutable interpreter session for tier 7 tests.
+ *
+ * The session wraps the interpreter with a mutable file store and
+ * a properly-wired unit evaluator. When a file is edited, the graph's
+ * staleness propagation and lazy re-evaluation work correctly because
+ * the unit evaluator captures a mutable reference to the current
+ * TS program.
+ */
+export function createMutableSession(
+  files: Record<string, string>,
+  options?: { enableConventions?: boolean },
+): MutableSession {
+  const evidence: EvidenceMap = new Map();
+  const normalizeP = (f: string) => f.replace(/\\/g, "/");
+
+  // Mutable file store — editFile() updates this
+  const fileStore = new Map(
+    Object.entries(files).map(([k, v]) => [normalizeP(k), v])
+  );
+
+  // Mutable program reference — re-created on each edit
+  let currentProgram = createFixtureProgram(Object.fromEntries(fileStore));
+
+  // Stable trace proxy — the graph holds a reference to this.
+  // We swap the target per edit cycle.
+  let currentTrace = new EditCycleTrace();
+  const proxy = new TraceProxy(currentTrace);
+
+  // Build the interpreter config (mutable — reads currentProgram)
+  function buildConfig() {
+    return {
+      program: currentProgram,
+      graph,
+      packagePath: "/",
+      enableConventions: options?.enableConventions ?? true,
+      readFile: (path: string) => fileStore.get(normalizeP(path)),
+    };
+  }
+
+  // The unit evaluator captures the mutable config reference.
+  // When the graph needs to re-evaluate a stale unit, it calls
+  // createUnitEvaluator with the CURRENT program (post-edit).
+  // We use a trampoline that always reads the current config.
+  const unitEvaluator: UnitEvaluator = (file, unitKey) => {
+    const liveEval = createUnitEvaluator(buildConfig());
+    liveEval(file, unitKey);
+  };
+
+  const graph = createProjectDepGraph(
+    unitEvaluator,
+    createTrackingConvergence(evidence),
+    proxy,
+  );
+
+  // Initial full evaluation
+  const config = buildConfig();
+  const sourceFiles = [...fileStore.keys()]
+    .filter(f => f.endsWith('.ts'))
+    .map(f => f as NormalizedPath);
+  interpretProject(sourceFiles, config);
+
+  // Pull all conclusions to populate concludedGreen values.
+  // This ensures value-sensitive cutoff works on the first edit cycle.
+  // Without this, oldGreen would be undefined (never converged) and
+  // cutoff comparison would always fail, reporting "changed" for
+  // structurally identical values.
+  const allConclusions = graph.nodesByKind('conclusion');
+  for (const concId of allConclusions) {
+    graph.evaluation.pull(concId);
+  }
+
+  // Clear initial evaluation events — tier 7 only cares about edits
+  currentTrace.clear();
+
+  const result: InterpreterResult = { graph, program: currentProgram, evidence };
+
+  return {
+    result,
+    get currentTrace() { return currentTrace; },
+
+    editFile(path: string, newContent: string): EditCycleTrace {
+      const normalizedPath = normalizeP(path);
+
+      // 1. Update file store
+      fileStore.set(normalizedPath, newContent);
+
+      // 2. Create new TS program with updated files
+      currentProgram = createFixtureProgram(Object.fromEntries(fileStore));
+      (result as any).program = currentProgram;
+
+      // 3. Fresh trace for this edit cycle
+      currentTrace = new EditCycleTrace();
+      proxy.target = currentTrace;
+
+      // 4. Mark the changed file as stale in the graph
+      graph.invalidation.markFileStale(normalizedPath as NormalizedPath);
+
+      return currentTrace;
+    },
+
+    pull(resourceKey: string, fieldPath: string): unknown {
+      return pullValue(graph, resourceKey, fieldPath);
+    },
+  };
+}
+
+
+// =============================================================================
+// Tier 7 Assertion Helpers
+// =============================================================================
+
+/**
+ * Assert that a conclusion node had cutoff fire (re-converged, same green).
+ * The node was on the staleness path, was re-evaluated, but produced
+ * the same structural content — downstream was NOT affected.
+ */
+export function assertCutoff(trace: EditCycleTrace, conclusionId: string): void {
+  if (!trace.cutoffNodes.has(conclusionId)) {
+    const wasChanged = trace.changedNodes.has(conclusionId);
+    const wasStale = trace.staleNodes.has(conclusionId);
+    throw new Error(
+      `Expected cutoff at '${conclusionId}' but ` +
+      (wasChanged ? 'conclusion CHANGED (no cutoff)' :
+       wasStale ? 'node was stale but never re-converged (not pulled?)' :
+       'node was never on the staleness path')
+    );
+  }
+}
+
+/**
+ * Assert that a conclusion node changed (re-converged, different green).
+ */
+export function assertChanged(trace: EditCycleTrace, conclusionId: string): void {
+  if (!trace.changedNodes.has(conclusionId)) {
+    const wasCutoff = trace.cutoffNodes.has(conclusionId);
+    throw new Error(
+      `Expected conclusion change at '${conclusionId}' but ` +
+      (wasCutoff ? 'cutoff fired (same green)' : 'node was never re-converged')
+    );
+  }
+}
+
+/**
+ * Assert that a node was NOT on the staleness propagation path at all.
+ * This is the strongest freshness assertion: the edit didn't touch
+ * this node's dependency subgraph.
+ */
+export function assertFresh(trace: EditCycleTrace, nodeId: string): void {
+  if (trace.staleNodes.has(nodeId)) {
+    throw new Error(
+      `Expected '${nodeId}' to be fresh but it received staleness propagation`
+    );
+  }
+}
+
+/**
+ * Assert that a node WAS marked stale during propagation.
+ */
+export function assertStale(trace: EditCycleTrace, nodeId: string): void {
+  if (!trace.staleNodes.has(nodeId)) {
+    throw new Error(
+      `Expected '${nodeId}' to be stale but it was never marked stale`
+    );
+  }
+}
+
+/**
+ * Assert that an evaluation callback was invoked for a specific node.
+ */
+export function assertEvaluated(trace: EditCycleTrace, evalNodeId: string): void {
+  if (!trace.evaluatedNodes.has(evalNodeId)) {
+    throw new Error(
+      `Expected evaluation of '${evalNodeId}' but callback was not invoked`
+    );
+  }
+}
+
+/**
+ * Assert that an evaluation callback was NOT invoked for a specific node.
+ */
+export function assertNotEvaluated(trace: EditCycleTrace, evalNodeId: string): void {
+  if (trace.evaluatedNodes.has(evalNodeId)) {
+    throw new Error(
+      `Expected '${evalNodeId}' to NOT be re-evaluated but callback was invoked`
+    );
+  }
+}
+
+/**
+ * Full propagation scope assertion: specifies exactly which conclusion
+ * nodes were affected (cutoff or changed) and which stayed fresh.
+ */
+export function assertPropagationScope(
+  trace: EditCycleTrace,
+  expected: {
+    cutoff?: string[];
+    changed?: string[];
+    fresh?: string[];
+  },
+): void {
+  for (const id of expected.cutoff ?? []) assertCutoff(trace, id);
+  for (const id of expected.changed ?? []) assertChanged(trace, id);
+  for (const id of expected.fresh ?? []) assertFresh(trace, id);
 }
