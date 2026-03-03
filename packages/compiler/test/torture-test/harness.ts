@@ -86,25 +86,61 @@ declare module 'aurelia' {
 // In-Memory Program Creation
 // =============================================================================
 
+const SHARED_OPTS: ts.CompilerOptions = {
+  target: ts.ScriptTarget.ES2022,
+  module: ts.ModuleKind.ESNext,
+  moduleResolution: ts.ModuleResolutionKind.Bundler,
+  strict: true,
+  noEmit: true,
+  experimentalDecorators: true,
+  // Skip type-checking lib files — we only need their declarations for
+  // resolution, not their correctness. Saves ~30% of program creation.
+  skipDefaultLibCheck: true,
+  skipLibCheck: true,
+};
+
+/**
+ * Cached lib.d.ts source files. TypeScript's default libs are immutable
+ * and position-independent — parsing them once and reusing across all
+ * test programs eliminates the dominant per-test cost (~60 lib files).
+ */
+const libSourceFileCache = new Map<string, ts.SourceFile>();
+
+/**
+ * Shared base CompilerHost — created once, reused across all programs.
+ * Its getSourceFile is wrapped to add caching.
+ */
+const sharedBaseHost = ts.createCompilerHost(SHARED_OPTS, true);
+
+/** Pre-parsed aurelia stubs source file. */
+const aureliaStubsSourceFile = ts.createSourceFile(
+  "/node_modules/aurelia/index.d.ts",
+  AURELIA_STUBS,
+  ts.ScriptTarget.ES2022,
+  true,
+);
+
+/**
+ * Previous program for incremental reuse. TypeScript's createProgram
+ * accepts an oldProgram parameter — it skips re-parsing unchanged
+ * source files. Since lib files never change between tests, this
+ * gives us free structural sharing.
+ */
+let previousProgram: ts.Program | undefined;
+
+const normalize = (f: string) => f.replace(/\\/g, "/");
+
 /**
  * Create a TypeScript program from in-memory fixture files.
  * Automatically includes Aurelia type stubs.
+ *
+ * Performance: caches lib.d.ts source files across invocations,
+ * reuses the previous program for structural sharing, and skips
+ * lib type-checking.
  */
 export function createFixtureProgram(
   files: Record<string, string>,
 ): ts.Program {
-  const opts: ts.CompilerOptions = {
-    target: ts.ScriptTarget.ES2022,
-    module: ts.ModuleKind.ESNext,
-    moduleResolution: ts.ModuleResolutionKind.Bundler,
-    strict: true,
-    noEmit: true,
-    experimentalDecorators: true,
-  };
-
-  const normalize = (f: string) => f.replace(/\\/g, "/");
-
-  // Add aurelia stubs
   const allFiles: Record<string, string> = {
     "/node_modules/aurelia/index.d.ts": AURELIA_STUBS,
     ...files,
@@ -124,30 +160,46 @@ export function createFixtureProgram(
     dirs.add("/");
   }
 
-  // Only use source files as roots (not .d.ts stubs)
   const roots = Object.keys(files);
-  const base = ts.createCompilerHost(opts, true);
 
   const host: ts.CompilerHost = {
-    ...base,
+    ...sharedBaseHost,
     getCurrentDirectory: () => "/",
     getCanonicalFileName: (f) => normalize(f),
-    fileExists: (f) => mem.has(normalize(f)) || base.fileExists(f),
-    readFile: (f) => mem.get(normalize(f)) ?? base.readFile(f),
+    fileExists: (f) => mem.has(normalize(f)) || sharedBaseHost.fileExists(f),
+    readFile: (f) => mem.get(normalize(f)) ?? sharedBaseHost.readFile(f),
     directoryExists: (d) => {
       const key = normalize(d);
-      return dirs.has(key) || base.directoryExists?.(d) || false;
+      return dirs.has(key) || sharedBaseHost.directoryExists?.(d) || false;
     },
     getSourceFile: (f, lang, onErr, shouldCreate) => {
       const key = normalize(f);
+
+      // In-memory fixture files — always fresh
       if (mem.has(key)) {
         return ts.createSourceFile(f, mem.get(key)!, lang, true);
       }
-      return base.getSourceFile(f, lang, onErr, shouldCreate);
+
+      // Aurelia stubs — pre-parsed singleton
+      if (key === "/node_modules/aurelia/index.d.ts") {
+        return aureliaStubsSourceFile;
+      }
+
+      // Lib files — cache parsed source files across all programs
+      const cached = libSourceFileCache.get(key);
+      if (cached) return cached;
+
+      const sf = sharedBaseHost.getSourceFile(f, lang, onErr, shouldCreate);
+      if (sf) {
+        libSourceFileCache.set(key, sf);
+      }
+      return sf;
     },
   };
 
-  return ts.createProgram(roots, opts, host);
+  const program = ts.createProgram(roots, SHARED_OPTS, host, previousProgram);
+  previousProgram = program;
+  return program;
 }
 
 // =============================================================================
