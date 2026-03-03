@@ -461,8 +461,10 @@ function classifyAndResolve(
   }
 
   // Step 2: Captured attributes
+  // F3 §Step 2: captured attributes exclude au-slot, bindable properties
+  // of this CE, and template controllers.
   if (ceGreen) {
-    const captureResult = checkCapture(ceGreen, attr, ctx);
+    const captureResult = checkCapture(ceGreen, attr, syntax, ctx);
     if (captureResult.captured) {
       return {
         classification: { step: 2, category: 'captured', uncertainty: captureResult.uncertainty },
@@ -537,9 +539,14 @@ function classifyAndResolve(
 function checkCapture(
   ce: CustomElementGreen,
   attr: TemplateAttr,
+  syntax: { target: string; command: string | null },
   ctx: LoweringContext,
 ): { captured: boolean; uncertainty?: GapSignal } {
-  if (attr.name === 'au-slot') return { captured: false };
+  // F3 §Step 2 exclusions: au-slot, CE bindable properties, TCs, spread
+  if (attr.name === 'au-slot' || attr.name === 'slot') return { captured: false };
+  if (attr.name === '...$attrs' || attr.name.startsWith('...')) return { captured: false };
+  if (findBindable(ce, syntax.target)) return { captured: false };
+  if (findController(syntax.target, ctx)) return { captured: false };
 
   const captureField = ce.capture;
 
