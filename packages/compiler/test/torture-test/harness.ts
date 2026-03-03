@@ -83,6 +83,31 @@ declare module 'aurelia' {
   export const BindingCommand: {
     define(config: Record<string, any>, target?: any): any;
   };
+
+  export interface IRegistry {
+    register(container: any): void;
+  }
+
+  /** Aurelia application builder — default export */
+  class Aurelia {
+    register(...registrations: any[]): this;
+    app(config: any): this;
+    start(): void;
+  }
+  export default Aurelia;
+}
+
+declare module '@aurelia/i18n' {
+  export const I18nConfiguration: {
+    customize(cb: (options: any) => void): any;
+    register(container: any): void;
+  };
+}
+
+declare module '@aurelia/router' {
+  export const RouterConfiguration: {
+    register(container: any): void;
+  };
 }
 `;
 
