@@ -14,7 +14,10 @@ import type { NormalizedPath } from "../../out/model/identity.js";
 import { createProjectDepGraph } from "../../out/project-semantics/deps/graph.js";
 import {
   conclusionNodeId,
+  manifestNodeId,
+  configNodeId,
   type ProjectDepGraph,
+  type ProjectDepNodeId,
   type ObservationEntry,
   type ConvergenceFunction,
   type EvidenceSource,
@@ -289,6 +292,96 @@ export function runInterpreter(
   interpretProject(sourceFiles, config);
 
   return { graph, program, evidence };
+}
+
+// =============================================================================
+// Non-Analysis Fixture Injection (Tier 3+)
+// =============================================================================
+
+/**
+ * A non-analysis evidence fixture: manifest, config, or builtin
+ * observation injected alongside analysis observations.
+ */
+export interface EvidenceFixture {
+  /** Evidence rank */
+  tier: "builtin" | "config" | "manifest" | "explicit-config";
+  /** Resource identity */
+  resource: { name: string; kind: string; className: string };
+  /** Per-field known values */
+  fields?: Record<string, unknown>;
+}
+
+/**
+ * Inject a non-analysis observation fixture into the graph.
+ * Creates observation nodes for each field and wires them to
+ * the same conclusion nodes the interpreter uses.
+ */
+export function injectFixture(
+  result: InterpreterResult,
+  fixture: EvidenceFixture,
+): void {
+  const { graph } = result;
+  const resourceKey = `${fixture.resource.kind}:${fixture.resource.name}`;
+  const tier = fixture.tier === "explicit-config" ? "config" : fixture.tier;
+  const source: EvidenceSource = { tier: tier as any, form: fixture.tier };
+
+  // Synthetic evaluation node for this fixture source
+  const evalNode = (fixture.tier === "manifest"
+    ? manifestNodeId(resourceKey)
+    : fixture.tier === "builtin"
+    ? `eval:builtin:${resourceKey}`
+    : configNodeId(resourceKey)) as any;
+
+  // Identity fields
+  registerFixtureField(graph, resourceKey, "name", fixture.resource.name, source, evalNode);
+  registerFixtureField(graph, resourceKey, "className", fixture.resource.className, source, evalNode);
+  registerFixtureField(graph, resourceKey, "kind", fixture.resource.kind, source, evalNode);
+
+  // Per-field values
+  if (fixture.fields) {
+    for (const [fieldPath, value] of Object.entries(fixture.fields)) {
+      registerFixtureField(graph, resourceKey, fieldPath, value, source, evalNode);
+    }
+  }
+}
+
+function registerFixtureField(
+  graph: ProjectDepGraph,
+  resourceKey: string,
+  fieldPath: string,
+  value: unknown,
+  source: EvidenceSource,
+  evalNode: any,
+): void {
+  const green = valueToGreenFixture(value);
+  const red: Sourced<unknown> = { origin: "source", state: "known", value };
+
+  graph.observations.registerObservation(
+    resourceKey,
+    fieldPath,
+    source,
+    green,
+    red,
+    evalNode,
+  );
+}
+
+function valueToGreenFixture(value: unknown): GreenValue {
+  if (value === null || value === undefined || typeof value === "string" ||
+      typeof value === "number" || typeof value === "boolean") {
+    return { kind: "literal", value: value as string | number | boolean | null | undefined };
+  }
+  if (Array.isArray(value)) {
+    return { kind: "array", elements: value.map(valueToGreenFixture) };
+  }
+  if (typeof value === "object") {
+    const props = new Map<string, GreenValue>();
+    for (const [k, v] of Object.entries(value)) {
+      props.set(k, valueToGreenFixture(v));
+    }
+    return { kind: "object", properties: props, methods: new Map() };
+  }
+  return { kind: "unknown", reasonKind: "unsupported-value" };
 }
 
 // =============================================================================
