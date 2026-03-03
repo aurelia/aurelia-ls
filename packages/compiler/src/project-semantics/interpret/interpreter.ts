@@ -167,6 +167,9 @@ function interpretFile(
   // Scan for define() calls in expression statements
   scanDefineCallsInFile(sf, filePath, config, checker, scope, classMap, explicitlyRecognizedClasses);
 
+  // Scan for Aurelia.register() calls (root registration sites)
+  scanRootRegistrations(sf, filePath, config, scope);
+
   // Process paired HTML meta elements for convention-recognized resources
   if (filePath.endsWith('.ts')) {
     extractHtmlMetaObservations(sf, filePath, config, checker);
@@ -321,4 +324,174 @@ function collectModuleLevelExpressions(
   }
 
   return result;
+}
+
+// =============================================================================
+// Root Registration Scanning — Aurelia.register() calls
+// =============================================================================
+
+/**
+ * Structured root registration observation.
+ * Each entry identifies a class that was registered in the root container.
+ */
+export interface RootRegistration {
+  /** Class name or import reference string */
+  readonly classRef: string;
+  /** File that contains the registration call site */
+  readonly site: NormalizedPath;
+}
+
+/**
+ * Scan a file for Aurelia.register() call patterns.
+ *
+ * Patterns recognized:
+ * - Aurelia.register(X, Y, Z)
+ * - new Aurelia().register(X)
+ * - Chained: Aurelia.register(X).app(App).start()
+ *
+ * Each argument that resolves to a class reference becomes a root
+ * registration observation on a well-known "root-registrations" resource.
+ */
+function scanRootRegistrations(
+  sf: ts.SourceFile,
+  filePath: NormalizedPath,
+  config: InterpreterConfig,
+  scope: import('../evaluate/value/types.js').LexicalScope,
+): void {
+  const registrations: RootRegistration[] = [];
+
+  // Collect all expression statements at module level
+  const exprStmts = collectModuleLevelExpressions(sf.statements);
+
+  for (const exprStmt of exprStmts) {
+    findRegisterCalls(exprStmt.expression, sf, filePath, scope, registrations);
+  }
+
+  if (registrations.length === 0) return;
+
+  // Emit root registration observations
+  const { graph } = config;
+  const evalHandle = graph.tracer.pushContext(filePath, 'root-registrations');
+  if (evalHandle.isCycle) return;
+
+  try {
+    graph.tracer.readFile(filePath);
+
+    // Build green value: array of class ref strings
+    const elements = registrations.map(r =>
+      ({ kind: 'literal' as const, value: `class:${r.classRef}` })
+    );
+    const green = { kind: 'array' as const, elements };
+    const red = {
+      origin: 'source' as const,
+      state: 'known' as const,
+      value: registrations.map(r => `class:${r.classRef}`),
+    };
+
+    graph.observations.registerObservation(
+      'root-registrations',
+      'registrations',
+      { tier: 'analysis-explicit', form: 'aurelia-register' },
+      green,
+      red as any,
+      evalHandle.nodeId,
+    );
+  } finally {
+    graph.tracer.popContext(evalHandle);
+  }
+}
+
+/**
+ * Walk a call chain to find .register() calls on Aurelia receivers.
+ *
+ * Handles chaining: Aurelia.register(X).app(App).start()
+ * The AST for this is nested: start(app(register(Aurelia, X), App))
+ * We walk the receiver chain (each call's callee.expression) to find
+ * all .register() calls.
+ */
+function findRegisterCalls(
+  expr: ts.Expression,
+  sf: ts.SourceFile,
+  filePath: NormalizedPath,
+  scope: import('../evaluate/value/types.js').LexicalScope,
+  out: RootRegistration[],
+): void {
+  if (!ts.isCallExpression(expr)) return;
+
+  const callee = expr.expression;
+  if (!ts.isPropertyAccessExpression(callee)) return;
+
+  // Check if this is a .register() call on an Aurelia receiver
+  if (callee.name.text === 'register' && isAureliaReceiver(callee.expression)) {
+    for (const arg of expr.arguments) {
+      const classRef = extractClassRefFromArg(arg, sf, scope);
+      if (classRef) {
+        out.push({ classRef, site: filePath });
+      }
+    }
+  }
+
+  // Walk the receiver chain for deeper .register() calls
+  // E.g., Aurelia.register(A).register(B).app(C).start()
+  // The receiver of .app() is .register(B), whose receiver is .register(A)
+  if (ts.isCallExpression(callee.expression)) {
+    findRegisterCalls(callee.expression, sf, filePath, scope, out);
+  }
+}
+
+/**
+ * Check if an expression is an Aurelia receiver:
+ * - Identifier `Aurelia`
+ * - `new Aurelia()`
+ * - Import of `Aurelia` / `default` from 'aurelia'
+ */
+function isAureliaReceiver(expr: ts.Expression): boolean {
+  // Direct identifier: Aurelia
+  if (ts.isIdentifier(expr) && expr.text === 'Aurelia') return true;
+
+  // new Aurelia()
+  if (ts.isNewExpression(expr)) {
+    if (ts.isIdentifier(expr.expression) && expr.expression.text === 'Aurelia') return true;
+  }
+
+  // Chained call: result of previous .register() or .app() call on Aurelia
+  if (ts.isCallExpression(expr)) {
+    const innerCallee = expr.expression;
+    if (ts.isPropertyAccessExpression(innerCallee)) {
+      return isAureliaReceiver(innerCallee.expression);
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Extract a class name from a registration argument.
+ *
+ * Args can be:
+ * - Identifier (local class reference)
+ * - Import (cross-file class reference)
+ * - Call expression (plugin: SomePlugin.configure(...)) — gap
+ */
+function extractClassRefFromArg(
+  arg: ts.Expression,
+  sf: ts.SourceFile,
+  scope: import('../evaluate/value/types.js').LexicalScope,
+): string | null {
+  if (ts.isIdentifier(arg)) {
+    return arg.text;
+  }
+
+  // Spread: ...args — gap
+  if (ts.isSpreadElement(arg)) {
+    return null;
+  }
+
+  // Property access: SomeModule.SomeClass
+  if (ts.isPropertyAccessExpression(arg)) {
+    return arg.name.text;
+  }
+
+  // Other complex expressions (function calls, etc.) — gap
+  return null;
 }

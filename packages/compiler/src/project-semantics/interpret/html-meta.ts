@@ -65,6 +65,25 @@ export function extractHtmlMetaObservations(
     emitMetaObservation(config, conventionKey, meta, evalNode);
   }
 
+  // Process <import from="..."> elements — local registrations via template import
+  if (metas.imports.length > 0) {
+    const importRefs = metas.imports.map(imp => imp.from);
+    const green = internPool.intern({
+      kind: 'array',
+      elements: importRefs.map(ref => ({ kind: 'literal' as const, value: ref })),
+    });
+    const red: Sourced<unknown> = { origin: 'source', state: 'known', value: importRefs };
+
+    config.graph.observations.registerObservation(
+      conventionKey,
+      'template-imports',
+      { tier: 'analysis-explicit', form: 'import-element' },
+      green,
+      red,
+      evalNode,
+    );
+  }
+
   // Process local templates
   for (const local of metas.localTemplates) {
     const localKey = `custom-element:${local.name}`;
@@ -96,14 +115,20 @@ interface LocalTemplate {
   metas: MetaElement[];
 }
 
+interface TemplateImportElement {
+  from: string;
+}
+
 interface ParsedHtmlMeta {
   topLevel: MetaElement[];
   localTemplates: LocalTemplate[];
+  imports: TemplateImportElement[];
 }
 
 function parseHtmlMetaElements(html: string): ParsedHtmlMeta {
   const topLevel: MetaElement[] = [];
   const localTemplates: LocalTemplate[] = [];
+  const imports: TemplateImportElement[] = [];
 
   // Find local templates first and extract their content
   const localRegex = /<template\s+as-custom-element="([^"]+)"[^>]*>([\s\S]*?)<\/template>/g;
@@ -119,8 +144,7 @@ function parseHtmlMetaElements(html: string): ParsedHtmlMeta {
     localTemplates.push({ name, metas });
   }
 
-  // Extract top-level meta elements (outside local templates)
-  // Remove local template content first
+  // Extract top-level content (outside local templates)
   let topLevelHtml = html;
   for (const range of localRanges.reverse()) {
     topLevelHtml = topLevelHtml.slice(0, range.start) + topLevelHtml.slice(range.end);
@@ -128,7 +152,15 @@ function parseHtmlMetaElements(html: string): ParsedHtmlMeta {
 
   topLevel.push(...extractMetaElementsFromContent(topLevelHtml));
 
-  return { topLevel, localTemplates };
+  // Extract <import> elements from top-level content
+  // <import from="./path"> or <import from="./path"></import> or <import from="./path"/>
+  const importRegex = /<import\s+from\s*=\s*"([^"]+)"\s*(?:\/>|><\/import>|>)/g;
+  let importMatch;
+  while ((importMatch = importRegex.exec(topLevelHtml)) !== null) {
+    imports.push({ from: importMatch[1]! });
+  }
+
+  return { topLevel, localTemplates, imports };
 }
 
 function extractMetaElementsFromContent(content: string): MetaElement[] {

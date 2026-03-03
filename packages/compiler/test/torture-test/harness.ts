@@ -642,3 +642,176 @@ export function assertExactFields(
     );
   }
 }
+
+// =============================================================================
+// Scope-Visibility Assertions (Tier 4+)
+// =============================================================================
+
+import {
+  evaluateScopeVisibility,
+  type ScopeVisibilityGreen,
+} from "../../out/project-semantics/deps/scope-visibility.js";
+
+export interface ScopeVisibilityResult {
+  /** Per-scope visibility data, keyed by CE name */
+  scopes: Map<string, ScopeVisibilityGreen>;
+}
+
+/**
+ * Run scope-visibility evaluation on an InterpreterResult.
+ * Returns the visibility data for all CE scopes.
+ */
+export function evaluateVisibility(
+  result: InterpreterResult,
+): ScopeVisibilityResult {
+  const raw = evaluateScopeVisibility(result.graph);
+  const scopes = new Map<string, ScopeVisibilityGreen>();
+  for (const [name, data] of raw) {
+    scopes.set(name, data.green);
+  }
+  return { scopes };
+}
+
+/**
+ * Assert that a resource is visible in a CE's template scope.
+ *
+ * @param vis - Scope-visibility result from evaluateVisibility
+ * @param resourceName - The resource name to check (e.g., 'shared-nav')
+ * @param scopeOwner - The CE whose template scope to check (e.g., 'app')
+ * @param level - Expected lookup level: 'local' or 'root'
+ */
+export function assertVisible(
+  vis: ScopeVisibilityResult,
+  resourceName: string,
+  scopeOwner: string,
+  level: 'local' | 'root',
+): void {
+  const scope = vis.scopes.get(scopeOwner);
+  if (!scope) {
+    throw new Error(
+      `No scope found for '${scopeOwner}'. ` +
+      `Available scopes: [${[...vis.scopes.keys()].join(', ')}]`
+    );
+  }
+
+  const entry = scope.visible.get(resourceName);
+  if (!entry) {
+    throw new Error(
+      `Resource '${resourceName}' is NOT visible in '${scopeOwner}' scope. ` +
+      `Visible resources: [${[...scope.visible.keys()].join(', ')}]`
+    );
+  }
+
+  if (entry.lookupLevel !== level) {
+    throw new Error(
+      `Resource '${resourceName}' IS visible in '${scopeOwner}' scope but ` +
+      `via ${entry.lookupLevel} lookup, expected ${level}`
+    );
+  }
+}
+
+/**
+ * Assert that a resource is NOT visible in a CE's template scope.
+ */
+export function assertNotVisible(
+  vis: ScopeVisibilityResult,
+  resourceName: string,
+  scopeOwner: string,
+): void {
+  const scope = vis.scopes.get(scopeOwner);
+  if (!scope) {
+    throw new Error(
+      `No scope found for '${scopeOwner}'. ` +
+      `Available scopes: [${[...vis.scopes.keys()].join(', ')}]`
+    );
+  }
+
+  const entry = scope.visible.get(resourceName);
+  if (entry) {
+    throw new Error(
+      `Resource '${resourceName}' SHOULD NOT be visible in '${scopeOwner}' ` +
+      `scope but found via ${entry.lookupLevel} lookup`
+    );
+  }
+}
+
+/**
+ * Assert that a scope is complete (all registration paths analyzed).
+ */
+export function assertComplete(
+  vis: ScopeVisibilityResult,
+  scopeOwner: string,
+): void {
+  const scope = vis.scopes.get(scopeOwner);
+  if (!scope) {
+    throw new Error(
+      `No scope found for '${scopeOwner}'. ` +
+      `Available scopes: [${[...vis.scopes.keys()].join(', ')}]`
+    );
+  }
+
+  if (scope.completeness.state !== 'complete') {
+    throw new Error(
+      `Scope '${scopeOwner}' should be COMPLETE but has gaps: ` +
+      JSON.stringify(scope.completeness.gaps)
+    );
+  }
+}
+
+/**
+ * Assert that a scope is NOT complete (has registration gaps).
+ */
+export function assertNotComplete(
+  vis: ScopeVisibilityResult,
+  scopeOwner: string,
+): void {
+  const scope = vis.scopes.get(scopeOwner);
+  if (!scope) {
+    throw new Error(
+      `No scope found for '${scopeOwner}'. ` +
+      `Available scopes: [${[...vis.scopes.keys()].join(', ')}]`
+    );
+  }
+
+  if (scope.completeness.state !== 'incomplete') {
+    throw new Error(
+      `Scope '${scopeOwner}' should be INCOMPLETE but is marked complete`
+    );
+  }
+}
+
+/**
+ * Assert that a scope has a registration gap with specific properties.
+ */
+export function assertRegistrationGap(
+  vis: ScopeVisibilityResult,
+  scopeOwner: string,
+  match: { site?: string; reason?: string },
+): void {
+  const scope = vis.scopes.get(scopeOwner);
+  if (!scope) {
+    throw new Error(
+      `No scope found for '${scopeOwner}'. ` +
+      `Available scopes: [${[...vis.scopes.keys()].join(', ')}]`
+    );
+  }
+
+  if (scope.completeness.state !== 'incomplete') {
+    throw new Error(
+      `Scope '${scopeOwner}' has no gaps (is complete). ` +
+      `Expected a gap matching ${JSON.stringify(match)}`
+    );
+  }
+
+  const found = scope.completeness.gaps.some(g =>
+    (!match.site || g.site.includes(match.site)) &&
+    (!match.reason || g.reason.includes(match.reason))
+  );
+
+  if (!found) {
+    throw new Error(
+      `No gap matching ${JSON.stringify(match)} found in '${scopeOwner}' scope. ` +
+      `Gaps: ${JSON.stringify(scope.completeness.gaps)}`
+    );
+  }
+}

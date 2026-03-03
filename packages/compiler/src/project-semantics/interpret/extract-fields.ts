@@ -221,11 +221,19 @@ function extractCustomElementFields(
     cls.staticMembers.get('aliases'),
   ], evalNode, cls);
 
-  emitCollectionField(registrar, recognized, 'dependencies', [
+  extractDependencyReferences(registrar, recognized, [
     config?.kind === 'object' ? getProperty(config, 'dependencies') : undefined,
     cls.staticMembers.get('$au')?.kind === 'object' ? getProperty(cls.staticMembers.get('$au')!, 'dependencies') : undefined,
     cls.staticMembers.get('dependencies'),
   ], evalNode, cls);
+
+  // Parse inline template for <import> and <template as-custom-element> elements
+  if (config?.kind === 'object') {
+    const template = extractString(getProperty(config, 'template'));
+    if (template) {
+      extractInlineTemplateRegistrations(registrar, recognized, template, evalNode);
+    }
+  }
 }
 
 function extractCustomAttributeFields(
@@ -574,6 +582,226 @@ function emitCollectionField(
     emitObservation(registrar, recognized, fieldPath, allElements, evalNode, cls);
   }
   // If no sources mentioned the field and no gaps → nothing to emit (absent)
+}
+
+// =============================================================================
+// Inline Template Registration Extraction
+// =============================================================================
+
+/**
+ * Parse an inline template string for <import> and <template as-custom-element>
+ * elements. These produce local registration observations on the owning CE.
+ */
+function extractInlineTemplateRegistrations(
+  registrar: ObservationRegistrar,
+  recognized: RecognizedResource,
+  template: string,
+  evalNode: ProjectDepNodeId,
+): void {
+  // Extract <import from="./path"> elements
+  const importRegex = /<import\s+from\s*=\s*"([^"]+)"\s*(?:\/>|><\/import>|>)/g;
+  const imports: string[] = [];
+  let match;
+  while ((match = importRegex.exec(template)) !== null) {
+    imports.push(match[1]!);
+  }
+
+  if (imports.length > 0) {
+    const green = internPool.intern({
+      kind: 'array',
+      elements: imports.map(ref => ({ kind: 'literal' as const, value: ref })),
+    });
+    const red: Sourced<unknown> = { origin: 'source', state: 'known', value: imports };
+
+    registrar.registerObservation(
+      recognized.resourceKey,
+      'template-imports',
+      { tier: 'analysis-explicit', form: 'import-element' },
+      green,
+      red,
+      evalNode,
+    );
+  }
+
+  // Extract <template as-custom-element="name"> elements
+  const localRegex = /<template\s+as-custom-element="([^"]+)"/g;
+  const localNames: string[] = [];
+  while ((match = localRegex.exec(template)) !== null) {
+    localNames.push(match[1]!);
+  }
+
+  if (localNames.length > 0) {
+    const green = internPool.intern({
+      kind: 'array',
+      elements: localNames.map(name => ({ kind: 'literal' as const, value: name })),
+    });
+    const red: Sourced<unknown> = { origin: 'source', state: 'known', value: localNames };
+
+    registrar.registerObservation(
+      recognized.resourceKey,
+      'local-elements',
+      { tier: 'analysis-explicit', form: 'as-custom-element' },
+      green,
+      red,
+      evalNode,
+    );
+  }
+}
+
+// =============================================================================
+// Dependency Reference Extraction
+// =============================================================================
+
+/**
+ * Structured dependency reference produced by resolving class references
+ * in a CE's `dependencies` array. Each entry identifies a resource that
+ * should be locally registered in the owning CE's container.
+ *
+ * Three outcomes per array element:
+ * - resolved → resource key (kind:name)
+ * - class-ref → class was found but not recognized as a resource
+ * - unresolvable → opaque expression, gap
+ */
+export type DependencyRef =
+  | { refKind: 'resource'; resourceKey: string }
+  | { refKind: 'class-ref'; className: string; filePath?: NormalizedPath }
+  | { refKind: 'unresolvable'; reason: string };
+
+/**
+ * Extract and resolve dependency references from all sources.
+ *
+ * Unlike `emitCollectionField` (which extracts strings), this function
+ * resolves class references to resource identities by running recognition
+ * on each resolved ClassValue. This is the bridge between "what class is
+ * in the dependencies array" and "what resource does it represent."
+ *
+ * Three-state outcome per source:
+ * - undefined (source doesn't mention this field) → skip
+ * - extractable array of class refs → resolve each
+ * - present but opaque → emit gap
+ */
+function extractDependencyReferences(
+  registrar: ObservationRegistrar,
+  recognized: RecognizedResource,
+  sources: (AnalyzableValue | undefined)[],
+  evalNode: ProjectDepNodeId,
+  cls: AnalyzableValue,
+): void {
+  const refs: DependencyRef[] = [];
+  let hasGap = false;
+
+  for (const source of sources) {
+    if (!source) continue;
+    const resolved = getResolvedValue(source);
+
+    if (resolved.kind === 'array') {
+      for (const el of resolved.elements) {
+        const ref = resolveDependencyElement(el);
+        if (ref.refKind === 'unresolvable') {
+          hasGap = true;
+        }
+        refs.push(ref);
+      }
+    } else if (resolved.kind === 'literal' && resolved.value === undefined) {
+      // Explicit undefined — skip
+    } else if (resolved.kind === 'unknown') {
+      hasGap = true;
+    } else {
+      // Present but opaque
+      hasGap = true;
+    }
+  }
+
+  if (hasGap && refs.length === 0) {
+    // All sources are opaque — emit pure gap
+    registrar.registerObservation(
+      recognized.resourceKey, 'dependencies', recognized.source,
+      { kind: 'unknown', reasonKind: 'opaque-dependencies' },
+      { origin: 'source', state: 'unknown' } as any,
+      evalNode,
+    );
+    return;
+  }
+
+  if (refs.length === 0) {
+    // No sources mentioned dependencies — nothing to emit (absent)
+    return;
+  }
+
+  // Build green value: array of resource keys (resolved) and unknowns (gaps)
+  const elements: GreenValue[] = refs.map(ref => {
+    switch (ref.refKind) {
+      case 'resource':
+        return { kind: 'literal' as const, value: ref.resourceKey };
+      case 'class-ref':
+        // Class found but not recognized as resource — still a valid dep ref,
+        // emit as a class identifier so downstream can attempt resolution
+        return { kind: 'literal' as const, value: `class:${ref.className}` };
+      case 'unresolvable':
+        return { kind: 'unknown' as const, reasonKind: ref.reason };
+    }
+  });
+
+  const green = internPool.intern({ kind: 'array', elements });
+  const redValue = refs.map(ref =>
+    ref.refKind === 'resource' ? ref.resourceKey :
+    ref.refKind === 'class-ref' ? `class:${ref.className}` :
+    `<unresolvable:${ref.reason}>`
+  );
+  const red: Sourced<unknown> = { origin: 'source', state: 'known', value: redValue };
+
+  registrar.registerObservation(
+    recognized.resourceKey, 'dependencies', recognized.source,
+    green, red, evalNode,
+  );
+
+  // If there were gaps mixed in, also emit a gap marker for completeness tracking
+  if (hasGap) {
+    registrar.registerObservation(
+      recognized.resourceKey, 'dependencies:completeness', recognized.source,
+      { kind: 'unknown', reasonKind: 'partial-opaque-dependencies' },
+      { origin: 'source', state: 'unknown' } as any,
+      evalNode,
+    );
+  }
+}
+
+/**
+ * Resolve a single element from a `dependencies` array to a DependencyRef.
+ *
+ * Follows reference/import chains to find the resolved value.
+ * If it's a ClassValue, records its identity as a class-ref. The scope-
+ * visibility callback will match these to recognized resources via the graph.
+ *
+ * Note: We can't run recognizeResource here because file-scope class bindings
+ * are skeleton ClassValues (empty decorators/statics). The full extraction
+ * happens separately in evaluateUnit. Instead we capture the class identity
+ * and let the scope-visibility layer match className → resource.
+ */
+function resolveDependencyElement(element: AnalyzableValue): DependencyRef {
+  const resolved = getResolvedValue(element);
+
+  if (resolved.kind === 'class') {
+    // Class found — record identity for downstream matching
+    return { refKind: 'class-ref', className: resolved.className, filePath: resolved.filePath };
+  }
+
+  // Unresolved reference — the class name is known but value wasn't resolved
+  if (element.kind === 'reference' && !element.resolved) {
+    return { refKind: 'class-ref', className: element.name };
+  }
+
+  // Unresolved import — cross-file dependency couldn't be followed
+  if (element.kind === 'import' && !element.resolved) {
+    return { refKind: 'unresolvable', reason: 'unresolved-import' };
+  }
+
+  // Unknown or opaque expression
+  if (resolved.kind === 'unknown') {
+    return { refKind: 'unresolvable', reason: resolved.reason.why.kind };
+  }
+
+  return { refKind: 'unresolvable', reason: 'opaque-expression' };
 }
 
 function valueToGreen(value: unknown): GreenValue {
