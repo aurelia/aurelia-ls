@@ -160,18 +160,9 @@ export function transformExpression(expr: ts.Expression, sf: ts.SourceFile): Ana
     return transformExpression(expr.expression, sf);
   }
 
-  // Template literal (without substitutions handled above)
+  // Template literal with substitutions: try to evaluate statically
   if (ts.isTemplateExpression(expr)) {
-    // Template with substitutions - can't statically evaluate
-    return unknown(
-      gapWithFile(
-        sf,
-        'template literal',
-        { kind: 'dynamic-value', expression: expr.getText(sf) },
-        'Template literals with substitutions cannot be statically analyzed',
-      ),
-      span
-    );
+    return transformTemplateLiteral(expr, sf, span);
   }
 
   // Binary expressions - limited support for string concatenation
@@ -180,15 +171,16 @@ export function transformExpression(expr: ts.Expression, sf: ts.SourceFile): Ana
   }
 
   // Conditional expression: cond ? then : else
+  // Store all three parts for potential static evaluation in scope resolution
   if (ts.isConditionalExpression(expr)) {
-    return unknown(
-      gapWithFile(
-        sf,
-        'conditional expression',
-        { kind: 'dynamic-value', expression: expr.getText(sf) },
-        'Conditional expressions cannot be statically analyzed',
-      ),
-      span
+    const condition = transformExpression(expr.condition, sf);
+    const whenTrue = transformExpression(expr.whenTrue, sf);
+    const whenFalse = transformExpression(expr.whenFalse, sf);
+    return call(
+      ref('__ternary', undefined, span),
+      [condition, whenTrue, whenFalse],
+      undefined,
+      span,
     );
   }
 
@@ -557,15 +549,69 @@ function transformFunctionExpression(
 }
 
 /**
- * Transform a binary expression - limited support.
+ * Transform a template literal expression.
+ *
+ * Template literals like `${prefix}-view` are transformed to a
+ * CallValue with a special `__templateLiteral` callee, carrying
+ * the head, spans (substitution expressions), and tail texts as args.
+ * Resolution in scope.ts can then concatenate when all parts are static.
+ *
+ * We store the structural parts so that scope resolution can attempt
+ * static evaluation: if all substitutions resolve to string/number
+ * literals, the result is a concatenated string literal.
+ */
+function transformTemplateLiteral(
+  expr: ts.TemplateExpression,
+  sf: ts.SourceFile,
+  span: TextSpan,
+): AnalyzableValue {
+  // Collect all parts: head text, then (expression, text) pairs
+  const parts: AnalyzableValue[] = [];
+
+  // Head text
+  parts.push(literal(expr.head.text, nodeSpan(expr.head, sf)));
+
+  // Template spans: each has an expression and a literal text tail
+  for (const templateSpan of expr.templateSpans) {
+    parts.push(transformExpression(templateSpan.expression, sf));
+    parts.push(literal(templateSpan.literal.text, nodeSpan(templateSpan.literal, sf)));
+  }
+
+  // Store as a call to a synthetic __templateLiteral function
+  // This allows scope resolution to detect and evaluate it
+  return call(
+    ref('__templateLiteral', undefined, span),
+    parts,
+    undefined,
+    span,
+  );
+}
+
+/**
+ * Transform a binary expression.
+ *
+ * Handles the `+` operator for string/numeric concatenation. Both operands
+ * are transformed; scope resolution can later evaluate if both resolve
+ * to literals. Other operators produce unknown with a descriptive gap.
  */
 function transformBinaryExpression(
   expr: ts.BinaryExpression,
   sf: ts.SourceFile,
   span: TextSpan
 ): AnalyzableValue {
-  // We could try to evaluate simple cases like string concatenation
-  // For now, treat as unknown
+  // For the + operator, store as a synthetic __concat call so scope
+  // resolution can evaluate it when both sides are static literals.
+  if (expr.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+    const left = transformExpression(expr.left, sf);
+    const right = transformExpression(expr.right, sf);
+    return call(
+      ref('__concat', undefined, span),
+      [left, right],
+      undefined,
+      span,
+    );
+  }
+
   return unknown(
     gapWithFile(
       sf,

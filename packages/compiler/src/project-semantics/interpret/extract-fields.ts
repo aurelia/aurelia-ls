@@ -24,6 +24,7 @@ import {
   extractStringArray,
   extractBindingMode,
   getProperty,
+  getResolvedValue,
 } from '../evaluate/value/types.js';
 import type { GreenValue } from '../../value/green.js';
 import { extractGreen } from '../../value/extract-green.js';
@@ -120,7 +121,7 @@ function extractCustomElementFields(
   if (config?.kind === 'object') {
     emitScalarIfPresent(registrar, recognized, 'containerless', extractBoolean(getProperty(config, 'containerless')), evalNode, cls, emitted);
     emitScalarIfPresent(registrar, recognized, 'capture', extractBoolean(getProperty(config, 'capture')), evalNode, cls, emitted);
-    emitScalarIfPresent(registrar, recognized, 'processContent', extractBoolean(getProperty(config, 'processContent')), evalNode, cls, emitted);
+    emitScalarIfPresent(registrar, recognized, 'processContent', extractPresence(getProperty(config, 'processContent')), evalNode, cls, emitted);
 
     const shadowOpts = getProperty(config, 'shadowOptions');
     if (shadowOpts) {
@@ -148,6 +149,15 @@ function extractCustomElementFields(
   if (au?.kind === 'object') {
     aliases.push(...extractStringArray(getProperty(au, 'aliases')));
     deps.push(...extractStringArray(getProperty(au, 'dependencies')));
+  }
+  // Merge from direct static class properties (e.g., static aliases = [...])
+  const staticAliases = cls.staticMembers.get('aliases');
+  if (staticAliases) {
+    aliases.push(...extractStringArray(staticAliases));
+  }
+  const staticDeps = cls.staticMembers.get('dependencies');
+  if (staticDeps) {
+    deps.push(...extractStringArray(staticDeps));
   }
   if (aliases.length > 0) {
     emitObservation(registrar, recognized, 'aliases', aliases, evalNode, cls);
@@ -183,28 +193,63 @@ function extractCustomAttributeFields(
   if (au?.kind === 'object') {
     aliases.push(...extractStringArray(getProperty(au, 'aliases')));
   }
+  const staticAliases = cls.staticMembers.get('aliases');
+  if (staticAliases) {
+    aliases.push(...extractStringArray(staticAliases));
+  }
   if (aliases.length > 0) {
     emitObservation(registrar, recognized, 'aliases', aliases, evalNode, cls);
   }
 }
 
 function extractValueConverterFields(
-  _recognized: RecognizedResource,
-  _cls: ClassValue,
-  _registrar: ObservationRegistrar,
-  _evalNode: ProjectDepNodeId,
+  recognized: RecognizedResource,
+  cls: ClassValue,
+  registrar: ObservationRegistrar,
+  evalNode: ProjectDepNodeId,
 ): void {
-  // VC has minimal fields (name only, already emitted)
+  // Array fields: aliases merged from all sources
+  const aliases: string[] = [];
+  if (recognized.config?.kind === 'object') {
+    aliases.push(...extractStringArray(getProperty(recognized.config, 'aliases')));
+  }
+  const au = cls.staticMembers.get('$au');
+  if (au?.kind === 'object') {
+    aliases.push(...extractStringArray(getProperty(au, 'aliases')));
+  }
+  // Static class property
+  const staticAliases = cls.staticMembers.get('aliases');
+  if (staticAliases) {
+    aliases.push(...extractStringArray(staticAliases));
+  }
+  if (aliases.length > 0) {
+    emitObservation(registrar, recognized, 'aliases', aliases, evalNode, cls);
+  }
   // fromType/toType require TypeScript type analysis (tier C)
 }
 
 function extractBindingBehaviorFields(
-  _recognized: RecognizedResource,
-  _cls: ClassValue,
-  _registrar: ObservationRegistrar,
-  _evalNode: ProjectDepNodeId,
+  recognized: RecognizedResource,
+  cls: ClassValue,
+  registrar: ObservationRegistrar,
+  evalNode: ProjectDepNodeId,
 ): void {
-  // BB has minimal fields (name only, already emitted)
+  // Array fields: aliases merged from all sources
+  const aliases: string[] = [];
+  if (recognized.config?.kind === 'object') {
+    aliases.push(...extractStringArray(getProperty(recognized.config, 'aliases')));
+  }
+  const au = cls.staticMembers.get('$au');
+  if (au?.kind === 'object') {
+    aliases.push(...extractStringArray(getProperty(au, 'aliases')));
+  }
+  const staticAliases = cls.staticMembers.get('aliases');
+  if (staticAliases) {
+    aliases.push(...extractStringArray(staticAliases));
+  }
+  if (aliases.length > 0) {
+    emitObservation(registrar, recognized, 'aliases', aliases, evalNode, cls);
+  }
 }
 
 // =============================================================================
@@ -442,6 +487,25 @@ function valueToSourced<T>(
   return location
     ? { origin: 'source', state: 'known', value, location }
     : { origin: 'source', state: 'known', value };
+}
+
+/**
+ * Extract a "presence" boolean: returns true if the value is present and not
+ * explicitly false/null/undefined. Used for processContent and capture where
+ * the value may be a function reference (tier D opaque) but its presence
+ * is still meaningful at tier B.
+ */
+function extractPresence(value: AnalyzableValue | undefined): boolean | undefined {
+  if (!value) return undefined;
+  const resolved = getResolvedValue(value);
+  // Explicitly false/null/undefined → false
+  if (resolved.kind === 'literal') {
+    if (resolved.value === false || resolved.value === null || resolved.value === undefined) return undefined;
+    return true;
+  }
+  // Function, reference, class, object, etc. → true (something is there)
+  if (resolved.kind === 'unknown') return undefined;
+  return true;
 }
 
 function extractShadowOptions(value: AnalyzableValue): { mode: 'open' | 'closed' } | undefined {

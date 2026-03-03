@@ -636,6 +636,11 @@ function resolveArray(
 
 /**
  * Resolve all properties and methods in an object.
+ *
+ * Handles object spread merge (P1): when a property key starts with
+ * `__spread_`, the value is a SpreadValue. If the spread target resolves
+ * to an object, merge its properties into the host object. Later explicit
+ * properties overwrite earlier spread properties (JS spread semantics).
  */
 function resolveObject(
   value: ObjectValue,
@@ -643,6 +648,7 @@ function resolveObject(
   resolving: Set<string>
 ): ObjectValue {
   let changed = false;
+  let hasSpread = false;
 
   // Resolve properties
   const properties = new Map<string, AnalyzableValue>();
@@ -650,6 +656,19 @@ function resolveObject(
     const resolved = resolveValue(propValue, scope, resolving);
     properties.set(key, resolved);
     if (resolved !== propValue) changed = true;
+    if (key.startsWith('__spread_')) hasSpread = true;
+  }
+
+  // If there are spread entries, try to merge them
+  if (hasSpread) {
+    const merged = mergeObjectSpreads(properties);
+    if (merged) {
+      properties.clear();
+      for (const [k, v] of merged) {
+        properties.set(k, v);
+      }
+      changed = true;
+    }
   }
 
   // Resolve methods (their bodies)
@@ -669,6 +688,43 @@ function resolveObject(
     properties,
     methods,
   };
+}
+
+/**
+ * Merge object spread entries into a flat property map.
+ * Returns null if no spreads could be resolved.
+ *
+ * Example: `{ __spread_0: ...baseConfig, name: 'override' }`
+ * If baseConfig resolves to `{ name: 'base', template: '...' }`,
+ * result is `{ name: 'override', template: '...' }`.
+ */
+function mergeObjectSpreads(
+  properties: Map<string, AnalyzableValue>,
+): Map<string, AnalyzableValue> | null {
+  let anyMerged = false;
+  const result = new Map<string, AnalyzableValue>();
+
+  for (const [key, value] of properties) {
+    if (key.startsWith('__spread_')) {
+      // Try to resolve the spread target to an object
+      const spreadTarget = value.kind === 'spread' ? getResolvedBase(value.target) : getResolvedBase(value);
+      if (spreadTarget?.kind === 'object') {
+        // Merge spread object's properties (earlier in iteration order)
+        for (const [spreadKey, spreadValue] of spreadTarget.properties) {
+          result.set(spreadKey, spreadValue);
+        }
+        anyMerged = true;
+      } else {
+        // Can't resolve spread — keep the __spread_ entry
+        result.set(key, value);
+      }
+    } else {
+      // Regular property — overwrites any earlier spread property
+      result.set(key, value);
+    }
+  }
+
+  return anyMerged ? result : null;
 }
 
 /**
@@ -768,6 +824,18 @@ function resolvePropertyAccess(
     }
   }
 
+  // Namespace import property access: import * as X from './y'; X.prop
+  // Convert to a specific named import for Layer 3 resolution
+  if (resolvedBase?.kind === 'import' && resolvedBase.exportName === '*') {
+    return {
+      kind: 'import',
+      specifier: resolvedBase.specifier,
+      exportName: value.property,
+      resolvedPath: resolvedBase.resolvedPath,
+      span: value.span,
+    };
+  }
+
   // If base resolved to an array and property is numeric, get the element
   if (resolvedBase?.kind === 'array') {
     const index = parseInt(value.property, 10);
@@ -797,14 +865,61 @@ function getResolvedBase(value: AnalyzableValue): AnalyzableValue | undefined {
 
 /**
  * Resolve a call expression.
+ *
+ * Special case: `__templateLiteral(parts...)` is a synthetic call
+ * produced by transform.ts for template literals. If all parts resolve
+ * to string/number literals, concatenate into a single string literal.
  */
 function resolveCall(
   value: CallValue,
   scope: LexicalScope,
   resolving: Set<string>
-): CallValue {
+): AnalyzableValue {
   const callee = resolveValue(value.callee, scope, resolving);
   const args = value.args.map(arg => resolveValue(arg, scope, resolving));
+
+  // Template literal evaluation: __templateLiteral(head, expr1, tail1, ...)
+  if (callee.kind === 'reference' && callee.name === '__templateLiteral') {
+    const parts: string[] = [];
+    let allStatic = true;
+    for (const arg of args) {
+      const resolved = getResolvedBase(arg);
+      if (resolved?.kind === 'literal' && (typeof resolved.value === 'string' || typeof resolved.value === 'number')) {
+        parts.push(String(resolved.value));
+      } else {
+        allStatic = false;
+        break;
+      }
+    }
+    if (allStatic) {
+      return { kind: 'literal', value: parts.join(''), span: value.span };
+    }
+  }
+
+  // Ternary evaluation: __ternary(condition, whenTrue, whenFalse)
+  if (callee.kind === 'reference' && callee.name === '__ternary' && args.length === 3) {
+    const condition = getResolvedBase(args[0]!);
+    if (condition?.kind === 'literal') {
+      // Static condition: select the appropriate branch
+      return condition.value ? args[1]! : args[2]!;
+    }
+  }
+
+  // String/number concatenation: __concat(left, right)
+  if (callee.kind === 'reference' && callee.name === '__concat' && args.length === 2) {
+    const left = getResolvedBase(args[0]!);
+    const right = getResolvedBase(args[1]!);
+    if (left?.kind === 'literal' && right?.kind === 'literal' &&
+        (typeof left.value === 'string' || typeof left.value === 'number') &&
+        (typeof right.value === 'string' || typeof right.value === 'number')) {
+      // JS + semantics: if either is string, result is string concatenation
+      if (typeof left.value === 'string' || typeof right.value === 'string') {
+        return { kind: 'literal', value: String(left.value) + String(right.value), span: value.span };
+      }
+      // Both numbers: arithmetic
+      return { kind: 'literal', value: (left.value as number) + (right.value as number), span: value.span };
+    }
+  }
 
   // Check if anything changed
   const calleeChanged = callee !== value.callee;

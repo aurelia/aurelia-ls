@@ -380,7 +380,6 @@ describe("1B: CE enhance, watches, strict", () => {
         shadowOptions: { mode: "open" },
         capture: true,
         processContent: true,
-        containerless: false,
         "bindable:value:property": "value",
       },
       absentFields: ["containerless"],
