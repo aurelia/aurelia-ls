@@ -38,13 +38,18 @@ export function createTracingResolver(
   const scopeCache = new Map<NormalizedPath, LexicalScope>();
   const resolving = new Set<string>();
 
-  return (specifier: string, exportName: string, requestingFile: NormalizedPath) => {
+  // Build a module resolution host from the program's source files.
+  // This is critical for in-memory test fixtures where ts.sys cannot
+  // find the files on disk.
+  const resolveHost = createProgramResolutionHost(program);
+
+  const resolver: OnDemandResolver = (specifier: string, exportName: string, requestingFile: NormalizedPath) => {
     // Resolve the module specifier to a file path
     const resolved = ts.resolveModuleName(
       specifier,
       requestingFile,
       program.getCompilerOptions(),
-      ts.sys,
+      resolveHost,
     );
 
     const resolvedModule = resolved.resolvedModule;
@@ -87,15 +92,28 @@ export function createTracingResolver(
         scopeCache.set(targetPath, scope);
       }
 
-      // Look up the exported value
+      // Look up the exported value — check bindings first, then imports
+      // (imports include re-export bindings from `export { X } from './y'`)
       let result: AnalyzableValue | null = null;
       const binding = scope.bindings.get(exportName);
       if (binding) {
         result = resolveInScope(binding, scope);
+        // Multi-hop: resolve imports within the resolved value so that
+        // values flowing through intermediary files are fully resolved.
+        result = resolveWithTracer(result, scope, resolver, targetPath);
+      } else if (scope.imports.has(exportName)) {
+        // Re-export: the name is an import binding pointing to another module.
+        // Resolve it by following the import chain.
+        const importBinding = scope.imports.get(exportName)!;
+        const reResolved = resolver(importBinding.specifier, importBinding.exportName, targetPath);
+        if (reResolved) {
+          result = reResolved;
+        }
       } else if (exportName === 'default') {
         const defaultBinding = scope.bindings.get('default');
         if (defaultBinding) {
           result = resolveInScope(defaultBinding, scope);
+          result = resolveWithTracer(result, scope, resolver, targetPath);
         }
       }
 
@@ -113,6 +131,50 @@ export function createTracingResolver(
     } finally {
       resolving.delete(cycleKey);
     }
+  };
+
+  return resolver;
+}
+
+// =============================================================================
+// Program Resolution Host
+// =============================================================================
+
+/**
+ * Create a ModuleResolutionHost that uses the program's source files.
+ *
+ * ts.resolveModuleName needs a host to check fileExists/readFile.
+ * Using ts.sys directly fails for in-memory test fixtures. This host
+ * checks the program's source files first, then falls back to ts.sys.
+ */
+function createProgramResolutionHost(program: ts.Program): ts.ModuleResolutionHost {
+  const normalize = (f: string) => f.replace(/\\/g, '/');
+
+  // Index all source files by their canonical path
+  const fileMap = new Map<string, ts.SourceFile>();
+  for (const sf of program.getSourceFiles()) {
+    fileMap.set(normalize(sf.fileName), sf);
+  }
+
+  // Collect directory paths from all source files
+  const dirs = new Set<string>();
+  for (const path of fileMap.keys()) {
+    let dir = path;
+    while ((dir = dir.substring(0, dir.lastIndexOf('/'))) && dir !== '') {
+      dirs.add(dir);
+    }
+    dirs.add('/');
+  }
+
+  return {
+    fileExists: (f) => fileMap.has(normalize(f)) || (ts.sys?.fileExists?.(f) ?? false),
+    readFile: (f) => {
+      const sf = fileMap.get(normalize(f));
+      return sf ? sf.text : ts.sys?.readFile?.(f);
+    },
+    directoryExists: (d) => {
+      return dirs.has(normalize(d)) || (ts.sys?.directoryExists?.(d) ?? false);
+    },
   };
 }
 
@@ -170,8 +232,18 @@ function resolveValue(
 
     case 'object': {
       const properties = new Map<string, AnalyzableValue>();
+      let hasSpread = false;
       for (const [k, v] of value.properties) {
         properties.set(k, resolveValue(v, scope, resolver, fromFile, seen));
+        if (k.startsWith('__spread_')) hasSpread = true;
+      }
+      // Object spread merge: after import resolution, spread targets
+      // may now be resolved objects that can be merged
+      if (hasSpread) {
+        const merged = mergeObjectSpreads(properties);
+        if (merged) {
+          return { ...value, properties: merged };
+        }
       }
       return { ...value, properties };
     }
@@ -202,7 +274,67 @@ function resolveValue(
         args: value.args.map(a => resolveValue(a, scope, resolver, fromFile, seen)),
       };
 
+    case 'class': {
+      // Resolve values inside class: decorator args, static members, bindable args
+      let changed = false;
+      const decorators = value.decorators.map(dec => {
+        const args = dec.args.map(a => resolveValue(a, scope, resolver, fromFile, seen));
+        if (args.some((a, i) => a !== dec.args[i])) { changed = true; return { ...dec, args }; }
+        return dec;
+      });
+      const staticMembers = new Map<string, AnalyzableValue>();
+      for (const [k, v] of value.staticMembers) {
+        const r = resolveValue(v, scope, resolver, fromFile, seen);
+        staticMembers.set(k, r);
+        if (r !== v) changed = true;
+      }
+      const bindableMembers = value.bindableMembers.map(bm => {
+        const args = bm.args.map(a => resolveValue(a, scope, resolver, fromFile, seen));
+        if (args.some((a, i) => a !== bm.args[i])) { changed = true; return { ...bm, args }; }
+        return bm;
+      });
+      if (!changed) return value;
+      return { ...value, decorators, staticMembers, bindableMembers };
+    }
+
     default:
       return value;
   }
+}
+
+/**
+ * Follow reference/import chains to get the resolved leaf value.
+ */
+function getResolvedLeaf(value: AnalyzableValue): AnalyzableValue {
+  if (value.kind === 'reference' && value.resolved) return getResolvedLeaf(value.resolved);
+  if (value.kind === 'import' && value.resolved) return getResolvedLeaf(value.resolved);
+  return value;
+}
+
+/**
+ * Merge object spread entries after cross-file resolution.
+ */
+function mergeObjectSpreads(
+  properties: Map<string, AnalyzableValue>,
+): Map<string, AnalyzableValue> | null {
+  let anyMerged = false;
+  const result = new Map<string, AnalyzableValue>();
+
+  for (const [key, value] of properties) {
+    if (key.startsWith('__spread_')) {
+      const target = value.kind === 'spread' ? getResolvedLeaf(value.target) : getResolvedLeaf(value);
+      if (target?.kind === 'object') {
+        for (const [sk, sv] of target.properties) {
+          result.set(sk, sv);
+        }
+        anyMerged = true;
+      } else {
+        result.set(key, value);
+      }
+    } else {
+      result.set(key, value);
+    }
+  }
+
+  return anyMerged ? result : null;
 }

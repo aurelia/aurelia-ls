@@ -246,10 +246,13 @@ function scanDefineCallsInFile(
   const { graph, program } = config;
   const tracingResolver = createTracingResolver(program, graph.tracer, filePath);
 
-  for (const stmt of sf.statements) {
-    if (!ts.isExpressionStatement(stmt)) continue;
+  // Collect expression statements, including those inside if-blocks
+  // at the module level. D10: static analysis produces gaps, never
+  // silent swallowing — conditional define() calls are still recognized.
+  const exprStmts = collectModuleLevelExpressions(sf.statements);
 
-    const expr = transformExpression(stmt.expression, sf);
+  for (const exprStmt of exprStmts) {
+    const expr = transformExpression(exprStmt.expression, sf);
     const resolved = resolveInScope(expr, scope);
     const fullyResolved = resolveWithTracer(resolved, scope, tracingResolver, filePath);
 
@@ -281,4 +284,41 @@ function scanDefineCallsInFile(
       config.graph.tracer.popContext(handle);
     }
   }
+}
+
+/**
+ * Collect expression statements from module-level statements,
+ * descending into if-blocks and plain blocks but NOT into
+ * function/class bodies. This finds define() calls inside
+ * conditionals (D10: produce gaps, never swallow).
+ */
+function collectModuleLevelExpressions(
+  statements: ts.NodeArray<ts.Statement> | readonly ts.Statement[],
+): ts.ExpressionStatement[] {
+  const result: ts.ExpressionStatement[] = [];
+
+  for (const stmt of statements) {
+    if (ts.isExpressionStatement(stmt)) {
+      result.push(stmt);
+    } else if (ts.isIfStatement(stmt)) {
+      // Descend into if/else blocks
+      if (ts.isBlock(stmt.thenStatement)) {
+        result.push(...collectModuleLevelExpressions(stmt.thenStatement.statements));
+      } else if (ts.isExpressionStatement(stmt.thenStatement)) {
+        result.push(stmt.thenStatement);
+      }
+      if (stmt.elseStatement) {
+        if (ts.isBlock(stmt.elseStatement)) {
+          result.push(...collectModuleLevelExpressions(stmt.elseStatement.statements));
+        } else if (ts.isExpressionStatement(stmt.elseStatement)) {
+          result.push(stmt.elseStatement);
+        }
+      }
+    } else if (ts.isBlock(stmt)) {
+      result.push(...collectModuleLevelExpressions(stmt.statements));
+    }
+    // Do NOT descend into function/class bodies — those are tier D
+  }
+
+  return result;
 }

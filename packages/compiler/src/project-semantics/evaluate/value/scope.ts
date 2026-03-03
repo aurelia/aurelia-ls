@@ -20,6 +20,7 @@ import ts from 'typescript';
 import type { NormalizedPath } from '../../compiler.js';
 import type {
   AnalyzableValue,
+  ClassValue,
   LexicalScope,
   ImportBinding,
   ParameterInfo,
@@ -83,6 +84,10 @@ export function buildFileScope(
       // Enums create bindings but we don't fully model enum values
       // Just record the name so references don't fail
       bindings.set(stmt.name.text, ref(stmt.name.text));
+    }
+    // Re-export declarations: export { X } from './y' or export * from './y'
+    else if (ts.isExportDeclaration(stmt) && stmt.moduleSpecifier) {
+      collectReExportBindings(stmt, sf, imports);
     }
   }
 
@@ -289,6 +294,36 @@ function collectImportBindings(
       });
     }
   }
+}
+
+/**
+ * Collect re-export bindings from an export declaration with moduleSpecifier.
+ * e.g., `export { X, Y as Z } from './source'` or `export * from './source'`
+ *
+ * Re-exports create import-like bindings so the tracing resolver can
+ * follow them to the source module.
+ */
+function collectReExportBindings(
+  stmt: ts.ExportDeclaration,
+  sf: ts.SourceFile,
+  imports: Map<string, ImportBinding>,
+): void {
+  if (!stmt.moduleSpecifier || !ts.isStringLiteral(stmt.moduleSpecifier)) return;
+  const specifier = stmt.moduleSpecifier.text;
+
+  if (stmt.exportClause && ts.isNamedExports(stmt.exportClause)) {
+    // export { X, Y as Z } from './source'
+    for (const element of stmt.exportClause.elements) {
+      const exportedName = element.name.text;
+      const sourceName = element.propertyName?.text ?? exportedName;
+      imports.set(exportedName, {
+        specifier,
+        exportName: sourceName,
+        resolvedPath: null,
+      });
+    }
+  }
+  // export * from './source' — handled by namespace resolution in the resolver
 }
 
 /**
@@ -528,9 +563,11 @@ function resolveValue(
     // Leaf values - already resolved
     // ─────────────────────────────────────────────────────────────────────────
     case 'literal':
-    case 'class':
     case 'unknown':
       return value;
+
+    case 'class':
+      return resolveClassValue(value, scope, resolving);
 
     // ─────────────────────────────────────────────────────────────────────────
     // References - look up in scope
@@ -631,6 +668,56 @@ function resolveArray(
   return {
     ...value,
     elements,
+  };
+}
+
+/**
+ * Resolve values inside a ClassValue: decorator args, static members,
+ * and bindable member args. This is essential for cross-file resolution
+ * where decorator arguments contain imported values.
+ */
+function resolveClassValue(
+  value: ClassValue,
+  scope: LexicalScope,
+  resolving: Set<string>,
+): ClassValue {
+  let changed = false;
+
+  // Resolve decorator args
+  const decorators = value.decorators.map(dec => {
+    const args = dec.args.map(arg => resolveValue(arg, scope, resolving));
+    if (args.some((a, i) => a !== dec.args[i])) {
+      changed = true;
+      return { ...dec, args };
+    }
+    return dec;
+  });
+
+  // Resolve static members
+  const staticMembers = new Map<string, AnalyzableValue>();
+  for (const [key, member] of value.staticMembers) {
+    const resolved = resolveValue(member, scope, resolving);
+    staticMembers.set(key, resolved);
+    if (resolved !== member) changed = true;
+  }
+
+  // Resolve bindable member args
+  const bindableMembers = value.bindableMembers.map(bm => {
+    const args = bm.args.map(arg => resolveValue(arg, scope, resolving));
+    if (args.some((a, i) => a !== bm.args[i])) {
+      changed = true;
+      return { ...bm, args };
+    }
+    return bm;
+  });
+
+  if (!changed) return value;
+
+  return {
+    ...value,
+    decorators,
+    staticMembers,
+    bindableMembers,
   };
 }
 

@@ -17,7 +17,7 @@
 
 import type { NormalizedPath } from '../../model/identity.js';
 import type { AnalyzableValue, ClassValue } from '../evaluate/value/types.js';
-import { extractString, getProperty } from '../evaluate/value/types.js';
+import { extractString, getProperty, getResolvedValue } from '../evaluate/value/types.js';
 import type { EvidenceSource } from '../deps/types.js';
 import type { ResourceKindLike } from '../../schema/types.js';
 
@@ -328,12 +328,18 @@ export function recognizeDefineCall(
   }
 
   // Second arg is the class reference (optional)
+  // Follow reference/import chains to find the resolved class
   const classRef = value.args[1];
   let className: string | undefined;
-  if (classRef?.kind === 'reference') {
-    className = classRef.name;
-  } else if (classRef?.kind === 'class') {
-    className = classRef.className;
+  if (classRef) {
+    const resolvedRef = getResolvedValue(classRef);
+    if (resolvedRef.kind === 'class') {
+      className = resolvedRef.className;
+    } else if (classRef.kind === 'reference') {
+      className = classRef.name;
+    } else if (classRef.kind === 'import') {
+      className = classRef.exportName;
+    }
   }
 
   // Look up the class in the file's class map
