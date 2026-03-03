@@ -19,7 +19,7 @@ import type { NormalizedPath } from '../../model/identity.js';
 import type { AnalyzableValue, ClassValue } from '../evaluate/value/types.js';
 import { extractString, getProperty } from '../evaluate/value/types.js';
 import type { EvidenceSource } from '../deps/types.js';
-import type { ResourceKind } from '../../schema/types.js';
+import type { ResourceKindLike } from '../../schema/types.js';
 
 // =============================================================================
 // Recognition Result
@@ -27,7 +27,7 @@ import type { ResourceKind } from '../../schema/types.js';
 
 export interface RecognizedResource {
   /** Resource kind (custom-element, custom-attribute, etc.) */
-  readonly kind: ResourceKind;
+  readonly kind: ResourceKindLike;
   /** Resource key for the dep graph (e.g., 'custom-element:my-comp') */
   readonly resourceKey: string;
   /** Resource name (e.g., 'my-comp') */
@@ -36,25 +36,29 @@ export interface RecognizedResource {
   readonly source: EvidenceSource;
   /** The declaration form's config value (decorator arg, $au object, define arg) */
   readonly config?: AnalyzableValue;
+  /** The class name (for define() where the class and the define call are separate units) */
+  readonly className?: string;
 }
 
 // =============================================================================
 // Decorator Name → Resource Kind
 // =============================================================================
 
-const DECORATOR_KIND_MAP: ReadonlyMap<string, ResourceKind> = new Map([
+const DECORATOR_KIND_MAP: ReadonlyMap<string, ResourceKindLike> = new Map([
   ['customElement', 'custom-element'],
   ['customAttribute', 'custom-attribute'],
   ['templateController', 'template-controller'],
   ['valueConverter', 'value-converter'],
   ['bindingBehavior', 'binding-behavior'],
+  ['bindingCommand', 'binding-command'],
+  ['attributePattern', 'attribute-pattern'],
 ]);
 
 // =============================================================================
 // Static $au Type → Resource Kind
 // =============================================================================
 
-const AU_TYPE_KIND_MAP: ReadonlyMap<string, ResourceKind> = new Map([
+const AU_TYPE_KIND_MAP: ReadonlyMap<string, ResourceKindLike> = new Map([
   ['custom-element', 'custom-element'],
   ['custom-attribute', 'custom-attribute'],
   ['value-converter', 'value-converter'],
@@ -65,12 +69,13 @@ const AU_TYPE_KIND_MAP: ReadonlyMap<string, ResourceKind> = new Map([
 // Convention Suffix → Resource Kind
 // =============================================================================
 
-const SUFFIX_KIND_MAP: ReadonlyMap<string, ResourceKind> = new Map([
+const SUFFIX_KIND_MAP: ReadonlyMap<string, ResourceKindLike> = new Map([
   ['CustomElement', 'custom-element'],
   ['CustomAttribute', 'custom-attribute'],
   ['TemplateController', 'template-controller'],
   ['ValueConverter', 'value-converter'],
   ['BindingBehavior', 'binding-behavior'],
+  ['BindingCommand', 'binding-command'],
 ]);
 
 // =============================================================================
@@ -105,10 +110,20 @@ function recognizeDecorator(cls: ClassValue): RecognizedResource | null {
     const kind = DECORATOR_KIND_MAP.get(dec.name);
     if (!kind) continue;
 
-    // Decorator with string arg: @customElement('my-comp')
-    // Decorator with object arg: @customElement({ name: 'my-comp', ... })
-    // Decorator with no arg: @valueConverter (name from class)
     const config = dec.args[0];
+
+    // attributePattern uses 'pattern' field instead of 'name'
+    if (kind === 'attribute-pattern') {
+      const name = extractAttributePatternName(config, cls.className);
+      return {
+        kind,
+        resourceKey: `${kind}:${name}`,
+        name,
+        source: { tier: 'analysis-explicit', form: 'decorator' },
+        config,
+      };
+    }
+
     const name = extractResourceName(config, cls.className, kind);
 
     return {
@@ -120,6 +135,18 @@ function recognizeDecorator(cls: ClassValue): RecognizedResource | null {
     };
   }
   return null;
+}
+
+/** Extract name from @attributePattern({ pattern: '...', ... }) */
+function extractAttributePatternName(
+  config: AnalyzableValue | undefined,
+  className: string,
+): string {
+  if (config?.kind === 'object') {
+    const pattern = extractString(getProperty(config, 'pattern'));
+    if (pattern) return pattern;
+  }
+  return className;
 }
 
 // =============================================================================
@@ -159,7 +186,7 @@ function recognizeStaticAu(cls: ClassValue): RecognizedResource | null {
 // Form 4: Convention Recognition
 // =============================================================================
 
-const SUFFIX_REGEX = /^(.+?)(CustomElement|CustomAttribute|TemplateController|ValueConverter|BindingBehavior)$/;
+const SUFFIX_REGEX = /^(.+?)(CustomElement|CustomAttribute|TemplateController|ValueConverter|BindingBehavior|BindingCommand)$/;
 
 function recognizeConvention(
   cls: ClassValue,
@@ -224,7 +251,7 @@ function extractFileBaseName(filePath: NormalizedPath): string | null {
 function extractResourceName(
   config: AnalyzableValue | undefined,
   className: string,
-  kind: ResourceKind,
+  kind: ResourceKindLike,
 ): string {
   if (!config) return conventionName(className, kind);
 
@@ -242,13 +269,95 @@ function extractResourceName(
   return conventionName(className, kind);
 }
 
+// =============================================================================
+// Form 3: Imperative define() Recognition
+// =============================================================================
+
+/** Maps property access namespace to resource kind: CustomElement.define → 'custom-element' */
+const DEFINE_NAMESPACE_MAP: ReadonlyMap<string, ResourceKindLike> = new Map([
+  ['CustomElement', 'custom-element'],
+  ['CustomAttribute', 'custom-attribute'],
+  ['ValueConverter', 'value-converter'],
+  ['BindingBehavior', 'binding-behavior'],
+  ['BindingCommand', 'binding-command'],
+]);
+
+/**
+ * Attempt to recognize a define() call from an evaluated expression.
+ *
+ * Pattern: `CustomElement.define({ name: '...' }, MyClass)`
+ * The expression is a CallValue where:
+ * - callee is PropertyAccess on a known namespace ('define')
+ * - first arg is the config object
+ * - second arg (optional) is the class reference
+ */
+export function recognizeDefineCall(
+  value: AnalyzableValue,
+  filePath: NormalizedPath,
+  classMap: ReadonlyMap<string, ClassValue>,
+): RecognizedResource | null {
+  if (value.kind !== 'call') return null;
+
+  // callee must be X.define where X is a known namespace
+  const callee = value.callee;
+  if (callee.kind !== 'propertyAccess' || callee.property !== 'define') return null;
+
+  // base must be a reference to a known namespace (CustomElement, etc.)
+  const base = callee.base;
+  let namespaceName: string | undefined;
+  if (base.kind === 'reference') {
+    namespaceName = base.name;
+  } else if (base.kind === 'import') {
+    namespaceName = base.exportName;
+  }
+  if (!namespaceName) return null;
+
+  let kind = DEFINE_NAMESPACE_MAP.get(namespaceName);
+  if (!kind) return null;
+
+  // First arg is the config
+  const config = value.args[0];
+  if (!config || config.kind !== 'object') return null;
+
+  // Check for isTemplateController (TC via CustomAttribute.define)
+  if (kind === 'custom-attribute') {
+    const isTc = getProperty(config, 'isTemplateController');
+    if (isTc && isTc.kind === 'literal' && isTc.value === true) {
+      kind = 'template-controller';
+    }
+  }
+
+  // Second arg is the class reference (optional)
+  const classRef = value.args[1];
+  let className: string | undefined;
+  if (classRef?.kind === 'reference') {
+    className = classRef.name;
+  } else if (classRef?.kind === 'class') {
+    className = classRef.className;
+  }
+
+  // Look up the class in the file's class map
+  const cls = className ? classMap.get(className) : undefined;
+
+  const name = extractResourceName(config, className ?? 'anonymous', kind);
+
+  return {
+    kind,
+    resourceKey: `${kind}:${name}`,
+    name,
+    source: { tier: 'analysis-explicit', form: 'define' },
+    config,
+    className: className ?? cls?.className,
+  };
+}
+
 /**
  * Derive a resource name from a class name using Aurelia 2 conventions.
  *
  * CE/CA/TC/BC → kebabCase(bareName)
  * VC/BB → camelCase(bareName)
  */
-function conventionName(className: string, kind: ResourceKind): string {
+function conventionName(className: string, kind: ResourceKindLike): string {
   // Strip known suffixes
   const suffixMatch = SUFFIX_REGEX.exec(className);
   const bareName = suffixMatch ? suffixMatch[1]! : className;

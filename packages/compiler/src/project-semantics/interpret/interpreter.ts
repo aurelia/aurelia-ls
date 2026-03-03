@@ -28,8 +28,10 @@ import { extractClassValue } from '../evaluate/value/class-extraction.js';
 import { transformExpression } from '../evaluate/value/transform.js';
 import { resolveInScope } from '../evaluate/value/scope.js';
 import { createTracingResolver, resolveWithTracer } from './resolve.js';
-import { recognizeResource, type RecognizedResource } from './recognize.js';
+import { recognizeResource, recognizeDefineCall, type RecognizedResource } from './recognize.js';
 import { extractFieldObservations } from './extract-fields.js';
+import { extractHtmlMetaObservations } from './html-meta.js';
+import type { ClassValue } from '../evaluate/value/types.js';
 
 // =============================================================================
 // Interpreter Configuration
@@ -40,6 +42,8 @@ export interface InterpreterConfig {
   readonly graph: ProjectDepGraph;
   readonly packagePath: string;
   readonly enableConventions?: boolean;
+  /** Optional file reader for non-TS files (HTML templates, etc.) */
+  readonly readFile?: (path: string) => string | undefined;
 }
 
 // =============================================================================
@@ -122,7 +126,8 @@ export function interpretProject(
 }
 
 /**
- * Interpret a single file — enumerate and evaluate all units.
+ * Interpret a single file — enumerate and evaluate all units,
+ * scan for define() calls, and process paired HTML meta elements.
  */
 function interpretFile(
   sf: ts.SourceFile,
@@ -131,6 +136,13 @@ function interpretFile(
   checker: ts.TypeChecker,
 ): void {
   const units = enumerateUnits(sf, filePath);
+  const scope = buildFileScope(sf, filePath);
+
+  // Track recognized classes so define() calls can find them
+  const classMap = new Map<string, ClassValue>();
+  // Track which classes were already recognized via explicit forms (decorator/$au)
+  // Convention-recognized classes are NOT blocked — define() overrides convention
+  const explicitlyRecognizedClasses = new Set<string>();
 
   for (const unit of units) {
     const handle = config.graph.tracer.pushContext(filePath, unit.key);
@@ -138,15 +150,32 @@ function interpretFile(
 
     try {
       config.graph.tracer.readFile(filePath);
-      evaluateUnit(sf, filePath, unit, config, checker);
+      const recognized = evaluateUnit(sf, filePath, unit, config, checker);
+      if (recognized && recognized.source.tier === 'analysis-explicit') {
+        explicitlyRecognizedClasses.add(unit.key);
+      }
+      // Collect class values for define() matching
+      if (ts.isClassDeclaration(unit.node) && unit.node.name) {
+        const cls = extractClassValue(unit.node, sf, filePath, checker);
+        classMap.set(unit.node.name.text, cls);
+      }
     } finally {
       config.graph.tracer.popContext(handle);
     }
+  }
+
+  // Scan for define() calls in expression statements
+  scanDefineCallsInFile(sf, filePath, config, checker, scope, classMap, explicitlyRecognizedClasses);
+
+  // Process paired HTML meta elements for convention-recognized resources
+  if (filePath.endsWith('.ts')) {
+    extractHtmlMetaObservations(sf, filePath, config, checker);
   }
 }
 
 /**
  * Evaluate a single unit: extract value, recognize resource, emit observations.
+ * Returns the RecognizedResource if recognition succeeded, null otherwise.
  */
 function evaluateUnit(
   sf: ts.SourceFile,
@@ -154,7 +183,7 @@ function evaluateUnit(
   unit: EvaluationUnit,
   config: InterpreterConfig,
   checker: ts.TypeChecker,
-): void {
+): RecognizedResource | null {
   const { graph, program } = config;
   const scope = buildFileScope(sf, filePath);
   const tracingResolver = createTracingResolver(program, graph.tracer, filePath);
@@ -162,7 +191,6 @@ function evaluateUnit(
   // Extract the unit's AnalyzableValue
   let value;
   if (ts.isClassDeclaration(unit.node)) {
-    // Record type-state dependency for class analysis
     graph.tracer.readTypeState(filePath);
     value = extractClassValue(unit.node, sf, filePath, checker);
     value = resolveInScope(value, scope);
@@ -172,13 +200,11 @@ function evaluateUnit(
     value = resolveInScope(value, scope);
     value = resolveWithTracer(value, scope, tracingResolver, filePath);
   } else if (ts.isFunctionDeclaration(unit.node)) {
-    // Functions are units for registration analysis, not resource declaration
-    return;
+    return null;
   } else {
-    return;
+    return null;
   }
 
-  // Recognize if this unit declares a resource
   const recognized = recognizeResource(
     value,
     unit.key,
@@ -186,12 +212,10 @@ function evaluateUnit(
     config.enableConventions ?? true,
   );
 
-  if (!recognized) return;
+  if (!recognized) return null;
 
-  // Extract per-field observations and register them
   const evalNodeId = graph.tracer.pushContext(filePath, unit.key);
   if (!evalNodeId.isCycle) {
-    // We already have the context from the caller — use its nodeId
     graph.tracer.popContext(evalNodeId);
   }
 
@@ -199,9 +223,62 @@ function evaluateUnit(
     recognized,
     value,
     graph.observations,
-    // Use the evaluation node ID from the outer push
-    // (the caller already pushed this context)
     evalNodeId.nodeId,
     checker,
   );
+
+  return recognized;
+}
+
+/**
+ * Scan top-level expression statements for define() calls.
+ * Pattern: `CustomElement.define({ name: '...' }, MyClass)`
+ */
+function scanDefineCallsInFile(
+  sf: ts.SourceFile,
+  filePath: NormalizedPath,
+  config: InterpreterConfig,
+  checker: ts.TypeChecker,
+  scope: import('../evaluate/value/types.js').LexicalScope,
+  classMap: Map<string, ClassValue>,
+  recognizedClasses: Set<string>,
+): void {
+  const { graph, program } = config;
+  const tracingResolver = createTracingResolver(program, graph.tracer, filePath);
+
+  for (const stmt of sf.statements) {
+    if (!ts.isExpressionStatement(stmt)) continue;
+
+    const expr = transformExpression(stmt.expression, sf);
+    const resolved = resolveInScope(expr, scope);
+    const fullyResolved = resolveWithTracer(resolved, scope, tracingResolver, filePath);
+
+    const recognized = recognizeDefineCall(fullyResolved, filePath, classMap);
+    if (!recognized) continue;
+
+    // If the target class was already recognized via decorator/$au, skip
+    // (D2: two identity forms on one class → decorator wins, define() suppressed)
+    if (recognized.className && recognizedClasses.has(recognized.className)) continue;
+
+    const handle = config.graph.tracer.pushContext(filePath, `define:${recognized.name}`);
+    if (handle.isCycle) continue;
+
+    try {
+      config.graph.tracer.readFile(filePath);
+
+      // Find the class value to use for field extraction
+      const cls = recognized.className ? classMap.get(recognized.className) : undefined;
+      const value = cls ?? { kind: 'class' as const, className: recognized.className ?? 'anonymous', filePath, decorators: [], staticMembers: new Map(), bindableMembers: [], gaps: [], gapKinds: [] };
+
+      extractFieldObservations(
+        recognized,
+        value as import('../evaluate/value/types.js').AnalyzableValue,
+        graph.observations,
+        handle.nodeId,
+        checker,
+      );
+    } finally {
+      config.graph.tracer.popContext(handle);
+    }
+  }
 }

@@ -216,14 +216,24 @@ export function runInterpreter(
     createTrackingConvergence(evidence),
   );
 
+  // Build a readFile function that serves all files (including .html)
+  const normalize = (f: string) => f.replace(/\\/g, "/");
+  const allFilesMap = new Map(
+    Object.entries(files).map(([k, v]) => [normalize(k), v])
+  );
+
   const config = {
     program,
     graph,
     packagePath: "/",
     enableConventions: options?.enableConventions ?? true,
+    readFile: (path: string) => allFilesMap.get(normalize(path)),
   };
 
-  const sourceFiles = Object.keys(files).map(f => f as NormalizedPath);
+  // Only pass .ts files to the interpreter (it finds .html via readFile)
+  const sourceFiles = Object.keys(files)
+    .filter(f => f.endsWith('.ts'))
+    .map(f => f as NormalizedPath);
   interpretProject(sourceFiles, config);
 
   return { graph, program, evidence };

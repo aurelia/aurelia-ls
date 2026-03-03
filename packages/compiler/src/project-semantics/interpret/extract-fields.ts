@@ -53,7 +53,8 @@ export function extractFieldObservations(
 
   // Always emit identity observations (kind, name, className)
   emitObservation(registrar, recognized, 'name', recognized.name, evalNode, value);
-  emitObservation(registrar, recognized, 'className', value.className, evalNode, value);
+  const className = recognized.className ?? (value.kind === 'class' ? value.className : 'anonymous');
+  emitObservation(registrar, recognized, 'className', className, evalNode, value);
   emitObservation(registrar, recognized, 'kind', recognized.kind, evalNode, value);
 
   // Kind-specific field extraction
