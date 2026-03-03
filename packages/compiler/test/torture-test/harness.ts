@@ -531,14 +531,17 @@ export function assertClaim(
     }
   }
 
-  // 6. gaps: fields that must be absent
+  // 6. absent fields: field was evaluated and found not specified.
+  // Per T2005: absent is a successful evaluation result (value = undefined),
+  // distinct from unknown (gap). The field MAY have an observation (with
+  // value undefined) — that's correct. We check the extracted value.
   if (spec.absentFields) {
     for (const fieldPath of spec.absentFields) {
-      const actual = pullRed(graph, resourceKey, fieldPath);
+      const actual = pullValue(graph, resourceKey, fieldPath);
       if (actual !== undefined) {
         throw new Error(
           `Field '${fieldPath}' should be ABSENT for ${resourceKey} ` +
-          `but has value: ${JSON.stringify(extractValue(actual))}`
+          `but has value: ${JSON.stringify(actual)}`
         );
       }
     }

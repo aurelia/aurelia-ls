@@ -96,15 +96,43 @@ function getOperator(fieldPath: string): Operator {
 // =============================================================================
 
 /**
- * locked-identity: Higher rank wins. If values differ, winner takes
- * the field value and a conflict gap is recorded.
+ * locked-identity: Higher rank wins. If values differ across observations,
+ * winner takes the field value and a conflict is detected (NL-2).
  */
 function applyLockedIdentity(
   sorted: ObservationEntry[],
-): { green: GreenValue; red: Sourced<unknown> } {
-  // All observations should agree (they share resource identity).
-  // Winner is highest rank (first in sorted list).
-  return { green: sorted[0]!.green, red: sorted[0]!.red };
+): { green: GreenValue; red: Sourced<unknown>; conflict?: ConflictInfo } {
+  const winner = sorted[0]!;
+
+  // Check if any other observation disagrees
+  for (let i = 1; i < sorted.length; i++) {
+    if (greenToString(sorted[i]!.green) !== greenToString(winner.green)) {
+      // NL-2: convergence creates a gap that no individual observation contained.
+      // Winner's value is used; conflict metadata recorded.
+      return {
+        green: winner.green,
+        red: winner.red,
+        conflict: {
+          field: '', // filled by caller
+          winner: winner,
+          loser: sorted[i]!,
+          reason: sorted.length > 1 && rank(winner.source.tier) > rank(sorted[i]!.source.tier)
+            ? 'resolved-by-evidence-rank'
+            : 'resolved-by-canonical-order',
+        },
+      };
+    }
+  }
+
+  return { green: winner.green, red: winner.red };
+}
+
+/** Conflict information for locked-identity disagreements (NL-2). */
+interface ConflictInfo {
+  field: string;
+  winner: ObservationEntry;
+  loser: ObservationEntry;
+  reason: 'resolved-by-evidence-rank' | 'resolved-by-canonical-order';
 }
 
 /**
@@ -114,14 +142,21 @@ function applyLockedIdentity(
 function applyKnownOverUnknown(
   sorted: ObservationEntry[],
 ): { green: GreenValue; red: Sourced<unknown> } {
-  // Find the first observation with a known value
+  // Find the first observation with a known value (not absent, not gap)
   for (const obs of sorted) {
     if (isKnown(obs)) {
       return { green: obs.green, red: obs.red };
     }
   }
-  // All unknown/absent → return highest rank (preserves gap state)
-  return { green: sorted[0]!.green, red: sorted[0]!.red };
+  // No known values. Check if any are gaps (unknown) vs all absent.
+  for (const obs of sorted) {
+    if (isGap(obs)) {
+      // Gap survives — return the gap observation
+      return { green: obs.green, red: obs.red };
+    }
+  }
+  // All absent → field is absent (not specified by anyone)
+  return { green: { kind: 'literal', value: undefined }, red: sorted[0]!.red };
 }
 
 /**
@@ -132,9 +167,17 @@ function applyKnownOverUnknown(
 function applyStableUnion(
   sorted: ObservationEntry[],
 ): { green: GreenValue; red: Sourced<unknown> } {
-  // Check if any observation is unknown (gap) — poisons the union
-  for (const obs of sorted) {
-    if (obs.green.kind === 'unknown') {
+  // Filter out absent observations — they contribute nothing to the union.
+  const effective = sorted.filter(obs => !isAbsent(obs));
+
+  // If all observations were absent, the field is absent (not specified by anyone)
+  if (effective.length === 0) {
+    return { green: { kind: 'literal', value: undefined }, red: sorted[0]!.red };
+  }
+
+  // Check if any non-absent observation is unknown (gap) — poisons the union
+  for (const obs of effective) {
+    if (isGap(obs)) {
       return { green: obs.green, red: obs.red };
     }
   }
@@ -144,7 +187,7 @@ function applyStableUnion(
   // (analysis observations registered before fixtures).
   const seen = new Set<string>();
   const elements: GreenValue[] = [];
-  const reversed = [...sorted].reverse();
+  const reversed = [...effective].reverse();
 
   for (const obs of reversed) {
     if (obs.green.kind === 'array') {
@@ -194,7 +237,19 @@ function applyFirstAvailable(
 // =============================================================================
 
 function isKnown(obs: ObservationEntry): boolean {
-  return obs.green.kind !== 'unknown';
+  if (obs.green.kind === 'unknown') return false;
+  // Absent: literal undefined represents "evaluated, field not specified" (T2005).
+  // This is NOT known — it's a successful "nothing here" result.
+  if (obs.green.kind === 'literal' && obs.green.value === undefined) return false;
+  return true;
+}
+
+function isAbsent(obs: ObservationEntry): boolean {
+  return obs.green.kind === 'literal' && obs.green.value === undefined;
+}
+
+function isGap(obs: ObservationEntry): boolean {
+  return obs.green.kind === 'unknown';
 }
 
 function greenToString(g: GreenValue): string {
@@ -231,12 +286,17 @@ export function createConvergence(
     const sorted = sortByRank(observations);
     const operator = getOperator(fieldPath);
 
-    let result: { green: GreenValue; red: Sourced<unknown> };
+    let result: { green: GreenValue; red: Sourced<unknown>; conflict?: ConflictInfo };
 
     switch (operator) {
-      case 'locked-identity':
-        result = applyLockedIdentity(sorted);
+      case 'locked-identity': {
+        const liResult = applyLockedIdentity(sorted);
+        if (liResult.conflict) {
+          liResult.conflict.field = fieldPath;
+        }
+        result = liResult;
         break;
+      }
       case 'known-over-unknown':
         result = applyKnownOverUnknown(sorted);
         break;

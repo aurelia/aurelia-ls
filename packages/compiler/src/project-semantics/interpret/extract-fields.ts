@@ -37,6 +37,34 @@ import type { RecognizedResource } from './recognize.js';
 const internPool = new InternPool();
 
 // =============================================================================
+// Per-Kind Field Schemas (F1: absent observation emission)
+// =============================================================================
+
+/**
+ * Product-relevant fields per resource kind. After extraction, any field
+ * in this schema that was NOT emitted gets an explicit absent observation.
+ * This implements the T2005 three-state lattice: absent is a successful
+ * evaluation result, distinct from "no data" (unknown/gap).
+ *
+ * Derived from L3 product.md §2.3-§2.8.
+ */
+const CE_FIELDS = [
+  'containerless', 'capture', 'processContent', 'shadowOptions',
+  'enhance', 'strict', 'inlineTemplate', 'aliases', 'dependencies',
+] as const;
+
+const CA_FIELDS = [
+  'noMultiBindings', 'defaultProperty', 'aliases',
+] as const;
+
+const TC_FIELDS = [
+  'noMultiBindings', 'defaultProperty', 'containerStrategy', 'aliases',
+] as const;
+
+const VC_FIELDS = ['aliases'] as const;
+const BB_FIELDS = ['aliases'] as const;
+
+// =============================================================================
 // Main Entry Point
 // =============================================================================
 
@@ -52,26 +80,35 @@ export function extractFieldObservations(
 ): void {
   if (value.kind !== 'class') return;
 
+  // Track emitted fields for F1 absent observation emission
+  const emittedFields = new Set<string>();
+  const trackingRegistrar: ObservationRegistrar = {
+    registerObservation(resourceKey, fieldPath, source, green, red, evaluationNode) {
+      emittedFields.add(fieldPath);
+      return registrar.registerObservation(resourceKey, fieldPath, source, green, red, evaluationNode);
+    },
+  };
+
   // Always emit identity observations (kind, name, className)
-  emitObservation(registrar, recognized, 'name', recognized.name, evalNode, value);
+  emitObservation(trackingRegistrar, recognized, 'name', recognized.name, evalNode, value);
   const className = recognized.className ?? (value.kind === 'class' ? value.className : 'anonymous');
-  emitObservation(registrar, recognized, 'className', className, evalNode, value);
-  emitObservation(registrar, recognized, 'kind', recognized.kind, evalNode, value);
+  emitObservation(trackingRegistrar, recognized, 'className', className, evalNode, value);
+  emitObservation(trackingRegistrar, recognized, 'kind', recognized.kind, evalNode, value);
 
   // Kind-specific field extraction
   switch (recognized.kind) {
     case 'custom-element':
-      extractCustomElementFields(recognized, value, registrar, evalNode);
+      extractCustomElementFields(recognized, value, trackingRegistrar, evalNode);
       break;
     case 'custom-attribute':
     case 'template-controller':
-      extractCustomAttributeFields(recognized, value, registrar, evalNode);
+      extractCustomAttributeFields(recognized, value, trackingRegistrar, evalNode);
       break;
     case 'value-converter':
-      extractValueConverterFields(recognized, value, registrar, evalNode);
+      extractValueConverterFields(recognized, value, trackingRegistrar, evalNode);
       break;
     case 'binding-behavior':
-      extractBindingBehaviorFields(recognized, value, registrar, evalNode);
+      extractBindingBehaviorFields(recognized, value, trackingRegistrar, evalNode);
       break;
   }
 
@@ -79,7 +116,35 @@ export function extractFieldObservations(
   if (recognized.kind === 'custom-element' ||
       recognized.kind === 'custom-attribute' ||
       recognized.kind === 'template-controller') {
-    extractBindableObservations(recognized, value, registrar, evalNode);
+    extractBindableObservations(recognized, value, trackingRegistrar, evalNode);
+  }
+
+  // F1: Emit explicit absent observations for product-schema fields
+  // that were evaluated and found not specified. Per T2005: absent is
+  // a successful evaluation result, not a gap.
+  const schemaFields = getSchemaFields(recognized.kind);
+  for (const field of schemaFields) {
+    if (!emittedFields.has(field)) {
+      registrar.registerObservation(
+        recognized.resourceKey,
+        field,
+        recognized.source,
+        { kind: 'literal', value: undefined },
+        { origin: 'source', state: 'known', value: undefined } as any,
+        evalNode,
+      );
+    }
+  }
+}
+
+function getSchemaFields(kind: string): readonly string[] {
+  switch (kind) {
+    case 'custom-element': return CE_FIELDS;
+    case 'custom-attribute': return CA_FIELDS;
+    case 'template-controller': return TC_FIELDS;
+    case 'value-converter': return VC_FIELDS;
+    case 'binding-behavior': return BB_FIELDS;
+    default: return [];
   }
 }
 
@@ -120,8 +185,19 @@ function extractCustomElementFields(
   // Priority 2: definition object (decorator arg / $au / define() arg)
   if (config?.kind === 'object') {
     emitScalarIfPresent(registrar, recognized, 'containerless', extractBoolean(getProperty(config, 'containerless')), evalNode, cls, emitted);
-    emitScalarIfPresent(registrar, recognized, 'capture', extractBoolean(getProperty(config, 'capture')), evalNode, cls, emitted);
+    emitScalarIfPresent(registrar, recognized, 'capture', extractPresence(getProperty(config, 'capture')), evalNode, cls, emitted);
     emitScalarIfPresent(registrar, recognized, 'processContent', extractPresence(getProperty(config, 'processContent')), evalNode, cls, emitted);
+    emitScalarIfPresent(registrar, recognized, 'enhance', extractBoolean(getProperty(config, 'enhance')), evalNode, cls, emitted);
+
+    // strict is three-valued: true, false, or undefined (absent).
+    // undefined means "not specified" which is distinct from false.
+    const strictValue = getProperty(config, 'strict');
+    if (strictValue) {
+      const strictBool = extractBoolean(strictValue);
+      if (strictBool !== undefined) {
+        emitScalar(registrar, recognized, 'strict', strictBool, evalNode, cls, emitted);
+      }
+    }
 
     const shadowOpts = getProperty(config, 'shadowOptions');
     if (shadowOpts) {
@@ -138,33 +214,18 @@ function extractCustomElementFields(
   extractStaticAuScalarFields(recognized, cls, registrar, evalNode, emitted);
 
   // Array fields: merged from all sources (not first-defined-wins)
-  const aliases: string[] = [];
-  const deps: string[] = [];
-  if (config?.kind === 'object') {
-    aliases.push(...extractStringArray(getProperty(config, 'aliases')));
-    deps.push(...extractStringArray(getProperty(config, 'dependencies')));
-  }
-  // Merge from static $au if present
-  const au = cls.staticMembers.get('$au');
-  if (au?.kind === 'object') {
-    aliases.push(...extractStringArray(getProperty(au, 'aliases')));
-    deps.push(...extractStringArray(getProperty(au, 'dependencies')));
-  }
-  // Merge from direct static class properties (e.g., static aliases = [...])
-  const staticAliases = cls.staticMembers.get('aliases');
-  if (staticAliases) {
-    aliases.push(...extractStringArray(staticAliases));
-  }
-  const staticDeps = cls.staticMembers.get('dependencies');
-  if (staticDeps) {
-    deps.push(...extractStringArray(staticDeps));
-  }
-  if (aliases.length > 0) {
-    emitObservation(registrar, recognized, 'aliases', aliases, evalNode, cls);
-  }
-  if (deps.length > 0) {
-    emitObservation(registrar, recognized, 'dependencies', deps, evalNode, cls);
-  }
+  // F2: detect opaque expressions and emit gap observations
+  emitCollectionField(registrar, recognized, 'aliases', [
+    config?.kind === 'object' ? getProperty(config, 'aliases') : undefined,
+    cls.staticMembers.get('$au')?.kind === 'object' ? getProperty(cls.staticMembers.get('$au')!, 'aliases') : undefined,
+    cls.staticMembers.get('aliases'),
+  ], evalNode, cls);
+
+  emitCollectionField(registrar, recognized, 'dependencies', [
+    config?.kind === 'object' ? getProperty(config, 'dependencies') : undefined,
+    cls.staticMembers.get('$au')?.kind === 'object' ? getProperty(cls.staticMembers.get('$au')!, 'dependencies') : undefined,
+    cls.staticMembers.get('dependencies'),
+  ], evalNode, cls);
 }
 
 function extractCustomAttributeFields(
@@ -190,21 +251,11 @@ function extractCustomAttributeFields(
   extractStaticAuScalarFields(recognized, cls, registrar, evalNode, emitted);
 
   // Array fields: merged
-  const aliases: string[] = [];
-  if (config?.kind === 'object') {
-    aliases.push(...extractStringArray(getProperty(config, 'aliases')));
-  }
-  const au = cls.staticMembers.get('$au');
-  if (au?.kind === 'object') {
-    aliases.push(...extractStringArray(getProperty(au, 'aliases')));
-  }
-  const staticAliases = cls.staticMembers.get('aliases');
-  if (staticAliases) {
-    aliases.push(...extractStringArray(staticAliases));
-  }
-  if (aliases.length > 0) {
-    emitObservation(registrar, recognized, 'aliases', aliases, evalNode, cls);
-  }
+  emitCollectionField(registrar, recognized, 'aliases', [
+    config?.kind === 'object' ? getProperty(config, 'aliases') : undefined,
+    cls.staticMembers.get('$au')?.kind === 'object' ? getProperty(cls.staticMembers.get('$au')!, 'aliases') : undefined,
+    cls.staticMembers.get('aliases'),
+  ], evalNode, cls);
 }
 
 function extractValueConverterFields(
@@ -213,23 +264,11 @@ function extractValueConverterFields(
   registrar: ObservationRegistrar,
   evalNode: ProjectDepNodeId,
 ): void {
-  // Array fields: aliases merged from all sources
-  const aliases: string[] = [];
-  if (recognized.config?.kind === 'object') {
-    aliases.push(...extractStringArray(getProperty(recognized.config, 'aliases')));
-  }
-  const au = cls.staticMembers.get('$au');
-  if (au?.kind === 'object') {
-    aliases.push(...extractStringArray(getProperty(au, 'aliases')));
-  }
-  // Static class property
-  const staticAliases = cls.staticMembers.get('aliases');
-  if (staticAliases) {
-    aliases.push(...extractStringArray(staticAliases));
-  }
-  if (aliases.length > 0) {
-    emitObservation(registrar, recognized, 'aliases', aliases, evalNode, cls);
-  }
+  emitCollectionField(registrar, recognized, 'aliases', [
+    recognized.config?.kind === 'object' ? getProperty(recognized.config, 'aliases') : undefined,
+    cls.staticMembers.get('$au')?.kind === 'object' ? getProperty(cls.staticMembers.get('$au')!, 'aliases') : undefined,
+    cls.staticMembers.get('aliases'),
+  ], evalNode, cls);
   // fromType/toType require TypeScript type analysis (tier C)
 }
 
@@ -239,22 +278,11 @@ function extractBindingBehaviorFields(
   registrar: ObservationRegistrar,
   evalNode: ProjectDepNodeId,
 ): void {
-  // Array fields: aliases merged from all sources
-  const aliases: string[] = [];
-  if (recognized.config?.kind === 'object') {
-    aliases.push(...extractStringArray(getProperty(recognized.config, 'aliases')));
-  }
-  const au = cls.staticMembers.get('$au');
-  if (au?.kind === 'object') {
-    aliases.push(...extractStringArray(getProperty(au, 'aliases')));
-  }
-  const staticAliases = cls.staticMembers.get('aliases');
-  if (staticAliases) {
-    aliases.push(...extractStringArray(staticAliases));
-  }
-  if (aliases.length > 0) {
-    emitObservation(registrar, recognized, 'aliases', aliases, evalNode, cls);
-  }
+  emitCollectionField(registrar, recognized, 'aliases', [
+    recognized.config?.kind === 'object' ? getProperty(recognized.config, 'aliases') : undefined,
+    cls.staticMembers.get('$au')?.kind === 'object' ? getProperty(cls.staticMembers.get('$au')!, 'aliases') : undefined,
+    cls.staticMembers.get('aliases'),
+  ], evalNode, cls);
 }
 
 // =============================================================================
@@ -394,9 +422,19 @@ function extractStaticAuScalarFields(
 
   // $au has the same shape as a decorator definition object
   emitScalarIfPresent(registrar, recognized, 'containerless', extractBoolean(getProperty(au, 'containerless')), evalNode, cls, emitted);
-  emitScalarIfPresent(registrar, recognized, 'capture', extractBoolean(getProperty(au, 'capture')), evalNode, cls, emitted);
-  emitScalarIfPresent(registrar, recognized, 'processContent', extractBoolean(getProperty(au, 'processContent')), evalNode, cls, emitted);
+  emitScalarIfPresent(registrar, recognized, 'capture', extractPresence(getProperty(au, 'capture')), evalNode, cls, emitted);
+  emitScalarIfPresent(registrar, recognized, 'processContent', extractPresence(getProperty(au, 'processContent')), evalNode, cls, emitted);
+  emitScalarIfPresent(registrar, recognized, 'enhance', extractBoolean(getProperty(au, 'enhance')), evalNode, cls, emitted);
   emitScalarIfPresent(registrar, recognized, 'noMultiBindings', extractBoolean(getProperty(au, 'noMultiBindings')), evalNode, cls, emitted);
+
+  // strict: three-valued
+  const auStrict = getProperty(au, 'strict');
+  if (auStrict && !emitted.has('strict')) {
+    const strictBool = extractBoolean(auStrict);
+    if (strictBool !== undefined) {
+      emitScalar(registrar, recognized, 'strict', strictBool, evalNode, cls, emitted);
+    }
+  }
 
   const shadowOpts = getProperty(au, 'shadowOptions');
   if (shadowOpts && !emitted.has('shadowOptions')) {
@@ -477,6 +515,65 @@ function emitScalarIfPresent<T>(
   if (value !== undefined) {
     emitScalar(registrar, recognized, fieldPath, value, evalNode, sourceNode, emitted);
   }
+}
+
+/**
+ * Extract and emit a collection field from multiple sources.
+ *
+ * F2 fix: detects opaque expressions (non-array values that represent
+ * collection fields the system can't evaluate) and emits gap observations
+ * instead of silently returning empty arrays.
+ *
+ * Three-state outcome per source:
+ * - undefined (source doesn't mention this field) → skip
+ * - extractable array → collect elements
+ * - present but opaque (not an array literal) → emit gap
+ */
+function emitCollectionField(
+  registrar: ObservationRegistrar,
+  recognized: RecognizedResource,
+  fieldPath: string,
+  sources: (AnalyzableValue | undefined)[],
+  evalNode: ProjectDepNodeId,
+  cls: AnalyzableValue,
+): void {
+  const allElements: string[] = [];
+  let hasGap = false;
+
+  for (const source of sources) {
+    if (!source) continue; // source doesn't mention this field
+    const resolved = getResolvedValue(source);
+    if (resolved.kind === 'array') {
+      // Extractable array — collect string elements
+      for (const el of resolved.elements) {
+        const s = extractString(el);
+        if (s !== undefined) allElements.push(s);
+      }
+    } else if (resolved.kind === 'literal' && resolved.value === undefined) {
+      // Explicit undefined — skip
+    } else if (resolved.kind === 'unknown') {
+      // Already a gap from upstream evaluation
+      hasGap = true;
+    } else {
+      // Present but opaque (function call, reference, etc.) — B+C ceiling hit
+      hasGap = true;
+    }
+  }
+
+  if (hasGap) {
+    // At least one source had an opaque value → emit gap observation.
+    // Even if other sources had extractable values, the union is
+    // incomplete (stable-union semantics: unknown poisons the union).
+    registrar.registerObservation(
+      recognized.resourceKey, fieldPath, recognized.source,
+      { kind: 'unknown', reasonKind: 'opaque-expression' },
+      { origin: 'source', state: 'unknown' } as any,
+      evalNode,
+    );
+  } else if (allElements.length > 0) {
+    emitObservation(registrar, recognized, fieldPath, allElements, evalNode, cls);
+  }
+  // If no sources mentioned the field and no gaps → nothing to emit (absent)
 }
 
 function valueToGreen(value: unknown): GreenValue {
