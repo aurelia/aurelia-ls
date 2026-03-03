@@ -10,9 +10,9 @@ import { hasThirdPartyResources } from "@aurelia-ls/compiler/project-semantics/t
 import { applyThirdPartyResources } from "@aurelia-ls/compiler/project-semantics/third-party/resolution.js";
 import type { ThirdPartyDiscoveryResult } from "@aurelia-ls/compiler/project-semantics/third-party/types.js";
 import type { Logger } from "@aurelia-ls/compiler/project-semantics/types.js";
-import { createProjectDepGraph } from "@aurelia-ls/compiler/project-semantics/deps/graph.js";
-import type { ProjectDepGraph } from "@aurelia-ls/compiler/project-semantics/deps/types.js";
-import { interpretProject, createUnitEvaluator } from "@aurelia-ls/compiler/project-semantics/interpret/interpreter.js";
+import { createProjectDepGraph } from "@aurelia-ls/compiler/core/graph/graph.js";
+import type { ProjectDepGraph } from "@aurelia-ls/compiler/core/graph/types.js";
+import { interpretProject, createUnitEvaluator } from "@aurelia-ls/compiler/core/interpret/interpreter.js";
 import { canonicalPath } from "@aurelia-ls/compiler/project-semantics/util/naming.js";
 import type { TypeScriptProject } from "./project.js";
 

@@ -22,7 +22,7 @@ import type { InterpreterConfig } from './interpreter.js';
 import type { GreenValue } from '../../value/green.js';
 import type { Sourced } from '../../value/sourced.js';
 import { InternPool } from '../../value/intern.js';
-import { evaluationNodeId } from '../deps/types.js';
+import { evaluationNodeId, type ProjectDepNodeId } from '../graph/types.js';
 
 const internPool = new InternPool();
 
@@ -212,7 +212,7 @@ function emitMetaObservation(
   config: InterpreterConfig,
   resourceKey: string,
   meta: MetaElement,
-  evalNode: import('../deps/types.js').ProjectDepNodeId,
+  evalNode: ProjectDepNodeId,
   form: string = 'convention',
 ): void {
   switch (meta.kind) {
@@ -248,7 +248,7 @@ function emitRawObservation(
   resourceKey: string,
   fieldPath: string,
   value: unknown,
-  evalNode: import('../deps/types.js').ProjectDepNodeId,
+  evalNode: ProjectDepNodeId,
   form: string,
 ): void {
   const green = internPool.intern(valueToGreen(value));

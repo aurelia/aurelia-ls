@@ -20,7 +20,7 @@
  * through the convergence algebra.
  */
 
-import type { EvidenceSource } from './types.js';
+import type { EvidenceSource } from '../graph/types.js';
 
 // =============================================================================
 // Public Types

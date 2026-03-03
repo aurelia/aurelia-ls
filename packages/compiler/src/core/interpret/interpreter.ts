@@ -21,17 +21,17 @@
 
 import ts from 'typescript';
 import type { NormalizedPath } from '../../model/identity.js';
-import type { ProjectDepGraph } from '../deps/types.js';
-import type { UnitEvaluator } from '../deps/types.js';
-import { buildFileScope } from '../evaluate/value/scope.js';
-import { extractClassValue } from '../evaluate/value/class-extraction.js';
-import { transformExpression } from '../evaluate/value/transform.js';
-import { resolveInScope } from '../evaluate/value/scope.js';
+import type { ProjectDepGraph } from '../graph/types.js';
+import type { UnitEvaluator } from '../graph/types.js';
+import { buildFileScope } from '../../project-semantics/evaluate/value/scope.js';
+import { extractClassValue } from '../../project-semantics/evaluate/value/class-extraction.js';
+import { transformExpression } from '../../project-semantics/evaluate/value/transform.js';
+import { resolveInScope } from '../../project-semantics/evaluate/value/scope.js';
 import { createTracingResolver, resolveWithTracer } from './resolve.js';
 import { recognizeResource, recognizeDefineCall, type RecognizedResource } from './recognize.js';
 import { extractFieldObservations } from './extract-fields.js';
 import { extractHtmlMetaObservations } from './html-meta.js';
-import type { ClassValue } from '../evaluate/value/types.js';
+import type { ClassValue, LexicalScope, AnalyzableValue } from '../../project-semantics/evaluate/value/types.js';
 
 // =============================================================================
 // Interpreter Configuration
@@ -242,7 +242,7 @@ function scanDefineCallsInFile(
   filePath: NormalizedPath,
   config: InterpreterConfig,
   checker: ts.TypeChecker,
-  scope: import('../evaluate/value/types.js').LexicalScope,
+  scope: LexicalScope,
   classMap: Map<string, ClassValue>,
   recognizedClasses: Set<string>,
 ): void {
@@ -278,7 +278,7 @@ function scanDefineCallsInFile(
 
       extractFieldObservations(
         recognized,
-        value as import('../evaluate/value/types.js').AnalyzableValue,
+        value as AnalyzableValue,
         graph.observations,
         handle.nodeId,
         checker,
@@ -361,7 +361,7 @@ function scanRootRegistrations(
   sf: ts.SourceFile,
   filePath: NormalizedPath,
   config: InterpreterConfig,
-  scope: import('../evaluate/value/types.js').LexicalScope,
+  scope: LexicalScope,
 ): void {
   const entries: RootRegistrationEntry[] = [];
 
@@ -455,7 +455,7 @@ function findRegisterCalls(
   expr: ts.Expression,
   sf: ts.SourceFile,
   filePath: NormalizedPath,
-  scope: import('../evaluate/value/types.js').LexicalScope,
+  scope: LexicalScope,
   out: RootRegistrationEntry[],
   config?: InterpreterConfig,
 ): void {

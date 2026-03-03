@@ -11,7 +11,7 @@
 
 import * as ts from "typescript";
 import type { NormalizedPath } from "../../out/model/identity.js";
-import { createProjectDepGraph } from "../../out/project-semantics/deps/graph.js";
+import { createProjectDepGraph } from "../../out/core/graph/graph.js";
 import {
   conclusionNodeId,
   manifestNodeId,
@@ -22,12 +22,12 @@ import {
   type ConvergenceFunction,
   type EvidenceSource,
   type UnitEvaluator,
-} from "../../out/project-semantics/deps/types.js";
+} from "../../out/core/graph/types.js";
 import {
   interpretProject,
   createUnitEvaluator,
-} from "../../out/project-semantics/interpret/interpreter.js";
-import { createConvergence } from "../../out/project-semantics/deps/convergence.js";
+} from "../../out/core/interpret/interpreter.js";
+import { createConvergence } from "../../out/core/convergence/convergence.js";
 import type { GreenValue } from "../../out/value/green.js";
 import type { Sourced } from "../../out/value/sourced.js";
 
@@ -699,7 +699,7 @@ export function assertExactFields(
 import {
   evaluateScopeVisibility,
   type ScopeVisibilityGreen,
-} from "../../out/project-semantics/deps/scope-visibility.js";
+} from "../../out/core/scope/scope-visibility.js";
 
 export interface ScopeVisibilityResult {
   /** Per-scope visibility data, keyed by CE name */
@@ -874,7 +874,7 @@ import {
   type VocabularyGreen,
   type BindingCommandEntry,
   type AttributePatternEntry,
-} from "../../out/project-semantics/deps/vocabulary.js";
+} from "../../out/core/vocabulary/vocabulary.js";
 
 export interface VocabularyResult {
   green: VocabularyGreen;
@@ -1028,7 +1028,7 @@ import {
   type ScopeEntry,
   type ScopeChainSnapshot,
   type TcInfo,
-} from "../../out/project-semantics/deps/template-analysis.js";
+} from "../../out/core/template/template-analysis.js";
 
 export type { TemplateAnalysisResult, ElementAnalysis, AttributeAnalysis, Classification, ClassificationCategory, ElementResolution, BindingInfo, BindingMode, ScopeEntry, ScopeChainSnapshot, TcInfo };
 
@@ -1432,7 +1432,7 @@ export function assertTcOrder(
 import type {
   GraphEvent,
   GraphEventListener,
-} from "../../out/project-semantics/deps/types.js";
+} from "../../out/core/graph/types.js";
 
 export type { GraphEvent };
 

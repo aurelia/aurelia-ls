@@ -17,7 +17,7 @@
 
 import type ts from 'typescript';
 import type { NormalizedPath } from '../../model/identity.js';
-import type { AnalyzableValue, ClassValue } from '../evaluate/value/types.js';
+import type { AnalyzableValue, ClassValue } from '../../project-semantics/evaluate/value/types.js';
 import {
   extractString,
   extractBoolean,
@@ -25,12 +25,12 @@ import {
   extractBindingMode,
   getProperty,
   getResolvedValue,
-} from '../evaluate/value/types.js';
+} from '../../project-semantics/evaluate/value/types.js';
 import type { GreenValue } from '../../value/green.js';
 import { extractGreen } from '../../value/extract-green.js';
 import { InternPool } from '../../value/intern.js';
 import type { Sourced } from '../../value/sourced.js';
-import type { ObservationRegistrar, ProjectDepNodeId } from '../deps/types.js';
+import type { ObservationRegistrar, ProjectDepNodeId } from '../graph/types.js';
 import type { RecognizedResource } from './recognize.js';
 
 // Shared intern pool for the interpreter session

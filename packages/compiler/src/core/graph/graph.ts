@@ -28,6 +28,7 @@ import {
   type ProjectEvaluationEngine,
   type UnitEvaluator,
   type ConvergenceFunction,
+  type GraphEventListener,
   fileNodeId,
   typeStateNodeId,
   configNodeId,
@@ -67,7 +68,7 @@ interface NodeEntry {
 export function createProjectDepGraph(
   evaluator: UnitEvaluator,
   converge: ConvergenceFunction,
-  listener?: import('./types.js').GraphEventListener,
+  listener?: GraphEventListener,
 ): ProjectDepGraph {
   const nodes = new Map<ProjectDepNodeId, NodeEntry>();
   const forwardEdges = new Map<ProjectDepNodeId, Set<ProjectDepNodeId>>();

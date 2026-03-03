@@ -1,7 +1,7 @@
 /**
  * Claim Graph — Unified Reactive Graph Implementation
  *
- * Generalizes ProjectDepGraph (project-semantics/deps/graph.ts) to all
+ * Generalizes ProjectDepGraph (core/graph/graph.ts) to all
  * domains. Same proven patterns: bidirectional edges, eager staleness
  * propagation, pull-based lazy evaluation, value-sensitive cutoff via
  * pointer equality on interned green values.

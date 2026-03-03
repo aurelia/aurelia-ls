@@ -18,7 +18,7 @@
 
 import type { GreenValue } from '../../value/green.js';
 import type { Sourced } from '../../value/sourced.js';
-import type { EvidenceSource, EvidenceTier, ObservationEntry, ConvergenceFunction } from './types.js';
+import type { EvidenceSource, EvidenceTier, ObservationEntry, ConvergenceFunction } from '../graph/types.js';
 
 // =============================================================================
 // Evidence Ranking

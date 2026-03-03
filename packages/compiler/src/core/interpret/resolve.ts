@@ -12,15 +12,15 @@
 
 import ts from 'typescript';
 import type { NormalizedPath } from '../../model/identity.js';
-import type { EvaluationTracer } from '../deps/types.js';
+import type { EvaluationTracer } from '../graph/types.js';
 import type {
   AnalyzableValue,
   LexicalScope,
   OnDemandResolver,
-} from '../evaluate/value/types.js';
-import { buildFileScope, resolveInScope } from '../evaluate/value/scope.js';
-import { transformExpression } from '../evaluate/value/transform.js';
-import { canonicalPath } from '../util/naming.js';
+} from '../../project-semantics/evaluate/value/types.js';
+import { buildFileScope, resolveInScope } from '../../project-semantics/evaluate/value/scope.js';
+import { transformExpression } from '../../project-semantics/evaluate/value/transform.js';
+import { canonicalPath } from '../../project-semantics/util/naming.js';
 
 // =============================================================================
 // Tracing On-Demand Resolver

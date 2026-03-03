@@ -26,8 +26,8 @@ import type {
   ProjectDepGraph,
   ProjectDepNodeId,
   EvidenceSource,
-} from './types.js';
-import { conclusionNodeId } from './types.js';
+} from '../graph/types.js';
+import { conclusionNodeId } from '../graph/types.js';
 
 // =============================================================================
 // Public Types

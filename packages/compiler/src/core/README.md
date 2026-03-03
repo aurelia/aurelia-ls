@@ -1,4 +1,4 @@
-# deps/ — Reactive Dependency Graph
+# core/ — Reactive Semantic Compiler
 
 The reactive core of the semantic compiler. Implements demand-driven
 evaluation with value-sensitive cutoff: edits that don't change
@@ -9,8 +9,8 @@ semantic content produce zero downstream work.
 Three well-known patterns composed:
 
 - **Roslyn-style green/red separation** — structural content (green,
-  in `../value/green.ts`) is position-free and internable. Provenance
-  (red, in `../value/sourced.ts`) carries spans and declaration forms.
+  in `value/green.ts`) is position-free and internable. Provenance
+  (red, in `value/sourced.ts`) carries spans and declaration forms.
   Cutoff operates on green only.
 - **Salsa-style demand-driven evaluation** — pull-based, lazy. Nodes
   evaluate only when pulled and stale. Evaluation callbacks are
@@ -34,19 +34,36 @@ What is specific to this implementation:
   Optional listener receives structured events (staleness, evaluation,
   convergence, cutoff, change). Pass no listener in production.
 
+## Directory structure
+
+```
+core/
+  graph/          graph infrastructure (types, topology, staleness, cutoff)
+  interpret/      interpreter (AST → observations)
+  convergence/    observation → conclusion merge algebra
+  scope/          scope-visibility evaluation
+  vocabulary/     frozen syntax registry
+  template/       template analysis (classification, resolution, binding, scope chain)
+```
+
 ## File overview
 
 | File | Role |
 |------|------|
-| `types.ts` | All interfaces: node IDs, edge construction, evaluation tracer, observation registrar, convergence function, push/pull engines, event protocol. **Read this first.** |
-| `graph.ts` | Graph implementation. Topology, staleness propagation, intern pool, pull-side re-evaluation with cutoff, orphan cleanup. |
-| `convergence.ts` | Merge operators and evidence ranking. Operator dispatch by field path. |
-| `scope-visibility.ts` | Standalone evaluation: two-level resource lookup, completeness, aliases, known plugin contributions. |
-| `vocabulary.ts` | Standalone evaluation: frozen syntax registry (core BCs/APs, plugin postulates). |
-| `template-parser.ts` | Source-faithful HTML walker. Abstract `TemplateNode` interface. |
-| `template-analysis.ts` | Standalone evaluation: 8-step classification, element resolution, binding mode, scope chain, DOM schema. |
+| `graph/types.ts` | All interfaces: node IDs, edge construction, evaluation tracer, observation registrar, convergence function, push/pull engines, event protocol. **Read this first.** |
+| `graph/graph.ts` | Graph implementation. Topology, staleness propagation, intern pool, pull-side re-evaluation with cutoff, orphan cleanup. |
+| `convergence/convergence.ts` | Merge operators and evidence ranking. Operator dispatch by field path. |
+| `scope/scope-visibility.ts` | Standalone evaluation: two-level resource lookup, completeness, aliases, known plugin contributions. |
+| `vocabulary/vocabulary.ts` | Standalone evaluation: frozen syntax registry (core BCs/APs, plugin postulates). |
+| `template/template-parser.ts` | Source-faithful HTML walker. Abstract `TemplateNode` interface. |
+| `template/template-analysis.ts` | Standalone evaluation: 8-step classification, element resolution, binding mode, scope chain, DOM schema. |
+| `interpret/interpreter.ts` | Declaration-driven claim producer. Walks TS AST, recognizes resources, emits observations. |
+| `interpret/extract-fields.ts` | Per-field observation emission with green extraction and interning. |
+| `interpret/recognize.ts` | Four declaration form recognition (decorator, static $au, define(), convention). |
+| `interpret/resolve.ts` | Tracer-integrated cross-file import resolution. |
+| `interpret/html-meta.ts` | Convention-paired HTML meta element processing. |
 
-## Graph mechanics (graph.ts + types.ts)
+## Graph mechanics (graph/types.ts + graph/graph.ts)
 
 ### Node layers
 
@@ -222,12 +239,12 @@ output with no side effects beyond `pull()`).
 ### Adding new resource kinds or fields
 
 1. Update the interpreter to extract the new field
-   (`../interpret/extract-fields.ts`)
+   (`interpret/extract-fields.ts`)
 2. Add the field path to the convergence operator dispatch
-   (`convergence.ts`)
-3. If it affects visibility, update `scope-visibility.ts`
+   (`convergence/convergence.ts`)
+3. If it affects visibility, update `scope/scope-visibility.ts`
 4. If it affects classification, update the relevant step in
-   `template-analysis.ts`
+   `template/template-analysis.ts`
 5. The graph, cutoff, and interning handle the rest automatically
 
 ## Known gaps

@@ -24,10 +24,10 @@ import {
   type Namespace,
   type Span,
 } from './template-parser.js';
-import type { VocabularyGreen, BindingCommandEntry, AttributePatternEntry } from './vocabulary.js';
-import type { ScopeVisibilityGreen, ScopeCompleteness } from './scope-visibility.js';
-import type { ProjectDepGraph } from './types.js';
-import { conclusionNodeId } from './types.js';
+import type { VocabularyGreen, BindingCommandEntry, AttributePatternEntry } from '../vocabulary/vocabulary.js';
+import type { ScopeVisibilityGreen, ScopeCompleteness } from '../scope/scope-visibility.js';
+import type { ProjectDepGraph } from '../graph/types.js';
+import { conclusionNodeId } from '../graph/types.js';
 
 // =============================================================================
 // Public Types — Template Analysis Output

@@ -16,9 +16,9 @@
  */
 
 import type { NormalizedPath } from '../../model/identity.js';
-import type { AnalyzableValue, ClassValue } from '../evaluate/value/types.js';
-import { extractString, getProperty, getResolvedValue } from '../evaluate/value/types.js';
-import type { EvidenceSource } from '../deps/types.js';
+import type { AnalyzableValue, ClassValue } from '../../project-semantics/evaluate/value/types.js';
+import { extractString, getProperty, getResolvedValue } from '../../project-semantics/evaluate/value/types.js';
+import type { EvidenceSource } from '../graph/types.js';
 import type { ResourceKindLike } from '../../schema/types.js';
 
 // =============================================================================
