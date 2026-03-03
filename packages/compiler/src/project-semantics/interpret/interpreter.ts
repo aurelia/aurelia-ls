@@ -467,13 +467,15 @@ function findRegisterCalls(
   if (ts.isPropertyAccessExpression(callee)) {
     if (callee.name.text === 'register' && isAureliaReceiver(callee.expression)) {
       for (const arg of expr.arguments) {
-        const entry = classifyRegisterArg(arg, filePath);
-        out.push(entry);
+        const entries = classifyRegisterArg(arg, filePath);
+        out.push(...entries);
 
-        // Bounded interprocedural: if arg is an identifier that resolves
-        // to an IRegistry object (not a class), trace into its .register() method
-        if (entry.kind === 'class-ref' && config) {
-          tracePluginRegistration(entry.classRef, sf, filePath, out, config);
+        // Bounded interprocedural: if any entry is a class-ref, trace into
+        // its .register() method (IRegistry plugin pattern)
+        for (const entry of entries) {
+          if (entry.kind === 'class-ref' && config) {
+            tracePluginRegistration(entry.classRef, sf, filePath, out, config);
+          }
         }
       }
     }
@@ -876,12 +878,12 @@ function scanBodyForRegistrations(
             const arrayElements = resolveStaticArray(arg.expression.text, bodySf);
             if (arrayElements) {
               for (const el of arrayElements) {
-                out.push(classifyRegisterArg(el, filePath));
+                out.push(...classifyRegisterArg(el, filePath));
               }
               continue;
             }
           }
-          out.push(classifyRegisterArg(arg, filePath));
+          out.push(...classifyRegisterArg(arg, filePath));
         }
         return;
       }
@@ -914,21 +916,21 @@ function resolveStaticArray(
 }
 
 /**
- * Classify a registration argument as a class reference or gap.
+ * Classify a registration argument as class reference(s) and/or gap(s).
  *
- * Bare identifiers → class-ref (resolved later).
- * Everything else (calls, spreads, property access chains,
- * template literals, etc.) → gap. The false-closed-world bug
- * requires treating anything we can't statically resolve as a
- * gap rather than silently ignoring it.
+ * Returns an array because some patterns produce BOTH a class-ref
+ * (for plugin detection) AND a gap (for completeness). Example:
+ * `I18nConfiguration.customize(cb)` — the base `I18nConfiguration` is
+ * a known plugin identifier (class-ref), but the `.customize(cb)` call
+ * means the configuration is opaque (gap).
  */
 function classifyRegisterArg(
   arg: ts.Expression,
   filePath: NormalizedPath,
-): RootRegistrationEntry {
+): RootRegistrationEntry[] {
   // Bare identifier: class reference (most common case)
   if (ts.isIdentifier(arg)) {
-    return { kind: 'class-ref', classRef: arg.text, site: filePath };
+    return [{ kind: 'class-ref', classRef: arg.text, site: filePath }];
   }
 
   // Spread: ...getPlugins() or ...array — opaque
@@ -937,23 +939,34 @@ function classifyRegisterArg(
     const desc = ts.isIdentifier(inner) ? `spread:${inner.text}`
       : ts.isCallExpression(inner) ? 'spread:opaque-call'
       : 'spread:opaque';
-    return { kind: 'gap', reason: desc, site: filePath };
+    return [{ kind: 'gap', reason: desc, site: filePath }];
   }
 
-  // Call expression: getPlugins(), Plugin.configure(...), etc. — opaque
+  // Call expression: getPlugins(), Plugin.configure(...), etc.
   if (ts.isCallExpression(arg)) {
     const callee = arg.expression;
+
+    // X.method(args) pattern — extract base identifier as class-ref
+    // AND record the method call as a gap. Both signals are needed:
+    // class-ref enables plugin detection, gap records the opaque config.
+    if (ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression)) {
+      return [
+        { kind: 'class-ref', classRef: callee.expression.text, site: filePath },
+        { kind: 'gap', reason: `opaque-call:${callee.name.text}`, site: filePath },
+      ];
+    }
+
     const desc = ts.isIdentifier(callee) ? `opaque-call:${callee.text}`
       : ts.isPropertyAccessExpression(callee) ? `opaque-call:${callee.name.text}`
       : 'opaque-call';
-    return { kind: 'gap', reason: desc, site: filePath };
+    return [{ kind: 'gap', reason: desc, site: filePath }];
   }
 
   // Property access: SomeModule.SomeClass — might be a class, treat as ref
   if (ts.isPropertyAccessExpression(arg)) {
-    return { kind: 'class-ref', classRef: arg.name.text, site: filePath };
+    return [{ kind: 'class-ref', classRef: arg.name.text, site: filePath }];
   }
 
   // Anything else: conditional expressions, template literals, etc.
-  return { kind: 'gap', reason: 'opaque-expression', site: filePath };
+  return [{ kind: 'gap', reason: 'opaque-expression', site: filePath }];
 }
