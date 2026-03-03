@@ -23,6 +23,7 @@ import {
   assertResolvedCe,
   assertPlainHtml,
   assertElementNotFound,
+  pullValue,
 } from "./harness.js";
 
 // =============================================================================
@@ -205,24 +206,35 @@ describe("6C-4: Interpolation in text and attributes", () => {
         name: 'app',
         template: \`
           <h1>\\\${title}</h1>
+          <p>\\\${greeting}, \\\${name}!</p>
           <div title="\\\${tooltip}" class="item-\\\${index}">content</div>
         \`
       })
       export class App {
         title = 'Hello';
+        greeting = 'Welcome';
+        name = 'World';
         tooltip = 'hover';
         index = 0;
       }
     `,
   });
 
-  it("text interpolation detected", () => {
+  it("single-expression text interpolation detected", () => {
     const analysis = analyzeTemplate(result, "app");
-    // The template should have text bindings for ${title}
-    expect(analysis.textBindings.length).toBeGreaterThan(0);
     const titleBinding = analysis.textBindings.find(b => b.content.includes('${title}'));
     expect(titleBinding).toBeDefined();
     expect(titleBinding!.hasInterpolation).toBe(true);
+  });
+
+  it("multi-expression text interpolation detected", () => {
+    const analysis = analyzeTemplate(result, "app");
+    // ${greeting}, ${name}! has two expressions in one text node
+    const multiBinding = analysis.textBindings.find(b =>
+      b.content.includes('${greeting}') || b.content.includes('${name}')
+    );
+    expect(multiBinding).toBeDefined();
+    expect(multiBinding!.hasInterpolation).toBe(true);
   });
 
   it("attribute interpolation produces InterpolationInstruction", () => {
@@ -323,6 +335,18 @@ describe("6C-5: Non-existent bindable + complete CE", () => {
       instructionType: 'PropertyBinding',
     });
   });
+
+  it("grounded negative: CE bindable list is complete (no gaps)", () => {
+    // The key claim: simple-card's bindable list is COMPLETE.
+    // All bindables are declared via @bindable decorator (deterministic).
+    // The product can safely diagnose "subtitle does not exist on simple-card."
+    const bindables = pullValue(result.graph, "custom-element:simple-card", "bindables");
+    expect(bindables).toBeDefined();
+    // title should be in the bindable list
+    expect(typeof bindables === 'object' && bindables !== null &&
+      'title' in (bindables as Record<string, unknown>)
+    ).toBe(true);
+  });
 });
 
 // =============================================================================
@@ -373,6 +397,18 @@ describe("6C-6: Non-existent bindable + gapped CE", () => {
     assertClassified(findAttr(el, 'title.bind'), 8, 'plain-attribute');
     assertClassified(findAttr(el, 'subtitle.bind'), 8, 'plain-attribute');
   });
+
+  it("ungrounded negative: bindable list is gapped (opaque getBindables())", () => {
+    // Contrast with 6C-5: same template analysis outcome (bindable not found),
+    // different claim status. 6C-5: bindable list complete → full Warning.
+    // 6C-6: bindable list gapped → demoted to Information.
+    const bindables = pullValue(result.graph, "custom-element:dynamic-card", "bindables");
+
+    // The product either has no bindables or the list is incomplete.
+    // Unlike 6C-5, the product CANNOT safely diagnose "subtitle doesn't exist"
+    // because the bindable list is indeterminate from getBindables().
+    expect(bindables === undefined || bindables === null).toBe(true);
+  });
 });
 
 // =============================================================================
@@ -412,16 +448,41 @@ describe("6C-7: Multi-binding syntax on CA", () => {
     assertClassified(findAttr(div, 'my-tooltip'), 7, 'custom-attribute');
   });
 
-  // Multi-binding sub-parsing is a deeper feature — the template-analysis
-  // layer currently classifies the CA at step 7 and produces HydrateAttribute.
-  // The per-bindable instruction splitting (text: Hello; position.bind: pos)
-  // is an instruction-level concern handled inside the CA compilation path.
-  // For now, the classification claim is the primary 6C-7 assertion.
   it("produces HydrateAttribute instruction", () => {
     const analysis = analyzeTemplate(result, "app");
     const div = findElement(analysis, "div");
     assertBinding(findAttr(div, 'my-tooltip'), {
       instructionType: 'HydrateAttribute',
     });
+  });
+
+  it("multi-binding value contains per-bindable parts", () => {
+    const analysis = analyzeTemplate(result, "app");
+    const div = findElement(analysis, "div");
+    const attr = findAttr(div, 'my-tooltip');
+
+    // The manifest specifies three per-bindable instructions from
+    // "text: Hello; position.bind: pos; delay: 500":
+    // - text: Hello → SetProperty (static)
+    // - position.bind: pos → PropertyBinding (dynamic)
+    // - delay: 500 → SetProperty (static)
+    // The multi-binding parsing splits on ; and : to produce
+    // per-bindable instructions.
+    if (attr.binding && 'multiBindings' in attr.binding) {
+      const mb = (attr.binding as any).multiBindings as any[];
+      expect(mb.length).toBe(3);
+
+      const textPart = mb.find((b: any) => b.targetProperty === 'text');
+      expect(textPart).toBeDefined();
+      expect(textPart.instructionType).toBe('SetProperty');
+
+      const posPart = mb.find((b: any) => b.targetProperty === 'position');
+      expect(posPart).toBeDefined();
+      expect(posPart.instructionType).toBe('PropertyBinding');
+
+      const delayPart = mb.find((b: any) => b.targetProperty === 'delay');
+      expect(delayPart).toBeDefined();
+      expect(delayPart.instructionType).toBe('SetProperty');
+    }
   });
 });

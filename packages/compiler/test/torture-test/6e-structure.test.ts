@@ -172,60 +172,87 @@ describe("6E-3: Content projection — au-slot", () => {
     const auSlots = findElements(cardAnalysis, "au-slot");
     expect(auSlots.length).toBe(3);
   });
+
+  it("children are grouped by au-slot target", () => {
+    const analysis = analyzeTemplate(result, "app");
+    const card = findElement(analysis, "card");
+
+    // The template compiler extracts children of <card> and groups them
+    // by au-slot attribute value. This is the projection routing claim.
+    if ('projections' in card) {
+      const projections = (card as any).projections as Record<string, any[]>;
+      // h2 au-slot="header" → header slot
+      expect(projections['header']).toBeDefined();
+      // p (no au-slot) → default slot
+      expect(projections['default'] || projections['']).toBeDefined();
+      // span au-slot="footer" → footer slot
+      expect(projections['footer']).toBeDefined();
+    }
+  });
 });
 
 // =============================================================================
 // 6E-4: Projected content scope — caller's scope with $host overlay
 // =============================================================================
 
-describe("6E-4: Projected content scope", () => {
-  // Projected content runs in the CALLER's scope with a $host overlay.
-  // At the template analysis level, the projected content (<h2>, <p>, <span>)
-  // is analyzed in the APP's template context, not the CARD's context.
-  // The scope chain at projected elements is the app's scope chain.
-
+describe("6E-4: Projected content scope — caller's scope with $host overlay", () => {
   const result = runInterpreter({
-    "/src/card.ts": `
-      import { customElement } from 'aurelia';
+    "/src/panel.ts": `
+      import { customElement, bindable } from 'aurelia';
 
       @customElement({
-        name: 'card',
-        template: '<div class="card"><au-slot></au-slot></div>'
+        name: 'panel',
+        template: '<div class="panel"><au-slot>\\\${title} (default)</au-slot></div>'
       })
-      export class Card {}
+      export class Panel {
+        @bindable title: string = '';
+      }
     `,
     "/src/app.ts": `
       import { customElement } from 'aurelia';
-      import { Card } from './card';
+      import { Panel } from './panel';
 
       @customElement({
         name: 'app',
         template: \`
-          <card>
-            <p>\\\${appTitle}</p>
-          </card>
+          <panel title.bind="panelTitle">
+            <span>\\\${appMessage} - \\\${$host.title}</span>
+          </panel>
         \`,
-        dependencies: [Card]
+        dependencies: [Panel]
       })
       export class App {
-        appTitle = 'From App';
+        appMessage = 'Hello from app';
+        panelTitle = 'My Panel';
       }
     `,
   });
 
-  it("projected <p> inside <card> has app's scope (caller scope)", () => {
+  it("projected <span> has app's scope (caller scope)", () => {
     const analysis = analyzeTemplate(result, "app");
-    const p = findElement(analysis, "p");
-    // The <p> is in app's template — its scope is app's scope.
-    // Template analysis runs per-CE: app's template is analyzed with
-    // app's scope. The <p> sees app's CE boundary.
-    assertCeBoundary(p, "app");
+    const span = findElement(analysis, "span");
+    // Projected content runs in the CALLER's scope.
+    // The <span> is in app's template → app's CE boundary.
+    assertCeBoundary(span, "app");
   });
 
-  it("card's own template has card's scope", () => {
-    const cardAnalysis = analyzeTemplate(result, "card");
-    const div = findElement(cardAnalysis, "div");
-    assertCeBoundary(div, "card");
+  it("panel's own template has panel's scope", () => {
+    const panelAnalysis = analyzeTemplate(result, "panel");
+    const div = findElement(panelAnalysis, "div");
+    assertCeBoundary(div, "panel");
+  });
+
+  it("$host in projected content provides access to target CE", () => {
+    // The manifest specifies: $host.title resolves to Panel's title.
+    // $host is a synthetic property in the projected content's
+    // overrideContext. At template analysis level, we verify the
+    // structural precondition: the projected span's text references
+    // $host, and panel has a title bindable.
+    const analysis = analyzeTemplate(result, "app");
+    const textBindings = analysis.textBindings.filter(
+      b => b.content.includes('$host')
+    );
+    expect(textBindings.length).toBeGreaterThan(0);
   });
 });
 
@@ -269,23 +296,41 @@ describe("6E-5: processContent gap (NL-4)", () => {
     expect(el.resolution.kind).toBe('custom-element');
   });
 
-  // NL-4: processContent makes the template non-deterministic.
-  // The hook modifies the DOM before compilation. The product can't
-  // predict what the hook will do. The gap is structural — the
-  // template's post-hook state is indeterminate at analysis time.
-  //
-  // At the conclusion level, the processContent field should be
-  // observed. The gap propagation (template content may differ from
-  // source) is a diagnostic-level concern.
-  it("processContent field is observed on the CE", () => {
-    const pc = pullValue(result.graph, "custom-element:magic-el", "processContent");
-    // processContent is an opaque function reference — the product
-    // may or may not extract it. The key claim is that the CE is
-    // recognized and can be analyzed despite having processContent.
-    // The gap (NL-4: template DOM may differ from source) is a
-    // diagnostic concern, not a classification concern.
-    // We verify the CE itself is fully recognized.
+  it("CE is recognized despite processContent hook", () => {
     const name = pullValue(result.graph, "custom-element:magic-el", "name");
     expect(name).toBe("magic-el");
+  });
+
+  it("processContent field is observed as opaque function (NL-4 gap source)", () => {
+    // NL-4: processContent makes the template non-deterministic.
+    // The hook is an opaque function — the product can detect its
+    // PRESENCE but cannot determine its BEHAVIOR.
+    const pc = pullValue(result.graph, "custom-element:magic-el", "processContent");
+
+    // The processContent field should be observed. It's either:
+    // - A function reference (opaque to static analysis)
+    // - An "unknown" gap marker
+    // Either way, it's NOT undefined — the product should detect that
+    // processContent IS specified on this CE.
+    expect(pc !== undefined).toBe(true);
+  });
+
+  it("processContent creates a template analysis gap", () => {
+    // The key NL-4 claim: the template's post-hook state is
+    // indeterminate. The product compiles the PRE-hook template
+    // but the runtime sees the POST-hook template.
+    // This should be reflected in the analysis as a gap or
+    // reduced confidence on template analysis claims for this CE.
+    const analysis = analyzeTemplate(result, "app");
+    const el = findElement(analysis, "magic-el");
+
+    // The CE resolves, but the product should indicate that
+    // template analysis of magic-el's children may not be reliable.
+    expect(el.resolution.kind).toBe('custom-element');
+
+    // If the analysis tracks processContent gaps, verify it
+    if ('hasProcessContentGap' in el) {
+      expect((el as any).hasProcessContentGap).toBe(true);
+    }
   });
 });

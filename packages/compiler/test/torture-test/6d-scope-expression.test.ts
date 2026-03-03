@@ -183,54 +183,70 @@ describe("6D-3: if TC passthrough — no scope creation", () => {
 // (Structural claim: $parent hops exactly N parents, ignoring boundaries)
 // =============================================================================
 
-describe("6D-4: $parent traversal", () => {
-  // $parent is a runtime scope mechanism. At the template analysis
-  // level, we verify the scope chain structure supports $parent
-  // traversal — i.e., the chain has the right entries in order.
-
+describe("6D-4: $parent traversal — crosses CE boundary", () => {
+  // The manifest fixture: inner-el's template uses both $parent.outerValue
+  // (should resolve across CE boundary) and bare outerValue (should NOT
+  // resolve — stops at CE boundary). This is the fundamental asymmetry.
   const result = runInterpreter({
-    "/src/inner.ts": `
+    "/src/inner-el.ts": `
       import { customElement } from 'aurelia';
 
       @customElement({
         name: 'inner-el',
-        template: '<span>\${value}</span>'
+        template: '<div>\${$parent.outerValue}</div><div>\${outerValue}</div>'
       })
-      export class InnerEl {
-        value = 'inner';
-      }
+      export class InnerEl {}
     `,
-    "/src/outer.ts": `
+    "/src/outer-el.ts": `
       import { customElement } from 'aurelia';
-      import { InnerEl } from './inner';
+      import { InnerEl } from './inner-el';
 
       @customElement({
         name: 'outer-el',
-        template: '<div repeat.for="item of items"><inner-el></inner-el></div>',
+        template: '<inner-el></inner-el>',
         dependencies: [InnerEl]
       })
       export class OuterEl {
-        items = [1, 2, 3];
+        outerValue = 'from outer';
       }
     `,
   });
 
-  it("inner-el inside repeat has scope [repeat → ce-boundary(outer-el)]", () => {
-    const analysis = analyzeTemplate(result, "outer-el");
-    const innerEl = findElement(analysis, "inner-el");
-    assertScopeChain(innerEl, ['repeat', 'ce-boundary']);
+  it("inner-el's template has CE boundary for inner-el", () => {
+    const innerAnalysis = analyzeTemplate(result, "inner-el");
+    const div = findElement(innerAnalysis, "div");
+    assertCeBoundary(div, "inner-el");
+    assertScopeChain(div, ['ce-boundary']);
   });
 
-  it("$parent from inner-el's template would hop to repeat scope (structural)", () => {
-    // inner-el's OWN template has scope [ce-boundary(inner-el)].
-    // $parent.item would hop from inner-el's boundary to the repeat
-    // scope in outer-el's template. This is a cross-CE traversal.
-    // At the structural level, we verify inner-el's template has
-    // its own CE boundary, and outer-el's template has the repeat scope.
+  it("outer-el's template has CE boundary for outer-el", () => {
+    const outerAnalysis = analyzeTemplate(result, "outer-el");
+    const innerEl = findElement(outerAnalysis, "inner-el");
+    assertCeBoundary(innerEl, "outer-el");
+  });
+
+  it("bare outerValue stops at inner-el's CE boundary (isBoundary: true)", () => {
+    // inner-el's template has [ce-boundary(InnerEl)] with isBoundary: true.
+    // Bare identifier resolution checks InnerEl's bindingContext → no outerValue.
+    // Stops at boundary. Does NOT reach OuterEl. This is the encapsulation claim.
     const innerAnalysis = analyzeTemplate(result, "inner-el");
-    const span = findElement(innerAnalysis, "span");
-    assertScopeChain(span, ['ce-boundary']);
-    assertCeBoundary(span, "inner-el");
+    const div = findElement(innerAnalysis, "div");
+    const boundary = div.scopeChain.find(s => s.kind === 'ce-boundary');
+    expect(boundary).toBeDefined();
+    expect(boundary!.isBoundary).toBe(true);
+  });
+
+  it("$parent traversal ignores isBoundary — structural precondition", () => {
+    // $parent.outerValue would hop one scope level from inner-el's CE
+    // boundary to outer-el's CE boundary, ignoring isBoundary.
+    // At template analysis level, we verify the structural precondition:
+    // inner-el IS inside outer-el's template, and both scopes exist
+    // in the correct hierarchy.
+    const outerAnalysis = analyzeTemplate(result, "outer-el");
+    const innerEl = findElement(outerAnalysis, "inner-el");
+    // inner-el is in outer-el's template → outer-el's scope is the parent
+    assertScopeChain(innerEl, ['ce-boundary']);
+    assertCeBoundary(innerEl, "outer-el");
   });
 });
 
@@ -352,6 +368,9 @@ describe("6D-7: Expression entry point selection", () => {
     const forAttr = findAttr(div, 'repeat.for');
     // repeat.for is classified as TC (step 7)
     assertClassified(forAttr, 7, 'template-controller');
+    // The expression entry point is IsIterator — "item of data"
+    // is iterator syntax, not property access
+    assertBinding(forAttr, { expressionEntry: 'IsIterator' });
   });
 });
 
@@ -404,34 +423,56 @@ describe("6D-9: <let> element scope injection", () => {
         name: 'app',
         template: \`
           <let greeting.bind="'Hello'"></let>
+          <let full-message.bind="greeting + ' ' + name"></let>
           <div>\\\${greeting}</div>
+          <div>\\\${fullMessage}</div>
+          <div>\\\${name}</div>
         \`
       })
-      export class App {}
+      export class App {
+        name = 'World';
+      }
     `,
   });
 
   it("<let> is recognized as an element", () => {
     const analysis = analyzeTemplate(result, "app");
-    const letEl = findElement(analysis, "let");
-    expect(letEl).toBeDefined();
+    const letEls = findElements(analysis, "let");
+    expect(letEls.length).toBe(2);
   });
 
   it("<let> produces a let scope entry with the bound variable", () => {
     const analysis = analyzeTemplate(result, "app");
-    const letEl = findElement(analysis, "let");
-    const letScope = letEl.scopeChain.find(s => s.kind === 'let');
+    const letEls = findElements(analysis, "let");
+    const letScope = letEls[0]!.scopeChain.find(s => s.kind === 'let');
     expect(letScope).toBeDefined();
     if (letScope?.kind === 'let') {
       expect(letScope.bindings).toContain('greeting');
     }
   });
 
-  it("let element scope chain includes let entry", () => {
+  it("hyphenated let target is camelCase-transformed: full-message → fullMessage", () => {
     const analysis = analyzeTemplate(result, "app");
-    const letEl = findElement(analysis, "let");
-    // The let element's own scope includes the let entry.
-    // Let injects into overrideContext — a sibling effect, not nesting.
-    assertScopeChain(letEl, ['let', 'ce-boundary']);
+    const letEls = findElements(analysis, "let");
+    // The second <let> has full-message.bind — should be transformed
+    // to fullMessage (HTML kebab-case → JS camelCase convention)
+    const secondLet = letEls[1]!;
+    const letScope = secondLet.scopeChain.find(s => s.kind === 'let');
+    expect(letScope).toBeDefined();
+    if (letScope?.kind === 'let') {
+      expect(letScope.bindings).toContain('fullMessage');
+    }
+  });
+
+  it("<let> does NOT create a child scope — downstream elements have CE scope only", () => {
+    const analysis = analyzeTemplate(result, "app");
+    // <let> injects into the existing scope's overrideContext.
+    // It does NOT create a child scope. Downstream div elements
+    // should still have just [ce-boundary] — the let entry only
+    // appears on the <let> element itself (as the injection source).
+    const divs = findElements(analysis, "div");
+    for (const div of divs) {
+      assertScopeChain(div, ['ce-boundary']);
+    }
   });
 });
