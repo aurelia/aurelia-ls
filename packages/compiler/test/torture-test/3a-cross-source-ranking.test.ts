@@ -288,7 +288,7 @@ describe("3A: Operator-specific merge behavior", () => {
       fields: {
         inlineTemplate: "<div>config wins</div>",
         containerless: true,
-        aliases: ["three-manifest", "three-src"],
+        aliases: ["three-src", "three-manifest"],
       },
     });
   });

@@ -90,7 +90,7 @@ export function observationNodeId(
 }
 
 export function conclusionNodeId(resourceKey: string, fieldPath: string): ProjectDepNodeId {
-  return `conclusion:${resourceKey}:${fieldPath}` as ProjectDepNodeId;
+  return `conclusion:${resourceKey}::${fieldPath}` as ProjectDepNodeId;
 }
 
 /** Well-known config node for convergence parameters. */

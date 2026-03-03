@@ -26,6 +26,7 @@ import {
   interpretProject,
   createUnitEvaluator,
 } from "../../out/project-semantics/interpret/interpreter.js";
+import { createConvergence } from "../../out/project-semantics/deps/convergence.js";
 import type { GreenValue } from "../../out/value/green.js";
 import type { Sourced } from "../../out/value/sourced.js";
 
@@ -219,31 +220,15 @@ function evidenceKey(resourceKey: string, fieldPath: string): string {
   return `${resourceKey}::${fieldPath}`;
 }
 
-const TIER_ORDER: Record<string, number> = {
-  "analysis-explicit": 4,
-  "analysis-convention": 3,
-  "manifest": 2,
-  "config": 1,
-  "builtin": 0,
-};
-
 /**
- * Creates a convergence function that also records evidence source metadata
- * for each converged field. This enables form/tier assertions in tests.
+ * Creates a convergence function that uses the product's convergence
+ * algebra (5 operators) and also records evidence source metadata for
+ * form/tier assertions in tests.
  */
 function createTrackingConvergence(evidenceMap: EvidenceMap): ConvergenceFunction {
-  return (resourceKey, fieldPath, observations) => {
-    if (observations.length === 1) {
-      evidenceMap.set(evidenceKey(resourceKey, fieldPath), observations[0]!.source);
-      return { green: observations[0]!.green, red: observations[0]!.red };
-    }
-    // Multiple observations: pick highest tier
-    const sorted = [...observations].sort(
-      (a, b) => (TIER_ORDER[b.source.tier] ?? 0) - (TIER_ORDER[a.source.tier] ?? 0)
-    );
-    evidenceMap.set(evidenceKey(resourceKey, fieldPath), sorted[0]!.source);
-    return { green: sorted[0]!.green, red: sorted[0]!.red };
-  };
+  return createConvergence((resourceKey, fieldPath, source) => {
+    evidenceMap.set(evidenceKey(resourceKey, fieldPath), source);
+  });
 }
 
 // =============================================================================

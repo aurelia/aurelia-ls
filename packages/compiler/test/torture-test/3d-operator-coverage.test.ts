@@ -183,9 +183,7 @@ describe("3D: stable-union edge cases", () => {
       className: "OpThreeSu",
       form: "explicit-config",
       fields: {
-        aliases: expect.arrayContaining([
-          "config-alias", "manifest-alias", "shared-alias", "src-alias",
-        ]),
+        aliases: ["src-alias", "shared-alias", "manifest-alias", "config-alias"],
       },
     });
   });

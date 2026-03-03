@@ -312,12 +312,12 @@ export function createProjectDepGraph(
 
   function parseConclusionKey(nodeId: ProjectDepNodeId): { resourceKey: string; fieldPath: string } | null {
     if (!nodeId.startsWith('conclusion:')) return null;
-    const rest = nodeId.slice(11);
-    const colonIdx = rest.indexOf(':');
-    if (colonIdx === -1) return null;
+    const rest = nodeId.slice(11); // strip "conclusion:"
+    const delimIdx = rest.indexOf('::');
+    if (delimIdx === -1) return null;
     return {
-      resourceKey: rest.slice(0, colonIdx),
-      fieldPath: rest.slice(colonIdx + 1),
+      resourceKey: rest.slice(0, delimIdx),
+      fieldPath: rest.slice(delimIdx + 2),
     };
   }
 

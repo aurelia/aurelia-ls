@@ -179,6 +179,11 @@ function extractCustomAttributeFields(
   // Priority 2: definition object
   if (config?.kind === 'object') {
     emitScalarIfPresent(registrar, recognized, 'noMultiBindings', extractBoolean(getProperty(config, 'noMultiBindings')), evalNode, cls, emitted);
+    emitScalarIfPresent(registrar, recognized, 'defaultProperty', extractString(getProperty(config, 'defaultProperty')), evalNode, cls, emitted);
+    // TC-specific: containerStrategy
+    if (recognized.kind === 'template-controller') {
+      emitScalarIfPresent(registrar, recognized, 'containerStrategy', extractString(getProperty(config, 'containerStrategy')), evalNode, cls, emitted);
+    }
   }
 
   // Priority 3: static $au
@@ -299,7 +304,7 @@ function extractBindableObservations(
     bindables.set(member.name, entry);
   }
 
-  // Source 2: static bindables = { ... }
+  // Source 2: static bindables = { ... } or static bindables = ['name', ...]
   const staticBindables = cls.staticMembers.get('bindables');
   if (staticBindables?.kind === 'object') {
     for (const [propName, propValue] of staticBindables.properties) {
@@ -314,6 +319,14 @@ function extractBindableObservations(
         const mode = extractBindingMode(getProperty(propValue, 'mode'));
         if (mode) existing.mode = mode;
         bindables.set(propName, existing);
+      }
+    }
+  } else if (staticBindables?.kind === 'array') {
+    // Array shorthand: ['propName', ...] — each string is a bindable name
+    for (const el of staticBindables.elements) {
+      const name = extractString(el);
+      if (name) {
+        bindables.set(name, { name, ...(bindables.get(name) ?? {}) });
       }
     }
   }
@@ -332,6 +345,14 @@ function extractBindableObservations(
           const mode = extractBindingMode(getProperty(propValue, 'mode'));
           if (mode) existing.mode = mode;
           bindables.set(propName, existing);
+        }
+      }
+    } else if (configBindables?.kind === 'array') {
+      // Array shorthand: ['propName', ...] — each string is a bindable name
+      for (const el of configBindables.elements) {
+        const name = extractString(el);
+        if (name) {
+          bindables.set(name, { name, ...(bindables.get(name) ?? {}) });
         }
       }
     }
@@ -385,6 +406,12 @@ function extractStaticAuScalarFields(
   const template = extractString(getProperty(au, 'template'));
   if (template !== undefined && !emitted.has('inlineTemplate')) {
     emitScalar(registrar, recognized, 'inlineTemplate', template, evalNode, cls, emitted);
+  }
+
+  // CA/TC-specific fields from $au
+  emitScalarIfPresent(registrar, recognized, 'defaultProperty', extractString(getProperty(au, 'defaultProperty')), evalNode, cls, emitted);
+  if (recognized.kind === 'template-controller') {
+    emitScalarIfPresent(registrar, recognized, 'containerStrategy', extractString(getProperty(au, 'containerStrategy')), evalNode, cls, emitted);
   }
 }
 
