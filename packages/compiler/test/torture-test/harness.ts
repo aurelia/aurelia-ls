@@ -1673,6 +1673,7 @@ export function createMutableSession(
 
     editFile(path: string, newContent: string): EditCycleTrace {
       const normalizedPath = normalizeP(path);
+      const isNewFile = !fileStore.has(normalizedPath);
 
       // 1. Update file store
       fileStore.set(normalizedPath, newContent);
@@ -1685,8 +1686,28 @@ export function createMutableSession(
       currentTrace = new EditCycleTrace();
       proxy.target = currentTrace;
 
-      // 4. Mark the changed file as stale in the graph
-      graph.invalidation.markFileStale(normalizedPath as NormalizedPath);
+      if (isNewFile) {
+        // New file — no graph nodes exist yet. Run the interpreter
+        // on the new file to create observation nodes. Then mark
+        // any files that import it as stale.
+        if (normalizedPath.endsWith('.ts')) {
+          const config = buildConfig();
+          interpretProject([normalizedPath as NormalizedPath], config);
+        }
+      } else {
+        // Existing file — mark stale. The graph's pull path will
+        // lazily re-evaluate via the unit evaluator.
+        graph.invalidation.markFileStale(normalizedPath as NormalizedPath);
+
+        // Re-run the interpreter on this file to update observations.
+        // The unit evaluator handles per-unit re-evaluation, but
+        // we also need to re-run the full file interpretation to catch
+        // new units (e.g., new exports) and root registration scanning.
+        if (normalizedPath.endsWith('.ts')) {
+          const config = buildConfig();
+          interpretProject([normalizedPath as NormalizedPath], config);
+        }
+      }
 
       return currentTrace;
     },
