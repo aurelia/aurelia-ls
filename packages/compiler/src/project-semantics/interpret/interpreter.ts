@@ -368,7 +368,7 @@ function scanRootRegistrations(
   const collected = collectModuleLevelExpressions(sf.statements);
   for (const { stmt: exprStmt, conditional } of collected) {
     const beforeCount = entries.length;
-    findRegisterCalls(exprStmt.expression, sf, filePath, scope, entries);
+    findRegisterCalls(exprStmt.expression, sf, filePath, scope, entries, config);
 
     // If this expression was inside a conditional (if-block) and it
     // produced registrations, add a gap — we can't determine at compile
@@ -443,7 +443,11 @@ function scanRootRegistrations(
 /**
  * Walk a call chain to find .register() calls on Aurelia receivers.
  *
- * Handles chaining: Aurelia.register(X).app(App).start()
+ * Handles:
+ * - Direct: Aurelia.register(X).app(App).start()
+ * - Helper wrapping: registerApp(Aurelia).app(App).start()
+ *   (bounded interprocedural: one level into the helper body)
+ *
  * The AST is nested: start(app(register(Aurelia, X), App))
  * We walk the receiver chain to find all .register() calls.
  */
@@ -453,21 +457,42 @@ function findRegisterCalls(
   filePath: NormalizedPath,
   scope: import('../evaluate/value/types.js').LexicalScope,
   out: RootRegistrationEntry[],
+  config?: InterpreterConfig,
 ): void {
   if (!ts.isCallExpression(expr)) return;
 
   const callee = expr.expression;
-  if (!ts.isPropertyAccessExpression(callee)) return;
 
-  if (callee.name.text === 'register' && isAureliaReceiver(callee.expression)) {
-    for (const arg of expr.arguments) {
-      const entry = classifyRegisterArg(arg, filePath);
-      out.push(entry);
+  // Case 1: Property access — .register() or other chained method
+  if (ts.isPropertyAccessExpression(callee)) {
+    if (callee.name.text === 'register' && isAureliaReceiver(callee.expression)) {
+      for (const arg of expr.arguments) {
+        const entry = classifyRegisterArg(arg, filePath);
+        out.push(entry);
+
+        // Bounded interprocedural: if arg is an identifier that resolves
+        // to an IRegistry object (not a class), trace into its .register() method
+        if (entry.kind === 'class-ref' && config) {
+          tracePluginRegistration(entry.classRef, sf, filePath, out, config);
+        }
+      }
     }
+
+    // Recurse into chained call receiver
+    if (ts.isCallExpression(callee.expression)) {
+      findRegisterCalls(callee.expression, sf, filePath, scope, out, config);
+    }
+    return;
   }
 
-  if (ts.isCallExpression(callee.expression)) {
-    findRegisterCalls(callee.expression, sf, filePath, scope, out);
+  // Case 2: Plain function call — registerApp(Aurelia)
+  // Bounded interprocedural: if a function is called with Aurelia as an
+  // argument, trace into the function body one level.
+  if (ts.isIdentifier(callee) && config) {
+    const aureliaArgIdx = findAureliaArgIndex(expr.arguments, sf);
+    if (aureliaArgIdx >= 0) {
+      traceHelperFunction(callee.text, aureliaArgIdx, sf, filePath, out, config);
+    }
   }
 }
 
@@ -518,6 +543,374 @@ function isAureliaReceiver(expr: ts.Expression): boolean {
   }
 
   return false;
+}
+
+// =============================================================================
+// Bounded Interprocedural Registration Tracing
+// =============================================================================
+
+/**
+ * Check if any argument to a call is an Aurelia instance.
+ * Returns the argument index, or -1 if none found.
+ */
+function findAureliaArgIndex(
+  args: ts.NodeArray<ts.Expression>,
+  sf: ts.SourceFile,
+): number {
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    if (ts.isIdentifier(arg) && isAureliaReceiver(arg)) return i;
+  }
+  return -1;
+}
+
+/**
+ * Trace into a helper function that wraps Aurelia.register().
+ *
+ * Pattern: registerApp(Aurelia) where registerApp's body contains
+ * au.register(X, Y). One level of call depth only.
+ *
+ * Finds the function declaration (same-file or imported), identifies
+ * the parameter that receives Aurelia, and scans the body for
+ * .register() calls on that parameter.
+ */
+function traceHelperFunction(
+  funcName: string,
+  aureliaArgIdx: number,
+  sf: ts.SourceFile,
+  filePath: NormalizedPath,
+  out: RootRegistrationEntry[],
+  config: InterpreterConfig,
+): void {
+  // Find the function declaration in the same file
+  let funcBody: ts.Block | undefined;
+  let paramName: string | undefined;
+
+  for (const stmt of sf.statements) {
+    // Function declaration: function registerApp(au) { ... }
+    if (ts.isFunctionDeclaration(stmt) && stmt.name?.text === funcName && stmt.body) {
+      funcBody = stmt.body;
+      paramName = stmt.parameters[aureliaArgIdx]?.name.getText(sf);
+      break;
+    }
+    // Variable declaration: const registerApp = function(au) { ... }
+    // or arrow function: const registerApp = (au) => { ... }
+    if (ts.isVariableStatement(stmt)) {
+      for (const decl of stmt.declarationList.declarations) {
+        if (!ts.isIdentifier(decl.name) || decl.name.text !== funcName) continue;
+        if (!decl.initializer) continue;
+
+        if (ts.isFunctionExpression(decl.initializer) && decl.initializer.body) {
+          funcBody = decl.initializer.body;
+          paramName = decl.initializer.parameters[aureliaArgIdx]?.name.getText(sf);
+        } else if (ts.isArrowFunction(decl.initializer)) {
+          if (ts.isBlock(decl.initializer.body)) {
+            funcBody = decl.initializer.body;
+          }
+          paramName = decl.initializer.parameters[aureliaArgIdx]?.name.getText(sf);
+        }
+      }
+    }
+  }
+
+  // Also check imports — the function might be imported from another file
+  if (!funcBody) {
+    const imported = findImportedFunctionBody(funcName, aureliaArgIdx, sf, filePath, config);
+    if (imported) {
+      funcBody = imported.body;
+      paramName = imported.paramName;
+    }
+  }
+
+  if (!funcBody || !paramName) return;
+
+  // Scan the function body for param.register(X) calls
+  scanBodyForRegistrations(funcBody, paramName, filePath, out);
+}
+
+/**
+ * Trace into a plugin object's .register() method.
+ *
+ * Pattern: Aurelia.register(MyPlugin) where MyPlugin = { register(container) { container.register(X) } }
+ *
+ * Finds the object literal, locates the `register` method, and scans
+ * its body for container.register(X) calls.
+ */
+function tracePluginRegistration(
+  identifier: string,
+  sf: ts.SourceFile,
+  filePath: NormalizedPath,
+  out: RootRegistrationEntry[],
+  config: InterpreterConfig,
+): void {
+  // Find the declaration for this identifier
+  for (const stmt of sf.statements) {
+    if (!ts.isVariableStatement(stmt)) continue;
+    for (const decl of stmt.declarationList.declarations) {
+      if (!ts.isIdentifier(decl.name) || decl.name.text !== identifier) continue;
+      if (!decl.initializer) continue;
+
+      // Object literal: { register(container) { ... } }
+      if (ts.isObjectLiteralExpression(decl.initializer)) {
+        const registerMethod = findRegisterMethod(decl.initializer);
+        if (registerMethod) {
+          const paramName = registerMethod.parameters[0]?.name.getText(sf);
+          if (paramName && registerMethod.body) {
+            scanBodyForRegistrations(registerMethod.body, paramName, filePath, out);
+          }
+        }
+      }
+    }
+  }
+
+  // Also check imports
+  const imported = findImportedObjectRegisterMethod(identifier, sf, filePath, config);
+  if (imported) {
+    scanBodyForRegistrations(imported.body, imported.paramName, filePath, out);
+  }
+}
+
+/**
+ * Find a `register` method on an object literal expression.
+ */
+function findRegisterMethod(obj: ts.ObjectLiteralExpression): ts.MethodDeclaration | undefined {
+  for (const prop of obj.properties) {
+    if (ts.isMethodDeclaration(prop) &&
+        ts.isIdentifier(prop.name) &&
+        prop.name.text === 'register' &&
+        prop.body) {
+      return prop;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Find an imported function's body by following the import chain.
+ */
+function findImportedFunctionBody(
+  funcName: string,
+  paramIdx: number,
+  sf: ts.SourceFile,
+  fromFile: NormalizedPath,
+  config: InterpreterConfig,
+): { body: ts.Block; paramName: string } | undefined {
+  for (const stmt of sf.statements) {
+    if (!ts.isImportDeclaration(stmt)) continue;
+    if (!ts.isStringLiteral(stmt.moduleSpecifier)) continue;
+    const specifier = stmt.moduleSpecifier.text;
+
+    const namedBindings = stmt.importClause?.namedBindings;
+    if (!namedBindings || !ts.isNamedImports(namedBindings)) continue;
+
+    for (const imp of namedBindings.elements) {
+      if (imp.name.text !== funcName) continue;
+
+      const targetSf = resolveModuleSourceFile(specifier, fromFile, config);
+      if (!targetSf) return undefined;
+
+      const exportName = imp.propertyName?.text ?? imp.name.text;
+      return findFunctionInFile(exportName, paramIdx, targetSf);
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Find an imported object's .register() method body.
+ */
+function findImportedObjectRegisterMethod(
+  identifier: string,
+  sf: ts.SourceFile,
+  fromFile: NormalizedPath,
+  config: InterpreterConfig,
+): { body: ts.Block; paramName: string } | undefined {
+  for (const stmt of sf.statements) {
+    if (!ts.isImportDeclaration(stmt)) continue;
+    if (!ts.isStringLiteral(stmt.moduleSpecifier)) continue;
+    const specifier = stmt.moduleSpecifier.text;
+
+    const namedBindings = stmt.importClause?.namedBindings;
+    if (!namedBindings || !ts.isNamedImports(namedBindings)) continue;
+
+    for (const imp of namedBindings.elements) {
+      if (imp.name.text !== identifier) continue;
+
+      const targetSf = resolveModuleSourceFile(specifier, fromFile, config);
+      if (!targetSf) return undefined;
+
+      const exportName = imp.propertyName?.text ?? imp.name.text;
+      return findObjectRegisterInFile(exportName, targetSf);
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Find a function declaration/expression in a file and return its body.
+ */
+function findFunctionInFile(
+  name: string,
+  paramIdx: number,
+  sf: ts.SourceFile,
+): { body: ts.Block; paramName: string } | undefined {
+  for (const stmt of sf.statements) {
+    if (ts.isFunctionDeclaration(stmt) && stmt.name?.text === name && stmt.body) {
+      const paramName = stmt.parameters[paramIdx]?.name.getText(sf);
+      if (paramName) return { body: stmt.body, paramName };
+    }
+    if (ts.isVariableStatement(stmt)) {
+      for (const decl of stmt.declarationList.declarations) {
+        if (!ts.isIdentifier(decl.name) || decl.name.text !== name) continue;
+        if (!decl.initializer) continue;
+        if (ts.isFunctionExpression(decl.initializer) && decl.initializer.body) {
+          const paramName = decl.initializer.parameters[paramIdx]?.name.getText(sf);
+          if (paramName) return { body: decl.initializer.body, paramName };
+        }
+        if (ts.isArrowFunction(decl.initializer) && ts.isBlock(decl.initializer.body)) {
+          const paramName = decl.initializer.parameters[paramIdx]?.name.getText(sf);
+          if (paramName) return { body: decl.initializer.body, paramName };
+        }
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Find an exported object with a .register() method in a file.
+ */
+function findObjectRegisterInFile(
+  name: string,
+  sf: ts.SourceFile,
+): { body: ts.Block; paramName: string } | undefined {
+  for (const stmt of sf.statements) {
+    if (!ts.isVariableStatement(stmt)) continue;
+    for (const decl of stmt.declarationList.declarations) {
+      if (!ts.isIdentifier(decl.name) || decl.name.text !== name) continue;
+      if (!decl.initializer || !ts.isObjectLiteralExpression(decl.initializer)) continue;
+
+      const method = findRegisterMethod(decl.initializer);
+      if (method?.body) {
+        const paramName = method.parameters[0]?.name.getText(sf);
+        if (paramName) return { body: method.body, paramName };
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Resolve a module specifier to a SourceFile using the program.
+ */
+function resolveModuleSourceFile(
+  specifier: string,
+  fromFile: NormalizedPath,
+  config: InterpreterConfig,
+): ts.SourceFile | undefined {
+  const { program } = config;
+
+  // Use TypeScript's module resolution
+  const resolved = ts.resolveModuleName(
+    specifier,
+    fromFile,
+    program.getCompilerOptions(),
+    {
+      fileExists: (f) => program.getSourceFile(f) !== undefined || (ts.sys?.fileExists?.(f) ?? false),
+      readFile: (f) => program.getSourceFile(f)?.text ?? ts.sys?.readFile?.(f),
+      directoryExists: (d) => ts.sys?.directoryExists?.(d) ?? false,
+    },
+  );
+
+  if (resolved.resolvedModule) {
+    return program.getSourceFile(resolved.resolvedModule.resolvedFileName);
+  }
+
+  // Fallback for relative imports in test fixtures
+  if (specifier.startsWith('.')) {
+    const fromDir = fromFile.slice(0, fromFile.lastIndexOf('/'));
+    const parts = specifier.split('/');
+    const resultParts = fromDir.split('/');
+    for (const part of parts) {
+      if (part === '.') continue;
+      if (part === '..') { resultParts.pop(); continue; }
+      resultParts.push(part);
+    }
+    const base = resultParts.join('/');
+    for (const ext of ['.ts', '/index.ts', '.d.ts']) {
+      const sf = program.getSourceFile(base + ext);
+      if (sf) return sf;
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Scan a function/method body for `paramName.register(X, Y)` calls.
+ * Extracts registration arguments using the same classifyRegisterArg logic.
+ * One level only — does not recurse into further function calls.
+ *
+ * Special handling for spreads of static arrays: if a spread argument
+ * is a bare identifier that resolves to a static array declaration in
+ * the same file, the array elements are extracted individually.
+ */
+function scanBodyForRegistrations(
+  body: ts.Block,
+  paramName: string,
+  filePath: NormalizedPath,
+  out: RootRegistrationEntry[],
+): void {
+  const bodySf = body.getSourceFile();
+
+  function visit(node: ts.Node): void {
+    if (ts.isCallExpression(node)) {
+      const callee = node.expression;
+      if (ts.isPropertyAccessExpression(callee) &&
+          callee.name.text === 'register' &&
+          ts.isIdentifier(callee.expression) &&
+          callee.expression.text === paramName) {
+        for (const arg of node.arguments) {
+          // Special case: spread of a static identifier
+          if (ts.isSpreadElement(arg) && ts.isIdentifier(arg.expression)) {
+            const arrayElements = resolveStaticArray(arg.expression.text, bodySf);
+            if (arrayElements) {
+              for (const el of arrayElements) {
+                out.push(classifyRegisterArg(el, filePath));
+              }
+              continue;
+            }
+          }
+          out.push(classifyRegisterArg(arg, filePath));
+        }
+        return;
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+
+  ts.forEachChild(body, visit);
+}
+
+/**
+ * Resolve a static array identifier to its elements.
+ * Handles: const appRegistrations = [X, Y, Z]
+ * Returns the array element expressions, or undefined if not resolvable.
+ */
+function resolveStaticArray(
+  name: string,
+  sf: ts.SourceFile,
+): readonly ts.Expression[] | undefined {
+  for (const stmt of sf.statements) {
+    if (!ts.isVariableStatement(stmt)) continue;
+    for (const decl of stmt.declarationList.declarations) {
+      if (!ts.isIdentifier(decl.name) || decl.name.text !== name) continue;
+      if (decl.initializer && ts.isArrayLiteralExpression(decl.initializer)) {
+        return decl.initializer.elements;
+      }
+    }
+  }
+  return undefined;
 }
 
 /**
