@@ -35,7 +35,7 @@ import {
   type Span,
 } from './template-parser.js';
 
-import type { BindingMode } from '../../model/ir.js';
+import type { BindingMode, AnyBindingExpression, ForOfStatement, Interpolation, IsBindingBehavior, ExpressionType } from '../../model/ir.js';
 
 import type {
   FieldValue,
@@ -55,6 +55,10 @@ import type {
   ExpressionEntry,
   ControllerSemanticsGreen,
 } from '../resource/types.js';
+
+import type { AttributeParser, AttrSyntax as RealAttrSyntax } from '../../parsing/attribute-parser.js';
+import type { IExpressionParser } from '../../parsing/expression-parser.js';
+import type { DomSchema, TwoWayDefaults, Naming } from '../../schema/types.js';
 
 // =============================================================================
 // Output Types
@@ -140,16 +144,17 @@ export type ClassificationCategory =
  * construction + link's target resolution + link's mode computation.
  */
 export type BindingTarget =
-  | { readonly kind: 'bindable'; readonly resource: CustomElementGreen | CustomAttributeGreen | TemplateControllerGreen; readonly bindable: BindableGreen; readonly effectiveMode: BindingMode; readonly expressionEntry: ExpressionEntry }
-  | { readonly kind: 'command'; readonly command: BindingCommandGreen; readonly effectiveMode: BindingMode; readonly targetProperty: string }
-  | { readonly kind: 'native-prop'; readonly tagName: string; readonly property: string; readonly effectiveMode: BindingMode; readonly expressionEntry: ExpressionEntry }
-  | { readonly kind: 'attribute'; readonly attrName: string; readonly expressionEntry: ExpressionEntry }
-  | { readonly kind: 'interpolation'; readonly targetProperty: string }
-  | { readonly kind: 'listener'; readonly eventName: string; readonly capture: boolean; readonly modifier: string | null }
-  | { readonly kind: 'ref'; readonly target: string }
-  | { readonly kind: 'iterator'; readonly itemVar: string; readonly iterableProperty: string; readonly expressionEntry: ExpressionEntry }
+  | { readonly kind: 'bindable'; readonly resource: CustomElementGreen | CustomAttributeGreen | TemplateControllerGreen; readonly bindable: BindableGreen; readonly effectiveMode: BindingMode; readonly expressionEntry: ExpressionEntry; readonly expression?: AnyBindingExpression }
+  | { readonly kind: 'command'; readonly command: BindingCommandGreen; readonly effectiveMode: BindingMode; readonly targetProperty: string; readonly expression?: AnyBindingExpression }
+  | { readonly kind: 'native-prop'; readonly tagName: string; readonly property: string; readonly effectiveMode: BindingMode; readonly expressionEntry: ExpressionEntry; readonly expression?: AnyBindingExpression }
+  | { readonly kind: 'attribute'; readonly attrName: string; readonly expressionEntry: ExpressionEntry; readonly expression?: AnyBindingExpression }
+  | { readonly kind: 'interpolation'; readonly targetProperty: string; readonly expression?: Interpolation }
+  | { readonly kind: 'listener'; readonly eventName: string; readonly capture: boolean; readonly modifier: string | null; readonly expression?: AnyBindingExpression }
+  | { readonly kind: 'ref'; readonly target: string; readonly expression?: AnyBindingExpression }
+  | { readonly kind: 'iterator'; readonly itemVar: string; readonly iterableProperty: string; readonly expressionEntry: ExpressionEntry; readonly expression?: ForOfStatement }
   | { readonly kind: 'set-property'; readonly targetProperty: string; readonly value: string }
-  | { readonly kind: 'translation'; readonly target: string; readonly isExpression: boolean };
+  | { readonly kind: 'translation'; readonly target: string; readonly isExpression: boolean; readonly expression?: AnyBindingExpression }
+  | { readonly kind: 'multi-binding'; readonly resource: CustomAttributeGreen; readonly bindings: readonly BindingTarget[] };
 
 // -- Scope Frame --
 
@@ -236,6 +241,35 @@ export interface LoweringInput {
   readonly vocabulary: VocabularyGreen;
   /** Scope completeness for negative assertion safety. */
   readonly completeness: ScopeCompleteness;
+  /**
+   * Real attribute parser (route-recognizer scoring, pattern caching,
+   * freeze invariant). When provided, replaces the built-in AP simulation
+   * with production-grade pattern matching.
+   */
+  readonly attrParser?: AttributeParser;
+  /**
+   * Expression parser. When provided, binding values are parsed into ASTs
+   * and attached to the binding target as `expression`. Without this,
+   * bindings carry raw expression strings only.
+   */
+  readonly exprParser?: IExpressionParser;
+  /**
+   * DOM schema (from dom-registry.generated.ts). When provided, replaces
+   * the inline element sets with the full generated registry for
+   * element recognition, isTwoWay defaults, and attrToProp mapping.
+   */
+  readonly dom?: DomSchema;
+  /**
+   * Two-way binding defaults (from registry.ts). When provided, uses
+   * the exhaustive per-element per-property table instead of the inline
+   * heuristic.
+   */
+  readonly twoWayDefaults?: TwoWayDefaults;
+  /**
+   * Naming conventions (attrToProp mappings). When provided, uses the
+   * full global + per-tag mapping table.
+   */
+  readonly naming?: Naming;
 }
 
 /**
@@ -275,6 +309,11 @@ interface LoweringContext {
   readonly catalog: ResourceCatalogGreen;
   readonly vocabulary: VocabularyGreen;
   readonly completeness: ScopeCompleteness;
+  readonly attrParser: AttributeParser | null;
+  readonly exprParser: IExpressionParser | null;
+  readonly dom: DomSchema | null;
+  readonly twoWayDefaults: TwoWayDefaults | null;
+  readonly naming: Naming | null;
   readonly gaps: GapSignal[];
 }
 
@@ -283,6 +322,11 @@ function createLoweringContext(input: LoweringInput): LoweringContext {
     catalog: input.catalog,
     vocabulary: input.vocabulary,
     completeness: input.completeness,
+    attrParser: input.attrParser ?? null,
+    exprParser: input.exprParser ?? null,
+    dom: input.dom ?? null,
+    twoWayDefaults: input.twoWayDefaults ?? null,
+    naming: input.naming ?? null,
     gaps: [],
   };
 }
@@ -336,7 +380,7 @@ function analyzeElement(
   let controllerOrder = 0;
 
   for (const attr of el.attrs) {
-    const syntax = parseAttrSyntax(attr.name, ctx.vocabulary.patterns);
+    const syntax = parseAttrSyntax(attr.name, attr.value, ctx);
     const { classification, binding } = classifyAndResolve(attr, syntax, el, ceGreen, ctx);
 
     attributes.push({
@@ -430,7 +474,7 @@ function resolveElement(el: ElementNode, ctx: LoweringContext): ElementResolutio
   }
 
   // Known HTML/SVG → plain
-  if (isKnownElement(tagName, el.namespace)) {
+  if (isKnownElement(tagName, el.namespace, ctx)) {
     return { kind: 'plain-html', tagName };
   }
 
@@ -500,7 +544,7 @@ function classifyAndResolve(
     if (bindable) {
       return {
         classification: { step: 6, category: 'element-bindable' },
-        binding: buildBindableBinding(bindable, ceGreen, command, target, el, ctx),
+        binding: buildBindableBinding(bindable, ceGreen, command, target, el, ctx, attr.value),
       };
     }
   }
@@ -512,7 +556,7 @@ function classifyAndResolve(
     if (tcGreen) {
       return {
         classification: { step: 7, category: 'template-controller' },
-        binding: buildTcBinding(tcGreen, command, target, el, ctx),
+        binding: buildTcBinding(tcGreen, command, target, attr.value, el, ctx),
       };
     }
 
@@ -520,7 +564,7 @@ function classifyAndResolve(
     if (caGreen) {
       return {
         classification: { step: 7, category: 'custom-attribute' },
-        binding: buildCaBinding(caGreen, command, target, el, ctx),
+        binding: buildCaBindingWithMulti(caGreen, command, target, attr.value, el, ctx),
       };
     }
   }
@@ -617,23 +661,30 @@ function buildBindableBinding(
   target: string,
   el: ElementNode,
   ctx: LoweringContext,
+  rawValue?: string,
 ): BindingTarget {
   if (command === null) {
-    // No command — interpolation or set-property. Distinction made by
-    // downstream expression parsing, not here.
+    // No command — check for interpolation first
+    if (rawValue && rawValue.includes('${') && ctx.exprParser) {
+      const expression = tryParseExpression(rawValue, 'Interpolation', ctx.exprParser) as Interpolation | undefined;
+      return { kind: 'interpolation', targetProperty: bindable.property, expression };
+    }
     return {
       kind: 'set-property',
       targetProperty: bindable.property,
-      value: '', // actual value from attr.value
+      value: rawValue ?? '',
     };
   }
 
   const bc = ctx.vocabulary.commands[command];
   if (!bc) {
-    return { kind: 'set-property', targetProperty: bindable.property, value: '' };
+    return { kind: 'set-property', targetProperty: bindable.property, value: rawValue ?? '' };
   }
 
   const effectiveMode = resolveEffectiveMode(command, bindable, el.tagName, target);
+  const expression = rawValue && ctx.exprParser
+    ? tryParseExpression(rawValue, bc.expressionEntry, ctx.exprParser)
+    : undefined;
 
   return {
     kind: 'bindable',
@@ -641,6 +692,7 @@ function buildBindableBinding(
     bindable,
     effectiveMode,
     expressionEntry: bc.expressionEntry,
+    expression,
   };
 }
 
@@ -648,30 +700,36 @@ function buildTcBinding(
   tc: TemplateControllerGreen,
   command: string | null,
   target: string,
+  rawValue: string,
   el: ElementNode,
   ctx: LoweringContext,
 ): BindingTarget {
   const semantics = tc.semantics;
   if (!semantics) {
-    return { kind: 'set-property', targetProperty: 'value', value: '' };
+    return { kind: 'set-property', targetProperty: 'value', value: rawValue };
   }
 
   switch (semantics.trigger.kind) {
-    case 'iterator':
+    case 'iterator': {
+      const expression = ctx.exprParser
+        ? tryParseExpression(rawValue, 'IsIterator', ctx.exprParser) as ForOfStatement | undefined
+        : undefined;
       return {
         kind: 'iterator',
         itemVar: extractIteratorVar(el, target),
         iterableProperty: semantics.trigger.prop,
         expressionEntry: 'IsIterator',
+        expression,
       };
+    }
     case 'value':
       return buildBindableBinding(
         findBindable(tc, semantics.trigger.prop) ?? defaultBindable(semantics.trigger.prop),
-        tc, command, target, el, ctx,
+        tc, command, target, el, ctx, rawValue,
       );
     case 'branch':
     case 'marker':
-      return { kind: 'set-property', targetProperty: 'value', value: '' };
+      return { kind: 'set-property', targetProperty: 'value', value: rawValue };
   }
 }
 
@@ -681,15 +739,16 @@ function buildCaBinding(
   target: string,
   el: ElementNode,
   ctx: LoweringContext,
+  rawValue?: string,
 ): BindingTarget {
   const defaultProp = ca.defaultProperty.state === 'known'
     ? ca.defaultProperty.value
     : Object.keys(ca.bindables)[0] ?? 'value';
   const bindable = ca.bindables[defaultProp] ?? ca.bindables[Object.keys(ca.bindables)[0] ?? ''];
   if (bindable) {
-    return buildBindableBinding(bindable, ca, command, target, el, ctx);
+    return buildBindableBinding(bindable, ca, command, target, el, ctx, rawValue);
   }
-  return { kind: 'set-property', targetProperty: defaultProp, value: '' };
+  return { kind: 'set-property', targetProperty: defaultProp, value: rawValue ?? '' };
 }
 
 function buildPlainBinding(
@@ -702,23 +761,33 @@ function buildPlainBinding(
   if (command !== null) {
     const bc = ctx.vocabulary.commands[command];
     if (bc) {
-      const mappedTarget = mapAttrToProperty(el.tagName, target) ?? camelCase(target);
+      const mappedTarget = mapAttrToProperty(el.tagName, target, ctx) ?? camelCase(target);
       const effectiveMode = command === 'bind'
-        ? (isTwoWayDefault(el.tagName, target) ? 'twoWay' : 'toView')
+        ? (isTwoWayDefault(el.tagName, target, ctx) ? 'twoWay' : 'toView')
         : (bc.mode ?? 'toView');
+
+      // Parse expression when parser is available
+      const expression = ctx.exprParser
+        ? tryParseExpression(rawValue, bc.expressionEntry, ctx.exprParser)
+        : undefined;
+
       return {
         kind: 'native-prop',
         tagName: el.tagName,
         property: mappedTarget,
         effectiveMode,
         expressionEntry: bc.expressionEntry,
+        expression,
       };
     }
   }
 
   if (rawValue.includes('${')) {
-    const mappedTarget = mapAttrToProperty(el.tagName, target) ?? camelCase(target);
-    return { kind: 'interpolation', targetProperty: mappedTarget };
+    const mappedTarget = mapAttrToProperty(el.tagName, target, ctx) ?? camelCase(target);
+    const expression = ctx.exprParser
+      ? tryParseExpression(rawValue, 'Interpolation', ctx.exprParser) as Interpolation | undefined
+      : undefined;
+    return { kind: 'interpolation', targetProperty: mappedTarget, expression };
   }
 
   return null;
@@ -803,7 +872,7 @@ function extractLetBindings(el: ElementNode, ctx: LoweringContext): LocalBinding
   const locals: LocalBinding[] = [];
   for (const attr of el.attrs) {
     if (attr.name === 'to-binding-context') continue;
-    const syntax = parseAttrSyntax(attr.name, ctx.vocabulary.patterns);
+    const syntax = parseAttrSyntax(attr.name, attr.value, ctx);
     locals.push({ name: camelCase(syntax.target), source: 'let-binding' });
   }
   return locals;
@@ -873,11 +942,19 @@ function defaultBindable(prop: string): BindableGreen {
 
 function parseAttrSyntax(
   name: string,
-  patterns: readonly AttributePatternGreen[],
-): { target: string; command: string | null } {
+  value: string,
+  ctx: LoweringContext,
+): { target: string; command: string | null; mode?: BindingMode | null; parts?: readonly string[] | null } {
+  // Use real AttributeParser when available (production path)
+  if (ctx.attrParser) {
+    const result = ctx.attrParser.parse(name, value);
+    return { target: result.target, command: result.command, mode: result.mode, parts: result.parts };
+  }
+
+  // Fallback: built-in AP simulation (test path)
   let best: { target: string; command: string | null; score: number } | null = null;
 
-  for (const pattern of patterns) {
+  for (const pattern of ctx.vocabulary.patterns) {
     const result = matchPattern(name, pattern);
     if (result && (best === null || result.score > best.score)) {
       best = result;
@@ -1011,13 +1088,31 @@ const SVG_ELEMENTS = new Set([
   'foreignObject', 'a', 'title', 'desc', 'metadata', 'marker', 'switch',
 ]);
 
-function isKnownElement(tag: string, ns: Namespace): boolean {
+function isKnownElement(tag: string, ns: Namespace, ctx?: LoweringContext): boolean {
+  if (ctx?.dom) {
+    if (ns === 'html') return tag in ctx.dom.elements || tag === ctx.dom.base.tag;
+    // SVG elements are in a separate schema merged at construction
+    return tag in ctx.dom.elements;
+  }
   if (ns === 'html') return HTML_ELEMENTS.has(tag);
   if (ns === 'svg') return SVG_ELEMENTS.has(tag);
   return false;
 }
 
-function isTwoWayDefault(tagName: string, target: string): boolean {
+function isTwoWayDefault(tagName: string, target: string, ctx?: LoweringContext): boolean {
+  if (ctx?.twoWayDefaults) {
+    const td = ctx.twoWayDefaults;
+    const byTag = td.byTag[tagName.toLowerCase()];
+    if (byTag?.includes(target)) return true;
+    if (td.globalProps.includes(target)) return true;
+    if (td.conditional) {
+      for (const c of td.conditional) {
+        if (c.prop === target) return true; // simplified — full check needs attr presence
+      }
+    }
+    return false;
+  }
+  // Fallback: inline heuristic
   const tag = tagName.toLowerCase();
   if (tag === 'input' && (target === 'value' || target === 'checked' || target === 'files')) return true;
   if (tag === 'textarea' && target === 'value') return true;
@@ -1027,7 +1122,21 @@ function isTwoWayDefault(tagName: string, target: string): boolean {
   return false;
 }
 
-function mapAttrToProperty(tagName: string, attrName: string): string | null {
+function mapAttrToProperty(tagName: string, attrName: string, ctx?: LoweringContext): string | null {
+  if (ctx?.naming) {
+    const perTag = ctx.naming.perTag?.[tagName.toLowerCase()]?.[attrName.toLowerCase()];
+    if (perTag) return perTag;
+    const global = ctx.naming.attrToPropGlobal[attrName.toLowerCase()];
+    if (global) return global;
+  }
+  if (ctx?.dom) {
+    const el = ctx.dom.elements[tagName.toLowerCase()];
+    const mapped = el?.attrToProp?.[attrName.toLowerCase()];
+    if (mapped) return mapped;
+    const baseMapped = ctx.dom.base.attrToProp?.[attrName.toLowerCase()];
+    if (baseMapped) return baseMapped;
+  }
+  // Fallback: inline mapping
   switch (attrName) {
     case 'class': return 'className';
     case 'for': return 'htmlFor';
@@ -1048,4 +1157,120 @@ function mapAttrToProperty(tagName: string, attrName: string): string | null {
 
 function camelCase(str: string): string {
   return str.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
+}
+
+// =============================================================================
+// Expression Parsing
+// =============================================================================
+
+/**
+ * Try to parse an expression string using the expression parser.
+ * Returns undefined on failure (graceful degradation for IDE mode).
+ */
+function tryParseExpression(
+  value: string,
+  entry: ExpressionEntry,
+  parser: IExpressionParser,
+): AnyBindingExpression | undefined {
+  try {
+    return parser.parse(value, entry as ExpressionType);
+  } catch {
+    return undefined;
+  }
+}
+
+// =============================================================================
+// Multi-Binding Parsing
+// =============================================================================
+
+const Char_Backslash = 0x5C;
+const Char_Colon = 0x3A;
+const Char_Semicolon = 0x3B;
+const Char_Dollar = 0x24;
+const Char_OpenBrace = 0x7B;
+const Char_Space = 0x20;
+
+/**
+ * Detect multi-binding syntax: "prop1: val; prop2.bind: expr"
+ * Returns true if a colon is found before any interpolation marker.
+ */
+function hasMultiBindingSyntax(value: string): boolean {
+  const len = value.length;
+  for (let i = 0; i < len; i++) {
+    const ch = value.charCodeAt(i);
+    if (ch === Char_Backslash) { i++; }
+    else if (ch === Char_Colon) { return true; }
+    else if (ch === Char_Dollar && value.charCodeAt(i + 1) === Char_OpenBrace) { return false; }
+  }
+  return false;
+}
+
+/**
+ * Parse multi-binding syntax into per-bindable binding targets.
+ * "prop1: val1; prop2.bind: expr" → one BindingTarget per property.
+ */
+function parseMultiBindings(
+  rawValue: string,
+  ca: CustomAttributeGreen,
+  el: ElementNode,
+  ctx: LoweringContext,
+): BindingTarget[] {
+  const targets: BindingTarget[] = [];
+  const len = rawValue.length;
+  let start = 0;
+
+  for (let i = 0; i < len; i++) {
+    const ch = rawValue.charCodeAt(i);
+    if (ch === Char_Backslash) { i++; continue; }
+    if (ch !== Char_Colon) continue;
+
+    const propPart = rawValue.slice(start, i).trim();
+    while (++i < len && rawValue.charCodeAt(i) <= Char_Space);
+    const valueStart = i;
+
+    for (; i < len; i++) {
+      const ch2 = rawValue.charCodeAt(i);
+      if (ch2 === Char_Backslash) { i++; }
+      else if (ch2 === Char_Semicolon) { break; }
+    }
+
+    const valuePart = rawValue.slice(valueStart, i).trim();
+    const syntax = parseAttrSyntax(propPart, valuePart, ctx);
+    const bindableName = camelCase(syntax.target);
+    const bindable = ca.bindables[bindableName];
+
+    if (bindable) {
+      targets.push(buildBindableBinding(
+        bindable, ca, syntax.command, syntax.target, el, ctx,
+      ));
+    }
+
+    while (i < len && rawValue.charCodeAt(i + 1) <= Char_Space) i++;
+    start = i + 1;
+  }
+
+  return targets;
+}
+
+/**
+ * Check if a CA should use multi-binding and build accordingly.
+ */
+function buildCaBindingWithMulti(
+  ca: CustomAttributeGreen,
+  command: string | null,
+  target: string,
+  rawValue: string,
+  el: ElementNode,
+  ctx: LoweringContext,
+): BindingTarget {
+  // Multi-binding: no noMultiBindings, no command, colon before interpolation
+  const allowMulti = ca.noMultiBindings.state !== 'known' || !ca.noMultiBindings.value;
+  if (allowMulti && command === null && hasMultiBindingSyntax(rawValue)) {
+    const bindings = parseMultiBindings(rawValue, ca, el, ctx);
+    if (bindings.length > 0) {
+      return { kind: 'multi-binding', resource: ca, bindings };
+    }
+  }
+
+  return buildCaBinding(ca, command, target, el, ctx, rawValue);
 }
