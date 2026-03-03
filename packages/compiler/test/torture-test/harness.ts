@@ -1009,3 +1009,283 @@ export function assertVocabularyGap(
     );
   }
 }
+
+// =============================================================================
+// Template Analysis Assertions (Tier 6)
+// =============================================================================
+
+import {
+  evaluateTemplateAnalysis,
+  type TemplateAnalysisResult,
+  type ElementAnalysis,
+  type AttributeAnalysis,
+  type Classification,
+  type ClassificationCategory,
+  type ElementResolution,
+  type BindingInfo,
+  type BindingMode,
+} from "../../out/project-semantics/deps/template-analysis.js";
+
+export type { TemplateAnalysisResult, ElementAnalysis, AttributeAnalysis, Classification, ClassificationCategory, ElementResolution, BindingInfo, BindingMode };
+
+/**
+ * Run template analysis for a CE's inline template.
+ *
+ * Evaluates scope-visibility and vocabulary, then runs the 8-step
+ * classification on the CE's template content.
+ */
+export function analyzeTemplate(
+  result: InterpreterResult,
+  ceName: string,
+): TemplateAnalysisResult {
+  // Pull the CE's template content from conclusions
+  // The interpreter stores it as 'inlineTemplate' (from extract-fields.ts)
+  const resourceKey = `custom-element:${ceName}`;
+  const templateContent = pullValue(result.graph, resourceKey, 'inlineTemplate');
+
+  if (typeof templateContent !== 'string') {
+    throw new Error(
+      `No template content found for CE '${ceName}'. ` +
+      `Got: ${JSON.stringify(templateContent)}`
+    );
+  }
+
+  // Evaluate upstream tiers
+  const vis = evaluateVisibility(result);
+  const vocab = evaluateProjectVocabulary(result);
+
+  const scopeGreen = vis.scopes.get(ceName);
+  if (!scopeGreen) {
+    throw new Error(
+      `No scope-visibility found for CE '${ceName}'. ` +
+      `Available scopes: [${[...vis.scopes.keys()].join(', ')}]`
+    );
+  }
+
+  return evaluateTemplateAnalysis(
+    templateContent,
+    ceName,
+    vocab.green,
+    scopeGreen,
+    result.graph,
+  );
+}
+
+/**
+ * Find an element analysis by tag name.
+ * Returns the first match in depth-first order.
+ */
+export function findElement(
+  analysis: TemplateAnalysisResult,
+  tagName: string,
+): ElementAnalysis {
+  const el = analysis.elements.find(e => e.tagName.toLowerCase() === tagName.toLowerCase());
+  if (!el) {
+    throw new Error(
+      `No element '${tagName}' found in template analysis. ` +
+      `Elements: [${analysis.elements.map(e => e.tagName).join(', ')}]`
+    );
+  }
+  return el;
+}
+
+/**
+ * Find all elements with a given tag name.
+ */
+export function findElements(
+  analysis: TemplateAnalysisResult,
+  tagName: string,
+): ElementAnalysis[] {
+  return analysis.elements.filter(e => e.tagName.toLowerCase() === tagName.toLowerCase());
+}
+
+/**
+ * Find an attribute analysis by raw attribute name on an element.
+ */
+export function findAttr(
+  el: ElementAnalysis,
+  attrName: string,
+): AttributeAnalysis {
+  const attr = el.attributes.find(a => a.rawName === attrName);
+  if (!attr) {
+    throw new Error(
+      `No attribute '${attrName}' found on <${el.tagName}>. ` +
+      `Attributes: [${el.attributes.map(a => a.rawName).join(', ')}]`
+    );
+  }
+  return attr;
+}
+
+/**
+ * Find an attribute by its AP-parsed target (not raw name).
+ * Useful when the raw name includes binding syntax (e.g., 'value.bind').
+ */
+export function findAttrByTarget(
+  el: ElementAnalysis,
+  target: string,
+): AttributeAnalysis {
+  const attr = el.attributes.find(a =>
+    a.syntax ? a.syntax.target === target : a.rawName === target
+  );
+  if (!attr) {
+    throw new Error(
+      `No attribute with target '${target}' found on <${el.tagName}>. ` +
+      `Attributes: [${el.attributes.map(a => a.syntax ? `${a.rawName}→${a.syntax.target}` : a.rawName).join(', ')}]`
+    );
+  }
+  return attr;
+}
+
+/**
+ * Assert an attribute is classified at a specific step and category.
+ */
+export function assertClassified(
+  attr: AttributeAnalysis,
+  step: number,
+  category: ClassificationCategory,
+): void {
+  if (attr.classification.step !== step) {
+    throw new Error(
+      `Attribute '${attr.rawName}': expected step ${step}, ` +
+      `got step ${attr.classification.step} (${attr.classification.category})`
+    );
+  }
+  if (attr.classification.category !== category) {
+    throw new Error(
+      `Attribute '${attr.rawName}': expected category '${category}', ` +
+      `got '${attr.classification.category}' at step ${attr.classification.step}`
+    );
+  }
+}
+
+/**
+ * Assert an element resolved as a custom element.
+ */
+export function assertResolvedCe(
+  el: ElementAnalysis,
+  expectedResourceKey?: string,
+): void {
+  if (el.resolution.kind !== 'custom-element') {
+    throw new Error(
+      `<${el.tagName}> expected to resolve as CE, ` +
+      `got '${el.resolution.kind}'`
+    );
+  }
+  if (expectedResourceKey && el.resolution.resourceKey !== expectedResourceKey) {
+    throw new Error(
+      `<${el.tagName}> resolved as CE but wrong key: ` +
+      `expected '${expectedResourceKey}', got '${el.resolution.resourceKey}'`
+    );
+  }
+}
+
+/**
+ * Assert an element resolved as plain HTML (not a CE, not unknown).
+ */
+export function assertPlainHtml(el: ElementAnalysis): void {
+  if (el.resolution.kind !== 'plain-html') {
+    throw new Error(
+      `<${el.tagName}> expected to be plain HTML, ` +
+      `got '${el.resolution.kind}'`
+    );
+  }
+}
+
+/**
+ * Assert an element was not found in the resource catalog.
+ */
+export function assertElementNotFound(
+  el: ElementAnalysis,
+  expectGrounded: boolean,
+): void {
+  if (el.resolution.kind !== 'not-found') {
+    throw new Error(
+      `<${el.tagName}> expected to be 'not-found', ` +
+      `got '${el.resolution.kind}'`
+    );
+  }
+  if (el.resolution.grounded !== expectGrounded) {
+    throw new Error(
+      `<${el.tagName}> not-found grounded: expected ${expectGrounded}, ` +
+      `got ${el.resolution.grounded}`
+    );
+  }
+}
+
+/**
+ * Assert binding info on an attribute.
+ */
+export function assertBinding(
+  attr: AttributeAnalysis,
+  expected: {
+    instructionType?: string;
+    mode?: BindingMode | null;
+    targetProperty?: string | null;
+    expressionEntry?: string | null;
+  },
+): void {
+  if (!attr.binding) {
+    throw new Error(
+      `Attribute '${attr.rawName}' has no binding info (expected binding)`
+    );
+  }
+  if (expected.instructionType !== undefined && attr.binding.instructionType !== expected.instructionType) {
+    throw new Error(
+      `Attribute '${attr.rawName}': instructionType expected '${expected.instructionType}', ` +
+      `got '${attr.binding.instructionType}'`
+    );
+  }
+  if (expected.mode !== undefined && attr.binding.mode !== expected.mode) {
+    throw new Error(
+      `Attribute '${attr.rawName}': mode expected '${expected.mode}', ` +
+      `got '${attr.binding.mode}'`
+    );
+  }
+  if (expected.targetProperty !== undefined && attr.binding.targetProperty !== expected.targetProperty) {
+    throw new Error(
+      `Attribute '${attr.rawName}': targetProperty expected '${expected.targetProperty}', ` +
+      `got '${attr.binding.targetProperty}'`
+    );
+  }
+  if (expected.expressionEntry !== undefined && attr.binding.expressionEntry !== expected.expressionEntry) {
+    throw new Error(
+      `Attribute '${attr.rawName}': expressionEntry expected '${expected.expressionEntry}', ` +
+      `got '${attr.binding.expressionEntry}'`
+    );
+  }
+}
+
+/**
+ * Assert that an attribute has NO binding info (truly plain, sub-path 8a).
+ */
+export function assertNoBinding(attr: AttributeAnalysis): void {
+  if (attr.binding !== null) {
+    throw new Error(
+      `Attribute '${attr.rawName}' should have NO binding but has: ` +
+      `${attr.binding.instructionType}`
+    );
+  }
+}
+
+/**
+ * Assert that an element has no Aurelia-specific instructions
+ * (no HydrateElement, no binding, no HydrateAttribute). Rung 4.
+ */
+export function assertNotApplicable(el: ElementAnalysis): void {
+  // Element should be plain HTML
+  if (el.resolution.kind === 'custom-element') {
+    throw new Error(
+      `<${el.tagName}> should be not-applicable but resolved as CE: ${el.resolution.resourceKey}`
+    );
+  }
+
+  // All attributes should be plain with no binding
+  for (const attr of el.attributes) {
+    if (attr.classification.step !== 8 || attr.classification.category !== 'plain-attribute') {
+      throw new Error(
+        `<${el.tagName}> attr '${attr.rawName}' should be plain (step 8) but is ` +
+        `${attr.classification.category} at step ${attr.classification.step}`
+      );
+    }
+  }
+}
