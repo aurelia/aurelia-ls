@@ -109,6 +109,22 @@ declare module '@aurelia/router' {
     register(container: any): void;
   };
 }
+
+declare module '@aurelia/state' {
+  export const StateDefaultConfiguration: {
+    init(state: any, handler: any): any;
+    register(container: any): void;
+  };
+}
+
+declare module '@aurelia/compat-v1' {
+  export const delegateSyntax: {
+    register(container: any): void;
+  };
+  export const callSyntax: {
+    register(container: any): void;
+  };
+}
 `;
 
 // =============================================================================

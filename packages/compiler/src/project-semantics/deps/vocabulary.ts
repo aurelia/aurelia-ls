@@ -123,6 +123,28 @@ const I18N_ATTRIBUTE_PATTERNS: readonly AttributePatternEntry[] = [
 ];
 
 // =============================================================================
+// Plugin Postulate: @aurelia/state
+// =============================================================================
+
+const STATE_BINDING_COMMANDS: readonly BindingCommandEntry[] = [
+  { name: 'state', ignoreAttr: false, outputInstruction: 'StateBinding', expressionEntry: 'IsProperty', source: 'plugin-postulate' },
+  { name: 'dispatch', ignoreAttr: true, outputInstruction: 'DispatchBinding', expressionEntry: 'IsProperty', source: 'plugin-postulate' },
+];
+
+const STATE_ATTRIBUTE_PATTERNS: readonly AttributePatternEntry[] = [
+  { className: 'StateAttributePattern', patterns: ['PART.state:PART', 'PART.dispatch:PART'], symbols: '.:', source: 'plugin-postulate' },
+];
+
+// =============================================================================
+// Plugin Postulate: @aurelia/compat-v1
+// =============================================================================
+
+const COMPAT_V1_BINDING_COMMANDS: readonly BindingCommandEntry[] = [
+  { name: 'delegate', ignoreAttr: true, outputInstruction: 'ListenerBinding', expressionEntry: 'IsFunction', source: 'plugin-postulate' },
+  { name: 'call', ignoreAttr: false, outputInstruction: 'CallBinding', expressionEntry: 'IsProperty', source: 'plugin-postulate' },
+];
+
+// =============================================================================
 // Known Plugins Registry
 // =============================================================================
 
@@ -140,8 +162,15 @@ interface KnownPlugin {
   readonly commands: readonly BindingCommandEntry[];
   /** Default APs registered by this plugin */
   readonly patterns: readonly AttributePatternEntry[];
-  /** Whether .customize() creates a vocabulary gap */
-  readonly customizeCreatesGap: boolean;
+  /**
+   * Whether .customize() creates a marginal vocabulary gap.
+   * 'none' = no gap regardless of .customize() (state plugin)
+   * 'marginal' = base vocabulary always present, but .customize() callback
+   *   may create additional aliases that produce additional BCs/APs the
+   *   product can't determine. The base items survive; completeness fails
+   *   because additional items are indeterminate.
+   */
+  readonly customizeGapKind: 'none' | 'marginal';
 }
 
 const KNOWN_PLUGINS: readonly KnownPlugin[] = [
@@ -150,7 +179,21 @@ const KNOWN_PLUGINS: readonly KnownPlugin[] = [
     specifier: '@aurelia/i18n',
     commands: I18N_BINDING_COMMANDS,
     patterns: I18N_ATTRIBUTE_PATTERNS,
-    customizeCreatesGap: true,
+    customizeGapKind: 'marginal',
+  },
+  {
+    identifiers: ['StateDefaultConfiguration'],
+    specifier: '@aurelia/state',
+    commands: STATE_BINDING_COMMANDS,
+    patterns: STATE_ATTRIBUTE_PATTERNS,
+    customizeGapKind: 'none',
+  },
+  {
+    identifiers: ['delegateSyntax', 'callSyntax'],
+    specifier: '@aurelia/compat-v1',
+    commands: COMPAT_V1_BINDING_COMMANDS,
+    patterns: [],
+    customizeGapKind: 'none',
   },
 ];
 
@@ -214,18 +257,19 @@ export function evaluateVocabulary(
     }
 
     // Check if the plugin was registered with .customize()
-    // This is detected by looking for opaque-call gaps referencing the plugin's configure method
+    // Detected from opaque-call gaps referencing 'customize'
     const hasCustomize = rootRegistrationGaps.some(g =>
       g.includes('customize') || g.includes('opaque-call:customize')
     );
 
-    // Also check class refs: if the identifier was registered via a call
-    // (I18nConfiguration.customize(...)), it appears as a gap, not as a class-ref.
-    // The registration gap from 4C.5 already carries this information.
-    if (hasCustomize && plugin.customizeCreatesGap) {
+    // Marginal gap: base vocabulary is always present, but .customize()
+    // callback may create additional aliases (additional BCs/APs) that
+    // the product can't determine. The gap is about the ADDITIONAL items,
+    // not the base items — those survive regardless.
+    if (hasCustomize && plugin.customizeGapKind === 'marginal') {
       gaps.push({
         site: plugin.specifier,
-        reason: `plugin customize callback may create additional BCs/APs`,
+        reason: `plugin customize callback may create additional BCs/APs from custom aliases`,
       });
     }
   }
