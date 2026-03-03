@@ -40,6 +40,8 @@ export interface TemplateAnalysisResult {
   readonly textBindings: readonly TextBindingAnalysis[];
   /** The CE whose template was analyzed */
   readonly scopeOwner: string;
+  /** Scope chain snapshots at various template positions */
+  readonly scopeChains: readonly ScopeChainSnapshot[];
 }
 
 export interface ElementAnalysis {
@@ -51,6 +53,10 @@ export interface ElementAnalysis {
   readonly attributes: readonly AttributeAnalysis[];
   /** Source span of the element */
   readonly sourceSpan: Span;
+  /** Scope chain at this element's content position (inside the element) */
+  readonly scopeChain: readonly ScopeEntry[];
+  /** TC attributes on this element (for wrapping order) */
+  readonly tcAttributes: readonly TcInfo[];
 }
 
 export type ElementResolution =
@@ -108,6 +114,54 @@ export interface TextBindingAnalysis {
   readonly hasInterpolation: boolean;
   readonly sourceSpan: Span;
 }
+
+// =============================================================================
+// Scope Chain Types
+// =============================================================================
+
+export interface ScopeChainSnapshot {
+  readonly position: string;
+  readonly chain: readonly ScopeEntry[];
+}
+
+export type ScopeEntry =
+  | { readonly kind: 'ce-boundary'; readonly ceName: string; readonly isBoundary: true }
+  | { readonly kind: 'repeat'; readonly iteratorVar: string; readonly contextualVars: readonly string[]; readonly isBoundary: false }
+  | { readonly kind: 'with'; readonly isBoundary: false }
+  | { readonly kind: 'promise'; readonly isBoundary: false }
+  | { readonly kind: 'let'; readonly bindings: readonly string[]; readonly isBoundary: false };
+
+export interface TcInfo {
+  readonly name: string;
+  readonly resourceKey: string;
+  readonly order: number;
+}
+
+/** The 8 repeat contextual variables (F5 §Repeat contextual variables) */
+const REPEAT_CONTEXTUAL_VARS = [
+  '$index', '$even', '$odd', '$first', '$middle', '$last', '$length', '$previous',
+] as const;
+
+/**
+ * Per-TC scope effect lookup (F5 §Per-TC scope effects).
+ * Only 4 TCs create scopes. All others pass parent scope through.
+ */
+type TcScopeEffect = 'creates-scope' | 'passthrough';
+
+const TC_SCOPE_EFFECTS: ReadonlyMap<string, TcScopeEffect> = new Map([
+  ['if', 'passthrough'],
+  ['else', 'passthrough'],
+  ['repeat', 'creates-scope'],
+  ['with', 'creates-scope'],
+  ['switch', 'passthrough'],
+  ['case', 'passthrough'],
+  ['default-case', 'passthrough'],
+  ['promise', 'creates-scope'],
+  ['pending', 'passthrough'],
+  ['then', 'passthrough'],
+  ['catch', 'passthrough'],
+  ['portal', 'passthrough'],
+]);
 
 // =============================================================================
 // Attribute Pattern Simulation
@@ -881,10 +935,16 @@ export function evaluateTemplateAnalysis(
   const tree = parseTemplate(templateHtml);
   const elements: ElementAnalysis[] = [];
   const textBindings: TextBindingAnalysis[] = [];
+  const scopeChains: ScopeChainSnapshot[] = [];
 
-  walkTree(tree.children, vocabulary, scopeVisibility, graph, elements, textBindings);
+  // The CE's own scope is the initial scope chain entry
+  const initialScope: ScopeEntry[] = [
+    { kind: 'ce-boundary', ceName: scopeOwner, isBoundary: true },
+  ];
 
-  return { elements, textBindings, scopeOwner };
+  walkTree(tree.children, vocabulary, scopeVisibility, graph, elements, textBindings, scopeChains, initialScope);
+
+  return { elements, textBindings, scopeOwner, scopeChains };
 }
 
 function walkTree(
@@ -894,6 +954,8 @@ function walkTree(
   graph: ProjectDepGraph,
   elements: ElementAnalysis[],
   textBindings: TextBindingAnalysis[],
+  scopeChains: ScopeChainSnapshot[],
+  currentScope: readonly ScopeEntry[],
 ): void {
   for (const node of nodes) {
     if (node.kind === 'text') {
@@ -909,11 +971,17 @@ function walkTree(
     }
 
     if (node.kind === 'element') {
-      const elementAnalysis = analyzeElement(node, vocabulary, scopeVisibility, graph);
-      elements.push(elementAnalysis);
+      const { analysis, childScope } = analyzeElement(node, vocabulary, scopeVisibility, graph, currentScope);
+      elements.push(analysis);
 
-      // Recurse into children
-      walkTree(node.children, vocabulary, scopeVisibility, graph, elements, textBindings);
+      // Record scope chain snapshot for this element's content
+      scopeChains.push({
+        position: `<${node.tagName}>`,
+        chain: analysis.scopeChain,
+      });
+
+      // Recurse into children with the (potentially modified) scope
+      walkTree(node.children, vocabulary, scopeVisibility, graph, elements, textBindings, scopeChains, childScope);
     }
   }
 }
@@ -923,7 +991,8 @@ function analyzeElement(
   vocabulary: VocabularyGreen,
   scopeVisibility: ScopeVisibilityGreen,
   graph: ProjectDepGraph,
-): ElementAnalysis {
+  parentScope: readonly ScopeEntry[],
+): { analysis: ElementAnalysis; childScope: readonly ScopeEntry[] } {
   // Build classification context
   const ctx: ClassificationContext = {
     ceDefinition: null,
@@ -942,8 +1011,11 @@ function analyzeElement(
     ctx.ceDefinition = resolveCeDefinition(resolution.resourceKey, graph);
   }
 
-  // Classify each attribute
+  // Classify each attribute and detect TC attributes
   const attributes: AttributeAnalysis[] = [];
+  const tcAttributes: TcInfo[] = [];
+  let tcOrder = 0;
+
   for (const attr of el.attrs) {
     const syntax = parseAttrSyntax(attr.name, [...vocabulary.patterns]);
     const { classification, binding } = classifyAttribute(attr, syntax, ctx);
@@ -955,13 +1027,102 @@ function analyzeElement(
       classification,
       binding,
     });
+
+    // Track TC attributes for wrapping order and scope effects
+    if (classification.category === 'template-controller') {
+      const tcName = syntax.target;
+      tcAttributes.push({
+        name: tcName,
+        resourceKey: `template-controller:${tcName}`,
+        order: tcOrder++,
+      });
+    }
   }
 
-  return {
+  // Compute scope chain for this element's content.
+  // Start from parent scope and apply TC scope effects.
+  let childScope: readonly ScopeEntry[] = parentScope;
+
+  for (const tc of tcAttributes) {
+    const effect = TC_SCOPE_EFFECTS.get(tc.name);
+    if (effect === 'creates-scope') {
+      childScope = buildTcScopeEntry(tc.name, el, childScope);
+    }
+    // 'passthrough' TCs don't modify the scope chain
+  }
+
+  // Handle <let> elements — they inject into overrideContext
+  if (el.tagName.toLowerCase() === 'let') {
+    const letBindings: string[] = [];
+    for (const attr of el.attrs) {
+      if (attr.name === 'to-binding-context') continue;
+      // Each attribute on <let> is a binding: name.bind="expr" or name="value"
+      const syntax = parseAttrSyntax(attr.name, [...vocabulary.patterns]);
+      const target = syntax.target;
+      if (target) letBindings.push(camelCase(target));
+    }
+    if (letBindings.length > 0) {
+      childScope = [...childScope];
+      (childScope as ScopeEntry[]).unshift(
+        { kind: 'let', bindings: letBindings, isBoundary: false }
+      );
+    }
+  }
+
+  const analysis: ElementAnalysis = {
     tagName: el.tagName,
     namespace: el.namespace,
     resolution,
     attributes,
     sourceSpan: el.sourceSpan,
+    scopeChain: childScope,
+    tcAttributes,
   };
+
+  return { analysis, childScope };
+}
+
+/**
+ * Build a scope entry for a TC that creates a scope.
+ * Returns the new scope chain (TC entry prepended).
+ */
+function buildTcScopeEntry(
+  tcName: string,
+  el: ElementNode,
+  parentScope: readonly ScopeEntry[],
+): ScopeEntry[] {
+  const newScope = [...parentScope];
+
+  switch (tcName) {
+    case 'repeat': {
+      // Extract iterator variable from the for expression
+      // Pattern: "item of items" → iteratorVar = "item"
+      const forAttr = el.attrs.find(a => {
+        const syntax = parseAttrSyntax(a.name, []);
+        return a.name === 'repeat.for' || (syntax.target === 'repeat' && syntax.command === 'for');
+      });
+      let iteratorVar = 'item';
+      if (forAttr) {
+        const match = forAttr.value.match(/^\s*(\w+)\s+of\s+/);
+        if (match) iteratorVar = match[1]!;
+      }
+      newScope.unshift({
+        kind: 'repeat',
+        iteratorVar,
+        contextualVars: [...REPEAT_CONTEXTUAL_VARS],
+        isBoundary: false,
+      });
+      break;
+    }
+    case 'with': {
+      newScope.unshift({ kind: 'with', isBoundary: false });
+      break;
+    }
+    case 'promise': {
+      newScope.unshift({ kind: 'promise', isBoundary: false });
+      break;
+    }
+  }
+
+  return newScope;
 }

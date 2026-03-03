@@ -1024,9 +1024,12 @@ import {
   type ElementResolution,
   type BindingInfo,
   type BindingMode,
+  type ScopeEntry,
+  type ScopeChainSnapshot,
+  type TcInfo,
 } from "../../out/project-semantics/deps/template-analysis.js";
 
-export type { TemplateAnalysisResult, ElementAnalysis, AttributeAnalysis, Classification, ClassificationCategory, ElementResolution, BindingInfo, BindingMode };
+export type { TemplateAnalysisResult, ElementAnalysis, AttributeAnalysis, Classification, ClassificationCategory, ElementResolution, BindingInfo, BindingMode, ScopeEntry, ScopeChainSnapshot, TcInfo };
 
 /**
  * Run template analysis for a CE's inline template.
@@ -1287,5 +1290,100 @@ export function assertNotApplicable(el: ElementAnalysis): void {
         `${attr.classification.category} at step ${attr.classification.step}`
       );
     }
+  }
+}
+
+// =============================================================================
+// Scope Chain Assertions (Tier 6D)
+// =============================================================================
+
+/**
+ * Assert the scope chain at an element has a CE boundary.
+ */
+export function assertCeBoundary(
+  el: ElementAnalysis,
+  ceName: string,
+): void {
+  const boundary = el.scopeChain.find(s => s.kind === 'ce-boundary');
+  if (!boundary) {
+    throw new Error(
+      `<${el.tagName}> scope chain has no CE boundary. ` +
+      `Chain: [${el.scopeChain.map(s => s.kind).join(' → ')}]`
+    );
+  }
+  if (boundary.kind === 'ce-boundary' && boundary.ceName !== ceName) {
+    throw new Error(
+      `<${el.tagName}> CE boundary is '${boundary.ceName}', expected '${ceName}'`
+    );
+  }
+}
+
+/**
+ * Assert that the scope chain contains a repeat scope entry with
+ * the expected iterator variable.
+ */
+export function assertRepeatScope(
+  el: ElementAnalysis,
+  iteratorVar: string,
+): void {
+  const repeat = el.scopeChain.find(s => s.kind === 'repeat');
+  if (!repeat) {
+    throw new Error(
+      `<${el.tagName}> scope chain has no repeat entry. ` +
+      `Chain: [${el.scopeChain.map(s => s.kind).join(' → ')}]`
+    );
+  }
+  if (repeat.kind === 'repeat' && repeat.iteratorVar !== iteratorVar) {
+    throw new Error(
+      `<${el.tagName}> repeat iteratorVar is '${repeat.iteratorVar}', expected '${iteratorVar}'`
+    );
+  }
+}
+
+/**
+ * Assert the scope chain has the expected structure (list of kinds).
+ */
+export function assertScopeChain(
+  el: ElementAnalysis,
+  expected: readonly string[],
+): void {
+  const actual = el.scopeChain.map(s => s.kind);
+  if (actual.length !== expected.length || !actual.every((k, i) => k === expected[i])) {
+    throw new Error(
+      `<${el.tagName}> scope chain mismatch.\n` +
+      `  Expected: [${expected.join(' → ')}]\n` +
+      `  Actual:   [${actual.join(' → ')}]`
+    );
+  }
+}
+
+/**
+ * Assert that no scope entry in the chain has isBoundary: true
+ * (except possibly the CE boundary at the end).
+ */
+export function assertNoBoundaryExceptCe(el: ElementAnalysis): void {
+  for (const entry of el.scopeChain) {
+    if (entry.isBoundary && entry.kind !== 'ce-boundary') {
+      throw new Error(
+        `<${el.tagName}> has a non-CE boundary scope entry: ${entry.kind}`
+      );
+    }
+  }
+}
+
+/**
+ * Assert that TC attributes on an element are in the expected wrapping order.
+ */
+export function assertTcOrder(
+  el: ElementAnalysis,
+  expectedOrder: readonly string[],
+): void {
+  const actual = el.tcAttributes.map(tc => tc.name);
+  if (actual.length !== expectedOrder.length || !actual.every((n, i) => n === expectedOrder[i])) {
+    throw new Error(
+      `<${el.tagName}> TC order mismatch.\n` +
+      `  Expected: [${expectedOrder.join(', ')}]\n` +
+      `  Actual:   [${actual.join(', ')}]`
+    );
   }
 }
