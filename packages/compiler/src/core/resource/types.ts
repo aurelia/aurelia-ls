@@ -103,16 +103,21 @@ export type ResourceKind =
  * - attribute: kebab-case HTML name (known-over-unknown)
  * - mode: declared binding mode (known-over-unknown)
  * - primary: whether this is the default property (derived from container)
- * - type: TypeScript type annotation (stratum 2, first-available)
- * - doc: documentation string (stratum 2, first-available)
+ * - type: TypeScript type annotation (stratum 1 at tier C — source-derivable
+ *   from TS annotations/inference, uses FieldValue)
+ * - doc: documentation string (stratum 2 — product-assigned only, never
+ *   source-derivable, uses plain type)
  */
 export interface BindableGreen {
   readonly property: string;
   readonly attribute: FieldValue<string>;
   readonly mode: FieldValue<BindingMode>;
   readonly primary: FieldValue<boolean>;
+  /** Stratum 1: TS type annotation. Source-derivable at tier C. */
   readonly type: FieldValue<string>;
-  readonly doc: FieldValue<string>;
+  /** Stratum 2: product-assigned documentation. Never source-derivable.
+   *  Two-state (present/absent), not three-state. */
+  readonly doc?: string;
 }
 
 // =============================================================================
@@ -132,19 +137,30 @@ export interface ResourceIdentity {
 }
 
 // =============================================================================
-// Evidence Metadata
+// Provenance Types (red layer — NOT on green resource types)
 // =============================================================================
 
+// The following types describe provenance metadata that consumers
+// (hover, rename, diagnostics, navigation) need. They are NOT carried
+// on the green resource types because they don't affect structural
+// evaluation (template analysis produces the same output regardless
+// of origin or declaration form).
+//
+// These are queried through the red/provenance layer — the graph's
+// Sourced<T> wrappers and convergence decision records. Defined here
+// for vocabulary consistency but structurally separate from the green
+// resource types above.
+
 /**
- * Evidence origin tier — where this resource's winning observation came from.
- * Preserved on the green layer because consumers (diagnostics, hover) need
- * it for confidence display and demotion, and it doesn't carry spans.
+ * Evidence origin tier — where a resource's winning observation came from.
+ * Red layer: does not participate in cutoff.
  */
 export type EvidenceOrigin = 'builtin' | 'config' | 'manifest' | 'source';
 
 /**
- * How the resource was discovered. Provenance metadata that consumers
- * (rename, navigation) need for name-form determination and source linking.
+ * How the resource was discovered.
+ * Red layer: consumed by rename (name-form determination) and
+ * navigation (source linking), not by template analysis.
  */
 export type DeclarationForm =
   | 'decorator'
@@ -157,26 +173,18 @@ export type DeclarationForm =
 
 /**
  * Gap summary — aggregate gap state for a resource.
- * Derivable from per-field FieldValue states but pre-computed for
- * fast consumer queries (diagnostics demotion, hover confidence display).
+ * DERIVED from per-field FieldValue states, not an independent signal.
+ * Computed at query time, not stored on the green type.
+ *
+ * In the manifest format, may be included as a pre-computed cache for
+ * readers that don't want to walk all fields. But it is never
+ * authoritative — the per-field states are.
  */
 export interface GapSummary {
   /** Total fields in unknown state. */
   readonly total: number;
   /** Fields where the gap is intrinsic (mandatory-declaration). */
   readonly intrinsic: number;
-}
-
-/**
- * Metadata carried on every resource green. Not identity, not per-field
- * content — cross-cutting metadata that consumers need.
- */
-export interface ResourceMeta {
-  readonly origin: EvidenceOrigin;
-  readonly declarationForm?: DeclarationForm;
-  readonly file?: string;
-  readonly package?: string;
-  readonly gaps: GapSummary;
 }
 
 // =============================================================================
@@ -192,9 +200,12 @@ export interface ResourceMeta {
  *   shadowOptions, template, enhance, strict, boundary
  * - Collection S1 fields: aliases, dependencies
  * - Nested: bindables (per-bindable BindableGreen records)
- * - Meta: origin, declarationForm, file, package, gaps
+ *
+ * Provenance (origin, declarationForm, file, package) and derived
+ * metadata (gap summary) are NOT on this type — they are red-layer
+ * concerns queried through the provenance surface.
  */
-export interface CustomElementGreen extends ResourceIdentity, ResourceMeta {
+export interface CustomElementGreen extends ResourceIdentity {
   readonly kind: 'custom-element';
   readonly containerless: FieldValue<boolean>;
   readonly capture: FieldValue<boolean>;
@@ -222,7 +233,7 @@ export interface ShadowOptions {
  *
  * 11 fields from L3 product.md §2.4.
  */
-export interface CustomAttributeGreen extends ResourceIdentity, ResourceMeta {
+export interface CustomAttributeGreen extends ResourceIdentity {
   readonly kind: 'custom-attribute';
   readonly noMultiBindings: FieldValue<boolean>;
   readonly defaultProperty: FieldValue<string>;
@@ -244,7 +255,7 @@ export interface CustomAttributeGreen extends ResourceIdentity, ResourceMeta {
  * TC is a separate product kind (L3 §1.1) even though the subject
  * models it as CA + isTemplateController flag.
  */
-export interface TemplateControllerGreen extends ResourceIdentity, ResourceMeta {
+export interface TemplateControllerGreen extends ResourceIdentity {
   readonly kind: 'template-controller';
   readonly noMultiBindings: FieldValue<boolean>;
   readonly defaultProperty: FieldValue<string>;
@@ -327,7 +338,7 @@ export interface TailPropSpec {
  * At tier B+C, TypeScript type analysis provides method signatures
  * (fromType, toType, hasFromView, signals).
  */
-export interface ValueConverterGreen extends ResourceIdentity, ResourceMeta {
+export interface ValueConverterGreen extends ResourceIdentity {
   readonly kind: 'value-converter';
   readonly aliases: FieldValue<readonly string[]>;
   readonly fromType: FieldValue<string>;
@@ -345,7 +356,7 @@ export interface ValueConverterGreen extends ResourceIdentity, ResourceMeta {
  *
  * 7 fields from L3 product.md §2.7.
  */
-export interface BindingBehaviorGreen extends ResourceIdentity, ResourceMeta {
+export interface BindingBehaviorGreen extends ResourceIdentity {
   readonly kind: 'binding-behavior';
   readonly aliases: FieldValue<readonly string[]>;
   readonly isFactory: FieldValue<boolean>;
@@ -455,9 +466,16 @@ export interface VocabularyGreen {
  * - Package scan result (origin: source or manifest)
  * - Explicit declaration file (origin: config)
  * - Converged project state (mixed origins)
+ *
+ * Provenance (origin, file, package) lives at the manifest level,
+ * not per-resource. All resources in a manifest share the same
+ * evidence origin. For converged state with mixed origins, provenance
+ * is queried through the graph's red layer, not through the manifest.
  */
 export interface ResourceManifest {
   readonly schemaVersion: typeof MANIFEST_SCHEMA_VERSION;
+  /** Evidence origin for all resources in this manifest. */
+  readonly origin: EvidenceOrigin;
   /** Package identity when this manifest represents a package. */
   readonly package?: string;
   /** Package version for cache invalidation. */
@@ -466,6 +484,8 @@ export interface ResourceManifest {
   readonly resources: readonly ResourceGreen[];
   /** Vocabulary entries (if this manifest contributes BCs or APs). */
   readonly vocabulary?: VocabularyGreen;
+  /** Pre-computed gap summary (derived, not authoritative). */
+  readonly gaps?: GapSummary;
 }
 
 // =============================================================================
