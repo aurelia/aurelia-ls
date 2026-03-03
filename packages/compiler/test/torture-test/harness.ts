@@ -1686,28 +1686,24 @@ export function createMutableSession(
       currentTrace = new EditCycleTrace();
       proxy.target = currentTrace;
 
-      if (isNewFile) {
-        // New file — no graph nodes exist yet. Run the interpreter
-        // on the new file to create observation nodes. Then mark
-        // any files that import it as stale.
-        if (normalizedPath.endsWith('.ts')) {
-          const config = buildConfig();
-          interpretProject([normalizedPath as NormalizedPath], config);
-        }
-      } else {
-        // Existing file — mark stale. The graph's pull path will
-        // lazily re-evaluate via the unit evaluator.
+      // Mark edited file stale (propagates through dependency edges)
+      if (!isNewFile) {
         graph.invalidation.markFileStale(normalizedPath as NormalizedPath);
-
-        // Re-run the interpreter on this file to update observations.
-        // The unit evaluator handles per-unit re-evaluation, but
-        // we also need to re-run the full file interpretation to catch
-        // new units (e.g., new exports) and root registration scanning.
-        if (normalizedPath.endsWith('.ts')) {
-          const config = buildConfig();
-          interpretProject([normalizedPath as NormalizedPath], config);
-        }
       }
+
+      // Re-interpret ALL .ts files with the updated program.
+      // This handles: new files, new exports, import-graph changes,
+      // root registration rescanning, and cross-file value propagation
+      // (e.g., a constant change in file A propagating to file B's
+      // resource name through the import). The graph's interning and
+      // cutoff ensure that unchanged observations produce no downstream
+      // work — re-interpreting a file whose output hasn't changed is
+      // a no-op at the conclusion level.
+      const config = buildConfig();
+      const allTsFiles = [...fileStore.keys()]
+        .filter(f => f.endsWith('.ts'))
+        .map(f => f as NormalizedPath);
+      interpretProject(allTsFiles, config);
 
       return currentTrace;
     },

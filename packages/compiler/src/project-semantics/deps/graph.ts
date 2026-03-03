@@ -308,15 +308,60 @@ export function createProjectDepGraph(
         if (evalEntry?.stale) {
           const parsed = parseEvaluationKey(obsEntry.sourceEvaluation);
           if (parsed) {
+            // Collect old observations from this eval before clearing
+            const oldObsFromEval = new Set<ProjectDepNodeId>();
+            const fwd = forwardEdges.get(obsEntry.sourceEvaluation);
+            if (fwd) {
+              for (const depId of fwd) {
+                if (nodes.get(depId)?.kind === 'observation') {
+                  oldObsFromEval.add(depId);
+                }
+              }
+            }
+
             clearOutgoingEdges(obsEntry.sourceEvaluation);
             if (listener) {
               listener.onEvent({ type: 'evaluation-invoked', nodeId: obsEntry.sourceEvaluation, file: parsed.file, unitKey: parsed.unitKey });
             }
             evaluator(parsed.file, parsed.unitKey);
             evalEntry.stale = false;
+
+            // Clean up orphaned observations: old observations from this
+            // eval that were NOT re-registered during re-evaluation.
+            // This handles resource identity changes (e.g., CE renamed
+            // from 'widget' to 'gadget' — old observations under
+            // 'custom-element:widget' are now orphaned).
+            const newFwd = forwardEdges.get(obsEntry.sourceEvaluation);
+            const currentObs = new Set<ProjectDepNodeId>();
+            if (newFwd) {
+              for (const depId of newFwd) {
+                if (nodes.get(depId)?.kind === 'observation') {
+                  currentObs.add(depId);
+                }
+              }
+            }
+            for (const oldObsId of oldObsFromEval) {
+              if (!currentObs.has(oldObsId)) {
+                // Mark downstream conclusions stale before removing
+                // the observation, so they re-converge and find the
+                // observation gone.
+                const obsFwd = forwardEdges.get(oldObsId);
+                if (obsFwd) {
+                  for (const depId of obsFwd) {
+                    const depEntry = nodes.get(depId);
+                    if (depEntry?.kind === 'conclusion') {
+                      depEntry.stale = true;
+                    }
+                  }
+                }
+                removeNode(oldObsId);
+              }
+            }
           }
         }
       }
+      // The observation may have been removed by orphan cleanup
+      if (!nodes.has(obsId)) continue;
       if (listener) {
         listener.onEvent({ type: 'observation-refreshed', observationId: obsId, sourceEvaluation: obsEntry.sourceEvaluation ?? ('' as ProjectDepNodeId) });
       }
