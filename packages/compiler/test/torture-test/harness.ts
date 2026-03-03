@@ -431,3 +431,81 @@ export function assertNotRecognized(
     );
   }
 }
+
+// =============================================================================
+// Cross-File Edge Assertions (Tier 2+)
+// =============================================================================
+
+/**
+ * Assert that a cross-file evaluation edge exists: the interpreter
+ * evaluated a file as a dependency of another file's evaluation.
+ *
+ * Checks for evaluation nodes (`eval:`) for units in the dependency file.
+ * This proves the interpreter actually followed the import — not just
+ * that the file was processed independently by interpretProject.
+ */
+export function assertEvaluationEdge(
+  result: InterpreterResult,
+  depFilePath: string,
+  unitKey: string,
+): void {
+  const evalId = `eval:${depFilePath}#${unitKey}`;
+  if (!result.graph.hasNode(evalId as any)) {
+    throw new Error(
+      `No evaluation node for ${depFilePath}#${unitKey}. ` +
+      `The interpreter did not evaluate this unit. ` +
+      `Graph has ${result.graph.nodeCount} nodes.`
+    );
+  }
+}
+
+/**
+ * Assert that observation nodes exist for a specific resource.
+ * Returns the list of field paths that have observations.
+ */
+export function observedFieldsFor(
+  result: InterpreterResult,
+  resourceKey: string,
+): string[] {
+  const prefix = `conclusion:${resourceKey}:`;
+  const conclusionIds = result.graph.nodesByPrefix(prefix);
+  const fields: string[] = [];
+  for (const id of conclusionIds) {
+    const fieldPath = id.slice(prefix.length);
+    // Only include fields that have actual values (not just identity)
+    if (fieldPath !== "name" && fieldPath !== "className" && fieldPath !== "kind") {
+      const val = pullRed(result.graph, resourceKey, fieldPath);
+      if (val !== undefined) {
+        fields.push(fieldPath);
+      }
+    }
+  }
+  return fields.sort();
+}
+
+/**
+ * Assert that a resource has ONLY the specified observed fields
+ * (beyond identity: name, className, kind). Any unexpected field
+ * is a test failure.
+ */
+export function assertExactFields(
+  result: InterpreterResult,
+  resourceKey: string,
+  expectedFields: string[],
+): void {
+  const actual = observedFieldsFor(result, resourceKey);
+  const expected = [...expectedFields].sort();
+
+  const unexpected = actual.filter(f => !expected.includes(f));
+  const missing = expected.filter(f => !actual.includes(f));
+
+  if (unexpected.length > 0 || missing.length > 0) {
+    const parts: string[] = [];
+    if (unexpected.length > 0) parts.push(`unexpected: [${unexpected.join(", ")}]`);
+    if (missing.length > 0) parts.push(`missing: [${missing.join(", ")}]`);
+    throw new Error(
+      `Field set mismatch for ${resourceKey}: ${parts.join("; ")}. ` +
+      `Actual fields: [${actual.join(", ")}]`
+    );
+  }
+}

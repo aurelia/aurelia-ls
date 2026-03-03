@@ -445,5 +445,30 @@ export function createProjectDepGraph(
       }
       return count;
     },
+
+    nodesByKind(kind) {
+      const result: ProjectDepNodeId[] = [];
+      for (const [id, entry] of nodes) {
+        if (entry.kind === kind) result.push(id);
+      }
+      return result;
+    },
+
+    nodesByPrefix(prefix: string) {
+      const result: ProjectDepNodeId[] = [];
+      for (const id of nodes.keys()) {
+        if (id.startsWith(prefix)) result.push(id);
+      }
+      return result;
+    },
+
+    hasNode(id) {
+      return nodes.has(id);
+    },
+
+    observationSource(id) {
+      const entry = nodes.get(id);
+      return entry?.evidenceSource;
+    },
   };
 }

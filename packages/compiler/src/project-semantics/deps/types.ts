@@ -190,4 +190,18 @@ export interface ProjectDepGraph {
   readonly nodeCount: number;
   readonly edgeCount: number;
   readonly staleCount: number;
+
+  // ── Diagnostic queries (for test harness introspection) ──────────────
+
+  /** List all node IDs matching a kind filter. */
+  nodesByKind(kind: ProjectDepNodeKind): ProjectDepNodeId[];
+
+  /** List all node IDs whose key starts with a prefix. */
+  nodesByPrefix(prefix: string): ProjectDepNodeId[];
+
+  /** Check whether a specific node exists. */
+  hasNode(id: ProjectDepNodeId): boolean;
+
+  /** Get the evidence source stored on an observation node. */
+  observationSource(id: ProjectDepNodeId): EvidenceSource | undefined;
 }
