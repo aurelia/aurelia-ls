@@ -32,6 +32,61 @@
 import type { BindingMode } from '../../model/ir.js';
 
 // =============================================================================
+// Domain Value Types (used within FieldValue<T> for complex fields)
+// =============================================================================
+
+/**
+ * A resolved entry in a CE/CA's `dependencies` array.
+ *
+ * The subject's `Key` type admits string, Constructable, InterfaceSymbol,
+ * IResolver. In practice, resource dependencies are string (name key) or
+ * Constructable (class reference). Other Key types are services, not
+ * resources. From L3 product.md §2.3.
+ */
+export type DependencyRef =
+  | { readonly refKind: 'resource'; readonly name: string; readonly resourceKind: ResourceKind }
+  | { readonly refKind: 'class-ref'; readonly className: string }
+  | { readonly refKind: 'unresolvable'; readonly reason: string };
+
+/**
+ * Representation of capture configuration.
+ *
+ * D4 (tier 1 spec): the product preserves the CaptureFilter predicate
+ * so the classification algorithm can evaluate it for known attribute
+ * names. `boolean` is the common case; `filter` is the full-fidelity case.
+ */
+export type CaptureValue =
+  | boolean
+  | { readonly kind: 'filter'; readonly description: string };
+
+/**
+ * Representation of processContent hook presence.
+ *
+ * D4 (tier 1 spec): processContent is `ProcessContentHook | null`,
+ * NEVER boolean. The product preserves the hook reference. The hook
+ * is opaque to static analysis but its presence gates template
+ * analysis behavior (NL-4 from template-analysis L1).
+ */
+export type ProcessContentValue =
+  | null
+  | { readonly kind: 'hook'; readonly description?: string };
+
+/**
+ * Shadow DOM options.
+ */
+export interface ShadowOptions {
+  readonly mode: 'open' | 'closed';
+}
+
+/**
+ * Watch definition — a reactive observer declared via @watch.
+ */
+export interface WatchDefinition {
+  readonly expression: string;
+  readonly callback?: string;
+}
+
+// =============================================================================
 // Schema Version
 // =============================================================================
 
@@ -204,24 +259,31 @@ export interface GapSummary {
  * Provenance (origin, declarationForm, file, package) and derived
  * metadata (gap summary) are NOT on this type — they are red-layer
  * concerns queried through the provenance surface.
+ *
+ * 14 structural fields from L3 product.md §2.3 (excluding kind,
+ * className, name on ResourceIdentity, and file/package on provenance).
  */
 export interface CustomElementGreen extends ResourceIdentity {
   readonly kind: 'custom-element';
   readonly containerless: FieldValue<boolean>;
-  readonly capture: FieldValue<boolean>;
-  readonly processContent: FieldValue<boolean>;
+  /** D4: boolean | CaptureFilter, never collapsed to boolean.
+   *  CaptureFilter predicates are opaque but their presence changes
+   *  attribute classification (step 2). */
+  readonly capture: FieldValue<CaptureValue>;
+  /** D4: ProcessContentHook | null, NEVER boolean. Hook presence
+   *  gates child compilation (NL-4). */
+  readonly processContent: FieldValue<ProcessContentValue>;
   readonly shadowOptions: FieldValue<ShadowOptions | null>;
   readonly template: FieldValue<string>;
   readonly enhance: FieldValue<boolean>;
+  /** Three-valued: true, false, or undefined. undefined ≠ false (D5). */
   readonly strict: FieldValue<boolean | undefined>;
-  readonly boundary: FieldValue<boolean>;
   readonly aliases: FieldValue<readonly string[]>;
-  readonly dependencies: FieldValue<readonly string[]>;
+  /** Structured refs, not strings. Each entry is a resource key,
+   *  class-ref, or unresolvable gap. From L3 §2.3 DependencyRef. */
+  readonly dependencies: FieldValue<readonly DependencyRef[]>;
+  readonly watches: FieldValue<readonly WatchDefinition[]>;
   readonly bindables: Readonly<Record<string, BindableGreen>>;
-}
-
-export interface ShadowOptions {
-  readonly mode: 'open' | 'closed';
 }
 
 // =============================================================================
@@ -233,12 +295,16 @@ export interface ShadowOptions {
  *
  * 11 fields from L3 product.md §2.4.
  */
+/**
+ * 9 structural fields from L3 product.md §2.4.
+ */
 export interface CustomAttributeGreen extends ResourceIdentity {
   readonly kind: 'custom-attribute';
   readonly noMultiBindings: FieldValue<boolean>;
   readonly defaultProperty: FieldValue<string>;
   readonly aliases: FieldValue<readonly string[]>;
-  readonly dependencies: FieldValue<readonly string[]>;
+  readonly dependencies: FieldValue<readonly DependencyRef[]>;
+  readonly watches: FieldValue<readonly WatchDefinition[]>;
   readonly bindables: Readonly<Record<string, BindableGreen>>;
 }
 
@@ -255,12 +321,18 @@ export interface CustomAttributeGreen extends ResourceIdentity {
  * TC is a separate product kind (L3 §1.1) even though the subject
  * models it as CA + isTemplateController flag.
  */
+/**
+ * Inherits all CA structural fields (L3 product.md §2.5) plus
+ * containerStrategy and semantics.
+ */
 export interface TemplateControllerGreen extends ResourceIdentity {
   readonly kind: 'template-controller';
   readonly noMultiBindings: FieldValue<boolean>;
   readonly defaultProperty: FieldValue<string>;
   readonly containerStrategy: FieldValue<'reuse' | 'new'>;
   readonly aliases: FieldValue<readonly string[]>;
+  readonly dependencies: FieldValue<readonly DependencyRef[]>;
+  readonly watches: FieldValue<readonly WatchDefinition[]>;
   readonly bindables: Readonly<Record<string, BindableGreen>>;
   /**
    * Behavioral semantics — stratum 2, product-assigned.
