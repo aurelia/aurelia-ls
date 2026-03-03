@@ -46,10 +46,16 @@ describe("5C: Vocabulary Gap Claims", () => {
                 lng: 'en',
                 fallbackLng: 'en',
               };
+              // This is the gap source: the callback sets custom aliases.
+              // The product can see translationAttributeAliases is accessed
+              // but can't determine the runtime value.
+              options.translationAttributeAliases = getAliases();
             })
           )
           .app(App)
           .start();
+
+        function getAliases() { return ['t', 'i18n']; }
       `,
       "/src/app.ts": `
         import { customElement } from 'aurelia';
@@ -67,10 +73,11 @@ describe("5C: Vocabulary Gap Claims", () => {
 
     const vocab = evaluateProjectVocabulary(result);
 
-    // Vocabulary is incomplete — .customize() callback may create
-    // additional BCs/APs from custom translation aliases
+    // Vocabulary is incomplete — .customize() callback sets
+    // translationAttributeAliases to an opaque function result.
+    // The product can't determine what aliases are created.
     assertVocabularyNotComplete(vocab);
-    assertVocabularyGap(vocab, { reason: "customize" });
+    assertVocabularyGap(vocab, { reason: "alias" });
 
     // Default i18n vocabulary items survive the gap (product postulates)
     assertInVocabulary(vocab, "t", {
@@ -86,7 +93,7 @@ describe("5C: Vocabulary Gap Claims", () => {
   });
 
   it("#5C.2 vocabulary gap structural properties — blast radius and no error signal", () => {
-    // Same project config as 5C.1
+    // Same gap shape as 5C.1 — callback writes translationAttributeAliases
     const result = runInterpreter({
       "/src/main.ts": `
         import Aurelia from 'aurelia';
@@ -96,14 +103,13 @@ describe("5C: Vocabulary Gap Claims", () => {
         Aurelia
           .register(
             I18nConfiguration.customize((options) => {
-              options.initOptions = {
-                resources: { en: { translation: { greeting: 'Hello' } } },
-                lng: 'en',
-              };
+              options.translationAttributeAliases = loadAliases();
             })
           )
           .app(App)
           .start();
+
+        function loadAliases() { return ['t']; }
       `,
       "/src/app.ts": `
         import { customElement } from 'aurelia';

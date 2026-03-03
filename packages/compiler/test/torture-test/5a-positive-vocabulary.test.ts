@@ -205,4 +205,70 @@ describe("5A: Positive Vocabulary Claims", () => {
     // Without this AP, t="greeting" would fall through to plain attribute
     assertPatternInVocabulary(vocab, "TranslationAP", ["t"]);
   });
+
+  it("#5A.7 state plugin — state BC (ignoreAttr: false) and dispatch BC (ignoreAttr: true)", () => {
+    const result = runInterpreter({
+      "/src/main.ts": `
+        import Aurelia from 'aurelia';
+        import { StateDefaultConfiguration } from '@aurelia/state';
+        import { App } from './app';
+
+        Aurelia.register(StateDefaultConfiguration.init({})).app(App).start();
+      `,
+      "/src/app.ts": `
+        import { customElement } from 'aurelia';
+
+        @customElement({
+          name: 'app',
+          template: '<input value.state="count" click.dispatch="increment">'
+        })
+        export class App {}
+      `,
+    });
+
+    const vocab = evaluateProjectVocabulary(result);
+
+    // state BC: ignoreAttr false, standard property expression
+    assertInVocabulary(vocab, "state", {
+      ignoreAttr: false,
+      outputInstruction: "StateBinding",
+      expressionEntry: "IsProperty",
+    });
+
+    // dispatch BC: ignoreAttr true — command owns the attribute (like trigger)
+    assertInVocabulary(vocab, "dispatch", {
+      ignoreAttr: true,
+      outputInstruction: "DispatchBinding",
+      expressionEntry: "IsProperty",
+    });
+  });
+
+  it("#5A.8 StateAttributePattern — state plugin AP", () => {
+    const result = runInterpreter({
+      "/src/main.ts": `
+        import Aurelia from 'aurelia';
+        import { StateDefaultConfiguration } from '@aurelia/state';
+        import { App } from './app';
+
+        Aurelia.register(StateDefaultConfiguration.init({})).app(App).start();
+      `,
+      "/src/app.ts": `
+        import { customElement } from 'aurelia';
+
+        @customElement({
+          name: 'app',
+          template: '<input value.state="count">'
+        })
+        export class App {}
+      `,
+    });
+
+    const vocab = evaluateProjectVocabulary(result);
+
+    // StateAttributePattern enables .state and .dispatch colon syntax
+    assertPatternInVocabulary(vocab, "StateAttributePattern", [
+      "PART.state:PART",
+      "PART.dispatch:PART",
+    ]);
+  });
 });

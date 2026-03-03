@@ -140,4 +140,90 @@ describe("5B: Vocabulary Completeness Claims", () => {
     assertInVocabulary(vocab, "bind");
     assertInVocabulary(vocab, "trigger");
   });
+
+  it("#5B.3 i18n .customize() with only initOptions — vocabulary still complete", () => {
+    // .customize() that only sets initOptions (language, resources) does
+    // NOT change translationAttributeAliases. The default alias 't' is
+    // always used. No vocabulary gap — this is the overwhelmingly common
+    // real-world pattern (e.g., cortex-device-list).
+    const result = runInterpreter({
+      "/src/main.ts": `
+        import Aurelia from 'aurelia';
+        import { I18nConfiguration } from '@aurelia/i18n';
+        import { App } from './app';
+
+        Aurelia
+          .register(
+            I18nConfiguration.customize((options) => {
+              options.initOptions = {
+                resources: { en: { translation: { greeting: 'Hello' } } },
+                lng: 'en',
+                fallbackLng: 'en',
+              };
+            })
+          )
+          .app(App)
+          .start();
+      `,
+      "/src/app.ts": `
+        import { customElement } from 'aurelia';
+
+        @customElement({
+          name: 'app',
+          template: '<span t="greeting">fallback</span>'
+        })
+        export class App {}
+      `,
+    });
+
+    const vocab = evaluateProjectVocabulary(result);
+
+    // .customize() that doesn't touch translationAttributeAliases
+    // → default aliases used → vocabulary complete
+    assertVocabularyComplete(vocab);
+
+    // Default i18n vocabulary present
+    assertInVocabulary(vocab, "t", {
+      ignoreAttr: false,
+      expressionEntry: "IsCustom",
+    });
+    assertPatternInVocabulary(vocab, "TranslationAP", ["t"]);
+  });
+
+  it("#5B.4 state plugin — deterministic vocabulary, no gap", () => {
+    const result = runInterpreter({
+      "/src/main.ts": `
+        import Aurelia from 'aurelia';
+        import { StateDefaultConfiguration } from '@aurelia/state';
+        import { App } from './app';
+
+        Aurelia.register(StateDefaultConfiguration.init({})).app(App).start();
+      `,
+      "/src/app.ts": `
+        import { customElement } from 'aurelia';
+
+        @customElement({
+          name: 'app',
+          template: '<input value.state="count">'
+        })
+        export class App {}
+      `,
+    });
+
+    const vocab = evaluateProjectVocabulary(result);
+
+    // State plugin has no .customize() — its vocabulary is always
+    // deterministic. Core builtins + state plugin postulates → complete.
+    assertVocabularyComplete(vocab);
+
+    // State BCs present
+    assertInVocabulary(vocab, "state", { ignoreAttr: false });
+    assertInVocabulary(vocab, "dispatch", { ignoreAttr: true });
+
+    // State AP present
+    assertPatternInVocabulary(vocab, "StateAttributePattern");
+
+    // Core BCs unaffected
+    assertInVocabulary(vocab, "bind");
+  });
 });

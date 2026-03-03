@@ -112,6 +112,13 @@ declare module '@aurelia/router' {
 
 declare module '@aurelia/state' {
   export const StateDefaultConfiguration: {
+    init(state: any, ...reducers: any[]): any;
+    register(container: any): void;
+  };
+}
+
+declare module '@aurelia/state' {
+  export const StateDefaultConfiguration: {
     init(state: any, handler: any): any;
     register(container: any): void;
   };
