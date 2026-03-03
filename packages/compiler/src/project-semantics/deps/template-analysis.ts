@@ -805,7 +805,10 @@ function resolveCeDefinition(
   for (const propName of bindableNames) {
     const property = pullConclusionVal(graph, resourceKey, `bindable:${propName}:property`);
     const modeVal = pullConclusionVal(graph, resourceKey, `bindable:${propName}:mode`);
-    const mode = typeof modeVal === 'number' ? modeVal : 2; // default toView
+    // Mode is stored as a string ('twoWay', 'fromView', etc.) by the interpreter
+    const mode = typeof modeVal === 'string' ? bindingModeStringToNumber(modeVal)
+               : typeof modeVal === 'number' ? modeVal
+               : 2; // default toView
     bindables.set(propName, {
       property: typeof property === 'string' ? property : propName,
       mode,
@@ -826,6 +829,17 @@ function resolveCeDefinition(
   const aliases = Array.isArray(aliasesVal) ? aliasesVal.filter((a): a is string => typeof a === 'string') : [];
 
   return { resourceKey, bindables, capture, aliases, hasGappedBindables };
+}
+
+function bindingModeStringToNumber(mode: string): number {
+  switch (mode) {
+    case 'default': return 0;
+    case 'oneTime': return 1;
+    case 'toView': return 2;
+    case 'fromView': return 4;
+    case 'twoWay': return 6;
+    default: return 2; // fall back to toView
+  }
 }
 
 function pullConclusionVal(
