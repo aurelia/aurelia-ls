@@ -31,6 +31,43 @@ import { createConvergence } from "../../out/core/convergence/convergence.js";
 import type { GreenValue } from "../../out/value/green.js";
 import type { Sourced } from "../../out/value/sourced.js";
 
+// New architecture imports (for analyzeTemplate)
+import {
+  lowerTemplate,
+  type TemplateSemantics,
+  type LoweringInput,
+} from "../../out/core/template/semantic-analysis.js";
+import {
+  buildCatalog,
+  scopedCatalog,
+} from "../../out/core/resource/catalog.js";
+import {
+  BUILTIN_RESOURCES,
+  BUILTIN_VOCABULARY,
+} from "../../out/core/resource/builtins.js";
+import type {
+  FieldValue,
+  ResourceGreen,
+  CustomElementGreen,
+  CustomAttributeGreen,
+  TemplateControllerGreen,
+  ValueConverterGreen,
+  BindingBehaviorGreen,
+  BindableGreen,
+  ResourceCatalogGreen,
+  VocabularyGreen as NewVocabularyGreen,
+  BindingCommandGreen,
+  AttributePatternGreen,
+  ScopeCompleteness as NewScopeCompleteness,
+  ResourceKind as NewResourceKind,
+  CaptureValue,
+  ProcessContentValue,
+  DependencyRef,
+  WatchDefinition,
+  ShadowOptions,
+} from "../../out/core/resource/types.js";
+import type { BindingMode } from "../../out/model/ir.js";
+
 // =============================================================================
 // Aurelia Type Stubs
 // =============================================================================
@@ -1012,287 +1049,7 @@ export function assertVocabularyGap(
 }
 
 // =============================================================================
-// Template Analysis Assertions (Tier 6)
-// =============================================================================
-
-import {
-  evaluateTemplateAnalysis,
-  type TemplateAnalysisResult,
-  type ElementAnalysis,
-  type AttributeAnalysis,
-  type Classification,
-  type ClassificationCategory,
-  type ElementResolution,
-  type BindingInfo,
-  type BindingMode,
-  type ScopeEntry,
-  type ScopeChainSnapshot,
-  type TcInfo,
-} from "../../out/core/template/template-analysis.js";
-
-export type { TemplateAnalysisResult, ElementAnalysis, AttributeAnalysis, Classification, ClassificationCategory, ElementResolution, BindingInfo, BindingMode, ScopeEntry, ScopeChainSnapshot, TcInfo };
-
-/**
- * Run template analysis for a CE's inline template.
- *
- * Evaluates scope-visibility and vocabulary, then runs the 8-step
- * classification on the CE's template content.
- */
-export function analyzeTemplate(
-  result: InterpreterResult,
-  ceName: string,
-): TemplateAnalysisResult {
-  // Pull the CE's template content from conclusions
-  // The interpreter stores it as 'inlineTemplate' (from extract-fields.ts)
-  const resourceKey = `custom-element:${ceName}`;
-  const templateContent = pullValue(result.graph, resourceKey, 'inlineTemplate');
-
-  if (typeof templateContent !== 'string') {
-    throw new Error(
-      `No template content found for CE '${ceName}'. ` +
-      `Got: ${JSON.stringify(templateContent)}`
-    );
-  }
-
-  // Evaluate upstream tiers
-  const vis = evaluateVisibility(result);
-  const vocab = evaluateProjectVocabulary(result);
-
-  const scopeGreen = vis.scopes.get(ceName);
-  if (!scopeGreen) {
-    throw new Error(
-      `No scope-visibility found for CE '${ceName}'. ` +
-      `Available scopes: [${[...vis.scopes.keys()].join(', ')}]`
-    );
-  }
-
-  return evaluateTemplateAnalysis(
-    templateContent,
-    ceName,
-    vocab.green,
-    scopeGreen,
-    result.graph,
-  );
-}
-
-/**
- * Find an element analysis by tag name.
- * Returns the first match in depth-first order.
- */
-export function findElement(
-  analysis: TemplateAnalysisResult,
-  tagName: string,
-): ElementAnalysis {
-  const el = analysis.elements.find(e => e.tagName.toLowerCase() === tagName.toLowerCase());
-  if (!el) {
-    throw new Error(
-      `No element '${tagName}' found in template analysis. ` +
-      `Elements: [${analysis.elements.map(e => e.tagName).join(', ')}]`
-    );
-  }
-  return el;
-}
-
-/**
- * Find all elements with a given tag name.
- */
-export function findElements(
-  analysis: TemplateAnalysisResult,
-  tagName: string,
-): ElementAnalysis[] {
-  return analysis.elements.filter(e => e.tagName.toLowerCase() === tagName.toLowerCase());
-}
-
-/**
- * Find an attribute analysis by raw attribute name on an element.
- */
-export function findAttr(
-  el: ElementAnalysis,
-  attrName: string,
-): AttributeAnalysis {
-  const attr = el.attributes.find(a => a.rawName === attrName);
-  if (!attr) {
-    throw new Error(
-      `No attribute '${attrName}' found on <${el.tagName}>. ` +
-      `Attributes: [${el.attributes.map(a => a.rawName).join(', ')}]`
-    );
-  }
-  return attr;
-}
-
-/**
- * Find an attribute by its AP-parsed target (not raw name).
- * Useful when the raw name includes binding syntax (e.g., 'value.bind').
- */
-export function findAttrByTarget(
-  el: ElementAnalysis,
-  target: string,
-): AttributeAnalysis {
-  const attr = el.attributes.find(a =>
-    a.syntax ? a.syntax.target === target : a.rawName === target
-  );
-  if (!attr) {
-    throw new Error(
-      `No attribute with target '${target}' found on <${el.tagName}>. ` +
-      `Attributes: [${el.attributes.map(a => a.syntax ? `${a.rawName}→${a.syntax.target}` : a.rawName).join(', ')}]`
-    );
-  }
-  return attr;
-}
-
-/**
- * Assert an attribute is classified at a specific step and category.
- */
-export function assertClassified(
-  attr: AttributeAnalysis,
-  step: number,
-  category: ClassificationCategory,
-): void {
-  if (attr.classification.step !== step) {
-    throw new Error(
-      `Attribute '${attr.rawName}': expected step ${step}, ` +
-      `got step ${attr.classification.step} (${attr.classification.category})`
-    );
-  }
-  if (attr.classification.category !== category) {
-    throw new Error(
-      `Attribute '${attr.rawName}': expected category '${category}', ` +
-      `got '${attr.classification.category}' at step ${attr.classification.step}`
-    );
-  }
-}
-
-/**
- * Assert an element resolved as a custom element.
- */
-export function assertResolvedCe(
-  el: ElementAnalysis,
-  expectedResourceKey?: string,
-): void {
-  if (el.resolution.kind !== 'custom-element') {
-    throw new Error(
-      `<${el.tagName}> expected to resolve as CE, ` +
-      `got '${el.resolution.kind}'`
-    );
-  }
-  if (expectedResourceKey && el.resolution.resourceKey !== expectedResourceKey) {
-    throw new Error(
-      `<${el.tagName}> resolved as CE but wrong key: ` +
-      `expected '${expectedResourceKey}', got '${el.resolution.resourceKey}'`
-    );
-  }
-}
-
-/**
- * Assert an element resolved as plain HTML (not a CE, not unknown).
- */
-export function assertPlainHtml(el: ElementAnalysis): void {
-  if (el.resolution.kind !== 'plain-html') {
-    throw new Error(
-      `<${el.tagName}> expected to be plain HTML, ` +
-      `got '${el.resolution.kind}'`
-    );
-  }
-}
-
-/**
- * Assert an element was not found in the resource catalog.
- */
-export function assertElementNotFound(
-  el: ElementAnalysis,
-  expectGrounded: boolean,
-): void {
-  if (el.resolution.kind !== 'not-found') {
-    throw new Error(
-      `<${el.tagName}> expected to be 'not-found', ` +
-      `got '${el.resolution.kind}'`
-    );
-  }
-  if (el.resolution.grounded !== expectGrounded) {
-    throw new Error(
-      `<${el.tagName}> not-found grounded: expected ${expectGrounded}, ` +
-      `got ${el.resolution.grounded}`
-    );
-  }
-}
-
-/**
- * Assert binding info on an attribute.
- */
-export function assertBinding(
-  attr: AttributeAnalysis,
-  expected: {
-    instructionType?: string;
-    mode?: BindingMode | null;
-    targetProperty?: string | null;
-    expressionEntry?: string | null;
-  },
-): void {
-  if (!attr.binding) {
-    throw new Error(
-      `Attribute '${attr.rawName}' has no binding info (expected binding)`
-    );
-  }
-  if (expected.instructionType !== undefined && attr.binding.instructionType !== expected.instructionType) {
-    throw new Error(
-      `Attribute '${attr.rawName}': instructionType expected '${expected.instructionType}', ` +
-      `got '${attr.binding.instructionType}'`
-    );
-  }
-  if (expected.mode !== undefined && attr.binding.mode !== expected.mode) {
-    throw new Error(
-      `Attribute '${attr.rawName}': mode expected '${expected.mode}', ` +
-      `got '${attr.binding.mode}'`
-    );
-  }
-  if (expected.targetProperty !== undefined && attr.binding.targetProperty !== expected.targetProperty) {
-    throw new Error(
-      `Attribute '${attr.rawName}': targetProperty expected '${expected.targetProperty}', ` +
-      `got '${attr.binding.targetProperty}'`
-    );
-  }
-  if (expected.expressionEntry !== undefined && attr.binding.expressionEntry !== expected.expressionEntry) {
-    throw new Error(
-      `Attribute '${attr.rawName}': expressionEntry expected '${expected.expressionEntry}', ` +
-      `got '${attr.binding.expressionEntry}'`
-    );
-  }
-}
-
-/**
- * Assert that an attribute has NO binding info (truly plain, sub-path 8a).
- */
-export function assertNoBinding(attr: AttributeAnalysis): void {
-  if (attr.binding !== null) {
-    throw new Error(
-      `Attribute '${attr.rawName}' should have NO binding but has: ` +
-      `${attr.binding.instructionType}`
-    );
-  }
-}
-
-/**
- * Assert that an element has no Aurelia-specific instructions
- * (no HydrateElement, no binding, no HydrateAttribute). Rung 4.
- */
-export function assertNotApplicable(el: ElementAnalysis): void {
-  // Element should be plain HTML
-  if (el.resolution.kind === 'custom-element') {
-    throw new Error(
-      `<${el.tagName}> should be not-applicable but resolved as CE: ${el.resolution.resourceKey}`
-    );
-  }
-
-  // All attributes should be plain with no binding
-  for (const attr of el.attributes) {
-    if (attr.classification.step !== 8 || attr.classification.category !== 'plain-attribute') {
-      throw new Error(
-        `<${el.tagName}> attr '${attr.rawName}' should be plain (step 8) but is ` +
-        `${attr.classification.category} at step ${attr.classification.step}`
-      );
-    }
-  }
-}
+// Template Analysis (Tier 6)
 
 /**
  * Pull a combined bindable map from per-field conclusion nodes.
@@ -1330,100 +1087,6 @@ export function pullBindables(
   return result;
 }
 
-// =============================================================================
-// Scope Chain Assertions (Tier 6D)
-// =============================================================================
-
-/**
- * Assert the scope chain at an element has a CE boundary.
- */
-export function assertCeBoundary(
-  el: ElementAnalysis,
-  ceName: string,
-): void {
-  const boundary = el.scopeChain.find(s => s.kind === 'ce-boundary');
-  if (!boundary) {
-    throw new Error(
-      `<${el.tagName}> scope chain has no CE boundary. ` +
-      `Chain: [${el.scopeChain.map(s => s.kind).join(' → ')}]`
-    );
-  }
-  if (boundary.kind === 'ce-boundary' && boundary.ceName !== ceName) {
-    throw new Error(
-      `<${el.tagName}> CE boundary is '${boundary.ceName}', expected '${ceName}'`
-    );
-  }
-}
-
-/**
- * Assert that the scope chain contains a repeat scope entry with
- * the expected iterator variable.
- */
-export function assertRepeatScope(
-  el: ElementAnalysis,
-  iteratorVar: string,
-): void {
-  const repeat = el.scopeChain.find(s => s.kind === 'repeat');
-  if (!repeat) {
-    throw new Error(
-      `<${el.tagName}> scope chain has no repeat entry. ` +
-      `Chain: [${el.scopeChain.map(s => s.kind).join(' → ')}]`
-    );
-  }
-  if (repeat.kind === 'repeat' && repeat.iteratorVar !== iteratorVar) {
-    throw new Error(
-      `<${el.tagName}> repeat iteratorVar is '${repeat.iteratorVar}', expected '${iteratorVar}'`
-    );
-  }
-}
-
-/**
- * Assert the scope chain has the expected structure (list of kinds).
- */
-export function assertScopeChain(
-  el: ElementAnalysis,
-  expected: readonly string[],
-): void {
-  const actual = el.scopeChain.map(s => s.kind);
-  if (actual.length !== expected.length || !actual.every((k, i) => k === expected[i])) {
-    throw new Error(
-      `<${el.tagName}> scope chain mismatch.\n` +
-      `  Expected: [${expected.join(' → ')}]\n` +
-      `  Actual:   [${actual.join(' → ')}]`
-    );
-  }
-}
-
-/**
- * Assert that no scope entry in the chain has isBoundary: true
- * (except possibly the CE boundary at the end).
- */
-export function assertNoBoundaryExceptCe(el: ElementAnalysis): void {
-  for (const entry of el.scopeChain) {
-    if (entry.isBoundary && entry.kind !== 'ce-boundary') {
-      throw new Error(
-        `<${el.tagName}> has a non-CE boundary scope entry: ${entry.kind}`
-      );
-    }
-  }
-}
-
-/**
- * Assert that TC attributes on an element are in the expected wrapping order.
- */
-export function assertTcOrder(
-  el: ElementAnalysis,
-  expectedOrder: readonly string[],
-): void {
-  const actual = el.tcAttributes.map(tc => tc.name);
-  if (actual.length !== expectedOrder.length || !actual.every((n, i) => n === expectedOrder[i])) {
-    throw new Error(
-      `<${el.tagName}> TC order mismatch.\n` +
-      `  Expected: [${expectedOrder.join(', ')}]\n` +
-      `  Actual:   [${actual.join(', ')}]`
-    );
-  }
-}
 
 // =============================================================================
 // Tier 7: Incremental Evaluation Infrastructure
@@ -1811,4 +1474,596 @@ export function assertPropagationScope(
   for (const id of expected.cutoff ?? []) assertCutoff(trace, id);
   for (const id of expected.changed ?? []) assertChanged(trace, id);
   for (const id of expected.fresh ?? []) assertFresh(trace, id);
+}
+
+// =============================================================================
+// Graph → ResourceCatalogGreen Bridge
+// =============================================================================
+
+/**
+ * Project the reactive graph's per-field conclusion nodes into a
+ * ResourceCatalogGreen that lowerTemplate() can consume.
+ *
+ * This is the bridge from the old architecture to the new one. It reads
+ * conclusion nodes from the graph and assembles them into ResourceGreen types.
+ *
+ * Field path → FieldValue mapping:
+ * - Sourced<T> absent (undefined) → { state: 'absent' }
+ * - Sourced<T> { origin: 'source', state: 'unknown' } → { state: 'unknown', reasonKind }
+ * - Sourced<T> { value } → { state: 'known', value }
+ */
+export function graphToResourceCatalog(
+  graph: ProjectDepGraph,
+): ResourceCatalogGreen {
+  // Step 1: Find all resources by scanning conclusion nodes for 'kind' fields
+  const resourceKeys = new Set<string>();
+  const conclusionNodes = graph.nodesByPrefix('conclusion:');
+
+  for (const nodeId of conclusionNodes) {
+    // nodeId format: conclusion:{kind}:{name}::{fieldPath}
+    const afterConclusion = nodeId.slice('conclusion:'.length);
+    const separatorIdx = afterConclusion.indexOf('::');
+    if (separatorIdx > 0) {
+      resourceKeys.add(afterConclusion.slice(0, separatorIdx));
+    }
+  }
+
+  // Step 2: For each resource, assemble a ResourceGreen
+  const resources: ResourceGreen[] = [];
+
+  for (const resourceKey of resourceKeys) {
+    // Skip non-resource keys (root-registrations, etc.)
+    if (!resourceKey.includes(':')) continue;
+
+    const colonIdx = resourceKey.indexOf(':');
+    const kindStr = resourceKey.slice(0, colonIdx);
+    const name = resourceKey.slice(colonIdx + 1);
+
+    // Only process the 5 resource kinds
+    if (!isResourceKind(kindStr)) continue;
+
+    const green = assembleResourceGreen(graph, resourceKey, kindStr as NewResourceKind, name);
+    if (green) resources.push(green);
+  }
+
+  // Step 3: Merge with builtins (builtins are the floor)
+  const builtinCatalog = buildCatalog(BUILTIN_RESOURCES);
+  const sourceCatalog = buildCatalog(resources);
+
+  // Source analysis overrides builtins for the same name
+  return {
+    elements: { ...builtinCatalog.elements, ...sourceCatalog.elements },
+    attributes: { ...builtinCatalog.attributes, ...sourceCatalog.attributes },
+    controllers: { ...builtinCatalog.controllers, ...sourceCatalog.controllers },
+    valueConverters: { ...builtinCatalog.valueConverters, ...sourceCatalog.valueConverters },
+    bindingBehaviors: { ...builtinCatalog.bindingBehaviors, ...sourceCatalog.bindingBehaviors },
+  };
+}
+
+function isResourceKind(s: string): s is NewResourceKind {
+  return s === 'custom-element' || s === 'custom-attribute' ||
+    s === 'template-controller' || s === 'value-converter' ||
+    s === 'binding-behavior';
+}
+
+/**
+ * Read a field from graph conclusions and convert to FieldValue<T>.
+ */
+function readField<T>(graph: ProjectDepGraph, resourceKey: string, fieldPath: string): FieldValue<T> {
+  const sourced = pullRed(graph, resourceKey, fieldPath);
+  if (!sourced) return { state: 'absent' };
+
+  if (sourced.origin === 'source' && sourced.state === 'unknown') {
+    return { state: 'unknown', reasonKind: 'opaque-expression' };
+  }
+
+  const value = sourced.origin === 'source'
+    ? (sourced.state === 'known' ? sourced.value : undefined)
+    : sourced.value;
+
+  if (value === undefined) return { state: 'absent' };
+  return { state: 'known', value: value as T };
+}
+
+/**
+ * Read bindables from graph conclusions and assemble into BindableGreen records.
+ */
+function readBindables(graph: ProjectDepGraph, resourceKey: string): Readonly<Record<string, BindableGreen>> {
+  const prefix = `conclusion:${resourceKey}::bindable:`;
+  const nodes = graph.nodesByPrefix(prefix);
+  const bindableNames = new Set<string>();
+
+  for (const nodeId of nodes) {
+    const afterPrefix = nodeId.slice(prefix.length);
+    const colonIdx = afterPrefix.indexOf(':');
+    if (colonIdx > 0) {
+      bindableNames.add(afterPrefix.slice(0, colonIdx));
+    }
+  }
+
+  const result: Record<string, BindableGreen> = {};
+  for (const propName of bindableNames) {
+    const property = extractValue(pullRed(graph, resourceKey, `bindable:${propName}:property`));
+    const attribute = readField<string>(graph, resourceKey, `bindable:${propName}:attribute`);
+    const mode = readField<BindingMode>(graph, resourceKey, `bindable:${propName}:mode`);
+    const primary = readField<boolean>(graph, resourceKey, `bindable:${propName}:primary`);
+    const type = readField<string>(graph, resourceKey, `bindable:${propName}:type`);
+
+    result[propName] = {
+      property: typeof property === 'string' ? property : propName,
+      attribute: attribute.state === 'absent' ? { state: 'known', value: propName } : attribute,
+      mode: mode.state === 'absent' ? { state: 'known', value: 'default' as BindingMode } : mode,
+      primary: primary.state === 'absent' ? { state: 'known', value: false } : primary,
+      type,
+    };
+  }
+  return result;
+}
+
+/**
+ * Assemble a single ResourceGreen from graph conclusions.
+ */
+function assembleResourceGreen(
+  graph: ProjectDepGraph,
+  resourceKey: string,
+  kind: NewResourceKind,
+  name: string,
+): ResourceGreen | null {
+  const className = extractValue(pullRed(graph, resourceKey, 'className'));
+  if (typeof className !== 'string') return null; // Not a recognized resource
+
+  switch (kind) {
+    case 'custom-element': {
+      const bindables = readBindables(graph, resourceKey);
+      return {
+        kind: 'custom-element',
+        name,
+        className,
+        containerless: readField<boolean>(graph, resourceKey, 'containerless'),
+        capture: readField<CaptureValue>(graph, resourceKey, 'capture'),
+        processContent: readField<ProcessContentValue>(graph, resourceKey, 'processContent'),
+        shadowOptions: readField<ShadowOptions | null>(graph, resourceKey, 'shadowOptions'),
+        template: readField<string>(graph, resourceKey, 'inlineTemplate'),
+        enhance: readField<boolean>(graph, resourceKey, 'enhance'),
+        strict: readField<boolean | undefined>(graph, resourceKey, 'strict'),
+        aliases: readField<readonly string[]>(graph, resourceKey, 'aliases'),
+        dependencies: readField<readonly DependencyRef[]>(graph, resourceKey, 'dependencies'),
+        watches: readField<readonly WatchDefinition[]>(graph, resourceKey, 'watches'),
+        bindables,
+      } satisfies CustomElementGreen;
+    }
+
+    case 'custom-attribute': {
+      const bindables = readBindables(graph, resourceKey);
+      return {
+        kind: 'custom-attribute',
+        name,
+        className,
+        noMultiBindings: readField<boolean>(graph, resourceKey, 'noMultiBindings'),
+        defaultProperty: readField<string>(graph, resourceKey, 'defaultProperty'),
+        aliases: readField<readonly string[]>(graph, resourceKey, 'aliases'),
+        dependencies: readField<readonly DependencyRef[]>(graph, resourceKey, 'dependencies'),
+        watches: readField<readonly WatchDefinition[]>(graph, resourceKey, 'watches'),
+        bindables,
+      } satisfies CustomAttributeGreen;
+    }
+
+    case 'template-controller': {
+      const bindables = readBindables(graph, resourceKey);
+      // TC semantics come from builtins — the graph doesn't store them.
+      // Look up from the builtin catalog.
+      const builtinCatalog = buildCatalog(BUILTIN_RESOURCES);
+      const builtinTc = builtinCatalog.controllers[name.toLowerCase()];
+      return {
+        kind: 'template-controller',
+        name,
+        className,
+        noMultiBindings: readField<boolean>(graph, resourceKey, 'noMultiBindings'),
+        defaultProperty: readField<string>(graph, resourceKey, 'defaultProperty'),
+        containerStrategy: readField<'reuse' | 'new'>(graph, resourceKey, 'containerStrategy'),
+        aliases: readField<readonly string[]>(graph, resourceKey, 'aliases'),
+        dependencies: readField<readonly DependencyRef[]>(graph, resourceKey, 'dependencies'),
+        watches: readField<readonly WatchDefinition[]>(graph, resourceKey, 'watches'),
+        bindables,
+        semantics: builtinTc?.semantics ?? null,
+      } satisfies TemplateControllerGreen;
+    }
+
+    case 'value-converter':
+      return {
+        kind: 'value-converter',
+        name,
+        className,
+        aliases: readField<readonly string[]>(graph, resourceKey, 'aliases'),
+        fromType: readField<string>(graph, resourceKey, 'fromType'),
+        toType: readField<string>(graph, resourceKey, 'toType'),
+        hasFromView: readField<boolean>(graph, resourceKey, 'hasFromView'),
+        signals: readField<readonly string[]>(graph, resourceKey, 'signals'),
+      } satisfies ValueConverterGreen;
+
+    case 'binding-behavior':
+      return {
+        kind: 'binding-behavior',
+        name,
+        className,
+        aliases: readField<readonly string[]>(graph, resourceKey, 'aliases'),
+        isFactory: readField<boolean>(graph, resourceKey, 'isFactory'),
+      } satisfies BindingBehaviorGreen;
+
+    default:
+      return null;
+  }
+}
+
+// =============================================================================
+// Vocabulary Conversion (old → new format)
+// =============================================================================
+
+/**
+ * Convert the old VocabularyGreen (Map-based, from vocabulary.ts) to the
+ * new VocabularyGreen (Record-based, from resource/types.ts).
+ */
+function convertVocabulary(
+  oldVocab: VocabularyGreen,
+): NewVocabularyGreen {
+  const commands: Record<string, BindingCommandGreen> = {};
+
+  for (const [name, entry] of oldVocab.commands) {
+    commands[name] = {
+      name: entry.name,
+      commandKind: mapCommandKind(entry),
+      ignoreAttr: entry.ignoreAttr,
+      expressionEntry: (entry.expressionEntry ?? 'IsProperty') as any,
+    };
+  }
+
+  // Use builtin patterns as the canonical source — they're already in the
+  // new format. The old vocabulary patterns don't carry enough info.
+  return {
+    commands,
+    patterns: BUILTIN_VOCABULARY.patterns,
+  };
+}
+
+function mapCommandKind(entry: BindingCommandEntry): 'property' | 'listener' | 'iterator' | 'ref' | 'attribute' | 'style' | 'translation' {
+  const name = entry.name;
+  if (name === 'trigger' || name === 'capture') return 'listener';
+  if (name === 'for') return 'iterator';
+  if (name === 'ref') return 'ref';
+  if (name === 'attr') return 'attribute';
+  if (name === 'style') return 'style';
+  if (name === 'class') return 'attribute';
+  if (name === 't' || name === 't.bind') return 'translation';
+  return 'property';
+}
+
+// =============================================================================
+// analyzeTemplate — New Architecture Path
+// =============================================================================
+
+/**
+ * Analyze a template using the NEW single-pass lowerTemplate() from
+ * semantic-analysis.ts. This is the replacement for analyzeTemplate()
+ * that consumes ResourceCatalogGreen directly instead of going through
+ * the old template-analysis.ts.
+ *
+ * The bridge:
+ * 1. graphToResourceCatalog() projects graph conclusions into ResourceGreen types
+ * 2. convertVocabulary() adapts the vocabulary format
+ * 3. lowerTemplate() runs the single-pass analysis
+ */
+export function analyzeTemplate(
+  result: InterpreterResult,
+  ceName: string,
+): TemplateSemantics {
+  // Pull the CE's template content from conclusions
+  const resourceKey = `custom-element:${ceName}`;
+  const templateContent = pullValue(result.graph, resourceKey, 'inlineTemplate');
+
+  if (typeof templateContent !== 'string') {
+    throw new Error(
+      `No template content found for CE '${ceName}'. ` +
+      `Got: ${JSON.stringify(templateContent)}`
+    );
+  }
+
+  // Build the resource catalog from graph conclusions + builtins
+  const catalog = graphToResourceCatalog(result.graph);
+
+  // Evaluate and convert vocabulary
+  const vocab = evaluateProjectVocabulary(result);
+  const newVocab = convertVocabulary(vocab.green);
+
+  // Evaluate scope completeness
+  const vis = evaluateVisibility(result);
+  const scopeGreen = vis.scopes.get(ceName);
+  const completeness: NewScopeCompleteness = scopeGreen
+    ? {
+        complete: scopeGreen.completeness.state === 'complete',
+        gaps: scopeGreen.completeness.state === 'incomplete'
+          ? scopeGreen.completeness.gaps.map(g => ({ site: g.site, reason: g.reason }))
+          : [],
+      }
+    : { complete: true, gaps: [] };
+
+  return lowerTemplate({
+    html: templateContent,
+    scopeOwner: ceName,
+    catalog,
+    vocabulary: newVocab,
+    completeness,
+  });
+}
+
+// Re-export new types for test files
+import type {
+  ElementSemantics,
+  AttributeSemantics,
+  ScopeFrame,
+} from "../../out/core/template/semantic-analysis.js";
+
+export type {
+  TemplateSemantics,
+  ElementSemantics,
+  AttributeSemantics,
+  Classification,
+  ClassificationCategory,
+  BindingTarget,
+  ScopeFrame,
+  ScopeFrameKind,
+  LocalBinding,
+  ControllerSemantics,
+  ElementResolution,
+  TextSemantics,
+  GapSignal,
+} from "../../out/core/template/semantic-analysis.js";
+
+// =============================================================================
+// New Path Assertion Helpers
+// =============================================================================
+
+/**
+ * Find an element in new-path TemplateSemantics by tag name.
+ */
+export function findElement(
+  semantics: TemplateSemantics,
+  tagName: string,
+): ElementSemantics {
+  const el = semantics.elements.find(e => e.tagName.toLowerCase() === tagName.toLowerCase());
+  if (!el) {
+    throw new Error(
+      `[NEW] No element '${tagName}' found. ` +
+      `Elements: [${semantics.elements.map(e => e.tagName).join(', ')}]`
+    );
+  }
+  return el;
+}
+
+/**
+ * Find all elements in new-path TemplateSemantics by tag name.
+ */
+export function findElements(
+  semantics: TemplateSemantics,
+  tagName: string,
+): ElementSemantics[] {
+  return semantics.elements.filter(e => e.tagName.toLowerCase() === tagName.toLowerCase());
+}
+
+/**
+ * Find an attribute in new-path ElementSemantics by raw name.
+ */
+export function findAttr(
+  el: ElementSemantics,
+  attrName: string,
+): AttributeSemantics {
+  const attr = el.attributes.find(a => a.rawName === attrName);
+  if (!attr) {
+    throw new Error(
+      `[NEW] No attribute '${attrName}' on <${el.tagName}>. ` +
+      `Attributes: [${el.attributes.map(a => a.rawName).join(', ')}]`
+    );
+  }
+  return attr;
+}
+
+/**
+ * Category name mapping from old to new.
+ */
+const CATEGORY_MAP: Record<string, string> = {
+  'special-attribute': 'special',
+  'captured-attribute': 'captured',
+  'spread-transferred': 'spread-transferred',
+  'override-bc': 'override-command',
+  'spread-value': 'spread-value',
+  'ce-bindable': 'element-bindable',
+  'custom-attribute': 'custom-attribute',
+  'template-controller': 'template-controller',
+  'plain-attribute': 'plain-attribute',
+};
+
+/**
+ * Assert classification on new-path attribute (using old-path category names
+ * for compatibility — maps automatically).
+ */
+export function assertClassified(
+  attr: AttributeSemantics,
+  step: number,
+  oldCategory: string,
+): void {
+  const newCategory = CATEGORY_MAP[oldCategory] ?? oldCategory;
+  if (attr.classification.step !== step) {
+    throw new Error(
+      `[NEW] Expected step ${step} but got ${attr.classification.step} ` +
+      `for '${attr.rawName}' (category: ${attr.classification.category})`
+    );
+  }
+  if (attr.classification.category !== newCategory) {
+    throw new Error(
+      `[NEW] Expected category '${newCategory}' but got '${attr.classification.category}' ` +
+      `for '${attr.rawName}' at step ${step}`
+    );
+  }
+}
+
+/**
+ * Assert CE resolution on new-path element.
+ */
+export function assertResolvedCe(
+  el: ElementSemantics,
+  expectedName: string,
+): void {
+  if (el.resolution.kind !== 'custom-element') {
+    throw new Error(
+      `[NEW] Expected CE resolution but got '${el.resolution.kind}' for <${el.tagName}>`
+    );
+  }
+  if (el.resolution.resource.name !== expectedName) {
+    throw new Error(
+      `[NEW] Expected CE '${expectedName}' but resolved '${el.resolution.resource.name}' for <${el.tagName}>`
+    );
+  }
+}
+
+/**
+ * Assert plain HTML resolution.
+ */
+export function assertPlainHtml(
+  el: ElementSemantics,
+): void {
+  if (el.resolution.kind !== 'plain-html') {
+    throw new Error(
+      `[NEW] Expected plain-html but got '${el.resolution.kind}' for <${el.tagName}>`
+    );
+  }
+}
+
+/**
+ * Assert not-found resolution with grounded flag.
+ */
+export function assertElementNotFound(
+  el: ElementSemantics,
+  grounded: boolean,
+): void {
+  if (el.resolution.kind !== 'not-found') {
+    throw new Error(
+      `[NEW] Expected not-found but got '${el.resolution.kind}' for <${el.tagName}>`
+    );
+  }
+  if (el.resolution.grounded !== grounded) {
+    throw new Error(
+      `[NEW] Expected grounded=${grounded} but got ${el.resolution.grounded} for <${el.tagName}>`
+    );
+  }
+}
+
+/**
+ * Assert no binding on new-path attribute.
+ */
+export function assertNoBinding(
+  attr: AttributeSemantics,
+): void {
+  if (attr.binding !== null) {
+    throw new Error(
+      `[NEW] Expected no binding but got '${attr.binding.kind}' for '${attr.rawName}'`
+    );
+  }
+}
+
+/**
+ * Assert binding kind and properties on new-path attribute.
+ */
+export function assertBinding(
+  attr: AttributeSemantics,
+  expected: {
+    kind?: string;
+    effectiveMode?: string;
+    property?: string;
+    expressionEntry?: string;
+  },
+): void {
+  if (!attr.binding) {
+    throw new Error(
+      `[NEW] Expected binding but got null for '${attr.rawName}'`
+    );
+  }
+  if (expected.kind !== undefined && attr.binding.kind !== expected.kind) {
+    throw new Error(
+      `[NEW] Expected binding kind '${expected.kind}' but got '${attr.binding.kind}' for '${attr.rawName}'`
+    );
+  }
+  if (expected.effectiveMode !== undefined) {
+    const mode = 'effectiveMode' in attr.binding ? (attr.binding as any).effectiveMode : undefined;
+    if (mode !== expected.effectiveMode) {
+      throw new Error(
+        `[NEW] Expected mode '${expected.effectiveMode}' but got '${mode}' for '${attr.rawName}'`
+      );
+    }
+  }
+  if (expected.property !== undefined) {
+    const prop = 'property' in attr.binding ? (attr.binding as any).property
+      : 'targetProperty' in attr.binding ? (attr.binding as any).targetProperty
+      : 'bindable' in attr.binding ? (attr.binding as any).bindable?.property
+      : undefined;
+    if (prop !== expected.property) {
+      throw new Error(
+        `[NEW] Expected property '${expected.property}' but got '${prop}' for '${attr.rawName}'`
+      );
+    }
+  }
+  if (expected.expressionEntry !== undefined) {
+    const entry = 'expressionEntry' in attr.binding ? (attr.binding as any).expressionEntry : undefined;
+    if (entry !== expected.expressionEntry) {
+      throw new Error(
+        `[NEW] Expected expressionEntry '${expected.expressionEntry}' but got '${entry}' for '${attr.rawName}'`
+      );
+    }
+  }
+}
+
+/**
+ * Collect scope chain from new-path ScopeFrame linked list into an array of kinds.
+ */
+export function collectScopeChain(
+  frame: ScopeFrame,
+): string[] {
+  const chain: string[] = [];
+  let current: ScopeFrame | null = frame;
+  while (current) {
+    chain.push(current.kind);
+    current = current.parent;
+  }
+  return chain;
+}
+
+/**
+ * Assert scope chain on new-path element matches expected kinds.
+ */
+export function assertScopeChain(
+  el: ElementSemantics,
+  expectedKinds: string[],
+): void {
+  const chain = collectScopeChain(el.frame);
+  const expected = expectedKinds.join(' → ');
+  const actual = chain.join(' → ');
+  if (JSON.stringify(chain) !== JSON.stringify(expectedKinds)) {
+    throw new Error(
+      `[NEW] Expected scope chain [${expected}] but got [${actual}] for <${el.tagName}>`
+    );
+  }
+}
+
+/**
+ * Assert that the new-path element produces no Aurelia-specific bindings
+ * (rung 4: not applicable).
+ */
+export function assertNotApplicable(
+  el: ElementSemantics,
+): void {
+  for (const attr of el.attributes) {
+    if (attr.binding !== null) {
+      throw new Error(
+        `[NEW] Expected no Aurelia bindings on <${el.tagName}> but '${attr.rawName}' has binding kind '${attr.binding.kind}'`
+      );
+    }
+  }
 }
