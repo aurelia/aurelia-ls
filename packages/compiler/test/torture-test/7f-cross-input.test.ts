@@ -132,21 +132,26 @@ describe("7F-2: Cyclic import edit → re-convergence", () => {
       export const REGISTRY_REF = Registry;
     `);
 
-    // The CE should now be named 'gadget' (constant propagated through cycle)
+    // The CE should now be named 'gadget'. The constant DEFAULT_NAME
+    // is a tier B static string literal — the interpreter must resolve
+    // it through the circular import and propagate the new value to
+    // registry's name field. This is the re-convergence claim.
     const name = session.pull("custom-element:gadget", "name");
+    expect(name).toBe("gadget");
+  });
 
-    // Note: this depends on the interpreter resolving the constant
-    // through the circular import. If it can't resolve 'gadget'
-    // through the cycle, the name stays 'widget'. Either way, the
-    // conclusion for the OLD name should have changed.
-    if (name === "gadget") {
-      // Full cycle resolution worked
-      expect(name).toBe("gadget");
-    } else {
-      // Constants across cycles may not resolve — the old CE is still there
-      const oldName = session.pull("custom-element:widget", "name");
-      expect(oldName).toBe("widget");
-    }
+  it("old CE name no longer resolves after constant change", () => {
+    session.editFile("/src/constants.ts", `
+      import { Registry } from './registry';
+      export const DEFAULT_NAME = 'gadget';
+      export const REGISTRY_REF = Registry;
+    `);
+
+    // The CE 'widget' should no longer exist — it was renamed to 'gadget'
+    // through the constant propagation. This verifies the old identity
+    // was replaced, not duplicated.
+    const oldName = session.pull("custom-element:widget", "name");
+    expect(oldName).toBeUndefined();
   });
 });
 

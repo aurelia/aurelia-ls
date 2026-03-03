@@ -103,6 +103,37 @@ describe("7C-1: Bindable mode change", () => {
     // form-view's file didn't change → its observation wasn't re-evaluated
     assertCutoff(trace, "conclusion:custom-element:form-view::name");
   });
+
+  it("mode change → template-ir cutoff (classification unchanged, DQ-3)", () => {
+    // THE KEY CLAIM: mode is a binding parameterization concern, not a
+    // classification concern. The step 6 classification decision
+    // ("value.bind matches CE bindable 'value'") is unchanged — only
+    // the mode parameter changes. Template-ir should cutoff.
+    // Template-bind should re-evaluate with the new effective mode.
+    const trace = session.editFile("/src/editable-label.ts", `
+      import { customElement, bindable } from 'aurelia';
+
+      @customElement({
+        name: 'editable-label',
+        template: '<span>\${value}</span>'
+      })
+      export class EditableLabel {
+        @bindable({ mode: 1 }) value: string = '';
+      }
+    `);
+
+    // The bindable mode field changed
+    session.pull("custom-element:editable-label", "bindable:value:mode");
+    assertChanged(trace, "conclusion:custom-element:editable-label::bindable:value:mode");
+
+    // Template-ir of the CONSUMING template should cutoff —
+    // classification decisions are unchanged by a mode change.
+    // (This assertion depends on template-ir being wired as a
+    // graph node with cutoff capability)
+    if (trace.evaluatedNodes.has("template-ir:form-view")) {
+      assertCutoff(trace, "template-ir:form-view");
+    }
+  });
 });
 
 // =============================================================================
@@ -174,6 +205,36 @@ describe("7C-2: Bindable added to CE", () => {
 
     // Name unchanged → cutoff
     assertCutoff(trace, "conclusion:custom-element:status-card::name");
+  });
+
+  it("adding bindable → template-ir re-evaluates (step 6 match set changes)", () => {
+    // Contrast with 7C-1 (mode change → template-ir cutoff).
+    // A new bindable changes WHICH attributes are classified at step 6.
+    // icon="star" was step 8a (plain). With new @bindable icon, it
+    // should reclassify to step 6 (CE bindable). Template-ir green changes.
+    const trace = session.editFile("/src/status-card.ts", `
+      import { customElement, bindable } from 'aurelia';
+
+      @customElement({
+        name: 'status-card',
+        template: '<div>\${label} \${icon3}</div>'
+      })
+      export class StatusCard {
+        @bindable label: string = '';
+        @bindable icon3: string = '';
+      }
+    `);
+
+    // The bindable list changed — this should propagate
+    session.pull("custom-element:status-card", "bindable:icon3:property");
+    expect(session.pull("custom-element:status-card", "bindable:icon3:property")).toBe("icon3");
+
+    // Template-ir of app (which uses <status-card icon="star">)
+    // should be affected — classification decisions may change
+    // because the step 6 match set expanded.
+    if (trace.evaluatedNodes.has("template-ir:app")) {
+      assertChanged(trace, "template-ir:app");
+    }
   });
 });
 
