@@ -252,9 +252,9 @@ function scanDefineCallsInFile(
   // Collect expression statements, including those inside if-blocks
   // at the module level. D10: static analysis produces gaps, never
   // silent swallowing — conditional define() calls are still recognized.
-  const exprStmts = collectModuleLevelExpressions(sf.statements);
+  const collected = collectModuleLevelExpressions(sf.statements);
 
-  for (const exprStmt of exprStmts) {
+  for (const { stmt: exprStmt } of collected) {
     const expr = transformExpression(exprStmt.expression, sf);
     const resolved = resolveInScope(expr, scope);
     const fullyResolved = resolveWithTracer(resolved, scope, tracingResolver, filePath);
@@ -289,38 +289,44 @@ function scanDefineCallsInFile(
   }
 }
 
+interface CollectedExpression {
+  stmt: ts.ExpressionStatement;
+  conditional: boolean;
+}
+
 /**
  * Collect expression statements from module-level statements,
  * descending into if-blocks and plain blocks but NOT into
- * function/class bodies. This finds define() calls inside
- * conditionals (D10: produce gaps, never swallow).
+ * function/class bodies. Tracks whether each expression is inside
+ * a conditional (for gap generation on conditional registrations).
  */
 function collectModuleLevelExpressions(
   statements: ts.NodeArray<ts.Statement> | readonly ts.Statement[],
-): ts.ExpressionStatement[] {
-  const result: ts.ExpressionStatement[] = [];
+  conditional: boolean = false,
+): CollectedExpression[] {
+  const result: CollectedExpression[] = [];
 
   for (const stmt of statements) {
     if (ts.isExpressionStatement(stmt)) {
-      result.push(stmt);
+      result.push({ stmt, conditional });
     } else if (ts.isIfStatement(stmt)) {
-      // Descend into if/else blocks
+      // Descend into if/else blocks — expressions inside are conditional
       if (ts.isBlock(stmt.thenStatement)) {
-        result.push(...collectModuleLevelExpressions(stmt.thenStatement.statements));
+        result.push(...collectModuleLevelExpressions(stmt.thenStatement.statements, true));
       } else if (ts.isExpressionStatement(stmt.thenStatement)) {
-        result.push(stmt.thenStatement);
+        result.push({ stmt: stmt.thenStatement, conditional: true });
       }
       if (stmt.elseStatement) {
         if (ts.isBlock(stmt.elseStatement)) {
-          result.push(...collectModuleLevelExpressions(stmt.elseStatement.statements));
+          result.push(...collectModuleLevelExpressions(stmt.elseStatement.statements, true));
         } else if (ts.isExpressionStatement(stmt.elseStatement)) {
-          result.push(stmt.elseStatement);
+          result.push({ stmt: stmt.elseStatement, conditional: true });
         }
       }
     } else if (ts.isBlock(stmt)) {
-      result.push(...collectModuleLevelExpressions(stmt.statements));
+      result.push(...collectModuleLevelExpressions(stmt.statements, conditional));
     }
-    // Do NOT descend into function/class bodies — those are tier D
+    // Do NOT descend into function/class bodies
   }
 
   return result;
@@ -332,14 +338,11 @@ function collectModuleLevelExpressions(
 
 /**
  * Structured root registration observation.
- * Each entry identifies a class that was registered in the root container.
+ * Each entry is either a resolved class reference or a gap.
  */
-export interface RootRegistration {
-  /** Class name or import reference string */
-  readonly classRef: string;
-  /** File that contains the registration call site */
-  readonly site: NormalizedPath;
-}
+export type RootRegistrationEntry =
+  | { kind: 'class-ref'; classRef: string; site: NormalizedPath }
+  | { kind: 'gap'; reason: string; site: NormalizedPath };
 
 /**
  * Scan a file for Aurelia.register() call patterns.
@@ -349,8 +352,10 @@ export interface RootRegistration {
  * - new Aurelia().register(X)
  * - Chained: Aurelia.register(X).app(App).start()
  *
- * Each argument that resolves to a class reference becomes a root
- * registration observation on a well-known "root-registrations" resource.
+ * Each argument is classified: identifiers that reference classes
+ * become class-ref entries; opaque expressions (call results, spreads,
+ * property access chains) become gap entries. Gaps prevent scope
+ * completeness — the false-closed-world bug requires carrying them.
  */
 function scanRootRegistrations(
   sf: ts.SourceFile,
@@ -358,18 +363,23 @@ function scanRootRegistrations(
   config: InterpreterConfig,
   scope: import('../evaluate/value/types.js').LexicalScope,
 ): void {
-  const registrations: RootRegistration[] = [];
+  const entries: RootRegistrationEntry[] = [];
 
-  // Collect all expression statements at module level
-  const exprStmts = collectModuleLevelExpressions(sf.statements);
+  const collected = collectModuleLevelExpressions(sf.statements);
+  for (const { stmt: exprStmt, conditional } of collected) {
+    const beforeCount = entries.length;
+    findRegisterCalls(exprStmt.expression, sf, filePath, scope, entries);
 
-  for (const exprStmt of exprStmts) {
-    findRegisterCalls(exprStmt.expression, sf, filePath, scope, registrations);
+    // If this expression was inside a conditional (if-block) and it
+    // produced registrations, add a gap — we can't determine at compile
+    // time whether the branch executes.
+    if (conditional && entries.length > beforeCount) {
+      entries.push({ kind: 'gap', reason: 'conditional-registration', site: filePath });
+    }
   }
 
-  if (registrations.length === 0) return;
+  if (entries.length === 0) return;
 
-  // Emit root registration observations
   const { graph } = config;
   const evalHandle = graph.tracer.pushContext(filePath, 'root-registrations');
   if (evalHandle.isCycle) return;
@@ -377,25 +387,54 @@ function scanRootRegistrations(
   try {
     graph.tracer.readFile(filePath);
 
-    // Build green value: array of class ref strings
-    const elements = registrations.map(r =>
-      ({ kind: 'literal' as const, value: `class:${r.classRef}` })
-    );
-    const green = { kind: 'array' as const, elements };
-    const red = {
-      origin: 'source' as const,
-      state: 'known' as const,
-      value: registrations.map(r => `class:${r.classRef}`),
-    };
+    // Separate class refs and gaps
+    const classRefs = entries.filter(e => e.kind === 'class-ref') as Extract<RootRegistrationEntry, { kind: 'class-ref' }>[];
+    const gapEntries = entries.filter(e => e.kind === 'gap') as Extract<RootRegistrationEntry, { kind: 'gap' }>[];
 
-    graph.observations.registerObservation(
-      'root-registrations',
-      'registrations',
-      { tier: 'analysis-explicit', form: 'aurelia-register' },
-      green,
-      red as any,
-      evalHandle.nodeId,
-    );
+    // Emit registrations observation (class refs)
+    if (classRefs.length > 0 || gapEntries.length > 0) {
+      const elements = classRefs.map(r =>
+        ({ kind: 'literal' as const, value: `class:${r.classRef}` })
+      );
+      const green = { kind: 'array' as const, elements };
+      const red = {
+        origin: 'source' as const,
+        state: 'known' as const,
+        value: classRefs.map(r => `class:${r.classRef}`),
+      };
+
+      graph.observations.registerObservation(
+        'root-registrations',
+        'registrations',
+        { tier: 'analysis-explicit', form: 'aurelia-register' },
+        green,
+        red as any,
+        evalHandle.nodeId,
+      );
+    }
+
+    // Emit gaps observation
+    if (gapEntries.length > 0) {
+      const gapReasons = gapEntries.map(g => g.reason);
+      const gapGreen = {
+        kind: 'array' as const,
+        elements: gapReasons.map(r => ({ kind: 'literal' as const, value: r })),
+      };
+      const gapRed = {
+        origin: 'source' as const,
+        state: 'known' as const,
+        value: gapReasons,
+      };
+
+      graph.observations.registerObservation(
+        'root-registrations',
+        'gaps',
+        { tier: 'analysis-explicit', form: 'aurelia-register' },
+        gapGreen,
+        gapRed as any,
+        evalHandle.nodeId,
+      );
+    }
   } finally {
     graph.tracer.popContext(evalHandle);
   }
@@ -405,35 +444,28 @@ function scanRootRegistrations(
  * Walk a call chain to find .register() calls on Aurelia receivers.
  *
  * Handles chaining: Aurelia.register(X).app(App).start()
- * The AST for this is nested: start(app(register(Aurelia, X), App))
- * We walk the receiver chain (each call's callee.expression) to find
- * all .register() calls.
+ * The AST is nested: start(app(register(Aurelia, X), App))
+ * We walk the receiver chain to find all .register() calls.
  */
 function findRegisterCalls(
   expr: ts.Expression,
   sf: ts.SourceFile,
   filePath: NormalizedPath,
   scope: import('../evaluate/value/types.js').LexicalScope,
-  out: RootRegistration[],
+  out: RootRegistrationEntry[],
 ): void {
   if (!ts.isCallExpression(expr)) return;
 
   const callee = expr.expression;
   if (!ts.isPropertyAccessExpression(callee)) return;
 
-  // Check if this is a .register() call on an Aurelia receiver
   if (callee.name.text === 'register' && isAureliaReceiver(callee.expression)) {
     for (const arg of expr.arguments) {
-      const classRef = extractClassRefFromArg(arg, sf, scope);
-      if (classRef) {
-        out.push({ classRef, site: filePath });
-      }
+      const entry = classifyRegisterArg(arg, filePath);
+      out.push(entry);
     }
   }
 
-  // Walk the receiver chain for deeper .register() calls
-  // E.g., Aurelia.register(A).register(B).app(C).start()
-  // The receiver of .app() is .register(B), whose receiver is .register(A)
   if (ts.isCallExpression(callee.expression)) {
     findRegisterCalls(callee.expression, sf, filePath, scope, out);
   }
@@ -441,13 +473,36 @@ function findRegisterCalls(
 
 /**
  * Check if an expression is an Aurelia receiver:
- * - Identifier `Aurelia`
+ * - Identifier `Aurelia` (direct or alias via `const au = Aurelia`)
  * - `new Aurelia()`
- * - Import of `Aurelia` / `default` from 'aurelia'
+ * - Chained call result (e.g., `Aurelia.register(X)` returns Aurelia)
  */
 function isAureliaReceiver(expr: ts.Expression): boolean {
   // Direct identifier: Aurelia
-  if (ts.isIdentifier(expr) && expr.text === 'Aurelia') return true;
+  if (ts.isIdentifier(expr)) {
+    if (expr.text === 'Aurelia') return true;
+    // Check if this identifier is an alias: `const au = Aurelia`
+    // Walk up to find the variable declaration
+    const sf = expr.getSourceFile();
+    if (sf) {
+      for (const stmt of sf.statements) {
+        if (ts.isVariableStatement(stmt)) {
+          for (const decl of stmt.declarationList.declarations) {
+            if (ts.isIdentifier(decl.name) && decl.name.text === expr.text) {
+              if (decl.initializer && ts.isIdentifier(decl.initializer) && decl.initializer.text === 'Aurelia') {
+                return true;
+              }
+              if (decl.initializer && ts.isNewExpression(decl.initializer) &&
+                  ts.isIdentifier(decl.initializer.expression) && decl.initializer.expression.text === 'Aurelia') {
+                return true;
+              }
+            }
+          }
+        }
+      }
+    }
+    return false;
+  }
 
   // new Aurelia()
   if (ts.isNewExpression(expr)) {
@@ -466,32 +521,46 @@ function isAureliaReceiver(expr: ts.Expression): boolean {
 }
 
 /**
- * Extract a class name from a registration argument.
+ * Classify a registration argument as a class reference or gap.
  *
- * Args can be:
- * - Identifier (local class reference)
- * - Import (cross-file class reference)
- * - Call expression (plugin: SomePlugin.configure(...)) — gap
+ * Bare identifiers → class-ref (resolved later).
+ * Everything else (calls, spreads, property access chains,
+ * template literals, etc.) → gap. The false-closed-world bug
+ * requires treating anything we can't statically resolve as a
+ * gap rather than silently ignoring it.
  */
-function extractClassRefFromArg(
+function classifyRegisterArg(
   arg: ts.Expression,
-  sf: ts.SourceFile,
-  scope: import('../evaluate/value/types.js').LexicalScope,
-): string | null {
+  filePath: NormalizedPath,
+): RootRegistrationEntry {
+  // Bare identifier: class reference (most common case)
   if (ts.isIdentifier(arg)) {
-    return arg.text;
+    return { kind: 'class-ref', classRef: arg.text, site: filePath };
   }
 
-  // Spread: ...args — gap
+  // Spread: ...getPlugins() or ...array — opaque
   if (ts.isSpreadElement(arg)) {
-    return null;
+    const inner = arg.expression;
+    const desc = ts.isIdentifier(inner) ? `spread:${inner.text}`
+      : ts.isCallExpression(inner) ? 'spread:opaque-call'
+      : 'spread:opaque';
+    return { kind: 'gap', reason: desc, site: filePath };
   }
 
-  // Property access: SomeModule.SomeClass
+  // Call expression: getPlugins(), Plugin.configure(...), etc. — opaque
+  if (ts.isCallExpression(arg)) {
+    const callee = arg.expression;
+    const desc = ts.isIdentifier(callee) ? `opaque-call:${callee.text}`
+      : ts.isPropertyAccessExpression(callee) ? `opaque-call:${callee.name.text}`
+      : 'opaque-call';
+    return { kind: 'gap', reason: desc, site: filePath };
+  }
+
+  // Property access: SomeModule.SomeClass — might be a class, treat as ref
   if (ts.isPropertyAccessExpression(arg)) {
-    return arg.name.text;
+    return { kind: 'class-ref', classRef: arg.name.text, site: filePath };
   }
 
-  // Other complex expressions (function calls, etc.) — gap
-  return null;
+  // Anything else: conditional expressions, template literals, etc.
+  return { kind: 'gap', reason: 'opaque-expression', site: filePath };
 }

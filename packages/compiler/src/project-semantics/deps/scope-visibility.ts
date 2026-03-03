@@ -1,22 +1,22 @@
 /**
- * Scope-Visibility Evaluation — Tier 4 Node Layer
+ * Scope-Visibility Evaluation
  *
  * Determines which resources are visible in which template scopes.
- * Consumes tier 3 conclusions (resource definitions) and registration
+ * Consumes resource conclusions (definitions) and registration
  * observations (dependencies, root registrations, template imports)
  * to produce per-scope visibility sets and completeness claims.
  *
- * Two-level lookup (from F5 scope-model §Resource Visibility):
- * Container.find() checks local container → root container only.
- * No intermediate ancestor traversal. A resource is either local
- * (registered in the CE's own container) or global (root container).
+ * Two-level lookup (Container.find() semantics, verified from
+ * di.container.ts:556-570):
+ *   1. Check local container (the CE's own resource map)
+ *   2. Check root container (the application-level resource map)
+ *   3. No intermediate ancestor containers are checked
  *
- * Completeness (from L1 claim-model §Negative assertions require completeness):
- * A scope is complete when all registration paths are analyzed and
- * deterministic. Positive claims don't need completeness. Negative
- * claims ("resource X is absent") need completeness to be safe.
- * Root incompleteness propagates to all scopes (two-level lookup
- * always checks root).
+ * Completeness: a scope is complete when all registration paths are
+ * analyzed and deterministic. Positive claims don't need completeness.
+ * Negative claims ("resource X is absent") require completeness to be
+ * safe for diagnostics. Root incompleteness propagates to all scopes
+ * because two-level lookup always checks root.
  */
 
 import type { GreenValue } from '../../value/green.js';
@@ -30,17 +30,11 @@ import type {
 import { conclusionNodeId } from './types.js';
 
 // =============================================================================
-// Scope-Visibility Green Value
+// Public Types
 // =============================================================================
 
-/**
- * Structural content for a scope-visibility node.
- * Internable for O(1) cutoff via pointer equality.
- */
 export interface ScopeVisibilityGreen {
-  /** Resources visible in this scope, keyed by resource name */
   readonly visible: ReadonlyMap<string, VisibilityEntry>;
-  /** Whether the scope's resource set is exhaustively known */
   readonly completeness: ScopeCompleteness;
 }
 
@@ -58,14 +52,8 @@ export interface RegistrationGap {
   readonly reason: string;
 }
 
-// =============================================================================
-// Scope-Visibility Red Value (provenance)
-// =============================================================================
-
 export interface ScopeVisibilityRed {
-  /** The CE that owns this scope */
   readonly scopeOwner: string;
-  /** Per-resource registration provenance */
   readonly registrations: ReadonlyMap<string, RegistrationProvenance>;
 }
 
@@ -75,41 +63,78 @@ export interface RegistrationProvenance {
 }
 
 // =============================================================================
-// Scope-Visibility Evaluation
+// Standard Builtins — Product Postulates (L3 §7.1)
 // =============================================================================
 
 /**
- * Build scope-visibility claims for all recognized CEs in the project.
+ * Framework resources that are always present in the root container
+ * when StandardConfiguration is registered (which happens implicitly
+ * via `new Aurelia()` or explicitly via `Aurelia.register(StandardConfiguration)`).
  *
- * This is the tier 4 evaluation callback. It:
- * 1. Collects all recognized CEs from conclusions (kind = 'custom-element')
- * 2. For each CE, resolves its local registrations (dependencies + template imports + local elements)
- * 3. Collects root registrations (Aurelia.register + builtins)
- * 4. Produces a ScopeVisibilityGreen per CE scope
- *
- * Returns a map from scope owner name to visibility result.
+ * These are product postulates — the compiler knows they exist without
+ * tracing the 5-hop cross-package StandardConfiguration.register() chain.
  */
+const STANDARD_BUILTINS: readonly { name: string; kind: string }[] = [
+  // Template controllers
+  { name: 'if', kind: 'template-controller' },
+  { name: 'else', kind: 'template-controller' },
+  { name: 'repeat', kind: 'template-controller' },
+  { name: 'with', kind: 'template-controller' },
+  { name: 'switch', kind: 'template-controller' },
+  { name: 'case', kind: 'template-controller' },
+  { name: 'default-case', kind: 'template-controller' },
+  { name: 'promise', kind: 'template-controller' },
+  { name: 'pending', kind: 'template-controller' },
+  { name: 'then', kind: 'template-controller' },
+  { name: 'catch', kind: 'template-controller' },
+  { name: 'portal', kind: 'template-controller' },
+  // Custom attributes
+  { name: 'focus', kind: 'custom-attribute' },
+  { name: 'show', kind: 'custom-attribute' },
+  { name: 'portal', kind: 'custom-attribute' },
+  // Value converters
+  { name: 'sanitize', kind: 'value-converter' },
+  { name: 'json', kind: 'value-converter' },
+  // Binding behaviors
+  { name: 'attr', kind: 'binding-behavior' },
+  { name: 'self', kind: 'binding-behavior' },
+  { name: 'updateTrigger', kind: 'binding-behavior' },
+  { name: 'oneTime', kind: 'binding-behavior' },
+  { name: 'toView', kind: 'binding-behavior' },
+  { name: 'fromView', kind: 'binding-behavior' },
+  { name: 'twoWay', kind: 'binding-behavior' },
+  { name: 'signal', kind: 'binding-behavior' },
+  { name: 'debounce', kind: 'binding-behavior' },
+  { name: 'throttle', kind: 'binding-behavior' },
+  // Custom elements
+  { name: 'au-slot', kind: 'custom-element' },
+  { name: 'au-compose', kind: 'custom-element' },
+];
+
+// =============================================================================
+// Entry Point
+// =============================================================================
+
 export function evaluateScopeVisibility(
   graph: ProjectDepGraph,
 ): Map<string, { green: ScopeVisibilityGreen; red: ScopeVisibilityRed }> {
   const results = new Map<string, { green: ScopeVisibilityGreen; red: ScopeVisibilityRed }>();
 
-  // Step 1: Collect all recognized resources and their identities
+  // Build indexes used by all scope evaluations
   const resourceIndex = buildResourceIndex(graph);
+  const classNameIndex = buildClassNameIndex(graph);
+  const fileResourceIndex = buildFileResourceIndex(graph);
 
-  // Step 2: Build className → resourceKey index for dependency resolution
-  const classNameIndex = buildClassNameIndex(graph, resourceIndex);
+  // Collect root-level registrations (shared by all scopes)
+  const rootResult = collectRootRegistrations(graph, classNameIndex, resourceIndex);
 
-  // Step 3: Collect root registrations
-  const rootResult = collectRootRegistrations(graph, classNameIndex);
-
-  // Step 4: For each CE, build scope visibility
+  // Evaluate visibility for each CE scope
   for (const resourceKey of resourceIndex.keys()) {
     if (!resourceKey.startsWith('custom-element:')) continue;
 
     const ceName = resourceKey.slice('custom-element:'.length);
     const scopeResult = buildScopeVisibility(
-      graph, resourceKey, classNameIndex, rootResult,
+      graph, resourceKey, classNameIndex, fileResourceIndex, rootResult,
     );
 
     results.set(ceName, scopeResult);
@@ -119,13 +144,14 @@ export function evaluateScopeVisibility(
 }
 
 // =============================================================================
-// Resource Index
+// Indexes
 // =============================================================================
 
 interface ResourceIdentity {
   kind: string;
   name: string;
   className: string;
+  file?: string;
 }
 
 /**
@@ -135,21 +161,21 @@ function buildResourceIndex(graph: ProjectDepGraph): Map<string, ResourceIdentit
   const index = new Map<string, ResourceIdentity>();
   const conclusionNodes = graph.nodesByKind('conclusion');
 
-  // Group conclusions by resource key (strip field path)
   const resourceKeys = new Set<string>();
   for (const id of conclusionNodes) {
-    // conclusion:custom-element:my-comp::name → custom-element:my-comp
     const match = id.match(/^conclusion:([^:]+:[^:]+)::/);
     if (match) resourceKeys.add(match[1]!);
   }
 
   for (const resourceKey of resourceKeys) {
+    if (resourceKey === 'root-registrations') continue;
     const kind = pullConclusionValue(graph, resourceKey, 'kind') as string | undefined;
     const name = pullConclusionValue(graph, resourceKey, 'name') as string | undefined;
     const className = pullConclusionValue(graph, resourceKey, 'className') as string | undefined;
+    const file = pullConclusionValue(graph, resourceKey, 'file') as string | undefined;
 
     if (kind && name) {
-      index.set(resourceKey, { kind, name, className: className ?? '' });
+      index.set(resourceKey, { kind, name, className: className ?? '', file });
     }
   }
 
@@ -157,19 +183,115 @@ function buildResourceIndex(graph: ProjectDepGraph): Map<string, ResourceIdentit
 }
 
 /**
- * Build className → resourceKey index for resolving class references
- * in dependencies arrays.
+ * Build className → resourceKey index from ALL observation nodes.
+ *
+ * This is critical: when two classes produce the same resource name
+ * (e.g., SharedEl and LocalSharedEl both declare name: 'shared-el'),
+ * convergence picks one className as the winner for the conclusion.
+ * But dependency arrays reference class names (class:LocalSharedEl),
+ * not resource names. Both classNames must map to the resourceKey.
+ *
+ * Strategy: parse observation node IDs to extract (className, resourceKey)
+ * pairs. Observation IDs encode the resource key and the source eval node.
+ * We extract the eval unit key (which is typically the className) and
+ * the resource key from the observation ID structure.
  */
-function buildClassNameIndex(
-  graph: ProjectDepGraph,
-  resourceIndex: Map<string, ResourceIdentity>,
-): Map<string, string> {
+function buildClassNameIndex(graph: ProjectDepGraph): Map<string, string> {
   const index = new Map<string, string>();
-  for (const [resourceKey, identity] of resourceIndex) {
-    if (identity.className) {
-      index.set(identity.className, resourceKey);
+
+  // Approach: className observations have IDs like:
+  //   obs:custom-element:shared-el:className:eval:/src/local-shared-el.ts#LocalSharedEl
+  // The eval node key after '#' is the className, and the resource key
+  // is between 'obs:' and ':className:'.
+  const observationNodes = graph.nodesByKind('observation');
+
+  for (const id of observationNodes) {
+    if (!id.includes(':className:')) continue;
+
+    // Find the eval node reference — it contains the className
+    const evalPrefix = ':eval:';
+    const evalIdx = id.indexOf(evalPrefix);
+    if (evalIdx === -1) continue;
+
+    const evalPart = id.slice(evalIdx + evalPrefix.length);
+    const hashIdx = evalPart.indexOf('#');
+    if (hashIdx === -1) continue;
+
+    const className = evalPart.slice(hashIdx + 1);
+    if (!className) continue;
+
+    // Extract resourceKey: between 'obs:' and ':className:'
+    const classNameFieldIdx = id.indexOf(':className:');
+    const resourceKey = id.slice(4, classNameFieldIdx); // skip 'obs:'
+
+    if (resourceKey && className) {
+      index.set(className, resourceKey);
     }
   }
+
+  // Also add from conclusions (catches resources whose observations
+  // don't follow the standard pattern, e.g., builtin fixtures)
+  const conclusionNodes = graph.nodesByKind('conclusion');
+  for (const id of conclusionNodes) {
+    if (!id.endsWith('::className')) continue;
+    const resourceKey = id.slice(11, -11); // strip 'conclusion:' and '::className'
+    const className = pullConclusionValue(graph, resourceKey, 'className');
+    if (typeof className === 'string' && className && !index.has(className)) {
+      index.set(className, resourceKey);
+    }
+  }
+
+  return index;
+}
+
+/**
+ * Build file path → resource keys index.
+ * Used to resolve <import from="./path"> elements to the resources
+ * defined in the imported file.
+ */
+function buildFileResourceIndex(graph: ProjectDepGraph): Map<string, string[]> {
+  const index = new Map<string, string[]>();
+  const evalNodes = graph.nodesByKind('evaluation');
+
+  for (const id of evalNodes) {
+    // eval:/src/foo.ts#ClassName → file=/src/foo.ts
+    if (!id.startsWith('eval:')) continue;
+    const rest = id.slice(5);
+    const hashIdx = rest.indexOf('#');
+    if (hashIdx === -1) continue;
+
+    const file = rest.slice(0, hashIdx);
+    const unitKey = rest.slice(hashIdx + 1);
+
+    // Check if this evaluation produced a recognized resource
+    // by looking for observation nodes from this eval
+    const obsPrefix = `obs:`;
+    const obsNodes = graph.nodesByPrefix(obsPrefix);
+    for (const obsId of obsNodes) {
+      if (obsId.endsWith(`:${id}`)) {
+        // Extract resourceKey from observation
+        const inner = obsId.slice(4); // strip 'obs:'
+        const lastColonBeforeEval = inner.lastIndexOf(`:${id}`);
+        const beforeEval = inner.slice(0, lastColonBeforeEval);
+        // beforeEval is "resourceKey:fieldPath"
+        const fieldSep = beforeEval.lastIndexOf(':');
+        if (fieldSep > 0) {
+          const resourceKey = beforeEval.slice(0, fieldSep);
+          if (resourceKey.includes(':') && !resourceKey.startsWith('root-registrations')) {
+            let fileResources = index.get(file);
+            if (!fileResources) {
+              fileResources = [];
+              index.set(file, fileResources);
+            }
+            if (!fileResources.includes(resourceKey)) {
+              fileResources.push(resourceKey);
+            }
+          }
+        }
+      }
+    }
+  }
+
   return index;
 }
 
@@ -178,24 +300,19 @@ function buildClassNameIndex(
 // =============================================================================
 
 interface RootRegistrationResult {
-  /** Resources registered at root level, keyed by resource name */
   resources: Map<string, VisibilityEntry>;
-  /** Completeness of the root scope */
   completeness: ScopeCompleteness;
 }
 
-/**
- * Collect root-level registrations from Aurelia.register() observations
- * and builtin fixtures.
- */
 function collectRootRegistrations(
   graph: ProjectDepGraph,
   classNameIndex: Map<string, string>,
+  resourceIndex: Map<string, ResourceIdentity>,
 ): RootRegistrationResult {
   const resources = new Map<string, VisibilityEntry>();
   const gaps: RegistrationGap[] = [];
 
-  // Pull root registration observations
+  // 1. Root registration observations from Aurelia.register() scanning
   const rootRegs = pullConclusionValue(graph, 'root-registrations', 'registrations');
   if (Array.isArray(rootRegs)) {
     for (const ref of rootRegs) {
@@ -203,51 +320,66 @@ function collectRootRegistrations(
         const className = ref.slice(6);
         const resourceKey = classNameIndex.get(className);
         if (resourceKey) {
-          // Extract the resource name from the key
-          const colonIdx = resourceKey.indexOf(':');
-          const name = colonIdx >= 0 ? resourceKey.slice(colonIdx + 1) : resourceKey;
+          const name = resourceKey.slice(resourceKey.indexOf(':') + 1);
           resources.set(name, { resourceKey, lookupLevel: 'root' });
+        } else {
+          // className not found as a recognized resource.
+          // This could be a non-resource registration (service, plugin object)
+          // which constitutes a registration gap — we can't determine what
+          // resources the registration produces.
+          gaps.push({
+            site: 'root',
+            reason: `opaque-class-ref:${className}`,
+          });
         }
-        // If className not found in index, it might be a non-resource registration
-        // (e.g., a service, plugin config object) — skip silently
-      } else if (typeof ref === 'object' && ref !== null && 'kind' in ref && ref.kind === 'unknown') {
-        // Gap from unresolvable registration
-        gaps.push({ site: 'root', reason: (ref as any).reasonKind ?? 'opaque-registration' });
+      } else if (typeof ref === 'string' && ref.startsWith('gap:')) {
+        gaps.push({ site: 'root', reason: ref.slice(4) });
       }
     }
   }
 
-  // Pull builtin resources (injected via injectFixture with tier='builtin')
-  // Builtins are recognized resources with origin='builtin'
-  const conclusionNodes = graph.nodesByKind('conclusion');
-  const builtinResources = new Set<string>();
-  for (const id of conclusionNodes) {
-    const source = graph.observationSource(id);
-    if (source?.tier === 'builtin') {
-      const match = id.match(/^conclusion:([^:]+:[^:]+)::name$/);
-      if (match) builtinResources.add(match[1]!);
+  // 2. Check for root registration gaps from the observation layer
+  const rootGaps = pullConclusionValue(graph, 'root-registrations', 'gaps');
+  if (Array.isArray(rootGaps)) {
+    for (const gap of rootGaps) {
+      if (typeof gap === 'string') {
+        gaps.push({ site: 'root', reason: gap });
+      }
     }
   }
 
-  // Check observation nodes for builtin tier (observations feed conclusions)
+  // 3. Builtin resources from injected fixtures (tier='builtin')
   const observationNodes = graph.nodesByKind('observation');
+  const builtinResourceKeys = new Set<string>();
   for (const id of observationNodes) {
     const source = graph.observationSource(id);
     if (source?.tier === 'builtin') {
-      // Extract resource key from observation id: obs:resourceKey:fieldPath:evalNode
-      const parts = id.split(':');
-      if (parts.length >= 4) {
-        const resourceKey = `${parts[1]}:${parts[2]}`;
-        builtinResources.add(resourceKey);
+      // obs:{resourceKey}:{field}:{evalNode}
+      // Find the resourceKey by looking for conclusion nodes
+      if (id.includes(':name:')) {
+        const inner = id.slice(4); // strip 'obs:'
+        const nameIdx = inner.indexOf(':name:');
+        if (nameIdx > 0) {
+          builtinResourceKeys.add(inner.slice(0, nameIdx));
+        }
       }
     }
   }
 
-  for (const resourceKey of builtinResources) {
-    const colonIdx = resourceKey.indexOf(':');
-    const name = colonIdx >= 0 ? resourceKey.slice(colonIdx + 1) : resourceKey;
+  for (const resourceKey of builtinResourceKeys) {
+    const name = resourceKey.slice(resourceKey.indexOf(':') + 1);
     if (!resources.has(name)) {
       resources.set(name, { resourceKey, lookupLevel: 'root' });
+    }
+  }
+
+  // 4. Standard builtins (product postulates) — always present in root
+  for (const builtin of STANDARD_BUILTINS) {
+    if (!resources.has(builtin.name)) {
+      resources.set(builtin.name, {
+        resourceKey: `${builtin.kind}:${builtin.name}`,
+        lookupLevel: 'root',
+      });
     }
   }
 
@@ -262,19 +394,11 @@ function collectRootRegistrations(
 // Per-Scope Visibility
 // =============================================================================
 
-/**
- * Build scope visibility for a single CE.
- *
- * Two-level lookup:
- * 1. Local: CE's dependencies + template imports + local elements
- * 2. Root: Aurelia.register() + builtins
- *
- * Local takes precedence over root (shadowing).
- */
 function buildScopeVisibility(
   graph: ProjectDepGraph,
   ceResourceKey: string,
   classNameIndex: Map<string, string>,
+  fileResourceIndex: Map<string, string[]>,
   rootResult: RootRegistrationResult,
 ): { green: ScopeVisibilityGreen; red: ScopeVisibilityRed } {
   const visible = new Map<string, VisibilityEntry>();
@@ -282,68 +406,16 @@ function buildScopeVisibility(
   const localGaps: RegistrationGap[] = [];
   const ceName = ceResourceKey.slice('custom-element:'.length);
 
-  // Step 1: Collect local registrations from dependencies field
-  const deps = pullConclusionValue(graph, ceResourceKey, 'dependencies');
-  if (Array.isArray(deps)) {
-    for (const ref of deps) {
-      if (typeof ref === 'string' && ref.startsWith('class:')) {
-        const className = ref.slice(6);
-        const resourceKey = classNameIndex.get(className);
-        if (resourceKey) {
-          const colonIdx = resourceKey.indexOf(':');
-          const name = colonIdx >= 0 ? resourceKey.slice(colonIdx + 1) : resourceKey;
-          visible.set(name, { resourceKey, lookupLevel: 'local' });
-          registrations.set(name, { mechanism: 'dependencies-array', source: { tier: 'analysis-explicit', form: 'dependencies-array' } });
-        }
-      }
-      // Gaps from unresolvable deps
-      if (typeof ref === 'string' && ref.startsWith('<unresolvable:')) {
-        localGaps.push({ site: ceResourceKey, reason: ref });
-      }
-    }
-  }
+  // 1. Local registrations from dependencies field
+  resolveDependencies(graph, ceResourceKey, classNameIndex, visible, registrations, localGaps);
 
-  // Check dependencies:completeness for partial gaps
-  const depsCompleteness = pullConclusionValue(graph, ceResourceKey, 'dependencies:completeness');
-  if (depsCompleteness !== undefined) {
-    localGaps.push({ site: ceResourceKey, reason: 'partial-opaque-dependencies' });
-  }
+  // 2. Local registrations from <import from="..."> elements
+  resolveTemplateImports(graph, ceResourceKey, fileResourceIndex, visible, registrations);
 
-  // Step 2: Collect local registrations from template imports
-  const templateImports = pullConclusionValue(graph, ceResourceKey, 'template-imports');
-  if (Array.isArray(templateImports)) {
-    for (const importPath of templateImports) {
-      if (typeof importPath === 'string') {
-        // Template imports reference file paths — resolve to resource
-        // For now, record as import-based local registration
-        // The scope-visibility callback will match these to resources
-        // when the full module resolution is available
-        registrations.set(`import:${importPath}`, {
-          mechanism: 'import-element',
-          source: { tier: 'analysis-explicit', form: 'import-element' },
-        });
-      }
-    }
-  }
+  // 3. Local registrations from <template as-custom-element="...">
+  resolveLocalElements(graph, ceResourceKey, visible, registrations);
 
-  // Step 3: Collect local elements (as-custom-element)
-  const localElements = pullConclusionValue(graph, ceResourceKey, 'local-elements');
-  if (Array.isArray(localElements)) {
-    for (const name of localElements) {
-      if (typeof name === 'string') {
-        visible.set(name, {
-          resourceKey: `custom-element:${name}`,
-          lookupLevel: 'local',
-        });
-        registrations.set(name, {
-          mechanism: 'as-custom-element',
-          source: { tier: 'analysis-explicit', form: 'as-custom-element' },
-        });
-      }
-    }
-  }
-
-  // Step 4: Add root registrations (local takes precedence — shadowing)
+  // 4. Root registrations (local takes precedence — shadowing)
   for (const [name, entry] of rootResult.resources) {
     if (!visible.has(name)) {
       visible.set(name, entry);
@@ -354,35 +426,122 @@ function buildScopeVisibility(
     }
   }
 
-  // Step 5: Compute completeness
-  // Scope is complete iff:
-  //   1. Local registrations have no gaps
-  //   2. Root is complete (root gaps propagate to all scopes)
+  // 5. Compute completeness
   const allGaps = [...localGaps];
   if (rootResult.completeness.state === 'incomplete') {
-    allGaps.push(...rootResult.completeness.gaps.map(g => ({
-      ...g,
-      site: `root → ${g.site}`,
-    })));
+    for (const g of rootResult.completeness.gaps) {
+      allGaps.push({ site: `root → ${g.site}`, reason: g.reason });
+    }
   }
 
   const completeness: ScopeCompleteness = allGaps.length > 0
     ? { state: 'incomplete', gaps: allGaps }
     : { state: 'complete' };
 
-  const green: ScopeVisibilityGreen = { visible, completeness };
-  const red: ScopeVisibilityRed = { scopeOwner: ceName, registrations };
+  return {
+    green: { visible, completeness },
+    red: { scopeOwner: ceName, registrations },
+  };
+}
 
-  return { green, red };
+function resolveDependencies(
+  graph: ProjectDepGraph,
+  ceResourceKey: string,
+  classNameIndex: Map<string, string>,
+  visible: Map<string, VisibilityEntry>,
+  registrations: Map<string, RegistrationProvenance>,
+  gaps: RegistrationGap[],
+): void {
+  const deps = pullConclusionValue(graph, ceResourceKey, 'dependencies');
+  if (!Array.isArray(deps)) return;
+
+  for (const ref of deps) {
+    if (typeof ref === 'string' && ref.startsWith('class:')) {
+      const className = ref.slice(6);
+      const resourceKey = classNameIndex.get(className);
+      if (resourceKey) {
+        const name = resourceKey.slice(resourceKey.indexOf(':') + 1);
+        visible.set(name, { resourceKey, lookupLevel: 'local' });
+        registrations.set(name, {
+          mechanism: 'dependencies-array',
+          source: { tier: 'analysis-explicit', form: 'dependencies-array' },
+        });
+      }
+      // If className not in index: the class wasn't recognized as a resource.
+      // Not a gap — it might be a service, DI registration, etc.
+    }
+  }
+
+  // Check for gaps in the dependencies observation
+  const depsCompleteness = pullConclusionValue(graph, ceResourceKey, 'dependencies:completeness');
+  if (depsCompleteness !== undefined) {
+    gaps.push({ site: ceResourceKey, reason: 'partial-opaque-dependencies' });
+  }
+}
+
+function resolveTemplateImports(
+  graph: ProjectDepGraph,
+  ceResourceKey: string,
+  fileResourceIndex: Map<string, string[]>,
+  visible: Map<string, VisibilityEntry>,
+  registrations: Map<string, RegistrationProvenance>,
+): void {
+  const templateImports = pullConclusionValue(graph, ceResourceKey, 'template-imports');
+  if (!Array.isArray(templateImports)) return;
+
+  // Find the CE's own file to resolve relative import paths
+  const ceFile = findCeFile(graph, ceResourceKey);
+
+  for (const importPath of templateImports) {
+    if (typeof importPath !== 'string') continue;
+
+    // Resolve relative path
+    const resolvedPath = ceFile ? resolveRelativePath(ceFile, importPath) : importPath;
+
+    // Find resources defined in the imported file
+    const fileResources = fileResourceIndex.get(resolvedPath)
+      ?? fileResourceIndex.get(resolvedPath + '.ts')
+      ?? fileResourceIndex.get(resolvedPath.replace(/\.ts$/, ''));
+
+    if (fileResources) {
+      for (const resourceKey of fileResources) {
+        const name = resourceKey.slice(resourceKey.indexOf(':') + 1);
+        visible.set(name, { resourceKey, lookupLevel: 'local' });
+        registrations.set(name, {
+          mechanism: 'import-element',
+          source: { tier: 'analysis-explicit', form: 'import-element' },
+        });
+      }
+    }
+  }
+}
+
+function resolveLocalElements(
+  graph: ProjectDepGraph,
+  ceResourceKey: string,
+  visible: Map<string, VisibilityEntry>,
+  registrations: Map<string, RegistrationProvenance>,
+): void {
+  const localElements = pullConclusionValue(graph, ceResourceKey, 'local-elements');
+  if (!Array.isArray(localElements)) return;
+
+  for (const name of localElements) {
+    if (typeof name !== 'string') continue;
+    visible.set(name, {
+      resourceKey: `custom-element:${name}`,
+      lookupLevel: 'local',
+    });
+    registrations.set(name, {
+      mechanism: 'as-custom-element',
+      source: { tier: 'analysis-explicit', form: 'as-custom-element' },
+    });
+  }
 }
 
 // =============================================================================
-// Conclusion Pull Helper
+// Helpers
 // =============================================================================
 
-/**
- * Pull a conclusion value from the graph, triggering lazy evaluation.
- */
 function pullConclusionValue(
   graph: ProjectDepGraph,
   resourceKey: string,
@@ -395,4 +554,40 @@ function pullConclusionValue(
     return sourced.state === 'known' ? sourced.value : undefined;
   }
   return sourced.value;
+}
+
+function findCeFile(graph: ProjectDepGraph, ceResourceKey: string): string | undefined {
+  // Look for an evaluation node that produced observations for this CE
+  const evalNodes = graph.nodesByKind('evaluation');
+  for (const id of evalNodes) {
+    if (!id.startsWith('eval:')) continue;
+    const rest = id.slice(5);
+    const hashIdx = rest.indexOf('#');
+    if (hashIdx === -1) continue;
+    const file = rest.slice(0, hashIdx);
+
+    // Check if this evaluation has observation edges to this resource
+    const obsPrefix = `obs:${ceResourceKey}:`;
+    const obs = graph.nodesByPrefix(obsPrefix);
+    for (const obsId of obs) {
+      if (obsId.endsWith(`:${id}`)) return file;
+    }
+  }
+  return undefined;
+}
+
+function resolveRelativePath(fromFile: string, importPath: string): string {
+  if (!importPath.startsWith('.')) return importPath;
+
+  const fromDir = fromFile.slice(0, fromFile.lastIndexOf('/'));
+  const parts = importPath.split('/');
+  const resultParts = fromDir.split('/');
+
+  for (const part of parts) {
+    if (part === '.') continue;
+    if (part === '..') { resultParts.pop(); continue; }
+    resultParts.push(part);
+  }
+
+  return resultParts.join('/');
 }
