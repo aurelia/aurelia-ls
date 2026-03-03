@@ -24,6 +24,7 @@ import {
   assertPlainHtml,
   assertElementNotFound,
   pullValue,
+  pullBindables,
 } from "./harness.js";
 
 // =============================================================================
@@ -340,12 +341,10 @@ describe("6C-5: Non-existent bindable + complete CE", () => {
     // The key claim: simple-card's bindable list is COMPLETE.
     // All bindables are declared via @bindable decorator (deterministic).
     // The product can safely diagnose "subtitle does not exist on simple-card."
-    const bindables = pullValue(result.graph, "custom-element:simple-card", "bindables");
+    const bindables = pullBindables(result.graph, "custom-element:simple-card");
     expect(bindables).toBeDefined();
     // title should be in the bindable list
-    expect(typeof bindables === 'object' && bindables !== null &&
-      'title' in (bindables as Record<string, unknown>)
-    ).toBe(true);
+    expect(bindables).toHaveProperty('title');
   });
 });
 

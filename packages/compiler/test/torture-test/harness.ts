@@ -1293,6 +1293,42 @@ export function assertNotApplicable(el: ElementAnalysis): void {
   }
 }
 
+/**
+ * Pull a combined bindable map from per-field conclusion nodes.
+ * Bindables are stored as individual fields (bindable:name:property,
+ * bindable:name:mode), not as a single 'bindables' conclusion.
+ * This helper reconstructs the combined view for test assertions.
+ */
+export function pullBindables(
+  graph: ProjectDepGraph,
+  resourceKey: string,
+): Record<string, { property: string; mode?: string }> | undefined {
+  const prefix = `conclusion:${resourceKey}::bindable:`;
+  const nodes = graph.nodesByPrefix(prefix);
+  const names = new Set<string>();
+
+  for (const nodeId of nodes) {
+    const afterPrefix = nodeId.slice(prefix.length);
+    const colonIdx = afterPrefix.indexOf(':');
+    if (colonIdx > 0) {
+      names.add(afterPrefix.slice(0, colonIdx));
+    }
+  }
+
+  if (names.size === 0) return undefined;
+
+  const result: Record<string, { property: string; mode?: string }> = {};
+  for (const name of names) {
+    const property = pullValue(graph, resourceKey, `bindable:${name}:property`);
+    const mode = pullValue(graph, resourceKey, `bindable:${name}:mode`);
+    result[name] = {
+      property: typeof property === 'string' ? property : name,
+      ...(mode !== undefined ? { mode: String(mode) } : {}),
+    };
+  }
+  return result;
+}
+
 // =============================================================================
 // Scope Chain Assertions (Tier 6D)
 // =============================================================================

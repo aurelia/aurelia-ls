@@ -601,9 +601,12 @@ function classifyAttribute(
     const caResource = findCustomAttribute(target, ctx);
     if (caResource) {
       const category = caResource.isTemplateController ? 'template-controller' : 'custom-attribute';
+      // Look up BC expression entry for the command (e.g., .for → IsIterator)
+      const bcEntry = command !== null ? ctx.vocabulary.commands.get(command) : null;
+      const expressionEntry = bcEntry?.expressionEntry ?? null;
       return {
         classification: { step: 7, category },
-        binding: { instructionType: caResource.isTemplateController ? 'HydrateTemplateController' : 'HydrateAttribute', mode: null, targetProperty: null, expressionEntry: null },
+        binding: { instructionType: caResource.isTemplateController ? 'HydrateTemplateController' : 'HydrateAttribute', mode: null, targetProperty: null, expressionEntry },
       };
     }
   }
