@@ -129,17 +129,30 @@ describe("6B-3: Alias resolution", () => {
 
       @customElement({
         name: 'app',
-        template: '<data-card>primary</data-card>',
+        template: '<info-card>card content</info-card>',
         dependencies: [DataCard]
       })
       export class App {}
     `,
   });
 
-  it("resolves <data-card> via primary name", () => {
+  it("resolves <info-card> (alias) to CE data-card", () => {
     const analysis = analyzeTemplate(result, "app");
-    const el = findElement(analysis, "data-card");
+    const el = findElement(analysis, "info-card");
+
+    // info-card is not a CE's primary name — it is an alias of data-card.
+    // The resolution finds the CE through the alias. The concluded
+    // definition is the same as if <data-card> had been used.
     assertResolvedCe(el, 'custom-element:data-card');
+  });
+
+  it("resolved via alias (not tag-name)", () => {
+    const analysis = analyzeTemplate(result, "app");
+    const el = findElement(analysis, "info-card");
+    expect(el.resolution.kind).toBe('custom-element');
+    if (el.resolution.kind === 'custom-element') {
+      expect(el.resolution.via).toBe('alias');
+    }
   });
 });
 

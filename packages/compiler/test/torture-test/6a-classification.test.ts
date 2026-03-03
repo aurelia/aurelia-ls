@@ -27,6 +27,12 @@ import {
   assertNoBinding,
   assertResolvedCe,
   assertPlainHtml,
+  evaluateProjectVocabulary,
+  assertInVocabulary,
+  evaluateVisibility,
+  assertNotComplete,
+  assertRegistrationGap,
+  pullValue,
 } from "./harness.js";
 
 // =============================================================================
@@ -308,14 +314,24 @@ describe("6A-7: Vocabulary gap → step 4 misclassification", () => {
     assertClassified(attr, 8, 'plain-attribute');
   });
 
-  it("produces a plain-element PropertyBinding (wrong but structurally valid)", () => {
+  it("upstream gap: dispatch BC absent from vocabulary (state plugin not registered)", () => {
+    const vocab = evaluateProjectVocabulary(result);
+
+    // The upstream cause: dispatch is not in the vocabulary at all.
+    // This is what makes the step 8 classification a misclassification —
+    // dispatch SHOULD be at step 4 if the state plugin were registered.
+    const cmd = vocab.green.commands.get("dispatch");
+    expect(cmd).toBeUndefined();
+  });
+
+  it("no binding produced — silent misclassification (no error signal)", () => {
     const analysis = analyzeTemplate(result, "app");
     const div = findElement(analysis, "div");
     const attr = findAttr(div, 'click.dispatch');
 
-    // Since dispatch is unknown, step 8 treats it as a plain BC
-    // This is structurally valid but semantically wrong
-    // (should have been a DispatchBinding via step 4)
+    // dispatch is unknown → no DispatchBinding instruction produced.
+    // This is the silence: no error, no binding, the attribute is just
+    // left on the DOM. The misclassification is invisible.
     expect(attr.binding).toBeNull();
   });
 });
@@ -371,6 +387,21 @@ describe("6A-8: Gapped bindable list → step 6 misclassification", () => {
     assertClassified(title, 8, 'plain-attribute');
     assertClassified(subtitle, 8, 'plain-attribute');
   });
+
+  it("upstream gap: bindable list is opaque (computeBindables())", () => {
+    // The upstream cause: the bindables field on dynamic-el's conclusion
+    // is gapped because computeBindables() is an opaque function call.
+    // This is what makes step 6 miss — it can't find subtitle in the
+    // bindable list because the list is indeterminate.
+    const bindables = pullValue(result.graph, "custom-element:dynamic-el", "bindables");
+
+    // The product either has no bindables (fully opaque) or has a gap marker.
+    // Either way, subtitle is not discoverable as a bindable.
+    expect(bindables === undefined || bindables === null ||
+      (typeof bindables === 'object' && !Array.isArray(bindables) &&
+        !Object.keys(bindables as Record<string, unknown>).includes('subtitle'))
+    ).toBe(true);
+  });
 });
 
 // =============================================================================
@@ -423,5 +454,16 @@ describe("6A-9: Scope gap → step 7 misclassification", () => {
     // visibility set for app's scope. Step 7 can't find it.
     // Falls through to step 8.
     assertClassified(attr, 8, 'plain-attribute');
+  });
+
+  it("upstream gap: scope has registration gap from getPlugins()", () => {
+    const vis = evaluateVisibility(result);
+
+    // The upstream cause: getPlugins() is opaque, creating a registration
+    // gap in the root scope. This gap propagates to app's scope, making
+    // the CA catalog incomplete. Step 7 can't find tooltip because the
+    // scope-visibility layer can't guarantee it's there.
+    assertNotComplete(vis, "app");
+    assertRegistrationGap(vis, "app", { reason: "opaque" });
   });
 });

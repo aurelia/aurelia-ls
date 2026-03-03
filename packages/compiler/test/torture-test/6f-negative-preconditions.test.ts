@@ -374,8 +374,18 @@ describe("6F-5: Opacity boundaries", () => {
 // 6F-6: SVG passthrough + namespace-dependent CA classification (LE-30)
 // =============================================================================
 
-describe("6F-6: SVG passthrough + namespace CA rule", () => {
+describe("6F-6: SVG passthrough + namespace CA rule (LE-30)", () => {
+  // Register the router so the href CA is in scope — this is the key
+  // setup for the namespace collision test. Same attribute name (href),
+  // same CA in scope, different classification based on namespace.
   const result = runInterpreter({
+    "/src/main.ts": `
+      import Aurelia from 'aurelia';
+      import { RouterConfiguration } from '@aurelia/router';
+      import { App } from './app';
+
+      Aurelia.register(RouterConfiguration).app(App).start();
+    `,
     "/src/app.ts": `
       import { customElement } from 'aurelia';
 
@@ -386,6 +396,7 @@ describe("6F-6: SVG passthrough + namespace CA rule", () => {
             <circle cx="50" cy="50" r="40" fill="blue"/>
             <use href="#icon-star"/>
           </svg>
+          <a href="/about">About</a>
         \`
       })
       export class App {}
@@ -423,15 +434,26 @@ describe("6F-6: SVG passthrough + namespace CA rule", () => {
     assertClassified(findAttr(circle, 'fill'), 8, 'plain-attribute');
   });
 
-  it("href on SVG <use> is plain step 8 (not CA, LE-30 namespace rule)", () => {
+  it("href on SVG <use> is plain step 8 (LE-30: bare attr in SVG skips CA)", () => {
     const analysis = analyzeTemplate(result, "app");
     const use = findElement(analysis, "use");
     const href = findAttr(use, 'href');
 
-    // In SVG namespace, bare 'href' is a native attribute.
-    // Even if a router 'href' CA were in scope, LE-30 says:
-    // bare attributes in non-HTML namespaces skip CA lookup at step 7.
+    // The router href CA IS in scope. But per LE-30, bare attributes
+    // in non-HTML namespaces skip CA lookup at step 7. href on <use>
+    // has no Aurelia binding syntax → native SVG attribute → step 8.
     assertClassified(href, 8, 'plain-attribute');
     assertNoBinding(href);
+  });
+
+  it("href on HTML <a> is step 7 (CA — router intercepts in HTML namespace)", () => {
+    const analysis = analyzeTemplate(result, "app");
+    const a = findElement(analysis, "a");
+    const href = findAttr(a, 'href');
+
+    // Same attribute name (href), same CA in scope, but HTML namespace.
+    // In HTML namespace, step 7 CA lookup applies to bare attributes.
+    // The router's href CA intercepts: step 7 classification.
+    assertClassified(href, 7, 'custom-attribute');
   });
 });
