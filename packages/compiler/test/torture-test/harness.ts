@@ -840,3 +840,149 @@ export function assertRegistrationGap(
     );
   }
 }
+
+// =============================================================================
+// Vocabulary Assertions (Tier 5)
+// =============================================================================
+
+import {
+  evaluateVocabulary,
+  type VocabularyGreen,
+  type BindingCommandEntry,
+  type AttributePatternEntry,
+} from "../../out/project-semantics/deps/vocabulary.js";
+
+export interface VocabularyResult {
+  green: VocabularyGreen;
+}
+
+/**
+ * Evaluate the vocabulary registry for a project.
+ *
+ * Builds the frozen vocabulary from core builtins, detected plugins,
+ * and root registration analysis.
+ */
+export function evaluateProjectVocabulary(
+  result: InterpreterResult,
+): VocabularyResult {
+  // Pull root registration data for plugin detection
+  const rootRegs = pullValue(result.graph, "root-registrations", "registrations");
+  const rootGaps = pullValue(result.graph, "root-registrations", "gaps");
+
+  const refs = Array.isArray(rootRegs) ? rootRegs.filter((r): r is string => typeof r === 'string') : [];
+  const gaps = Array.isArray(rootGaps) ? rootGaps.filter((g): g is string => typeof g === 'string') : [];
+
+  const { green } = evaluateVocabulary(refs, gaps);
+  return { green };
+}
+
+/**
+ * Assert that a binding command is in the vocabulary with expected behavioral fields.
+ */
+export function assertInVocabulary(
+  vocab: VocabularyResult,
+  name: string,
+  expected?: Partial<Pick<BindingCommandEntry, 'ignoreAttr' | 'outputInstruction' | 'expressionEntry'>>,
+): void {
+  const cmd = vocab.green.commands.get(name);
+  if (!cmd) {
+    throw new Error(
+      `Binding command '${name}' is NOT in the vocabulary. ` +
+      `Known commands: [${[...vocab.green.commands.keys()].join(', ')}]`
+    );
+  }
+
+  if (expected) {
+    if (expected.ignoreAttr !== undefined && cmd.ignoreAttr !== expected.ignoreAttr) {
+      throw new Error(
+        `BC '${name}': ignoreAttr expected ${expected.ignoreAttr}, got ${cmd.ignoreAttr}`
+      );
+    }
+    if (expected.outputInstruction !== undefined && cmd.outputInstruction !== expected.outputInstruction) {
+      throw new Error(
+        `BC '${name}': outputInstruction expected '${expected.outputInstruction}', got '${cmd.outputInstruction}'`
+      );
+    }
+    if (expected.expressionEntry !== undefined && cmd.expressionEntry !== expected.expressionEntry) {
+      throw new Error(
+        `BC '${name}': expressionEntry expected '${expected.expressionEntry}', got '${cmd.expressionEntry}'`
+      );
+    }
+  }
+}
+
+/**
+ * Assert that an attribute pattern is in the vocabulary.
+ */
+export function assertPatternInVocabulary(
+  vocab: VocabularyResult,
+  className: string,
+  expectedPatterns?: readonly string[],
+): void {
+  const found = vocab.green.patterns.find(p => p.className === className);
+  if (!found) {
+    throw new Error(
+      `Attribute pattern '${className}' is NOT in the vocabulary. ` +
+      `Known patterns: [${vocab.green.patterns.map(p => p.className).join(', ')}]`
+    );
+  }
+
+  if (expectedPatterns) {
+    const actualPatterns = [...found.patterns].sort();
+    const expected = [...expectedPatterns].sort();
+    if (JSON.stringify(actualPatterns) !== JSON.stringify(expected)) {
+      throw new Error(
+        `AP '${className}': patterns expected [${expected.join(', ')}], got [${actualPatterns.join(', ')}]`
+      );
+    }
+  }
+}
+
+/**
+ * Assert that the vocabulary is complete.
+ */
+export function assertVocabularyComplete(vocab: VocabularyResult): void {
+  if (vocab.green.completeness.state !== 'complete') {
+    throw new Error(
+      `Vocabulary should be COMPLETE but has gaps: ` +
+      JSON.stringify(vocab.green.completeness.gaps)
+    );
+  }
+}
+
+/**
+ * Assert that the vocabulary is NOT complete (has gaps).
+ */
+export function assertVocabularyNotComplete(vocab: VocabularyResult): void {
+  if (vocab.green.completeness.state !== 'incomplete') {
+    throw new Error(
+      `Vocabulary should be INCOMPLETE but is marked complete`
+    );
+  }
+}
+
+/**
+ * Assert that the vocabulary has a gap matching the given criteria.
+ */
+export function assertVocabularyGap(
+  vocab: VocabularyResult,
+  match: { site?: string; reason?: string },
+): void {
+  if (vocab.green.completeness.state !== 'incomplete') {
+    throw new Error(
+      `Vocabulary has no gaps (is complete). Expected a gap matching ${JSON.stringify(match)}`
+    );
+  }
+
+  const found = vocab.green.completeness.gaps.some(g =>
+    (!match.site || g.site.includes(match.site)) &&
+    (!match.reason || g.reason.includes(match.reason))
+  );
+
+  if (!found) {
+    throw new Error(
+      `No vocabulary gap matching ${JSON.stringify(match)}. ` +
+      `Gaps: ${JSON.stringify(vocab.green.completeness.gaps)}`
+    );
+  }
+}
