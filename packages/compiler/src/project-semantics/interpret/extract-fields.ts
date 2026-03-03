@@ -51,8 +51,10 @@ export function extractFieldObservations(
 ): void {
   if (value.kind !== 'class') return;
 
-  // Always emit identity observation (kind + name)
+  // Always emit identity observations (kind, name, className)
   emitObservation(registrar, recognized, 'name', recognized.name, evalNode, value);
+  emitObservation(registrar, recognized, 'className', value.className, evalNode, value);
+  emitObservation(registrar, recognized, 'kind', recognized.kind, evalNode, value);
 
   // Kind-specific field extraction
   switch (recognized.kind) {

@@ -197,8 +197,11 @@ export function createProjectDepGraph(
 
       // Ensure conclusion node exists and wire observation → conclusion
       const concId = conclusionNodeId(resourceKey, fieldPath);
-      ensureNode(concId, 'conclusion', `${resourceKey}:${fieldPath}`);
+      const concEntry = ensureNode(concId, 'conclusion', `${resourceKey}:${fieldPath}`);
       addEdge(obsId, concId);
+
+      // Mark conclusion stale so the next pull triggers convergence
+      concEntry.stale = true;
 
       // Wire convergence config → conclusion (static dependency)
       addEdge(CONVERGENCE_CONFIG_NODE, concId);

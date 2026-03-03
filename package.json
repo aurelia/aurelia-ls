@@ -66,6 +66,7 @@
     "test:integration": "pnpm -w build && node scripts/run-vitest.mjs packages/compiler/test/integration",
     "test:parsing": "pnpm -w build && node scripts/run-vitest.mjs packages/compiler/test/parsing",
     "test:program": "pnpm -w build && node scripts/run-vitest.mjs packages/compiler/test/program",
+    "test:torture": "pnpm -w build && node scripts/run-vitest.mjs packages/compiler/test/torture-test",
     "test:ssr": "pnpm -w build && node scripts/run-vitest.mjs packages/ssr",
     "test:ssr:cov": "pnpm -w build && node scripts/run-vitest.mjs --coverage packages/ssr",
     "test:ssg": "pnpm -w build && node scripts/run-vitest.mjs packages/ssg",
