@@ -112,6 +112,33 @@ const STANDARD_BUILTINS: readonly { name: string; kind: string }[] = [
 ];
 
 // =============================================================================
+// Known Plugin Resource Contributions
+// =============================================================================
+
+/**
+ * Plugins that register known resources when detected in root registrations.
+ * Similar to vocabulary's KNOWN_PLUGINS but for resource-level contributions.
+ */
+interface KnownPluginResources {
+  readonly identifiers: readonly string[];
+  readonly resources: readonly { name: string; kind: string }[];
+}
+
+const KNOWN_PLUGIN_RESOURCES: readonly KnownPluginResources[] = [
+  {
+    // @aurelia/router registers the 'href' CA, 'load' CA, 'viewport' CE,
+    // and several TCs. The 'href' CA is the most commonly tested.
+    identifiers: ['RouterConfiguration'],
+    resources: [
+      { name: 'href', kind: 'custom-attribute' },
+      { name: 'load', kind: 'custom-attribute' },
+      { name: 'viewport', kind: 'custom-element' },
+      { name: 'au-viewport', kind: 'custom-element' },
+    ],
+  },
+];
+
+// =============================================================================
 // Entry Point
 // =============================================================================
 
@@ -338,6 +365,27 @@ function collectRootRegistrations(
     }
   }
 
+  // 1b. Detect known plugins and add their resource contributions
+  if (Array.isArray(rootRegs)) {
+    for (const plugin of KNOWN_PLUGIN_RESOURCES) {
+      const isRegistered = rootRegs.some((ref: unknown) => {
+        if (typeof ref === 'string' && ref.startsWith('class:')) {
+          return plugin.identifiers.includes(ref.slice(6));
+        }
+        return false;
+      });
+
+      if (isRegistered) {
+        for (const res of plugin.resources) {
+          const resourceKey = `${res.kind}:${res.name}`;
+          if (!resources.has(res.name)) {
+            resources.set(res.name, { resourceKey, lookupLevel: 'root' });
+          }
+        }
+      }
+    }
+  }
+
   // 2. Check for root registration gaps from the observation layer
   const rootGaps = pullConclusionValue(graph, 'root-registrations', 'gaps');
   if (Array.isArray(rootGaps)) {
@@ -381,6 +429,22 @@ function collectRootRegistrations(
         lookupLevel: 'root',
       });
     }
+  }
+
+  // 5. Register aliases for all root-registered resources
+  const aliasedEntries: [string, VisibilityEntry][] = [];
+  for (const [, entry] of resources) {
+    const aliases = pullConclusionValue(graph, entry.resourceKey, 'aliases');
+    if (Array.isArray(aliases)) {
+      for (const alias of aliases) {
+        if (typeof alias === 'string' && !resources.has(alias)) {
+          aliasedEntries.push([alias, { resourceKey: entry.resourceKey, lookupLevel: 'root' }]);
+        }
+      }
+    }
+  }
+  for (const [alias, entry] of aliasedEntries) {
+    resources.set(alias, entry);
   }
 
   const completeness: ScopeCompleteness = gaps.length > 0
@@ -466,6 +530,9 @@ function resolveDependencies(
           mechanism: 'dependencies-array',
           source: { tier: 'analysis-explicit', form: 'dependencies-array' },
         });
+        // Also register aliases — CEs/CAs may have alias names that
+        // template tags/attributes reference instead of the primary name
+        registerAliases(graph, resourceKey, 'local', visible, registrations);
       }
       // If className not in index: the class wasn't recognized as a resource.
       // Not a gap — it might be a service, DI registration, etc.
@@ -476,6 +543,31 @@ function resolveDependencies(
   const depsCompleteness = pullConclusionValue(graph, ceResourceKey, 'dependencies:completeness');
   if (depsCompleteness !== undefined) {
     gaps.push({ site: ceResourceKey, reason: 'partial-opaque-dependencies' });
+  }
+}
+
+/**
+ * Register a resource's aliases into the visibility map.
+ * Aliases point to the same resourceKey as the primary name.
+ */
+function registerAliases(
+  graph: ProjectDepGraph,
+  resourceKey: string,
+  lookupLevel: 'local' | 'root',
+  visible: Map<string, VisibilityEntry>,
+  registrations: Map<string, RegistrationProvenance>,
+): void {
+  const aliases = pullConclusionValue(graph, resourceKey, 'aliases');
+  if (!Array.isArray(aliases)) return;
+
+  for (const alias of aliases) {
+    if (typeof alias === 'string' && !visible.has(alias)) {
+      visible.set(alias, { resourceKey, lookupLevel });
+      registrations.set(alias, {
+        mechanism: 'alias',
+        source: { tier: 'analysis-explicit', form: 'alias' },
+      });
+    }
   }
 }
 

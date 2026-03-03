@@ -740,15 +740,10 @@ function resolveElement(
   // Check scope-visibility for this tag name as a CE
   const entry = ctx.scopeVisibility.visible.get(tagName);
   if (entry && entry.resourceKey.startsWith('custom-element:')) {
-    return { kind: 'custom-element', resourceKey: entry.resourceKey, via: 'tag-name' };
-  }
-
-  // Check if any CE has this as an alias
-  for (const [name, vis] of ctx.scopeVisibility.visible) {
-    if (!vis.resourceKey.startsWith('custom-element:')) continue;
-    // We'd need to check the aliases from the conclusion. For now,
-    // the scope-visibility layer should have resolved aliases at
-    // registration time.
+    // Determine if resolution was via primary name or alias
+    const primaryName = entry.resourceKey.slice('custom-element:'.length);
+    const via = primaryName === tagName ? 'tag-name' : 'alias';
+    return { kind: 'custom-element', resourceKey: entry.resourceKey, via };
   }
 
   // Known HTML element — not a CE, not "unknown"
