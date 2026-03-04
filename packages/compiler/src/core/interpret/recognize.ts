@@ -9,7 +9,7 @@
  * 1. Decorator (@customElement, @customAttribute, etc.)
  * 2. Static $au (type discriminator)
  * 3. Imperative define() (CustomElement.define(...))
- * 4. Convention (filename/classname matching)
+ * 4. Convention (filename/classname matching via CompiledConventionPolicy)
  *
  * Local template (as-custom-element) is template analysis, not
  * project analysis — handled by the template pipeline.
@@ -20,6 +20,8 @@ import type { AnalyzableValue, ClassValue } from '../../project-semantics/evalua
 import { extractString, getProperty, getResolvedValue } from '../../project-semantics/evaluate/value/types.js';
 import type { EvidenceSource } from '../graph/types.js';
 import type { ResourceKindLike } from '../../schema/types.js';
+import type { CompiledConventionPolicy } from '../project/conventions.js';
+import { compileConventionPolicy } from '../project/conventions.js';
 
 // =============================================================================
 // Recognition Result
@@ -66,17 +68,15 @@ const AU_TYPE_KIND_MAP: ReadonlyMap<string, ResourceKindLike> = new Map([
 ]);
 
 // =============================================================================
-// Convention Suffix → Resource Kind
+// Default convention policy (lazy-initialized)
 // =============================================================================
 
-const SUFFIX_KIND_MAP: ReadonlyMap<string, ResourceKindLike> = new Map([
-  ['CustomElement', 'custom-element'],
-  ['CustomAttribute', 'custom-attribute'],
-  ['TemplateController', 'template-controller'],
-  ['ValueConverter', 'value-converter'],
-  ['BindingBehavior', 'binding-behavior'],
-  ['BindingCommand', 'binding-command'],
-]);
+let _defaultPolicy: CompiledConventionPolicy | undefined;
+
+function defaultPolicy(): CompiledConventionPolicy {
+  if (!_defaultPolicy) _defaultPolicy = compileConventionPolicy();
+  return _defaultPolicy;
+}
 
 // =============================================================================
 // Recognition Entry Point
@@ -92,20 +92,26 @@ export function recognizeResource(
   unitKey: string,
   filePath: NormalizedPath,
   enableConventions: boolean,
+  conventionPolicy?: CompiledConventionPolicy,
 ): RecognizedResource | null {
   if (value.kind !== 'class') return null;
 
+  const policy = conventionPolicy ?? defaultPolicy();
+
   // Try forms in priority order (most explicit first)
-  return recognizeDecorator(value)
-    ?? recognizeStaticAu(value)
-    ?? (enableConventions ? recognizeConvention(value, filePath) : null);
+  return recognizeDecorator(value, policy)
+    ?? recognizeStaticAu(value, policy)
+    ?? (enableConventions && policy.enabled ? recognizeConvention(value, filePath, policy) : null);
 }
 
 // =============================================================================
 // Form 1: Decorator Recognition
 // =============================================================================
 
-function recognizeDecorator(cls: ClassValue): RecognizedResource | null {
+function recognizeDecorator(
+  cls: ClassValue,
+  policy: CompiledConventionPolicy,
+): RecognizedResource | null {
   for (const dec of cls.decorators) {
     const kind = DECORATOR_KIND_MAP.get(dec.name);
     if (!kind) continue;
@@ -124,7 +130,7 @@ function recognizeDecorator(cls: ClassValue): RecognizedResource | null {
       };
     }
 
-    const name = extractResourceName(config, cls.className, kind);
+    const name = extractResourceName(config, cls.className, kind, policy);
 
     return {
       kind,
@@ -153,7 +159,10 @@ function extractAttributePatternName(
 // Form 2: Static $au Recognition
 // =============================================================================
 
-function recognizeStaticAu(cls: ClassValue): RecognizedResource | null {
+function recognizeStaticAu(
+  cls: ClassValue,
+  policy: CompiledConventionPolicy,
+): RecognizedResource | null {
   const au = cls.staticMembers.get('$au');
   if (!au || au.kind !== 'object') return null;
 
@@ -171,7 +180,7 @@ function recognizeStaticAu(cls: ClassValue): RecognizedResource | null {
   }
   if (!kind) return null;
 
-  const name = extractResourceName(au, cls.className, kind);
+  const name = extractResourceName(au, cls.className, kind, policy);
 
   return {
     kind,
@@ -183,39 +192,47 @@ function recognizeStaticAu(cls: ClassValue): RecognizedResource | null {
 }
 
 // =============================================================================
-// Form 4: Convention Recognition
+// Form 4: Convention Recognition (via CompiledConventionPolicy)
 // =============================================================================
-
-const SUFFIX_REGEX = /^(.+?)(CustomElement|CustomAttribute|TemplateController|ValueConverter|BindingBehavior|BindingCommand)$/;
 
 function recognizeConvention(
   cls: ClassValue,
   filePath: NormalizedPath,
+  policy: CompiledConventionPolicy,
 ): RecognizedResource | null {
   const className = cls.className;
   const fileBaseName = extractFileBaseName(filePath);
 
-  // Try suffix match first
-  const suffixMatch = SUFFIX_REGEX.exec(className);
+  // Try suffix match via policy
+  const suffixMatch = policy.matchSuffix(className);
   if (suffixMatch) {
-    const bareName = suffixMatch[1]!;
-    const suffix = suffixMatch[2]!;
-    const kind = SUFFIX_KIND_MAP.get(suffix);
-    if (kind) {
-      const name = conventionName(bareName, kind);
+    const name = policy.deriveName(className, suffixMatch.kind);
+    return {
+      kind: suffixMatch.kind,
+      resourceKey: `${suffixMatch.kind}:${name}`,
+      name,
+      source: { tier: 'analysis-convention', form: 'convention' },
+    };
+  }
+
+  // Try file pattern match via policy
+  if (fileBaseName) {
+    const fileKind = policy.matchFilePattern(fileBaseName);
+    if (fileKind) {
+      const name = policy.deriveName(className, fileKind);
       return {
-        kind,
-        resourceKey: `${kind}:${name}`,
+        kind: fileKind,
+        resourceKey: `${fileKind}:${name}`,
         name,
         source: { tier: 'analysis-convention', form: 'convention' },
       };
     }
   }
 
-  // No suffix → CE only when the derived name matches the filename.
+  // No suffix, no file pattern → CE only when derived name matches filename
   // F2 §Form 4: "Only the first exported class whose convention name
   // matches the filename name."
-  const candidateName = conventionName(className, 'custom-element');
+  const candidateName = policy.deriveName(className, 'custom-element');
   if (fileBaseName && candidateName === fileBaseName) {
     return {
       kind: 'custom-element',
@@ -225,7 +242,6 @@ function recognizeConvention(
     };
   }
 
-  // No match — this class is not a resource by convention
   return null;
 }
 
@@ -246,14 +262,15 @@ function extractFileBaseName(filePath: NormalizedPath): string | null {
 
 /**
  * Extract resource name from a config value (decorator arg or $au object).
- * Falls back to convention naming from the class name.
+ * Falls back to convention naming from the class name via policy.
  */
 function extractResourceName(
   config: AnalyzableValue | undefined,
   className: string,
   kind: ResourceKindLike,
+  policy: CompiledConventionPolicy,
 ): string {
-  if (!config) return conventionName(className, kind);
+  if (!config) return policy.deriveName(className, kind as any);
 
   // String arg: @customElement('my-comp')
   if (config.kind === 'literal' && typeof config.value === 'string') {
@@ -266,7 +283,7 @@ function extractResourceName(
     if (nameValue) return nameValue;
   }
 
-  return conventionName(className, kind);
+  return policy.deriveName(className, kind as any);
 }
 
 // =============================================================================
@@ -286,17 +303,16 @@ const DEFINE_NAMESPACE_MAP: ReadonlyMap<string, ResourceKindLike> = new Map([
  * Attempt to recognize a define() call from an evaluated expression.
  *
  * Pattern: `CustomElement.define({ name: '...' }, MyClass)`
- * The expression is a CallValue where:
- * - callee is PropertyAccess on a known namespace ('define')
- * - first arg is the config object
- * - second arg (optional) is the class reference
  */
 export function recognizeDefineCall(
   value: AnalyzableValue,
   filePath: NormalizedPath,
   classMap: ReadonlyMap<string, ClassValue>,
+  conventionPolicy?: CompiledConventionPolicy,
 ): RecognizedResource | null {
   if (value.kind !== 'call') return null;
+
+  const policy = conventionPolicy ?? defaultPolicy();
 
   // callee must be X.define where X is a known namespace
   const callee = value.callee;
@@ -328,7 +344,6 @@ export function recognizeDefineCall(
   }
 
   // Second arg is the class reference (optional)
-  // Follow reference/import chains to find the resolved class
   const classRef = value.args[1];
   let className: string | undefined;
   if (classRef) {
@@ -342,10 +357,8 @@ export function recognizeDefineCall(
     }
   }
 
-  // Look up the class in the file's class map
   const cls = className ? classMap.get(className) : undefined;
-
-  const name = extractResourceName(config, className ?? 'anonymous', kind);
+  const name = extractResourceName(config, className ?? 'anonymous', kind, policy);
 
   return {
     kind,
@@ -355,53 +368,4 @@ export function recognizeDefineCall(
     config,
     className: className ?? cls?.className,
   };
-}
-
-/**
- * Derive a resource name from a class name using Aurelia 2 conventions.
- *
- * CE/CA/TC/BC → kebabCase(bareName)
- * VC/BB → camelCase(bareName)
- */
-function conventionName(className: string, kind: ResourceKindLike): string {
-  // Strip known suffixes
-  const suffixMatch = SUFFIX_REGEX.exec(className);
-  const bareName = suffixMatch ? suffixMatch[1]! : className;
-
-  switch (kind) {
-    case 'value-converter':
-    case 'binding-behavior':
-      return camelCase(bareName);
-    default:
-      return kebabCase(bareName);
-  }
-}
-
-/**
- * Simple kebab-case conversion from PascalCase.
- * Handles acronyms: 'JSONParser' → 'json-parser'
- */
-function kebabCase(name: string): string {
-  return name
-    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1-$2')
-    .replace(/([a-z\d])([A-Z])/g, '$1-$2')
-    .toLowerCase();
-}
-
-/**
- * Simple camelCase conversion from PascalCase.
- * Handles acronyms: 'JSONParser' → 'jsonParser'
- */
-function camelCase(name: string): string {
-  if (name.length === 0) return name;
-  // If entire name is uppercase, lowercase all
-  if (name === name.toUpperCase()) return name.toLowerCase();
-  // Lowercase the leading uppercase run
-  let i = 0;
-  while (i < name.length - 1 && name[i] === name[i]!.toUpperCase() && name[i] !== name[i]!.toLowerCase()) {
-    i++;
-  }
-  if (i <= 1) return name[0]!.toLowerCase() + name.slice(1);
-  // Multi-char uppercase run: lowercase all but last (which starts next word)
-  return name.slice(0, i - 1).toLowerCase() + name.slice(i - 1);
 }

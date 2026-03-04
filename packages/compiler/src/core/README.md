@@ -1,8 +1,36 @@
 # core/ — Reactive Semantic Compiler
 
-The reactive core of the semantic compiler. Implements demand-driven
-evaluation with value-sensitive cutoff: edits that don't change
-semantic content produce zero downstream work.
+The reactive core of the Aurelia 2 semantic compiler. Replaces the old
+batch pipeline (analysis/ + pipeline/ + synthesis/ + facade.ts) and the
+old project discovery (project-semantics/resolve.ts) with demand-driven
+evaluation and value-sensitive cutoff.
+
+## Status map
+
+```
+core/
+  graph/              DONE     reactive dep graph (types, topology, staleness, cutoff)
+  interpret/          DONE     interpreter (AST -> observations, convention policy)
+  convergence/        DONE     observation -> conclusion merge algebra
+  resource/           DONE     green resource types, builtins, catalog, graph projection
+  scope/              DONE     scope-visibility evaluation
+  vocabulary/         DONE     frozen syntax registry (BCs, APs)
+  template/           DONE     template analysis (lowerTemplate)
+  project/            PARTIAL  workspace layout, conventions, discovery (stub)
+```
+
+### What's tested
+
+| Module | Test coverage |
+|--------|--------------|
+| graph + interpret + convergence | Tiers 1-5 (126 + 50 + ongoing tests) |
+| scope-visibility | Tier 5 (27 tests) |
+| vocabulary | Tier 5 |
+| template/semantic-analysis | Tier 6 (103 tests) |
+| resource/from-graph | Consumed by tier 6 tests via harness bridge |
+| project/workspace | Empirical (aurelia-60: 51 packages detected, 369/971 files filtered) |
+| project/conventions | Empirical (default policy matches old hardcoded behavior, 379 tests pass) |
+| project/discovery | Stub |
 
 ## Architecture
 
@@ -19,235 +47,180 @@ Three well-known patterns composed:
   of the same field merge via an operator algebra. Cycles resolve
   through iterative re-evaluation to a stable fixed point.
 
-What is specific to this implementation:
-
-- **Four-layer node taxonomy** with strict layering (input → evaluation
-  → observation → conclusion). No skip-layer edges.
-- **Two edge kinds** with identical staleness propagation but different
-  evaluation semantics: data edges (failed → gap) and completeness
-  edges (failed → demotion). Same graph, distinguished at the callback.
-- **Orphaned observation cleanup** on resource identity change. When
-  re-evaluation produces observations under a different resource key,
-  old observations are detected and removed, downstream conclusions
-  marked stale.
-- **GraphEventListener protocol** for zero-cost instrumentation.
-  Optional listener receives structured events (staleness, evaluation,
-  convergence, cutoff, change). Pass no listener in production.
-
-## Directory structure
+## Data flow
 
 ```
-core/
-  graph/          graph infrastructure (types, topology, staleness, cutoff)
-  interpret/      interpreter (AST → observations)
-  convergence/    observation → conclusion merge algebra
-  scope/          scope-visibility evaluation
-  vocabulary/     frozen syntax registry
-  template/       template analysis (classification, resolution, binding, scope chain)
+workspace root
+    |
+    v
+project/workspace.ts               detect packages, source roots, excludes
+    |
+    v
+ts.Program (filtered source files)
+    |
+    v
+project/conventions.ts             compile convention rules into policy
+    |
+    v
+interpret/interpreter.ts           AST -> observations in the graph
+    |                               (per-file, per-class, per-field)
+    |                               convention policy drives Form 4 recognition
+    v
+graph/graph.ts                     observations + convergence -> conclusions
+    |                               (staleness propagation, pull, cutoff)
+    v
+resource/from-graph.ts             conclusions -> ResourceCatalogGreen
+scope/scope-visibility.ts          conclusions -> per-CE visibility + completeness
+vocabulary/vocabulary.ts           root registrations -> VocabularyGreen
+    |
+    v
+project/discovery.ts     [STUB]    orchestrates the above into ProjectSemanticsGreen
+    |
+    v
+template/semantic-analysis.ts      HTML + catalog + vocabulary -> TemplateSemantics
+    |                               (single-pass, replaces 6,278 lines in analysis/)
+    v
+[consumer layer]                   TemplateSemantics -> features
+                                    (completions, hover, diagnostics, etc.)
+                                    Lives in semantic-workspace/, not here.
 ```
 
 ## File overview
 
-| File | Role |
-|------|------|
-| `graph/types.ts` | All interfaces: node IDs, edge construction, evaluation tracer, observation registrar, convergence function, push/pull engines, event protocol. **Read this first.** |
-| `graph/graph.ts` | Graph implementation. Topology, staleness propagation, intern pool, pull-side re-evaluation with cutoff, orphan cleanup. |
-| `convergence/convergence.ts` | Merge operators and evidence ranking. Operator dispatch by field path. |
-| `scope/scope-visibility.ts` | Standalone evaluation: two-level resource lookup, completeness, aliases, known plugin contributions. |
-| `vocabulary/vocabulary.ts` | Standalone evaluation: frozen syntax registry (core BCs/APs, plugin postulates). |
-| `template/template-parser.ts` | Source-faithful HTML walker. Abstract `TemplateNode` interface. |
-| `template/template-analysis.ts` | Standalone evaluation: 8-step classification, element resolution, binding mode, scope chain, DOM schema. |
-| `interpret/interpreter.ts` | Declaration-driven claim producer. Walks TS AST, recognizes resources, emits observations. |
-| `interpret/extract-fields.ts` | Per-field observation emission with green extraction and interning. |
-| `interpret/recognize.ts` | Four declaration form recognition (decorator, static $au, define(), convention). |
-| `interpret/resolve.ts` | Tracer-integrated cross-file import resolution. |
-| `interpret/html-meta.ts` | Convention-paired HTML meta element processing. |
+### graph/ — reactive infrastructure
 
-## Graph mechanics (graph/types.ts + graph/graph.ts)
+| File | Status | Role |
+|------|--------|------|
+| `graph/types.ts` | DONE | Node IDs, edge construction, tracer, registrar, convergence function, push/pull engines, event protocol. **Read this first.** |
+| `graph/graph.ts` | DONE | Graph implementation. Topology, staleness, intern pool, pull-side re-evaluation with cutoff, orphan cleanup. |
 
-### Node layers
-
+Node layers:
 ```
 input               evaluation           observation              conclusion
-─────               ──────────           ───────────              ──────────
-file:/path    →  eval:/path#Unit  →  obs:kind:name:field:eval  →  conclusion:kind:name::field
+-----               ----------           -----------              ----------
+file:/path    ->  eval:/path#Unit  ->  obs:kind:name:field:eval  ->  conclusion:kind:name::field
 type-state
 config
 manifest
 ```
 
-Edges are maintained in both directions. Forward edges carry staleness
-propagation. Backward edges drive pull-side traversal.
+### interpret/ — declaration evaluator
 
-### Push side: staleness
+| File | Status | Role |
+|------|--------|------|
+| `interpret/interpreter.ts` | DONE | Walks TS AST, recognizes resources, emits observations. Entry points: `interpretProject()`, `createUnitEvaluator()`. |
+| `interpret/extract-fields.ts` | DONE | Per-field observation emission with green extraction. |
+| `interpret/recognize.ts` | DONE | Four declaration form recognition (decorator, static $au, define(), convention). |
+| `interpret/resolve.ts` | DONE | Tracer-integrated cross-file import resolution. |
+| `interpret/html-meta.ts` | DONE | Convention-paired HTML meta element processing. |
 
-`markFileStale(file)` eagerly marks all transitive dependents stale
-through forward edges. The staleness source is tracked per propagation
-for event attribution.
+### convergence/ — merge algebra
 
-### Pull side: re-evaluation and cutoff
+| File | Status | Role |
+|------|--------|------|
+| `convergence/convergence.ts` | DONE | 6 operators (locked-identity, known-over-unknown, stable-union, patch-object, first-defined, first-available). Evidence ranking. Field path dispatch. |
 
-`evaluation.pull(conclusionId)`:
+### resource/ — green resource types
 
-1. Not stale → return cached value (fast path)
-2. Find stale observations, re-evaluate their source eval nodes via
-   the `UnitEvaluator` callback
-3. Detect orphaned observations (produced by eval on previous run but
-   not on this run) — remove them, mark downstream conclusions stale
-4. Collect surviving observations, run convergence
-5. Intern the converged green value
-6. Compare with previous green (pointer equality)
-7. Same → **cutoff** (no downstream impact). Different → **changed**
+| File | Status | Role |
+|------|--------|------|
+| `resource/types.ts` | DONE | FieldValue<T>, per-kind resource green types (CE, CA, TC, VC, BB), vocabulary types, ResourceCatalogGreen, manifest container. |
+| `resource/builtins.ts` | DONE | 30 resources + 14 BCs + 14 APs as green literals. JSON-serializable. |
+| `resource/catalog.ts` | DONE | `buildCatalog()` — assembles ResourceGreen[] into name-indexed ResourceCatalogGreen. |
+| `resource/provenance.ts` | DONE | Red-layer types (FieldProvenance, GapDetail, ConvergenceDecision). |
+| `resource/annotate.ts` | DONE | `uniformProvenance()`, `annotate()` — pair green + red. |
+| `resource/from-graph.ts` | DONE | `graphToResourceCatalog()` — projects graph conclusions into ResourceCatalogGreen. Reads per-field conclusion nodes, maps Sourced<T> to FieldValue<T>, assembles per-kind ResourceGreen, merges over builtins. |
 
-### Intern pool invariant
+### scope/ — visibility evaluation
 
-All green values stored in the graph are interned. This happens at
-two points: observation registration and convergence output. Cutoff
-depends on this — without interning, pointer equality always fails
-and every re-convergence cascades. The pool lives on the graph
-instance (one per graph, cleared on full rebuild).
+| File | Status | Role |
+|------|--------|------|
+| `scope/scope-visibility.ts` | DONE | `evaluateScopeVisibility()` — two-level resource lookup, completeness, aliases, known plugin contributions, standard builtins. |
 
-### Orphan cleanup invariant
+### vocabulary/ — frozen syntax registry
 
-When an eval node is re-evaluated, the graph compares the set of
-observations it produced before vs after. Observations that no longer
-exist (resource renamed, field removed, etc.) are deleted and their
-downstream conclusions marked stale. This prevents stale data from
-surviving identity changes.
+| File | Status | Role |
+|------|--------|------|
+| `vocabulary/vocabulary.ts` | DONE | `evaluateProjectVocabulary()` — core BCs/APs + plugin postulates. Gap model. |
 
-## Convergence (convergence.ts)
+### template/ — template analysis
 
-Observations of the same `(resourceKey, fieldPath)` merge via an
-operator selected by field path. The operator dispatch table maps
-field path patterns to one of the merge operators. Evidence ranking
-determines which observation wins when operators need a "best"
-candidate.
+| File | Status | Role |
+|------|--------|------|
+| `template/semantic-analysis.ts` | DONE | `lowerTemplate()` — single-pass 8-step classification, element resolution, binding, scope chain, DOM schema. 1,276 lines replacing 6,278. |
+| `template/template-parser.ts` | DONE | Source-faithful HTML walker. `TemplateNode` abstraction boundary. |
 
-**To add a new field**: ensure the dispatch table in `convergence.ts`
-maps its field path to the appropriate operator. If the field has
-novel merge semantics, add a new operator.
+### project/ — discovery orchestration
 
-## Standalone evaluations
+| File | Status | Role |
+|------|--------|------|
+| `project/workspace.ts` | DONE | `resolveWorkspaceLayout()` — detects npm/pnpm/single-package workspace structure. `filterAnalysisFiles()` — intersects layout with ts.Program file list. Extensible to nx, turbo, lerna. |
+| `project/conventions.ts` | DONE | `compileConventionPolicy()` — compiles user-facing `ConventionConfig` into lookup-optimized policy. Single canonical place for suffix rules, file patterns, name derivation. Consumed by `interpret/recognize.ts`. |
+| `project/discovery.ts` | **STUB** | `discoverProjectSemanticsGreen()` — composes interpret + graph + convergence + catalog + scope + vocabulary into `ProjectSemanticsGreen`. Replaces `project-semantics/resolve.ts`. |
 
-Three evaluation functions sit on top of the graph. They read from
-conclusions via `pull()` but are not graph nodes themselves. Each is
-called imperatively from the test harness or consumer code.
+## What this replaces (old code, LOC)
 
-### scope-visibility.ts
+When the green path is complete and verified, these can be deleted:
 
-Determines which resources are visible in each CE's template scope.
-Implements the two-level lookup: local container (dependencies,
-template imports, local elements) checked first, root container
-(global registrations, builtins, known plugin resources) checked
-second. No intermediate ancestors.
+| Old module | LOC | Replaced by |
+|------------|-----|-------------|
+| `analysis/10-lower/` | 3,353 | `template/semantic-analysis.ts` |
+| `analysis/20-link/` | 2,021 | `template/semantic-analysis.ts` |
+| `analysis/30-bind/` | 904 | `template/semantic-analysis.ts` |
+| `analysis/40-typecheck/` | 737 | Dissolves — BindingTarget carries the info |
+| `pipeline/` | 404 | Dissolves — graph handles ordering |
+| `synthesis/overlay/` | 2,110 | Not needed for IDE surface |
+| `facade.ts` | 149 | `project/discovery.ts` |
+| `project-semantics/resolve.ts` | 588 | `project/discovery.ts` |
+| `convergence/` (old) | 838 | `convergence/convergence.ts` |
+| `reactive-graph/` | 619 | Unused generalization — delete |
+| `schema/model.ts` | 568 | Direct graph queries |
+| `program/program.ts` | 433 | TBD — caching strategy not yet decided |
+| **Total deletable** | **~12,724** | |
 
-Key concepts:
-- **Completeness** — a scope is complete when all registration paths
-  are deterministic. Negative claims ("resource X absent") require
-  completeness to be safe for diagnostics.
-- **Aliases** — registered alongside primary names, mapping to the
-  same resource key.
-- **Known plugin resources** — plugins like the router contribute
-  specific resources (CAs, CEs) to root scope when detected.
-  Extensible via the `KNOWN_PLUGIN_RESOURCES` array.
-- **Standard builtins** — always present in root scope. Listed in the
-  `STANDARD_BUILTINS` array.
+Modules that **survive** (architecture-independent):
+- `model/` (2,091) — identity types, IR types
+- `parsing/` (3,785) — expression parser, attribute parser
+- `value/` (805) — GreenValue, Sourced<T>, interning
+- `shared/` (2,843) — type-analysis (TS checker queries)
+- `diagnostics/` (2,839) — diagnostic catalog (needs type updates)
+- `program/services.ts` (~1,200) — LSP protocol adapters
 
-### vocabulary.ts
+Modules with **mixed fate**:
+- `project-semantics/` (28,891 total) — extract/ and evaluate/ are
+  reused by the interpreter. recognize/ is reimplemented in
+  interpret/recognize.ts. The rest dissolves.
+- `schema/` (9,471 total) — types.ts replaced by resource/types.ts.
+  cursor-resolve.ts needs new implementation on TemplateSemantics.
+  cursor-entity.ts type definitions may survive with field renames.
 
-Frozen syntax registry: binding commands and attribute patterns that
-the compiler recognizes. Must be closed before template analysis
-begins (the subject's `IAttributeParser` freezes after first parse).
+## Consumer layer (NOT in core/)
 
-Key concepts:
-- **Core builtins** — always present (DefaultBindingSyntax,
-  DefaultBindingLanguage, DefaultComponents).
-- **Plugin postulates** — known plugins with deterministic base
-  vocabulary. Detected from root registration refs.
-- **Gap model** — `customizeGapKind: 'none'` (deterministic) vs
-  `'marginal'` (base vocabulary survives `.customize()`, additional
-  aliases indeterminate).
+The consumer layer lives in `semantic-workspace/`. It consumes
+`TemplateSemantics` + `ResourceCatalogGreen` + expression model to
+produce IDE features.
 
-### template-analysis.ts
+Consumer migration is a separate phase. It cannot begin until
+`project/discovery.ts` is implemented and verified against the old
+path. The architectural seams document (meta-repo
+`models/current/architectural-seams.md`) maps all consumer
+integration points.
 
-8-step attribute classification + element resolution + binding mode
-resolution + scope chain construction. Consumes vocabulary, scope-
-visibility, and resource conclusions.
+Consumer modules and their migration status:
 
-Key concepts:
-- **Classification is deterministic but trusts its inputs.** Every
-  attribute classifies into exactly one of 8 categories. Missing
-  upstream data causes silent misclassification, not errors.
-- **AP simulation** — regex-based matching against vocabulary patterns.
-  The sole arbiter of binding syntax. No splitting on dots.
-- **LE-30 namespace rule** — bare attributes in SVG/MathML skip CA
-  lookup at step 7. Only explicit binding syntax triggers it.
-- **Scope chain is structural** — determined from DOM tree and per-TC
-  scope effects. CEs are boundaries. Only a subset of TCs create child
-  scopes (documented in the `TC_SCOPE_EFFECTS` map). All others pass
-  through.
-- **DOM schema** — known HTML and SVG elements, `data-*`/`aria-*`
-  passthrough, `isTwoWay` mapping, attribute-to-property mapping.
-  Static tables — see "needs review" below.
+| Module | LOC | What changes |
+|--------|-----|--------------|
+| `engine.ts` | ~2,500 | Calls discoverProjectSemanticsGreen instead of discoverProjectSemantics |
+| `workspace.ts` | ~500 | Program/query dispatch adapts to new types |
+| `completions-engine.ts` | ~2,100 | Position resolution walks TemplateSemantics instead of TemplateQueryFacade |
+| `expression-model.ts` | ~1,700 | Frame tree from ScopeFrame linked list (400 LOC dissolves) |
+| `hover.ts` | 430 | Type renames (ElementRes -> CustomElementGreen etc) |
+| `definition.ts` | ~1,100 | Walks TemplateSemantics instead of linked templates |
+| `semantic-tokens.ts` | ~300 | Walks TemplateSemantics instead of linked templates |
+| `template-edit-engine.ts` | ~2,300 | Walks TemplateSemantics instead of linked templates + IR |
+| `cursor-resolve.ts` | ~1,380 | Rewrites to span-walking on TemplateSemantics (~260 LOC) |
 
-## Template parser (template-parser.ts)
-
-Source-faithful markup walker. Not a spec-compliant HTML parser.
-
-Design rationale: IDE template analysis needs to match what the
-developer sees in source, not what the HTML spec says the tree should
-be. No auto-closing, no implicit elements, no foster parenting.
-Preserves source positions exactly.
-
-The `TemplateNode` interface is the abstraction boundary. Analysis
-callbacks consume it. For AOT compilation, a parse5 adapter produces
-the same interface with spec-compliant parsing. Parser choice is an
-upstream concern — template analysis doesn't know which parser ran.
-
-## Integration guide (for migration)
-
-### Wrapping a pipeline stage as a graph node
-
-1. Identify the stage's inputs (what it reads) and outputs (what it
-   produces)
-2. Express inputs as `tracer.readFile()`, `tracer.readEvaluation()`,
-   or `pull()` calls — these create dependency edges
-3. Express outputs as `observations.registerObservation()` calls
-4. The graph handles ordering, caching, cutoff, and re-evaluation
-
-### Making standalone evaluations into graph nodes
-
-scope-visibility, vocabulary, and template-analysis already consume
-the right inputs via `pull()`. To make them incremental:
-
-1. Register a new node kind in the graph (new evaluation node type)
-2. In the evaluation callback, call the existing function
-3. Store the result as an observation or conclusion
-4. The graph's cutoff prevents unnecessary downstream re-evaluation
-
-This is mechanical — the functions are already pure (input →
-output with no side effects beyond `pull()`).
-
-### Connecting to the existing parse5 template pipeline
-
-1. Implement `TemplateTree` adapter for parse5's output
-2. Template analysis consumes the adapter's output unchanged
-3. Parser choice (source-faithful vs parse5) is a config input node
-4. When config changes, template parse nodes go stale, analysis
-   re-evaluates, cutoff handles the equivalent-tree case
-
-### Adding new resource kinds or fields
-
-1. Update the interpreter to extract the new field
-   (`interpret/extract-fields.ts`)
-2. Add the field path to the convergence operator dispatch
-   (`convergence/convergence.ts`)
-3. If it affects visibility, update `scope/scope-visibility.ts`
-4. If it affects classification, update the relevant step in
-   `template/template-analysis.ts`
-5. The graph, cutoff, and interning handle the rest automatically
-
-## Known gaps
+## Known gaps in the DONE modules
 
 **Multi-binding sub-parsing** — CAs with `"prop: val; prop2.bind: expr"`
 are classified at step 7 but not split into per-bindable instructions.
@@ -261,35 +234,3 @@ children aren't grouped into projection slot maps.
 **Expression AST** — interpolation and entry points are detected, but
 expressions aren't parsed into AST. Identifier resolution against the
 scope chain is structural, not semantic.
-
-**Template analysis as graph nodes** — currently a single standalone
-function. Splitting into template-ir / template-link / template-bind
-nodes enables incremental template analysis (e.g., bindable mode change
-cutoffs at classification while binding re-evaluates).
-
-## Needs review
-
-**Convergence operator dispatch** — field path → operator mapping is
-a hardcoded table. New fields require updating the table. Consider
-whether the dispatch should be declarative (metadata on field
-definitions) rather than procedural.
-
-**AP simulation** — covers standard and plugin patterns via regex but
-doesn't implement the full `SyntaxInterpreter` scoring. Edge cases
-with multiple close-scoring pattern matches may diverge from the
-subject compiler.
-
-**DOM schema** — static element/attribute sets. The subject compiler
-generates its schema from `lib.dom.d.ts`. The static sets should be
-reconciled with the generated schema during migration to prevent
-divergence.
-
-**Intern pool growth** — grows monotonically (no eviction). For
-long-running sessions, monitor `pool.size` and `clear()` on full
-rebuild to prevent unbounded memory growth.
-
-**Re-interpret-all in test harness** — the mutable test session
-re-interprets all files on every edit. Production should use the
-graph's targeted re-evaluation via staleness propagation + unit
-evaluator. The graph supports this; only the test harness uses the
-blunt approach.
