@@ -248,11 +248,21 @@ function resolveValue(
       return { ...value, properties };
     }
 
-    case 'propertyAccess':
-      return {
-        ...value,
-        base: resolveValue(value.base, scope, resolver, fromFile, seen),
-      };
+    case 'propertyAccess': {
+      const resolvedBase = resolveValue(value.base, scope, resolver, fromFile, seen);
+      // After cross-file resolution, the base may now be a resolved
+      // ObjectValue (e.g., an imported enum). Extract the property
+      // directly to enable const enum member access like
+      // ValueConverters.dateFormatValueConverterName → 'df'.
+      const leaf = getResolvedLeaf(resolvedBase);
+      if (leaf?.kind === 'object') {
+        const propValue = leaf.properties.get(value.property);
+        if (propValue) {
+          return resolveValue(propValue, scope, resolver, fromFile, seen);
+        }
+      }
+      return { ...value, base: resolvedBase };
+    }
 
     case 'call':
       return {

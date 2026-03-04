@@ -155,26 +155,24 @@ const EXPECTED_ATTRIBUTES = new Set([
 
 // --- Value Converters ---
 // runtime-html: sanitize (static $au, name: 'sanitize')
-// i18n: $au.name uses imported constants that the interpreter can't resolve yet.
-//   Ground truth names: df, nf, rt, t
-//   Current names (convention-derived via $au-partial): dateFormat, numberFormat, relativeTime, translation
+// i18n: $au.name uses imported const enum constants, resolved via tier B enum support
+//   df, nf, rt, t — correct names from ValueConverters const enum in i18n/utils.ts
 // testing: mock
 const EXPECTED_VALUE_CONVERTERS = new Set([
   "sanitize",
-  "dateFormat",    // TODO: should be 'df' once $au constant resolution works
-  "numberFormat",  // TODO: should be 'nf'
-  "relativeTime",  // TODO: should be 'rt'
-  "translation",   // TODO: should be 't'
+  "df",
+  "nf",
+  "rt",
+  "t",
   "mock",
 ]);
 
 // --- Binding Behaviors ---
 // runtime-html: 10 core (static $au, camelCase names)
-//   oneTime/toView/fromView/twoWay use $au = createConfig('name') — function call,
-//   recognized via $au-partial with convention-derived names (which happen to match)
-// i18n: $au.name uses imported constants (same issue as VCs)
-//   Ground truth names: t, df, nf, rt
-//   Current names (convention-derived): translation, dateFormat, numberFormat, relativeTime
+//   oneTime/toView/fromView/twoWay use $au = createConfig('name') — resolved via
+//   bounded tier E (single-return function evaluation in resolveCall)
+// i18n: $au.name uses imported const enum constants, resolved via tier B
+//   t, df, nf, rt — correct names from ValueConverters const enum
 // state: state
 // validation-html: validate
 // testing: mock
@@ -189,10 +187,10 @@ const EXPECTED_BINDING_BEHAVIORS = new Set([
   "attr",
   "self",
   "updateTrigger",
-  "translation",   // TODO: should be 't' once $au constant resolution works
-  "dateFormat",    // TODO: should be 'df'
-  "numberFormat",  // TODO: should be 'nf'
-  "relativeTime",  // TODO: should be 'rt'
+  "t",
+  "df",
+  "nf",
+  "rt",
   "state",
   "validate",
   "mock",

@@ -689,3 +689,73 @@ describe("1H: Declaration Precedence", () => {
     });
   });
 });
+
+// =============================================================================
+// Tier B Ceiling: Enum Resolution + Bounded Tier E
+// =============================================================================
+
+describe("1A: Tier B — Enum and Function Evaluation", () => {
+  it("#35 $au with imported const enum member resolves name", () => {
+    const result = runInterpreter({
+      "/src/utils.ts": `
+        export const enum MyEnums {
+          vcName = 'my-vc-name',
+        }
+        export const vcTypeName = 'value-converter';
+      `,
+      "/src/my-vc.ts": `
+        import { MyEnums, vcTypeName } from './utils';
+        export class MyVcValueConverter {
+          static $au = {
+            type: vcTypeName,
+            name: MyEnums.vcName,
+          };
+        }
+      `,
+    });
+
+    assertClaim(result, {
+      kind: "value-converter",
+      name: "my-vc-name",
+      className: "MyVcValueConverter",
+      form: "static-$au",
+    });
+  });
+
+  it("#36 $au from single-return factory function resolves name", () => {
+    const result = runInterpreter({
+      "/src/factory-bb.ts": `
+        const bbType = 'binding-behavior';
+        const createConfig = (name: string) => ({ type: bbType, name });
+        export class MyBbBindingBehavior {
+          static $au = createConfig('my-bb');
+        }
+      `,
+    });
+
+    assertClaim(result, {
+      kind: "binding-behavior",
+      name: "my-bb",
+      className: "MyBbBindingBehavior",
+      form: "static-$au",
+    });
+  });
+
+  it("#37 enum with numeric auto-increment members", () => {
+    const result = runInterpreter({
+      "/src/nums.ts": `
+        export enum Status { Active, Inactive, Pending }
+        export class ActiveCustomElement {
+          static $au = { type: 'custom-element', name: 'active-el' };
+        }
+      `,
+    });
+
+    assertClaim(result, {
+      kind: "custom-element",
+      name: "active-el",
+      className: "ActiveCustomElement",
+      form: "static-$au",
+    });
+  });
+});

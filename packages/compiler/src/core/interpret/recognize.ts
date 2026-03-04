@@ -164,12 +164,18 @@ function recognizeStaticAu(
   cls: ClassValue,
   policy: CompiledConventionPolicy,
 ): RecognizedResource | null {
-  const au = cls.staticMembers.get('$au');
-  if (!au) return null;
+  const rawAu = cls.staticMembers.get('$au');
+  if (!rawAu) return null;
+
+  // Unwrap the $au value: follow reference/import chains, and for
+  // CallValue with returnValue (from bounded tier E evaluation in
+  // resolveCall), use the return value. This enables:
+  //   static $au = createConfig('oneTime')  →  { type: '...', name: 'oneTime' }
+  const au = unwrapAuValue(rawAu);
 
   // Two sub-cases:
-  // A) $au is an object literal → try to extract type + name fields
-  // B) $au is a function call (e.g., createConfig('oneTime')) → fields not directly available
+  // A) $au is an object literal (or evaluates to one) → try to extract type + name fields
+  // B) $au is a function call or opaque expression → fields not directly available
   // In both cases, the PRESENCE of $au is explicit evidence of resource intent.
 
   if (au.kind === 'object') {
@@ -236,6 +242,22 @@ function recognizeStaticAuPartial(
     source: { tier: 'analysis-explicit', form: 'static-$au-partial' },
     config: au.kind === 'object' ? au : undefined,
   };
+}
+
+/**
+ * Unwrap a $au static member value to its effective configuration object.
+ *
+ * Follows reference/import chains and, for CallValue nodes whose
+ * returnValue has been evaluated (bounded tier E in resolveCall),
+ * uses the return value. This enables:
+ *   static $au = createConfig('oneTime')  →  { type: 'binding-behavior', name: 'oneTime' }
+ */
+function unwrapAuValue(value: AnalyzableValue): AnalyzableValue {
+  const resolved = getResolvedValue(value);
+  if (resolved.kind === 'call' && resolved.returnValue) {
+    return getResolvedValue(resolved.returnValue);
+  }
+  return resolved;
 }
 
 // =============================================================================

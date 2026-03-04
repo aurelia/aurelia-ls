@@ -95,6 +95,22 @@ export function extractFieldObservations(
   emitObservation(trackingRegistrar, recognized, 'className', className, evalNode, value);
   emitObservation(trackingRegistrar, recognized, 'kind', recognized.kind, evalNode, value);
 
+  // Gap observation for partial recognition forms.
+  // When recognition falls back to convention-derived names (static-$au-partial,
+  // define-partial), the name observation is best-effort. Emit a gap so the
+  // claim model records that evaluation was blocked (per resource-model L1:
+  // a gap is a claim about inability to evaluate, not about omission).
+  if (recognized.source.form?.includes('partial')) {
+    registrar.registerObservation(
+      recognized.resourceKey,
+      'name:gap',
+      recognized.source,
+      { kind: 'unknown', reasonKind: 'unresolved-constant' },
+      { origin: 'source', state: 'unknown' } as any,
+      evalNode,
+    );
+  }
+
   // Kind-specific field extraction
   switch (recognized.kind) {
     case 'custom-element':

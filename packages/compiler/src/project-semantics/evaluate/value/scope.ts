@@ -32,6 +32,7 @@ import {
   ref,
   propAccess,
   classVal,
+  object,
 } from './types.js';
 import { transformExpression, transformParameters, transformBlock } from './transform.js';
 
@@ -79,11 +80,12 @@ export function buildFileScope(
     else if (ts.isImportDeclaration(stmt)) {
       collectImportBindings(stmt, sf, imports);
     }
-    // Enum declarations (treat as unknown for now)
+    // Enum declarations — extract members as ObjectValue properties.
+    // Tier B: enum members with string/numeric initializers are
+    // compile-time constants. Modeling as ObjectValue lets property
+    // access resolution work through resolvePropertyAccess().
     else if (ts.isEnumDeclaration(stmt)) {
-      // Enums create bindings but we don't fully model enum values
-      // Just record the name so references don't fail
-      bindings.set(stmt.name.text, ref(stmt.name.text));
+      collectEnumBinding(stmt, sf, bindings);
     }
     // Re-export declarations: export { X } from './y' or export * from './y'
     else if (ts.isExportDeclaration(stmt) && stmt.moduleSpecifier) {
@@ -240,6 +242,54 @@ function collectClassBinding(
   const name = decl.name.text;
   // Class declarations become ClassValue references
   bindings.set(name, classVal(name, filePath));
+}
+
+/**
+ * Collect an enum declaration as an ObjectValue with member properties.
+ *
+ * Tier B: enum members with string/numeric literal initializers are
+ * compile-time constants. Numeric enums without initializers use
+ * auto-increment starting from 0. Complex initializers (computed
+ * values, references) are transformed as expressions and may or may
+ * not resolve — graceful degradation via the existing gap model.
+ */
+function collectEnumBinding(
+  decl: ts.EnumDeclaration,
+  sf: ts.SourceFile,
+  bindings: Map<string, AnalyzableValue>,
+): void {
+  const props = new Map<string, AnalyzableValue>();
+  let autoValue = 0;
+
+  for (const member of decl.members) {
+    const memberName = ts.isIdentifier(member.name)
+      ? member.name.text
+      : ts.isStringLiteral(member.name)
+        ? member.name.text
+        : undefined;
+    if (!memberName) continue;
+
+    if (member.initializer) {
+      // Has initializer — transform it. String/numeric literals resolve
+      // immediately; complex expressions remain as AnalyzableValues for
+      // downstream resolution.
+      const initValue = transformExpression(member.initializer, sf);
+      props.set(memberName, initValue);
+
+      // Update auto-increment for numeric enums
+      if (initValue.kind === 'literal' && typeof initValue.value === 'number') {
+        autoValue = initValue.value + 1;
+      }
+    } else {
+      // No initializer — numeric auto-increment
+      props.set(memberName, { kind: 'literal', value: autoValue++ });
+    }
+  }
+
+  bindings.set(
+    decl.name.text,
+    object(props, new Map(), { start: decl.getStart(sf), end: decl.getEnd() }),
+  );
 }
 
 /**
@@ -1005,6 +1055,46 @@ function resolveCall(
       }
       // Both numbers: arithmetic
       return { kind: 'literal', value: (left.value as number) + (right.value as number), span: value.span };
+    }
+  }
+
+  // Bounded tier E: pure function evaluation.
+  // If callee resolves to a FunctionValue with a single return expression
+  // and all args are resolved to known values, evaluate by substitution.
+  // Handles: const createConfig = (name) => ({ type: bbType, name });
+  //          static $au = createConfig('oneTime');
+  const resolvedCallee = getResolvedBase(callee);
+  if (resolvedCallee?.kind === 'function' &&
+      resolvedCallee.body.length === 1 &&
+      resolvedCallee.body[0]!.kind === 'return' &&
+      resolvedCallee.body[0]!.value !== null) {
+    // Check all args are resolved to known values
+    const allArgsKnown = args.every(a => {
+      const r = getResolvedBase(a);
+      return r !== undefined && (
+        r.kind === 'literal' || r.kind === 'object' ||
+        r.kind === 'array' || r.kind === 'class'
+      );
+    });
+    if (allArgsKnown) {
+      // Create substitution scope: params bound to actual arg values,
+      // parent = caller's scope (for closure variable access)
+      const substBindings = new Map<string, AnalyzableValue>();
+      resolvedCallee.params.forEach((p, i) => {
+        if (p.name !== '(destructuring)' && args[i]) {
+          substBindings.set(p.name, args[i]!);
+        }
+      });
+      const substScope = createChildScope(substBindings, scope);
+      const returnExpr = resolvedCallee.body[0]!.value!;
+      const result = resolveValue(returnExpr, substScope, resolving);
+      // Return the call with returnValue populated for downstream unwrapping
+      return {
+        ...value,
+        callee,
+        args,
+        returnValue: result,
+      } as CallValue;
     }
   }
 
