@@ -165,7 +165,23 @@ export function transformExpression(expr: ts.Expression, sf: ts.SourceFile): Ana
     return transformTemplateLiteral(expr, sf, span);
   }
 
-  // Binary expressions - limited support for string concatenation
+  // typeof expression: typeof x → synthetic call for static evaluation
+  if (ts.isTypeOfExpression(expr)) {
+    const operand = transformExpression(expr.expression, sf);
+    return call(ref('__typeof', undefined, span), [operand], undefined, span);
+  }
+
+  // void expression: void x → always undefined
+  if (ts.isVoidExpression(expr)) {
+    return literal(undefined, span);
+  }
+
+  // Prefix unary expressions: !, -, +, ~
+  if (ts.isPrefixUnaryExpression(expr)) {
+    return transformPrefixUnary(expr, sf, span);
+  }
+
+  // Binary expressions — all operators transformed for static evaluation
   if (ts.isBinaryExpression(expr)) {
     return transformBinaryExpression(expr, sf, span);
   }
@@ -221,6 +237,45 @@ export function transformExpression(expr: ts.Expression, sf: ts.SourceFile): Ana
         'yield expression',
         { kind: 'dynamic-value', expression: 'yield ...' },
         'Generator values cannot be statically analyzed',
+      ),
+      span
+    );
+  }
+
+  // Tagged template expression: tag`template` — requires tag function evaluation
+  if (ts.isTaggedTemplateExpression(expr)) {
+    return unknown(
+      gapWithFile(
+        sf,
+        'tagged template',
+        { kind: 'function-return', functionName: expr.tag.getText(sf).slice(0, 30) },
+        'Tagged template value depends on tag function',
+      ),
+      span
+    );
+  }
+
+  // Delete expression: delete x — side-effectful, not statically evaluable
+  if (ts.isDeleteExpression(expr)) {
+    return unknown(
+      gapWithFile(
+        sf,
+        'delete expression',
+        { kind: 'dynamic-value', expression: expr.getText(sf).slice(0, 50) },
+        'Delete is side-effectful',
+      ),
+      span
+    );
+  }
+
+  // Postfix unary: x++, x-- — side-effectful, not statically evaluable
+  if (ts.isPostfixUnaryExpression(expr)) {
+    return unknown(
+      gapWithFile(
+        sf,
+        'postfix unary',
+        { kind: 'dynamic-value', expression: expr.getText(sf).slice(0, 50) },
+        'Postfix increment/decrement is side-effectful',
       ),
       span
     );
@@ -587,37 +642,107 @@ function transformTemplateLiteral(
   );
 }
 
+// =============================================================================
+// Binary Operator Map — SyntaxKind → synthetic call name
+// =============================================================================
+
+const BINARY_OP_MAP: ReadonlyMap<number, string> = new Map([
+  // Arithmetic
+  [ts.SyntaxKind.PlusToken, '__concat'],
+  [ts.SyntaxKind.MinusToken, '__sub'],
+  [ts.SyntaxKind.AsteriskToken, '__mul'],
+  [ts.SyntaxKind.SlashToken, '__div'],
+  [ts.SyntaxKind.PercentToken, '__mod'],
+  [ts.SyntaxKind.AsteriskAsteriskToken, '__exp'],
+  // Comparison
+  [ts.SyntaxKind.EqualsEqualsToken, '__eq'],
+  [ts.SyntaxKind.ExclamationEqualsToken, '__neq'],
+  [ts.SyntaxKind.EqualsEqualsEqualsToken, '__seq'],
+  [ts.SyntaxKind.ExclamationEqualsEqualsToken, '__sneq'],
+  [ts.SyntaxKind.LessThanToken, '__lt'],
+  [ts.SyntaxKind.GreaterThanToken, '__gt'],
+  [ts.SyntaxKind.LessThanEqualsToken, '__lte'],
+  [ts.SyntaxKind.GreaterThanEqualsToken, '__gte'],
+  // Logical (short-circuit)
+  [ts.SyntaxKind.AmpersandAmpersandToken, '__logicalAnd'],
+  [ts.SyntaxKind.BarBarToken, '__logicalOr'],
+  [ts.SyntaxKind.QuestionQuestionToken, '__nullCoalesce'],
+  // Bitwise
+  [ts.SyntaxKind.AmpersandToken, '__bitAnd'],
+  [ts.SyntaxKind.BarToken, '__bitOr'],
+  [ts.SyntaxKind.CaretToken, '__bitXor'],
+  [ts.SyntaxKind.LessThanLessThanToken, '__shl'],
+  [ts.SyntaxKind.GreaterThanGreaterThanToken, '__shr'],
+  [ts.SyntaxKind.GreaterThanGreaterThanGreaterThanToken, '__ushr'],
+]);
+
 /**
  * Transform a binary expression.
  *
- * Handles the `+` operator for string/numeric concatenation. Both operands
- * are transformed; scope resolution can later evaluate if both resolve
- * to literals. Other operators produce unknown with a descriptive gap.
+ * All operators are transformed to synthetic calls so scope resolution
+ * can evaluate them when both operands resolve to known literals.
+ * Assignment operators (=, +=, etc.) are excluded — they are side-effectful.
  */
 function transformBinaryExpression(
   expr: ts.BinaryExpression,
   sf: ts.SourceFile,
   span: TextSpan
 ): AnalyzableValue {
-  // For the + operator, store as a synthetic __concat call so scope
-  // resolution can evaluate it when both sides are static literals.
-  if (expr.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+  const syntheticName = BINARY_OP_MAP.get(expr.operatorToken.kind);
+  if (syntheticName) {
     const left = transformExpression(expr.left, sf);
     const right = transformExpression(expr.right, sf);
-    return call(
-      ref('__concat', undefined, span),
-      [left, right],
-      undefined,
-      span,
-    );
+    return call(ref(syntheticName, undefined, span), [left, right], undefined, span);
   }
 
+  // Assignment operators and other non-evaluable binary expressions
   return unknown(
     gapWithFile(
       sf,
       'binary expression',
       { kind: 'dynamic-value', expression: expr.getText(sf).slice(0, 50) },
-      'Binary expressions cannot be statically analyzed',
+      'Assignment or unsupported binary operator',
+    ),
+    span
+  );
+}
+
+// =============================================================================
+// Prefix Unary Operator Map
+// =============================================================================
+
+const UNARY_OP_MAP: ReadonlyMap<number, string> = new Map([
+  [ts.SyntaxKind.ExclamationToken, '__not'],
+  [ts.SyntaxKind.MinusToken, '__neg'],
+  [ts.SyntaxKind.PlusToken, '__pos'],
+  [ts.SyntaxKind.TildeToken, '__bitNot'],
+]);
+
+/**
+ * Transform a prefix unary expression: !, -, +, ~.
+ *
+ * typeof and void are separate AST nodes handled before this function.
+ * Operators are transformed to synthetic calls for static evaluation
+ * in scope resolution.
+ */
+function transformPrefixUnary(
+  expr: ts.PrefixUnaryExpression,
+  sf: ts.SourceFile,
+  span: TextSpan,
+): AnalyzableValue {
+  const syntheticName = UNARY_OP_MAP.get(expr.operator);
+  if (syntheticName) {
+    const operand = transformExpression(expr.operand, sf);
+    return call(ref(syntheticName, undefined, span), [operand], undefined, span);
+  }
+
+  // ++, -- are side-effectful, not tier B
+  return unknown(
+    gapWithFile(
+      sf,
+      'prefix unary',
+      { kind: 'dynamic-value', expression: expr.getText(sf).slice(0, 50) },
+      'Side-effectful unary operator',
     ),
     span
   );

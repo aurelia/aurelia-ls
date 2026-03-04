@@ -17,7 +17,7 @@
  */
 
 import ts from 'typescript';
-import type { NormalizedPath } from '../../compiler.js';
+import type { NormalizedPath, TextSpan } from '../../compiler.js';
 import type {
   AnalyzableValue,
   ClassValue,
@@ -1058,6 +1058,40 @@ function resolveCall(
     }
   }
 
+  // Logical short-circuit operators: __logicalAnd, __logicalOr, __nullCoalesce
+  // These return one of their operands (not necessarily boolean) and
+  // short-circuit: if the left side determines the result, the right
+  // side doesn't need to be evaluated.
+  if (callee.kind === 'reference' && args.length === 2) {
+    const left = getResolvedBase(args[0]!);
+    if (left?.kind === 'literal') {
+      if (callee.name === '__logicalAnd') {
+        // falsy && _ → left; truthy && _ → right
+        return left.value ? args[1]! : args[0]!;
+      }
+      if (callee.name === '__logicalOr') {
+        // truthy || _ → left; falsy || _ → right
+        return left.value ? args[0]! : args[1]!;
+      }
+      if (callee.name === '__nullCoalesce') {
+        // non-nullish ?? _ → left; null/undefined ?? _ → right
+        return (left.value !== null && left.value !== undefined) ? args[0]! : args[1]!;
+      }
+    }
+  }
+
+  // Binary operators: arithmetic, comparison, bitwise
+  if (callee.kind === 'reference' && args.length === 2) {
+    const result = evaluateBinaryOp(callee.name, args[0]!, args[1]!, value.span);
+    if (result !== undefined) return result;
+  }
+
+  // Unary operators: __not, __neg, __pos, __bitNot, __typeof
+  if (callee.kind === 'reference' && args.length === 1) {
+    const result = evaluateUnaryOp(callee.name, args[0]!, value.span);
+    if (result !== undefined) return result;
+  }
+
   // Bounded tier E: pure function evaluation.
   // If callee resolves to a FunctionValue with a single return expression
   // and all args are resolved to known values, evaluate by substitution.
@@ -1111,6 +1145,79 @@ function resolveCall(
     callee,
     args,
   };
+}
+
+// =============================================================================
+// Static Operator Evaluation — Tier B Ceiling
+// =============================================================================
+
+/**
+ * Evaluate a binary operator synthetic call when both operands are known literals.
+ * Returns undefined if the operator is unknown or operands aren't static.
+ */
+function evaluateBinaryOp(
+  op: string,
+  leftArg: AnalyzableValue,
+  rightArg: AnalyzableValue,
+  span: TextSpan | undefined,
+): AnalyzableValue | undefined {
+  const left = getResolvedBase(leftArg);
+  const right = getResolvedBase(rightArg);
+  if (left?.kind !== 'literal' || right?.kind !== 'literal') return undefined;
+
+  const l = left.value;
+  const r = right.value;
+  // Arithmetic (both must be numbers)
+  if (typeof l === 'number' && typeof r === 'number') {
+    switch (op) {
+      case '__sub': return { kind: 'literal', value: l - r, span };
+      case '__mul': return { kind: 'literal', value: l * r, span };
+      case '__div': return { kind: 'literal', value: l / r, span };
+      case '__mod': return { kind: 'literal', value: l % r, span };
+      case '__exp': return { kind: 'literal', value: l ** r, span };
+      case '__bitAnd': return { kind: 'literal', value: l & r, span };
+      case '__bitOr': return { kind: 'literal', value: l | r, span };
+      case '__bitXor': return { kind: 'literal', value: l ^ r, span };
+      case '__shl': return { kind: 'literal', value: l << r, span };
+      case '__shr': return { kind: 'literal', value: l >> r, span };
+      case '__ushr': return { kind: 'literal', value: l >>> r, span };
+    }
+  }
+  // Comparison (works on any literal types)
+  switch (op) {
+    case '__eq': return { kind: 'literal', value: l == r, span };
+    case '__neq': return { kind: 'literal', value: l != r, span };
+    case '__seq': return { kind: 'literal', value: l === r, span };
+    case '__sneq': return { kind: 'literal', value: l !== r, span };
+    case '__lt': return { kind: 'literal', value: (l as any) < (r as any), span };
+    case '__gt': return { kind: 'literal', value: (l as any) > (r as any), span };
+    case '__lte': return { kind: 'literal', value: (l as any) <= (r as any), span };
+    case '__gte': return { kind: 'literal', value: (l as any) >= (r as any), span };
+  }
+  return undefined;
+}
+
+/**
+ * Evaluate a unary operator synthetic call when the operand is a known literal.
+ * Returns undefined if the operator is unknown or operand isn't static.
+ */
+function evaluateUnaryOp(
+  op: string,
+  operandArg: AnalyzableValue,
+  span: TextSpan | undefined,
+): AnalyzableValue | undefined {
+  const operand = getResolvedBase(operandArg);
+  if (operand?.kind !== 'literal') return undefined;
+
+  const v = operand.value;
+  switch (op) {
+    case '__not': return { kind: 'literal', value: !v, span };
+    case '__neg': return { kind: 'literal', value: typeof v === 'number' ? -v : undefined, span };
+    case '__pos': return { kind: 'literal', value: typeof v === 'number' ? +v : undefined, span };
+    case '__bitNot': return { kind: 'literal', value: typeof v === 'number' ? ~v : undefined, span };
+    case '__typeof': return { kind: 'literal', value: typeof v, span };
+  }
+  return undefined;
 }
 
 /**
