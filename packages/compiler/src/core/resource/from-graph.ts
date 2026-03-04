@@ -74,16 +74,19 @@ export function graphToResourceCatalog(
     if (green) resources.push(green);
   }
 
-  // Step 3: Merge with builtins (builtins are the floor)
+  // Step 3: Merge with builtins using per-field lattice join.
+  // Resource model L1: absent < unknown < known. When source has a
+  // field as absent (not observed), the builtin's value survives.
+  // When source has known or unknown, source wins (higher evidence tier).
   const builtinCatalog = buildCatalog(BUILTIN_RESOURCES);
   const sourceCatalog = buildCatalog(resources);
 
   return {
-    elements: { ...builtinCatalog.elements, ...sourceCatalog.elements },
-    attributes: { ...builtinCatalog.attributes, ...sourceCatalog.attributes },
-    controllers: { ...builtinCatalog.controllers, ...sourceCatalog.controllers },
-    valueConverters: { ...builtinCatalog.valueConverters, ...sourceCatalog.valueConverters },
-    bindingBehaviors: { ...builtinCatalog.bindingBehaviors, ...sourceCatalog.bindingBehaviors },
+    elements: mergeCatalogSection(builtinCatalog.elements, sourceCatalog.elements),
+    attributes: mergeCatalogSection(builtinCatalog.attributes, sourceCatalog.attributes),
+    controllers: mergeCatalogSection(builtinCatalog.controllers, sourceCatalog.controllers),
+    valueConverters: mergeCatalogSection(builtinCatalog.valueConverters, sourceCatalog.valueConverters),
+    bindingBehaviors: mergeCatalogSection(builtinCatalog.bindingBehaviors, sourceCatalog.bindingBehaviors),
   };
 }
 
@@ -158,11 +161,16 @@ function readBindables(
     const primary = readField<boolean>(graph, resourceKey, `bindable:${propName}:primary`);
     const type = readField<string>(graph, resourceKey, `bindable:${propName}:type`);
 
+    // Preserve absent for all bindable fields — the lattice join with
+    // builtins fills in defaults where they exist. Turning absent into
+    // known(defaultValue) here conflates "not observed" with "observed
+    // as the default," which is semantically wrong per resource model L1
+    // and prevents builtin values from surviving the merge.
     result[propName] = {
       property: typeof property === 'string' ? property : propName,
-      attribute: attribute.state === 'absent' ? { state: 'known', value: propName } : attribute,
-      mode: mode.state === 'absent' ? { state: 'known', value: 'default' as BindingMode } : mode,
-      primary: primary.state === 'absent' ? { state: 'known', value: false } : primary,
+      attribute,
+      mode,
+      primary,
       type,
     };
   }
@@ -221,7 +229,7 @@ function assembleResourceGreen(
     case 'template-controller': {
       const bindables = readBindables(graph, resourceKey);
       const builtinCatalog = buildCatalog(BUILTIN_RESOURCES);
-      const builtinTc = builtinCatalog.controllers[name.toLowerCase()];
+      const builtinTc = builtinCatalog.controllers[name];
       return {
         kind: 'template-controller',
         name,
@@ -261,4 +269,149 @@ function assembleResourceGreen(
     default:
       return null;
   }
+}
+
+// =============================================================================
+// Per-Field Lattice Merge (Resource Model L1 §Information Lattice)
+// =============================================================================
+
+/**
+ * Lattice join for a single FieldValue.
+ *
+ * The information lattice: absent < unknown < known.
+ * join(absent, x) = x — absent is bottom, any information wins.
+ * join(x, absent) = x — symmetric.
+ * join(known_source, known_builtin) = known_source — source has higher
+ * evidence tier than builtin.
+ */
+function joinField<T>(source: FieldValue<T>, builtin: FieldValue<T>): FieldValue<T> {
+  if (source.state === 'absent') return builtin;
+  return source;
+}
+
+/**
+ * Merge per-bindable records using per-field lattice join.
+ */
+function joinBindables(
+  source: Readonly<Record<string, BindableGreen>>,
+  builtin: Readonly<Record<string, BindableGreen>>,
+): Readonly<Record<string, BindableGreen>> {
+  const result: Record<string, BindableGreen> = { ...builtin };
+  for (const [name, srcB] of Object.entries(source)) {
+    const builtinB = builtin[name];
+    if (builtinB) {
+      result[name] = {
+        property: srcB.property,
+        attribute: joinField(srcB.attribute, builtinB.attribute),
+        mode: joinField(srcB.mode, builtinB.mode),
+        primary: joinField(srcB.primary, builtinB.primary),
+        type: joinField(srcB.type, builtinB.type),
+        ...(srcB.doc !== undefined ? { doc: srcB.doc } : builtinB.doc !== undefined ? { doc: builtinB.doc } : {}),
+      };
+    } else {
+      result[name] = srcB;
+    }
+  }
+  return result;
+}
+
+/**
+ * Merge two ResourceGreen of the same kind using per-field lattice join.
+ * Source fields override builtin fields except when source is absent.
+ */
+function joinResourceFields(source: ResourceGreen, builtin: ResourceGreen): ResourceGreen {
+  if (source.kind !== builtin.kind) return source;
+
+  switch (source.kind) {
+    case 'custom-element': {
+      const b = builtin as CustomElementGreen;
+      return {
+        ...source,
+        containerless: joinField(source.containerless, b.containerless),
+        capture: joinField(source.capture, b.capture),
+        processContent: joinField(source.processContent, b.processContent),
+        shadowOptions: joinField(source.shadowOptions, b.shadowOptions),
+        template: joinField(source.template, b.template),
+        enhance: joinField(source.enhance, b.enhance),
+        strict: joinField(source.strict, b.strict),
+        aliases: joinField(source.aliases, b.aliases),
+        dependencies: joinField(source.dependencies, b.dependencies),
+        watches: joinField(source.watches, b.watches),
+        bindables: joinBindables(source.bindables, b.bindables),
+      };
+    }
+
+    case 'custom-attribute': {
+      const b = builtin as CustomAttributeGreen;
+      return {
+        ...source,
+        noMultiBindings: joinField(source.noMultiBindings, b.noMultiBindings),
+        defaultProperty: joinField(source.defaultProperty, b.defaultProperty),
+        aliases: joinField(source.aliases, b.aliases),
+        dependencies: joinField(source.dependencies, b.dependencies),
+        watches: joinField(source.watches, b.watches),
+        bindables: joinBindables(source.bindables, b.bindables),
+      };
+    }
+
+    case 'template-controller': {
+      const b = builtin as TemplateControllerGreen;
+      return {
+        ...source,
+        noMultiBindings: joinField(source.noMultiBindings, b.noMultiBindings),
+        defaultProperty: joinField(source.defaultProperty, b.defaultProperty),
+        containerStrategy: joinField(source.containerStrategy, b.containerStrategy),
+        aliases: joinField(source.aliases, b.aliases),
+        dependencies: joinField(source.dependencies, b.dependencies),
+        watches: joinField(source.watches, b.watches),
+        bindables: joinBindables(source.bindables, b.bindables),
+        semantics: source.semantics ?? b.semantics,
+      };
+    }
+
+    case 'value-converter': {
+      const b = builtin as ValueConverterGreen;
+      return {
+        ...source,
+        aliases: joinField(source.aliases, b.aliases),
+        fromType: joinField(source.fromType, b.fromType),
+        toType: joinField(source.toType, b.toType),
+        hasFromView: joinField(source.hasFromView, b.hasFromView),
+        signals: joinField(source.signals, b.signals),
+      };
+    }
+
+    case 'binding-behavior': {
+      const b = builtin as BindingBehaviorGreen;
+      return {
+        ...source,
+        aliases: joinField(source.aliases, b.aliases),
+        isFactory: joinField(source.isFactory, b.isFactory),
+      };
+    }
+
+    default:
+      return source;
+  }
+}
+
+/**
+ * Merge a catalog section using per-field lattice join.
+ * Source entries override builtin entries. For resources that exist in
+ * both, per-field join preserves builtin values where source is absent.
+ */
+function mergeCatalogSection<T extends ResourceGreen>(
+  builtins: Readonly<Record<string, T>>,
+  source: Readonly<Record<string, T>>,
+): Readonly<Record<string, T>> {
+  const result: Record<string, T> = { ...builtins };
+  for (const [name, srcRes] of Object.entries(source)) {
+    const builtinRes = builtins[name];
+    if (builtinRes) {
+      result[name] = joinResourceFields(srcRes, builtinRes) as T;
+    } else {
+      result[name] = srcRes;
+    }
+  }
+  return result;
 }

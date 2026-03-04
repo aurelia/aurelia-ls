@@ -111,11 +111,12 @@ describe("1A: CE Recognition", () => {
     });
   });
 
-  it("#33 CE convention filename match (no suffix)", () => {
+  it("#33 CE convention filename match (no suffix, paired HTML)", () => {
     const result = runInterpreter({
       "/src/my-comp.ts": `
         export class MyComp {}
       `,
+      "/src/my-comp.html": `<template><div></div></template>`,
     });
 
     assertClaim(result, {

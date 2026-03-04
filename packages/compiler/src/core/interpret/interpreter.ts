@@ -138,6 +138,15 @@ function interpretFile(
   const units = enumerateUnits(sf, filePath);
   const scope = buildFileScope(sf, filePath);
 
+  // Check for paired HTML template (gates convention filename-matching rule)
+  const hasPairedTemplate = detectPairedTemplate(filePath, config);
+
+  // Pre-scan for define() call targets — classes referenced as the second
+  // argument to X.define(config, ClassName). These classes should NOT be
+  // convention-recognized because the define() call provides the real name.
+  // F2: explicit forms take precedence over convention.
+  const defineTargets = prescanDefineTargets(sf);
+
   // Track recognized classes so define() calls can find them
   const classMap = new Map<string, ClassValue>();
   // Track which classes were already recognized via explicit forms (decorator/$au)
@@ -150,7 +159,10 @@ function interpretFile(
 
     try {
       config.graph.tracer.readFile(filePath);
-      const recognized = evaluateUnit(sf, filePath, unit, config, checker);
+      // Suppress convention entirely for classes targeted by define() calls —
+      // the define() provides the authoritative name (F2 precedence).
+      const skipConvention = defineTargets.has(unit.key);
+      const recognized = evaluateUnit(sf, filePath, unit, config, checker, hasPairedTemplate, skipConvention);
       if (recognized && recognized.source.tier === 'analysis-explicit') {
         explicitlyRecognizedClasses.add(unit.key);
       }
@@ -186,6 +198,8 @@ function evaluateUnit(
   unit: EvaluationUnit,
   config: InterpreterConfig,
   checker: ts.TypeChecker,
+  hasPairedTemplate?: boolean,
+  skipConvention?: boolean,
 ): RecognizedResource | null {
   const { graph, program } = config;
   const scope = buildFileScope(sf, filePath);
@@ -212,7 +226,9 @@ function evaluateUnit(
     value,
     unit.key,
     filePath,
-    config.enableConventions ?? true,
+    skipConvention ? false : (config.enableConventions ?? true),
+    undefined, // conventionPolicy — use default
+    hasPairedTemplate,
   );
 
   if (!recognized) return null;
@@ -969,4 +985,95 @@ function classifyRegisterArg(
 
   // Anything else: conditional expressions, template literals, etc.
   return [{ kind: 'gap', reason: 'opaque-expression', site: filePath }];
+}
+
+// =============================================================================
+// Define() Target Pre-scan
+// =============================================================================
+
+/**
+ * Pre-scan a file for define() call targets.
+ *
+ * Quickly walks top-level expression statements looking for the pattern
+ * `X.define(config, ClassName)` where X is a known resource namespace
+ * (CustomElement, CustomAttribute, etc.). Returns the set of class names
+ * that appear as the second argument — these classes should not be
+ * convention-recognized because the define() call provides the real name.
+ *
+ * This is a lightweight syntactic scan — no type checking, no scope
+ * resolution. It just collects identifier names from the second argument
+ * position. False positives are harmless (a class skips convention but
+ * gets properly recognized via define()).
+ */
+function prescanDefineTargets(sf: ts.SourceFile): Set<string> {
+  const targets = new Set<string>();
+  const namespaces = new Set([
+    'CustomElement', 'CustomAttribute', 'ValueConverter',
+    'BindingBehavior', 'BindingCommand',
+  ]);
+
+  for (const stmt of sf.statements) {
+    if (!ts.isExpressionStatement(stmt)) continue;
+    visitDefineExpr(stmt.expression, namespaces, targets);
+  }
+
+  return targets;
+}
+
+function visitDefineExpr(
+  expr: ts.Expression,
+  namespaces: Set<string>,
+  targets: Set<string>,
+): void {
+  if (!ts.isCallExpression(expr)) return;
+
+  const callee = expr.expression;
+
+  // X.define(config, ClassName)
+  if (ts.isPropertyAccessExpression(callee) &&
+      callee.name.text === 'define' &&
+      ts.isIdentifier(callee.expression) &&
+      namespaces.has(callee.expression.text)) {
+    const classArg = expr.arguments[1];
+    if (classArg && ts.isIdentifier(classArg)) {
+      targets.add(classArg.text);
+    }
+  }
+
+  // Recurse into chained calls: X.define(...).register(...)
+  if (ts.isPropertyAccessExpression(callee) && ts.isCallExpression(callee.expression)) {
+    visitDefineExpr(callee.expression, namespaces, targets);
+  }
+}
+
+// =============================================================================
+// Paired HTML Template Detection
+// =============================================================================
+
+/**
+ * Check whether a .ts file has a paired HTML template in the same directory.
+ *
+ * Convention pattern: `foo.ts` → `foo.html` or `foo-view.html`.
+ * This gates the filename-matching convention rule — without a paired
+ * template, a class with no resource suffix is not recognized as a CE.
+ */
+function detectPairedTemplate(
+  filePath: NormalizedPath,
+  config: InterpreterConfig,
+): boolean {
+  if (!filePath.endsWith('.ts')) return false;
+
+  const basePath = filePath.slice(0, -3); // strip '.ts'
+
+  // Try {basename}.html, then {basename}-view.html
+  for (const suffix of ['.html', '-view.html']) {
+    const htmlPath = basePath + suffix;
+    // Use config.readFile if available, otherwise fall back to ts.sys
+    const content = config.readFile
+      ? config.readFile(htmlPath)
+      : ts.sys?.readFile?.(htmlPath);
+    if (content !== undefined) return true;
+  }
+
+  return false;
 }

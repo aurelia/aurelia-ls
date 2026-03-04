@@ -93,6 +93,7 @@ export function recognizeResource(
   filePath: NormalizedPath,
   enableConventions: boolean,
   conventionPolicy?: CompiledConventionPolicy,
+  hasPairedTemplate?: boolean,
 ): RecognizedResource | null {
   if (value.kind !== 'class') return null;
 
@@ -101,7 +102,7 @@ export function recognizeResource(
   // Try forms in priority order (most explicit first)
   return recognizeDecorator(value, policy)
     ?? recognizeStaticAu(value, policy)
-    ?? (enableConventions && policy.enabled ? recognizeConvention(value, filePath, policy) : null);
+    ?? (enableConventions && policy.enabled ? recognizeConvention(value, filePath, policy, hasPairedTemplate) : null);
 }
 
 // =============================================================================
@@ -164,30 +165,76 @@ function recognizeStaticAu(
   policy: CompiledConventionPolicy,
 ): RecognizedResource | null {
   const au = cls.staticMembers.get('$au');
-  if (!au || au.kind !== 'object') return null;
+  if (!au) return null;
 
-  // $au must have a type field: { type: 'custom-element', ... }
-  const typeValue = extractString(getProperty(au, 'type'));
-  if (!typeValue) return null;
+  // Two sub-cases:
+  // A) $au is an object literal → try to extract type + name fields
+  // B) $au is a function call (e.g., createConfig('oneTime')) → fields not directly available
+  // In both cases, the PRESENCE of $au is explicit evidence of resource intent.
 
-  // Handle template-controller: CA type with isTemplateController flag
-  let kind = AU_TYPE_KIND_MAP.get(typeValue);
-  if (typeValue === 'custom-attribute') {
-    const isTc = getProperty(au, 'isTemplateController');
-    if (isTc && isTc.kind === 'literal' && isTc.value === true) {
-      kind = 'template-controller';
+  if (au.kind === 'object') {
+    // Case A: object literal — try full field extraction
+    const typeValue = extractString(getProperty(au, 'type'));
+    if (typeValue) {
+      // Full $au recognition — type resolved successfully
+      let kind = AU_TYPE_KIND_MAP.get(typeValue);
+      if (typeValue === 'custom-attribute') {
+        const isTc = getProperty(au, 'isTemplateController');
+        if (isTc && isTc.kind === 'literal' && isTc.value === true) {
+          kind = 'template-controller';
+        }
+      }
+      if (kind) {
+        const name = extractResourceName(au, cls.className, kind, policy);
+        return {
+          kind,
+          resourceKey: `${kind}:${name}`,
+          name,
+          source: { tier: 'analysis-explicit', form: 'static-$au' },
+          config: au,
+        };
+      }
     }
+
+    // Case A fallback: $au is an object but type/name fields couldn't be
+    // resolved (imported constants, property access chains, etc.).
+    // The $au property IS explicit evidence — use convention for kind/name
+    // but preserve the explicit tier. This prevents silent fallthrough to
+    // convention creating a separate entry with the wrong name.
+    return recognizeStaticAuPartial(cls, au, policy);
   }
-  if (!kind) return null;
 
-  const name = extractResourceName(au, cls.className, kind, policy);
+  // Case B: $au is not an object (function call, reference, etc.)
+  // e.g., static $au = createConfig('oneTime')
+  // Still explicit evidence — try convention for kind/name.
+  return recognizeStaticAuPartial(cls, au, policy);
+}
 
+/**
+ * Partial $au recognition: the class has a $au property but we can't
+ * fully parse it. Use convention rules for kind + name derivation,
+ * but mark as analysis-explicit (not convention) because the $au
+ * property IS an explicit declaration of resource intent.
+ *
+ * Records a gap so provenance consumers know the name was derived,
+ * not extracted from the declaration.
+ */
+function recognizeStaticAuPartial(
+  cls: ClassValue,
+  au: AnalyzableValue,
+  policy: CompiledConventionPolicy,
+): RecognizedResource | null {
+  // Try to determine kind from class name suffix
+  const suffixMatch = policy.matchSuffix(cls.className);
+  if (!suffixMatch) return null; // No suffix, no $au type → can't determine kind
+
+  const name = policy.deriveName(cls.className, suffixMatch.kind);
   return {
-    kind,
-    resourceKey: `${kind}:${name}`,
+    kind: suffixMatch.kind,
+    resourceKey: `${suffixMatch.kind}:${name}`,
     name,
-    source: { tier: 'analysis-explicit', form: 'static-$au' },
-    config: au,
+    source: { tier: 'analysis-explicit', form: 'static-$au-partial' },
+    config: au.kind === 'object' ? au : undefined,
   };
 }
 
@@ -199,11 +246,12 @@ function recognizeConvention(
   cls: ClassValue,
   filePath: NormalizedPath,
   policy: CompiledConventionPolicy,
+  hasPairedTemplate?: boolean,
 ): RecognizedResource | null {
   const className = cls.className;
   const fileBaseName = extractFileBaseName(filePath);
 
-  // Try suffix match via policy
+  // Try suffix match via policy — unambiguous signal, no template required
   const suffixMatch = policy.matchSuffix(className);
   if (suffixMatch) {
     const name = policy.deriveName(className, suffixMatch.kind);
@@ -215,7 +263,7 @@ function recognizeConvention(
     };
   }
 
-  // Try file pattern match via policy
+  // Try file pattern match via policy — configured patterns, no template required
   if (fileBaseName) {
     const fileKind = policy.matchFilePattern(fileBaseName);
     if (fileKind) {
@@ -229,17 +277,22 @@ function recognizeConvention(
     }
   }
 
-  // No suffix, no file pattern → CE only when derived name matches filename
-  // F2 §Form 4: "Only the first exported class whose convention name
-  // matches the filename name."
-  const candidateName = policy.deriveName(className, 'custom-element');
-  if (fileBaseName && candidateName === fileBaseName) {
-    return {
-      kind: 'custom-element',
-      resourceKey: `custom-element:${candidateName}`,
-      name: candidateName,
-      source: { tier: 'analysis-convention', form: 'convention' },
-    };
+  // No suffix, no file pattern → CE only when:
+  // 1. Derived name matches filename (F2 §Form 4), AND
+  // 2. A paired HTML template exists in the same directory.
+  // Without a template, a class with no resource suffix is just a class —
+  // not a custom element. This prevents over-recognition of services
+  // (DialogController, HttpClient, Router, etc.) as CEs.
+  if (hasPairedTemplate) {
+    const candidateName = policy.deriveName(className, 'custom-element');
+    if (fileBaseName && candidateName === fileBaseName) {
+      return {
+        kind: 'custom-element',
+        resourceKey: `custom-element:${candidateName}`,
+        name: candidateName,
+        source: { tier: 'analysis-convention', form: 'convention' },
+      };
+    }
   }
 
   return null;
@@ -331,9 +384,67 @@ export function recognizeDefineCall(
   let kind = DEFINE_NAMESPACE_MAP.get(namespaceName);
   if (!kind) return null;
 
-  // First arg is the config
+  // First arg is the config — supports two forms:
+  //   X.define({ name: 'foo', ... }, MyClass)  — object config
+  //   X.define('foo', MyClass)                 — string shorthand
   const config = value.args[0];
-  if (!config || config.kind !== 'object') return null;
+  if (!config) return null;
+
+  // String shorthand: X.define('name', MyClass)
+  if (config.kind === 'literal' && typeof config.value === 'string') {
+    const classRef = value.args[1];
+    let className: string | undefined;
+    if (classRef) {
+      const resolvedRef = getResolvedValue(classRef);
+      if (resolvedRef.kind === 'class') {
+        className = resolvedRef.className;
+      } else if (classRef.kind === 'reference') {
+        className = classRef.name;
+      } else if (classRef.kind === 'import') {
+        className = classRef.exportName;
+      }
+    }
+
+    return {
+      kind,
+      resourceKey: `${kind}:${config.value}`,
+      name: config.value,
+      source: { tier: 'analysis-explicit', form: 'define' },
+      config,
+      className: className,
+    };
+  }
+
+  // Object config: X.define({ name: 'foo', ... }, MyClass)
+  // If config is not an object or string (e.g., imported constant reference),
+  // we still know a define() call exists — use convention name as fallback
+  // with explicit tier + partial form (same principle as $au-partial).
+  if (config.kind !== 'object') {
+    const classRef = value.args[1];
+    let className: string | undefined;
+    if (classRef) {
+      const resolvedRef = getResolvedValue(classRef);
+      if (resolvedRef.kind === 'class') {
+        className = resolvedRef.className;
+      } else if (classRef.kind === 'reference') {
+        className = classRef.name;
+      } else if (classRef.kind === 'import') {
+        className = classRef.exportName;
+      }
+    }
+    if (className) {
+      const name = policy.deriveName(className, kind as any);
+      return {
+        kind,
+        resourceKey: `${kind}:${name}`,
+        name,
+        source: { tier: 'analysis-explicit', form: 'define-partial' },
+        config: undefined,
+        className,
+      };
+    }
+    return null;
+  }
 
   // Check for isTemplateController (TC via CustomAttribute.define)
   if (kind === 'custom-attribute') {

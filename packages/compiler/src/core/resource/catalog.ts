@@ -22,7 +22,7 @@ import type {
 /**
  * Build a ResourceCatalogGreen from a flat list of resources.
  *
- * Resources are indexed by name (lowercased). Later entries
+ * Resources are indexed by name (case-preserving). Later entries
  * override earlier ones for the same name — this enables
  * convergence ordering (builtins first, then source analysis).
  */
@@ -34,7 +34,7 @@ export function buildCatalog(resources: readonly ResourceGreen[]): ResourceCatal
   const bindingBehaviors: Record<string, BindingBehaviorGreen> = {};
 
   for (const r of resources) {
-    const key = r.name.toLowerCase();
+    const key = r.name;
     switch (r.kind) {
       case 'custom-element': elements[key] = r; break;
       case 'custom-attribute': attributes[key] = r; break;
