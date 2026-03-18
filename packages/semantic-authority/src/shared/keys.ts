@@ -1,5 +1,4 @@
 import type {
-  CompletenessFamily,
   LookupDomain,
   PositionFamily,
   ResourceKind,
@@ -202,13 +201,6 @@ export function serializeBoundaryKey(key: CompletenessKey): BoundaryKey {
     case "type-closure":
       return `${key.consultedContext}${STRUCTURED_AXIS_SEPARATOR}tc${STRUCTURED_AXIS_SEPARATOR}${key.typeClosureSurface}` as BoundaryKey;
   }
-}
-
-export function serializeGraphCompletenessKey(key: {
-  readonly boundaryKey: BoundaryKey;
-  readonly completenessFamily: CompletenessFamily;
-}): string {
-  return `completeness:${key.boundaryKey}:${key.completenessFamily}`;
 }
 
 export function serializeResourceKey(key: ResourceKey): string {

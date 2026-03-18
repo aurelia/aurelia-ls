@@ -7,7 +7,6 @@ import {
   serializeBoundaryKey,
   serializeBindableKey,
   serializeBindableTraitKey,
-  serializeGraphCompletenessKey,
   serializeEntityKey,
   serializeGovernedSemanticKey,
   serializeLookupKey,
@@ -191,7 +190,7 @@ describe("semantic-authority shared key encoding helpers", () => {
     );
   });
 
-  it("serializes boundary keys per EB-4 and wraps graph completeness keys", () => {
+  it("serializes boundary keys per EB-4", () => {
     const consultedContext = serializeConsultedContext({
       scopeChainRef: "root/app",
       boundaryIdentifier: "root",
@@ -244,11 +243,5 @@ describe("semantic-authority shared key encoding helpers", () => {
     });
 
     expect(boundaryKey).toBe("root/app::root::tc::expression");
-    expect(
-      serializeGraphCompletenessKey({
-        boundaryKey,
-        completenessFamily: "type-closure",
-      }),
-    ).toBe("completeness:root/app::root::tc::expression:type-closure");
   });
 });

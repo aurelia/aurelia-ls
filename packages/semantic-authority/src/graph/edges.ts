@@ -1,5 +1,5 @@
 import type { EdgeClass } from "../shared/edges.js";
-import type { NodeKey } from "./types.js";
+import type { NodeKey } from "./keys.js";
 
 export interface GraphEdgeBase {
   readonly edgeClass: EdgeClass;

@@ -1,6 +1,6 @@
-import { serializeGraphCompletenessKey } from "../shared/keys.js";
 import type { RevisionToken } from "../shared/types.js";
-import type { CompletenessWitnessNode, CompletenessKey } from "./types.js";
+import { serializeGraphCompletenessKey, type CompletenessKey } from "./keys.js";
+import type { CompletenessWitnessNode } from "./types.js";
 
 function serializeWitnessKey(key: CompletenessKey): string {
   return serializeGraphCompletenessKey(key);
