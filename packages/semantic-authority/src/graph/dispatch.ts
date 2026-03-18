@@ -17,8 +17,15 @@ export interface GraphDispatchOptions {
   readonly nodeEvaluationRequester?: GraphNodeEvaluationRequester;
 }
 
+export interface GraphCommittedNodeChange {
+  readonly current: ClaimNodeBase;
+  readonly previous: ClaimNodeBase | undefined;
+}
+
 export type GraphDispatchResult =
   | {
+      readonly committedNodeChanges: readonly GraphCommittedNodeChange[];
+      readonly deletedNodeKeys: readonly NodeKey[];
       readonly node: ClaimNodeBase;
       readonly registration: GraphEvaluatorRegistration;
       readonly status: "ok";
@@ -104,9 +111,11 @@ export async function dispatchRegisteredEvaluator(
       mutation,
       targetNode,
     } satisfies GraphEvaluatorDispatchContext);
-    mutation.commit();
+    const commitSummary = mutation.commit();
 
     return {
+      committedNodeChanges: commitSummary.committedNodeChanges,
+      deletedNodeKeys: commitSummary.deletedNodeKeys,
       node: options.nodeStore.get(targetNodeKey) ?? liveNode,
       registration,
       status: "ok",
@@ -128,6 +137,7 @@ class BufferedGraphMutationHandle implements GraphMutationHandle {
   readonly #nodeDeletes = new Map<string, NodeKey>();
   readonly #nodeStore: GraphNodeStore;
   readonly #nodeUpserts = new Map<string, ClaimNodeBase>();
+  readonly #priorNodeSnapshots = new Map<string, ClaimNodeBase | undefined>();
   readonly #nodeEvaluationRequester?: GraphNodeEvaluationRequester;
 
   public constructor(
@@ -156,6 +166,7 @@ class BufferedGraphMutationHandle implements GraphMutationHandle {
     const nodeId = serializeGraphNodeKey(nodeKey);
     this.#nodeUpserts.delete(nodeId);
     this.#nodeDeletes.set(nodeId, cloneGraphValue(nodeKey));
+    this.#capturePriorNode(nodeId, nodeKey);
   }
 
   public deleteOpenBoundariesFor(targetFamilyId: FamilyTag, subjectKey: GraphEntityKey): number {
@@ -216,10 +227,14 @@ class BufferedGraphMutationHandle implements GraphMutationHandle {
   public upsertNode(node: ClaimNodeBase): void {
     const nodeId = serializeGraphNodeKey(node.key);
     this.#nodeDeletes.delete(nodeId);
+    this.#capturePriorNode(nodeId, node.key);
     this.#nodeUpserts.set(nodeId, cloneGraphValue(node));
   }
 
-  public commit(): void {
+  public commit(): {
+    readonly committedNodeChanges: readonly GraphCommittedNodeChange[];
+    readonly deletedNodeKeys: readonly NodeKey[];
+  } {
     for (const identity of this.#edgeDeletes.values()) {
       this.#edgeStore.delete(identity);
     }
@@ -228,13 +243,25 @@ class BufferedGraphMutationHandle implements GraphMutationHandle {
       this.#nodeStore.delete(nodeKey);
     }
 
-    for (const node of this.#nodeUpserts.values()) {
-      this.#nodeStore.set(cloneGraphValue(node));
+    const committedNodeChanges: GraphCommittedNodeChange[] = [];
+    for (const [nodeId, node] of this.#nodeUpserts.entries()) {
+      const committedNode = cloneGraphValue(node);
+      committedNode.validityState = "valid";
+      this.#nodeStore.set(committedNode);
+      committedNodeChanges.push({
+        current: committedNode,
+        previous: this.#priorNodeSnapshots.get(nodeId),
+      });
     }
 
     for (const edge of this.#edgeUpserts.values()) {
       this.#edgeStore.add(cloneGraphValue(edge));
     }
+
+    return {
+      committedNodeChanges,
+      deletedNodeKeys: [...this.#nodeDeletes.values()],
+    };
   }
 
   #collectVisibleNodes(): readonly ClaimNodeBase[] {
@@ -253,6 +280,18 @@ class BufferedGraphMutationHandle implements GraphMutationHandle {
     }
 
     return [...visible.values()];
+  }
+
+  #capturePriorNode(nodeId: string, nodeKey: NodeKey): void {
+    if (this.#priorNodeSnapshots.has(nodeId)) {
+      return;
+    }
+
+    const liveNode = this.#nodeStore.get(nodeKey);
+    this.#priorNodeSnapshots.set(
+      nodeId,
+      liveNode == null ? undefined : cloneGraphValue(liveNode),
+    );
   }
 }
 
