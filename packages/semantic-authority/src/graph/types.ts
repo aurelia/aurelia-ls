@@ -6,6 +6,7 @@ import type {
   BoundaryKey,
   ConsultedWorld,
 } from "../shared/keys.js";
+import type { NodeKindTag } from "../shared/node-kinds.js";
 import type {
   ClaimState,
   DegradationTarget,
@@ -16,26 +17,8 @@ import type {
   WitnessState,
 } from "../shared/types.js";
 import type { CompletenessKey, NodeKey } from "./keys.js";
-
-export const NODE_KIND_TAGS = [
-  "resource-identity",
-  "field-fact",
-  "bindable-identity",
-  "bindable-trait",
-  "admission",
-  "reachability",
-  "position-classification",
-  "correctness-finding",
-  "open-boundary",
-  "witness",
-  "completeness-witness",
-  "governed-semantic",
-  "observation",
-  "reference-entry",
-  "bridge-artifact",
-] as const;
-
-export type NodeKindTag = (typeof NODE_KIND_TAGS)[number];
+export { NODE_KIND_TAGS } from "../shared/node-kinds.js";
+export type { NodeKindTag } from "../shared/node-kinds.js";
 
 export interface ClaimNodeBase {
   readonly key: NodeKey;
