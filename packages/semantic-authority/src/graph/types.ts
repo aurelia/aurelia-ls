@@ -1,4 +1,8 @@
-import type { CompletenessFamily, ReferenceKind } from "../shared/enums.js";
+import type {
+  ClosabilityStatus,
+  CompletenessFamily,
+  ReferenceKind,
+} from "../shared/enums.js";
 import type {
   AdmissionKey,
   BoundaryKey,
@@ -23,6 +27,7 @@ import type {
   RetentionTier,
   RevisionToken,
   ValidityState,
+  WitnessState,
 } from "../shared/types.js";
 
 export interface FieldFactKey {
@@ -142,4 +147,15 @@ export interface ConsultedWorldScope {
 
 export interface DegradableNode {
   readonly degradationTarget: DegradationTarget | null;
+}
+
+export interface CompletenessWitnessNode extends ClaimNodeBase, DegradableNode {
+  readonly nodeKind: "completeness-witness";
+  readonly key: CompletenessKey;
+  readonly completenessFamily: CompletenessFamily;
+  readonly boundaryKey: BoundaryKey;
+  witnessState: WitnessState;
+  closability: ClosabilityStatus;
+  readonly valueLevelProvenance: unknown | null;
+  readonly decisionLevelProvenance: unknown | null;
 }

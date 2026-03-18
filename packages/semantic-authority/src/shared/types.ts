@@ -1,5 +1,7 @@
 export type ClaimState = "holds" | "fails" | "unevaluated" | "error";
 
+export type WitnessState = "satisfied" | "unsatisfied" | "open";
+
 export type ValidityState = "valid" | "stale";
 
 export type RetentionTier = "pinned" | "hot" | "warm" | "cold";
