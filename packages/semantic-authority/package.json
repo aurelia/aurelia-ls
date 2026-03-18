@@ -1,0 +1,27 @@
+{
+  "name": "@aurelia-ls/semantic-authority",
+  "version": "0.2.0",
+  "description": "Semantic authority runtime for Aurelia tooling",
+  "type": "module",
+  "main": "./out/index.js",
+  "types": "./out/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./out/index.js",
+      "types": "./out/index.d.ts"
+    }
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aurelia/aurelia-ls"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc --noEmit",
+    "typecheck:test": "tsc --noEmit -p tsconfig.test.json"
+  },
+  "peerDependencies": {
+    "typescript": "^5.5.4"
+  }
+}

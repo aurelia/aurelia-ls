@@ -3,6 +3,55 @@ const globals = require("globals");
 const tsParser = require("@typescript-eslint/parser");
 const tseslint = require("@typescript-eslint/eslint-plugin");
 
+const semanticAuthorityBoundaryRules = {
+  shared: ["graph", "subject-model", "evaluators", "ts-bridge", "facade", "workspace", "consumer-adapters"],
+  graph: ["subject-model", "evaluators", "ts-bridge", "facade", "workspace", "consumer-adapters"],
+  "subject-model": ["graph", "evaluators", "ts-bridge", "facade", "workspace", "consumer-adapters"],
+  evaluators: ["facade", "workspace", "consumer-adapters"],
+  "ts-bridge": ["evaluators", "facade", "workspace", "consumer-adapters"],
+  facade: ["evaluators", "workspace", "consumer-adapters"],
+  workspace: ["facade", "consumer-adapters"],
+  "consumer-adapters": ["graph", "evaluators", "subject-model", "ts-bridge"],
+};
+
+function createSemanticAuthorityRestrictions(sourceModule, forbiddenTargets) {
+  return [
+    {
+      group: ["@aurelia-ls/*"],
+      message: "semantic-authority is a clean-room package; do not import existing @aurelia-ls sibling packages.",
+    },
+    ...forbiddenTargets.map((target) => ({
+      group: [`**/${target}`, `**/${target}/**`],
+      message: `semantic-authority dependency matrix forbids ${sourceModule} -> ${target}.`,
+    })),
+  ];
+}
+
+const semanticAuthorityLintOverrides = [
+  {
+    files: ["packages/semantic-authority/src/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: createSemanticAuthorityRestrictions("package-root", []),
+        },
+      ],
+    },
+  },
+  ...Object.entries(semanticAuthorityBoundaryRules).map(([sourceModule, forbiddenTargets]) => ({
+    files: [`packages/semantic-authority/src/${sourceModule}/**/*.ts`],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: createSemanticAuthorityRestrictions(sourceModule, forbiddenTargets),
+        },
+      ],
+    },
+  })),
+];
+
 module.exports = [
   {
     ignores: [
@@ -105,4 +154,5 @@ module.exports = [
       eqeqeq: ["error", "smart"],
     },
   },
+  ...semanticAuthorityLintOverrides,
 ];
