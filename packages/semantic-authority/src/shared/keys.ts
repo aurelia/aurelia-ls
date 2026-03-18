@@ -1,5 +1,4 @@
 import type {
-  BoundaryLevel,
   CompletenessFamily,
   LookupDomain,
   PositionFamily,
@@ -45,6 +44,7 @@ export interface Position {
 declare const occurrenceAnchorBrand: unique symbol;
 declare const consultedContextBrand: unique symbol;
 declare const consultedWorldBrand: unique symbol;
+declare const boundaryKeyBrand: unique symbol;
 
 export type OccurrenceAnchor = string & {
   readonly [occurrenceAnchorBrand]: "OccurrenceAnchor";
@@ -56,6 +56,10 @@ export type ConsultedContext = string & {
 
 export type ConsultedWorld = string & {
   readonly [consultedWorldBrand]: "ConsultedWorld";
+};
+
+export type BoundaryKey = string & {
+  readonly [boundaryKeyBrand]: "BoundaryKey";
 };
 
 export interface OccurrenceAnchorParts {
@@ -181,6 +185,30 @@ export function serializeConsultedWorld(parts: ConsultedWorldParts): ConsultedWo
 export function parseConsultedWorld(world: ConsultedWorld | string): ConsultedWorldParts {
   const [worldIdentifier, boundaryIdentifier] = parseStructuredPair(world, "ConsultedWorld");
   return { worldIdentifier, boundaryIdentifier };
+}
+
+export function serializeBoundaryKey(key: CompletenessKey): BoundaryKey {
+  switch (key.completenessFamily) {
+    case "grammar-shape":
+      return `${key.consultedContext}${STRUCTURED_AXIS_SEPARATOR}gs${STRUCTURED_AXIS_SEPARATOR}${key.grammarShapeSurface}` as BoundaryKey;
+    case "resource-admission":
+      return `${key.consultedWorld}${STRUCTURED_AXIS_SEPARATOR}ra${STRUCTURED_AXIS_SEPARATOR}${key.resourceFamily}` as BoundaryKey;
+    case "vocabulary-admission":
+      return `${key.consultedWorld}${STRUCTURED_AXIS_SEPARATOR}va${STRUCTURED_AXIS_SEPARATOR}${key.vocabularyFamily}` as BoundaryKey;
+    case "resource-scope":
+      return `${key.consultedContext}${STRUCTURED_AXIS_SEPARATOR}rs${STRUCTURED_AXIS_SEPARATOR}${key.resourceFamily}` as BoundaryKey;
+    case "template-scope":
+      return `${key.consultedContext}${STRUCTURED_AXIS_SEPARATOR}ts${STRUCTURED_AXIS_SEPARATOR}${key.lookupDomain}` as BoundaryKey;
+    case "type-closure":
+      return `${key.consultedContext}${STRUCTURED_AXIS_SEPARATOR}tc${STRUCTURED_AXIS_SEPARATOR}${key.typeClosureSurface}` as BoundaryKey;
+  }
+}
+
+export function serializeGraphCompletenessKey(key: {
+  readonly boundaryKey: BoundaryKey;
+  readonly completenessFamily: CompletenessFamily;
+}): string {
+  return `completeness:${key.boundaryKey}:${key.completenessFamily}`;
 }
 
 export function serializeResourceKey(key: ResourceKey): string {
@@ -309,55 +337,49 @@ export interface ReachabilityKey {
   readonly subjectKey: EntityKey;
 }
 
-export interface CompletenessKeyContextSurface {
-  readonly scopingPattern: "context-surface";
+export interface CompletenessKeyGrammarShape {
+  readonly completenessFamily: "grammar-shape";
   readonly consultedContext: ConsultedContext;
-  readonly surface: string;
-  readonly completenessFamily: CompletenessFamily;
+  readonly grammarShapeSurface: string;
 }
 
-export interface CompletenessKeyWorldFamily {
-  readonly scopingPattern: "world-family";
+export interface CompletenessKeyResourceAdmission {
+  readonly completenessFamily: "resource-admission";
   readonly consultedWorld: ConsultedWorld;
   readonly resourceFamily: ResourceKind;
-  readonly completenessFamily: CompletenessFamily;
 }
 
-export interface CompletenessKeyContextBoundary {
-  readonly scopingPattern: "context-boundary";
-  readonly consultedContext: ConsultedContext;
-  readonly boundaryLevel: BoundaryLevel;
-  readonly completenessFamily: CompletenessFamily;
-}
-
-export interface CompletenessKeyWorldResource {
-  readonly scopingPattern: "world-resource";
-  readonly consultedWorld: ConsultedWorld;
-  readonly resourceKey: EntityKey;
-  readonly completenessFamily: CompletenessFamily;
-}
-
-export interface CompletenessKeyContextType {
-  readonly scopingPattern: "context-type";
-  readonly consultedContext: ConsultedContext;
-  readonly typeClosureBoundary: string;
-  readonly completenessFamily: CompletenessFamily;
-}
-
-export interface CompletenessKeyWorldVocabulary {
-  readonly scopingPattern: "world-vocabulary";
+export interface CompletenessKeyVocabularyAdmission {
+  readonly completenessFamily: "vocabulary-admission";
   readonly consultedWorld: ConsultedWorld;
   readonly vocabularyFamily: string;
-  readonly completenessFamily: CompletenessFamily;
+}
+
+export interface CompletenessKeyResourceScope {
+  readonly completenessFamily: "resource-scope";
+  readonly consultedContext: ConsultedContext;
+  readonly resourceFamily: ResourceKind;
+}
+
+export interface CompletenessKeyTemplateScope {
+  readonly completenessFamily: "template-scope";
+  readonly consultedContext: ConsultedContext;
+  readonly lookupDomain: string;
+}
+
+export interface CompletenessKeyTypeClosure {
+  readonly completenessFamily: "type-closure";
+  readonly consultedContext: ConsultedContext;
+  readonly typeClosureSurface: string;
 }
 
 export type CompletenessKey =
-  | CompletenessKeyContextSurface
-  | CompletenessKeyWorldFamily
-  | CompletenessKeyContextBoundary
-  | CompletenessKeyWorldResource
-  | CompletenessKeyContextType
-  | CompletenessKeyWorldVocabulary;
+  | CompletenessKeyGrammarShape
+  | CompletenessKeyResourceAdmission
+  | CompletenessKeyVocabularyAdmission
+  | CompletenessKeyResourceScope
+  | CompletenessKeyTemplateScope
+  | CompletenessKeyTypeClosure;
 
 export interface OpenBoundaryKey {
   readonly targetFamilyId: string;

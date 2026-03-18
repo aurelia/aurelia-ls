@@ -1,9 +1,9 @@
-import type { ReferenceKind } from "../shared/enums.js";
+import type { CompletenessFamily, ReferenceKind } from "../shared/enums.js";
 import type {
   AdmissionKey,
+  BoundaryKey,
   BindableKey,
   BindableTraitKey,
-  CompletenessKey,
   ConsultedWorld,
   DeclarationWitnessKey,
   GovernedSemanticKey,
@@ -66,6 +66,12 @@ export interface BridgeArtifactKey {
   readonly keyKind: "bridge-artifact";
   readonly entityKey: GraphEntityKey;
   readonly artifactKind: string;
+}
+
+export interface CompletenessKey {
+  readonly keyKind: "completeness";
+  readonly boundaryKey: BoundaryKey;
+  readonly completenessFamily: CompletenessFamily;
 }
 
 export type GraphEntityKey =

@@ -4,8 +4,10 @@ import {
   parseConsultedWorld,
   parseOccurrenceAnchor,
   serializeAdmissionKey,
+  serializeBoundaryKey,
   serializeBindableKey,
   serializeBindableTraitKey,
+  serializeGraphCompletenessKey,
   serializeEntityKey,
   serializeGovernedSemanticKey,
   serializeLookupKey,
@@ -187,5 +189,66 @@ describe("semantic-authority shared key encoding helpers", () => {
     ).toBe(
       "open-boundary:claim.identity.custom-attribute:resource:custom-attribute:if:registration-missing",
     );
+  });
+
+  it("serializes boundary keys per EB-4 and wraps graph completeness keys", () => {
+    const consultedContext = serializeConsultedContext({
+      scopeChainRef: "root/app",
+      boundaryIdentifier: "root",
+    });
+    const consultedWorld = serializeConsultedWorld({
+      worldIdentifier: "root/app",
+      boundaryIdentifier: "root/app",
+    });
+
+    expect(
+      serializeBoundaryKey({
+        completenessFamily: "grammar-shape",
+        consultedContext,
+        grammarShapeSurface: "html-element",
+      }),
+    ).toBe("root/app::root::gs::html-element");
+    expect(
+      serializeBoundaryKey({
+        completenessFamily: "resource-admission",
+        consultedWorld,
+        resourceFamily: "custom-element",
+      }),
+    ).toBe("root/app::root/app::ra::custom-element");
+    expect(
+      serializeBoundaryKey({
+        completenessFamily: "vocabulary-admission",
+        consultedWorld,
+        vocabularyFamily: "binding-command",
+      }),
+    ).toBe("root/app::root/app::va::binding-command");
+    expect(
+      serializeBoundaryKey({
+        completenessFamily: "resource-scope",
+        consultedContext,
+        resourceFamily: "custom-attribute",
+      }),
+    ).toBe("root/app::root::rs::custom-attribute");
+    expect(
+      serializeBoundaryKey({
+        completenessFamily: "template-scope",
+        consultedContext,
+        lookupDomain: "template-scope",
+      }),
+    ).toBe("root/app::root::ts::template-scope");
+
+    const boundaryKey = serializeBoundaryKey({
+      completenessFamily: "type-closure",
+      consultedContext,
+      typeClosureSurface: "expression",
+    });
+
+    expect(boundaryKey).toBe("root/app::root::tc::expression");
+    expect(
+      serializeGraphCompletenessKey({
+        boundaryKey,
+        completenessFamily: "type-closure",
+      }),
+    ).toBe("completeness:root/app::root::tc::expression:type-closure");
   });
 });
