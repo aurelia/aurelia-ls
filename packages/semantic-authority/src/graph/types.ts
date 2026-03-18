@@ -1,3 +1,4 @@
+import type { ReferenceKind } from "../shared/enums.js";
 import type {
   AdmissionKey,
   BindableKey,
@@ -53,16 +54,6 @@ export interface ReferenceSite {
   readonly span: TextSpan;
   readonly siteKind: string;
 }
-
-export const REFERENCE_KINDS = [
-  "resource",
-  "bindable",
-  "scope",
-  "governed-linkage",
-  "declaration",
-] as const;
-
-export type ReferenceKind = (typeof REFERENCE_KINDS)[number];
 
 export interface ReferenceEntryKey {
   readonly keyKind: "reference-entry";

@@ -100,6 +100,16 @@ export const COMPLETENESS_FAMILIES = [
 
 export type CompletenessFamily = (typeof COMPLETENESS_FAMILIES)[number];
 
+export const REFERENCE_KINDS = [
+  "resource",
+  "bindable",
+  "scope",
+  "governed-linkage",
+  "declaration",
+] as const;
+
+export type ReferenceKind = (typeof REFERENCE_KINDS)[number];
+
 export const BOUNDARY_LEVELS = [
   "site",
   "registration-boundary",

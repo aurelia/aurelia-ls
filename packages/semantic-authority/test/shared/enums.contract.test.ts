@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   COMPLETENESS_FAMILIES,
   OCCURRENCE_VIOLATION_FAMILIES,
+  REFERENCE_KINDS,
   WITNESS_FAMILIES,
 } from "../../out/shared/index.js";
 
@@ -27,6 +28,16 @@ describe("semantic-authority shared contract enums", () => {
       "template-structure",
       "composition",
       "structural-invalid",
+    ]);
+  });
+
+  it("exposes reference kinds from the shared layer", () => {
+    expect(REFERENCE_KINDS).toEqual([
+      "resource",
+      "bindable",
+      "scope",
+      "governed-linkage",
+      "declaration",
     ]);
   });
 });

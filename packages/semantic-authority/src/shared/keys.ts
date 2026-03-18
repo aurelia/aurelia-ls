@@ -42,19 +42,225 @@ export interface Position {
   readonly character: number;
 }
 
-export interface OccurrenceAnchor {
+declare const occurrenceAnchorBrand: unique symbol;
+declare const consultedContextBrand: unique symbol;
+declare const consultedWorldBrand: unique symbol;
+
+export type OccurrenceAnchor = string & {
+  readonly [occurrenceAnchorBrand]: "OccurrenceAnchor";
+};
+
+export type ConsultedContext = string & {
+  readonly [consultedContextBrand]: "ConsultedContext";
+};
+
+export type ConsultedWorld = string & {
+  readonly [consultedWorldBrand]: "ConsultedWorld";
+};
+
+export interface OccurrenceAnchorParts {
   readonly documentUri: string;
   readonly position: Position;
 }
 
-export interface ConsultedContext {
+export interface ConsultedContextParts {
   readonly scopeChainRef: string;
   readonly boundaryIdentifier: string;
 }
 
-export interface ConsultedWorld {
+export interface ConsultedWorldParts {
   readonly worldIdentifier: string;
   readonly boundaryIdentifier: string;
+}
+
+const OCCURRENCE_ANCHOR_LINE_WIDTH = 5;
+const OCCURRENCE_ANCHOR_CHARACTER_WIDTH = 4;
+const STRUCTURED_AXIS_SEPARATOR = "::";
+
+function assertNonNegativeInteger(value: number, label: string): void {
+  if (!Number.isInteger(value) || value < 0) {
+    throw new Error(`${label} must be a non-negative integer.`);
+  }
+}
+
+function assertSeparatorFree(value: string, separator: string, label: string): void {
+  if (value.includes(separator)) {
+    throw new Error(`${label} must not contain '${separator}'.`);
+  }
+}
+
+function padCoordinate(value: number, width: number, label: string): string {
+  assertNonNegativeInteger(value, label);
+
+  const encoded = String(value);
+  if (encoded.length > width) {
+    throw new Error(`${label} exceeds the supported width of ${width} digits.`);
+  }
+
+  return encoded.padStart(width, "0");
+}
+
+function parseStructuredPair(serialized: string, label: string): readonly [string, string] {
+  const firstSeparator = serialized.indexOf(STRUCTURED_AXIS_SEPARATOR);
+  const lastSeparator = serialized.lastIndexOf(STRUCTURED_AXIS_SEPARATOR);
+  if (firstSeparator <= 0 || firstSeparator !== lastSeparator) {
+    throw new Error(`${label} must contain exactly one '${STRUCTURED_AXIS_SEPARATOR}' separator.`);
+  }
+
+  const lhs = serialized.slice(0, firstSeparator);
+  const rhs = serialized.slice(firstSeparator + STRUCTURED_AXIS_SEPARATOR.length);
+  if (lhs.length === 0 || rhs.length === 0) {
+    throw new Error(`${label} must contain non-empty components.`);
+  }
+
+  return [lhs, rhs] as const;
+}
+
+export function serializeOccurrenceAnchor(parts: OccurrenceAnchorParts): OccurrenceAnchor {
+  const { documentUri, position } = parts;
+  const line = padCoordinate(position.line, OCCURRENCE_ANCHOR_LINE_WIDTH, "OccurrenceAnchor line");
+  const character = padCoordinate(
+    position.character,
+    OCCURRENCE_ANCHOR_CHARACTER_WIDTH,
+    "OccurrenceAnchor character",
+  );
+
+  return `${documentUri}:${line}:${character}` as OccurrenceAnchor;
+}
+
+export function parseOccurrenceAnchor(anchor: OccurrenceAnchor | string): OccurrenceAnchorParts {
+  const characterSeparator = anchor.lastIndexOf(":");
+  const lineSeparator = characterSeparator > 0 ? anchor.lastIndexOf(":", characterSeparator - 1) : -1;
+  if (lineSeparator <= 0 || characterSeparator <= lineSeparator + 1) {
+    throw new Error("OccurrenceAnchor must match '<documentUri>:<line>:<character>' with zero-padded coordinates.");
+  }
+
+  const documentUri = anchor.slice(0, lineSeparator);
+  const line = anchor.slice(lineSeparator + 1, characterSeparator);
+  const character = anchor.slice(characterSeparator + 1);
+  if (line.length !== OCCURRENCE_ANCHOR_LINE_WIDTH || character.length !== OCCURRENCE_ANCHOR_CHARACTER_WIDTH) {
+    throw new Error("OccurrenceAnchor must match '<documentUri>:<line>:<character>' with zero-padded coordinates.");
+  }
+
+  return {
+    documentUri,
+    position: {
+      line: Number.parseInt(line, 10),
+      character: Number.parseInt(character, 10),
+    },
+  };
+}
+
+export function serializeConsultedContext(parts: ConsultedContextParts): ConsultedContext {
+  assertSeparatorFree(parts.scopeChainRef, STRUCTURED_AXIS_SEPARATOR, "ConsultedContext scopeChainRef");
+  assertSeparatorFree(
+    parts.boundaryIdentifier,
+    STRUCTURED_AXIS_SEPARATOR,
+    "ConsultedContext boundaryIdentifier",
+  );
+
+  return `${parts.scopeChainRef}${STRUCTURED_AXIS_SEPARATOR}${parts.boundaryIdentifier}` as ConsultedContext;
+}
+
+export function parseConsultedContext(context: ConsultedContext | string): ConsultedContextParts {
+  const [scopeChainRef, boundaryIdentifier] = parseStructuredPair(context, "ConsultedContext");
+  return { scopeChainRef, boundaryIdentifier };
+}
+
+export function serializeConsultedWorld(parts: ConsultedWorldParts): ConsultedWorld {
+  assertSeparatorFree(parts.worldIdentifier, STRUCTURED_AXIS_SEPARATOR, "ConsultedWorld worldIdentifier");
+  assertSeparatorFree(
+    parts.boundaryIdentifier,
+    STRUCTURED_AXIS_SEPARATOR,
+    "ConsultedWorld boundaryIdentifier",
+  );
+
+  return `${parts.worldIdentifier}${STRUCTURED_AXIS_SEPARATOR}${parts.boundaryIdentifier}` as ConsultedWorld;
+}
+
+export function parseConsultedWorld(world: ConsultedWorld | string): ConsultedWorldParts {
+  const [worldIdentifier, boundaryIdentifier] = parseStructuredPair(world, "ConsultedWorld");
+  return { worldIdentifier, boundaryIdentifier };
+}
+
+export function serializeResourceKey(key: ResourceKey): string {
+  return `resource:${key.kind}:${key.canonicalName}`;
+}
+
+export function serializeAttributePatternKey(key: AttributePatternKey): string {
+  return `resource:attribute-pattern:${key.pattern}|${key.symbols.join(",")}`;
+}
+
+export function serializeLocalCustomElementKey(key: LocalCustomElementKey): string {
+  return `resource:local-custom-element:${serializeResourceKey(key.ownerResourceKey)}/${key.localName}`;
+}
+
+export function serializeEntityKey(key: EntityKey): string {
+  if ("pattern" in key) {
+    return serializeAttributePatternKey(key);
+  }
+
+  if ("ownerResourceKey" in key && "localName" in key) {
+    return serializeLocalCustomElementKey(key);
+  }
+
+  return serializeResourceKey(key);
+}
+
+export function serializeBindableKey(key: BindableKey): string {
+  return `bindable:${serializeResourceKey(key.ownerResourceKey)}:${key.propertyName}`;
+}
+
+export function serializeBindableTraitKey(key: BindableTraitKey): string {
+  return `bindable-trait:${serializeBindableKey(key.bindableKey)}:${key.traitKind}`;
+}
+
+export function serializeOccurrenceKey(key: OccurrenceKey): string {
+  return `occ:${key.consultedContext}:${key.occurrenceAnchor}:${key.family}`;
+}
+
+export function serializeLookupKey(key: LookupKey): string {
+  return `lookup:${serializeOccurrenceKey(key.occurrenceKey)}:${key.lookupDomain}:${key.lookupName}`;
+}
+
+export function serializeRelationKey(key: RelationKey): string {
+  const rhs = typeof key.rhsKey === "string" ? key.rhsKey : serializeRelationKeyOperand(key.rhsKey);
+  return `rel:${serializeRelationKeyOperand(key.lhsKey)}:${rhs}:${key.relationKind}`;
+}
+
+function serializeRelationKeyOperand(value: EntityKey | OccurrenceKey): string {
+  if ("family" in value && "occurrenceAnchor" in value && "consultedContext" in value) {
+    return serializeOccurrenceKey(value);
+  }
+
+  return serializeEntityKey(value);
+}
+
+export function serializeGovernedSemanticKey(key: GovernedSemanticKey): string {
+  return `governed:${serializeEntityKey(key.subjectKey)}:${key.governedFamily}`;
+}
+
+export function serializeAdmissionKey(key: AdmissionKey): string {
+  return `admission:${key.consultedWorld}:${serializeEntityKey(key.subjectKey)}`;
+}
+
+export function serializeReachabilityKey(key: ReachabilityKey): string {
+  return `reach:${key.consultedContext}:${serializeEntityKey(key.subjectKey)}`;
+}
+
+export function serializeDeclarationWitnessKey(key: DeclarationWitnessKey): string {
+  return `decl-witness:${serializeEntityKey(key.subjectKey)}:${key.declarationFormSet}`;
+}
+
+export function serializeSupportBundleKey(key: SupportBundleKey): string {
+  return `support-bundle:${key.targetFamilyId}:${serializeEntityKey(key.subjectKey)}`;
+}
+
+export function serializeOpenBoundaryKey(key: OpenBoundaryKey): string {
+  const subject = "family" in key.subjectKey
+    ? serializeOccurrenceKey(key.subjectKey)
+    : serializeEntityKey(key.subjectKey);
+  return `open-boundary:${key.targetFamilyId}:${subject}:${key.blockedDependency}`;
 }
 
 export interface OccurrenceKey {
