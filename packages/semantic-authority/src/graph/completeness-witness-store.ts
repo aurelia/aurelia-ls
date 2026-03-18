@@ -1,5 +1,6 @@
 import type { RevisionToken } from "../shared/types.js";
 import { serializeGraphCompletenessKey, type CompletenessKey } from "./keys.js";
+import { GraphRevisionClock } from "./revision-clock.js";
 import type { CompletenessWitnessNode } from "./types.js";
 
 function serializeWitnessKey(key: CompletenessKey): string {
@@ -26,14 +27,18 @@ function assertWitnessKeyMatchesNode(witness: CompletenessWitnessNode): void {
 
 export class CompletenessWitnessStore {
   readonly #witnesses = new Map<string, CompletenessWitnessNode>();
-  #currentRevisionToken: RevisionToken = 0;
+  readonly #revisionClock: GraphRevisionClock;
+
+  public constructor(revisionClock: GraphRevisionClock = new GraphRevisionClock()) {
+    this.#revisionClock = revisionClock;
+  }
 
   public get size(): number {
     return this.#witnesses.size;
   }
 
   public get currentRevisionToken(): RevisionToken {
-    return this.#currentRevisionToken;
+    return this.#revisionClock.currentRevisionToken;
   }
 
   public clear(): void {
@@ -54,7 +59,7 @@ export class CompletenessWitnessStore {
 
   public set(witness: CompletenessWitnessNode): CompletenessWitnessNode {
     assertWitnessKeyMatchesNode(witness);
-    witness.revisionToken = this.#issueRevisionToken();
+    witness.revisionToken = this.#revisionClock.issue();
     this.#witnesses.set(serializeWitnessKey(witness.key), witness);
     return witness;
   }
@@ -63,8 +68,4 @@ export class CompletenessWitnessStore {
     return this.#witnesses.values();
   }
 
-  #issueRevisionToken(): RevisionToken {
-    this.#currentRevisionToken += 1;
-    return this.#currentRevisionToken;
-  }
 }
