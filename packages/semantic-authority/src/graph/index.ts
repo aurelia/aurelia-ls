@@ -1,6 +1,7 @@
 export * from "./completeness-witness-store.js";
 export * from "./cutoff.js";
 export * from "./dispatch.js";
+export * from "./direct-index-store.js";
 export * from "./edge-store.js";
 export * from "./edges.js";
 export * from "./keys.js";

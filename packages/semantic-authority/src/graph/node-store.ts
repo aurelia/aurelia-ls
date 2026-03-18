@@ -30,6 +30,10 @@ export class GraphNodeStore<TNode extends ClaimNodeBase = ClaimNodeBase> {
     return this.#nodes.get(serializeGraphNodeKey(key));
   }
 
+  public getBySerializedKey(serializedKey: string): TNode | undefined {
+    return this.#nodes.get(serializedKey);
+  }
+
   public getByNodeKind<K extends NodeKindTag>(
     nodeKind: K,
     key: NodeKey,
