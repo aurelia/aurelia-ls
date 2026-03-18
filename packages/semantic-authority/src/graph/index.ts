@@ -9,4 +9,5 @@ export * from "./pull.js";
 export * from "./protocol.js";
 export * from "./revision-clock.js";
 export * from "./retreat.js";
+export * from "./scheduler.js";
 export * from "./types.js";
