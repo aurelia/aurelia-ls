@@ -24,23 +24,20 @@ export interface GovernedFamilySection {
 }
 
 export interface ControllerSemanticsSlots {
-  readonly trigger: GovernedSlotValue;
-  readonly scope: GovernedSlotValue;
+  readonly scopeEffect: GovernedSlotValue;
+  readonly linkageKind: GovernedSlotValue;
   readonly cardinality: GovernedSlotValue;
-  readonly placement: GovernedSlotValue;
-  readonly branches: GovernedSlotValue;
-  readonly linksTo: GovernedSlotValue;
-  readonly injects: GovernedSlotValue;
-  readonly tailProps: GovernedSlotValue;
+  readonly contextualData: GovernedSlotValue;
+  readonly viewManagement: GovernedSlotValue;
 }
 
 export interface BindingCommandSemanticsSlots {
   readonly commandKind: GovernedSlotValue;
-  readonly mode: GovernedSlotValue;
-  readonly capture: GovernedSlotValue;
-  readonly forceAttribute: GovernedSlotValue;
+  readonly expressionRequired: GovernedSlotValue;
+  readonly targetProperty: GovernedSlotValue;
 }
 
 export interface AttributePatternSemanticsSlots {
   readonly interpret: GovernedSlotValue;
+  readonly symbols: GovernedSlotValue;
 }

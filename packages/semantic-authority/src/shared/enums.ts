@@ -54,6 +54,15 @@ export const CORRECTNESS_CLAIM_KINDS = [
 
 export type CorrectnessClaimKind = (typeof CORRECTNESS_CLAIM_KINDS)[number];
 
+export const OCCURRENCE_VIOLATION_FAMILIES = [
+  "syntax-invalid",
+  "template-structure",
+  "composition",
+  "structural-invalid",
+] as const;
+
+export type OccurrenceViolationFamily = (typeof OCCURRENCE_VIOLATION_FAMILIES)[number];
+
 export const LOOKUP_DOMAINS = [
   "resource-scope",
   "vocabulary-entry",
@@ -80,7 +89,16 @@ export const WITNESS_FAMILIES = [
 
 export type WitnessFamily = (typeof WITNESS_FAMILIES)[number];
 
-export type CompletenessFamily = WitnessFamily;
+export const COMPLETENESS_FAMILIES = [
+  "grammar-shape",
+  "resource-admission",
+  "vocabulary-admission",
+  "resource-scope",
+  "template-scope",
+  "type-closure",
+] as const;
+
+export type CompletenessFamily = (typeof COMPLETENESS_FAMILIES)[number];
 
 export const BOUNDARY_LEVELS = [
   "site",
