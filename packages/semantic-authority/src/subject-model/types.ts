@@ -10,6 +10,7 @@ import type {
   WitnessFamily,
 } from "../shared/enums.js";
 import type { DegradationTargetCategory } from "../shared/degradation-targets.js";
+import type { EdgeClass } from "../shared/edges.js";
 import type { ExtensionIdentifier, GovernedClosureState } from "../shared/families.js";
 import type { NodeKindTag } from "../shared/node-kinds.js";
 
@@ -60,6 +61,34 @@ export const FAMILY_STAGE_VALUES = [
 
 export type FamilyStage = (typeof FAMILY_STAGE_VALUES)[number];
 
+export const DEPENDENCY_CONCEPTS = [
+  "admissibility-gate",
+  "attribute-pattern-semantics-governed-closure",
+  "binding-behavior-semantics-governed-closure",
+  "binding-command-semantics-governed-closure",
+  "classification",
+  "composition-contract",
+  "controller-semantics-governed-closure",
+  "controller-semantics-governed-closure or binding-command-semantics-governed-closure or attribute-pattern-semantics-governed-closure",
+  "declaration-surface",
+  "family-4-governed-applicability",
+  "grammar-shape-completeness",
+  "interface-completeness",
+  "open-boundary",
+  "realized-world-consultation",
+  "resource identity",
+  "resource-admission-completeness",
+  "resource-scope-completeness",
+  "schema-surface-completeness",
+  "subject-derived type evidence",
+  "support-bundle",
+  "template-scope-completeness",
+  "type-closure-completeness",
+  "vocabulary-admission-completeness",
+] as const;
+
+export type DependencyConcept = (typeof DEPENDENCY_CONCEPTS)[number];
+
 export interface QueryableCatalog<TEntry, TKey extends string | number> {
   readonly entries: readonly TEntry[];
   readonly byKey: ReadonlyMap<TKey, TEntry>;
@@ -104,7 +133,7 @@ export interface GovernedFamilyDefinition {
   readonly description: string;
   readonly keyConstructor: string;
   readonly closureStates: readonly GovernedClosureState[];
-  readonly dependencies: readonly string[];
+  readonly dependencies: readonly DependencyConcept[];
   readonly slotNames: readonly string[];
   readonly slots: readonly GovernedSlotDefinition[];
 }
@@ -157,7 +186,7 @@ export interface ScopeFamilyDefinition {
   readonly completenessFamily: CompletenessFamily;
   readonly lookupLaw: string;
   readonly subjectKey: string;
-  readonly dependencies: readonly string[];
+  readonly dependencies: readonly DependencyConcept[];
 }
 
 export interface ClosureContractDefinition {
@@ -166,7 +195,7 @@ export interface ClosureContractDefinition {
   readonly kind: "declaration-surface" | "support-bundle" | "completeness" | "governed";
   readonly closability: ClosabilityStatus;
   readonly description: string;
-  readonly blockingDependencies: readonly string[];
+  readonly blockingDependencies: readonly DependencyConcept[];
   readonly degradationCategory?: DegradationTargetCategory;
 }
 
@@ -180,11 +209,11 @@ export interface ClaimFamilyDefinition {
   readonly producingEvaluatorGroups: readonly EvaluatorGroupId[];
   readonly positiveAssertion: string;
   readonly entityFamily: string;
-  readonly dependencies: readonly string[];
+  readonly dependencies: readonly DependencyConcept[];
   readonly completenessConditions: string;
   readonly degradationTarget: string;
   readonly status: FamilyStatus;
-  readonly incomingEdgeClasses: readonly string[];
+  readonly incomingEdgeClasses: readonly EdgeClass[];
   readonly sourceInputs?: string;
   readonly analysis?: string;
   readonly output?: string;
