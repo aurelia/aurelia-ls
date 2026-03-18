@@ -46,6 +46,16 @@ export class GraphNodeStore<TNode extends ClaimNodeBase = ClaimNodeBase> {
     return this.#nodes.has(serializeGraphNodeKey(key));
   }
 
+  public markStale(key: NodeKey): TNode | undefined {
+    const node = this.get(key);
+    if (node == null) {
+      return undefined;
+    }
+
+    node.validityState = "stale";
+    return node;
+  }
+
   public set(node: TNode): TNode {
     node.revisionToken = this.#revisionClock.issue();
     this.#nodes.set(serializeGraphNodeKey(node.key), node);

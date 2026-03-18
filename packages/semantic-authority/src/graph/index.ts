@@ -4,4 +4,5 @@ export * from "./edges.js";
 export * from "./keys.js";
 export * from "./node-store.js";
 export * from "./revision-clock.js";
+export * from "./retreat.js";
 export * from "./types.js";
