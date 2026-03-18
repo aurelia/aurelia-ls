@@ -32,5 +32,7 @@ describe("semantic-authority governed family definitions", () => {
         { slotName: "symbols", valueType: "string[]" },
       ],
     });
+
+    expect(slotsByFamily["binding-behavior-semantics"]).toBeUndefined();
   });
 });

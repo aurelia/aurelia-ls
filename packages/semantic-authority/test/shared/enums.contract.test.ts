@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   COMPLETENESS_FAMILIES,
+  DEGRADATION_FORMS,
+  GOVERNED_SLOT_COMPLETENESS_VALUES,
   OCCURRENCE_VIOLATION_FAMILIES,
   REFERENCE_KINDS,
   WITNESS_FAMILIES,
@@ -38,6 +40,17 @@ describe("semantic-authority shared contract enums", () => {
       "scope",
       "governed-linkage",
       "declaration",
+    ]);
+  });
+
+  it("keeps facade degradation forms and governed-slot completeness on the reconciled runtime surface", () => {
+    expect(DEGRADATION_FORMS).toHaveLength(10);
+    expect(DEGRADATION_FORMS).toContain("evaluator-error");
+    expect(DEGRADATION_FORMS).not.toContain("site-unknown");
+    expect(GOVERNED_SLOT_COMPLETENESS_VALUES).toEqual([
+      "satisfied",
+      "unsatisfied",
+      "open",
     ]);
   });
 });

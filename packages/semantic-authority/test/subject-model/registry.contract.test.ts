@@ -59,21 +59,100 @@ describe("semantic-authority subject-model registry", () => {
         "correctness.3.duplicate-registration",
       ]),
     );
+
+    expect(SUBJECT_MODEL_REGISTRY.claimFamiliesById.get("claim.resource.custom-element-field")).toMatchObject({
+      nodeKind: "field-fact",
+      stage: "2-4",
+      keyConstructor: "FieldFactKey(ResourceKey(custom-element, canonicalName), fieldPath)",
+      incomingEdgeClasses: ["support"],
+      output: "14 FieldFact nodes per CE",
+    });
+
+    expect(SUBJECT_MODEL_REGISTRY.claimFamiliesById.get("claim.resource.binding-command-field")).toMatchObject({
+      nodeKind: "field-fact",
+      stage: "2-4",
+      keyConstructor: "FieldFactKey(ResourceKey(binding-command, canonicalName), fieldPath)",
+      output: "2 FieldFact nodes per BC",
+    });
+
+    expect(SUBJECT_MODEL_REGISTRY.claimFamiliesById.get("claim.governed.binding-command-semantics")).toMatchObject({
+      nodeKind: "governed-semantic",
+      stage: "3",
+      incomingEdgeClasses: ["support", "reachability-scope"],
+      analysis: "Extract commandKind, expressionRequired, targetProperty",
+    });
+
+    expect(SUBJECT_MODEL_REGISTRY.claimFamiliesById.get("witness.completeness.resource-admission")).toMatchObject({
+      nodeKind: "completeness-witness",
+      stage: "5",
+      keyConstructor: "CompletenessKey(consultedWorld+resourceFamily, resource-admission)",
+      output: "witnessState",
+    });
   });
 
-  it("surfaces the EB-6 and EB-7 schema catalogs", () => {
-    expect(FIELD_SCHEMA_DEFINITIONS).toHaveLength(33);
+  it("surfaces EB-6 field schema metadata and the EB-7 trait catalog", () => {
+    expect(FIELD_SCHEMA_DEFINITIONS).toHaveLength(37);
+    expect(SUBJECT_MODEL_REGISTRY.fieldSchemasByResourceKind.get("custom-element")).toHaveLength(14);
+    expect(SUBJECT_MODEL_REGISTRY.fieldSchemasByResourceKind.get("custom-attribute")).toHaveLength(9);
+    expect(SUBJECT_MODEL_REGISTRY.fieldSchemasByResourceKind.get("value-converter")).toHaveLength(3);
+    expect(SUBJECT_MODEL_REGISTRY.fieldSchemasByResourceKind.get("binding-behavior")).toHaveLength(3);
+    expect(SUBJECT_MODEL_REGISTRY.fieldSchemasByResourceKind.get("binding-command")).toHaveLength(2);
+    expect(SUBJECT_MODEL_REGISTRY.fieldSchemasByResourceKind.get("attribute-pattern")).toHaveLength(2);
+    expect(SUBJECT_MODEL_REGISTRY.fieldSchemasByResourceKind.get("local-custom-element")).toHaveLength(4);
+
     expect(
       FIELD_SCHEMA_DEFINITIONS.find(({ schemaId }) => schemaId === "custom-element:shadowOptions"),
     ).toMatchObject({
       valueType: "{ mode: 'open' | 'closed' } | null",
+      identityCarried: false,
+      completenessSensitive: true,
       owningFamilyId: "claim.resource.custom-element-field",
+    });
+    expect(
+      FIELD_SCHEMA_DEFINITIONS.find(({ schemaId }) => schemaId === "custom-element:capture"),
+    ).toMatchObject({
+      valueType: "boolean | { kind: 'filter' }",
+      identityCarried: false,
+      completenessSensitive: true,
+    });
+    expect(
+      FIELD_SCHEMA_DEFINITIONS.find(({ schemaId }) => schemaId === "custom-element:processContent"),
+    ).toMatchObject({
+      valueType: "boolean",
+      identityCarried: false,
+      completenessSensitive: true,
+    });
+    expect(
+      FIELD_SCHEMA_DEFINITIONS.find(({ schemaId }) => schemaId === "custom-element:watches"),
+    ).toMatchObject({
+      valueType: "WatchFieldValue[]",
+      identityCarried: false,
+      completenessSensitive: true,
+    });
+    expect(
+      FIELD_SCHEMA_DEFINITIONS.find(({ schemaId }) => schemaId === "custom-attribute:watches"),
+    ).toMatchObject({
+      valueType: "WatchFieldValue[]",
+      identityCarried: false,
+      completenessSensitive: true,
+    });
+    expect(
+      FIELD_SCHEMA_DEFINITIONS.find(({ schemaId }) => schemaId === "binding-command:name"),
+    ).toMatchObject({
+      valueType: "string",
+      identityCarried: true,
+      completenessSensitive: false,
     });
     expect(
       FIELD_SCHEMA_DEFINITIONS.find(({ schemaId }) => schemaId === "binding-command:aliases"),
     ).toMatchObject({
       valueType: "string[]",
+      identityCarried: false,
+      completenessSensitive: true,
     });
+    expect(
+      FIELD_SCHEMA_DEFINITIONS.find(({ schemaId }) => schemaId === "binding-command:commandKind"),
+    ).toBeUndefined();
 
     expect(TRAIT_SCHEMA_DEFINITIONS).toEqual([
       {

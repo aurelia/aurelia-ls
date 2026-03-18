@@ -36,12 +36,10 @@ export const DEGRADATION_TARGET_FORM_RELATIONS = {
   "classification-weakened": { relation: "shared-identifier", form: "classification-weakened" },
   "closure-reopened": { relation: "shared-identifier", form: "closure-reopened" },
   "claim-unevaluated": { relation: "shared-identifier", form: "claim-unevaluated" },
-  "evaluator-error": { relation: "target-only" },
+  "evaluator-error": { relation: "shared-identifier", form: "evaluator-error" },
 } as const satisfies Record<DegradationTargetCategory, DegradationTargetFormRelation>;
 
-export const DEGRADATION_FORM_ONLY_VALUES = [
-  "site-unknown",
-] as const satisfies readonly DegradationForm[];
+export const DEGRADATION_FORM_ONLY_VALUES = [] as const satisfies readonly DegradationForm[];
 
 export function isDegradationTargetCategory(
   value: string,

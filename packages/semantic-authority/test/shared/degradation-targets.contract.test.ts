@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEGRADATION_FORM_ONLY_VALUES,
+  DEGRADATION_FORMS,
   DEGRADATION_TARGET_CATEGORIES,
   DEGRADATION_TARGET_FORM_RELATIONS,
   parseDegradationTarget,
@@ -23,11 +24,13 @@ describe("semantic-authority degradation target encoding", () => {
     ]);
   });
 
-  it("keeps graph-node target categories distinct from facade-only degradation forms", () => {
+  it("keeps graph-node target categories aligned with the reconciled facade degradation forms", () => {
     expect(DEGRADATION_TARGET_CATEGORIES).toContain("evaluator-error");
     expect(DEGRADATION_TARGET_FORM_RELATIONS["evaluator-error"]).toEqual({
-      relation: "target-only",
+      relation: "shared-identifier",
+      form: "evaluator-error",
     });
-    expect(DEGRADATION_FORM_ONLY_VALUES).toEqual(["site-unknown"]);
+    expect([...DEGRADATION_TARGET_CATEGORIES].sort()).toEqual([...DEGRADATION_FORMS].sort());
+    expect(DEGRADATION_FORM_ONLY_VALUES).toEqual([]);
   });
 });

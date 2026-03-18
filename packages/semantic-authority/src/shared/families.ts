@@ -1,5 +1,3 @@
-import type { InlineCompleteness } from "./outcomes.js";
-
 export type ExtensionIdentifier = string;
 
 export const KNOWN_GOVERNED_FAMILY_IDS = [
@@ -12,9 +10,13 @@ export type KnownGovernedFamilyId = (typeof KNOWN_GOVERNED_FAMILY_IDS)[number];
 
 export type GovernedClosureState = "closed" | "unassigned" | "open";
 
+export const GOVERNED_SLOT_COMPLETENESS_VALUES = ["satisfied", "unsatisfied", "open"] as const;
+
+export type GovernedSlotCompleteness = (typeof GOVERNED_SLOT_COMPLETENESS_VALUES)[number];
+
 export interface GovernedSlotValue {
   readonly value: unknown;
-  readonly completeness: InlineCompleteness;
+  readonly completeness: GovernedSlotCompleteness;
 }
 
 export interface GovernedFamilySection {

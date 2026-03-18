@@ -47,7 +47,7 @@ export const CLAIM_FAMILY_DEFINITIONS =
       "support-bundle",
       "declaration-surface"
     ],
-    completenessConditions: "Positive field facts close on one field witness. Negative/default/empty forms follow resource-kind-fields.md: many custom-element payload fields need declaration-surface, while identity-carried fields do not carry an independent negative-field declaration-surface burden; opaque payload semantics such as function-valued capture and processContent may remain field-open.",
+    completenessConditions: "Positive field facts close on one field witness. Negative/default/empty forms follow per-field closure metadata: payload fields are completeness-sensitive, while name and className are identity-carried and do not carry an independent negative-field declaration-surface burden.",
     degradationTarget: "claim.identity.custom-element plus FieldFactKey(ResourceKey(custom-element, canonicalName), fieldPath), fact kind resource-field, state open.",
     status: "attractor-derived",
     incomingEdgeClasses: [
@@ -55,7 +55,7 @@ export const CLAIM_FAMILY_DEFINITIONS =
     ],
     sourceInputs: "Same as F1 + static fields, template",
     analysis: "Per-field convergence",
-    output: "12 FieldFact nodes per CE",
+    output: "14 FieldFact nodes per CE",
     crossFamilyDependencies: [
       "claim.identity.custom-element"
     ]
@@ -113,7 +113,7 @@ export const CLAIM_FAMILY_DEFINITIONS =
     ],
     sourceInputs: "Same as F3",
     analysis: "Per-field convergence",
-    output: "8 FieldFact nodes per CA",
+    output: "9 FieldFact nodes per CA",
     crossFamilyDependencies: [
       "claim.identity.custom-attribute"
     ]
@@ -194,7 +194,7 @@ export const CLAIM_FAMILY_DEFINITIONS =
       "support-bundle",
       "declaration-surface"
     ],
-    completenessConditions: "Positive field facts close on one field witness. aliases is completeness-sensitive; Type, name, and key are identity-carried rather than standalone negative field burdens.",
+    completenessConditions: "Positive field facts close on one field witness. aliases is completeness-sensitive; name and className are identity-carried rather than standalone negative field burdens.",
     degradationTarget: "claim.identity.value-converter plus FieldFactKey(ResourceKey(value-converter, canonicalName), fieldPath), fact kind resource-field, state open.",
     status: "attractor-derived",
     incomingEdgeClasses: [
@@ -202,7 +202,7 @@ export const CLAIM_FAMILY_DEFINITIONS =
     ],
     sourceInputs: "Same as F6",
     analysis: "Per-field convergence",
-    output: "2 FieldFact nodes per VC",
+    output: "3 FieldFact nodes per VC",
     crossFamilyDependencies: [
       "claim.identity.value-converter"
     ]
@@ -252,7 +252,7 @@ export const CLAIM_FAMILY_DEFINITIONS =
       "support-bundle",
       "declaration-surface"
     ],
-    completenessConditions: "Positive field facts close on one field witness. aliases is completeness-sensitive; Type, name, and key are identity-carried rather than standalone negative field burdens.",
+    completenessConditions: "Positive field facts close on one field witness. aliases is completeness-sensitive; name and className are identity-carried rather than standalone negative field burdens.",
     degradationTarget: "claim.identity.binding-behavior plus FieldFactKey(ResourceKey(binding-behavior, canonicalName), fieldPath), fact kind resource-field, state open.",
     status: "attractor-derived",
     incomingEdgeClasses: [
@@ -260,7 +260,7 @@ export const CLAIM_FAMILY_DEFINITIONS =
     ],
     sourceInputs: "Same as F8",
     analysis: "Per-field convergence",
-    output: "2 FieldFact nodes per BB",
+    output: "3 FieldFact nodes per BB",
     crossFamilyDependencies: [
       "claim.identity.binding-behavior"
     ]
@@ -310,7 +310,7 @@ export const CLAIM_FAMILY_DEFINITIONS =
       "support-bundle",
       "declaration-surface"
     ],
-    completenessConditions: "Positive field facts close on one field witness. aliases is completeness-sensitive; Type, name, and key are identity-carried rather than standalone negative field burdens.",
+    completenessConditions: "Positive field facts close on one field witness. aliases is completeness-sensitive; name is identity-carried rather than a standalone negative field burden.",
     degradationTarget: "claim.identity.binding-command plus FieldFactKey(ResourceKey(binding-command, canonicalName), fieldPath), fact kind resource-field, state open.",
     status: "attractor-derived",
     incomingEdgeClasses: [
@@ -318,7 +318,7 @@ export const CLAIM_FAMILY_DEFINITIONS =
     ],
     sourceInputs: "Same as F10",
     analysis: "Per-field convergence",
-    output: "3 FieldFact nodes per BC",
+    output: "2 FieldFact nodes per BC",
     crossFamilyDependencies: [
       "claim.identity.binding-command"
     ]

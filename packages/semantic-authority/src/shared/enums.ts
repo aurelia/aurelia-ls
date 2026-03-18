@@ -121,7 +121,7 @@ export type BoundaryLevel = (typeof BOUNDARY_LEVELS)[number];
 export const DEGRADATION_FORMS = [
   "observation-limit",
   "claim-unevaluated",
-  "site-unknown",
+  "evaluator-error",
   "convergence-conflict",
   "governed-unassigned",
   "world-open",

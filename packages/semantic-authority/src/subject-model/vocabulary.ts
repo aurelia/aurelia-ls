@@ -69,7 +69,7 @@ export const SUBJECT_MODEL_VOCABULARIES = [
   },
   {
     catalogId: "degradation-target-category",
-    description: "Per-node DegradationTarget category vocabulary from EB-5 with explicit form/target separation.",
+    description: "Per-node DegradationTarget category vocabulary from EB-5 with explicit graph-to-facade relation metadata.",
     source: "encoding-bridge:EB-5",
     entries: DEGRADATION_TARGET_CATEGORIES.map((category) => {
       const relation = DEGRADATION_TARGET_FORM_RELATIONS[category];
@@ -84,7 +84,7 @@ export const SUBJECT_MODEL_VOCABULARIES = [
   },
   {
     catalogId: "degradation-form-only",
-    description: "Facade-level DegradationForm identifiers with no graph-node DegradationTarget twin.",
+    description: "Facade-level DegradationForm identifiers with no graph-node DegradationTarget twin. Empty on the reconciled runtime surface.",
     source: "g7-facade-contract:4.2",
     entries: DEGRADATION_FORM_ONLY_VALUES.map((form) => ({
       id: form,

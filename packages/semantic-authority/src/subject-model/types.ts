@@ -79,6 +79,8 @@ export interface FieldSchemaDefinition {
   readonly resourceKind: ResourceKind;
   readonly fieldPath: string;
   readonly valueType: string;
+  readonly identityCarried: boolean;
+  readonly completenessSensitive: boolean;
   readonly owningFamilyId: string;
   readonly notes?: string;
 }
