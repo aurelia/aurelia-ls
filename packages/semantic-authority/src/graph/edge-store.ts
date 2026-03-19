@@ -10,6 +10,7 @@ import {
 export class GraphEdgeStore<TEdge extends GraphEdgeUnion = GraphEdgeUnion> {
   readonly #edges = new Map<string, TEdge>();
   readonly #incoming = new Map<string, Set<string>>();
+  readonly #incomingByClass = new Map<string, Map<EdgeClass, Set<string>>>();
   readonly #outgoing = new Map<string, Set<string>>();
   readonly #revisionClock: GraphRevisionClock;
 
@@ -35,6 +36,7 @@ export class GraphEdgeStore<TEdge extends GraphEdgeUnion = GraphEdgeUnion> {
     if (!this.#edges.has(edgeId)) {
       this.#addAdjacency(this.#outgoing, sourceId, edgeId);
       this.#addAdjacency(this.#incoming, targetId, edgeId);
+      this.#addClassAdjacency(targetId, edge.edgeClass, edgeId);
     }
 
     this.#edges.set(edgeId, edge);
@@ -44,6 +46,7 @@ export class GraphEdgeStore<TEdge extends GraphEdgeUnion = GraphEdgeUnion> {
   public clear(): void {
     this.#edges.clear();
     this.#incoming.clear();
+    this.#incomingByClass.clear();
     this.#outgoing.clear();
   }
 
@@ -57,11 +60,25 @@ export class GraphEdgeStore<TEdge extends GraphEdgeUnion = GraphEdgeUnion> {
     this.#edges.delete(edgeId);
     this.#removeAdjacency(this.#outgoing, serializeGraphNodeKey(edge.sourceNodeKey), edgeId);
     this.#removeAdjacency(this.#incoming, serializeGraphNodeKey(edge.targetNodeKey), edgeId);
+    this.#removeClassAdjacency(
+      serializeGraphNodeKey(edge.targetNodeKey),
+      edge.edgeClass,
+      edgeId,
+    );
     return true;
   }
 
   public getIncoming(targetNodeKey: NodeKey, edgeClass?: EdgeClass): readonly TEdge[] {
-    return this.#collect(this.#incoming.get(serializeGraphNodeKey(targetNodeKey)), edgeClass);
+    if (edgeClass != null) {
+      return this.getIncomingByClass(targetNodeKey, edgeClass);
+    }
+
+    return this.#collect(this.#incoming.get(serializeGraphNodeKey(targetNodeKey)));
+  }
+
+  public getIncomingByClass(targetNodeKey: NodeKey, edgeClass: EdgeClass): readonly TEdge[] {
+    const byClass = this.#incomingByClass.get(serializeGraphNodeKey(targetNodeKey));
+    return this.#collect(byClass?.get(edgeClass));
   }
 
   public getOutgoing(sourceNodeKey: NodeKey, edgeClass?: EdgeClass): readonly TEdge[] {
@@ -81,6 +98,22 @@ export class GraphEdgeStore<TEdge extends GraphEdgeUnion = GraphEdgeUnion> {
     if (bucket == null) {
       bucket = new Set<string>();
       index.set(nodeId, bucket);
+    }
+
+    bucket.add(edgeId);
+  }
+
+  #addClassAdjacency(nodeId: string, edgeClass: EdgeClass, edgeId: string): void {
+    let byClass = this.#incomingByClass.get(nodeId);
+    if (byClass == null) {
+      byClass = new Map<EdgeClass, Set<string>>();
+      this.#incomingByClass.set(nodeId, byClass);
+    }
+
+    let bucket = byClass.get(edgeClass);
+    if (bucket == null) {
+      bucket = new Set<string>();
+      byClass.set(edgeClass, bucket);
     }
 
     bucket.add(edgeId);
@@ -117,6 +150,26 @@ export class GraphEdgeStore<TEdge extends GraphEdgeUnion = GraphEdgeUnion> {
     bucket.delete(edgeId);
     if (bucket.size === 0) {
       index.delete(nodeId);
+    }
+  }
+
+  #removeClassAdjacency(nodeId: string, edgeClass: EdgeClass, edgeId: string): void {
+    const byClass = this.#incomingByClass.get(nodeId);
+    if (byClass == null) {
+      return;
+    }
+
+    const bucket = byClass.get(edgeClass);
+    if (bucket == null) {
+      return;
+    }
+
+    bucket.delete(edgeId);
+    if (bucket.size === 0) {
+      byClass.delete(edgeClass);
+    }
+    if (byClass.size === 0) {
+      this.#incomingByClass.delete(nodeId);
     }
   }
 }
