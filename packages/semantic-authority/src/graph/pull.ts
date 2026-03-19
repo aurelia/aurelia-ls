@@ -1,13 +1,11 @@
 import {
   dispatchRegisteredEvaluator,
-  type GraphCommittedNodeChange,
   type GraphDispatchOptions,
   type GraphEvaluatorRegistry,
 } from "./dispatch.js";
 import { compareGreenValueFields } from "./cutoff.js";
-import { GraphEdgeStore } from "./edge-store.js";
+import { ClaimGraph } from "./graph.js";
 import type { NodeKey } from "./keys.js";
-import { GraphNodeStore } from "./node-store.js";
 import type { GraphNodeEvaluationRequester } from "./protocol.js";
 import { applyRetreatCascade, type RetreatCascadeResult } from "./retreat.js";
 import type { ClaimNodeBase } from "./types.js";
@@ -20,25 +18,21 @@ export interface GraphPullResult {
 }
 
 export interface GraphPullOptions {
-  readonly edgeStore: GraphEdgeStore;
   readonly evaluatorRegistry: GraphEvaluatorRegistry;
-  readonly nodeStore: GraphNodeStore;
+  readonly graph: ClaimGraph;
 }
 
 export class GraphPullEngine implements GraphNodeEvaluationRequester {
   readonly #activePulls = new Map<string, Promise<GraphPullResult>>();
   readonly #dispatchOptions: GraphDispatchOptions;
-  readonly #edgeStore: GraphEdgeStore;
   readonly #evaluatorRegistry: GraphEvaluatorRegistry;
-  readonly #nodeStore: GraphNodeStore;
+  readonly #graph: ClaimGraph;
 
   public constructor(options: GraphPullOptions) {
-    this.#edgeStore = options.edgeStore;
+    this.#graph = options.graph;
     this.#evaluatorRegistry = options.evaluatorRegistry;
-    this.#nodeStore = options.nodeStore;
     this.#dispatchOptions = {
-      edgeStore: options.edgeStore,
-      nodeStore: options.nodeStore,
+      graph: options.graph,
       nodeEvaluationRequester: this,
     };
   }
@@ -65,7 +59,7 @@ export class GraphPullEngine implements GraphNodeEvaluationRequester {
   }
 
   async #performPull(nodeKey: NodeKey): Promise<GraphPullResult> {
-    const liveNode = this.#nodeStore.get(nodeKey);
+    const liveNode = this.#graph.getNode(nodeKey);
     if (liveNode == null) {
       return {
         cutoffAppliedNodeKeys: [],
@@ -103,7 +97,7 @@ export class GraphPullEngine implements GraphNodeEvaluationRequester {
     const changedNodeKeys: NodeKey[] = [];
 
     for (const change of dispatchResult.committedNodeChanges) {
-      const currentNode = this.#nodeStore.get(change.current.key);
+      const currentNode = this.#graph.getNode(change.current.key);
       if (currentNode == null) {
         continue;
       }
@@ -123,13 +117,13 @@ export class GraphPullEngine implements GraphNodeEvaluationRequester {
       changedNodeKeys.length === 0
         ? null
         : applyRetreatCascade(changedNodeKeys, {
-            edgeStore: this.#edgeStore,
-            nodeStore: this.#nodeStore,
+            edgeStore: this.#graph.edgeStore,
+            nodeStore: this.#graph.nodeStore,
           });
 
     return {
       cutoffAppliedNodeKeys,
-      node: this.#nodeStore.get(nodeKey),
+      node: this.#graph.getNode(nodeKey),
       propagatedChanges,
       status: "pulled",
     };

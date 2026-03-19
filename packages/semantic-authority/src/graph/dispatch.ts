@@ -1,25 +1,17 @@
 import type { FamilyTag } from "../shared/types.js";
-import type { GraphEdgeStore } from "./edge-store.js";
-import type { GraphEdgeIdentity, GraphEdgeUnion } from "./edges.js";
-import { serializeGraphEntityKey, serializeGraphNodeKey, type GraphEntityKey, type NodeKey } from "./keys.js";
-import type { GraphNodeStore } from "./node-store.js";
+import { ClaimGraph } from "./graph.js";
+import type { NodeKey } from "./keys.js";
 import type {
+  GraphCommittedNodeChange,
   GraphEvaluatorDispatchContext,
   GraphEvaluatorRegistration,
-  GraphMutationHandle,
   GraphNodeEvaluationRequester,
 } from "./protocol.js";
-import type { ClaimNodeBase, NodeKindTag } from "./types.js";
+import type { ClaimNodeBase } from "./types.js";
 
 export interface GraphDispatchOptions {
-  readonly edgeStore: GraphEdgeStore;
-  readonly nodeStore: GraphNodeStore;
+  readonly graph: ClaimGraph;
   readonly nodeEvaluationRequester?: GraphNodeEvaluationRequester;
-}
-
-export interface GraphCommittedNodeChange {
-  readonly current: ClaimNodeBase;
-  readonly previous: ClaimNodeBase | undefined;
 }
 
 export type GraphDispatchResult =
@@ -84,14 +76,14 @@ export async function dispatchRegisteredEvaluator(
   registry: GraphEvaluatorRegistry,
   options: GraphDispatchOptions,
 ): Promise<GraphDispatchResult> {
-  const liveNode = options.nodeStore.get(targetNodeKey);
+  const liveNode = options.graph.getNode(targetNodeKey);
   if (liveNode == null) {
     throw new Error("Cannot dispatch evaluator for a node that does not exist in the graph.");
   }
 
   const registration = registry.getByFamilyTag(liveNode.familyTag);
   if (registration == null) {
-    const erroredNode = markNodeError(liveNode, options.nodeStore);
+    const erroredNode = markNodeError(liveNode, options.graph);
     return {
       error: new Error(`No evaluator is registered for family '${liveNode.familyTag}'.`),
       node: erroredNode,
@@ -99,11 +91,7 @@ export async function dispatchRegisteredEvaluator(
     };
   }
 
-  const mutation = new BufferedGraphMutationHandle(
-    options.nodeStore,
-    options.edgeStore,
-    options.nodeEvaluationRequester,
-  );
+  const mutation = options.graph.createMutationHandle(options.nodeEvaluationRequester);
   const targetNode = cloneGraphValue(liveNode);
 
   try {
@@ -116,182 +104,17 @@ export async function dispatchRegisteredEvaluator(
     return {
       committedNodeChanges: commitSummary.committedNodeChanges,
       deletedNodeKeys: commitSummary.deletedNodeKeys,
-      node: options.nodeStore.get(targetNodeKey) ?? liveNode,
+      node: options.graph.getNode(targetNodeKey) ?? liveNode,
       registration,
       status: "ok",
     };
   } catch (error) {
-    const erroredNode = markNodeError(liveNode, options.nodeStore);
+    const erroredNode = markNodeError(liveNode, options.graph);
     return {
       error,
       node: erroredNode,
       status: "error",
     };
-  }
-}
-
-class BufferedGraphMutationHandle implements GraphMutationHandle {
-  readonly #edgeDeletes = new Map<string, GraphEdgeIdentity>();
-  readonly #edgeStore: GraphEdgeStore;
-  readonly #edgeUpserts = new Map<string, GraphEdgeUnion>();
-  readonly #nodeDeletes = new Map<string, NodeKey>();
-  readonly #nodeStore: GraphNodeStore;
-  readonly #nodeUpserts = new Map<string, ClaimNodeBase>();
-  readonly #priorNodeSnapshots = new Map<string, ClaimNodeBase | undefined>();
-  readonly #nodeEvaluationRequester?: GraphNodeEvaluationRequester;
-
-  public constructor(
-    nodeStore: GraphNodeStore,
-    edgeStore: GraphEdgeStore,
-    nodeEvaluationRequester?: GraphNodeEvaluationRequester,
-  ) {
-    this.#nodeStore = nodeStore;
-    this.#edgeStore = edgeStore;
-    this.#nodeEvaluationRequester = nodeEvaluationRequester;
-  }
-
-  public addEdge(edge: GraphEdgeUnion): void {
-    const edgeId = serializeEdgeIdentity(edge);
-    this.#edgeDeletes.delete(edgeId);
-    this.#edgeUpserts.set(edgeId, cloneGraphValue(edge));
-  }
-
-  public deleteEdge(identity: GraphEdgeIdentity): void {
-    const edgeId = serializeEdgeIdentity(identity);
-    this.#edgeUpserts.delete(edgeId);
-    this.#edgeDeletes.set(edgeId, cloneGraphValue(identity));
-  }
-
-  public deleteNode(nodeKey: NodeKey): void {
-    const nodeId = serializeGraphNodeKey(nodeKey);
-    this.#nodeUpserts.delete(nodeId);
-    this.#nodeDeletes.set(nodeId, cloneGraphValue(nodeKey));
-    this.#capturePriorNode(nodeId, nodeKey);
-  }
-
-  public deleteOpenBoundariesFor(targetFamilyId: FamilyTag, subjectKey: GraphEntityKey): number {
-    let deleted = 0;
-    const subjectKeyId = serializeGraphEntityKey(subjectKey);
-
-    for (const node of this.#collectVisibleNodes()) {
-      if (node.key.keyKind !== "open-boundary") {
-        continue;
-      }
-
-      if (node.key.targetFamilyId !== targetFamilyId) {
-        continue;
-      }
-
-      if (serializeGraphEntityKey(node.key.subjectKey) !== subjectKeyId) {
-        continue;
-      }
-
-      this.deleteNode(node.key);
-      deleted += 1;
-    }
-
-    return deleted;
-  }
-
-  public getNode(nodeKey: NodeKey): ClaimNodeBase | undefined {
-    const nodeId = serializeGraphNodeKey(nodeKey);
-    if (this.#nodeDeletes.has(nodeId)) {
-      return undefined;
-    }
-
-    const pending = this.#nodeUpserts.get(nodeId);
-    if (pending != null) {
-      return cloneGraphValue(pending);
-    }
-
-    const liveNode = this.#nodeStore.get(nodeKey);
-    return liveNode == null ? undefined : cloneGraphValue(liveNode);
-  }
-
-  public getNodeByKind<K extends NodeKindTag>(
-    nodeKind: K,
-    nodeKey: NodeKey,
-  ): Extract<ClaimNodeBase, { readonly nodeKind: K }> | undefined {
-    const node = this.getNode(nodeKey);
-    if (node == null || node.nodeKind !== nodeKind) {
-      return undefined;
-    }
-
-    return node as Extract<ClaimNodeBase, { readonly nodeKind: K }>;
-  }
-
-  public requestNodeEvaluation(nodeKey: NodeKey): void | Promise<void> {
-    return this.#nodeEvaluationRequester?.requestNodeEvaluation(nodeKey);
-  }
-
-  public upsertNode(node: ClaimNodeBase): void {
-    const nodeId = serializeGraphNodeKey(node.key);
-    this.#nodeDeletes.delete(nodeId);
-    this.#capturePriorNode(nodeId, node.key);
-    this.#nodeUpserts.set(nodeId, cloneGraphValue(node));
-  }
-
-  public commit(): {
-    readonly committedNodeChanges: readonly GraphCommittedNodeChange[];
-    readonly deletedNodeKeys: readonly NodeKey[];
-  } {
-    for (const identity of this.#edgeDeletes.values()) {
-      this.#edgeStore.delete(identity);
-    }
-
-    for (const nodeKey of this.#nodeDeletes.values()) {
-      this.#nodeStore.delete(nodeKey);
-    }
-
-    const committedNodeChanges: GraphCommittedNodeChange[] = [];
-    for (const [nodeId, node] of this.#nodeUpserts.entries()) {
-      const committedNode = cloneGraphValue(node);
-      committedNode.validityState = "valid";
-      this.#nodeStore.set(committedNode);
-      committedNodeChanges.push({
-        current: committedNode,
-        previous: this.#priorNodeSnapshots.get(nodeId),
-      });
-    }
-
-    for (const edge of this.#edgeUpserts.values()) {
-      this.#edgeStore.add(cloneGraphValue(edge));
-    }
-
-    return {
-      committedNodeChanges,
-      deletedNodeKeys: [...this.#nodeDeletes.values()],
-    };
-  }
-
-  #collectVisibleNodes(): readonly ClaimNodeBase[] {
-    const visible = new Map<string, ClaimNodeBase>();
-
-    for (const node of this.#nodeStore.values()) {
-      visible.set(serializeGraphNodeKey(node.key), node);
-    }
-
-    for (const [nodeId] of this.#nodeDeletes) {
-      visible.delete(nodeId);
-    }
-
-    for (const [nodeId, node] of this.#nodeUpserts.entries()) {
-      visible.set(nodeId, node);
-    }
-
-    return [...visible.values()];
-  }
-
-  #capturePriorNode(nodeId: string, nodeKey: NodeKey): void {
-    if (this.#priorNodeSnapshots.has(nodeId)) {
-      return;
-    }
-
-    const liveNode = this.#nodeStore.get(nodeKey);
-    this.#priorNodeSnapshots.set(
-      nodeId,
-      liveNode == null ? undefined : cloneGraphValue(liveNode),
-    );
   }
 }
 
@@ -301,20 +124,11 @@ function cloneGraphValue<T>(value: T): T {
 
 function markNodeError(
   liveNode: ClaimNodeBase,
-  nodeStore: GraphNodeStore,
+  graph: ClaimGraph,
 ): ClaimNodeBase {
   const erroredNode = cloneGraphValue(liveNode);
   erroredNode.claimState = "error";
   erroredNode.validityState = "valid";
-  nodeStore.set(erroredNode);
+  graph.upsertNode(erroredNode);
   return erroredNode;
-}
-
-function serializeEdgeIdentity(identity: GraphEdgeIdentity): string {
-  return [
-    identity.edgeClass,
-    serializeGraphNodeKey(identity.sourceNodeKey),
-    serializeGraphNodeKey(identity.targetNodeKey),
-    identity.mechanismId,
-  ].join(":");
 }

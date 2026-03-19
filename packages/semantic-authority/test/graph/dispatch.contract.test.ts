@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  ClaimGraph,
   dispatchRegisteredEvaluator,
-  GraphEdgeStore,
   type GraphEntityKey,
   GraphEvaluatorRegistry,
-  GraphNodeStore,
   type ClaimNodeBase,
   type GraphEvaluatorRegistration,
   type SupportEdge,
@@ -63,8 +62,7 @@ describe("semantic-authority graph evaluator dispatch", () => {
   });
 
   it("dispatches a registered evaluator and commits buffered node and edge mutations", async () => {
-    const nodeStore = new GraphNodeStore();
-    const edgeStore = new GraphEdgeStore();
+    const graph = new ClaimGraph();
     const registry = new GraphEvaluatorRegistry();
     const targetNode = createResourceNode();
     const dependentNode = createResourceNode("claim.identity.custom-attribute", "if");
@@ -76,7 +74,7 @@ describe("semantic-authority graph evaluator dispatch", () => {
       revisionToken: 0,
     };
 
-    nodeStore.set(targetNode);
+    graph.upsertNode(targetNode);
 
     registry.register(
       createRegistration({
@@ -96,24 +94,22 @@ describe("semantic-authority graph evaluator dispatch", () => {
     );
 
     const result = await dispatchRegisteredEvaluator(targetNode.key, registry, {
-      edgeStore,
-      nodeStore,
+      graph,
     });
 
     expect(result.status).toBe("ok");
-    expect(nodeStore.get(targetNode.key)?.claimState).toBe("fails");
-    expect(nodeStore.get(dependentNode.key)?.validityState).toBe("valid");
-    expect(edgeStore.getOutgoing(targetNode.key, "support")).toHaveLength(1);
+    expect(graph.getNode(targetNode.key)?.claimState).toBe("fails");
+    expect(graph.getNode(dependentNode.key)?.validityState).toBe("valid");
+    expect(graph.getOutgoingEdges(targetNode.key, "support")).toHaveLength(1);
   });
 
   it("marks the target node as error and drops buffered mutations when the callback throws", async () => {
-    const nodeStore = new GraphNodeStore();
-    const edgeStore = new GraphEdgeStore();
+    const graph = new ClaimGraph();
     const registry = new GraphEvaluatorRegistry();
     const targetNode = createResourceNode();
     const dependentNode = createResourceNode("claim.identity.custom-attribute", "if");
 
-    nodeStore.set(targetNode);
+    graph.upsertNode(targetNode);
 
     registry.register(
       createRegistration({
@@ -125,19 +121,17 @@ describe("semantic-authority graph evaluator dispatch", () => {
     );
 
     const result = await dispatchRegisteredEvaluator(targetNode.key, registry, {
-      edgeStore,
-      nodeStore,
+      graph,
     });
 
     expect(result.status).toBe("error");
-    expect(nodeStore.get(targetNode.key)?.claimState).toBe("error");
-    expect(nodeStore.get(targetNode.key)?.validityState).toBe("valid");
-    expect(nodeStore.get(dependentNode.key)).toBeUndefined();
+    expect(graph.getNode(targetNode.key)?.claimState).toBe("error");
+    expect(graph.getNode(targetNode.key)?.validityState).toBe("valid");
+    expect(graph.getNode(dependentNode.key)).toBeUndefined();
   });
 
   it("can delete matching open boundaries through the mutation handle", async () => {
-    const nodeStore = new GraphNodeStore();
-    const edgeStore = new GraphEdgeStore();
+    const graph = new ClaimGraph();
     const registry = new GraphEvaluatorRegistry();
     const targetNode = createResourceNode();
     const openBoundaryNode: ClaimNodeBase = {
@@ -155,8 +149,8 @@ describe("semantic-authority graph evaluator dispatch", () => {
       retentionTier: "warm",
     };
 
-    nodeStore.set(targetNode);
-    nodeStore.set(openBoundaryNode);
+    graph.upsertNode(targetNode);
+    graph.upsertNode(openBoundaryNode);
 
     registry.register(
       createRegistration({
@@ -171,22 +165,20 @@ describe("semantic-authority graph evaluator dispatch", () => {
     );
 
     const result = await dispatchRegisteredEvaluator(targetNode.key, registry, {
-      edgeStore,
-      nodeStore,
+      graph,
     });
 
     expect(result.status).toBe("ok");
-    expect(nodeStore.get(openBoundaryNode.key)).toBeUndefined();
+    expect(graph.getNode(openBoundaryNode.key)).toBeUndefined();
   });
 
   it("forwards demand-driven evaluation requests through the injected requester without implementing scheduling", async () => {
-    const nodeStore = new GraphNodeStore();
-    const edgeStore = new GraphEdgeStore();
+    const graph = new ClaimGraph();
     const registry = new GraphEvaluatorRegistry();
     const targetNode = createResourceNode();
     const requested: ClaimNodeBase["key"][] = [];
 
-    nodeStore.set(targetNode);
+    graph.upsertNode(targetNode);
     registry.register(
       createRegistration({
         callback: ({ mutation }) => {
@@ -196,13 +188,12 @@ describe("semantic-authority graph evaluator dispatch", () => {
     );
 
     await dispatchRegisteredEvaluator(targetNode.key, registry, {
-      edgeStore,
+      graph,
       nodeEvaluationRequester: {
         requestNodeEvaluation(nodeKey) {
           requested.push(nodeKey);
         },
       },
-      nodeStore,
     });
 
     expect(requested).toEqual([targetNode.key]);

@@ -4,6 +4,7 @@ export * from "./dispatch.js";
 export * from "./direct-index-store.js";
 export * from "./edge-store.js";
 export * from "./edges.js";
+export * from "./graph.js";
 export * from "./keys.js";
 export * from "./node-store.js";
 export * from "./pull.js";

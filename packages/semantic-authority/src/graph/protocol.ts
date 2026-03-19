@@ -8,10 +8,14 @@ export interface GraphNodeEvaluationRequester {
   requestNodeEvaluation(nodeKey: NodeKey): void | Promise<void>;
 }
 
+export interface GraphNodeMutationOptions {
+  readonly correctnessContextOverride?: string;
+}
+
 export interface GraphMutationHandle {
   addEdge(edge: GraphEdgeUnion): void;
   deleteEdge(identity: GraphEdgeIdentity): void;
-  deleteNode(nodeKey: NodeKey): void;
+  deleteNode(nodeKey: NodeKey, options?: GraphNodeMutationOptions): void;
   deleteOpenBoundariesFor(targetFamilyId: FamilyTag, subjectKey: GraphEntityKey): number;
   getNode(nodeKey: NodeKey): ClaimNodeBase | undefined;
   getNodeByKind<K extends NodeKindTag>(
@@ -19,7 +23,17 @@ export interface GraphMutationHandle {
     nodeKey: NodeKey,
   ): Extract<ClaimNodeBase, { readonly nodeKind: K }> | undefined;
   requestNodeEvaluation(nodeKey: NodeKey): void | Promise<void>;
-  upsertNode(node: ClaimNodeBase): void;
+  upsertNode(node: ClaimNodeBase, options?: GraphNodeMutationOptions): void;
+}
+
+export interface GraphCommittedNodeChange {
+  readonly current: ClaimNodeBase;
+  readonly previous: ClaimNodeBase | undefined;
+}
+
+export interface GraphMutationCommitSummary {
+  readonly committedNodeChanges: readonly GraphCommittedNodeChange[];
+  readonly deletedNodeKeys: readonly NodeKey[];
 }
 
 export interface GraphEvaluatorDispatchContext {
