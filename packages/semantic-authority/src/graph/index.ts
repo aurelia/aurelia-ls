@@ -10,5 +10,7 @@ export * from "./pull.js";
 export * from "./protocol.js";
 export * from "./revision-clock.js";
 export * from "./retreat.js";
+export * from "./scan-index-store.js";
 export * from "./scheduler.js";
+export * from "./two-level-key-index.js";
 export * from "./types.js";
