@@ -227,10 +227,10 @@ function mergeArrayCandidates(candidates: readonly ConvergenceCandidate[]): read
 
 function mergeScalarCandidates(
   candidates: readonly ConvergenceCandidate[],
-): { readonly degradationTarget: DegradationTarget | null; readonly value: unknown | null } {
+): { readonly conflict: boolean; readonly value: unknown | null } {
   if (candidates.length === 0) {
     return {
-      degradationTarget: null,
+      conflict: false,
       value: null,
     };
   }
@@ -242,7 +242,7 @@ function mergeScalarCandidates(
   const conflict = ranked.some(({ value }) => JSON.stringify(value) !== JSON.stringify(winner));
 
   return {
-    degradationTarget: conflict ? "convergence-conflict:fieldPath" : null,
+    conflict,
     value: winner,
   };
 }
@@ -350,7 +350,7 @@ export async function applySubjectConvergenceStage2(
 
         const arrayLike = schema.valueType.endsWith("[]");
         const merged = arrayLike
-          ? { degradationTarget: null, value: mergeArrayCandidates(candidates) }
+          ? { conflict: false, value: mergeArrayCandidates(candidates) }
           : mergeScalarCandidates(candidates);
 
         const fieldFact = createFieldFactNode(
@@ -359,7 +359,7 @@ export async function applySubjectConvergenceStage2(
           merged.value === null ? "fails" : "holds",
           merged.value,
           supportStatus,
-          merged.degradationTarget == null ? null : `convergence-conflict:${schema.fieldPath}`,
+          merged.conflict ? `convergence-conflict:${schema.fieldPath}` : null,
         );
         mutation.upsertNode(fieldFact);
         nodeKeys.push(fieldFact.key);

@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import type {
   BindableKey,
   BindableTraitKey,
-  DeclarationWitnessKey,
   FieldFactKey,
   ResourceKey,
 } from "../../../out/graph/index.js";
@@ -60,11 +59,6 @@ describe("semantic-authority subject convergence stage 2", () => {
   it("materializes resource identity, field facts, bindable interface, and declaration reference entries from observations", async () => {
     const graph = new ClaimGraph();
     const subjectKey = createResourceKey("custom-element", "app");
-    const declarationWitnessKey: DeclarationWitnessKey = {
-      keyKind: "declaration-witness",
-      subjectKey,
-      declarationFormSet: "custom-element.decorator|convention",
-    };
 
     await applyObservationEvaluation(graph, {
       documentUri: "file:///app.ts",
@@ -138,7 +132,6 @@ describe("semantic-authority subject convergence stage 2", () => {
 
     const result = await applySubjectConvergenceStage2(graph, {
       subjectKey,
-      declarationWitnessKey,
     });
 
     const identity = graph.getNodeByKind("resource-identity", subjectKey) as ResourceIdentityNode | undefined;
@@ -210,11 +203,6 @@ describe("semantic-authority subject convergence stage 2", () => {
   it("uses the documented row3/row5 cohabitation workaround for template-controller custom attributes", async () => {
     const graph = new ClaimGraph();
     const subjectKey = createResourceKey("custom-attribute", "if");
-    const declarationWitnessKey: DeclarationWitnessKey = {
-      keyKind: "declaration-witness",
-      subjectKey,
-      declarationFormSet: "custom-attribute.decorator|custom-attribute.template-controller-decorator",
-    };
 
     await applyObservationEvaluation(graph, {
       documentUri: "file:///if.ts",
@@ -254,7 +242,6 @@ describe("semantic-authority subject convergence stage 2", () => {
 
     await applySubjectConvergenceStage2(graph, {
       subjectKey,
-      declarationWitnessKey,
     });
 
     expect(graph.getNodeByKind("resource-identity", subjectKey)).toMatchObject({
@@ -272,11 +259,6 @@ describe("semantic-authority subject convergence stage 2", () => {
   it("produces a negative identity when declaration-surface is closed and no supporting observations exist", async () => {
     const graph = new ClaimGraph();
     const subjectKey = createResourceKey("binding-command", "trigger");
-    const declarationWitnessKey: DeclarationWitnessKey = {
-      keyKind: "declaration-witness",
-      subjectKey,
-      declarationFormSet: "binding-command.definition-object|binding-command.standard-configuration",
-    };
 
     await applyObservationEvaluation(graph, {
       documentUri: "config://commands",
@@ -295,7 +277,6 @@ describe("semantic-authority subject convergence stage 2", () => {
 
     const result = await applySubjectConvergenceStage2(graph, {
       subjectKey,
-      declarationWitnessKey,
     });
 
     expect(graph.getNodeByKind("resource-identity", subjectKey)).toMatchObject({
