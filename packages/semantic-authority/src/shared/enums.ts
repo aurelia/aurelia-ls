@@ -110,6 +110,20 @@ export const REFERENCE_KINDS = [
 
 export type ReferenceKind = (typeof REFERENCE_KINDS)[number];
 
+export const OBSERVATION_SOURCE_SURFACES = [
+  "decorator",
+  "static-au",
+  "convention",
+  "define-call",
+  "template-meta",
+  "config",
+  "npm-package",
+  "builtin",
+] as const;
+
+export type ObservationSourceSurface = (typeof OBSERVATION_SOURCE_SURFACES)[number];
+export type ObservationWitnessSource = ObservationSourceSurface;
+
 export const BOUNDARY_LEVELS = [
   "site",
   "registration-boundary",
