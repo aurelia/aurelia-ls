@@ -1,0 +1,18 @@
+{
+  "name": "@aurelia-ls/semantic-runtime",
+  "version": "0.0.0",
+  "description": "Isolated semantic runtime ingress nucleus",
+  "type": "module",
+  "main": "./out/index.js",
+  "types": "./out/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./out/index.js",
+      "types": "./out/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "test": "pnpm run build && node --test test/*.test.mjs"
+  }
+}
