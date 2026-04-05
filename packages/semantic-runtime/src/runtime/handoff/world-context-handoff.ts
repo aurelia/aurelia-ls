@@ -1,27 +1,32 @@
 import type { QuestionRoute } from "../../query/framing/question-route.js";
-import type { WorldFrame } from "../../query/framing/world-frame.js";
+import type {
+  CurrentWorldContext,
+  RescanBasis,
+  WorldFrameHandle,
+  WorldSnapshotSummary
+} from "../../workspace/handoff/current-world-context.js";
 
-export interface WorldSnapshotSummary {
-  readonly kind: WorldFrame["kind"];
-  readonly version: number;
-}
+export type {
+  RescanBasis,
+  WorldFrameHandle,
+  WorldSnapshotSummary
+} from "../../workspace/handoff/current-world-context.js";
 
-export interface WorldContextHandoff {
+export interface RuntimeWorldContextHandoff {
   readonly questionRoute: QuestionRoute;
-  readonly worldFrame: WorldFrame;
-  readonly snapshot: WorldSnapshotSummary;
+  readonly worldFrameHandle: WorldFrameHandle;
+  readonly snapshotSummary: WorldSnapshotSummary;
+  readonly rescanBasis: RescanBasis;
 }
 
-export function createWorldContextHandoff(
+export function createRuntimeWorldContextHandoff(
   questionRoute: QuestionRoute,
-  worldFrame: WorldFrame
-): WorldContextHandoff {
+  currentWorldContext: CurrentWorldContext
+): RuntimeWorldContextHandoff {
   return Object.freeze({
     questionRoute,
-    worldFrame,
-    snapshot: Object.freeze({
-      kind: worldFrame.kind,
-      version: worldFrame.version
-    })
+    worldFrameHandle: currentWorldContext.worldFrameHandle,
+    snapshotSummary: currentWorldContext.snapshotSummary,
+    rescanBasis: currentWorldContext.rescanBasis
   });
 }

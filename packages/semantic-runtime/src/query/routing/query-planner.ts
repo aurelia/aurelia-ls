@@ -1,9 +1,10 @@
 import {
-  createWorldContextHandoff,
-  type WorldContextHandoff
-} from "../../runtime/handoff/world-context-handoff.js";
+  getAnswerCommitment,
+  AnswerCommitmentKind,
+  type AnswerCommitment
+} from "../../model/semantic-api/semantic-api-model.js";
 import type { QuestionRoute } from "../framing/question-route.js";
-import type { WorldFrame } from "../framing/world-frame.js";
+import { normalizeWorldFrame, type WorldFrame } from "../framing/world-frame.js";
 
 export interface SemanticQuery {
   readonly questionRoute: QuestionRoute;
@@ -12,7 +13,7 @@ export interface SemanticQuery {
 
 export interface SemanticQueryPlan {
   readonly query: SemanticQuery;
-  readonly worldContext: WorldContextHandoff;
+  readonly answerCommitment: AnswerCommitment;
 }
 
 export interface SemanticQueryPlanner {
@@ -20,8 +21,16 @@ export interface SemanticQueryPlanner {
 }
 
 export function planSemanticQuery(query: SemanticQuery): SemanticQueryPlan {
+  const normalizedWorldFrame = normalizeWorldFrame(query.worldFrame);
+  const answerCommitmentKind = query.questionRoute.boundaryRoute === undefined
+    ? AnswerCommitmentKind.SemanticTruth
+    : AnswerCommitmentKind.BoundaryFrontier;
+
   return Object.freeze({
-    query,
-    worldContext: createWorldContextHandoff(query.questionRoute, query.worldFrame)
+    query: Object.freeze({
+      questionRoute: query.questionRoute,
+      worldFrame: normalizedWorldFrame
+    }),
+    answerCommitment: getAnswerCommitment(answerCommitmentKind)
   });
 }

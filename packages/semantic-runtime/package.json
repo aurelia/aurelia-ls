@@ -1,7 +1,7 @@
 {
   "name": "@aurelia-ls/semantic-runtime",
   "version": "0.0.0",
-  "description": "Isolated semantic runtime ingress nucleus",
+  "description": "Semantic runtime kernel for read-side semantic answers",
   "type": "module",
   "main": "./out/index.js",
   "types": "./out/index.d.ts",

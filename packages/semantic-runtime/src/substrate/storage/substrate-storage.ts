@@ -1,0 +1,85 @@
+import type { ClaimHomeKind } from "../../model/claims/claim-model.js";
+import {
+  ClaimOutcomeKind,
+  ClaimQualifierKind
+} from "../../model/claims/claim-model.js";
+import { ClosureStatusKind } from "../../model/semantic-runtime-handles.js";
+import {
+  createSubstrateClaimRef,
+  type CurrentWorldSummaryValue,
+  type PublishedSubstrateClaim,
+  type SubstrateClaimRef
+} from "../claims/substrate-claim-ref.js";
+import { createLineageRef, type LineageRef } from "../lineage/lineage-ref.js";
+
+export interface SubstrateStorage {
+  readPublishedClaim(ref: SubstrateClaimRef): PublishedSubstrateClaim | undefined;
+  readLineage(ref: SubstrateClaimRef): LineageRef | undefined;
+}
+
+class EmptySubstrateStorage implements SubstrateStorage {
+  public readPublishedClaim(_ref: SubstrateClaimRef): PublishedSubstrateClaim | undefined {
+    return undefined;
+  }
+
+  public readLineage(_ref: SubstrateClaimRef): LineageRef | undefined {
+    return undefined;
+  }
+}
+
+class InMemorySubstrateStorage implements SubstrateStorage {
+  readonly #claims: ReadonlyMap<string, PublishedSubstrateClaim>;
+  readonly #lineage: ReadonlyMap<string, LineageRef>;
+
+  public constructor(claims: readonly PublishedSubstrateClaim[]) {
+    const claimEntries = claims.map((claim) => [
+      keyForClaim(claim.ref),
+      Object.freeze(claim)
+    ] as const);
+    const lineageEntries = claims.map((claim) => [
+      keyForClaim(claim.ref),
+      createLineageRef(claim.ref.home, claim.ref.worldVersion)
+    ] as const);
+
+    this.#claims = new Map(claimEntries);
+    this.#lineage = new Map(lineageEntries);
+  }
+
+  public readPublishedClaim(ref: SubstrateClaimRef): PublishedSubstrateClaim | undefined {
+    return this.#claims.get(keyForClaim(ref));
+  }
+
+  public readLineage(ref: SubstrateClaimRef): LineageRef | undefined {
+    return this.#lineage.get(keyForClaim(ref));
+  }
+}
+
+export const EMPTY_SUBSTRATE_STORAGE: SubstrateStorage = new EmptySubstrateStorage();
+
+export function createCurrentWorldSummaryClaim(
+  home: ClaimHomeKind,
+  worldVersion: number,
+  summary: CurrentWorldSummaryValue
+): PublishedSubstrateClaim {
+  return Object.freeze({
+    ref: createSubstrateClaimRef(home, worldVersion),
+    outcome: ClaimOutcomeKind.Present,
+    qualifier: ClaimQualifierKind.None,
+    closureStatus: ClosureStatusKind.Closed,
+    currentWorldSummary: Object.freeze(summary)
+  });
+}
+
+export function createInMemorySubstrateStorage(
+  claims: readonly PublishedSubstrateClaim[] = []
+): SubstrateStorage {
+  if (claims.length === 0) {
+    return EMPTY_SUBSTRATE_STORAGE;
+  }
+
+  return new InMemorySubstrateStorage(claims);
+}
+
+function keyForClaim(ref: SubstrateClaimRef): string {
+  return `${ref.home}:${ref.worldVersion}`;
+}

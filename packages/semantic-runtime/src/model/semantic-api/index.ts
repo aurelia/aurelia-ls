@@ -1,0 +1,22 @@
+export {
+  AnswerCommitmentKind,
+  SemanticApiTerm,
+  SemanticInquiryEpisode,
+  SemanticReadMode,
+  SemanticSlotGroup,
+  getAnswerCommitment,
+  getInquiryEpisode,
+  getReadMode,
+  getSemanticApiTerm,
+  getSlotGroup,
+  type AnswerCommitment,
+  type AnswerCommitmentKind as AnswerCommitmentKindValue,
+  type SemanticApiTerm as SemanticApiTermValue,
+  type SemanticApiTermRef,
+  type SemanticInquiryEpisode as SemanticInquiryEpisodeValue,
+  type SemanticInquiryEpisodeRef,
+  type SemanticReadMode as SemanticReadModeValue,
+  type SemanticReadModeRef,
+  type SemanticSlotGroup as SemanticSlotGroupValue,
+  type SemanticSlotGroupRef
+} from "./semantic-api-model.js";

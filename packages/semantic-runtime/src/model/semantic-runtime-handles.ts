@@ -6,7 +6,13 @@ export const SemanticRuntimeSurfaceKind = Object.freeze({
   BoundaryRoutes: 5,
   BoundaryRouter: 6,
   BoundaryConsequenceBasis: 7,
-  BoundaryPorts: 8
+  BoundaryPorts: 8,
+  ClaimModel: 9,
+  SemanticApiModel: 10,
+  WorldContextHandoff: 11,
+  SubstrateReader: 12,
+  EvaluatorReadPort: 13,
+  AnswerAssembler: 14
 } as const);
 
 export type SemanticRuntimeSurfaceKind =
@@ -15,7 +21,10 @@ export type SemanticRuntimeSurfaceKind =
 export const SemanticRuntimeVerificationPocketKind = Object.freeze({
   RuntimeReadFacadeAndServices: 1,
   BoundaryRoutingAndDeferredOwnerPorts: 2,
-  ReplayObservabilityAndAIDebug: 3
+  ReplayObservabilityAndAIDebug: 3,
+  ModelQueryAnswerCore: 4,
+  WorkspaceCurrentWorldHandoff: 5,
+  SubstrateAndEvaluatorRead: 6
 } as const);
 
 export type SemanticRuntimeVerificationPocketKind =

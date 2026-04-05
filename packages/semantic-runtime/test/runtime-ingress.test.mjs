@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { BoundaryOutcomeKind } from "../out/boundaries/consequence-basis/boundary-consequence-basis.js";
 import { BoundaryRouteKind } from "../out/model/boundary-routes/boundary-routes.js";
+import { ClaimHomeKind, ClaimOutcomeKind, ClaimQualifierKind, createClaimRoute } from "../out/model/claims/index.js";
 import {
   ClosureStatusKind,
   ReentryAreaKind,
@@ -33,7 +34,12 @@ test("semantic-runtime ingress routes a deferred owner with structured proof and
     introspection: createBufferedSemanticRuntimeIntrospection()
   });
 
-  const questionRoute = createQuestionRoute(BoundaryRouteKind.TypedEnrichment);
+  const questionRoute = createQuestionRoute(
+    createClaimRoute(ClaimHomeKind.BoundaryFrontier),
+    Object.freeze({
+      boundaryRoute: BoundaryRouteKind.TypedEnrichment
+    })
+  );
   const worldFrame = createWorldFrame(1);
   const answer = runtime.readSemanticAnswer({
     questionRoute,
@@ -58,12 +64,16 @@ test("semantic-runtime ingress routes a deferred owner with structured proof and
     expected: Object.freeze({
       boundaryOutcomeKind: BoundaryOutcomeKind.RouteToOwner,
       boundaryRoute: BoundaryRouteKind.TypedEnrichment,
-      closureStatus: ClosureStatusKind.Qualified
+      closureStatus: ClosureStatusKind.Qualified,
+      outcome: ClaimOutcomeKind.BoundaryDeferred,
+      qualification: ClaimQualifierKind.BoundaryQualified
     }),
     actual: Object.freeze({
       boundaryOutcomeKind: answer.boundaryOutcome.kind,
       boundaryRoute: answer.boundaryOutcome.route,
-      closureStatus: answer.boundaryOutcome.closureStatus
+      closureStatus: answer.boundaryOutcome.closureStatus,
+      outcome: answer.outcome,
+      qualification: answer.qualification
     }),
     traceCapture: Object.freeze({
       request: traceCaptureRequest,
@@ -72,12 +82,15 @@ test("semantic-runtime ingress routes a deferred owner with structured proof and
   });
   const verifiedRecord = assertProofRecord(proofRecord);
 
-  assert.equal(answer.mayReuse, true);
+  assert.equal(answer.deltaBasis.mayReuse, true);
   assert.deepEqual(
     verifiedRecord.traceCapture.events.map((event) => event.kind),
     [
       SemanticRuntimeTraceEventKind.QueryPlanned,
-      SemanticRuntimeTraceEventKind.BoundaryOutcomeProduced
+      SemanticRuntimeTraceEventKind.WorldContextHandedOff,
+      SemanticRuntimeTraceEventKind.SubstrateClaimRead,
+      SemanticRuntimeTraceEventKind.BoundaryOutcomeProduced,
+      SemanticRuntimeTraceEventKind.AnswerAssembled
     ]
   );
 });

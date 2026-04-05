@@ -1,0 +1,74 @@
+import {
+  ClaimOutcomeKind,
+  ClaimQualifierKind,
+  type ClaimOutcomeKind as ClaimOutcomeKindValue,
+  type ClaimQualifierKind as ClaimQualifierKindValue
+} from "../../model/claims/claim-model.js";
+import {
+  ClosureStatusKind,
+  SemanticRuntimeSurfaceKind,
+  type ClosureStatusKind as ClosureStatusKindValue
+} from "../../model/semantic-runtime-handles.js";
+import type { QuestionRoute } from "../../query/framing/question-route.js";
+import type { RuntimeWorldContextHandoff } from "../../runtime/handoff/world-context-handoff.js";
+import type { CurrentWorldSummaryValue, PublishedSubstrateClaim, SubstrateClaimRef } from "../../substrate/claims/substrate-claim-ref.js";
+import type { LineageRef } from "../../substrate/lineage/lineage-ref.js";
+
+export interface EvaluatorExecutionPlan {
+  readonly questionRoute: QuestionRoute;
+  readonly worldContext: RuntimeWorldContextHandoff;
+  readonly claimRef: SubstrateClaimRef;
+  readonly publishedClaim?: PublishedSubstrateClaim;
+  readonly lineageRef?: LineageRef;
+}
+
+export interface PublishedEvaluatorResult {
+  readonly claimRef: SubstrateClaimRef;
+  readonly outcome: ClaimOutcomeKindValue;
+  readonly qualifier: ClaimQualifierKindValue;
+  readonly closureStatus: ClosureStatusKindValue;
+  readonly lineageRef?: LineageRef;
+  readonly surface: typeof SemanticRuntimeSurfaceKind.EvaluatorReadPort;
+  readonly currentWorldSummary?: CurrentWorldSummaryValue;
+}
+
+export interface EvaluatorReadPort {
+  runPublishedEvaluators(plan: EvaluatorExecutionPlan): PublishedEvaluatorResult;
+}
+
+class DefaultEvaluatorReadPort implements EvaluatorReadPort {
+  public runPublishedEvaluators(plan: EvaluatorExecutionPlan): PublishedEvaluatorResult {
+    return runPublishedEvaluators(plan);
+  }
+}
+
+const DEFAULT_EVALUATOR_READ_PORT = new DefaultEvaluatorReadPort();
+
+export function createEvaluatorReadPort(): EvaluatorReadPort {
+  return DEFAULT_EVALUATOR_READ_PORT;
+}
+
+export function runPublishedEvaluators(
+  plan: EvaluatorExecutionPlan
+): PublishedEvaluatorResult {
+  if (plan.publishedClaim === undefined) {
+    return Object.freeze({
+      claimRef: plan.claimRef,
+      outcome: ClaimOutcomeKind.NoClaim,
+      qualifier: ClaimQualifierKind.WorldOpen,
+      closureStatus: ClosureStatusKind.Open,
+      lineageRef: plan.lineageRef,
+      surface: SemanticRuntimeSurfaceKind.EvaluatorReadPort
+    });
+  }
+
+  return Object.freeze({
+    claimRef: plan.claimRef,
+    outcome: plan.publishedClaim.outcome,
+    qualifier: plan.publishedClaim.qualifier,
+    closureStatus: plan.publishedClaim.closureStatus,
+    lineageRef: plan.lineageRef,
+    surface: SemanticRuntimeSurfaceKind.EvaluatorReadPort,
+    currentWorldSummary: plan.publishedClaim.currentWorldSummary
+  });
+}

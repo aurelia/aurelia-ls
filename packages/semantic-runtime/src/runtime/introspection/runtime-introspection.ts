@@ -1,16 +1,23 @@
 import type { BoundaryOutcomeKind } from "../../boundaries/consequence-basis/boundary-consequence-basis.js";
 import type { BoundaryRouteKind } from "../../model/boundary-routes/boundary-routes.js";
+import type { ClaimHomeKind, ClaimOutcomeKind, ClaimQualifierKind } from "../../model/claims/claim-model.js";
 import type {
   ClosureStatusKind,
   SemanticRuntimeSurfaceKind
 } from "../../model/semantic-runtime-handles.js";
+import type { SemanticInquiryEpisode, SemanticReadMode } from "../../model/semantic-api/semantic-api-model.js";
 import type { QuestionRoute } from "../../query/framing/question-route.js";
 import type { WorldFrame } from "../../query/framing/world-frame.js";
+import type { InvalidationTriggerKind } from "../reread/reread-plan.js";
 
 export const SemanticRuntimeTraceEventKind = Object.freeze({
   RuntimeCreated: 1,
   QueryPlanned: 2,
-  BoundaryOutcomeProduced: 3
+  BoundaryOutcomeProduced: 3,
+  WorldContextHandedOff: 4,
+  SubstrateClaimRead: 5,
+  EvaluatorResultPublished: 6,
+  AnswerAssembled: 7
 } as const);
 
 export type SemanticRuntimeTraceEventKind =
@@ -28,9 +35,16 @@ export interface SemanticRuntimeTraceEvent {
   readonly questionRouteKind?: QuestionRoute["kind"];
   readonly worldFrameKind?: WorldFrame["kind"];
   readonly worldVersion?: number;
+  readonly claimHome?: ClaimHomeKind;
+  readonly inquiryEpisode?: SemanticInquiryEpisode;
+  readonly readMode?: SemanticReadMode;
   readonly boundaryRoute?: BoundaryRouteKind;
   readonly boundaryOutcomeKind?: BoundaryOutcomeKind;
+  readonly claimOutcome?: ClaimOutcomeKind;
+  readonly claimQualification?: ClaimQualifierKind;
   readonly closureStatus?: ClosureStatusKind;
+  readonly publishedClaimCount?: number;
+  readonly triggerMask?: InvalidationTriggerKind;
 }
 
 export interface SemanticRuntimeIntrospection {

@@ -1,6 +1,7 @@
 export const WorldFrameKind = Object.freeze({
-  Current: 1,
-  Snapshot: 2
+  Consulted: 1,
+  Current: 2,
+  Runtime: 3
 } as const);
 
 export type WorldFrameKind =
@@ -11,12 +12,21 @@ export interface WorldFrame {
   readonly version: number;
 }
 
+export function normalizeWorldFrame(worldFrame: WorldFrame): WorldFrame {
+  return Object.freeze({
+    kind: worldFrame.kind,
+    version: worldFrame.version
+  });
+}
+
 export function createWorldFrame(
   version: number,
   kind: WorldFrameKind = WorldFrameKind.Current
 ): WorldFrame {
-  return Object.freeze({
-    kind,
-    version
-  });
+  return normalizeWorldFrame(
+    Object.freeze({
+      kind,
+      version
+    })
+  );
 }
