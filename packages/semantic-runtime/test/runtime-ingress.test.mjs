@@ -18,14 +18,14 @@ import {
   SemanticRuntimeTraceEventKind,
   createBufferedSemanticRuntimeIntrospection
 } from "../out/runtime/introspection/runtime-introspection.js";
-import { createSemanticRuntime } from "../out/runtime/semantic-runtime.js";
+import { SemanticRuntime } from "../out/runtime/semantic-runtime.js";
 import {
   assertProofRecord,
   createProofRecord
 } from "../out/testing/obligation-harness.js";
 
 test("semantic-runtime ingress routes a deferred owner with structured proof and trace", () => {
-  const runtime = createSemanticRuntime({
+  const runtime = new SemanticRuntime({
     boundaryPorts: {
       typedEnrichment: {
         route: BoundaryRouteKind.TypedEnrichment

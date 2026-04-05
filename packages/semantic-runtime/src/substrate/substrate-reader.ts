@@ -1,7 +1,7 @@
 import type { ClaimRouteRef } from "../model/claims/claim-model.js";
 import type { WorldFrameHandle } from "../workspace/handoff/current-world-context.js";
 import type { PublishedSubstrateClaim, SubstrateClaimRef } from "./claims/substrate-claim-ref.js";
-import { type ClaimHomeIndex, createClaimHomeIndex } from "./indexes/claim-home-index.js";
+import { ClaimHomeIndex } from "./indexes/claim-home-index.js";
 import type { LineageRef } from "./lineage/lineage-ref.js";
 import {
   EMPTY_SUBSTRATE_STORAGE,
@@ -19,16 +19,14 @@ export interface SubstrateReadResult {
   readonly lineageRef?: LineageRef;
 }
 
-export interface SubstrateReader {
-  readSubstrateClaim(plan: SubstrateLookupPlan): SubstrateReadResult;
-  lookupLineage(ref: SubstrateClaimRef): LineageRef | undefined;
-}
-
-class DefaultSubstrateReader implements SubstrateReader {
+export class SubstrateReader {
   readonly #storage: SubstrateStorage;
   readonly #claimHomeIndex: ClaimHomeIndex;
 
-  public constructor(storage: SubstrateStorage, claimHomeIndex: ClaimHomeIndex) {
+  public constructor(
+    storage: SubstrateStorage = EMPTY_SUBSTRATE_STORAGE,
+    claimHomeIndex: ClaimHomeIndex = new ClaimHomeIndex()
+  ) {
     this.#storage = storage;
     this.#claimHomeIndex = claimHomeIndex;
   }
@@ -49,25 +47,4 @@ class DefaultSubstrateReader implements SubstrateReader {
   public lookupLineage(ref: SubstrateClaimRef): LineageRef | undefined {
     return this.#storage.readLineage(ref);
   }
-}
-
-export function createSubstrateReader(
-  storage: SubstrateStorage = EMPTY_SUBSTRATE_STORAGE,
-  claimHomeIndex: ClaimHomeIndex = createClaimHomeIndex()
-): SubstrateReader {
-  return new DefaultSubstrateReader(storage, claimHomeIndex);
-}
-
-export function readSubstrateClaim(
-  reader: SubstrateReader,
-  plan: SubstrateLookupPlan
-): SubstrateReadResult {
-  return reader.readSubstrateClaim(plan);
-}
-
-export function lookupLineage(
-  reader: SubstrateReader,
-  ref: SubstrateClaimRef
-): LineageRef | undefined {
-  return reader.lookupLineage(ref);
 }

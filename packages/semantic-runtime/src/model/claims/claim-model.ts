@@ -47,16 +47,16 @@ export interface ClaimRoute extends ClaimRouteRef {
   readonly homeRef: ClaimHome;
 }
 
-const CLAIM_HOMES: Readonly<Record<ClaimHomeKind, ClaimHome>> = {
+const CLAIM_HOMES = {
   [ClaimHomeKind.CurrentWorldSummary]: {
     kind: ClaimHomeKind.CurrentWorldSummary
   },
   [ClaimHomeKind.BoundaryFrontier]: {
     kind: ClaimHomeKind.BoundaryFrontier
   }
-};
+} as const satisfies Record<ClaimHomeKind, ClaimHome>;
 
-const CLAIM_OUTCOMES: Readonly<Record<ClaimOutcomeKind, ClaimOutcome>> = {
+const CLAIM_OUTCOMES = {
   [ClaimOutcomeKind.Present]: {
     kind: ClaimOutcomeKind.Present
   },
@@ -66,9 +66,9 @@ const CLAIM_OUTCOMES: Readonly<Record<ClaimOutcomeKind, ClaimOutcome>> = {
   [ClaimOutcomeKind.BoundaryDeferred]: {
     kind: ClaimOutcomeKind.BoundaryDeferred
   }
-};
+} as const satisfies Record<ClaimOutcomeKind, ClaimOutcome>;
 
-const CLAIM_QUALIFIERS: Readonly<Record<ClaimQualifierKind, ClaimQualifier>> = {
+const CLAIM_QUALIFIERS = {
   [ClaimQualifierKind.None]: {
     kind: ClaimQualifierKind.None
   },
@@ -78,9 +78,9 @@ const CLAIM_QUALIFIERS: Readonly<Record<ClaimQualifierKind, ClaimQualifier>> = {
   [ClaimQualifierKind.WorldOpen]: {
     kind: ClaimQualifierKind.WorldOpen
   }
-};
+} as const satisfies Record<ClaimQualifierKind, ClaimQualifier>;
 
-const CLAIM_BOUNDARIES: Readonly<Record<ClaimBoundaryKind, ClaimBoundary>> = {
+const CLAIM_BOUNDARIES = {
   [ClaimBoundaryKind.None]: {
     kind: ClaimBoundaryKind.None
   },
@@ -96,7 +96,7 @@ const CLAIM_BOUNDARIES: Readonly<Record<ClaimBoundaryKind, ClaimBoundary>> = {
   [ClaimBoundaryKind.WorkspaceAuthoring]: {
     kind: ClaimBoundaryKind.WorkspaceAuthoring
   }
-};
+} as const satisfies Record<ClaimBoundaryKind, ClaimBoundary>;
 
 export function createClaimRoute(home: ClaimHomeKind): ClaimRouteRef {
   return { home };

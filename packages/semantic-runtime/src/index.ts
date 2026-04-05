@@ -1,4 +1,4 @@
-export { createSemanticRuntime, type SemanticRuntime } from "./runtime/semantic-runtime.js";
+export { SemanticRuntime } from "./runtime/semantic-runtime.js";
 export type { SemanticAnswer } from "./answers/semantic-answer.js";
 export {
   ClaimHomeKind,

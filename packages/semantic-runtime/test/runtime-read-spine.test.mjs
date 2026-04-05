@@ -18,17 +18,17 @@ import {
   SemanticRuntimeTraceEventKind,
   createBufferedSemanticRuntimeIntrospection
 } from "../out/runtime/introspection/runtime-introspection.js";
-import { createSemanticRuntime } from "../out/runtime/semantic-runtime.js";
+import { SemanticRuntime } from "../out/runtime/semantic-runtime.js";
 import {
   RescanReasonKind,
-  createCurrentWorldContextPort
+  CurrentWorldContextPort
 } from "../out/workspace/handoff/current-world-context.js";
-import { createEvaluatorReadPort, runPublishedEvaluators } from "../out/evaluators/kernel/evaluator-read-port.js";
+import { EvaluatorReadPort } from "../out/evaluators/kernel/evaluator-read-port.js";
 import {
   createProofRecord,
   assertProofRecord
 } from "../out/testing/obligation-harness.js";
-import { createSubstrateReader } from "../out/substrate/substrate-reader.js";
+import { SubstrateReader } from "../out/substrate/substrate-reader.js";
 import {
   createCurrentWorldSummaryClaim,
   createInMemorySubstrateStorage
@@ -44,9 +44,9 @@ test("semantic-runtime local read assembles a structured semantic answer", () =>
       readMode: SemanticReadMode.Explain
     }
   );
-  const runtime = createSemanticRuntime({
+  const runtime = new SemanticRuntime({
     introspection: createBufferedSemanticRuntimeIntrospection(),
-    currentWorldContextPort: createCurrentWorldContextPort(
+    currentWorldContextPort: new CurrentWorldContextPort(
       {
         publishedClaimCount: 1,
         consultedPackageCount: 1,
@@ -130,7 +130,7 @@ test("workspace current-world handoff stays layered and route-safe", () => {
   const questionRoute = createQuestionRoute(
     createClaimRoute(ClaimHomeKind.CurrentWorldSummary)
   );
-  const currentWorldContext = createCurrentWorldContextPort(
+  const currentWorldContext = new CurrentWorldContextPort(
     {
       publishedClaimCount: 2,
       consultedPackageCount: 1,
@@ -179,14 +179,14 @@ test("substrate and evaluator read stay publication-first and snapshot-first", (
       readMode: SemanticReadMode.Observe
     }
   );
-  const currentWorldContext = createCurrentWorldContextPort(
+  const currentWorldContext = new CurrentWorldContextPort(
     {
       publishedClaimCount: 3,
       consultedPackageCount: 2
     }
   ).publishCurrentWorldContext(worldFrame);
   const handoff = createRuntimeWorldContextHandoff(questionRoute, currentWorldContext);
-  const substrateReader = createSubstrateReader(
+  const substrateReader = new SubstrateReader(
     createInMemorySubstrateStorage(
       [
         createCurrentWorldSummaryClaim(
@@ -206,7 +206,7 @@ test("substrate and evaluator read stay publication-first and snapshot-first", (
       worldFrameHandle: handoff.worldFrameHandle
     }
   );
-  const evaluation = runPublishedEvaluators(
+  const evaluation = new EvaluatorReadPort().runPublishedEvaluators(
     {
       questionRoute,
       worldContext: handoff,

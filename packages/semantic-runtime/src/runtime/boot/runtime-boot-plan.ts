@@ -6,19 +6,13 @@ import {
   createDormantSemanticRuntimeIntrospection,
   type SemanticRuntimeIntrospection
 } from "../introspection/runtime-introspection.js";
-import {
-  createCurrentWorldContextPort,
-  type CurrentWorldContextPort
-} from "../../workspace/handoff/current-world-context.js";
-import { createSubstrateReader, type SubstrateReader } from "../../substrate/substrate-reader.js";
+import { CurrentWorldContextPort } from "../../workspace/handoff/current-world-context.js";
+import { SubstrateReader } from "../../substrate/substrate-reader.js";
 import {
   EMPTY_SUBSTRATE_STORAGE,
   type SubstrateStorage
 } from "../../substrate/storage/substrate-storage.js";
-import {
-  createEvaluatorReadPort,
-  type EvaluatorReadPort
-} from "../../evaluators/kernel/evaluator-read-port.js";
+import { EvaluatorReadPort } from "../../evaluators/kernel/evaluator-read-port.js";
 
 export interface RuntimeBootPort {
   readonly boundaryPorts?: BoundaryPortSet;
@@ -44,8 +38,8 @@ export function planRuntimeBoot(
   return {
     boundaryPorts: port.boundaryPorts ?? EMPTY_BOUNDARY_PORT_SET,
     introspection: port.introspection ?? createDormantSemanticRuntimeIntrospection(),
-    currentWorldContextPort: port.currentWorldContextPort ?? createCurrentWorldContextPort(),
-    substrateReader: createSubstrateReader(port.substrateStorage ?? EMPTY_SUBSTRATE_STORAGE),
-    evaluatorReadPort: port.evaluatorReadPort ?? createEvaluatorReadPort()
+    currentWorldContextPort: port.currentWorldContextPort ?? new CurrentWorldContextPort({}),
+    substrateReader: new SubstrateReader(port.substrateStorage ?? EMPTY_SUBSTRATE_STORAGE),
+    evaluatorReadPort: port.evaluatorReadPort ?? new EvaluatorReadPort()
   };
 }

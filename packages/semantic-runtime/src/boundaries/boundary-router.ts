@@ -16,11 +16,7 @@ export interface BoundaryOutcome {
   readonly refusal?: BoundaryRefusal;
 }
 
-export interface BoundaryRouter {
-  routeBoundary(route: BoundaryRouteRef): BoundaryOutcome;
-}
-
-class DefaultBoundaryRouter implements BoundaryRouter {
+export class BoundaryRouter {
   readonly #ports: BoundaryPortSet;
 
   public constructor(ports: BoundaryPortSet) {
@@ -45,8 +41,4 @@ export function routeBoundary(
     preview: basis.preview,
     refusal: basis.refusal
   };
-}
-
-export function createBoundaryRouter(ports: BoundaryPortSet): BoundaryRouter {
-  return new DefaultBoundaryRouter(ports);
 }

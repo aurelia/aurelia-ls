@@ -12,8 +12,8 @@ import type { PublishedEvaluatorResult } from "../evaluators/kernel/evaluator-re
 import { createSubstrateClaimRef } from "../substrate/claims/substrate-claim-ref.js";
 import type { SemanticAnswer } from "./semantic-answer.js";
 
-export interface SemanticAnswerAssembler {
-  assembleSemanticAnswer(
+export class SemanticAnswerAssembler {
+  public assemble(
     plan: SemanticQueryPlan,
     worldContext: RuntimeWorldContextHandoff,
     boundaryOutcome: BoundaryOutcome | undefined,
@@ -21,51 +21,34 @@ export interface SemanticAnswerAssembler {
     trustBundle: TrustBundle,
     invalidationPlan: RuntimeInvalidationPlan,
     reuseAdmission: RuntimeReuseAdmission
-  ): SemanticAnswer;
-}
+  ): SemanticAnswer {
+    const claimRef = evaluation?.claimRef ?? createSubstrateClaimRef(
+      plan.query.questionRoute.claimRoute.home,
+      worldContext.worldFrameHandle.version
+    );
+    const outcome = evaluation?.outcome ?? ClaimOutcomeKind.BoundaryDeferred;
+    const qualification = evaluation?.qualifier ?? ClaimQualifierKind.BoundaryQualified;
 
-export function mergeBoundaryConsequence(
-  boundaryOutcome: BoundaryOutcome | undefined
-): BoundaryOutcome | undefined {
-  return boundaryOutcome;
-}
-
-export function assembleSemanticAnswer(
-  plan: SemanticQueryPlan,
-  worldContext: RuntimeWorldContextHandoff,
-  boundaryOutcome: BoundaryOutcome | undefined,
-  evaluation: PublishedEvaluatorResult | undefined,
-  trustBundle: TrustBundle,
-  invalidationPlan: RuntimeInvalidationPlan,
-  reuseAdmission: RuntimeReuseAdmission
-): SemanticAnswer {
-  const mergedBoundaryOutcome = mergeBoundaryConsequence(boundaryOutcome);
-  const claimRef = evaluation?.claimRef ?? createSubstrateClaimRef(
-    plan.query.questionRoute.claimRoute.home,
-    worldContext.worldFrameHandle.version
-  );
-  const outcome = evaluation?.outcome ?? ClaimOutcomeKind.BoundaryDeferred;
-  const qualification = evaluation?.qualifier ?? ClaimQualifierKind.BoundaryQualified;
-
-  return {
-    questionRoute: plan.query.questionRoute,
-    worldFrame: plan.query.worldFrame,
-    answerCommitment: plan.answerCommitment,
-    outcome,
-    qualification,
-    closureStatus: trustBundle.closureStatus,
-    provenance: {
-      surface: trustBundle.governingSurface,
-      claimRef,
-      worldFrameHandle: worldContext.worldFrameHandle,
-      lineageRef: evaluation?.lineageRef
-    },
-    deltaBasis: {
-      worldVersion: worldContext.worldFrameHandle.version,
-      mayReuse: reuseAdmission.mayReuse,
-      triggerMask: invalidationPlan.triggerMask
-    },
-    boundaryOutcome: mergedBoundaryOutcome,
-    currentWorldSummary: evaluation?.currentWorldSummary
-  };
+    return {
+      questionRoute: plan.query.questionRoute,
+      worldFrame: plan.query.worldFrame,
+      answerCommitment: plan.answerCommitment,
+      outcome,
+      qualification,
+      closureStatus: trustBundle.closureStatus,
+      provenance: {
+        surface: trustBundle.governingSurface,
+        claimRef,
+        worldFrameHandle: worldContext.worldFrameHandle,
+        lineageRef: evaluation?.lineageRef
+      },
+      deltaBasis: {
+        worldVersion: worldContext.worldFrameHandle.version,
+        mayReuse: reuseAdmission.mayReuse,
+        triggerMask: invalidationPlan.triggerMask
+      },
+      boundaryOutcome,
+      currentWorldSummary: evaluation?.currentWorldSummary
+    };
+  }
 }

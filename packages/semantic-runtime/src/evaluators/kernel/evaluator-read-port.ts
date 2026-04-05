@@ -29,43 +29,29 @@ export interface PublishedEvaluatorResult {
   readonly currentWorldSummary?: CurrentWorldSummaryValue;
 }
 
-export interface EvaluatorReadPort {
-  runPublishedEvaluators(plan: EvaluatorExecutionPlan): PublishedEvaluatorResult;
-}
+export class EvaluatorReadPort {
+  public runPublishedEvaluators(
+    plan: EvaluatorExecutionPlan
+  ): PublishedEvaluatorResult {
+    if (plan.publishedClaim === undefined) {
+      return {
+        claimRef: plan.claimRef,
+        outcome: ClaimOutcomeKind.NoClaim,
+        qualifier: ClaimQualifierKind.WorldOpen,
+        closureStatus: ClosureStatusKind.Open,
+        lineageRef: plan.lineageRef,
+        surface: SemanticRuntimeSurfaceKind.EvaluatorReadPort
+      };
+    }
 
-class DefaultEvaluatorReadPort implements EvaluatorReadPort {
-  public runPublishedEvaluators(plan: EvaluatorExecutionPlan): PublishedEvaluatorResult {
-    return runPublishedEvaluators(plan);
-  }
-}
-
-const DEFAULT_EVALUATOR_READ_PORT = new DefaultEvaluatorReadPort();
-
-export function createEvaluatorReadPort(): EvaluatorReadPort {
-  return DEFAULT_EVALUATOR_READ_PORT;
-}
-
-export function runPublishedEvaluators(
-  plan: EvaluatorExecutionPlan
-): PublishedEvaluatorResult {
-  if (plan.publishedClaim === undefined) {
     return {
       claimRef: plan.claimRef,
-      outcome: ClaimOutcomeKind.NoClaim,
-      qualifier: ClaimQualifierKind.WorldOpen,
-      closureStatus: ClosureStatusKind.Open,
+      outcome: plan.publishedClaim.outcome,
+      qualifier: plan.publishedClaim.qualifier,
+      closureStatus: plan.publishedClaim.closureStatus,
       lineageRef: plan.lineageRef,
-      surface: SemanticRuntimeSurfaceKind.EvaluatorReadPort
+      surface: SemanticRuntimeSurfaceKind.EvaluatorReadPort,
+      currentWorldSummary: plan.publishedClaim.currentWorldSummary
     };
   }
-
-  return {
-    claimRef: plan.claimRef,
-    outcome: plan.publishedClaim.outcome,
-    qualifier: plan.publishedClaim.qualifier,
-    closureStatus: plan.publishedClaim.closureStatus,
-    lineageRef: plan.lineageRef,
-    surface: SemanticRuntimeSurfaceKind.EvaluatorReadPort,
-    currentWorldSummary: plan.publishedClaim.currentWorldSummary
-  };
 }

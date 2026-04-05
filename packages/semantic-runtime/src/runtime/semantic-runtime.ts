@@ -1,9 +1,9 @@
-import { assembleSemanticAnswer } from "../answers/answer-assembler.js";
+import { SemanticAnswerAssembler } from "../answers/answer-assembler.js";
 import type { SemanticAnswer } from "../answers/semantic-answer.js";
-import { createBoundaryRouter, type BoundaryRouter } from "../boundaries/boundary-router.js";
+import { BoundaryRouter } from "../boundaries/boundary-router.js";
 import { getBoundaryRoute } from "../model/boundary-routes/boundary-routes.js";
 import { SemanticRuntimeSurfaceKind } from "../model/semantic-runtime-handles.js";
-import { planSemanticQuery, type SemanticQuery } from "../query/routing/query-planner.js";
+import { SemanticQueryPlanner, type SemanticQuery } from "../query/routing/query-planner.js";
 import { createRuntimeWorldContextHandoff } from "./handoff/world-context-handoff.js";
 import {
   SemanticRuntimeTraceEventKind,
@@ -12,22 +12,14 @@ import {
   type SemanticRuntimeTraceEvent
 } from "./introspection/runtime-introspection.js";
 import { planRuntimeBoot, type RuntimeBootPort } from "./boot/runtime-boot-plan.js";
-import { admitRuntimeReuse, planInvalidation } from "./invalidation/invalidation-coordinator.js";
-import { planReread } from "./reread/reread-plan.js";
+import { RuntimeInvalidationCoordinator } from "./invalidation/invalidation-coordinator.js";
+import { RereadPlanner } from "./reread/reread-plan.js";
 import { createTrustBundle } from "./trust/trust-bundle.js";
 import type { CurrentWorldContextPort } from "../workspace/handoff/current-world-context.js";
 import type { SubstrateReader } from "../substrate/substrate-reader.js";
 import type { EvaluatorReadPort } from "../evaluators/kernel/evaluator-read-port.js";
 
-export interface SemanticRuntimePort {
-  readonly surface: SemanticRuntimeSurfaceKind;
-  readSemanticAnswer(query: SemanticQuery): SemanticAnswer;
-  captureTrace(request?: SemanticRuntimeTraceCaptureRequest): readonly SemanticRuntimeTraceEvent[];
-}
-
-export interface SemanticRuntime extends SemanticRuntimePort {}
-
-class DefaultSemanticRuntime implements SemanticRuntime {
+export class SemanticRuntime {
   public readonly surface = SemanticRuntimeSurfaceKind.SemanticRuntime;
 
   readonly #boundaryRouter: BoundaryRouter;
@@ -35,10 +27,14 @@ class DefaultSemanticRuntime implements SemanticRuntime {
   readonly #currentWorldContextPort: CurrentWorldContextPort;
   readonly #substrateReader: SubstrateReader;
   readonly #evaluatorReadPort: EvaluatorReadPort;
+  readonly #queryPlanner = new SemanticQueryPlanner();
+  readonly #answerAssembler = new SemanticAnswerAssembler();
+  readonly #rereadPlanner = new RereadPlanner();
+  readonly #invalidationCoordinator = new RuntimeInvalidationCoordinator();
 
   public constructor(port: RuntimeBootPort) {
     const plan = planRuntimeBoot(port);
-    this.#boundaryRouter = createBoundaryRouter(plan.boundaryPorts);
+    this.#boundaryRouter = new BoundaryRouter(plan.boundaryPorts);
     this.#introspection = plan.introspection;
     this.#currentWorldContextPort = plan.currentWorldContextPort;
     this.#substrateReader = plan.substrateReader;
@@ -51,7 +47,7 @@ class DefaultSemanticRuntime implements SemanticRuntime {
   }
 
   public readSemanticAnswer(query: SemanticQuery): SemanticAnswer {
-    const plannedQuery = planSemanticQuery(query);
+    const plannedQuery = this.#queryPlanner.plan(query);
     const currentWorldContext = this.#currentWorldContextPort.publishCurrentWorldContext(
       plannedQuery.query.worldFrame
     );
@@ -118,9 +114,9 @@ class DefaultSemanticRuntime implements SemanticRuntime {
         )
       : undefined;
     const trustBundle = createTrustBundle(worldContext, evaluation, boundaryOutcome);
-    const rereadPlan = planReread(query);
-    const invalidationPlan = planInvalidation(rereadPlan);
-    const reuseAdmission = admitRuntimeReuse(invalidationPlan);
+    const rereadPlan = this.#rereadPlanner.plan(query);
+    const invalidationPlan = this.#invalidationCoordinator.plan(rereadPlan);
+    const reuseAdmission = this.#invalidationCoordinator.admitReuse(invalidationPlan);
 
     if (boundaryOutcome !== undefined) {
       this.#introspection.record(() => ({
@@ -152,7 +148,7 @@ class DefaultSemanticRuntime implements SemanticRuntime {
       }));
     }
 
-    const answer = assembleSemanticAnswer(
+    const answer = this.#answerAssembler.assemble(
       plannedQuery,
       worldContext,
       boundaryOutcome,
@@ -185,10 +181,4 @@ class DefaultSemanticRuntime implements SemanticRuntime {
   ): readonly SemanticRuntimeTraceEvent[] {
     return this.#introspection.snapshot(request);
   }
-}
-
-export function createSemanticRuntime(
-  port: RuntimeBootPort = {}
-): SemanticRuntime {
-  return new DefaultSemanticRuntime(port);
 }

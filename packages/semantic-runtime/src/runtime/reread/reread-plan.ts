@@ -15,15 +15,13 @@ export interface RereadPlan {
   readonly trigger: InvalidationTrigger;
 }
 
-export interface RereadPlanner {
-  planReread(query: SemanticQuery): RereadPlan;
-}
-
-export function planReread(_query: SemanticQuery): RereadPlan {
-  return {
-    shouldReread: false,
-    trigger: {
-      kindMask: InvalidationTriggerKind.None
-    }
-  };
+export class RereadPlanner {
+  public plan(_query: SemanticQuery): RereadPlan {
+    return {
+      shouldReread: false,
+      trigger: {
+        kindMask: InvalidationTriggerKind.None
+      }
+    };
+  }
 }

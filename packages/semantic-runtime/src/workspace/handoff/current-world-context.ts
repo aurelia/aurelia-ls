@@ -35,11 +35,7 @@ export interface CurrentWorldContextSeed {
   readonly rescanReasonMask?: RescanReasonKind;
 }
 
-export interface CurrentWorldContextPort {
-  publishCurrentWorldContext(worldFrame: WorldFrame): CurrentWorldContext;
-}
-
-class DefaultCurrentWorldContextPort implements CurrentWorldContextPort {
+export class CurrentWorldContextPort {
   readonly #seed: CurrentWorldContextSeed;
 
   public constructor(seed: CurrentWorldContextSeed) {
@@ -67,8 +63,4 @@ class DefaultCurrentWorldContextPort implements CurrentWorldContextPort {
 
 const EMPTY_CURRENT_WORLD_CONTEXT_SEED: CurrentWorldContextSeed = {};
 
-export function createCurrentWorldContextPort(
-  seed: CurrentWorldContextSeed = EMPTY_CURRENT_WORLD_CONTEXT_SEED
-): CurrentWorldContextPort {
-  return new DefaultCurrentWorldContextPort(seed);
-}
+export { EMPTY_CURRENT_WORLD_CONTEXT_SEED };

@@ -16,21 +16,19 @@ export interface SemanticQueryPlan {
   readonly answerCommitment: AnswerCommitment;
 }
 
-export interface SemanticQueryPlanner {
-  planSemanticQuery(query: SemanticQuery): SemanticQueryPlan;
-}
+export class SemanticQueryPlanner {
+  public plan(query: SemanticQuery): SemanticQueryPlan {
+    const normalizedWorldFrame = normalizeWorldFrame(query.worldFrame);
+    const answerCommitmentKind = query.questionRoute.boundaryRoute === undefined
+      ? AnswerCommitmentKind.SemanticTruth
+      : AnswerCommitmentKind.BoundaryFrontier;
 
-export function planSemanticQuery(query: SemanticQuery): SemanticQueryPlan {
-  const normalizedWorldFrame = normalizeWorldFrame(query.worldFrame);
-  const answerCommitmentKind = query.questionRoute.boundaryRoute === undefined
-    ? AnswerCommitmentKind.SemanticTruth
-    : AnswerCommitmentKind.BoundaryFrontier;
-
-  return {
-    query: {
-      questionRoute: query.questionRoute,
-      worldFrame: normalizedWorldFrame
-    },
-    answerCommitment: getAnswerCommitment(answerCommitmentKind)
-  };
+    return {
+      query: {
+        questionRoute: query.questionRoute,
+        worldFrame: normalizedWorldFrame
+      },
+      answerCommitment: getAnswerCommitment(answerCommitmentKind)
+    };
+  }
 }

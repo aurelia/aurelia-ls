@@ -49,44 +49,44 @@ export interface AnswerCommitment {
   readonly kind: AnswerCommitmentKind;
 }
 
-const READ_MODES: Readonly<Record<SemanticReadMode, SemanticReadModeRef>> = {
+const READ_MODES = {
   [SemanticReadMode.Observe]: { kind: SemanticReadMode.Observe },
   [SemanticReadMode.Explain]: { kind: SemanticReadMode.Explain },
   [SemanticReadMode.Locate]: { kind: SemanticReadMode.Locate },
   [SemanticReadMode.Complete]: { kind: SemanticReadMode.Complete },
   [SemanticReadMode.Audit]: { kind: SemanticReadMode.Audit }
-};
+} as const satisfies Record<SemanticReadMode, SemanticReadModeRef>;
 
-const INQUIRY_EPISODES: Readonly<Record<SemanticInquiryEpisode, SemanticInquiryEpisodeRef>> = {
+const INQUIRY_EPISODES = {
   [SemanticInquiryEpisode.CurrentWorldRead]: {
     kind: SemanticInquiryEpisode.CurrentWorldRead
   },
   [SemanticInquiryEpisode.BoundaryFrontier]: {
     kind: SemanticInquiryEpisode.BoundaryFrontier
   }
-};
+} as const satisfies Record<SemanticInquiryEpisode, SemanticInquiryEpisodeRef>;
 
-const SLOT_GROUPS: Readonly<Record<SemanticSlotGroup, SemanticSlotGroupRef>> = {
+const SLOT_GROUPS = {
   [SemanticSlotGroup.Summary]: { kind: SemanticSlotGroup.Summary },
   [SemanticSlotGroup.Explanation]: { kind: SemanticSlotGroup.Explanation },
   [SemanticSlotGroup.Boundary]: { kind: SemanticSlotGroup.Boundary }
-};
+} as const satisfies Record<SemanticSlotGroup, SemanticSlotGroupRef>;
 
-const API_TERMS: Readonly<Record<SemanticApiTerm, SemanticApiTermRef>> = {
+const API_TERMS = {
   [SemanticApiTerm.Claim]: { kind: SemanticApiTerm.Claim },
   [SemanticApiTerm.WorldFrame]: { kind: SemanticApiTerm.WorldFrame },
   [SemanticApiTerm.Boundary]: { kind: SemanticApiTerm.Boundary },
   [SemanticApiTerm.Answer]: { kind: SemanticApiTerm.Answer }
-};
+} as const satisfies Record<SemanticApiTerm, SemanticApiTermRef>;
 
-const ANSWER_COMMITMENTS: Readonly<Record<AnswerCommitmentKind, AnswerCommitment>> = {
+const ANSWER_COMMITMENTS = {
   [AnswerCommitmentKind.SemanticTruth]: {
     kind: AnswerCommitmentKind.SemanticTruth
   },
   [AnswerCommitmentKind.BoundaryFrontier]: {
     kind: AnswerCommitmentKind.BoundaryFrontier
   }
-};
+} as const satisfies Record<AnswerCommitmentKind, AnswerCommitment>;
 
 export function getReadMode(kind: SemanticReadMode): SemanticReadModeRef {
   return READ_MODES[kind];

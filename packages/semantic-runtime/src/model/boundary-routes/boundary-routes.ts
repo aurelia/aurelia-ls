@@ -17,20 +17,25 @@ export interface BoundaryRoute extends BoundaryRouteRef {
   readonly ownerPreview: BoundaryOwnerPreviewRef;
 }
 
-const ROUTES: Readonly<Record<BoundaryRouteKind, BoundaryRoute>> = {
-  [BoundaryRouteKind.TypedEnrichment]: createBoundaryRoute(BoundaryRouteKind.TypedEnrichment),
-  [BoundaryRouteKind.CandidateDiscovery]: createBoundaryRoute(BoundaryRouteKind.CandidateDiscovery),
-  [BoundaryRouteKind.ProtocolProjection]: createBoundaryRoute(BoundaryRouteKind.ProtocolProjection),
-  [BoundaryRouteKind.WorkspaceAuthoring]: createBoundaryRoute(BoundaryRouteKind.WorkspaceAuthoring)
-};
+const ROUTES = {
+  [BoundaryRouteKind.TypedEnrichment]: {
+    kind: BoundaryRouteKind.TypedEnrichment,
+    ownerPreview: { route: BoundaryRouteKind.TypedEnrichment }
+  },
+  [BoundaryRouteKind.CandidateDiscovery]: {
+    kind: BoundaryRouteKind.CandidateDiscovery,
+    ownerPreview: { route: BoundaryRouteKind.CandidateDiscovery }
+  },
+  [BoundaryRouteKind.ProtocolProjection]: {
+    kind: BoundaryRouteKind.ProtocolProjection,
+    ownerPreview: { route: BoundaryRouteKind.ProtocolProjection }
+  },
+  [BoundaryRouteKind.WorkspaceAuthoring]: {
+    kind: BoundaryRouteKind.WorkspaceAuthoring,
+    ownerPreview: { route: BoundaryRouteKind.WorkspaceAuthoring }
+  }
+} as const satisfies Record<BoundaryRouteKind, BoundaryRoute>;
 
 export function getBoundaryRoute(kind: BoundaryRouteKind): BoundaryRoute {
   return ROUTES[kind];
-}
-
-function createBoundaryRoute(kind: BoundaryRouteKind): BoundaryRoute {
-  return {
-    kind,
-    ownerPreview: { route: kind }
-  };
 }
