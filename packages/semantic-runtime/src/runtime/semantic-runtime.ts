@@ -1,5 +1,6 @@
 import { SemanticAnswerAssembler } from "../answers/answer-assembler.js";
 import type { SemanticAnswer } from "../answers/semantic-answer.js";
+import type { BoundaryOutcome } from "../boundaries/boundary-router.js";
 import { BoundaryRouter } from "../boundaries/boundary-router.js";
 import { getBoundaryRoute } from "../model/boundary-routes/boundary-routes.js";
 import { SemanticRuntimeSurfaceKind } from "../model/semantic-runtime-handles.js";
@@ -18,6 +19,14 @@ import { createTrustBundle } from "./trust/trust-bundle.js";
 import type { CurrentWorldContextPort } from "../workspace/handoff/current-world-context.js";
 import type { SubstrateReader } from "../substrate/substrate-reader.js";
 import type { EvaluatorReadPort } from "../evaluators/kernel/evaluator-read-port.js";
+import {
+  TypedEnrichmentOutcome,
+  TypedEnrichmentOutcomeKind,
+  TypedEnrichmentPort,
+  TypedEnrichmentRequest,
+  TypedUnavailabilityReasonKind
+} from "../typescript/typed-enrichment/typed-enrichment-port.js";
+import { BoundaryOutcomeKind } from "../boundaries/consequence-basis/boundary-consequence-basis.js";
 
 export class SemanticRuntime {
   public readonly surface = SemanticRuntimeSurfaceKind.SemanticRuntime;
@@ -27,6 +36,7 @@ export class SemanticRuntime {
   readonly #currentWorldContextPort: CurrentWorldContextPort;
   readonly #substrateReader: SubstrateReader;
   readonly #evaluatorReadPort: EvaluatorReadPort;
+  readonly #typedEnrichmentPort: TypedEnrichmentPort;
   readonly #queryPlanner = new SemanticQueryPlanner();
   readonly #answerAssembler = new SemanticAnswerAssembler();
   readonly #rereadPlanner = new RereadPlanner();
@@ -39,6 +49,7 @@ export class SemanticRuntime {
     this.#currentWorldContextPort = plan.currentWorldContextPort;
     this.#substrateReader = plan.substrateReader;
     this.#evaluatorReadPort = plan.evaluatorReadPort;
+    this.#typedEnrichmentPort = plan.typedEnrichmentPort;
 
     this.#introspection.record(() => ({
       kind: SemanticRuntimeTraceEventKind.RuntimeCreated,
@@ -176,9 +187,100 @@ export class SemanticRuntime {
     return answer;
   }
 
+  public readTypedEnrichment(
+    request: TypedEnrichmentRequest
+  ): TypedEnrichmentOutcome {
+    const currentWorldContext = this.#currentWorldContextPort.publishCurrentWorldContext(
+      request.worldFrame
+    );
+    const worldContext = createRuntimeWorldContextHandoff(
+      request.questionRoute,
+      currentWorldContext
+    );
+
+    this.#introspection.record(() => ({
+      kind: SemanticRuntimeTraceEventKind.TypedEnrichmentRequested,
+      surface: SemanticRuntimeSurfaceKind.SemanticRuntime,
+      questionRouteKind: request.questionRoute.kind,
+      worldFrameKind: request.worldFrame.kind,
+      worldVersion: request.worldFrame.version,
+      claimHome: request.questionRoute.claimRoute.home,
+      inquiryEpisode: request.questionRoute.inquiryEpisode,
+      readMode: request.questionRoute.readMode,
+      boundaryRoute: request.questionRoute.boundaryRoute,
+      typedOperationIntent: request.intent,
+      typedFileName: request.target.fileName,
+      typedTargetPosition: request.target.position
+    }));
+
+    this.#introspection.record(() => ({
+      kind: SemanticRuntimeTraceEventKind.WorldContextHandedOff,
+      surface: SemanticRuntimeSurfaceKind.WorldContextHandoff,
+      questionRouteKind: request.questionRoute.kind,
+      worldFrameKind: worldContext.worldFrameHandle.kind,
+      worldVersion: worldContext.worldFrameHandle.version,
+      claimHome: request.questionRoute.claimRoute.home,
+      boundaryRoute: request.questionRoute.boundaryRoute,
+      publishedClaimCount: worldContext.snapshotSummary.publishedClaimCount
+    }));
+
+    let outcome = this.#typedEnrichmentPort.enrich(request, worldContext);
+    if (
+      outcome.kind === TypedEnrichmentOutcomeKind.RoutedToOwner &&
+      outcome.boundaryRoute !== undefined
+    ) {
+      const boundaryOutcome = this.#boundaryRouter.routeBoundary(
+        getBoundaryRoute(outcome.boundaryRoute)
+      );
+      outcome = applyBoundaryOutcome(
+        outcome,
+        boundaryOutcome
+      );
+    }
+
+    this.#introspection.record(() => ({
+      kind: SemanticRuntimeTraceEventKind.TypedEnrichmentProduced,
+      surface: SemanticRuntimeSurfaceKind.TypedEnrichmentPort,
+      questionRouteKind: request.questionRoute.kind,
+      worldFrameKind: request.worldFrame.kind,
+      worldVersion: request.worldFrame.version,
+      claimHome: request.questionRoute.claimRoute.home,
+      inquiryEpisode: request.questionRoute.inquiryEpisode,
+      readMode: request.questionRoute.readMode,
+      boundaryRoute: outcome.boundaryRoute,
+      closureStatus: outcome.closureStatus,
+      typedOperationIntent: request.intent,
+      typedOutcomeKind: outcome.kind,
+      typedProjectGeneration: outcome.projectGeneration,
+      typedUnavailabilityReason: outcome.unavailabilityReason,
+      typedFileName: request.target.fileName,
+      typedTargetPosition: request.target.position
+    }));
+
+    return outcome;
+  }
+
   public captureTrace(
     request?: SemanticRuntimeTraceCaptureRequest
   ): readonly SemanticRuntimeTraceEvent[] {
     return this.#introspection.snapshot(request);
   }
+}
+
+function applyBoundaryOutcome(
+  outcome: TypedEnrichmentOutcome,
+  boundaryOutcome: BoundaryOutcome
+): TypedEnrichmentOutcome {
+  if (boundaryOutcome.kind === BoundaryOutcomeKind.RouteToOwner) {
+    return outcome.withBoundaryOutcome(boundaryOutcome);
+  }
+
+  return TypedEnrichmentOutcome.typedUnavailable(
+    outcome.anchor,
+    outcome.worldVersion,
+    TypedUnavailabilityReasonKind.BoundaryOwnerUnavailable,
+    outcome.projectGeneration,
+    outcome.note,
+    boundaryOutcome
+  );
 }

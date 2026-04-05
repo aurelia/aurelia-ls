@@ -12,7 +12,9 @@ export const enum SemanticRuntimeSurfaceKind {
   WorldContextHandoff = 11,
   SubstrateReader = 12,
   EvaluatorReadPort = 13,
-  AnswerAssembler = 14
+  AnswerAssembler = 14,
+  TypeScriptProjectPort = 15,
+  TypedEnrichmentPort = 16
 }
 
 export const enum SemanticRuntimeVerificationPocketKind {
@@ -21,7 +23,8 @@ export const enum SemanticRuntimeVerificationPocketKind {
   ReplayObservabilityAndAIDebug = 3,
   ModelQueryAnswerCore = 4,
   WorkspaceCurrentWorldHandoff = 5,
-  SubstrateAndEvaluatorRead = 6
+  SubstrateAndEvaluatorRead = 6,
+  TypeScriptLocalTypedService = 7
 }
 
 export const enum VerificationProofClassKind {

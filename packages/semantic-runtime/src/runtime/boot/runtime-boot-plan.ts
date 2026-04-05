@@ -13,6 +13,8 @@ import {
   type SubstrateStorage
 } from "../../substrate/storage/substrate-storage.js";
 import { EvaluatorReadPort } from "../../evaluators/kernel/evaluator-read-port.js";
+import { TypeScriptProjectPort } from "../../typescript/programs/typescript-project-port.js";
+import { TypedEnrichmentPort } from "../../typescript/typed-enrichment/typed-enrichment-port.js";
 
 export interface RuntimeBootPort {
   readonly boundaryPorts?: BoundaryPortSet;
@@ -20,6 +22,7 @@ export interface RuntimeBootPort {
   readonly currentWorldContextPort?: CurrentWorldContextPort;
   readonly substrateStorage?: SubstrateStorage;
   readonly evaluatorReadPort?: EvaluatorReadPort;
+  readonly typescriptProjectPort?: TypeScriptProjectPort;
 }
 
 export interface RuntimeBootPlan {
@@ -28,6 +31,7 @@ export interface RuntimeBootPlan {
   readonly currentWorldContextPort: CurrentWorldContextPort;
   readonly substrateReader: SubstrateReader;
   readonly evaluatorReadPort: EvaluatorReadPort;
+  readonly typedEnrichmentPort: TypedEnrichmentPort;
 }
 
 const EMPTY_RUNTIME_BOOT_PORT: RuntimeBootPort = {};
@@ -40,6 +44,7 @@ export function planRuntimeBoot(
     introspection: port.introspection ?? createDormantSemanticRuntimeIntrospection(),
     currentWorldContextPort: port.currentWorldContextPort ?? new CurrentWorldContextPort({}),
     substrateReader: new SubstrateReader(port.substrateStorage ?? EMPTY_SUBSTRATE_STORAGE),
-    evaluatorReadPort: port.evaluatorReadPort ?? new EvaluatorReadPort()
+    evaluatorReadPort: port.evaluatorReadPort ?? new EvaluatorReadPort(),
+    typedEnrichmentPort: new TypedEnrichmentPort(port.typescriptProjectPort)
   };
 }

@@ -11,6 +11,9 @@
       "types": "./out/index.d.ts"
     }
   },
+  "dependencies": {
+    "typescript": "^5.5.4"
+  },
   "scripts": {
     "build": "tsc -b",
     "test": "pnpm run build && node --test test/*.test.mjs"

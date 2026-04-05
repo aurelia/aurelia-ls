@@ -1,5 +1,15 @@
 export { SemanticRuntime } from "./runtime/semantic-runtime.js";
 export type { SemanticAnswer } from "./answers/semantic-answer.js";
+export { TypeScriptProjectPort } from "./typescript/programs/typescript-project-port.js";
+export {
+  TypedEnrichmentOutcome,
+  TypedEnrichmentRequest,
+  TypedEvidenceBundle,
+  TypedOperationIntentKind,
+  TypedEnrichmentOutcomeKind,
+  TypedTargetLocator,
+  TypedUnavailabilityReasonKind
+} from "./typescript/typed-enrichment/typed-enrichment-port.js";
 export {
   ClaimHomeKind,
   createClaimRoute,

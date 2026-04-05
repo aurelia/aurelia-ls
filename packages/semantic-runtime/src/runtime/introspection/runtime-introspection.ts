@@ -9,6 +9,11 @@ import type { SemanticInquiryEpisode, SemanticReadMode } from "../../model/seman
 import type { QuestionRoute } from "../../query/framing/question-route.js";
 import type { WorldFrame } from "../../query/framing/world-frame.js";
 import type { InvalidationTriggerKind } from "../reread/reread-plan.js";
+import type {
+  TypedEnrichmentOutcomeKind,
+  TypedOperationIntentKind,
+  TypedUnavailabilityReasonKind
+} from "../../typescript/typed-enrichment/typed-enrichment-port.js";
 
 export const enum SemanticRuntimeTraceEventKind {
   RuntimeCreated = 1,
@@ -17,7 +22,9 @@ export const enum SemanticRuntimeTraceEventKind {
   WorldContextHandedOff = 4,
   SubstrateClaimRead = 5,
   EvaluatorResultPublished = 6,
-  AnswerAssembled = 7
+  AnswerAssembled = 7,
+  TypedEnrichmentRequested = 8,
+  TypedEnrichmentProduced = 9
 }
 
 export interface SemanticRuntimeTraceCaptureRequest {
@@ -42,6 +49,12 @@ export interface SemanticRuntimeTraceEvent {
   readonly closureStatus?: ClosureStatusKind;
   readonly publishedClaimCount?: number;
   readonly triggerMask?: InvalidationTriggerKind;
+  readonly typedOperationIntent?: TypedOperationIntentKind;
+  readonly typedOutcomeKind?: TypedEnrichmentOutcomeKind;
+  readonly typedProjectGeneration?: number;
+  readonly typedUnavailabilityReason?: TypedUnavailabilityReasonKind;
+  readonly typedFileName?: string;
+  readonly typedTargetPosition?: number;
 }
 
 export interface SemanticRuntimeIntrospection {
