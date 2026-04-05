@@ -60,6 +60,7 @@ export class SemanticRuntime {
   public readSemanticAnswer(query: SemanticQuery): SemanticAnswer {
     const plannedQuery = this.#queryPlanner.plan(query);
     const currentWorldContext = this.#currentWorldContextPort.publishCurrentWorldContext(
+      plannedQuery.query.questionRoute,
       plannedQuery.query.worldFrame
     );
     const worldContext = createRuntimeWorldContextHandoff(
@@ -87,7 +88,10 @@ export class SemanticRuntime {
       worldVersion: worldContext.worldFrameHandle.version,
       claimHome: query.questionRoute.claimRoute.home,
       boundaryRoute: query.questionRoute.boundaryRoute,
-      publishedClaimCount: worldContext.snapshotSummary.publishedClaimCount
+      publishedClaimCount: worldContext.snapshotSummary.publishedClaimCount,
+      recognizedResourceCount: worldContext.snapshotSummary.recognizedResourceCount,
+      admittedResourceCount: worldContext.snapshotSummary.admittedResourceCount,
+      activeResourceCount: worldContext.snapshotSummary.activeResourceCount
     }));
 
     const boundaryOutcome = query.questionRoute.boundaryRoute === undefined
@@ -110,7 +114,10 @@ export class SemanticRuntime {
       worldVersion: worldContext.worldFrameHandle.version,
       claimHome: substrateRead.claimRef.home,
       boundaryRoute: query.questionRoute.boundaryRoute,
-      publishedClaimCount: substrateRead.publishedClaim?.currentWorldSummary?.publishedClaimCount
+      publishedClaimCount: substrateRead.publishedClaim?.currentWorldSummary?.publishedClaimCount,
+      recognizedResourceCount: substrateRead.publishedClaim?.currentWorldSummary?.recognizedResourceCount,
+      admittedResourceCount: substrateRead.publishedClaim?.currentWorldSummary?.admittedResourceCount,
+      activeResourceCount: substrateRead.publishedClaim?.currentWorldSummary?.activeResourceCount
     }));
 
     const evaluation = boundaryOutcome === undefined
@@ -155,7 +162,10 @@ export class SemanticRuntime {
         claimOutcome: evaluation.outcome,
         claimQualification: evaluation.qualifier,
         closureStatus: evaluation.closureStatus,
-        publishedClaimCount: evaluation.currentWorldSummary?.publishedClaimCount
+        publishedClaimCount: evaluation.currentWorldSummary?.publishedClaimCount,
+        recognizedResourceCount: evaluation.currentWorldSummary?.recognizedResourceCount,
+        admittedResourceCount: evaluation.currentWorldSummary?.admittedResourceCount,
+        activeResourceCount: evaluation.currentWorldSummary?.activeResourceCount
       }));
     }
 
@@ -181,7 +191,10 @@ export class SemanticRuntime {
       closureStatus: answer.closureStatus,
       boundaryRoute: query.questionRoute.boundaryRoute ?? answer.boundaryOutcome?.route,
       triggerMask: answer.deltaBasis.triggerMask,
-      publishedClaimCount: answer.currentWorldSummary?.publishedClaimCount
+      publishedClaimCount: answer.currentWorldSummary?.publishedClaimCount,
+      recognizedResourceCount: answer.currentWorldSummary?.recognizedResourceCount,
+      admittedResourceCount: answer.currentWorldSummary?.admittedResourceCount,
+      activeResourceCount: answer.currentWorldSummary?.activeResourceCount
     }));
 
     return answer;
@@ -191,6 +204,7 @@ export class SemanticRuntime {
     request: TypedEnrichmentRequest
   ): TypedEnrichmentOutcome {
     const currentWorldContext = this.#currentWorldContextPort.publishCurrentWorldContext(
+      request.questionRoute,
       request.worldFrame
     );
     const worldContext = createRuntimeWorldContextHandoff(
@@ -221,7 +235,10 @@ export class SemanticRuntime {
       worldVersion: worldContext.worldFrameHandle.version,
       claimHome: request.questionRoute.claimRoute.home,
       boundaryRoute: request.questionRoute.boundaryRoute,
-      publishedClaimCount: worldContext.snapshotSummary.publishedClaimCount
+      publishedClaimCount: worldContext.snapshotSummary.publishedClaimCount,
+      recognizedResourceCount: worldContext.snapshotSummary.recognizedResourceCount,
+      admittedResourceCount: worldContext.snapshotSummary.admittedResourceCount,
+      activeResourceCount: worldContext.snapshotSummary.activeResourceCount
     }));
 
     let outcome = this.#typedEnrichmentPort.enrich(request, worldContext);

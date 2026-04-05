@@ -1,0 +1,76 @@
+import type { ConsultedBoundaryRef } from "../routes/consulted-boundary.js";
+
+export const enum ConsultationRoleKind {
+  CandidateIntakeWorld = 1,
+  AdmittedRegistrationWorld = 2,
+  CurrentWorldActiveLocalWorld = 3
+}
+
+export const enum WorldRegimeKind {
+  DefinitionMerge = 1,
+  RegistryCarrier = 2,
+  OwnerBoundedLocal = 3,
+  ModuleIntake = 4,
+  ConstructorEmission = 5,
+  ConventionMediated = 6
+}
+
+export const enum RegistrationPathKind {
+  ResourceRegistration = 1,
+  RegistryInsertion = 2,
+  AnalyzedModuleSelection = 3,
+  ConfigurationEmission = 4,
+  ConventionBridge = 5
+}
+
+export const enum ConstructorArchetypeKind {
+  AggregateBundle = 1,
+  CustomizedDefault = 2,
+  GeneratedSyntax = 3,
+  StagedBuilder = 4,
+  LifecycleAttached = 5,
+  ChildWorldBranch = 6
+}
+
+export const enum LookupRegimeKind {
+  CurrentPlusRootResource = 1,
+  OwnOnlyResource = 2,
+  GenericDiAncestor = 3,
+  AnalyzedModuleSelection = 4
+}
+
+export const enum MaterializationTimingKind {
+  Eager = 1,
+  LifecycleSlotGated = 2,
+  ChildWorldBranched = 3,
+  RenderTimeBranch = 4
+}
+
+export const enum NamingSurfaceKind {
+  ExportName = 1,
+  ResourceName = 2
+}
+
+export const enum WorldParticipationFrontierKind {
+  ClosedBaseline = 1,
+  CurrentWorldSensitive = 2,
+  WorldQualified = 3,
+  TerminalOpen = 4,
+  OpenPlaceholder = 5
+}
+
+export class ConsultedWorldHandle {
+  public constructor(
+    public readonly worldRef: string,
+    public readonly consultedBoundary: ConsultedBoundaryRef,
+    public readonly searchedBoundaries: readonly ConsultedBoundaryRef[],
+    public readonly consultationRole: ConsultationRoleKind,
+    public readonly worldRegime: WorldRegimeKind,
+    public readonly worldOwnerOrConstructorBasis: string,
+    public readonly registrationPath: RegistrationPathKind,
+    public readonly constructorArchetypes: readonly ConstructorArchetypeKind[],
+    public readonly lookupRegime: LookupRegimeKind,
+    public readonly materializationTiming: MaterializationTimingKind,
+    public readonly namingSurfaces: readonly NamingSurfaceKind[]
+  ) {}
+}

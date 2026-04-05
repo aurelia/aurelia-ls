@@ -9,6 +9,7 @@ import type { RuntimeInvalidationPlan } from "../runtime/invalidation/invalidati
 import type { WorldFrameHandle } from "../runtime/handoff/world-context-handoff.js";
 import type { CurrentWorldSummaryValue, SubstrateClaimRef } from "../substrate/claims/substrate-claim-ref.js";
 import type { LineageRef } from "../substrate/lineage/lineage-ref.js";
+import type { CurrentWorldPublication } from "../workspace/snapshots/current-world-publication.js";
 
 export interface SemanticProvenance {
   readonly surface: SemanticRuntimeSurfaceKind;
@@ -34,4 +35,5 @@ export interface SemanticAnswer {
   readonly deltaBasis: SemanticDelta;
   readonly boundaryOutcome?: BoundaryOutcome;
   readonly currentWorldSummary?: CurrentWorldSummaryValue;
+  readonly currentWorldPublication?: CurrentWorldPublication;
 }

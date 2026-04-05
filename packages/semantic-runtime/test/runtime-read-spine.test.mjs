@@ -50,6 +50,9 @@ test("semantic-runtime local read assembles a structured semantic answer", () =>
       {
         publishedClaimCount: 1,
         consultedPackageCount: 1,
+        recognizedResourceCount: 0,
+        admittedResourceCount: 0,
+        activeResourceCount: 0,
         rescanReasonMask: RescanReasonKind.WorkspaceChanged
       }
     ),
@@ -60,7 +63,10 @@ test("semantic-runtime local read assembles a structured semantic answer", () =>
           7,
           {
             publishedClaimCount: 1,
-            consultedPackageCount: 1
+            consultedPackageCount: 1,
+            recognizedResourceCount: 0,
+            admittedResourceCount: 0,
+            activeResourceCount: 0
           }
         )
       ]
@@ -95,14 +101,20 @@ test("semantic-runtime local read assembles a structured semantic answer", () =>
       outcome: ClaimOutcomeKind.Present,
       qualification: ClaimQualifierKind.None,
       closureStatus: ClosureStatusKind.Closed,
-      publishedClaimCount: 1
+      publishedClaimCount: 1,
+      recognizedResourceCount: 0,
+      admittedResourceCount: 0,
+      activeResourceCount: 0
     },
     actual: {
       answerCommitment: answer.answerCommitment.kind,
       outcome: answer.outcome,
       qualification: answer.qualification,
       closureStatus: answer.closureStatus,
-      publishedClaimCount: answer.currentWorldSummary?.publishedClaimCount
+      publishedClaimCount: answer.currentWorldSummary?.publishedClaimCount,
+      recognizedResourceCount: answer.currentWorldSummary?.recognizedResourceCount,
+      admittedResourceCount: answer.currentWorldSummary?.admittedResourceCount,
+      activeResourceCount: answer.currentWorldSummary?.activeResourceCount
     },
     traceCapture: {
       request: traceCaptureRequest,
@@ -134,9 +146,12 @@ test("workspace current-world handoff stays layered and route-safe", () => {
     {
       publishedClaimCount: 2,
       consultedPackageCount: 1,
+      recognizedResourceCount: 0,
+      admittedResourceCount: 0,
+      activeResourceCount: 0,
       rescanReasonMask: RescanReasonKind.WorkspaceChanged | RescanReasonKind.BoundaryPlanChanged
     }
-  ).publishCurrentWorldContext(worldFrame);
+  ).publishCurrentWorldContext(questionRoute, worldFrame);
   const handoff = createRuntimeWorldContextHandoff(questionRoute, currentWorldContext);
   const proofRecord = createProofRecord({
     pocket: SemanticRuntimeVerificationPocketKind.WorkspaceCurrentWorldHandoff,
@@ -153,12 +168,18 @@ test("workspace current-world handoff stays layered and route-safe", () => {
       version: 9,
       publishedClaimCount: 2,
       consultedPackageCount: 1,
+      recognizedResourceCount: 0,
+      admittedResourceCount: 0,
+      activeResourceCount: 0,
       rescanReasonMask: RescanReasonKind.WorkspaceChanged | RescanReasonKind.BoundaryPlanChanged
     },
     actual: {
       version: handoff.worldFrameHandle.version,
       publishedClaimCount: handoff.snapshotSummary.publishedClaimCount,
       consultedPackageCount: handoff.snapshotSummary.consultedPackageCount,
+      recognizedResourceCount: handoff.snapshotSummary.recognizedResourceCount,
+      admittedResourceCount: handoff.snapshotSummary.admittedResourceCount,
+      activeResourceCount: handoff.snapshotSummary.activeResourceCount,
       rescanReasonMask: handoff.rescanBasis.reasonMask
     },
     traceCapture: {
@@ -182,9 +203,12 @@ test("substrate and evaluator read stay publication-first and snapshot-first", (
   const currentWorldContext = new CurrentWorldContextPort(
     {
       publishedClaimCount: 3,
-      consultedPackageCount: 2
+      consultedPackageCount: 2,
+      recognizedResourceCount: 0,
+      admittedResourceCount: 0,
+      activeResourceCount: 0
     }
-  ).publishCurrentWorldContext(worldFrame);
+  ).publishCurrentWorldContext(questionRoute, worldFrame);
   const handoff = createRuntimeWorldContextHandoff(questionRoute, currentWorldContext);
   const substrateReader = new SubstrateReader(
     createInMemorySubstrateStorage(
@@ -194,7 +218,10 @@ test("substrate and evaluator read stay publication-first and snapshot-first", (
           12,
           {
             publishedClaimCount: 3,
-            consultedPackageCount: 2
+            consultedPackageCount: 2,
+            recognizedResourceCount: 0,
+            admittedResourceCount: 0,
+            activeResourceCount: 0
           }
         )
       ]
@@ -230,14 +257,20 @@ test("substrate and evaluator read stay publication-first and snapshot-first", (
       qualification: ClaimQualifierKind.None,
       closureStatus: ClosureStatusKind.Closed,
       claimHome: ClaimHomeKind.CurrentWorldSummary,
-      worldVersion: 12
+      worldVersion: 12,
+      recognizedResourceCount: 0,
+      admittedResourceCount: 0,
+      activeResourceCount: 0
     },
     actual: {
       outcome: evaluation.outcome,
       qualification: evaluation.qualifier,
       closureStatus: evaluation.closureStatus,
       claimHome: evaluation.claimRef.home,
-      worldVersion: evaluation.claimRef.worldVersion
+      worldVersion: evaluation.claimRef.worldVersion,
+      recognizedResourceCount: evaluation.currentWorldSummary?.recognizedResourceCount,
+      admittedResourceCount: evaluation.currentWorldSummary?.admittedResourceCount,
+      activeResourceCount: evaluation.currentWorldSummary?.activeResourceCount
     },
     traceCapture: {
       request: { worldFrame, questionRoute },
@@ -248,4 +281,5 @@ test("substrate and evaluator read stay publication-first and snapshot-first", (
   assertProofRecord(proofRecord);
   assert.equal(evaluation.currentWorldSummary?.publishedClaimCount, 3);
   assert.equal(evaluation.currentWorldSummary?.consultedPackageCount, 2);
+  assert.equal(evaluation.currentWorldSummary?.recognizedResourceCount, 0);
 });

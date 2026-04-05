@@ -48,7 +48,8 @@ export class SemanticAnswerAssembler {
         triggerMask: invalidationPlan.triggerMask
       },
       boundaryOutcome,
-      currentWorldSummary: evaluation?.currentWorldSummary
+      currentWorldSummary: evaluation?.currentWorldSummary,
+      currentWorldPublication: evaluation?.currentWorldPublication
     };
   }
 }

@@ -10,6 +10,7 @@ import type { QuestionRoute } from "../../query/framing/question-route.js";
 import type { RuntimeWorldContextHandoff } from "../../runtime/handoff/world-context-handoff.js";
 import type { CurrentWorldSummaryValue, PublishedSubstrateClaim, SubstrateClaimRef } from "../../substrate/claims/substrate-claim-ref.js";
 import type { LineageRef } from "../../substrate/lineage/lineage-ref.js";
+import type { CurrentWorldPublication } from "../../workspace/snapshots/current-world-publication.js";
 
 export interface EvaluatorExecutionPlan {
   readonly questionRoute: QuestionRoute;
@@ -27,6 +28,7 @@ export interface PublishedEvaluatorResult {
   readonly lineageRef?: LineageRef;
   readonly surface: SemanticRuntimeSurfaceKind.EvaluatorReadPort;
   readonly currentWorldSummary?: CurrentWorldSummaryValue;
+  readonly currentWorldPublication?: CurrentWorldPublication;
 }
 
 export class EvaluatorReadPort {
@@ -51,7 +53,8 @@ export class EvaluatorReadPort {
       closureStatus: plan.publishedClaim.closureStatus,
       lineageRef: plan.lineageRef,
       surface: SemanticRuntimeSurfaceKind.EvaluatorReadPort,
-      currentWorldSummary: plan.publishedClaim.currentWorldSummary
+      currentWorldSummary: plan.publishedClaim.currentWorldSummary,
+      currentWorldPublication: plan.publishedClaim.currentWorldPublication
     };
   }
 }

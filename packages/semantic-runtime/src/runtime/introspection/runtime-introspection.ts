@@ -48,6 +48,9 @@ export interface SemanticRuntimeTraceEvent {
   readonly claimQualification?: ClaimQualifierKind;
   readonly closureStatus?: ClosureStatusKind;
   readonly publishedClaimCount?: number;
+  readonly recognizedResourceCount?: number;
+  readonly admittedResourceCount?: number;
+  readonly activeResourceCount?: number;
   readonly triggerMask?: InvalidationTriggerKind;
   readonly typedOperationIntent?: TypedOperationIntentKind;
   readonly typedOutcomeKind?: TypedEnrichmentOutcomeKind;

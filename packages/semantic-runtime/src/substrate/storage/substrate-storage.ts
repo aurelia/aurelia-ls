@@ -11,6 +11,7 @@ import {
   type SubstrateClaimRef
 } from "../claims/substrate-claim-ref.js";
 import { createLineageRef, type LineageRef } from "../lineage/lineage-ref.js";
+import type { CurrentWorldPublication } from "../../workspace/snapshots/current-world-publication.js";
 
 export interface SubstrateStorage {
   readPublishedClaim(ref: SubstrateClaimRef): PublishedSubstrateClaim | undefined;
@@ -59,14 +60,16 @@ export const EMPTY_SUBSTRATE_STORAGE: SubstrateStorage = new EmptySubstrateStora
 export function createCurrentWorldSummaryClaim(
   home: ClaimHomeKind,
   worldVersion: number,
-  summary: CurrentWorldSummaryValue
+  summary: CurrentWorldSummaryValue,
+  publication?: CurrentWorldPublication
 ): PublishedSubstrateClaim {
   return {
     ref: createSubstrateClaimRef(home, worldVersion),
     outcome: ClaimOutcomeKind.Present,
     qualifier: ClaimQualifierKind.None,
     closureStatus: ClosureStatusKind.Closed,
-    currentWorldSummary: summary
+    currentWorldSummary: summary,
+    currentWorldPublication: publication
   };
 }
 

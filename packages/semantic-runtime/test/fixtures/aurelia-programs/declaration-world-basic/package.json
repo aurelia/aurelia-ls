@@ -1,0 +1,5 @@
+{
+  "name": "@fixtures/declaration-world-basic",
+  "private": true,
+  "type": "module"
+}
