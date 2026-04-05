@@ -36,16 +36,16 @@ export interface RuntimeBootPlan {
   readonly evaluatorReadPort: EvaluatorReadPort;
 }
 
-const EMPTY_RUNTIME_BOOT_PORT: RuntimeBootPort = Object.freeze({});
+const EMPTY_RUNTIME_BOOT_PORT: RuntimeBootPort = {};
 
 export function planRuntimeBoot(
   port: RuntimeBootPort = EMPTY_RUNTIME_BOOT_PORT
 ): RuntimeBootPlan {
-  return Object.freeze({
+  return {
     boundaryPorts: port.boundaryPorts ?? EMPTY_BOUNDARY_PORT_SET,
     introspection: port.introspection ?? createDormantSemanticRuntimeIntrospection(),
     currentWorldContextPort: port.currentWorldContextPort ?? createCurrentWorldContextPort(),
     substrateReader: createSubstrateReader(port.substrateStorage ?? EMPTY_SUBSTRATE_STORAGE),
     evaluatorReadPort: port.evaluatorReadPort ?? createEvaluatorReadPort()
-  });
+  };
 }

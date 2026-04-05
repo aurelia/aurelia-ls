@@ -47,25 +47,25 @@ export function assembleSemanticAnswer(
   const outcome = evaluation?.outcome ?? ClaimOutcomeKind.BoundaryDeferred;
   const qualification = evaluation?.qualifier ?? ClaimQualifierKind.BoundaryQualified;
 
-  return Object.freeze({
+  return {
     questionRoute: plan.query.questionRoute,
     worldFrame: plan.query.worldFrame,
     answerCommitment: plan.answerCommitment,
     outcome,
     qualification,
     closureStatus: trustBundle.closureStatus,
-    provenance: Object.freeze({
+    provenance: {
       surface: trustBundle.governingSurface,
       claimRef,
       worldFrameHandle: worldContext.worldFrameHandle,
       lineageRef: evaluation?.lineageRef
-    }),
-    deltaBasis: Object.freeze({
+    },
+    deltaBasis: {
       worldVersion: worldContext.worldFrameHandle.version,
       mayReuse: reuseAdmission.mayReuse,
       triggerMask: invalidationPlan.triggerMask
-    }),
+    },
     boundaryOutcome: mergedBoundaryOutcome,
     currentWorldSummary: evaluation?.currentWorldSummary
-  });
+  };
 }

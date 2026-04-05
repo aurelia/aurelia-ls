@@ -39,75 +39,75 @@ test("semantic-runtime local read assembles a structured semantic answer", () =>
   const claimRoute = createClaimRoute(ClaimHomeKind.CurrentWorldSummary);
   const questionRoute = createQuestionRoute(
     claimRoute,
-    Object.freeze({
+    {
       inquiryEpisode: SemanticInquiryEpisode.CurrentWorldRead,
       readMode: SemanticReadMode.Explain
-    })
+    }
   );
   const runtime = createSemanticRuntime({
     introspection: createBufferedSemanticRuntimeIntrospection(),
     currentWorldContextPort: createCurrentWorldContextPort(
-      Object.freeze({
+      {
         publishedClaimCount: 1,
         consultedPackageCount: 1,
         rescanReasonMask: RescanReasonKind.WorkspaceChanged
-      })
+      }
     ),
     substrateStorage: createInMemorySubstrateStorage(
-      Object.freeze([
+      [
         createCurrentWorldSummaryClaim(
           ClaimHomeKind.CurrentWorldSummary,
           7,
-          Object.freeze({
+          {
             publishedClaimCount: 1,
             consultedPackageCount: 1
-          })
+          }
         )
-      ])
+      ]
     )
   });
   const answer = runtime.readSemanticAnswer(
-    Object.freeze({
+    {
       questionRoute,
       worldFrame
-    })
+    }
   );
-  const traceCaptureRequest = Object.freeze({
+  const traceCaptureRequest = {
     questionRoute,
     worldFrame
-  });
+  };
   const proofRecord = createProofRecord({
     pocket: SemanticRuntimeVerificationPocketKind.ModelQueryAnswerCore,
     proofClass: VerificationProofClassKind.ContractProof,
     verificationBasis: VerificationBasisKind.InventedProductObligation,
-    surfaceRefs: Object.freeze([
+    surfaceRefs: [
       SemanticRuntimeSurfaceKind.ClaimModel,
       SemanticRuntimeSurfaceKind.SemanticApiModel,
       SemanticRuntimeSurfaceKind.QuestionRoute,
       SemanticRuntimeSurfaceKind.WorldFrame,
       SemanticRuntimeSurfaceKind.AnswerAssembler,
       SemanticRuntimeSurfaceKind.SemanticRuntime
-    ]),
+    ],
     closureStatusPressure: ClosureStatusKind.Closed,
     likelyReentryArea: ReentryAreaKind.VerificationBurden,
-    expected: Object.freeze({
+    expected: {
       answerCommitment: AnswerCommitmentKind.SemanticTruth,
       outcome: ClaimOutcomeKind.Present,
       qualification: ClaimQualifierKind.None,
       closureStatus: ClosureStatusKind.Closed,
       publishedClaimCount: 1
-    }),
-    actual: Object.freeze({
+    },
+    actual: {
       answerCommitment: answer.answerCommitment.kind,
       outcome: answer.outcome,
       qualification: answer.qualification,
       closureStatus: answer.closureStatus,
       publishedClaimCount: answer.currentWorldSummary?.publishedClaimCount
-    }),
-    traceCapture: Object.freeze({
+    },
+    traceCapture: {
       request: traceCaptureRequest,
       events: runtime.captureTrace(traceCaptureRequest)
-    })
+    }
   });
   const verifiedRecord = assertProofRecord(proofRecord);
 
@@ -131,40 +131,40 @@ test("workspace current-world handoff stays layered and route-safe", () => {
     createClaimRoute(ClaimHomeKind.CurrentWorldSummary)
   );
   const currentWorldContext = createCurrentWorldContextPort(
-    Object.freeze({
+    {
       publishedClaimCount: 2,
       consultedPackageCount: 1,
       rescanReasonMask: RescanReasonKind.WorkspaceChanged | RescanReasonKind.BoundaryPlanChanged
-    })
+    }
   ).publishCurrentWorldContext(worldFrame);
   const handoff = createRuntimeWorldContextHandoff(questionRoute, currentWorldContext);
   const proofRecord = createProofRecord({
     pocket: SemanticRuntimeVerificationPocketKind.WorkspaceCurrentWorldHandoff,
     proofClass: VerificationProofClassKind.SeamProof,
     verificationBasis: VerificationBasisKind.InventedProductObligation,
-    surfaceRefs: Object.freeze([
+    surfaceRefs: [
       SemanticRuntimeSurfaceKind.WorldFrame,
       SemanticRuntimeSurfaceKind.QuestionRoute,
       SemanticRuntimeSurfaceKind.WorldContextHandoff
-    ]),
+    ],
     closureStatusPressure: ClosureStatusKind.Closed,
     likelyReentryArea: ReentryAreaKind.ProjectionAndNaming,
-    expected: Object.freeze({
+    expected: {
       version: 9,
       publishedClaimCount: 2,
       consultedPackageCount: 1,
       rescanReasonMask: RescanReasonKind.WorkspaceChanged | RescanReasonKind.BoundaryPlanChanged
-    }),
-    actual: Object.freeze({
+    },
+    actual: {
       version: handoff.worldFrameHandle.version,
       publishedClaimCount: handoff.snapshotSummary.publishedClaimCount,
       consultedPackageCount: handoff.snapshotSummary.consultedPackageCount,
       rescanReasonMask: handoff.rescanBasis.reasonMask
-    }),
-    traceCapture: Object.freeze({
-      request: Object.freeze({ worldFrame, questionRoute }),
-      events: Object.freeze([])
-    })
+    },
+    traceCapture: {
+      request: { worldFrame, questionRoute },
+      events: []
+    }
   });
 
   assertProofRecord(proofRecord);
@@ -174,75 +174,75 @@ test("substrate and evaluator read stay publication-first and snapshot-first", (
   const worldFrame = createWorldFrame(12, WorldFrameKind.Current);
   const questionRoute = createQuestionRoute(
     createClaimRoute(ClaimHomeKind.CurrentWorldSummary),
-    Object.freeze({
+    {
       inquiryEpisode: SemanticInquiryEpisode.CurrentWorldRead,
       readMode: SemanticReadMode.Observe
-    })
+    }
   );
   const currentWorldContext = createCurrentWorldContextPort(
-    Object.freeze({
+    {
       publishedClaimCount: 3,
       consultedPackageCount: 2
-    })
+    }
   ).publishCurrentWorldContext(worldFrame);
   const handoff = createRuntimeWorldContextHandoff(questionRoute, currentWorldContext);
   const substrateReader = createSubstrateReader(
     createInMemorySubstrateStorage(
-      Object.freeze([
+      [
         createCurrentWorldSummaryClaim(
           ClaimHomeKind.CurrentWorldSummary,
           12,
-          Object.freeze({
+          {
             publishedClaimCount: 3,
             consultedPackageCount: 2
-          })
+          }
         )
-      ])
+      ]
     )
   );
   const substrateRead = substrateReader.readSubstrateClaim(
-    Object.freeze({
+    {
       claimRoute: questionRoute.claimRoute,
       worldFrameHandle: handoff.worldFrameHandle
-    })
+    }
   );
   const evaluation = runPublishedEvaluators(
-    Object.freeze({
+    {
       questionRoute,
       worldContext: handoff,
       claimRef: substrateRead.claimRef,
       publishedClaim: substrateRead.publishedClaim,
       lineageRef: substrateRead.lineageRef
-    })
+    }
   );
   const proofRecord = createProofRecord({
     pocket: SemanticRuntimeVerificationPocketKind.SubstrateAndEvaluatorRead,
     proofClass: VerificationProofClassKind.SeamProof,
     verificationBasis: VerificationBasisKind.InventedProductObligation,
-    surfaceRefs: Object.freeze([
+    surfaceRefs: [
       SemanticRuntimeSurfaceKind.SubstrateReader,
       SemanticRuntimeSurfaceKind.EvaluatorReadPort
-    ]),
+    ],
     closureStatusPressure: ClosureStatusKind.Closed,
     likelyReentryArea: ReentryAreaKind.SubjectOracle,
-    expected: Object.freeze({
+    expected: {
       outcome: ClaimOutcomeKind.Present,
       qualification: ClaimQualifierKind.None,
       closureStatus: ClosureStatusKind.Closed,
       claimHome: ClaimHomeKind.CurrentWorldSummary,
       worldVersion: 12
-    }),
-    actual: Object.freeze({
+    },
+    actual: {
       outcome: evaluation.outcome,
       qualification: evaluation.qualifier,
       closureStatus: evaluation.closureStatus,
       claimHome: evaluation.claimRef.home,
       worldVersion: evaluation.claimRef.worldVersion
-    }),
-    traceCapture: Object.freeze({
-      request: Object.freeze({ worldFrame, questionRoute }),
-      events: Object.freeze([])
-    })
+    },
+    traceCapture: {
+      request: { worldFrame, questionRoute },
+      events: []
+    }
   });
 
   assertProofRecord(proofRecord);

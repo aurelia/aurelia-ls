@@ -10,18 +10,15 @@ import type { QuestionRoute } from "../../query/framing/question-route.js";
 import type { WorldFrame } from "../../query/framing/world-frame.js";
 import type { InvalidationTriggerKind } from "../reread/reread-plan.js";
 
-export const SemanticRuntimeTraceEventKind = Object.freeze({
-  RuntimeCreated: 1,
-  QueryPlanned: 2,
-  BoundaryOutcomeProduced: 3,
-  WorldContextHandedOff: 4,
-  SubstrateClaimRead: 5,
-  EvaluatorResultPublished: 6,
-  AnswerAssembled: 7
-} as const);
-
-export type SemanticRuntimeTraceEventKind =
-  (typeof SemanticRuntimeTraceEventKind)[keyof typeof SemanticRuntimeTraceEventKind];
+export const enum SemanticRuntimeTraceEventKind {
+  RuntimeCreated = 1,
+  QueryPlanned = 2,
+  BoundaryOutcomeProduced = 3,
+  WorldContextHandedOff = 4,
+  SubstrateClaimRead = 5,
+  EvaluatorResultPublished = 6,
+  AnswerAssembled = 7
+}
 
 export interface SemanticRuntimeTraceCaptureRequest {
   readonly worldFrame?: WorldFrame;

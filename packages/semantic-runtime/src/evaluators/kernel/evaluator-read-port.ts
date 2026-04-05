@@ -1,13 +1,10 @@
 import {
   ClaimOutcomeKind,
-  ClaimQualifierKind,
-  type ClaimOutcomeKind as ClaimOutcomeKindValue,
-  type ClaimQualifierKind as ClaimQualifierKindValue
+  ClaimQualifierKind
 } from "../../model/claims/claim-model.js";
 import {
   ClosureStatusKind,
-  SemanticRuntimeSurfaceKind,
-  type ClosureStatusKind as ClosureStatusKindValue
+  SemanticRuntimeSurfaceKind
 } from "../../model/semantic-runtime-handles.js";
 import type { QuestionRoute } from "../../query/framing/question-route.js";
 import type { RuntimeWorldContextHandoff } from "../../runtime/handoff/world-context-handoff.js";
@@ -24,11 +21,11 @@ export interface EvaluatorExecutionPlan {
 
 export interface PublishedEvaluatorResult {
   readonly claimRef: SubstrateClaimRef;
-  readonly outcome: ClaimOutcomeKindValue;
-  readonly qualifier: ClaimQualifierKindValue;
-  readonly closureStatus: ClosureStatusKindValue;
+  readonly outcome: ClaimOutcomeKind;
+  readonly qualifier: ClaimQualifierKind;
+  readonly closureStatus: ClosureStatusKind;
   readonly lineageRef?: LineageRef;
-  readonly surface: typeof SemanticRuntimeSurfaceKind.EvaluatorReadPort;
+  readonly surface: SemanticRuntimeSurfaceKind.EvaluatorReadPort;
   readonly currentWorldSummary?: CurrentWorldSummaryValue;
 }
 
@@ -52,17 +49,17 @@ export function runPublishedEvaluators(
   plan: EvaluatorExecutionPlan
 ): PublishedEvaluatorResult {
   if (plan.publishedClaim === undefined) {
-    return Object.freeze({
+    return {
       claimRef: plan.claimRef,
       outcome: ClaimOutcomeKind.NoClaim,
       qualifier: ClaimQualifierKind.WorldOpen,
       closureStatus: ClosureStatusKind.Open,
       lineageRef: plan.lineageRef,
       surface: SemanticRuntimeSurfaceKind.EvaluatorReadPort
-    });
+    };
   }
 
-  return Object.freeze({
+  return {
     claimRef: plan.claimRef,
     outcome: plan.publishedClaim.outcome,
     qualifier: plan.publishedClaim.qualifier,
@@ -70,5 +67,5 @@ export function runPublishedEvaluators(
     lineageRef: plan.lineageRef,
     surface: SemanticRuntimeSurfaceKind.EvaluatorReadPort,
     currentWorldSummary: plan.publishedClaim.currentWorldSummary
-  });
+  };
 }

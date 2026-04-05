@@ -1,14 +1,11 @@
 import type { WorldFrame } from "../../query/framing/world-frame.js";
 
-export const RescanReasonKind = Object.freeze({
-  None: 0,
-  WorkspaceChanged: 1 << 0,
-  BoundaryPlanChanged: 1 << 1,
-  WorldFrameShifted: 1 << 2
-} as const);
-
-export type RescanReasonKind =
-  (typeof RescanReasonKind)[keyof typeof RescanReasonKind];
+export const enum RescanReasonKind {
+  None = 0,
+  WorkspaceChanged = 1 << 0,
+  BoundaryPlanChanged = 1 << 1,
+  WorldFrameShifted = 1 << 2
+}
 
 export interface WorldFrameHandle {
   readonly kind: WorldFrame["kind"];
@@ -50,25 +47,25 @@ class DefaultCurrentWorldContextPort implements CurrentWorldContextPort {
   }
 
   public publishCurrentWorldContext(worldFrame: WorldFrame): CurrentWorldContext {
-    return Object.freeze({
-      worldFrameHandle: Object.freeze({
+    return {
+      worldFrameHandle: {
         kind: worldFrame.kind,
         version: worldFrame.version
-      }),
-      snapshotSummary: Object.freeze({
+      },
+      snapshotSummary: {
         kind: worldFrame.kind,
         version: worldFrame.version,
         publishedClaimCount: this.#seed.publishedClaimCount ?? 0,
         consultedPackageCount: this.#seed.consultedPackageCount ?? 0
-      }),
-      rescanBasis: Object.freeze({
+      },
+      rescanBasis: {
         reasonMask: this.#seed.rescanReasonMask ?? RescanReasonKind.None
-      })
-    });
+      }
+    };
   }
 }
 
-const EMPTY_CURRENT_WORLD_CONTEXT_SEED: CurrentWorldContextSeed = Object.freeze({});
+const EMPTY_CURRENT_WORLD_CONTEXT_SEED: CurrentWorldContextSeed = {};
 
 export function createCurrentWorldContextPort(
   seed: CurrentWorldContextSeed = EMPTY_CURRENT_WORLD_CONTEXT_SEED

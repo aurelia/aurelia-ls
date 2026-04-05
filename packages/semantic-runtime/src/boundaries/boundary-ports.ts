@@ -1,19 +1,19 @@
-import { BoundaryRouteKind, type BoundaryRouteKind as BoundaryRouteKindValue } from "../model/boundary-routes/boundary-routes.js";
+import { BoundaryRouteKind } from "../model/boundary-routes/boundary-routes.js";
 
 export interface TypedEnrichmentBoundary {
-  readonly route: typeof BoundaryRouteKind.TypedEnrichment;
+  readonly route: BoundaryRouteKind.TypedEnrichment;
 }
 
 export interface CandidateDiscoveryBoundary {
-  readonly route: typeof BoundaryRouteKind.CandidateDiscovery;
+  readonly route: BoundaryRouteKind.CandidateDiscovery;
 }
 
 export interface ProtocolProjectionBoundary {
-  readonly route: typeof BoundaryRouteKind.ProtocolProjection;
+  readonly route: BoundaryRouteKind.ProtocolProjection;
 }
 
 export interface WorkspaceAuthoringBoundary {
-  readonly route: typeof BoundaryRouteKind.WorkspaceAuthoring;
+  readonly route: BoundaryRouteKind.WorkspaceAuthoring;
 }
 
 export interface BoundaryPortSet {
@@ -23,11 +23,11 @@ export interface BoundaryPortSet {
   readonly workspaceAuthoring?: WorkspaceAuthoringBoundary;
 }
 
-export const EMPTY_BOUNDARY_PORT_SET: BoundaryPortSet = Object.freeze({});
+export const EMPTY_BOUNDARY_PORT_SET: BoundaryPortSet = {};
 
 export function hasBoundaryPort(
   ports: BoundaryPortSet,
-  route: BoundaryRouteKindValue
+  route: BoundaryRouteKind
 ): boolean {
   switch (route) {
     case BoundaryRouteKind.TypedEnrichment:

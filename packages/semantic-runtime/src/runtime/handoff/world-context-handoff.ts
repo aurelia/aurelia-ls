@@ -23,10 +23,10 @@ export function createRuntimeWorldContextHandoff(
   questionRoute: QuestionRoute,
   currentWorldContext: CurrentWorldContext
 ): RuntimeWorldContextHandoff {
-  return Object.freeze({
+  return {
     questionRoute,
     worldFrameHandle: currentWorldContext.worldFrameHandle,
     snapshotSummary: currentWorldContext.snapshotSummary,
     rescanBasis: currentWorldContext.rescanBasis
-  });
+  };
 }

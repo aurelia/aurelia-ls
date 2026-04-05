@@ -4,22 +4,16 @@ import {
   type BoundaryRouteRef,
   getBoundaryRoute
 } from "../../model/boundary-routes/boundary-routes.js";
-import { ClosureStatusKind, type ClosureStatusKind as ClosureStatusKindValue } from "../../model/semantic-runtime-handles.js";
+import { ClosureStatusKind } from "../../model/semantic-runtime-handles.js";
 
-export const BoundaryOutcomeKind = Object.freeze({
-  RouteToOwner: 1,
-  Refuse: 2
-} as const);
+export const enum BoundaryOutcomeKind {
+  RouteToOwner = 1,
+  Refuse = 2
+}
 
-export type BoundaryOutcomeKind =
-  (typeof BoundaryOutcomeKind)[keyof typeof BoundaryOutcomeKind];
-
-export const BoundaryRefusalReasonKind = Object.freeze({
-  MissingOwner: 1
-} as const);
-
-export type BoundaryRefusalReasonKind =
-  (typeof BoundaryRefusalReasonKind)[keyof typeof BoundaryRefusalReasonKind];
+export const enum BoundaryRefusalReasonKind {
+  MissingOwner = 1
+}
 
 export interface BoundaryHandoffPreview {
   readonly route: BoundaryRouteKind;
@@ -33,7 +27,7 @@ export interface BoundaryRefusal {
 export interface BoundaryConsequenceBasis {
   readonly route: BoundaryRoute;
   readonly kind: BoundaryOutcomeKind;
-  readonly closureStatus: ClosureStatusKindValue;
+  readonly closureStatus: ClosureStatusKind;
   readonly preview?: BoundaryHandoffPreview;
   readonly refusal?: BoundaryRefusal;
 }
@@ -43,10 +37,10 @@ export function classifyBoundaryRoute(route: BoundaryRouteRef): BoundaryRouteKin
 }
 
 export function normalizeBoundaryRefusal(route: BoundaryRouteRef): BoundaryRefusal {
-  return Object.freeze({
+  return {
     route: route.kind,
     reason: BoundaryRefusalReasonKind.MissingOwner
-  });
+  };
 }
 
 export function buildBoundaryConsequenceBasis(
@@ -56,18 +50,18 @@ export function buildBoundaryConsequenceBasis(
   const resolvedRoute = getBoundaryRoute(classifyBoundaryRoute(route));
 
   if (hasOwnerPort) {
-    return Object.freeze({
+    return {
       route: resolvedRoute,
       kind: BoundaryOutcomeKind.RouteToOwner,
       closureStatus: ClosureStatusKind.Qualified,
-      preview: Object.freeze({ route: resolvedRoute.kind })
-    });
+      preview: { route: resolvedRoute.kind }
+    };
   }
 
-  return Object.freeze({
+  return {
     route: resolvedRoute,
     kind: BoundaryOutcomeKind.Refuse,
     closureStatus: ClosureStatusKind.Open,
     refusal: normalizeBoundaryRefusal(resolvedRoute)
-  });
+  };
 }

@@ -1,39 +1,27 @@
-export const ClaimHomeKind = Object.freeze({
-  CurrentWorldSummary: 1,
-  BoundaryFrontier: 2
-} as const);
+export const enum ClaimHomeKind {
+  CurrentWorldSummary = 1,
+  BoundaryFrontier = 2
+}
 
-export type ClaimHomeKind =
-  (typeof ClaimHomeKind)[keyof typeof ClaimHomeKind];
+export const enum ClaimOutcomeKind {
+  Present = 1,
+  NoClaim = 2,
+  BoundaryDeferred = 3
+}
 
-export const ClaimOutcomeKind = Object.freeze({
-  Present: 1,
-  NoClaim: 2,
-  BoundaryDeferred: 3
-} as const);
+export const enum ClaimQualifierKind {
+  None = 0,
+  BoundaryQualified = 1,
+  WorldOpen = 2
+}
 
-export type ClaimOutcomeKind =
-  (typeof ClaimOutcomeKind)[keyof typeof ClaimOutcomeKind];
-
-export const ClaimQualifierKind = Object.freeze({
-  None: 0,
-  BoundaryQualified: 1,
-  WorldOpen: 2
-} as const);
-
-export type ClaimQualifierKind =
-  (typeof ClaimQualifierKind)[keyof typeof ClaimQualifierKind];
-
-export const ClaimBoundaryKind = Object.freeze({
-  None: 0,
-  TypedEnrichment: 1,
-  CandidateDiscovery: 2,
-  ProtocolProjection: 3,
-  WorkspaceAuthoring: 4
-} as const);
-
-export type ClaimBoundaryKind =
-  (typeof ClaimBoundaryKind)[keyof typeof ClaimBoundaryKind];
+export const enum ClaimBoundaryKind {
+  None = 0,
+  TypedEnrichment = 1,
+  CandidateDiscovery = 2,
+  ProtocolProjection = 3,
+  WorkspaceAuthoring = 4
+}
 
 export interface ClaimHome {
   readonly kind: ClaimHomeKind;
@@ -59,59 +47,59 @@ export interface ClaimRoute extends ClaimRouteRef {
   readonly homeRef: ClaimHome;
 }
 
-const CLAIM_HOMES: Readonly<Record<ClaimHomeKind, ClaimHome>> = Object.freeze({
-  [ClaimHomeKind.CurrentWorldSummary]: Object.freeze({
+const CLAIM_HOMES: Readonly<Record<ClaimHomeKind, ClaimHome>> = {
+  [ClaimHomeKind.CurrentWorldSummary]: {
     kind: ClaimHomeKind.CurrentWorldSummary
-  }),
-  [ClaimHomeKind.BoundaryFrontier]: Object.freeze({
+  },
+  [ClaimHomeKind.BoundaryFrontier]: {
     kind: ClaimHomeKind.BoundaryFrontier
-  })
-});
+  }
+};
 
-const CLAIM_OUTCOMES: Readonly<Record<ClaimOutcomeKind, ClaimOutcome>> = Object.freeze({
-  [ClaimOutcomeKind.Present]: Object.freeze({
+const CLAIM_OUTCOMES: Readonly<Record<ClaimOutcomeKind, ClaimOutcome>> = {
+  [ClaimOutcomeKind.Present]: {
     kind: ClaimOutcomeKind.Present
-  }),
-  [ClaimOutcomeKind.NoClaim]: Object.freeze({
+  },
+  [ClaimOutcomeKind.NoClaim]: {
     kind: ClaimOutcomeKind.NoClaim
-  }),
-  [ClaimOutcomeKind.BoundaryDeferred]: Object.freeze({
+  },
+  [ClaimOutcomeKind.BoundaryDeferred]: {
     kind: ClaimOutcomeKind.BoundaryDeferred
-  })
-});
+  }
+};
 
-const CLAIM_QUALIFIERS: Readonly<Record<ClaimQualifierKind, ClaimQualifier>> = Object.freeze({
-  [ClaimQualifierKind.None]: Object.freeze({
+const CLAIM_QUALIFIERS: Readonly<Record<ClaimQualifierKind, ClaimQualifier>> = {
+  [ClaimQualifierKind.None]: {
     kind: ClaimQualifierKind.None
-  }),
-  [ClaimQualifierKind.BoundaryQualified]: Object.freeze({
+  },
+  [ClaimQualifierKind.BoundaryQualified]: {
     kind: ClaimQualifierKind.BoundaryQualified
-  }),
-  [ClaimQualifierKind.WorldOpen]: Object.freeze({
+  },
+  [ClaimQualifierKind.WorldOpen]: {
     kind: ClaimQualifierKind.WorldOpen
-  })
-});
+  }
+};
 
-const CLAIM_BOUNDARIES: Readonly<Record<ClaimBoundaryKind, ClaimBoundary>> = Object.freeze({
-  [ClaimBoundaryKind.None]: Object.freeze({
+const CLAIM_BOUNDARIES: Readonly<Record<ClaimBoundaryKind, ClaimBoundary>> = {
+  [ClaimBoundaryKind.None]: {
     kind: ClaimBoundaryKind.None
-  }),
-  [ClaimBoundaryKind.TypedEnrichment]: Object.freeze({
+  },
+  [ClaimBoundaryKind.TypedEnrichment]: {
     kind: ClaimBoundaryKind.TypedEnrichment
-  }),
-  [ClaimBoundaryKind.CandidateDiscovery]: Object.freeze({
+  },
+  [ClaimBoundaryKind.CandidateDiscovery]: {
     kind: ClaimBoundaryKind.CandidateDiscovery
-  }),
-  [ClaimBoundaryKind.ProtocolProjection]: Object.freeze({
+  },
+  [ClaimBoundaryKind.ProtocolProjection]: {
     kind: ClaimBoundaryKind.ProtocolProjection
-  }),
-  [ClaimBoundaryKind.WorkspaceAuthoring]: Object.freeze({
+  },
+  [ClaimBoundaryKind.WorkspaceAuthoring]: {
     kind: ClaimBoundaryKind.WorkspaceAuthoring
-  })
-});
+  }
+};
 
 export function createClaimRoute(home: ClaimHomeKind): ClaimRouteRef {
-  return Object.freeze({ home });
+  return { home };
 }
 
 export function getClaimHome(kind: ClaimHomeKind): ClaimHome {
@@ -131,8 +119,8 @@ export function getClaimBoundary(kind: ClaimBoundaryKind): ClaimBoundary {
 }
 
 export function getClaimRoute(route: ClaimRouteRef): ClaimRoute {
-  return Object.freeze({
+  return {
     home: route.home,
     homeRef: getClaimHome(route.home)
-  });
+  };
 }

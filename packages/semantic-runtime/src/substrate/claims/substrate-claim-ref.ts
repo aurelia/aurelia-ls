@@ -27,8 +27,8 @@ export function createSubstrateClaimRef(
   home: ClaimHomeKind,
   worldVersion: number
 ): SubstrateClaimRef {
-  return Object.freeze({
+  return {
     home,
     worldVersion
-  });
+  };
 }

@@ -10,9 +10,9 @@ export function createLineageRef(
   home: ClaimHomeKind,
   worldVersion: number
 ): LineageRef {
-  return Object.freeze({
+  return {
     home,
     publicationVersion: worldVersion,
     worldVersion
-  });
+  };
 }

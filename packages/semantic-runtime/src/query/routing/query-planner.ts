@@ -26,11 +26,11 @@ export function planSemanticQuery(query: SemanticQuery): SemanticQueryPlan {
     ? AnswerCommitmentKind.SemanticTruth
     : AnswerCommitmentKind.BoundaryFrontier;
 
-  return Object.freeze({
-    query: Object.freeze({
+  return {
+    query: {
       questionRoute: query.questionRoute,
       worldFrame: normalizedWorldFrame
-    }),
+    },
     answerCommitment: getAnswerCommitment(answerCommitmentKind)
-  });
+  };
 }

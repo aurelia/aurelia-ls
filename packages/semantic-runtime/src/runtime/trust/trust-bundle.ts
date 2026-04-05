@@ -3,8 +3,7 @@ import type { BoundaryRouteKind } from "../../model/boundary-routes/boundary-rou
 import type { ClaimHomeKind } from "../../model/claims/claim-model.js";
 import {
   ClosureStatusKind,
-  SemanticRuntimeSurfaceKind,
-  type SemanticRuntimeSurfaceKind as SemanticRuntimeSurfaceKindValue
+  SemanticRuntimeSurfaceKind
 } from "../../model/semantic-runtime-handles.js";
 import type { PublishedEvaluatorResult } from "../../evaluators/kernel/evaluator-read-port.js";
 import type { RuntimeWorldContextHandoff } from "../handoff/world-context-handoff.js";
@@ -14,7 +13,7 @@ export interface TrustBundle {
   readonly worldVersion: number;
   readonly claimHome: ClaimHomeKind;
   readonly boundaryRoute?: BoundaryRouteKind;
-  readonly governingSurface: SemanticRuntimeSurfaceKindValue;
+  readonly governingSurface: SemanticRuntimeSurfaceKind;
 }
 
 export function createTrustBundle(
@@ -22,11 +21,11 @@ export function createTrustBundle(
   evaluation: PublishedEvaluatorResult | undefined,
   boundaryOutcome?: BoundaryOutcome
 ): TrustBundle {
-  return Object.freeze({
+  return {
     closureStatus: evaluation?.closureStatus ?? boundaryOutcome?.closureStatus ?? ClosureStatusKind.Open,
     worldVersion: worldContext.worldFrameHandle.version,
     claimHome: worldContext.questionRoute.claimRoute.home,
     boundaryRoute: boundaryOutcome?.route,
     governingSurface: evaluation?.surface ?? SemanticRuntimeSurfaceKind.BoundaryRouter
-  });
+  };
 }

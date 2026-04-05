@@ -2,10 +2,7 @@ import { assembleSemanticAnswer } from "../answers/answer-assembler.js";
 import type { SemanticAnswer } from "../answers/semantic-answer.js";
 import { createBoundaryRouter, type BoundaryRouter } from "../boundaries/boundary-router.js";
 import { getBoundaryRoute } from "../model/boundary-routes/boundary-routes.js";
-import {
-  SemanticRuntimeSurfaceKind,
-  type SemanticRuntimeSurfaceKind as SemanticRuntimeSurfaceKindValue
-} from "../model/semantic-runtime-handles.js";
+import { SemanticRuntimeSurfaceKind } from "../model/semantic-runtime-handles.js";
 import { planSemanticQuery, type SemanticQuery } from "../query/routing/query-planner.js";
 import { createRuntimeWorldContextHandoff } from "./handoff/world-context-handoff.js";
 import {
@@ -23,7 +20,7 @@ import type { SubstrateReader } from "../substrate/substrate-reader.js";
 import type { EvaluatorReadPort } from "../evaluators/kernel/evaluator-read-port.js";
 
 export interface SemanticRuntimePort {
-  readonly surface: SemanticRuntimeSurfaceKindValue;
+  readonly surface: SemanticRuntimeSurfaceKind;
   readSemanticAnswer(query: SemanticQuery): SemanticAnswer;
   captureTrace(request?: SemanticRuntimeTraceCaptureRequest): readonly SemanticRuntimeTraceEvent[];
 }
@@ -92,10 +89,10 @@ class DefaultSemanticRuntime implements SemanticRuntime {
           getBoundaryRoute(query.questionRoute.boundaryRoute)
         );
     const substrateRead = this.#substrateReader.readSubstrateClaim(
-      Object.freeze({
+      {
         claimRoute: query.questionRoute.claimRoute,
         worldFrameHandle: worldContext.worldFrameHandle
-      })
+      }
     );
 
     this.#introspection.record(() => ({
@@ -111,13 +108,13 @@ class DefaultSemanticRuntime implements SemanticRuntime {
 
     const evaluation = boundaryOutcome === undefined
       ? this.#evaluatorReadPort.runPublishedEvaluators(
-          Object.freeze({
+          {
             questionRoute: query.questionRoute,
             worldContext,
             claimRef: substrateRead.claimRef,
             publishedClaim: substrateRead.publishedClaim,
             lineageRef: substrateRead.lineageRef
-          })
+          }
         )
       : undefined;
     const trustBundle = createTrustBundle(worldContext, evaluation, boundaryOutcome);

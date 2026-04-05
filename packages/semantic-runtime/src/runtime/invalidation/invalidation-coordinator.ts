@@ -1,11 +1,10 @@
 import {
   InvalidationTriggerKind,
-  type InvalidationTriggerKind as InvalidationTriggerKindValue,
   type RereadPlan
 } from "../reread/reread-plan.js";
 
 export interface RuntimeInvalidationPlan {
-  readonly triggerMask: InvalidationTriggerKindValue;
+  readonly triggerMask: InvalidationTriggerKind;
   readonly shouldInvalidate: boolean;
 }
 
@@ -19,16 +18,16 @@ export interface InvalidationCoordinator {
 }
 
 export function planInvalidation(rereadPlan: RereadPlan): RuntimeInvalidationPlan {
-  return Object.freeze({
+  return {
     triggerMask: rereadPlan.trigger.kindMask,
     shouldInvalidate: rereadPlan.shouldReread
-  });
+  };
 }
 
 export function admitRuntimeReuse(
   plan: RuntimeInvalidationPlan
 ): RuntimeReuseAdmission {
-  return Object.freeze({
+  return {
     mayReuse: !plan.shouldInvalidate || plan.triggerMask === InvalidationTriggerKind.None
-  });
+  };
 }

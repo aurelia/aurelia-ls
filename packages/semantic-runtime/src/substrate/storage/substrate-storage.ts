@@ -34,7 +34,7 @@ class InMemorySubstrateStorage implements SubstrateStorage {
   public constructor(claims: readonly PublishedSubstrateClaim[]) {
     const claimEntries = claims.map((claim) => [
       keyForClaim(claim.ref),
-      Object.freeze(claim)
+      claim
     ] as const);
     const lineageEntries = claims.map((claim) => [
       keyForClaim(claim.ref),
@@ -61,13 +61,13 @@ export function createCurrentWorldSummaryClaim(
   worldVersion: number,
   summary: CurrentWorldSummaryValue
 ): PublishedSubstrateClaim {
-  return Object.freeze({
+  return {
     ref: createSubstrateClaimRef(home, worldVersion),
     outcome: ClaimOutcomeKind.Present,
     qualifier: ClaimQualifierKind.None,
     closureStatus: ClosureStatusKind.Closed,
-    currentWorldSummary: Object.freeze(summary)
-  });
+    currentWorldSummary: summary
+  };
 }
 
 export function createInMemorySubstrateStorage(

@@ -48,10 +48,10 @@ export function createProofRecord<TExpected, TActual = TExpected>(
     readonly semanticTerritoryRefs?: readonly [];
   }
 ): SemanticRuntimeProofRecord<TExpected, TActual> {
-  return Object.freeze({
+  return {
     ...proofRecord,
     semanticTerritoryRefs: proofRecord.semanticTerritoryRefs ?? []
-  });
+  };
 }
 
 export function assertProofRecord<TExpected, TActual = TExpected>(

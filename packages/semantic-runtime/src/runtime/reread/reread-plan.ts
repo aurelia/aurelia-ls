@@ -1,13 +1,10 @@
 import type { SemanticQuery } from "../../query/routing/query-planner.js";
 
-export const InvalidationTriggerKind = Object.freeze({
-  None: 0,
-  WorldVersionChanged: 1 << 0,
-  BoundaryOutcomeChanged: 1 << 1
-} as const);
-
-export type InvalidationTriggerKind =
-  (typeof InvalidationTriggerKind)[keyof typeof InvalidationTriggerKind];
+export const enum InvalidationTriggerKind {
+  None = 0,
+  WorldVersionChanged = 1 << 0,
+  BoundaryOutcomeChanged = 1 << 1
+}
 
 export interface InvalidationTrigger {
   readonly kindMask: InvalidationTriggerKind;
@@ -23,10 +20,10 @@ export interface RereadPlanner {
 }
 
 export function planReread(_query: SemanticQuery): RereadPlan {
-  return Object.freeze({
+  return {
     shouldReread: false,
-    trigger: Object.freeze({
+    trigger: {
       kindMask: InvalidationTriggerKind.None
-    })
-  });
+    }
+  };
 }

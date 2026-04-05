@@ -39,11 +39,11 @@ class DefaultSubstrateReader implements SubstrateReader {
       plan.worldFrameHandle
     );
 
-    return Object.freeze({
+    return {
       claimRef,
       publishedClaim: this.#storage.readPublishedClaim(claimRef),
       lineageRef: this.#storage.readLineage(claimRef)
-    });
+    };
   }
 
   public lookupLineage(ref: SubstrateClaimRef): LineageRef | undefined {

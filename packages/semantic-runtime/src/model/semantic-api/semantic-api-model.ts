@@ -1,48 +1,33 @@
-export const SemanticReadMode = Object.freeze({
-  Observe: 1,
-  Explain: 2,
-  Locate: 3,
-  Complete: 4,
-  Audit: 5
-} as const);
+export const enum SemanticReadMode {
+  Observe = 1,
+  Explain = 2,
+  Locate = 3,
+  Complete = 4,
+  Audit = 5
+}
 
-export type SemanticReadMode =
-  (typeof SemanticReadMode)[keyof typeof SemanticReadMode];
+export const enum SemanticInquiryEpisode {
+  CurrentWorldRead = 1,
+  BoundaryFrontier = 2
+}
 
-export const SemanticInquiryEpisode = Object.freeze({
-  CurrentWorldRead: 1,
-  BoundaryFrontier: 2
-} as const);
+export const enum SemanticSlotGroup {
+  Summary = 1,
+  Explanation = 2,
+  Boundary = 3
+}
 
-export type SemanticInquiryEpisode =
-  (typeof SemanticInquiryEpisode)[keyof typeof SemanticInquiryEpisode];
+export const enum SemanticApiTerm {
+  Claim = 1,
+  WorldFrame = 2,
+  Boundary = 3,
+  Answer = 4
+}
 
-export const SemanticSlotGroup = Object.freeze({
-  Summary: 1,
-  Explanation: 2,
-  Boundary: 3
-} as const);
-
-export type SemanticSlotGroup =
-  (typeof SemanticSlotGroup)[keyof typeof SemanticSlotGroup];
-
-export const SemanticApiTerm = Object.freeze({
-  Claim: 1,
-  WorldFrame: 2,
-  Boundary: 3,
-  Answer: 4
-} as const);
-
-export type SemanticApiTerm =
-  (typeof SemanticApiTerm)[keyof typeof SemanticApiTerm];
-
-export const AnswerCommitmentKind = Object.freeze({
-  SemanticTruth: 1,
-  BoundaryFrontier: 2
-} as const);
-
-export type AnswerCommitmentKind =
-  (typeof AnswerCommitmentKind)[keyof typeof AnswerCommitmentKind];
+export const enum AnswerCommitmentKind {
+  SemanticTruth = 1,
+  BoundaryFrontier = 2
+}
 
 export interface SemanticReadModeRef {
   readonly kind: SemanticReadMode;
@@ -64,44 +49,44 @@ export interface AnswerCommitment {
   readonly kind: AnswerCommitmentKind;
 }
 
-const READ_MODES: Readonly<Record<SemanticReadMode, SemanticReadModeRef>> = Object.freeze({
-  [SemanticReadMode.Observe]: Object.freeze({ kind: SemanticReadMode.Observe }),
-  [SemanticReadMode.Explain]: Object.freeze({ kind: SemanticReadMode.Explain }),
-  [SemanticReadMode.Locate]: Object.freeze({ kind: SemanticReadMode.Locate }),
-  [SemanticReadMode.Complete]: Object.freeze({ kind: SemanticReadMode.Complete }),
-  [SemanticReadMode.Audit]: Object.freeze({ kind: SemanticReadMode.Audit })
-});
+const READ_MODES: Readonly<Record<SemanticReadMode, SemanticReadModeRef>> = {
+  [SemanticReadMode.Observe]: { kind: SemanticReadMode.Observe },
+  [SemanticReadMode.Explain]: { kind: SemanticReadMode.Explain },
+  [SemanticReadMode.Locate]: { kind: SemanticReadMode.Locate },
+  [SemanticReadMode.Complete]: { kind: SemanticReadMode.Complete },
+  [SemanticReadMode.Audit]: { kind: SemanticReadMode.Audit }
+};
 
-const INQUIRY_EPISODES: Readonly<Record<SemanticInquiryEpisode, SemanticInquiryEpisodeRef>> = Object.freeze({
-  [SemanticInquiryEpisode.CurrentWorldRead]: Object.freeze({
+const INQUIRY_EPISODES: Readonly<Record<SemanticInquiryEpisode, SemanticInquiryEpisodeRef>> = {
+  [SemanticInquiryEpisode.CurrentWorldRead]: {
     kind: SemanticInquiryEpisode.CurrentWorldRead
-  }),
-  [SemanticInquiryEpisode.BoundaryFrontier]: Object.freeze({
+  },
+  [SemanticInquiryEpisode.BoundaryFrontier]: {
     kind: SemanticInquiryEpisode.BoundaryFrontier
-  })
-});
+  }
+};
 
-const SLOT_GROUPS: Readonly<Record<SemanticSlotGroup, SemanticSlotGroupRef>> = Object.freeze({
-  [SemanticSlotGroup.Summary]: Object.freeze({ kind: SemanticSlotGroup.Summary }),
-  [SemanticSlotGroup.Explanation]: Object.freeze({ kind: SemanticSlotGroup.Explanation }),
-  [SemanticSlotGroup.Boundary]: Object.freeze({ kind: SemanticSlotGroup.Boundary })
-});
+const SLOT_GROUPS: Readonly<Record<SemanticSlotGroup, SemanticSlotGroupRef>> = {
+  [SemanticSlotGroup.Summary]: { kind: SemanticSlotGroup.Summary },
+  [SemanticSlotGroup.Explanation]: { kind: SemanticSlotGroup.Explanation },
+  [SemanticSlotGroup.Boundary]: { kind: SemanticSlotGroup.Boundary }
+};
 
-const API_TERMS: Readonly<Record<SemanticApiTerm, SemanticApiTermRef>> = Object.freeze({
-  [SemanticApiTerm.Claim]: Object.freeze({ kind: SemanticApiTerm.Claim }),
-  [SemanticApiTerm.WorldFrame]: Object.freeze({ kind: SemanticApiTerm.WorldFrame }),
-  [SemanticApiTerm.Boundary]: Object.freeze({ kind: SemanticApiTerm.Boundary }),
-  [SemanticApiTerm.Answer]: Object.freeze({ kind: SemanticApiTerm.Answer })
-});
+const API_TERMS: Readonly<Record<SemanticApiTerm, SemanticApiTermRef>> = {
+  [SemanticApiTerm.Claim]: { kind: SemanticApiTerm.Claim },
+  [SemanticApiTerm.WorldFrame]: { kind: SemanticApiTerm.WorldFrame },
+  [SemanticApiTerm.Boundary]: { kind: SemanticApiTerm.Boundary },
+  [SemanticApiTerm.Answer]: { kind: SemanticApiTerm.Answer }
+};
 
-const ANSWER_COMMITMENTS: Readonly<Record<AnswerCommitmentKind, AnswerCommitment>> = Object.freeze({
-  [AnswerCommitmentKind.SemanticTruth]: Object.freeze({
+const ANSWER_COMMITMENTS: Readonly<Record<AnswerCommitmentKind, AnswerCommitment>> = {
+  [AnswerCommitmentKind.SemanticTruth]: {
     kind: AnswerCommitmentKind.SemanticTruth
-  }),
-  [AnswerCommitmentKind.BoundaryFrontier]: Object.freeze({
+  },
+  [AnswerCommitmentKind.BoundaryFrontier]: {
     kind: AnswerCommitmentKind.BoundaryFrontier
-  })
-});
+  }
+};
 
 export function getReadMode(kind: SemanticReadMode): SemanticReadModeRef {
   return READ_MODES[kind];
