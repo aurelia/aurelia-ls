@@ -65,9 +65,9 @@ export function createCurrentWorldSummaryClaim(
 ): PublishedSubstrateClaim {
   return {
     ref: createSubstrateClaimRef(home, worldVersion),
-    outcome: ClaimOutcomeKind.Present,
-    qualifier: ClaimQualifierKind.None,
-    closureStatus: ClosureStatusKind.Closed,
+    outcome: publication?.claimOutcome ?? ClaimOutcomeKind.Present,
+    qualifier: publication?.claimQualifier ?? ClaimQualifierKind.None,
+    closureStatus: publication?.closureStatus ?? ClosureStatusKind.Closed,
     currentWorldSummary: summary,
     currentWorldPublication: publication
   };

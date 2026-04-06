@@ -23,6 +23,7 @@ export interface WorldSnapshotSummary {
   readonly recognizedResourceCount: number;
   readonly admittedResourceCount: number;
   readonly activeResourceCount: number;
+  readonly underclosedResourceCount: number;
 }
 
 export interface RescanBasis {
@@ -42,6 +43,7 @@ export interface CurrentWorldContextSeed {
   readonly recognizedResourceCount?: number;
   readonly admittedResourceCount?: number;
   readonly activeResourceCount?: number;
+  readonly underclosedResourceCount?: number;
   readonly rescanReasonMask?: RescanReasonKind;
 }
 
@@ -71,14 +73,16 @@ export class CurrentWorldContextPort {
           consultedPackageCount: this.#seed.consultedPackageCount ?? 0,
           recognizedResourceCount: this.#seed.recognizedResourceCount ?? 0,
           admittedResourceCount: this.#seed.admittedResourceCount ?? 0,
-          activeResourceCount: this.#seed.activeResourceCount ?? 0
+          activeResourceCount: this.#seed.activeResourceCount ?? 0,
+          underclosedResourceCount: this.#seed.underclosedResourceCount ?? 0
         }
       : {
           publishedClaimCount: 1,
           consultedPackageCount: 1,
           recognizedResourceCount: publication.recognizedResourceCount,
           admittedResourceCount: publication.admittedResourceCount,
-          activeResourceCount: publication.activeResourceCount
+          activeResourceCount: publication.activeResourceCount,
+          underclosedResourceCount: publication.underclosedResourceCount
         };
     const reasonMask = (
       this.#seed.rescanReasonMask ?? RescanReasonKind.None
@@ -96,7 +100,8 @@ export class CurrentWorldContextPort {
         consultedPackageCount: summary.consultedPackageCount,
         recognizedResourceCount: summary.recognizedResourceCount,
         admittedResourceCount: summary.admittedResourceCount,
-        activeResourceCount: summary.activeResourceCount
+        activeResourceCount: summary.activeResourceCount,
+        underclosedResourceCount: summary.underclosedResourceCount
       },
       rescanBasis: {
         reasonMask

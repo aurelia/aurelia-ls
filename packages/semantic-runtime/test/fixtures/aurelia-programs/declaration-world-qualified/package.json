@@ -1,0 +1,5 @@
+{
+  "name": "@fixtures/declaration-world-qualified",
+  "private": true,
+  "type": "module"
+}

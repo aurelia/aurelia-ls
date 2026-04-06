@@ -51,6 +51,7 @@ export interface SemanticRuntimeTraceEvent {
   readonly recognizedResourceCount?: number;
   readonly admittedResourceCount?: number;
   readonly activeResourceCount?: number;
+  readonly underclosedResourceCount?: number;
   readonly triggerMask?: InvalidationTriggerKind;
   readonly typedOperationIntent?: TypedOperationIntentKind;
   readonly typedOutcomeKind?: TypedEnrichmentOutcomeKind;

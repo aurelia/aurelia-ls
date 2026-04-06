@@ -17,6 +17,7 @@ export interface CurrentWorldSummaryValue {
   readonly recognizedResourceCount: number;
   readonly admittedResourceCount: number;
   readonly activeResourceCount: number;
+  readonly underclosedResourceCount: number;
 }
 
 export interface PublishedSubstrateClaim {

@@ -91,7 +91,8 @@ export class SemanticRuntime {
       publishedClaimCount: worldContext.snapshotSummary.publishedClaimCount,
       recognizedResourceCount: worldContext.snapshotSummary.recognizedResourceCount,
       admittedResourceCount: worldContext.snapshotSummary.admittedResourceCount,
-      activeResourceCount: worldContext.snapshotSummary.activeResourceCount
+      activeResourceCount: worldContext.snapshotSummary.activeResourceCount,
+      underclosedResourceCount: worldContext.snapshotSummary.underclosedResourceCount
     }));
 
     const boundaryOutcome = query.questionRoute.boundaryRoute === undefined
@@ -117,7 +118,8 @@ export class SemanticRuntime {
       publishedClaimCount: substrateRead.publishedClaim?.currentWorldSummary?.publishedClaimCount,
       recognizedResourceCount: substrateRead.publishedClaim?.currentWorldSummary?.recognizedResourceCount,
       admittedResourceCount: substrateRead.publishedClaim?.currentWorldSummary?.admittedResourceCount,
-      activeResourceCount: substrateRead.publishedClaim?.currentWorldSummary?.activeResourceCount
+      activeResourceCount: substrateRead.publishedClaim?.currentWorldSummary?.activeResourceCount,
+      underclosedResourceCount: substrateRead.publishedClaim?.currentWorldSummary?.underclosedResourceCount
     }));
 
     const evaluation = boundaryOutcome === undefined
@@ -165,7 +167,8 @@ export class SemanticRuntime {
         publishedClaimCount: evaluation.currentWorldSummary?.publishedClaimCount,
         recognizedResourceCount: evaluation.currentWorldSummary?.recognizedResourceCount,
         admittedResourceCount: evaluation.currentWorldSummary?.admittedResourceCount,
-        activeResourceCount: evaluation.currentWorldSummary?.activeResourceCount
+        activeResourceCount: evaluation.currentWorldSummary?.activeResourceCount,
+        underclosedResourceCount: evaluation.currentWorldSummary?.underclosedResourceCount
       }));
     }
 
@@ -194,7 +197,8 @@ export class SemanticRuntime {
       publishedClaimCount: answer.currentWorldSummary?.publishedClaimCount,
       recognizedResourceCount: answer.currentWorldSummary?.recognizedResourceCount,
       admittedResourceCount: answer.currentWorldSummary?.admittedResourceCount,
-      activeResourceCount: answer.currentWorldSummary?.activeResourceCount
+      activeResourceCount: answer.currentWorldSummary?.activeResourceCount,
+      underclosedResourceCount: answer.currentWorldSummary?.underclosedResourceCount
     }));
 
     return answer;
@@ -238,7 +242,8 @@ export class SemanticRuntime {
       publishedClaimCount: worldContext.snapshotSummary.publishedClaimCount,
       recognizedResourceCount: worldContext.snapshotSummary.recognizedResourceCount,
       admittedResourceCount: worldContext.snapshotSummary.admittedResourceCount,
-      activeResourceCount: worldContext.snapshotSummary.activeResourceCount
+      activeResourceCount: worldContext.snapshotSummary.activeResourceCount,
+      underclosedResourceCount: worldContext.snapshotSummary.underclosedResourceCount
     }));
 
     let outcome = this.#typedEnrichmentPort.enrich(request, worldContext);

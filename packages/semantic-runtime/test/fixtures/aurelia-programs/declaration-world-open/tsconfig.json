@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2023",
+    "experimentalDecorators": true
+  },
+  "include": [
+    "src/**/*.ts"
+  ]
+}

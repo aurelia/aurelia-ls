@@ -27,12 +27,14 @@ import {
   RegistrationPathKind,
   WorldRegimeKind
 } from "./consulted-world.js";
-import { ResourceAdmissionEvaluator, type RecognizedCustomElement } from "../../evaluators/resources/resource-admission-evaluator.js";
+import { ResourceAdmissionEvaluator } from "../../evaluators/resources/resource-admission-evaluator.js";
 import type { CurrentWorldPublication } from "../snapshots/current-world-publication.js";
+import { CustomElementDeclarationScanner } from "./custom-element-declaration-scanner.js";
 
 export class TypeScriptWorldConstruction {
   readonly #projectPort: TypeScriptProjectPort;
   readonly #resourceAdmissionEvaluator = new ResourceAdmissionEvaluator();
+  readonly #declarationScanner = new CustomElementDeclarationScanner();
 
   public constructor(projectPort: TypeScriptProjectPort) {
     this.#projectPort = projectPort;
@@ -91,6 +93,7 @@ export class TypeScriptWorldConstruction {
     }
 
     const consultedPackage = resolveConsultedPackage(generation);
+    const scanResult = this.#declarationScanner.scan(generation);
     const boundary = new ConsultedBoundaryRef(
       ConsultedBoundaryKind.Package,
       consultedPackage.rootPath
@@ -117,7 +120,7 @@ export class TypeScriptWorldConstruction {
     return this.#resourceAdmissionEvaluator.publishCurrentWorldPublication(
       consultedWorld,
       consultedPackage,
-      scanCustomElements(generation)
+      scanResult
     );
   }
 }
@@ -130,7 +133,8 @@ export function createCurrentWorldSummary(
     consultedPackageCount: 1,
     recognizedResourceCount: publication.recognizedResourceCount,
     admittedResourceCount: publication.admittedResourceCount,
-    activeResourceCount: publication.activeResourceCount
+    activeResourceCount: publication.activeResourceCount,
+    underclosedResourceCount: publication.underclosedResourceCount
   };
 }
 
@@ -183,74 +187,6 @@ function resolveCommonProjectRoot(program: ts.Program): string {
   }
 
   return commonRoot;
-}
-
-function scanCustomElements(
-  generation: TypeScriptProjectGeneration
-): readonly RecognizedCustomElement[] {
-  const customElements: RecognizedCustomElement[] = [];
-
-  for (const sourceFile of generation.listSemanticSourceFiles()) {
-    for (const statement of sourceFile.statements) {
-      if (!ts.isClassDeclaration(statement) || statement.name === undefined) {
-        continue;
-      }
-
-      if (!isExportedClass(statement)) {
-        continue;
-      }
-
-      const resourceName = readCustomElementName(statement);
-      if (resourceName === undefined) {
-        continue;
-      }
-
-      customElements.push(
-        {
-          className: statement.name.text,
-          exportName: statement.name.text,
-          resourceName,
-          fileName: sourceFile.fileName
-        }
-      );
-    }
-  }
-
-  return customElements;
-}
-
-function isExportedClass(node: ts.ClassDeclaration): boolean {
-  return node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) ?? false;
-}
-
-function readCustomElementName(node: ts.ClassDeclaration): string | undefined {
-  const decorators = ts.canHaveDecorators(node)
-    ? ts.getDecorators(node)
-    : undefined;
-  if (decorators === undefined) {
-    return undefined;
-  }
-
-  for (const decorator of decorators) {
-    if (!ts.isCallExpression(decorator.expression)) {
-      continue;
-    }
-
-    if (!ts.isIdentifier(decorator.expression.expression)) {
-      continue;
-    }
-
-    if (decorator.expression.expression.text !== "customElement") {
-      continue;
-    }
-
-    const [firstArgument] = decorator.expression.arguments;
-    if (firstArgument !== undefined && ts.isStringLiteralLike(firstArgument)) {
-      return firstArgument.text;
-    }
-  }
-
-  return undefined;
 }
 
 function isTypeScriptLibraryFile(fileName: string): boolean {
