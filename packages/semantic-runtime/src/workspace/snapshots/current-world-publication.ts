@@ -19,6 +19,7 @@ import type {
   UnderclosedExtensionActivation
 } from "../extensions/extension-activation.js";
 import type { WorkspacePackageRef } from "../packages/workspace-package.js";
+import type { UnderclosedTemplateSourceAssociation } from "../templates/template-source-association.js";
 
 export class CurrentWorldPublication {
   public readonly recognizedResourceCount: number;
@@ -28,6 +29,9 @@ export class CurrentWorldPublication {
   public readonly activeExtensionCount: number;
   public readonly admittedGeneratedVocabularyCount: number;
   public readonly underclosedGeneratedVocabularyCount: number;
+  public readonly associatedTemplateCount: number;
+  public readonly explicitNoViewCount: number;
+  public readonly underclosedTemplateAssociationCount: number;
 
   public constructor(
     public readonly consultedWorld: ConsultedWorldHandle,
@@ -38,6 +42,7 @@ export class CurrentWorldPublication {
     public readonly activeExtensions: readonly ActiveExtensionActivation[],
     public readonly underclosedExtensions: readonly UnderclosedExtensionActivation[],
     public readonly generatedVocabulary: readonly GeneratedTemplateVocabularyMember[],
+    public readonly underclosedTemplateAssociations: readonly UnderclosedTemplateSourceAssociation[],
     public readonly declarationWitnessRef: string,
     public readonly closureRef: string
   ) {
@@ -52,6 +57,13 @@ export class CurrentWorldPublication {
     this.activeExtensionCount = activeExtensions.length;
     this.admittedGeneratedVocabularyCount = generatedVocabulary.length;
     this.underclosedGeneratedVocabularyCount = underclosedExtensions.length;
+    this.associatedTemplateCount = resources.filter(
+      (resource) => resource.templateAssociation?.hasTemplateSource === true
+    ).length;
+    this.explicitNoViewCount = resources.filter(
+      (resource) => resource.templateAssociation?.hasTemplateSource === false
+    ).length;
+    this.underclosedTemplateAssociationCount = underclosedTemplateAssociations.length;
   }
 
   public get claimOutcome(): ClaimOutcomeKind {

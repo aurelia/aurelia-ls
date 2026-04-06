@@ -55,7 +55,12 @@ export interface SemanticRuntimeTraceEvent {
   readonly activeExtensionCount?: number;
   readonly admittedGeneratedVocabularyCount?: number;
   readonly underclosedGeneratedVocabularyCount?: number;
+  readonly associatedTemplateCount?: number;
+  readonly explicitNoViewCount?: number;
+  readonly underclosedTemplateAssociationCount?: number;
   readonly triggerMask?: InvalidationTriggerKind;
+  readonly authoredOccurrenceTemplateSourceRef?: string;
+  readonly authoredOccurrenceOffset?: number;
   readonly typedOperationIntent?: TypedOperationIntentKind;
   readonly typedOutcomeKind?: TypedEnrichmentOutcomeKind;
   readonly typedProjectGeneration?: number;

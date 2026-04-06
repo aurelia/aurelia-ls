@@ -23,6 +23,7 @@ export {
   createQuestionRoute,
   type QuestionRoute
 } from "./query/framing/question-route.js";
+export { AuthoredOccurrenceTarget } from "./query/framing/authored-occurrence-target.js";
 export {
   WorldFrameKind,
   createWorldFrame,

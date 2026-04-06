@@ -1,6 +1,7 @@
 export const enum ClaimHomeKind {
   CurrentWorldSummary = 1,
-  BoundaryFrontier = 2
+  BoundaryFrontier = 2,
+  AuthoredOccurrenceBasis = 3
 }
 
 export const enum ClaimOutcomeKind {
@@ -53,6 +54,9 @@ const CLAIM_HOMES = {
   },
   [ClaimHomeKind.BoundaryFrontier]: {
     kind: ClaimHomeKind.BoundaryFrontier
+  },
+  [ClaimHomeKind.AuthoredOccurrenceBasis]: {
+    kind: ClaimHomeKind.AuthoredOccurrenceBasis
   }
 } as const satisfies Record<ClaimHomeKind, ClaimHome>;
 

@@ -46,6 +46,9 @@ import {
   ResourceDefinitionKind
 } from "../out/workspace/resources/resource-definition.js";
 import {
+  TemplateViewStrategyKind
+} from "../out/workspace/templates/template-source-association.js";
+import {
   createProofRecord,
   assertProofRecord
 } from "../out/testing/obligation-harness.js";
@@ -88,6 +91,12 @@ const EXTENSION_INACTIVE_FIXTURE_ROOT = path.join(
   "aurelia-programs",
   "extension-world-inactive"
 );
+const TEMPLATE_QUALIFIED_FIXTURE_ROOT = path.join(
+  __dirname,
+  "fixtures",
+  "aurelia-programs",
+  "template-world-qualified"
+);
 
 test("current-world handoff publishes a file-backed consulted world and resource neighborhood", () => {
   const questionRoute = createQuestionRoute(
@@ -128,6 +137,9 @@ test("current-world handoff publishes a file-backed consulted world and resource
       activeExtensionCount: 0,
       admittedGeneratedVocabularyCount: 0,
       underclosedGeneratedVocabularyCount: 0,
+      associatedTemplateCount: 4,
+      explicitNoViewCount: 1,
+      underclosedTemplateAssociationCount: 0,
       frontier: WorldParticipationFrontierKind.CurrentWorldSensitive,
       packageName: "@fixtures/declaration-world-basic",
       resourceNames: ["app-root", "feature-card", "info-panel", "inline-notice", "status-badge"],
@@ -144,6 +156,13 @@ test("current-world handoff publishes a file-backed consulted world and resource
         ResourceDeclarationClosureKind.SourceAnalyzable,
         ResourceDeclarationClosureKind.SourceAnalyzable,
         ResourceDeclarationClosureKind.DeclaredExplicit
+      ],
+      viewStrategies: [
+        TemplateViewStrategyKind.ConventionalFile,
+        TemplateViewStrategyKind.InlineTemplate,
+        TemplateViewStrategyKind.InlineTemplate,
+        TemplateViewStrategyKind.InlineTemplate,
+        TemplateViewStrategyKind.NoView
       ]
     },
     actual: {
@@ -155,11 +174,15 @@ test("current-world handoff publishes a file-backed consulted world and resource
       activeExtensionCount: currentWorldContext.snapshotSummary.activeExtensionCount,
       admittedGeneratedVocabularyCount: currentWorldContext.snapshotSummary.admittedGeneratedVocabularyCount,
       underclosedGeneratedVocabularyCount: currentWorldContext.snapshotSummary.underclosedGeneratedVocabularyCount,
+      associatedTemplateCount: currentWorldContext.snapshotSummary.associatedTemplateCount,
+      explicitNoViewCount: currentWorldContext.snapshotSummary.explicitNoViewCount,
+      underclosedTemplateAssociationCount: currentWorldContext.snapshotSummary.underclosedTemplateAssociationCount,
       frontier: publication?.frontier,
       packageName: publication?.consultedPackage.packageName,
       resourceNames: publication?.resources.map((resource) => resource.resourceName),
       declarationSurfaces: publication?.resources.map((resource) => resource.declarationSurface),
-      declarationClosures: publication?.resources.map((resource) => resource.declarationClosure)
+      declarationClosures: publication?.resources.map((resource) => resource.declarationClosure),
+      viewStrategies: publication?.resources.map((resource) => resource.templateAssociation?.viewStrategy)
     },
     traceCapture: {
       request: { questionRoute, worldFrame },
@@ -174,6 +197,8 @@ test("current-world handoff publishes a file-backed consulted world and resource
     CurrentWorldActivityStateKind.CurrentWorldSensitive
   );
   assert.equal(publication?.underclosedResourceCount, 0);
+  assert.equal(publication?.associatedTemplateCount, 4);
+  assert.equal(publication?.explicitNoViewCount, 1);
 });
 
 test("semantic-runtime publishes current-world resource admission from a curated Aurelia fixture", () => {
@@ -220,6 +245,9 @@ test("semantic-runtime publishes current-world resource admission from a curated
       activeExtensionCount: 0,
       admittedGeneratedVocabularyCount: 0,
       underclosedGeneratedVocabularyCount: 0,
+      associatedTemplateCount: 4,
+      explicitNoViewCount: 1,
+      underclosedTemplateAssociationCount: 0,
       resourceNames: ["app-root", "feature-card", "info-panel", "inline-notice", "status-badge"],
       packageName: "@fixtures/declaration-world-basic",
       frontier: WorldParticipationFrontierKind.CurrentWorldSensitive
@@ -232,6 +260,9 @@ test("semantic-runtime publishes current-world resource admission from a curated
       activeExtensionCount: answer.currentWorldSummary?.activeExtensionCount,
       admittedGeneratedVocabularyCount: answer.currentWorldSummary?.admittedGeneratedVocabularyCount,
       underclosedGeneratedVocabularyCount: answer.currentWorldSummary?.underclosedGeneratedVocabularyCount,
+      associatedTemplateCount: answer.currentWorldSummary?.associatedTemplateCount,
+      explicitNoViewCount: answer.currentWorldSummary?.explicitNoViewCount,
+      underclosedTemplateAssociationCount: answer.currentWorldSummary?.underclosedTemplateAssociationCount,
       resourceNames: answer.currentWorldPublication?.resources.map((resource) => resource.resourceName),
       packageName: answer.currentWorldPublication?.consultedPackage.packageName,
       frontier: answer.currentWorldPublication?.frontier
@@ -308,6 +339,9 @@ test("semantic-runtime keeps declaration-world publication qualified when recogn
       activeExtensionCount: 0,
       admittedGeneratedVocabularyCount: 0,
       underclosedGeneratedVocabularyCount: 0,
+      associatedTemplateCount: 1,
+      explicitNoViewCount: 0,
+      underclosedTemplateAssociationCount: 0,
       resourceNames: ["resolved-panel"]
     },
     actual: {
@@ -319,6 +353,9 @@ test("semantic-runtime keeps declaration-world publication qualified when recogn
       activeExtensionCount: answer.currentWorldSummary?.activeExtensionCount,
       admittedGeneratedVocabularyCount: answer.currentWorldSummary?.admittedGeneratedVocabularyCount,
       underclosedGeneratedVocabularyCount: answer.currentWorldSummary?.underclosedGeneratedVocabularyCount,
+      associatedTemplateCount: answer.currentWorldSummary?.associatedTemplateCount,
+      explicitNoViewCount: answer.currentWorldSummary?.explicitNoViewCount,
+      underclosedTemplateAssociationCount: answer.currentWorldSummary?.underclosedTemplateAssociationCount,
       resourceNames: answer.currentWorldPublication?.resources.map((resource) => resource.resourceName)
     },
     traceCapture: {
@@ -383,6 +420,9 @@ test("semantic-runtime keeps declaration-world publication open when only underc
       activeExtensionCount: 0,
       admittedGeneratedVocabularyCount: 0,
       underclosedGeneratedVocabularyCount: 0,
+      associatedTemplateCount: 0,
+      explicitNoViewCount: 0,
+      underclosedTemplateAssociationCount: 0,
       resourceNames: []
     },
     actual: {
@@ -394,6 +434,9 @@ test("semantic-runtime keeps declaration-world publication open when only underc
       activeExtensionCount: answer.currentWorldSummary?.activeExtensionCount,
       admittedGeneratedVocabularyCount: answer.currentWorldSummary?.admittedGeneratedVocabularyCount,
       underclosedGeneratedVocabularyCount: answer.currentWorldSummary?.underclosedGeneratedVocabularyCount,
+      associatedTemplateCount: answer.currentWorldSummary?.associatedTemplateCount,
+      explicitNoViewCount: answer.currentWorldSummary?.explicitNoViewCount,
+      underclosedTemplateAssociationCount: answer.currentWorldSummary?.underclosedTemplateAssociationCount,
       resourceNames: answer.currentWorldPublication?.resources.map((resource) => resource.resourceName)
     },
     traceCapture: {
@@ -410,6 +453,78 @@ test("semantic-runtime keeps declaration-world publication open when only underc
   assertProofRecord(proofRecord);
   assert.equal(answer.currentWorldPublication?.resources.length, 0);
   assert.equal(answer.currentWorldPublication?.underclosedResourceCount, 1);
+});
+
+test("current-world publication stays qualified when one template association remains underclosed", () => {
+  const questionRoute = createQuestionRoute(
+    createClaimRoute(ClaimHomeKind.CurrentWorldSummary),
+    {
+      inquiryEpisode: SemanticInquiryEpisode.CurrentWorldRead,
+      readMode: SemanticReadMode.Explain
+    }
+  );
+  const worldFrame = createWorldFrame(48, WorldFrameKind.Current);
+  const runtime = new SemanticRuntime(
+    {
+      introspection: createBufferedSemanticRuntimeIntrospection(),
+      typescriptProjectPort: new TypeScriptProjectPort(
+        {
+          generation: 48,
+          projectRoot: TEMPLATE_QUALIFIED_FIXTURE_ROOT
+        }
+      )
+    }
+  );
+  const answer = runtime.readSemanticAnswer(
+    {
+      questionRoute,
+      worldFrame
+    }
+  );
+  const proofRecord = createProofRecord({
+    pocket: SemanticRuntimeVerificationPocketKind.TemplateWorldAndOccurrenceBasis,
+    proofClass: VerificationProofClassKind.SeamProof,
+    verificationBasis: VerificationBasisKind.InventedProductObligation,
+    surfaceRefs: [
+      SemanticRuntimeSurfaceKind.TypeScriptProjectPort,
+      SemanticRuntimeSurfaceKind.TemplateSourceAssociationScanner,
+      SemanticRuntimeSurfaceKind.WorldContextHandoff
+    ],
+    closureStatusPressure: ClosureStatusKind.Qualified,
+    likelyReentryArea: ReentryAreaKind.SubjectOracle,
+    expected: {
+      qualification: ClaimQualifierKind.WorldOpen,
+      closureStatus: ClosureStatusKind.Qualified,
+      frontier: WorldParticipationFrontierKind.WorldQualified,
+      recognizedResourceCount: 2,
+      associatedTemplateCount: 1,
+      explicitNoViewCount: 0,
+      underclosedTemplateAssociationCount: 1,
+      resourceNames: ["maybe-inline", "resolved-view"]
+    },
+    actual: {
+      qualification: answer.qualification,
+      closureStatus: answer.closureStatus,
+      frontier: answer.currentWorldPublication?.frontier,
+      recognizedResourceCount: answer.currentWorldSummary?.recognizedResourceCount,
+      associatedTemplateCount: answer.currentWorldSummary?.associatedTemplateCount,
+      explicitNoViewCount: answer.currentWorldSummary?.explicitNoViewCount,
+      underclosedTemplateAssociationCount: answer.currentWorldSummary?.underclosedTemplateAssociationCount,
+      resourceNames: answer.currentWorldPublication?.resources.map((resource) => resource.resourceName)
+    },
+    traceCapture: {
+      request: { questionRoute, worldFrame },
+      events: runtime.captureTrace(
+        {
+          questionRoute,
+          worldFrame
+        }
+      )
+    }
+  });
+
+  assertProofRecord(proofRecord);
+  assert.equal(answer.currentWorldPublication?.underclosedTemplateAssociationCount, 1);
 });
 
 test("current-world publication admits active extension-generated vocabulary from a curated configuration fixture", () => {
@@ -448,6 +563,9 @@ test("current-world publication admits active extension-generated vocabulary fro
       activeExtensionCount: 1,
       admittedGeneratedVocabularyCount: 4,
       underclosedGeneratedVocabularyCount: 0,
+      associatedTemplateCount: 0,
+      explicitNoViewCount: 0,
+      underclosedTemplateAssociationCount: 0,
       frontier: WorldParticipationFrontierKind.CurrentWorldSensitive,
       packageName: "@fixtures/extension-world-basic",
       registrationPath: RegistrationPathKind.ConfigurationEmission,
@@ -474,6 +592,9 @@ test("current-world publication admits active extension-generated vocabulary fro
       activeExtensionCount: currentWorldContext.snapshotSummary.activeExtensionCount,
       admittedGeneratedVocabularyCount: currentWorldContext.snapshotSummary.admittedGeneratedVocabularyCount,
       underclosedGeneratedVocabularyCount: currentWorldContext.snapshotSummary.underclosedGeneratedVocabularyCount,
+      associatedTemplateCount: currentWorldContext.snapshotSummary.associatedTemplateCount,
+      explicitNoViewCount: currentWorldContext.snapshotSummary.explicitNoViewCount,
+      underclosedTemplateAssociationCount: currentWorldContext.snapshotSummary.underclosedTemplateAssociationCount,
       frontier: publication?.frontier,
       packageName: publication?.consultedPackage.packageName,
       registrationPath: publication?.consultedWorld.registrationPath,
@@ -540,6 +661,9 @@ test("semantic-runtime keeps extension-generated vocabulary qualified when build
       activeExtensionCount: 1,
       admittedGeneratedVocabularyCount: 0,
       underclosedGeneratedVocabularyCount: 1,
+      associatedTemplateCount: 0,
+      explicitNoViewCount: 0,
+      underclosedTemplateAssociationCount: 0,
       packageName: "@fixtures/extension-world-qualified"
     },
     actual: {
@@ -549,6 +673,9 @@ test("semantic-runtime keeps extension-generated vocabulary qualified when build
       activeExtensionCount: answer.currentWorldSummary?.activeExtensionCount,
       admittedGeneratedVocabularyCount: answer.currentWorldSummary?.admittedGeneratedVocabularyCount,
       underclosedGeneratedVocabularyCount: answer.currentWorldSummary?.underclosedGeneratedVocabularyCount,
+      associatedTemplateCount: answer.currentWorldSummary?.associatedTemplateCount,
+      explicitNoViewCount: answer.currentWorldSummary?.explicitNoViewCount,
+      underclosedTemplateAssociationCount: answer.currentWorldSummary?.underclosedTemplateAssociationCount,
       packageName: answer.currentWorldPublication?.consultedPackage.packageName
     },
     traceCapture: {
@@ -613,6 +740,9 @@ test("visible but unregistered extension configurations do not widen current-wor
       activeExtensionCount: 0,
       admittedGeneratedVocabularyCount: 0,
       underclosedGeneratedVocabularyCount: 0,
+      associatedTemplateCount: 0,
+      explicitNoViewCount: 0,
+      underclosedTemplateAssociationCount: 0,
       packageName: "@fixtures/extension-world-inactive"
     },
     actual: {
@@ -622,6 +752,9 @@ test("visible but unregistered extension configurations do not widen current-wor
       activeExtensionCount: answer.currentWorldSummary?.activeExtensionCount,
       admittedGeneratedVocabularyCount: answer.currentWorldSummary?.admittedGeneratedVocabularyCount,
       underclosedGeneratedVocabularyCount: answer.currentWorldSummary?.underclosedGeneratedVocabularyCount,
+      associatedTemplateCount: answer.currentWorldSummary?.associatedTemplateCount,
+      explicitNoViewCount: answer.currentWorldSummary?.explicitNoViewCount,
+      underclosedTemplateAssociationCount: answer.currentWorldSummary?.underclosedTemplateAssociationCount,
       packageName: answer.currentWorldPublication?.consultedPackage.packageName
     },
     traceCapture: {

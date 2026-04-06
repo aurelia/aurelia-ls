@@ -8,20 +8,23 @@ export const enum SemanticReadMode {
 
 export const enum SemanticInquiryEpisode {
   CurrentWorldRead = 1,
-  BoundaryFrontier = 2
+  BoundaryFrontier = 2,
+  AuthoredOccurrenceRead = 3
 }
 
 export const enum SemanticSlotGroup {
   Summary = 1,
   Explanation = 2,
-  Boundary = 3
+  Boundary = 3,
+  Occurrence = 4
 }
 
 export const enum SemanticApiTerm {
   Claim = 1,
   WorldFrame = 2,
   Boundary = 3,
-  Answer = 4
+  Answer = 4,
+  Occurrence = 5
 }
 
 export const enum AnswerCommitmentKind {
@@ -63,6 +66,9 @@ const INQUIRY_EPISODES = {
   },
   [SemanticInquiryEpisode.BoundaryFrontier]: {
     kind: SemanticInquiryEpisode.BoundaryFrontier
+  },
+  [SemanticInquiryEpisode.AuthoredOccurrenceRead]: {
+    kind: SemanticInquiryEpisode.AuthoredOccurrenceRead
   }
 } as const satisfies Record<SemanticInquiryEpisode, SemanticInquiryEpisodeRef>;
 
@@ -70,13 +76,16 @@ const SLOT_GROUPS = {
   [SemanticSlotGroup.Summary]: { kind: SemanticSlotGroup.Summary },
   [SemanticSlotGroup.Explanation]: { kind: SemanticSlotGroup.Explanation },
   [SemanticSlotGroup.Boundary]: { kind: SemanticSlotGroup.Boundary }
+  ,
+  [SemanticSlotGroup.Occurrence]: { kind: SemanticSlotGroup.Occurrence }
 } as const satisfies Record<SemanticSlotGroup, SemanticSlotGroupRef>;
 
 const API_TERMS = {
   [SemanticApiTerm.Claim]: { kind: SemanticApiTerm.Claim },
   [SemanticApiTerm.WorldFrame]: { kind: SemanticApiTerm.WorldFrame },
   [SemanticApiTerm.Boundary]: { kind: SemanticApiTerm.Boundary },
-  [SemanticApiTerm.Answer]: { kind: SemanticApiTerm.Answer }
+  [SemanticApiTerm.Answer]: { kind: SemanticApiTerm.Answer },
+  [SemanticApiTerm.Occurrence]: { kind: SemanticApiTerm.Occurrence }
 } as const satisfies Record<SemanticApiTerm, SemanticApiTermRef>;
 
 const ANSWER_COMMITMENTS = {

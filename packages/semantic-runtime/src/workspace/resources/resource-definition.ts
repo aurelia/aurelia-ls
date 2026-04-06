@@ -1,4 +1,5 @@
 import type { WorldParticipationFrontierKind } from "../registration/consulted-world.js";
+import type { AssociatedTemplateSource } from "../templates/template-source-association.js";
 
 export const enum ResourceDefinitionKind {
   CustomElement = 1
@@ -50,7 +51,8 @@ export class PublishedResourceDefinition {
     public readonly admissionStatus: ResourceAdmissionStatusKind,
     public readonly currentWorldActivityState: CurrentWorldActivityStateKind,
     public readonly reachabilityScope: ReachabilityScopeKind,
-    public readonly frontier: WorldParticipationFrontierKind
+    public readonly frontier: WorldParticipationFrontierKind,
+    public readonly templateAssociation?: AssociatedTemplateSource
   ) {}
 }
 

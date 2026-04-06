@@ -1,6 +1,5 @@
 import path from "node:path";
 import ts from "typescript";
-import type { ClaimRouteRef } from "../../model/claims/claim-model.js";
 import { ClaimHomeKind } from "../../model/claims/claim-model.js";
 import type { QuestionRoute } from "../../query/framing/question-route.js";
 import type { WorldFrame } from "../../query/framing/world-frame.js";
@@ -10,7 +9,10 @@ import {
   type PublishedSubstrateClaim,
   type SubstrateClaimRef
 } from "../../substrate/claims/substrate-claim-ref.js";
-import { createCurrentWorldSummaryClaim } from "../../substrate/storage/substrate-storage.js";
+import {
+  createAuthoredOccurrenceBasisClaim,
+  createCurrentWorldSummaryClaim
+} from "../../substrate/storage/substrate-storage.js";
 import {
   TypeScriptProjectPort,
   type TypeScriptProjectGeneration
@@ -31,12 +33,16 @@ import { CurrentWorldPublicationAssembler } from "../snapshots/current-world-pub
 import type { CurrentWorldPublication } from "../snapshots/current-world-publication.js";
 import { CustomElementDeclarationScanner } from "./custom-element-declaration-scanner.js";
 import { ExtensionConfigurationScanner } from "./extension-configuration-scanner.js";
+import { TemplateSourceAssociationScanner } from "./template-source-association-scanner.js";
+import { AuthoredOccurrenceBasisPublisher } from "../../syntax/occurrences/authored-occurrence-basis-publisher.js";
 
 export class TypeScriptWorldConstruction {
   readonly #projectPort: TypeScriptProjectPort;
   readonly #publicationAssembler = new CurrentWorldPublicationAssembler();
   readonly #declarationScanner = new CustomElementDeclarationScanner();
   readonly #extensionConfigurationScanner = new ExtensionConfigurationScanner();
+  readonly #templateAssociationScanner = new TemplateSourceAssociationScanner();
+  readonly #authoredOccurrenceBasisPublisher = new AuthoredOccurrenceBasisPublisher();
 
   public constructor(projectPort: TypeScriptProjectPort) {
     this.#projectPort = projectPort;
@@ -53,36 +59,69 @@ export class TypeScriptWorldConstruction {
   }
 
   public readPublishedClaim(
-    claimRoute: ClaimRouteRef,
+    questionRoute: QuestionRoute,
     worldVersion: number
   ): PublishedSubstrateClaim | undefined {
-    if (claimRoute.home !== ClaimHomeKind.CurrentWorldSummary) {
-      return undefined;
+    switch (questionRoute.claimRoute.home) {
+      case ClaimHomeKind.CurrentWorldSummary: {
+        const publication = this.publishCurrentWorldPublicationForHome(
+          questionRoute.claimRoute.home,
+          worldVersion
+        );
+
+        if (publication === undefined) {
+          return undefined;
+        }
+
+        return createCurrentWorldSummaryClaim(
+          questionRoute.claimRoute.home,
+          worldVersion,
+          createCurrentWorldSummary(publication),
+          publication
+        );
+      }
+      case ClaimHomeKind.AuthoredOccurrenceBasis: {
+        const publication = this.publishCurrentWorldPublicationForHome(
+          ClaimHomeKind.CurrentWorldSummary,
+          worldVersion
+        );
+        if (publication === undefined) {
+          return undefined;
+        }
+
+        const basisDecision = this.#authoredOccurrenceBasisPublisher.publish(
+          questionRoute,
+          publication
+        );
+
+        return createAuthoredOccurrenceBasisClaim(
+          questionRoute.claimRoute.home,
+          worldVersion,
+          questionRoute.authoredOccurrenceTarget === undefined
+            ? undefined
+            : `${questionRoute.authoredOccurrenceTarget.templateSourceRef}:${questionRoute.authoredOccurrenceTarget.offset}`,
+          createCurrentWorldSummary(publication),
+          publication,
+          basisDecision.outcome,
+          basisDecision.qualifier,
+          basisDecision.closureStatus,
+          basisDecision.basis
+        );
+      }
+      default:
+        return undefined;
     }
-
-    const publication = this.publishCurrentWorldPublicationForHome(
-      claimRoute.home,
-      worldVersion
-    );
-
-    if (publication === undefined) {
-      return undefined;
-    }
-
-    return createCurrentWorldSummaryClaim(
-      claimRoute.home,
-      worldVersion,
-      createCurrentWorldSummary(publication),
-      publication
-    );
   }
 
   public readLineage(ref: SubstrateClaimRef): LineageRef | undefined {
-    if (ref.home !== ClaimHomeKind.CurrentWorldSummary) {
+    if (
+      ref.home !== ClaimHomeKind.CurrentWorldSummary &&
+      ref.home !== ClaimHomeKind.AuthoredOccurrenceBasis
+    ) {
       return undefined;
     }
 
-    return createLineageRef(ref.home, ref.worldVersion);
+    return createLineageRef(ref.home, ref.worldVersion, ref.localIdentity);
   }
 
   public publishCurrentWorldPublicationForHome(
@@ -97,6 +136,10 @@ export class TypeScriptWorldConstruction {
     const consultedPackage = resolveConsultedPackage(generation);
     const resourceScan = this.#declarationScanner.scan(generation);
     const extensionScan = this.#extensionConfigurationScanner.scan(generation);
+    const templateAssociations = this.#templateAssociationScanner.scan(
+      generation,
+      resourceScan.recognizedElements
+    );
     const boundary = new ConsultedBoundaryRef(
       ConsultedBoundaryKind.Package,
       consultedPackage.rootPath
@@ -124,7 +167,8 @@ export class TypeScriptWorldConstruction {
       consultedWorld,
       consultedPackage,
       resourceScan,
-      extensionScan
+      extensionScan,
+      templateAssociations
     );
   }
 }
@@ -141,14 +185,18 @@ export function createCurrentWorldSummary(
     underclosedResourceCount: publication.underclosedResourceCount,
     activeExtensionCount: publication.activeExtensionCount,
     admittedGeneratedVocabularyCount: publication.admittedGeneratedVocabularyCount,
-    underclosedGeneratedVocabularyCount: publication.underclosedGeneratedVocabularyCount
+    underclosedGeneratedVocabularyCount: publication.underclosedGeneratedVocabularyCount,
+    associatedTemplateCount: publication.associatedTemplateCount,
+    explicitNoViewCount: publication.explicitNoViewCount,
+    underclosedTemplateAssociationCount: publication.underclosedTemplateAssociationCount
   };
 }
 
 function selectConsultationRole(
   home: ClaimHomeKind
 ): ConsultationRoleKind {
-  return home === ClaimHomeKind.CurrentWorldSummary
+  return home === ClaimHomeKind.CurrentWorldSummary ||
+    home === ClaimHomeKind.AuthoredOccurrenceBasis
     ? ConsultationRoleKind.CurrentWorldActiveLocalWorld
     : ConsultationRoleKind.AdmittedRegistrationWorld;
 }

@@ -14,13 +14,15 @@ import {
 import type { WorkspacePackageRef } from "../packages/workspace-package.js";
 import type { CustomElementScanResult } from "../registration/custom-element-declaration-scanner.js";
 import type { ExtensionConfigurationScanResult } from "../registration/extension-configuration-scanner.js";
+import type { TemplateSourceAssociationScanResult } from "../registration/template-source-association-scanner.js";
 
 export class CurrentWorldPublicationAssembler {
   public publishCurrentWorldPublication(
     consultedWorld: ConsultedWorldHandle,
     consultedPackage: WorkspacePackageRef,
     resourceScan: CustomElementScanResult,
-    extensionScan: ExtensionConfigurationScanResult
+    extensionScan: ExtensionConfigurationScanResult,
+    templateAssociations: TemplateSourceAssociationScanResult
   ): CurrentWorldPublication {
     const resources = resourceScan.recognizedElements.map(
       (customElement) => new PublishedResourceDefinition(
@@ -35,11 +37,17 @@ export class CurrentWorldPublicationAssembler {
         ResourceAdmissionStatusKind.Admitted,
         CurrentWorldActivityStateKind.CurrentWorldSensitive,
         ReachabilityScopeKind.ResourceCurrentPlusRoot,
-        deriveResourceFrontier(resourceScan, extensionScan)
+        deriveResourceFrontier(resourceScan, extensionScan, templateAssociations),
+        templateAssociations.findAssociation(customElement)
       )
     );
 
-    const frontier = derivePublicationFrontier(resources.length, resourceScan.underclosedResources.length, extensionScan);
+    const frontier = derivePublicationFrontier(
+      resources.length,
+      resourceScan.underclosedResources.length,
+      extensionScan,
+      templateAssociations.underclosedAssociations.length
+    );
     const packageIdentity = consultedPackage.packageName ?? consultedPackage.rootPath;
 
     return new CurrentWorldPublication(
@@ -51,6 +59,7 @@ export class CurrentWorldPublicationAssembler {
       extensionScan.activeExtensions,
       extensionScan.underclosedExtensions,
       extensionScan.generatedVocabulary,
+      templateAssociations.underclosedAssociations,
       createDeclarationWitnessRef(packageIdentity, frontier),
       createClosureRef(packageIdentity, frontier)
     );
@@ -59,11 +68,13 @@ export class CurrentWorldPublicationAssembler {
 
 function deriveResourceFrontier(
   resourceScan: CustomElementScanResult,
-  extensionScan: ExtensionConfigurationScanResult
+  extensionScan: ExtensionConfigurationScanResult,
+  templateAssociations: TemplateSourceAssociationScanResult
 ): WorldParticipationFrontierKind {
   if (
     resourceScan.underclosedResources.length === 0 &&
-    extensionScan.underclosedGeneratedVocabularyCount === 0
+    extensionScan.underclosedGeneratedVocabularyCount === 0 &&
+    templateAssociations.underclosedAssociations.length === 0
   ) {
     return WorldParticipationFrontierKind.CurrentWorldSensitive;
   }
@@ -74,13 +85,15 @@ function deriveResourceFrontier(
 function derivePublicationFrontier(
   recognizedResourceCount: number,
   underclosedResourceCount: number,
-  extensionScan: ExtensionConfigurationScanResult
+  extensionScan: ExtensionConfigurationScanResult,
+  underclosedTemplateAssociationCount: number
 ): WorldParticipationFrontierKind {
   const recognizedBasisCount = recognizedResourceCount +
     extensionScan.activeExtensionCount +
     extensionScan.admittedGeneratedVocabularyCount;
   const underclosedBasisCount = underclosedResourceCount +
-    extensionScan.underclosedGeneratedVocabularyCount;
+    extensionScan.underclosedGeneratedVocabularyCount +
+    underclosedTemplateAssociationCount;
 
   if (underclosedBasisCount === 0) {
     return recognizedBasisCount === 0

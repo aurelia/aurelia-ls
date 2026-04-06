@@ -12,6 +12,7 @@ import {
 } from "../claims/substrate-claim-ref.js";
 import { createLineageRef, type LineageRef } from "../lineage/lineage-ref.js";
 import type { CurrentWorldPublication } from "../../workspace/snapshots/current-world-publication.js";
+import type { AuthoredOccurrenceBasis } from "../../syntax/occurrences/authored-occurrence-basis.js";
 
 export interface SubstrateStorage {
   readPublishedClaim(ref: SubstrateClaimRef): PublishedSubstrateClaim | undefined;
@@ -73,6 +74,28 @@ export function createCurrentWorldSummaryClaim(
   };
 }
 
+export function createAuthoredOccurrenceBasisClaim(
+  home: ClaimHomeKind,
+  worldVersion: number,
+  localIdentity: string | undefined,
+  summary: CurrentWorldSummaryValue,
+  publication: CurrentWorldPublication,
+  outcome: ClaimOutcomeKind,
+  qualifier: ClaimQualifierKind,
+  closureStatus: ClosureStatusKind,
+  authoredOccurrenceBasis?: AuthoredOccurrenceBasis
+): PublishedSubstrateClaim {
+  return {
+    ref: createSubstrateClaimRef(home, worldVersion, localIdentity),
+    outcome,
+    qualifier,
+    closureStatus,
+    currentWorldSummary: summary,
+    currentWorldPublication: publication,
+    authoredOccurrenceBasis
+  };
+}
+
 export function createInMemorySubstrateStorage(
   claims: readonly PublishedSubstrateClaim[] = []
 ): SubstrateStorage {
@@ -84,5 +107,5 @@ export function createInMemorySubstrateStorage(
 }
 
 function keyForClaim(ref: SubstrateClaimRef): string {
-  return `${ref.home}:${ref.worldVersion}`;
+  return `${ref.home}:${ref.worldVersion}:${ref.localIdentity ?? "root"}`;
 }

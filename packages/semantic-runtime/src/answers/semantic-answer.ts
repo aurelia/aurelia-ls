@@ -10,6 +10,7 @@ import type { WorldFrameHandle } from "../runtime/handoff/world-context-handoff.
 import type { CurrentWorldSummaryValue, SubstrateClaimRef } from "../substrate/claims/substrate-claim-ref.js";
 import type { LineageRef } from "../substrate/lineage/lineage-ref.js";
 import type { CurrentWorldPublication } from "../workspace/snapshots/current-world-publication.js";
+import type { AuthoredOccurrenceBasis } from "../syntax/occurrences/authored-occurrence-basis.js";
 
 export interface SemanticProvenance {
   readonly surface: SemanticRuntimeSurfaceKind;
@@ -36,4 +37,5 @@ export interface SemanticAnswer {
   readonly boundaryOutcome?: BoundaryOutcome;
   readonly currentWorldSummary?: CurrentWorldSummaryValue;
   readonly currentWorldPublication?: CurrentWorldPublication;
+  readonly authoredOccurrenceBasis?: AuthoredOccurrenceBasis;
 }

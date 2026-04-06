@@ -78,6 +78,9 @@ export class SemanticRuntime {
       inquiryEpisode: query.questionRoute.inquiryEpisode,
       readMode: query.questionRoute.readMode,
       boundaryRoute: query.questionRoute.boundaryRoute
+      ,
+      authoredOccurrenceTemplateSourceRef: query.questionRoute.authoredOccurrenceTarget?.templateSourceRef,
+      authoredOccurrenceOffset: query.questionRoute.authoredOccurrenceTarget?.offset
     }));
 
     this.#introspection.record(() => ({
@@ -95,7 +98,12 @@ export class SemanticRuntime {
       underclosedResourceCount: worldContext.snapshotSummary.underclosedResourceCount,
       activeExtensionCount: worldContext.snapshotSummary.activeExtensionCount,
       admittedGeneratedVocabularyCount: worldContext.snapshotSummary.admittedGeneratedVocabularyCount,
-      underclosedGeneratedVocabularyCount: worldContext.snapshotSummary.underclosedGeneratedVocabularyCount
+      underclosedGeneratedVocabularyCount: worldContext.snapshotSummary.underclosedGeneratedVocabularyCount,
+      associatedTemplateCount: worldContext.snapshotSummary.associatedTemplateCount,
+      explicitNoViewCount: worldContext.snapshotSummary.explicitNoViewCount,
+      underclosedTemplateAssociationCount: worldContext.snapshotSummary.underclosedTemplateAssociationCount,
+      authoredOccurrenceTemplateSourceRef: query.questionRoute.authoredOccurrenceTarget?.templateSourceRef,
+      authoredOccurrenceOffset: query.questionRoute.authoredOccurrenceTarget?.offset
     }));
 
     const boundaryOutcome = query.questionRoute.boundaryRoute === undefined
@@ -104,8 +112,8 @@ export class SemanticRuntime {
           getBoundaryRoute(query.questionRoute.boundaryRoute)
         );
     const substrateRead = this.#substrateReader.readSubstrateClaim(
-      {
-        claimRoute: query.questionRoute.claimRoute,
+        {
+        questionRoute: query.questionRoute,
         worldFrameHandle: worldContext.worldFrameHandle
       }
     );
@@ -125,7 +133,12 @@ export class SemanticRuntime {
       underclosedResourceCount: substrateRead.publishedClaim?.currentWorldSummary?.underclosedResourceCount,
       activeExtensionCount: substrateRead.publishedClaim?.currentWorldSummary?.activeExtensionCount,
       admittedGeneratedVocabularyCount: substrateRead.publishedClaim?.currentWorldSummary?.admittedGeneratedVocabularyCount,
-      underclosedGeneratedVocabularyCount: substrateRead.publishedClaim?.currentWorldSummary?.underclosedGeneratedVocabularyCount
+      underclosedGeneratedVocabularyCount: substrateRead.publishedClaim?.currentWorldSummary?.underclosedGeneratedVocabularyCount,
+      associatedTemplateCount: substrateRead.publishedClaim?.currentWorldSummary?.associatedTemplateCount,
+      explicitNoViewCount: substrateRead.publishedClaim?.currentWorldSummary?.explicitNoViewCount,
+      underclosedTemplateAssociationCount: substrateRead.publishedClaim?.currentWorldSummary?.underclosedTemplateAssociationCount,
+      authoredOccurrenceTemplateSourceRef: query.questionRoute.authoredOccurrenceTarget?.templateSourceRef,
+      authoredOccurrenceOffset: query.questionRoute.authoredOccurrenceTarget?.offset
     }));
 
     const evaluation = boundaryOutcome === undefined
@@ -177,7 +190,12 @@ export class SemanticRuntime {
         underclosedResourceCount: evaluation.currentWorldSummary?.underclosedResourceCount,
         activeExtensionCount: evaluation.currentWorldSummary?.activeExtensionCount,
         admittedGeneratedVocabularyCount: evaluation.currentWorldSummary?.admittedGeneratedVocabularyCount,
-        underclosedGeneratedVocabularyCount: evaluation.currentWorldSummary?.underclosedGeneratedVocabularyCount
+        underclosedGeneratedVocabularyCount: evaluation.currentWorldSummary?.underclosedGeneratedVocabularyCount,
+        associatedTemplateCount: evaluation.currentWorldSummary?.associatedTemplateCount,
+        explicitNoViewCount: evaluation.currentWorldSummary?.explicitNoViewCount,
+        underclosedTemplateAssociationCount: evaluation.currentWorldSummary?.underclosedTemplateAssociationCount,
+        authoredOccurrenceTemplateSourceRef: query.questionRoute.authoredOccurrenceTarget?.templateSourceRef,
+        authoredOccurrenceOffset: query.questionRoute.authoredOccurrenceTarget?.offset
       }));
     }
 
@@ -210,7 +228,12 @@ export class SemanticRuntime {
       underclosedResourceCount: answer.currentWorldSummary?.underclosedResourceCount,
       activeExtensionCount: answer.currentWorldSummary?.activeExtensionCount,
       admittedGeneratedVocabularyCount: answer.currentWorldSummary?.admittedGeneratedVocabularyCount,
-      underclosedGeneratedVocabularyCount: answer.currentWorldSummary?.underclosedGeneratedVocabularyCount
+      underclosedGeneratedVocabularyCount: answer.currentWorldSummary?.underclosedGeneratedVocabularyCount,
+      associatedTemplateCount: answer.currentWorldSummary?.associatedTemplateCount,
+      explicitNoViewCount: answer.currentWorldSummary?.explicitNoViewCount,
+      underclosedTemplateAssociationCount: answer.currentWorldSummary?.underclosedTemplateAssociationCount,
+      authoredOccurrenceTemplateSourceRef: query.questionRoute.authoredOccurrenceTarget?.templateSourceRef,
+      authoredOccurrenceOffset: query.questionRoute.authoredOccurrenceTarget?.offset
     }));
 
     return answer;

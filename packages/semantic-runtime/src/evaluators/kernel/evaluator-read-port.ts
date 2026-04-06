@@ -11,6 +11,7 @@ import type { RuntimeWorldContextHandoff } from "../../runtime/handoff/world-con
 import type { CurrentWorldSummaryValue, PublishedSubstrateClaim, SubstrateClaimRef } from "../../substrate/claims/substrate-claim-ref.js";
 import type { LineageRef } from "../../substrate/lineage/lineage-ref.js";
 import type { CurrentWorldPublication } from "../../workspace/snapshots/current-world-publication.js";
+import type { AuthoredOccurrenceBasis } from "../../syntax/occurrences/authored-occurrence-basis.js";
 
 export interface EvaluatorExecutionPlan {
   readonly questionRoute: QuestionRoute;
@@ -29,6 +30,7 @@ export interface PublishedEvaluatorResult {
   readonly surface: SemanticRuntimeSurfaceKind.EvaluatorReadPort;
   readonly currentWorldSummary?: CurrentWorldSummaryValue;
   readonly currentWorldPublication?: CurrentWorldPublication;
+  readonly authoredOccurrenceBasis?: AuthoredOccurrenceBasis;
 }
 
 export class EvaluatorReadPort {
@@ -54,7 +56,8 @@ export class EvaluatorReadPort {
       lineageRef: plan.lineageRef,
       surface: SemanticRuntimeSurfaceKind.EvaluatorReadPort,
       currentWorldSummary: plan.publishedClaim.currentWorldSummary,
-      currentWorldPublication: plan.publishedClaim.currentWorldPublication
+      currentWorldPublication: plan.publishedClaim.currentWorldPublication,
+      authoredOccurrenceBasis: plan.publishedClaim.authoredOccurrenceBasis
     };
   }
 }

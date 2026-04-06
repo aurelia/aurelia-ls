@@ -49,7 +49,8 @@ export class SemanticAnswerAssembler {
       },
       boundaryOutcome,
       currentWorldSummary: evaluation?.currentWorldSummary,
-      currentWorldPublication: evaluation?.currentWorldPublication
+      currentWorldPublication: evaluation?.currentWorldPublication,
+      authoredOccurrenceBasis: evaluation?.authoredOccurrenceBasis
     };
   }
 }

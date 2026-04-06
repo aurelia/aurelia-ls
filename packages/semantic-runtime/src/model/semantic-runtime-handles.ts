@@ -14,7 +14,9 @@ export const enum SemanticRuntimeSurfaceKind {
   EvaluatorReadPort = 13,
   AnswerAssembler = 14,
   TypeScriptProjectPort = 15,
-  TypedEnrichmentPort = 16
+  TypedEnrichmentPort = 16,
+  TemplateSourceAssociationScanner = 17,
+  AuthoredOccurrenceBasisPublisher = 18
 }
 
 export const enum SemanticRuntimeVerificationPocketKind {
@@ -24,7 +26,8 @@ export const enum SemanticRuntimeVerificationPocketKind {
   ModelQueryAnswerCore = 4,
   WorkspaceCurrentWorldHandoff = 5,
   SubstrateAndEvaluatorRead = 6,
-  TypeScriptLocalTypedService = 7
+  TypeScriptLocalTypedService = 7,
+  TemplateWorldAndOccurrenceBasis = 8
 }
 
 export const enum VerificationProofClassKind {

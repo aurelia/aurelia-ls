@@ -4,15 +4,18 @@ export interface LineageRef {
   readonly home: ClaimHomeKind;
   readonly publicationVersion: number;
   readonly worldVersion: number;
+  readonly localIdentity?: string;
 }
 
 export function createLineageRef(
   home: ClaimHomeKind,
-  worldVersion: number
+  worldVersion: number,
+  localIdentity?: string
 ): LineageRef {
   return {
     home,
     publicationVersion: worldVersion,
-    worldVersion
+    worldVersion,
+    localIdentity
   };
 }
