@@ -13,6 +13,11 @@ import {
   type PublishedResourceDefinition,
   type UnderclosedResourceDefinition
 } from "../resources/resource-definition.js";
+import type {
+  ActiveExtensionActivation,
+  GeneratedTemplateVocabularyMember,
+  UnderclosedExtensionActivation
+} from "../extensions/extension-activation.js";
 import type { WorkspacePackageRef } from "../packages/workspace-package.js";
 
 export class CurrentWorldPublication {
@@ -20,6 +25,9 @@ export class CurrentWorldPublication {
   public readonly admittedResourceCount: number;
   public readonly activeResourceCount: number;
   public readonly underclosedResourceCount: number;
+  public readonly activeExtensionCount: number;
+  public readonly admittedGeneratedVocabularyCount: number;
+  public readonly underclosedGeneratedVocabularyCount: number;
 
   public constructor(
     public readonly consultedWorld: ConsultedWorldHandle,
@@ -27,6 +35,9 @@ export class CurrentWorldPublication {
     public readonly frontier: WorldParticipationFrontierKind,
     public readonly resources: readonly PublishedResourceDefinition[],
     public readonly underclosedResources: readonly UnderclosedResourceDefinition[],
+    public readonly activeExtensions: readonly ActiveExtensionActivation[],
+    public readonly underclosedExtensions: readonly UnderclosedExtensionActivation[],
+    public readonly generatedVocabulary: readonly GeneratedTemplateVocabularyMember[],
     public readonly declarationWitnessRef: string,
     public readonly closureRef: string
   ) {
@@ -38,6 +49,9 @@ export class CurrentWorldPublication {
       (resource) => resource.currentWorldActivityState === CurrentWorldActivityStateKind.Active
     ).length;
     this.underclosedResourceCount = underclosedResources.length;
+    this.activeExtensionCount = activeExtensions.length;
+    this.admittedGeneratedVocabularyCount = generatedVocabulary.length;
+    this.underclosedGeneratedVocabularyCount = underclosedExtensions.length;
   }
 
   public get claimOutcome(): ClaimOutcomeKind {

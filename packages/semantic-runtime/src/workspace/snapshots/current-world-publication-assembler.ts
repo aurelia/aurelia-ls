@@ -1,4 +1,3 @@
-import { CurrentWorldPublication } from "../../workspace/snapshots/current-world-publication.js";
 import {
   CurrentWorldActivityStateKind,
   PublishedResourceDefinition,
@@ -6,21 +5,24 @@ import {
   ResourceDefinitionKind,
   ResourceRecognitionStatusKind,
   ReachabilityScopeKind
-} from "../../workspace/resources/resource-definition.js";
+} from "../resources/resource-definition.js";
+import { CurrentWorldPublication } from "./current-world-publication.js";
 import {
   type ConsultedWorldHandle,
   WorldParticipationFrontierKind
-} from "../../workspace/registration/consulted-world.js";
-import type { WorkspacePackageRef } from "../../workspace/packages/workspace-package.js";
-import type { CustomElementScanResult } from "../../workspace/registration/custom-element-declaration-scanner.js";
+} from "../registration/consulted-world.js";
+import type { WorkspacePackageRef } from "../packages/workspace-package.js";
+import type { CustomElementScanResult } from "../registration/custom-element-declaration-scanner.js";
+import type { ExtensionConfigurationScanResult } from "../registration/extension-configuration-scanner.js";
 
-export class ResourceAdmissionEvaluator {
+export class CurrentWorldPublicationAssembler {
   public publishCurrentWorldPublication(
     consultedWorld: ConsultedWorldHandle,
     consultedPackage: WorkspacePackageRef,
-    scanResult: CustomElementScanResult
+    resourceScan: CustomElementScanResult,
+    extensionScan: ExtensionConfigurationScanResult
   ): CurrentWorldPublication {
-    const resources = scanResult.recognizedElements.map(
+    const resources = resourceScan.recognizedElements.map(
       (customElement) => new PublishedResourceDefinition(
         ResourceDefinitionKind.CustomElement,
         customElement.className,
@@ -33,11 +35,11 @@ export class ResourceAdmissionEvaluator {
         ResourceAdmissionStatusKind.Admitted,
         CurrentWorldActivityStateKind.CurrentWorldSensitive,
         ReachabilityScopeKind.ResourceCurrentPlusRoot,
-        deriveResourceFrontier(scanResult)
+        deriveResourceFrontier(resourceScan, extensionScan)
       )
     );
 
-    const frontier = derivePublicationFrontier(scanResult);
+    const frontier = derivePublicationFrontier(resources.length, resourceScan.underclosedResources.length, extensionScan);
     const packageIdentity = consultedPackage.packageName ?? consultedPackage.rootPath;
 
     return new CurrentWorldPublication(
@@ -45,7 +47,10 @@ export class ResourceAdmissionEvaluator {
       consultedPackage,
       frontier,
       resources,
-      scanResult.underclosedResources,
+      resourceScan.underclosedResources,
+      extensionScan.activeExtensions,
+      extensionScan.underclosedExtensions,
+      extensionScan.generatedVocabulary,
       createDeclarationWitnessRef(packageIdentity, frontier),
       createClosureRef(packageIdentity, frontier)
     );
@@ -53,9 +58,13 @@ export class ResourceAdmissionEvaluator {
 }
 
 function deriveResourceFrontier(
-  scanResult: CustomElementScanResult
+  resourceScan: CustomElementScanResult,
+  extensionScan: ExtensionConfigurationScanResult
 ): WorldParticipationFrontierKind {
-  if (scanResult.underclosedResources.length === 0) {
+  if (
+    resourceScan.underclosedResources.length === 0 &&
+    extensionScan.underclosedGeneratedVocabularyCount === 0
+  ) {
     return WorldParticipationFrontierKind.CurrentWorldSensitive;
   }
 
@@ -63,15 +72,23 @@ function deriveResourceFrontier(
 }
 
 function derivePublicationFrontier(
-  scanResult: CustomElementScanResult
+  recognizedResourceCount: number,
+  underclosedResourceCount: number,
+  extensionScan: ExtensionConfigurationScanResult
 ): WorldParticipationFrontierKind {
-  if (scanResult.underclosedResources.length === 0) {
-    return scanResult.recognizedElements.length === 0
+  const recognizedBasisCount = recognizedResourceCount +
+    extensionScan.activeExtensionCount +
+    extensionScan.admittedGeneratedVocabularyCount;
+  const underclosedBasisCount = underclosedResourceCount +
+    extensionScan.underclosedGeneratedVocabularyCount;
+
+  if (underclosedBasisCount === 0) {
+    return recognizedBasisCount === 0
       ? WorldParticipationFrontierKind.ClosedBaseline
       : WorldParticipationFrontierKind.CurrentWorldSensitive;
   }
 
-  return scanResult.recognizedElements.length === 0
+  return recognizedBasisCount === 0
     ? WorldParticipationFrontierKind.OpenPlaceholder
     : WorldParticipationFrontierKind.WorldQualified;
 }

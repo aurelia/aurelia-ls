@@ -27,14 +27,16 @@ import {
   RegistrationPathKind,
   WorldRegimeKind
 } from "./consulted-world.js";
-import { ResourceAdmissionEvaluator } from "../../evaluators/resources/resource-admission-evaluator.js";
+import { CurrentWorldPublicationAssembler } from "../snapshots/current-world-publication-assembler.js";
 import type { CurrentWorldPublication } from "../snapshots/current-world-publication.js";
 import { CustomElementDeclarationScanner } from "./custom-element-declaration-scanner.js";
+import { ExtensionConfigurationScanner } from "./extension-configuration-scanner.js";
 
 export class TypeScriptWorldConstruction {
   readonly #projectPort: TypeScriptProjectPort;
-  readonly #resourceAdmissionEvaluator = new ResourceAdmissionEvaluator();
+  readonly #publicationAssembler = new CurrentWorldPublicationAssembler();
   readonly #declarationScanner = new CustomElementDeclarationScanner();
+  readonly #extensionConfigurationScanner = new ExtensionConfigurationScanner();
 
   public constructor(projectPort: TypeScriptProjectPort) {
     this.#projectPort = projectPort;
@@ -93,7 +95,8 @@ export class TypeScriptWorldConstruction {
     }
 
     const consultedPackage = resolveConsultedPackage(generation);
-    const scanResult = this.#declarationScanner.scan(generation);
+    const resourceScan = this.#declarationScanner.scan(generation);
+    const extensionScan = this.#extensionConfigurationScanner.scan(generation);
     const boundary = new ConsultedBoundaryRef(
       ConsultedBoundaryKind.Package,
       consultedPackage.rootPath
@@ -110,17 +113,18 @@ export class TypeScriptWorldConstruction {
       selectConsultationRole(home),
       WorldRegimeKind.DefinitionMerge,
       consultedPackage.rootPath,
-      RegistrationPathKind.ResourceRegistration,
-      [ConstructorArchetypeKind.AggregateBundle],
+      selectRegistrationPath(extensionScan),
+      selectConstructorArchetypes(extensionScan),
       LookupRegimeKind.CurrentPlusRootResource,
       MaterializationTimingKind.Eager,
       [NamingSurfaceKind.ExportName, NamingSurfaceKind.ResourceName]
     );
 
-    return this.#resourceAdmissionEvaluator.publishCurrentWorldPublication(
+    return this.#publicationAssembler.publishCurrentWorldPublication(
       consultedWorld,
       consultedPackage,
-      scanResult
+      resourceScan,
+      extensionScan
     );
   }
 }
@@ -134,7 +138,10 @@ export function createCurrentWorldSummary(
     recognizedResourceCount: publication.recognizedResourceCount,
     admittedResourceCount: publication.admittedResourceCount,
     activeResourceCount: publication.activeResourceCount,
-    underclosedResourceCount: publication.underclosedResourceCount
+    underclosedResourceCount: publication.underclosedResourceCount,
+    activeExtensionCount: publication.activeExtensionCount,
+    admittedGeneratedVocabularyCount: publication.admittedGeneratedVocabularyCount,
+    underclosedGeneratedVocabularyCount: publication.underclosedGeneratedVocabularyCount
   };
 }
 
@@ -192,4 +199,36 @@ function resolveCommonProjectRoot(program: ts.Program): string {
 function isTypeScriptLibraryFile(fileName: string): boolean {
   return fileName.includes("/node_modules/typescript/lib/") ||
     fileName.includes("\\node_modules\\typescript\\lib\\");
+}
+
+function selectRegistrationPath(
+  extensionScan: {
+    readonly activeExtensionCount: number;
+    readonly underclosedGeneratedVocabularyCount: number;
+  }
+): RegistrationPathKind {
+  return extensionScan.activeExtensionCount > 0 ||
+    extensionScan.underclosedGeneratedVocabularyCount > 0
+    ? RegistrationPathKind.ConfigurationEmission
+    : RegistrationPathKind.ResourceRegistration;
+}
+
+function selectConstructorArchetypes(
+  extensionScan: {
+    readonly activeExtensionCount: number;
+    readonly underclosedGeneratedVocabularyCount: number;
+  }
+): readonly ConstructorArchetypeKind[] {
+  if (
+    extensionScan.activeExtensionCount === 0 &&
+    extensionScan.underclosedGeneratedVocabularyCount === 0
+  ) {
+    return [ConstructorArchetypeKind.AggregateBundle];
+  }
+
+  return [
+    ConstructorArchetypeKind.AggregateBundle,
+    ConstructorArchetypeKind.CustomizedDefault,
+    ConstructorArchetypeKind.GeneratedSyntax
+  ];
 }

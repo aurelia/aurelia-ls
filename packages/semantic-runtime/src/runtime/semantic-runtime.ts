@@ -92,7 +92,10 @@ export class SemanticRuntime {
       recognizedResourceCount: worldContext.snapshotSummary.recognizedResourceCount,
       admittedResourceCount: worldContext.snapshotSummary.admittedResourceCount,
       activeResourceCount: worldContext.snapshotSummary.activeResourceCount,
-      underclosedResourceCount: worldContext.snapshotSummary.underclosedResourceCount
+      underclosedResourceCount: worldContext.snapshotSummary.underclosedResourceCount,
+      activeExtensionCount: worldContext.snapshotSummary.activeExtensionCount,
+      admittedGeneratedVocabularyCount: worldContext.snapshotSummary.admittedGeneratedVocabularyCount,
+      underclosedGeneratedVocabularyCount: worldContext.snapshotSummary.underclosedGeneratedVocabularyCount
     }));
 
     const boundaryOutcome = query.questionRoute.boundaryRoute === undefined
@@ -119,7 +122,10 @@ export class SemanticRuntime {
       recognizedResourceCount: substrateRead.publishedClaim?.currentWorldSummary?.recognizedResourceCount,
       admittedResourceCount: substrateRead.publishedClaim?.currentWorldSummary?.admittedResourceCount,
       activeResourceCount: substrateRead.publishedClaim?.currentWorldSummary?.activeResourceCount,
-      underclosedResourceCount: substrateRead.publishedClaim?.currentWorldSummary?.underclosedResourceCount
+      underclosedResourceCount: substrateRead.publishedClaim?.currentWorldSummary?.underclosedResourceCount,
+      activeExtensionCount: substrateRead.publishedClaim?.currentWorldSummary?.activeExtensionCount,
+      admittedGeneratedVocabularyCount: substrateRead.publishedClaim?.currentWorldSummary?.admittedGeneratedVocabularyCount,
+      underclosedGeneratedVocabularyCount: substrateRead.publishedClaim?.currentWorldSummary?.underclosedGeneratedVocabularyCount
     }));
 
     const evaluation = boundaryOutcome === undefined
@@ -168,7 +174,10 @@ export class SemanticRuntime {
         recognizedResourceCount: evaluation.currentWorldSummary?.recognizedResourceCount,
         admittedResourceCount: evaluation.currentWorldSummary?.admittedResourceCount,
         activeResourceCount: evaluation.currentWorldSummary?.activeResourceCount,
-        underclosedResourceCount: evaluation.currentWorldSummary?.underclosedResourceCount
+        underclosedResourceCount: evaluation.currentWorldSummary?.underclosedResourceCount,
+        activeExtensionCount: evaluation.currentWorldSummary?.activeExtensionCount,
+        admittedGeneratedVocabularyCount: evaluation.currentWorldSummary?.admittedGeneratedVocabularyCount,
+        underclosedGeneratedVocabularyCount: evaluation.currentWorldSummary?.underclosedGeneratedVocabularyCount
       }));
     }
 
@@ -198,7 +207,10 @@ export class SemanticRuntime {
       recognizedResourceCount: answer.currentWorldSummary?.recognizedResourceCount,
       admittedResourceCount: answer.currentWorldSummary?.admittedResourceCount,
       activeResourceCount: answer.currentWorldSummary?.activeResourceCount,
-      underclosedResourceCount: answer.currentWorldSummary?.underclosedResourceCount
+      underclosedResourceCount: answer.currentWorldSummary?.underclosedResourceCount,
+      activeExtensionCount: answer.currentWorldSummary?.activeExtensionCount,
+      admittedGeneratedVocabularyCount: answer.currentWorldSummary?.admittedGeneratedVocabularyCount,
+      underclosedGeneratedVocabularyCount: answer.currentWorldSummary?.underclosedGeneratedVocabularyCount
     }));
 
     return answer;
@@ -243,7 +255,10 @@ export class SemanticRuntime {
       recognizedResourceCount: worldContext.snapshotSummary.recognizedResourceCount,
       admittedResourceCount: worldContext.snapshotSummary.admittedResourceCount,
       activeResourceCount: worldContext.snapshotSummary.activeResourceCount,
-      underclosedResourceCount: worldContext.snapshotSummary.underclosedResourceCount
+      underclosedResourceCount: worldContext.snapshotSummary.underclosedResourceCount,
+      activeExtensionCount: worldContext.snapshotSummary.activeExtensionCount,
+      admittedGeneratedVocabularyCount: worldContext.snapshotSummary.admittedGeneratedVocabularyCount,
+      underclosedGeneratedVocabularyCount: worldContext.snapshotSummary.underclosedGeneratedVocabularyCount
     }));
 
     let outcome = this.#typedEnrichmentPort.enrich(request, worldContext);

@@ -1,83 +1,19 @@
 import * as ts from "typescript";
 import type { TypeScriptProjectGeneration } from "../../typescript/programs/typescript-project-port.js";
 import {
+  createAnalysisContext,
+  ResolvedValueKind,
+  TypeScriptAnalysisClosureKind,
+  resolveExpressionValue,
+  type ResolvedValue,
+} from "../../typescript/analysis/resolved-value.js";
+import {
   RecognizedCustomElement,
   ResourceDeclarationClosureKind,
   ResourceDeclarationSurfaceKind,
   ResourceDefinitionKind,
   UnderclosedResourceDefinition
 } from "../resources/resource-definition.js";
-
-const MAX_ANALYSIS_DEPTH = 4;
-
-const enum ResolvedDeclarationValueKind {
-  String = 1,
-  Object = 2
-}
-
-class ResolvedDeclarationValue {
-  public constructor(
-    public readonly kind: ResolvedDeclarationValueKind,
-    public readonly closureKind: ResourceDeclarationClosureKind,
-    public readonly stringValue?: string,
-    public readonly objectProperties: ReadonlyMap<string, ResolvedDeclarationValue> = new Map()
-  ) {}
-
-  public static createString(
-    value: string,
-    closureKind: ResourceDeclarationClosureKind
-  ): ResolvedDeclarationValue {
-    return new ResolvedDeclarationValue(
-      ResolvedDeclarationValueKind.String,
-      closureKind,
-      value
-    );
-  }
-
-  public static createObject(
-    properties: ReadonlyMap<string, ResolvedDeclarationValue>,
-    closureKind: ResourceDeclarationClosureKind
-  ): ResolvedDeclarationValue {
-    return new ResolvedDeclarationValue(
-      ResolvedDeclarationValueKind.Object,
-      closureKind,
-      undefined,
-      properties
-    );
-  }
-
-  public promote(
-    closureKind: ResourceDeclarationClosureKind
-  ): ResolvedDeclarationValue {
-    const promotedClosure = maxClosureKind(this.closureKind, closureKind);
-    if (promotedClosure === this.closureKind) {
-      return this;
-    }
-
-    return new ResolvedDeclarationValue(
-      this.kind,
-      promotedClosure,
-      this.stringValue,
-      this.objectProperties
-    );
-  }
-
-  public readProperty(name: string): ResolvedDeclarationValue | undefined {
-    const property = this.objectProperties.get(name);
-    if (property === undefined) {
-      return undefined;
-    }
-
-    return property.promote(this.closureKind);
-  }
-}
-
-type EvaluationContext = {
-  readonly checker: ts.TypeChecker;
-  readonly bindings: ReadonlyMap<string, ts.Expression>;
-  readonly depth: number;
-  readonly seenDeclarations: Set<string>;
-};
 
 export class CustomElementScanResult {
   public constructor(
@@ -220,8 +156,10 @@ export class CustomElementDeclarationScanner {
       return;
     }
 
-    const context = createEvaluationContext(generation.checker);
-    const resourceName = resolveCustomElementName(expression, context);
+    const resourceName = resolveCustomElementName(
+      expression,
+      createAnalysisContext(generation.checker)
+    );
     if (resourceName !== undefined) {
       const resourceText = resourceName.stringValue;
       if (resourceText === undefined) {
@@ -236,7 +174,7 @@ export class CustomElementDeclarationScanner {
           resourceText,
           sourceFile.fileName,
           surfaceKind,
-          resourceName.closureKind
+          mapAnalysisClosureKind(resourceName.closureKind)
         )
       );
       return;
@@ -255,20 +193,6 @@ export class CustomElementDeclarationScanner {
       )
     );
   }
-}
-
-function createEvaluationContext(
-  checker: ts.TypeChecker,
-  bindings: ReadonlyMap<string, ts.Expression> = new Map(),
-  depth = MAX_ANALYSIS_DEPTH,
-  seenDeclarations: Set<string> = new Set()
-): EvaluationContext {
-  return {
-    checker,
-    bindings,
-    depth,
-    seenDeclarations
-  };
 }
 
 function createRecognizedKey(
@@ -384,21 +308,21 @@ function readDefineClassName(
 
 function resolveCustomElementName(
   expression: ts.Expression,
-  context: EvaluationContext
-): ResolvedDeclarationValue | undefined {
+  context: ReturnType<typeof createAnalysisContext>
+): ResolvedValue | undefined {
   const declarationValue = resolveExpressionValue(expression, context);
   if (declarationValue === undefined) {
     return undefined;
   }
 
-  if (declarationValue.kind === ResolvedDeclarationValueKind.String) {
+  if (declarationValue.kind === ResolvedValueKind.String) {
     return declarationValue;
   }
 
   if (looksLikeStaticAuMetadata(expression)) {
     const typeProperty = declarationValue.readProperty("type");
     if (
-      typeProperty?.kind !== ResolvedDeclarationValueKind.String ||
+      typeProperty?.kind !== ResolvedValueKind.String ||
       typeProperty.stringValue !== "custom-element"
     ) {
       return undefined;
@@ -406,277 +330,11 @@ function resolveCustomElementName(
   }
 
   const nameProperty = declarationValue.readProperty("name");
-  if (nameProperty?.kind !== ResolvedDeclarationValueKind.String) {
+  if (nameProperty?.kind !== ResolvedValueKind.String) {
     return undefined;
   }
 
   return nameProperty;
-}
-
-function resolveExpressionValue(
-  expression: ts.Expression,
-  context: EvaluationContext
-): ResolvedDeclarationValue | undefined {
-  if (context.depth <= 0) {
-    return undefined;
-  }
-
-  if (ts.isStringLiteralLike(expression) || ts.isNoSubstitutionTemplateLiteral(expression)) {
-    return ResolvedDeclarationValue.createString(
-      expression.text,
-      ResourceDeclarationClosureKind.DeclaredExplicit
-    );
-  }
-
-  if (ts.isObjectLiteralExpression(expression)) {
-    const properties = new Map<string, ResolvedDeclarationValue>();
-    for (const property of expression.properties) {
-      if (ts.isShorthandPropertyAssignment(property)) {
-        const propertyValue = resolveExpressionValue(
-          property.name,
-          consumeDepth(context)
-        );
-        if (propertyValue !== undefined) {
-          properties.set(property.name.text, propertyValue);
-        }
-        continue;
-      }
-
-      if (!ts.isPropertyAssignment(property)) {
-        continue;
-      }
-
-      const propertyName = readPropertyName(property.name);
-      if (propertyName === undefined) {
-        continue;
-      }
-
-      const propertyValue = resolveExpressionValue(property.initializer, context);
-      if (propertyValue === undefined) {
-        continue;
-      }
-
-      properties.set(propertyName, propertyValue);
-    }
-
-    return ResolvedDeclarationValue.createObject(
-      properties,
-      ResourceDeclarationClosureKind.DeclaredExplicit
-    );
-  }
-
-  if (ts.isIdentifier(expression)) {
-    const boundExpression = context.bindings.get(expression.text);
-    if (boundExpression !== undefined) {
-      return resolveExpressionValue(boundExpression, consumeDepth(context))
-        ?.promote(ResourceDeclarationClosureKind.SourceAnalyzable);
-    }
-
-    return resolveSymbolValue(
-      context.checker.getSymbolAtLocation(expression),
-      consumeDepth(context)
-    );
-  }
-
-  if (ts.isPropertyAccessExpression(expression)) {
-    return resolveExpressionValue(expression.expression, consumeDepth(context))
-      ?.readProperty(expression.name.text)
-      ?.promote(ResourceDeclarationClosureKind.SourceAnalyzable);
-  }
-
-  if (ts.isCallExpression(expression)) {
-    return resolveFunctionCallValue(expression, consumeDepth(context));
-  }
-
-  if (ts.isParenthesizedExpression(expression)) {
-    return resolveExpressionValue(expression.expression, context);
-  }
-
-  if (ts.isAsExpression(expression) || ts.isSatisfiesExpression(expression)) {
-    return resolveExpressionValue(expression.expression, context);
-  }
-
-  return undefined;
-}
-
-function resolveSymbolValue(
-  symbol: ts.Symbol | undefined,
-  context: EvaluationContext
-): ResolvedDeclarationValue | undefined {
-  if (symbol === undefined || context.depth <= 0) {
-    return undefined;
-  }
-
-  const resolvedSymbol = (symbol.flags & ts.SymbolFlags.Alias) !== 0
-    ? context.checker.getAliasedSymbol(symbol)
-    : symbol;
-  for (const declaration of resolvedSymbol.declarations ?? []) {
-    const declarationKey = `${declaration.getSourceFile().fileName}:${declaration.pos}`;
-    if (context.seenDeclarations.has(declarationKey)) {
-      continue;
-    }
-
-    context.seenDeclarations.add(declarationKey);
-    const declarationValue = resolveDeclarationNodeValue(
-      declaration,
-      consumeDepth(context)
-    );
-    if (declarationValue !== undefined) {
-      return declarationValue.promote(ResourceDeclarationClosureKind.SourceAnalyzable);
-    }
-  }
-
-  return undefined;
-}
-
-function resolveDeclarationNodeValue(
-  declaration: ts.Declaration,
-  context: EvaluationContext
-): ResolvedDeclarationValue | undefined {
-  if (ts.isVariableDeclaration(declaration) && declaration.initializer !== undefined) {
-    return resolveExpressionValue(declaration.initializer, context);
-  }
-
-  if (ts.isPropertyAssignment(declaration)) {
-    return resolveExpressionValue(declaration.initializer, context);
-  }
-
-  if (ts.isBindingElement(declaration) && declaration.initializer !== undefined) {
-    return resolveExpressionValue(declaration.initializer, context);
-  }
-
-  if (ts.isEnumMember(declaration) && declaration.initializer !== undefined) {
-    return resolveExpressionValue(declaration.initializer, context);
-  }
-
-  if (ts.isFunctionDeclaration(declaration) || ts.isMethodDeclaration(declaration)) {
-    const returnExpression = readReturnExpression(declaration);
-    if (returnExpression === undefined) {
-      return undefined;
-    }
-
-    return resolveExpressionValue(returnExpression, context);
-  }
-
-  return undefined;
-}
-
-function resolveFunctionCallValue(
-  expression: ts.CallExpression,
-  context: EvaluationContext
-): ResolvedDeclarationValue | undefined {
-  const callable = resolveCallable(expression.expression, context);
-  if (callable === undefined) {
-    return undefined;
-  }
-
-  const returnExpression = readReturnExpression(callable);
-  if (returnExpression === undefined) {
-    return undefined;
-  }
-
-  const bindings = new Map(context.bindings);
-  for (let index = 0; index < callable.parameters.length; index += 1) {
-    const parameter = callable.parameters[index];
-    if (parameter === undefined || !ts.isIdentifier(parameter.name)) {
-      return undefined;
-    }
-
-    const argument = expression.arguments[index];
-    if (argument !== undefined) {
-      bindings.set(parameter.name.text, argument);
-    }
-  }
-
-  return resolveExpressionValue(
-    returnExpression,
-    createEvaluationContext(
-      context.checker,
-      bindings,
-      context.depth - 1,
-      context.seenDeclarations
-    )
-  )?.promote(ResourceDeclarationClosureKind.SourceAnalyzable);
-}
-
-function resolveCallable(
-  expression: ts.LeftHandSideExpression,
-  context: EvaluationContext
-): ts.FunctionLikeDeclaration | ts.ArrowFunction | ts.FunctionExpression | undefined {
-  if (ts.isIdentifier(expression)) {
-    return resolveCallableFromSymbol(
-      context.checker.getSymbolAtLocation(expression),
-      context
-    );
-  }
-
-  if (ts.isPropertyAccessExpression(expression)) {
-    return resolveCallableFromSymbol(
-      context.checker.getSymbolAtLocation(expression.name) ??
-        context.checker.getSymbolAtLocation(expression),
-      context
-    );
-  }
-
-  if (ts.isArrowFunction(expression) || ts.isFunctionExpression(expression)) {
-    return expression;
-  }
-
-  return undefined;
-}
-
-function resolveCallableFromSymbol(
-  symbol: ts.Symbol | undefined,
-  context: EvaluationContext
-): ts.FunctionLikeDeclaration | ts.ArrowFunction | ts.FunctionExpression | undefined {
-  if (symbol === undefined) {
-    return undefined;
-  }
-
-  const resolvedSymbol = (symbol.flags & ts.SymbolFlags.Alias) !== 0
-    ? context.checker.getAliasedSymbol(symbol)
-    : symbol;
-  for (const declaration of resolvedSymbol.declarations ?? []) {
-    if (
-      ts.isFunctionDeclaration(declaration) ||
-      ts.isMethodDeclaration(declaration) ||
-      ts.isArrowFunction(declaration) ||
-      ts.isFunctionExpression(declaration)
-    ) {
-      return declaration;
-    }
-
-    if (ts.isVariableDeclaration(declaration) && declaration.initializer !== undefined) {
-      if (ts.isArrowFunction(declaration.initializer) || ts.isFunctionExpression(declaration.initializer)) {
-        return declaration.initializer;
-      }
-    }
-  }
-
-  return undefined;
-}
-
-function readReturnExpression(
-  callable: ts.FunctionLikeDeclaration | ts.ArrowFunction | ts.FunctionExpression
-): ts.Expression | undefined {
-  if (callable.body === undefined) {
-    return undefined;
-  }
-
-  if (ts.isExpression(callable.body)) {
-    return callable.body;
-  }
-
-  if (callable.body.statements.length !== 1) {
-    return undefined;
-  }
-
-  const [statement] = callable.body.statements;
-  if (statement === undefined || !ts.isReturnStatement(statement) || statement.expression === undefined) {
-    return undefined;
-  }
-
-  return statement.expression;
 }
 
 function looksLikeStaticAuMetadata(expression: ts.Expression): boolean {
@@ -706,17 +364,6 @@ function hasStaticModifier(node: ts.Node): boolean {
 function isExported(node: ts.Node): boolean {
   const modifiers = ts.canHaveModifiers(node) ? ts.getModifiers(node) : undefined;
   return modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) ?? false;
-}
-
-function consumeDepth(
-  context: EvaluationContext
-): EvaluationContext {
-  return createEvaluationContext(
-    context.checker,
-    context.bindings,
-    context.depth - 1,
-    context.seenDeclarations
-  );
 }
 
 function inferCandidateClosureKind(
@@ -749,11 +396,17 @@ function createUnderclosedNote(
   }
 }
 
-function maxClosureKind(
-  left: ResourceDeclarationClosureKind,
-  right: ResourceDeclarationClosureKind
+function mapAnalysisClosureKind(
+  closureKind: TypeScriptAnalysisClosureKind
 ): ResourceDeclarationClosureKind {
-  return left >= right ? left : right;
+  switch (closureKind) {
+    case TypeScriptAnalysisClosureKind.DeclaredExplicit:
+      return ResourceDeclarationClosureKind.DeclaredExplicit;
+    case TypeScriptAnalysisClosureKind.SourceAnalyzable:
+      return ResourceDeclarationClosureKind.SourceAnalyzable;
+    default:
+      return ResourceDeclarationClosureKind.RuntimeOnly;
+  }
 }
 
 function compareRecognizedCustomElements(

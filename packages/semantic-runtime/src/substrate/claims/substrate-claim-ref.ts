@@ -18,6 +18,9 @@ export interface CurrentWorldSummaryValue {
   readonly admittedResourceCount: number;
   readonly activeResourceCount: number;
   readonly underclosedResourceCount: number;
+  readonly activeExtensionCount: number;
+  readonly admittedGeneratedVocabularyCount: number;
+  readonly underclosedGeneratedVocabularyCount: number;
 }
 
 export interface PublishedSubstrateClaim {

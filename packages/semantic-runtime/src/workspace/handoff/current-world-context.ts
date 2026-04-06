@@ -24,6 +24,9 @@ export interface WorldSnapshotSummary {
   readonly admittedResourceCount: number;
   readonly activeResourceCount: number;
   readonly underclosedResourceCount: number;
+  readonly activeExtensionCount: number;
+  readonly admittedGeneratedVocabularyCount: number;
+  readonly underclosedGeneratedVocabularyCount: number;
 }
 
 export interface RescanBasis {
@@ -44,6 +47,9 @@ export interface CurrentWorldContextSeed {
   readonly admittedResourceCount?: number;
   readonly activeResourceCount?: number;
   readonly underclosedResourceCount?: number;
+  readonly activeExtensionCount?: number;
+  readonly admittedGeneratedVocabularyCount?: number;
+  readonly underclosedGeneratedVocabularyCount?: number;
   readonly rescanReasonMask?: RescanReasonKind;
 }
 
@@ -74,7 +80,10 @@ export class CurrentWorldContextPort {
           recognizedResourceCount: this.#seed.recognizedResourceCount ?? 0,
           admittedResourceCount: this.#seed.admittedResourceCount ?? 0,
           activeResourceCount: this.#seed.activeResourceCount ?? 0,
-          underclosedResourceCount: this.#seed.underclosedResourceCount ?? 0
+          underclosedResourceCount: this.#seed.underclosedResourceCount ?? 0,
+          activeExtensionCount: this.#seed.activeExtensionCount ?? 0,
+          admittedGeneratedVocabularyCount: this.#seed.admittedGeneratedVocabularyCount ?? 0,
+          underclosedGeneratedVocabularyCount: this.#seed.underclosedGeneratedVocabularyCount ?? 0
         }
       : {
           publishedClaimCount: 1,
@@ -82,7 +91,10 @@ export class CurrentWorldContextPort {
           recognizedResourceCount: publication.recognizedResourceCount,
           admittedResourceCount: publication.admittedResourceCount,
           activeResourceCount: publication.activeResourceCount,
-          underclosedResourceCount: publication.underclosedResourceCount
+          underclosedResourceCount: publication.underclosedResourceCount,
+          activeExtensionCount: publication.activeExtensionCount,
+          admittedGeneratedVocabularyCount: publication.admittedGeneratedVocabularyCount,
+          underclosedGeneratedVocabularyCount: publication.underclosedGeneratedVocabularyCount
         };
     const reasonMask = (
       this.#seed.rescanReasonMask ?? RescanReasonKind.None
@@ -101,7 +113,10 @@ export class CurrentWorldContextPort {
         recognizedResourceCount: summary.recognizedResourceCount,
         admittedResourceCount: summary.admittedResourceCount,
         activeResourceCount: summary.activeResourceCount,
-        underclosedResourceCount: summary.underclosedResourceCount
+        underclosedResourceCount: summary.underclosedResourceCount,
+        activeExtensionCount: summary.activeExtensionCount,
+        admittedGeneratedVocabularyCount: summary.admittedGeneratedVocabularyCount,
+        underclosedGeneratedVocabularyCount: summary.underclosedGeneratedVocabularyCount
       },
       rescanBasis: {
         reasonMask
