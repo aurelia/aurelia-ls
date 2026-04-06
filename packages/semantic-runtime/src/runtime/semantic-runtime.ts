@@ -5,6 +5,10 @@ import { BoundaryRouter } from "../boundaries/boundary-router.js";
 import { getBoundaryRoute } from "../model/boundary-routes/boundary-routes.js";
 import { SemanticRuntimeSurfaceKind } from "../model/semantic-runtime-handles.js";
 import { SemanticQueryPlanner, type SemanticQuery } from "../query/routing/query-planner.js";
+import {
+  getQuestionRouteAuthoredOccurrenceTarget,
+  getQuestionRouteClaimRoute
+} from "../query/framing/question-route.js";
 import { createRuntimeWorldContextHandoff } from "./handoff/world-context-handoff.js";
 import {
   SemanticRuntimeTraceEventKind,
@@ -17,7 +21,10 @@ import { RuntimeInvalidationCoordinator } from "./invalidation/invalidation-coor
 import { RereadPlanner } from "./reread/reread-plan.js";
 import { createTrustBundle } from "./trust/trust-bundle.js";
 import type { CurrentWorldContextPort } from "../workspace/handoff/current-world-context.js";
-import type { SubstrateReader } from "../substrate/substrate-reader.js";
+import {
+  createQuestionRouteSubstrateLookupPlan,
+  type SubstrateReader
+} from "../substrate/substrate-reader.js";
 import type { EvaluatorReadPort } from "../evaluators/kernel/evaluator-read-port.js";
 import {
   TypedEnrichmentOutcome,
@@ -59,6 +66,10 @@ export class SemanticRuntime {
 
   public readSemanticAnswer(query: SemanticQuery): SemanticAnswer {
     const plannedQuery = this.#queryPlanner.plan(query);
+    const claimRoute = getQuestionRouteClaimRoute(plannedQuery.query.questionRoute);
+    const authoredOccurrenceTarget = getQuestionRouteAuthoredOccurrenceTarget(
+      plannedQuery.query.questionRoute
+    );
     const currentWorldContext = this.#currentWorldContextPort.publishCurrentWorldContext(
       plannedQuery.query.questionRoute,
       plannedQuery.query.worldFrame
@@ -74,13 +85,12 @@ export class SemanticRuntime {
       questionRouteKind: query.questionRoute.kind,
       worldFrameKind: query.worldFrame.kind,
       worldVersion: query.worldFrame.version,
-      claimHome: query.questionRoute.claimRoute.home,
+      claimHome: claimRoute.home,
       inquiryEpisode: query.questionRoute.inquiryEpisode,
       readMode: query.questionRoute.readMode,
-      boundaryRoute: query.questionRoute.boundaryRoute
-      ,
-      authoredOccurrenceTemplateSourceRef: query.questionRoute.authoredOccurrenceTarget?.templateSourceRef,
-      authoredOccurrenceOffset: query.questionRoute.authoredOccurrenceTarget?.offset
+      boundaryRoute: query.questionRoute.boundaryRoute,
+      authoredOccurrenceTemplateSourceRef: authoredOccurrenceTarget?.templateSourceRef,
+      authoredOccurrenceOffset: authoredOccurrenceTarget?.offset
     }));
 
     this.#introspection.record(() => ({
@@ -89,7 +99,7 @@ export class SemanticRuntime {
       questionRouteKind: query.questionRoute.kind,
       worldFrameKind: worldContext.worldFrameHandle.kind,
       worldVersion: worldContext.worldFrameHandle.version,
-      claimHome: query.questionRoute.claimRoute.home,
+      claimHome: claimRoute.home,
       boundaryRoute: query.questionRoute.boundaryRoute,
       publishedClaimCount: worldContext.snapshotSummary.publishedClaimCount,
       recognizedResourceCount: worldContext.snapshotSummary.recognizedResourceCount,
@@ -102,8 +112,8 @@ export class SemanticRuntime {
       associatedTemplateCount: worldContext.snapshotSummary.associatedTemplateCount,
       explicitNoViewCount: worldContext.snapshotSummary.explicitNoViewCount,
       underclosedTemplateAssociationCount: worldContext.snapshotSummary.underclosedTemplateAssociationCount,
-      authoredOccurrenceTemplateSourceRef: query.questionRoute.authoredOccurrenceTarget?.templateSourceRef,
-      authoredOccurrenceOffset: query.questionRoute.authoredOccurrenceTarget?.offset
+      authoredOccurrenceTemplateSourceRef: authoredOccurrenceTarget?.templateSourceRef,
+      authoredOccurrenceOffset: authoredOccurrenceTarget?.offset
     }));
 
     const boundaryOutcome = query.questionRoute.boundaryRoute === undefined
@@ -112,11 +122,12 @@ export class SemanticRuntime {
           getBoundaryRoute(query.questionRoute.boundaryRoute)
         );
     const substrateRead = this.#substrateReader.readSubstrateClaim(
-        {
-        questionRoute: query.questionRoute,
-        worldFrameHandle: worldContext.worldFrameHandle
-      }
+      createQuestionRouteSubstrateLookupPlan(
+        query.questionRoute,
+        worldContext.worldFrameHandle
+      )
     );
+    const substrateSummary = substrateRead.publishedClaim?.payload?.currentWorldSummary;
 
     this.#introspection.record(() => ({
       kind: SemanticRuntimeTraceEventKind.SubstrateClaimRead,
@@ -126,19 +137,19 @@ export class SemanticRuntime {
       worldVersion: worldContext.worldFrameHandle.version,
       claimHome: substrateRead.claimRef.home,
       boundaryRoute: query.questionRoute.boundaryRoute,
-      publishedClaimCount: substrateRead.publishedClaim?.currentWorldSummary?.publishedClaimCount,
-      recognizedResourceCount: substrateRead.publishedClaim?.currentWorldSummary?.recognizedResourceCount,
-      admittedResourceCount: substrateRead.publishedClaim?.currentWorldSummary?.admittedResourceCount,
-      activeResourceCount: substrateRead.publishedClaim?.currentWorldSummary?.activeResourceCount,
-      underclosedResourceCount: substrateRead.publishedClaim?.currentWorldSummary?.underclosedResourceCount,
-      activeExtensionCount: substrateRead.publishedClaim?.currentWorldSummary?.activeExtensionCount,
-      admittedGeneratedVocabularyCount: substrateRead.publishedClaim?.currentWorldSummary?.admittedGeneratedVocabularyCount,
-      underclosedGeneratedVocabularyCount: substrateRead.publishedClaim?.currentWorldSummary?.underclosedGeneratedVocabularyCount,
-      associatedTemplateCount: substrateRead.publishedClaim?.currentWorldSummary?.associatedTemplateCount,
-      explicitNoViewCount: substrateRead.publishedClaim?.currentWorldSummary?.explicitNoViewCount,
-      underclosedTemplateAssociationCount: substrateRead.publishedClaim?.currentWorldSummary?.underclosedTemplateAssociationCount,
-      authoredOccurrenceTemplateSourceRef: query.questionRoute.authoredOccurrenceTarget?.templateSourceRef,
-      authoredOccurrenceOffset: query.questionRoute.authoredOccurrenceTarget?.offset
+      publishedClaimCount: substrateSummary?.publishedClaimCount,
+      recognizedResourceCount: substrateSummary?.recognizedResourceCount,
+      admittedResourceCount: substrateSummary?.admittedResourceCount,
+      activeResourceCount: substrateSummary?.activeResourceCount,
+      underclosedResourceCount: substrateSummary?.underclosedResourceCount,
+      activeExtensionCount: substrateSummary?.activeExtensionCount,
+      admittedGeneratedVocabularyCount: substrateSummary?.admittedGeneratedVocabularyCount,
+      underclosedGeneratedVocabularyCount: substrateSummary?.underclosedGeneratedVocabularyCount,
+      associatedTemplateCount: substrateSummary?.associatedTemplateCount,
+      explicitNoViewCount: substrateSummary?.explicitNoViewCount,
+      underclosedTemplateAssociationCount: substrateSummary?.underclosedTemplateAssociationCount,
+      authoredOccurrenceTemplateSourceRef: authoredOccurrenceTarget?.templateSourceRef,
+      authoredOccurrenceOffset: authoredOccurrenceTarget?.offset
     }));
 
     const evaluation = boundaryOutcome === undefined
@@ -164,7 +175,7 @@ export class SemanticRuntime {
         questionRouteKind: query.questionRoute.kind,
         worldFrameKind: query.worldFrame.kind,
         worldVersion: query.worldFrame.version,
-        claimHome: query.questionRoute.claimRoute.home,
+        claimHome: claimRoute.home,
         boundaryRoute: boundaryOutcome.route,
         boundaryOutcomeKind: boundaryOutcome.kind,
         closureStatus: boundaryOutcome.closureStatus
@@ -172,6 +183,7 @@ export class SemanticRuntime {
     }
 
     if (evaluation !== undefined) {
+      const evaluationSummary = evaluation.payload?.currentWorldSummary;
       this.#introspection.record(() => ({
         kind: SemanticRuntimeTraceEventKind.EvaluatorResultPublished,
         surface: SemanticRuntimeSurfaceKind.EvaluatorReadPort,
@@ -183,19 +195,19 @@ export class SemanticRuntime {
         claimOutcome: evaluation.outcome,
         claimQualification: evaluation.qualifier,
         closureStatus: evaluation.closureStatus,
-        publishedClaimCount: evaluation.currentWorldSummary?.publishedClaimCount,
-        recognizedResourceCount: evaluation.currentWorldSummary?.recognizedResourceCount,
-        admittedResourceCount: evaluation.currentWorldSummary?.admittedResourceCount,
-        activeResourceCount: evaluation.currentWorldSummary?.activeResourceCount,
-        underclosedResourceCount: evaluation.currentWorldSummary?.underclosedResourceCount,
-        activeExtensionCount: evaluation.currentWorldSummary?.activeExtensionCount,
-        admittedGeneratedVocabularyCount: evaluation.currentWorldSummary?.admittedGeneratedVocabularyCount,
-        underclosedGeneratedVocabularyCount: evaluation.currentWorldSummary?.underclosedGeneratedVocabularyCount,
-        associatedTemplateCount: evaluation.currentWorldSummary?.associatedTemplateCount,
-        explicitNoViewCount: evaluation.currentWorldSummary?.explicitNoViewCount,
-        underclosedTemplateAssociationCount: evaluation.currentWorldSummary?.underclosedTemplateAssociationCount,
-        authoredOccurrenceTemplateSourceRef: query.questionRoute.authoredOccurrenceTarget?.templateSourceRef,
-        authoredOccurrenceOffset: query.questionRoute.authoredOccurrenceTarget?.offset
+        publishedClaimCount: evaluationSummary?.publishedClaimCount,
+        recognizedResourceCount: evaluationSummary?.recognizedResourceCount,
+        admittedResourceCount: evaluationSummary?.admittedResourceCount,
+        activeResourceCount: evaluationSummary?.activeResourceCount,
+        underclosedResourceCount: evaluationSummary?.underclosedResourceCount,
+        activeExtensionCount: evaluationSummary?.activeExtensionCount,
+        admittedGeneratedVocabularyCount: evaluationSummary?.admittedGeneratedVocabularyCount,
+        underclosedGeneratedVocabularyCount: evaluationSummary?.underclosedGeneratedVocabularyCount,
+        associatedTemplateCount: evaluationSummary?.associatedTemplateCount,
+        explicitNoViewCount: evaluationSummary?.explicitNoViewCount,
+        underclosedTemplateAssociationCount: evaluationSummary?.underclosedTemplateAssociationCount,
+        authoredOccurrenceTemplateSourceRef: authoredOccurrenceTarget?.templateSourceRef,
+        authoredOccurrenceOffset: authoredOccurrenceTarget?.offset
       }));
     }
 
@@ -209,6 +221,7 @@ export class SemanticRuntime {
       reuseAdmission
     );
 
+    const answerSummary = answer.payload?.currentWorldSummary;
     this.#introspection.record(() => ({
       kind: SemanticRuntimeTraceEventKind.AnswerAssembled,
       surface: SemanticRuntimeSurfaceKind.AnswerAssembler,
@@ -217,23 +230,23 @@ export class SemanticRuntime {
       worldVersion: query.worldFrame.version,
       claimHome: answer.provenance.claimRef.home,
       claimOutcome: answer.outcome,
-      claimQualification: answer.qualification,
+      claimQualification: answer.qualificationRefs[0]?.kind,
       closureStatus: answer.closureStatus,
       boundaryRoute: query.questionRoute.boundaryRoute ?? answer.boundaryOutcome?.route,
       triggerMask: answer.deltaBasis.triggerMask,
-      publishedClaimCount: answer.currentWorldSummary?.publishedClaimCount,
-      recognizedResourceCount: answer.currentWorldSummary?.recognizedResourceCount,
-      admittedResourceCount: answer.currentWorldSummary?.admittedResourceCount,
-      activeResourceCount: answer.currentWorldSummary?.activeResourceCount,
-      underclosedResourceCount: answer.currentWorldSummary?.underclosedResourceCount,
-      activeExtensionCount: answer.currentWorldSummary?.activeExtensionCount,
-      admittedGeneratedVocabularyCount: answer.currentWorldSummary?.admittedGeneratedVocabularyCount,
-      underclosedGeneratedVocabularyCount: answer.currentWorldSummary?.underclosedGeneratedVocabularyCount,
-      associatedTemplateCount: answer.currentWorldSummary?.associatedTemplateCount,
-      explicitNoViewCount: answer.currentWorldSummary?.explicitNoViewCount,
-      underclosedTemplateAssociationCount: answer.currentWorldSummary?.underclosedTemplateAssociationCount,
-      authoredOccurrenceTemplateSourceRef: query.questionRoute.authoredOccurrenceTarget?.templateSourceRef,
-      authoredOccurrenceOffset: query.questionRoute.authoredOccurrenceTarget?.offset
+      publishedClaimCount: answerSummary?.publishedClaimCount,
+      recognizedResourceCount: answerSummary?.recognizedResourceCount,
+      admittedResourceCount: answerSummary?.admittedResourceCount,
+      activeResourceCount: answerSummary?.activeResourceCount,
+      underclosedResourceCount: answerSummary?.underclosedResourceCount,
+      activeExtensionCount: answerSummary?.activeExtensionCount,
+      admittedGeneratedVocabularyCount: answerSummary?.admittedGeneratedVocabularyCount,
+      underclosedGeneratedVocabularyCount: answerSummary?.underclosedGeneratedVocabularyCount,
+      associatedTemplateCount: answerSummary?.associatedTemplateCount,
+      explicitNoViewCount: answerSummary?.explicitNoViewCount,
+      underclosedTemplateAssociationCount: answerSummary?.underclosedTemplateAssociationCount,
+      authoredOccurrenceTemplateSourceRef: authoredOccurrenceTarget?.templateSourceRef,
+      authoredOccurrenceOffset: authoredOccurrenceTarget?.offset
     }));
 
     return answer;
@@ -257,7 +270,7 @@ export class SemanticRuntime {
       questionRouteKind: request.questionRoute.kind,
       worldFrameKind: request.worldFrame.kind,
       worldVersion: request.worldFrame.version,
-      claimHome: request.questionRoute.claimRoute.home,
+      claimHome: getQuestionRouteClaimRoute(request.questionRoute).home,
       inquiryEpisode: request.questionRoute.inquiryEpisode,
       readMode: request.questionRoute.readMode,
       boundaryRoute: request.questionRoute.boundaryRoute,
@@ -272,7 +285,7 @@ export class SemanticRuntime {
       questionRouteKind: request.questionRoute.kind,
       worldFrameKind: worldContext.worldFrameHandle.kind,
       worldVersion: worldContext.worldFrameHandle.version,
-      claimHome: request.questionRoute.claimRoute.home,
+      claimHome: getQuestionRouteClaimRoute(request.questionRoute).home,
       boundaryRoute: request.questionRoute.boundaryRoute,
       publishedClaimCount: worldContext.snapshotSummary.publishedClaimCount,
       recognizedResourceCount: worldContext.snapshotSummary.recognizedResourceCount,
@@ -304,7 +317,7 @@ export class SemanticRuntime {
       questionRouteKind: request.questionRoute.kind,
       worldFrameKind: request.worldFrame.kind,
       worldVersion: request.worldFrame.version,
-      claimHome: request.questionRoute.claimRoute.home,
+      claimHome: getQuestionRouteClaimRoute(request.questionRoute).home,
       inquiryEpisode: request.questionRoute.inquiryEpisode,
       readMode: request.questionRoute.readMode,
       boundaryRoute: outcome.boundaryRoute,

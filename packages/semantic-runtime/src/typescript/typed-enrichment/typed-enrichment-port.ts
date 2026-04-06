@@ -6,7 +6,10 @@ import {
   ClosureStatusKind,
   SemanticRuntimeSurfaceKind
 } from "../../model/semantic-runtime-handles.js";
-import type { QuestionRoute } from "../../query/framing/question-route.js";
+import {
+  getQuestionRouteClaimRoute,
+  type QuestionRoute
+} from "../../query/framing/question-route.js";
 import type { WorldFrame } from "../../query/framing/world-frame.js";
 import type { RuntimeWorldContextHandoff } from "../../runtime/handoff/world-context-handoff.js";
 import { TypeScriptProjectPort } from "../programs/typescript-project-port.js";
@@ -186,7 +189,7 @@ export class TypedEnrichmentPort {
   ): TypedEnrichmentOutcome {
     if (request.intent === TypedOperationIntentKind.MemberCompletion) {
       return TypedEnrichmentOutcome.routedToOwner(
-        request.questionRoute.claimRoute,
+        getQuestionRouteClaimRoute(request.questionRoute),
         worldContext.worldFrameHandle.version,
         BoundaryRouteKind.CandidateDiscovery,
         undefined,
@@ -196,7 +199,7 @@ export class TypedEnrichmentPort {
 
     if (request.intent !== TypedOperationIntentKind.ContextualReadout) {
       return TypedEnrichmentOutcome.typedUnavailable(
-        request.questionRoute.claimRoute,
+        getQuestionRouteClaimRoute(request.questionRoute),
         worldContext.worldFrameHandle.version,
         TypedUnavailabilityReasonKind.IntentNotSupported,
         undefined,
@@ -207,7 +210,7 @@ export class TypedEnrichmentPort {
     const project = this.#projectPort.publishCurrentGeneration();
     if (project === undefined) {
       return TypedEnrichmentOutcome.typedUnavailable(
-        request.questionRoute.claimRoute,
+        getQuestionRouteClaimRoute(request.questionRoute),
         worldContext.worldFrameHandle.version,
         TypedUnavailabilityReasonKind.NoLiveProject,
         undefined,
@@ -218,7 +221,7 @@ export class TypedEnrichmentPort {
     const sourceFile = project.program.getSourceFile(request.target.fileName);
     if (sourceFile === undefined) {
       return TypedEnrichmentOutcome.typedUnavailable(
-        request.questionRoute.claimRoute,
+        getQuestionRouteClaimRoute(request.questionRoute),
         worldContext.worldFrameHandle.version,
         TypedUnavailabilityReasonKind.SourceFileMissing,
         project.generation,
@@ -229,7 +232,7 @@ export class TypedEnrichmentPort {
     const token = findInnermostNode(sourceFile, request.target.position);
     if (token === undefined) {
       return TypedEnrichmentOutcome.typedUnavailable(
-        request.questionRoute.claimRoute,
+        getQuestionRouteClaimRoute(request.questionRoute),
         worldContext.worldFrameHandle.version,
         TypedUnavailabilityReasonKind.TargetNotResolved,
         project.generation,
@@ -246,7 +249,7 @@ export class TypedEnrichmentPort {
 
     if (type === undefined) {
       return TypedEnrichmentOutcome.typedUnavailable(
-        request.questionRoute.claimRoute,
+        getQuestionRouteClaimRoute(request.questionRoute),
         worldContext.worldFrameHandle.version,
         TypedUnavailabilityReasonKind.CheckerUnavailable,
         project.generation,
@@ -262,7 +265,7 @@ export class TypedEnrichmentPort {
       ? undefined
       : ts.displayPartsToString(quickInfo.documentation);
     const evidence = new TypedEvidenceBundle(
-      request.questionRoute.claimRoute,
+      getQuestionRouteClaimRoute(request.questionRoute),
       request.intent,
       request.target.fileName,
       quickInfo?.textSpan.start ?? token.getStart(sourceFile),

@@ -28,14 +28,18 @@ export interface CurrentWorldSummaryValue {
   readonly underclosedTemplateAssociationCount: number;
 }
 
+export interface SemanticClaimPayload {
+  readonly currentWorldSummary?: CurrentWorldSummaryValue;
+  readonly currentWorldPublication?: CurrentWorldPublication;
+  readonly authoredOccurrenceBasis?: AuthoredOccurrenceBasis;
+}
+
 export interface PublishedSubstrateClaim {
   readonly ref: SubstrateClaimRef;
   readonly outcome: ClaimOutcomeKind;
   readonly qualifier: ClaimQualifierKind;
   readonly closureStatus: ClosureStatusKind;
-  readonly currentWorldSummary?: CurrentWorldSummaryValue;
-  readonly currentWorldPublication?: CurrentWorldPublication;
-  readonly authoredOccurrenceBasis?: AuthoredOccurrenceBasis;
+  readonly payload?: SemanticClaimPayload;
 }
 
 export function createSubstrateClaimRef(
@@ -48,4 +52,14 @@ export function createSubstrateClaimRef(
     worldVersion,
     localIdentity
   };
+}
+
+export function createSemanticClaimPayload(
+  payload: SemanticClaimPayload
+): SemanticClaimPayload | undefined {
+  return payload.currentWorldSummary === undefined &&
+    payload.currentWorldPublication === undefined &&
+    payload.authoredOccurrenceBasis === undefined
+    ? undefined
+    : payload;
 }

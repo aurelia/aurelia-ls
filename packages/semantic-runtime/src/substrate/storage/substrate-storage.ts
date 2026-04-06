@@ -5,6 +5,7 @@ import {
 } from "../../model/claims/claim-model.js";
 import { ClosureStatusKind } from "../../model/semantic-runtime-handles.js";
 import {
+  createSemanticClaimPayload,
   createSubstrateClaimRef,
   type CurrentWorldSummaryValue,
   type PublishedSubstrateClaim,
@@ -69,8 +70,12 @@ export function createCurrentWorldSummaryClaim(
     outcome: publication?.claimOutcome ?? ClaimOutcomeKind.Present,
     qualifier: publication?.claimQualifier ?? ClaimQualifierKind.None,
     closureStatus: publication?.closureStatus ?? ClosureStatusKind.Closed,
-    currentWorldSummary: summary,
-    currentWorldPublication: publication
+    payload: createSemanticClaimPayload(
+      {
+        currentWorldSummary: summary,
+        currentWorldPublication: publication
+      }
+    )
   };
 }
 
@@ -90,9 +95,13 @@ export function createAuthoredOccurrenceBasisClaim(
     outcome,
     qualifier,
     closureStatus,
-    currentWorldSummary: summary,
-    currentWorldPublication: publication,
-    authoredOccurrenceBasis
+    payload: createSemanticClaimPayload(
+      {
+        currentWorldSummary: summary,
+        currentWorldPublication: publication,
+        authoredOccurrenceBasis
+      }
+    )
   };
 }
 

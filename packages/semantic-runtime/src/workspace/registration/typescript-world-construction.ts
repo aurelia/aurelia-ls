@@ -1,7 +1,11 @@
 import path from "node:path";
 import ts from "typescript";
 import { ClaimHomeKind } from "../../model/claims/claim-model.js";
-import type { QuestionRoute } from "../../query/framing/question-route.js";
+import {
+  getQuestionRouteAuthoredOccurrenceTarget,
+  getQuestionRouteClaimRoute,
+  type QuestionRoute
+} from "../../query/framing/question-route.js";
 import type { WorldFrame } from "../../query/framing/world-frame.js";
 import { createLineageRef, type LineageRef } from "../../substrate/lineage/lineage-ref.js";
 import {
@@ -53,7 +57,7 @@ export class TypeScriptWorldConstruction {
     worldFrame: WorldFrame
   ): CurrentWorldPublication | undefined {
     return this.publishCurrentWorldPublicationForHome(
-      questionRoute.claimRoute.home,
+      getQuestionRouteClaimRoute(questionRoute).home,
       worldFrame.version
     );
   }
@@ -62,10 +66,15 @@ export class TypeScriptWorldConstruction {
     questionRoute: QuestionRoute,
     worldVersion: number
   ): PublishedSubstrateClaim | undefined {
-    switch (questionRoute.claimRoute.home) {
+    const claimRoute = getQuestionRouteClaimRoute(questionRoute);
+    const authoredOccurrenceTarget = getQuestionRouteAuthoredOccurrenceTarget(
+      questionRoute
+    );
+
+    switch (claimRoute.home) {
       case ClaimHomeKind.CurrentWorldSummary: {
         const publication = this.publishCurrentWorldPublicationForHome(
-          questionRoute.claimRoute.home,
+          claimRoute.home,
           worldVersion
         );
 
@@ -74,7 +83,7 @@ export class TypeScriptWorldConstruction {
         }
 
         return createCurrentWorldSummaryClaim(
-          questionRoute.claimRoute.home,
+          claimRoute.home,
           worldVersion,
           createCurrentWorldSummary(publication),
           publication
@@ -95,11 +104,11 @@ export class TypeScriptWorldConstruction {
         );
 
         return createAuthoredOccurrenceBasisClaim(
-          questionRoute.claimRoute.home,
+          claimRoute.home,
           worldVersion,
-          questionRoute.authoredOccurrenceTarget === undefined
+          authoredOccurrenceTarget === undefined
             ? undefined
-            : `${questionRoute.authoredOccurrenceTarget.templateSourceRef}:${questionRoute.authoredOccurrenceTarget.offset}`,
+            : `${authoredOccurrenceTarget.templateSourceRef}:${authoredOccurrenceTarget.offset}`,
           createCurrentWorldSummary(publication),
           publication,
           basisDecision.outcome,

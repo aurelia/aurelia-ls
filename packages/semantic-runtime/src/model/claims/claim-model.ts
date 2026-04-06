@@ -4,6 +4,22 @@ export const enum ClaimHomeKind {
   AuthoredOccurrenceBasis = 3
 }
 
+export const enum ClaimHomeFamilyKind {
+  AnchoredIdentityAndCarriedSupport = 1,
+  DeclarationWorldParticipationAndReachability = 2,
+  AuthoredOccurrenceClassification = 3,
+  GovernedSemanticConsequence = 4,
+  ExhaustiveAbsenceAndNegativeSafety = 5,
+  MisuseContradictionAndOccurrenceInvalidity = 6,
+  RuntimeWorldFormationAndPlacement = 7,
+  RuntimeEvaluationDependencyAndFeedback = 8,
+  ExtensionWorldAndInteroperabilityQualification = 9,
+  EvidenceAndCompletenessLicensing = 10,
+  OpenBoundaryRetreatAndDeferredFrontier = 11,
+  ExpressionSemanticResolution = 12,
+  ChangeImpactAndRetreatPropagation = 13
+}
+
 export const enum ClaimOutcomeKind {
   Present = 1,
   NoClaim = 2,
@@ -26,6 +42,11 @@ export const enum ClaimBoundaryKind {
 
 export interface ClaimHome {
   readonly kind: ClaimHomeKind;
+  readonly familyRefs: readonly ClaimHomeFamily[];
+}
+
+export interface ClaimHomeFamily {
+  readonly kind: ClaimHomeFamilyKind;
 }
 
 export interface ClaimOutcome {
@@ -48,15 +69,76 @@ export interface ClaimRoute extends ClaimRouteRef {
   readonly homeRef: ClaimHome;
 }
 
+const CLAIM_HOME_FAMILIES = {
+  [ClaimHomeFamilyKind.AnchoredIdentityAndCarriedSupport]: {
+    kind: ClaimHomeFamilyKind.AnchoredIdentityAndCarriedSupport
+  },
+  [ClaimHomeFamilyKind.DeclarationWorldParticipationAndReachability]: {
+    kind: ClaimHomeFamilyKind.DeclarationWorldParticipationAndReachability
+  },
+  [ClaimHomeFamilyKind.AuthoredOccurrenceClassification]: {
+    kind: ClaimHomeFamilyKind.AuthoredOccurrenceClassification
+  },
+  [ClaimHomeFamilyKind.GovernedSemanticConsequence]: {
+    kind: ClaimHomeFamilyKind.GovernedSemanticConsequence
+  },
+  [ClaimHomeFamilyKind.ExhaustiveAbsenceAndNegativeSafety]: {
+    kind: ClaimHomeFamilyKind.ExhaustiveAbsenceAndNegativeSafety
+  },
+  [ClaimHomeFamilyKind.MisuseContradictionAndOccurrenceInvalidity]: {
+    kind: ClaimHomeFamilyKind.MisuseContradictionAndOccurrenceInvalidity
+  },
+  [ClaimHomeFamilyKind.RuntimeWorldFormationAndPlacement]: {
+    kind: ClaimHomeFamilyKind.RuntimeWorldFormationAndPlacement
+  },
+  [ClaimHomeFamilyKind.RuntimeEvaluationDependencyAndFeedback]: {
+    kind: ClaimHomeFamilyKind.RuntimeEvaluationDependencyAndFeedback
+  },
+  [ClaimHomeFamilyKind.ExtensionWorldAndInteroperabilityQualification]: {
+    kind: ClaimHomeFamilyKind.ExtensionWorldAndInteroperabilityQualification
+  },
+  [ClaimHomeFamilyKind.EvidenceAndCompletenessLicensing]: {
+    kind: ClaimHomeFamilyKind.EvidenceAndCompletenessLicensing
+  },
+  [ClaimHomeFamilyKind.OpenBoundaryRetreatAndDeferredFrontier]: {
+    kind: ClaimHomeFamilyKind.OpenBoundaryRetreatAndDeferredFrontier
+  },
+  [ClaimHomeFamilyKind.ExpressionSemanticResolution]: {
+    kind: ClaimHomeFamilyKind.ExpressionSemanticResolution
+  },
+  [ClaimHomeFamilyKind.ChangeImpactAndRetreatPropagation]: {
+    kind: ClaimHomeFamilyKind.ChangeImpactAndRetreatPropagation
+  }
+} as const satisfies Record<ClaimHomeFamilyKind, ClaimHomeFamily>;
+
 const CLAIM_HOMES = {
   [ClaimHomeKind.CurrentWorldSummary]: {
-    kind: ClaimHomeKind.CurrentWorldSummary
+    kind: ClaimHomeKind.CurrentWorldSummary,
+    familyRefs: [
+      getClaimHomeFamily(
+        ClaimHomeFamilyKind.DeclarationWorldParticipationAndReachability
+      ),
+      getClaimHomeFamily(
+        ClaimHomeFamilyKind.ExtensionWorldAndInteroperabilityQualification
+      ),
+      getClaimHomeFamily(
+        ClaimHomeFamilyKind.EvidenceAndCompletenessLicensing
+      )
+    ]
   },
   [ClaimHomeKind.BoundaryFrontier]: {
-    kind: ClaimHomeKind.BoundaryFrontier
+    kind: ClaimHomeKind.BoundaryFrontier,
+    familyRefs: [
+      getClaimHomeFamily(
+        ClaimHomeFamilyKind.OpenBoundaryRetreatAndDeferredFrontier
+      )
+    ]
   },
   [ClaimHomeKind.AuthoredOccurrenceBasis]: {
-    kind: ClaimHomeKind.AuthoredOccurrenceBasis
+    kind: ClaimHomeKind.AuthoredOccurrenceBasis,
+    familyRefs: [
+      getClaimHomeFamily(ClaimHomeFamilyKind.AuthoredOccurrenceClassification)
+    ]
   }
 } as const satisfies Record<ClaimHomeKind, ClaimHome>;
 
@@ -108,6 +190,12 @@ export function createClaimRoute(home: ClaimHomeKind): ClaimRouteRef {
 
 export function getClaimHome(kind: ClaimHomeKind): ClaimHome {
   return CLAIM_HOMES[kind];
+}
+
+export function getClaimHomeFamily(
+  kind: ClaimHomeFamilyKind
+): ClaimHomeFamily {
+  return CLAIM_HOME_FAMILIES[kind];
 }
 
 export function getClaimOutcome(kind: ClaimOutcomeKind): ClaimOutcome {

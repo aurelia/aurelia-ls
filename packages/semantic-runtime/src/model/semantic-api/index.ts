@@ -5,6 +5,7 @@ export {
   SemanticReadMode,
   SemanticSlotGroup,
   getAnswerCommitment,
+  getAnswerCommitmentForReadMode,
   getInquiryEpisode,
   getReadMode,
   getSemanticApiTerm,

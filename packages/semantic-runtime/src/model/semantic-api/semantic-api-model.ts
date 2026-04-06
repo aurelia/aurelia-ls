@@ -7,9 +7,11 @@ export const enum SemanticReadMode {
 }
 
 export const enum SemanticInquiryEpisode {
-  CurrentWorldRead = 1,
-  BoundaryFrontier = 2,
-  AuthoredOccurrenceRead = 3
+  OrientAndLocalize = 1,
+  BoundedClosureExplanation = 2,
+  GoverningAnchorJump = 3,
+  InventoryAndAuditSweep = 4,
+  TransformOrRemediateHandoff = 5
 }
 
 export const enum SemanticSlotGroup {
@@ -28,8 +30,11 @@ export const enum SemanticApiTerm {
 }
 
 export const enum AnswerCommitmentKind {
-  SemanticTruth = 1,
-  BoundaryFrontier = 2
+  Lookup = 1,
+  Enumerate = 2,
+  Explain = 3,
+  Lineage = 4,
+  Handoff = 5
 }
 
 export interface SemanticReadModeRef {
@@ -61,14 +66,20 @@ const READ_MODES = {
 } as const satisfies Record<SemanticReadMode, SemanticReadModeRef>;
 
 const INQUIRY_EPISODES = {
-  [SemanticInquiryEpisode.CurrentWorldRead]: {
-    kind: SemanticInquiryEpisode.CurrentWorldRead
+  [SemanticInquiryEpisode.OrientAndLocalize]: {
+    kind: SemanticInquiryEpisode.OrientAndLocalize
   },
-  [SemanticInquiryEpisode.BoundaryFrontier]: {
-    kind: SemanticInquiryEpisode.BoundaryFrontier
+  [SemanticInquiryEpisode.BoundedClosureExplanation]: {
+    kind: SemanticInquiryEpisode.BoundedClosureExplanation
   },
-  [SemanticInquiryEpisode.AuthoredOccurrenceRead]: {
-    kind: SemanticInquiryEpisode.AuthoredOccurrenceRead
+  [SemanticInquiryEpisode.GoverningAnchorJump]: {
+    kind: SemanticInquiryEpisode.GoverningAnchorJump
+  },
+  [SemanticInquiryEpisode.InventoryAndAuditSweep]: {
+    kind: SemanticInquiryEpisode.InventoryAndAuditSweep
+  },
+  [SemanticInquiryEpisode.TransformOrRemediateHandoff]: {
+    kind: SemanticInquiryEpisode.TransformOrRemediateHandoff
   }
 } as const satisfies Record<SemanticInquiryEpisode, SemanticInquiryEpisodeRef>;
 
@@ -89,11 +100,20 @@ const API_TERMS = {
 } as const satisfies Record<SemanticApiTerm, SemanticApiTermRef>;
 
 const ANSWER_COMMITMENTS = {
-  [AnswerCommitmentKind.SemanticTruth]: {
-    kind: AnswerCommitmentKind.SemanticTruth
+  [AnswerCommitmentKind.Lookup]: {
+    kind: AnswerCommitmentKind.Lookup
   },
-  [AnswerCommitmentKind.BoundaryFrontier]: {
-    kind: AnswerCommitmentKind.BoundaryFrontier
+  [AnswerCommitmentKind.Enumerate]: {
+    kind: AnswerCommitmentKind.Enumerate
+  },
+  [AnswerCommitmentKind.Explain]: {
+    kind: AnswerCommitmentKind.Explain
+  },
+  [AnswerCommitmentKind.Lineage]: {
+    kind: AnswerCommitmentKind.Lineage
+  },
+  [AnswerCommitmentKind.Handoff]: {
+    kind: AnswerCommitmentKind.Handoff
   }
 } as const satisfies Record<AnswerCommitmentKind, AnswerCommitment>;
 
@@ -119,4 +139,21 @@ export function getAnswerCommitment(
   kind: AnswerCommitmentKind
 ): AnswerCommitment {
   return ANSWER_COMMITMENTS[kind];
+}
+
+export function getAnswerCommitmentForReadMode(
+  readMode: SemanticReadMode
+): AnswerCommitment {
+  switch (readMode) {
+    case SemanticReadMode.Observe:
+      return getAnswerCommitment(AnswerCommitmentKind.Lookup);
+    case SemanticReadMode.Explain:
+      return getAnswerCommitment(AnswerCommitmentKind.Explain);
+    case SemanticReadMode.Locate:
+      return getAnswerCommitment(AnswerCommitmentKind.Lineage);
+    case SemanticReadMode.Audit:
+      return getAnswerCommitment(AnswerCommitmentKind.Enumerate);
+    case SemanticReadMode.Complete:
+      return getAnswerCommitment(AnswerCommitmentKind.Handoff);
+  }
 }

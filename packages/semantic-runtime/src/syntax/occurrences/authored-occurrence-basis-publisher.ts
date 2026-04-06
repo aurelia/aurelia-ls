@@ -5,7 +5,11 @@ import {
   ClaimHomeKind
 } from "../../model/claims/claim-model.js";
 import { ClosureStatusKind } from "../../model/semantic-runtime-handles.js";
-import type { QuestionRoute } from "../../query/framing/question-route.js";
+import {
+  getQuestionRouteAuthoredOccurrenceTarget,
+  getQuestionRouteClaimRoute,
+  type QuestionRoute
+} from "../../query/framing/question-route.js";
 import type { CurrentWorldPublication } from "../../workspace/snapshots/current-world-publication.js";
 import {
   TemplateSourceKind,
@@ -27,7 +31,10 @@ export class AuthoredOccurrenceBasisPublisher {
     questionRoute: QuestionRoute,
     publication: CurrentWorldPublication
   ): AuthoredOccurrencePublicationDecision {
-    if (questionRoute.claimRoute.home !== ClaimHomeKind.AuthoredOccurrenceBasis) {
+    if (
+      getQuestionRouteClaimRoute(questionRoute).home !==
+      ClaimHomeKind.AuthoredOccurrenceBasis
+    ) {
       return new AuthoredOccurrencePublicationDecision(
         ClaimOutcomeKind.NoClaim,
         ClaimQualifierKind.WorldOpen,
@@ -35,7 +42,7 @@ export class AuthoredOccurrenceBasisPublisher {
       );
     }
 
-    const target = questionRoute.authoredOccurrenceTarget;
+    const target = getQuestionRouteAuthoredOccurrenceTarget(questionRoute);
     if (target === undefined) {
       return new AuthoredOccurrencePublicationDecision(
         ClaimOutcomeKind.NoClaim,

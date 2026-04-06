@@ -40,7 +40,7 @@ test("semantic-runtime local read assembles a structured semantic answer", () =>
   const questionRoute = createQuestionRoute(
     claimRoute,
     {
-      inquiryEpisode: SemanticInquiryEpisode.CurrentWorldRead,
+      inquiryEpisode: SemanticInquiryEpisode.BoundedClosureExplanation,
       readMode: SemanticReadMode.Explain
     }
   );
@@ -99,7 +99,7 @@ test("semantic-runtime local read assembles a structured semantic answer", () =>
     closureStatusPressure: ClosureStatusKind.Closed,
     likelyReentryArea: ReentryAreaKind.VerificationBurden,
     expected: {
-      answerCommitment: AnswerCommitmentKind.SemanticTruth,
+      answerCommitment: AnswerCommitmentKind.Explain,
       outcome: ClaimOutcomeKind.Present,
       qualification: ClaimQualifierKind.None,
       closureStatus: ClosureStatusKind.Closed,
@@ -112,13 +112,13 @@ test("semantic-runtime local read assembles a structured semantic answer", () =>
     actual: {
       answerCommitment: answer.answerCommitment.kind,
       outcome: answer.outcome,
-      qualification: answer.qualification,
+      qualification: answer.qualificationRefs[0]?.kind,
       closureStatus: answer.closureStatus,
-      publishedClaimCount: answer.currentWorldSummary?.publishedClaimCount,
-      recognizedResourceCount: answer.currentWorldSummary?.recognizedResourceCount,
-      admittedResourceCount: answer.currentWorldSummary?.admittedResourceCount,
-      activeResourceCount: answer.currentWorldSummary?.activeResourceCount,
-      underclosedResourceCount: answer.currentWorldSummary?.underclosedResourceCount
+      publishedClaimCount: answer.payload?.currentWorldSummary?.publishedClaimCount,
+      recognizedResourceCount: answer.payload?.currentWorldSummary?.recognizedResourceCount,
+      admittedResourceCount: answer.payload?.currentWorldSummary?.admittedResourceCount,
+      activeResourceCount: answer.payload?.currentWorldSummary?.activeResourceCount,
+      underclosedResourceCount: answer.payload?.currentWorldSummary?.underclosedResourceCount
     },
     traceCapture: {
       request: traceCaptureRequest,
@@ -203,7 +203,7 @@ test("substrate and evaluator read stay publication-first and snapshot-first", (
   const questionRoute = createQuestionRoute(
     createClaimRoute(ClaimHomeKind.CurrentWorldSummary),
     {
-      inquiryEpisode: SemanticInquiryEpisode.CurrentWorldRead,
+      inquiryEpisode: SemanticInquiryEpisode.OrientAndLocalize,
       readMode: SemanticReadMode.Observe
     }
   );
@@ -238,7 +238,9 @@ test("substrate and evaluator read stay publication-first and snapshot-first", (
   );
   const substrateRead = substrateReader.readSubstrateClaim(
     {
-      claimRoute: questionRoute.claimRoute,
+      lookupTarget: {
+        claimRoute: questionRoute.focusRef.claimRoute
+      },
       worldFrameHandle: handoff.worldFrameHandle
     }
   );
@@ -278,10 +280,10 @@ test("substrate and evaluator read stay publication-first and snapshot-first", (
       closureStatus: evaluation.closureStatus,
       claimHome: evaluation.claimRef.home,
       worldVersion: evaluation.claimRef.worldVersion,
-      recognizedResourceCount: evaluation.currentWorldSummary?.recognizedResourceCount,
-      admittedResourceCount: evaluation.currentWorldSummary?.admittedResourceCount,
-      activeResourceCount: evaluation.currentWorldSummary?.activeResourceCount,
-      underclosedResourceCount: evaluation.currentWorldSummary?.underclosedResourceCount
+      recognizedResourceCount: evaluation.payload?.currentWorldSummary?.recognizedResourceCount,
+      admittedResourceCount: evaluation.payload?.currentWorldSummary?.admittedResourceCount,
+      activeResourceCount: evaluation.payload?.currentWorldSummary?.activeResourceCount,
+      underclosedResourceCount: evaluation.payload?.currentWorldSummary?.underclosedResourceCount
     },
     traceCapture: {
       request: { worldFrame, questionRoute },
@@ -290,7 +292,7 @@ test("substrate and evaluator read stay publication-first and snapshot-first", (
   });
 
   assertProofRecord(proofRecord);
-  assert.equal(evaluation.currentWorldSummary?.publishedClaimCount, 3);
-  assert.equal(evaluation.currentWorldSummary?.consultedPackageCount, 2);
-  assert.equal(evaluation.currentWorldSummary?.recognizedResourceCount, 0);
+  assert.equal(evaluation.payload?.currentWorldSummary?.publishedClaimCount, 3);
+  assert.equal(evaluation.payload?.currentWorldSummary?.consultedPackageCount, 2);
+  assert.equal(evaluation.payload?.currentWorldSummary?.recognizedResourceCount, 0);
 });

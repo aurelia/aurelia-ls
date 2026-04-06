@@ -48,7 +48,7 @@ test("semantic-runtime contextual typed readout resolves live checker evidence",
   const questionRoute = createQuestionRoute(
     createClaimRoute(ClaimHomeKind.CurrentWorldSummary),
     {
-      inquiryEpisode: SemanticInquiryEpisode.CurrentWorldRead,
+      inquiryEpisode: SemanticInquiryEpisode.BoundedClosureExplanation,
       readMode: SemanticReadMode.Explain
     }
   );
@@ -171,7 +171,7 @@ test("semantic-runtime member completion routes outward through the candidate-di
   const questionRoute = createQuestionRoute(
     createClaimRoute(ClaimHomeKind.CurrentWorldSummary),
     {
-      inquiryEpisode: SemanticInquiryEpisode.CurrentWorldRead,
+      inquiryEpisode: SemanticInquiryEpisode.TransformOrRemediateHandoff,
       readMode: SemanticReadMode.Complete
     }
   );

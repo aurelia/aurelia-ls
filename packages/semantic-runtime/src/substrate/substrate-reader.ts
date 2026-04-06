@@ -3,7 +3,11 @@ import type { QuestionRoute } from "../query/framing/question-route.js";
 import type { WorldFrameHandle } from "../workspace/handoff/current-world-context.js";
 import type { TypeScriptWorldConstruction } from "../workspace/registration/typescript-world-construction.js";
 import type { PublishedSubstrateClaim, SubstrateClaimRef } from "./claims/substrate-claim-ref.js";
-import { ClaimHomeIndex } from "./indexes/claim-home-index.js";
+import {
+  ClaimHomeIndex,
+  createSubstrateLookupTarget,
+  type SubstrateLookupTarget
+} from "./indexes/claim-home-index.js";
 import type { LineageRef } from "./lineage/lineage-ref.js";
 import {
   EMPTY_SUBSTRATE_STORAGE,
@@ -11,9 +15,11 @@ import {
 } from "./storage/substrate-storage.js";
 
 export interface SubstrateLookupPlan {
-  readonly questionRoute?: QuestionRoute;
-  readonly claimRoute?: ClaimRouteRef;
+  readonly lookupTarget: SubstrateLookupTarget;
   readonly worldFrameHandle: WorldFrameHandle;
+  readonly readContext?: {
+    readonly questionRoute?: QuestionRoute;
+  };
 }
 
 export interface SubstrateReadResult {
@@ -38,16 +44,11 @@ export class SubstrateReader {
   }
 
   public readSubstrateClaim(plan: SubstrateLookupPlan): SubstrateReadResult {
-    const claimRoute = plan.questionRoute?.claimRoute ?? plan.claimRoute;
-    if (claimRoute === undefined) {
-      throw new Error("Substrate lookup requires either questionRoute or claimRoute.");
-    }
-
     const claimRef = this.#claimHomeIndex.resolveClaimRef(
-      plan.questionRoute ?? { claimRoute },
+      plan.lookupTarget,
       plan.worldFrameHandle
     );
-    const questionRoute = plan.questionRoute;
+    const questionRoute = plan.readContext?.questionRoute;
 
     return {
       claimRef,
@@ -68,4 +69,29 @@ export class SubstrateReader {
   public lookupLineage(ref: SubstrateClaimRef): LineageRef | undefined {
     return this.#storage.readLineage(ref) ?? this.#worldConstruction?.readLineage(ref);
   }
+}
+
+export function createSubstrateLookupPlan(
+  claimRoute: ClaimRouteRef,
+  worldFrameHandle: WorldFrameHandle
+): SubstrateLookupPlan {
+  return {
+    lookupTarget: {
+      claimRoute
+    },
+    worldFrameHandle
+  };
+}
+
+export function createQuestionRouteSubstrateLookupPlan(
+  questionRoute: QuestionRoute,
+  worldFrameHandle: WorldFrameHandle
+): SubstrateLookupPlan {
+  return {
+    lookupTarget: createSubstrateLookupTarget(questionRoute),
+    worldFrameHandle,
+    readContext: {
+      questionRoute
+    }
+  };
 }

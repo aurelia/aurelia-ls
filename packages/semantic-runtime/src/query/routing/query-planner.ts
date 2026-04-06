@@ -1,6 +1,5 @@
 import {
-  getAnswerCommitment,
-  AnswerCommitmentKind,
+  getAnswerCommitmentForReadMode,
   type AnswerCommitment
 } from "../../model/semantic-api/semantic-api-model.js";
 import type { QuestionRoute } from "../framing/question-route.js";
@@ -19,16 +18,15 @@ export interface SemanticQueryPlan {
 export class SemanticQueryPlanner {
   public plan(query: SemanticQuery): SemanticQueryPlan {
     const normalizedWorldFrame = normalizeWorldFrame(query.worldFrame);
-    const answerCommitmentKind = query.questionRoute.boundaryRoute === undefined
-      ? AnswerCommitmentKind.SemanticTruth
-      : AnswerCommitmentKind.BoundaryFrontier;
 
     return {
       query: {
         questionRoute: query.questionRoute,
         worldFrame: normalizedWorldFrame
       },
-      answerCommitment: getAnswerCommitment(answerCommitmentKind)
+      answerCommitment: getAnswerCommitmentForReadMode(
+        query.questionRoute.readMode
+      )
     };
   }
 }

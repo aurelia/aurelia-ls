@@ -7,6 +7,7 @@ import {
 } from "../../model/semantic-runtime-handles.js";
 import type { PublishedEvaluatorResult } from "../../evaluators/kernel/evaluator-read-port.js";
 import type { RuntimeWorldContextHandoff } from "../handoff/world-context-handoff.js";
+import { getQuestionRouteClaimRoute } from "../../query/framing/question-route.js";
 
 export interface TrustBundle {
   readonly closureStatus: ClosureStatusKind;
@@ -24,7 +25,7 @@ export function createTrustBundle(
   return {
     closureStatus: evaluation?.closureStatus ?? boundaryOutcome?.closureStatus ?? ClosureStatusKind.Open,
     worldVersion: worldContext.worldFrameHandle.version,
-    claimHome: worldContext.questionRoute.claimRoute.home,
+    claimHome: getQuestionRouteClaimRoute(worldContext.questionRoute).home,
     boundaryRoute: boundaryOutcome?.route,
     governingSurface: evaluation?.surface ?? SemanticRuntimeSurfaceKind.BoundaryRouter
   };

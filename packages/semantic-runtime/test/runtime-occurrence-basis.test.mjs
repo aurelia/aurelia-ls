@@ -63,7 +63,7 @@ test("semantic-runtime publishes an authored occurrence basis from a template so
   const currentWorldRoute = createQuestionRoute(
     createClaimRoute(ClaimHomeKind.CurrentWorldSummary),
     {
-      inquiryEpisode: SemanticInquiryEpisode.CurrentWorldRead,
+      inquiryEpisode: SemanticInquiryEpisode.BoundedClosureExplanation,
       readMode: SemanticReadMode.Explain
     }
   );
@@ -73,7 +73,7 @@ test("semantic-runtime publishes an authored occurrence basis from a template so
       worldFrame
     }
   );
-  const appRoot = currentWorldAnswer.currentWorldPublication?.resources.find(
+  const appRoot = currentWorldAnswer.payload?.currentWorldPublication?.resources.find(
     (resource) => resource.resourceName === "app-root"
   );
   const templateSourceRef = appRoot?.templateAssociation?.templateSourceRef;
@@ -82,7 +82,7 @@ test("semantic-runtime publishes an authored occurrence basis from a template so
   const questionRoute = createQuestionRoute(
     createClaimRoute(ClaimHomeKind.AuthoredOccurrenceBasis),
     {
-      inquiryEpisode: SemanticInquiryEpisode.AuthoredOccurrenceRead,
+      inquiryEpisode: SemanticInquiryEpisode.GoverningAnchorJump,
       readMode: SemanticReadMode.Explain,
       authoredOccurrenceTarget: new AuthoredOccurrenceTarget(
         templateSourceRef,
@@ -121,14 +121,14 @@ test("semantic-runtime publishes an authored occurrence basis from a template so
       offset
     },
     actual: {
-      qualification: answer.qualification,
+      qualification: answer.qualificationRefs[0]?.kind,
       closureStatus: answer.closureStatus,
-      templateSourceRef: answer.authoredOccurrenceBasis?.templateSourceRef,
-      ownerResourceName: answer.authoredOccurrenceBasis?.ownerResourceName,
-      carrierKind: answer.authoredOccurrenceBasis?.carrierKind,
-      viewStrategy: answer.authoredOccurrenceBasis?.viewStrategy,
-      sourceKind: answer.authoredOccurrenceBasis?.sourceKind,
-      offset: answer.authoredOccurrenceBasis?.offset
+      templateSourceRef: answer.payload?.authoredOccurrenceBasis?.templateSourceRef,
+      ownerResourceName: answer.payload?.authoredOccurrenceBasis?.ownerResourceName,
+      carrierKind: answer.payload?.authoredOccurrenceBasis?.carrierKind,
+      viewStrategy: answer.payload?.authoredOccurrenceBasis?.viewStrategy,
+      sourceKind: answer.payload?.authoredOccurrenceBasis?.sourceKind,
+      offset: answer.payload?.authoredOccurrenceBasis?.offset
     },
     traceCapture: {
       request: { questionRoute, worldFrame },
@@ -142,8 +142,8 @@ test("semantic-runtime publishes an authored occurrence basis from a template so
   });
 
   assertProofRecord(proofRecord);
-  assert.match(answer.authoredOccurrenceBasis?.occurrenceRef ?? "", /occurrence:/);
-  assert.equal(answer.currentWorldPublication?.associatedTemplateCount, 4);
+  assert.match(answer.payload?.authoredOccurrenceBasis?.occurrenceRef ?? "", /occurrence:/);
+  assert.equal(answer.payload?.currentWorldPublication?.associatedTemplateCount, 4);
   assert.deepEqual(
     proofRecord.traceCapture.events.map((event) => event.kind),
     [
@@ -155,3 +155,4 @@ test("semantic-runtime publishes an authored occurrence basis from a template so
     ]
   );
 });
+

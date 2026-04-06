@@ -102,7 +102,7 @@ test("current-world handoff publishes a file-backed consulted world and resource
   const questionRoute = createQuestionRoute(
     createClaimRoute(ClaimHomeKind.CurrentWorldSummary),
     {
-      inquiryEpisode: SemanticInquiryEpisode.CurrentWorldRead,
+      inquiryEpisode: SemanticInquiryEpisode.BoundedClosureExplanation,
       readMode: SemanticReadMode.Explain
     }
   );
@@ -205,7 +205,7 @@ test("semantic-runtime publishes current-world resource admission from a curated
   const questionRoute = createQuestionRoute(
     createClaimRoute(ClaimHomeKind.CurrentWorldSummary),
     {
-      inquiryEpisode: SemanticInquiryEpisode.CurrentWorldRead,
+      inquiryEpisode: SemanticInquiryEpisode.BoundedClosureExplanation,
       readMode: SemanticReadMode.Explain
     }
   );
@@ -253,19 +253,19 @@ test("semantic-runtime publishes current-world resource admission from a curated
       frontier: WorldParticipationFrontierKind.CurrentWorldSensitive
     },
     actual: {
-      recognizedResourceCount: answer.currentWorldSummary?.recognizedResourceCount,
-      admittedResourceCount: answer.currentWorldSummary?.admittedResourceCount,
-      activeResourceCount: answer.currentWorldSummary?.activeResourceCount,
-      underclosedResourceCount: answer.currentWorldSummary?.underclosedResourceCount,
-      activeExtensionCount: answer.currentWorldSummary?.activeExtensionCount,
-      admittedGeneratedVocabularyCount: answer.currentWorldSummary?.admittedGeneratedVocabularyCount,
-      underclosedGeneratedVocabularyCount: answer.currentWorldSummary?.underclosedGeneratedVocabularyCount,
-      associatedTemplateCount: answer.currentWorldSummary?.associatedTemplateCount,
-      explicitNoViewCount: answer.currentWorldSummary?.explicitNoViewCount,
-      underclosedTemplateAssociationCount: answer.currentWorldSummary?.underclosedTemplateAssociationCount,
-      resourceNames: answer.currentWorldPublication?.resources.map((resource) => resource.resourceName),
-      packageName: answer.currentWorldPublication?.consultedPackage.packageName,
-      frontier: answer.currentWorldPublication?.frontier
+      recognizedResourceCount: answer.payload?.currentWorldSummary?.recognizedResourceCount,
+      admittedResourceCount: answer.payload?.currentWorldSummary?.admittedResourceCount,
+      activeResourceCount: answer.payload?.currentWorldSummary?.activeResourceCount,
+      underclosedResourceCount: answer.payload?.currentWorldSummary?.underclosedResourceCount,
+      activeExtensionCount: answer.payload?.currentWorldSummary?.activeExtensionCount,
+      admittedGeneratedVocabularyCount: answer.payload?.currentWorldSummary?.admittedGeneratedVocabularyCount,
+      underclosedGeneratedVocabularyCount: answer.payload?.currentWorldSummary?.underclosedGeneratedVocabularyCount,
+      associatedTemplateCount: answer.payload?.currentWorldSummary?.associatedTemplateCount,
+      explicitNoViewCount: answer.payload?.currentWorldSummary?.explicitNoViewCount,
+      underclosedTemplateAssociationCount: answer.payload?.currentWorldSummary?.underclosedTemplateAssociationCount,
+      resourceNames: answer.payload?.currentWorldPublication?.resources.map((resource) => resource.resourceName),
+      packageName: answer.payload?.currentWorldPublication?.consultedPackage.packageName,
+      frontier: answer.payload?.currentWorldPublication?.frontier
     },
     traceCapture: {
       request: { questionRoute, worldFrame },
@@ -279,7 +279,7 @@ test("semantic-runtime publishes current-world resource admission from a curated
   });
 
   assertProofRecord(proofRecord);
-  assert.equal(answer.currentWorldPublication?.resources.length, 5);
+  assert.equal(answer.payload?.currentWorldPublication?.resources.length, 5);
   assert.deepEqual(
     proofRecord.traceCapture.events.map((event) => event.kind),
     [
@@ -296,7 +296,7 @@ test("semantic-runtime keeps declaration-world publication qualified when recogn
   const questionRoute = createQuestionRoute(
     createClaimRoute(ClaimHomeKind.CurrentWorldSummary),
     {
-      inquiryEpisode: SemanticInquiryEpisode.CurrentWorldRead,
+      inquiryEpisode: SemanticInquiryEpisode.BoundedClosureExplanation,
       readMode: SemanticReadMode.Explain
     }
   );
@@ -345,18 +345,18 @@ test("semantic-runtime keeps declaration-world publication qualified when recogn
       resourceNames: ["resolved-panel"]
     },
     actual: {
-      qualification: answer.qualification,
+      qualification: answer.qualificationRefs[0]?.kind,
       closureStatus: answer.closureStatus,
-      frontier: answer.currentWorldPublication?.frontier,
-      recognizedResourceCount: answer.currentWorldSummary?.recognizedResourceCount,
-      underclosedResourceCount: answer.currentWorldSummary?.underclosedResourceCount,
-      activeExtensionCount: answer.currentWorldSummary?.activeExtensionCount,
-      admittedGeneratedVocabularyCount: answer.currentWorldSummary?.admittedGeneratedVocabularyCount,
-      underclosedGeneratedVocabularyCount: answer.currentWorldSummary?.underclosedGeneratedVocabularyCount,
-      associatedTemplateCount: answer.currentWorldSummary?.associatedTemplateCount,
-      explicitNoViewCount: answer.currentWorldSummary?.explicitNoViewCount,
-      underclosedTemplateAssociationCount: answer.currentWorldSummary?.underclosedTemplateAssociationCount,
-      resourceNames: answer.currentWorldPublication?.resources.map((resource) => resource.resourceName)
+      frontier: answer.payload?.currentWorldPublication?.frontier,
+      recognizedResourceCount: answer.payload?.currentWorldSummary?.recognizedResourceCount,
+      underclosedResourceCount: answer.payload?.currentWorldSummary?.underclosedResourceCount,
+      activeExtensionCount: answer.payload?.currentWorldSummary?.activeExtensionCount,
+      admittedGeneratedVocabularyCount: answer.payload?.currentWorldSummary?.admittedGeneratedVocabularyCount,
+      underclosedGeneratedVocabularyCount: answer.payload?.currentWorldSummary?.underclosedGeneratedVocabularyCount,
+      associatedTemplateCount: answer.payload?.currentWorldSummary?.associatedTemplateCount,
+      explicitNoViewCount: answer.payload?.currentWorldSummary?.explicitNoViewCount,
+      underclosedTemplateAssociationCount: answer.payload?.currentWorldSummary?.underclosedTemplateAssociationCount,
+      resourceNames: answer.payload?.currentWorldPublication?.resources.map((resource) => resource.resourceName)
     },
     traceCapture: {
       request: { questionRoute, worldFrame },
@@ -370,14 +370,14 @@ test("semantic-runtime keeps declaration-world publication qualified when recogn
   });
 
   assertProofRecord(proofRecord);
-  assert.equal(answer.currentWorldPublication?.underclosedResourceCount, 1);
+  assert.equal(answer.payload?.currentWorldPublication?.underclosedResourceCount, 1);
 });
 
 test("semantic-runtime keeps declaration-world publication open when only underclosed candidates are present", () => {
   const questionRoute = createQuestionRoute(
     createClaimRoute(ClaimHomeKind.CurrentWorldSummary),
     {
-      inquiryEpisode: SemanticInquiryEpisode.CurrentWorldRead,
+      inquiryEpisode: SemanticInquiryEpisode.BoundedClosureExplanation,
       readMode: SemanticReadMode.Explain
     }
   );
@@ -426,18 +426,18 @@ test("semantic-runtime keeps declaration-world publication open when only underc
       resourceNames: []
     },
     actual: {
-      qualification: answer.qualification,
+      qualification: answer.qualificationRefs[0]?.kind,
       closureStatus: answer.closureStatus,
-      frontier: answer.currentWorldPublication?.frontier,
-      recognizedResourceCount: answer.currentWorldSummary?.recognizedResourceCount,
-      underclosedResourceCount: answer.currentWorldSummary?.underclosedResourceCount,
-      activeExtensionCount: answer.currentWorldSummary?.activeExtensionCount,
-      admittedGeneratedVocabularyCount: answer.currentWorldSummary?.admittedGeneratedVocabularyCount,
-      underclosedGeneratedVocabularyCount: answer.currentWorldSummary?.underclosedGeneratedVocabularyCount,
-      associatedTemplateCount: answer.currentWorldSummary?.associatedTemplateCount,
-      explicitNoViewCount: answer.currentWorldSummary?.explicitNoViewCount,
-      underclosedTemplateAssociationCount: answer.currentWorldSummary?.underclosedTemplateAssociationCount,
-      resourceNames: answer.currentWorldPublication?.resources.map((resource) => resource.resourceName)
+      frontier: answer.payload?.currentWorldPublication?.frontier,
+      recognizedResourceCount: answer.payload?.currentWorldSummary?.recognizedResourceCount,
+      underclosedResourceCount: answer.payload?.currentWorldSummary?.underclosedResourceCount,
+      activeExtensionCount: answer.payload?.currentWorldSummary?.activeExtensionCount,
+      admittedGeneratedVocabularyCount: answer.payload?.currentWorldSummary?.admittedGeneratedVocabularyCount,
+      underclosedGeneratedVocabularyCount: answer.payload?.currentWorldSummary?.underclosedGeneratedVocabularyCount,
+      associatedTemplateCount: answer.payload?.currentWorldSummary?.associatedTemplateCount,
+      explicitNoViewCount: answer.payload?.currentWorldSummary?.explicitNoViewCount,
+      underclosedTemplateAssociationCount: answer.payload?.currentWorldSummary?.underclosedTemplateAssociationCount,
+      resourceNames: answer.payload?.currentWorldPublication?.resources.map((resource) => resource.resourceName)
     },
     traceCapture: {
       request: { questionRoute, worldFrame },
@@ -451,15 +451,15 @@ test("semantic-runtime keeps declaration-world publication open when only underc
   });
 
   assertProofRecord(proofRecord);
-  assert.equal(answer.currentWorldPublication?.resources.length, 0);
-  assert.equal(answer.currentWorldPublication?.underclosedResourceCount, 1);
+  assert.equal(answer.payload?.currentWorldPublication?.resources.length, 0);
+  assert.equal(answer.payload?.currentWorldPublication?.underclosedResourceCount, 1);
 });
 
 test("current-world publication stays qualified when one template association remains underclosed", () => {
   const questionRoute = createQuestionRoute(
     createClaimRoute(ClaimHomeKind.CurrentWorldSummary),
     {
-      inquiryEpisode: SemanticInquiryEpisode.CurrentWorldRead,
+      inquiryEpisode: SemanticInquiryEpisode.BoundedClosureExplanation,
       readMode: SemanticReadMode.Explain
     }
   );
@@ -503,14 +503,14 @@ test("current-world publication stays qualified when one template association re
       resourceNames: ["maybe-inline", "resolved-view"]
     },
     actual: {
-      qualification: answer.qualification,
+      qualification: answer.qualificationRefs[0]?.kind,
       closureStatus: answer.closureStatus,
-      frontier: answer.currentWorldPublication?.frontier,
-      recognizedResourceCount: answer.currentWorldSummary?.recognizedResourceCount,
-      associatedTemplateCount: answer.currentWorldSummary?.associatedTemplateCount,
-      explicitNoViewCount: answer.currentWorldSummary?.explicitNoViewCount,
-      underclosedTemplateAssociationCount: answer.currentWorldSummary?.underclosedTemplateAssociationCount,
-      resourceNames: answer.currentWorldPublication?.resources.map((resource) => resource.resourceName)
+      frontier: answer.payload?.currentWorldPublication?.frontier,
+      recognizedResourceCount: answer.payload?.currentWorldSummary?.recognizedResourceCount,
+      associatedTemplateCount: answer.payload?.currentWorldSummary?.associatedTemplateCount,
+      explicitNoViewCount: answer.payload?.currentWorldSummary?.explicitNoViewCount,
+      underclosedTemplateAssociationCount: answer.payload?.currentWorldSummary?.underclosedTemplateAssociationCount,
+      resourceNames: answer.payload?.currentWorldPublication?.resources.map((resource) => resource.resourceName)
     },
     traceCapture: {
       request: { questionRoute, worldFrame },
@@ -524,14 +524,14 @@ test("current-world publication stays qualified when one template association re
   });
 
   assertProofRecord(proofRecord);
-  assert.equal(answer.currentWorldPublication?.underclosedTemplateAssociationCount, 1);
+  assert.equal(answer.payload?.currentWorldPublication?.underclosedTemplateAssociationCount, 1);
 });
 
 test("current-world publication admits active extension-generated vocabulary from a curated configuration fixture", () => {
   const questionRoute = createQuestionRoute(
     createClaimRoute(ClaimHomeKind.CurrentWorldSummary),
     {
-      inquiryEpisode: SemanticInquiryEpisode.CurrentWorldRead,
+      inquiryEpisode: SemanticInquiryEpisode.BoundedClosureExplanation,
       readMode: SemanticReadMode.Explain
     }
   );
@@ -620,7 +620,7 @@ test("semantic-runtime keeps extension-generated vocabulary qualified when build
   const questionRoute = createQuestionRoute(
     createClaimRoute(ClaimHomeKind.CurrentWorldSummary),
     {
-      inquiryEpisode: SemanticInquiryEpisode.CurrentWorldRead,
+      inquiryEpisode: SemanticInquiryEpisode.BoundedClosureExplanation,
       readMode: SemanticReadMode.Explain
     }
   );
@@ -667,16 +667,16 @@ test("semantic-runtime keeps extension-generated vocabulary qualified when build
       packageName: "@fixtures/extension-world-qualified"
     },
     actual: {
-      qualification: answer.qualification,
+      qualification: answer.qualificationRefs[0]?.kind,
       closureStatus: answer.closureStatus,
-      frontier: answer.currentWorldPublication?.frontier,
-      activeExtensionCount: answer.currentWorldSummary?.activeExtensionCount,
-      admittedGeneratedVocabularyCount: answer.currentWorldSummary?.admittedGeneratedVocabularyCount,
-      underclosedGeneratedVocabularyCount: answer.currentWorldSummary?.underclosedGeneratedVocabularyCount,
-      associatedTemplateCount: answer.currentWorldSummary?.associatedTemplateCount,
-      explicitNoViewCount: answer.currentWorldSummary?.explicitNoViewCount,
-      underclosedTemplateAssociationCount: answer.currentWorldSummary?.underclosedTemplateAssociationCount,
-      packageName: answer.currentWorldPublication?.consultedPackage.packageName
+      frontier: answer.payload?.currentWorldPublication?.frontier,
+      activeExtensionCount: answer.payload?.currentWorldSummary?.activeExtensionCount,
+      admittedGeneratedVocabularyCount: answer.payload?.currentWorldSummary?.admittedGeneratedVocabularyCount,
+      underclosedGeneratedVocabularyCount: answer.payload?.currentWorldSummary?.underclosedGeneratedVocabularyCount,
+      associatedTemplateCount: answer.payload?.currentWorldSummary?.associatedTemplateCount,
+      explicitNoViewCount: answer.payload?.currentWorldSummary?.explicitNoViewCount,
+      underclosedTemplateAssociationCount: answer.payload?.currentWorldSummary?.underclosedTemplateAssociationCount,
+      packageName: answer.payload?.currentWorldPublication?.consultedPackage.packageName
     },
     traceCapture: {
       request: { questionRoute, worldFrame },
@@ -690,16 +690,16 @@ test("semantic-runtime keeps extension-generated vocabulary qualified when build
   });
 
   assertProofRecord(proofRecord);
-  assert.equal(answer.currentWorldPublication?.activeExtensions.length, 1);
-  assert.equal(answer.currentWorldPublication?.generatedVocabulary.length, 0);
-  assert.equal(answer.currentWorldPublication?.underclosedExtensions.length, 1);
+  assert.equal(answer.payload?.currentWorldPublication?.activeExtensions.length, 1);
+  assert.equal(answer.payload?.currentWorldPublication?.generatedVocabulary.length, 0);
+  assert.equal(answer.payload?.currentWorldPublication?.underclosedExtensions.length, 1);
 });
 
 test("visible but unregistered extension configurations do not widen current-world closure", () => {
   const questionRoute = createQuestionRoute(
     createClaimRoute(ClaimHomeKind.CurrentWorldSummary),
     {
-      inquiryEpisode: SemanticInquiryEpisode.CurrentWorldRead,
+      inquiryEpisode: SemanticInquiryEpisode.BoundedClosureExplanation,
       readMode: SemanticReadMode.Explain
     }
   );
@@ -746,16 +746,16 @@ test("visible but unregistered extension configurations do not widen current-wor
       packageName: "@fixtures/extension-world-inactive"
     },
     actual: {
-      qualification: answer.qualification,
+      qualification: answer.qualificationRefs[0]?.kind,
       closureStatus: answer.closureStatus,
-      frontier: answer.currentWorldPublication?.frontier,
-      activeExtensionCount: answer.currentWorldSummary?.activeExtensionCount,
-      admittedGeneratedVocabularyCount: answer.currentWorldSummary?.admittedGeneratedVocabularyCount,
-      underclosedGeneratedVocabularyCount: answer.currentWorldSummary?.underclosedGeneratedVocabularyCount,
-      associatedTemplateCount: answer.currentWorldSummary?.associatedTemplateCount,
-      explicitNoViewCount: answer.currentWorldSummary?.explicitNoViewCount,
-      underclosedTemplateAssociationCount: answer.currentWorldSummary?.underclosedTemplateAssociationCount,
-      packageName: answer.currentWorldPublication?.consultedPackage.packageName
+      frontier: answer.payload?.currentWorldPublication?.frontier,
+      activeExtensionCount: answer.payload?.currentWorldSummary?.activeExtensionCount,
+      admittedGeneratedVocabularyCount: answer.payload?.currentWorldSummary?.admittedGeneratedVocabularyCount,
+      underclosedGeneratedVocabularyCount: answer.payload?.currentWorldSummary?.underclosedGeneratedVocabularyCount,
+      associatedTemplateCount: answer.payload?.currentWorldSummary?.associatedTemplateCount,
+      explicitNoViewCount: answer.payload?.currentWorldSummary?.explicitNoViewCount,
+      underclosedTemplateAssociationCount: answer.payload?.currentWorldSummary?.underclosedTemplateAssociationCount,
+      packageName: answer.payload?.currentWorldPublication?.consultedPackage.packageName
     },
     traceCapture: {
       request: { questionRoute, worldFrame },
@@ -769,7 +769,8 @@ test("visible but unregistered extension configurations do not widen current-wor
   });
 
   assertProofRecord(proofRecord);
-  assert.equal(answer.currentWorldPublication?.activeExtensions.length, 0);
-  assert.equal(answer.currentWorldPublication?.generatedVocabulary.length, 0);
-  assert.equal(answer.currentWorldPublication?.underclosedExtensions.length, 0);
+  assert.equal(answer.payload?.currentWorldPublication?.activeExtensions.length, 0);
+  assert.equal(answer.payload?.currentWorldPublication?.generatedVocabulary.length, 0);
+  assert.equal(answer.payload?.currentWorldPublication?.underclosedExtensions.length, 0);
 });
+

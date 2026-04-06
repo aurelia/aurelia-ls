@@ -1,16 +1,21 @@
 import type { BoundaryOutcome } from "../boundaries/boundary-router.js";
 import type { ClosureStatusKind } from "../model/semantic-runtime-handles.js";
-import type { ClaimOutcomeKind, ClaimQualifierKind } from "../model/claims/claim-model.js";
+import type {
+  ClaimBoundary,
+  ClaimOutcomeKind,
+  ClaimQualifier
+} from "../model/claims/claim-model.js";
 import type { AnswerCommitment } from "../model/semantic-api/semantic-api-model.js";
 import type { SemanticRuntimeSurfaceKind } from "../model/semantic-runtime-handles.js";
 import type { QuestionRoute } from "../query/framing/question-route.js";
 import type { WorldFrame } from "../query/framing/world-frame.js";
 import type { RuntimeInvalidationPlan } from "../runtime/invalidation/invalidation-coordinator.js";
 import type { WorldFrameHandle } from "../runtime/handoff/world-context-handoff.js";
-import type { CurrentWorldSummaryValue, SubstrateClaimRef } from "../substrate/claims/substrate-claim-ref.js";
+import type {
+  SemanticClaimPayload,
+  SubstrateClaimRef
+} from "../substrate/claims/substrate-claim-ref.js";
 import type { LineageRef } from "../substrate/lineage/lineage-ref.js";
-import type { CurrentWorldPublication } from "../workspace/snapshots/current-world-publication.js";
-import type { AuthoredOccurrenceBasis } from "../syntax/occurrences/authored-occurrence-basis.js";
 
 export interface SemanticProvenance {
   readonly surface: SemanticRuntimeSurfaceKind;
@@ -30,12 +35,11 @@ export interface SemanticAnswer {
   readonly worldFrame: WorldFrame;
   readonly answerCommitment: AnswerCommitment;
   readonly outcome: ClaimOutcomeKind;
-  readonly qualification: ClaimQualifierKind;
+  readonly qualificationRefs: readonly ClaimQualifier[];
+  readonly boundaryRefs: readonly ClaimBoundary[];
   readonly closureStatus: ClosureStatusKind;
   readonly provenance: SemanticProvenance;
   readonly deltaBasis: SemanticDelta;
   readonly boundaryOutcome?: BoundaryOutcome;
-  readonly currentWorldSummary?: CurrentWorldSummaryValue;
-  readonly currentWorldPublication?: CurrentWorldPublication;
-  readonly authoredOccurrenceBasis?: AuthoredOccurrenceBasis;
+  readonly payload?: SemanticClaimPayload;
 }

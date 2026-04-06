@@ -73,7 +73,7 @@ test("semantic-runtime ingress routes a deferred owner with structured proof and
       boundaryRoute: answer.boundaryOutcome.route,
       closureStatus: answer.boundaryOutcome.closureStatus,
       outcome: answer.outcome,
-      qualification: answer.qualification
+      qualification: answer.qualificationRefs[0]?.kind
     },
     traceCapture: {
       request: traceCaptureRequest,

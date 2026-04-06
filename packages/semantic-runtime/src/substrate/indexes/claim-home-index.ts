@@ -1,27 +1,44 @@
 import { ClaimHomeKind } from "../../model/claims/claim-model.js";
 import type { ClaimRouteRef } from "../../model/claims/claim-model.js";
-import type { QuestionRoute } from "../../query/framing/question-route.js";
+import {
+  getQuestionRouteAuthoredOccurrenceTarget,
+  getQuestionRouteClaimRoute,
+  type QuestionRoute
+} from "../../query/framing/question-route.js";
 import type { WorldFrameHandle } from "../../workspace/handoff/current-world-context.js";
 import { createSubstrateClaimRef, type SubstrateClaimRef } from "../claims/substrate-claim-ref.js";
 
-type ClaimIdentityRoute = Pick<QuestionRoute, "claimRoute" | "authoredOccurrenceTarget"> |
-  { readonly claimRoute: ClaimRouteRef };
+export interface SubstrateLookupTarget {
+  readonly claimRoute: ClaimRouteRef;
+  readonly localIdentity?: string;
+}
+
+export function createSubstrateLookupTarget(
+  questionRoute: QuestionRoute
+): SubstrateLookupTarget {
+  const claimRoute = getQuestionRouteClaimRoute(questionRoute);
+  const authoredOccurrenceTarget = getQuestionRouteAuthoredOccurrenceTarget(
+    questionRoute
+  );
+
+  return {
+    claimRoute,
+    localIdentity: claimRoute.home === ClaimHomeKind.AuthoredOccurrenceBasis &&
+      authoredOccurrenceTarget !== undefined
+      ? `${authoredOccurrenceTarget.templateSourceRef}:${authoredOccurrenceTarget.offset}`
+      : undefined
+  };
+}
 
 export class ClaimHomeIndex {
   public resolveClaimRef(
-    route: ClaimIdentityRoute,
+    target: SubstrateLookupTarget,
     worldFrameHandle: WorldFrameHandle
   ): SubstrateClaimRef {
-    const authoredOccurrenceTarget = "authoredOccurrenceTarget" in route
-      ? route.authoredOccurrenceTarget
-      : undefined;
     return createSubstrateClaimRef(
-      route.claimRoute.home,
+      target.claimRoute.home,
       worldFrameHandle.version,
-      route.claimRoute.home === ClaimHomeKind.AuthoredOccurrenceBasis &&
-        authoredOccurrenceTarget !== undefined
-        ? `${authoredOccurrenceTarget.templateSourceRef}:${authoredOccurrenceTarget.offset}`
-        : undefined
+      target.localIdentity
     );
   }
 }
