@@ -16,34 +16,39 @@ export const enum WorldRegimeKind {
 }
 
 export const enum RegistrationPathKind {
-  ResourceRegistration = 1,
-  RegistryInsertion = 2,
-  AnalyzedModuleSelection = 3,
-  ConfigurationEmission = 4,
-  ConventionBridge = 5
+  KernelRegistration = 1,
+  ResourceRegistration = 2,
+  RegistryInsertion = 3,
+  AnalyzedModuleSelection = 4,
+  ConfigurationEmission = 5,
+  ConventionBridge = 6
 }
 
 export const enum ConstructorArchetypeKind {
   AggregateBundle = 1,
   CustomizedDefault = 2,
-  GeneratedSyntax = 3,
-  StagedBuilder = 4,
-  LifecycleAttached = 5,
-  ChildWorldBranch = 6
+  ComposedLayer = 3,
+  GeneratedSyntax = 4,
+  StagedBuilder = 5,
+  LifecycleAttached = 6,
+  ChildWorldBranch = 7
 }
 
 export const enum LookupRegimeKind {
   CurrentPlusRootResource = 1,
   OwnOnlyResource = 2,
   GenericDiAncestor = 3,
-  AnalyzedModuleSelection = 4
+  RegistryLocalOnly = 4,
+  OwnerBoundedLocal = 5,
+  AnalyzedModuleSelection = 6
 }
 
 export const enum MaterializationTimingKind {
   Eager = 1,
-  LifecycleSlotGated = 2,
-  ChildWorldBranched = 3,
-  RenderTimeBranch = 4
+  PreRuntimePreprocess = 2,
+  LifecycleSlotGated = 3,
+  ChildWorldBranched = 4,
+  RenderTimeBranch = 5
 }
 
 export const enum NamingSurfaceKind {

@@ -55,6 +55,13 @@ export interface SemanticRuntimeTraceEvent {
   readonly activeExtensionCount?: number;
   readonly admittedGeneratedVocabularyCount?: number;
   readonly underclosedGeneratedVocabularyCount?: number;
+  readonly activeRegistrationPatternCount?: number;
+  readonly closedRegistrationPatternCount?: number;
+  readonly qualifiedRegistrationPatternCount?: number;
+  readonly underclosedRegistrationPatternCount?: number;
+  readonly openRegistrationPatternCount?: number;
+  readonly unsupportedRegistrationBoundaryCount?: number;
+  readonly runtimeOnlyRegistrationBoundaryCount?: number;
   readonly associatedTemplateCount?: number;
   readonly explicitNoViewCount?: number;
   readonly underclosedTemplateAssociationCount?: number;

@@ -18,6 +18,11 @@ import type {
   GeneratedTemplateVocabularyMember,
   UnderclosedExtensionActivation
 } from "../extensions/extension-activation.js";
+import {
+  RegistrationSupportBehaviorKind,
+  type ActiveRegistrationPattern,
+  type UnderclosedRegistrationPattern
+} from "../registration/registration-pattern.js";
 import type { WorkspacePackageRef } from "../packages/workspace-package.js";
 import type { UnderclosedTemplateSourceAssociation } from "../templates/template-source-association.js";
 
@@ -29,6 +34,13 @@ export class CurrentWorldPublication {
   public readonly activeExtensionCount: number;
   public readonly admittedGeneratedVocabularyCount: number;
   public readonly underclosedGeneratedVocabularyCount: number;
+  public readonly activeRegistrationPatternCount: number;
+  public readonly closedRegistrationPatternCount: number;
+  public readonly qualifiedRegistrationPatternCount: number;
+  public readonly underclosedRegistrationPatternCount: number;
+  public readonly openRegistrationPatternCount: number;
+  public readonly unsupportedRegistrationBoundaryCount: number;
+  public readonly runtimeOnlyRegistrationBoundaryCount: number;
   public readonly associatedTemplateCount: number;
   public readonly explicitNoViewCount: number;
   public readonly underclosedTemplateAssociationCount: number;
@@ -42,6 +54,8 @@ export class CurrentWorldPublication {
     public readonly activeExtensions: readonly ActiveExtensionActivation[],
     public readonly underclosedExtensions: readonly UnderclosedExtensionActivation[],
     public readonly generatedVocabulary: readonly GeneratedTemplateVocabularyMember[],
+    public readonly activeRegistrationPatterns: readonly ActiveRegistrationPattern[],
+    public readonly underclosedRegistrationPatterns: readonly UnderclosedRegistrationPattern[],
     public readonly underclosedTemplateAssociations: readonly UnderclosedTemplateSourceAssociation[],
     public readonly declarationWitnessRef: string,
     public readonly closureRef: string
@@ -57,6 +71,24 @@ export class CurrentWorldPublication {
     this.activeExtensionCount = activeExtensions.length;
     this.admittedGeneratedVocabularyCount = generatedVocabulary.length;
     this.underclosedGeneratedVocabularyCount = underclosedExtensions.length;
+    this.activeRegistrationPatternCount = activeRegistrationPatterns.length;
+    this.closedRegistrationPatternCount = activeRegistrationPatterns.filter(
+      (pattern) => pattern.behavior === RegistrationSupportBehaviorKind.ClaimAndClose
+    ).length;
+    this.qualifiedRegistrationPatternCount = activeRegistrationPatterns.filter(
+      (pattern) => pattern.behavior === RegistrationSupportBehaviorKind.ClaimWithQualifiers
+    ).length;
+    this.underclosedRegistrationPatternCount = underclosedRegistrationPatterns.length;
+    this.openRegistrationPatternCount = underclosedRegistrationPatterns.filter(
+      (pattern) => pattern.behavior === RegistrationSupportBehaviorKind.ClaimWithQualifiers ||
+        pattern.behavior === RegistrationSupportBehaviorKind.DetectAndDeclareOpen
+    ).length;
+    this.unsupportedRegistrationBoundaryCount = underclosedRegistrationPatterns.filter(
+      (pattern) => pattern.behavior === RegistrationSupportBehaviorKind.DetectAndDeclareUnsupported
+    ).length;
+    this.runtimeOnlyRegistrationBoundaryCount = underclosedRegistrationPatterns.filter(
+      (pattern) => pattern.behavior === RegistrationSupportBehaviorKind.DetectRuntimeOnlyBoundary
+    ).length;
     this.associatedTemplateCount = resources.filter(
       (resource) => resource.templateAssociation?.hasTemplateSource === true
     ).length;

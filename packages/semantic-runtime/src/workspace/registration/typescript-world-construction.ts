@@ -37,6 +37,8 @@ import { CurrentWorldPublicationAssembler } from "../snapshots/current-world-pub
 import type { CurrentWorldPublication } from "../snapshots/current-world-publication.js";
 import { CustomElementDeclarationScanner } from "./custom-element-declaration-scanner.js";
 import { ExtensionConfigurationScanner } from "./extension-configuration-scanner.js";
+import { RegistrationPatternScanner } from "./registration-pattern-scanner.js";
+import type { RegistrationPatternScanResult } from "./registration-pattern.js";
 import { TemplateSourceAssociationScanner } from "./template-source-association-scanner.js";
 import { AuthoredOccurrenceBasisPublisher } from "../../syntax/occurrences/authored-occurrence-basis-publisher.js";
 
@@ -45,6 +47,7 @@ export class TypeScriptWorldConstruction {
   readonly #publicationAssembler = new CurrentWorldPublicationAssembler();
   readonly #declarationScanner = new CustomElementDeclarationScanner();
   readonly #extensionConfigurationScanner = new ExtensionConfigurationScanner();
+  readonly #registrationPatternScanner = new RegistrationPatternScanner();
   readonly #templateAssociationScanner = new TemplateSourceAssociationScanner();
   readonly #authoredOccurrenceBasisPublisher = new AuthoredOccurrenceBasisPublisher();
 
@@ -145,6 +148,7 @@ export class TypeScriptWorldConstruction {
     const consultedPackage = resolveConsultedPackage(generation);
     const resourceScan = this.#declarationScanner.scan(generation);
     const extensionScan = this.#extensionConfigurationScanner.scan(generation);
+    const registrationScan = this.#registrationPatternScanner.scan(generation);
     const templateAssociations = this.#templateAssociationScanner.scan(
       generation,
       resourceScan.recognizedElements
@@ -163,12 +167,12 @@ export class TypeScriptWorldConstruction {
       boundary,
       [boundary],
       selectConsultationRole(home),
-      WorldRegimeKind.DefinitionMerge,
+      selectWorldRegime(registrationScan),
       consultedPackage.rootPath,
-      selectRegistrationPath(extensionScan),
-      selectConstructorArchetypes(extensionScan),
-      LookupRegimeKind.CurrentPlusRootResource,
-      MaterializationTimingKind.Eager,
+      selectRegistrationPath(extensionScan, registrationScan),
+      selectConstructorArchetypes(extensionScan, registrationScan),
+      selectLookupRegime(registrationScan),
+      selectMaterializationTiming(registrationScan),
       [NamingSurfaceKind.ExportName, NamingSurfaceKind.ResourceName]
     );
 
@@ -177,6 +181,7 @@ export class TypeScriptWorldConstruction {
       consultedPackage,
       resourceScan,
       extensionScan,
+      registrationScan,
       templateAssociations
     );
   }
@@ -195,6 +200,13 @@ export function createCurrentWorldSummary(
     activeExtensionCount: publication.activeExtensionCount,
     admittedGeneratedVocabularyCount: publication.admittedGeneratedVocabularyCount,
     underclosedGeneratedVocabularyCount: publication.underclosedGeneratedVocabularyCount,
+    activeRegistrationPatternCount: publication.activeRegistrationPatternCount,
+    closedRegistrationPatternCount: publication.closedRegistrationPatternCount,
+    qualifiedRegistrationPatternCount: publication.qualifiedRegistrationPatternCount,
+    underclosedRegistrationPatternCount: publication.underclosedRegistrationPatternCount,
+    openRegistrationPatternCount: publication.openRegistrationPatternCount,
+    unsupportedRegistrationBoundaryCount: publication.unsupportedRegistrationBoundaryCount,
+    runtimeOnlyRegistrationBoundaryCount: publication.runtimeOnlyRegistrationBoundaryCount,
     associatedTemplateCount: publication.associatedTemplateCount,
     explicitNoViewCount: publication.explicitNoViewCount,
     underclosedTemplateAssociationCount: publication.underclosedTemplateAssociationCount
@@ -258,12 +270,53 @@ function isTypeScriptLibraryFile(fileName: string): boolean {
     fileName.includes("\\node_modules\\typescript\\lib\\");
 }
 
+function selectWorldRegime(
+  registrationScan: RegistrationPatternScanResult
+): WorldRegimeKind {
+  const regimes = [
+    ...registrationScan.activeRegistrationPatterns,
+    ...registrationScan.underclosedRegistrationPatterns
+  ].map((pattern) => pattern.worldRegime);
+
+  if (regimes.includes(WorldRegimeKind.OwnerBoundedLocal)) {
+    return WorldRegimeKind.OwnerBoundedLocal;
+  }
+
+  if (regimes.includes(WorldRegimeKind.RegistryCarrier)) {
+    return WorldRegimeKind.RegistryCarrier;
+  }
+
+  if (regimes.includes(WorldRegimeKind.ConstructorEmission)) {
+    return WorldRegimeKind.ConstructorEmission;
+  }
+
+  return WorldRegimeKind.DefinitionMerge;
+}
+
 function selectRegistrationPath(
   extensionScan: {
     readonly activeExtensionCount: number;
     readonly underclosedGeneratedVocabularyCount: number;
-  }
+  },
+  registrationScan: RegistrationPatternScanResult
 ): RegistrationPathKind {
+  const paths = [
+    ...registrationScan.activeRegistrationPatterns,
+    ...registrationScan.underclosedRegistrationPatterns
+  ].map((pattern) => pattern.registrationPath);
+
+  if (paths.includes(RegistrationPathKind.KernelRegistration)) {
+    return RegistrationPathKind.KernelRegistration;
+  }
+
+  if (paths.includes(RegistrationPathKind.RegistryInsertion)) {
+    return RegistrationPathKind.RegistryInsertion;
+  }
+
+  if (paths.includes(RegistrationPathKind.ConfigurationEmission)) {
+    return RegistrationPathKind.ConfigurationEmission;
+  }
+
   return extensionScan.activeExtensionCount > 0 ||
     extensionScan.underclosedGeneratedVocabularyCount > 0
     ? RegistrationPathKind.ConfigurationEmission
@@ -274,18 +327,85 @@ function selectConstructorArchetypes(
   extensionScan: {
     readonly activeExtensionCount: number;
     readonly underclosedGeneratedVocabularyCount: number;
-  }
+  },
+  registrationScan: RegistrationPatternScanResult
 ): readonly ConstructorArchetypeKind[] {
-  if (
-    extensionScan.activeExtensionCount === 0 &&
-    extensionScan.underclosedGeneratedVocabularyCount === 0
-  ) {
-    return [ConstructorArchetypeKind.AggregateBundle];
+  const archetypes = new Set<ConstructorArchetypeKind>();
+
+  for (const pattern of registrationScan.activeRegistrationPatterns) {
+    for (const archetype of pattern.constructorArchetypes) {
+      archetypes.add(archetype);
+    }
   }
 
-  return [
-    ConstructorArchetypeKind.AggregateBundle,
-    ConstructorArchetypeKind.CustomizedDefault,
-    ConstructorArchetypeKind.GeneratedSyntax
-  ];
+  for (const pattern of registrationScan.underclosedRegistrationPatterns) {
+    for (const archetype of pattern.constructorArchetypes) {
+      archetypes.add(archetype);
+    }
+  }
+
+  if (
+    extensionScan.activeExtensionCount > 0 ||
+    extensionScan.underclosedGeneratedVocabularyCount > 0
+  ) {
+    archetypes.add(ConstructorArchetypeKind.AggregateBundle);
+    archetypes.add(ConstructorArchetypeKind.CustomizedDefault);
+    archetypes.add(ConstructorArchetypeKind.GeneratedSyntax);
+  }
+
+  if (archetypes.size === 0) {
+    archetypes.add(ConstructorArchetypeKind.AggregateBundle);
+  }
+
+  return [...archetypes].sort((left, right) => left - right);
+}
+
+function selectLookupRegime(
+  registrationScan: RegistrationPatternScanResult
+): LookupRegimeKind {
+  const lookupRegimes = [
+    ...registrationScan.underclosedRegistrationPatterns,
+    ...registrationScan.activeRegistrationPatterns
+  ].map((pattern) => pattern.lookupRegime);
+
+  if (lookupRegimes.includes(LookupRegimeKind.OwnerBoundedLocal)) {
+    return LookupRegimeKind.OwnerBoundedLocal;
+  }
+
+  if (lookupRegimes.includes(LookupRegimeKind.RegistryLocalOnly)) {
+    return LookupRegimeKind.RegistryLocalOnly;
+  }
+
+  if (lookupRegimes.includes(LookupRegimeKind.GenericDiAncestor)) {
+    return LookupRegimeKind.GenericDiAncestor;
+  }
+
+  return LookupRegimeKind.CurrentPlusRootResource;
+}
+
+function selectMaterializationTiming(
+  registrationScan: RegistrationPatternScanResult
+): MaterializationTimingKind {
+  const timings = [
+    ...registrationScan.underclosedRegistrationPatterns,
+    ...registrationScan.activeRegistrationPatterns
+  ].map((pattern) => pattern.materializationTiming);
+
+  if (timings.includes(MaterializationTimingKind.RenderTimeBranch)) {
+    return MaterializationTimingKind.RenderTimeBranch;
+  }
+
+  if (timings.includes(MaterializationTimingKind.LifecycleSlotGated)) {
+    return MaterializationTimingKind.LifecycleSlotGated;
+  }
+
+  if (timings.includes(MaterializationTimingKind.ChildWorldBranched)) {
+    return MaterializationTimingKind.ChildWorldBranched;
+  }
+
+  if (timings.includes(MaterializationTimingKind.PreRuntimePreprocess)) {
+    return MaterializationTimingKind.PreRuntimePreprocess;
+  }
+
+  return MaterializationTimingKind.Eager;
 }

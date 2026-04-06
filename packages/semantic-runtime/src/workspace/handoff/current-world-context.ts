@@ -27,6 +27,13 @@ export interface WorldSnapshotSummary {
   readonly activeExtensionCount: number;
   readonly admittedGeneratedVocabularyCount: number;
   readonly underclosedGeneratedVocabularyCount: number;
+  readonly activeRegistrationPatternCount: number;
+  readonly closedRegistrationPatternCount: number;
+  readonly qualifiedRegistrationPatternCount: number;
+  readonly underclosedRegistrationPatternCount: number;
+  readonly openRegistrationPatternCount: number;
+  readonly unsupportedRegistrationBoundaryCount: number;
+  readonly runtimeOnlyRegistrationBoundaryCount: number;
   readonly associatedTemplateCount: number;
   readonly explicitNoViewCount: number;
   readonly underclosedTemplateAssociationCount: number;
@@ -53,6 +60,13 @@ export interface CurrentWorldContextSeed {
   readonly activeExtensionCount?: number;
   readonly admittedGeneratedVocabularyCount?: number;
   readonly underclosedGeneratedVocabularyCount?: number;
+  readonly activeRegistrationPatternCount?: number;
+  readonly closedRegistrationPatternCount?: number;
+  readonly qualifiedRegistrationPatternCount?: number;
+  readonly underclosedRegistrationPatternCount?: number;
+  readonly openRegistrationPatternCount?: number;
+  readonly unsupportedRegistrationBoundaryCount?: number;
+  readonly runtimeOnlyRegistrationBoundaryCount?: number;
   readonly associatedTemplateCount?: number;
   readonly explicitNoViewCount?: number;
   readonly underclosedTemplateAssociationCount?: number;
@@ -90,6 +104,13 @@ export class CurrentWorldContextPort {
           activeExtensionCount: this.#seed.activeExtensionCount ?? 0,
           admittedGeneratedVocabularyCount: this.#seed.admittedGeneratedVocabularyCount ?? 0,
           underclosedGeneratedVocabularyCount: this.#seed.underclosedGeneratedVocabularyCount ?? 0,
+          activeRegistrationPatternCount: this.#seed.activeRegistrationPatternCount ?? 0,
+          closedRegistrationPatternCount: this.#seed.closedRegistrationPatternCount ?? 0,
+          qualifiedRegistrationPatternCount: this.#seed.qualifiedRegistrationPatternCount ?? 0,
+          underclosedRegistrationPatternCount: this.#seed.underclosedRegistrationPatternCount ?? 0,
+          openRegistrationPatternCount: this.#seed.openRegistrationPatternCount ?? 0,
+          unsupportedRegistrationBoundaryCount: this.#seed.unsupportedRegistrationBoundaryCount ?? 0,
+          runtimeOnlyRegistrationBoundaryCount: this.#seed.runtimeOnlyRegistrationBoundaryCount ?? 0,
           associatedTemplateCount: this.#seed.associatedTemplateCount ?? 0,
           explicitNoViewCount: this.#seed.explicitNoViewCount ?? 0,
           underclosedTemplateAssociationCount: this.#seed.underclosedTemplateAssociationCount ?? 0
@@ -104,6 +125,13 @@ export class CurrentWorldContextPort {
           activeExtensionCount: publication.activeExtensionCount,
           admittedGeneratedVocabularyCount: publication.admittedGeneratedVocabularyCount,
           underclosedGeneratedVocabularyCount: publication.underclosedGeneratedVocabularyCount,
+          activeRegistrationPatternCount: publication.activeRegistrationPatternCount,
+          closedRegistrationPatternCount: publication.closedRegistrationPatternCount,
+          qualifiedRegistrationPatternCount: publication.qualifiedRegistrationPatternCount,
+          underclosedRegistrationPatternCount: publication.underclosedRegistrationPatternCount,
+          openRegistrationPatternCount: publication.openRegistrationPatternCount,
+          unsupportedRegistrationBoundaryCount: publication.unsupportedRegistrationBoundaryCount,
+          runtimeOnlyRegistrationBoundaryCount: publication.runtimeOnlyRegistrationBoundaryCount,
           associatedTemplateCount: publication.associatedTemplateCount,
           explicitNoViewCount: publication.explicitNoViewCount,
           underclosedTemplateAssociationCount: publication.underclosedTemplateAssociationCount
@@ -129,6 +157,13 @@ export class CurrentWorldContextPort {
         activeExtensionCount: summary.activeExtensionCount,
         admittedGeneratedVocabularyCount: summary.admittedGeneratedVocabularyCount,
         underclosedGeneratedVocabularyCount: summary.underclosedGeneratedVocabularyCount,
+        activeRegistrationPatternCount: summary.activeRegistrationPatternCount,
+        closedRegistrationPatternCount: summary.closedRegistrationPatternCount,
+        qualifiedRegistrationPatternCount: summary.qualifiedRegistrationPatternCount,
+        underclosedRegistrationPatternCount: summary.underclosedRegistrationPatternCount,
+        openRegistrationPatternCount: summary.openRegistrationPatternCount,
+        unsupportedRegistrationBoundaryCount: summary.unsupportedRegistrationBoundaryCount,
+        runtimeOnlyRegistrationBoundaryCount: summary.runtimeOnlyRegistrationBoundaryCount,
         associatedTemplateCount: summary.associatedTemplateCount,
         explicitNoViewCount: summary.explicitNoViewCount,
         underclosedTemplateAssociationCount: summary.underclosedTemplateAssociationCount

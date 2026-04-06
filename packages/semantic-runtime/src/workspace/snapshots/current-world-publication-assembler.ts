@@ -14,6 +14,7 @@ import {
 import type { WorkspacePackageRef } from "../packages/workspace-package.js";
 import type { CustomElementScanResult } from "../registration/custom-element-declaration-scanner.js";
 import type { ExtensionConfigurationScanResult } from "../registration/extension-configuration-scanner.js";
+import type { RegistrationPatternScanResult } from "../registration/registration-pattern.js";
 import type { TemplateSourceAssociationScanResult } from "../registration/template-source-association-scanner.js";
 
 export class CurrentWorldPublicationAssembler {
@@ -22,6 +23,7 @@ export class CurrentWorldPublicationAssembler {
     consultedPackage: WorkspacePackageRef,
     resourceScan: CustomElementScanResult,
     extensionScan: ExtensionConfigurationScanResult,
+    registrationScan: RegistrationPatternScanResult,
     templateAssociations: TemplateSourceAssociationScanResult
   ): CurrentWorldPublication {
     const resources = resourceScan.recognizedElements.map(
@@ -37,7 +39,7 @@ export class CurrentWorldPublicationAssembler {
         ResourceAdmissionStatusKind.Admitted,
         CurrentWorldActivityStateKind.CurrentWorldSensitive,
         ReachabilityScopeKind.ResourceCurrentPlusRoot,
-        deriveResourceFrontier(resourceScan, extensionScan, templateAssociations),
+        deriveResourceFrontier(resourceScan, extensionScan, registrationScan, templateAssociations),
         templateAssociations.findAssociation(customElement)
       )
     );
@@ -46,6 +48,7 @@ export class CurrentWorldPublicationAssembler {
       resources.length,
       resourceScan.underclosedResources.length,
       extensionScan,
+      registrationScan,
       templateAssociations.underclosedAssociations.length
     );
     const packageIdentity = consultedPackage.packageName ?? consultedPackage.rootPath;
@@ -59,6 +62,8 @@ export class CurrentWorldPublicationAssembler {
       extensionScan.activeExtensions,
       extensionScan.underclosedExtensions,
       extensionScan.generatedVocabulary,
+      registrationScan.activeRegistrationPatterns,
+      registrationScan.underclosedRegistrationPatterns,
       templateAssociations.underclosedAssociations,
       createDeclarationWitnessRef(packageIdentity, frontier),
       createClosureRef(packageIdentity, frontier)
@@ -69,11 +74,13 @@ export class CurrentWorldPublicationAssembler {
 function deriveResourceFrontier(
   resourceScan: CustomElementScanResult,
   extensionScan: ExtensionConfigurationScanResult,
+  registrationScan: RegistrationPatternScanResult,
   templateAssociations: TemplateSourceAssociationScanResult
 ): WorldParticipationFrontierKind {
   if (
     resourceScan.underclosedResources.length === 0 &&
     extensionScan.underclosedGeneratedVocabularyCount === 0 &&
+    registrationScan.underclosedRegistrationPatternCount === 0 &&
     templateAssociations.underclosedAssociations.length === 0
   ) {
     return WorldParticipationFrontierKind.CurrentWorldSensitive;
@@ -86,19 +93,28 @@ function derivePublicationFrontier(
   recognizedResourceCount: number,
   underclosedResourceCount: number,
   extensionScan: ExtensionConfigurationScanResult,
+  registrationScan: RegistrationPatternScanResult,
   underclosedTemplateAssociationCount: number
 ): WorldParticipationFrontierKind {
   const recognizedBasisCount = recognizedResourceCount +
     extensionScan.activeExtensionCount +
-    extensionScan.admittedGeneratedVocabularyCount;
+    extensionScan.admittedGeneratedVocabularyCount +
+    registrationScan.activeRegistrationPatternCount;
   const underclosedBasisCount = underclosedResourceCount +
     extensionScan.underclosedGeneratedVocabularyCount +
+    registrationScan.openRegistrationPatternCount +
     underclosedTemplateAssociationCount;
+  const terminalOpenBasisCount = registrationScan.unsupportedRegistrationBoundaryCount +
+    registrationScan.runtimeOnlyRegistrationBoundaryCount;
 
-  if (underclosedBasisCount === 0) {
+  if (underclosedBasisCount === 0 && terminalOpenBasisCount === 0) {
     return recognizedBasisCount === 0
       ? WorldParticipationFrontierKind.ClosedBaseline
       : WorldParticipationFrontierKind.CurrentWorldSensitive;
+  }
+
+  if (recognizedBasisCount === 0 && underclosedBasisCount === 0) {
+    return WorldParticipationFrontierKind.TerminalOpen;
   }
 
   return recognizedBasisCount === 0

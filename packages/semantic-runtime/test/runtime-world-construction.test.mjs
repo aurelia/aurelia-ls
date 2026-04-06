@@ -31,9 +31,16 @@ import { CurrentWorldContextPort } from "../out/workspace/handoff/current-world-
 import { TypeScriptWorldConstruction } from "../out/workspace/registration/typescript-world-construction.js";
 import {
   ConstructorArchetypeKind,
+  LookupRegimeKind,
+  MaterializationTimingKind,
   RegistrationPathKind,
+  WorldRegimeKind,
   WorldParticipationFrontierKind
 } from "../out/workspace/registration/consulted-world.js";
+import {
+  RegistrationPatternFamilyKind,
+  RegistrationSupportBehaviorKind
+} from "../out/workspace/registration/registration-pattern.js";
 import {
   ExtensionConfigurationProfileKind,
   ExtensionFamilyKind,
@@ -96,6 +103,24 @@ const TEMPLATE_QUALIFIED_FIXTURE_ROOT = path.join(
   "fixtures",
   "aurelia-programs",
   "template-world-qualified"
+);
+const REGISTRATION_BASIC_FIXTURE_ROOT = path.join(
+  __dirname,
+  "fixtures",
+  "aurelia-programs",
+  "registration-world-basic"
+);
+const REGISTRATION_QUALIFIED_FIXTURE_ROOT = path.join(
+  __dirname,
+  "fixtures",
+  "aurelia-programs",
+  "registration-world-qualified"
+);
+const REGISTRATION_TERMINAL_FIXTURE_ROOT = path.join(
+  __dirname,
+  "fixtures",
+  "aurelia-programs",
+  "registration-world-terminal"
 );
 
 test("current-world handoff publishes a file-backed consulted world and resource neighborhood", () => {
@@ -772,5 +797,263 @@ test("visible but unregistered extension configurations do not widen current-wor
   assert.equal(answer.payload?.currentWorldPublication?.activeExtensions.length, 0);
   assert.equal(answer.payload?.currentWorldPublication?.generatedVocabulary.length, 0);
   assert.equal(answer.payload?.currentWorldPublication?.underclosedExtensions.length, 0);
+});
+
+test("current-world publication closes aggregate and direct DI registration patterns from a curated fixture", () => {
+  const questionRoute = createQuestionRoute(
+    createClaimRoute(ClaimHomeKind.CurrentWorldSummary),
+    {
+      inquiryEpisode: SemanticInquiryEpisode.BoundedClosureExplanation,
+      readMode: SemanticReadMode.Explain
+    }
+  );
+  const worldFrame = createWorldFrame(49, WorldFrameKind.Current);
+  const currentWorldContext = new CurrentWorldContextPort(
+    {},
+    new TypeScriptWorldConstruction(
+      new TypeScriptProjectPort(
+        {
+          generation: 49,
+          projectRoot: REGISTRATION_BASIC_FIXTURE_ROOT
+        }
+      )
+    )
+  ).publishCurrentWorldContext(questionRoute, worldFrame);
+  const publication = currentWorldContext.currentWorldPublication;
+  const proofRecord = createProofRecord({
+    pocket: SemanticRuntimeVerificationPocketKind.WorkspaceCurrentWorldHandoff,
+    proofClass: VerificationProofClassKind.ContractProof,
+    verificationBasis: VerificationBasisKind.InventedProductObligation,
+    surfaceRefs: [
+      SemanticRuntimeSurfaceKind.TypeScriptProjectPort,
+      SemanticRuntimeSurfaceKind.WorldContextHandoff
+    ],
+    closureStatusPressure: ClosureStatusKind.Closed,
+    likelyReentryArea: ReentryAreaKind.SubjectOracle,
+    expected: {
+      packageName: "@fixtures/registration-world-basic",
+      frontier: WorldParticipationFrontierKind.CurrentWorldSensitive,
+      worldRegime: WorldRegimeKind.RegistryCarrier,
+      registrationPath: RegistrationPathKind.KernelRegistration,
+      lookupRegime: LookupRegimeKind.GenericDiAncestor,
+      materializationTiming: MaterializationTimingKind.Eager,
+      activeRegistrationPatternCount: 2,
+      closedRegistrationPatternCount: 2,
+      qualifiedRegistrationPatternCount: 0,
+      underclosedRegistrationPatternCount: 0,
+      openRegistrationPatternCount: 0,
+      unsupportedRegistrationBoundaryCount: 0,
+      runtimeOnlyRegistrationBoundaryCount: 0,
+      activeFamilies: [
+        RegistrationPatternFamilyKind.AggregateBundle,
+        RegistrationPatternFamilyKind.DirectDiAliasBundle
+      ],
+      activeBehaviors: [
+        RegistrationSupportBehaviorKind.ClaimAndClose,
+        RegistrationSupportBehaviorKind.ClaimAndClose
+      ]
+    },
+    actual: {
+      packageName: publication?.consultedPackage.packageName,
+      frontier: publication?.frontier,
+      worldRegime: publication?.consultedWorld.worldRegime,
+      registrationPath: publication?.consultedWorld.registrationPath,
+      lookupRegime: publication?.consultedWorld.lookupRegime,
+      materializationTiming: publication?.consultedWorld.materializationTiming,
+      activeRegistrationPatternCount: currentWorldContext.snapshotSummary.activeRegistrationPatternCount,
+      closedRegistrationPatternCount: currentWorldContext.snapshotSummary.closedRegistrationPatternCount,
+      qualifiedRegistrationPatternCount: currentWorldContext.snapshotSummary.qualifiedRegistrationPatternCount,
+      underclosedRegistrationPatternCount: currentWorldContext.snapshotSummary.underclosedRegistrationPatternCount,
+      openRegistrationPatternCount: currentWorldContext.snapshotSummary.openRegistrationPatternCount,
+      unsupportedRegistrationBoundaryCount: currentWorldContext.snapshotSummary.unsupportedRegistrationBoundaryCount,
+      runtimeOnlyRegistrationBoundaryCount: currentWorldContext.snapshotSummary.runtimeOnlyRegistrationBoundaryCount,
+      activeFamilies: publication?.activeRegistrationPatterns.map((pattern) => pattern.family),
+      activeBehaviors: publication?.activeRegistrationPatterns.map((pattern) => pattern.behavior)
+    },
+    traceCapture: {
+      request: { questionRoute, worldFrame },
+      events: []
+    }
+  });
+
+  assertProofRecord(proofRecord);
+  assert.equal(publication?.activeRegistrationPatterns.length, 2);
+  assert.equal(publication?.underclosedRegistrationPatterns.length, 0);
+});
+
+test("current-world publication keeps registration-world support qualified when builder, route, and lifecycle patterns remain partly open", () => {
+  const questionRoute = createQuestionRoute(
+    createClaimRoute(ClaimHomeKind.CurrentWorldSummary),
+    {
+      inquiryEpisode: SemanticInquiryEpisode.BoundedClosureExplanation,
+      readMode: SemanticReadMode.Explain
+    }
+  );
+  const worldFrame = createWorldFrame(50, WorldFrameKind.Current);
+  const runtime = new SemanticRuntime(
+    {
+      introspection: createBufferedSemanticRuntimeIntrospection(),
+      typescriptProjectPort: new TypeScriptProjectPort(
+        {
+          generation: 50,
+          projectRoot: REGISTRATION_QUALIFIED_FIXTURE_ROOT
+        }
+      )
+    }
+  );
+  const answer = runtime.readSemanticAnswer(
+    {
+      questionRoute,
+      worldFrame
+    }
+  );
+  const proofRecord = createProofRecord({
+    pocket: SemanticRuntimeVerificationPocketKind.SubstrateAndEvaluatorRead,
+    proofClass: VerificationProofClassKind.SeamProof,
+    verificationBasis: VerificationBasisKind.InventedProductObligation,
+    surfaceRefs: [
+      SemanticRuntimeSurfaceKind.TypeScriptProjectPort,
+      SemanticRuntimeSurfaceKind.SubstrateReader,
+      SemanticRuntimeSurfaceKind.EvaluatorReadPort,
+      SemanticRuntimeSurfaceKind.SemanticRuntime
+    ],
+    closureStatusPressure: ClosureStatusKind.Qualified,
+    likelyReentryArea: ReentryAreaKind.SubjectOracle,
+    expected: {
+      qualification: ClaimQualifierKind.WorldOpen,
+      closureStatus: ClosureStatusKind.Qualified,
+      frontier: WorldParticipationFrontierKind.WorldQualified,
+      packageName: "@fixtures/registration-world-qualified",
+      activeRegistrationPatternCount: 2,
+      closedRegistrationPatternCount: 0,
+      qualifiedRegistrationPatternCount: 2,
+      underclosedRegistrationPatternCount: 3,
+      openRegistrationPatternCount: 3,
+      unsupportedRegistrationBoundaryCount: 0,
+      runtimeOnlyRegistrationBoundaryCount: 0,
+      activeFamilies: [
+        RegistrationPatternFamilyKind.StagedBuilderFinalization,
+        RegistrationPatternFamilyKind.LifecycleGatedRegistration
+      ],
+      underclosedFamilies: [
+        RegistrationPatternFamilyKind.StagedBuilderFinalization,
+        RegistrationPatternFamilyKind.LifecycleGatedRegistration,
+        RegistrationPatternFamilyKind.RouteConfigAdmissionWorld
+      ]
+    },
+    actual: {
+      qualification: answer.qualificationRefs[0]?.kind,
+      closureStatus: answer.closureStatus,
+      frontier: answer.payload?.currentWorldPublication?.frontier,
+      packageName: answer.payload?.currentWorldPublication?.consultedPackage.packageName,
+      activeRegistrationPatternCount: answer.payload?.currentWorldSummary?.activeRegistrationPatternCount,
+      closedRegistrationPatternCount: answer.payload?.currentWorldSummary?.closedRegistrationPatternCount,
+      qualifiedRegistrationPatternCount: answer.payload?.currentWorldSummary?.qualifiedRegistrationPatternCount,
+      underclosedRegistrationPatternCount: answer.payload?.currentWorldSummary?.underclosedRegistrationPatternCount,
+      openRegistrationPatternCount: answer.payload?.currentWorldSummary?.openRegistrationPatternCount,
+      unsupportedRegistrationBoundaryCount: answer.payload?.currentWorldSummary?.unsupportedRegistrationBoundaryCount,
+      runtimeOnlyRegistrationBoundaryCount: answer.payload?.currentWorldSummary?.runtimeOnlyRegistrationBoundaryCount,
+      activeFamilies: answer.payload?.currentWorldPublication?.activeRegistrationPatterns.map((pattern) => pattern.family),
+      underclosedFamilies: answer.payload?.currentWorldPublication?.underclosedRegistrationPatterns.map((pattern) => pattern.family)
+    },
+    traceCapture: {
+      request: { questionRoute, worldFrame },
+      events: runtime.captureTrace(
+        {
+          questionRoute,
+          worldFrame
+        }
+      )
+    }
+  });
+
+  assertProofRecord(proofRecord);
+  assert.equal(answer.payload?.currentWorldPublication?.underclosedRegistrationPatterns.length, 3);
+});
+
+test("current-world publication reports unsupported and runtime-only registration boundaries honestly", () => {
+  const questionRoute = createQuestionRoute(
+    createClaimRoute(ClaimHomeKind.CurrentWorldSummary),
+    {
+      inquiryEpisode: SemanticInquiryEpisode.BoundedClosureExplanation,
+      readMode: SemanticReadMode.Explain
+    }
+  );
+  const worldFrame = createWorldFrame(51, WorldFrameKind.Current);
+  const runtime = new SemanticRuntime(
+    {
+      introspection: createBufferedSemanticRuntimeIntrospection(),
+      typescriptProjectPort: new TypeScriptProjectPort(
+        {
+          generation: 51,
+          projectRoot: REGISTRATION_TERMINAL_FIXTURE_ROOT
+        }
+      )
+    }
+  );
+  const answer = runtime.readSemanticAnswer(
+    {
+      questionRoute,
+      worldFrame
+    }
+  );
+  const proofRecord = createProofRecord({
+    pocket: SemanticRuntimeVerificationPocketKind.SubstrateAndEvaluatorRead,
+    proofClass: VerificationProofClassKind.SeamProof,
+    verificationBasis: VerificationBasisKind.InventedProductObligation,
+    surfaceRefs: [
+      SemanticRuntimeSurfaceKind.TypeScriptProjectPort,
+      SemanticRuntimeSurfaceKind.SubstrateReader,
+      SemanticRuntimeSurfaceKind.EvaluatorReadPort,
+      SemanticRuntimeSurfaceKind.SemanticRuntime
+    ],
+    closureStatusPressure: ClosureStatusKind.Open,
+    likelyReentryArea: ReentryAreaKind.SubjectOracle,
+    expected: {
+      qualification: ClaimQualifierKind.WorldOpen,
+      closureStatus: ClosureStatusKind.Open,
+      frontier: WorldParticipationFrontierKind.TerminalOpen,
+      packageName: "@fixtures/registration-world-terminal",
+      activeRegistrationPatternCount: 0,
+      underclosedRegistrationPatternCount: 2,
+      openRegistrationPatternCount: 0,
+      unsupportedRegistrationBoundaryCount: 1,
+      runtimeOnlyRegistrationBoundaryCount: 1,
+      underclosedFamilies: [
+        RegistrationPatternFamilyKind.CallbackLocalDynamicRegistration,
+        RegistrationPatternFamilyKind.LateBoundDynamicCompositionLookup
+      ],
+      underclosedBehaviors: [
+        RegistrationSupportBehaviorKind.DetectAndDeclareUnsupported,
+        RegistrationSupportBehaviorKind.DetectRuntimeOnlyBoundary
+      ]
+    },
+    actual: {
+      qualification: answer.qualificationRefs[0]?.kind,
+      closureStatus: answer.closureStatus,
+      frontier: answer.payload?.currentWorldPublication?.frontier,
+      packageName: answer.payload?.currentWorldPublication?.consultedPackage.packageName,
+      activeRegistrationPatternCount: answer.payload?.currentWorldSummary?.activeRegistrationPatternCount,
+      underclosedRegistrationPatternCount: answer.payload?.currentWorldSummary?.underclosedRegistrationPatternCount,
+      openRegistrationPatternCount: answer.payload?.currentWorldSummary?.openRegistrationPatternCount,
+      unsupportedRegistrationBoundaryCount: answer.payload?.currentWorldSummary?.unsupportedRegistrationBoundaryCount,
+      runtimeOnlyRegistrationBoundaryCount: answer.payload?.currentWorldSummary?.runtimeOnlyRegistrationBoundaryCount,
+      underclosedFamilies: answer.payload?.currentWorldPublication?.underclosedRegistrationPatterns.map((pattern) => pattern.family),
+      underclosedBehaviors: answer.payload?.currentWorldPublication?.underclosedRegistrationPatterns.map((pattern) => pattern.behavior)
+    },
+    traceCapture: {
+      request: { questionRoute, worldFrame },
+      events: runtime.captureTrace(
+        {
+          questionRoute,
+          worldFrame
+        }
+      )
+    }
+  });
+
+  assertProofRecord(proofRecord);
+  assert.equal(answer.payload?.currentWorldPublication?.activeRegistrationPatterns.length, 0);
+  assert.equal(answer.payload?.currentWorldPublication?.underclosedRegistrationPatterns.length, 2);
 });
 
