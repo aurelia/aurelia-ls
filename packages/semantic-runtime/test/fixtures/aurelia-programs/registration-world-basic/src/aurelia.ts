@@ -10,11 +10,11 @@ export class Aurelia {
   }
 }
 
-export class DI {
-  public static singleton(_key: unknown, _implementation: unknown): RegistrationBuilder {
+export const Registration = {
+  singleton(_key: unknown, _implementation: unknown): RegistrationBuilder {
     return new RegistrationBuilder();
   }
-}
+};
 
 export class ServiceContainer {
   public register(..._registrations: readonly unknown[]): void {}

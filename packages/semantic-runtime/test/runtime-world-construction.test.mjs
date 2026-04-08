@@ -799,7 +799,7 @@ test("visible but unregistered extension configurations do not widen current-wor
   assert.equal(answer.payload?.currentWorldPublication?.underclosedExtensions.length, 0);
 });
 
-test("current-world publication closes aggregate and direct DI registration patterns from a curated fixture", () => {
+test("current-world publication closes aggregate and direct registration-builder patterns from a curated fixture", () => {
   const questionRoute = createQuestionRoute(
     createClaimRoute(ClaimHomeKind.CurrentWorldSummary),
     {
@@ -846,7 +846,7 @@ test("current-world publication closes aggregate and direct DI registration patt
       runtimeOnlyRegistrationBoundaryCount: 0,
       activeFamilies: [
         RegistrationPatternFamilyKind.AggregateBundle,
-        RegistrationPatternFamilyKind.DirectDiAliasBundle
+        RegistrationPatternFamilyKind.DirectRegistrationBuilderAliasBundle
       ],
       activeBehaviors: [
         RegistrationSupportBehaviorKind.ClaimAndClose,

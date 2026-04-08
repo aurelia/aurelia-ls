@@ -8,7 +8,7 @@ import {
 
 export const enum RegistrationPatternFamilyKind {
   AggregateBundle = 1,
-  DirectDiAliasBundle = 2,
+  DirectRegistrationBuilderAliasBundle = 2,
   ConfiguredEmissionRegistry = 3,
   StagedBuilderFinalization = 4,
   LifecycleGatedRegistration = 5,

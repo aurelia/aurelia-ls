@@ -10,6 +10,10 @@ import {
   type TypeScriptAnalysisContext
 } from "../../typescript/analysis/resolved-value.js";
 import {
+  FrameworkConfigurationRootKind,
+  resolveFrameworkConfigurationRootKindFromSymbol
+} from "../../typescript/analysis/framework-interpretation.js";
+import {
   ActiveExtensionActivation,
   ExtensionAdmissionClosureKind,
   ExtensionConfigurationProfileKind,
@@ -349,7 +353,7 @@ function resolveRegisteredExtensionFromSymbol(
   const resolvedSymbol = (symbol.flags & ts.SymbolFlags.Alias) !== 0
     ? context.checker.getAliasedSymbol(symbol)
     : symbol;
-  const family = resolveKnownExtensionFamily(resolvedSymbol);
+  const family = resolveKnownExtensionFamily(resolvedSymbol, context);
   if (family === ExtensionFamilyKind.I18n) {
     return createBaseI18nActivation(registrationFileName);
   }
@@ -671,9 +675,11 @@ function createUnderclosedKey(
 }
 
 function resolveKnownExtensionFamily(
-  symbol: ts.Symbol
+  symbol: ts.Symbol,
+  context: TypeScriptAnalysisContext
 ): ExtensionFamilyKind | undefined {
-  return symbol.name === "I18nConfiguration"
+  return resolveFrameworkConfigurationRootKindFromSymbol(symbol, context) ===
+      FrameworkConfigurationRootKind.I18n
     ? ExtensionFamilyKind.I18n
     : undefined;
 }

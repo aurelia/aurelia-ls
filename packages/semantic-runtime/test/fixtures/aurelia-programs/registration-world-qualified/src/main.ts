@@ -2,7 +2,7 @@ import {
   AppTask,
   Aurelia,
   FeatureConfiguration,
-  RouterConfiguration
+  RouterConfiguration as RoutingConfiguration
 } from "./aurelia.js";
 
 function readRoutes(): readonly unknown[] {
@@ -21,8 +21,8 @@ new Aurelia().register(
     .customize((options) => {
       options.aliases = ["feature"];
     }),
-  RouterConfiguration.customize(configureRoutes),
-  AppTask.activating((container) => {
-    container.register(FeatureConfiguration);
+  RoutingConfiguration.customize(configureRoutes),
+  AppTask.activating((services) => {
+    services.register(FeatureConfiguration);
   })
 );

@@ -9,6 +9,16 @@ import {
   type TypeScriptAnalysisContext
 } from "../../typescript/analysis/resolved-value.js";
 import {
+  FrameworkConfigurationRootKind,
+  FrameworkDirectRegistrationBuilderKind,
+  FrameworkRegisterReceiverKind,
+  isFrameworkAppTaskCall,
+  resolveFrameworkConfigurationRootKind,
+  resolveFrameworkConfigurationRootKindFromSymbol,
+  resolveFrameworkDirectRegistrationBuilderKind,
+  resolveFrameworkRegisterReceiverKind
+} from "../../typescript/analysis/framework-interpretation.js";
+import {
   ActiveRegistrationPattern,
   RegistrationPatternFamilyKind,
   RegistrationPatternScanResult,
@@ -47,6 +57,7 @@ type CustomizeProviderAnalysis =
 
 type CustomizeChain = {
   readonly baseName: string | undefined;
+  readonly configurationRootKind: FrameworkConfigurationRootKind | undefined;
   readonly depth: number;
   readonly customizeCalls: readonly ts.CallExpression[];
 };
@@ -55,13 +66,6 @@ const EMPTY_RESOLUTION: RegistrationPatternResolution = {
   activePatterns: [],
   underclosedPatterns: []
 };
-
-const APP_TASK_METHOD_NAMES = new Set([
-  "creating",
-  "created",
-  "activating",
-  "activated"
-]);
 
 export class RegistrationPatternScanner {
   public scan(
@@ -161,7 +165,8 @@ export class RegistrationPatternScanner {
 
     if (isRegisterCall(unwrappedExpression)) {
       const receiverContext = inferRegisterReceiverContext(
-        unwrappedExpression.expression.expression
+        unwrappedExpression.expression.expression,
+        context
       );
       this.recordRegistrationPatterns(
         unwrappedExpression.arguments,
@@ -304,7 +309,7 @@ function resolveRegistrationExpression(
   }
 
   if (ts.isCallExpression(unwrappedExpression)) {
-    if (isAppTaskCall(unwrappedExpression)) {
+    if (isFrameworkAppTaskCall(unwrappedExpression, context)) {
       return resolveAppTaskRegistration(
         unwrappedExpression,
         registrationFileName,
@@ -339,12 +344,16 @@ function resolveRegistrationExpression(
       };
     }
 
-    if (isDirectDiRegistrationCall(unwrappedExpression)) {
+    const directRegistrationBuilderKind = resolveFrameworkDirectRegistrationBuilderKind(
+      unwrappedExpression,
+      context
+    );
+    if (directRegistrationBuilderKind === FrameworkDirectRegistrationBuilderKind.RegistrationBuilder) {
       return areRegistrationArgumentsExplicit(unwrappedExpression.arguments, context)
         ? {
             activePatterns: [
               createActivePattern(
-                RegistrationPatternFamilyKind.DirectDiAliasBundle,
+                RegistrationPatternFamilyKind.DirectRegistrationBuilderAliasBundle,
                 RegistrationSupportBehaviorKind.ClaimAndClose,
                 registrationFileName,
                 {
@@ -376,10 +385,13 @@ function resolveRegistrationExpression(
                   "user-code-execution-dependent",
                   "dynamic-late-binding"
                 ],
-                "Direct DI registration included dynamic payloads that fall outside the current static closure ceiling."
+                "Direct registration-builder payloads fell outside the current static closure ceiling."
               )
             ]
           };
+    }
+    if (directRegistrationBuilderKind === FrameworkDirectRegistrationBuilderKind.WrongDiHelper) {
+      return EMPTY_RESOLUTION;
     }
 
     const customizeChain = inspectCustomizeChain(unwrappedExpression, context);
@@ -429,7 +441,7 @@ function resolveRegistrationExpressionFromSymbol(
     : symbol;
   const symbolName = resolvedSymbol.name;
 
-  if (looksLikeAggregateBundleSymbol(symbolName, resolvedSymbol)) {
+  if (looksLikeAggregateBundleSymbol(symbolName, resolvedSymbol, context)) {
     return {
       activePatterns: [
         createActivePattern(
@@ -470,7 +482,7 @@ function resolveRegistrationExpressionFromSymbol(
     }
 
     if (ts.isClassDeclaration(declaration) || ts.isClassExpression(declaration)) {
-      if (looksLikeAggregateBundleSymbol(symbolName, resolvedSymbol)) {
+      if (looksLikeAggregateBundleSymbol(symbolName, resolvedSymbol, context)) {
         return {
           activePatterns: [
             createActivePattern(
@@ -499,7 +511,7 @@ function resolveCustomizeRegistration(
   const baseName = customizeChain.baseName ?? "Configuration";
   const providerArgument = customizeChain.customizeCalls[0]?.arguments[0];
 
-  if (baseName.includes("RouterConfiguration")) {
+  if (customizeChain.configurationRootKind === FrameworkConfigurationRootKind.Router) {
     return {
       activePatterns: [],
       underclosedPatterns: [
@@ -585,7 +597,7 @@ function resolveCustomizeRegistration(
             lookupRegime: receiverContext.lookupRegime,
             materializationTiming: receiverContext.materializationTiming
           },
-          determineConfiguredEmissionArchetypes(baseName)
+          determineConfiguredEmissionArchetypes(customizeChain)
         )
       ],
       underclosedPatterns: []
@@ -604,10 +616,10 @@ function resolveCustomizeRegistration(
           lookupRegime: receiverContext.lookupRegime,
           materializationTiming: receiverContext.materializationTiming
         },
-        determineConfiguredEmissionArchetypes(baseName)
-      )
-    ],
-    underclosedPatterns: [
+          determineConfiguredEmissionArchetypes(customizeChain)
+        )
+      ],
+      underclosedPatterns: [
       createUnderclosedPattern(
         RegistrationPatternFamilyKind.ConfiguredEmissionRegistry,
         RegistrationSupportBehaviorKind.ClaimWithQualifiers,
@@ -618,10 +630,10 @@ function resolveCustomizeRegistration(
           lookupRegime: receiverContext.lookupRegime,
           materializationTiming: receiverContext.materializationTiming
         },
-        determineConfiguredEmissionArchetypes(baseName),
-        providerAnalysis.reasonIds,
-        providerAnalysis.note
-      )
+          determineConfiguredEmissionArchetypes(customizeChain),
+          providerAnalysis.reasonIds,
+          providerAnalysis.note
+        )
     ]
   };
 }
@@ -727,7 +739,8 @@ function resolveAppTaskRegistration(
         {
           worldRegime: WorldRegimeKind.ConstructorEmission,
           registrationPath: inferRegisterReceiverContext(
-            (registerCall.expression as ts.PropertyAccessExpression).expression
+            (registerCall.expression as ts.PropertyAccessExpression).expression,
+            context
           ).registrationPath,
           lookupRegime: receiverContext.lookupRegime,
           materializationTiming: MaterializationTimingKind.LifecycleSlotGated
@@ -812,9 +825,9 @@ function resolveAppTaskRegistration(
 }
 
 function determineConfiguredEmissionArchetypes(
-  baseName: string
+  customizeChain: CustomizeChain
 ): readonly ConstructorArchetypeKind[] {
-  return baseName.includes("I18n")
+  return customizeChain.configurationRootKind === FrameworkConfigurationRootKind.I18n
     ? [
         ConstructorArchetypeKind.CustomizedDefault,
         ConstructorArchetypeKind.GeneratedSyntax
@@ -925,6 +938,10 @@ function inspectCustomizeChain(
   const baseName = readBaseExpressionName(currentExpression, context);
   return {
     baseName,
+    configurationRootKind: resolveFrameworkConfigurationRootKind(
+      currentExpression,
+      consumeAnalysisDepth(context)
+    ),
     depth: customizeCalls.length,
     customizeCalls
   };
@@ -983,11 +1000,14 @@ function collectRegisterCalls(
 }
 
 function inferRegisterReceiverContext(
-  receiverExpression: ts.Expression
+  receiverExpression: ts.Expression,
+  context: TypeScriptAnalysisContext
 ): RegisterReceiverContext {
-  const receiverName = readReceiverName(receiverExpression);
-
-  if (receiverName === "DI" || receiverName.toLowerCase().includes("container")) {
+  const receiverKind = resolveFrameworkRegisterReceiverKind(
+    receiverExpression,
+    context
+  );
+  if (receiverKind === FrameworkRegisterReceiverKind.KernelRegistration) {
     return {
       worldRegime: WorldRegimeKind.RegistryCarrier,
       registrationPath: RegistrationPathKind.KernelRegistration,
@@ -996,7 +1016,7 @@ function inferRegisterReceiverContext(
     };
   }
 
-  if (receiverName.toLowerCase().includes("registry")) {
+  if (receiverKind === FrameworkRegisterReceiverKind.RegistryInsertion) {
     return {
       worldRegime: WorldRegimeKind.RegistryCarrier,
       registrationPath: RegistrationPathKind.RegistryInsertion,
@@ -1011,26 +1031,6 @@ function inferRegisterReceiverContext(
     lookupRegime: LookupRegimeKind.CurrentPlusRootResource,
     materializationTiming: MaterializationTimingKind.Eager
   };
-}
-
-function readReceiverName(
-  expression: ts.Expression
-): string {
-  const unwrappedExpression = unwrapExpression(expression);
-
-  if (ts.isIdentifier(unwrappedExpression)) {
-    return unwrappedExpression.text;
-  }
-
-  if (ts.isPropertyAccessExpression(unwrappedExpression)) {
-    return unwrappedExpression.name.text;
-  }
-
-  if (ts.isCallExpression(unwrappedExpression)) {
-    return readReceiverName(unwrappedExpression.expression);
-  }
-
-  return "register";
 }
 
 function readBaseExpressionName(
@@ -1074,8 +1074,13 @@ function resolveExpressionSymbol(
 
 function looksLikeAggregateBundleSymbol(
   symbolName: string,
-  symbol: ts.Symbol
+  symbol: ts.Symbol,
+  context: TypeScriptAnalysisContext
 ): boolean {
+  if (resolveFrameworkConfigurationRootKindFromSymbol(symbol, context) !== undefined) {
+    return false;
+  }
+
   if (symbolName.endsWith("Configuration")) {
     return true;
   }
@@ -1134,13 +1139,6 @@ function isRegisterCall(
     expression.expression.name.text === "register";
 }
 
-function isAppTaskCall(
-  expression: ts.CallExpression
-): boolean {
-  return ts.isPropertyAccessExpression(expression.expression) &&
-    APP_TASK_METHOD_NAMES.has(expression.expression.name.text);
-}
-
 function isAuComposeBoundaryCall(
   expression: ts.CallExpression
 ): boolean {
@@ -1148,35 +1146,14 @@ function isAuComposeBoundaryCall(
     return false;
   }
 
-  const receiverName = readReceiverName(expression.expression.expression);
+  const receiverName = ts.isIdentifier(expression.expression.expression)
+    ? expression.expression.expression.text
+    : ts.isPropertyAccessExpression(expression.expression.expression)
+      ? expression.expression.expression.name.text
+      : "boundary";
   return receiverName.includes("AuCompose") ||
     receiverName.includes("ComposeBoundary") ||
     expression.expression.name.text === "boundary";
-}
-
-function isDirectDiRegistrationCall(
-  expression: ts.CallExpression
-): boolean {
-  if (!ts.isPropertyAccessExpression(expression.expression)) {
-    return false;
-  }
-
-  const methodName = expression.expression.name.text;
-  if (methodName === "aliasTo" && ts.isCallExpression(expression.expression.expression)) {
-    return isDirectDiRegistrationCall(expression.expression.expression);
-  }
-
-  if (![
-    "singleton",
-    "transient",
-    "instance",
-    "register"
-  ].includes(methodName)) {
-    return false;
-  }
-
-  const receiverName = readReceiverName(expression.expression.expression);
-  return receiverName === "DI" || receiverName.toLowerCase().includes("container");
 }
 
 function createActivePattern(
