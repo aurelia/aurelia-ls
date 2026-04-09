@@ -17,7 +17,9 @@ export const enum ContributorClassKind {
   ModuleIntakeCarriers = 3,
   ConfigurationEmittedMembers = 4,
   ConventionPolicyBroadening = 5,
-  NamingAndAliasConvergence = 6
+  NamingAndAliasConvergence = 6,
+  RootStackComposition = 7,
+  RouteShellAdmission = 8
 }
 
 export const enum SummaryStatusKind {

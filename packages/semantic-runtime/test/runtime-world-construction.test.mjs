@@ -124,6 +124,12 @@ const REGISTRATION_QUALIFIED_FIXTURE_ROOT = path.join(
   "aurelia-programs",
   "registration-world-qualified"
 );
+const REGISTRATION_BROADER_OBSERVED_FIXTURE_ROOT = path.join(
+  __dirname,
+  "fixtures",
+  "aurelia-programs",
+  "registration-world-broader-observed"
+);
 const REGISTRATION_TERMINAL_FIXTURE_ROOT = path.join(
   __dirname,
   "fixtures",
@@ -1021,6 +1027,139 @@ test("current-world publication keeps registration-world support qualified when 
     [
       RegistrationCompletenessPostureId.Closed,
       RegistrationCompletenessPostureId.Closed,
+      RegistrationCompletenessPostureId.ClosableOpen
+    ]
+  );
+});
+
+test("current-world publication widens broader observed routed root stacks without erasing qualifier posture", () => {
+  const questionRoute = createQuestionRoute(
+    createClaimRoute(ClaimHomeKind.CurrentWorldSummary),
+    {
+      inquiryEpisode: SemanticInquiryEpisode.BoundedClosureExplanation,
+      readMode: SemanticReadMode.Explain
+    }
+  );
+  const worldFrame = createWorldFrame(52, WorldFrameKind.Current);
+  const runtime = new SemanticRuntime(
+    {
+      introspection: createBufferedSemanticRuntimeIntrospection(),
+      typescriptProjectPort: new TypeScriptProjectPort(
+        {
+          generation: 52,
+          projectRoot: REGISTRATION_BROADER_OBSERVED_FIXTURE_ROOT
+        }
+      )
+    }
+  );
+  const answer = runtime.readSemanticAnswer(
+    {
+      questionRoute,
+      worldFrame
+    }
+  );
+  const proofRecord = createProofRecord({
+    pocket: SemanticRuntimeVerificationPocketKind.SubstrateAndEvaluatorRead,
+    proofClass: VerificationProofClassKind.SeamProof,
+    verificationBasis: VerificationBasisKind.InventedProductObligation,
+    surfaceRefs: [
+      SemanticRuntimeSurfaceKind.TypeScriptProjectPort,
+      SemanticRuntimeSurfaceKind.SubstrateReader,
+      SemanticRuntimeSurfaceKind.EvaluatorReadPort,
+      SemanticRuntimeSurfaceKind.SemanticRuntime
+    ],
+    closureStatusPressure: ClosureStatusKind.Qualified,
+    likelyReentryArea: ReentryAreaKind.SubjectOracle,
+    expected: {
+      qualification: ClaimQualifierKind.WorldOpen,
+      closureStatus: ClosureStatusKind.Qualified,
+      frontier: WorldParticipationFrontierKind.WorldQualified,
+      packageName: "@fixtures/registration-world-broader-observed",
+      activeRegistrationPatternCount: 6,
+      closedRegistrationPatternCount: 3,
+      qualifiedRegistrationPatternCount: 3,
+      underclosedRegistrationPatternCount: 4,
+      openRegistrationPatternCount: 4,
+      unsupportedRegistrationBoundaryCount: 0,
+      runtimeOnlyRegistrationBoundaryCount: 0,
+      activeFamilies: [
+        RegistrationPatternFamilyKind.AggregateBundle,
+        RegistrationPatternFamilyKind.ConfiguredEmissionRegistry,
+        RegistrationPatternFamilyKind.StagedBuilderFinalization,
+        RegistrationPatternFamilyKind.LifecycleGatedRegistration,
+        RegistrationPatternFamilyKind.MixedRootConstructorStack,
+        RegistrationPatternFamilyKind.RoutedRootWrapperAdmission
+      ],
+      underclosedFamilies: [
+        RegistrationPatternFamilyKind.LifecycleGatedRegistration,
+        RegistrationPatternFamilyKind.RouteConfigAdmissionWorld,
+        RegistrationPatternFamilyKind.MixedRootConstructorStack,
+        RegistrationPatternFamilyKind.RoutedRootWrapperAdmission
+      ],
+      contributorClasses: [
+        ContributorClassKind.ConfigurationEmittedMembers,
+        ContributorClassKind.RootStackComposition,
+        ContributorClassKind.RouteShellAdmission
+      ]
+    },
+    actual: {
+      qualification: answer.qualificationRefs[0]?.kind,
+      closureStatus: answer.closureStatus,
+      frontier: answer.payload?.currentWorldPublication?.frontier,
+      packageName: answer.payload?.currentWorldPublication?.consultedPackage.packageName,
+      activeRegistrationPatternCount: answer.payload?.currentWorldSummary?.activeRegistrationPatternCount,
+      closedRegistrationPatternCount: answer.payload?.currentWorldSummary?.closedRegistrationPatternCount,
+      qualifiedRegistrationPatternCount: answer.payload?.currentWorldSummary?.qualifiedRegistrationPatternCount,
+      underclosedRegistrationPatternCount: answer.payload?.currentWorldSummary?.underclosedRegistrationPatternCount,
+      openRegistrationPatternCount: answer.payload?.currentWorldSummary?.openRegistrationPatternCount,
+      unsupportedRegistrationBoundaryCount: answer.payload?.currentWorldSummary?.unsupportedRegistrationBoundaryCount,
+      runtimeOnlyRegistrationBoundaryCount: answer.payload?.currentWorldSummary?.runtimeOnlyRegistrationBoundaryCount,
+      activeFamilies: answer.payload?.currentWorldPublication?.activeRegistrationPatterns.map((pattern) => pattern.family),
+      underclosedFamilies: answer.payload?.currentWorldPublication?.underclosedRegistrationPatterns.map((pattern) => pattern.family),
+      contributorClasses: answer.payload?.currentWorldPublication?.createWorldSnapshotSummary(
+        worldFrame,
+        1
+      ).scannedContributorClasses
+    },
+    traceCapture: {
+      request: { questionRoute, worldFrame },
+      events: runtime.captureTrace(
+        {
+          questionRoute,
+          worldFrame
+        }
+      )
+    }
+  });
+
+  assertProofRecord(proofRecord);
+  assert.equal(
+    answer.payload?.currentWorldPublication?.underclosedRegistrationPatterns.length,
+    4
+  );
+  assert.deepEqual(
+    answer.payload?.currentWorldPublication?.activeRegistrationPatterns.map(
+      (pattern) => pattern.metadata.transitionClassId
+    ),
+    [
+      RegistrationTransitionClassId.MultiRegistrationAggregation,
+      RegistrationTransitionClassId.GeneratedSyntaxOrSettingsEmission,
+      RegistrationTransitionClassId.BuilderHistoryAccumulation,
+      RegistrationTransitionClassId.LifecycleSlotAttachment,
+      RegistrationTransitionClassId.RootStackComposition,
+      RegistrationTransitionClassId.RouteShellAdmission
+    ]
+  );
+  assert.deepEqual(
+    answer.payload?.currentWorldPublication?.activeRegistrationPatterns.map(
+      (pattern) => pattern.metadata.completenessPostureId
+    ),
+    [
+      RegistrationCompletenessPostureId.Closed,
+      RegistrationCompletenessPostureId.Closed,
+      RegistrationCompletenessPostureId.Closed,
+      RegistrationCompletenessPostureId.ClosableOpen,
+      RegistrationCompletenessPostureId.ClosableOpen,
       RegistrationCompletenessPostureId.ClosableOpen
     ]
   );

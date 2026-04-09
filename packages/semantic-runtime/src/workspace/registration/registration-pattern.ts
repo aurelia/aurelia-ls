@@ -14,7 +14,9 @@ export const enum RegistrationPatternFamilyKind {
   LifecycleGatedRegistration = 5,
   RouteConfigAdmissionWorld = 6,
   CallbackLocalDynamicRegistration = 7,
-  LateBoundDynamicCompositionLookup = 8
+  LateBoundDynamicCompositionLookup = 8,
+  MixedRootConstructorStack = 9,
+  RoutedRootWrapperAdmission = 10
 }
 
 export const enum RegistrationSupportBehaviorKind {
@@ -33,7 +35,9 @@ export const enum RegistrationTransitionClassId {
   BuilderHistoryAccumulation = 5,
   LifecycleSlotAttachment = 6,
   ChildWorldFork = 7,
-  GeneratedSyntaxOrSettingsEmission = 8
+  GeneratedSyntaxOrSettingsEmission = 8,
+  RootStackComposition = 9,
+  RouteShellAdmission = 10
 }
 
 export const enum RegistrationAnalyzabilityBandId {

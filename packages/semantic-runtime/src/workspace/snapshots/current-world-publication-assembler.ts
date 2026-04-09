@@ -25,6 +25,9 @@ import {
 import type { WorkspacePackageRef } from "../packages/workspace-package.js";
 import type { CustomElementScanResult } from "../registration/custom-element-declaration-scanner.js";
 import type { ExtensionConfigurationScanResult } from "../registration/extension-configuration-scanner.js";
+import {
+  RegistrationPatternFamilyKind
+} from "../registration/registration-pattern.js";
 import type {
   ActiveRegistrationPattern,
   RegistrationPatternScanResult,
@@ -212,6 +215,22 @@ function collectScannedContributorClasses(
     registrationPatterns.some((pattern) => pattern.lookupRegime === LookupRegimeKind.RegistryLocalOnly)
   ) {
     contributorClasses.add(ContributorClassKind.NamingAndAliasConvergence);
+  }
+
+  if (
+    registrationPatterns.some(
+      (pattern) => pattern.family === RegistrationPatternFamilyKind.MixedRootConstructorStack
+    )
+  ) {
+    contributorClasses.add(ContributorClassKind.RootStackComposition);
+  }
+
+  if (
+    registrationPatterns.some(
+      (pattern) => pattern.family === RegistrationPatternFamilyKind.RoutedRootWrapperAdmission
+    )
+  ) {
+    contributorClasses.add(ContributorClassKind.RouteShellAdmission);
   }
 
   return [...contributorClasses].sort((left, right) => left - right);

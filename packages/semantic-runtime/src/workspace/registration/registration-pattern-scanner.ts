@@ -11,8 +11,10 @@ import {
 import {
   FrameworkConfigurationRootKind,
   FrameworkDirectRegistrationBuilderKind,
+  FrameworkRootWrapperKind,
   FrameworkRegisterReceiverKind,
   isFrameworkAppTaskCall,
+  resolveFrameworkRootWrapperKind,
   resolveFrameworkConfigurationRootKind,
   resolveFrameworkConfigurationRootKindFromSymbol,
   resolveFrameworkDirectRegistrationBuilderKind,
@@ -76,6 +78,13 @@ type CustomizeChain = {
   readonly configurationRootKind: FrameworkConfigurationRootKind | undefined;
   readonly depth: number;
   readonly customizeCalls: readonly ts.CallExpression[];
+};
+
+type RootWrapperRegistration = {
+  readonly kind: FrameworkRootWrapperKind;
+  readonly registerCall: ts.CallExpression & {
+    readonly expression: ts.PropertyAccessExpression;
+  };
 };
 
 const EMPTY_RESOLUTION: RegistrationPatternResolution = {
@@ -195,6 +204,17 @@ export class RegistrationPatternScanner {
       return;
     }
 
+    const rootWrapperResolution = resolveRootWrapperRegistration(
+      unwrappedExpression,
+      registrationFileName,
+      context
+    );
+    if (rootWrapperResolution !== undefined) {
+      activePatterns.push(...rootWrapperResolution.activePatterns);
+      underclosedPatterns.push(...rootWrapperResolution.underclosedPatterns);
+      return;
+    }
+
     const callable = resolveCallable(unwrappedExpression.expression, context);
     if (callable === undefined) {
       return;
@@ -255,17 +275,171 @@ export class RegistrationPatternScanner {
     activePatterns: ActiveRegistrationPattern[],
     underclosedPatterns: UnderclosedRegistrationPattern[]
   ): void {
-    for (const expression of expressions) {
-      const resolution = resolveRegistrationExpression(
-        expression,
-        registrationFileName,
-        receiverContext,
+    const resolution = resolveRegistrationStack(
+      expressions,
+      registrationFileName,
+      receiverContext,
+      context
+    );
+    activePatterns.push(...resolution.activePatterns);
+    underclosedPatterns.push(...resolution.underclosedPatterns);
+  }
+}
+
+function resolveRegistrationStack(
+  expressions: readonly ts.Expression[],
+  registrationFileName: string,
+  receiverContext: RegisterReceiverContext,
+  context: TypeScriptAnalysisContext
+): RegistrationPatternResolution {
+  return mergeResolutions(
+    expressions.map((expression) => resolveRegistrationExpression(
+      expression,
+      registrationFileName,
+      receiverContext,
+      context
+    ))
+  );
+}
+
+function resolveRootWrapperRegistration(
+  expression: ts.CallExpression,
+  registrationFileName: string,
+  context: TypeScriptAnalysisContext
+): RegistrationPatternResolution | undefined {
+  const rootWrapper = resolveRootWrapperRegistrationSource(expression, context);
+  if (rootWrapper === undefined) {
+    return undefined;
+  }
+
+  const receiverContext = inferRegisterReceiverContext(
+    rootWrapper.registerCall.expression.expression,
+    context
+  );
+  const stackResolution = resolveRegistrationStack(
+    rootWrapper.registerCall.arguments,
+    registrationFileName,
+    receiverContext,
+    consumeAnalysisDepth(context)
+  );
+  const synthesizedResolutions: RegistrationPatternResolution[] = [stackResolution];
+  const mixedRootResolution = synthesizeMixedRootConstructorStack(
+    stackResolution,
+    registrationFileName
+  );
+  if (mixedRootResolution !== undefined) {
+    synthesizedResolutions.push(mixedRootResolution);
+  }
+
+  const routedRootResolution = synthesizeRoutedRootWrapperAdmission(
+    rootWrapper.kind,
+    expression.arguments,
+    stackResolution,
+    registrationFileName
+  );
+  if (routedRootResolution !== undefined) {
+    synthesizedResolutions.push(routedRootResolution);
+  }
+
+  return mergeResolutions(synthesizedResolutions);
+}
+
+function resolveRootWrapperRegistrationSource(
+  expression: ts.CallExpression,
+  context: TypeScriptAnalysisContext
+): RootWrapperRegistration | undefined {
+  const kind = resolveFrameworkRootWrapperKind(expression, context);
+  if (kind === undefined || !ts.isPropertyAccessExpression(expression.expression)) {
+    return undefined;
+  }
+
+  const registerCall = resolveRegisterCallSource(
+    expression.expression.expression,
+    consumeAnalysisDepth(context)
+  );
+  if (registerCall === undefined) {
+    return undefined;
+  }
+
+  return {
+    kind,
+    registerCall
+  };
+}
+
+function resolveRegisterCallSource(
+  expression: ts.Expression,
+  context: TypeScriptAnalysisContext
+): (ts.CallExpression & {
+  readonly expression: ts.PropertyAccessExpression;
+}) | undefined {
+  if (context.depth <= 0) {
+    return undefined;
+  }
+
+  const unwrappedExpression = unwrapExpression(expression);
+  if (ts.isCallExpression(unwrappedExpression)) {
+    if (isRegisterCall(unwrappedExpression)) {
+      return unwrappedExpression;
+    }
+
+    const callable = resolveCallable(unwrappedExpression.expression, context);
+    const returnExpression = callable === undefined
+      ? undefined
+      : readReturnExpression(callable);
+    return returnExpression === undefined
+      ? undefined
+      : resolveRegisterCallSource(returnExpression, consumeAnalysisDepth(context));
+  }
+
+  if (ts.isIdentifier(unwrappedExpression) || ts.isPropertyAccessExpression(unwrappedExpression)) {
+    const symbol = resolveExpressionSymbol(unwrappedExpression, context);
+    if (symbol === undefined) {
+      return undefined;
+    }
+
+    return resolveRegisterCallSourceFromSymbol(symbol, consumeAnalysisDepth(context));
+  }
+
+  return undefined;
+}
+
+function resolveRegisterCallSourceFromSymbol(
+  symbol: ts.Symbol,
+  context: TypeScriptAnalysisContext
+): (ts.CallExpression & {
+  readonly expression: ts.PropertyAccessExpression;
+}) | undefined {
+  const resolvedSymbol = (symbol.flags & ts.SymbolFlags.Alias) !== 0
+    ? context.checker.getAliasedSymbol(symbol)
+    : symbol;
+
+  for (const declaration of resolvedSymbol.declarations ?? []) {
+    if (ts.isVariableDeclaration(declaration) && declaration.initializer !== undefined) {
+      const registerCall = resolveRegisterCallSource(
+        declaration.initializer,
         context
       );
-      activePatterns.push(...resolution.activePatterns);
-      underclosedPatterns.push(...resolution.underclosedPatterns);
+      if (registerCall !== undefined) {
+        return registerCall;
+      }
+    }
+
+    if (ts.isFunctionDeclaration(declaration) || ts.isMethodDeclaration(declaration)) {
+      const returnExpression = readReturnExpression(declaration);
+      if (returnExpression !== undefined) {
+        const registerCall = resolveRegisterCallSource(
+          returnExpression,
+          context
+        );
+        if (registerCall !== undefined) {
+          return registerCall;
+        }
+      }
     }
   }
+
+  return undefined;
 }
 
 function resolveRegistrationExpression(
@@ -812,6 +986,101 @@ function resolveAppTaskRegistration(
   };
 }
 
+function synthesizeMixedRootConstructorStack(
+  stackResolution: RegistrationPatternResolution,
+  registrationFileName: string
+): RegistrationPatternResolution | undefined {
+  const constructorArchetypes = collectMixedRootConstructorArchetypes(stackResolution);
+  if (constructorArchetypes.length < 2) {
+    return undefined;
+  }
+
+  const reasonIds = collectMixedRootReasonIds(stackResolution);
+  const receiverContext: RegisterReceiverContext = {
+    worldRegime: WorldRegimeKind.ConstructorEmission,
+    registrationPath: RegistrationPathKind.ConfigurationEmission,
+    lookupRegime: selectMixedRootLookupRegime(stackResolution),
+    materializationTiming: selectMixedRootMaterializationTiming(stackResolution)
+  };
+  const metadata = createMixedRootConstructorStackMetadata(reasonIds);
+  return {
+    activePatterns: [
+      createActivePattern(
+        RegistrationPatternFamilyKind.MixedRootConstructorStack,
+        RegistrationSupportBehaviorKind.ClaimWithQualifiers,
+        registrationFileName,
+        receiverContext,
+        constructorArchetypes,
+        metadata
+      )
+    ],
+    underclosedPatterns: [
+      createUnderclosedPattern(
+        RegistrationPatternFamilyKind.MixedRootConstructorStack,
+        RegistrationSupportBehaviorKind.ClaimWithQualifiers,
+        registrationFileName,
+        receiverContext,
+        constructorArchetypes,
+        metadata,
+        reasonIds,
+        "The root startup path composes heterogeneous constructor surfaces, but lifecycle and current-world scope still keep the full stack qualified."
+      )
+    ]
+  };
+}
+
+function synthesizeRoutedRootWrapperAdmission(
+  rootWrapperKind: FrameworkRootWrapperKind,
+  rootWrapperArguments: readonly ts.Expression[],
+  stackResolution: RegistrationPatternResolution,
+  registrationFileName: string
+): RegistrationPatternResolution | undefined {
+  if (
+    rootWrapperArguments.length === 0 ||
+    !hasRoutedRootShellPressure(stackResolution)
+  ) {
+    return undefined;
+  }
+
+  const reasonIds = [
+    RegistrationReasonKind.ActiveWorldScopeDependent,
+    RegistrationReasonKind.RenderBranchDependent
+  ] as const;
+  const receiverContext: RegisterReceiverContext = {
+    worldRegime: WorldRegimeKind.ConstructorEmission,
+    registrationPath: RegistrationPathKind.ConfigurationEmission,
+    lookupRegime: LookupRegimeKind.OwnerBoundedLocal,
+    materializationTiming: rootWrapperKind === FrameworkRootWrapperKind.Hydrate
+      ? MaterializationTimingKind.LifecycleSlotGated
+      : MaterializationTimingKind.RenderTimeBranch
+  };
+  const metadata = createRoutedRootWrapperMetadata(reasonIds);
+  return {
+    activePatterns: [
+      createActivePattern(
+        RegistrationPatternFamilyKind.RoutedRootWrapperAdmission,
+        RegistrationSupportBehaviorKind.ClaimWithQualifiers,
+        registrationFileName,
+        receiverContext,
+        [],
+        metadata
+      )
+    ],
+    underclosedPatterns: [
+      createUnderclosedPattern(
+        RegistrationPatternFamilyKind.RoutedRootWrapperAdmission,
+        RegistrationSupportBehaviorKind.ClaimWithQualifiers,
+        registrationFileName,
+        receiverContext,
+        [],
+        metadata,
+        [...reasonIds],
+        "The routed root wrapper is visible, but route-shell admission still depends on active-world scope and render-time branching."
+      )
+    ]
+  };
+}
+
 function determineConfiguredEmissionArchetypes(
   customizeChain: CustomizeChain
 ): readonly ConstructorArchetypeKind[] {
@@ -1351,7 +1620,52 @@ function createRouteConfigMetadata(): RegistrationPatternMetadata {
     [
       RegistrationOpenResidualId.ChildWorldVisibilityQualified,
       RegistrationOpenResidualId.CompletenessOpen
-    ]
+      ]
+  );
+}
+
+function createMixedRootConstructorStackMetadata(
+  reasonIds: readonly RegistrationReasonKind[]
+): RegistrationPatternMetadata {
+  return new RegistrationPatternMetadata(
+    RegistrationTransitionClassId.RootStackComposition,
+    RegistrationAnalyzabilityBandId.BoundedDeeperInterpretation,
+    RegistrationAnalyzabilityTierId.SourceAnalyzable,
+    [
+      RegistrationWitnessBasisId.PositivePresenceSupported,
+      RegistrationWitnessBasisId.SearchedSpaceWitnessed,
+      RegistrationWitnessBasisId.CompletenessBlocked
+    ],
+    RegistrationCompletenessPostureId.ClosableOpen,
+    [RegistrationTopologyRuntimeHookId.CurrentWorldActivity],
+    mapReasonIdsToOpenResidualIds(
+      reasonIds,
+      [RegistrationOpenResidualId.CompletenessOpen]
+    )
+  );
+}
+
+function createRoutedRootWrapperMetadata(
+  reasonIds: readonly RegistrationReasonKind[]
+): RegistrationPatternMetadata {
+  return new RegistrationPatternMetadata(
+    RegistrationTransitionClassId.RouteShellAdmission,
+    RegistrationAnalyzabilityBandId.BoundedDeeperInterpretation,
+    RegistrationAnalyzabilityTierId.SourceAnalyzable,
+    [
+      RegistrationWitnessBasisId.PositivePresenceSupported,
+      RegistrationWitnessBasisId.SearchedSpaceWitnessed,
+      RegistrationWitnessBasisId.CompletenessBlocked
+    ],
+    RegistrationCompletenessPostureId.ClosableOpen,
+    [
+      RegistrationTopologyRuntimeHookId.CurrentWorldActivity,
+      RegistrationTopologyRuntimeHookId.ChildWorldVisibility
+    ],
+    mapReasonIdsToOpenResidualIds(
+      reasonIds,
+      [RegistrationOpenResidualId.CompletenessOpen]
+    )
   );
 }
 
@@ -1381,7 +1695,90 @@ function createLateBoundDynamicCompositionMetadata(): RegistrationPatternMetadat
     [
       RegistrationOpenResidualId.ChildWorldVisibilityQualified,
       RegistrationOpenResidualId.RuntimeOnlyExpansion
-    ]
+      ]
+  );
+}
+
+function collectMixedRootConstructorArchetypes(
+  stackResolution: RegistrationPatternResolution
+): readonly ConstructorArchetypeKind[] {
+  const supportedArchetypes = new Set<ConstructorArchetypeKind>([
+    ConstructorArchetypeKind.AggregateBundle,
+    ConstructorArchetypeKind.CustomizedDefault,
+    ConstructorArchetypeKind.StagedBuilder,
+    ConstructorArchetypeKind.LifecycleAttached
+  ]);
+  const constructorArchetypes = new Set<ConstructorArchetypeKind>();
+
+  for (const pattern of [
+    ...stackResolution.activePatterns,
+    ...stackResolution.underclosedPatterns
+  ]) {
+    for (const constructorArchetype of pattern.constructorArchetypes) {
+      if (supportedArchetypes.has(constructorArchetype)) {
+        constructorArchetypes.add(constructorArchetype);
+      }
+    }
+  }
+
+  return [...constructorArchetypes].sort((left, right) => left - right);
+}
+
+function collectMixedRootReasonIds(
+  stackResolution: RegistrationPatternResolution
+): readonly RegistrationReasonKind[] {
+  const reasonIds = new Set<RegistrationReasonKind>([
+    RegistrationReasonKind.ActiveWorldScopeDependent
+  ]);
+  const hasLifecyclePressure = [
+    ...stackResolution.activePatterns,
+    ...stackResolution.underclosedPatterns
+  ].some((pattern) =>
+    pattern.family === RegistrationPatternFamilyKind.LifecycleGatedRegistration
+  );
+
+  if (hasLifecyclePressure) {
+    reasonIds.add(RegistrationReasonKind.LifecycleGateDependent);
+  }
+
+  return [...reasonIds].sort((left, right) => left - right);
+}
+
+function selectMixedRootLookupRegime(
+  stackResolution: RegistrationPatternResolution
+): LookupRegimeKind {
+  const lookupRegimes = [
+    ...stackResolution.underclosedPatterns,
+    ...stackResolution.activePatterns
+  ].map((pattern) => pattern.lookupRegime);
+
+  if (lookupRegimes.includes(LookupRegimeKind.OwnerBoundedLocal)) {
+    return LookupRegimeKind.OwnerBoundedLocal;
+  }
+
+  return lookupRegimes.includes(LookupRegimeKind.GenericDiAncestor)
+    ? LookupRegimeKind.GenericDiAncestor
+    : LookupRegimeKind.CurrentPlusRootResource;
+}
+
+function selectMixedRootMaterializationTiming(
+  stackResolution: RegistrationPatternResolution
+): MaterializationTimingKind {
+  const timings = [
+    ...stackResolution.underclosedPatterns,
+    ...stackResolution.activePatterns
+  ].map((pattern) => pattern.materializationTiming);
+
+  return timings.includes(MaterializationTimingKind.LifecycleSlotGated)
+    ? MaterializationTimingKind.LifecycleSlotGated
+    : MaterializationTimingKind.Eager;
+}
+
+function hasRoutedRootShellPressure(
+  stackResolution: RegistrationPatternResolution
+): boolean {
+  return stackResolution.underclosedPatterns.some((pattern) =>
+    pattern.family === RegistrationPatternFamilyKind.RouteConfigAdmissionWorld
   );
 }
 

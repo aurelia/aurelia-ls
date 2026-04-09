@@ -16,6 +16,12 @@ export const enum FrameworkDirectRegistrationBuilderKind {
   WrongDiHelper = 2
 }
 
+export const enum FrameworkRootWrapperKind {
+  App = 1,
+  Enhance = 2,
+  Hydrate = 3
+}
+
 export const enum FrameworkRegisterReceiverKind {
   KernelRegistration = 1,
   RegistryInsertion = 2
@@ -27,7 +33,8 @@ const enum KnownFrameworkSurfaceKind {
   Container = 3,
   AppTask = 4,
   RouterConfiguration = 5,
-  I18nConfiguration = 6
+  I18nConfiguration = 6,
+  Aurelia = 7
 }
 
 type KnownFrameworkSurfaceDescriptor = {
@@ -68,6 +75,11 @@ const KNOWN_FRAMEWORK_SURFACES: readonly KnownFrameworkSurfaceDescriptor[] = [
     kind: KnownFrameworkSurfaceKind.I18nConfiguration,
     exactNames: ["I18nConfiguration"],
     packageHints: ["packages/i18n/src/configuration.ts"]
+  },
+  {
+    kind: KnownFrameworkSurfaceKind.Aurelia,
+    exactNames: ["Aurelia"],
+    packageHints: ["packages/runtime-html/src/aurelia.ts"]
   }
 ] as const;
 
@@ -86,6 +98,11 @@ const APP_TASK_MEMBER_NAMES = new Set([
   "hydrated",
   "deactivating",
   "deactivated"
+]);
+const ROOT_WRAPPER_MEMBER_KINDS = new Map<string, FrameworkRootWrapperKind>([
+  ["app", FrameworkRootWrapperKind.App],
+  ["enhance", FrameworkRootWrapperKind.Enhance],
+  ["hydrate", FrameworkRootWrapperKind.Hydrate]
 ]);
 
 export function resolveFrameworkConfigurationRootKind(
@@ -174,6 +191,27 @@ export function resolveFrameworkRegisterReceiverKind(
   const names = readExpressionAndTypeNames(expression, context);
   return names.some((name) => REGISTRY_NAME_PATTERN.test(name))
     ? FrameworkRegisterReceiverKind.RegistryInsertion
+    : undefined;
+}
+
+export function resolveFrameworkRootWrapperKind(
+  expression: ts.CallExpression,
+  context: TypeScriptAnalysisContext
+): FrameworkRootWrapperKind | undefined {
+  if (!ts.isPropertyAccessExpression(expression.expression)) {
+    return undefined;
+  }
+
+  const memberKind = ROOT_WRAPPER_MEMBER_KINDS.get(expression.expression.name.text);
+  if (memberKind === undefined) {
+    return undefined;
+  }
+
+  return resolveKnownFrameworkSurfaceFromExpression(
+    expression.expression.expression,
+    context
+  ) === KnownFrameworkSurfaceKind.Aurelia
+    ? memberKind
     : undefined;
 }
 
