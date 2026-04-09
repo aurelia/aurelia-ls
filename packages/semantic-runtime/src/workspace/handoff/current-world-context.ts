@@ -2,6 +2,35 @@ import type { QuestionRoute } from "../../query/framing/question-route.js";
 import type { WorldFrame } from "../../query/framing/world-frame.js";
 import type { CurrentWorldPublication } from "../snapshots/current-world-publication.js";
 import type { TypeScriptWorldConstruction } from "../registration/typescript-world-construction.js";
+import { ConsultedBoundaryKind, ConsultedBoundaryRef } from "../routes/consulted-boundary.js";
+import {
+  AdmissionRegimeKind,
+  ConsultationRoleKind,
+  ConstructorArchetypeKind,
+  LookupRegimeKind,
+  MaterializationTimingKind,
+  NamingSurfaceKind,
+  RegistrationPathKind,
+  WorldRegimeKind
+} from "../registration/consulted-world.js";
+import {
+  ChangedBasisClassKind,
+  ContributorClassKind,
+  CurrentWorldActivityStatusKind,
+  RescanBasis,
+  RescanScopeKind,
+  RescanSignal,
+  RescanTriggerKind,
+  SummaryReachabilityScopeKind,
+  SummaryStatusKind,
+  WorldFrameHandle,
+  WorldSnapshotSummary
+} from "./world-context-shapes.js";
+
+const SYNTHETIC_WORLD_REF_PREFIX = "synthetic-world";
+const WORLD_SEED_PREFIX = "world-seed";
+const SYNTHETIC_WORLD_BASIS = "synthetic-world-basis";
+const SYNTHETIC_BOUNDARY_ID = "/";
 
 export const enum RescanReasonKind {
   None = 0,
@@ -10,44 +39,27 @@ export const enum RescanReasonKind {
   WorldFrameShifted = 1 << 2
 }
 
-export interface WorldFrameHandle {
-  readonly kind: WorldFrame["kind"];
-  readonly version: number;
-}
+export {
+  ChangedBasisClassKind,
+  ContributorClassKind,
+  CurrentWorldActivityStatusKind,
+  RescanBasis,
+  RescanScopeKind,
+  RescanSignal,
+  RescanTriggerKind,
+  SummaryReachabilityScopeKind,
+  SummaryStatusKind,
+  WorldFrameHandle,
+  WorldSnapshotSummary
+};
 
-export interface WorldSnapshotSummary {
-  readonly kind: WorldFrame["kind"];
-  readonly version: number;
-  readonly publishedClaimCount: number;
-  readonly consultedPackageCount: number;
-  readonly recognizedResourceCount: number;
-  readonly admittedResourceCount: number;
-  readonly activeResourceCount: number;
-  readonly underclosedResourceCount: number;
-  readonly activeExtensionCount: number;
-  readonly admittedGeneratedVocabularyCount: number;
-  readonly underclosedGeneratedVocabularyCount: number;
-  readonly activeRegistrationPatternCount: number;
-  readonly closedRegistrationPatternCount: number;
-  readonly qualifiedRegistrationPatternCount: number;
-  readonly underclosedRegistrationPatternCount: number;
-  readonly openRegistrationPatternCount: number;
-  readonly unsupportedRegistrationBoundaryCount: number;
-  readonly runtimeOnlyRegistrationBoundaryCount: number;
-  readonly associatedTemplateCount: number;
-  readonly explicitNoViewCount: number;
-  readonly underclosedTemplateAssociationCount: number;
-}
-
-export interface RescanBasis {
-  readonly reasonMask: RescanReasonKind;
-}
-
-export interface CurrentWorldContext {
-  readonly worldFrameHandle: WorldFrameHandle;
-  readonly snapshotSummary: WorldSnapshotSummary;
-  readonly rescanBasis: RescanBasis;
-  readonly currentWorldPublication?: CurrentWorldPublication;
+export class CurrentWorldContext {
+  public constructor(
+    public readonly worldFrameHandle: WorldFrameHandle,
+    public readonly snapshotSummary: WorldSnapshotSummary,
+    public readonly rescanBasis: RescanBasis,
+    public readonly currentWorldPublication?: CurrentWorldPublication
+  ) {}
 }
 
 export interface CurrentWorldContextSeed {
@@ -70,7 +82,32 @@ export interface CurrentWorldContextSeed {
   readonly associatedTemplateCount?: number;
   readonly explicitNoViewCount?: number;
   readonly underclosedTemplateAssociationCount?: number;
+  readonly scannedContributorClasses?: readonly ContributorClassKind[];
+  readonly scannedContributorRefs?: readonly string[];
+  readonly supportingBoundaries?: readonly ConsultedBoundaryRef[];
+  readonly outOfBoundaryCandidateRefs?: readonly string[];
+  readonly recognitionStatus?: SummaryStatusKind;
+  readonly admissionStatus?: SummaryStatusKind;
+  readonly currentWorldActivityStatus?: CurrentWorldActivityStatusKind;
+  readonly reachabilityScopes?: readonly SummaryReachabilityScopeKind[];
+  readonly declarationWitnessStatus?: SummaryStatusKind;
+  readonly searchedWorldCompletenessStatus?: SummaryStatusKind;
+  readonly openStateStatus?: SummaryStatusKind;
+  readonly worldRef?: string;
+  readonly inheritedWorldSeedRef?: string;
+  readonly consultedBoundary?: ConsultedBoundaryRef;
+  readonly searchedBoundaries?: readonly ConsultedBoundaryRef[];
+  readonly consultationRole?: ConsultationRoleKind;
+  readonly worldRegime?: WorldRegimeKind;
+  readonly worldOwnerOrConstructorBasis?: string;
+  readonly registrationPath?: RegistrationPathKind;
+  readonly constructorArchetypes?: readonly ConstructorArchetypeKind[];
+  readonly admissionRegime?: AdmissionRegimeKind;
+  readonly lookupRegime?: LookupRegimeKind;
+  readonly materializationTiming?: MaterializationTimingKind;
+  readonly namingSurfaces?: readonly NamingSurfaceKind[];
   readonly rescanReasonMask?: RescanReasonKind;
+  readonly rescanSignals?: readonly RescanSignal[];
 }
 
 export class CurrentWorldContextPort {
@@ -93,92 +130,103 @@ export class CurrentWorldContextPort {
       questionRoute,
       worldFrame
     );
-    const summary = publication === undefined
-      ? {
-          publishedClaimCount: this.#seed.publishedClaimCount ?? 0,
-          consultedPackageCount: this.#seed.consultedPackageCount ?? 0,
-          recognizedResourceCount: this.#seed.recognizedResourceCount ?? 0,
-          admittedResourceCount: this.#seed.admittedResourceCount ?? 0,
-          activeResourceCount: this.#seed.activeResourceCount ?? 0,
-          underclosedResourceCount: this.#seed.underclosedResourceCount ?? 0,
-          activeExtensionCount: this.#seed.activeExtensionCount ?? 0,
-          admittedGeneratedVocabularyCount: this.#seed.admittedGeneratedVocabularyCount ?? 0,
-          underclosedGeneratedVocabularyCount: this.#seed.underclosedGeneratedVocabularyCount ?? 0,
-          activeRegistrationPatternCount: this.#seed.activeRegistrationPatternCount ?? 0,
-          closedRegistrationPatternCount: this.#seed.closedRegistrationPatternCount ?? 0,
-          qualifiedRegistrationPatternCount: this.#seed.qualifiedRegistrationPatternCount ?? 0,
-          underclosedRegistrationPatternCount: this.#seed.underclosedRegistrationPatternCount ?? 0,
-          openRegistrationPatternCount: this.#seed.openRegistrationPatternCount ?? 0,
-          unsupportedRegistrationBoundaryCount: this.#seed.unsupportedRegistrationBoundaryCount ?? 0,
-          runtimeOnlyRegistrationBoundaryCount: this.#seed.runtimeOnlyRegistrationBoundaryCount ?? 0,
-          associatedTemplateCount: this.#seed.associatedTemplateCount ?? 0,
-          explicitNoViewCount: this.#seed.explicitNoViewCount ?? 0,
-          underclosedTemplateAssociationCount: this.#seed.underclosedTemplateAssociationCount ?? 0
-        }
-      : {
-          publishedClaimCount: 1,
-          consultedPackageCount: 1,
-          recognizedResourceCount: publication.recognizedResourceCount,
-          admittedResourceCount: publication.admittedResourceCount,
-          activeResourceCount: publication.activeResourceCount,
-          underclosedResourceCount: publication.underclosedResourceCount,
-          activeExtensionCount: publication.activeExtensionCount,
-          admittedGeneratedVocabularyCount: publication.admittedGeneratedVocabularyCount,
-          underclosedGeneratedVocabularyCount: publication.underclosedGeneratedVocabularyCount,
-          activeRegistrationPatternCount: publication.activeRegistrationPatternCount,
-          closedRegistrationPatternCount: publication.closedRegistrationPatternCount,
-          qualifiedRegistrationPatternCount: publication.qualifiedRegistrationPatternCount,
-          underclosedRegistrationPatternCount: publication.underclosedRegistrationPatternCount,
-          openRegistrationPatternCount: publication.openRegistrationPatternCount,
-          unsupportedRegistrationBoundaryCount: publication.unsupportedRegistrationBoundaryCount,
-          runtimeOnlyRegistrationBoundaryCount: publication.runtimeOnlyRegistrationBoundaryCount,
-          associatedTemplateCount: publication.associatedTemplateCount,
-          explicitNoViewCount: publication.explicitNoViewCount,
-          underclosedTemplateAssociationCount: publication.underclosedTemplateAssociationCount
-        };
+    const worldFrameHandle = publication === undefined
+      ? createSeedWorldFrameHandle(worldFrame, this.#seed)
+      : publication.createWorldFrameHandle(worldFrame);
+    const snapshotSummary = publication === undefined
+      ? createSeedWorldSnapshotSummary(worldFrame, this.#seed)
+      : publication.createWorldSnapshotSummary(
+          worldFrame,
+          this.#seed.publishedClaimCount ?? 1
+        );
     const reasonMask = (
       this.#seed.rescanReasonMask ?? RescanReasonKind.None
     ) | inferWorldFrameShift(worldFrame, publication);
+    const rescanBasis = new RescanBasis(
+      reasonMask,
+      mergeRescanSignals(
+        this.#seed.rescanSignals ?? [],
+        inferSignalsFromReasonMask(reasonMask)
+      )
+    );
 
-    return {
-      worldFrameHandle: {
-        kind: worldFrame.kind,
-        version: worldFrame.version
-      },
-      snapshotSummary: {
-        kind: worldFrame.kind,
-        version: worldFrame.version,
-        publishedClaimCount: summary.publishedClaimCount,
-        consultedPackageCount: summary.consultedPackageCount,
-        recognizedResourceCount: summary.recognizedResourceCount,
-        admittedResourceCount: summary.admittedResourceCount,
-        activeResourceCount: summary.activeResourceCount,
-        underclosedResourceCount: summary.underclosedResourceCount,
-        activeExtensionCount: summary.activeExtensionCount,
-        admittedGeneratedVocabularyCount: summary.admittedGeneratedVocabularyCount,
-        underclosedGeneratedVocabularyCount: summary.underclosedGeneratedVocabularyCount,
-        activeRegistrationPatternCount: summary.activeRegistrationPatternCount,
-        closedRegistrationPatternCount: summary.closedRegistrationPatternCount,
-        qualifiedRegistrationPatternCount: summary.qualifiedRegistrationPatternCount,
-        underclosedRegistrationPatternCount: summary.underclosedRegistrationPatternCount,
-        openRegistrationPatternCount: summary.openRegistrationPatternCount,
-        unsupportedRegistrationBoundaryCount: summary.unsupportedRegistrationBoundaryCount,
-        runtimeOnlyRegistrationBoundaryCount: summary.runtimeOnlyRegistrationBoundaryCount,
-        associatedTemplateCount: summary.associatedTemplateCount,
-        explicitNoViewCount: summary.explicitNoViewCount,
-        underclosedTemplateAssociationCount: summary.underclosedTemplateAssociationCount
-      },
-      rescanBasis: {
-        reasonMask
-      },
-      currentWorldPublication: publication
-    };
+    return new CurrentWorldContext(
+      worldFrameHandle,
+      snapshotSummary,
+      rescanBasis,
+      publication
+    );
   }
 }
 
 const EMPTY_CURRENT_WORLD_CONTEXT_SEED: CurrentWorldContextSeed = {};
 
 export { EMPTY_CURRENT_WORLD_CONTEXT_SEED };
+
+function createSeedWorldFrameHandle(
+  worldFrame: WorldFrame,
+  seed: CurrentWorldContextSeed
+): WorldFrameHandle {
+  const consultedBoundary = seed.consultedBoundary ?? createSyntheticBoundary();
+
+  return new WorldFrameHandle(
+    worldFrame.kind,
+    worldFrame.version,
+    seed.worldRef ?? createSyntheticWorldRef(worldFrame),
+    seed.inheritedWorldSeedRef ?? createWorldSeedRef(worldFrame),
+    consultedBoundary,
+    seed.searchedBoundaries ?? [consultedBoundary],
+    seed.consultationRole ?? ConsultationRoleKind.AdmittedRegistrationWorld,
+    seed.worldRegime ?? WorldRegimeKind.DefinitionMerge,
+    seed.worldOwnerOrConstructorBasis ?? SYNTHETIC_WORLD_BASIS,
+    seed.registrationPath ?? RegistrationPathKind.ResourceRegistration,
+    seed.constructorArchetypes ?? [ConstructorArchetypeKind.AggregateBundle],
+    seed.admissionRegime ?? AdmissionRegimeKind.FrameworkNative,
+    seed.lookupRegime ?? LookupRegimeKind.CurrentPlusRootResource,
+    seed.materializationTiming ?? MaterializationTimingKind.Eager,
+    seed.namingSurfaces ?? [NamingSurfaceKind.ExportName]
+  );
+}
+
+function createSeedWorldSnapshotSummary(
+  worldFrame: WorldFrame,
+  seed: CurrentWorldContextSeed
+): WorldSnapshotSummary {
+  return new WorldSnapshotSummary(
+    worldFrame.kind,
+    worldFrame.version,
+    seed.publishedClaimCount ?? 0,
+    seed.consultedPackageCount ?? 0,
+    seed.recognizedResourceCount ?? 0,
+    seed.admittedResourceCount ?? 0,
+    seed.activeResourceCount ?? 0,
+    seed.underclosedResourceCount ?? 0,
+    seed.activeExtensionCount ?? 0,
+    seed.admittedGeneratedVocabularyCount ?? 0,
+    seed.underclosedGeneratedVocabularyCount ?? 0,
+    seed.activeRegistrationPatternCount ?? 0,
+    seed.closedRegistrationPatternCount ?? 0,
+    seed.qualifiedRegistrationPatternCount ?? 0,
+    seed.underclosedRegistrationPatternCount ?? 0,
+    seed.openRegistrationPatternCount ?? 0,
+    seed.unsupportedRegistrationBoundaryCount ?? 0,
+    seed.runtimeOnlyRegistrationBoundaryCount ?? 0,
+    seed.associatedTemplateCount ?? 0,
+    seed.explicitNoViewCount ?? 0,
+    seed.underclosedTemplateAssociationCount ?? 0,
+    seed.scannedContributorClasses ?? [],
+    seed.scannedContributorRefs ?? [],
+    seed.supportingBoundaries ?? [seed.consultedBoundary ?? createSyntheticBoundary()],
+    seed.outOfBoundaryCandidateRefs ?? [],
+    seed.recognitionStatus ?? SummaryStatusKind.OpenPlaceholder,
+    seed.admissionStatus ?? SummaryStatusKind.OpenPlaceholder,
+    seed.currentWorldActivityStatus ?? CurrentWorldActivityStatusKind.Closed,
+    seed.reachabilityScopes ?? [],
+    seed.declarationWitnessStatus ?? SummaryStatusKind.OpenPlaceholder,
+    seed.searchedWorldCompletenessStatus ?? SummaryStatusKind.OpenPlaceholder,
+    seed.openStateStatus ?? SummaryStatusKind.OpenPlaceholder
+  );
+}
 
 function inferWorldFrameShift(
   worldFrame: WorldFrame,
@@ -191,4 +239,75 @@ function inferWorldFrameShift(
   return publication.consultedWorld.worldRef.endsWith(`:${worldFrame.version}`)
     ? RescanReasonKind.None
     : RescanReasonKind.WorldFrameShifted;
+}
+
+function inferSignalsFromReasonMask(
+  reasonMask: RescanReasonKind
+): readonly RescanSignal[] {
+  const rescanSignals: RescanSignal[] = [];
+
+  if ((reasonMask & RescanReasonKind.WorkspaceChanged) !== 0) {
+    rescanSignals.push(
+      new RescanSignal(
+        RescanTriggerKind.LocalDeclarationEdit,
+        RescanScopeKind.OwnerLocalThenPackage,
+        ChangedBasisClassKind.Declaration
+      )
+    );
+  }
+
+  if ((reasonMask & RescanReasonKind.BoundaryPlanChanged) !== 0) {
+    rescanSignals.push(
+      new RescanSignal(
+        RescanTriggerKind.BoundaryPlanEdit,
+        RescanScopeKind.BoundaryStackThenContributorPlanning,
+        ChangedBasisClassKind.BoundaryPlan
+      )
+    );
+  }
+
+  if ((reasonMask & RescanReasonKind.WorldFrameShifted) !== 0) {
+    rescanSignals.push(
+      new RescanSignal(
+        RescanTriggerKind.TimingOrBranchActivationEdit,
+        RescanScopeKind.CurrentWorldActivityAndReachability,
+        ChangedBasisClassKind.TimingBranch
+      )
+    );
+  }
+
+  return rescanSignals;
+}
+
+function mergeRescanSignals(
+  left: readonly RescanSignal[],
+  right: readonly RescanSignal[]
+): readonly RescanSignal[] {
+  const merged = new Map<string, RescanSignal>();
+
+  for (const signal of [...left, ...right]) {
+    const key = `${signal.trigger}:${signal.scope}:${signal.changedBasisClass}`;
+    merged.set(key, signal);
+  }
+
+  return [...merged.values()];
+}
+
+function createSyntheticBoundary(): ConsultedBoundaryRef {
+  return new ConsultedBoundaryRef(
+    ConsultedBoundaryKind.Package,
+    SYNTHETIC_BOUNDARY_ID
+  );
+}
+
+function createSyntheticWorldRef(
+  worldFrame: WorldFrame
+): string {
+  return `${SYNTHETIC_WORLD_REF_PREFIX}:${worldFrame.kind}:${worldFrame.version}`;
+}
+
+function createWorldSeedRef(
+  worldFrame: WorldFrame
+): string {
+  return `${WORLD_SEED_PREFIX}:${worldFrame.kind}:${worldFrame.version}`;
 }

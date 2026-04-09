@@ -24,6 +24,7 @@ import {
 import { WorkspacePackageRef } from "../packages/workspace-package.js";
 import { ConsultedBoundaryKind, ConsultedBoundaryRef } from "../routes/consulted-boundary.js";
 import {
+  AdmissionRegimeKind,
   ConsultationRoleKind,
   ConstructorArchetypeKind,
   ConsultedWorldHandle,
@@ -171,6 +172,7 @@ export class TypeScriptWorldConstruction {
       consultedPackage.rootPath,
       selectRegistrationPath(extensionScan, registrationScan),
       selectConstructorArchetypes(extensionScan, registrationScan),
+      selectAdmissionRegime(extensionScan, registrationScan),
       selectLookupRegime(registrationScan),
       selectMaterializationTiming(registrationScan),
       [NamingSurfaceKind.ExportName, NamingSurfaceKind.ResourceName]
@@ -358,6 +360,31 @@ function selectConstructorArchetypes(
   }
 
   return [...archetypes].sort((left, right) => left - right);
+}
+
+function selectAdmissionRegime(
+  extensionScan: {
+    readonly activeExtensionCount: number;
+    readonly underclosedGeneratedVocabularyCount: number;
+  },
+  registrationScan: RegistrationPatternScanResult
+): AdmissionRegimeKind {
+  const registrationPatterns = [
+    ...registrationScan.activeRegistrationPatterns,
+    ...registrationScan.underclosedRegistrationPatterns
+  ];
+
+  if (
+    extensionScan.activeExtensionCount > 0 ||
+    extensionScan.underclosedGeneratedVocabularyCount > 0 ||
+    registrationPatterns.some(
+      (pattern) => pattern.registrationPath === RegistrationPathKind.ConfigurationEmission
+    )
+  ) {
+    return AdmissionRegimeKind.ExtensionQualified;
+  }
+
+  return AdmissionRegimeKind.FrameworkNative;
 }
 
 function selectLookupRegime(

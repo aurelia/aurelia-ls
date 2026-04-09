@@ -30,6 +30,7 @@ import {
 import { CurrentWorldContextPort } from "../out/workspace/handoff/current-world-context.js";
 import { TypeScriptWorldConstruction } from "../out/workspace/registration/typescript-world-construction.js";
 import {
+  AdmissionRegimeKind,
   ConstructorArchetypeKind,
   LookupRegimeKind,
   MaterializationTimingKind,
@@ -38,9 +39,16 @@ import {
   WorldParticipationFrontierKind
 } from "../out/workspace/registration/consulted-world.js";
 import {
+  RegistrationCompletenessPostureId,
   RegistrationPatternFamilyKind,
+  RegistrationTransitionClassId,
   RegistrationSupportBehaviorKind
 } from "../out/workspace/registration/registration-pattern.js";
+import {
+  ContributorClassKind,
+  CurrentWorldActivityStatusKind,
+  SummaryStatusKind
+} from "../out/workspace/handoff/current-world-context.js";
 import {
   ExtensionConfigurationProfileKind,
   ExtensionFamilyKind,
@@ -224,6 +232,19 @@ test("current-world handoff publishes a file-backed consulted world and resource
   assert.equal(publication?.underclosedResourceCount, 0);
   assert.equal(publication?.associatedTemplateCount, 4);
   assert.equal(publication?.explicitNoViewCount, 1);
+  assert.equal(currentWorldContext.worldFrameHandle.admissionRegime, AdmissionRegimeKind.FrameworkNative);
+  assert.deepEqual(
+    currentWorldContext.snapshotSummary.scannedContributorClasses,
+    [
+      ContributorClassKind.ExplicitSourceDeclarations,
+      ContributorClassKind.ConventionPolicyBroadening
+    ]
+  );
+  assert.equal(currentWorldContext.snapshotSummary.recognitionStatus, SummaryStatusKind.Closed);
+  assert.equal(
+    currentWorldContext.snapshotSummary.currentWorldActivityStatus,
+    CurrentWorldActivityStatusKind.CurrentWorldSensitive
+  );
 });
 
 test("semantic-runtime publishes current-world resource admission from a curated Aurelia fixture", () => {
@@ -879,6 +900,20 @@ test("current-world publication closes aggregate and direct registration-builder
   assertProofRecord(proofRecord);
   assert.equal(publication?.activeRegistrationPatterns.length, 2);
   assert.equal(publication?.underclosedRegistrationPatterns.length, 0);
+  assert.deepEqual(
+    publication?.activeRegistrationPatterns.map((pattern) => pattern.metadata.transitionClassId),
+    [
+      RegistrationTransitionClassId.MultiRegistrationAggregation,
+      RegistrationTransitionClassId.AliasLinkage
+    ]
+  );
+  assert.deepEqual(
+    publication?.activeRegistrationPatterns.map((pattern) => pattern.metadata.completenessPostureId),
+    [
+      RegistrationCompletenessPostureId.Closed,
+      RegistrationCompletenessPostureId.Closed
+    ]
+  );
 });
 
 test("current-world publication keeps registration-world support qualified when builder, route, and lifecycle patterns remain partly open", () => {
@@ -924,19 +959,19 @@ test("current-world publication keeps registration-world support qualified when 
       closureStatus: ClosureStatusKind.Qualified,
       frontier: WorldParticipationFrontierKind.WorldQualified,
       packageName: "@fixtures/registration-world-qualified",
-      activeRegistrationPatternCount: 2,
-      closedRegistrationPatternCount: 0,
-      qualifiedRegistrationPatternCount: 2,
-      underclosedRegistrationPatternCount: 3,
-      openRegistrationPatternCount: 3,
+      activeRegistrationPatternCount: 3,
+      closedRegistrationPatternCount: 2,
+      qualifiedRegistrationPatternCount: 1,
+      underclosedRegistrationPatternCount: 2,
+      openRegistrationPatternCount: 2,
       unsupportedRegistrationBoundaryCount: 0,
       runtimeOnlyRegistrationBoundaryCount: 0,
       activeFamilies: [
+        RegistrationPatternFamilyKind.ConfiguredEmissionRegistry,
         RegistrationPatternFamilyKind.StagedBuilderFinalization,
         RegistrationPatternFamilyKind.LifecycleGatedRegistration
       ],
       underclosedFamilies: [
-        RegistrationPatternFamilyKind.StagedBuilderFinalization,
         RegistrationPatternFamilyKind.LifecycleGatedRegistration,
         RegistrationPatternFamilyKind.RouteConfigAdmissionWorld
       ]
@@ -968,7 +1003,27 @@ test("current-world publication keeps registration-world support qualified when 
   });
 
   assertProofRecord(proofRecord);
-  assert.equal(answer.payload?.currentWorldPublication?.underclosedRegistrationPatterns.length, 3);
+  assert.equal(answer.payload?.currentWorldPublication?.underclosedRegistrationPatterns.length, 2);
+  assert.deepEqual(
+    answer.payload?.currentWorldPublication?.activeRegistrationPatterns.map(
+      (pattern) => pattern.metadata.transitionClassId
+    ),
+    [
+      RegistrationTransitionClassId.GeneratedSyntaxOrSettingsEmission,
+      RegistrationTransitionClassId.BuilderHistoryAccumulation,
+      RegistrationTransitionClassId.LifecycleSlotAttachment
+    ]
+  );
+  assert.deepEqual(
+    answer.payload?.currentWorldPublication?.activeRegistrationPatterns.map(
+      (pattern) => pattern.metadata.completenessPostureId
+    ),
+    [
+      RegistrationCompletenessPostureId.Closed,
+      RegistrationCompletenessPostureId.Closed,
+      RegistrationCompletenessPostureId.ClosableOpen
+    ]
+  );
 });
 
 test("current-world publication reports unsupported and runtime-only registration boundaries honestly", () => {

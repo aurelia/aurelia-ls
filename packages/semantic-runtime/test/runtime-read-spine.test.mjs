@@ -20,9 +20,18 @@ import {
 } from "../out/runtime/introspection/runtime-introspection.js";
 import { SemanticRuntime } from "../out/runtime/semantic-runtime.js";
 import {
+  ChangedBasisClassKind,
+  ContributorClassKind,
   RescanReasonKind,
+  RescanScopeKind,
+  RescanTriggerKind,
+  SummaryStatusKind,
   CurrentWorldContextPort
 } from "../out/workspace/handoff/current-world-context.js";
+import {
+  ConsultationRoleKind,
+  RegistrationPathKind
+} from "../out/workspace/registration/consulted-world.js";
 import { EvaluatorReadPort } from "../out/evaluators/kernel/evaluator-read-port.js";
 import {
   createProofRecord,
@@ -196,6 +205,33 @@ test("workspace current-world handoff stays layered and route-safe", () => {
   });
 
   assertProofRecord(proofRecord);
+  assert.equal(handoff.worldFrameHandle.consultationRole, ConsultationRoleKind.AdmittedRegistrationWorld);
+  assert.equal(handoff.worldFrameHandle.registrationPath, RegistrationPathKind.ResourceRegistration);
+  assert.deepEqual(
+    handoff.snapshotSummary.scannedContributorClasses,
+    []
+  );
+  assert.equal(handoff.snapshotSummary.recognitionStatus, SummaryStatusKind.OpenPlaceholder);
+  assert.equal(handoff.snapshotSummary.declarationWitnessStatus, SummaryStatusKind.OpenPlaceholder);
+  assert.deepEqual(
+    handoff.rescanBasis.signals.map((signal) => [
+      signal.trigger,
+      signal.scope,
+      signal.changedBasisClass
+    ]),
+    [
+      [
+        RescanTriggerKind.LocalDeclarationEdit,
+        RescanScopeKind.OwnerLocalThenPackage,
+        ChangedBasisClassKind.Declaration
+      ],
+      [
+        RescanTriggerKind.BoundaryPlanEdit,
+        RescanScopeKind.BoundaryStackThenContributorPlanning,
+        ChangedBasisClassKind.BoundaryPlan
+      ]
+    ]
+  );
 });
 
 test("substrate and evaluator read stay publication-first and snapshot-first", () => {

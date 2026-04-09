@@ -24,6 +24,13 @@ export const enum RegistrationPathKind {
   ConventionBridge = 6
 }
 
+export const enum AdmissionRegimeKind {
+  FrameworkNative = 1,
+  LegacyConventionsTooling = 2,
+  ExtensionQualified = 3,
+  ProductNativeConventions = 4
+}
+
 export const enum ConstructorArchetypeKind {
   AggregateBundle = 1,
   CustomizedDefault = 2,
@@ -74,6 +81,7 @@ export class ConsultedWorldHandle {
     public readonly worldOwnerOrConstructorBasis: string,
     public readonly registrationPath: RegistrationPathKind,
     public readonly constructorArchetypes: readonly ConstructorArchetypeKind[],
+    public readonly admissionRegime: AdmissionRegimeKind,
     public readonly lookupRegime: LookupRegimeKind,
     public readonly materializationTiming: MaterializationTimingKind,
     public readonly namingSurfaces: readonly NamingSurfaceKind[]

@@ -25,6 +25,90 @@ export const enum RegistrationSupportBehaviorKind {
   DetectRuntimeOnlyBoundary = 5
 }
 
+export const enum RegistrationTransitionClassId {
+  KeySpaceAddition = 1,
+  KeySpaceOverlay = 2,
+  AliasLinkage = 3,
+  MultiRegistrationAggregation = 4,
+  BuilderHistoryAccumulation = 5,
+  LifecycleSlotAttachment = 6,
+  ChildWorldFork = 7,
+  GeneratedSyntaxOrSettingsEmission = 8
+}
+
+export const enum RegistrationAnalyzabilityBandId {
+  StaticallyClosable = 1,
+  BoundedDeeperInterpretation = 2,
+  ConventionAssisted = 3,
+  HeuristicDetectionOnly = 4,
+  RuntimeOnly = 5
+}
+
+export const enum RegistrationAnalyzabilityTierId {
+  DeclaredExplicit = 1,
+  GeneratedExplicit = 2,
+  SourceAnalyzable = 3,
+  TypeAssisted = 4,
+  CandidateOnly = 5,
+  RuntimeOnly = 6
+}
+
+export const enum RegistrationWitnessBasisId {
+  PositivePresenceSupported = 1,
+  SearchedSpaceWitnessed = 2,
+  CompletenessLicensed = 3,
+  AbsenceLicensable = 4,
+  CompletenessBlocked = 5,
+  TypedBasisBlocked = 6
+}
+
+export const enum RegistrationCompletenessPostureId {
+  Closed = 1,
+  ClosableOpen = 2,
+  TerminalOpen = 3,
+  OpaqueCarried = 4,
+  OpenPlaceholder = 5
+}
+
+export const enum RegistrationTopologyRuntimeHookId {
+  CurrentWorldActivity = 1,
+  ChildWorldVisibility = 2,
+  InheritedResourceVisibility = 3
+}
+
+export const enum RegistrationOpenResidualId {
+  CallbackBodyOpaque = 1,
+  DynamicKeyEmission = 2,
+  LifecycleGatedActivity = 3,
+  ChildWorldVisibilityQualified = 4,
+  ExtensionQualifiedFront = 5,
+  CompletenessOpen = 6,
+  RuntimeOnlyExpansion = 7
+}
+
+export const enum RegistrationReasonKind {
+  CallbackOpaquePayload = 1,
+  RuntimeTopologyDependent = 2,
+  DynamicLateBinding = 3,
+  UserCodeExecutionDependent = 4,
+  ImportedModuleSelectionDependent = 5,
+  ActiveWorldScopeDependent = 6,
+  LifecycleGateDependent = 7,
+  RenderBranchDependent = 8
+}
+
+export class RegistrationPatternMetadata {
+  public constructor(
+    public readonly transitionClassId: RegistrationTransitionClassId,
+    public readonly analyzabilityBandId: RegistrationAnalyzabilityBandId,
+    public readonly analyzabilityTierId: RegistrationAnalyzabilityTierId,
+    public readonly witnessBasisIds: readonly RegistrationWitnessBasisId[],
+    public readonly completenessPostureId: RegistrationCompletenessPostureId,
+    public readonly topologyRuntimeHookIds: readonly RegistrationTopologyRuntimeHookId[] = [],
+    public readonly openResidualIds: readonly RegistrationOpenResidualId[] = []
+  ) {}
+}
+
 export class ActiveRegistrationPattern {
   public constructor(
     public readonly family: RegistrationPatternFamilyKind,
@@ -35,7 +119,8 @@ export class ActiveRegistrationPattern {
     public readonly registrationPath: RegistrationPathKind,
     public readonly constructorArchetypes: readonly ConstructorArchetypeKind[],
     public readonly lookupRegime: LookupRegimeKind,
-    public readonly materializationTiming: MaterializationTimingKind
+    public readonly materializationTiming: MaterializationTimingKind,
+    public readonly metadata: RegistrationPatternMetadata
   ) {}
 }
 
@@ -49,7 +134,8 @@ export class UnderclosedRegistrationPattern {
     public readonly constructorArchetypes: readonly ConstructorArchetypeKind[],
     public readonly lookupRegime: LookupRegimeKind,
     public readonly materializationTiming: MaterializationTimingKind,
-    public readonly reasonIds: readonly string[],
+    public readonly metadata: RegistrationPatternMetadata,
+    public readonly reasonIds: readonly RegistrationReasonKind[],
     public readonly note: string
   ) {}
 }

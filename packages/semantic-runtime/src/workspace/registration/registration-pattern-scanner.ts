@@ -20,9 +20,18 @@ import {
 } from "../../typescript/analysis/framework-interpretation.js";
 import {
   ActiveRegistrationPattern,
+  RegistrationAnalyzabilityBandId,
+  RegistrationAnalyzabilityTierId,
+  RegistrationCompletenessPostureId,
+  RegistrationOpenResidualId,
   RegistrationPatternFamilyKind,
+  RegistrationPatternMetadata,
   RegistrationPatternScanResult,
+  RegistrationReasonKind,
   RegistrationSupportBehaviorKind,
+  RegistrationTopologyRuntimeHookId,
+  RegistrationTransitionClassId,
+  RegistrationWitnessBasisId,
   UnderclosedRegistrationPattern
 } from "./registration-pattern.js";
 import {
@@ -51,9 +60,16 @@ type CustomizeProviderAnalysis =
     }
   | {
       readonly kind: "open";
-      readonly reasonIds: readonly string[];
+      readonly reasonIds: readonly RegistrationReasonKind[];
       readonly note: string;
     };
+
+type CustomizeChainAnalysis = {
+  readonly kind: CustomizeProviderAnalysis["kind"];
+  readonly analyzabilityTierId: RegistrationAnalyzabilityTierId;
+  readonly reasonIds: readonly RegistrationReasonKind[];
+  readonly note?: string;
+};
 
 type CustomizeChain = {
   readonly baseName: string | undefined;
@@ -286,7 +302,8 @@ function resolveRegistrationExpression(
               RegistrationSupportBehaviorKind.ClaimAndClose,
               registrationFileName,
               receiverContext,
-              [ConstructorArchetypeKind.AggregateBundle]
+              [ConstructorArchetypeKind.AggregateBundle],
+              createAggregateBundleMetadata()
             )
           ],
           underclosedPatterns: []
@@ -333,10 +350,11 @@ function resolveRegistrationExpression(
               materializationTiming: MaterializationTimingKind.RenderTimeBranch
             },
             [ConstructorArchetypeKind.ChildWorldBranch],
+            createLateBoundDynamicCompositionMetadata(),
             [
-              "dynamic-late-binding",
-              "runtime-topology-dependent",
-              "render-branch-dependent"
+              RegistrationReasonKind.DynamicLateBinding,
+              RegistrationReasonKind.RuntimeTopologyDependent,
+              RegistrationReasonKind.RenderBranchDependent
             ],
             "Dynamic composition lookup stays runtime-only inside the current registration-world ceiling."
           )
@@ -362,7 +380,8 @@ function resolveRegistrationExpression(
                   lookupRegime: LookupRegimeKind.GenericDiAncestor,
                   materializationTiming: MaterializationTimingKind.Eager
                 },
-                []
+                [],
+                createDirectDiAliasBundleMetadata()
               )
             ],
             underclosedPatterns: []
@@ -381,9 +400,10 @@ function resolveRegistrationExpression(
                   materializationTiming: MaterializationTimingKind.Eager
                 },
                 [],
+                createCallbackLocalDynamicMetadata(),
                 [
-                  "user-code-execution-dependent",
-                  "dynamic-late-binding"
+                  RegistrationReasonKind.UserCodeExecutionDependent,
+                  RegistrationReasonKind.DynamicLateBinding
                 ],
                 "Direct registration-builder payloads fell outside the current static closure ceiling."
               )
@@ -449,7 +469,8 @@ function resolveRegistrationExpressionFromSymbol(
           RegistrationSupportBehaviorKind.ClaimAndClose,
           registrationFileName,
           receiverContext,
-          [ConstructorArchetypeKind.AggregateBundle]
+          [ConstructorArchetypeKind.AggregateBundle],
+          createAggregateBundleMetadata()
         )
       ],
       underclosedPatterns: []
@@ -490,7 +511,8 @@ function resolveRegistrationExpressionFromSymbol(
               RegistrationSupportBehaviorKind.ClaimAndClose,
               registrationFileName,
               receiverContext,
-              [ConstructorArchetypeKind.AggregateBundle]
+              [ConstructorArchetypeKind.AggregateBundle],
+              createAggregateBundleMetadata()
             )
           ],
           underclosedPatterns: []
@@ -508,8 +530,13 @@ function resolveCustomizeRegistration(
   receiverContext: RegisterReceiverContext,
   context: TypeScriptAnalysisContext
 ): RegistrationPatternResolution {
-  const baseName = customizeChain.baseName ?? "Configuration";
-  const providerArgument = customizeChain.customizeCalls[0]?.arguments[0];
+  const configuredReceiverContext: RegisterReceiverContext = {
+    worldRegime: WorldRegimeKind.ConstructorEmission,
+    registrationPath: RegistrationPathKind.ConfigurationEmission,
+    lookupRegime: receiverContext.lookupRegime,
+    materializationTiming: receiverContext.materializationTiming
+  };
+  const configuredArchetypes = determineConfiguredEmissionArchetypes(customizeChain);
 
   if (customizeChain.configurationRootKind === FrameworkConfigurationRootKind.Router) {
     return {
@@ -529,9 +556,10 @@ function resolveCustomizeRegistration(
             ConstructorArchetypeKind.CustomizedDefault,
             ConstructorArchetypeKind.ComposedLayer
           ],
+          createRouteConfigMetadata(),
           [
-            "imported-module-selection-dependent",
-            "active-world-scope-dependent"
+            RegistrationReasonKind.ImportedModuleSelectionDependent,
+            RegistrationReasonKind.ActiveWorldScopeDependent
           ],
           "Route configuration admission is visible, but the admitted route world stays open inside the current registration-world ceiling."
         )
@@ -539,102 +567,79 @@ function resolveCustomizeRegistration(
     };
   }
 
+  const chainAnalysis = analyzeCustomizeChain(customizeChain, context);
+  const activePatterns: ActiveRegistrationPattern[] = [];
+  const underclosedPatterns: UnderclosedRegistrationPattern[] = [];
+
   if (customizeChain.depth > 1) {
-    return {
-      activePatterns: [
-        createActivePattern(
-          RegistrationPatternFamilyKind.StagedBuilderFinalization,
-          RegistrationSupportBehaviorKind.ClaimWithQualifiers,
-          registrationFileName,
-          {
-            worldRegime: WorldRegimeKind.ConstructorEmission,
-            registrationPath: RegistrationPathKind.ConfigurationEmission,
-            lookupRegime: receiverContext.lookupRegime,
-            materializationTiming: receiverContext.materializationTiming
-          },
-          [
-            ConstructorArchetypeKind.StagedBuilder,
-            ConstructorArchetypeKind.CustomizedDefault
-          ]
-        )
-      ],
-      underclosedPatterns: [
+    activePatterns.push(
+      createActivePattern(
+        RegistrationPatternFamilyKind.StagedBuilderFinalization,
+        chainAnalysis.kind === "explicit"
+          ? RegistrationSupportBehaviorKind.ClaimAndClose
+          : RegistrationSupportBehaviorKind.ClaimWithQualifiers,
+        registrationFileName,
+        configuredReceiverContext,
+        [
+          ConstructorArchetypeKind.StagedBuilder,
+          ...configuredArchetypes
+        ],
+        createStagedBuilderMetadata(chainAnalysis)
+      )
+    );
+
+    if (chainAnalysis.kind === "open") {
+      underclosedPatterns.push(
         createUnderclosedPattern(
           RegistrationPatternFamilyKind.StagedBuilderFinalization,
           RegistrationSupportBehaviorKind.ClaimWithQualifiers,
           registrationFileName,
-          {
-            worldRegime: WorldRegimeKind.ConstructorEmission,
-            registrationPath: RegistrationPathKind.ConfigurationEmission,
-            lookupRegime: receiverContext.lookupRegime,
-            materializationTiming: receiverContext.materializationTiming
-          },
+          configuredReceiverContext,
           [
             ConstructorArchetypeKind.StagedBuilder,
-            ConstructorArchetypeKind.CustomizedDefault
+            ...configuredArchetypes
           ],
-          [
-            "callback-opaque-payload",
-            "runtime-topology-dependent"
-          ],
-          "Staged builder finalization widened the registration world, but the layered builder history stays qualified inside the current analysis ceiling."
+          createStagedBuilderMetadata(chainAnalysis),
+          chainAnalysis.reasonIds,
+          chainAnalysis.note ??
+            "Staged builder finalization widened the registration world, but the layered builder history stays qualified inside the current analysis ceiling."
         )
-      ]
-    };
+      );
+    }
   }
 
-  const providerAnalysis = analyzeCustomizeProvider(providerArgument, context);
-  if (providerAnalysis.kind === "explicit") {
-    return {
-      activePatterns: [
-        createActivePattern(
-          RegistrationPatternFamilyKind.ConfiguredEmissionRegistry,
-          RegistrationSupportBehaviorKind.ClaimAndClose,
-          registrationFileName,
-          {
-            worldRegime: WorldRegimeKind.ConstructorEmission,
-            registrationPath: RegistrationPathKind.ConfigurationEmission,
-            lookupRegime: receiverContext.lookupRegime,
-            materializationTiming: receiverContext.materializationTiming
-          },
-          determineConfiguredEmissionArchetypes(customizeChain)
-        )
-      ],
-      underclosedPatterns: []
-    };
-  }
+  activePatterns.push(
+    createActivePattern(
+      RegistrationPatternFamilyKind.ConfiguredEmissionRegistry,
+      chainAnalysis.kind === "explicit"
+        ? RegistrationSupportBehaviorKind.ClaimAndClose
+        : RegistrationSupportBehaviorKind.ClaimWithQualifiers,
+      registrationFileName,
+      configuredReceiverContext,
+      configuredArchetypes,
+      createConfiguredEmissionMetadata(chainAnalysis)
+    )
+  );
 
-  return {
-    activePatterns: [
-      createActivePattern(
-        RegistrationPatternFamilyKind.ConfiguredEmissionRegistry,
-        RegistrationSupportBehaviorKind.ClaimWithQualifiers,
-        registrationFileName,
-        {
-          worldRegime: WorldRegimeKind.ConstructorEmission,
-          registrationPath: RegistrationPathKind.ConfigurationEmission,
-          lookupRegime: receiverContext.lookupRegime,
-          materializationTiming: receiverContext.materializationTiming
-        },
-          determineConfiguredEmissionArchetypes(customizeChain)
-        )
-      ],
-      underclosedPatterns: [
+  if (chainAnalysis.kind === "open") {
+    underclosedPatterns.push(
       createUnderclosedPattern(
         RegistrationPatternFamilyKind.ConfiguredEmissionRegistry,
         RegistrationSupportBehaviorKind.ClaimWithQualifiers,
         registrationFileName,
-        {
-          worldRegime: WorldRegimeKind.ConstructorEmission,
-          registrationPath: RegistrationPathKind.ConfigurationEmission,
-          lookupRegime: receiverContext.lookupRegime,
-          materializationTiming: receiverContext.materializationTiming
-        },
-          determineConfiguredEmissionArchetypes(customizeChain),
-          providerAnalysis.reasonIds,
-          providerAnalysis.note
-        )
-    ]
+        configuredReceiverContext,
+        configuredArchetypes,
+        createConfiguredEmissionMetadata(chainAnalysis),
+        chainAnalysis.reasonIds,
+        chainAnalysis.note ??
+          "Configuration customization callback left registration-side consequence underclosed inside the current analysis ceiling."
+      )
+    );
+  }
+
+  return {
+    activePatterns,
+    underclosedPatterns
   };
 }
 
@@ -645,6 +650,13 @@ function resolveAppTaskRegistration(
   context: TypeScriptAnalysisContext
 ): RegistrationPatternResolution {
   const callbackExpression = expression.arguments[0];
+  const lifecycleReceiverContext: RegisterReceiverContext = {
+    worldRegime: WorldRegimeKind.ConstructorEmission,
+    registrationPath: RegistrationPathKind.ConfigurationEmission,
+    lookupRegime: receiverContext.lookupRegime,
+    materializationTiming: MaterializationTimingKind.LifecycleSlotGated
+  };
+
   if (callbackExpression === undefined || !ts.isExpression(callbackExpression)) {
     return {
       activePatterns: [],
@@ -653,16 +665,12 @@ function resolveAppTaskRegistration(
           RegistrationPatternFamilyKind.CallbackLocalDynamicRegistration,
           RegistrationSupportBehaviorKind.DetectAndDeclareUnsupported,
           registrationFileName,
-          {
-            worldRegime: WorldRegimeKind.ConstructorEmission,
-            registrationPath: RegistrationPathKind.ConfigurationEmission,
-            lookupRegime: receiverContext.lookupRegime,
-            materializationTiming: MaterializationTimingKind.LifecycleSlotGated
-          },
+          lifecycleReceiverContext,
           [ConstructorArchetypeKind.LifecycleAttached],
+          createCallbackLocalDynamicMetadata(),
           [
-            "user-code-execution-dependent",
-            "dynamic-late-binding"
+            RegistrationReasonKind.UserCodeExecutionDependent,
+            RegistrationReasonKind.DynamicLateBinding
           ],
           "Lifecycle-attached registration callback could not be resolved inside the current analysis ceiling."
         )
@@ -685,16 +693,12 @@ function resolveAppTaskRegistration(
           RegistrationPatternFamilyKind.CallbackLocalDynamicRegistration,
           RegistrationSupportBehaviorKind.DetectAndDeclareUnsupported,
           registrationFileName,
-          {
-            worldRegime: WorldRegimeKind.ConstructorEmission,
-            registrationPath: RegistrationPathKind.ConfigurationEmission,
-            lookupRegime: receiverContext.lookupRegime,
-            materializationTiming: MaterializationTimingKind.LifecycleSlotGated
-          },
+          lifecycleReceiverContext,
           [ConstructorArchetypeKind.LifecycleAttached],
+          createCallbackLocalDynamicMetadata(),
           [
-            "user-code-execution-dependent",
-            "dynamic-late-binding"
+            RegistrationReasonKind.UserCodeExecutionDependent,
+            RegistrationReasonKind.DynamicLateBinding
           ],
           "Lifecycle-attached registration callback remained opaque inside the current analysis ceiling."
         )
@@ -711,16 +715,12 @@ function resolveAppTaskRegistration(
           RegistrationPatternFamilyKind.CallbackLocalDynamicRegistration,
           RegistrationSupportBehaviorKind.DetectAndDeclareUnsupported,
           registrationFileName,
-          {
-            worldRegime: WorldRegimeKind.ConstructorEmission,
-            registrationPath: RegistrationPathKind.ConfigurationEmission,
-            lookupRegime: receiverContext.lookupRegime,
-            materializationTiming: MaterializationTimingKind.LifecycleSlotGated
-          },
+          lifecycleReceiverContext,
           [ConstructorArchetypeKind.LifecycleAttached],
+          createCallbackLocalDynamicMetadata(),
           [
-            "user-code-execution-dependent",
-            "dynamic-late-binding"
+            RegistrationReasonKind.UserCodeExecutionDependent,
+            RegistrationReasonKind.DynamicLateBinding
           ],
           "Lifecycle-attached callback performs registration dynamically and cannot be closed from the current callsite shape."
         )
@@ -762,13 +762,9 @@ function resolveAppTaskRegistration(
           RegistrationPatternFamilyKind.LifecycleGatedRegistration,
           RegistrationSupportBehaviorKind.ClaimWithQualifiers,
           registrationFileName,
-          {
-            worldRegime: WorldRegimeKind.ConstructorEmission,
-            registrationPath: RegistrationPathKind.ConfigurationEmission,
-            lookupRegime: receiverContext.lookupRegime,
-            materializationTiming: MaterializationTimingKind.LifecycleSlotGated
-          },
-          [ConstructorArchetypeKind.LifecycleAttached]
+          lifecycleReceiverContext,
+          [ConstructorArchetypeKind.LifecycleAttached],
+          createLifecycleGatedMetadata()
         )
       ]
     : [];
@@ -780,16 +776,12 @@ function resolveAppTaskRegistration(
         RegistrationPatternFamilyKind.LifecycleGatedRegistration,
         RegistrationSupportBehaviorKind.ClaimWithQualifiers,
         registrationFileName,
-        {
-          worldRegime: WorldRegimeKind.ConstructorEmission,
-          registrationPath: RegistrationPathKind.ConfigurationEmission,
-          lookupRegime: receiverContext.lookupRegime,
-          materializationTiming: MaterializationTimingKind.LifecycleSlotGated
-        },
+        lifecycleReceiverContext,
         [ConstructorArchetypeKind.LifecycleAttached],
+        createLifecycleGatedMetadata(),
         [
-          "lifecycle-gate-dependent",
-          "render-branch-dependent"
+          RegistrationReasonKind.LifecycleGateDependent,
+          RegistrationReasonKind.RenderBranchDependent
         ],
         "Lifecycle-attached registration is admitted, but current-world activity stays qualified until the lifecycle gate runs."
       )
@@ -802,16 +794,12 @@ function resolveAppTaskRegistration(
         RegistrationPatternFamilyKind.CallbackLocalDynamicRegistration,
         RegistrationSupportBehaviorKind.DetectAndDeclareUnsupported,
         registrationFileName,
-        {
-          worldRegime: WorldRegimeKind.ConstructorEmission,
-          registrationPath: RegistrationPathKind.ConfigurationEmission,
-          lookupRegime: receiverContext.lookupRegime,
-          materializationTiming: MaterializationTimingKind.LifecycleSlotGated
-        },
+        lifecycleReceiverContext,
         [ConstructorArchetypeKind.LifecycleAttached],
+        createCallbackLocalDynamicMetadata(),
         [
-          "user-code-execution-dependent",
-          "dynamic-late-binding"
+          RegistrationReasonKind.UserCodeExecutionDependent,
+          RegistrationReasonKind.DynamicLateBinding
         ],
         "Lifecycle callback includes dynamic registration payloads that stay unsupported inside the current static ceiling."
       )
@@ -853,7 +841,7 @@ function analyzeCustomizeProvider(
   if (callable === undefined || callable.body === undefined) {
     return {
       kind: "open",
-      reasonIds: ["callback-opaque-payload"],
+      reasonIds: [RegistrationReasonKind.CallbackOpaquePayload],
       note: "Configuration customization callback could not be resolved inside the current builder-history ceiling."
     };
   }
@@ -863,7 +851,7 @@ function analyzeCustomizeProvider(
     return resolvedValue === undefined
       ? {
           kind: "open",
-          reasonIds: ["callback-opaque-payload"],
+          reasonIds: [RegistrationReasonKind.CallbackOpaquePayload],
           note: "Configuration customization callback returned an underclosed payload."
         }
       : { kind: "explicit" };
@@ -873,7 +861,7 @@ function analyzeCustomizeProvider(
     if (!ts.isExpressionStatement(statement)) {
       return {
         kind: "open",
-        reasonIds: ["callback-opaque-payload"],
+        reasonIds: [RegistrationReasonKind.CallbackOpaquePayload],
         note: "Configuration customization callback uses non-expression control flow that stays underclosed."
       };
     }
@@ -890,7 +878,7 @@ function analyzeCustomizeProvider(
       if (resolvedValue === undefined) {
         return {
           kind: "open",
-          reasonIds: ["callback-opaque-payload"],
+          reasonIds: [RegistrationReasonKind.CallbackOpaquePayload],
           note: "Configuration customization callback assigned a payload that stayed underclosed."
         };
       }
@@ -902,13 +890,48 @@ function analyzeCustomizeProvider(
     if (resolvedValue === undefined) {
       return {
         kind: "open",
-        reasonIds: ["callback-opaque-payload"],
+        reasonIds: [RegistrationReasonKind.CallbackOpaquePayload],
         note: "Configuration customization callback used an unresolvable payload."
       };
     }
   }
 
   return { kind: "explicit" };
+}
+
+function analyzeCustomizeChain(
+  customizeChain: CustomizeChain,
+  context: TypeScriptAnalysisContext
+): CustomizeChainAnalysis {
+  let hasSourceAnalyzableProvider = false;
+
+  for (const customizeCall of customizeChain.customizeCalls) {
+    const providerAnalysis = analyzeCustomizeProvider(
+      customizeCall.arguments[0],
+      context
+    );
+
+    if (providerAnalysis.kind === "open") {
+      return {
+        kind: "open",
+        analyzabilityTierId: RegistrationAnalyzabilityTierId.SourceAnalyzable,
+        reasonIds: providerAnalysis.reasonIds,
+        note: providerAnalysis.note
+      };
+    }
+
+    if (customizeCall.arguments[0] !== undefined) {
+      hasSourceAnalyzableProvider = true;
+    }
+  }
+
+  return {
+    kind: "explicit",
+    analyzabilityTierId: hasSourceAnalyzableProvider
+      ? RegistrationAnalyzabilityTierId.SourceAnalyzable
+      : RegistrationAnalyzabilityTierId.GeneratedExplicit,
+    reasonIds: []
+  };
 }
 
 function inspectCustomizeChain(
@@ -1162,7 +1185,8 @@ function createActivePattern(
     RegistrationSupportBehaviorKind.ClaimWithQualifiers,
   registrationFileName: string,
   receiverContext: RegisterReceiverContext,
-  constructorArchetypes: readonly ConstructorArchetypeKind[]
+  constructorArchetypes: readonly ConstructorArchetypeKind[],
+  metadata: RegistrationPatternMetadata
 ): ActiveRegistrationPattern {
   return new ActiveRegistrationPattern(
     family,
@@ -1172,7 +1196,8 @@ function createActivePattern(
     receiverContext.registrationPath,
     constructorArchetypes,
     receiverContext.lookupRegime,
-    receiverContext.materializationTiming
+    receiverContext.materializationTiming,
+    metadata
   );
 }
 
@@ -1182,7 +1207,8 @@ function createUnderclosedPattern(
   registrationFileName: string,
   receiverContext: RegisterReceiverContext,
   constructorArchetypes: readonly ConstructorArchetypeKind[],
-  reasonIds: readonly string[],
+  metadata: RegistrationPatternMetadata,
+  reasonIds: readonly RegistrationReasonKind[],
   note: string
 ): UnderclosedRegistrationPattern {
   return new UnderclosedRegistrationPattern(
@@ -1194,9 +1220,201 @@ function createUnderclosedPattern(
     constructorArchetypes,
     receiverContext.lookupRegime,
     receiverContext.materializationTiming,
+    metadata,
     reasonIds,
     note
   );
+}
+
+function createAggregateBundleMetadata(): RegistrationPatternMetadata {
+  return new RegistrationPatternMetadata(
+    RegistrationTransitionClassId.MultiRegistrationAggregation,
+    RegistrationAnalyzabilityBandId.StaticallyClosable,
+    RegistrationAnalyzabilityTierId.DeclaredExplicit,
+    [
+      RegistrationWitnessBasisId.PositivePresenceSupported,
+      RegistrationWitnessBasisId.SearchedSpaceWitnessed,
+      RegistrationWitnessBasisId.CompletenessLicensed,
+      RegistrationWitnessBasisId.AbsenceLicensable
+    ],
+    RegistrationCompletenessPostureId.Closed
+  );
+}
+
+function createDirectDiAliasBundleMetadata(): RegistrationPatternMetadata {
+  return new RegistrationPatternMetadata(
+    RegistrationTransitionClassId.AliasLinkage,
+    RegistrationAnalyzabilityBandId.StaticallyClosable,
+    RegistrationAnalyzabilityTierId.DeclaredExplicit,
+    [
+      RegistrationWitnessBasisId.PositivePresenceSupported,
+      RegistrationWitnessBasisId.SearchedSpaceWitnessed,
+      RegistrationWitnessBasisId.CompletenessLicensed,
+      RegistrationWitnessBasisId.AbsenceLicensable
+    ],
+    RegistrationCompletenessPostureId.Closed
+  );
+}
+
+function createConfiguredEmissionMetadata(
+  analysis: CustomizeChainAnalysis
+): RegistrationPatternMetadata {
+  return new RegistrationPatternMetadata(
+    RegistrationTransitionClassId.GeneratedSyntaxOrSettingsEmission,
+    RegistrationAnalyzabilityBandId.BoundedDeeperInterpretation,
+    analysis.analyzabilityTierId,
+    analysis.kind === "explicit"
+      ? [
+          RegistrationWitnessBasisId.PositivePresenceSupported,
+          RegistrationWitnessBasisId.SearchedSpaceWitnessed,
+          RegistrationWitnessBasisId.CompletenessLicensed,
+          RegistrationWitnessBasisId.AbsenceLicensable
+        ]
+      : [
+          RegistrationWitnessBasisId.PositivePresenceSupported,
+          RegistrationWitnessBasisId.CompletenessBlocked
+        ],
+    analysis.kind === "explicit"
+      ? RegistrationCompletenessPostureId.Closed
+      : RegistrationCompletenessPostureId.ClosableOpen,
+    [],
+    analysis.kind === "explicit"
+      ? []
+      : mapReasonIdsToOpenResidualIds(
+          analysis.reasonIds,
+          [RegistrationOpenResidualId.CompletenessOpen]
+        )
+  );
+}
+
+function createStagedBuilderMetadata(
+  analysis: CustomizeChainAnalysis
+): RegistrationPatternMetadata {
+  return new RegistrationPatternMetadata(
+    RegistrationTransitionClassId.BuilderHistoryAccumulation,
+    RegistrationAnalyzabilityBandId.BoundedDeeperInterpretation,
+    analysis.analyzabilityTierId,
+    analysis.kind === "explicit"
+      ? [
+          RegistrationWitnessBasisId.PositivePresenceSupported,
+          RegistrationWitnessBasisId.SearchedSpaceWitnessed,
+          RegistrationWitnessBasisId.CompletenessLicensed,
+          RegistrationWitnessBasisId.AbsenceLicensable
+        ]
+      : [
+          RegistrationWitnessBasisId.PositivePresenceSupported,
+          RegistrationWitnessBasisId.CompletenessBlocked
+        ],
+    analysis.kind === "explicit"
+      ? RegistrationCompletenessPostureId.Closed
+      : RegistrationCompletenessPostureId.ClosableOpen,
+    [],
+    analysis.kind === "explicit"
+      ? []
+      : mapReasonIdsToOpenResidualIds(
+          analysis.reasonIds,
+          [
+            RegistrationOpenResidualId.CallbackBodyOpaque,
+            RegistrationOpenResidualId.CompletenessOpen
+          ]
+        )
+  );
+}
+
+function createLifecycleGatedMetadata(
+  openResidualIds: readonly RegistrationOpenResidualId[] = [
+    RegistrationOpenResidualId.LifecycleGatedActivity
+  ]
+): RegistrationPatternMetadata {
+  return new RegistrationPatternMetadata(
+    RegistrationTransitionClassId.LifecycleSlotAttachment,
+    RegistrationAnalyzabilityBandId.BoundedDeeperInterpretation,
+    RegistrationAnalyzabilityTierId.SourceAnalyzable,
+    [
+      RegistrationWitnessBasisId.PositivePresenceSupported,
+      RegistrationWitnessBasisId.CompletenessBlocked
+    ],
+    RegistrationCompletenessPostureId.ClosableOpen,
+    [RegistrationTopologyRuntimeHookId.CurrentWorldActivity],
+    [...openResidualIds]
+  );
+}
+
+function createRouteConfigMetadata(): RegistrationPatternMetadata {
+  return new RegistrationPatternMetadata(
+    RegistrationTransitionClassId.ChildWorldFork,
+    RegistrationAnalyzabilityBandId.BoundedDeeperInterpretation,
+    RegistrationAnalyzabilityTierId.SourceAnalyzable,
+    [RegistrationWitnessBasisId.CompletenessBlocked],
+    RegistrationCompletenessPostureId.OpenPlaceholder,
+    [RegistrationTopologyRuntimeHookId.ChildWorldVisibility],
+    [
+      RegistrationOpenResidualId.ChildWorldVisibilityQualified,
+      RegistrationOpenResidualId.CompletenessOpen
+    ]
+  );
+}
+
+function createCallbackLocalDynamicMetadata(): RegistrationPatternMetadata {
+  return new RegistrationPatternMetadata(
+    RegistrationTransitionClassId.LifecycleSlotAttachment,
+    RegistrationAnalyzabilityBandId.RuntimeOnly,
+    RegistrationAnalyzabilityTierId.RuntimeOnly,
+    [RegistrationWitnessBasisId.CompletenessBlocked],
+    RegistrationCompletenessPostureId.OpenPlaceholder,
+    [RegistrationTopologyRuntimeHookId.CurrentWorldActivity],
+    [
+      RegistrationOpenResidualId.CallbackBodyOpaque,
+      RegistrationOpenResidualId.RuntimeOnlyExpansion
+    ]
+  );
+}
+
+function createLateBoundDynamicCompositionMetadata(): RegistrationPatternMetadata {
+  return new RegistrationPatternMetadata(
+    RegistrationTransitionClassId.ChildWorldFork,
+    RegistrationAnalyzabilityBandId.RuntimeOnly,
+    RegistrationAnalyzabilityTierId.RuntimeOnly,
+    [RegistrationWitnessBasisId.CompletenessBlocked],
+    RegistrationCompletenessPostureId.TerminalOpen,
+    [RegistrationTopologyRuntimeHookId.ChildWorldVisibility],
+    [
+      RegistrationOpenResidualId.ChildWorldVisibilityQualified,
+      RegistrationOpenResidualId.RuntimeOnlyExpansion
+    ]
+  );
+}
+
+function mapReasonIdsToOpenResidualIds(
+  reasonIds: readonly RegistrationReasonKind[],
+  fallback: readonly RegistrationOpenResidualId[] = []
+): readonly RegistrationOpenResidualId[] {
+  const openResidualIds = new Set<RegistrationOpenResidualId>(fallback);
+
+  for (const reasonId of reasonIds) {
+    switch (reasonId) {
+      case RegistrationReasonKind.CallbackOpaquePayload:
+      case RegistrationReasonKind.UserCodeExecutionDependent:
+        openResidualIds.add(RegistrationOpenResidualId.CallbackBodyOpaque);
+        break;
+      case RegistrationReasonKind.DynamicLateBinding:
+        openResidualIds.add(RegistrationOpenResidualId.RuntimeOnlyExpansion);
+        break;
+      case RegistrationReasonKind.LifecycleGateDependent:
+        openResidualIds.add(RegistrationOpenResidualId.LifecycleGatedActivity);
+        break;
+      case RegistrationReasonKind.RuntimeTopologyDependent:
+      case RegistrationReasonKind.RenderBranchDependent:
+      case RegistrationReasonKind.ActiveWorldScopeDependent:
+        openResidualIds.add(RegistrationOpenResidualId.ChildWorldVisibilityQualified);
+        break;
+      default:
+        openResidualIds.add(RegistrationOpenResidualId.CompletenessOpen);
+        break;
+    }
+  }
+
+  return [...openResidualIds];
 }
 
 function unwrapExpression(
