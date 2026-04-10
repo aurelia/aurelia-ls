@@ -20,6 +20,13 @@ import {
   ClaimTruthStatusKind
 } from "../out/model/claims/claim-model.js";
 import {
+  SemanticClosureFrontierKind,
+  SemanticClosureReferenceKind,
+  SemanticClosureRetreatKind,
+  SemanticDependencyKind,
+  SemanticGoverningAnchorKind
+} from "../out/answers/semantic-answer.js";
+import {
   ClosureStatusKind,
   ReentryAreaKind,
   SemanticRuntimeSurfaceKind,
@@ -335,6 +342,40 @@ test("semantic-runtime publishes current-world resource admission from a curated
   });
 
   assertProofRecord(proofRecord);
+  assert.equal(
+    answer.closureBasis.witness.kind,
+    SemanticClosureReferenceKind.Recorded
+  );
+  assert.equal(
+    answer.closureBasis.witness.ref,
+    answer.payload?.currentWorldPublication?.declarationWitnessRef
+  );
+  assert.equal(
+    answer.closureBasis.completeness.kind,
+    SemanticClosureReferenceKind.Recorded
+  );
+  assert.equal(
+    answer.closureBasis.completeness.ref,
+    answer.payload?.currentWorldPublication?.closureRef
+  );
+  assert.equal(
+    answer.closureBasis.frontier,
+    SemanticClosureFrontierKind.CurrentWorldSensitive
+  );
+  assert.equal(answer.closureBasis.retreat, SemanticClosureRetreatKind.None);
+  assert.equal(
+    answer.closureBasis.dependencyKind,
+    SemanticDependencyKind.QualificationPublicationIngress
+  );
+  assert.deepEqual(
+    answer.governingAnchorRefs.map((anchor) => [anchor.kind, anchor.ref]),
+    [
+      [
+        SemanticGoverningAnchorKind.GoverningOrigin,
+        answer.payload?.currentWorldPublication?.consultedWorld.worldOwnerOrConstructorBasis
+      ]
+    ]
+  );
   assert.equal(answer.payload?.currentWorldPublication?.resources.length, 5);
   assert.deepEqual(
     proofRecord.traceCapture.events.map((event) => event.kind),
@@ -1400,6 +1441,26 @@ test("current-world publication reports unsupported and runtime-only registratio
   });
 
   assertProofRecord(proofRecord);
+  assert.equal(
+    answer.closureBasis.witness.kind,
+    SemanticClosureReferenceKind.Recorded
+  );
+  assert.equal(
+    answer.closureBasis.completeness.kind,
+    SemanticClosureReferenceKind.Recorded
+  );
+  assert.equal(
+    answer.closureBasis.frontier,
+    SemanticClosureFrontierKind.TerminalOpen
+  );
+  assert.equal(
+    answer.closureBasis.retreat,
+    SemanticClosureRetreatKind.BlockedDependencyBoundary
+  );
+  assert.equal(
+    answer.closureBasis.dependencyKind,
+    SemanticDependencyKind.QualificationPublicationIngress
+  );
   assert.equal(answer.payload?.currentWorldPublication?.activeRegistrationPatterns.length, 0);
   assert.equal(answer.payload?.currentWorldPublication?.underclosedRegistrationPatterns.length, 2);
 });

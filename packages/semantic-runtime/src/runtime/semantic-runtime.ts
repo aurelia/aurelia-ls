@@ -1,5 +1,8 @@
 import { SemanticAnswerAssembler } from "../answers/answer-assembler.js";
-import type { SemanticAnswer } from "../answers/semantic-answer.js";
+import {
+  collectSemanticGoverningAnchorRefStrings,
+  type SemanticAnswer
+} from "../answers/semantic-answer.js";
 import type { BoundaryOutcome } from "../boundaries/boundary-router.js";
 import { BoundaryRouter } from "../boundaries/boundary-router.js";
 import { getBoundaryRoute } from "../model/boundary-routes/boundary-routes.js";
@@ -115,7 +118,11 @@ export class SemanticRuntime {
     const boundaryOutcome = query.questionRoute.boundaryRoute === undefined
       ? undefined
       : this.#boundaryRouter.routeBoundary(
-          getBoundaryRoute(query.questionRoute.boundaryRoute)
+          getBoundaryRoute(query.questionRoute.boundaryRoute),
+          collectSemanticGoverningAnchorRefStrings(
+            worldContext.currentWorldPublication,
+            worldContext.worldFrameHandle
+          )
         );
     const substrateRead = this.#substrateReader.readSubstrateClaim(
       createQuestionRouteSubstrateLookupPlan(

@@ -163,6 +163,10 @@ const EMPTY_CURRENT_WORLD_CONTEXT_SEED: CurrentWorldContextSeed = {};
 
 export { EMPTY_CURRENT_WORLD_CONTEXT_SEED };
 
+export function isSyntheticWorldOwnerOrConstructorBasis(ref: string): boolean {
+  return ref === SYNTHETIC_WORLD_BASIS;
+}
+
 function createSeedWorldFrameHandle(
   worldFrame: WorldFrame,
   seed: CurrentWorldContextSeed

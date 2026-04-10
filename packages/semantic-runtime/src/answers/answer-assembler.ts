@@ -3,6 +3,7 @@ import { BoundaryRouteKind } from "../model/boundary-routes/boundary-routes.js";
 import {
   getClaimTruthStatus,
   ClaimOutcomeKind,
+  ClaimTruthStatusKind,
   ClaimQualifierKind,
   ClaimBoundaryKind,
   getClaimBoundary,
@@ -14,11 +15,26 @@ import type { RuntimeInvalidationPlan } from "../runtime/invalidation/invalidati
 import type { RuntimeWorldContextHandoff } from "../runtime/handoff/world-context-handoff.js";
 import type { TrustBundle } from "../runtime/trust/trust-bundle.js";
 import type { PublishedEvaluatorResult } from "../evaluators/kernel/evaluator-read-port.js";
-import { createSemanticClaimPayload } from "../substrate/claims/substrate-claim-ref.js";
+import {
+  createCurrentWorldSummaryValueFromSnapshot,
+  createSemanticClaimPayload
+} from "../substrate/claims/substrate-claim-ref.js";
 import { createSubstrateClaimRef } from "../substrate/claims/substrate-claim-ref.js";
-import type { SemanticAnswer } from "./semantic-answer.js";
+import {
+  SemanticClosureBasis,
+  SemanticClosureFrontierKind,
+  SemanticClosureRetreatKind,
+  SemanticDependencyKind,
+  SemanticGoverningAnchorKind,
+  SemanticGoverningAnchorRef,
+  collectSemanticGoverningAnchorRefStrings,
+  createRecordedSemanticClosureReference,
+  createUnavailableSemanticClosureReference,
+  type SemanticAnswer
+} from "./semantic-answer.js";
 import { getQuestionRouteClaimRoute } from "../query/framing/question-route.js";
 import { BoundaryOutcomeKind } from "../boundaries/consequence-basis/boundary-consequence-basis.js";
+import { WorldParticipationFrontierKind } from "../workspace/registration/consulted-world.js";
 
 export class SemanticAnswerAssembler {
   public assemble(
@@ -39,9 +55,20 @@ export class SemanticAnswerAssembler {
       classifyBoundaryOutcome(boundaryOutcome) ??
       ClaimOutcomeKind.ConsumerSilence;
     const qualifier = evaluation?.qualifier ?? ClaimQualifierKind.None;
+    const currentWorldPublication = selectCurrentWorldPublication(
+      worldContext,
+      evaluation
+    );
     const boundaryRefs = mergeBoundaryConsequence(
       boundaryOutcome,
       plan.query.questionRoute.boundaryRoute
+    );
+    const governingAnchorRefs = toSemanticGoverningAnchorRefs(
+      boundaryOutcome?.governingAnchorRefs ??
+        collectSemanticGoverningAnchorRefStrings(
+          currentWorldPublication,
+          worldContext.worldFrameHandle
+        )
     );
 
     return {
@@ -54,6 +81,13 @@ export class SemanticAnswerAssembler {
       outcome,
       qualificationRefs: [getClaimQualifier(qualifier)],
       boundaryRefs,
+      closureBasis: buildSemanticClosureBasis(
+        currentWorldPublication,
+        evaluation,
+        boundaryOutcome,
+        outcome
+      ),
+      governingAnchorRefs,
       closureStatus: trustBundle.closureStatus,
       provenance: {
         surface: trustBundle.governingSurface,
@@ -69,8 +103,9 @@ export class SemanticAnswerAssembler {
       boundaryOutcome,
       payload: createSemanticClaimPayload(
         {
-          currentWorldSummary: evaluation?.payload?.currentWorldSummary,
-          currentWorldPublication: evaluation?.payload?.currentWorldPublication,
+          currentWorldSummary: evaluation?.payload?.currentWorldSummary ??
+            createCurrentWorldSummaryValueFromSnapshot(worldContext.snapshotSummary),
+          currentWorldPublication,
           authoredOccurrenceBasis: evaluation?.payload?.authoredOccurrenceBasis
         }
       )
@@ -118,6 +153,129 @@ function classifyBoundaryOutcome(
   return boundaryOutcome.kind === BoundaryOutcomeKind.RouteToOwner
     ? ClaimOutcomeKind.ExternalOwnerReroute
     : ClaimOutcomeKind.ConsumerRefusal;
+}
+
+function buildSemanticClosureBasis(
+  currentWorldPublication: ReturnType<typeof selectCurrentWorldPublication>,
+  evaluation: PublishedEvaluatorResult | undefined,
+  boundaryOutcome: BoundaryOutcome | undefined,
+  outcome: ClaimOutcomeKind
+): SemanticClosureBasis {
+  return new SemanticClosureBasis(
+    currentWorldPublication?.declarationWitnessRef === undefined
+      ? createUnavailableSemanticClosureReference()
+      : createRecordedSemanticClosureReference(
+          currentWorldPublication.declarationWitnessRef
+        ),
+    currentWorldPublication?.closureRef === undefined
+      ? createUnavailableSemanticClosureReference()
+      : createRecordedSemanticClosureReference(
+          currentWorldPublication.closureRef
+        ),
+    deriveSemanticClosureFrontierKind(
+      currentWorldPublication?.frontier,
+      evaluation?.truthStatus
+    ),
+    deriveSemanticClosureRetreatKind(
+      currentWorldPublication?.frontier,
+      boundaryOutcome,
+      outcome
+    ),
+    deriveSemanticDependencyKind(
+      currentWorldPublication?.frontier,
+      boundaryOutcome
+    )
+  );
+}
+
+function selectCurrentWorldPublication(
+  worldContext: RuntimeWorldContextHandoff,
+  evaluation: PublishedEvaluatorResult | undefined
+) {
+  return evaluation?.payload?.currentWorldPublication ??
+    worldContext.currentWorldPublication;
+}
+
+function deriveSemanticClosureFrontierKind(
+  frontier: WorldParticipationFrontierKind | undefined,
+  truthStatus: PublishedEvaluatorResult["truthStatus"]
+): SemanticClosureFrontierKind {
+  switch (frontier) {
+    case WorldParticipationFrontierKind.ClosedBaseline:
+      return SemanticClosureFrontierKind.ClosedBaseline;
+    case WorldParticipationFrontierKind.CurrentWorldSensitive:
+      return SemanticClosureFrontierKind.CurrentWorldSensitive;
+    case WorldParticipationFrontierKind.WorldQualified:
+      return SemanticClosureFrontierKind.WorldQualified;
+    case WorldParticipationFrontierKind.TerminalOpen:
+      return SemanticClosureFrontierKind.TerminalOpen;
+    case WorldParticipationFrontierKind.OpenPlaceholder:
+      return SemanticClosureFrontierKind.OpenPlaceholder;
+  }
+
+  switch (truthStatus) {
+    case undefined:
+      return SemanticClosureFrontierKind.Unknown;
+    case ClaimTruthStatusKind.ClosedBaseline:
+      return SemanticClosureFrontierKind.ClosedBaseline;
+    case ClaimTruthStatusKind.CurrentWorldSensitive:
+      return SemanticClosureFrontierKind.CurrentWorldSensitive;
+    case ClaimTruthStatusKind.WorldQualified:
+      return SemanticClosureFrontierKind.WorldQualified;
+    case ClaimTruthStatusKind.TerminalOpen:
+      return SemanticClosureFrontierKind.TerminalOpen;
+    case ClaimTruthStatusKind.OpenPlaceholder:
+      return SemanticClosureFrontierKind.OpenPlaceholder;
+  }
+}
+
+function deriveSemanticClosureRetreatKind(
+  frontier: WorldParticipationFrontierKind | undefined,
+  boundaryOutcome: BoundaryOutcome | undefined,
+  outcome: ClaimOutcomeKind
+): SemanticClosureRetreatKind {
+  if (outcome === ClaimOutcomeKind.RetreatedOrReopened) {
+    return SemanticClosureRetreatKind.WithdrawnSupportRetreat;
+  }
+
+  if (
+    boundaryOutcome !== undefined ||
+    frontier === WorldParticipationFrontierKind.TerminalOpen
+  ) {
+    return SemanticClosureRetreatKind.BlockedDependencyBoundary;
+  }
+
+  return frontier === WorldParticipationFrontierKind.OpenPlaceholder
+    ? SemanticClosureRetreatKind.PlaceholderCarryForward
+    : SemanticClosureRetreatKind.None;
+}
+
+function deriveSemanticDependencyKind(
+  frontier: WorldParticipationFrontierKind | undefined,
+  boundaryOutcome: BoundaryOutcome | undefined
+): SemanticDependencyKind {
+  if (boundaryOutcome !== undefined) {
+    return SemanticDependencyKind.AffectedSurfaceReference;
+  }
+
+  if (frontier === undefined) {
+    return SemanticDependencyKind.KernelReadoutIngress;
+  }
+
+  return frontier === WorldParticipationFrontierKind.ClosedBaseline
+    ? SemanticDependencyKind.BasisPublicationIngress
+    : SemanticDependencyKind.QualificationPublicationIngress;
+}
+
+function toSemanticGoverningAnchorRefs(
+  refs: readonly string[]
+): readonly SemanticGoverningAnchorRef[] {
+  return refs.map(
+    (ref) => new SemanticGoverningAnchorRef(
+      SemanticGoverningAnchorKind.GoverningOrigin,
+      ref
+    )
+  );
 }
 
 function toClaimBoundaryKind(

@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import {
+  SemanticClosureFrontierKind,
+  SemanticClosureReferenceKind,
+  SemanticClosureRetreatKind,
+  SemanticDependencyKind
+} from "../out/answers/semantic-answer.js";
 import { BoundaryOutcomeKind } from "../out/boundaries/consequence-basis/boundary-consequence-basis.js";
 import { BoundaryRouteKind } from "../out/model/boundary-routes/boundary-routes.js";
 import { ClaimHomeKind, ClaimOutcomeKind, ClaimQualifierKind, createClaimRoute } from "../out/model/claims/index.js";
@@ -82,6 +88,13 @@ test("semantic-runtime ingress routes a deferred owner with structured proof and
   });
   const verifiedRecord = assertProofRecord(proofRecord);
 
+  assert.equal(answer.closureBasis.witness.kind, SemanticClosureReferenceKind.Unavailable);
+  assert.equal(answer.closureBasis.completeness.kind, SemanticClosureReferenceKind.Unavailable);
+  assert.equal(answer.closureBasis.frontier, SemanticClosureFrontierKind.Unknown);
+  assert.equal(answer.closureBasis.retreat, SemanticClosureRetreatKind.BlockedDependencyBoundary);
+  assert.equal(answer.closureBasis.dependencyKind, SemanticDependencyKind.AffectedSurfaceReference);
+  assert.deepEqual(answer.governingAnchorRefs, []);
+  assert.equal(answer.payload?.currentWorldSummary?.publishedClaimCount, 0);
   assert.equal(answer.deltaBasis.mayReuse, true);
   assert.deepEqual(
     verifiedRecord.traceCapture.events.map((event) => event.kind),

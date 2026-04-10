@@ -2,6 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  SemanticClosureFrontierKind,
+  SemanticClosureReferenceKind,
+  SemanticClosureRetreatKind,
+  SemanticDependencyKind
+} from "../out/answers/semantic-answer.js";
+import {
   ClaimHomeKind,
   ClaimOutcomeKind,
   ClaimQualifierKind,
@@ -145,6 +151,12 @@ test("semantic-runtime local read assembles a structured semantic answer", () =>
   const verifiedRecord = assertProofRecord(proofRecord);
 
   assert.equal(answer.provenance.surface, SemanticRuntimeSurfaceKind.EvaluatorReadPort);
+  assert.equal(answer.closureBasis.witness.kind, SemanticClosureReferenceKind.Unavailable);
+  assert.equal(answer.closureBasis.completeness.kind, SemanticClosureReferenceKind.Unavailable);
+  assert.equal(answer.closureBasis.frontier, SemanticClosureFrontierKind.ClosedBaseline);
+  assert.equal(answer.closureBasis.retreat, SemanticClosureRetreatKind.None);
+  assert.equal(answer.closureBasis.dependencyKind, SemanticDependencyKind.KernelReadoutIngress);
+  assert.deepEqual(answer.governingAnchorRefs, []);
   assert.equal(answer.deltaBasis.mayReuse, true);
   assert.deepEqual(
     verifiedRecord.traceCapture.events.map((event) => event.kind),

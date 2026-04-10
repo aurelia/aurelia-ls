@@ -6,6 +6,8 @@ import {
 } from "../../model/boundary-routes/boundary-routes.js";
 import { ClosureStatusKind } from "../../model/semantic-runtime-handles.js";
 
+const EMPTY_GOVERNING_ANCHOR_REFS: readonly string[] = [];
+
 export const enum BoundaryOutcomeKind {
   RouteToOwner = 1,
   Refuse = 2
@@ -28,6 +30,7 @@ export interface BoundaryConsequenceBasis {
   readonly route: BoundaryRoute;
   readonly kind: BoundaryOutcomeKind;
   readonly closureStatus: ClosureStatusKind;
+  readonly governingAnchorRefs: readonly string[];
   readonly preview?: BoundaryHandoffPreview;
   readonly refusal?: BoundaryRefusal;
 }
@@ -45,7 +48,8 @@ export function normalizeBoundaryRefusal(route: BoundaryRouteRef): BoundaryRefus
 
 export function buildBoundaryConsequenceBasis(
   route: BoundaryRouteRef,
-  hasOwnerPort: boolean
+  hasOwnerPort: boolean,
+  governingAnchorRefs: readonly string[] = EMPTY_GOVERNING_ANCHOR_REFS
 ): BoundaryConsequenceBasis {
   const resolvedRoute = getBoundaryRoute(classifyBoundaryRoute(route));
 
@@ -54,6 +58,7 @@ export function buildBoundaryConsequenceBasis(
       route: resolvedRoute,
       kind: BoundaryOutcomeKind.RouteToOwner,
       closureStatus: ClosureStatusKind.Qualified,
+      governingAnchorRefs,
       preview: { route: resolvedRoute.kind }
     };
   }
@@ -62,6 +67,7 @@ export function buildBoundaryConsequenceBasis(
     route: resolvedRoute,
     kind: BoundaryOutcomeKind.Refuse,
     closureStatus: ClosureStatusKind.Open,
+    governingAnchorRefs,
     refusal: normalizeBoundaryRefusal(resolvedRoute)
   };
 }
