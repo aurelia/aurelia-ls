@@ -180,15 +180,15 @@ function createSeedWorldFrameHandle(
     seed.inheritedWorldSeedRef ?? createWorldSeedRef(worldFrame),
     consultedBoundary,
     seed.searchedBoundaries ?? [consultedBoundary],
-    seed.consultationRole ?? ConsultationRoleKind.AdmittedRegistrationWorld,
-    seed.worldRegime ?? WorldRegimeKind.DefinitionMerge,
+    seed.consultationRole ?? ConsultationRoleKind.Unspecified,
+    seed.worldRegime ?? WorldRegimeKind.Unspecified,
     seed.worldOwnerOrConstructorBasis ?? SYNTHETIC_WORLD_BASIS,
-    seed.registrationPath ?? RegistrationPathKind.ResourceRegistration,
-    seed.constructorArchetypes ?? [ConstructorArchetypeKind.AggregateBundle],
-    seed.admissionRegime ?? AdmissionRegimeKind.FrameworkNative,
-    seed.lookupRegime ?? LookupRegimeKind.CurrentPlusRootResource,
-    seed.materializationTiming ?? MaterializationTimingKind.Eager,
-    seed.namingSurfaces ?? [NamingSurfaceKind.ExportName]
+    seed.registrationPath ?? RegistrationPathKind.Unspecified,
+    seed.constructorArchetypes ?? [],
+    seed.admissionRegime ?? AdmissionRegimeKind.Unspecified,
+    seed.lookupRegime ?? LookupRegimeKind.Unspecified,
+    seed.materializationTiming ?? MaterializationTimingKind.Unspecified,
+    seed.namingSurfaces ?? []
   );
 }
 

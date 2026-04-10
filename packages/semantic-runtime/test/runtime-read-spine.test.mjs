@@ -117,14 +117,14 @@ test("semantic-runtime local read assembles a structured semantic answer", () =>
       SemanticRuntimeSurfaceKind.AnswerAssembler,
       SemanticRuntimeSurfaceKind.SemanticRuntime
     ],
-    closureStatusPressure: ClosureStatusKind.Closed,
+    closureStatusPressure: ClosureStatusKind.Partial,
     likelyReentryArea: ReentryAreaKind.VerificationBurden,
     expected: {
       answerCommitment: AnswerCommitmentKind.Explain,
-      truthStatus: ClaimTruthStatusKind.ClosedBaseline,
-      outcome: ClaimOutcomeKind.ClosedPositive,
-      qualification: ClaimQualifierKind.None,
-      closureStatus: ClosureStatusKind.Closed,
+      truthStatus: ClaimTruthStatusKind.OpenPlaceholder,
+      outcome: ClaimOutcomeKind.DeferredOrPlaceholderOpen,
+      qualification: ClaimQualifierKind.WorldOpen,
+      closureStatus: ClosureStatusKind.Partial,
       publishedClaimCount: 1,
       recognizedResourceCount: 0,
       admittedResourceCount: 0,
@@ -153,8 +153,11 @@ test("semantic-runtime local read assembles a structured semantic answer", () =>
   assert.equal(answer.provenance.surface, SemanticRuntimeSurfaceKind.EvaluatorReadPort);
   assert.equal(answer.closureBasis.witness.kind, SemanticClosureReferenceKind.Unavailable);
   assert.equal(answer.closureBasis.completeness.kind, SemanticClosureReferenceKind.Unavailable);
-  assert.equal(answer.closureBasis.frontier, SemanticClosureFrontierKind.ClosedBaseline);
-  assert.equal(answer.closureBasis.retreat, SemanticClosureRetreatKind.None);
+  assert.equal(answer.closureBasis.frontier, SemanticClosureFrontierKind.OpenPlaceholder);
+  assert.equal(
+    answer.closureBasis.retreat,
+    SemanticClosureRetreatKind.PlaceholderCarryForward
+  );
   assert.equal(answer.closureBasis.dependencyKind, SemanticDependencyKind.KernelReadoutIngress);
   assert.deepEqual(answer.governingAnchorRefs, []);
   assert.equal(answer.deltaBasis.mayReuse, true);
@@ -225,8 +228,8 @@ test("workspace current-world handoff stays layered and route-safe", () => {
   });
 
   assertProofRecord(proofRecord);
-  assert.equal(handoff.worldFrameHandle.consultationRole, ConsultationRoleKind.AdmittedRegistrationWorld);
-  assert.equal(handoff.worldFrameHandle.registrationPath, RegistrationPathKind.ResourceRegistration);
+  assert.equal(handoff.worldFrameHandle.consultationRole, ConsultationRoleKind.Unspecified);
+  assert.equal(handoff.worldFrameHandle.registrationPath, RegistrationPathKind.Unspecified);
   assert.deepEqual(
     handoff.snapshotSummary.scannedContributorClasses,
     []
@@ -317,13 +320,13 @@ test("substrate and evaluator read stay publication-first and snapshot-first", (
       SemanticRuntimeSurfaceKind.SubstrateReader,
       SemanticRuntimeSurfaceKind.EvaluatorReadPort
     ],
-    closureStatusPressure: ClosureStatusKind.Closed,
+    closureStatusPressure: ClosureStatusKind.Partial,
     likelyReentryArea: ReentryAreaKind.SubjectOracle,
     expected: {
-      truthStatus: ClaimTruthStatusKind.ClosedBaseline,
-      outcome: ClaimOutcomeKind.ClosedPositive,
-      qualification: ClaimQualifierKind.None,
-      closureStatus: ClosureStatusKind.Closed,
+      truthStatus: ClaimTruthStatusKind.OpenPlaceholder,
+      outcome: ClaimOutcomeKind.DeferredOrPlaceholderOpen,
+      qualification: ClaimQualifierKind.WorldOpen,
+      closureStatus: ClosureStatusKind.Partial,
       claimHome: ClaimHomeKind.CurrentWorldSummary,
       worldVersion: 12,
       recognizedResourceCount: 0,

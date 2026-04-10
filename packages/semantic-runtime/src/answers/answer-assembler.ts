@@ -161,6 +161,11 @@ function buildSemanticClosureBasis(
   boundaryOutcome: BoundaryOutcome | undefined,
   outcome: ClaimOutcomeKind
 ): SemanticClosureBasis {
+  const frontier = deriveSemanticClosureFrontierKind(
+    currentWorldPublication?.frontier,
+    evaluation?.truthStatus
+  );
+
   return new SemanticClosureBasis(
     currentWorldPublication?.declarationWitnessRef === undefined
       ? createUnavailableSemanticClosureReference()
@@ -172,12 +177,9 @@ function buildSemanticClosureBasis(
       : createRecordedSemanticClosureReference(
           currentWorldPublication.closureRef
         ),
-    deriveSemanticClosureFrontierKind(
-      currentWorldPublication?.frontier,
-      evaluation?.truthStatus
-    ),
+    frontier,
     deriveSemanticClosureRetreatKind(
-      currentWorldPublication?.frontier,
+      frontier,
       boundaryOutcome,
       outcome
     ),
@@ -230,7 +232,7 @@ function deriveSemanticClosureFrontierKind(
 }
 
 function deriveSemanticClosureRetreatKind(
-  frontier: WorldParticipationFrontierKind | undefined,
+  frontier: SemanticClosureFrontierKind,
   boundaryOutcome: BoundaryOutcome | undefined,
   outcome: ClaimOutcomeKind
 ): SemanticClosureRetreatKind {
@@ -240,12 +242,12 @@ function deriveSemanticClosureRetreatKind(
 
   if (
     boundaryOutcome !== undefined ||
-    frontier === WorldParticipationFrontierKind.TerminalOpen
+    frontier === SemanticClosureFrontierKind.TerminalOpen
   ) {
     return SemanticClosureRetreatKind.BlockedDependencyBoundary;
   }
 
-  return frontier === WorldParticipationFrontierKind.OpenPlaceholder
+  return frontier === SemanticClosureFrontierKind.OpenPlaceholder
     ? SemanticClosureRetreatKind.PlaceholderCarryForward
     : SemanticClosureRetreatKind.None;
 }

@@ -18,6 +18,13 @@ import {
 import { createLineageRef, type LineageRef } from "../lineage/lineage-ref.js";
 import type { CurrentWorldPublication } from "../../workspace/snapshots/current-world-publication.js";
 import type { AuthoredOccurrenceBasis } from "../../syntax/occurrences/authored-occurrence-basis.js";
+import {
+  deriveClaimOutcomeFromFrontier,
+  deriveClaimQualifierFromFrontier,
+  deriveClaimTruthStatusFromFrontier,
+  deriveClosureStatusFromFrontier,
+  deriveCurrentWorldSummaryFrontier
+} from "../../workspace/snapshots/current-world-producer-basis.js";
 
 export interface SubstrateStorage {
   readPublishedClaim(ref: SubstrateClaimRef): PublishedSubstrateClaim | undefined;
@@ -70,13 +77,15 @@ export function createCurrentWorldSummaryClaim(
   publication?: CurrentWorldPublication
 ): PublishedSubstrateClaim {
   const currentWorldSummary = createCurrentWorldSummaryValue(summary);
+  const frontier = publication?.frontier ??
+    deriveCurrentWorldSummaryFrontier(currentWorldSummary);
 
   return {
     ref: createSubstrateClaimRef(home, worldVersion),
-    truthStatus: publication?.claimTruthStatus ?? ClaimTruthStatusKind.ClosedBaseline,
-    outcome: publication?.claimOutcome ?? ClaimOutcomeKind.ClosedPositive,
-    qualifier: publication?.claimQualifier ?? ClaimQualifierKind.None,
-    closureStatus: publication?.closureStatus ?? ClosureStatusKind.Closed,
+    truthStatus: publication?.claimTruthStatus ?? deriveClaimTruthStatusFromFrontier(frontier),
+    outcome: publication?.claimOutcome ?? deriveClaimOutcomeFromFrontier(frontier),
+    qualifier: publication?.claimQualifier ?? deriveClaimQualifierFromFrontier(frontier),
+    closureStatus: publication?.closureStatus ?? deriveClosureStatusFromFrontier(frontier),
     payload: createSemanticClaimPayload(
       {
         currentWorldSummary,

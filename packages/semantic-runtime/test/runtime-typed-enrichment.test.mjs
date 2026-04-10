@@ -127,7 +127,7 @@ test("semantic-runtime contextual typed readout resolves live checker evidence",
   assert.equal(handoffEvent?.currentWorld?.summary.consultedPackageCount, 1);
   assert.equal(
     handoffEvent?.currentWorld?.summary.recognitionStatus,
-    SummaryStatusKind.OpenPlaceholder
+    SummaryStatusKind.Closed
   );
   assert.equal(
     handoffEvent?.currentWorld?.worldFrameHandle?.version,

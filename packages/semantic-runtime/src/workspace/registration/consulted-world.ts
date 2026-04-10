@@ -1,12 +1,14 @@
 import type { ConsultedBoundaryRef } from "../routes/consulted-boundary.js";
 
 export const enum ConsultationRoleKind {
+  Unspecified = 0,
   CandidateIntakeWorld = 1,
   AdmittedRegistrationWorld = 2,
   CurrentWorldActiveLocalWorld = 3
 }
 
 export const enum WorldRegimeKind {
+  Unspecified = 0,
   DefinitionMerge = 1,
   RegistryCarrier = 2,
   OwnerBoundedLocal = 3,
@@ -16,6 +18,7 @@ export const enum WorldRegimeKind {
 }
 
 export const enum RegistrationPathKind {
+  Unspecified = 0,
   KernelRegistration = 1,
   ResourceRegistration = 2,
   RegistryInsertion = 3,
@@ -25,6 +28,7 @@ export const enum RegistrationPathKind {
 }
 
 export const enum AdmissionRegimeKind {
+  Unspecified = 0,
   FrameworkNative = 1,
   LegacyConventionsTooling = 2,
   ExtensionQualified = 3,
@@ -42,6 +46,7 @@ export const enum ConstructorArchetypeKind {
 }
 
 export const enum LookupRegimeKind {
+  Unspecified = 0,
   CurrentPlusRootResource = 1,
   OwnOnlyResource = 2,
   GenericDiAncestor = 3,
@@ -51,6 +56,7 @@ export const enum LookupRegimeKind {
 }
 
 export const enum MaterializationTimingKind {
+  Unspecified = 0,
   Eager = 1,
   PreRuntimePreprocess = 2,
   LifecycleSlotGated = 3,

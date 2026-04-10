@@ -36,6 +36,12 @@ import {
 } from "../registration/registration-pattern.js";
 import type { WorkspacePackageRef } from "../packages/workspace-package.js";
 import type { UnderclosedTemplateSourceAssociation } from "../templates/template-source-association.js";
+import {
+  deriveClaimOutcomeFromFrontier,
+  deriveClaimQualifierFromFrontier,
+  deriveClaimTruthStatusFromFrontier,
+  deriveClosureStatusFromFrontier
+} from "./current-world-producer-basis.js";
 
 const WORLD_SEED_PREFIX = "world-seed";
 
@@ -184,63 +190,19 @@ export class CurrentWorldPublication {
   }
 
   public get claimTruthStatus(): ClaimTruthStatusKind {
-    switch (this.frontier) {
-      case WorldParticipationFrontierKind.ClosedBaseline:
-        return ClaimTruthStatusKind.ClosedBaseline;
-      case WorldParticipationFrontierKind.CurrentWorldSensitive:
-        return ClaimTruthStatusKind.CurrentWorldSensitive;
-      case WorldParticipationFrontierKind.WorldQualified:
-        return ClaimTruthStatusKind.WorldQualified;
-      case WorldParticipationFrontierKind.TerminalOpen:
-        return ClaimTruthStatusKind.TerminalOpen;
-      case WorldParticipationFrontierKind.OpenPlaceholder:
-        return ClaimTruthStatusKind.OpenPlaceholder;
-      default:
-        return ClaimTruthStatusKind.TerminalOpen;
-    }
+    return deriveClaimTruthStatusFromFrontier(this.frontier);
   }
 
   public get claimOutcome(): ClaimOutcomeKind {
-    switch (this.claimTruthStatus) {
-      case ClaimTruthStatusKind.ClosedBaseline:
-      case ClaimTruthStatusKind.CurrentWorldSensitive:
-        return ClaimOutcomeKind.ClosedPositive;
-      case ClaimTruthStatusKind.WorldQualified:
-        return ClaimOutcomeKind.ClosedQualified;
-      case ClaimTruthStatusKind.TerminalOpen:
-        return ClaimOutcomeKind.BlockedOpen;
-      case ClaimTruthStatusKind.OpenPlaceholder:
-        return ClaimOutcomeKind.DeferredOrPlaceholderOpen;
-      default:
-        return ClaimOutcomeKind.BlockedOpen;
-    }
+    return deriveClaimOutcomeFromFrontier(this.frontier);
   }
 
   public get claimQualifier(): ClaimQualifierKind {
-    switch (this.frontier) {
-      case WorldParticipationFrontierKind.WorldQualified:
-      case WorldParticipationFrontierKind.TerminalOpen:
-      case WorldParticipationFrontierKind.OpenPlaceholder:
-        return ClaimQualifierKind.WorldOpen;
-      default:
-        return ClaimQualifierKind.None;
-    }
+    return deriveClaimQualifierFromFrontier(this.frontier);
   }
 
   public get closureStatus(): ClosureStatusKind {
-    switch (this.frontier) {
-      case WorldParticipationFrontierKind.ClosedBaseline:
-      case WorldParticipationFrontierKind.CurrentWorldSensitive:
-        return ClosureStatusKind.Closed;
-      case WorldParticipationFrontierKind.WorldQualified:
-        return ClosureStatusKind.Qualified;
-      case WorldParticipationFrontierKind.TerminalOpen:
-        return ClosureStatusKind.Open;
-      case WorldParticipationFrontierKind.OpenPlaceholder:
-        return ClosureStatusKind.Partial;
-      default:
-        return ClosureStatusKind.Open;
-    }
+    return deriveClosureStatusFromFrontier(this.frontier);
   }
 }
 

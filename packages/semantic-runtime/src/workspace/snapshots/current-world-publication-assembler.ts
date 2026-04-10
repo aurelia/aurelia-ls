@@ -17,10 +17,8 @@ import {
 import { CurrentWorldPublication } from "./current-world-publication.js";
 import {
   LookupRegimeKind,
-  MaterializationTimingKind,
   RegistrationPathKind,
-  type ConsultedWorldHandle,
-  WorldParticipationFrontierKind
+  type ConsultedWorldHandle
 } from "../registration/consulted-world.js";
 import type { WorkspacePackageRef } from "../packages/workspace-package.js";
 import type { CustomElementScanResult } from "../registration/custom-element-declaration-scanner.js";
@@ -35,11 +33,11 @@ import type {
 } from "../registration/registration-pattern.js";
 import type { TemplateSourceAssociationScanResult } from "../registration/template-source-association-scanner.js";
 import { TemplateViewStrategyKind } from "../templates/template-source-association.js";
-
-const DECLARATION_WITNESS_REF_PREFIX = "declaration-witness";
-const CLOSURE_REF_PREFIX = "closure";
+import { CurrentWorldProducerBasisAssembler } from "./current-world-producer-basis.js";
 
 export class CurrentWorldPublicationAssembler {
+  readonly #producerBasisAssembler = new CurrentWorldProducerBasisAssembler();
+
   public publishCurrentWorldPublication(
     consultedWorld: ConsultedWorldHandle,
     consultedPackage: WorkspacePackageRef,
@@ -48,6 +46,12 @@ export class CurrentWorldPublicationAssembler {
     registrationScan: RegistrationPatternScanResult,
     templateAssociations: TemplateSourceAssociationScanResult
   ): CurrentWorldPublication {
+    const producerBasis = this.#producerBasisAssembler.assess(
+      resourceScan,
+      extensionScan,
+      registrationScan,
+      templateAssociations
+    );
     const resources = resourceScan.recognizedElements.map(
       (customElement) => new PublishedResourceDefinition(
         ResourceDefinitionKind.CustomElement,
@@ -61,32 +65,15 @@ export class CurrentWorldPublicationAssembler {
         ResourceAdmissionStatusKind.Admitted,
         CurrentWorldActivityStateKind.CurrentWorldSensitive,
         ReachabilityScopeKind.ResourceCurrentPlusRoot,
-        deriveResourceFrontier(resourceScan, extensionScan, registrationScan, templateAssociations),
+        producerBasis.frontier,
         templateAssociations.findAssociation(customElement)
       )
     );
 
-    const recognizedBasisCount = resources.length +
-      extensionScan.activeExtensionCount +
-      extensionScan.admittedGeneratedVocabularyCount +
-      registrationScan.activeRegistrationPatternCount;
-    const underclosedBasisCount = resourceScan.underclosedResources.length +
-      extensionScan.underclosedGeneratedVocabularyCount +
-      registrationScan.openRegistrationPatternCount +
-      templateAssociations.underclosedAssociations.length;
-    const terminalOpenBasisCount = registrationScan.unsupportedRegistrationBoundaryCount +
-      registrationScan.runtimeOnlyRegistrationBoundaryCount;
-    const frontier = derivePublicationFrontier(
-      recognizedBasisCount,
-      underclosedBasisCount,
-      terminalOpenBasisCount
-    );
-    const packageIdentity = consultedPackage.packageName ?? consultedPackage.rootPath;
-
     return new CurrentWorldPublication(
       consultedWorld,
       consultedPackage,
-      frontier,
+      producerBasis.frontier,
       resources,
       resourceScan.underclosedResources,
       extensionScan.activeExtensions,
@@ -95,8 +82,8 @@ export class CurrentWorldPublicationAssembler {
       registrationScan.activeRegistrationPatterns,
       registrationScan.underclosedRegistrationPatterns,
       templateAssociations.underclosedAssociations,
-      createDeclarationWitnessRef(packageIdentity, frontier),
-      createClosureRef(packageIdentity, frontier),
+      producerBasis.createDeclarationWitnessRef(consultedWorld),
+      producerBasis.createClosureRef(consultedWorld),
       collectScannedContributorClasses(
         resources,
         resourceScan.underclosedResources,
@@ -112,53 +99,15 @@ export class CurrentWorldPublicationAssembler {
         templateAssociations
       ),
       [],
-      deriveRecognitionStatus(recognizedBasisCount, underclosedBasisCount, terminalOpenBasisCount),
-      deriveAdmissionStatus(frontier, recognizedBasisCount, underclosedBasisCount, terminalOpenBasisCount),
-      deriveCurrentWorldActivityStatus(frontier, resources, registrationScan),
+      producerBasis.recognitionStatus,
+      producerBasis.admissionStatus,
+      producerBasis.currentWorldActivityStatus,
       collectReachabilityScopes(resources, registrationScan),
-      deriveDeclarationWitnessStatus(recognizedBasisCount, underclosedBasisCount, terminalOpenBasisCount),
-      deriveSearchedWorldCompletenessStatus(frontier, recognizedBasisCount, underclosedBasisCount, terminalOpenBasisCount),
-      deriveOpenStateStatus(frontier, underclosedBasisCount)
+      producerBasis.declarationWitnessStatus,
+      producerBasis.searchedWorldCompletenessStatus,
+      producerBasis.openStateStatus
     );
   }
-}
-
-function deriveResourceFrontier(
-  resourceScan: CustomElementScanResult,
-  extensionScan: ExtensionConfigurationScanResult,
-  registrationScan: RegistrationPatternScanResult,
-  templateAssociations: TemplateSourceAssociationScanResult
-): WorldParticipationFrontierKind {
-  if (
-    resourceScan.underclosedResources.length === 0 &&
-    extensionScan.underclosedGeneratedVocabularyCount === 0 &&
-    registrationScan.underclosedRegistrationPatternCount === 0 &&
-    templateAssociations.underclosedAssociations.length === 0
-  ) {
-    return WorldParticipationFrontierKind.CurrentWorldSensitive;
-  }
-
-  return WorldParticipationFrontierKind.WorldQualified;
-}
-
-function derivePublicationFrontier(
-  recognizedBasisCount: number,
-  underclosedBasisCount: number,
-  terminalOpenBasisCount: number
-): WorldParticipationFrontierKind {
-  if (underclosedBasisCount === 0 && terminalOpenBasisCount === 0) {
-    return recognizedBasisCount === 0
-      ? WorldParticipationFrontierKind.ClosedBaseline
-      : WorldParticipationFrontierKind.CurrentWorldSensitive;
-  }
-
-  if (recognizedBasisCount === 0 && underclosedBasisCount === 0) {
-    return WorldParticipationFrontierKind.TerminalOpen;
-  }
-
-  return recognizedBasisCount === 0
-    ? WorldParticipationFrontierKind.OpenPlaceholder
-    : WorldParticipationFrontierKind.WorldQualified;
 }
 
 function collectScannedContributorClasses(
@@ -279,63 +228,6 @@ function collectScannedContributorRefs(
   return [...refs].sort();
 }
 
-function deriveRecognitionStatus(
-  recognizedBasisCount: number,
-  underclosedBasisCount: number,
-  terminalOpenBasisCount: number
-): SummaryStatusKind {
-  return recognizedBasisCount > 0 ||
-    underclosedBasisCount > 0 ||
-    terminalOpenBasisCount > 0
-    ? SummaryStatusKind.Closed
-    : SummaryStatusKind.OpenPlaceholder;
-}
-
-function deriveAdmissionStatus(
-  frontier: WorldParticipationFrontierKind,
-  recognizedBasisCount: number,
-  underclosedBasisCount: number,
-  terminalOpenBasisCount: number
-): SummaryStatusKind {
-  if (frontier === WorldParticipationFrontierKind.TerminalOpen) {
-    return SummaryStatusKind.TerminalOpen;
-  }
-
-  if (recognizedBasisCount === 0 && underclosedBasisCount === 0 && terminalOpenBasisCount === 0) {
-    return SummaryStatusKind.OpenPlaceholder;
-  }
-
-  return frontier === WorldParticipationFrontierKind.ClosedBaseline ||
-      frontier === WorldParticipationFrontierKind.CurrentWorldSensitive
-    ? SummaryStatusKind.Closed
-    : SummaryStatusKind.ClosableOpen;
-}
-
-function deriveCurrentWorldActivityStatus(
-  frontier: WorldParticipationFrontierKind,
-  resources: readonly PublishedResourceDefinitionType[],
-  registrationScan: RegistrationPatternScanResult
-): CurrentWorldActivityStatusKind {
-  if (frontier === WorldParticipationFrontierKind.TerminalOpen) {
-    return CurrentWorldActivityStatusKind.TerminalOpen;
-  }
-
-  if (
-    frontier === WorldParticipationFrontierKind.CurrentWorldSensitive ||
-    resources.some(
-      (resource) => resource.currentWorldActivityState === CurrentWorldActivityStateKind.CurrentWorldSensitive
-    ) ||
-    registrationScan.activeRegistrationPatterns.some(
-      (pattern) => pattern.materializationTiming !== MaterializationTimingKind.Eager
-    ) ||
-    registrationScan.underclosedRegistrationPatterns.length > 0
-  ) {
-    return CurrentWorldActivityStatusKind.CurrentWorldSensitive;
-  }
-
-  return CurrentWorldActivityStatusKind.Closed;
-}
-
 function collectReachabilityScopes(
   resources: readonly PublishedResourceDefinitionType[],
   registrationScan: RegistrationPatternScanResult
@@ -381,89 +273,4 @@ function collectReachabilityScopes(
   }
 
   return [...reachabilityScopes].sort((left, right) => left - right);
-}
-
-function deriveDeclarationWitnessStatus(
-  recognizedBasisCount: number,
-  underclosedBasisCount: number,
-  terminalOpenBasisCount: number
-): SummaryStatusKind {
-  return recognizedBasisCount > 0 ||
-    underclosedBasisCount > 0 ||
-    terminalOpenBasisCount > 0
-    ? SummaryStatusKind.Closed
-    : SummaryStatusKind.OpenPlaceholder;
-}
-
-function deriveSearchedWorldCompletenessStatus(
-  frontier: WorldParticipationFrontierKind,
-  recognizedBasisCount: number,
-  underclosedBasisCount: number,
-  terminalOpenBasisCount: number
-): SummaryStatusKind {
-  if (frontier === WorldParticipationFrontierKind.TerminalOpen) {
-    return SummaryStatusKind.TerminalOpen;
-  }
-
-  if (recognizedBasisCount === 0 && underclosedBasisCount === 0 && terminalOpenBasisCount === 0) {
-    return SummaryStatusKind.OpenPlaceholder;
-  }
-
-  return underclosedBasisCount === 0
-    ? SummaryStatusKind.Closed
-    : SummaryStatusKind.ClosableOpen;
-}
-
-function deriveOpenStateStatus(
-  frontier: WorldParticipationFrontierKind,
-  underclosedBasisCount: number
-): SummaryStatusKind {
-  switch (frontier) {
-    case WorldParticipationFrontierKind.TerminalOpen:
-      return SummaryStatusKind.TerminalOpen;
-    case WorldParticipationFrontierKind.OpenPlaceholder:
-      return SummaryStatusKind.OpenPlaceholder;
-    case WorldParticipationFrontierKind.WorldQualified:
-      return SummaryStatusKind.ClosableOpen;
-    case WorldParticipationFrontierKind.CurrentWorldSensitive:
-    case WorldParticipationFrontierKind.ClosedBaseline:
-    default:
-      return underclosedBasisCount === 0
-        ? SummaryStatusKind.Closed
-        : SummaryStatusKind.ClosableOpen;
-  }
-}
-
-function createDeclarationWitnessRef(
-  packageIdentity: string,
-  frontier: WorldParticipationFrontierKind
-): string {
-  switch (frontier) {
-    case WorldParticipationFrontierKind.WorldQualified:
-    case WorldParticipationFrontierKind.OpenPlaceholder:
-      return `${DECLARATION_WITNESS_REF_PREFIX}:qualified:${packageIdentity}`;
-    case WorldParticipationFrontierKind.TerminalOpen:
-      return `${DECLARATION_WITNESS_REF_PREFIX}:open:${packageIdentity}`;
-    default:
-      return `${DECLARATION_WITNESS_REF_PREFIX}:closed:${packageIdentity}`;
-  }
-}
-
-function createClosureRef(
-  packageIdentity: string,
-  frontier: WorldParticipationFrontierKind
-): string {
-  switch (frontier) {
-    case WorldParticipationFrontierKind.WorldQualified:
-      return `${CLOSURE_REF_PREFIX}:world-qualified:${packageIdentity}`;
-    case WorldParticipationFrontierKind.OpenPlaceholder:
-      return `${CLOSURE_REF_PREFIX}:open-placeholder:${packageIdentity}`;
-    case WorldParticipationFrontierKind.TerminalOpen:
-      return `${CLOSURE_REF_PREFIX}:terminal-open:${packageIdentity}`;
-    case WorldParticipationFrontierKind.CurrentWorldSensitive:
-      return `${CLOSURE_REF_PREFIX}:current-world-sensitive:${packageIdentity}`;
-    case WorldParticipationFrontierKind.ClosedBaseline:
-    default:
-      return `${CLOSURE_REF_PREFIX}:closed-baseline:${packageIdentity}`;
-  }
 }
