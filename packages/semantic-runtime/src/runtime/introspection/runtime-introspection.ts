@@ -14,6 +14,7 @@ import type {
   TypedOperationIntentKind,
   TypedUnavailabilityReasonKind
 } from "../../typescript/typed-enrichment/typed-enrichment-port.js";
+import type { CurrentWorldTraceDetails } from "./current-world-trace-details.js";
 
 export const enum SemanticRuntimeTraceEventKind {
   RuntimeCreated = 1,
@@ -40,6 +41,7 @@ export interface SemanticRuntimeTraceEvent {
   readonly worldFrameKind?: WorldFrame["kind"];
   readonly worldVersion?: number;
   readonly claimHome?: ClaimHomeKind;
+  readonly currentWorld?: CurrentWorldTraceDetails;
   readonly inquiryEpisode?: SemanticInquiryEpisode;
   readonly readMode?: SemanticReadMode;
   readonly boundaryRoute?: BoundaryRouteKind;

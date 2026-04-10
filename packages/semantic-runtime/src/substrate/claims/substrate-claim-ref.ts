@@ -11,6 +11,7 @@ import {
   SummaryReachabilityScopeKind,
   SummaryStatusKind
 } from "../../workspace/handoff/world-context-shapes.js";
+import type { WorldSnapshotSummary } from "../../workspace/handoff/current-world-context.js";
 import type { ConsultedBoundaryRef } from "../../workspace/routes/consulted-boundary.js";
 import type { CurrentWorldPublication } from "../../workspace/snapshots/current-world-publication.js";
 
@@ -119,6 +120,45 @@ export function createCurrentWorldSummaryValue(
       SummaryStatusKind.OpenPlaceholder,
     openStateStatus: value.openStateStatus ?? SummaryStatusKind.OpenPlaceholder
   };
+}
+
+export function createCurrentWorldSummaryValueFromSnapshot(
+  snapshotSummary: WorldSnapshotSummary
+): CurrentWorldSummaryValue {
+  return createCurrentWorldSummaryValue(
+    {
+      publishedClaimCount: snapshotSummary.publishedClaimCount,
+      consultedPackageCount: snapshotSummary.consultedPackageCount,
+      recognizedResourceCount: snapshotSummary.recognizedResourceCount,
+      admittedResourceCount: snapshotSummary.admittedResourceCount,
+      activeResourceCount: snapshotSummary.activeResourceCount,
+      underclosedResourceCount: snapshotSummary.underclosedResourceCount,
+      activeExtensionCount: snapshotSummary.activeExtensionCount,
+      admittedGeneratedVocabularyCount: snapshotSummary.admittedGeneratedVocabularyCount,
+      underclosedGeneratedVocabularyCount: snapshotSummary.underclosedGeneratedVocabularyCount,
+      activeRegistrationPatternCount: snapshotSummary.activeRegistrationPatternCount,
+      closedRegistrationPatternCount: snapshotSummary.closedRegistrationPatternCount,
+      qualifiedRegistrationPatternCount: snapshotSummary.qualifiedRegistrationPatternCount,
+      underclosedRegistrationPatternCount: snapshotSummary.underclosedRegistrationPatternCount,
+      openRegistrationPatternCount: snapshotSummary.openRegistrationPatternCount,
+      unsupportedRegistrationBoundaryCount: snapshotSummary.unsupportedRegistrationBoundaryCount,
+      runtimeOnlyRegistrationBoundaryCount: snapshotSummary.runtimeOnlyRegistrationBoundaryCount,
+      associatedTemplateCount: snapshotSummary.associatedTemplateCount,
+      explicitNoViewCount: snapshotSummary.explicitNoViewCount,
+      underclosedTemplateAssociationCount: snapshotSummary.underclosedTemplateAssociationCount,
+      scannedContributorClasses: snapshotSummary.scannedContributorClasses,
+      scannedContributorRefs: snapshotSummary.scannedContributorRefs,
+      supportingBoundaries: snapshotSummary.supportingBoundaries,
+      outOfBoundaryCandidateRefs: snapshotSummary.outOfBoundaryCandidateRefs,
+      recognitionStatus: snapshotSummary.recognitionStatus,
+      admissionStatus: snapshotSummary.admissionStatus,
+      currentWorldActivityStatus: snapshotSummary.currentWorldActivityStatus,
+      reachabilityScopes: snapshotSummary.reachabilityScopes,
+      declarationWitnessStatus: snapshotSummary.declarationWitnessStatus,
+      searchedWorldCompletenessStatus: snapshotSummary.searchedWorldCompletenessStatus,
+      openStateStatus: snapshotSummary.openStateStatus
+    }
+  );
 }
 
 export function createSemanticClaimPayload(

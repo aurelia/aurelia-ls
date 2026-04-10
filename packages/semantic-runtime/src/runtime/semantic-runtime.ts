@@ -16,6 +16,7 @@ import {
   type SemanticRuntimeTraceCaptureRequest,
   type SemanticRuntimeTraceEvent
 } from "./introspection/runtime-introspection.js";
+import { CurrentWorldTraceDetails } from "./introspection/current-world-trace-details.js";
 import { planRuntimeBoot, type RuntimeBootPort } from "./boot/runtime-boot-plan.js";
 import { RuntimeInvalidationCoordinator } from "./invalidation/invalidation-coordinator.js";
 import { RereadPlanner } from "./reread/reread-plan.js";
@@ -78,6 +79,9 @@ export class SemanticRuntime {
       plannedQuery.query.questionRoute,
       currentWorldContext
     );
+    const handoffTraceDetails = CurrentWorldTraceDetails.fromWorldContext(
+      worldContext
+    );
 
     this.#introspection.record(() => ({
       kind: SemanticRuntimeTraceEventKind.QueryPlanned,
@@ -93,35 +97,20 @@ export class SemanticRuntime {
       authoredOccurrenceOffset: authoredOccurrenceTarget?.offset
     }));
 
-    this.#introspection.record(() => ({
-      kind: SemanticRuntimeTraceEventKind.WorldContextHandedOff,
-      surface: SemanticRuntimeSurfaceKind.WorldContextHandoff,
-      questionRouteKind: query.questionRoute.kind,
-      worldFrameKind: worldContext.worldFrameHandle.kind,
-      worldVersion: worldContext.worldFrameHandle.version,
-      claimHome: claimRoute.home,
-      boundaryRoute: query.questionRoute.boundaryRoute,
-      publishedClaimCount: worldContext.snapshotSummary.publishedClaimCount,
-      recognizedResourceCount: worldContext.snapshotSummary.recognizedResourceCount,
-      admittedResourceCount: worldContext.snapshotSummary.admittedResourceCount,
-      activeResourceCount: worldContext.snapshotSummary.activeResourceCount,
-      underclosedResourceCount: worldContext.snapshotSummary.underclosedResourceCount,
-      activeExtensionCount: worldContext.snapshotSummary.activeExtensionCount,
-      admittedGeneratedVocabularyCount: worldContext.snapshotSummary.admittedGeneratedVocabularyCount,
-      underclosedGeneratedVocabularyCount: worldContext.snapshotSummary.underclosedGeneratedVocabularyCount,
-      activeRegistrationPatternCount: worldContext.snapshotSummary.activeRegistrationPatternCount,
-      closedRegistrationPatternCount: worldContext.snapshotSummary.closedRegistrationPatternCount,
-      qualifiedRegistrationPatternCount: worldContext.snapshotSummary.qualifiedRegistrationPatternCount,
-      underclosedRegistrationPatternCount: worldContext.snapshotSummary.underclosedRegistrationPatternCount,
-      openRegistrationPatternCount: worldContext.snapshotSummary.openRegistrationPatternCount,
-      unsupportedRegistrationBoundaryCount: worldContext.snapshotSummary.unsupportedRegistrationBoundaryCount,
-      runtimeOnlyRegistrationBoundaryCount: worldContext.snapshotSummary.runtimeOnlyRegistrationBoundaryCount,
-      associatedTemplateCount: worldContext.snapshotSummary.associatedTemplateCount,
-      explicitNoViewCount: worldContext.snapshotSummary.explicitNoViewCount,
-      underclosedTemplateAssociationCount: worldContext.snapshotSummary.underclosedTemplateAssociationCount,
-      authoredOccurrenceTemplateSourceRef: authoredOccurrenceTarget?.templateSourceRef,
-      authoredOccurrenceOffset: authoredOccurrenceTarget?.offset
-    }));
+    this.#introspection.record(() => withCurrentWorldTrace(
+      {
+        kind: SemanticRuntimeTraceEventKind.WorldContextHandedOff,
+        surface: SemanticRuntimeSurfaceKind.WorldContextHandoff,
+        questionRouteKind: query.questionRoute.kind,
+        worldFrameKind: worldContext.worldFrameHandle.kind,
+        worldVersion: worldContext.worldFrameHandle.version,
+        claimHome: claimRoute.home,
+        boundaryRoute: query.questionRoute.boundaryRoute,
+        authoredOccurrenceTemplateSourceRef: authoredOccurrenceTarget?.templateSourceRef,
+        authoredOccurrenceOffset: authoredOccurrenceTarget?.offset
+      },
+      handoffTraceDetails
+    ));
 
     const boundaryOutcome = query.questionRoute.boundaryRoute === undefined
       ? undefined
@@ -139,36 +128,27 @@ export class SemanticRuntime {
       )
     );
     const substrateSummary = substrateRead.publishedClaim?.payload?.currentWorldSummary;
+    const substrateTraceDetails = CurrentWorldTraceDetails.fromSummary(
+      substrateSummary,
+      substrateRead.publishedClaim?.payload?.currentWorldPublication,
+      worldContext.worldFrameHandle,
+      worldContext.rescanBasis
+    );
 
-    this.#introspection.record(() => ({
-      kind: SemanticRuntimeTraceEventKind.SubstrateClaimRead,
-      surface: SemanticRuntimeSurfaceKind.SubstrateReader,
-      questionRouteKind: query.questionRoute.kind,
-      worldFrameKind: worldContext.worldFrameHandle.kind,
-      worldVersion: worldContext.worldFrameHandle.version,
-      claimHome: substrateRead.claimRef.home,
-      boundaryRoute: query.questionRoute.boundaryRoute,
-      publishedClaimCount: substrateSummary?.publishedClaimCount,
-      recognizedResourceCount: substrateSummary?.recognizedResourceCount,
-      admittedResourceCount: substrateSummary?.admittedResourceCount,
-      activeResourceCount: substrateSummary?.activeResourceCount,
-      underclosedResourceCount: substrateSummary?.underclosedResourceCount,
-      activeExtensionCount: substrateSummary?.activeExtensionCount,
-      admittedGeneratedVocabularyCount: substrateSummary?.admittedGeneratedVocabularyCount,
-      underclosedGeneratedVocabularyCount: substrateSummary?.underclosedGeneratedVocabularyCount,
-      activeRegistrationPatternCount: substrateSummary?.activeRegistrationPatternCount,
-      closedRegistrationPatternCount: substrateSummary?.closedRegistrationPatternCount,
-      qualifiedRegistrationPatternCount: substrateSummary?.qualifiedRegistrationPatternCount,
-      underclosedRegistrationPatternCount: substrateSummary?.underclosedRegistrationPatternCount,
-      openRegistrationPatternCount: substrateSummary?.openRegistrationPatternCount,
-      unsupportedRegistrationBoundaryCount: substrateSummary?.unsupportedRegistrationBoundaryCount,
-      runtimeOnlyRegistrationBoundaryCount: substrateSummary?.runtimeOnlyRegistrationBoundaryCount,
-      associatedTemplateCount: substrateSummary?.associatedTemplateCount,
-      explicitNoViewCount: substrateSummary?.explicitNoViewCount,
-      underclosedTemplateAssociationCount: substrateSummary?.underclosedTemplateAssociationCount,
-      authoredOccurrenceTemplateSourceRef: authoredOccurrenceTarget?.templateSourceRef,
-      authoredOccurrenceOffset: authoredOccurrenceTarget?.offset
-    }));
+    this.#introspection.record(() => withCurrentWorldTrace(
+      {
+        kind: SemanticRuntimeTraceEventKind.SubstrateClaimRead,
+        surface: SemanticRuntimeSurfaceKind.SubstrateReader,
+        questionRouteKind: query.questionRoute.kind,
+        worldFrameKind: worldContext.worldFrameHandle.kind,
+        worldVersion: worldContext.worldFrameHandle.version,
+        claimHome: substrateRead.claimRef.home,
+        boundaryRoute: query.questionRoute.boundaryRoute,
+        authoredOccurrenceTemplateSourceRef: authoredOccurrenceTarget?.templateSourceRef,
+        authoredOccurrenceOffset: authoredOccurrenceTarget?.offset
+      },
+      substrateTraceDetails
+    ));
 
     const evaluation = boundaryOutcome === undefined
       ? this.#evaluatorReadPort.runPublishedEvaluators(
@@ -202,38 +182,29 @@ export class SemanticRuntime {
 
     if (evaluation !== undefined) {
       const evaluationSummary = evaluation.payload?.currentWorldSummary;
-      this.#introspection.record(() => ({
-        kind: SemanticRuntimeTraceEventKind.EvaluatorResultPublished,
-        surface: SemanticRuntimeSurfaceKind.EvaluatorReadPort,
-        questionRouteKind: query.questionRoute.kind,
-        worldFrameKind: query.worldFrame.kind,
-        worldVersion: query.worldFrame.version,
-        claimHome: evaluation.claimRef.home,
-        boundaryRoute: query.questionRoute.boundaryRoute,
-        claimOutcome: evaluation.outcome,
-        claimQualification: evaluation.qualifier,
-        closureStatus: evaluation.closureStatus,
-        publishedClaimCount: evaluationSummary?.publishedClaimCount,
-        recognizedResourceCount: evaluationSummary?.recognizedResourceCount,
-        admittedResourceCount: evaluationSummary?.admittedResourceCount,
-        activeResourceCount: evaluationSummary?.activeResourceCount,
-        underclosedResourceCount: evaluationSummary?.underclosedResourceCount,
-        activeExtensionCount: evaluationSummary?.activeExtensionCount,
-        admittedGeneratedVocabularyCount: evaluationSummary?.admittedGeneratedVocabularyCount,
-        underclosedGeneratedVocabularyCount: evaluationSummary?.underclosedGeneratedVocabularyCount,
-        activeRegistrationPatternCount: evaluationSummary?.activeRegistrationPatternCount,
-        closedRegistrationPatternCount: evaluationSummary?.closedRegistrationPatternCount,
-        qualifiedRegistrationPatternCount: evaluationSummary?.qualifiedRegistrationPatternCount,
-        underclosedRegistrationPatternCount: evaluationSummary?.underclosedRegistrationPatternCount,
-        openRegistrationPatternCount: evaluationSummary?.openRegistrationPatternCount,
-        unsupportedRegistrationBoundaryCount: evaluationSummary?.unsupportedRegistrationBoundaryCount,
-        runtimeOnlyRegistrationBoundaryCount: evaluationSummary?.runtimeOnlyRegistrationBoundaryCount,
-        associatedTemplateCount: evaluationSummary?.associatedTemplateCount,
-        explicitNoViewCount: evaluationSummary?.explicitNoViewCount,
-        underclosedTemplateAssociationCount: evaluationSummary?.underclosedTemplateAssociationCount,
-        authoredOccurrenceTemplateSourceRef: authoredOccurrenceTarget?.templateSourceRef,
-        authoredOccurrenceOffset: authoredOccurrenceTarget?.offset
-      }));
+      const evaluationTraceDetails = CurrentWorldTraceDetails.fromSummary(
+        evaluationSummary,
+        evaluation.payload?.currentWorldPublication,
+        worldContext.worldFrameHandle,
+        worldContext.rescanBasis
+      );
+      this.#introspection.record(() => withCurrentWorldTrace(
+        {
+          kind: SemanticRuntimeTraceEventKind.EvaluatorResultPublished,
+          surface: SemanticRuntimeSurfaceKind.EvaluatorReadPort,
+          questionRouteKind: query.questionRoute.kind,
+          worldFrameKind: query.worldFrame.kind,
+          worldVersion: query.worldFrame.version,
+          claimHome: evaluation.claimRef.home,
+          boundaryRoute: query.questionRoute.boundaryRoute,
+          claimOutcome: evaluation.outcome,
+          claimQualification: evaluation.qualifier,
+          closureStatus: evaluation.closureStatus,
+          authoredOccurrenceTemplateSourceRef: authoredOccurrenceTarget?.templateSourceRef,
+          authoredOccurrenceOffset: authoredOccurrenceTarget?.offset
+        },
+        evaluationTraceDetails
+      ));
     }
 
     const answer = this.#answerAssembler.assemble(
@@ -247,39 +218,30 @@ export class SemanticRuntime {
     );
 
     const answerSummary = answer.payload?.currentWorldSummary;
-    this.#introspection.record(() => ({
-      kind: SemanticRuntimeTraceEventKind.AnswerAssembled,
-      surface: SemanticRuntimeSurfaceKind.AnswerAssembler,
-      questionRouteKind: query.questionRoute.kind,
-      worldFrameKind: query.worldFrame.kind,
-      worldVersion: query.worldFrame.version,
-      claimHome: answer.provenance.claimRef.home,
-      claimOutcome: answer.outcome,
-      claimQualification: answer.qualificationRefs[0]?.kind,
-      closureStatus: answer.closureStatus,
-      boundaryRoute: query.questionRoute.boundaryRoute ?? answer.boundaryOutcome?.route,
-      triggerMask: answer.deltaBasis.triggerMask,
-      publishedClaimCount: answerSummary?.publishedClaimCount,
-      recognizedResourceCount: answerSummary?.recognizedResourceCount,
-      admittedResourceCount: answerSummary?.admittedResourceCount,
-      activeResourceCount: answerSummary?.activeResourceCount,
-      underclosedResourceCount: answerSummary?.underclosedResourceCount,
-      activeExtensionCount: answerSummary?.activeExtensionCount,
-      admittedGeneratedVocabularyCount: answerSummary?.admittedGeneratedVocabularyCount,
-      underclosedGeneratedVocabularyCount: answerSummary?.underclosedGeneratedVocabularyCount,
-      activeRegistrationPatternCount: answerSummary?.activeRegistrationPatternCount,
-      closedRegistrationPatternCount: answerSummary?.closedRegistrationPatternCount,
-      qualifiedRegistrationPatternCount: answerSummary?.qualifiedRegistrationPatternCount,
-      underclosedRegistrationPatternCount: answerSummary?.underclosedRegistrationPatternCount,
-      openRegistrationPatternCount: answerSummary?.openRegistrationPatternCount,
-      unsupportedRegistrationBoundaryCount: answerSummary?.unsupportedRegistrationBoundaryCount,
-      runtimeOnlyRegistrationBoundaryCount: answerSummary?.runtimeOnlyRegistrationBoundaryCount,
-      associatedTemplateCount: answerSummary?.associatedTemplateCount,
-      explicitNoViewCount: answerSummary?.explicitNoViewCount,
-      underclosedTemplateAssociationCount: answerSummary?.underclosedTemplateAssociationCount,
-      authoredOccurrenceTemplateSourceRef: authoredOccurrenceTarget?.templateSourceRef,
-      authoredOccurrenceOffset: authoredOccurrenceTarget?.offset
-    }));
+    const answerTraceDetails = CurrentWorldTraceDetails.fromSummary(
+      answerSummary,
+      answer.payload?.currentWorldPublication,
+      worldContext.worldFrameHandle,
+      worldContext.rescanBasis
+    );
+    this.#introspection.record(() => withCurrentWorldTrace(
+      {
+        kind: SemanticRuntimeTraceEventKind.AnswerAssembled,
+        surface: SemanticRuntimeSurfaceKind.AnswerAssembler,
+        questionRouteKind: query.questionRoute.kind,
+        worldFrameKind: query.worldFrame.kind,
+        worldVersion: query.worldFrame.version,
+        claimHome: answer.provenance.claimRef.home,
+        claimOutcome: answer.outcome,
+        claimQualification: answer.qualificationRefs[0]?.kind,
+        closureStatus: answer.closureStatus,
+        boundaryRoute: query.questionRoute.boundaryRoute ?? answer.boundaryOutcome?.route,
+        triggerMask: answer.deltaBasis.triggerMask,
+        authoredOccurrenceTemplateSourceRef: authoredOccurrenceTarget?.templateSourceRef,
+        authoredOccurrenceOffset: authoredOccurrenceTarget?.offset
+      },
+      answerTraceDetails
+    ));
 
     return answer;
   }
@@ -294,6 +256,9 @@ export class SemanticRuntime {
     const worldContext = createRuntimeWorldContextHandoff(
       request.questionRoute,
       currentWorldContext
+    );
+    const handoffTraceDetails = CurrentWorldTraceDetails.fromWorldContext(
+      worldContext
     );
 
     this.#introspection.record(() => ({
@@ -311,30 +276,18 @@ export class SemanticRuntime {
       typedTargetPosition: request.target.position
     }));
 
-    this.#introspection.record(() => ({
-      kind: SemanticRuntimeTraceEventKind.WorldContextHandedOff,
-      surface: SemanticRuntimeSurfaceKind.WorldContextHandoff,
-      questionRouteKind: request.questionRoute.kind,
-      worldFrameKind: worldContext.worldFrameHandle.kind,
-      worldVersion: worldContext.worldFrameHandle.version,
-      claimHome: getQuestionRouteClaimRoute(request.questionRoute).home,
-      boundaryRoute: request.questionRoute.boundaryRoute,
-      publishedClaimCount: worldContext.snapshotSummary.publishedClaimCount,
-      recognizedResourceCount: worldContext.snapshotSummary.recognizedResourceCount,
-      admittedResourceCount: worldContext.snapshotSummary.admittedResourceCount,
-      activeResourceCount: worldContext.snapshotSummary.activeResourceCount,
-      underclosedResourceCount: worldContext.snapshotSummary.underclosedResourceCount,
-      activeExtensionCount: worldContext.snapshotSummary.activeExtensionCount,
-      admittedGeneratedVocabularyCount: worldContext.snapshotSummary.admittedGeneratedVocabularyCount,
-      underclosedGeneratedVocabularyCount: worldContext.snapshotSummary.underclosedGeneratedVocabularyCount,
-      activeRegistrationPatternCount: worldContext.snapshotSummary.activeRegistrationPatternCount,
-      closedRegistrationPatternCount: worldContext.snapshotSummary.closedRegistrationPatternCount,
-      qualifiedRegistrationPatternCount: worldContext.snapshotSummary.qualifiedRegistrationPatternCount,
-      underclosedRegistrationPatternCount: worldContext.snapshotSummary.underclosedRegistrationPatternCount,
-      openRegistrationPatternCount: worldContext.snapshotSummary.openRegistrationPatternCount,
-      unsupportedRegistrationBoundaryCount: worldContext.snapshotSummary.unsupportedRegistrationBoundaryCount,
-      runtimeOnlyRegistrationBoundaryCount: worldContext.snapshotSummary.runtimeOnlyRegistrationBoundaryCount
-    }));
+    this.#introspection.record(() => withCurrentWorldTrace(
+      {
+        kind: SemanticRuntimeTraceEventKind.WorldContextHandedOff,
+        surface: SemanticRuntimeSurfaceKind.WorldContextHandoff,
+        questionRouteKind: request.questionRoute.kind,
+        worldFrameKind: worldContext.worldFrameHandle.kind,
+        worldVersion: worldContext.worldFrameHandle.version,
+        claimHome: getQuestionRouteClaimRoute(request.questionRoute).home,
+        boundaryRoute: request.questionRoute.boundaryRoute
+      },
+      handoffTraceDetails
+    ));
 
     let outcome = this.#typedEnrichmentPort.enrich(request, worldContext);
     if (
@@ -395,4 +348,37 @@ function applyBoundaryOutcome(
     outcome.note,
     boundaryOutcome
   );
+}
+
+function withCurrentWorldTrace(
+  event: SemanticRuntimeTraceEvent,
+  currentWorld: CurrentWorldTraceDetails | undefined
+): SemanticRuntimeTraceEvent {
+  if (currentWorld === undefined) {
+    return event;
+  }
+
+  const summary = currentWorld.summary;
+  return {
+    ...event,
+    currentWorld,
+    publishedClaimCount: summary.publishedClaimCount,
+    recognizedResourceCount: summary.recognizedResourceCount,
+    admittedResourceCount: summary.admittedResourceCount,
+    activeResourceCount: summary.activeResourceCount,
+    underclosedResourceCount: summary.underclosedResourceCount,
+    activeExtensionCount: summary.activeExtensionCount,
+    admittedGeneratedVocabularyCount: summary.admittedGeneratedVocabularyCount,
+    underclosedGeneratedVocabularyCount: summary.underclosedGeneratedVocabularyCount,
+    activeRegistrationPatternCount: summary.activeRegistrationPatternCount,
+    closedRegistrationPatternCount: summary.closedRegistrationPatternCount,
+    qualifiedRegistrationPatternCount: summary.qualifiedRegistrationPatternCount,
+    underclosedRegistrationPatternCount: summary.underclosedRegistrationPatternCount,
+    openRegistrationPatternCount: summary.openRegistrationPatternCount,
+    unsupportedRegistrationBoundaryCount: summary.unsupportedRegistrationBoundaryCount,
+    runtimeOnlyRegistrationBoundaryCount: summary.runtimeOnlyRegistrationBoundaryCount,
+    associatedTemplateCount: summary.associatedTemplateCount,
+    explicitNoViewCount: summary.explicitNoViewCount,
+    underclosedTemplateAssociationCount: summary.underclosedTemplateAssociationCount
+  };
 }

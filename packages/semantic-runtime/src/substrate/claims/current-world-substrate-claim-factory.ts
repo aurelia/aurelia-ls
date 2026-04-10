@@ -5,7 +5,7 @@ import {
 } from "../../query/framing/question-route.js";
 import { createLineageRef, type LineageRef } from "../lineage/lineage-ref.js";
 import {
-  createCurrentWorldSummaryValue,
+  createCurrentWorldSummaryValueFromSnapshot as createSummaryValueFromSnapshot,
   type CurrentWorldSummaryValue,
   type PublishedSubstrateClaim,
   type SubstrateClaimRef
@@ -42,7 +42,7 @@ export class CurrentWorldSubstrateClaimFactory {
       return undefined;
     }
 
-    const currentWorldSummary = createCurrentWorldSummaryValueFromSnapshot(
+    const currentWorldSummary = createSummaryValueFromSnapshot(
       readContext.snapshotSummary
     );
 
@@ -118,43 +118,4 @@ export class CurrentWorldSubstrateClaimFactory {
       basisDecision.basis
     );
   }
-}
-
-function createCurrentWorldSummaryValueFromSnapshot(
-  snapshotSummary: WorldSnapshotSummary
-): CurrentWorldSummaryValue {
-  return createCurrentWorldSummaryValue(
-    {
-      publishedClaimCount: snapshotSummary.publishedClaimCount,
-      consultedPackageCount: snapshotSummary.consultedPackageCount,
-      recognizedResourceCount: snapshotSummary.recognizedResourceCount,
-      admittedResourceCount: snapshotSummary.admittedResourceCount,
-      activeResourceCount: snapshotSummary.activeResourceCount,
-      underclosedResourceCount: snapshotSummary.underclosedResourceCount,
-      activeExtensionCount: snapshotSummary.activeExtensionCount,
-      admittedGeneratedVocabularyCount: snapshotSummary.admittedGeneratedVocabularyCount,
-      underclosedGeneratedVocabularyCount: snapshotSummary.underclosedGeneratedVocabularyCount,
-      activeRegistrationPatternCount: snapshotSummary.activeRegistrationPatternCount,
-      closedRegistrationPatternCount: snapshotSummary.closedRegistrationPatternCount,
-      qualifiedRegistrationPatternCount: snapshotSummary.qualifiedRegistrationPatternCount,
-      underclosedRegistrationPatternCount: snapshotSummary.underclosedRegistrationPatternCount,
-      openRegistrationPatternCount: snapshotSummary.openRegistrationPatternCount,
-      unsupportedRegistrationBoundaryCount: snapshotSummary.unsupportedRegistrationBoundaryCount,
-      runtimeOnlyRegistrationBoundaryCount: snapshotSummary.runtimeOnlyRegistrationBoundaryCount,
-      associatedTemplateCount: snapshotSummary.associatedTemplateCount,
-      explicitNoViewCount: snapshotSummary.explicitNoViewCount,
-      underclosedTemplateAssociationCount: snapshotSummary.underclosedTemplateAssociationCount,
-      scannedContributorClasses: snapshotSummary.scannedContributorClasses,
-      scannedContributorRefs: snapshotSummary.scannedContributorRefs,
-      supportingBoundaries: snapshotSummary.supportingBoundaries,
-      outOfBoundaryCandidateRefs: snapshotSummary.outOfBoundaryCandidateRefs,
-      recognitionStatus: snapshotSummary.recognitionStatus,
-      admissionStatus: snapshotSummary.admissionStatus,
-      currentWorldActivityStatus: snapshotSummary.currentWorldActivityStatus,
-      reachabilityScopes: snapshotSummary.reachabilityScopes,
-      declarationWitnessStatus: snapshotSummary.declarationWitnessStatus,
-      searchedWorldCompletenessStatus: snapshotSummary.searchedWorldCompletenessStatus,
-      openStateStatus: snapshotSummary.openStateStatus
-    }
-  );
 }

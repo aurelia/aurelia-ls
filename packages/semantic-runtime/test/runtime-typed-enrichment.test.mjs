@@ -32,6 +32,7 @@ import {
   SemanticRuntimeTraceEventKind,
   createBufferedSemanticRuntimeIntrospection
 } from "../out/runtime/introspection/runtime-introspection.js";
+import { SummaryStatusKind } from "../out/workspace/handoff/current-world-context.js";
 import {
   createProofRecord,
   assertProofRecord
@@ -119,6 +120,18 @@ test("semantic-runtime contextual typed readout resolves live checker evidence",
       SemanticRuntimeTraceEventKind.WorldContextHandedOff,
       SemanticRuntimeTraceEventKind.TypedEnrichmentProduced
     ]
+  );
+  const handoffEvent = proofRecord.traceCapture.events.find(
+    (event) => event.kind === SemanticRuntimeTraceEventKind.WorldContextHandedOff
+  );
+  assert.equal(handoffEvent?.currentWorld?.summary.consultedPackageCount, 1);
+  assert.equal(
+    handoffEvent?.currentWorld?.summary.recognitionStatus,
+    SummaryStatusKind.OpenPlaceholder
+  );
+  assert.equal(
+    handoffEvent?.currentWorld?.worldFrameHandle?.version,
+    worldFrame.version
   );
 });
 

@@ -441,6 +441,48 @@ test("substrate fallback reuses the handed-off current-world summary instead of 
     answer.payload?.currentWorldSummary?.outOfBoundaryCandidateRefs,
     previewContext.snapshotSummary.outOfBoundaryCandidateRefs
   );
+  const handoffEvent = proofRecord.traceCapture.events.find(
+    (event) => event.kind === SemanticRuntimeTraceEventKind.WorldContextHandedOff
+  );
+  const answerEvent = proofRecord.traceCapture.events.find(
+    (event) => event.kind === SemanticRuntimeTraceEventKind.AnswerAssembled
+  );
+  assert.deepEqual(
+    handoffEvent?.currentWorld?.summary.scannedContributorClasses,
+    previewContext.snapshotSummary.scannedContributorClasses
+  );
+  assert.equal(
+    handoffEvent?.currentWorld?.summary.recognitionStatus,
+    previewContext.snapshotSummary.recognitionStatus
+  );
+  assert.deepEqual(
+    handoffEvent?.currentWorld?.summary.supportingBoundaries.map(
+      (boundary) => `${boundary.kind}:${boundary.id}`
+    ),
+    previewContext.snapshotSummary.supportingBoundaries.map(
+      (boundary) => `${boundary.kind}:${boundary.id}`
+    )
+  );
+  assert.equal(
+    handoffEvent?.currentWorld?.publication?.frontier,
+    previewContext.currentWorldPublication?.frontier
+  );
+  assert.equal(
+    handoffEvent?.currentWorld?.worldFrameHandle?.lookupRegime,
+    previewContext.worldFrameHandle.lookupRegime
+  );
+  assert.equal(
+    handoffEvent?.currentWorld?.rescanBasis?.reasonMask,
+    previewContext.rescanBasis.reasonMask
+  );
+  assert.equal(
+    answerEvent?.currentWorld?.publication?.closureRef,
+    answer.payload?.currentWorldPublication?.closureRef
+  );
+  assert.equal(
+    answerEvent?.currentWorld?.summary.openStateStatus,
+    answer.payload?.currentWorldSummary?.openStateStatus
+  );
 });
 
 test("semantic-runtime keeps declaration-world publication qualified when recognizer breadth is still partial", () => {
