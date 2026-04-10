@@ -1,12 +1,12 @@
 import {
   ApiClient,
   Aurelia,
+  Container,
   FeatureConfiguration,
-  Registration as ServiceRegistration,
-  ServiceContainer
+  Registration as ServiceRegistration
 } from "./aurelia.js";
 
-const services = new ServiceContainer();
+const services = new Container();
 
 services.register(
   ServiceRegistration.singleton(ApiClient, ApiClient).aliasTo("api-client")

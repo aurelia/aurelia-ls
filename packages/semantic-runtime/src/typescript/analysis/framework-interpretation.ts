@@ -57,9 +57,9 @@ const KNOWN_FRAMEWORK_SURFACES: readonly KnownFrameworkSurfaceDescriptor[] = [
   },
   {
     kind: KnownFrameworkSurfaceKind.Container,
-    exactNames: ["IContainer", "Container", "ServiceContainer"],
+    exactNames: ["IContainer", "Container"],
     packageHints: ["packages/kernel/src/di.ts"],
-    typeNames: ["IContainer", "Container", "ServiceContainer"]
+    typeNames: ["IContainer", "Container"]
   },
   {
     kind: KnownFrameworkSurfaceKind.AppTask,

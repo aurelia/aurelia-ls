@@ -20,13 +20,13 @@ export class Aurelia {
   }
 }
 
-export class ServiceContainer {
+export class Container {
   public register(..._registrations: readonly unknown[]): void {}
 }
 
 export class AppTask {
   public static activating(
-    _callback: (container: ServiceContainer) => void
+    _callback: (container: Container) => void
   ): unknown {
     return {};
   }

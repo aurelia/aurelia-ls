@@ -16,7 +16,7 @@ export const Registration = {
   }
 };
 
-export class ServiceContainer {
+export class Container {
   public register(..._registrations: readonly unknown[]): void {}
 }
 
