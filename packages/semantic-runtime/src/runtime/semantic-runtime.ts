@@ -131,7 +131,11 @@ export class SemanticRuntime {
     const substrateRead = this.#substrateReader.readSubstrateClaim(
       createQuestionRouteSubstrateLookupPlan(
         query.questionRoute,
-        worldContext.worldFrameHandle
+        worldContext.worldFrameHandle,
+        {
+          snapshotSummary: worldContext.snapshotSummary,
+          currentWorldPublication: worldContext.currentWorldPublication
+        }
       )
     );
     const substrateSummary = substrateRead.publishedClaim?.payload?.currentWorldSummary;

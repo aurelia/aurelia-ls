@@ -52,9 +52,7 @@ export function planRuntimeBoot(
       worldConstruction
     ),
     substrateReader: new SubstrateReader(
-      port.substrateStorage ?? EMPTY_SUBSTRATE_STORAGE,
-      undefined,
-      worldConstruction
+      port.substrateStorage ?? EMPTY_SUBSTRATE_STORAGE
     ),
     evaluatorReadPort: port.evaluatorReadPort ?? new EvaluatorReadPort(),
     typedEnrichmentPort: new TypedEnrichmentPort(port.typescriptProjectPort)

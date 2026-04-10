@@ -1,8 +1,13 @@
 import type { ClaimRouteRef } from "../model/claims/claim-model.js";
 import type { QuestionRoute } from "../query/framing/question-route.js";
 import type { WorldFrameHandle } from "../workspace/handoff/current-world-context.js";
-import type { TypeScriptWorldConstruction } from "../workspace/registration/typescript-world-construction.js";
+import type { WorldSnapshotSummary } from "../workspace/handoff/current-world-context.js";
+import type { CurrentWorldPublication } from "../workspace/snapshots/current-world-publication.js";
 import type { PublishedSubstrateClaim, SubstrateClaimRef } from "./claims/substrate-claim-ref.js";
+import {
+  CurrentWorldSubstrateClaimFactory,
+  type CurrentWorldSubstrateReadContext
+} from "./claims/current-world-substrate-claim-factory.js";
 import {
   ClaimHomeIndex,
   createSubstrateLookupTarget,
@@ -17,9 +22,7 @@ import {
 export interface SubstrateLookupPlan {
   readonly lookupTarget: SubstrateLookupTarget;
   readonly worldFrameHandle: WorldFrameHandle;
-  readonly readContext?: {
-    readonly questionRoute?: QuestionRoute;
-  };
+  readonly readContext?: CurrentWorldSubstrateReadContext;
 }
 
 export interface SubstrateReadResult {
@@ -31,16 +34,16 @@ export interface SubstrateReadResult {
 export class SubstrateReader {
   readonly #storage: SubstrateStorage;
   readonly #claimHomeIndex: ClaimHomeIndex;
-  readonly #worldConstruction?: TypeScriptWorldConstruction;
+  readonly #currentWorldClaimFactory: CurrentWorldSubstrateClaimFactory;
 
   public constructor(
     storage: SubstrateStorage = EMPTY_SUBSTRATE_STORAGE,
     claimHomeIndex: ClaimHomeIndex = new ClaimHomeIndex(),
-    worldConstruction?: TypeScriptWorldConstruction
+    currentWorldClaimFactory: CurrentWorldSubstrateClaimFactory = new CurrentWorldSubstrateClaimFactory()
   ) {
     this.#storage = storage;
     this.#claimHomeIndex = claimHomeIndex;
-    this.#worldConstruction = worldConstruction;
+    this.#currentWorldClaimFactory = currentWorldClaimFactory;
   }
 
   public readSubstrateClaim(plan: SubstrateLookupPlan): SubstrateReadResult {
@@ -48,26 +51,41 @@ export class SubstrateReader {
       plan.lookupTarget,
       plan.worldFrameHandle
     );
-    const questionRoute = plan.readContext?.questionRoute;
+    const publishedClaim = this.#storage.readPublishedClaim(claimRef) ??
+      (
+        plan.readContext === undefined
+          ? undefined
+          : this.#currentWorldClaimFactory.createPublishedClaim(
+              claimRef,
+              plan.readContext
+            )
+      );
 
     return {
       claimRef,
-      publishedClaim: this.#storage.readPublishedClaim(claimRef) ??
-        (
-          questionRoute === undefined
-            ? undefined
-            : this.#worldConstruction?.readPublishedClaim(
-                questionRoute,
-                plan.worldFrameHandle.version
-              )
-        ),
+      publishedClaim,
       lineageRef: this.#storage.readLineage(claimRef) ??
-        this.#worldConstruction?.readLineage(claimRef)
+        (
+          plan.readContext === undefined
+            ? undefined
+            : this.#currentWorldClaimFactory.createLineage(
+                claimRef,
+                plan.readContext
+              )
+        )
     };
   }
 
-  public lookupLineage(ref: SubstrateClaimRef): LineageRef | undefined {
-    return this.#storage.readLineage(ref) ?? this.#worldConstruction?.readLineage(ref);
+  public lookupLineage(
+    ref: SubstrateClaimRef,
+    readContext?: CurrentWorldSubstrateReadContext
+  ): LineageRef | undefined {
+    return this.#storage.readLineage(ref) ??
+      (
+        readContext === undefined
+          ? undefined
+          : this.#currentWorldClaimFactory.createLineage(ref, readContext)
+      );
   }
 }
 
@@ -85,13 +103,21 @@ export function createSubstrateLookupPlan(
 
 export function createQuestionRouteSubstrateLookupPlan(
   questionRoute: QuestionRoute,
-  worldFrameHandle: WorldFrameHandle
+  worldFrameHandle: WorldFrameHandle,
+  readContext?: {
+    readonly snapshotSummary: WorldSnapshotSummary;
+    readonly currentWorldPublication?: CurrentWorldPublication;
+  }
 ): SubstrateLookupPlan {
   return {
     lookupTarget: createSubstrateLookupTarget(questionRoute),
     worldFrameHandle,
-    readContext: {
-      questionRoute
-    }
+    readContext: readContext === undefined
+      ? undefined
+      : {
+          questionRoute,
+          snapshotSummary: readContext.snapshotSummary,
+          currentWorldPublication: readContext.currentWorldPublication
+        }
   };
 }

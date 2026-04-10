@@ -7,7 +7,10 @@ import { ClosureStatusKind } from "../../model/semantic-runtime-handles.js";
 import {
   createSemanticClaimPayload,
   createSubstrateClaimRef,
-  type CurrentWorldSummaryValue,
+  createCurrentWorldSummaryValue,
+  getSubstrateClaim,
+  getSubstrateClaimKey,
+  type CurrentWorldSummaryValueOptions,
   type PublishedSubstrateClaim,
   type SubstrateClaimRef
 } from "../claims/substrate-claim-ref.js";
@@ -36,11 +39,11 @@ class InMemorySubstrateStorage implements SubstrateStorage {
 
   public constructor(claims: readonly PublishedSubstrateClaim[]) {
     const claimEntries = claims.map((claim) => [
-      keyForClaim(claim.ref),
+      getSubstrateClaimKey(claim.ref),
       claim
     ] as const);
     const lineageEntries = claims.map((claim) => [
-      keyForClaim(claim.ref),
+      getSubstrateClaimKey(claim.ref),
       createLineageRef(claim.ref.home, claim.ref.worldVersion)
     ] as const);
 
@@ -49,11 +52,11 @@ class InMemorySubstrateStorage implements SubstrateStorage {
   }
 
   public readPublishedClaim(ref: SubstrateClaimRef): PublishedSubstrateClaim | undefined {
-    return this.#claims.get(keyForClaim(ref));
+    return getSubstrateClaim(this.#claims, ref);
   }
 
   public readLineage(ref: SubstrateClaimRef): LineageRef | undefined {
-    return this.#lineage.get(keyForClaim(ref));
+    return this.#lineage.get(getSubstrateClaimKey(ref));
   }
 }
 
@@ -62,9 +65,11 @@ export const EMPTY_SUBSTRATE_STORAGE: SubstrateStorage = new EmptySubstrateStora
 export function createCurrentWorldSummaryClaim(
   home: ClaimHomeKind,
   worldVersion: number,
-  summary: CurrentWorldSummaryValue,
+  summary: CurrentWorldSummaryValueOptions,
   publication?: CurrentWorldPublication
 ): PublishedSubstrateClaim {
+  const currentWorldSummary = createCurrentWorldSummaryValue(summary);
+
   return {
     ref: createSubstrateClaimRef(home, worldVersion),
     outcome: publication?.claimOutcome ?? ClaimOutcomeKind.Present,
@@ -72,7 +77,7 @@ export function createCurrentWorldSummaryClaim(
     closureStatus: publication?.closureStatus ?? ClosureStatusKind.Closed,
     payload: createSemanticClaimPayload(
       {
-        currentWorldSummary: summary,
+        currentWorldSummary,
         currentWorldPublication: publication
       }
     )
@@ -83,13 +88,15 @@ export function createAuthoredOccurrenceBasisClaim(
   home: ClaimHomeKind,
   worldVersion: number,
   localIdentity: string | undefined,
-  summary: CurrentWorldSummaryValue,
+  summary: CurrentWorldSummaryValueOptions,
   publication: CurrentWorldPublication,
   outcome: ClaimOutcomeKind,
   qualifier: ClaimQualifierKind,
   closureStatus: ClosureStatusKind,
   authoredOccurrenceBasis?: AuthoredOccurrenceBasis
 ): PublishedSubstrateClaim {
+  const currentWorldSummary = createCurrentWorldSummaryValue(summary);
+
   return {
     ref: createSubstrateClaimRef(home, worldVersion, localIdentity),
     outcome,
@@ -97,7 +104,7 @@ export function createAuthoredOccurrenceBasisClaim(
     closureStatus,
     payload: createSemanticClaimPayload(
       {
-        currentWorldSummary: summary,
+        currentWorldSummary,
         currentWorldPublication: publication,
         authoredOccurrenceBasis
       }
@@ -113,8 +120,4 @@ export function createInMemorySubstrateStorage(
   }
 
   return new InMemorySubstrateStorage(claims);
-}
-
-function keyForClaim(ref: SubstrateClaimRef): string {
-  return `${ref.home}:${ref.worldVersion}:${ref.localIdentity ?? "root"}`;
 }

@@ -344,6 +344,105 @@ test("semantic-runtime publishes current-world resource admission from a curated
   );
 });
 
+test("substrate fallback reuses the handed-off current-world summary instead of regenerating a thinner local snapshot", () => {
+  const questionRoute = createQuestionRoute(
+    createClaimRoute(ClaimHomeKind.CurrentWorldSummary),
+    {
+      inquiryEpisode: SemanticInquiryEpisode.BoundedClosureExplanation,
+      readMode: SemanticReadMode.Explain
+    }
+  );
+  const worldFrame = createWorldFrame(53, WorldFrameKind.Current);
+  const currentWorldContextPort = new CurrentWorldContextPort(
+    {
+      publishedClaimCount: 5
+    },
+    new TypeScriptWorldConstruction(
+      new TypeScriptProjectPort(
+        {
+          generation: 53,
+          projectRoot: REGISTRATION_BROADER_OBSERVED_FIXTURE_ROOT
+        }
+      )
+    )
+  );
+  const previewContext = currentWorldContextPort.publishCurrentWorldContext(
+    questionRoute,
+    worldFrame
+  );
+  const runtime = new SemanticRuntime(
+    {
+      introspection: createBufferedSemanticRuntimeIntrospection(),
+      currentWorldContextPort
+    }
+  );
+  const answer = runtime.readSemanticAnswer(
+    {
+      questionRoute,
+      worldFrame
+    }
+  );
+  const proofRecord = createProofRecord({
+    pocket: SemanticRuntimeVerificationPocketKind.SubstrateAndEvaluatorRead,
+    proofClass: VerificationProofClassKind.SeamProof,
+    verificationBasis: VerificationBasisKind.InventedProductObligation,
+    surfaceRefs: [
+      SemanticRuntimeSurfaceKind.WorldContextHandoff,
+      SemanticRuntimeSurfaceKind.SubstrateReader,
+      SemanticRuntimeSurfaceKind.EvaluatorReadPort,
+      SemanticRuntimeSurfaceKind.SemanticRuntime
+    ],
+    closureStatusPressure: ClosureStatusKind.Qualified,
+    likelyReentryArea: ReentryAreaKind.SubjectOracle,
+    expected: {
+      publishedClaimCount: previewContext.snapshotSummary.publishedClaimCount,
+      scannedContributorClasses: previewContext.snapshotSummary.scannedContributorClasses,
+      scannedContributorRefs: previewContext.snapshotSummary.scannedContributorRefs,
+      recognitionStatus: previewContext.snapshotSummary.recognitionStatus,
+      admissionStatus: previewContext.snapshotSummary.admissionStatus,
+      currentWorldActivityStatus: previewContext.snapshotSummary.currentWorldActivityStatus,
+      reachabilityScopes: previewContext.snapshotSummary.reachabilityScopes,
+      declarationWitnessStatus: previewContext.snapshotSummary.declarationWitnessStatus,
+      searchedWorldCompletenessStatus: previewContext.snapshotSummary.searchedWorldCompletenessStatus,
+      openStateStatus: previewContext.snapshotSummary.openStateStatus,
+      supportingBoundaryIds: previewContext.snapshotSummary.supportingBoundaries.map(
+        (boundary) => `${boundary.kind}:${boundary.id}`
+      )
+    },
+    actual: {
+      publishedClaimCount: answer.payload?.currentWorldSummary?.publishedClaimCount,
+      scannedContributorClasses: answer.payload?.currentWorldSummary?.scannedContributorClasses,
+      scannedContributorRefs: answer.payload?.currentWorldSummary?.scannedContributorRefs,
+      recognitionStatus: answer.payload?.currentWorldSummary?.recognitionStatus,
+      admissionStatus: answer.payload?.currentWorldSummary?.admissionStatus,
+      currentWorldActivityStatus: answer.payload?.currentWorldSummary?.currentWorldActivityStatus,
+      reachabilityScopes: answer.payload?.currentWorldSummary?.reachabilityScopes,
+      declarationWitnessStatus: answer.payload?.currentWorldSummary?.declarationWitnessStatus,
+      searchedWorldCompletenessStatus: answer.payload?.currentWorldSummary?.searchedWorldCompletenessStatus,
+      openStateStatus: answer.payload?.currentWorldSummary?.openStateStatus,
+      supportingBoundaryIds: answer.payload?.currentWorldSummary?.supportingBoundaries.map(
+        (boundary) => `${boundary.kind}:${boundary.id}`
+      )
+    },
+    traceCapture: {
+      request: { questionRoute, worldFrame },
+      events: runtime.captureTrace(
+        {
+          questionRoute,
+          worldFrame
+        }
+      )
+    }
+  });
+
+  assertProofRecord(proofRecord);
+  assert.equal(answer.payload?.currentWorldSummary?.publishedClaimCount, 5);
+  assert.deepEqual(
+    answer.payload?.currentWorldSummary?.outOfBoundaryCandidateRefs,
+    previewContext.snapshotSummary.outOfBoundaryCandidateRefs
+  );
+});
+
 test("semantic-runtime keeps declaration-world publication qualified when recognizer breadth is still partial", () => {
   const questionRoute = createQuestionRoute(
     createClaimRoute(ClaimHomeKind.CurrentWorldSummary),
