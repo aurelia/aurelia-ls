@@ -250,10 +250,10 @@ export class CurrentWorldProducerBasisAssembler {
       signals.analyzabilityTier,
       frontier,
       SummaryStatusKind.Closed,
-      deriveAdmissionStatus(frontier),
+      deriveAdmissionStatus(frontier, signals, registrationScan),
       deriveCurrentWorldActivityStatus(frontier, signals),
-      deriveWitnessStatus(frontier),
-      deriveCompletenessStatus(frontier),
+      deriveWitnessStatus(frontier, signals, registrationScan),
+      deriveCompletenessStatus(frontier, signals, registrationScan),
       deriveOpenStateStatus(frontier)
     );
   }
@@ -347,9 +347,13 @@ export function deriveCurrentWorldSummaryFrontier(
 
   if (
     summary.openStateStatus === SummaryStatusKind.ClosableOpen ||
+    summary.openStateStatus === SummaryStatusKind.OpaqueCarried ||
     summary.admissionStatus === SummaryStatusKind.ClosableOpen ||
+    summary.admissionStatus === SummaryStatusKind.OpaqueCarried ||
     summary.declarationWitnessStatus === SummaryStatusKind.ClosableOpen ||
+    summary.declarationWitnessStatus === SummaryStatusKind.OpaqueCarried ||
     summary.searchedWorldCompletenessStatus === SummaryStatusKind.ClosableOpen
+    || summary.searchedWorldCompletenessStatus === SummaryStatusKind.OpaqueCarried
   ) {
     return WorldParticipationFrontierKind.WorldQualified;
   }
@@ -380,8 +384,14 @@ function deriveProducerFrontier(
 }
 
 function deriveAdmissionStatus(
-  frontier: WorldParticipationFrontierKind
+  frontier: WorldParticipationFrontierKind,
+  signals: CurrentWorldProducerSignalAccumulator,
+  registrationScan: RegistrationPatternScanResult
 ): SummaryStatusKind {
+  if (shouldCarryRuntimeOnlyRegistrationState(frontier, signals, registrationScan)) {
+    return SummaryStatusKind.OpaqueCarried;
+  }
+
   switch (frontier) {
     case WorldParticipationFrontierKind.ClosedBaseline:
     case WorldParticipationFrontierKind.CurrentWorldSensitive:
@@ -410,6 +420,37 @@ function deriveCurrentWorldActivityStatus(
 }
 
 function deriveWitnessStatus(
+  frontier: WorldParticipationFrontierKind,
+  signals: CurrentWorldProducerSignalAccumulator,
+  registrationScan: RegistrationPatternScanResult
+): SummaryStatusKind {
+  if (shouldCarryRuntimeOnlyRegistrationState(frontier, signals, registrationScan)) {
+    return SummaryStatusKind.OpaqueCarried;
+  }
+
+  switch (frontier) {
+    case WorldParticipationFrontierKind.ClosedBaseline:
+    case WorldParticipationFrontierKind.CurrentWorldSensitive:
+      return SummaryStatusKind.Closed;
+    case WorldParticipationFrontierKind.WorldQualified:
+      return SummaryStatusKind.ClosableOpen;
+    case WorldParticipationFrontierKind.TerminalOpen:
+      return SummaryStatusKind.TerminalOpen;
+    case WorldParticipationFrontierKind.OpenPlaceholder:
+    default:
+      return SummaryStatusKind.OpenPlaceholder;
+  }
+}
+
+function deriveCompletenessStatus(
+  frontier: WorldParticipationFrontierKind,
+  signals: CurrentWorldProducerSignalAccumulator,
+  registrationScan: RegistrationPatternScanResult
+): SummaryStatusKind {
+  return deriveWitnessStatus(frontier, signals, registrationScan);
+}
+
+function deriveOpenStateStatus(
   frontier: WorldParticipationFrontierKind
 ): SummaryStatusKind {
   switch (frontier) {
@@ -426,18 +467,6 @@ function deriveWitnessStatus(
   }
 }
 
-function deriveCompletenessStatus(
-  frontier: WorldParticipationFrontierKind
-): SummaryStatusKind {
-  return deriveWitnessStatus(frontier);
-}
-
-function deriveOpenStateStatus(
-  frontier: WorldParticipationFrontierKind
-): SummaryStatusKind {
-  return deriveWitnessStatus(frontier);
-}
-
 function mapResourceTier(
   closureKind: ResourceDeclarationClosureKind
 ): ProducerAnalyzabilityTierKind {
@@ -450,6 +479,21 @@ function mapResourceTier(
     default:
       return ProducerAnalyzabilityTierKind.RuntimeOnly;
   }
+}
+
+function shouldCarryRuntimeOnlyRegistrationState(
+  frontier: WorldParticipationFrontierKind,
+  signals: CurrentWorldProducerSignalAccumulator,
+  registrationScan: RegistrationPatternScanResult
+): boolean {
+  return frontier === WorldParticipationFrontierKind.TerminalOpen &&
+    !signals.hasPositivePressure() &&
+    registrationScan.underclosedRegistrationPatterns.length > 0 &&
+    registrationScan.activeRegistrationPatterns.length === 0 &&
+    registrationScan.underclosedRegistrationPatterns.every(
+      (pattern) => pattern.behavior === RegistrationSupportBehaviorKind.DetectAndDeclareUnsupported ||
+        pattern.behavior === RegistrationSupportBehaviorKind.DetectRuntimeOnlyBoundary
+    );
 }
 
 function mapExtensionTier(

@@ -42,6 +42,7 @@ import { CurrentWorldContextPort } from "../out/workspace/handoff/current-world-
 import { TypeScriptWorldConstruction } from "../out/workspace/registration/typescript-world-construction.js";
 import {
   AdmissionRegimeKind,
+  ConsultationRoleKind,
   ConstructorArchetypeKind,
   LookupRegimeKind,
   MaterializationTimingKind,
@@ -1050,6 +1051,7 @@ test("current-world publication closes aggregate and direct registration-builder
     expected: {
       packageName: "@fixtures/registration-world-basic",
       frontier: WorldParticipationFrontierKind.CurrentWorldSensitive,
+      consultationRole: ConsultationRoleKind.CurrentWorldActiveLocalWorld,
       worldRegime: WorldRegimeKind.RegistryCarrier,
       registrationPath: RegistrationPathKind.KernelRegistration,
       lookupRegime: LookupRegimeKind.GenericDiAncestor,
@@ -1068,11 +1070,17 @@ test("current-world publication closes aggregate and direct registration-builder
       activeBehaviors: [
         RegistrationSupportBehaviorKind.ClaimAndClose,
         RegistrationSupportBehaviorKind.ClaimAndClose
+      ],
+      contributorClasses: [
+        ContributorClassKind.RegistryCarriers,
+        ContributorClassKind.ConfigurationEmittedMembers,
+        ContributorClassKind.NamingAndAliasConvergence
       ]
     },
     actual: {
       packageName: publication?.consultedPackage.packageName,
       frontier: publication?.frontier,
+      consultationRole: publication?.consultedWorld.consultationRole,
       worldRegime: publication?.consultedWorld.worldRegime,
       registrationPath: publication?.consultedWorld.registrationPath,
       lookupRegime: publication?.consultedWorld.lookupRegime,
@@ -1085,7 +1093,8 @@ test("current-world publication closes aggregate and direct registration-builder
       unsupportedRegistrationBoundaryCount: currentWorldContext.snapshotSummary.unsupportedRegistrationBoundaryCount,
       runtimeOnlyRegistrationBoundaryCount: currentWorldContext.snapshotSummary.runtimeOnlyRegistrationBoundaryCount,
       activeFamilies: publication?.activeRegistrationPatterns.map((pattern) => pattern.family),
-      activeBehaviors: publication?.activeRegistrationPatterns.map((pattern) => pattern.behavior)
+      activeBehaviors: publication?.activeRegistrationPatterns.map((pattern) => pattern.behavior),
+      contributorClasses: currentWorldContext.snapshotSummary.scannedContributorClasses
     },
     traceCapture: {
       request: { questionRoute, worldFrame },
@@ -1170,6 +1179,10 @@ test("current-world publication keeps registration-world support qualified when 
       underclosedFamilies: [
         RegistrationPatternFamilyKind.LifecycleGatedRegistration,
         RegistrationPatternFamilyKind.RouteConfigAdmissionWorld
+      ],
+      contributorClasses: [
+        ContributorClassKind.ModuleIntakeCarriers,
+        ContributorClassKind.ConfigurationEmittedMembers
       ]
     },
     actual: {
@@ -1185,7 +1198,8 @@ test("current-world publication keeps registration-world support qualified when 
       unsupportedRegistrationBoundaryCount: answer.payload?.currentWorldSummary?.unsupportedRegistrationBoundaryCount,
       runtimeOnlyRegistrationBoundaryCount: answer.payload?.currentWorldSummary?.runtimeOnlyRegistrationBoundaryCount,
       activeFamilies: answer.payload?.currentWorldPublication?.activeRegistrationPatterns.map((pattern) => pattern.family),
-      underclosedFamilies: answer.payload?.currentWorldPublication?.underclosedRegistrationPatterns.map((pattern) => pattern.family)
+      underclosedFamilies: answer.payload?.currentWorldPublication?.underclosedRegistrationPatterns.map((pattern) => pattern.family),
+      contributorClasses: answer.payload?.currentWorldSummary?.scannedContributorClasses
     },
     traceCapture: {
       request: { questionRoute, worldFrame },
@@ -1287,6 +1301,7 @@ test("current-world publication widens broader observed routed root stacks witho
         RegistrationPatternFamilyKind.RoutedRootWrapperAdmission
       ],
       contributorClasses: [
+        ContributorClassKind.ModuleIntakeCarriers,
         ContributorClassKind.ConfigurationEmittedMembers,
         ContributorClassKind.RootStackComposition,
         ContributorClassKind.RouteShellAdmission
@@ -1399,12 +1414,17 @@ test("current-world publication reports unsupported and runtime-only registratio
       qualification: ClaimQualifierKind.WorldOpen,
       closureStatus: ClosureStatusKind.Open,
       frontier: WorldParticipationFrontierKind.TerminalOpen,
+      consultationRole: ConsultationRoleKind.AdmittedRegistrationWorld,
       packageName: "@fixtures/registration-world-terminal",
       activeRegistrationPatternCount: 0,
       underclosedRegistrationPatternCount: 2,
       openRegistrationPatternCount: 0,
       unsupportedRegistrationBoundaryCount: 1,
       runtimeOnlyRegistrationBoundaryCount: 1,
+      admissionStatus: SummaryStatusKind.OpaqueCarried,
+      declarationWitnessStatus: SummaryStatusKind.OpaqueCarried,
+      searchedWorldCompletenessStatus: SummaryStatusKind.OpaqueCarried,
+      openStateStatus: SummaryStatusKind.TerminalOpen,
       underclosedFamilies: [
         RegistrationPatternFamilyKind.CallbackLocalDynamicRegistration,
         RegistrationPatternFamilyKind.LateBoundDynamicCompositionLookup
@@ -1420,12 +1440,17 @@ test("current-world publication reports unsupported and runtime-only registratio
       qualification: answer.qualificationRefs[0]?.kind,
       closureStatus: answer.closureStatus,
       frontier: answer.payload?.currentWorldPublication?.frontier,
+      consultationRole: answer.payload?.currentWorldPublication?.consultedWorld.consultationRole,
       packageName: answer.payload?.currentWorldPublication?.consultedPackage.packageName,
       activeRegistrationPatternCount: answer.payload?.currentWorldSummary?.activeRegistrationPatternCount,
       underclosedRegistrationPatternCount: answer.payload?.currentWorldSummary?.underclosedRegistrationPatternCount,
       openRegistrationPatternCount: answer.payload?.currentWorldSummary?.openRegistrationPatternCount,
       unsupportedRegistrationBoundaryCount: answer.payload?.currentWorldSummary?.unsupportedRegistrationBoundaryCount,
       runtimeOnlyRegistrationBoundaryCount: answer.payload?.currentWorldSummary?.runtimeOnlyRegistrationBoundaryCount,
+      admissionStatus: answer.payload?.currentWorldSummary?.admissionStatus,
+      declarationWitnessStatus: answer.payload?.currentWorldSummary?.declarationWitnessStatus,
+      searchedWorldCompletenessStatus: answer.payload?.currentWorldSummary?.searchedWorldCompletenessStatus,
+      openStateStatus: answer.payload?.currentWorldSummary?.openStateStatus,
       underclosedFamilies: answer.payload?.currentWorldPublication?.underclosedRegistrationPatterns.map((pattern) => pattern.family),
       underclosedBehaviors: answer.payload?.currentWorldPublication?.underclosedRegistrationPatterns.map((pattern) => pattern.behavior)
     },

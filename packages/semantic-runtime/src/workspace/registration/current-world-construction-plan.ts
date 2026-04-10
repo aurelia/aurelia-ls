@@ -42,7 +42,12 @@ export class CurrentWorldConstructionPlan {
       resourceScan.underclosedResources.length > 0;
     this.#hasExtensionPressure = extensionScan.activeExtensionCount > 0 ||
       extensionScan.underclosedGeneratedVocabularyCount > 0;
-    this.consultationRole = selectConsultationRole(home);
+    this.consultationRole = selectConsultationRole(
+      home,
+      this.#hasResourcePressure,
+      this.#hasExtensionPressure,
+      registrationScan
+    );
     this.worldRegime = selectWorldRegime(
       registrationScan,
       this.#hasResourcePressure,
@@ -115,12 +120,24 @@ export class CurrentWorldConstructionPlan {
 }
 
 function selectConsultationRole(
-  home: ClaimHomeKind
+  home: ClaimHomeKind,
+  hasResourcePressure: boolean,
+  hasExtensionPressure: boolean,
+  registrationScan: RegistrationPatternScanResult
 ): ConsultationRoleKind {
-  return home === ClaimHomeKind.CurrentWorldSummary ||
-    home === ClaimHomeKind.AuthoredOccurrenceBasis
+  const targetsCurrentWorld = home === ClaimHomeKind.CurrentWorldSummary ||
+    home === ClaimHomeKind.AuthoredOccurrenceBasis;
+  if (!targetsCurrentWorld) {
+    return ConsultationRoleKind.AdmittedRegistrationWorld;
+  }
+
+  return hasResourcePressure ||
+    hasExtensionPressure ||
+    registrationScan.activeRegistrationPatterns.length > 0
     ? ConsultationRoleKind.CurrentWorldActiveLocalWorld
-    : ConsultationRoleKind.AdmittedRegistrationWorld;
+    : registrationScan.underclosedRegistrationPatterns.length > 0
+      ? ConsultationRoleKind.AdmittedRegistrationWorld
+      : ConsultationRoleKind.CurrentWorldActiveLocalWorld;
 }
 
 function selectWorldRegime(

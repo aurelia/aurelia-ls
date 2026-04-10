@@ -24,7 +24,8 @@ import type { WorkspacePackageRef } from "../packages/workspace-package.js";
 import type { CustomElementScanResult } from "../registration/custom-element-declaration-scanner.js";
 import type { ExtensionConfigurationScanResult } from "../registration/extension-configuration-scanner.js";
 import {
-  RegistrationPatternFamilyKind
+  RegistrationPatternFamilyKind,
+  RegistrationTransitionClassId
 } from "../registration/registration-pattern.js";
 import type {
   ActiveRegistrationPattern,
@@ -146,6 +147,9 @@ function collectScannedContributorClasses(
 
   if (
     registrationPatterns.some((pattern) => pattern.registrationPath === RegistrationPathKind.AnalyzedModuleSelection)
+      || registrationPatterns.some(
+        (pattern) => pattern.family === RegistrationPatternFamilyKind.RouteConfigAdmissionWorld
+      )
   ) {
     contributorClasses.add(ContributorClassKind.ModuleIntakeCarriers);
   }
@@ -161,7 +165,10 @@ function collectScannedContributorClasses(
 
   if (
     extensionScan.generatedVocabulary.length > 0 ||
-    registrationPatterns.some((pattern) => pattern.lookupRegime === LookupRegimeKind.RegistryLocalOnly)
+    registrationPatterns.some((pattern) => pattern.lookupRegime === LookupRegimeKind.RegistryLocalOnly) ||
+    registrationPatterns.some(
+      (pattern) => pattern.metadata.transitionClassId === RegistrationTransitionClassId.AliasLinkage
+    )
   ) {
     contributorClasses.add(ContributorClassKind.NamingAndAliasConvergence);
   }
