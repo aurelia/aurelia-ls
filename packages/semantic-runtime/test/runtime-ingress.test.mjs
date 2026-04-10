@@ -65,8 +65,8 @@ test("semantic-runtime ingress routes a deferred owner with structured proof and
       boundaryOutcomeKind: BoundaryOutcomeKind.RouteToOwner,
       boundaryRoute: BoundaryRouteKind.TypedEnrichment,
       closureStatus: ClosureStatusKind.Qualified,
-      outcome: ClaimOutcomeKind.BoundaryDeferred,
-      qualification: ClaimQualifierKind.BoundaryQualified
+      outcome: ClaimOutcomeKind.ExternalOwnerReroute,
+      qualification: ClaimQualifierKind.None
     },
     actual: {
       boundaryOutcomeKind: answer.boundaryOutcome.kind,

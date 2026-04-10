@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { ClaimHomeKind, ClaimOutcomeKind, ClaimQualifierKind, createClaimRoute } from "../out/model/claims/index.js";
+import {
+  ClaimHomeKind,
+  ClaimOutcomeKind,
+  ClaimQualifierKind,
+  ClaimTruthStatusKind,
+  createClaimRoute
+} from "../out/model/claims/index.js";
 import { AnswerCommitmentKind, SemanticInquiryEpisode, SemanticReadMode } from "../out/model/semantic-api/index.js";
 import {
   ClosureStatusKind,
@@ -109,7 +115,8 @@ test("semantic-runtime local read assembles a structured semantic answer", () =>
     likelyReentryArea: ReentryAreaKind.VerificationBurden,
     expected: {
       answerCommitment: AnswerCommitmentKind.Explain,
-      outcome: ClaimOutcomeKind.Present,
+      truthStatus: ClaimTruthStatusKind.ClosedBaseline,
+      outcome: ClaimOutcomeKind.ClosedPositive,
       qualification: ClaimQualifierKind.None,
       closureStatus: ClosureStatusKind.Closed,
       publishedClaimCount: 1,
@@ -120,6 +127,7 @@ test("semantic-runtime local read assembles a structured semantic answer", () =>
     },
     actual: {
       answerCommitment: answer.answerCommitment.kind,
+      truthStatus: answer.truthStatus?.kind,
       outcome: answer.outcome,
       qualification: answer.qualificationRefs[0]?.kind,
       closureStatus: answer.closureStatus,
@@ -300,7 +308,8 @@ test("substrate and evaluator read stay publication-first and snapshot-first", (
     closureStatusPressure: ClosureStatusKind.Closed,
     likelyReentryArea: ReentryAreaKind.SubjectOracle,
     expected: {
-      outcome: ClaimOutcomeKind.Present,
+      truthStatus: ClaimTruthStatusKind.ClosedBaseline,
+      outcome: ClaimOutcomeKind.ClosedPositive,
       qualification: ClaimQualifierKind.None,
       closureStatus: ClosureStatusKind.Closed,
       claimHome: ClaimHomeKind.CurrentWorldSummary,
@@ -311,6 +320,7 @@ test("substrate and evaluator read stay publication-first and snapshot-first", (
       underclosedResourceCount: 0
     },
     actual: {
+      truthStatus: evaluation.truthStatus,
       outcome: evaluation.outcome,
       qualification: evaluation.qualifier,
       closureStatus: evaluation.closureStatus,

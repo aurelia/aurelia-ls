@@ -21,9 +21,24 @@ export const enum ClaimHomeFamilyKind {
 }
 
 export const enum ClaimOutcomeKind {
-  Present = 1,
-  NoClaim = 2,
-  BoundaryDeferred = 3
+  ClosedPositive = 1,
+  ClosedNegative = 2,
+  ClosedQualified = 3,
+  EvidentialLicensing = 4,
+  BlockedOpen = 5,
+  DeferredOrPlaceholderOpen = 6,
+  RetreatedOrReopened = 7,
+  ConsumerRefusal = 8,
+  ConsumerSilence = 9,
+  ExternalOwnerReroute = 10
+}
+
+export const enum ClaimTruthStatusKind {
+  ClosedBaseline = 1,
+  CurrentWorldSensitive = 2,
+  WorldQualified = 3,
+  TerminalOpen = 4,
+  OpenPlaceholder = 5
 }
 
 export const enum ClaimQualifierKind {
@@ -51,6 +66,10 @@ export interface ClaimHomeFamily {
 
 export interface ClaimOutcome {
   readonly kind: ClaimOutcomeKind;
+}
+
+export interface ClaimTruthStatus {
+  readonly kind: ClaimTruthStatusKind;
 }
 
 export interface ClaimQualifier {
@@ -143,16 +162,55 @@ const CLAIM_HOMES = {
 } as const satisfies Record<ClaimHomeKind, ClaimHome>;
 
 const CLAIM_OUTCOMES = {
-  [ClaimOutcomeKind.Present]: {
-    kind: ClaimOutcomeKind.Present
+  [ClaimOutcomeKind.ClosedPositive]: {
+    kind: ClaimOutcomeKind.ClosedPositive
   },
-  [ClaimOutcomeKind.NoClaim]: {
-    kind: ClaimOutcomeKind.NoClaim
+  [ClaimOutcomeKind.ClosedNegative]: {
+    kind: ClaimOutcomeKind.ClosedNegative
   },
-  [ClaimOutcomeKind.BoundaryDeferred]: {
-    kind: ClaimOutcomeKind.BoundaryDeferred
+  [ClaimOutcomeKind.ClosedQualified]: {
+    kind: ClaimOutcomeKind.ClosedQualified
+  },
+  [ClaimOutcomeKind.EvidentialLicensing]: {
+    kind: ClaimOutcomeKind.EvidentialLicensing
+  },
+  [ClaimOutcomeKind.BlockedOpen]: {
+    kind: ClaimOutcomeKind.BlockedOpen
+  },
+  [ClaimOutcomeKind.DeferredOrPlaceholderOpen]: {
+    kind: ClaimOutcomeKind.DeferredOrPlaceholderOpen
+  },
+  [ClaimOutcomeKind.RetreatedOrReopened]: {
+    kind: ClaimOutcomeKind.RetreatedOrReopened
+  },
+  [ClaimOutcomeKind.ConsumerRefusal]: {
+    kind: ClaimOutcomeKind.ConsumerRefusal
+  },
+  [ClaimOutcomeKind.ConsumerSilence]: {
+    kind: ClaimOutcomeKind.ConsumerSilence
+  },
+  [ClaimOutcomeKind.ExternalOwnerReroute]: {
+    kind: ClaimOutcomeKind.ExternalOwnerReroute
   }
 } as const satisfies Record<ClaimOutcomeKind, ClaimOutcome>;
+
+const CLAIM_TRUTH_STATUSES = {
+  [ClaimTruthStatusKind.ClosedBaseline]: {
+    kind: ClaimTruthStatusKind.ClosedBaseline
+  },
+  [ClaimTruthStatusKind.CurrentWorldSensitive]: {
+    kind: ClaimTruthStatusKind.CurrentWorldSensitive
+  },
+  [ClaimTruthStatusKind.WorldQualified]: {
+    kind: ClaimTruthStatusKind.WorldQualified
+  },
+  [ClaimTruthStatusKind.TerminalOpen]: {
+    kind: ClaimTruthStatusKind.TerminalOpen
+  },
+  [ClaimTruthStatusKind.OpenPlaceholder]: {
+    kind: ClaimTruthStatusKind.OpenPlaceholder
+  }
+} as const satisfies Record<ClaimTruthStatusKind, ClaimTruthStatus>;
 
 const CLAIM_QUALIFIERS = {
   [ClaimQualifierKind.None]: {
@@ -200,6 +258,12 @@ export function getClaimHomeFamily(
 
 export function getClaimOutcome(kind: ClaimOutcomeKind): ClaimOutcome {
   return CLAIM_OUTCOMES[kind];
+}
+
+export function getClaimTruthStatus(
+  kind: ClaimTruthStatusKind
+): ClaimTruthStatus {
+  return CLAIM_TRUTH_STATUSES[kind];
 }
 
 export function getClaimQualifier(kind: ClaimQualifierKind): ClaimQualifier {

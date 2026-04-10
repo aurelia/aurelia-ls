@@ -1,4 +1,5 @@
 import {
+  ClaimTruthStatusKind,
   ClaimOutcomeKind,
   ClaimQualifierKind
 } from "../../model/claims/claim-model.js";
@@ -25,6 +26,7 @@ export interface EvaluatorExecutionPlan {
 
 export interface PublishedEvaluatorResult {
   readonly claimRef: SubstrateClaimRef;
+  readonly truthStatus?: ClaimTruthStatusKind;
   readonly outcome: ClaimOutcomeKind;
   readonly qualifier: ClaimQualifierKind;
   readonly closureStatus: ClosureStatusKind;
@@ -40,8 +42,8 @@ export class EvaluatorReadPort {
     if (plan.publishedClaim === undefined) {
       return {
         claimRef: plan.claimRef,
-        outcome: ClaimOutcomeKind.NoClaim,
-        qualifier: ClaimQualifierKind.WorldOpen,
+        outcome: ClaimOutcomeKind.ConsumerSilence,
+        qualifier: ClaimQualifierKind.None,
         closureStatus: ClosureStatusKind.Open,
         lineageRef: plan.lineageRef,
         surface: SemanticRuntimeSurfaceKind.EvaluatorReadPort
@@ -50,6 +52,7 @@ export class EvaluatorReadPort {
 
     return {
       claimRef: plan.claimRef,
+      truthStatus: plan.publishedClaim.truthStatus,
       outcome: plan.publishedClaim.outcome,
       qualifier: plan.publishedClaim.qualifier,
       closureStatus: plan.publishedClaim.closureStatus,

@@ -1,5 +1,6 @@
 import * as ts from "typescript";
 import {
+  ClaimTruthStatusKind,
   ClaimOutcomeKind,
   ClaimQualifierKind,
   ClaimHomeKind
@@ -19,6 +20,7 @@ import { AuthoredOccurrenceBasis } from "./authored-occurrence-basis.js";
 
 export class AuthoredOccurrencePublicationDecision {
   public constructor(
+    public readonly truthStatus: ClaimTruthStatusKind | undefined,
     public readonly outcome: ClaimOutcomeKind,
     public readonly qualifier: ClaimQualifierKind,
     public readonly closureStatus: ClosureStatusKind,
@@ -36,7 +38,8 @@ export class AuthoredOccurrenceBasisPublisher {
       ClaimHomeKind.AuthoredOccurrenceBasis
     ) {
       return new AuthoredOccurrencePublicationDecision(
-        ClaimOutcomeKind.NoClaim,
+        undefined,
+        ClaimOutcomeKind.ConsumerSilence,
         ClaimQualifierKind.WorldOpen,
         ClosureStatusKind.Open
       );
@@ -45,7 +48,8 @@ export class AuthoredOccurrenceBasisPublisher {
     const target = getQuestionRouteAuthoredOccurrenceTarget(questionRoute);
     if (target === undefined) {
       return new AuthoredOccurrencePublicationDecision(
-        ClaimOutcomeKind.NoClaim,
+        ClaimTruthStatusKind.TerminalOpen,
+        ClaimOutcomeKind.BlockedOpen,
         ClaimQualifierKind.WorldOpen,
         ClosureStatusKind.Open
       );
@@ -58,7 +62,8 @@ export class AuthoredOccurrenceBasisPublisher {
     const association = matchedResource?.templateAssociation;
     if (matchedResource === undefined || association === undefined) {
       return new AuthoredOccurrencePublicationDecision(
-        ClaimOutcomeKind.NoClaim,
+        ClaimTruthStatusKind.TerminalOpen,
+        ClaimOutcomeKind.BlockedOpen,
         ClaimQualifierKind.WorldOpen,
         ClosureStatusKind.Open
       );
@@ -67,14 +72,16 @@ export class AuthoredOccurrenceBasisPublisher {
     const templateText = readTemplateText(association);
     if (templateText === undefined || target.offset < 0 || target.offset >= templateText.length) {
       return new AuthoredOccurrencePublicationDecision(
-        ClaimOutcomeKind.NoClaim,
+        ClaimTruthStatusKind.TerminalOpen,
+        ClaimOutcomeKind.BlockedOpen,
         ClaimQualifierKind.WorldOpen,
         ClosureStatusKind.Open
       );
     }
 
     return new AuthoredOccurrencePublicationDecision(
-      ClaimOutcomeKind.Present,
+      ClaimTruthStatusKind.ClosedBaseline,
+      ClaimOutcomeKind.ClosedQualified,
       ClaimQualifierKind.WorldOpen,
       ClosureStatusKind.Partial,
       new AuthoredOccurrenceBasis(

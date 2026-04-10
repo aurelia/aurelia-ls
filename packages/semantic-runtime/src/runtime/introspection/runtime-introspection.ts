@@ -1,6 +1,11 @@
 import type { BoundaryOutcomeKind } from "../../boundaries/consequence-basis/boundary-consequence-basis.js";
 import type { BoundaryRouteKind } from "../../model/boundary-routes/boundary-routes.js";
-import type { ClaimHomeKind, ClaimOutcomeKind, ClaimQualifierKind } from "../../model/claims/claim-model.js";
+import type {
+  ClaimHomeKind,
+  ClaimOutcomeKind,
+  ClaimQualifierKind,
+  ClaimTruthStatusKind
+} from "../../model/claims/claim-model.js";
 import type {
   ClosureStatusKind,
   SemanticRuntimeSurfaceKind
@@ -46,6 +51,7 @@ export interface SemanticRuntimeTraceEvent {
   readonly readMode?: SemanticReadMode;
   readonly boundaryRoute?: BoundaryRouteKind;
   readonly boundaryOutcomeKind?: BoundaryOutcomeKind;
+  readonly claimTruthStatus?: ClaimTruthStatusKind;
   readonly claimOutcome?: ClaimOutcomeKind;
   readonly claimQualification?: ClaimQualifierKind;
   readonly closureStatus?: ClosureStatusKind;

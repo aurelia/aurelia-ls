@@ -1,5 +1,6 @@
 import type {
   ClaimHomeKind,
+  ClaimTruthStatusKind,
   ClaimOutcomeKind,
   ClaimQualifierKind
 } from "../../model/claims/claim-model.js";
@@ -82,6 +83,7 @@ export interface SemanticClaimPayload {
 
 export interface PublishedSubstrateClaim {
   readonly ref: SubstrateClaimRef;
+  readonly truthStatus?: ClaimTruthStatusKind;
   readonly outcome: ClaimOutcomeKind;
   readonly qualifier: ClaimQualifierKind;
   readonly closureStatus: ClosureStatusKind;

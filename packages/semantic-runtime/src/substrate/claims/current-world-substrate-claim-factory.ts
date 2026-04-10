@@ -112,6 +112,7 @@ export class CurrentWorldSubstrateClaimFactory {
         `${authoredOccurrenceTarget.templateSourceRef}:${authoredOccurrenceTarget.offset}`,
       currentWorldSummary,
       publication,
+      basisDecision.truthStatus,
       basisDecision.outcome,
       basisDecision.qualifier,
       basisDecision.closureStatus,

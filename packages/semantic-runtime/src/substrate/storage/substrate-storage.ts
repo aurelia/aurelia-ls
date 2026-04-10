@@ -1,5 +1,6 @@
 import type { ClaimHomeKind } from "../../model/claims/claim-model.js";
 import {
+  ClaimTruthStatusKind,
   ClaimOutcomeKind,
   ClaimQualifierKind
 } from "../../model/claims/claim-model.js";
@@ -72,7 +73,8 @@ export function createCurrentWorldSummaryClaim(
 
   return {
     ref: createSubstrateClaimRef(home, worldVersion),
-    outcome: publication?.claimOutcome ?? ClaimOutcomeKind.Present,
+    truthStatus: publication?.claimTruthStatus ?? ClaimTruthStatusKind.ClosedBaseline,
+    outcome: publication?.claimOutcome ?? ClaimOutcomeKind.ClosedPositive,
     qualifier: publication?.claimQualifier ?? ClaimQualifierKind.None,
     closureStatus: publication?.closureStatus ?? ClosureStatusKind.Closed,
     payload: createSemanticClaimPayload(
@@ -90,6 +92,7 @@ export function createAuthoredOccurrenceBasisClaim(
   localIdentity: string | undefined,
   summary: CurrentWorldSummaryValueOptions,
   publication: CurrentWorldPublication,
+  truthStatus: ClaimTruthStatusKind | undefined,
   outcome: ClaimOutcomeKind,
   qualifier: ClaimQualifierKind,
   closureStatus: ClosureStatusKind,
@@ -99,6 +102,7 @@ export function createAuthoredOccurrenceBasisClaim(
 
   return {
     ref: createSubstrateClaimRef(home, worldVersion, localIdentity),
+    truthStatus,
     outcome,
     qualifier,
     closureStatus,

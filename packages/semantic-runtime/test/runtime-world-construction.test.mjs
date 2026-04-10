@@ -14,7 +14,11 @@ import {
   createQuestionRoute,
   createWorldFrame
 } from "../out/index.js";
-import { ClaimQualifierKind } from "../out/model/claims/claim-model.js";
+import {
+  ClaimOutcomeKind,
+  ClaimQualifierKind,
+  ClaimTruthStatusKind
+} from "../out/model/claims/claim-model.js";
 import {
   ClosureStatusKind,
   ReentryAreaKind,
@@ -524,6 +528,8 @@ test("semantic-runtime keeps declaration-world publication qualified when recogn
     closureStatusPressure: ClosureStatusKind.Qualified,
     likelyReentryArea: ReentryAreaKind.SubjectOracle,
     expected: {
+      truthStatus: ClaimTruthStatusKind.WorldQualified,
+      outcome: ClaimOutcomeKind.ClosedQualified,
       qualification: ClaimQualifierKind.WorldOpen,
       closureStatus: ClosureStatusKind.Qualified,
       frontier: WorldParticipationFrontierKind.WorldQualified,
@@ -538,6 +544,8 @@ test("semantic-runtime keeps declaration-world publication qualified when recogn
       resourceNames: ["resolved-panel"]
     },
     actual: {
+      truthStatus: answer.truthStatus?.kind,
+      outcome: answer.outcome,
       qualification: answer.qualificationRefs[0]?.kind,
       closureStatus: answer.closureStatus,
       frontier: answer.payload?.currentWorldPublication?.frontier,
@@ -1345,6 +1353,8 @@ test("current-world publication reports unsupported and runtime-only registratio
     closureStatusPressure: ClosureStatusKind.Open,
     likelyReentryArea: ReentryAreaKind.SubjectOracle,
     expected: {
+      truthStatus: ClaimTruthStatusKind.TerminalOpen,
+      outcome: ClaimOutcomeKind.BlockedOpen,
       qualification: ClaimQualifierKind.WorldOpen,
       closureStatus: ClosureStatusKind.Open,
       frontier: WorldParticipationFrontierKind.TerminalOpen,
@@ -1364,6 +1374,8 @@ test("current-world publication reports unsupported and runtime-only registratio
       ]
     },
     actual: {
+      truthStatus: answer.truthStatus?.kind,
+      outcome: answer.outcome,
       qualification: answer.qualificationRefs[0]?.kind,
       closureStatus: answer.closureStatus,
       frontier: answer.payload?.currentWorldPublication?.frontier,

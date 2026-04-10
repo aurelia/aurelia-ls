@@ -1,6 +1,7 @@
 import type { BoundaryOutcome } from "../boundaries/boundary-router.js";
 import { BoundaryRouteKind } from "../model/boundary-routes/boundary-routes.js";
 import {
+  getClaimTruthStatus,
   ClaimOutcomeKind,
   ClaimQualifierKind,
   ClaimBoundaryKind,
@@ -17,6 +18,7 @@ import { createSemanticClaimPayload } from "../substrate/claims/substrate-claim-
 import { createSubstrateClaimRef } from "../substrate/claims/substrate-claim-ref.js";
 import type { SemanticAnswer } from "./semantic-answer.js";
 import { getQuestionRouteClaimRoute } from "../query/framing/question-route.js";
+import { BoundaryOutcomeKind } from "../boundaries/consequence-basis/boundary-consequence-basis.js";
 
 export class SemanticAnswerAssembler {
   public assemble(
@@ -33,8 +35,10 @@ export class SemanticAnswerAssembler {
       claimRoute.home,
       worldContext.worldFrameHandle.version
     );
-    const outcome = evaluation?.outcome ?? ClaimOutcomeKind.BoundaryDeferred;
-    const qualifier = evaluation?.qualifier ?? ClaimQualifierKind.BoundaryQualified;
+    const outcome = evaluation?.outcome ??
+      classifyBoundaryOutcome(boundaryOutcome) ??
+      ClaimOutcomeKind.ConsumerSilence;
+    const qualifier = evaluation?.qualifier ?? ClaimQualifierKind.None;
     const boundaryRefs = mergeBoundaryConsequence(
       boundaryOutcome,
       plan.query.questionRoute.boundaryRoute
@@ -44,6 +48,9 @@ export class SemanticAnswerAssembler {
       questionRoute: plan.query.questionRoute,
       worldFrame: plan.query.worldFrame,
       answerCommitment: plan.answerCommitment,
+      truthStatus: evaluation?.truthStatus === undefined
+        ? undefined
+        : getClaimTruthStatus(evaluation.truthStatus),
       outcome,
       qualificationRefs: [getClaimQualifier(qualifier)],
       boundaryRefs,
@@ -99,6 +106,18 @@ export function mergeBoundaryConsequence(
   return effectiveBoundaryRoute === undefined
     ? []
     : [getClaimBoundary(toClaimBoundaryKind(effectiveBoundaryRoute))];
+}
+
+function classifyBoundaryOutcome(
+  boundaryOutcome: BoundaryOutcome | undefined
+): ClaimOutcomeKind | undefined {
+  if (boundaryOutcome === undefined) {
+    return undefined;
+  }
+
+  return boundaryOutcome.kind === BoundaryOutcomeKind.RouteToOwner
+    ? ClaimOutcomeKind.ExternalOwnerReroute
+    : ClaimOutcomeKind.ConsumerRefusal;
 }
 
 function toClaimBoundaryKind(

@@ -3,6 +3,7 @@ import type { ClosureStatusKind } from "../model/semantic-runtime-handles.js";
 import type {
   ClaimBoundary,
   ClaimOutcomeKind,
+  ClaimTruthStatus,
   ClaimQualifier
 } from "../model/claims/claim-model.js";
 import type { AnswerCommitment } from "../model/semantic-api/semantic-api-model.js";
@@ -34,6 +35,7 @@ export interface SemanticAnswer {
   readonly questionRoute: QuestionRoute;
   readonly worldFrame: WorldFrame;
   readonly answerCommitment: AnswerCommitment;
+  readonly truthStatus?: ClaimTruthStatus;
   readonly outcome: ClaimOutcomeKind;
   readonly qualificationRefs: readonly ClaimQualifier[];
   readonly boundaryRefs: readonly ClaimBoundary[];

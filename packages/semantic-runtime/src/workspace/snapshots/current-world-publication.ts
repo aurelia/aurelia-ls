@@ -1,5 +1,6 @@
 import type { WorldFrame } from "../../query/framing/world-frame.js";
 import {
+  ClaimTruthStatusKind,
   ClaimOutcomeKind,
   ClaimQualifierKind
 } from "../../model/claims/claim-model.js";
@@ -182,10 +183,37 @@ export class CurrentWorldPublication {
     );
   }
 
+  public get claimTruthStatus(): ClaimTruthStatusKind {
+    switch (this.frontier) {
+      case WorldParticipationFrontierKind.ClosedBaseline:
+        return ClaimTruthStatusKind.ClosedBaseline;
+      case WorldParticipationFrontierKind.CurrentWorldSensitive:
+        return ClaimTruthStatusKind.CurrentWorldSensitive;
+      case WorldParticipationFrontierKind.WorldQualified:
+        return ClaimTruthStatusKind.WorldQualified;
+      case WorldParticipationFrontierKind.TerminalOpen:
+        return ClaimTruthStatusKind.TerminalOpen;
+      case WorldParticipationFrontierKind.OpenPlaceholder:
+        return ClaimTruthStatusKind.OpenPlaceholder;
+      default:
+        return ClaimTruthStatusKind.TerminalOpen;
+    }
+  }
+
   public get claimOutcome(): ClaimOutcomeKind {
-    return this.frontier === WorldParticipationFrontierKind.TerminalOpen
-      ? ClaimOutcomeKind.NoClaim
-      : ClaimOutcomeKind.Present;
+    switch (this.claimTruthStatus) {
+      case ClaimTruthStatusKind.ClosedBaseline:
+      case ClaimTruthStatusKind.CurrentWorldSensitive:
+        return ClaimOutcomeKind.ClosedPositive;
+      case ClaimTruthStatusKind.WorldQualified:
+        return ClaimOutcomeKind.ClosedQualified;
+      case ClaimTruthStatusKind.TerminalOpen:
+        return ClaimOutcomeKind.BlockedOpen;
+      case ClaimTruthStatusKind.OpenPlaceholder:
+        return ClaimOutcomeKind.DeferredOrPlaceholderOpen;
+      default:
+        return ClaimOutcomeKind.BlockedOpen;
+    }
   }
 
   public get claimQualifier(): ClaimQualifierKind {

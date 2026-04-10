@@ -15,7 +15,10 @@ import {
   createQuestionRoute,
   createWorldFrame
 } from "../out/index.js";
-import { ClaimQualifierKind } from "../out/model/claims/claim-model.js";
+import {
+  ClaimOutcomeKind,
+  ClaimQualifierKind
+} from "../out/model/claims/claim-model.js";
 import {
   ClosureStatusKind,
   ReentryAreaKind,
@@ -111,6 +114,7 @@ test("semantic-runtime publishes an authored occurrence basis from a template so
     closureStatusPressure: ClosureStatusKind.Partial,
     likelyReentryArea: ReentryAreaKind.SubjectOracle,
     expected: {
+      outcome: ClaimOutcomeKind.ClosedQualified,
       qualification: ClaimQualifierKind.WorldOpen,
       closureStatus: ClosureStatusKind.Partial,
       templateSourceRef,
@@ -121,6 +125,7 @@ test("semantic-runtime publishes an authored occurrence basis from a template so
       offset
     },
     actual: {
+      outcome: answer.outcome,
       qualification: answer.qualificationRefs[0]?.kind,
       closureStatus: answer.closureStatus,
       templateSourceRef: answer.payload?.authoredOccurrenceBasis?.templateSourceRef,
