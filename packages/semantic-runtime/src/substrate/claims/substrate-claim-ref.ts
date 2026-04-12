@@ -20,7 +20,10 @@ const EMPTY_CONTRIBUTOR_CLASSES: readonly ContributorClassKind[] = [];
 const EMPTY_STRING_REFS: readonly string[] = [];
 const EMPTY_BOUNDARIES: readonly ConsultedBoundaryRef[] = [];
 const EMPTY_REACHABILITY_SCOPES: readonly SummaryReachabilityScopeKind[] = [];
+const EMPTY_ANCHORED_SUPPORT_OPEN_REASONS: readonly AnchoredSupportOpenReasonKind[] = [];
+const EMPTY_ANCHORED_SUPPORT_SECTIONS: readonly AnchoredSupportSectionKind[] = [];
 const ROOT_LOCAL_IDENTITY = "root";
+const ANCHORED_SUPPORT_REF_PREFIX = "anchor";
 
 export interface SubstrateClaimRef {
   readonly home: ClaimHomeKind;
@@ -75,10 +78,55 @@ export interface CurrentWorldSummaryValue extends CurrentWorldSummaryValueOption
   readonly openStateStatus: SummaryStatusKind;
 }
 
+export const enum AnchoredSupportOpenReasonKind {
+  SectionSupportOpen = 1,
+  CurrentWorldSensitive = 2
+}
+
+export const enum AnchoredSupportSectionKind {
+  PolicyConfig = 1,
+  StructuredSupportBundle = 2,
+  OpaqueHooks = 3
+}
+
+export const enum AnchoredSupportAnchorKind {
+  CustomElement = 1
+}
+
+export class AnchoredSupportBasis {
+  public constructor(
+    public readonly anchorRef: string,
+    public readonly resolvedIdentityRefs: readonly string[],
+    public readonly inheritedDeclarationWitnessRef: string,
+    public readonly openReasonKinds: readonly AnchoredSupportOpenReasonKind[] =
+      EMPTY_ANCHORED_SUPPORT_OPEN_REASONS,
+    public readonly blockedSupportSections: readonly AnchoredSupportSectionKind[] =
+      EMPTY_ANCHORED_SUPPORT_SECTIONS,
+    public readonly supportBundleRef?: string,
+    public readonly supportWitnessRef?: string,
+    public readonly carriedMemberRefs: readonly string[] = EMPTY_STRING_REFS,
+    public readonly semanticAttachmentRefs: readonly string[] = EMPTY_STRING_REFS
+  ) {}
+}
+
+export function createAnchoredSupportAnchorRef(
+  worldRef: string,
+  kind: AnchoredSupportAnchorKind,
+  canonicalIdentity: string
+): string {
+  return [
+    ANCHORED_SUPPORT_REF_PREFIX,
+    worldRef,
+    toAnchoredSupportAnchorKindSegment(kind),
+    canonicalIdentity
+  ].join(":");
+}
+
 export interface SemanticClaimPayload {
   readonly currentWorldSummary?: CurrentWorldSummaryValue;
   readonly currentWorldPublication?: CurrentWorldPublication;
   readonly authoredOccurrenceBasis?: AuthoredOccurrenceBasis;
+  readonly anchoredSupportBasis?: AnchoredSupportBasis;
 }
 
 export interface PublishedSubstrateClaim {
@@ -168,7 +216,8 @@ export function createSemanticClaimPayload(
 ): SemanticClaimPayload | undefined {
   return payload.currentWorldSummary === undefined &&
     payload.currentWorldPublication === undefined &&
-    payload.authoredOccurrenceBasis === undefined
+    payload.authoredOccurrenceBasis === undefined &&
+    payload.anchoredSupportBasis === undefined
     ? undefined
     : payload;
 }
@@ -182,4 +231,15 @@ export function getSubstrateClaim(
   ref: SubstrateClaimRef
 ): PublishedSubstrateClaim | undefined {
   return claims.get(getSubstrateClaimKey(ref));
+}
+
+function toAnchoredSupportAnchorKindSegment(
+  kind: AnchoredSupportAnchorKind
+): string {
+  switch (kind) {
+    case AnchoredSupportAnchorKind.CustomElement:
+      return "custom-element";
+  }
+
+  throw new Error(`Unsupported anchored support anchor kind: ${kind}`);
 }

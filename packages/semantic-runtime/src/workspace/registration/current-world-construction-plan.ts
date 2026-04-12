@@ -126,7 +126,8 @@ function selectConsultationRole(
   registrationScan: RegistrationPatternScanResult
 ): ConsultationRoleKind {
   const targetsCurrentWorld = home === ClaimHomeKind.CurrentWorldSummary ||
-    home === ClaimHomeKind.AuthoredOccurrenceBasis;
+    home === ClaimHomeKind.AuthoredOccurrenceBasis ||
+    home === ClaimHomeKind.AnchoredSupport;
   if (!targetsCurrentWorld) {
     return ConsultationRoleKind.AdmittedRegistrationWorld;
   }

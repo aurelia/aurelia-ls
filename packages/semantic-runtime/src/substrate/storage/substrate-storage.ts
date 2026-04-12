@@ -6,6 +6,7 @@ import {
 } from "../../model/claims/claim-model.js";
 import { ClosureStatusKind } from "../../model/semantic-runtime-handles.js";
 import {
+  AnchoredSupportBasis,
   createSemanticClaimPayload,
   createSubstrateClaimRef,
   createCurrentWorldSummaryValue,
@@ -120,6 +121,36 @@ export function createAuthoredOccurrenceBasisClaim(
         currentWorldSummary,
         currentWorldPublication: publication,
         authoredOccurrenceBasis
+      }
+    )
+  };
+}
+
+export function createAnchoredSupportClaim(
+  home: ClaimHomeKind,
+  worldVersion: number,
+  localIdentity: string | undefined,
+  summary: CurrentWorldSummaryValueOptions,
+  publication: CurrentWorldPublication,
+  truthStatus: ClaimTruthStatusKind | undefined,
+  outcome: ClaimOutcomeKind,
+  qualifier: ClaimQualifierKind,
+  closureStatus: ClosureStatusKind,
+  anchoredSupportBasis?: AnchoredSupportBasis
+): PublishedSubstrateClaim {
+  const currentWorldSummary = createCurrentWorldSummaryValue(summary);
+
+  return {
+    ref: createSubstrateClaimRef(home, worldVersion, localIdentity),
+    truthStatus,
+    outcome,
+    qualifier,
+    closureStatus,
+    payload: createSemanticClaimPayload(
+      {
+        currentWorldSummary,
+        currentWorldPublication: publication,
+        anchoredSupportBasis
       }
     )
   };

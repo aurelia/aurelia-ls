@@ -1,7 +1,8 @@
 export const enum ClaimHomeKind {
   CurrentWorldSummary = 1,
   BoundaryFrontier = 2,
-  AuthoredOccurrenceBasis = 3
+  AuthoredOccurrenceBasis = 3,
+  AnchoredSupport = 4
 }
 
 export const enum ClaimHomeFamilyKind {
@@ -157,6 +158,14 @@ const CLAIM_HOMES = {
     kind: ClaimHomeKind.AuthoredOccurrenceBasis,
     familyRefs: [
       getClaimHomeFamily(ClaimHomeFamilyKind.AuthoredOccurrenceClassification)
+    ]
+  },
+  [ClaimHomeKind.AnchoredSupport]: {
+    kind: ClaimHomeKind.AnchoredSupport,
+    familyRefs: [
+      getClaimHomeFamily(
+        ClaimHomeFamilyKind.AnchoredIdentityAndCarriedSupport
+      )
     ]
   }
 } as const satisfies Record<ClaimHomeKind, ClaimHome>;

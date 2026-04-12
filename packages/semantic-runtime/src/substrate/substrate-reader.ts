@@ -110,7 +110,10 @@ export function createQuestionRouteSubstrateLookupPlan(
   }
 ): SubstrateLookupPlan {
   return {
-    lookupTarget: createSubstrateLookupTarget(questionRoute),
+    lookupTarget: createSubstrateLookupTarget(
+      questionRoute,
+      readContext?.currentWorldPublication
+    ),
     worldFrameHandle,
     readContext: readContext === undefined
       ? undefined

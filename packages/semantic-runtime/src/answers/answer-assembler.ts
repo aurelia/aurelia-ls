@@ -106,7 +106,8 @@ export class SemanticAnswerAssembler {
           currentWorldSummary: evaluation?.payload?.currentWorldSummary ??
             createCurrentWorldSummaryValueFromSnapshot(worldContext.snapshotSummary),
           currentWorldPublication,
-          authoredOccurrenceBasis: evaluation?.payload?.authoredOccurrenceBasis
+          authoredOccurrenceBasis: evaluation?.payload?.authoredOccurrenceBasis,
+          anchoredSupportBasis: evaluation?.payload?.anchoredSupportBasis
         }
       )
     };
