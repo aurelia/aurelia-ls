@@ -206,7 +206,7 @@ test("semantic-runtime publishes an anchored-support basis from an occurrence-gu
   });
 
   const questionRoute = createQuestionRoute(
-    createClaimRoute(ClaimHomeKind.AnchoredSupport),
+    createClaimRoute(ClaimHomeKind.AuthoredOccurrenceBasis),
     {
       inquiryEpisode: SemanticInquiryEpisode.BoundedClosureExplanation,
       readMode: SemanticReadMode.Explain,
@@ -283,11 +283,13 @@ test("semantic-runtime publishes an anchored-support basis from an occurrence-gu
   });
 
   assertProofRecord(proofRecord);
+  assert.equal(questionRoute.focusRef.claimRoute.home, ClaimHomeKind.AuthoredOccurrenceBasis);
   assert.equal(answer.provenance.claimRef.localIdentity, expectedAnchorRef);
   assert.equal(
     answer.payload?.anchoredSupportBasis?.inheritedDeclarationWitnessRef,
     publication?.declarationWitnessRef
   );
+  assert.equal(proofRecord.traceCapture.events[0]?.claimHome, ClaimHomeKind.AnchoredSupport);
   assert.deepEqual(
     proofRecord.traceCapture.events.map((event) => event.kind),
     [

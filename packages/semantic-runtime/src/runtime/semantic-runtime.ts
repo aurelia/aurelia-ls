@@ -70,16 +70,18 @@ export class SemanticRuntime {
 
   public readSemanticAnswer(query: SemanticQuery): SemanticAnswer {
     const plannedQuery = this.#queryPlanner.plan(query);
-    const claimRoute = getQuestionRouteClaimRoute(plannedQuery.query.questionRoute);
+    const plannedQuestionRoute = plannedQuery.query.questionRoute;
+    const plannedWorldFrame = plannedQuery.query.worldFrame;
+    const claimRoute = getQuestionRouteClaimRoute(plannedQuestionRoute);
     const authoredOccurrenceTarget = getQuestionRouteAuthoredOccurrenceTarget(
-      plannedQuery.query.questionRoute
+      plannedQuestionRoute
     );
     const currentWorldContext = this.#currentWorldContextPort.publishCurrentWorldContext(
-      plannedQuery.query.questionRoute,
-      plannedQuery.query.worldFrame
+      plannedQuestionRoute,
+      plannedWorldFrame
     );
     const worldContext = createRuntimeWorldContextHandoff(
-      plannedQuery.query.questionRoute,
+      plannedQuestionRoute,
       currentWorldContext
     );
     const handoffTraceDetails = CurrentWorldTraceDetails.fromWorldContext(
@@ -89,13 +91,13 @@ export class SemanticRuntime {
     this.#introspection.record(() => ({
       kind: SemanticRuntimeTraceEventKind.QueryPlanned,
       surface: SemanticRuntimeSurfaceKind.SemanticRuntime,
-      questionRouteKind: query.questionRoute.kind,
-      worldFrameKind: query.worldFrame.kind,
-      worldVersion: query.worldFrame.version,
+      questionRouteKind: plannedQuestionRoute.kind,
+      worldFrameKind: plannedWorldFrame.kind,
+      worldVersion: plannedWorldFrame.version,
       claimHome: claimRoute.home,
-      inquiryEpisode: query.questionRoute.inquiryEpisode,
-      readMode: query.questionRoute.readMode,
-      boundaryRoute: query.questionRoute.boundaryRoute,
+      inquiryEpisode: plannedQuestionRoute.inquiryEpisode,
+      readMode: plannedQuestionRoute.readMode,
+      boundaryRoute: plannedQuestionRoute.boundaryRoute,
       authoredOccurrenceTemplateSourceRef: authoredOccurrenceTarget?.templateSourceRef,
       authoredOccurrenceOffset: authoredOccurrenceTarget?.offset
     }));
@@ -104,21 +106,21 @@ export class SemanticRuntime {
       {
         kind: SemanticRuntimeTraceEventKind.WorldContextHandedOff,
         surface: SemanticRuntimeSurfaceKind.WorldContextHandoff,
-        questionRouteKind: query.questionRoute.kind,
+        questionRouteKind: plannedQuestionRoute.kind,
         worldFrameKind: worldContext.worldFrameHandle.kind,
         worldVersion: worldContext.worldFrameHandle.version,
         claimHome: claimRoute.home,
-        boundaryRoute: query.questionRoute.boundaryRoute,
+        boundaryRoute: plannedQuestionRoute.boundaryRoute,
         authoredOccurrenceTemplateSourceRef: authoredOccurrenceTarget?.templateSourceRef,
         authoredOccurrenceOffset: authoredOccurrenceTarget?.offset
       },
       handoffTraceDetails
     ));
 
-    const boundaryOutcome = query.questionRoute.boundaryRoute === undefined
+    const boundaryOutcome = plannedQuestionRoute.boundaryRoute === undefined
       ? undefined
       : this.#boundaryRouter.routeBoundary(
-          getBoundaryRoute(query.questionRoute.boundaryRoute),
+          getBoundaryRoute(plannedQuestionRoute.boundaryRoute),
           collectSemanticGoverningAnchorRefStrings(
             worldContext.currentWorldPublication,
             worldContext.worldFrameHandle
@@ -126,7 +128,7 @@ export class SemanticRuntime {
         );
     const substrateRead = this.#substrateReader.readSubstrateClaim(
       createQuestionRouteSubstrateLookupPlan(
-        query.questionRoute,
+        plannedQuestionRoute,
         worldContext.worldFrameHandle,
         {
           snapshotSummary: worldContext.snapshotSummary,
@@ -146,11 +148,11 @@ export class SemanticRuntime {
       {
         kind: SemanticRuntimeTraceEventKind.SubstrateClaimRead,
         surface: SemanticRuntimeSurfaceKind.SubstrateReader,
-        questionRouteKind: query.questionRoute.kind,
+        questionRouteKind: plannedQuestionRoute.kind,
         worldFrameKind: worldContext.worldFrameHandle.kind,
         worldVersion: worldContext.worldFrameHandle.version,
         claimHome: substrateRead.claimRef.home,
-        boundaryRoute: query.questionRoute.boundaryRoute,
+        boundaryRoute: plannedQuestionRoute.boundaryRoute,
         authoredOccurrenceTemplateSourceRef: authoredOccurrenceTarget?.templateSourceRef,
         authoredOccurrenceOffset: authoredOccurrenceTarget?.offset
       },
@@ -160,7 +162,7 @@ export class SemanticRuntime {
     const evaluation = boundaryOutcome === undefined
       ? this.#evaluatorReadPort.runPublishedEvaluators(
           {
-            questionRoute: query.questionRoute,
+            questionRoute: plannedQuestionRoute,
             worldContext,
             claimRef: substrateRead.claimRef,
             publishedClaim: substrateRead.publishedClaim,
@@ -169,7 +171,7 @@ export class SemanticRuntime {
         )
       : undefined;
     const trustBundle = createTrustBundle(worldContext, evaluation, boundaryOutcome);
-    const rereadPlan = this.#rereadPlanner.plan(query);
+    const rereadPlan = this.#rereadPlanner.plan(plannedQuery.query);
     const invalidationPlan = this.#invalidationCoordinator.plan(rereadPlan);
     const reuseAdmission = this.#invalidationCoordinator.admitReuse(invalidationPlan);
 
@@ -177,9 +179,9 @@ export class SemanticRuntime {
       this.#introspection.record(() => ({
         kind: SemanticRuntimeTraceEventKind.BoundaryOutcomeProduced,
         surface: SemanticRuntimeSurfaceKind.BoundaryRouter,
-        questionRouteKind: query.questionRoute.kind,
-        worldFrameKind: query.worldFrame.kind,
-        worldVersion: query.worldFrame.version,
+        questionRouteKind: plannedQuestionRoute.kind,
+        worldFrameKind: plannedWorldFrame.kind,
+        worldVersion: plannedWorldFrame.version,
         claimHome: claimRoute.home,
         boundaryRoute: boundaryOutcome.route,
         boundaryOutcomeKind: boundaryOutcome.kind,
@@ -199,12 +201,12 @@ export class SemanticRuntime {
         {
           kind: SemanticRuntimeTraceEventKind.EvaluatorResultPublished,
           surface: SemanticRuntimeSurfaceKind.EvaluatorReadPort,
-          questionRouteKind: query.questionRoute.kind,
-          worldFrameKind: query.worldFrame.kind,
-          worldVersion: query.worldFrame.version,
+          questionRouteKind: plannedQuestionRoute.kind,
+          worldFrameKind: plannedWorldFrame.kind,
+          worldVersion: plannedWorldFrame.version,
           claimHome: evaluation.claimRef.home,
           claimTruthStatus: evaluation.truthStatus,
-          boundaryRoute: query.questionRoute.boundaryRoute,
+          boundaryRoute: plannedQuestionRoute.boundaryRoute,
           claimOutcome: evaluation.outcome,
           claimQualification: evaluation.qualifier,
           closureStatus: evaluation.closureStatus,
@@ -236,15 +238,15 @@ export class SemanticRuntime {
       {
         kind: SemanticRuntimeTraceEventKind.AnswerAssembled,
         surface: SemanticRuntimeSurfaceKind.AnswerAssembler,
-        questionRouteKind: query.questionRoute.kind,
-        worldFrameKind: query.worldFrame.kind,
-        worldVersion: query.worldFrame.version,
+        questionRouteKind: plannedQuestionRoute.kind,
+        worldFrameKind: plannedWorldFrame.kind,
+        worldVersion: plannedWorldFrame.version,
         claimHome: answer.provenance.claimRef.home,
         claimTruthStatus: answer.truthStatus?.kind,
         claimOutcome: answer.outcome,
         claimQualification: answer.qualificationRefs[0]?.kind,
         closureStatus: answer.closureStatus,
-        boundaryRoute: query.questionRoute.boundaryRoute ?? answer.boundaryOutcome?.route,
+        boundaryRoute: plannedQuestionRoute.boundaryRoute ?? answer.boundaryOutcome?.route,
         triggerMask: answer.deltaBasis.triggerMask,
         authoredOccurrenceTemplateSourceRef: authoredOccurrenceTarget?.templateSourceRef,
         authoredOccurrenceOffset: authoredOccurrenceTarget?.offset

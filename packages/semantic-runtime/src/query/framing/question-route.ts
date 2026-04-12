@@ -10,6 +10,8 @@ import {
   type QuestionFocusRef
 } from "./focus-ref.js";
 
+export { AuthoredOccurrenceTarget } from "./authored-occurrence-target.js";
+
 export const enum QuestionRouteKind {
   OrientAndLocalize = 1,
   BoundedClosureExplanation = 2,
