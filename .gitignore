@@ -35,7 +35,3 @@ examples/**/aot-source.js
 scripts/inspect-aot.mjs
 dumps/
 
-AGENTS.md
-CLAUDE.md
-.codex
-.claude
