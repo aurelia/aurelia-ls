@@ -3,7 +3,7 @@
  * (temp file + rename) so concurrent readers never see a torn file.
  *
  * Default output: .source-analysis/snapshots/<target>-{deps|typerefs|exports}.json
- * relative to the current working directory. Override with --out-dir or the
+ * relative to the analyzed repo root. Override with --out-dir or the
  * SNAPSHOT_ROOT environment variable.
  */
 
@@ -13,6 +13,7 @@ import { join, resolve } from 'node:path';
 
 import {
   createSnapshotPaths,
+  resolveSnapshotRootPath,
   resolveSnapshotTarget,
 } from './snapshot-config.js';
 import { resolveAnalysisProfile } from './analysis-profile.js';
@@ -42,10 +43,15 @@ function takeOption(name: string): string | undefined {
 
 const targetArg = takeOption('--target');
 const repoArg = takeOption('--repo');
-const outDirArg = takeOption('--out-dir') ?? PATHS.snapshotRootPath;
+const profilePathArg = takeOption('--profile-path');
+const outDirArg = takeOption('--out-dir');
 const waitMsArg = takeOption('--wait-ms');
 const waitMs = waitMsArg ? Number(waitMsArg) : 20000;
-const selection = resolveSnapshotTarget({ target: targetArg, repoPath: repoArg });
+const selection = resolveSnapshotTarget({
+  target: targetArg,
+  repoPath: repoArg,
+  profilePath: profilePathArg,
+});
 const target = selection.target;
 
 if (!Number.isFinite(waitMs) || waitMs < 0) {
@@ -72,7 +78,7 @@ const profile = resolveAnalysisProfile({
   ...(selection.profilePath ? { profilePath: selection.profilePath } : {}),
 });
 
-const outDir = resolve(outDirArg);
+const outDir = resolve(outDirArg ?? resolveSnapshotRootPath(PATHS, repoPath));
 mkdirSync(outDir, { recursive: true });
 
 const sleep = (ms: number): void => {
@@ -103,7 +109,13 @@ function runGenerator(kind: RefreshableKind): string {
       : resolve(PATHS.toolRootPath, 'out/exports/generate.js');
   const stdout = execFileSync(
     process.execPath,
-    [generatorPath, repoPath, target, JSON.stringify(profile.excludedRepoRelativePrefixes)],
+    [
+      generatorPath,
+      repoPath,
+      target,
+      JSON.stringify(profile.excludedRepoRelativePrefixes),
+      profile.profilePath ?? '',
+    ],
     {
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'inherit'],

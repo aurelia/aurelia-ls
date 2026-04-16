@@ -1,3 +1,5 @@
+import type { SnapshotProfileProvenance } from '../snapshots.js';
+
 /**
  * Schema for the dependency graph JSON produced by `pnpm deps`.
  *
@@ -221,6 +223,8 @@ export interface DepsOutput {
   source_commit: string;
   /** Git blob hash of src/dependency-graph.ts when this was generated. */
   analyzer_commit: string;
+  /** Profile and exclusion regime used to derive this snapshot. */
+  profile: SnapshotProfileProvenance;
   tsconfigs: string[];
   summary: {
     files_analyzed: number;

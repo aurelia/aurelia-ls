@@ -52,6 +52,14 @@ describe('SnapshotHostRuntime', () => {
     expect(depsSummary.meta.refreshedKinds).toEqual(['deps']);
     expect(depsSummary.result.summary.files_analyzed).toBe(2);
 
+    const depsSnapshotQuery = runtime.execute({
+      command: 'query.deps.snapshot',
+      args: { sessionId },
+    });
+    expect(depsSnapshotQuery.status).toBe('ok');
+    expect(depsSnapshotQuery.result.snapshot.profile.target).toBe('fixture');
+    expect(depsSnapshotQuery.result.snapshot.profile.profileId.length).toBeGreaterThan(0);
+
     const depsSummaryCached = runtime.execute({
       command: 'query.deps.summary',
       args: { sessionId },
@@ -105,14 +113,18 @@ describe('SnapshotHostRuntime', () => {
     expect(existsSync(join(materializeDir, 'fixture-deps.json'))).toBe(true);
     expect(existsSync(join(materializeDir, 'fixture-typerefs.json'))).toBe(true);
 
-    const depsSnapshot = JSON.parse(
+    const materializedDepsSnapshot = JSON.parse(
       readFileSync(join(materializeDir, 'fixture-deps.json'), 'utf-8'),
     ) as {
+      readonly profile: {
+        readonly target: string;
+      };
       readonly summary: {
         readonly files_analyzed: number;
       };
     };
-    expect(depsSnapshot.summary.files_analyzed).toBe(2);
+    expect(materializedDepsSnapshot.profile.target).toBe('fixture');
+    expect(materializedDepsSnapshot.summary.files_analyzed).toBe(2);
 
     const finalStatus = runtime.execute({
       command: 'session.status',
@@ -415,6 +427,45 @@ describe('SnapshotHostRuntime', () => {
     expect(asked.result.answer.outcome.value?.status).toBe('answered');
     expect(asked.result.answer.outcome.value?.execution?.command).toBe('query.audit.package');
     expect(asked.result.answer.query.worldFrame?.freshness).toBe('snapshot');
+    expect(asked.result.execution?.ephemeralSession).toBe(false);
+    expect(asked.result.execution?.steps.some((step) =>
+      step.command === 'session.open' && step.status === 'skipped',
+    )).toBe(true);
+  });
+
+  it('uses repo-local current snapshots for non-cwd repos', () => {
+    const repoPath = createAuditFixtureRepo();
+    const runtime = createSnapshotHostRuntime();
+
+    const opened = runtime.execute({
+      command: 'session.open',
+      args: {
+        repoPath,
+        target: 'fixture-current',
+      },
+    });
+
+    const sessionId = opened.result.sessionId;
+    const materialized = runtime.execute({
+      command: 'materializeSnapshots',
+      args: {
+        sessionId,
+      },
+    });
+
+    expect(materialized.result.outDir).toBe(join(repoPath, '.source-analysis', 'snapshots'));
+    expect(existsSync(join(repoPath, '.source-analysis', 'snapshots', 'fixture-current-deps.json'))).toBe(true);
+
+    const asked = runtime.execute({
+      command: 'ask.question',
+      args: {
+        question: 'Audit @fixture/source-analysis-audit for tech debt.',
+        repoPath,
+        target: 'fixture-current',
+      },
+    });
+
+    expect(asked.status).toBe('ok');
     expect(asked.result.execution?.ephemeralSession).toBe(false);
     expect(asked.result.execution?.steps.some((step) =>
       step.command === 'session.open' && step.status === 'skipped',

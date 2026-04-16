@@ -11,6 +11,7 @@ import {
 } from '../package-descriptors.js';
 import type { ProgramReuseOptions } from '../program-reuse-options.js';
 import { RepoSession } from '../repo-session.js';
+import { describeSnapshotProfile } from '../snapshots.js';
 import type {
   ExportChainStep,
   ExportFaceKind,
@@ -999,6 +1000,7 @@ export function generateExportsAnalysis(
     generated_at: new Date().toISOString(),
     source_commit: gitHead(scope.repoPath),
     analyzer_commit: gitBlobHash(resolve(import.meta.dirname!, 'analyze.js')),
+    profile: describeSnapshotProfile(nextSession.profile),
     summary: {
       packages_analyzed: packageSummaries.length,
       exports: exportRecords.length,
@@ -1011,6 +1013,10 @@ export function generateExportsAnalysis(
   };
 
   const reportLines = [
+    "",
+    `Snapshot target:    ${output.profile.target}`,
+    `Profile:            ${output.profile.profileId}${output.profile.profilePath ? ` (${output.profile.profilePath})` : ''}`,
+    `Excluded prefixes:  ${output.profile.excludedRepoRelativePrefixes.length}`,
     "",
     `Packages analyzed: ${packageSummaries.length}`,
     `Exports:           ${output.summary.exports}`,

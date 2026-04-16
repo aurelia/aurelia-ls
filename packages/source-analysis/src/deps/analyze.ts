@@ -37,6 +37,7 @@ import { execFileSync } from "node:child_process";
 import type { ProgramReuseOptions } from '../program-reuse-options.js';
 import type { DepsOutput } from './schema.js';
 import { RepoSession } from '../repo-session.js';
+import { describeSnapshotProfile } from '../snapshots.js';
 import {
   scanParsedTsconfigSourceFiles,
   type ParsedTsconfigSourceFileScanResult,
@@ -777,6 +778,7 @@ export function generateDepsAnalysis(
     generated_at: new Date().toISOString(),
     source_commit: gitHead(repoPath),
     analyzer_commit: gitBlobHash(resolve(import.meta.dirname!, 'analyze.js')),
+    profile: describeSnapshotProfile(nextSession.profile),
     tsconfigs: usedTsconfigs.slice().sort(),
     summary: {
       files_analyzed: analyzed.size,
@@ -811,6 +813,10 @@ export function generateDepsAnalysis(
   };
 
   const reportLines = [
+    "",
+    `Snapshot target:    ${output.profile.target}`,
+    `Profile:            ${output.profile.profileId}${output.profile.profilePath ? ` (${output.profile.profilePath})` : ''}`,
+    `Excluded prefixes:  ${output.profile.excludedRepoRelativePrefixes.length}`,
     "",
     `Files analyzed:     ${analyzed.size}`,
     `Internal edges:     ${allEdges.length}`,

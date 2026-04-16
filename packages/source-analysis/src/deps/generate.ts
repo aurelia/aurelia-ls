@@ -7,9 +7,11 @@ function main(): void {
   const repoPath = process.argv[2] || process.cwd();
   const target = process.argv[3] || '';
   const excludedRepoRelativePrefixes = parseExcludedRepoRelativePrefixes(process.argv[4], target, repoPath);
+  const profilePath = process.argv[5] || undefined;
   const session = createRepoSession({
     repoPath,
     target,
+    ...(profilePath ? { profilePath } : {}),
     excludedRepoRelativePrefixes,
   });
   const result = generateDepsAnalysis(session);

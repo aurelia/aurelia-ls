@@ -19,6 +19,7 @@ const args = process.argv.slice(2);
 let jsonPath: string | undefined;
 let targetArg: string | undefined;
 let repoArg: string | undefined;
+let profilePathArg: string | undefined;
 
 const fileIdx = args.indexOf("--file");
 if (fileIdx !== -1) {
@@ -38,12 +39,22 @@ if (repoIdx !== -1) {
   args.splice(repoIdx, 2);
 }
 
+const profilePathIdx = args.indexOf("--profile-path");
+if (profilePathIdx !== -1) {
+  profilePathArg = args[profilePathIdx + 1];
+  args.splice(profilePathIdx, 2);
+}
+
 const command = args[0];
 const commandArgs = args.slice(1);
 const lockWaitMsRaw = process.env.ANALYZER_LOCK_WAIT_MS;
 const lockWaitMs = lockWaitMsRaw ? Number(lockWaitMsRaw) : 5000;
 const PATHS = createSnapshotPaths(import.meta.url);
-const selection = resolveSnapshotTarget({ target: targetArg, repoPath: repoArg });
+const selection = resolveSnapshotTarget({
+  target: targetArg,
+  repoPath: repoArg,
+  profilePath: profilePathArg,
+});
 const target = selection.target;
 const refreshCommand = createRefreshCommand('typerefs', selection);
 let exportsSnapshotCache: ExportsOutput | null | undefined;
@@ -61,6 +72,7 @@ function resolveDefaultTypeRefsJsonPath(): string {
     kind: 'typerefs',
     waitMs: lockWaitMs,
     refreshCommand,
+    repoPath: selection.repoPath,
   });
 }
 
@@ -93,6 +105,7 @@ function loadCurrentExportsSnapshot(): ExportsOutput | null {
     kind: 'exports',
     waitMs: lockWaitMs,
     refreshCommand: createRefreshCommand('exports', selection),
+    repoPath: selection.repoPath,
   };
 
   try {
@@ -228,6 +241,9 @@ function printSummary(): void {
     `Generated:           ${data.generated_at}`,
     `Source commit:        ${data.source_commit?.slice(0, 10) ?? "unknown"}`,
     `Analyzer commit:     ${data.analyzer_commit?.slice(0, 10) ?? "unknown"}`,
+    `Snapshot target:     ${data.profile.target}`,
+    `Profile:             ${data.profile.profileId}${data.profile.profilePath ? ` (${data.profile.profilePath})` : ''}`,
+    `Excluded prefixes:   ${data.profile.excludedRepoRelativePrefixes.length}`,
     `Files analyzed:      ${s.files_analyzed}`,
     `Type declarations:   ${s.type_declarations}`,
     `Type references:     ${s.type_references}`,
@@ -1307,7 +1323,7 @@ function printStale(): void {
 
 // ── Dispatch ────────────────────────────────────────────────────────────
 
-const USAGE = `Usage: pnpm source-analysis typerefs <command> [args] [--target <name>] [--repo <path>] [--file path.json]
+const USAGE = `Usage: pnpm source-analysis typerefs <command> [args] [--target <name>] [--repo <path>] [--profile-path <path>] [--file path.json]
 
 Overview:
   stale                         Check if typerefs JSON needs regeneration
@@ -1338,7 +1354,8 @@ File and structure:
 
 Use --target <name> to select a named repo target (default: aurelia-ls2).
 Use --repo <path> to derive or override the current snapshot target from a repo path.
-Defaults to data/generated/source-analysis/current/<target>-typerefs.json.
+Use --profile-path <path> to select a non-default profile file relative to the repo root.
+Defaults to .source-analysis/snapshots/<target>-typerefs.json under the analyzed repo.
 If current is locked/missing/unreadable, query stops and must be escalated.`;
 
 switch (command) {

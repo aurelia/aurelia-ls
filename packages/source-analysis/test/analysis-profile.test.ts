@@ -9,6 +9,11 @@ import {
   resolveAnalysisProfile,
 } from '../out/analysis-profile.js';
 import { createRepoSession } from '../out/repo-session.js';
+import {
+  createSnapshotPaths,
+  resolveSnapshotRootPath,
+  resolveSnapshotTarget,
+} from '../out/snapshot-config.js';
 
 const tempDirs: string[] = [];
 
@@ -40,6 +45,32 @@ describe('analysis profiles', () => {
     expect(session.listPackageDirs().map((dir) => session.toRepoRelative(dir))).toEqual([
       'modules/alpha',
       'modules/beta',
+    ]);
+  });
+
+  it('supports explicit profile paths and repo-local snapshot roots', () => {
+    const repoPath = createExplicitProfileFixtureRepo();
+    const selection = resolveSnapshotTarget({
+      repoPath,
+      profilePath: 'profiles/framework-core.json',
+    });
+
+    expect(selection.target).toBe('fixture-explicit-target');
+    expect(selection.profilePath).toBe(join(repoPath, 'profiles', 'framework-core.json'));
+
+    const paths = createSnapshotPaths(import.meta.url, {});
+    expect(resolveSnapshotRootPath(paths, repoPath)).toBe(
+      join(repoPath, '.source-analysis', 'snapshots'),
+    );
+
+    const session = createRepoSession({
+      repoPath,
+      profilePath: 'profiles/framework-core.json',
+    });
+    expect(session.profile.profileId).toBe('fixture-explicit-profile');
+    expect(session.target).toBe('fixture-explicit-target');
+    expect(session.listPackageDirs().map((dir) => session.toRepoRelative(dir))).toEqual([
+      'packages/alpha',
     ]);
   });
 });
@@ -95,6 +126,37 @@ function createProfileFixtureRepo(): string {
   writeFileSync(
     join(repoPath, 'modules', 'beta', 'src', 'model', 'types.ts'),
     'export interface BetaType { value: string; }\n',
+  );
+
+  return repoPath;
+}
+
+function createExplicitProfileFixtureRepo(): string {
+  const repoPath = mkdtempSync(join(tmpdir(), 'source-analysis-explicit-profile-'));
+  tempDirs.push(repoPath);
+
+  mkdirSync(join(repoPath, 'profiles'), { recursive: true });
+  mkdirSync(join(repoPath, 'packages', 'alpha', 'src'), { recursive: true });
+  writeFileSync(
+    join(repoPath, 'profiles', 'framework-core.json'),
+    JSON.stringify(
+      {
+        id: 'fixture-explicit-profile',
+        target: 'fixture-explicit-target',
+        packageDiscoveryRoots: ['packages'],
+        includeRepoRootPackage: false,
+      },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(
+    join(repoPath, 'packages', 'alpha', 'package.json'),
+    JSON.stringify({ name: '@fixture/alpha', type: 'module' }, null, 2),
+  );
+  writeFileSync(
+    join(repoPath, 'packages', 'alpha', 'src', 'index.ts'),
+    'export const alpha = true;\n',
   );
 
   return repoPath;

@@ -15,7 +15,11 @@ import {
   renderAnswerDocumentToPlainText,
 } from '../answer-renderer.js';
 import { resolveAnalysisProfile } from '../analysis-profile.js';
-import { createSnapshotPaths, resolveSnapshotTarget } from '../snapshot-config.js';
+import {
+  createSnapshotPaths,
+  resolveSnapshotRootPath,
+  resolveSnapshotTarget,
+} from '../snapshot-config.js';
 import { loadCurrentSnapshots } from '../current-snapshots.js';
 import {
   SNAPSHOT_KINDS,
@@ -733,7 +737,7 @@ export class SnapshotHostRuntime {
     const state = this.#sessions.get(args.sessionId);
     const kinds = normalizeSnapshotKinds(args.kinds);
     const outDir = resolve(
-      args.outDir ?? createSnapshotPaths(import.meta.url).snapshotRootPath,
+      args.outDir ?? resolveSnapshotRootPath(createSnapshotPaths(import.meta.url), state.repoPath),
     );
     mkdirSync(outDir, { recursive: true });
 
@@ -784,7 +788,7 @@ export class SnapshotHostRuntime {
 
     const target = context.target ?? resolveSnapshotTarget({ repoPath: context.repoPath }).target;
     try {
-      const snapshots = loadCurrentSnapshots(target);
+      const snapshots = loadCurrentSnapshots(target, 0, context.repoPath);
       const primaryEnvelope = createCurrentSnapshotEnvelope(primaryStep.command, primaryStep.args, snapshots, context.repoPath, target);
       if (!primaryEnvelope) {
         return undefined;

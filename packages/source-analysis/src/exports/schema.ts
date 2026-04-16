@@ -1,3 +1,5 @@
+import type { SnapshotProfileProvenance } from '../snapshots.js';
+
 export type ExportFaceKind =
   | 'type-alias'
   | 'interface'
@@ -68,6 +70,8 @@ export interface ExportsOutput {
   generated_at: string;
   source_commit: string;
   analyzer_commit: string;
+  /** Profile and exclusion regime used to derive this snapshot. */
+  profile: SnapshotProfileProvenance;
   summary: {
     packages_analyzed: number;
     exports: number;

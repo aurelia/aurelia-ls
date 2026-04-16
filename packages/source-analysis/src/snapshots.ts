@@ -1,7 +1,9 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
+import type { AnalysisProfile } from './analysis-profile.js';
 import type { SnapshotPaths } from './snapshot-config.js';
+import { resolveSnapshotRootPath } from './snapshot-config.js';
 
 export const SNAPSHOT_KINDS = ['deps', 'typerefs', 'exports'] as const;
 
@@ -12,6 +14,25 @@ export interface SnapshotOptions {
   kind: SnapshotKind;
   waitMs: number;
   refreshCommand: string;
+  repoPath?: string;
+}
+
+export interface SnapshotProfileProvenance {
+  readonly target: string;
+  readonly profileId: string;
+  readonly profilePath: string | null;
+  readonly excludedRepoRelativePrefixes: readonly string[];
+}
+
+export function describeSnapshotProfile(
+  profile: AnalysisProfile,
+): SnapshotProfileProvenance {
+  return {
+    target: profile.snapshotTarget,
+    profileId: profile.profileId,
+    profilePath: profile.profilePath,
+    excludedRepoRelativePrefixes: profile.excludedRepoRelativePrefixes,
+  };
 }
 
 function sleep(ms: number): void {
@@ -43,7 +64,7 @@ export function resolveCurrentSnapshotPath(
   options: SnapshotOptions,
 ): string {
   const filename = `${options.target}-${options.kind}.json`;
-  const currentCandidate = join(paths.snapshotRootPath, filename);
+  const currentCandidate = join(resolveSnapshotRootPath(paths, options.repoPath), filename);
   waitIfLocked(currentCandidate, options.waitMs);
 
   try {

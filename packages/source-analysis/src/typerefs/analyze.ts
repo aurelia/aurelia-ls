@@ -16,6 +16,7 @@ import { execFileSync } from "node:child_process";
 import type { ProgramReuseOptions } from '../program-reuse-options.js';
 import type { TypeDecl, TypeRef, RefKind, DeclKind, Member, MemberKind, TypeRefsOutput } from './schema.js';
 import { RepoSession } from '../repo-session.js';
+import { describeSnapshotProfile } from '../snapshots.js';
 import {
   scanParsedTsconfigSourceFiles,
   type ParsedTsconfigSourceFileScanResult,
@@ -736,6 +737,7 @@ export function generateTypeRefsAnalysis(
     generated_at: new Date().toISOString(),
     source_commit: gitHead(repoPath),
     analyzer_commit: gitBlobHash(resolve(import.meta.dirname!, 'analyze.js')),
+    profile: describeSnapshotProfile(nextSession.profile),
     summary: {
       files_analyzed: analyzed.size,
       type_declarations: allDeclarations.length,
@@ -747,6 +749,10 @@ export function generateTypeRefsAnalysis(
   };
 
   const reportLines = [
+    "",
+    `Snapshot target:    ${output.profile.target}`,
+    `Profile:            ${output.profile.profileId}${output.profile.profilePath ? ` (${output.profile.profilePath})` : ''}`,
+    `Excluded prefixes:  ${output.profile.excludedRepoRelativePrefixes.length}`,
     "",
     `Loaded ${analyzed.size} source files`,
     `Pass 1: ${rawDecls.length} declarations indexed`,

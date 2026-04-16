@@ -1,4 +1,8 @@
-import { createSnapshotPaths, resolveSnapshotTarget } from './snapshot-config.js';
+import {
+  createRefreshCommand,
+  createSnapshotPaths,
+  resolveSnapshotTarget,
+} from './snapshot-config.js';
 import { loadJsonSnapshot, resolveCurrentSnapshotPath, type SnapshotKind } from './snapshots.js';
 import type { DepsOutput } from './deps/schema.js';
 import type { ExportsOutput } from './exports/schema.js';
@@ -6,8 +10,11 @@ import type { TypeRefsOutput } from './typerefs/schema.js';
 
 const PATHS = createSnapshotPaths(import.meta.url);
 
-function defaultTarget(): string {
-  return resolveSnapshotTarget().target;
+function defaultSelection(
+  repoPath?: string,
+  profilePath?: string,
+) {
+  return resolveSnapshotTarget({ repoPath, profilePath });
 }
 
 export interface CurrentSnapshotSet {
@@ -28,13 +35,21 @@ function tryLoadSnapshot<T>(
   target: string,
   kind: SnapshotKind,
   waitMs: number,
+  repoPath?: string,
+  profilePath?: string,
 ): { data: T | null; warning: string | null } {
+  const selection = resolveSnapshotTarget({
+    target,
+    repoPath,
+    profilePath,
+  });
   try {
     const snapshotPath = resolveCurrentSnapshotPath(PATHS, {
-      target,
+      target: selection.target,
       kind,
       waitMs,
-      refreshCommand: `pnpm source-analysis refresh ${kind} --target ${target}`,
+      refreshCommand: createRefreshCommand(kind, selection),
+      repoPath: selection.repoPath,
     });
 
     return {
@@ -50,12 +65,14 @@ function tryLoadSnapshot<T>(
 }
 
 export function loadCurrentSnapshots(
-  target = defaultTarget(),
+  target = defaultSelection().target,
   waitMs = 0,
+  repoPath?: string,
+  profilePath?: string,
 ): LoadedCurrentSnapshotSet {
-  const deps = tryLoadSnapshot<DepsOutput>(target, 'deps', waitMs);
-  const typeRefs = tryLoadSnapshot<TypeRefsOutput>(target, 'typerefs', waitMs);
-  const exports = tryLoadSnapshot<ExportsOutput>(target, 'exports', waitMs);
+  const deps = tryLoadSnapshot<DepsOutput>(target, 'deps', waitMs, repoPath, profilePath);
+  const typeRefs = tryLoadSnapshot<TypeRefsOutput>(target, 'typerefs', waitMs, repoPath, profilePath);
+  const exports = tryLoadSnapshot<ExportsOutput>(target, 'exports', waitMs, repoPath, profilePath);
   const warnings = [deps.warning, typeRefs.warning, exports.warning].filter((value): value is string => Boolean(value));
 
   if (warnings.length > 0 || !deps.data || !typeRefs.data || !exports.data) {
@@ -71,12 +88,14 @@ export function loadCurrentSnapshots(
 }
 
 export function tryLoadCurrentSnapshots(
-  target = defaultTarget(),
+  target = defaultSelection().target,
   waitMs = 0,
+  repoPath?: string,
+  profilePath?: string,
 ): CurrentSnapshotSet {
-  const deps = tryLoadSnapshot<DepsOutput>(target, 'deps', waitMs);
-  const typeRefs = tryLoadSnapshot<TypeRefsOutput>(target, 'typerefs', waitMs);
-  const exports = tryLoadSnapshot<ExportsOutput>(target, 'exports', waitMs);
+  const deps = tryLoadSnapshot<DepsOutput>(target, 'deps', waitMs, repoPath, profilePath);
+  const typeRefs = tryLoadSnapshot<TypeRefsOutput>(target, 'typerefs', waitMs, repoPath, profilePath);
+  const exports = tryLoadSnapshot<ExportsOutput>(target, 'exports', waitMs, repoPath, profilePath);
 
   return {
     deps: deps.data,

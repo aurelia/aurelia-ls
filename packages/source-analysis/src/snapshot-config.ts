@@ -6,6 +6,7 @@ import { resolveAnalysisProfile } from './analysis-profile.js';
 
 export interface SnapshotPaths {
   toolRootPath: string;
+  envSnapshotRootPath: string | null;
   snapshotRootPath: string;
 }
 
@@ -60,6 +61,9 @@ export function createRefreshCommand(
   if (selection.repoPath && normalizePath(selection.repoPath) !== cwdPath) {
     parts.push('--repo', selection.repoPath);
   }
+  if (selection.profilePath) {
+    parts.push('--profile-path', selection.profilePath);
+  }
   return parts.join(' ');
 }
 
@@ -88,11 +92,23 @@ export function createSnapshotPaths(
   env: NodeJS.ProcessEnv = process.env,
 ): SnapshotPaths {
   const toolRootPath = resolveToolRootPath(moduleUrl);
-  const snapshotRootPath = env.SNAPSHOT_ROOT
+  const envSnapshotRootPath = env.SNAPSHOT_ROOT
     ? resolve(env.SNAPSHOT_ROOT)
+    : null;
+  const snapshotRootPath = envSnapshotRootPath
+    ? envSnapshotRootPath
     : resolve(process.cwd(), '.source-analysis/snapshots');
   return {
     toolRootPath,
+    envSnapshotRootPath,
     snapshotRootPath,
   };
+}
+
+export function resolveSnapshotRootPath(
+  paths: SnapshotPaths,
+  repoPath?: string,
+): string {
+  return paths.envSnapshotRootPath
+    ?? resolve(repoPath ?? process.cwd(), '.source-analysis/snapshots');
 }

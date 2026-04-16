@@ -17,6 +17,7 @@ const args = process.argv.slice(2);
 let jsonPath: string | undefined;
 let targetArg: string | undefined;
 let repoArg: string | undefined;
+let profilePathArg: string | undefined;
 
 const fileIdx = args.indexOf("--file");
 if (fileIdx !== -1) {
@@ -36,6 +37,12 @@ if (repoIdx !== -1) {
   args.splice(repoIdx, 2);
 }
 
+const profilePathIdx = args.indexOf("--profile-path");
+if (profilePathIdx !== -1) {
+  profilePathArg = args[profilePathIdx + 1];
+  args.splice(profilePathIdx, 2);
+}
+
 // Extract boolean flags before splitting positional args
 const typeOnlyFlag = args.includes("--type-only");
 const valueOnlyFlag = args.includes("--value-only");
@@ -46,7 +53,11 @@ const commandArgs = filteredArgs.slice(1);
 const lockWaitMsRaw = process.env.ANALYZER_LOCK_WAIT_MS;
 const lockWaitMs = lockWaitMsRaw ? Number(lockWaitMsRaw) : 5000;
 const PATHS = createSnapshotPaths(import.meta.url);
-const selection = resolveSnapshotTarget({ target: targetArg, repoPath: repoArg });
+const selection = resolveSnapshotTarget({
+  target: targetArg,
+  repoPath: repoArg,
+  profilePath: profilePathArg,
+});
 const target = selection.target;
 const refreshCommand = createRefreshCommand('deps', selection);
 
@@ -63,6 +74,7 @@ function resolveDefaultDepsJsonPath(): string {
     kind: 'deps',
     waitMs: lockWaitMs,
     refreshCommand,
+    repoPath: selection.repoPath,
   });
 }
 
@@ -168,6 +180,9 @@ function printSummary(): void {
     `Generated:        ${data.generated_at}`,
     `Source commit:     ${data.source_commit ?? "not recorded"}`,
     `Analyzer commit:  ${data.analyzer_commit ?? "not recorded"}`,
+    `Snapshot target:  ${data.profile.target}`,
+    `Profile:          ${data.profile.profileId}${data.profile.profilePath ? ` (${data.profile.profilePath})` : ''}`,
+    `Excluded prefixes: ${data.profile.excludedRepoRelativePrefixes.length}`,
     `Files analyzed:   ${s.files_analyzed}`,
     `Internal edges:   ${s.internal_edges}`,
     `External imports: ${s.external_imports}`,
@@ -1175,7 +1190,7 @@ function printTestCoverage(): void {
 
 // ── Dispatch ────────────────────────────────────────────────────────────
 
-const USAGE = `Usage: pnpm source-analysis deps <command> [args] [--target <name>] [--repo <path>] [--file path.json]
+const USAGE = `Usage: pnpm source-analysis deps <command> [args] [--target <name>] [--repo <path>] [--profile-path <path>] [--file path.json]
 
 Calibration (start here):
   stale                         Check if JSON needs regeneration
@@ -1208,7 +1223,8 @@ Flags (for seam/bindings):
 
 Use --target <name> to select a named repo target (default: aurelia-ls2).
 Use --repo <path> to derive or override the current snapshot target from a repo path.
-Defaults to data/generated/source-analysis/current/<target>-deps.json.
+Use --profile-path <path> to select a non-default profile file relative to the repo root.
+Defaults to .source-analysis/snapshots/<target>-deps.json under the analyzed repo.
 If current is locked/missing/unreadable, query stops and must be escalated.`;
 
 switch (command) {

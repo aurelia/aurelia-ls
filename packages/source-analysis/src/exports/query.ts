@@ -11,6 +11,7 @@ const args = process.argv.slice(2);
 let jsonPath: string | undefined;
 let targetArg: string | undefined;
 let repoArg: string | undefined;
+let profilePathArg: string | undefined;
 
 const fileIdx = args.indexOf('--file');
 if (fileIdx !== -1) {
@@ -30,12 +31,22 @@ if (repoIdx !== -1) {
   args.splice(repoIdx, 2);
 }
 
+const profilePathIdx = args.indexOf('--profile-path');
+if (profilePathIdx !== -1) {
+  profilePathArg = args[profilePathIdx + 1];
+  args.splice(profilePathIdx, 2);
+}
+
 const command = args[0];
 const commandArgs = args.slice(1);
 const lockWaitMsRaw = process.env.ANALYZER_LOCK_WAIT_MS;
 const lockWaitMs = lockWaitMsRaw ? Number(lockWaitMsRaw) : 5000;
 const PATHS = createSnapshotPaths(import.meta.url);
-const selection = resolveSnapshotTarget({ target: targetArg, repoPath: repoArg });
+const selection = resolveSnapshotTarget({
+  target: targetArg,
+  repoPath: repoArg,
+  profilePath: profilePathArg,
+});
 const target = selection.target;
 const refreshCommand = createRefreshCommand('exports', selection);
 
@@ -52,6 +63,7 @@ function resolveDefaultExportsJsonPath(): string {
     kind: 'exports',
     waitMs: lockWaitMs,
     refreshCommand,
+    repoPath: selection.repoPath,
   });
 }
 
@@ -183,6 +195,9 @@ function printSummary(): void {
   console.log(`Generated:         ${data.generated_at}`);
   console.log(`Source commit:     ${data.source_commit ?? 'unknown'}`);
   console.log(`Analyzer commit:   ${data.analyzer_commit ?? 'unknown'}`);
+  console.log(`Snapshot target:   ${data.profile.target}`);
+  console.log(`Profile:           ${data.profile.profileId}${data.profile.profilePath ? ` (${data.profile.profilePath})` : ''}`);
+  console.log(`Excluded prefixes: ${data.profile.excludedRepoRelativePrefixes.length}`);
   console.log(`Packages analyzed: ${summary.packages_analyzed}`);
   console.log(`Exports:           ${summary.exports}`);
   console.log(`Type-only exports: ${summary.type_only_exports}`);
@@ -376,7 +391,7 @@ function printStale(): void {
   console.log(`\nRegenerate: ${refreshCommand}`);
 }
 
-const USAGE = `Usage: pnpm source-analysis exports <command> [args] [--target <name>] [--repo <path>] [--file path.json]
+const USAGE = `Usage: pnpm source-analysis exports <command> [args] [--target <name>] [--repo <path>] [--profile-path <path>] [--file path.json]
 
 Overview:
   stale                         Check if exports JSON needs regeneration
@@ -391,7 +406,8 @@ Export queries:
 
 Use --target <name> to select a named repo target (default: aurelia-ls2).
 Use --repo <path> to derive or override the current snapshot target from a repo path.
-Defaults to data/generated/source-analysis/current/<target>-exports.json.
+Use --profile-path <path> to select a non-default profile file relative to the repo root.
+Defaults to .source-analysis/snapshots/<target>-exports.json under the analyzed repo.
 If current is locked/missing/unreadable, query stops and must be escalated.`;
 
 switch (command) {
