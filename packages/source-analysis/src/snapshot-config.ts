@@ -2,6 +2,8 @@ import { existsSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { resolveAnalysisProfile } from './analysis-profile.js';
+
 export interface SnapshotPaths {
   toolRootPath: string;
   snapshotRootPath: string;
@@ -10,6 +12,8 @@ export interface SnapshotPaths {
 export interface SnapshotTargetSelection {
   target: string;
   repoPath?: string;
+  profileId?: string;
+  profilePath?: string | null;
 }
 
 type RefreshMode = 'deps' | 'typerefs' | 'exports' | 'all';
@@ -31,13 +35,20 @@ export function resolveSnapshotTarget(
   options: {
     target?: string;
     repoPath?: string;
+    profilePath?: string;
   } = {},
 ): SnapshotTargetSelection {
-  const repoPath = options.repoPath
-    ? resolve(options.repoPath)
-    : resolve(process.cwd());
-  const target = options.target ?? deriveSnapshotTargetFromRepoPath(repoPath);
-  return { target, repoPath };
+  const profile = resolveAnalysisProfile({
+    repoPath: options.repoPath,
+    target: options.target,
+    profilePath: options.profilePath,
+  });
+  return {
+    target: profile.snapshotTarget,
+    repoPath: profile.repoPath,
+    profileId: profile.profileId,
+    profilePath: profile.profilePath,
+  };
 }
 
 export function createRefreshCommand(

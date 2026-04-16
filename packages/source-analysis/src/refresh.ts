@@ -13,9 +13,9 @@ import { join, resolve } from 'node:path';
 
 import {
   createSnapshotPaths,
-  getExcludedRepoRelativePrefixesForTarget,
   resolveSnapshotTarget,
 } from './snapshot-config.js';
+import { resolveAnalysisProfile } from './analysis-profile.js';
 
 type Mode = 'deps' | 'typerefs' | 'exports' | 'all';
 type RefreshableKind = Exclude<Mode, 'all'>;
@@ -66,6 +66,11 @@ if (!selectedRepoPath) {
   process.exit(1);
 }
 const repoPath = selectedRepoPath;
+const profile = resolveAnalysisProfile({
+  repoPath,
+  target,
+  ...(selection.profilePath ? { profilePath: selection.profilePath } : {}),
+});
 
 const outDir = resolve(outDirArg);
 mkdirSync(outDir, { recursive: true });
@@ -98,7 +103,7 @@ function runGenerator(kind: RefreshableKind): string {
       : resolve(PATHS.toolRootPath, 'out/exports/generate.js');
   const stdout = execFileSync(
     process.execPath,
-    [generatorPath, repoPath, target, JSON.stringify(getExcludedRepoRelativePrefixesForTarget(target))],
+    [generatorPath, repoPath, target, JSON.stringify(profile.excludedRepoRelativePrefixes)],
     {
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'inherit'],

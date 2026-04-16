@@ -14,7 +14,8 @@ import {
   renderAnswerDocumentToJson,
   renderAnswerDocumentToPlainText,
 } from '../answer-renderer.js';
-import { createSnapshotPaths, deriveSnapshotTargetFromRepoPath } from '../snapshot-config.js';
+import { resolveAnalysisProfile } from '../analysis-profile.js';
+import { createSnapshotPaths, resolveSnapshotTarget } from '../snapshot-config.js';
 import { loadCurrentSnapshots } from '../current-snapshots.js';
 import {
   SNAPSHOT_KINDS,
@@ -54,6 +55,8 @@ import {
   type DescribeInquiriesResult,
   type DescribeCapabilitiesArgs,
   type DescribeCapabilitiesResult,
+  type DescribeProfileArgs,
+  type DescribeProfileResult,
   type PlanInquiryArgs,
   type PlanInquiryResult,
   type PlanQuestionArgs,
@@ -165,6 +168,7 @@ export class SnapshotHostRuntime {
     invocation: HostCommandInvocation<TCommand>,
   ): CommandOutcome {
     switch (invocation.command) {
+      case 'describe.profile': return this.#describeProfile(invocation.args as DescribeProfileArgs);
       case 'describe.inquiries': return this.#describeInquiries(invocation.args as DescribeInquiriesArgs);
       case 'describe.capabilities': return this.#describeCapabilities(invocation.args as DescribeCapabilitiesArgs);
       case 'plan.inquiry': return this.#planInquiry(invocation.args as PlanInquiryArgs);
@@ -209,6 +213,20 @@ export class SnapshotHostRuntime {
     const result: DescribeInquiriesResult = {
       answer,
       ...(rendered ? { rendered } : {}),
+    };
+    return {
+      result,
+      invalidation: emptyInvalidationMeta(),
+    };
+  }
+
+  #describeProfile(args: DescribeProfileArgs): CommandOutcome {
+    const result: DescribeProfileResult = {
+      profile: resolveAnalysisProfile({
+        repoPath: args.repoPath,
+        target: args.target,
+        profilePath: args.profilePath,
+      }),
     };
     return {
       result,
@@ -398,6 +416,8 @@ export class SnapshotHostRuntime {
       sessionId: state.sessionId,
       repoPath: state.repoPath,
       target: state.target,
+      profileId: state.profileId,
+      profilePath: state.profilePath,
       warmPrograms: state.warmPrograms,
       dirtyKinds: sortSnapshotKinds(state.dirtyKinds),
     };
@@ -762,7 +782,7 @@ export class SnapshotHostRuntime {
       return undefined;
     }
 
-    const target = context.target ?? deriveSnapshotTargetFromRepoPath(context.repoPath);
+    const target = context.target ?? resolveSnapshotTarget({ repoPath: context.repoPath }).target;
     try {
       const snapshots = loadCurrentSnapshots(target);
       const primaryEnvelope = createCurrentSnapshotEnvelope(primaryStep.command, primaryStep.args, snapshots, context.repoPath, target);

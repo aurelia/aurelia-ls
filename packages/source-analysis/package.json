@@ -24,6 +24,10 @@
     "./inquiry": {
       "import": "./out/public/inquiry.js",
       "types": "./out/public/inquiry.d.ts"
+    },
+    "./profile": {
+      "import": "./out/public/profile.js",
+      "types": "./out/public/profile.d.ts"
     }
   },
   "scripts": {

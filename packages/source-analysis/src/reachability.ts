@@ -3,6 +3,12 @@ import { join, posix as pathPosix } from 'node:path';
 
 import * as ts from 'typescript';
 
+import {
+  expandMappedRepoRelativePathCandidates,
+  isExercisePath,
+  resolveAnalysisProfile,
+  type AnalysisProfile,
+} from './analysis-profile.js';
 import type { LoadedCurrentSnapshotSet } from './current-snapshots.js';
 import type { PackageExportRecord, PackageExportsSummary } from './exports/schema.js';
 import type { TrustKind } from './outcome-algebra.js';
@@ -124,11 +130,12 @@ export function createPackageReachability(
   options?: PackageReachabilityOptions,
 ): PackageReachability {
   const ordering = options?.ordering ?? DEFAULT_INQUIRY_ORDERING;
+  const profile = resolveAnalysisProfile({ repoPath: snapshots.deps.root });
   const packagePrefix = pkg.package_dir.length > 0 ? `${pkg.package_dir}/` : '';
   const packageFiles = new Set<string>();
   const routeEdges = new Map<string, PackageRouteEdge>();
   const canonicalizePackageFilePath = (filePath: string): string =>
-    canonicalizeSourceBackedPackageFile(snapshots.deps.root, filePath);
+    canonicalizeSourceBackedPackageFile(profile, snapshots.deps.root, filePath);
 
   for (const edge of snapshots.deps.edges) {
     const sourceInPackage = edge.source.startsWith(packagePrefix);
@@ -170,6 +177,7 @@ export function createPackageReachability(
     packageFiles.add(filePath);
   }
   const manifestPublicApiRoots = resolveManifestPublicApiRoots(
+    profile,
     snapshots.deps.root,
     pkg,
     packageFiles,
@@ -184,6 +192,7 @@ export function createPackageReachability(
   }
 
   for (const edge of discoverParseImportEdges(
+    profile,
     snapshots.deps.root,
     uncoveredPackageFiles,
     packageFiles,
@@ -192,6 +201,7 @@ export function createPackageReachability(
   }
 
   for (const edge of discoverExecutableHandoffEdges(
+    profile,
     snapshots.deps.root,
     pkg.package_dir,
     packageFiles,
@@ -231,12 +241,12 @@ export function createPackageReachability(
     addRoot(roots, root);
   }
 
-  for (const root of resolveManifestBinRoots(snapshots.deps.root, pkg, packageFiles)) {
+  for (const root of resolveManifestBinRoots(profile, snapshots.deps.root, pkg, packageFiles)) {
     addRoot(roots, root);
   }
 
   const exerciseFiles = [...packageFiles]
-    .filter((filePath) => isExerciseFile(pkg.package_dir, filePath))
+    .filter((filePath) => isExerciseFile(profile, pkg.package_dir, filePath))
     .sort((left, right) => left.localeCompare(right));
   const uncoveredExerciseFiles = new Set(uncoveredPackageFiles);
   for (const filePath of exerciseFiles) {
@@ -413,6 +423,7 @@ function groupExportRecordsByFile(
 }
 
 function resolveManifestBinRoots(
+  profile: AnalysisProfile,
   repoRoot: string,
   pkg: PackageExportsSummary,
   packageFiles: ReadonlySet<string>,
@@ -428,7 +439,7 @@ function resolveManifestBinRoots(
     };
     const binEntries = normalizeBinEntries(manifest.bin);
     return binEntries.flatMap((entry) => {
-      const filePath = resolveManifestTargetToSourceFile(pkg.package_dir, entry.target, packageFiles);
+      const filePath = resolveManifestTargetToSourceFile(profile, pkg.package_dir, entry.target, packageFiles);
       if (!filePath) return [];
       return [createRoot(
         'manifest-bin',
@@ -444,6 +455,7 @@ function resolveManifestBinRoots(
 }
 
 function resolveManifestPublicApiRoots(
+  profile: AnalysisProfile,
   repoRoot: string,
   pkg: PackageExportsSummary,
   packageFiles: ReadonlySet<string>,
@@ -459,7 +471,7 @@ function resolveManifestPublicApiRoots(
     };
     const exportEntries = normalizeManifestExportEntries(manifest.exports);
     return exportEntries.flatMap((entry) => {
-      const filePath = resolveManifestTargetToSourceFile(pkg.package_dir, entry.target, packageFiles);
+      const filePath = resolveManifestTargetToSourceFile(profile, pkg.package_dir, entry.target, packageFiles);
       if (!filePath) return [];
       return [createRoot(
         'public-api',
@@ -475,6 +487,7 @@ function resolveManifestPublicApiRoots(
 }
 
 function discoverParseImportEdges(
+  profile: AnalysisProfile,
   repoRoot: string,
   uncoveredPackageFiles: readonly string[],
   packageFiles: ReadonlySet<string>,
@@ -502,7 +515,7 @@ function discoverParseImportEdges(
 
     for (const reference of collectModuleReferences(sourceFile)) {
       if (!isPackageLocalSpecifier(reference.specifier)) continue;
-      const targetFilePath = resolveRelativeModuleSpecifier(filePath, reference.specifier, packageFiles);
+      const targetFilePath = resolveRelativeModuleSpecifier(profile, filePath, reference.specifier, packageFiles);
       if (!targetFilePath || targetFilePath === filePath) continue;
 
       edges.push(createRouteEdge(
@@ -520,6 +533,7 @@ function discoverParseImportEdges(
 }
 
 function discoverExecutableHandoffEdges(
+  profile: AnalysisProfile,
   repoRoot: string,
   packageDir: string,
   packageFiles: ReadonlySet<string>,
@@ -542,7 +556,7 @@ function discoverExecutableHandoffEdges(
     }
 
     for (const handoffTarget of discoverExecutableHandoffTargets(sourceText)) {
-      const targetFilePath = resolveManifestTargetToSourceFile(packageDir, handoffTarget, packageFiles);
+      const targetFilePath = resolveManifestTargetToSourceFile(profile, packageDir, handoffTarget, packageFiles);
       if (!targetFilePath || targetFilePath === filePath) continue;
       edges.push(createRouteEdge(
         'executable-handoff',
@@ -598,6 +612,7 @@ function isPackageLocalSpecifier(specifier: string): boolean {
 }
 
 function resolveRelativeModuleSpecifier(
+  profile: AnalysisProfile,
   sourceFilePath: string,
   specifier: string,
   packageFiles: ReadonlySet<string>,
@@ -607,8 +622,7 @@ function resolveRelativeModuleSpecifier(
     ? specifier.slice(1)
     : pathPosix.normalize(pathPosix.join(sourceDir, specifier));
   const baseCandidates = dedupeStrings([
-    normalized,
-    normalized.replace(/(^|\/)(out|dist|build)\//i, '$1src/'),
+    ...expandMappedRepoRelativePathCandidates(profile, normalized),
     normalized.replace(/\.[cm]?js$/i, '.ts'),
     normalized.replace(/\.[cm]?js$/i, '.tsx'),
     normalized.replace(/\.[cm]?js$/i, '.mts'),
@@ -698,15 +712,13 @@ function normalizeManifestExportEntries(
 }
 
 function resolveManifestTargetToSourceFile(
+  profile: AnalysisProfile,
   packageDir: string,
   target: string,
   packageFiles: ReadonlySet<string>,
 ): string | null {
   const normalized = normalizeRepoRelativePath(packageDir, target);
-  const baseCandidates = dedupeStrings([
-    normalized,
-    normalized.replace(/(^|\/)(out|dist|build)\//i, '$1src/'),
-  ]);
+  const baseCandidates = expandMappedRepoRelativePathCandidates(profile, normalized);
   const candidates = dedupeStrings(baseCandidates.flatMap((candidate) => [
     candidate,
     candidate.replace(/\.d\.[cm]?ts$/i, '.ts'),
@@ -726,13 +738,11 @@ function resolveManifestTargetToSourceFile(
 }
 
 function canonicalizeSourceBackedPackageFile(
+  profile: AnalysisProfile,
   repoRoot: string,
   filePath: string,
 ): string {
-  const candidates = dedupeStrings([
-    filePath.replace(/(^|\/)(out|dist|build)\//i, '$1src/'),
-    filePath,
-  ].flatMap((candidate) => [
+  const candidates = dedupeStrings(expandMappedRepoRelativePathCandidates(profile, filePath).flatMap((candidate) => [
     candidate,
     candidate.replace(/\.d\.[cm]?ts$/i, '.ts'),
     candidate.replace(/\.[cm]?js$/i, '.ts'),
@@ -957,13 +967,15 @@ function sortedSetValues(values: ReadonlySet<string> | undefined): readonly stri
   return [...(values ?? new Set<string>())].sort((left, right) => left.localeCompare(right));
 }
 
-function isExerciseFile(packageDir: string, filePath: string): boolean {
-  const testPrefix = packageDir.length > 0 ? `${packageDir}/test/` : 'test/';
-  const testsPrefix = packageDir.length > 0 ? `${packageDir}/tests/` : 'tests/';
-  return filePath.startsWith(testPrefix)
-    || filePath.startsWith(testsPrefix)
-    || /\.test\.[cm]?[jt]sx?$/i.test(filePath)
-    || /\.spec\.[cm]?[jt]sx?$/i.test(filePath);
+function isExerciseFile(
+  profile: AnalysisProfile,
+  packageDir: string,
+  filePath: string,
+): boolean {
+  if (!filePath.startsWith(packageDir.length > 0 ? `${packageDir}/` : '')) {
+    return false;
+  }
+  return isExercisePath(profile, filePath);
 }
 
 function rootIdForFile(kind: PackageRootKind, filePath: string): string {

@@ -4,6 +4,8 @@ export type {
   AskQuestionExecution,
   AskQuestionExecutionStep,
   AskQuestionResult,
+  DescribeProfileArgs,
+  DescribeProfileResult,
   DescribeInquiriesArgs,
   DescribeInquiriesResult,
   DescribeCapabilitiesArgs,

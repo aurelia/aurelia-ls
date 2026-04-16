@@ -33,6 +33,7 @@ describe('SnapshotHostRuntime', () => {
 
     expect(opened.status).toBe('ok');
     expect(opened.result.dirtyKinds).toEqual(['deps', 'typerefs', 'exports']);
+    expect(opened.result.profileId.length).toBeGreaterThan(0);
 
     const sessionId = opened.result.sessionId;
     const initialStatus = runtime.execute({
@@ -41,6 +42,7 @@ describe('SnapshotHostRuntime', () => {
     });
     expect(initialStatus.result.sessions).toHaveLength(1);
     expect(initialStatus.result.sessions[0]?.dirtyKinds).toEqual(['deps', 'typerefs', 'exports']);
+    expect(initialStatus.result.sessions[0]?.profileId.length).toBeGreaterThan(0);
 
     const depsSummary = runtime.execute({
       command: 'query.deps.summary',
@@ -418,6 +420,45 @@ describe('SnapshotHostRuntime', () => {
       step.command === 'session.open' && step.status === 'skipped',
     )).toBe(true);
   });
+
+  it('derives session targeting and package discovery from a repo profile', () => {
+    const repoPath = createProfileFixtureRepo();
+    const runtime = createSnapshotHostRuntime();
+
+    const described = runtime.execute({
+      command: 'describe.profile',
+      args: {
+        repoPath,
+      },
+    });
+    expect(described.status).toBe('ok');
+    expect(described.result.profile.profileId).toBe('fixture-profile');
+    expect(described.result.profile.snapshotTarget).toBe('fixture-profile-target');
+
+    const opened = runtime.execute({
+      command: 'session.open',
+      args: {
+        repoPath,
+      },
+    });
+
+    expect(opened.status).toBe('ok');
+    expect(opened.result.target).toBe('fixture-profile-target');
+    expect(opened.result.profileId).toBe('fixture-profile');
+
+    const status = runtime.execute({
+      command: 'session.status',
+      args: { sessionId: opened.result.sessionId },
+    });
+    expect(status.result.sessions[0]?.profileId).toBe('fixture-profile');
+
+    const exportsSummary = runtime.execute({
+      command: 'query.exports.summary',
+      args: { sessionId: opened.result.sessionId },
+    });
+    expect(exportsSummary.status).toBe('ok');
+    expect(exportsSummary.result.summary.packages_analyzed).toBe(2);
+  });
 });
 
 function createFixtureRepo(): string {
@@ -686,6 +727,72 @@ function createCoordinationFixtureRepo(): string {
       '',
     ].join('\n'),
   );
+
+  return repoPath;
+}
+
+function createProfileFixtureRepo(): string {
+  const repoPath = mkdtempSync(join(tmpdir(), 'source-analysis-host-profile-'));
+  tempDirs.push(repoPath);
+
+  mkdirSync(join(repoPath, '.source-analysis'), { recursive: true });
+  mkdirSync(join(repoPath, 'modules', 'alpha', 'src'), { recursive: true });
+  mkdirSync(join(repoPath, 'modules', 'beta', 'src'), { recursive: true });
+  writeFileSync(
+    join(repoPath, '.source-analysis', 'profile.json'),
+    JSON.stringify(
+      {
+        id: 'fixture-profile',
+        target: 'fixture-profile-target',
+        packageDiscoveryRoots: ['modules'],
+        includeRepoRootPackage: false,
+      },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(
+    join(repoPath, 'modules', 'alpha', 'package.json'),
+    JSON.stringify({ name: '@fixture/alpha', type: 'module' }, null, 2),
+  );
+  writeFileSync(
+    join(repoPath, 'modules', 'beta', 'package.json'),
+    JSON.stringify({ name: '@fixture/beta', type: 'module' }, null, 2),
+  );
+  writeFileSync(
+    join(repoPath, 'modules', 'alpha', 'tsconfig.json'),
+    JSON.stringify(
+      {
+        compilerOptions: {
+          module: 'NodeNext',
+          moduleResolution: 'NodeNext',
+          target: 'ES2022',
+          noEmit: true,
+        },
+        include: ['src/**/*.ts'],
+      },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(
+    join(repoPath, 'modules', 'beta', 'tsconfig.json'),
+    JSON.stringify(
+      {
+        compilerOptions: {
+          module: 'NodeNext',
+          moduleResolution: 'NodeNext',
+          target: 'ES2022',
+          noEmit: true,
+        },
+        include: ['src/**/*.ts'],
+      },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(join(repoPath, 'modules', 'alpha', 'src', 'index.ts'), 'export const alpha = true;\n');
+  writeFileSync(join(repoPath, 'modules', 'beta', 'src', 'index.ts'), 'export const beta = true;\n');
 
   return repoPath;
 }

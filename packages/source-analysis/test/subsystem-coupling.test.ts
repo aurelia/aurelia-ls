@@ -22,11 +22,11 @@ describe('Source-analysis subsystem coupling helpers', () => {
     const seams = collectBindingSeams(snapshots.deps, 'packages/source-analysis/src/');
 
     expect(seams.some((seam) =>
-      seam.from === 'packages/source-analysis/src/host'
-      && seam.to === 'packages/source-analysis/src/deps',
+      seam.from.partitionId === 'packages/source-analysis/src/host'
+      && seam.to.partitionId === 'packages/source-analysis/src/deps',
     )).toBe(true);
 
     const pressure = collectSubsystemBindingPressure(snapshots.deps, 'packages/source-analysis/src/');
-    expect(pressure.some((entry) => entry.subsystem === 'packages/source-analysis/src/host')).toBe(true);
+    expect(pressure.some((entry) => entry.partition.partitionId === 'packages/source-analysis/src/host')).toBe(true);
   });
 });

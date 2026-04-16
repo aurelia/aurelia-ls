@@ -6,7 +6,7 @@ import { createRepoSession, parseExcludedRepoRelativePrefixes } from '../repo-se
 function main(): void {
   const repoPath = process.argv[2] || process.cwd();
   const target = process.argv[3] || '';
-  const excludedRepoRelativePrefixes = parseExcludedRepoRelativePrefixes(process.argv[4], target);
+  const excludedRepoRelativePrefixes = parseExcludedRepoRelativePrefixes(process.argv[4], target, repoPath);
   const session = createRepoSession({
     repoPath,
     target,

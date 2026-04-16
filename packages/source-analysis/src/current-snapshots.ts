@@ -1,4 +1,4 @@
-import { createSnapshotPaths, deriveSnapshotTargetFromRepoPath } from './snapshot-config.js';
+import { createSnapshotPaths, resolveSnapshotTarget } from './snapshot-config.js';
 import { loadJsonSnapshot, resolveCurrentSnapshotPath, type SnapshotKind } from './snapshots.js';
 import type { DepsOutput } from './deps/schema.js';
 import type { ExportsOutput } from './exports/schema.js';
@@ -7,7 +7,7 @@ import type { TypeRefsOutput } from './typerefs/schema.js';
 const PATHS = createSnapshotPaths(import.meta.url);
 
 function defaultTarget(): string {
-  return deriveSnapshotTargetFromRepoPath(process.cwd());
+  return resolveSnapshotTarget().target;
 }
 
 export interface CurrentSnapshotSet {

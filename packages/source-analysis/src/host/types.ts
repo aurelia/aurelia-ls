@@ -26,6 +26,7 @@ import type { NavigationValue } from '../navigation.js';
 import type { RouteWitnessValue } from '../route-witness.js';
 import type { TypeRefsOutput } from '../typerefs/schema.js';
 import type { SnapshotKind } from '../snapshots.js';
+import type { AnalysisProfile } from '../analysis-profile.js';
 
 export const HOST_SCHEMA_VERSION = 'v1alpha1' as const;
 export const HOST_RENDER_STYLES = [
@@ -90,6 +91,7 @@ export interface SessionOpenArgs {
   readonly sessionId?: string;
   readonly repoPath: string;
   readonly target?: string;
+  readonly profilePath?: string;
   readonly excludedRepoRelativePrefixes?: readonly string[] | null;
   readonly warmPrograms?: boolean;
 }
@@ -98,6 +100,8 @@ export interface SessionOpenResult {
   readonly sessionId: string;
   readonly repoPath: string;
   readonly target: string;
+  readonly profileId: string;
+  readonly profilePath: string | null;
   readonly warmPrograms: boolean;
   readonly dirtyKinds: readonly SnapshotKind[];
 }
@@ -119,6 +123,8 @@ export interface SessionStatusEntry {
   readonly sessionId: string;
   readonly repoPath: string;
   readonly target: string;
+  readonly profileId: string;
+  readonly profilePath: string | null;
   readonly warmPrograms: boolean;
   readonly dirtyKinds: readonly SnapshotKind[];
   readonly cachedKinds: readonly SnapshotKind[];
@@ -202,6 +208,12 @@ export interface DescribeCapabilitiesArgs extends HostRenderOptions {
   readonly topK?: number;
 }
 
+export interface DescribeProfileArgs {
+  readonly repoPath?: string;
+  readonly target?: string;
+  readonly profilePath?: string;
+}
+
 export interface DescribeInquiriesArgs extends HostRenderOptions {
   readonly question?: string;
   readonly focusKind?: FocusKind;
@@ -279,6 +291,10 @@ export interface DescribeCapabilitiesResult {
   readonly rendered?: HostRenderedView;
 }
 
+export interface DescribeProfileResult {
+  readonly profile: AnalysisProfile;
+}
+
 export interface DescribeInquiriesResult {
   readonly answer: InquiryAnswer<InquiryDiscoveryValue>;
   readonly rendered?: HostRenderedView;
@@ -333,6 +349,7 @@ export interface MaterializeSnapshotsResult {
 }
 
 export interface HostCommandArgsMap {
+  'describe.profile': DescribeProfileArgs;
   'describe.inquiries': DescribeInquiriesArgs;
   'describe.capabilities': DescribeCapabilitiesArgs;
   'plan.inquiry': PlanInquiryArgs;
@@ -357,6 +374,7 @@ export interface HostCommandArgsMap {
 }
 
 export interface HostCommandResultMap {
+  'describe.profile': DescribeProfileResult;
   'describe.inquiries': DescribeInquiriesResult;
   'describe.capabilities': DescribeCapabilitiesResult;
   'plan.inquiry': PlanInquiryResult;

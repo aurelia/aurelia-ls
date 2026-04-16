@@ -17,6 +17,8 @@ export interface HostSessionState {
   readonly sessionId: string;
   readonly repoPath: string;
   readonly target: string;
+  readonly profileId: string;
+  readonly profilePath: string | null;
   readonly warmPrograms: boolean;
   readonly session: RepoSession;
   readonly snapshots: Partial<SnapshotOutputMap>;
@@ -36,6 +38,7 @@ export class HostSessionManager {
     const selection = resolveSnapshotTarget({
       target: args.target,
       repoPath: args.repoPath,
+      profilePath: args.profilePath,
     });
     const sessionId = args.sessionId?.trim() || `session-${this.#nextSessionId++}`;
     if (this.#sessions.has(sessionId)) {
@@ -45,6 +48,7 @@ export class HostSessionManager {
     const session = createRepoSession({
       repoPath: selection.repoPath,
       target: selection.target,
+      ...(args.profilePath ? { profilePath: args.profilePath } : {}),
       excludedRepoRelativePrefixes: args.excludedRepoRelativePrefixes,
     });
 
@@ -52,6 +56,8 @@ export class HostSessionManager {
       sessionId,
       repoPath: session.repoPath,
       target: selection.target,
+      profileId: session.profile.profileId,
+      profilePath: session.profile.profilePath,
       warmPrograms: args.warmPrograms ?? true,
       session,
       snapshots: {},
@@ -96,6 +102,8 @@ export function toSessionStatusEntry(
     sessionId: state.sessionId,
     repoPath: state.repoPath,
     target: state.target,
+    profileId: state.profileId,
+    profilePath: state.profilePath,
     warmPrograms: state.warmPrograms,
     dirtyKinds: sortSnapshotKinds(state.dirtyKinds),
     cachedKinds: sortSnapshotKinds(Object.keys(state.snapshots) as SnapshotKind[]),

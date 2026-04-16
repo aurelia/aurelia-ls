@@ -39,7 +39,13 @@ describe('Source-analysis package audit', () => {
       finding.code === 'exercise-only-files',
     );
     expect(exerciseOnlyFinding).toBeTruthy();
-    expect(exerciseOnlyFinding?.primaryRef.value).toBe('packages/source-analysis/src/subsystem-coupling.ts');
+    expect(exerciseOnlyFinding?.primaryRef.value).toBe('packages/source-analysis/src/partition-coupling.ts');
+    expect(exerciseOnlyFinding?.relatedRefs.some((ref) =>
+      ref.value === 'packages/source-analysis/src/subsystem-coupling.ts',
+    )).toBe(true);
+    expect(exerciseOnlyFinding?.evidence.some((line) =>
+      line.includes('partition-coupling.test.ts -> partition-coupling.ts (grounded)'),
+    )).toBe(true);
     expect(exerciseOnlyFinding?.evidence.some((line) =>
       line.includes('subsystem-coupling.test.ts -> subsystem-coupling.ts (grounded)'),
     )).toBe(true);

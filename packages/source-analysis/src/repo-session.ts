@@ -4,13 +4,18 @@ import { dirname, join, relative, resolve } from 'node:path';
 
 import * as ts from 'typescript';
 
-import { getExcludedRepoRelativePrefixesForTarget } from './snapshot-config.js';
+import {
+  normalizeRepoRelativePath,
+  resolveAnalysisProfile,
+  type AnalysisProfile,
+} from './analysis-profile.js';
 
 export type TsProgramProfile = 'analysis' | 'analysis-no-resolve';
 
 export interface RepoSessionOptions {
   readonly repoPath?: string;
   readonly target?: string;
+  readonly profilePath?: string;
   readonly excludedRepoRelativePrefixes?: readonly string[] | null;
   readonly maxCachedPrograms?: number;
 }
@@ -41,6 +46,7 @@ const SOURCE_FILE_PATTERN = /\.(tsx?|mts|cts)$/;
 export function parseExcludedRepoRelativePrefixes(
   rawValue: string | undefined,
   target = '',
+  repoPath = process.cwd(),
 ): readonly string[] {
   if (rawValue) {
     try {
@@ -51,16 +57,15 @@ export function parseExcludedRepoRelativePrefixes(
           .map((value) => normalizeRepoRelativePath(value));
       }
     } catch {
-      // Fall back to target-derived defaults below.
+      // Fall back to profile-derived defaults below.
     }
   }
 
-  return getExcludedRepoRelativePrefixesForTarget(target).map((value) =>
-    normalizeRepoRelativePath(value),
-  );
+  return resolveAnalysisProfile({ repoPath, target }).excludedRepoRelativePrefixes;
 }
 
 export class RepoSession {
+  readonly #profile: AnalysisProfile;
   readonly #repoPath: string;
   readonly #target: string;
   readonly #excludedRepoRelativePrefixes: readonly string[];
@@ -76,12 +81,15 @@ export class RepoSession {
   #nextProgramAccessToken = 1;
 
   constructor(options: RepoSessionOptions = {}) {
-    this.#repoPath = resolve(options.repoPath ?? process.cwd());
-    this.#target = options.target ?? '';
-    this.#excludedRepoRelativePrefixes = (
-      options.excludedRepoRelativePrefixes
-      ?? getExcludedRepoRelativePrefixesForTarget(this.#target)
-    ).map((value) => normalizeRepoRelativePath(value));
+    this.#profile = resolveAnalysisProfile({
+      repoPath: options.repoPath,
+      target: options.target,
+      profilePath: options.profilePath,
+      excludedRepoRelativePrefixes: options.excludedRepoRelativePrefixes,
+    });
+    this.#repoPath = this.#profile.repoPath;
+    this.#target = this.#profile.snapshotTarget;
+    this.#excludedRepoRelativePrefixes = this.#profile.excludedRepoRelativePrefixes;
     this.#maxCachedPrograms = Number.isFinite(options.maxCachedPrograms)
       ? Math.max(0, Math.trunc(options.maxCachedPrograms!))
       : 8;
@@ -99,6 +107,10 @@ export class RepoSession {
 
   get excludedRepoRelativePrefixes(): readonly string[] {
     return this.#excludedRepoRelativePrefixes;
+  }
+
+  get profile(): AnalysisProfile {
+    return this.#profile;
   }
 
   toForwardSlash(value: string): string {
@@ -255,13 +267,17 @@ export class RepoSession {
       return this.#packageDirs;
     }
 
-    const packagesRoot = join(this.#repoPath, 'packages');
     const results = new Set<string>();
 
-    if (existsSync(packagesRoot)) {
-      for (const entry of readdirSync(packagesRoot, { withFileTypes: true })) {
+    for (const discoveryRoot of this.#profile.packageDiscoveryRoots) {
+      const rootAbs = join(this.#repoPath, discoveryRoot.root);
+      if (!existsSync(rootAbs)) {
+        continue;
+      }
+
+      for (const entry of readdirSync(rootAbs, { withFileTypes: true })) {
         if (!entry.isDirectory()) continue;
-        const packageDir = resolve(packagesRoot, entry.name);
+        const packageDir = resolve(rootAbs, entry.name);
         const relDir = this.toRepoRelative(packageDir);
         if (relDir.startsWith('..') || this.isExcludedRepoRelativePath(relDir)) continue;
 
@@ -272,7 +288,7 @@ export class RepoSession {
       }
     }
 
-    if (results.size === 0 && existsSync(join(this.#repoPath, 'package.json'))) {
+    if (this.#profile.includeRepoRootPackage && existsSync(join(this.#repoPath, 'package.json'))) {
       results.add(this.#repoPath);
     }
 
@@ -386,8 +402,4 @@ export function createRepoSession(
   options: RepoSessionOptions = {},
 ): RepoSession {
   return new RepoSession(options);
-}
-
-function normalizeRepoRelativePath(pathValue: string): string {
-  return pathValue.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
 }
