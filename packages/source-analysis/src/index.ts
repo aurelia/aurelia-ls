@@ -22,6 +22,14 @@ export type {
   SourceAnalysisNavigationRef,
   SourceAnalysisNavigationValue,
 } from './navigation.js';
+export {
+  createCurrentSourceAnalysisRouteWitnessAnswer,
+  createSourceAnalysisRouteWitnessAnswer,
+} from './route-witness.js';
+export type {
+  SourceAnalysisRouteWitnessRef,
+  SourceAnalysisRouteWitnessValue,
+} from './route-witness.js';
 export type {
   SourceAnalysisClaimEdge,
   SourceAnalysisClaimEdgeKind,
@@ -118,11 +126,19 @@ export {
 export type {
   SourceAnalysisPackageFileReachability,
   SourceAnalysisPackageReachability,
+  SourceAnalysisPackageRouteClass,
+  SourceAnalysisPackageRouteEdge,
+  SourceAnalysisPackageRouteKind,
+  SourceAnalysisPackageRouteStep,
+  SourceAnalysisPackageRouteWitness,
   SourceAnalysisPackageRoot,
   SourceAnalysisPackageRootKind,
 } from './reachability.js';
 export {
   createSourceAnalysisPackageReachability,
+  getSourceAnalysisPackageRouteWitnesses,
+  SOURCE_ANALYSIS_PACKAGE_ROUTE_CLASSES,
+  SOURCE_ANALYSIS_PACKAGE_ROUTE_KINDS,
   SOURCE_ANALYSIS_PACKAGE_ROOT_KINDS,
 } from './reachability.js';
 
@@ -165,6 +181,8 @@ export type {
   QueryArgs,
   QuerySnapshotResult,
   QuerySummaryResult,
+  QueryRouteWitnessArgs,
+  QueryRouteWitnessResult,
   SessionCloseArgs,
   SessionCloseResult,
   SessionInvalidateArgs,

@@ -40,6 +40,5 @@ The tool targets itself — its own structure is queryable through the same surf
 - Draft an imperative single-line message such as `Add X`, `Fix X`, `Remove X`, or `Refactor X`.
 - Prefer naming the concrete capability or behavior that changed.
 - Do not overcompress the subject just to keep it short. If the you land several coequal changes and there is no single honest unifying capability, name more than one of them in the subject. Commas and `and` are fine.
-- Mention the package name only when it actually helps disambiguate the change.
 - Mention the package name only when it actually helps disambiguate the change; do not let every commit default to `Add <package name> ...` just because the package is the active surface.
 - No commit bodies beyond the first line.

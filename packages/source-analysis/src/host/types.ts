@@ -2,6 +2,7 @@ import type { SourceAnalysisAnswer } from '../query-model.js';
 import type { SourceAnalysisAuditValue } from '../audit.js';
 import type { DepsOutput } from '../deps/schema.js';
 import type { ExportsOutput } from '../exports/schema.js';
+import type { SourceAnalysisRouteWitnessValue } from '../route-witness.js';
 import type { TypeRefsOutput } from '../typerefs/schema.js';
 
 export const SOURCE_ANALYSIS_HOST_SCHEMA_VERSION = 'v1alpha1' as const;
@@ -138,6 +139,11 @@ export interface QueryAuditPackageArgs extends QueryArgs {
   readonly packageName: string;
 }
 
+export interface QueryRouteWitnessArgs extends QueryArgs {
+  readonly focusKind: 'file' | 'type';
+  readonly focusValue: string;
+}
+
 export interface QuerySummaryResult<TKind extends SourceAnalysisKind> {
   readonly kind: TKind;
   readonly generatedAt: string;
@@ -153,6 +159,11 @@ export interface QuerySnapshotResult<TKind extends SourceAnalysisKind> {
 
 export interface QueryAuditPackageResult {
   readonly answer: SourceAnalysisAnswer<SourceAnalysisAuditValue>;
+  readonly warnings: readonly string[];
+}
+
+export interface QueryRouteWitnessResult {
+  readonly answer: SourceAnalysisAnswer<SourceAnalysisRouteWitnessValue>;
   readonly warnings: readonly string[];
 }
 
@@ -182,6 +193,7 @@ export interface SourceAnalysisHostCommandArgsMap {
   'query.exports.summary': QueryArgs;
   'query.exports.snapshot': QueryArgs;
   'query.audit.package': QueryAuditPackageArgs;
+  'query.route.witness': QueryRouteWitnessArgs;
   'materializeSnapshots': MaterializeSnapshotsArgs;
 }
 
@@ -198,6 +210,7 @@ export interface SourceAnalysisHostCommandResultMap {
   'query.exports.summary': QuerySummaryResult<'exports'>;
   'query.exports.snapshot': QuerySnapshotResult<'exports'>;
   'query.audit.package': QueryAuditPackageResult;
+  'query.route.witness': QueryRouteWitnessResult;
   'materializeSnapshots': MaterializeSnapshotsResult;
 }
 

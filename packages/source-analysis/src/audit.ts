@@ -71,8 +71,6 @@ interface PackageAuditContext {
   readonly packageFiles: readonly string[];
   readonly uncoveredFiles: readonly string[];
   readonly unresolvedImports: LoadedCurrentSourceAnalysisSnapshots['deps']['unresolved_imports'];
-  readonly inboundCountsByFile: ReadonlyMap<string, number>;
-  readonly inboundSourcesByFile: ReadonlyMap<string, readonly string[]>;
   readonly declarationsByFile: ReadonlyMap<string, readonly TypeDecl[]>;
   readonly exportRecordsByFile: ReadonlyMap<string, readonly PackageExportRecord[]>;
   readonly reachability: SourceAnalysisPackageReachability;
@@ -200,18 +198,12 @@ function createPackageAuditContext(
     entry.source.startsWith(packagePrefix),
   );
 
-  const inboundCountsByFile = new Map<string, number>();
-  const inboundSourcesByFile = new Map<string, string[]>();
   for (const edge of snapshots.deps.edges) {
     if (edge.source.startsWith(packagePrefix)) {
       packageFiles.add(edge.source);
     }
     if (edge.target.startsWith(packagePrefix)) {
       packageFiles.add(edge.target);
-      inboundCountsByFile.set(edge.target, (inboundCountsByFile.get(edge.target) ?? 0) + 1);
-      const inboundSources = inboundSourcesByFile.get(edge.target) ?? [];
-      inboundSources.push(edge.source);
-      inboundSourcesByFile.set(edge.target, inboundSources);
     }
   }
 
@@ -241,13 +233,6 @@ function createPackageAuditContext(
     packageFiles: [...packageFiles].sort((left, right) => left.localeCompare(right)),
     uncoveredFiles,
     unresolvedImports,
-    inboundCountsByFile,
-    inboundSourcesByFile: new Map(
-      [...inboundSourcesByFile.entries()].map(([filePath, importers]) => [
-        filePath,
-        [...new Set(importers)].sort((left, right) => left.localeCompare(right)),
-      ]),
-    ),
     declarationsByFile: new Map(
       [...declarationsByFile.entries()].map(([filePath, declarations]) => [
         filePath,
@@ -293,12 +278,18 @@ function collectUncoveredFilesFinding(
   const uncoveredExercises = context.uncoveredFiles.filter((filePath) =>
     context.reachability.exerciseFiles.includes(filePath),
   );
+  const exerciseTargets = context.reachability.files
+    .filter((file) =>
+      file.exerciseRootIds.length > 0
+      && !context.reachability.exerciseFiles.includes(file.filePath),
+    )
+    .map((file) => file.filePath);
   const primaryPath = uncoveredExercises[0] ?? context.uncoveredFiles[0]!;
   const title = uncoveredExercises.length === context.uncoveredFiles.length
     ? 'Tests sit outside the graph coverage'
     : 'Some package files sit outside the graph coverage';
   const summary = uncoveredExercises.length === context.uncoveredFiles.length
-    ? `${context.uncoveredFiles.length} test file${pluralize(context.uncoveredFiles.length)} under ${context.pkg.package_dir} are outside every tsconfig, so the audit cannot honestly close on which package surfaces are exercised.`
+    ? `${context.uncoveredFiles.length} test file${pluralize(context.uncoveredFiles.length)} under ${context.pkg.package_dir} are outside every tsconfig. Parse-only route recovery now reaches ${exerciseTargets.length} package file${pluralize(exerciseTargets.length)}, but that exercise evidence is still qualified rather than snapshot-grounded.`
     : `${context.uncoveredFiles.length} file${pluralize(context.uncoveredFiles.length)} under ${context.pkg.package_dir} are outside every tsconfig, so the dependency graph has a real blind spot.`;
 
   return {
@@ -313,8 +304,12 @@ function collectUncoveredFilesFinding(
     evidence: [
       `${context.uncoveredFiles.length} uncovered file${pluralize(context.uncoveredFiles.length)} under ${context.pkg.package_dir}.`,
       ...(uncoveredExercises.length > 0
-        ? [`${uncoveredExercises.length} uncovered file${pluralize(uncoveredExercises.length)} currently classify as exercise roots, which hides exercise coverage from the graph.`]
+        ? [`${uncoveredExercises.length} uncovered file${pluralize(uncoveredExercises.length)} currently classify as exercise roots, so exercise reachability depends on parse-only recovery.`]
         : []),
+      ...(exerciseTargets.length > 0
+        ? [`parse-only exercise routes currently reach ${exerciseTargets.length} package file${pluralize(exerciseTargets.length)}.`]
+        : []),
+      ...exerciseTargets.slice(0, 4).map((filePath) => `exercise route target: ${filePath}`),
       ...context.uncoveredFiles.slice(0, 4).map((filePath) => `uncovered: ${filePath}`),
     ],
   };
@@ -358,27 +353,30 @@ function collectDormantFileFindings(
   return dormantFiles.map((file) => {
     const declarations = context.declarationsByFile.get(file.filePath) ?? [];
     const roots = context.reachability.rootsByFilePath.get(file.filePath) ?? [];
+    const topWitnesses = file.routeWitnesses.slice(0, 3);
     return {
       code: 'under-integrated-file',
       kind: 'under-integrated-file' as const,
       severity: 'warning' as const,
       confidence: 'grounded' as const,
       title: `${basename(file.filePath)} looks parked rather than integrated`,
-      summary: `${file.filePath} is not reachable from a grounded package root, has no inbound imports in the current graph, is not on the public package surface, and still carries ${declarations.length} tracked declaration${pluralize(declarations.length)}.`,
+      summary: `${file.filePath} has no modeled production route through the public API or manifest-backed executables, is not on the public package surface, and still carries ${declarations.length} tracked declaration${pluralize(declarations.length)}.`,
       primaryRef: fileRef(file.filePath, 'under-integrated file'),
       relatedRefs: dedupeRefs([
         packageRef(context.pkg),
         ...declarations.slice(0, 4).map((declaration) => typeRef(declaration)),
       ]),
       evidence: [
-        `grounded roots: ${file.groundedRootIds.length}`,
-        `qualified roots: ${file.qualifiedRootIds.length}`,
-        `inbound imports: ${file.inboundFiles.length}`,
+        `grounded production roots: ${file.groundedProductionRootIds.length}`,
+        `qualified production roots: ${file.qualifiedProductionRootIds.length}`,
+        `exercise roots: ${file.exerciseRootIds.length}`,
+        `candidate roots: ${file.candidateRootIds.length}`,
         `public export records: ${file.exportCount}`,
         `tracked declarations: ${declarations.length}`,
         ...(roots.length > 0
           ? [`root roles: ${roots.map((root) => root.kind).join(', ')}`]
           : []),
+        ...topWitnesses.map((witness) => `witness: ${witness.summary}`),
         ...(declarations.length > 0
           ? [`declared types: ${declarations.map((declaration) => declaration.name).join(', ')}`]
           : []),
@@ -434,8 +432,7 @@ function isDormantCandidate(
     : 'src/';
   if (!file.filePath.startsWith(sourcePrefix)) return false;
   if (file.publicSurface) return false;
-  if (file.groundedRootIds.length > 0) return false;
-  if (file.inboundFiles.length > 0) return false;
+  if (file.productionRootIds.length > 0) return false;
   if (file.declarationCount === 0) return false;
   return true;
 }
@@ -857,19 +854,6 @@ function originForFinding(
 
 function pluralize(count: number): string {
   return count === 1 ? '' : 's';
-}
-
-function isTestLikeFile(filePath: string): boolean {
-  return filePath.includes('/test/')
-    || filePath.includes('/tests/')
-    || /\.test\.[cm]?[jt]sx?$/i.test(filePath)
-    || /\.spec\.[cm]?[jt]sx?$/i.test(filePath);
-}
-
-function isEntrypointLike(filePath: string): boolean {
-  return /(^|\/)cli\.ts$/i.test(filePath)
-    || /(^|\/)refresh\.ts$/i.test(filePath)
-    || /(^|\/)(generate|query)\.ts$/i.test(filePath);
 }
 
 function basename(filePath: string): string {

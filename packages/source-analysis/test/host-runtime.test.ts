@@ -156,6 +156,25 @@ describe('SourceAnalysisHostRuntime', () => {
     expect(candidateRootsFinding).toBeTruthy();
     expect(candidateRootsFinding?.relatedRefs.some((ref) => ref.value === 'src/tool.ts')).toBe(true);
     expect(candidateRootsFinding?.relatedRefs.some((ref) => ref.value === 'src/cli.ts')).toBe(false);
+
+    const routeWitness = runtime.execute({
+      command: 'query.route.witness',
+      args: {
+        sessionId,
+        focusKind: 'file',
+        focusValue: 'src/live.ts',
+      },
+    });
+
+    expect(routeWitness.status).toBe('ok');
+    expect(routeWitness.meta.refreshedKinds).toEqual([]);
+    expect(routeWitness.result.answer.outcome.tag).toBe('hit');
+    expect(routeWitness.result.answer.outcome.trust.kind).toBe('grounded');
+    expect(routeWitness.result.answer.outcome.value?.witnesses[0]?.rootKind).toBe('public-api');
+    expect(routeWitness.result.answer.outcome.value?.witnesses[0]?.files).toEqual([
+      'src/index.ts',
+      'src/live.ts',
+    ]);
   });
 });
 

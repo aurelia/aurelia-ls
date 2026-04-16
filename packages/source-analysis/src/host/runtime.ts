@@ -9,6 +9,7 @@ import { basename, join, resolve } from 'node:path';
 
 import { createSourceAnalysisAuditAnswer } from '../audit.js';
 import { createSourceAnalysisPaths } from '../config.js';
+import { createSourceAnalysisRouteWitnessAnswer } from '../route-witness.js';
 import type { SourceAnalysisAnalysisOptions } from '../analysis-options.js';
 import { generateDepsAnalysis } from '../deps/analyze.js';
 import { generateExportsAnalysis } from '../exports/analyze.js';
@@ -26,6 +27,8 @@ import {
   type MaterializeSnapshotsResult,
   type QueryAuditPackageArgs,
   type QueryAuditPackageResult,
+  type QueryRouteWitnessArgs,
+  type QueryRouteWitnessResult,
   type QueryArgs,
   type QuerySnapshotResult,
   type QuerySummaryResult,
@@ -126,6 +129,7 @@ export class SourceAnalysisHostRuntime {
       case 'query.exports.summary': return this.#querySummary('exports', invocation.args as QueryArgs);
       case 'query.exports.snapshot': return this.#querySnapshot('exports', invocation.args as QueryArgs);
       case 'query.audit.package': return this.#queryAuditPackage(invocation.args as QueryAuditPackageArgs);
+      case 'query.route.witness': return this.#queryRouteWitness(invocation.args as QueryRouteWitnessArgs);
       case 'materializeSnapshots': return this.#materializeSnapshots(invocation.args as MaterializeSnapshotsArgs);
       default: return assertNever(invocation.command);
     }
@@ -285,6 +289,66 @@ export class SourceAnalysisHostRuntime {
           focusRef: { kind: 'package', value: args.packageName },
           questionRoute: 'inventory',
           readMode: 'summary-card',
+          worldFrame: {
+            repoPath: state.repoPath,
+            target: state.target,
+            regimeAnchor: 'hosted',
+            partiality: 'complete',
+            freshness: 'snapshot',
+          },
+        },
+        {
+          deps: depsQuery.snapshot,
+          typeRefs: typeRefsQuery.snapshot,
+          exports: exportsQuery.snapshot,
+          warnings,
+        },
+      ),
+      warnings,
+    };
+
+    return {
+      result,
+      sessionId: state.sessionId,
+      refreshedKinds,
+      invalidation: buildInvalidationMeta(state),
+      cache: {
+        hit: depsQuery.cache.hit && typeRefsQuery.cache.hit && exportsQuery.cache.hit,
+        tier: depsQuery.cache.tier === 'warm'
+          || typeRefsQuery.cache.tier === 'warm'
+          || exportsQuery.cache.tier === 'warm'
+          ? 'warm'
+          : 'cold',
+      },
+    };
+  }
+
+  #queryRouteWitness(args: QueryRouteWitnessArgs): CommandOutcome {
+    const state = this.#sessions.get(args.sessionId);
+    const depsQuery = ensureFreshSnapshot(state, 'deps', args.refreshIfNeeded);
+    const typeRefsQuery = ensureFreshSnapshot(state, 'typerefs', args.refreshIfNeeded);
+    const exportsQuery = ensureFreshSnapshot(state, 'exports', args.refreshIfNeeded);
+
+    const warnings = [
+      ...depsQuery.warnings,
+      ...typeRefsQuery.warnings,
+      ...exportsQuery.warnings,
+    ];
+    const refreshedKinds = sortKinds([
+      ...depsQuery.refreshedKinds,
+      ...typeRefsQuery.refreshedKinds,
+      ...exportsQuery.refreshedKinds,
+    ]);
+    const result: QueryRouteWitnessResult = {
+      answer: createSourceAnalysisRouteWitnessAnswer(
+        {
+          inquiryEpisode: 'bounded-closure-explanation',
+          focusRef: {
+            kind: args.focusKind,
+            value: args.focusValue,
+          },
+          questionRoute: 'route',
+          readMode: 'focus-card',
           worldFrame: {
             repoPath: state.repoPath,
             target: state.target,

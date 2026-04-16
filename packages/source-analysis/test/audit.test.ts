@@ -29,6 +29,9 @@ describe('Source-analysis package audit', () => {
     expect(uncoveredFinding?.relatedRefs.some((ref) =>
       ref.value === 'packages/source-analysis/test/navigation.test.ts',
     )).toBe(true);
+    expect(uncoveredFinding?.evidence.some((line) =>
+      line.includes('parse-only exercise routes currently reach'),
+    )).toBe(true);
   });
 
   it('surfaces semantic-runtime.ts as a likely under-integrated code island', () => {
@@ -43,7 +46,7 @@ describe('Source-analysis package audit', () => {
       && finding.primaryRef.value === 'packages/source-analysis/src/semantic-runtime.ts',
     );
     expect(dormantFinding).toBeTruthy();
-    expect(dormantFinding?.summary.includes('no inbound imports')).toBe(true);
+    expect(dormantFinding?.summary.includes('no modeled production route')).toBe(true);
     expect(answer.outcome.continuations.some((step) =>
       step.targetFocusRef === 'packages/source-analysis/src/semantic-runtime.ts',
     )).toBe(true);
