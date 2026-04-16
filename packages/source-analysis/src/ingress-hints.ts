@@ -1,4 +1,15 @@
 import type { SourceAnalysisFocusKind } from './query-model.js';
+import {
+  DEFAULT_SOURCE_ANALYSIS_INGRESS_RECOGNIZER_REGISTRY,
+  captureKindsForFocusKind,
+  extractFilePaths,
+  extractPackageNames,
+  extractRepoPaths,
+  extractTypeNames,
+  type SourceAnalysisIngressCapture,
+  type SourceAnalysisIngressRecognition,
+  type SourceAnalysisIngressRecognizerRegistry,
+} from './ingress-recognizers.js';
 
 export interface SourceAnalysisIngressHintDetail {
   readonly kind: 'input' | 'focus-inference' | 'repair';
@@ -9,6 +20,7 @@ export interface SourceAnalysisIngressFocusHints {
   readonly focusKind?: SourceAnalysisFocusKind;
   readonly focusValue?: string;
   readonly packageName?: string;
+  readonly recognition: SourceAnalysisIngressRecognition;
   readonly reasons: readonly SourceAnalysisIngressHintDetail[];
 }
 
@@ -16,8 +28,11 @@ export function deriveFocusHints(
   question: string,
   explicitFocusKind?: SourceAnalysisFocusKind,
   explicitFocusValue?: string,
+  recognizers: SourceAnalysisIngressRecognizerRegistry = DEFAULT_SOURCE_ANALYSIS_INGRESS_RECOGNIZER_REGISTRY,
 ): SourceAnalysisIngressFocusHints {
+  const recognition = recognizers.createRecognition(question);
   const reasons: SourceAnalysisIngressHintDetail[] = [];
+
   if (explicitFocusKind && explicitFocusValue) {
     reasons.push({
       kind: 'input',
@@ -27,76 +42,107 @@ export function deriveFocusHints(
       focusKind: explicitFocusKind,
       focusValue: explicitFocusValue,
       packageName: explicitFocusKind === 'package' ? explicitFocusValue : extractPackageName(question),
+      recognition,
       reasons,
     };
   }
 
-  const packageName = extractPackageName(question);
-  const filePath = extractFilePath(question);
-  const typeName = extractTypeName(question);
-
-  if (packageName) {
+  const packageCapture = recognizers.findFirst(recognition, 'package-name');
+  if (packageCapture) {
     reasons.push({
       kind: 'focus-inference',
-      detail: `Inferred the package focus "${packageName}" from the question text.`,
+      detail: packageCapture.detail,
     });
     return {
       focusKind: 'package',
-      focusValue: packageName,
-      packageName,
-      reasons,
-    };
-  }
-  if (filePath) {
-    reasons.push({
-      kind: 'focus-inference',
-      detail: `Inferred the file focus "${filePath}" from the question text.`,
-    });
-    return {
-      focusKind: 'file',
-      focusValue: filePath,
-      reasons,
-    };
-  }
-  if (typeName) {
-    reasons.push({
-      kind: 'focus-inference',
-      detail: `Inferred the type focus "${typeName}" from the question text.`,
-    });
-    return {
-      focusKind: 'type',
-      focusValue: typeName,
+      focusValue: packageCapture.value,
+      packageName: packageCapture.value,
+      recognition,
       reasons,
     };
   }
 
-  return { reasons };
+  const fileCapture = recognizers.findFirst(recognition, 'file-path');
+  if (fileCapture) {
+    reasons.push({
+      kind: 'focus-inference',
+      detail: fileCapture.detail,
+    });
+    return {
+      focusKind: 'file',
+      focusValue: fileCapture.value,
+      recognition,
+      reasons,
+    };
+  }
+
+  const typeCapture = recognizers.findFirst(recognition, 'type-name');
+  if (typeCapture) {
+    reasons.push({
+      kind: 'focus-inference',
+      detail: typeCapture.detail,
+    });
+    return {
+      focusKind: 'type',
+      focusValue: typeCapture.value,
+      recognition,
+      reasons,
+    };
+  }
+
+  const repoCapture = recognizers.findFirst(recognition, 'repo-path');
+  if (repoCapture) {
+    reasons.push({
+      kind: 'focus-inference',
+      detail: repoCapture.detail,
+    });
+    return {
+      focusKind: 'repo',
+      focusValue: repoCapture.value,
+      recognition,
+      reasons,
+    };
+  }
+
+  return { recognition, reasons };
 }
 
 export function deriveRepairHints(
   args: Record<string, unknown> | undefined,
   question: string | undefined,
+  recognizers: SourceAnalysisIngressRecognizerRegistry = DEFAULT_SOURCE_ANALYSIS_INGRESS_RECOGNIZER_REGISTRY,
 ): SourceAnalysisIngressFocusHints {
-  const focusKind = asFocusKind(args?.focusKind) ?? inferFocusKindFromArgs(args);
-  const focusValue = asString(args?.focusValue)
-    ?? asString(args?.packageName)
-    ?? extractPackageName(question ?? '')
-    ?? extractFilePath(question ?? '')
-    ?? extractTypeName(question ?? '');
-  const reasons: SourceAnalysisIngressHintDetail[] = [];
+  const recognition = recognizers.createRecognition(question);
+  const explicitFocusKind = asFocusKind(args?.focusKind) ?? inferFocusKindFromArgs(args);
+  const explicitFocusValue = asString(args?.focusValue) ?? asString(args?.packageName);
+  if (explicitFocusKind && explicitFocusValue) {
+    return {
+      focusKind: explicitFocusKind,
+      focusValue: explicitFocusValue,
+      packageName: asString(args?.packageName) ?? (explicitFocusKind === 'package' ? explicitFocusValue : undefined),
+      recognition,
+      reasons: [{
+        kind: 'repair',
+        detail: `Recovered ${explicitFocusKind}:${explicitFocusValue} from the attempted args.`,
+      }],
+    };
+  }
 
-  if (focusKind && focusValue) {
-    reasons.push({
-      kind: 'repair',
-      detail: `Recovered ${focusKind}:${focusValue} from the attempted args or fallback question.`,
-    });
+  const inferred = deriveFocusHints(question ?? '', undefined, undefined, recognizers);
+  if (inferred.focusKind && inferred.focusValue) {
+    return {
+      ...inferred,
+      recognition,
+      reasons: [{
+        kind: 'repair',
+        detail: `Recovered ${inferred.focusKind}:${inferred.focusValue} from the fallback question.`,
+      }],
+    };
   }
 
   return {
-    focusKind,
-    focusValue,
-    packageName: asString(args?.packageName) ?? (focusKind === 'package' ? focusValue : undefined),
-    reasons,
+    recognition,
+    reasons: [],
   };
 }
 
@@ -119,37 +165,19 @@ export function inferFocusKindFromArgs(
 }
 
 export function extractPackageName(question: string): string | undefined {
-  const packageMatch = question.match(/@[\w.-]+\/[\w.-]+/);
-  if (packageMatch) {
-    return packageMatch[0];
-  }
-  return undefined;
+  return extractPackageNames(question)[0];
 }
 
 export function extractFilePath(question: string): string | undefined {
-  const fileMatch = question.match(/[A-Za-z0-9_./\\-]+\.(?:cts|mts|ts|tsx|js|mjs|cjs)/);
-  return fileMatch ? fileMatch[0].replace(/\\/g, '/') : undefined;
+  return extractFilePaths(question)[0];
 }
 
 export function extractTypeName(question: string): string | undefined {
-  const typedMatch = question.match(/\b(?:type|class|interface)\s+([A-Z][A-Za-z0-9_]*)\b/);
-  if (typedMatch) {
-    return typedMatch[1];
-  }
-
-  const backtickMatch = question.match(/`([A-Z][A-Za-z0-9_]*)`/);
-  if (backtickMatch) {
-    return backtickMatch[1];
-  }
-
-  const pascalMatches = (question.match(/\b[A-Z][A-Za-z0-9_]*\b/g) ?? [])
-    .filter((match) => match.length > 1);
-  return pascalMatches.length === 1 ? pascalMatches[0] : undefined;
+  return extractTypeNames(question)[0];
 }
 
 export function extractRepoPath(question: string): string | undefined {
-  const absoluteMatch = question.match(/[A-Za-z]:[\\/][A-Za-z0-9_.\\/ -]+/);
-  return absoluteMatch ? absoluteMatch[0].replace(/\\/g, '/') : undefined;
+  return extractRepoPaths(question)[0];
 }
 
 export function describeFocusHints(hints: {
@@ -173,4 +201,15 @@ export function asFocusKind(value: unknown): SourceAnalysisFocusKind | undefined
     return value;
   }
   return undefined;
+}
+
+export function supportsRecognizedFocus(
+  focusKind: SourceAnalysisFocusKind,
+  recognition: SourceAnalysisIngressRecognition | readonly SourceAnalysisIngressCapture[],
+): boolean {
+  const captures = Array.isArray(recognition) || !('captures' in recognition)
+    ? recognition
+    : recognition.captures;
+  const captureKinds = captureKindsForFocusKind(focusKind);
+  return captures.some((capture) => captureKinds.includes(capture.kind));
 }

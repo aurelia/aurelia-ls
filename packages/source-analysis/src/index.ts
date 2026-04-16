@@ -241,13 +241,53 @@ export {
   SOURCE_ANALYSIS_INQUIRY_STEP_PHASES,
 } from './inquiry-ingress.js';
 export {
-  intersect,
-  matchPhrases,
-  matchTokens,
+  createSourceAnalysisNormalizedText,
+  intersectTokens,
   normalizePhrase,
   normalizeToken,
+  phraseMatches,
+  tokenMatches,
   tokenize,
-} from './ingress-language.js';
+} from './ingress-normalization.js';
+export type { SourceAnalysisNormalizedText } from './ingress-normalization.js';
+export type {
+  SourceAnalysisIngressCapture,
+  SourceAnalysisIngressCaptureKind,
+  SourceAnalysisIngressRecognition,
+} from './ingress-recognizers.js';
+export {
+  DEFAULT_SOURCE_ANALYSIS_INGRESS_RECOGNIZER_REGISTRY,
+  SOURCE_ANALYSIS_INGRESS_CAPTURE_KINDS,
+  captureKindsForFocusKind,
+  createDefaultSourceAnalysisIngressRecognizerRegistry,
+  SourceAnalysisIngressRecognizerRegistry,
+} from './ingress-recognizers.js';
+export type {
+  SourceAnalysisIngressContext,
+  SourceAnalysisIngressExactRule,
+  SourceAnalysisIngressFocusRule,
+  SourceAnalysisIngressMatchTrace,
+  SourceAnalysisIngressPhraseRule,
+  SourceAnalysisIngressRuleEvaluation,
+  SourceAnalysisIngressRuleImportance,
+  SourceAnalysisIngressRuleKind,
+  SourceAnalysisIngressRuleSpec,
+  SourceAnalysisIngressSelectionPolicy,
+  SourceAnalysisIngressTokenRule,
+} from './ingress-matcher.js';
+export {
+  SOURCE_ANALYSIS_INGRESS_RULE_IMPORTANCE,
+  SOURCE_ANALYSIS_INGRESS_RULE_KINDS,
+  compareSourceAnalysisIngressEvaluations,
+  createSourceAnalysisCaptureRule,
+  createSourceAnalysisExactRule,
+  createSourceAnalysisFocusRule,
+  createSourceAnalysisIngressContext,
+  createSourceAnalysisPhraseRule,
+  createSourceAnalysisTokenRule,
+  evaluateSourceAnalysisIngressRules,
+  rehydrateSourceAnalysisIngressEvaluation,
+} from './ingress-matcher.js';
 export type {
   SourceAnalysisIngressFocusHints,
   SourceAnalysisIngressHintDetail,

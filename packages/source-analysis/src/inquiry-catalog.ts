@@ -6,12 +6,25 @@ import type {
 } from './query-model.js';
 import type { SourceAnalysisCapabilityCatalog } from './capability-catalog.js';
 import {
-  intersect,
-  matchPhrases,
-  matchTokens,
-  normalizePhrase,
-  tokenize,
-} from './ingress-language.js';
+  captureKindsForFocusKind,
+  type SourceAnalysisIngressCapture,
+} from './ingress-recognizers.js';
+import {
+  compareSourceAnalysisIngressEvaluations,
+  createSourceAnalysisCaptureRule,
+  createSourceAnalysisExactRule,
+  createSourceAnalysisFocusRule,
+  createSourceAnalysisIngressContext,
+  createSourceAnalysisPhraseRule,
+  createSourceAnalysisTokenRule,
+  evaluateSourceAnalysisIngressRules,
+  rehydrateSourceAnalysisIngressEvaluation,
+  type SourceAnalysisIngressContext,
+  type SourceAnalysisIngressMatchTrace,
+  type SourceAnalysisIngressRuleSpec,
+  type SourceAnalysisIngressSelectionPolicy,
+} from './ingress-matcher.js';
+import { tokenize } from './ingress-normalization.js';
 
 export const SOURCE_ANALYSIS_INQUIRY_FAMILY_IDS = [
   'capability-guidance',
@@ -29,6 +42,7 @@ export const SOURCE_ANALYSIS_INQUIRY_MATCH_REASON_KINDS = [
   'focus',
   'route',
   'command',
+  'confusion',
 ] as const;
 
 export type SourceAnalysisInquiryFamilyId =
@@ -93,12 +107,16 @@ export interface SourceAnalysisInquiryMatchReason {
 export interface SourceAnalysisInquiryMatch {
   readonly inquiry: SourceAnalysisInquiryFamilyView;
   readonly reasons: readonly SourceAnalysisInquiryMatchReason[];
+  readonly traces: readonly SourceAnalysisIngressMatchTrace<SourceAnalysisInquiryMatchReasonKind>[];
+  readonly captures: readonly SourceAnalysisIngressCapture[];
+  readonly requiredSatisfied: boolean;
   readonly exactFamily: boolean;
   readonly aliasMatches: readonly string[];
   readonly nounMatches: readonly string[];
   readonly verbMatches: readonly string[];
   readonly routeMatches: readonly string[];
   readonly commandMatches: readonly string[];
+  readonly confusionMatches: readonly string[];
   readonly focusMatched: boolean;
 }
 
@@ -117,13 +135,11 @@ export interface SourceAnalysisInquiryCatalogDiagnostics {
 
 export class SourceAnalysisInquiryFamilyDescriptor {
   readonly #definition: SourceAnalysisInquiryFamilyDefinition;
-  readonly #familyTokens: readonly string[];
-  readonly #commandTokens: readonly string[];
+  readonly #rules: readonly SourceAnalysisIngressRuleSpec<SourceAnalysisInquiryMatchReasonKind>[];
 
   constructor(definition: SourceAnalysisInquiryFamilyDefinition) {
     this.#definition = definition;
-    this.#familyTokens = tokenize(definition.id);
-    this.#commandTokens = tokenize(definition.primaryCommands.join(' '));
+    this.#rules = createInquiryMatchRules(definition);
   }
 
   get id(): SourceAnalysisInquiryFamilyId {
@@ -156,134 +172,66 @@ export class SourceAnalysisInquiryFamilyDescriptor {
     };
   }
 
-  match(input: {
-    readonly question?: string;
-    readonly focusKind?: SourceAnalysisFocusKind;
-    readonly familyId?: string;
-    readonly includeExamples?: boolean;
-  }): SourceAnalysisInquiryMatch | null {
-    if (!input.question && !input.familyId && !input.focusKind) {
-      return {
-        inquiry: this.toView(input.includeExamples),
-        reasons: [],
-        exactFamily: false,
-        aliasMatches: [],
-        nounMatches: [],
-        verbMatches: [],
-        routeMatches: [],
-        commandMatches: [],
-        focusMatched: false,
-      };
-    }
+  emptyMatch(includeExamples = false): SourceAnalysisInquiryMatch {
+    return {
+      inquiry: this.toView(includeExamples),
+      reasons: [],
+      traces: [],
+      captures: [],
+      requiredSatisfied: true,
+      exactFamily: false,
+      aliasMatches: [],
+      nounMatches: [],
+      verbMatches: [],
+      routeMatches: [],
+      commandMatches: [],
+      confusionMatches: [],
+      focusMatched: false,
+    };
+  }
 
-    const reasons: SourceAnalysisInquiryMatchReason[] = [];
-    const aliasMatches = matchPhrases(input.question, [
-      this.#definition.label,
-      this.#definition.id,
-      ...this.#definition.aliases,
-    ]);
-    const nounMatches = matchTokens(input.question, this.#definition.nouns);
-    const verbMatches = matchTokens(input.question, this.#definition.verbs);
-    const routeMatches = matchTokens(input.question, this.#definition.questionRoutes);
-    const commandMatches = matchTokens(input.question, this.#definition.primaryCommands);
-    const exactFamily = normalizePhrase(input.familyId) === normalizePhrase(this.#definition.id);
-    const focusMatched = input.focusKind !== undefined && this.#definition.focusKinds.includes(input.focusKind);
-    const familyTokenOverlap = input.familyId
-      ? intersect(tokenize(input.familyId), this.#familyTokens)
-      : [];
-    const commandTokenOverlap = input.question
-      ? intersect(tokenize(input.question), this.#commandTokens)
-      : [];
-
-    if (exactFamily) {
-      reasons.push({
-        kind: 'family',
-        detail: `Exact inquiry-family match for "${this.#definition.id}".`,
-        term: this.#definition.id,
-      });
-    } else {
-      for (const token of familyTokenOverlap) {
-        reasons.push({
-          kind: 'family',
-          detail: `Family hint overlaps on "${token}".`,
-          term: token,
-        });
-      }
-    }
-
-    for (const alias of aliasMatches) {
-      reasons.push({
-        kind: 'alias',
-        detail: `Question mentions "${alias}".`,
-        term: alias,
-      });
-    }
-    for (const noun of nounMatches) {
-      reasons.push({
-        kind: 'noun',
-        detail: `Question uses the inquiry noun "${noun}".`,
-        term: noun,
-      });
-    }
-    for (const verb of verbMatches) {
-      reasons.push({
-        kind: 'verb',
-        detail: `Question uses the inquiry verb "${verb}".`,
-        term: verb,
-      });
-    }
-    for (const route of routeMatches) {
-      reasons.push({
-        kind: 'route',
-        detail: `Question suggests the "${route}" route.`,
-        term: route,
-      });
-    }
-    for (const command of commandMatches) {
-      reasons.push({
-        kind: 'command',
-        detail: `Question lines up with the kernel command "${command}".`,
-        term: command,
-      });
-    }
-    for (const token of commandTokenOverlap) {
-      reasons.push({
-        kind: 'command',
-        detail: `Question overlaps a kernel command token "${token}".`,
-        term: token,
-      });
-    }
-    if (focusMatched) {
-      reasons.push({
-        kind: 'focus',
-        detail: `The inquiry accepts the ${input.focusKind} focus kind.`,
-        term: input.focusKind,
-      });
-    }
-
-    if (reasons.length === 0) {
+  matchContext(
+    context: SourceAnalysisIngressContext,
+    includeExamples = false,
+  ): SourceAnalysisInquiryMatch | null {
+    const evaluation = evaluateSourceAnalysisIngressRules(context, this.#rules);
+    if (!evaluation.matched) {
       return null;
     }
 
+    const traces = evaluation.traces;
+    const matchedTraces = evaluation.matchedTraces;
+
     return {
-      inquiry: this.toView(input.includeExamples),
-      reasons,
-      exactFamily,
-      aliasMatches,
-      nounMatches,
-      verbMatches,
-      routeMatches,
-      commandMatches,
-      focusMatched,
+      inquiry: this.toView(includeExamples),
+      reasons: matchedTraces.map(toInquiryMatchReason),
+      traces,
+      captures: matchedTraces
+        .map((trace) => trace.capture)
+        .filter((capture): capture is SourceAnalysisIngressCapture => capture !== undefined),
+      requiredSatisfied: evaluation.requiredSatisfied,
+      exactFamily: matchedTraces.some((trace) => trace.ruleId === 'exact-family'),
+      aliasMatches: matchedTerms(matchedTraces, 'alias'),
+      nounMatches: matchedTerms(matchedTraces, 'noun'),
+      verbMatches: matchedTerms(matchedTraces, 'verb'),
+      routeMatches: matchedTerms(matchedTraces, 'route'),
+      commandMatches: matchedTerms(matchedTraces, 'command'),
+      confusionMatches: matchedTerms(matchedTraces, 'confusion'),
+      focusMatched: matchedTraces.some((trace) => trace.reasonKind === 'focus' && trace.importance !== 'negative'),
     };
   }
 }
 
 export class SourceAnalysisInquiryCatalog {
   readonly #descriptors: readonly SourceAnalysisInquiryFamilyDescriptor[];
+  readonly #selectionPolicy: SourceAnalysisIngressSelectionPolicy<SourceAnalysisInquiryMatchReasonKind>;
 
-  constructor(descriptors: readonly SourceAnalysisInquiryFamilyDescriptor[]) {
+  constructor(
+    descriptors: readonly SourceAnalysisInquiryFamilyDescriptor[],
+    selectionPolicy: SourceAnalysisIngressSelectionPolicy<SourceAnalysisInquiryMatchReasonKind> = DEFAULT_SOURCE_ANALYSIS_INQUIRY_SELECTION_POLICY,
+  ) {
     this.#descriptors = descriptors;
+    this.#selectionPolicy = selectionPolicy;
   }
 
   list(includeExamples = false): readonly SourceAnalysisInquiryFamilyView[] {
@@ -291,15 +239,39 @@ export class SourceAnalysisInquiryCatalog {
   }
 
   resolve(id: string): SourceAnalysisInquiryFamilyDescriptor | undefined {
-    const normalizedId = normalizePhrase(id);
-    return this.#descriptors.find((descriptor) => normalizePhrase(descriptor.id) === normalizedId);
+    const normalizedId = id.trim().toLowerCase();
+    return this.#descriptors.find((descriptor) => descriptor.id.trim().toLowerCase() === normalizedId);
+  }
+
+  isAmbiguousTie(
+    left: SourceAnalysisInquiryMatch,
+    right: SourceAnalysisInquiryMatch,
+  ): boolean {
+    return compareInquiryMatches(left, right, this.#selectionPolicy) === 0;
   }
 
   discover(input: DiscoverSourceAnalysisInquiriesInput = {}): readonly SourceAnalysisInquiryMatch[] {
+    if (!input.question && !input.focusKind && !input.familyId) {
+      return limitMatches(
+        this.#descriptors
+          .map((descriptor) => descriptor.emptyMatch(input.includeExamples))
+          .sort((left, right) => left.inquiry.id.localeCompare(right.inquiry.id)),
+        input.topK,
+      );
+    }
+
+    const context = createSourceAnalysisIngressContext({
+      question: input.question,
+      familyId: input.familyId,
+      focusKind: input.focusKind,
+    });
     const matches = this.#descriptors
-      .map((descriptor) => descriptor.match(input))
+      .map((descriptor) => descriptor.matchContext(context, input.includeExamples))
       .filter((match): match is SourceAnalysisInquiryMatch => Boolean(match))
-      .sort(compareInquiryMatches);
+      .sort((left, right) =>
+        compareInquiryMatches(left, right, this.#selectionPolicy)
+        || left.inquiry.id.localeCompare(right.inquiry.id),
+      );
     return limitMatches(matches, input.topK);
   }
 
@@ -466,12 +438,22 @@ function inquiryExample(
   };
 }
 
+const DEFAULT_SOURCE_ANALYSIS_INQUIRY_SELECTION_POLICY: SourceAnalysisIngressSelectionPolicy<
+  SourceAnalysisInquiryMatchReasonKind
+> = {
+  reasonKindOrder: ['family', 'alias', 'focus', 'route', 'command', 'noun', 'verb', 'confusion'],
+};
+
 function compareInquiryMatches(
   left: SourceAnalysisInquiryMatch,
   right: SourceAnalysisInquiryMatch,
+  policy: SourceAnalysisIngressSelectionPolicy<SourceAnalysisInquiryMatchReasonKind>,
 ): number {
-  return compareMatchKey(matchKey(right), matchKey(left))
-    || left.inquiry.id.localeCompare(right.inquiry.id);
+  return compareSourceAnalysisIngressEvaluations(
+    evaluationForMatch(right),
+    evaluationForMatch(left),
+    policy,
+  );
 }
 
 function limitMatches(
@@ -484,27 +466,116 @@ function limitMatches(
   return matches.slice(0, topK);
 }
 
-function matchKey(match: SourceAnalysisInquiryMatch): readonly [number, number, number, number, number, number, number] {
+function createInquiryMatchRules(
+  definition: SourceAnalysisInquiryFamilyDefinition,
+): readonly SourceAnalysisIngressRuleSpec<SourceAnalysisInquiryMatchReasonKind>[] {
+  const focusCaptureKinds = definition.focusKinds.flatMap((focusKind) => captureKindsForFocusKind(focusKind));
   return [
-    match.exactFamily ? 1 : 0,
-    match.aliasMatches.length,
-    match.nounMatches.length,
-    match.verbMatches.length,
-    match.routeMatches.length,
-    match.commandMatches.length,
-    match.focusMatched ? 1 : 0,
+    createSourceAnalysisExactRule(
+      'exact-family',
+      'family',
+      'familyId',
+      definition.id,
+      `Exact inquiry-family match for "${definition.id}".`,
+    ),
+    createSourceAnalysisPhraseRule(
+      'alias-phrases',
+      'alias',
+      [definition.label, definition.id, ...definition.aliases],
+      'Question mentions a declared inquiry alias.',
+    ),
+    createSourceAnalysisTokenRule(
+      'noun-tokens',
+      'noun',
+      'question',
+      definition.nouns,
+      'Question uses a declared inquiry noun.',
+    ),
+    createSourceAnalysisTokenRule(
+      'verb-tokens',
+      'verb',
+      'question',
+      definition.verbs,
+      'Question uses a declared inquiry verb.',
+    ),
+    createSourceAnalysisTokenRule(
+      'route-tokens',
+      'route',
+      'question',
+      definition.questionRoutes,
+      'Question suggests a declared question route.',
+    ),
+    createSourceAnalysisTokenRule(
+      'command-tokens',
+      'command',
+      'question',
+      definition.primaryCommands,
+      'Question lines up with a declared kernel command.',
+      'supporting',
+    ),
+    createSourceAnalysisTokenRule(
+      'family-tokens',
+      'family',
+      'familyId',
+      tokenize(definition.id),
+      'Family hint overlaps declared inquiry-family tokens.',
+      'supporting',
+    ),
+    createSourceAnalysisFocusRule(
+      'focus-kind',
+      'focus',
+      definition.focusKinds,
+      'The provided focus kind is accepted by this inquiry family.',
+    ),
+    ...(focusCaptureKinds.length > 0
+      ? [createSourceAnalysisCaptureRule(
+        'focus-capture',
+        'focus',
+        focusCaptureKinds,
+        'The question contains a recognized focus capture compatible with this inquiry family.',
+      )]
+      : []),
+    ...definition.examples.map((example, index) =>
+      createSourceAnalysisPhraseRule(
+        `example-${index}`,
+        'command',
+        [example.question],
+        'Question overlaps a declared inquiry example.',
+        'supporting',
+      )),
+    ...definition.commonConfusions.map((confusion, index) =>
+      createSourceAnalysisPhraseRule(
+        `confusion-${index}`,
+        'confusion',
+        confusion.terms,
+        `Question also overlaps a common confusion: ${confusion.detail}`,
+        'negative',
+      )),
   ];
 }
 
-function compareMatchKey(
-  left: readonly number[],
-  right: readonly number[],
-): number {
-  for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
-    const difference = (left[index] ?? 0) - (right[index] ?? 0);
-    if (difference !== 0) {
-      return difference;
-    }
-  }
-  return 0;
+function evaluationForMatch(
+  match: SourceAnalysisInquiryMatch,
+) {
+  return rehydrateSourceAnalysisIngressEvaluation(match.traces, match.requiredSatisfied);
+}
+
+function matchedTerms(
+  traces: readonly SourceAnalysisIngressMatchTrace<SourceAnalysisInquiryMatchReasonKind>[],
+  reasonKind: SourceAnalysisInquiryMatchReasonKind,
+): readonly string[] {
+  return traces
+    .filter((trace) => trace.matched && trace.reasonKind === reasonKind && trace.term !== undefined)
+    .map((trace) => trace.term!)
+    .filter((term, index, values) => values.indexOf(term) === index);
+}
+
+function toInquiryMatchReason(
+  trace: SourceAnalysisIngressMatchTrace<SourceAnalysisInquiryMatchReasonKind>,
+): SourceAnalysisInquiryMatchReason {
+  return {
+    kind: trace.reasonKind,
+    detail: trace.capture ? `${trace.detail} ${trace.capture.detail}` : trace.detail,
+    ...(trace.term ? { term: trace.term } : {}),
+  };
 }

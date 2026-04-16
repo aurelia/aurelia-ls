@@ -25,7 +25,10 @@ import {
   deriveFocusHints,
   extractRepoPath,
 } from './ingress-hints.js';
-import { matchTokens } from './ingress-language.js';
+import {
+  createSourceAnalysisNormalizedText,
+  tokenMatches,
+} from './ingress-normalization.js';
 import type {
   SourceAnalysisClosureBasis,
   SourceAnalysisContinuation,
@@ -217,7 +220,7 @@ export class SourceAnalysisInquiryIngress {
     });
     const top = matches[0];
     const second = matches[1];
-    const ambiguous = top && second ? compareMatchesForAmbiguity(top, second) : false;
+    const ambiguous = top && second ? this.#inquiries.isAmbiguousTie(top, second) : false;
 
     if (!top) {
       return {
@@ -304,6 +307,7 @@ export class SourceAnalysisInquiryIngress {
     });
     const relatedRefs = inquiries.map((inquiry) => inquiryRef(inquiry.id, inquiry.label, inquiry.summary));
     const topInquiry = inquiries[0];
+    const topMatch = matches[0];
     const document = createSourceAnalysisAnswerDocument<SourceAnalysisInquiryRef>([
       {
         kind: 'paragraph',
@@ -329,6 +333,12 @@ export class SourceAnalysisInquiryIngress {
         title: 'Inquiry families',
         items: inquiries.map((inquiry) => `${inquiry.id}: ${inquiry.summary}`),
       },
+      ...(topMatch && topMatch.reasons.length > 0 ? [{
+        kind: 'bullet-list' as const,
+        importance: 'supporting' as const,
+        title: 'Why the top inquiry fits',
+        items: topMatch.reasons.slice(0, 6).map((reason) => reason.detail),
+      }] : []),
       ...(diagnostics.uncoveredCommands.length > 0 ? [{
         kind: 'bullet-list' as const,
         importance: 'detail' as const,
@@ -975,21 +985,8 @@ function describeSnapshotMaintenanceSummary(command: string): string {
 }
 
 function questionSuggests(question: string, terms: readonly string[]): boolean {
-  return matchTokens(question, terms).length > 0
+  return tokenMatches(createSourceAnalysisNormalizedText(question), terms).length > 0
     || terms.some((term) => question.toLowerCase().includes(term.toLowerCase()));
-}
-
-function compareMatchesForAmbiguity(
-  left: SourceAnalysisInquiryMatch,
-  right: SourceAnalysisInquiryMatch,
-): boolean {
-  return left.exactFamily === right.exactFamily
-    && left.aliasMatches.length === right.aliasMatches.length
-    && left.nounMatches.length === right.nounMatches.length
-    && left.verbMatches.length === right.verbMatches.length
-    && left.routeMatches.length === right.routeMatches.length
-    && left.commandMatches.length === right.commandMatches.length
-    && left.focusMatched === right.focusMatched;
 }
 
 function describePlanStatus(plan: SourceAnalysisResolvedInquiryPlan): string {

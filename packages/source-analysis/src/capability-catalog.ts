@@ -4,12 +4,25 @@ import type {
   SourceAnalysisReadMode,
 } from './query-model.js';
 import {
-  intersect,
-  matchPhrases,
-  matchTokens,
-  normalizePhrase,
-  tokenize,
-} from './ingress-language.js';
+  captureKindsForFocusKind,
+  type SourceAnalysisIngressCapture,
+} from './ingress-recognizers.js';
+import {
+  compareSourceAnalysisIngressEvaluations,
+  createSourceAnalysisCaptureRule,
+  createSourceAnalysisExactRule,
+  createSourceAnalysisFocusRule,
+  createSourceAnalysisIngressContext,
+  createSourceAnalysisPhraseRule,
+  createSourceAnalysisTokenRule,
+  evaluateSourceAnalysisIngressRules,
+  rehydrateSourceAnalysisIngressEvaluation,
+  type SourceAnalysisIngressContext,
+  type SourceAnalysisIngressMatchTrace,
+  type SourceAnalysisIngressRuleSpec,
+  type SourceAnalysisIngressSelectionPolicy,
+} from './ingress-matcher.js';
+import { tokenize } from './ingress-normalization.js';
 
 export const SOURCE_ANALYSIS_CAPABILITY_FAMILIES = [
   'ingress',
@@ -43,6 +56,7 @@ export const SOURCE_ANALYSIS_CAPABILITY_MATCH_REASON_KINDS = [
   'focus',
   'route',
   'example',
+  'confusion',
 ] as const;
 
 export type SourceAnalysisCapabilityFamily =
@@ -126,11 +140,15 @@ export interface SourceAnalysisCapabilityMatchReason {
 export interface SourceAnalysisCapabilityMatch {
   readonly capability: SourceAnalysisCapabilityView;
   readonly reasons: readonly SourceAnalysisCapabilityMatchReason[];
+  readonly traces: readonly SourceAnalysisIngressMatchTrace<SourceAnalysisCapabilityMatchReasonKind>[];
+  readonly captures: readonly SourceAnalysisIngressCapture[];
+  readonly requiredSatisfied: boolean;
   readonly exactCommand: boolean;
   readonly aliasMatches: readonly string[];
   readonly nounMatches: readonly string[];
   readonly verbMatches: readonly string[];
   readonly routeMatches: readonly string[];
+  readonly confusionMatches: readonly string[];
   readonly focusMatched: boolean;
 }
 
@@ -144,11 +162,11 @@ export interface DiscoverSourceAnalysisCapabilitiesInput {
 
 export class SourceAnalysisCapabilityDescriptor {
   readonly #definition: SourceAnalysisCapabilityDefinition;
-  readonly #commandTokens: readonly string[];
+  readonly #rules: readonly SourceAnalysisIngressRuleSpec<SourceAnalysisCapabilityMatchReasonKind>[];
 
   constructor(definition: SourceAnalysisCapabilityDefinition) {
     this.#definition = definition;
-    this.#commandTokens = tokenize(definition.command);
+    this.#rules = createCapabilityMatchRules(definition);
   }
 
   get id(): string {
@@ -212,105 +230,50 @@ export class SourceAnalysisCapabilityDescriptor {
     };
   }
 
-  match(input: {
-    readonly question?: string;
-    readonly focusKind?: SourceAnalysisFocusKind;
-    readonly command?: string;
-    readonly includeExamples?: boolean;
-  }): SourceAnalysisCapabilityMatch | null {
-    if (!input.question && !input.command && !input.focusKind) {
-      return {
-        capability: this.toView(input.includeExamples),
-        reasons: [],
-        exactCommand: false,
-        aliasMatches: [],
-        nounMatches: [],
-        verbMatches: [],
-        routeMatches: [],
-        focusMatched: false,
-      };
-    }
+  emptyMatch(includeExamples = false): SourceAnalysisCapabilityMatch {
+    return {
+      capability: this.toView(includeExamples),
+      reasons: [],
+      traces: [],
+      captures: [],
+      requiredSatisfied: true,
+      exactCommand: false,
+      aliasMatches: [],
+      nounMatches: [],
+      verbMatches: [],
+      routeMatches: [],
+      confusionMatches: [],
+      focusMatched: false,
+    };
+  }
 
-    const reasons: SourceAnalysisCapabilityMatchReason[] = [];
-    const aliasMatches = matchPhrases(input.question, [
-      this.#definition.label,
-      this.#definition.command,
-      ...this.#definition.aliases,
-    ]);
-    const nounMatches = matchTokens(input.question, this.#definition.nouns);
-    const verbMatches = matchTokens(input.question, this.#definition.verbs);
-    const routeMatches = matchTokens(input.question, this.#definition.questionRoutes);
-    const exactCommand = normalizePhrase(input.command) === normalizePhrase(this.#definition.command);
-    const focusMatched = input.focusKind !== undefined && this.#definition.focusKinds.includes(input.focusKind);
-    const commandTokenOverlap = input.command
-      ? intersect(tokenize(input.command), this.#commandTokens)
-      : [];
-
-    if (exactCommand) {
-      reasons.push({
-        kind: 'command',
-        detail: `Exact command match for "${this.#definition.command}".`,
-        term: this.#definition.command,
-      });
-    } else if (commandTokenOverlap.length > 0) {
-      for (const token of commandTokenOverlap) {
-        reasons.push({
-          kind: 'command',
-          detail: `Command hint overlaps on "${token}".`,
-          term: token,
-        });
-      }
-    }
-
-    for (const alias of aliasMatches) {
-      reasons.push({
-        kind: 'alias',
-        detail: `Question mentions "${alias}".`,
-        term: alias,
-      });
-    }
-    for (const noun of nounMatches) {
-      reasons.push({
-        kind: 'noun',
-        detail: `Question contains the capability noun "${noun}".`,
-        term: noun,
-      });
-    }
-    for (const verb of verbMatches) {
-      reasons.push({
-        kind: 'verb',
-        detail: `Question contains the capability verb "${verb}".`,
-        term: verb,
-      });
-    }
-    for (const route of routeMatches) {
-      reasons.push({
-        kind: 'route',
-        detail: `Question aligns with the "${route}" route.`,
-        term: route,
-      });
-    }
-    if (focusMatched) {
-      reasons.push({
-        kind: 'focus',
-        detail: `The provided focus kind "${input.focusKind}" is supported.`,
-        term: input.focusKind,
-      });
-    }
-
-    if (reasons.length === 0) {
+  matchContext(
+    context: SourceAnalysisIngressContext,
+    includeExamples = false,
+  ): SourceAnalysisCapabilityMatch | null {
+    const evaluation = evaluateSourceAnalysisIngressRules(context, this.#rules);
+    if (!evaluation.matched) {
       return null;
     }
 
+    const traces = evaluation.traces;
+    const matchedTraces = evaluation.matchedTraces;
+
     return {
-      capability: this.toView(input.includeExamples),
-      reasons,
-      exactCommand,
-      aliasMatches,
-      nounMatches,
-      verbMatches,
-      routeMatches,
-      focusMatched,
+      capability: this.toView(includeExamples),
+      reasons: matchedTraces.map(toCapabilityMatchReason),
+      traces,
+      captures: matchedTraces
+        .map((trace) => trace.capture)
+        .filter((capture): capture is SourceAnalysisIngressCapture => capture !== undefined),
+      requiredSatisfied: evaluation.requiredSatisfied,
+      exactCommand: matchedTraces.some((trace) => trace.ruleId === 'exact-command'),
+      aliasMatches: matchedTerms(matchedTraces, 'alias'),
+      nounMatches: matchedTerms(matchedTraces, 'noun'),
+      verbMatches: matchedTerms(matchedTraces, 'verb'),
+      routeMatches: matchedTerms(matchedTraces, 'route'),
+      confusionMatches: matchedTerms(matchedTraces, 'confusion'),
+      focusMatched: matchedTraces.some((trace) => trace.reasonKind === 'focus' && trace.importance !== 'negative'),
     };
   }
 }
@@ -318,8 +281,13 @@ export class SourceAnalysisCapabilityDescriptor {
 export class SourceAnalysisCapabilityCatalog {
   readonly #descriptors: readonly SourceAnalysisCapabilityDescriptor[];
   readonly #byCommand = new Map<string, SourceAnalysisCapabilityDescriptor>();
+  readonly #selectionPolicy: SourceAnalysisIngressSelectionPolicy<SourceAnalysisCapabilityMatchReasonKind>;
 
-  constructor(definitions: readonly SourceAnalysisCapabilityDefinition[]) {
+  constructor(
+    definitions: readonly SourceAnalysisCapabilityDefinition[],
+    selectionPolicy: SourceAnalysisIngressSelectionPolicy<SourceAnalysisCapabilityMatchReasonKind> = DEFAULT_SOURCE_ANALYSIS_CAPABILITY_SELECTION_POLICY,
+  ) {
+    this.#selectionPolicy = selectionPolicy;
     this.#descriptors = definitions.map((definition) => new SourceAnalysisCapabilityDescriptor(definition));
     for (const descriptor of this.#descriptors) {
       this.#byCommand.set(descriptor.command, descriptor);
@@ -336,16 +304,35 @@ export class SourceAnalysisCapabilityCatalog {
     return this.#byCommand.get(command);
   }
 
-  discover(input: DiscoverSourceAnalysisCapabilitiesInput = {}): readonly SourceAnalysisCapabilityMatch[] {
-    const matches = this.#descriptors
-      .map((descriptor) => descriptor.match(input))
-      .filter((match): match is SourceAnalysisCapabilityMatch => match !== null);
+  isAmbiguousTie(
+    left: SourceAnalysisCapabilityMatch,
+    right: SourceAnalysisCapabilityMatch,
+  ): boolean {
+    return compareCapabilityMatches(left, right, this.#selectionPolicy) === 0;
+  }
 
+  discover(input: DiscoverSourceAnalysisCapabilitiesInput = {}): readonly SourceAnalysisCapabilityMatch[] {
     if (!input.question && !input.focusKind && !input.command) {
-      return limitMatches(matches, input.topK);
+      return limitMatches(
+        this.#descriptors
+          .map((descriptor) => descriptor.emptyMatch(input.includeExamples))
+          .sort((left, right) => left.capability.command.localeCompare(right.capability.command)),
+        input.topK,
+      );
     }
 
-    const sorted = [...matches].sort(compareCapabilityMatches);
+    const context = createSourceAnalysisIngressContext({
+      question: input.question,
+      command: input.command,
+      focusKind: input.focusKind,
+    });
+    const matches = this.#descriptors
+      .map((descriptor) => descriptor.matchContext(context, input.includeExamples))
+      .filter((match): match is SourceAnalysisCapabilityMatch => match !== null);
+    const sorted = [...matches].sort((left, right) =>
+      compareCapabilityMatches(left, right, this.#selectionPolicy)
+      || left.capability.command.localeCompare(right.capability.command),
+    );
     return limitMatches(sorted, input.topK);
   }
 }
@@ -961,12 +948,22 @@ function example(
   };
 }
 
+const DEFAULT_SOURCE_ANALYSIS_CAPABILITY_SELECTION_POLICY: SourceAnalysisIngressSelectionPolicy<
+  SourceAnalysisCapabilityMatchReasonKind
+> = {
+  reasonKindOrder: ['command', 'alias', 'focus', 'route', 'noun', 'verb', 'example', 'confusion'],
+};
+
 function compareCapabilityMatches(
   left: SourceAnalysisCapabilityMatch,
   right: SourceAnalysisCapabilityMatch,
+  policy: SourceAnalysisIngressSelectionPolicy<SourceAnalysisCapabilityMatchReasonKind>,
 ): number {
-  return compareMatchKey(matchKey(right), matchKey(left))
-    || left.capability.command.localeCompare(right.capability.command);
+  return compareSourceAnalysisIngressEvaluations(
+    evaluationForMatch(right),
+    evaluationForMatch(left),
+    policy,
+  );
 }
 
 function limitMatches(
@@ -979,26 +976,108 @@ function limitMatches(
   return matches.slice(0, topK);
 }
 
-function matchKey(match: SourceAnalysisCapabilityMatch): readonly [number, number, number, number, number, number] {
+function createCapabilityMatchRules(
+  definition: SourceAnalysisCapabilityDefinition,
+): readonly SourceAnalysisIngressRuleSpec<SourceAnalysisCapabilityMatchReasonKind>[] {
+  const focusCaptureKinds = definition.focusKinds.flatMap((focusKind) => captureKindsForFocusKind(focusKind));
   return [
-    match.exactCommand ? 1 : 0,
-    match.aliasMatches.length,
-    match.nounMatches.length,
-    match.verbMatches.length,
-    match.routeMatches.length,
-    match.focusMatched ? 1 : 0,
+    createSourceAnalysisExactRule(
+      'exact-command',
+      'command',
+      'command',
+      definition.command,
+      `Exact command match for "${definition.command}".`,
+    ),
+    createSourceAnalysisPhraseRule(
+      'alias-phrases',
+      'alias',
+      [definition.label, definition.command, ...definition.aliases],
+      'Question mentions a declared capability alias.',
+    ),
+    createSourceAnalysisTokenRule(
+      'noun-tokens',
+      'noun',
+      'question',
+      definition.nouns,
+      'Question contains a declared capability noun.',
+    ),
+    createSourceAnalysisTokenRule(
+      'verb-tokens',
+      'verb',
+      'question',
+      definition.verbs,
+      'Question contains a declared capability verb.',
+    ),
+    createSourceAnalysisTokenRule(
+      'route-tokens',
+      'route',
+      'question',
+      definition.questionRoutes,
+      'Question aligns with a declared question route.',
+    ),
+    createSourceAnalysisTokenRule(
+      'command-tokens',
+      'command',
+      'command',
+      tokenize(definition.command),
+      'Command hint overlaps declared command tokens.',
+      'supporting',
+    ),
+    createSourceAnalysisFocusRule(
+      'focus-kind',
+      'focus',
+      definition.focusKinds,
+      'The provided focus kind is supported by this capability.',
+    ),
+    ...(focusCaptureKinds.length > 0
+      ? [createSourceAnalysisCaptureRule(
+        'focus-capture',
+        'focus',
+        focusCaptureKinds,
+        'The question contains a recognized focus capture compatible with this capability.',
+      )]
+      : []),
+    ...definition.examples.map((example, index) =>
+      createSourceAnalysisPhraseRule(
+        `example-${index}`,
+        'example',
+        [example.question],
+        'Question overlaps a declared capability example.',
+        'supporting',
+      )),
+    ...definition.commonConfusions.map((confusion, index) =>
+      createSourceAnalysisPhraseRule(
+        `confusion-${index}`,
+        'confusion',
+        confusion.terms,
+        `Question also overlaps a common confusion: ${confusion.detail}`,
+        'negative',
+      )),
   ];
 }
 
-function compareMatchKey(
-  left: readonly number[],
-  right: readonly number[],
-): number {
-  for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
-    const difference = (left[index] ?? 0) - (right[index] ?? 0);
-    if (difference !== 0) {
-      return difference;
-    }
-  }
-  return 0;
+function evaluationForMatch(
+  match: SourceAnalysisCapabilityMatch,
+) {
+  return rehydrateSourceAnalysisIngressEvaluation(match.traces, match.requiredSatisfied);
+}
+
+function matchedTerms(
+  traces: readonly SourceAnalysisIngressMatchTrace<SourceAnalysisCapabilityMatchReasonKind>[],
+  reasonKind: SourceAnalysisCapabilityMatchReasonKind,
+): readonly string[] {
+  return traces
+    .filter((trace) => trace.matched && trace.reasonKind === reasonKind && trace.term !== undefined)
+    .map((trace) => trace.term!)
+    .filter((term, index, values) => values.indexOf(term) === index);
+}
+
+function toCapabilityMatchReason(
+  trace: SourceAnalysisIngressMatchTrace<SourceAnalysisCapabilityMatchReasonKind>,
+): SourceAnalysisCapabilityMatchReason {
+  return {
+    kind: trace.reasonKind,
+    detail: trace.capture ? `${trace.detail} ${trace.capture.detail}` : trace.detail,
+    ...(trace.term ? { term: trace.term } : {}),
+  };
 }

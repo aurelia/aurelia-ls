@@ -12,6 +12,14 @@ describe('SourceAnalysisCapabilityIngress', () => {
 
     expect(answer.outcome.tag).toBe('hit');
     expect(answer.outcome.value?.capabilities[0]?.command).toBe('query.route.witness');
+
+    const mixed = ingress.createDiscoveryAnswer({
+      question: 'Orient me to @aurelia-ls/source-analysis and show a reachable proof.',
+    });
+
+    expect(mixed.outcome.value?.matches.find((match) =>
+      match.capability.command === 'query.navigate',
+    )?.confusionMatches).toContain('reachable');
   });
 
   it('plans a package audit invocation from a natural-language question', () => {

@@ -201,6 +201,7 @@ export class SourceAnalysisCapabilityIngress {
       ? 'Source-analysis capability matches'
       : 'Source-analysis capability catalog';
     const topCapability = capabilities[0];
+    const topMatch = matches[0];
     const summaryLine = options.question
       ? (capabilities.length > 0
         ? `The best capability matches for "${options.question}" start with ${topCapability?.command ?? 'describe.capabilities'}.`
@@ -227,6 +228,12 @@ export class SourceAnalysisCapabilityIngress {
         title: 'Capability matches',
         items: capabilities.map((capability) => `${capability.command}: ${capability.summary}`),
       },
+      ...(topMatch && topMatch.reasons.length > 0 ? [{
+        kind: 'bullet-list' as const,
+        importance: 'supporting' as const,
+        title: 'Why the top match fits',
+        items: topMatch.reasons.slice(0, 6).map((reason) => reason.detail),
+      }] : []),
       {
         kind: 'ref-list',
         importance: 'detail',
@@ -302,7 +309,7 @@ export class SourceAnalysisCapabilityIngress {
     const hints = deriveFocusHints(options.question, options.focusKind, options.focusValue);
     const top = matches[0];
     const second = matches[1];
-    const ambiguous = top && second ? compareMatchesForAmbiguity(top, second) : false;
+    const ambiguous = top && second ? this.#catalog.isAmbiguousTie(top, second) : false;
 
     if (!top) {
       return this.#createNoMatchPlanAnswer(query, policy, options.question);
@@ -1014,18 +1021,6 @@ function determineRepairStatus(
     return builtStatus === 'ready' ? 'ready' : 'needs-input';
   }
   return builtStatus === 'ready' ? 'repaired' : 'needs-input';
-}
-
-function compareMatchesForAmbiguity(
-  left: SourceAnalysisCapabilityMatch,
-  right: SourceAnalysisCapabilityMatch,
-): boolean {
-  return left.exactCommand === right.exactCommand
-    && left.aliasMatches.length === right.aliasMatches.length
-    && left.nounMatches.length === right.nounMatches.length
-    && left.verbMatches.length === right.verbMatches.length
-    && left.routeMatches.length === right.routeMatches.length
-    && left.focusMatched === right.focusMatched;
 }
 
 function repoFocusRef(value: string): SourceAnalysisFocusRef {

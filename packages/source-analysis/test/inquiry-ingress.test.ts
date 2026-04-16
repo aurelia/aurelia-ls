@@ -45,4 +45,21 @@ describe('SourceAnalysisInquiryIngress', () => {
     expect(answer.outcome.value?.status).toBe('ready');
     expect(answer.outcome.value?.primaryStep?.command).toBe('query.deps.summary');
   });
+
+  it('keeps sentence-leading words out of type captures when routing why-alive questions', () => {
+    const ingress = createSourceAnalysisInquiryIngress();
+
+    const answer = ingress.createDiscoveryAnswer({
+      question: 'Why is packages/source-analysis/src/refresh.ts alive?',
+    });
+
+    expect(answer.outcome.value?.inquiries[0]?.id).toBe('route-explanation');
+    expect(answer.outcome.value?.matches[0]?.captures.some((capture) => capture.value === 'Why')).toBe(false);
+    expect(answer.outcome.value?.matches[0]?.captures.some((capture) =>
+      capture.kind === 'file-path' && capture.value === 'packages/source-analysis/src/refresh.ts',
+    )).toBe(true);
+    expect(answer.outcome.value?.matches.find((match) =>
+      match.inquiry.id === 'workspace-orientation',
+    )?.confusionMatches).toContain('alive');
+  });
 });
