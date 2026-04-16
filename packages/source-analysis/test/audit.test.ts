@@ -67,4 +67,20 @@ describe('Source-analysis package audit', () => {
       ref.value === 'packages/source-analysis/src/semantic-runtime.ts',
     )).toBe(true);
   });
+
+  it('surfaces public surface files that still have no modeled exercise route', () => {
+    const snapshots = loadSnapshotsForAudit();
+    const answer = createSourceAnalysisAuditAnswer({
+      focusRef: { kind: 'package', value: '@aurelia-ls/source-analysis' },
+      questionRoute: 'inventory',
+    }, snapshots);
+
+    const publicUnexercisedFinding = answer.outcome.value?.findings.find((finding) =>
+      finding.code === 'public-surface-unexercised',
+    );
+    expect(publicUnexercisedFinding).toBeTruthy();
+    expect(publicUnexercisedFinding?.relatedRefs.some((ref) =>
+      ref.value === 'packages/source-analysis/src/host/runtime.ts',
+    )).toBe(true);
+  });
 });

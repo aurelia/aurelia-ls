@@ -257,6 +257,8 @@ function collectPackageAuditFindings(
   const findings = [
     collectUncoveredFilesFinding(context),
     collectUnresolvedImportsFinding(context),
+    collectExerciseOnlyFilesFinding(context),
+    collectPublicSurfaceUnexercisedFinding(context),
     ...collectDormantFileFindings(context),
     collectUnanchoredCandidateRootsFinding(context),
   ].filter((finding): finding is SourceAnalysisAuditFinding => Boolean(finding));
@@ -385,6 +387,74 @@ function collectDormantFileFindings(
   });
 }
 
+function collectExerciseOnlyFilesFinding(
+  context: PackageAuditContext,
+): SourceAnalysisAuditFinding | null {
+  const exerciseOnlyFiles = context.reachability.files
+    .filter((file) => isExerciseOnlyCandidate(context, file))
+    .sort((left, right) =>
+      scoreExerciseOnlyCandidate(right) - scoreExerciseOnlyCandidate(left)
+      || left.filePath.localeCompare(right.filePath),
+    );
+
+  if (exerciseOnlyFiles.length === 0) {
+    return null;
+  }
+
+  const primary = exerciseOnlyFiles[0]!;
+  return {
+    code: 'exercise-only-files',
+    kind: 'surface-drift',
+    severity: 'warning',
+    confidence: 'qualified',
+    title: 'Some source files are only justified by exercise routes',
+    summary: `${exerciseOnlyFiles.length} source file${pluralize(exerciseOnlyFiles.length)} under ${context.pkg.package_name} ${exerciseOnlyFiles.length === 1 ? 'is' : 'are'} currently reachable only from exercise roots and ${exerciseOnlyFiles.length === 1 ? 'has' : 'have'} no modeled production route. That usually means the implementation is test-only, scaffold-only, or still missing its intended product integration.`,
+    primaryRef: fileRef(primary.filePath, 'exercise-only source file'),
+    relatedRefs: exerciseOnlyFiles.slice(0, 8).map((file) => fileRef(file.filePath, 'exercise-only source file')),
+    evidence: exerciseOnlyFiles.slice(0, 6).flatMap((file) => {
+      const witness = file.routeWitnesses.find((candidate) => candidate.routeClass === 'exercise');
+      return [
+        `${file.filePath}: exerciseRoots=${file.exerciseRootIds.length}, declarations=${file.declarationCount}, exports=${file.exportCount}`,
+        ...(witness ? [`witness: ${witness.summary}`] : []),
+      ];
+    }),
+  };
+}
+
+function collectPublicSurfaceUnexercisedFinding(
+  context: PackageAuditContext,
+): SourceAnalysisAuditFinding | null {
+  const unexercisedPublicFiles = context.reachability.files
+    .filter((file) => isPublicSurfaceUnexercisedCandidate(context, file))
+    .sort((left, right) =>
+      scorePublicSurfaceCandidate(right) - scorePublicSurfaceCandidate(left)
+      || left.filePath.localeCompare(right.filePath),
+    );
+
+  if (unexercisedPublicFiles.length === 0) {
+    return null;
+  }
+
+  const primary = unexercisedPublicFiles[0]!;
+  return {
+    code: 'public-surface-unexercised',
+    kind: 'surface-drift',
+    severity: 'info',
+    confidence: 'qualified',
+    title: 'Some public surface files have no modeled exercise route',
+    summary: `${unexercisedPublicFiles.length} public surface file${pluralize(unexercisedPublicFiles.length)} under ${context.pkg.package_name} ${unexercisedPublicFiles.length === 1 ? 'has' : 'have'} production reachability but no modeled exercise route. That leaves the public contract structurally present but unexercised by the current test/runtime witness model.`,
+    primaryRef: fileRef(primary.filePath, 'public surface without exercise route'),
+    relatedRefs: unexercisedPublicFiles.slice(0, 8).map((file) => fileRef(file.filePath, 'public surface without exercise route')),
+    evidence: unexercisedPublicFiles.slice(0, 6).flatMap((file) => {
+      const productionWitness = file.routeWitnesses.find((candidate) => candidate.routeClass === 'production');
+      return [
+        `${file.filePath}: productionRoots=${file.productionRootIds.length}, groundedProductionRoots=${file.groundedProductionRootIds.length}, declarations=${file.declarationCount}, exports=${file.exportCount}`,
+        ...(productionWitness ? [`production witness: ${productionWitness.summary}`] : []),
+      ];
+    }),
+  };
+}
+
 function collectUnanchoredCandidateRootsFinding(
   context: PackageAuditContext,
 ): SourceAnalysisAuditFinding | null {
@@ -437,11 +507,51 @@ function isDormantCandidate(
   return true;
 }
 
+function isExerciseOnlyCandidate(
+  context: PackageAuditContext,
+  file: SourceAnalysisPackageFileReachability,
+): boolean {
+  const sourcePrefix = context.pkg.package_dir.length > 0
+    ? `${context.pkg.package_dir}/src/`
+    : 'src/';
+  if (!file.filePath.startsWith(sourcePrefix)) return false;
+  if (file.publicSurface) return false;
+  if (file.productionRootIds.length > 0) return false;
+  if (file.exerciseRootIds.length === 0) return false;
+  if (file.declarationCount === 0 && file.exportCount === 0) return false;
+  return true;
+}
+
+function isPublicSurfaceUnexercisedCandidate(
+  context: PackageAuditContext,
+  file: SourceAnalysisPackageFileReachability,
+): boolean {
+  if (!file.publicSurface) return false;
+  if (file.exerciseRootIds.length > 0) return false;
+  if (file.productionRootIds.length === 0) return false;
+  if (file.filePath === context.pkg.analysis_entrypoint) return false;
+  return true;
+}
+
 function scoreCandidateEntry(file: SourceAnalysisPackageFileReachability): number {
   return file.outboundFiles.length * 10
     + file.declarationCount * 5
     + file.exportCount * 3
     + (file.publicSurface ? 1 : 0);
+}
+
+function scoreExerciseOnlyCandidate(file: SourceAnalysisPackageFileReachability): number {
+  return file.exerciseRootIds.length * 20
+    + file.declarationCount * 5
+    + file.exportCount * 3
+    + file.outboundFiles.length;
+}
+
+function scorePublicSurfaceCandidate(file: SourceAnalysisPackageFileReachability): number {
+  return file.productionRootIds.length * 20
+    + file.groundedProductionRootIds.length * 10
+    + file.declarationCount * 5
+    + file.exportCount * 3;
 }
 
 function trustForFindings(

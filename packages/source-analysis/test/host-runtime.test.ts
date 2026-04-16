@@ -156,6 +156,11 @@ describe('SourceAnalysisHostRuntime', () => {
     expect(candidateRootsFinding).toBeTruthy();
     expect(candidateRootsFinding?.relatedRefs.some((ref) => ref.value === 'src/tool.ts')).toBe(true);
     expect(candidateRootsFinding?.relatedRefs.some((ref) => ref.value === 'src/cli.ts')).toBe(false);
+    const exerciseOnlyFinding = audit.result.answer.outcome.value?.findings.find((finding) =>
+      finding.code === 'exercise-only-files',
+    );
+    expect(exerciseOnlyFinding).toBeTruthy();
+    expect(exerciseOnlyFinding?.relatedRefs.some((ref) => ref.value === 'src/test-only.ts')).toBe(true);
 
     const routeWitness = runtime.execute({
       command: 'query.route.witness',
@@ -295,10 +300,16 @@ function createAuditFixtureRepo(): string {
     ].join('\n'),
   );
   writeFileSync(
+    join(repoPath, 'src', 'test-only.ts'),
+    'export interface TestOnlyShape { helper: boolean; }\n',
+  );
+  writeFileSync(
     join(repoPath, 'test', 'index.test.ts'),
     [
       "import { auditReady } from '../src/index.js';",
+      "import type { TestOnlyShape } from '../src/test-only.js';",
       'void auditReady;',
+      'type _ExerciseOnly = TestOnlyShape;',
       '',
     ].join('\n'),
   );
