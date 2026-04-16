@@ -180,6 +180,40 @@ describe('SourceAnalysisHostRuntime', () => {
       'src/index.ts',
       'src/live.ts',
     ]);
+
+    const renderedAudit = runtime.execute({
+      command: 'query.audit.package',
+      args: {
+        sessionId,
+        packageName: '@fixture/source-analysis-audit',
+        readMode: 'supporting-evidence',
+        renderStyle: 'plain-text',
+        consumer: 'machine',
+      },
+    });
+    expect(renderedAudit.result.answer.query.readMode).toBe('supporting-evidence');
+    expect(renderedAudit.result.rendered?.style).toBe('plain-text');
+    if (renderedAudit.result.rendered?.style !== 'plain-text') {
+      throw new Error('Expected plain-text render output.');
+    }
+    expect(renderedAudit.result.rendered.rendered.lines.length).toBeGreaterThan(
+      renderedAudit.result.rendered.rendered.summaryLines.length,
+    );
+
+    const renderedWitness = runtime.execute({
+      command: 'query.route.witness',
+      args: {
+        sessionId,
+        focusKind: 'file',
+        focusValue: 'src/live.ts',
+        renderStyle: 'json-document',
+      },
+    });
+    expect(renderedWitness.result.rendered?.style).toBe('json-document');
+    if (renderedWitness.result.rendered?.style !== 'json-document') {
+      throw new Error('Expected json-document render output.');
+    }
+    expect(renderedWitness.result.rendered.document.blocks.some((block) => block.kind === 'witness-list')).toBe(true);
   });
 
   it('detects fragmented answer coordination from repeated envelope builders and carriers', () => {

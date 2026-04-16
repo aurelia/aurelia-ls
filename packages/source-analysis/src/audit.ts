@@ -2,8 +2,19 @@ import { loadCurrentSourceAnalysisSnapshots, type LoadedCurrentSourceAnalysisSna
 import type { PackageExportRecord, PackageExportsSummary } from './exports/schema.js';
 import type { TypeDecl } from './typerefs/schema.js';
 import type { SourceAnalysisAnswerCard, SourceAnalysisAnswerRef } from './answer-card.js';
-import { createSourceAnalysisAnswerCard } from './answer-card.js';
+import {
+  createStructuredSourceAnalysisAnswerCard,
+} from './answer-card.js';
+import { createSourceAnalysisAnswerDocument } from './answer-document.js';
 import { createSourceAnalysisAnswerEnvelope } from './answer-envelope.js';
+import {
+  compareByPrecedence,
+  compareNumbersDescending,
+  compareStringsAscending,
+  resolveSourceAnalysisInquiryPolicy,
+  type SourceAnalysisAuditMetric,
+  type SourceAnalysisInquiryPolicy,
+} from './inquiry-policy.js';
 import type {
   SourceAnalysisClosureBasis,
   SourceAnalysisContinuation,
@@ -66,6 +77,7 @@ interface PackageAuditContext {
   readonly exportRecordsByFile: ReadonlyMap<string, readonly PackageExportRecord[]>;
   readonly reachability: SourceAnalysisPackageReachability;
   readonly coordinationSurface: SourceAnalysisPackageCoordinationSurface | null;
+  readonly policy: SourceAnalysisInquiryPolicy;
 }
 
 export function createCurrentSourceAnalysisAuditAnswer(
@@ -122,10 +134,16 @@ function buildPackageAuditAnswer(
   }
 
   const pkg = pkgMatches[0]!;
+  const policy = resolveSourceAnalysisInquiryPolicy(query, {
+    focusKind: 'package',
+    inquiryEpisode: 'inventory-and-audit-sweep',
+    readMode: defaultReadMode(query.questionRoute),
+  });
   const context = createPackageAuditContext(
     snapshots,
     pkg,
     resolveAuditRepoPath(query.worldFrame?.repoPath),
+    policy,
   );
   const findings = collectPackageAuditFindings(context);
 
@@ -159,18 +177,27 @@ function buildPackageAuditAnswer(
   const issues = issuesForFindings(findings);
   const continuations = continuationsForFindings(pkg, findings);
   const provenance = provenanceForPackageAudit(context, findings);
+  const document = createAuditDocument(summaryLines, findings, relatedRefs, {
+    blindspotCount,
+    dormantCount,
+    driftCount,
+  });
 
   return createAnswer(
     query,
     snapshots,
+    policy,
     { kind: 'package', value: pkg.package_name, label: pkg.package_name },
     tag,
-    createSourceAnalysisAnswerCard({
+    createStructuredSourceAnalysisAnswerCard({
       title: `${pkg.package_name} package audit`,
-      summaryLines,
       primaryRef: packageRef(pkg),
       relatedRefs,
-      findings,
+      document,
+      policy,
+      extra: {
+        findings,
+      },
     }),
     trust,
     closureBasis,
@@ -184,8 +211,11 @@ function createPackageAuditContext(
   snapshots: LoadedCurrentSourceAnalysisSnapshots,
   pkg: PackageExportsSummary,
   repoPath: string,
+  policy: SourceAnalysisInquiryPolicy,
 ): PackageAuditContext {
-  const reachability = createSourceAnalysisPackageReachability(snapshots, pkg);
+  const reachability = createSourceAnalysisPackageReachability(snapshots, pkg, {
+    ordering: policy.ordering,
+  });
   const packagePrefix = pkg.package_dir.length > 0 ? `${pkg.package_dir}/` : '';
   const packageFiles = new Set<string>(reachability.files.map((file) => file.filePath));
   const uncoveredFiles = snapshots.deps.uncovered_files.filter((filePath) =>
@@ -248,6 +278,7 @@ function createPackageAuditContext(
     ),
     reachability,
     coordinationSurface,
+    policy,
   };
 }
 
@@ -266,9 +297,9 @@ function collectPackageAuditFindings(
   ].filter((finding): finding is SourceAnalysisAuditFinding => Boolean(finding));
 
   return findings.sort((left, right) =>
-    severityRank(right.severity) - severityRank(left.severity)
-    || confidenceRank(right.confidence) - confidenceRank(left.confidence)
-    || left.title.localeCompare(right.title),
+    compareByPrecedence(context.policy.ordering.issueSeverity, left.severity, right.severity)
+    || compareByPrecedence(context.policy.ordering.trust, left.confidence, right.confidence)
+    || compareStringsAscending(left.title, right.title),
   );
 }
 
@@ -395,8 +426,8 @@ function collectExerciseOnlyFilesFinding(
   const exerciseOnlyFiles = context.reachability.files
     .filter((file) => isExerciseOnlyCandidate(context, file))
     .sort((left, right) =>
-      scoreExerciseOnlyCandidate(right) - scoreExerciseOnlyCandidate(left)
-      || left.filePath.localeCompare(right.filePath),
+      compareFileAuditMetrics(context.policy.auditMetricOrders.exerciseOnly, left, right)
+      || compareStringsAscending(left.filePath, right.filePath),
     );
 
   if (exerciseOnlyFiles.length === 0) {
@@ -429,8 +460,8 @@ function collectPublicSurfaceUnexercisedFinding(
   const unexercisedPublicFiles = context.reachability.files
     .filter((file) => isPublicSurfaceUnexercisedCandidate(context, file))
     .sort((left, right) =>
-      scorePublicSurfaceCandidate(right) - scorePublicSurfaceCandidate(left)
-      || left.filePath.localeCompare(right.filePath),
+      compareFileAuditMetrics(context.policy.auditMetricOrders.publicSurface, left, right)
+      || compareStringsAscending(left.filePath, right.filePath),
     );
 
   if (unexercisedPublicFiles.length === 0) {
@@ -468,8 +499,8 @@ function collectAnswerCoordinationFragmentationFinding(
   const files = surface.answerBuilderFiles
     .slice()
     .sort((left, right) =>
-      scoreCoordinationSurface(right) - scoreCoordinationSurface(left)
-      || left.filePath.localeCompare(right.filePath),
+      compareCoordinationAuditMetrics(context.policy.auditMetricOrders.coordination, left, right)
+      || compareStringsAscending(left.filePath, right.filePath),
     );
   const primary = files[0]!;
   const totalBuilders = files.reduce((count, file) => count + file.envelopeBuilderFunctions.length, 0);
@@ -503,8 +534,8 @@ function collectPresentationFragmentationFinding(
   const files = surface.presentationCarrierFiles
     .slice()
     .sort((left, right) =>
-      scorePresentationSurface(right) - scorePresentationSurface(left)
-      || left.filePath.localeCompare(right.filePath),
+      compareCoordinationAuditMetrics(context.policy.auditMetricOrders.presentation, left, right)
+      || compareStringsAscending(left.filePath, right.filePath),
     );
   const primary = files[0]!;
   const totalRefInterfaces = files.reduce((count, file) => count + file.refLikeInterfaces.length, 0);
@@ -540,8 +571,8 @@ function collectUnanchoredCandidateRootsFinding(
       Boolean(entry.file),
     )
     .sort((left, right) =>
-      scoreCandidateEntry(right.file) - scoreCandidateEntry(left.file)
-      || left.root.filePath.localeCompare(right.root.filePath),
+      compareFileAuditMetrics(context.policy.auditMetricOrders.candidateEntry, left.file, right.file)
+      || compareStringsAscending(left.root.filePath, right.root.filePath),
     );
 
   if (candidateRoots.length === 0) {
@@ -605,43 +636,136 @@ function isPublicSurfaceUnexercisedCandidate(
   return true;
 }
 
-function scoreCandidateEntry(file: SourceAnalysisPackageFileReachability): number {
-  return file.outboundFiles.length * 10
-    + file.declarationCount * 5
-    + file.exportCount * 3
-    + (file.publicSurface ? 1 : 0);
+function createAuditDocument(
+  summaryLines: readonly string[],
+  findings: readonly SourceAnalysisAuditFinding[],
+  relatedRefs: readonly SourceAnalysisAuditRef[],
+  counts: {
+    readonly blindspotCount: number;
+    readonly dormantCount: number;
+    readonly driftCount: number;
+  },
+) {
+  return createSourceAnalysisAnswerDocument<SourceAnalysisAuditRef>([
+    {
+      kind: 'paragraph',
+      importance: 'primary',
+      lines: summaryLines,
+    },
+    {
+      kind: 'key-fact-list',
+      importance: 'supporting',
+      facts: [
+        { label: 'blindspots', value: String(counts.blindspotCount) },
+        { label: 'under-integrated files', value: String(counts.dormantCount) },
+        { label: 'surface drift findings', value: String(counts.driftCount) },
+      ],
+    },
+    ...(findings.length > 0
+      ? [{
+        kind: 'finding-list' as const,
+        importance: 'primary' as const,
+        findings: findings.map((finding) => ({
+          code: finding.code,
+          title: finding.title,
+          summary: finding.summary,
+          severity: finding.severity,
+          trust: finding.confidence,
+          primaryRef: finding.primaryRef,
+          relatedRefs: finding.relatedRefs,
+          evidence: finding.evidence,
+        })),
+      }]
+      : []),
+    ...(relatedRefs.length > 0
+      ? [{
+        kind: 'ref-list' as const,
+        importance: 'detail' as const,
+        refs: relatedRefs,
+      }]
+      : []),
+  ]);
 }
 
-function scoreExerciseOnlyCandidate(file: SourceAnalysisPackageFileReachability): number {
-  return file.exerciseRootIds.length * 20
-    + file.declarationCount * 5
-    + file.exportCount * 3
-    + file.outboundFiles.length;
+function compareFileAuditMetrics(
+  metrics: readonly SourceAnalysisAuditMetric[],
+  left: SourceAnalysisPackageFileReachability,
+  right: SourceAnalysisPackageFileReachability,
+): number {
+  return compareMetricSequence(metrics, left, right, fileAuditMetricValue);
 }
 
-function scorePublicSurfaceCandidate(file: SourceAnalysisPackageFileReachability): number {
-  return file.productionRootIds.length * 20
-    + file.groundedProductionRootIds.length * 10
-    + file.declarationCount * 5
-    + file.exportCount * 3;
+function compareCoordinationAuditMetrics(
+  metrics: readonly SourceAnalysisAuditMetric[],
+  left: SourceAnalysisPackageCoordinationSurface['files'][number],
+  right: SourceAnalysisPackageCoordinationSurface['files'][number],
+): number {
+  return compareMetricSequence(metrics, left, right, coordinationAuditMetricValue);
 }
 
-function scoreCoordinationSurface(
+function compareMetricSequence<T>(
+  metrics: readonly SourceAnalysisAuditMetric[],
+  left: T,
+  right: T,
+  valueForMetric: (metric: SourceAnalysisAuditMetric, item: T) => number,
+): number {
+  for (const metric of metrics) {
+    const comparison = compareNumbersDescending(
+      valueForMetric(metric, left),
+      valueForMetric(metric, right),
+    );
+    if (comparison !== 0) {
+      return comparison;
+    }
+  }
+
+  return 0;
+}
+
+function fileAuditMetricValue(
+  metric: SourceAnalysisAuditMetric,
+  file: SourceAnalysisPackageFileReachability,
+): number {
+  switch (metric) {
+    case 'outbound-count':
+      return file.outboundFiles.length;
+    case 'declaration-count':
+      return file.declarationCount;
+    case 'export-count':
+      return file.exportCount;
+    case 'public-surface':
+      return file.publicSurface ? 1 : 0;
+    case 'exercise-root-count':
+      return file.exerciseRootIds.length;
+    case 'production-root-count':
+      return file.productionRootIds.length;
+    case 'grounded-production-root-count':
+      return file.groundedProductionRootIds.length;
+    default:
+      return 0;
+  }
+}
+
+function coordinationAuditMetricValue(
+  metric: SourceAnalysisAuditMetric,
   file: SourceAnalysisPackageCoordinationSurface['files'][number],
 ): number {
-  return file.envelopeBuilderFunctions.length * 20
-    + file.envelopeWrapperFunctions.length * 10
-    + file.cardObjectLiteralLines.length * 5
-    + file.summaryLineSites.length;
-}
-
-function scorePresentationSurface(
-  file: SourceAnalysisPackageCoordinationSurface['files'][number],
-): number {
-  return file.refLikeInterfaces.length * 20
-    + file.cardLikeInterfaces.length * 20
-    + file.cardObjectLiteralLines.length * 5
-    + file.summaryLineSites.length;
+  switch (metric) {
+    case 'builder-count':
+      return file.envelopeBuilderFunctions.length;
+    case 'wrapper-count':
+      return file.envelopeWrapperFunctions.length;
+    case 'card-literal-count':
+      return file.cardObjectLiteralLines.length;
+    case 'summary-site-count':
+      return file.summaryLineSites.length;
+    case 'ref-interface-count':
+      return file.refLikeInterfaces.length;
+    case 'card-interface-count':
+      return file.cardLikeInterfaces.length;
+    default:
+      return 0;
+  }
 }
 
 function trustForFindings(
@@ -754,6 +878,7 @@ function continuationsForFindings(
 function createAnswer(
   query: SourceAnalysisQuery,
   snapshots: LoadedCurrentSourceAnalysisSnapshots,
+  policy: SourceAnalysisInquiryPolicy,
   focusRef: SourceAnalysisFocusRef,
   tag: SourceAnalysisAnswer<SourceAnalysisAuditValue>['outcome']['tag'],
   value: SourceAnalysisAuditValue,
@@ -763,20 +888,19 @@ function createAnswer(
   continuations: readonly SourceAnalysisContinuation[],
   provenance: readonly SourceAnalysisAnswerProvenanceEntry[],
 ): SourceAnalysisAnswer<SourceAnalysisAuditValue> {
-  const readMode = defaultReadMode(query.questionRoute);
   const worldFrame = defaultWorldFrame(snapshots, query.worldFrame);
   return createSourceAnalysisAnswerEnvelope({
     query,
     focusRef,
-    inquiryEpisode: 'inventory-and-audit-sweep',
-    readMode,
+    inquiryEpisode: policy.inquiryEpisode,
+    readMode: policy.readMode,
     worldFrame,
     tag,
     value,
     trust,
     closureBasis,
     issues,
-    continuations,
+    continuations: continuations.slice(0, policy.limits.continuationCount),
     provenance,
   });
 }
@@ -788,21 +912,43 @@ function createMissAnswer(
   focusRef: SourceAnalysisFocusRef,
   relatedRefs: readonly SourceAnalysisAuditRef[],
 ): SourceAnalysisAnswer<SourceAnalysisAuditValue> {
+  const policy = resolveSourceAnalysisInquiryPolicy(query, {
+    focusKind: focusRef.kind,
+    inquiryEpisode: 'inventory-and-audit-sweep',
+    readMode: defaultReadMode(query.questionRoute),
+  });
   return createAnswer(
     query,
     snapshots,
+    policy,
     focusRef,
     'miss-unknown-shape',
-    createSourceAnalysisAnswerCard({
+    createStructuredSourceAnalysisAnswerCard({
       title: 'Package audit miss',
-      summaryLines: [message],
       primaryRef: {
         kind: focusRef.kind,
         value: focusRef.value,
         label: focusRef.label ?? focusRef.value,
       },
       relatedRefs,
-      findings: [],
+      document: createSourceAnalysisAnswerDocument([
+        {
+          kind: 'paragraph',
+          importance: 'primary',
+          lines: [message],
+        },
+        ...(relatedRefs.length > 0
+          ? [{
+            kind: 'ref-list' as const,
+            importance: 'supporting' as const,
+            refs: relatedRefs,
+          }]
+          : []),
+      ]),
+      policy,
+      extra: {
+        findings: [],
+      },
     }),
     {
       kind: 'unavailable',
@@ -830,21 +976,41 @@ function createAmbiguousAnswer(
   focusRef: SourceAnalysisFocusRef,
   relatedRefs: readonly SourceAnalysisAuditRef[],
 ): SourceAnalysisAnswer<SourceAnalysisAuditValue> {
+  const policy = resolveSourceAnalysisInquiryPolicy(query, {
+    focusKind: focusRef.kind,
+    inquiryEpisode: 'inventory-and-audit-sweep',
+    readMode: defaultReadMode(query.questionRoute),
+  });
   return createAnswer(
     query,
     snapshots,
+    policy,
     focusRef,
     'ambiguous',
-    createSourceAnalysisAnswerCard({
+    createStructuredSourceAnalysisAnswerCard({
       title: 'Package audit ambiguity',
-      summaryLines: [message],
       primaryRef: {
         kind: focusRef.kind,
         value: focusRef.value,
         label: focusRef.label ?? focusRef.value,
       },
       relatedRefs,
-      findings: [],
+      document: createSourceAnalysisAnswerDocument([
+        {
+          kind: 'paragraph',
+          importance: 'primary',
+          lines: [message],
+        },
+        {
+          kind: 'ref-list',
+          importance: 'supporting',
+          refs: relatedRefs,
+        },
+      ]),
+      policy,
+      extra: {
+        findings: [],
+      },
     }),
     {
       kind: 'qualified',
@@ -872,21 +1038,36 @@ function createUnsupportedAnswer(
   snapshots: LoadedCurrentSourceAnalysisSnapshots,
   message: string,
 ): SourceAnalysisAnswer<SourceAnalysisAuditValue> {
+  const policy = resolveSourceAnalysisInquiryPolicy(query, {
+    focusKind: query.focusRef.kind,
+    inquiryEpisode: 'inventory-and-audit-sweep',
+    readMode: defaultReadMode(query.questionRoute),
+  });
   return createAnswer(
     query,
     snapshots,
+    policy,
     query.focusRef,
     'unsupported',
-    createSourceAnalysisAnswerCard({
+    createStructuredSourceAnalysisAnswerCard({
       title: 'Package audit unsupported',
-      summaryLines: [message],
       primaryRef: {
         kind: query.focusRef.kind,
         value: query.focusRef.value,
         label: query.focusRef.label ?? query.focusRef.value,
       },
       relatedRefs: [],
-      findings: [],
+      document: createSourceAnalysisAnswerDocument([
+        {
+          kind: 'paragraph',
+          importance: 'primary',
+          lines: [message],
+        },
+      ]),
+      policy,
+      extra: {
+        findings: [],
+      },
     }),
     {
       kind: 'unavailable',
@@ -1081,34 +1262,6 @@ function dedupeContinuations(
     deduped.push(continuation);
   }
   return deduped;
-}
-
-function severityRank(severity: SourceAnalysisIssueSeverity): number {
-  switch (severity) {
-    case 'error':
-      return 3;
-    case 'warning':
-      return 2;
-    case 'info':
-      return 1;
-    default:
-      return assertNever(severity);
-  }
-}
-
-function confidenceRank(kind: SourceAnalysisTrustKind): number {
-  switch (kind) {
-    case 'grounded':
-      return 4;
-    case 'qualified':
-      return 3;
-    case 'frontier':
-      return 2;
-    case 'unavailable':
-      return 1;
-    default:
-      return assertNever(kind);
-  }
 }
 
 function assertNever(value: never): never {

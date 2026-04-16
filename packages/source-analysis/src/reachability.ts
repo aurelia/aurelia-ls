@@ -7,6 +7,12 @@ import type { LoadedCurrentSourceAnalysisSnapshots } from './current-snapshots.j
 import type { PackageExportRecord, PackageExportsSummary } from './exports/schema.js';
 import type { SourceAnalysisTrustKind } from './outcome-algebra.js';
 import type { TypeDecl } from './typerefs/schema.js';
+import {
+  compareByPrecedence,
+  compareStringsAscending,
+  DEFAULT_SOURCE_ANALYSIS_INQUIRY_ORDERING,
+} from './inquiry-policy.js';
+import type { SourceAnalysisInquiryOrdering } from './inquiry-policy.js';
 
 export const SOURCE_ANALYSIS_PACKAGE_ROOT_KINDS = [
   'public-api',
@@ -108,10 +114,16 @@ export interface SourceAnalysisPackageReachability {
   readonly exerciseFiles: readonly string[];
 }
 
+export interface SourceAnalysisPackageReachabilityOptions {
+  readonly ordering?: SourceAnalysisInquiryOrdering;
+}
+
 export function createSourceAnalysisPackageReachability(
   snapshots: LoadedCurrentSourceAnalysisSnapshots,
   pkg: PackageExportsSummary,
+  options?: SourceAnalysisPackageReachabilityOptions,
 ): SourceAnalysisPackageReachability {
+  const ordering = options?.ordering ?? DEFAULT_SOURCE_ANALYSIS_INQUIRY_ORDERING;
   const packagePrefix = pkg.package_dir.length > 0 ? `${pkg.package_dir}/` : '';
   const packageFiles = new Set<string>();
   const routeEdges = new Map<string, SourceAnalysisPackageRouteEdge>();
@@ -253,6 +265,7 @@ export function createSourceAnalysisPackageReachability(
     packageFiles,
     outboundEdgesByFile,
     roots.values(),
+    ordering,
   );
 
   const files = [...packageFiles]
@@ -298,28 +311,28 @@ export function createSourceAnalysisPackageReachability(
     files,
     filesByPath: new Map(files.map((file) => [file.filePath, file])),
     roots: [...roots.values()].sort((left, right) =>
-      rootRank(left.kind) - rootRank(right.kind)
-      || left.filePath.localeCompare(right.filePath),
+      compareByPrecedence(ordering.rootKind, left.kind, right.kind)
+      || compareStringsAscending(left.filePath, right.filePath),
     ),
     rootsByFilePath: new Map(
       [...rootsByFilePath.entries()].map(([filePath, fileRoots]) => [
         filePath,
         [...fileRoots].sort((left, right) =>
-          rootRank(left.kind) - rootRank(right.kind)
-          || left.filePath.localeCompare(right.filePath),
+          compareByPrecedence(ordering.rootKind, left.kind, right.kind)
+          || compareStringsAscending(left.filePath, right.filePath),
         ),
       ]),
     ),
     routeEdges: [...routeEdges.values()].sort((left, right) =>
-      routeTrustRank(left.trust) - routeTrustRank(right.trust)
-      || routeKindRank(left.kind) - routeKindRank(right.kind)
-      || left.fromFilePath.localeCompare(right.fromFilePath)
-      || left.toFilePath.localeCompare(right.toFilePath),
+      compareByPrecedence(ordering.trust, left.trust, right.trust)
+      || compareByPrecedence(ordering.routeKind, left.kind, right.kind)
+      || compareStringsAscending(left.fromFilePath, right.fromFilePath)
+      || compareStringsAscending(left.toFilePath, right.toFilePath),
     ),
     routeWitnessesByFilePath: new Map(
       [...routeWitnessesByFilePath.entries()].map(([filePath, witnesses]) => [
         filePath,
-        [...witnesses].sort(compareRouteWitnesses),
+        [...witnesses].sort((left, right) => compareRouteWitnesses(left, right, ordering)),
       ]),
     ),
     publicSurfaceFiles: [...publicSurfaceFiles].sort((left, right) => left.localeCompare(right)),
@@ -685,6 +698,7 @@ function computeRouteWitnesses(
   packageFiles: ReadonlySet<string>,
   outboundEdgesByFile: ReadonlyMap<string, readonly SourceAnalysisPackageRouteEdge[]>,
   roots: Iterable<SourceAnalysisPackageRoot>,
+  ordering: SourceAnalysisInquiryOrdering,
 ): ReadonlyMap<string, readonly SourceAnalysisPackageRouteWitness[]> {
   const routeWitnessesByFilePath = new Map<string, SourceAnalysisPackageRouteWitness[]>();
   for (const filePath of packageFiles) {
@@ -736,7 +750,7 @@ function computeRouteWitnesses(
   return new Map(
     [...routeWitnessesByFilePath.entries()].map(([filePath, witnesses]) => [
       filePath,
-      [...witnesses].sort(compareRouteWitnesses),
+      [...witnesses].sort((left, right) => compareRouteWitnesses(left, right, ordering)),
     ]),
   );
 }
@@ -853,62 +867,6 @@ function routeClassForRootKind(kind: SourceAnalysisPackageRootKind): SourceAnaly
   }
 }
 
-function rootRank(kind: SourceAnalysisPackageRootKind): number {
-  switch (kind) {
-    case 'public-api':
-      return 1;
-    case 'manifest-bin':
-      return 2;
-    case 'exercise':
-      return 3;
-    case 'candidate-entry':
-      return 4;
-    default:
-      return assertNever(kind);
-  }
-}
-
-function routeKindRank(kind: SourceAnalysisPackageRouteKind): number {
-  switch (kind) {
-    case 'dependency-import':
-      return 1;
-    case 'parse-import':
-      return 2;
-    case 'executable-handoff':
-      return 3;
-    default:
-      return assertNever(kind);
-  }
-}
-
-function routeClassRank(kind: SourceAnalysisPackageRouteClass): number {
-  switch (kind) {
-    case 'production':
-      return 1;
-    case 'exercise':
-      return 2;
-    case 'candidate':
-      return 3;
-    default:
-      return assertNever(kind);
-  }
-}
-
-function routeTrustRank(kind: SourceAnalysisTrustKind): number {
-  switch (kind) {
-    case 'grounded':
-      return 1;
-    case 'qualified':
-      return 2;
-    case 'frontier':
-      return 3;
-    case 'unavailable':
-      return 4;
-    default:
-      return assertNever(kind);
-  }
-}
-
 function dedupeStrings(values: readonly string[]): readonly string[] {
   return [...new Set(values)];
 }
@@ -916,12 +874,13 @@ function dedupeStrings(values: readonly string[]): readonly string[] {
 function compareRouteWitnesses(
   left: SourceAnalysisPackageRouteWitness,
   right: SourceAnalysisPackageRouteWitness,
+  ordering: SourceAnalysisInquiryOrdering,
 ): number {
-  return routeClassRank(left.routeClass) - routeClassRank(right.routeClass)
-    || routeTrustRank(left.trust) - routeTrustRank(right.trust)
+  return compareByPrecedence(ordering.routeClass, left.routeClass, right.routeClass)
+    || compareByPrecedence(ordering.trust, left.trust, right.trust)
     || left.stepCount - right.stepCount
-    || left.rootFilePath.localeCompare(right.rootFilePath)
-    || left.filePath.localeCompare(right.filePath);
+    || compareStringsAscending(left.rootFilePath, right.rootFilePath)
+    || compareStringsAscending(left.filePath, right.filePath);
 }
 
 interface RouteScore {

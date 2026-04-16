@@ -11,9 +11,34 @@ export type {
   SourceAnalysisAnswerCard,
   SourceAnalysisAnswerRef,
 } from './answer-card.js';
-export { createSourceAnalysisAnswerCard } from './answer-card.js';
+export {
+  createSourceAnalysisAnswerCard,
+  createStructuredSourceAnalysisAnswerCard,
+} from './answer-card.js';
+export type { CreateStructuredSourceAnalysisAnswerCardOptions } from './answer-card.js';
+export type {
+  SourceAnalysisAnswerBlockImportance,
+  SourceAnalysisAnswerBlockKind,
+  SourceAnalysisAnswerDocument,
+  SourceAnalysisAnswerDocumentBlock,
+  SourceAnalysisAnswerDocumentFact,
+  SourceAnalysisAnswerDocumentFinding,
+  SourceAnalysisAnswerDocumentWitness,
+} from './answer-document.js';
+export {
+  SOURCE_ANALYSIS_ANSWER_BLOCK_IMPORTANCE,
+  SOURCE_ANALYSIS_ANSWER_BLOCK_KINDS,
+  SOURCE_ANALYSIS_ANSWER_DOCUMENT_SCHEMA_VERSION,
+  createSourceAnalysisAnswerDocument,
+} from './answer-document.js';
 export type { CreateSourceAnalysisAnswerEnvelopeOptions } from './answer-envelope.js';
 export { createSourceAnalysisAnswerEnvelope } from './answer-envelope.js';
+export type { SourceAnalysisRenderedPlainText } from './answer-renderer.js';
+export {
+  projectSourceAnalysisAnswerDocument,
+  renderSourceAnalysisAnswerDocumentToJson,
+  renderSourceAnalysisAnswerDocumentToPlainText,
+} from './answer-renderer.js';
 export type {
   SourceAnalysisAuditFinding,
   SourceAnalysisAuditFindingKind,
@@ -110,6 +135,25 @@ export {
   SOURCE_ANALYSIS_REGIME_ANCHORS,
 } from './query-model.js';
 export type {
+  ResolveSourceAnalysisInquiryPolicyDefaults,
+  SourceAnalysisAuditMetric,
+  SourceAnalysisAuditMetricOrders,
+  SourceAnalysisConsumerKind,
+  SourceAnalysisInquiryLimits,
+  SourceAnalysisInquiryOrdering,
+  SourceAnalysisInquiryPolicy,
+} from './inquiry-policy.js';
+export {
+  compareByPrecedence,
+  compareNumbersDescending,
+  compareStringsAscending,
+  compareBooleansDescending,
+  DEFAULT_SOURCE_ANALYSIS_INQUIRY_ORDERING,
+  SOURCE_ANALYSIS_AUDIT_METRICS,
+  SOURCE_ANALYSIS_CONSUMER_KINDS,
+  resolveSourceAnalysisInquiryPolicy,
+} from './inquiry-policy.js';
+export type {
   SourceAnalysisLocationPoint,
   SourceAnalysisLocationRange,
   SourceAnalysisObservationProvenance,
@@ -133,6 +177,7 @@ export {
 export type {
   SourceAnalysisPackageFileReachability,
   SourceAnalysisPackageReachability,
+  SourceAnalysisPackageReachabilityOptions,
   SourceAnalysisPackageRouteClass,
   SourceAnalysisPackageRouteEdge,
   SourceAnalysisPackageRouteKind,
@@ -155,6 +200,36 @@ export type {
   SourceAnalysisPackageCoordinationSurface,
 } from './coordination-surface.js';
 export { createSourceAnalysisPackageCoordinationSurface } from './coordination-surface.js';
+export type {
+  BindingSeamSummary,
+  CrossSubsystemTypeRefSummary,
+  SubsystemCouplingPressure,
+} from './subsystem-coupling.js';
+export {
+  collectBindingSeams,
+  collectCrossSubsystemTypeRefSummaries,
+  collectSubsystemBindingPressure,
+  collectSubsystemTypeRefPressure,
+} from './subsystem-coupling.js';
+export type {
+  SourceAnalysisPackageStructuralDiagnostics,
+  SourceAnalysisStructuralFileDiagnostics,
+  SourceAnalysisStructuralFunctionFact,
+  SourceAnalysisStructuralFunctionRole,
+  SourceAnalysisStructuralInterfaceFact,
+  SourceAnalysisStructuralInterfaceRole,
+  SourceAnalysisStructuralObjectFact,
+  SourceAnalysisStructuralObjectRole,
+} from './structural-diagnostics.js';
+export {
+  createSourceAnalysisPackageStructuralDiagnostics,
+  getSourceAnalysisStructuralFilesByFunctionRole,
+  getSourceAnalysisStructuralFilesByInterfaceRole,
+  getSourceAnalysisStructuralFilesByObjectRole,
+  SOURCE_ANALYSIS_STRUCTURAL_FUNCTION_ROLES,
+  SOURCE_ANALYSIS_STRUCTURAL_INTERFACE_ROLES,
+  SOURCE_ANALYSIS_STRUCTURAL_OBJECT_ROLES,
+} from './structural-diagnostics.js';
 
 export {
   loadCurrentSourceAnalysisSnapshots,
@@ -197,6 +272,7 @@ export type {
   QuerySummaryResult,
   QueryRouteWitnessArgs,
   QueryRouteWitnessResult,
+  RenderQueryArgs,
   SessionCloseArgs,
   SessionCloseResult,
   SessionInvalidateArgs,
@@ -220,7 +296,13 @@ export type {
   SourceAnalysisHostError,
   SourceAnalysisHostInvalidationMeta,
   SourceAnalysisKind,
+  SourceAnalysisHostRenderStyle,
+  SourceAnalysisHostRenderedView,
   SourceAnalysisOutputByKind,
   SourceAnalysisSummaryByKind,
 } from './host/types.js';
-export { SOURCE_ANALYSIS_HOST_SCHEMA_VERSION, SOURCE_ANALYSIS_KINDS } from './host/types.js';
+export {
+  SOURCE_ANALYSIS_HOST_RENDER_STYLES,
+  SOURCE_ANALYSIS_HOST_SCHEMA_VERSION,
+  SOURCE_ANALYSIS_KINDS,
+} from './host/types.js';

@@ -34,7 +34,7 @@ describe('Source-analysis package audit', () => {
     )).toBe(true);
   });
 
-  it('surfaces semantic-runtime.ts as a likely under-integrated code island', () => {
+  it('no longer reports an under-integrated orphan after the subsystem coupling helper was integrated', () => {
     const snapshots = loadSnapshotsForAudit();
     const answer = createSourceAnalysisAuditAnswer({
       focusRef: { kind: 'package', value: '@aurelia-ls/source-analysis' },
@@ -42,17 +42,12 @@ describe('Source-analysis package audit', () => {
     }, snapshots);
 
     const dormantFinding = answer.outcome.value?.findings.find((finding) =>
-      finding.code === 'under-integrated-file'
-      && finding.primaryRef.value === 'packages/source-analysis/src/semantic-runtime.ts',
+      finding.code === 'under-integrated-file',
     );
-    expect(dormantFinding).toBeTruthy();
-    expect(dormantFinding?.summary.includes('no modeled production route')).toBe(true);
-    expect(answer.outcome.continuations.some((step) =>
-      step.targetFocusRef === 'packages/source-analysis/src/semantic-runtime.ts',
-    )).toBe(true);
+    expect(dormantFinding).toBeUndefined();
   });
 
-  it('surfaces unanchored candidate entry roots that the audit cannot yet ground', () => {
+  it('no longer reports unanchored candidate roots for the package after the helper integration', () => {
     const snapshots = loadSnapshotsForAudit();
     const answer = createSourceAnalysisAuditAnswer({
       focusRef: { kind: 'package', value: '@aurelia-ls/source-analysis' },
@@ -62,13 +57,10 @@ describe('Source-analysis package audit', () => {
     const candidateRootsFinding = answer.outcome.value?.findings.find((finding) =>
       finding.code === 'candidate-entry-roots',
     );
-    expect(candidateRootsFinding).toBeTruthy();
-    expect(candidateRootsFinding?.relatedRefs.some((ref) =>
-      ref.value === 'packages/source-analysis/src/semantic-runtime.ts',
-    )).toBe(true);
+    expect(candidateRootsFinding).toBeUndefined();
   });
 
-  it('surfaces public surface files that still have no modeled exercise route', () => {
+  it('no longer reports public surface without exercise routes after the helper tests were added', () => {
     const snapshots = loadSnapshotsForAudit();
     const answer = createSourceAnalysisAuditAnswer({
       focusRef: { kind: 'package', value: '@aurelia-ls/source-analysis' },
@@ -78,10 +70,7 @@ describe('Source-analysis package audit', () => {
     const publicUnexercisedFinding = answer.outcome.value?.findings.find((finding) =>
       finding.code === 'public-surface-unexercised',
     );
-    expect(publicUnexercisedFinding).toBeTruthy();
-    expect(publicUnexercisedFinding?.relatedRefs.some((ref) =>
-      ref.value === 'packages/source-analysis/src/host/runtime.ts',
-    )).toBe(true);
+    expect(publicUnexercisedFinding).toBeUndefined();
   });
 
   it('no longer flags fragmented local answer builders after the shared envelope extraction', () => {

@@ -1,8 +1,10 @@
 import { loadCurrentSourceAnalysisSnapshots, type LoadedCurrentSourceAnalysisSnapshots } from './current-snapshots.js';
 import type { PackageExportsSummary } from './exports/schema.js';
 import type { SourceAnalysisAnswerCard, SourceAnalysisAnswerRef } from './answer-card.js';
-import { createSourceAnalysisAnswerCard } from './answer-card.js';
+import { createStructuredSourceAnalysisAnswerCard } from './answer-card.js';
+import { createSourceAnalysisAnswerDocument } from './answer-document.js';
 import { createSourceAnalysisAnswerEnvelope } from './answer-envelope.js';
+import { resolveSourceAnalysisInquiryPolicy, type SourceAnalysisInquiryPolicy } from './inquiry-policy.js';
 import type {
   SourceAnalysisClosureBasis,
   SourceAnalysisContinuation,
@@ -98,7 +100,10 @@ function buildFileRouteWitnessAnswer(
     );
   }
 
-  const reachability = createSourceAnalysisPackageReachability(snapshots, pkg);
+  const policy = policyForRouteWitness(query, 'file');
+  const reachability = createSourceAnalysisPackageReachability(snapshots, pkg, {
+    ordering: policy.ordering,
+  });
   const witnesses = getSourceAnalysisPackageRouteWitnesses(reachability, filePath);
   return createRouteWitnessAnswer(
     query,
@@ -150,7 +155,10 @@ function buildTypeRouteWitnessAnswer(
     );
   }
 
-  const reachability = createSourceAnalysisPackageReachability(snapshots, pkg);
+  const policy = policyForRouteWitness(query, 'type');
+  const reachability = createSourceAnalysisPackageReachability(snapshots, pkg, {
+    ordering: policy.ordering,
+  });
   const witnesses = getSourceAnalysisPackageRouteWitnesses(reachability, declaration.file);
   return createRouteWitnessAnswer(
     query,
@@ -214,18 +222,24 @@ function createRouteWitnessAnswer(
       ? [`Additional route witnesses: ${witnesses.slice(1, 4).map((witness) => renderWitnessChain(witness)).join('; ')}.`]
       : []),
   ];
+  const policy = policyForRouteWitness(query, focusRef.kind);
+  const document = createRouteWitnessDocument(summaryLines, relatedRefs, witnesses);
 
   return createAnswer(
     query,
     snapshots,
+    policy,
     focusRef,
     'hit',
-    createSourceAnalysisAnswerCard({
+    createStructuredSourceAnalysisAnswerCard({
       title: `${primaryRef.label} route witnesses`,
-      summaryLines,
       primaryRef,
       relatedRefs,
-      witnesses: witnesses.slice(0, 6),
+      document,
+      policy,
+      extra: {
+        witnesses: witnesses.slice(0, 6),
+      },
     }),
     trust,
     [
@@ -293,6 +307,7 @@ function renderWitnessChain(witness: SourceAnalysisPackageRouteWitness): string 
 function createAnswer(
   query: SourceAnalysisQuery,
   snapshots: LoadedCurrentSourceAnalysisSnapshots,
+  policy: SourceAnalysisInquiryPolicy,
   focusRef: SourceAnalysisFocusRef,
   tag: SourceAnalysisAnswer<SourceAnalysisRouteWitnessValue>['outcome']['tag'],
   value: SourceAnalysisRouteWitnessValue,
@@ -302,20 +317,19 @@ function createAnswer(
   continuations: readonly SourceAnalysisContinuation[],
   provenance: readonly SourceAnalysisAnswerProvenanceEntry[],
 ): SourceAnalysisAnswer<SourceAnalysisRouteWitnessValue> {
-  const readMode = defaultReadMode();
   const worldFrame = defaultWorldFrame(snapshots, query.worldFrame);
   return createSourceAnalysisAnswerEnvelope({
     query,
     focusRef,
-    inquiryEpisode: 'bounded-closure-explanation',
-    readMode,
+    inquiryEpisode: policy.inquiryEpisode,
+    readMode: policy.readMode,
     worldFrame,
     tag,
     value,
     trust,
     closureBasis,
     issues,
-    continuations,
+    continuations: continuations.slice(0, policy.limits.continuationCount),
     provenance,
   });
 }
@@ -327,21 +341,26 @@ function createMissAnswer(
   focusRef: SourceAnalysisFocusRef,
   relatedRefs: readonly SourceAnalysisRouteWitnessRef[],
 ): SourceAnalysisAnswer<SourceAnalysisRouteWitnessValue> {
+  const policy = policyForRouteWitness(query, focusRef.kind);
   return createAnswer(
     query,
     snapshots,
+    policy,
     focusRef,
     'miss-unknown-shape',
-    createSourceAnalysisAnswerCard({
+    createStructuredSourceAnalysisAnswerCard({
       title: 'Route witness miss',
-      summaryLines: [message],
       primaryRef: {
         kind: focusRef.kind,
         value: focusRef.value,
         label: focusRef.label ?? focusRef.value,
       },
       relatedRefs,
-      witnesses: [],
+      document: createRouteWitnessDocument([message], relatedRefs, []),
+      policy,
+      extra: {
+        witnesses: [],
+      },
     }),
     {
       kind: 'unavailable',
@@ -369,21 +388,26 @@ function createAmbiguousAnswer(
   focusRef: SourceAnalysisFocusRef,
   relatedRefs: readonly SourceAnalysisRouteWitnessRef[],
 ): SourceAnalysisAnswer<SourceAnalysisRouteWitnessValue> {
+  const policy = policyForRouteWitness(query, focusRef.kind);
   return createAnswer(
     query,
     snapshots,
+    policy,
     focusRef,
     'ambiguous',
-    createSourceAnalysisAnswerCard({
+    createStructuredSourceAnalysisAnswerCard({
       title: 'Route witness ambiguity',
-      summaryLines: [message],
       primaryRef: {
         kind: focusRef.kind,
         value: focusRef.value,
         label: focusRef.label ?? focusRef.value,
       },
       relatedRefs,
-      witnesses: [],
+      document: createRouteWitnessDocument([message], relatedRefs, []),
+      policy,
+      extra: {
+        witnesses: [],
+      },
     }),
     {
       kind: 'qualified',
@@ -414,21 +438,26 @@ function createOpenBoundaryAnswer(
   relatedRefs: readonly SourceAnalysisRouteWitnessRef[],
   continuations: readonly SourceAnalysisContinuation[],
 ): SourceAnalysisAnswer<SourceAnalysisRouteWitnessValue> {
+  const policy = policyForRouteWitness(query, focusRef.kind);
   return createAnswer(
     query,
     snapshots,
+    policy,
     focusRef,
     'open-boundary',
-    createSourceAnalysisAnswerCard({
+    createStructuredSourceAnalysisAnswerCard({
       title: 'Route witness boundary',
-      summaryLines: [message],
       primaryRef: {
         kind: focusRef.kind,
         value: focusRef.value,
         label: focusRef.label ?? focusRef.value,
       },
       relatedRefs,
-      witnesses: [],
+      document: createRouteWitnessDocument([message], relatedRefs, []),
+      policy,
+      extra: {
+        witnesses: [],
+      },
     }),
     {
       kind: 'qualified',
@@ -454,21 +483,26 @@ function createUnsupportedAnswer(
   snapshots: LoadedCurrentSourceAnalysisSnapshots,
   message: string,
 ): SourceAnalysisAnswer<SourceAnalysisRouteWitnessValue> {
+  const policy = policyForRouteWitness(query, query.focusRef.kind);
   return createAnswer(
     query,
     snapshots,
+    policy,
     query.focusRef,
     'unsupported',
-    createSourceAnalysisAnswerCard({
+    createStructuredSourceAnalysisAnswerCard({
       title: 'Route witness unsupported',
-      summaryLines: [message],
       primaryRef: {
         kind: query.focusRef.kind,
         value: query.focusRef.value,
         label: query.focusRef.label ?? query.focusRef.value,
       },
       relatedRefs: [],
-      witnesses: [],
+      document: createRouteWitnessDocument([message], [], []),
+      policy,
+      extra: {
+        witnesses: [],
+      },
     }),
     {
       kind: 'unavailable',
@@ -599,6 +633,54 @@ function defaultWorldFrame(
     partiality: worldFrame?.partiality ?? 'complete',
     freshness: worldFrame?.freshness ?? 'snapshot',
   };
+}
+
+function policyForRouteWitness(
+  query: SourceAnalysisQuery,
+  focusKind: SourceAnalysisFocusRef['kind'],
+): SourceAnalysisInquiryPolicy {
+  return resolveSourceAnalysisInquiryPolicy(query, {
+    focusKind,
+    inquiryEpisode: 'bounded-closure-explanation',
+    readMode: defaultReadMode(),
+  });
+}
+
+function createRouteWitnessDocument(
+  summaryLines: readonly string[],
+  relatedRefs: readonly SourceAnalysisRouteWitnessRef[],
+  witnesses: readonly SourceAnalysisPackageRouteWitness[],
+) {
+  return createSourceAnalysisAnswerDocument<SourceAnalysisRouteWitnessRef>([
+    {
+      kind: 'paragraph',
+      importance: 'primary',
+      lines: summaryLines,
+    },
+    ...(witnesses.length > 0
+      ? [{
+        kind: 'witness-list' as const,
+        importance: 'primary' as const,
+        witnesses: witnesses.map((witness) => ({
+          label: basename(witness.filePath),
+          summary: renderWitnessChain(witness),
+          trust: witness.trust,
+          routeClass: witness.routeClass,
+          refs: [
+            fileRef(witness.rootFilePath, `${witness.rootKind} root`),
+            ...witness.steps.slice(0, 3).map((step) => fileRef(step.toFilePath, step.summary)),
+          ],
+        })),
+      }]
+      : []),
+    ...(relatedRefs.length > 0
+      ? [{
+        kind: 'ref-list' as const,
+        importance: 'detail' as const,
+        refs: relatedRefs,
+      }]
+      : []),
+  ]);
 }
 
 function defaultReadMode(): SourceAnalysisReadMode {

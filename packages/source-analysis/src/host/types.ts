@@ -1,5 +1,9 @@
-import type { SourceAnalysisAnswer } from '../query-model.js';
+import type { SourceAnalysisAnswer, SourceAnalysisReadMode } from '../query-model.js';
 import type { SourceAnalysisAuditValue } from '../audit.js';
+import type { SourceAnalysisAnswerDocument } from '../answer-document.js';
+import type { SourceAnalysisAnswerRef } from '../answer-card.js';
+import type { SourceAnalysisConsumerKind } from '../inquiry-policy.js';
+import type { SourceAnalysisRenderedPlainText } from '../answer-renderer.js';
 import type { DepsOutput } from '../deps/schema.js';
 import type { ExportsOutput } from '../exports/schema.js';
 import type { SourceAnalysisRouteWitnessValue } from '../route-witness.js';
@@ -7,8 +11,15 @@ import type { TypeRefsOutput } from '../typerefs/schema.js';
 
 export const SOURCE_ANALYSIS_HOST_SCHEMA_VERSION = 'v1alpha1' as const;
 export const SOURCE_ANALYSIS_KINDS = ['deps', 'typerefs', 'exports'] as const;
+export const SOURCE_ANALYSIS_HOST_RENDER_STYLES = [
+  'answer',
+  'plain-text',
+  'json-document',
+] as const;
 
 export type SourceAnalysisKind = typeof SOURCE_ANALYSIS_KINDS[number];
+export type SourceAnalysisHostRenderStyle =
+  typeof SOURCE_ANALYSIS_HOST_RENDER_STYLES[number];
 
 export interface SourceAnalysisOutputByKind {
   deps: DepsOutput;
@@ -135,11 +146,27 @@ export interface QueryArgs {
   readonly refreshIfNeeded?: boolean;
 }
 
-export interface QueryAuditPackageArgs extends QueryArgs {
+export interface RenderQueryArgs extends QueryArgs {
+  readonly readMode?: SourceAnalysisReadMode;
+  readonly consumer?: SourceAnalysisConsumerKind;
+  readonly renderStyle?: SourceAnalysisHostRenderStyle;
+}
+
+export type SourceAnalysisHostRenderedView =
+  | {
+    readonly style: 'plain-text';
+    readonly rendered: SourceAnalysisRenderedPlainText;
+  }
+  | {
+    readonly style: 'json-document';
+    readonly document: SourceAnalysisAnswerDocument<SourceAnalysisAnswerRef>;
+  };
+
+export interface QueryAuditPackageArgs extends RenderQueryArgs {
   readonly packageName: string;
 }
 
-export interface QueryRouteWitnessArgs extends QueryArgs {
+export interface QueryRouteWitnessArgs extends RenderQueryArgs {
   readonly focusKind: 'file' | 'type';
   readonly focusValue: string;
 }
@@ -159,11 +186,13 @@ export interface QuerySnapshotResult<TKind extends SourceAnalysisKind> {
 
 export interface QueryAuditPackageResult {
   readonly answer: SourceAnalysisAnswer<SourceAnalysisAuditValue>;
+  readonly rendered?: SourceAnalysisHostRenderedView;
   readonly warnings: readonly string[];
 }
 
 export interface QueryRouteWitnessResult {
   readonly answer: SourceAnalysisAnswer<SourceAnalysisRouteWitnessValue>;
+  readonly rendered?: SourceAnalysisHostRenderedView;
   readonly warnings: readonly string[];
 }
 

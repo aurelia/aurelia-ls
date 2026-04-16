@@ -8,7 +8,16 @@ import {
 import { basename, join, resolve } from 'node:path';
 
 import { createSourceAnalysisAuditAnswer } from '../audit.js';
+import type { SourceAnalysisAnswerRef } from '../answer-card.js';
+import type { SourceAnalysisAnswerDocument } from '../answer-document.js';
+import {
+  renderSourceAnalysisAnswerDocumentToJson,
+  renderSourceAnalysisAnswerDocumentToPlainText,
+} from '../answer-renderer.js';
 import { createSourceAnalysisPaths } from '../config.js';
+import type { SourceAnalysisConsumerKind } from '../inquiry-policy.js';
+import { resolveSourceAnalysisInquiryPolicy } from '../inquiry-policy.js';
+import type { SourceAnalysisFocusKind } from '../query-model.js';
 import { createSourceAnalysisRouteWitnessAnswer } from '../route-witness.js';
 import type { SourceAnalysisAnalysisOptions } from '../analysis-options.js';
 import { generateDepsAnalysis } from '../deps/analyze.js';
@@ -54,6 +63,7 @@ import {
   type SourceAnalysisKind,
   type SourceAnalysisOutputByKind,
   type SourceAnalysisSummaryByKind,
+  type SourceAnalysisHostRenderedView,
 } from './types.js';
 
 interface CommandOutcome {
@@ -282,28 +292,31 @@ export class SourceAnalysisHostRuntime {
       ...typeRefsQuery.refreshedKinds,
       ...exportsQuery.refreshedKinds,
     ]);
+    const answer = createSourceAnalysisAuditAnswer(
+      {
+        inquiryEpisode: 'inventory-and-audit-sweep',
+        focusRef: { kind: 'package', value: args.packageName },
+        questionRoute: 'inventory',
+        readMode: args.readMode ?? 'summary-card',
+        worldFrame: {
+          repoPath: state.repoPath,
+          target: state.target,
+          regimeAnchor: 'hosted',
+          partiality: 'complete',
+          freshness: 'snapshot',
+        },
+      },
+      {
+        deps: depsQuery.snapshot,
+        typeRefs: typeRefsQuery.snapshot,
+        exports: exportsQuery.snapshot,
+        warnings,
+      },
+    );
+    const rendered = buildRenderedView(answer, args.consumer, args.renderStyle);
     const result: QueryAuditPackageResult = {
-      answer: createSourceAnalysisAuditAnswer(
-        {
-          inquiryEpisode: 'inventory-and-audit-sweep',
-          focusRef: { kind: 'package', value: args.packageName },
-          questionRoute: 'inventory',
-          readMode: 'summary-card',
-          worldFrame: {
-            repoPath: state.repoPath,
-            target: state.target,
-            regimeAnchor: 'hosted',
-            partiality: 'complete',
-            freshness: 'snapshot',
-          },
-        },
-        {
-          deps: depsQuery.snapshot,
-          typeRefs: typeRefsQuery.snapshot,
-          exports: exportsQuery.snapshot,
-          warnings,
-        },
-      ),
+      answer,
+      ...(rendered ? { rendered } : {}),
       warnings,
     };
 
@@ -339,31 +352,34 @@ export class SourceAnalysisHostRuntime {
       ...typeRefsQuery.refreshedKinds,
       ...exportsQuery.refreshedKinds,
     ]);
+    const answer = createSourceAnalysisRouteWitnessAnswer(
+      {
+        inquiryEpisode: 'bounded-closure-explanation',
+        focusRef: {
+          kind: args.focusKind,
+          value: args.focusValue,
+        },
+        questionRoute: 'route',
+        readMode: args.readMode ?? 'focus-card',
+        worldFrame: {
+          repoPath: state.repoPath,
+          target: state.target,
+          regimeAnchor: 'hosted',
+          partiality: 'complete',
+          freshness: 'snapshot',
+        },
+      },
+      {
+        deps: depsQuery.snapshot,
+        typeRefs: typeRefsQuery.snapshot,
+        exports: exportsQuery.snapshot,
+        warnings,
+      },
+    );
+    const rendered = buildRenderedView(answer, args.consumer, args.renderStyle);
     const result: QueryRouteWitnessResult = {
-      answer: createSourceAnalysisRouteWitnessAnswer(
-        {
-          inquiryEpisode: 'bounded-closure-explanation',
-          focusRef: {
-            kind: args.focusKind,
-            value: args.focusValue,
-          },
-          questionRoute: 'route',
-          readMode: 'focus-card',
-          worldFrame: {
-            repoPath: state.repoPath,
-            target: state.target,
-            regimeAnchor: 'hosted',
-            partiality: 'complete',
-            freshness: 'snapshot',
-          },
-        },
-        {
-          deps: depsQuery.snapshot,
-          typeRefs: typeRefsQuery.snapshot,
-          exports: exportsQuery.snapshot,
-          warnings,
-        },
-      ),
+      answer,
+      ...(rendered ? { rendered } : {}),
       warnings,
     };
 
@@ -435,6 +451,40 @@ export class SourceAnalysisHostRuntime {
 
 export function createSourceAnalysisHostRuntime(): SourceAnalysisHostRuntime {
   return new SourceAnalysisHostRuntime();
+}
+
+function buildRenderedView<TResult extends { document?: SourceAnalysisAnswerDocument<SourceAnalysisAnswerRef> }>(
+  answer: { readonly query: { readonly focusRef: { readonly kind: SourceAnalysisFocusKind }; readonly inquiryEpisode?: string; readonly readMode?: string; }; readonly outcome: { readonly value?: TResult } },
+  consumer: SourceAnalysisConsumerKind | undefined,
+  renderStyle: 'answer' | 'plain-text' | 'json-document' | undefined,
+): SourceAnalysisHostRenderedView | undefined {
+  if (!renderStyle || renderStyle === 'answer') {
+    return undefined;
+  }
+
+  const document = answer.outcome.value?.document;
+  if (!document) {
+    return undefined;
+  }
+
+  const policy = resolveSourceAnalysisInquiryPolicy(answer.query as Parameters<typeof resolveSourceAnalysisInquiryPolicy>[0], {
+    focusKind: answer.query.focusRef.kind,
+    inquiryEpisode: (answer.query.inquiryEpisode ?? 'orient-and-localize') as Parameters<typeof resolveSourceAnalysisInquiryPolicy>[1]['inquiryEpisode'],
+    readMode: (answer.query.readMode ?? 'focus-card') as Parameters<typeof resolveSourceAnalysisInquiryPolicy>[1]['readMode'],
+    ...(consumer ? { consumer } : {}),
+  });
+
+  if (renderStyle === 'plain-text') {
+    return {
+      style: 'plain-text',
+      rendered: renderSourceAnalysisAnswerDocumentToPlainText(document, policy),
+    };
+  }
+
+  return {
+    style: 'json-document',
+    document: renderSourceAnalysisAnswerDocumentToJson(document, policy),
+  };
 }
 
 function ensureFreshSnapshot<TKind extends SourceAnalysisKind>(

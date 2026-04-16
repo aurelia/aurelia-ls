@@ -2,8 +2,12 @@ import { loadCurrentSourceAnalysisSnapshots, type LoadedCurrentSourceAnalysisSna
 import type { PackageExportRecord, PackageExportsSummary } from './exports/schema.js';
 import type { TypeDecl } from './typerefs/schema.js';
 import type { SourceAnalysisAnswerCard, SourceAnalysisAnswerRef } from './answer-card.js';
-import { createSourceAnalysisAnswerCard } from './answer-card.js';
+import {
+  createStructuredSourceAnalysisAnswerCard,
+} from './answer-card.js';
+import { createSourceAnalysisAnswerDocument } from './answer-document.js';
 import { createSourceAnalysisAnswerEnvelope } from './answer-envelope.js';
+import { resolveSourceAnalysisInquiryPolicy, type SourceAnalysisInquiryPolicy } from './inquiry-policy.js';
 import type {
   SourceAnalysisClaimEdge,
   SourceAnalysisClaimHome,
@@ -446,24 +450,32 @@ function buildPackageEpisode(
       continuation('route', 'Follow the public host runtime factory', 'createSourceAnalysisHostRuntime', 'public export route'),
     );
   }
+  const policy = policyForNavigation(builder, 'package');
+  const relatedRefs = [
+    {
+      kind: 'file' as const,
+      value: pkg.analysis_entrypoint,
+      label: basename(pkg.analysis_entrypoint),
+      detail: 'package entrypoint',
+    },
+    ...keyExports.map((record) => exportRef(record)),
+  ];
 
   return builder.finish(createAnswer(
     builder,
+    policy,
     { kind: 'package', value: pkg.package_name, label: pkg.package_name },
     'hit',
-    createSourceAnalysisAnswerCard({
+    createStructuredSourceAnalysisAnswerCard({
       title: `${pkg.package_name} package overview`,
-      summaryLines,
       primaryRef: packageRef(pkg),
-      relatedRefs: [
-        {
-          kind: 'file',
-          value: pkg.analysis_entrypoint,
-          label: basename(pkg.analysis_entrypoint),
-          detail: 'package entrypoint',
-        },
-        ...keyExports.map((record) => exportRef(record)),
-      ],
+      relatedRefs,
+      document: createNavigationDocument(summaryLines, relatedRefs, [
+        { label: 'value exports', value: String(pkg.value_export_count) },
+        { label: 'type-only exports', value: String(pkg.type_only_export_count) },
+        { label: 'coupling cells', value: String(matrix?.cells.length ?? 0) },
+      ]),
+      policy,
     }),
     {
       kind: 'grounded',
@@ -585,30 +597,37 @@ function buildTypeEpisode(
       ? `It is also part of the public export surface for ${matchingExport.package_name}.`
       : 'It is not currently resolved as part of the package export surface.',
   ];
+  const policy = policyForNavigation(builder, 'type');
+  const relatedRefs = [
+    {
+      kind: 'file' as const,
+      value: decl.file,
+      label: basename(decl.file),
+      detail: 'declaration file',
+    },
+    ...(pkg ? [packageRef(pkg)] : []),
+    ...uniqueRefs.slice(0, 4).map((ref) => ({
+      kind: 'type' as const,
+      value: ref.target,
+      label: ref.target,
+      detail: `${ref.kind}${ref.context ? ` (${ref.context})` : ''}`,
+    })),
+  ];
 
   return builder.finish(createAnswer(
     builder,
+    policy,
     { kind: 'type', value: decl.name, label: decl.name },
     'hit',
-    createSourceAnalysisAnswerCard({
+    createStructuredSourceAnalysisAnswerCard({
       title: `${decl.name} type neighborhood`,
-      summaryLines,
       primaryRef: typeRef(decl),
-      relatedRefs: [
-        {
-          kind: 'file',
-          value: decl.file,
-          label: basename(decl.file),
-          detail: 'declaration file',
-        },
-        ...(pkg ? [packageRef(pkg)] : []),
-        ...uniqueRefs.slice(0, 4).map((ref) => ({
-          kind: 'type' as const,
-          value: ref.target,
-          label: ref.target,
-          detail: `${ref.kind}${ref.context ? ` (${ref.context})` : ''}`,
-        })),
-      ],
+      relatedRefs,
+      document: createNavigationDocument(summaryLines, relatedRefs, [
+        { label: 'type refs', value: String(uniqueRefs.length) },
+        { label: 'public export', value: matchingExport ? 'yes' : 'no' },
+      ]),
+      policy,
     }),
     {
       kind: 'grounded',
@@ -719,27 +738,34 @@ function buildExportEpisode(
       : 'Its implementation file could not be resolved in the current export chain.',
     `The public chain is ${record.chain.map((step) => `${basename(step.file)}:${step.kind}`).join(' -> ')}.`,
   ];
+  const policy = policyForNavigation(builder, 'export');
+  const relatedRefs = [
+    packageRef(pkg),
+    ...(record.declaration_file
+      ? [{
+        kind: 'file' as const,
+        value: record.declaration_file,
+        label: basename(record.declaration_file),
+        detail: 'implementation file',
+      }]
+      : []),
+    ...(declarationType ? [typeRef(declarationType)] : []),
+  ];
 
   return builder.finish(createAnswer(
     builder,
+    policy,
     { kind: 'export', value: record.exported_name, label: record.exported_name },
     'reroute',
-    createSourceAnalysisAnswerCard({
+    createStructuredSourceAnalysisAnswerCard({
       title: `${record.exported_name} export route`,
-      summaryLines,
       primaryRef: exportRef(record),
-      relatedRefs: [
-        packageRef(pkg),
-        ...(record.declaration_file
-          ? [{
-            kind: 'file' as const,
-            value: record.declaration_file,
-            label: basename(record.declaration_file),
-            detail: 'implementation file',
-          }]
-          : []),
-        ...(declarationType ? [typeRef(declarationType)] : []),
-      ],
+      relatedRefs,
+      document: createNavigationDocument(summaryLines, relatedRefs, [
+        { label: 'chain length', value: String(record.chain.length) },
+        { label: 'type-only', value: record.type_only ? 'yes' : 'no' },
+      ]),
+      policy,
     }),
     {
       kind: 'grounded',
@@ -875,30 +901,39 @@ function buildFileEpisode(
       ? `It contributes ${exportRecords.length} package exports, including ${exportRecords.slice(0, 4).map((record) => record.exported_name).join(', ')}.`
       : 'It does not directly contribute any package export records.',
   ];
+  const policy = policyForNavigation(builder, 'file');
+  const relatedRefs = [
+    ...(pkg ? [packageRef(pkg)] : []),
+    ...declarations.slice(0, 4).map((decl) => typeRef(decl)),
+    ...outboundEdges.slice(0, 3).map((edge) => ({
+      kind: 'file' as const,
+      value: edge.target,
+      label: basename(edge.target),
+      detail: `imports ${edge.bindings.join(', ') || '(side effect)'}`,
+    })),
+  ];
 
   return builder.finish(createAnswer(
     builder,
+    policy,
     { kind: 'file', value: filePath, label: basename(filePath) },
     'hit',
-    createSourceAnalysisAnswerCard({
+    createStructuredSourceAnalysisAnswerCard({
       title: `${basename(filePath)} file neighborhood`,
-      summaryLines,
       primaryRef: {
         kind: 'file',
         value: filePath,
         label: basename(filePath),
         detail: filePath,
       },
-      relatedRefs: [
-        ...(pkg ? [packageRef(pkg)] : []),
-        ...declarations.slice(0, 4).map((decl) => typeRef(decl)),
-        ...outboundEdges.slice(0, 3).map((edge) => ({
-          kind: 'file' as const,
-          value: edge.target,
-          label: basename(edge.target),
-          detail: `imports ${edge.bindings.join(', ') || '(side effect)'}`,
-        })),
-      ],
+      relatedRefs,
+      document: createNavigationDocument(summaryLines, relatedRefs, [
+        { label: 'outbound imports', value: String(outboundEdges.length) },
+        { label: 'inbound imports', value: String(inboundEdges.length) },
+        { label: 'declared types', value: String(declarations.length) },
+        { label: 'package exports', value: String(exportRecords.length) },
+      ]),
+      policy,
     }),
     {
       kind: 'grounded',
@@ -934,6 +969,7 @@ function buildFileEpisode(
 
 function createAnswer(
   builder: EpisodeBuilder,
+  policy: SourceAnalysisInquiryPolicy,
   focusRef: SourceAnalysisFocusRef,
   tag: SourceAnalysisAnswer<SourceAnalysisNavigationValue>['outcome']['tag'],
   value: SourceAnalysisNavigationValue,
@@ -943,20 +979,19 @@ function createAnswer(
   continuations: readonly SourceAnalysisContinuation[],
   provenance: readonly SourceAnalysisAnswerProvenanceEntry[],
 ): SourceAnalysisAnswer<SourceAnalysisNavigationValue> {
-  const readMode = defaultReadMode(focusRef.kind, builder.query.questionRoute);
   const worldFrame = defaultWorldFrame(builder.snapshots, builder.query.worldFrame);
   return createSourceAnalysisAnswerEnvelope({
     query: builder.query,
     focusRef,
-    inquiryEpisode: 'orient-and-localize',
-    readMode,
+    inquiryEpisode: policy.inquiryEpisode,
+    readMode: policy.readMode,
     worldFrame,
     tag,
     value,
     trust,
     closureBasis,
     issues,
-    continuations,
+    continuations: continuations.slice(0, policy.limits.continuationCount),
     provenance,
   });
 }
@@ -967,19 +1002,22 @@ function createMissAnswer(
   focusRef: SourceAnalysisFocusRef,
   relatedRefs: readonly SourceAnalysisNavigationRef[],
 ): SourceAnalysisAnswer<SourceAnalysisNavigationValue> {
+  const policy = policyForNavigation(builder, focusRef.kind);
   return createAnswer(
     builder,
+    policy,
     focusRef,
     'miss-unknown-shape',
-    createSourceAnalysisAnswerCard({
+    createStructuredSourceAnalysisAnswerCard({
       title: 'Workspace navigation miss',
-      summaryLines: [message],
       primaryRef: {
         kind: focusRef.kind,
         value: focusRef.value,
         label: focusRef.label ?? focusRef.value,
       },
       relatedRefs,
+      document: createNavigationDocument([message], relatedRefs),
+      policy,
     }),
     {
       kind: 'unavailable',
@@ -1006,19 +1044,22 @@ function createAmbiguousAnswer(
   focusRef: SourceAnalysisFocusRef,
   relatedRefs: readonly SourceAnalysisNavigationRef[],
 ): SourceAnalysisAnswer<SourceAnalysisNavigationValue> {
+  const policy = policyForNavigation(builder, focusRef.kind);
   return createAnswer(
     builder,
+    policy,
     focusRef,
     'ambiguous',
-    createSourceAnalysisAnswerCard({
+    createStructuredSourceAnalysisAnswerCard({
       title: 'Workspace navigation ambiguity',
-      summaryLines: [message],
       primaryRef: {
         kind: focusRef.kind,
         value: focusRef.value,
         label: focusRef.label ?? focusRef.value,
       },
       relatedRefs,
+      document: createNavigationDocument([message], relatedRefs),
+      policy,
     }),
     {
       kind: 'qualified',
@@ -1044,19 +1085,22 @@ function createUnsupportedAnswer(
   focusRef: SourceAnalysisFocusRef,
   message: string,
 ): SourceAnalysisAnswer<SourceAnalysisNavigationValue> {
+  const policy = policyForNavigation(builder, focusRef.kind);
   return createAnswer(
     builder,
+    policy,
     focusRef,
     'unsupported',
-    createSourceAnalysisAnswerCard({
+    createStructuredSourceAnalysisAnswerCard({
       title: 'Workspace navigation unsupported',
-      summaryLines: [message],
       primaryRef: {
         kind: focusRef.kind,
         value: focusRef.value,
         label: focusRef.label ?? focusRef.value,
       },
       relatedRefs: [],
+      document: createNavigationDocument([message], []),
+      policy,
     }),
     {
       kind: 'unavailable',
@@ -1226,6 +1270,45 @@ function defaultWorldFrame(
     partiality: worldFrame?.partiality ?? 'complete',
     freshness: worldFrame?.freshness ?? 'snapshot',
   };
+}
+
+function policyForNavigation(
+  builder: EpisodeBuilder,
+  focusKind: SourceAnalysisFocusKind,
+): SourceAnalysisInquiryPolicy {
+  return resolveSourceAnalysisInquiryPolicy(builder.query, {
+    focusKind,
+    inquiryEpisode: 'orient-and-localize',
+    readMode: defaultReadMode(focusKind, builder.query.questionRoute),
+  });
+}
+
+function createNavigationDocument(
+  summaryLines: readonly string[],
+  relatedRefs: readonly SourceAnalysisNavigationRef[],
+  facts: readonly { readonly label: string; readonly value: string }[] = [],
+) {
+  return createSourceAnalysisAnswerDocument<SourceAnalysisNavigationRef>([
+    {
+      kind: 'paragraph',
+      importance: 'primary',
+      lines: summaryLines,
+    },
+    ...(facts.length > 0
+      ? [{
+        kind: 'key-fact-list' as const,
+        importance: 'supporting' as const,
+        facts,
+      }]
+      : []),
+    ...(relatedRefs.length > 0
+      ? [{
+        kind: 'ref-list' as const,
+        importance: 'detail' as const,
+        refs: relatedRefs,
+      }]
+      : []),
+  ]);
 }
 
 function defaultReadMode(
