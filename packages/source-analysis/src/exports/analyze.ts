@@ -1,11 +1,11 @@
-
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 
 import * as ts from 'typescript';
 
+import type { SourceAnalysisAnalysisOptions } from '../analysis-options.js';
 import { SourceAnalysisSession } from '../session.js';
 import type {
   ExportChainStep,
@@ -143,7 +143,11 @@ function readJsonFile<T>(absPath: string): T {
 
 function gitHead(cwd: string): string {
   try {
-    return execSync('git rev-parse HEAD', { cwd, encoding: 'utf-8' }).trim();
+    return execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
   } catch {
     return 'unknown';
   }
@@ -151,7 +155,10 @@ function gitHead(cwd: string): string {
 
 function gitBlobHash(filePath: string): string {
   try {
-    return execSync(`git hash-object "${filePath}"`, { encoding: 'utf-8' }).trim();
+    return execFileSync('git', ['hash-object', filePath], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
   } catch {
     return 'unknown';
   }
@@ -279,7 +286,10 @@ function createFallbackProgram(entrypointAbs: string): ts.Program {
   );
 }
 
-function createPackageProgram(descriptor: PackageDescriptor): ts.Program {
+function createPackageProgram(
+  descriptor: PackageDescriptor,
+  options: SourceAnalysisAnalysisOptions,
+): ts.Program {
   const entrypointAbs = resolve(repoPath, descriptor.analysisEntrypoint);
   const tsconfigPath = resolveTsconfigForPackage(descriptor.packageDir);
 
@@ -293,7 +303,9 @@ function createPackageProgram(descriptor: PackageDescriptor): ts.Program {
   }
 
   try {
-    return requireSession().getProgram(loaded.snapshot.absPath, 'analysis')
+    return requireSession().getProgram(loaded.snapshot.absPath, 'analysis', {
+      cache: options.cachePrograms,
+    })
       ?? createFallbackProgram(entrypointAbs);
   } catch {
     return createFallbackProgram(entrypointAbs);
@@ -918,11 +930,14 @@ function computePackageRevision(files: Iterable<string>): string {
   return hash.digest('hex');
 }
 
-function analyzePackage(descriptor: PackageDescriptor): {
+function analyzePackage(
+  descriptor: PackageDescriptor,
+  options: SourceAnalysisAnalysisOptions,
+): {
   summary: PackageExportsSummary;
   records: PackageExportRecord[];
 } {
-  const program = createPackageProgram(descriptor);
+  const program = createPackageProgram(descriptor, options);
   const context: PackageAnalysisContext = {
     program,
     checker: program.getTypeChecker(),
@@ -1054,7 +1069,10 @@ function analyzePackage(descriptor: PackageDescriptor): {
   };
 }
 
-export function generateExportsAnalysis(nextSession: SourceAnalysisSession): ExportsAnalysisResult {
+export function generateExportsAnalysis(
+  nextSession: SourceAnalysisSession,
+  options: SourceAnalysisAnalysisOptions = {},
+): ExportsAnalysisResult {
   session = nextSession;
   repoPath = nextSession.repoPath;
   repoPathNormalized = toForwardSlash(repoPath).toLowerCase();
@@ -1072,7 +1090,7 @@ export function generateExportsAnalysis(nextSession: SourceAnalysisSession): Exp
     );
   }
 
-  const packageAnalyses = descriptors.map(analyzePackage);
+  const packageAnalyses = descriptors.map((descriptor) => analyzePackage(descriptor, options));
   const packageSummaries = packageAnalyses
     .map((analysis) => analysis.summary)
     .sort((left, right) => left.package_name.localeCompare(right.package_name));

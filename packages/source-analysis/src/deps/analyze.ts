@@ -33,7 +33,8 @@
 import * as ts from "typescript";
 import { resolve, relative, dirname } from "node:path";
 import { realpathSync } from "node:fs";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
+import type { SourceAnalysisAnalysisOptions } from '../analysis-options.js';
 import type { DepsOutput } from './schema.js';
 import { SourceAnalysisSession } from '../session.js';
 
@@ -627,7 +628,11 @@ function computeCouplingMatrices(): CouplingMatrix[] {
 
 function gitHead(cwd: string): string {
   try {
-    return execSync("git rev-parse HEAD", { cwd, encoding: "utf-8" }).trim();
+    return execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd,
+      encoding: "utf-8",
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
   } catch {
     return "unknown";
   }
@@ -635,13 +640,19 @@ function gitHead(cwd: string): string {
 
 function gitBlobHash(filePath: string): string {
   try {
-    return execSync(`git hash-object "${filePath}"`, { encoding: "utf-8" }).trim();
+    return execFileSync('git', ['hash-object', filePath], {
+      encoding: "utf-8",
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
   } catch {
     return "unknown";
   }
 }
 
-export function generateDepsAnalysis(nextSession: SourceAnalysisSession): DepsAnalysisResult {
+export function generateDepsAnalysis(
+  nextSession: SourceAnalysisSession,
+  options: SourceAnalysisAnalysisOptions = {},
+): DepsAnalysisResult {
   session = nextSession;
   repoPath = nextSession.repoPath;
   analyzed = new Set();
@@ -670,7 +681,9 @@ export function generateDepsAnalysis(nextSession: SourceAnalysisSession): DepsAn
 
     let program: ts.Program;
     try {
-      const maybeProgram = nextSession.getProgram(snapshot.absPath, 'analysis');
+      const maybeProgram = nextSession.getProgram(snapshot.absPath, 'analysis', {
+        cache: options.cachePrograms,
+      });
       if (!maybeProgram) {
         warnings.push(`Warning: skipped ${snapshot.absPath}: no TypeScript program available`);
         continue;
