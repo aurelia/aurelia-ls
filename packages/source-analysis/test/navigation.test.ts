@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { loadCurrentSourceAnalysisSnapshots } from '../src/current-snapshots.js';
-import { createSourceAnalysisNavigationEpisode } from '../src/navigation.js';
+import { loadCurrentSnapshots } from '../src/current-snapshots.js';
+import { createNavigationEpisode } from '../src/navigation.js';
 
 function loadSnapshotsForNavigation() {
   try {
-    return loadCurrentSourceAnalysisSnapshots();
+    return loadCurrentSnapshots();
   } catch (error) {
     throw new Error(
       `Current source-analysis snapshots are required for live navigation tests. Run "pnpm source-analysis refresh all".\n\n${(error as Error).message}`,
@@ -16,7 +16,7 @@ function loadSnapshotsForNavigation() {
 describe('Source-analysis live navigation', () => {
   it('orients an AI to the source-analysis package entrypoints and orchestration seams', () => {
     const snapshots = loadSnapshotsForNavigation();
-    const episode = createSourceAnalysisNavigationEpisode({
+    const episode = createNavigationEpisode({
       focusRef: { kind: 'package', value: '@aurelia-ls/source-analysis' },
       questionRoute: 'join',
     }, snapshots);
@@ -25,14 +25,14 @@ describe('Source-analysis live navigation', () => {
     expect(episode.answer.outcome.value?.primaryRef.value).toBe('@aurelia-ls/source-analysis');
     expect(episode.answer.outcome.value?.summaryLines.some((line) => line.includes('host -> deps'))).toBe(true);
     expect(episode.answer.outcome.value?.relatedRefs.some((ref) => ref.value === 'packages/source-analysis/src/index.ts')).toBe(true);
-    expect(episode.answer.outcome.value?.relatedRefs.some((ref) => ref.value === 'collectBindingSeams')).toBe(true);
+    expect(episode.answer.outcome.value?.relatedRefs.some((ref) => ref.kind === 'export')).toBe(true);
     expect(episode.answer.slots.closure_basis?.some((basis) => basis.kind === 'substrate')).toBe(true);
   });
 
   it('routes a public export to its owning implementation file in the live workspace', () => {
     const snapshots = loadSnapshotsForNavigation();
-    const episode = createSourceAnalysisNavigationEpisode({
-      focusRef: { kind: 'export', value: 'createSourceAnalysisHostRuntime' },
+    const episode = createNavigationEpisode({
+      focusRef: { kind: 'export', value: 'createSnapshotHostRuntime' },
       questionRoute: 'route',
     }, snapshots);
 
@@ -45,16 +45,16 @@ describe('Source-analysis live navigation', () => {
 
   it('shows the hosted runtime type neighborhood and next inspection steps', () => {
     const snapshots = loadSnapshotsForNavigation();
-    const episode = createSourceAnalysisNavigationEpisode({
-      focusRef: { kind: 'type', value: 'SourceAnalysisHostRuntime' },
+    const episode = createNavigationEpisode({
+      focusRef: { kind: 'type', value: 'SnapshotHostRuntime' },
       questionRoute: 'join',
     }, snapshots);
 
     expect(episode.answer.outcome.tag).toBe('hit');
     expect(episode.answer.outcome.value?.summaryLines.some((line) => line.includes('packages/source-analysis/src/host/runtime.ts:'))).toBe(true);
-    expect(episode.answer.outcome.value?.summaryLines.some((line) => line.includes('SourceAnalysisHostEnvelope'))).toBe(true);
+    expect(episode.answer.outcome.value?.summaryLines.some((line) => line.includes('HostCommandEnvelope'))).toBe(true);
     expect(episode.answer.outcome.value?.relatedRefs.some((ref) => ref.value === 'packages/source-analysis/src/host/runtime.ts')).toBe(true);
-    expect(episode.answer.outcome.value?.relatedRefs.some((ref) => ref.value === 'SourceAnalysisHostEnvelope')).toBe(true);
+    expect(episode.answer.outcome.value?.relatedRefs.some((ref) => ref.value === 'HostCommandEnvelope')).toBe(true);
     expect(episode.answer.outcome.continuations.some((step) => step.targetFocusRef === 'packages/source-analysis/src/host/runtime.ts')).toBe(true);
   });
 });

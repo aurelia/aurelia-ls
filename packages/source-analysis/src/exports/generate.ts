@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 
 import { generateExportsAnalysis } from './analyze.js';
-import { createSourceAnalysisSession, parseExcludedRepoRelativePrefixes } from '../session.js';
+import { createRepoSession, parseExcludedRepoRelativePrefixes } from '../repo-session.js';
 
 function main(): void {
   const repoPath = process.argv[2] || process.cwd();
   const target = process.argv[3] || '';
   const excludedRepoRelativePrefixes = parseExcludedRepoRelativePrefixes(process.argv[4], target);
-  const session = createSourceAnalysisSession({
+  const session = createRepoSession({
     repoPath,
     target,
     excludedRepoRelativePrefixes,

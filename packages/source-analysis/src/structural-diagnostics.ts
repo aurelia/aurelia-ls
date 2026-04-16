@@ -8,7 +8,7 @@ const ANSWER_DOCUMENT_KEYS = ['schemaVersion', 'blocks'] as const;
 const CARD_PROPERTY_KEYS = ['title', 'summaryLines', 'primaryRef', 'relatedRefs'] as const;
 const REF_PROPERTY_KEYS = ['kind', 'value', 'label'] as const;
 
-export const SOURCE_ANALYSIS_STRUCTURAL_FUNCTION_ROLES = [
+export const STRUCTURAL_FUNCTION_ROLES = [
   'answer-envelope-builder',
   'answer-envelope-wrapper',
   'answer-document-builder',
@@ -17,55 +17,55 @@ export const SOURCE_ANALYSIS_STRUCTURAL_FUNCTION_ROLES = [
   'summary-emitter',
 ] as const;
 
-export const SOURCE_ANALYSIS_STRUCTURAL_INTERFACE_ROLES = [
+export const STRUCTURAL_INTERFACE_ROLES = [
   'card-like',
   'ref-like',
 ] as const;
 
-export const SOURCE_ANALYSIS_STRUCTURAL_OBJECT_ROLES = [
+export const STRUCTURAL_OBJECT_ROLES = [
   'card-like',
   'answer-document',
   'answer-document-block',
 ] as const;
 
-export type SourceAnalysisStructuralFunctionRole =
-  typeof SOURCE_ANALYSIS_STRUCTURAL_FUNCTION_ROLES[number];
+export type StructuralFunctionRole =
+  typeof STRUCTURAL_FUNCTION_ROLES[number];
 
-export type SourceAnalysisStructuralInterfaceRole =
-  typeof SOURCE_ANALYSIS_STRUCTURAL_INTERFACE_ROLES[number];
+export type StructuralInterfaceRole =
+  typeof STRUCTURAL_INTERFACE_ROLES[number];
 
-export type SourceAnalysisStructuralObjectRole =
-  typeof SOURCE_ANALYSIS_STRUCTURAL_OBJECT_ROLES[number];
+export type StructuralObjectRole =
+  typeof STRUCTURAL_OBJECT_ROLES[number];
 
-export interface SourceAnalysisStructuralFunctionFact {
+export interface StructuralFunctionFact {
   readonly name: string;
   readonly line: number;
-  readonly roles: readonly SourceAnalysisStructuralFunctionRole[];
+  readonly roles: readonly StructuralFunctionRole[];
 }
 
-export interface SourceAnalysisStructuralInterfaceFact {
+export interface StructuralInterfaceFact {
   readonly name: string;
   readonly line: number;
   readonly propertyKeys: readonly string[];
-  readonly roles: readonly SourceAnalysisStructuralInterfaceRole[];
+  readonly roles: readonly StructuralInterfaceRole[];
 }
 
-export interface SourceAnalysisStructuralObjectFact {
+export interface StructuralObjectFact {
   readonly line: number;
   readonly propertyKeys: readonly string[];
-  readonly roles: readonly SourceAnalysisStructuralObjectRole[];
+  readonly roles: readonly StructuralObjectRole[];
 }
 
-export interface SourceAnalysisStructuralFileDiagnostics {
+export interface StructuralFileDiagnostics {
   readonly filePath: string;
-  readonly functions: readonly SourceAnalysisStructuralFunctionFact[];
-  readonly interfaces: readonly SourceAnalysisStructuralInterfaceFact[];
-  readonly objectLiterals: readonly SourceAnalysisStructuralObjectFact[];
+  readonly functions: readonly StructuralFunctionFact[];
+  readonly interfaces: readonly StructuralInterfaceFact[];
+  readonly objectLiterals: readonly StructuralObjectFact[];
   readonly summaryLineSites: readonly number[];
 }
 
-export interface SourceAnalysisPackageStructuralDiagnostics {
-  readonly files: readonly SourceAnalysisStructuralFileDiagnostics[];
+export interface PackageStructuralDiagnostics {
+  readonly files: readonly StructuralFileDiagnostics[];
 }
 
 interface NamedFunctionLike {
@@ -74,40 +74,40 @@ interface NamedFunctionLike {
   readonly body: ts.ConciseBody;
 }
 
-export function createSourceAnalysisPackageStructuralDiagnostics(
+export function createPackageStructuralDiagnostics(
   repoPath: string,
   packageFiles: readonly string[],
-): SourceAnalysisPackageStructuralDiagnostics {
+): PackageStructuralDiagnostics {
   const files = packageFiles
     .filter((filePath) => isAnalyzableTypeScriptFile(filePath))
     .map((filePath) => inspectStructuralFile(repoPath, filePath))
-    .filter((surface): surface is SourceAnalysisStructuralFileDiagnostics => surface !== null);
+    .filter((surface): surface is StructuralFileDiagnostics => surface !== null);
 
   return { files };
 }
 
-export function getSourceAnalysisStructuralFilesByFunctionRole(
-  diagnostics: SourceAnalysisPackageStructuralDiagnostics,
-  role: SourceAnalysisStructuralFunctionRole,
-): readonly SourceAnalysisStructuralFileDiagnostics[] {
+export function getStructuralFilesByFunctionRole(
+  diagnostics: PackageStructuralDiagnostics,
+  role: StructuralFunctionRole,
+): readonly StructuralFileDiagnostics[] {
   return diagnostics.files.filter((file) =>
     file.functions.some((fn) => fn.roles.includes(role)),
   );
 }
 
-export function getSourceAnalysisStructuralFilesByInterfaceRole(
-  diagnostics: SourceAnalysisPackageStructuralDiagnostics,
-  role: SourceAnalysisStructuralInterfaceRole,
-): readonly SourceAnalysisStructuralFileDiagnostics[] {
+export function getStructuralFilesByInterfaceRole(
+  diagnostics: PackageStructuralDiagnostics,
+  role: StructuralInterfaceRole,
+): readonly StructuralFileDiagnostics[] {
   return diagnostics.files.filter((file) =>
     file.interfaces.some((item) => item.roles.includes(role)),
   );
 }
 
-export function getSourceAnalysisStructuralFilesByObjectRole(
-  diagnostics: SourceAnalysisPackageStructuralDiagnostics,
-  role: SourceAnalysisStructuralObjectRole,
-): readonly SourceAnalysisStructuralFileDiagnostics[] {
+export function getStructuralFilesByObjectRole(
+  diagnostics: PackageStructuralDiagnostics,
+  role: StructuralObjectRole,
+): readonly StructuralFileDiagnostics[] {
   return diagnostics.files.filter((file) =>
     file.objectLiterals.some((item) => item.roles.includes(role)),
   );
@@ -116,7 +116,7 @@ export function getSourceAnalysisStructuralFilesByObjectRole(
 function inspectStructuralFile(
   repoPath: string,
   filePath: string,
-): SourceAnalysisStructuralFileDiagnostics | null {
+): StructuralFileDiagnostics | null {
   const absolutePath = resolve(repoPath, filePath);
   if (!existsSync(absolutePath)) {
     return null;
@@ -146,8 +146,8 @@ function inspectStructuralFile(
     }))
     .filter((fact) => fact.roles.length > 0);
 
-  const interfaces: SourceAnalysisStructuralInterfaceFact[] = [];
-  const objectLiterals: SourceAnalysisStructuralObjectFact[] = [];
+  const interfaces: StructuralInterfaceFact[] = [];
+  const objectLiterals: StructuralObjectFact[] = [];
   const summaryLineSites = new Set<number>();
 
   visitAllNodes(sourceFile, (node) => {
@@ -202,8 +202,8 @@ function inspectStructuralFile(
 function detectFunctionRoles(
   fn: NamedFunctionLike,
   directBuilderNames: ReadonlySet<string>,
-): readonly SourceAnalysisStructuralFunctionRole[] {
-  const roles = new Set<SourceAnalysisStructuralFunctionRole>();
+): readonly StructuralFunctionRole[] {
+  const roles = new Set<StructuralFunctionRole>();
 
   if (functionBuildsAnswerEnvelope(fn)) {
     roles.add('answer-envelope-builder');
@@ -214,7 +214,7 @@ function detectFunctionRoles(
   if (functionBuildsAnswerDocument(fn)) {
     roles.add('answer-document-builder');
   }
-  if (functionUsesCallNamed(fn.body, 'resolveSourceAnalysisInquiryPolicy')) {
+  if (functionUsesCallNamed(fn.body, 'resolveInquiryPolicy')) {
     roles.add('policy-resolver');
   }
   if (/^(compare|rank|score)/.test(fn.name)) {
@@ -229,8 +229,8 @@ function detectFunctionRoles(
 
 function detectInterfaceRoles(
   propertyKeys: readonly string[],
-): readonly SourceAnalysisStructuralInterfaceRole[] {
-  const roles: SourceAnalysisStructuralInterfaceRole[] = [];
+): readonly StructuralInterfaceRole[] {
+  const roles: StructuralInterfaceRole[] = [];
   if (hasAllKeys(propertyKeys, CARD_PROPERTY_KEYS)) {
     roles.push('card-like');
   }
@@ -243,8 +243,8 @@ function detectInterfaceRoles(
 function detectObjectRoles(
   node: ts.ObjectLiteralExpression,
   propertyKeys: readonly string[],
-): readonly SourceAnalysisStructuralObjectRole[] {
-  const roles: SourceAnalysisStructuralObjectRole[] = [];
+): readonly StructuralObjectRole[] {
+  const roles: StructuralObjectRole[] = [];
   if (hasAllKeys(propertyKeys, CARD_PROPERTY_KEYS)) {
     roles.push('card-like');
   }
@@ -302,7 +302,7 @@ function functionBuildsAnswerEnvelope(fn: NamedFunctionLike): boolean {
 function functionBuildsAnswerDocument(fn: NamedFunctionLike): boolean {
   return collectFunctionReturnExpressions(fn.body).some((expression) => {
     if (ts.isCallExpression(expression) && ts.isIdentifier(expression.expression)) {
-      return expression.expression.text === 'createSourceAnalysisAnswerDocument';
+      return expression.expression.text === 'createAnswerDocument';
     }
     return ts.isObjectLiteralExpression(expression) && looksLikeAnswerDocument(expression);
   });

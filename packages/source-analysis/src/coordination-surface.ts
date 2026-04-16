@@ -1,63 +1,63 @@
 import type {
-  SourceAnalysisPackageStructuralDiagnostics,
-  SourceAnalysisStructuralFileDiagnostics,
-  SourceAnalysisStructuralFunctionFact,
-  SourceAnalysisStructuralInterfaceFact,
+  PackageStructuralDiagnostics,
+  StructuralFileDiagnostics,
+  StructuralFunctionFact,
+  StructuralInterfaceFact,
 } from './structural-diagnostics.js';
 import {
-  createSourceAnalysisPackageStructuralDiagnostics,
-  getSourceAnalysisStructuralFilesByFunctionRole,
+  createPackageStructuralDiagnostics,
+  getStructuralFilesByFunctionRole,
 } from './structural-diagnostics.js';
 
-export interface SourceAnalysisCoordinationFunctionSurface {
+export interface CoordinationFunctionSurface {
   readonly name: string;
   readonly line: number;
 }
 
-export interface SourceAnalysisCoordinationInterfaceSurface {
+export interface CoordinationInterfaceSurface {
   readonly name: string;
   readonly line: number;
   readonly propertyKeys: readonly string[];
 }
 
-export interface SourceAnalysisFileCoordinationSurface {
+export interface FileCoordinationSurface {
   readonly filePath: string;
-  readonly envelopeBuilderFunctions: readonly SourceAnalysisCoordinationFunctionSurface[];
-  readonly envelopeWrapperFunctions: readonly SourceAnalysisCoordinationFunctionSurface[];
-  readonly cardLikeInterfaces: readonly SourceAnalysisCoordinationInterfaceSurface[];
-  readonly refLikeInterfaces: readonly SourceAnalysisCoordinationInterfaceSurface[];
+  readonly envelopeBuilderFunctions: readonly CoordinationFunctionSurface[];
+  readonly envelopeWrapperFunctions: readonly CoordinationFunctionSurface[];
+  readonly cardLikeInterfaces: readonly CoordinationInterfaceSurface[];
+  readonly refLikeInterfaces: readonly CoordinationInterfaceSurface[];
   readonly cardObjectLiteralLines: readonly number[];
   readonly summaryLineSites: readonly number[];
 }
 
-export interface SourceAnalysisPackageCoordinationSurface {
-  readonly files: readonly SourceAnalysisFileCoordinationSurface[];
-  readonly answerBuilderFiles: readonly SourceAnalysisFileCoordinationSurface[];
-  readonly presentationCarrierFiles: readonly SourceAnalysisFileCoordinationSurface[];
+export interface PackageCoordinationSurface {
+  readonly files: readonly FileCoordinationSurface[];
+  readonly answerBuilderFiles: readonly FileCoordinationSurface[];
+  readonly presentationCarrierFiles: readonly FileCoordinationSurface[];
 }
 
-export function createSourceAnalysisPackageCoordinationSurface(
+export function createPackageCoordinationSurface(
   repoPath: string,
   packageFiles: readonly string[],
-): SourceAnalysisPackageCoordinationSurface {
+): PackageCoordinationSurface {
   return coordinationSurfaceFromStructuralDiagnostics(
-    createSourceAnalysisPackageStructuralDiagnostics(repoPath, packageFiles),
+    createPackageStructuralDiagnostics(repoPath, packageFiles),
   );
 }
 
 export function coordinationSurfaceFromStructuralDiagnostics(
-  diagnostics: SourceAnalysisPackageStructuralDiagnostics,
-): SourceAnalysisPackageCoordinationSurface {
+  diagnostics: PackageStructuralDiagnostics,
+): PackageCoordinationSurface {
   const files = diagnostics.files
     .map(mapStructuralFileToCoordinationSurface)
-    .filter((surface): surface is SourceAnalysisFileCoordinationSurface => surface !== null);
+    .filter((surface): surface is FileCoordinationSurface => surface !== null);
 
   return {
     files,
-    answerBuilderFiles: getSourceAnalysisStructuralFilesByFunctionRole(
+    answerBuilderFiles: getStructuralFilesByFunctionRole(
       diagnostics,
       'answer-envelope-builder',
-    ).map((file) => mapStructuralFileToCoordinationSurface(file)).filter(Boolean) as SourceAnalysisFileCoordinationSurface[],
+    ).map((file) => mapStructuralFileToCoordinationSurface(file)).filter(Boolean) as FileCoordinationSurface[],
     presentationCarrierFiles: files.filter((file) =>
       file.cardLikeInterfaces.length > 0
       && file.refLikeInterfaces.length > 0
@@ -67,8 +67,8 @@ export function coordinationSurfaceFromStructuralDiagnostics(
 }
 
 function mapStructuralFileToCoordinationSurface(
-  file: SourceAnalysisStructuralFileDiagnostics,
-): SourceAnalysisFileCoordinationSurface | null {
+  file: StructuralFileDiagnostics,
+): FileCoordinationSurface | null {
   const envelopeBuilderFunctions = mapFunctionsByRole(file.functions, 'answer-envelope-builder');
   const envelopeWrapperFunctions = mapFunctionsByRole(file.functions, 'answer-envelope-wrapper');
   const cardLikeInterfaces = mapInterfacesByRole(file.interfaces, 'card-like');
@@ -101,18 +101,18 @@ function mapStructuralFileToCoordinationSurface(
 }
 
 function mapFunctionsByRole(
-  functions: readonly SourceAnalysisStructuralFunctionFact[],
+  functions: readonly StructuralFunctionFact[],
   role: 'answer-envelope-builder' | 'answer-envelope-wrapper',
-): readonly SourceAnalysisCoordinationFunctionSurface[] {
+): readonly CoordinationFunctionSurface[] {
   return functions
     .filter((fn) => fn.roles.includes(role))
     .map((fn) => ({ name: fn.name, line: fn.line }));
 }
 
 function mapInterfacesByRole(
-  interfaces: readonly SourceAnalysisStructuralInterfaceFact[],
+  interfaces: readonly StructuralInterfaceFact[],
   role: 'card-like' | 'ref-like',
-): readonly SourceAnalysisCoordinationInterfaceSurface[] {
+): readonly CoordinationInterfaceSurface[] {
   return interfaces
     .filter((item) => item.roles.includes(role))
     .map((item) => ({

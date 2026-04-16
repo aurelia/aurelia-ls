@@ -4,7 +4,7 @@
  *
  * Default output: .source-analysis/snapshots/<target>-{deps|typerefs|exports}.json
  * relative to the current working directory. Override with --out-dir or the
- * SOURCE_ANALYSIS_SNAPSHOT_ROOT environment variable.
+ * SNAPSHOT_ROOT environment variable.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -12,15 +12,15 @@ import { closeSync, existsSync, mkdirSync, openSync, renameSync, statSync, unlin
 import { join, resolve } from 'node:path';
 
 import {
-  createSourceAnalysisPaths,
+  createSnapshotPaths,
   getExcludedRepoRelativePrefixesForTarget,
-  resolveSourceAnalysisTarget,
-} from './config.js';
+  resolveSnapshotTarget,
+} from './snapshot-config.js';
 
 type Mode = 'deps' | 'typerefs' | 'exports' | 'all';
 type RefreshableKind = Exclude<Mode, 'all'>;
 
-const PATHS = createSourceAnalysisPaths(import.meta.url);
+const PATHS = createSnapshotPaths(import.meta.url);
 
 const rawArgs = process.argv.slice(2);
 let mode: Mode = "all";
@@ -45,7 +45,7 @@ const repoArg = takeOption('--repo');
 const outDirArg = takeOption('--out-dir') ?? PATHS.snapshotRootPath;
 const waitMsArg = takeOption('--wait-ms');
 const waitMs = waitMsArg ? Number(waitMsArg) : 20000;
-const selection = resolveSourceAnalysisTarget({ target: targetArg, repoPath: repoArg });
+const selection = resolveSnapshotTarget({ target: targetArg, repoPath: repoArg });
 const target = selection.target;
 
 if (!Number.isFinite(waitMs) || waitMs < 0) {

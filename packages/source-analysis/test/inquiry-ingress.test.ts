@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { createSourceAnalysisInquiryIngress } from '../out/index.js';
+import { createInquiryIngress } from '../out/inquiry-ingress.js';
 
-describe('SourceAnalysisInquiryIngress', () => {
+describe('InquiryIngress', () => {
   it('describes inquiry families and keeps kernel coverage closed', () => {
-    const ingress = createSourceAnalysisInquiryIngress();
+    const ingress = createInquiryIngress();
 
     const answer = ingress.createDiscoveryAnswer({
       question: 'What can this tool do for package tech debt?',
@@ -16,7 +16,7 @@ describe('SourceAnalysisInquiryIngress', () => {
   });
 
   it('plans package audit as a public inquiry with a transient session step', () => {
-    const ingress = createSourceAnalysisInquiryIngress();
+    const ingress = createInquiryIngress();
 
     const answer = ingress.createPlanAnswer({
       question: 'Audit @aurelia-ls/source-analysis for tech debt.',
@@ -34,7 +34,7 @@ describe('SourceAnalysisInquiryIngress', () => {
   });
 
   it('routes repo orientation questions toward workspace-orientation instead of raw session commands', () => {
-    const ingress = createSourceAnalysisInquiryIngress();
+    const ingress = createInquiryIngress();
 
     const answer = ingress.createPlanAnswer({
       question: 'I want to understand the repo before editing it.',
@@ -47,7 +47,7 @@ describe('SourceAnalysisInquiryIngress', () => {
   });
 
   it('keeps sentence-leading words out of type captures when routing why-alive questions', () => {
-    const ingress = createSourceAnalysisInquiryIngress();
+    const ingress = createInquiryIngress();
 
     const answer = ingress.createDiscoveryAnswer({
       question: 'Why is packages/source-analysis/src/refresh.ts alive?',

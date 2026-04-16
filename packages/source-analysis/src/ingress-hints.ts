@@ -1,37 +1,37 @@
-import type { SourceAnalysisFocusKind } from './query-model.js';
+import type { FocusKind } from './inquiry-model.js';
 import {
-  DEFAULT_SOURCE_ANALYSIS_INGRESS_RECOGNIZER_REGISTRY,
+  DEFAULT_INGRESS_RECOGNIZER_REGISTRY,
   captureKindsForFocusKind,
   extractFilePaths,
   extractPackageNames,
   extractRepoPaths,
   extractTypeNames,
-  type SourceAnalysisIngressCapture,
-  type SourceAnalysisIngressRecognition,
-  type SourceAnalysisIngressRecognizerRegistry,
+  type IngressCapture,
+  type IngressRecognition,
+  type IngressRecognizerRegistry,
 } from './ingress-recognizers.js';
 
-export interface SourceAnalysisIngressHintDetail {
+export interface IngressHintDetail {
   readonly kind: 'input' | 'focus-inference' | 'repair';
   readonly detail: string;
 }
 
-export interface SourceAnalysisIngressFocusHints {
-  readonly focusKind?: SourceAnalysisFocusKind;
+export interface IngressFocusHints {
+  readonly focusKind?: FocusKind;
   readonly focusValue?: string;
   readonly packageName?: string;
-  readonly recognition: SourceAnalysisIngressRecognition;
-  readonly reasons: readonly SourceAnalysisIngressHintDetail[];
+  readonly recognition: IngressRecognition;
+  readonly reasons: readonly IngressHintDetail[];
 }
 
 export function deriveFocusHints(
   question: string,
-  explicitFocusKind?: SourceAnalysisFocusKind,
+  explicitFocusKind?: FocusKind,
   explicitFocusValue?: string,
-  recognizers: SourceAnalysisIngressRecognizerRegistry = DEFAULT_SOURCE_ANALYSIS_INGRESS_RECOGNIZER_REGISTRY,
-): SourceAnalysisIngressFocusHints {
+  recognizers: IngressRecognizerRegistry = DEFAULT_INGRESS_RECOGNIZER_REGISTRY,
+): IngressFocusHints {
   const recognition = recognizers.createRecognition(question);
-  const reasons: SourceAnalysisIngressHintDetail[] = [];
+  const reasons: IngressHintDetail[] = [];
 
   if (explicitFocusKind && explicitFocusValue) {
     reasons.push({
@@ -110,8 +110,8 @@ export function deriveFocusHints(
 export function deriveRepairHints(
   args: Record<string, unknown> | undefined,
   question: string | undefined,
-  recognizers: SourceAnalysisIngressRecognizerRegistry = DEFAULT_SOURCE_ANALYSIS_INGRESS_RECOGNIZER_REGISTRY,
-): SourceAnalysisIngressFocusHints {
+  recognizers: IngressRecognizerRegistry = DEFAULT_INGRESS_RECOGNIZER_REGISTRY,
+): IngressFocusHints {
   const recognition = recognizers.createRecognition(question);
   const explicitFocusKind = asFocusKind(args?.focusKind) ?? inferFocusKindFromArgs(args);
   const explicitFocusValue = asString(args?.focusValue) ?? asString(args?.packageName);
@@ -148,7 +148,7 @@ export function deriveRepairHints(
 
 export function inferFocusKindFromArgs(
   args: Record<string, unknown> | undefined,
-): SourceAnalysisFocusKind | undefined {
+): FocusKind | undefined {
   if (!args) {
     return undefined;
   }
@@ -181,7 +181,7 @@ export function extractRepoPath(question: string): string | undefined {
 }
 
 export function describeFocusHints(hints: {
-  readonly focusKind?: SourceAnalysisFocusKind;
+  readonly focusKind?: FocusKind;
   readonly focusValue?: string;
 }): string {
   if (!hints.focusKind || !hints.focusValue) {
@@ -194,7 +194,7 @@ export function asString(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
-export function asFocusKind(value: unknown): SourceAnalysisFocusKind | undefined {
+export function asFocusKind(value: unknown): FocusKind | undefined {
   if (value === 'repo' || value === 'package' || value === 'directory' || value === 'file'
     || value === 'symbol' || value === 'type' || value === 'export' || value === 'claim'
     || value === 'session' || value === 'capability' || value === 'inquiry') {
@@ -204,8 +204,8 @@ export function asFocusKind(value: unknown): SourceAnalysisFocusKind | undefined
 }
 
 export function supportsRecognizedFocus(
-  focusKind: SourceAnalysisFocusKind,
-  recognition: SourceAnalysisIngressRecognition | readonly SourceAnalysisIngressCapture[],
+  focusKind: FocusKind,
+  recognition: IngressRecognition | readonly IngressCapture[],
 ): boolean {
   const captures = Array.isArray(recognition) || !('captures' in recognition)
     ? recognition

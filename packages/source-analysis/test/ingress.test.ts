@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { createSourceAnalysisCapabilityIngress } from '../out/index.js';
+import { createCapabilityIngress } from '../out/capability-ingress.js';
 
-describe('SourceAnalysisCapabilityIngress', () => {
+describe('CapabilityIngress', () => {
   it('discovers route-witness as the best fit for why-alive questions', () => {
-    const ingress = createSourceAnalysisCapabilityIngress();
+    const ingress = createCapabilityIngress();
 
     const answer = ingress.createDiscoveryAnswer({
       question: 'Why is packages/source-analysis/src/refresh.ts alive?',
@@ -23,7 +23,7 @@ describe('SourceAnalysisCapabilityIngress', () => {
   });
 
   it('plans a package audit invocation from a natural-language question', () => {
-    const ingress = createSourceAnalysisCapabilityIngress();
+    const ingress = createCapabilityIngress();
 
     const answer = ingress.createPlanAnswer({
       question: 'Audit @aurelia-ls/source-analysis for tech debt.',
@@ -42,7 +42,7 @@ describe('SourceAnalysisCapabilityIngress', () => {
   });
 
   it('repairs wrong command labels toward the declared catalog command', () => {
-    const ingress = createSourceAnalysisCapabilityIngress();
+    const ingress = createCapabilityIngress();
 
     const answer = ingress.createRepairAnswer({
       command: 'query.audit.pkg',

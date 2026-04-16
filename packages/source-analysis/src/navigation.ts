@@ -1,51 +1,51 @@
-import { loadCurrentSourceAnalysisSnapshots, type LoadedCurrentSourceAnalysisSnapshots } from './current-snapshots.js';
+import { loadCurrentSnapshots, type LoadedCurrentSnapshotSet } from './current-snapshots.js';
 import type { PackageExportRecord, PackageExportsSummary } from './exports/schema.js';
 import type { TypeDecl } from './typerefs/schema.js';
-import type { SourceAnalysisAnswerCard, SourceAnalysisAnswerRef } from './answer-card.js';
+import type { AnswerCard, AnswerRef } from './answer-card.js';
 import {
-  createStructuredSourceAnalysisAnswerCard,
+  createStructuredAnswerCard,
 } from './answer-card.js';
-import { createSourceAnalysisAnswerDocument } from './answer-document.js';
-import { createSourceAnalysisAnswerEnvelope } from './answer-envelope.js';
-import { resolveSourceAnalysisInquiryPolicy, type SourceAnalysisInquiryPolicy } from './inquiry-policy.js';
+import { createAnswerDocument } from './answer-document.js';
+import { createAnswerEnvelope } from './answer-envelope.js';
+import { resolveInquiryPolicy, type InquiryPolicy } from './inquiry-policy.js';
 import type {
-  SourceAnalysisClaimEdge,
-  SourceAnalysisClaimHome,
-  SourceAnalysisClaimLattice,
-  SourceAnalysisClaimNode,
+  ClaimEdge,
+  ClaimHome,
+  ClaimLattice,
+  ClaimNode,
 } from './claim-lattice.js';
-import { SOURCE_ANALYSIS_CLAIM_LATTICE_SCHEMA_VERSION } from './claim-lattice.js';
+import { CLAIM_LATTICE_SCHEMA_VERSION } from './claim-lattice.js';
 import type {
-  SourceAnalysisClosureBasis,
-  SourceAnalysisContinuation,
-  SourceAnalysisIssue,
-  SourceAnalysisTrustProfile,
+  ClosureBasis,
+  Continuation,
+  Issue,
+  TrustProfile,
 } from './outcome-algebra.js';
 import type {
-  SourceAnalysisAnswer,
-  SourceAnalysisAnswerProvenanceEntry,
-  SourceAnalysisFocusKind,
-  SourceAnalysisFocusRef,
-  SourceAnalysisQuery,
-  SourceAnalysisReadMode,
-  SourceAnalysisWorldFrame,
-} from './query-model.js';
+  InquiryAnswer,
+  InquiryProvenanceEntry,
+  FocusKind,
+  FocusRef,
+  Inquiry,
+  ReadMode,
+  WorldFrame,
+} from './inquiry-model.js';
 import type {
-  SourceAnalysisObservationProvenance,
-  SourceAnalysisSubstrateEdge,
-  SourceAnalysisSubstrateGraph,
-  SourceAnalysisSubstrateNode,
+  ObservationProvenance,
+  SubstrateEdge,
+  SubstrateGraph,
+  SubstrateNode,
 } from './substrate.js';
-import { SOURCE_ANALYSIS_SUBSTRATE_SCHEMA_VERSION } from './substrate.js';
+import { SUBSTRATE_SCHEMA_VERSION } from './substrate.js';
 
-export type SourceAnalysisNavigationRef = SourceAnalysisAnswerRef;
+export type NavigationRef = AnswerRef;
 
-export type SourceAnalysisNavigationValue = SourceAnalysisAnswerCard<SourceAnalysisNavigationRef>;
+export type NavigationValue = AnswerCard<NavigationRef>;
 
-export interface SourceAnalysisNavigationEpisode {
-  readonly substrate: SourceAnalysisSubstrateGraph;
-  readonly lattice: SourceAnalysisClaimLattice;
-  readonly answer: SourceAnalysisAnswer<SourceAnalysisNavigationValue>;
+export interface NavigationEpisode {
+  readonly substrate: SubstrateGraph;
+  readonly lattice: ClaimLattice;
+  readonly answer: InquiryAnswer<NavigationValue>;
 }
 
 const NAVIGATION_HOME_IDS = {
@@ -57,7 +57,7 @@ const NAVIGATION_HOME_IDS = {
   route: 'navigation/route',
 } as const;
 
-const NAVIGATION_HOMES: readonly SourceAnalysisClaimHome[] = [
+const NAVIGATION_HOMES: readonly ClaimHome[] = [
   {
     id: NAVIGATION_HOME_IDS.packageOverview,
     kind: 'observation',
@@ -90,21 +90,21 @@ const NAVIGATION_HOMES: readonly SourceAnalysisClaimHome[] = [
   },
 ];
 
-export function createCurrentSourceAnalysisNavigationEpisode(
-  query: SourceAnalysisQuery,
+export function createCurrentNavigationEpisode(
+  query: Inquiry,
   target?: string,
   waitMs = 0,
-): SourceAnalysisNavigationEpisode {
-  return createSourceAnalysisNavigationEpisode(
+): NavigationEpisode {
+  return createNavigationEpisode(
     query,
-    loadCurrentSourceAnalysisSnapshots(target, waitMs),
+    loadCurrentSnapshots(target, waitMs),
   );
 }
 
-export function createSourceAnalysisNavigationEpisode(
-  query: SourceAnalysisQuery,
-  snapshots: LoadedCurrentSourceAnalysisSnapshots,
-): SourceAnalysisNavigationEpisode {
+export function createNavigationEpisode(
+  query: Inquiry,
+  snapshots: LoadedCurrentSnapshotSet,
+): NavigationEpisode {
   const builder = new EpisodeBuilder(query, snapshots);
   switch (query.focusRef.kind) {
     case 'package':
@@ -127,41 +127,41 @@ export function createSourceAnalysisNavigationEpisode(
 }
 
 class EpisodeBuilder {
-  readonly #query: SourceAnalysisQuery;
-  readonly #snapshots: LoadedCurrentSourceAnalysisSnapshots;
-  readonly #nodes = new Map<string, SourceAnalysisSubstrateNode>();
-  readonly #edges = new Map<string, SourceAnalysisSubstrateEdge>();
-  readonly #claims = new Map<string, SourceAnalysisClaimNode>();
-  readonly #claimEdges = new Map<string, SourceAnalysisClaimEdge>();
+  readonly #query: Inquiry;
+  readonly #snapshots: LoadedCurrentSnapshotSet;
+  readonly #nodes = new Map<string, SubstrateNode>();
+  readonly #edges = new Map<string, SubstrateEdge>();
+  readonly #claims = new Map<string, ClaimNode>();
+  readonly #claimEdges = new Map<string, ClaimEdge>();
 
-  constructor(query: SourceAnalysisQuery, snapshots: LoadedCurrentSourceAnalysisSnapshots) {
+  constructor(query: Inquiry, snapshots: LoadedCurrentSnapshotSet) {
     this.#query = query;
     this.#snapshots = snapshots;
   }
 
-  get query(): SourceAnalysisQuery {
+  get query(): Inquiry {
     return this.#query;
   }
 
-  get snapshots(): LoadedCurrentSourceAnalysisSnapshots {
+  get snapshots(): LoadedCurrentSnapshotSet {
     return this.#snapshots;
   }
 
-  addNode(node: SourceAnalysisSubstrateNode): string {
+  addNode(node: SubstrateNode): string {
     this.#nodes.set(node.id, node);
     return node.id;
   }
 
-  addEdge(edge: SourceAnalysisSubstrateEdge): void {
+  addEdge(edge: SubstrateEdge): void {
     this.#edges.set(edge.id, edge);
   }
 
-  addClaim(claim: SourceAnalysisClaimNode): string {
+  addClaim(claim: ClaimNode): string {
     this.#claims.set(claim.id, claim);
     return claim.id;
   }
 
-  addClaimEdge(edge: SourceAnalysisClaimEdge): void {
+  addClaimEdge(edge: ClaimEdge): void {
     this.#claimEdges.set(`${edge.kind}:${edge.from}->${edge.to}`, edge);
   }
 
@@ -301,7 +301,7 @@ class EpisodeBuilder {
     });
   }
 
-  snapshotProvenance(kind: 'deps' | 'typerefs' | 'exports'): SourceAnalysisObservationProvenance {
+  snapshotProvenance(kind: 'deps' | 'typerefs' | 'exports'): ObservationProvenance {
     const snapshot = kind === 'deps'
       ? this.#snapshots.deps
       : kind === 'typerefs'
@@ -315,17 +315,17 @@ class EpisodeBuilder {
     };
   }
 
-  finish(answer: SourceAnalysisAnswer<SourceAnalysisNavigationValue>): SourceAnalysisNavigationEpisode {
+  finish(answer: InquiryAnswer<NavigationValue>): NavigationEpisode {
     return {
       substrate: {
-        schemaVersion: SOURCE_ANALYSIS_SUBSTRATE_SCHEMA_VERSION,
+        schemaVersion: SUBSTRATE_SCHEMA_VERSION,
         repoPath: this.#snapshots.deps.root,
         target: answer.query.worldFrame?.target ?? 'current',
         nodes: [...this.#nodes.values()],
         edges: [...this.#edges.values()],
       },
       lattice: {
-        schemaVersion: SOURCE_ANALYSIS_CLAIM_LATTICE_SCHEMA_VERSION,
+        schemaVersion: CLAIM_LATTICE_SCHEMA_VERSION,
         homes: NAVIGATION_HOMES,
         claims: [...this.#claims.values()],
         edges: [...this.#claimEdges.values()],
@@ -338,7 +338,7 @@ class EpisodeBuilder {
 function buildPackageEpisode(
   builder: EpisodeBuilder,
   packageQuery: string,
-): SourceAnalysisNavigationEpisode {
+): NavigationEpisode {
   const pkgMatches = resolvePackages(builder.snapshots, packageQuery);
   if (pkgMatches.length === 0) {
     return builder.finish(createMissAnswer(
@@ -441,13 +441,13 @@ function buildPackageEpisode(
       : 'No representative value exports were available for this package.',
   ];
 
-  const continuations: SourceAnalysisContinuation[] = [
+  const continuations: Continuation[] = [
     continuation('join', 'Inspect the package entrypoint', pkg.analysis_entrypoint, 'package entrypoint'),
-    continuation('join', 'Inspect the hosted runtime type', 'SourceAnalysisHostRuntime', 'host runtime type'),
+    continuation('join', 'Inspect the snapshot host runtime type', 'SnapshotHostRuntime', 'snapshot host runtime type'),
   ];
-  if (keyExports.some((record) => record.exported_name === 'createSourceAnalysisHostRuntime')) {
+  if (keyExports.some((record) => record.exported_name === 'createSnapshotHostRuntime')) {
     continuations.push(
-      continuation('route', 'Follow the public host runtime factory', 'createSourceAnalysisHostRuntime', 'public export route'),
+      continuation('route', 'Follow the public snapshot host runtime factory', 'createSnapshotHostRuntime', 'public export route'),
     );
   }
   const policy = policyForNavigation(builder, 'package');
@@ -466,7 +466,7 @@ function buildPackageEpisode(
     policy,
     { kind: 'package', value: pkg.package_name, label: pkg.package_name },
     'hit',
-    createStructuredSourceAnalysisAnswerCard({
+    createStructuredAnswerCard({
       title: `${pkg.package_name} package overview`,
       primaryRef: packageRef(pkg),
       relatedRefs,
@@ -511,7 +511,7 @@ function buildPackageEpisode(
 function buildTypeEpisode(
   builder: EpisodeBuilder,
   typeQuery: string,
-): SourceAnalysisNavigationEpisode {
+): NavigationEpisode {
   const declMatches = resolveTypeDeclarations(builder.snapshots, typeQuery);
   if (declMatches.length === 0) {
     return builder.finish(createMissAnswer(
@@ -619,7 +619,7 @@ function buildTypeEpisode(
     policy,
     { kind: 'type', value: decl.name, label: decl.name },
     'hit',
-    createStructuredSourceAnalysisAnswerCard({
+    createStructuredAnswerCard({
       title: `${decl.name} type neighborhood`,
       primaryRef: typeRef(decl),
       relatedRefs,
@@ -669,7 +669,7 @@ function buildTypeEpisode(
 function buildExportEpisode(
   builder: EpisodeBuilder,
   exportQuery: string,
-): SourceAnalysisNavigationEpisode {
+): NavigationEpisode {
   const matches = resolveExports(builder.snapshots, exportQuery);
   if (matches.length === 0) {
     return builder.finish(createMissAnswer(
@@ -757,7 +757,7 @@ function buildExportEpisode(
     policy,
     { kind: 'export', value: record.exported_name, label: record.exported_name },
     'reroute',
-    createStructuredSourceAnalysisAnswerCard({
+    createStructuredAnswerCard({
       title: `${record.exported_name} export route`,
       primaryRef: exportRef(record),
       relatedRefs,
@@ -808,7 +808,7 @@ function buildExportEpisode(
 function buildFileEpisode(
   builder: EpisodeBuilder,
   fileQuery: string,
-): SourceAnalysisNavigationEpisode {
+): NavigationEpisode {
   const matches = resolveFiles(builder.snapshots, fileQuery);
   if (matches.length === 0) {
     return builder.finish(createMissAnswer(
@@ -918,7 +918,7 @@ function buildFileEpisode(
     policy,
     { kind: 'file', value: filePath, label: basename(filePath) },
     'hit',
-    createStructuredSourceAnalysisAnswerCard({
+    createStructuredAnswerCard({
       title: `${basename(filePath)} file neighborhood`,
       primaryRef: {
         kind: 'file',
@@ -969,18 +969,18 @@ function buildFileEpisode(
 
 function createAnswer(
   builder: EpisodeBuilder,
-  policy: SourceAnalysisInquiryPolicy,
-  focusRef: SourceAnalysisFocusRef,
-  tag: SourceAnalysisAnswer<SourceAnalysisNavigationValue>['outcome']['tag'],
-  value: SourceAnalysisNavigationValue,
-  trust: SourceAnalysisTrustProfile,
-  closureBasis: readonly SourceAnalysisClosureBasis[],
-  issues: readonly SourceAnalysisIssue[],
-  continuations: readonly SourceAnalysisContinuation[],
-  provenance: readonly SourceAnalysisAnswerProvenanceEntry[],
-): SourceAnalysisAnswer<SourceAnalysisNavigationValue> {
+  policy: InquiryPolicy,
+  focusRef: FocusRef,
+  tag: InquiryAnswer<NavigationValue>['outcome']['tag'],
+  value: NavigationValue,
+  trust: TrustProfile,
+  closureBasis: readonly ClosureBasis[],
+  issues: readonly Issue[],
+  continuations: readonly Continuation[],
+  provenance: readonly InquiryProvenanceEntry[],
+): InquiryAnswer<NavigationValue> {
   const worldFrame = defaultWorldFrame(builder.snapshots, builder.query.worldFrame);
-  return createSourceAnalysisAnswerEnvelope({
+  return createAnswerEnvelope({
     query: builder.query,
     focusRef,
     inquiryEpisode: policy.inquiryEpisode,
@@ -999,16 +999,16 @@ function createAnswer(
 function createMissAnswer(
   builder: EpisodeBuilder,
   message: string,
-  focusRef: SourceAnalysisFocusRef,
-  relatedRefs: readonly SourceAnalysisNavigationRef[],
-): SourceAnalysisAnswer<SourceAnalysisNavigationValue> {
+  focusRef: FocusRef,
+  relatedRefs: readonly NavigationRef[],
+): InquiryAnswer<NavigationValue> {
   const policy = policyForNavigation(builder, focusRef.kind);
   return createAnswer(
     builder,
     policy,
     focusRef,
     'miss-unknown-shape',
-    createStructuredSourceAnalysisAnswerCard({
+    createStructuredAnswerCard({
       title: 'Workspace navigation miss',
       primaryRef: {
         kind: focusRef.kind,
@@ -1041,16 +1041,16 @@ function createMissAnswer(
 function createAmbiguousAnswer(
   builder: EpisodeBuilder,
   message: string,
-  focusRef: SourceAnalysisFocusRef,
-  relatedRefs: readonly SourceAnalysisNavigationRef[],
-): SourceAnalysisAnswer<SourceAnalysisNavigationValue> {
+  focusRef: FocusRef,
+  relatedRefs: readonly NavigationRef[],
+): InquiryAnswer<NavigationValue> {
   const policy = policyForNavigation(builder, focusRef.kind);
   return createAnswer(
     builder,
     policy,
     focusRef,
     'ambiguous',
-    createStructuredSourceAnalysisAnswerCard({
+    createStructuredAnswerCard({
       title: 'Workspace navigation ambiguity',
       primaryRef: {
         kind: focusRef.kind,
@@ -1082,16 +1082,16 @@ function createAmbiguousAnswer(
 
 function createUnsupportedAnswer(
   builder: EpisodeBuilder,
-  focusRef: SourceAnalysisFocusRef,
+  focusRef: FocusRef,
   message: string,
-): SourceAnalysisAnswer<SourceAnalysisNavigationValue> {
+): InquiryAnswer<NavigationValue> {
   const policy = policyForNavigation(builder, focusRef.kind);
   return createAnswer(
     builder,
     policy,
     focusRef,
     'unsupported',
-    createStructuredSourceAnalysisAnswerCard({
+    createStructuredAnswerCard({
       title: 'Workspace navigation unsupported',
       primaryRef: {
         kind: focusRef.kind,
@@ -1122,7 +1122,7 @@ function createUnsupportedAnswer(
 }
 
 function resolvePackages(
-  snapshots: LoadedCurrentSourceAnalysisSnapshots,
+  snapshots: LoadedCurrentSnapshotSet,
   query: string,
 ): readonly PackageExportsSummary[] {
   const normalized = query.toLowerCase();
@@ -1145,7 +1145,7 @@ function resolvePackages(
 }
 
 function resolveTypeDeclarations(
-  snapshots: LoadedCurrentSourceAnalysisSnapshots,
+  snapshots: LoadedCurrentSnapshotSet,
   query: string,
 ): readonly TypeDecl[] {
   const exact = snapshots.typeRefs.declarations.filter((decl) => decl.name === query);
@@ -1162,7 +1162,7 @@ function resolveTypeDeclarations(
 }
 
 function resolveExports(
-  snapshots: LoadedCurrentSourceAnalysisSnapshots,
+  snapshots: LoadedCurrentSnapshotSet,
   query: string,
 ): readonly PackageExportRecord[] {
   const exact = snapshots.exports.exports.filter((record) => record.exported_name === query);
@@ -1179,7 +1179,7 @@ function resolveExports(
 }
 
 function resolveFiles(
-  snapshots: LoadedCurrentSourceAnalysisSnapshots,
+  snapshots: LoadedCurrentSnapshotSet,
   query: string,
 ): readonly string[] {
   const allFiles = new Set<string>();
@@ -1232,7 +1232,7 @@ function packageDirForFile(filePath: string): string | null {
   return null;
 }
 
-function packageRef(pkg: PackageExportsSummary): SourceAnalysisNavigationRef {
+function packageRef(pkg: PackageExportsSummary): NavigationRef {
   return {
     kind: 'package',
     value: pkg.package_name,
@@ -1241,7 +1241,7 @@ function packageRef(pkg: PackageExportsSummary): SourceAnalysisNavigationRef {
   };
 }
 
-function typeRef(decl: TypeDecl): SourceAnalysisNavigationRef {
+function typeRef(decl: TypeDecl): NavigationRef {
   return {
     kind: 'type',
     value: decl.name,
@@ -1250,7 +1250,7 @@ function typeRef(decl: TypeDecl): SourceAnalysisNavigationRef {
   };
 }
 
-function exportRef(record: PackageExportRecord): SourceAnalysisNavigationRef {
+function exportRef(record: PackageExportRecord): NavigationRef {
   return {
     kind: 'export',
     value: record.exported_name,
@@ -1260,9 +1260,9 @@ function exportRef(record: PackageExportRecord): SourceAnalysisNavigationRef {
 }
 
 function defaultWorldFrame(
-  snapshots: LoadedCurrentSourceAnalysisSnapshots,
-  worldFrame: SourceAnalysisWorldFrame | undefined,
-): SourceAnalysisWorldFrame {
+  snapshots: LoadedCurrentSnapshotSet,
+  worldFrame: WorldFrame | undefined,
+): WorldFrame {
   return {
     repoPath: worldFrame?.repoPath ?? snapshots.deps.root,
     target: worldFrame?.target ?? 'current',
@@ -1274,9 +1274,9 @@ function defaultWorldFrame(
 
 function policyForNavigation(
   builder: EpisodeBuilder,
-  focusKind: SourceAnalysisFocusKind,
-): SourceAnalysisInquiryPolicy {
-  return resolveSourceAnalysisInquiryPolicy(builder.query, {
+  focusKind: FocusKind,
+): InquiryPolicy {
+  return resolveInquiryPolicy(builder.query, {
     focusKind,
     inquiryEpisode: 'orient-and-localize',
     readMode: defaultReadMode(focusKind, builder.query.questionRoute),
@@ -1285,10 +1285,10 @@ function policyForNavigation(
 
 function createNavigationDocument(
   summaryLines: readonly string[],
-  relatedRefs: readonly SourceAnalysisNavigationRef[],
+  relatedRefs: readonly NavigationRef[],
   facts: readonly { readonly label: string; readonly value: string }[] = [],
 ) {
-  return createSourceAnalysisAnswerDocument<SourceAnalysisNavigationRef>([
+  return createAnswerDocument<NavigationRef>([
     {
       kind: 'paragraph',
       importance: 'primary',
@@ -1312,9 +1312,9 @@ function createNavigationDocument(
 }
 
 function defaultReadMode(
-  focusKind: SourceAnalysisFocusKind,
-  questionRoute: SourceAnalysisQuery['questionRoute'],
-): SourceAnalysisReadMode {
+  focusKind: FocusKind,
+  questionRoute: Inquiry['questionRoute'],
+): ReadMode {
   if (questionRoute === 'route') return 'focus-card';
   if (focusKind === 'package') return 'summary-card';
   if (focusKind === 'file') return 'supporting-evidence';
@@ -1326,11 +1326,11 @@ function basename(filePath: string): string {
 }
 
 function continuation(
-  targetQuestionRoute: SourceAnalysisQuery['questionRoute'],
+  targetQuestionRoute: Inquiry['questionRoute'],
   label: string,
   targetFocusRef: string,
   detail: string,
-): SourceAnalysisContinuation {
+): Continuation {
   return {
     kind: targetQuestionRoute === 'route' ? 'reroute' : 'inspect-support',
     label,
@@ -1344,7 +1344,7 @@ function snapshotProvenanceEntry(
   kind: 'deps' | 'typerefs' | 'exports',
   generatedAt: string,
   sourceCommit: string,
-): SourceAnalysisAnswerProvenanceEntry {
+): InquiryProvenanceEntry {
   return {
     kind: 'snapshot',
     label: `${kind} snapshot`,
@@ -1353,7 +1353,7 @@ function snapshotProvenanceEntry(
   };
 }
 
-function claimProvenanceEntry(label: string, claimId: string): SourceAnalysisAnswerProvenanceEntry {
+function claimProvenanceEntry(label: string, claimId: string): InquiryProvenanceEntry {
   return {
     kind: 'claim',
     label,

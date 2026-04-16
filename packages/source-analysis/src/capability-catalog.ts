@@ -1,37 +1,37 @@
 import type {
-  SourceAnalysisFocusKind,
-  SourceAnalysisQuestionRoute,
-  SourceAnalysisReadMode,
-} from './query-model.js';
+  FocusKind,
+  QuestionRoute,
+  ReadMode,
+} from './inquiry-model.js';
 import {
   captureKindsForFocusKind,
-  type SourceAnalysisIngressCapture,
+  type IngressCapture,
 } from './ingress-recognizers.js';
 import {
-  compareSourceAnalysisIngressEvaluations,
-  createSourceAnalysisCaptureRule,
-  createSourceAnalysisExactRule,
-  createSourceAnalysisFocusRule,
-  createSourceAnalysisIngressContext,
-  createSourceAnalysisPhraseRule,
-  createSourceAnalysisTokenRule,
-  evaluateSourceAnalysisIngressRules,
-  rehydrateSourceAnalysisIngressEvaluation,
-  type SourceAnalysisIngressContext,
-  type SourceAnalysisIngressMatchTrace,
-  type SourceAnalysisIngressRuleSpec,
-  type SourceAnalysisIngressSelectionPolicy,
+  compareIngressEvaluations,
+  createCaptureRule,
+  createExactRule,
+  createFocusRule,
+  createIngressContext,
+  createPhraseRule,
+  createTokenRule,
+  evaluateIngressRules,
+  rehydrateIngressEvaluation,
+  type IngressContext,
+  type IngressMatchTrace,
+  type IngressRuleSpec,
+  type IngressSelectionPolicy,
 } from './ingress-matcher.js';
 import { tokenize } from './ingress-normalization.js';
 
-export const SOURCE_ANALYSIS_CAPABILITY_FAMILIES = [
+export const CAPABILITY_FAMILIES = [
   'ingress',
   'session',
   'query',
   'materialize',
 ] as const;
 
-export const SOURCE_ANALYSIS_CAPABILITY_PLANNER_KINDS = [
+export const CAPABILITY_PLANNER_KINDS = [
   'discover',
   'plan',
   'repair',
@@ -48,7 +48,7 @@ export const SOURCE_ANALYSIS_CAPABILITY_PLANNER_KINDS = [
   'materialize',
 ] as const;
 
-export const SOURCE_ANALYSIS_CAPABILITY_MATCH_REASON_KINDS = [
+export const CAPABILITY_MATCH_REASON_KINDS = [
   'command',
   'alias',
   'noun',
@@ -59,23 +59,23 @@ export const SOURCE_ANALYSIS_CAPABILITY_MATCH_REASON_KINDS = [
   'confusion',
 ] as const;
 
-export type SourceAnalysisCapabilityFamily =
-  typeof SOURCE_ANALYSIS_CAPABILITY_FAMILIES[number];
+export type CapabilityFamily =
+  typeof CAPABILITY_FAMILIES[number];
 
-export type SourceAnalysisCapabilityPlannerKind =
-  typeof SOURCE_ANALYSIS_CAPABILITY_PLANNER_KINDS[number];
+export type CapabilityPlannerKind =
+  typeof CAPABILITY_PLANNER_KINDS[number];
 
-export type SourceAnalysisCapabilityMatchReasonKind =
-  typeof SOURCE_ANALYSIS_CAPABILITY_MATCH_REASON_KINDS[number];
+export type CapabilityMatchReasonKind =
+  typeof CAPABILITY_MATCH_REASON_KINDS[number];
 
-export interface SourceAnalysisCapabilityArgSpec {
+export interface CapabilityArgSpec {
   readonly name: string;
   readonly required: boolean;
   readonly summary: string;
   readonly acceptedValues?: readonly string[];
 }
 
-export interface SourceAnalysisCapabilityExample {
+export interface CapabilityExample {
   readonly label: string;
   readonly question: string;
   readonly invocation: {
@@ -84,64 +84,64 @@ export interface SourceAnalysisCapabilityExample {
   };
 }
 
-export interface SourceAnalysisCapabilityConfusion {
+export interface CapabilityConfusion {
   readonly label: string;
   readonly detail: string;
   readonly terms: readonly string[];
   readonly preferredCommand?: string;
 }
 
-export interface SourceAnalysisCapabilityDefinition {
+export interface CapabilityDefinition {
   readonly id: string;
   readonly command: string;
-  readonly plannerKind: SourceAnalysisCapabilityPlannerKind;
-  readonly family: SourceAnalysisCapabilityFamily;
+  readonly plannerKind: CapabilityPlannerKind;
+  readonly family: CapabilityFamily;
   readonly label: string;
   readonly summary: string;
   readonly whenToUse: string;
-  readonly focusKinds: readonly SourceAnalysisFocusKind[];
-  readonly questionRoutes: readonly SourceAnalysisQuestionRoute[];
-  readonly readModes: readonly SourceAnalysisReadMode[];
+  readonly focusKinds: readonly FocusKind[];
+  readonly questionRoutes: readonly QuestionRoute[];
+  readonly readModes: readonly ReadMode[];
   readonly aliases: readonly string[];
   readonly nouns: readonly string[];
   readonly verbs: readonly string[];
-  readonly requiredArgs: readonly SourceAnalysisCapabilityArgSpec[];
-  readonly optionalArgs: readonly SourceAnalysisCapabilityArgSpec[];
+  readonly requiredArgs: readonly CapabilityArgSpec[];
+  readonly optionalArgs: readonly CapabilityArgSpec[];
   readonly relatedCommands: readonly string[];
-  readonly examples: readonly SourceAnalysisCapabilityExample[];
-  readonly commonConfusions: readonly SourceAnalysisCapabilityConfusion[];
+  readonly examples: readonly CapabilityExample[];
+  readonly commonConfusions: readonly CapabilityConfusion[];
 }
 
-export interface SourceAnalysisCapabilityView {
+export interface CapabilityView {
   readonly id: string;
   readonly command: string;
-  readonly plannerKind: SourceAnalysisCapabilityPlannerKind;
-  readonly family: SourceAnalysisCapabilityFamily;
+  readonly plannerKind: CapabilityPlannerKind;
+  readonly family: CapabilityFamily;
   readonly label: string;
   readonly summary: string;
   readonly whenToUse: string;
-  readonly focusKinds: readonly SourceAnalysisFocusKind[];
-  readonly questionRoutes: readonly SourceAnalysisQuestionRoute[];
-  readonly readModes: readonly SourceAnalysisReadMode[];
+  readonly focusKinds: readonly FocusKind[];
+  readonly questionRoutes: readonly QuestionRoute[];
+  readonly readModes: readonly ReadMode[];
   readonly aliases: readonly string[];
-  readonly requiredArgs: readonly SourceAnalysisCapabilityArgSpec[];
-  readonly optionalArgs: readonly SourceAnalysisCapabilityArgSpec[];
+  readonly requiredArgs: readonly CapabilityArgSpec[];
+  readonly optionalArgs: readonly CapabilityArgSpec[];
   readonly relatedCommands: readonly string[];
-  readonly examples: readonly SourceAnalysisCapabilityExample[];
-  readonly commonConfusions: readonly SourceAnalysisCapabilityConfusion[];
+  readonly examples: readonly CapabilityExample[];
+  readonly commonConfusions: readonly CapabilityConfusion[];
 }
 
-export interface SourceAnalysisCapabilityMatchReason {
-  readonly kind: SourceAnalysisCapabilityMatchReasonKind;
+export interface CapabilityMatchReason {
+  readonly kind: CapabilityMatchReasonKind;
   readonly detail: string;
   readonly term?: string;
 }
 
-export interface SourceAnalysisCapabilityMatch {
-  readonly capability: SourceAnalysisCapabilityView;
-  readonly reasons: readonly SourceAnalysisCapabilityMatchReason[];
-  readonly traces: readonly SourceAnalysisIngressMatchTrace<SourceAnalysisCapabilityMatchReasonKind>[];
-  readonly captures: readonly SourceAnalysisIngressCapture[];
+export interface CapabilityMatch {
+  readonly capability: CapabilityView;
+  readonly reasons: readonly CapabilityMatchReason[];
+  readonly traces: readonly IngressMatchTrace<CapabilityMatchReasonKind>[];
+  readonly captures: readonly IngressCapture[];
   readonly requiredSatisfied: boolean;
   readonly exactCommand: boolean;
   readonly aliasMatches: readonly string[];
@@ -152,19 +152,19 @@ export interface SourceAnalysisCapabilityMatch {
   readonly focusMatched: boolean;
 }
 
-export interface DiscoverSourceAnalysisCapabilitiesInput {
+export interface DiscoverCapabilitiesInput {
   readonly question?: string;
-  readonly focusKind?: SourceAnalysisFocusKind;
+  readonly focusKind?: FocusKind;
   readonly command?: string;
   readonly includeExamples?: boolean;
   readonly topK?: number;
 }
 
-export class SourceAnalysisCapabilityDescriptor {
-  readonly #definition: SourceAnalysisCapabilityDefinition;
-  readonly #rules: readonly SourceAnalysisIngressRuleSpec<SourceAnalysisCapabilityMatchReasonKind>[];
+export class CapabilityDescriptor {
+  readonly #definition: CapabilityDefinition;
+  readonly #rules: readonly IngressRuleSpec<CapabilityMatchReasonKind>[];
 
-  constructor(definition: SourceAnalysisCapabilityDefinition) {
+  constructor(definition: CapabilityDefinition) {
     this.#definition = definition;
     this.#rules = createCapabilityMatchRules(definition);
   }
@@ -177,39 +177,39 @@ export class SourceAnalysisCapabilityDescriptor {
     return this.#definition.command;
   }
 
-  get plannerKind(): SourceAnalysisCapabilityPlannerKind {
+  get plannerKind(): CapabilityPlannerKind {
     return this.#definition.plannerKind;
   }
 
-  get family(): SourceAnalysisCapabilityFamily {
+  get family(): CapabilityFamily {
     return this.#definition.family;
   }
 
-  get focusKinds(): readonly SourceAnalysisFocusKind[] {
+  get focusKinds(): readonly FocusKind[] {
     return this.#definition.focusKinds;
   }
 
-  get questionRoutes(): readonly SourceAnalysisQuestionRoute[] {
+  get questionRoutes(): readonly QuestionRoute[] {
     return this.#definition.questionRoutes;
   }
 
-  get readModes(): readonly SourceAnalysisReadMode[] {
+  get readModes(): readonly ReadMode[] {
     return this.#definition.readModes;
   }
 
-  get requiredArgs(): readonly SourceAnalysisCapabilityArgSpec[] {
+  get requiredArgs(): readonly CapabilityArgSpec[] {
     return this.#definition.requiredArgs;
   }
 
-  get optionalArgs(): readonly SourceAnalysisCapabilityArgSpec[] {
+  get optionalArgs(): readonly CapabilityArgSpec[] {
     return this.#definition.optionalArgs;
   }
 
-  get commonConfusions(): readonly SourceAnalysisCapabilityConfusion[] {
+  get commonConfusions(): readonly CapabilityConfusion[] {
     return this.#definition.commonConfusions;
   }
 
-  toView(includeExamples = false): SourceAnalysisCapabilityView {
+  toView(includeExamples = false): CapabilityView {
     return {
       id: this.#definition.id,
       command: this.#definition.command,
@@ -230,7 +230,7 @@ export class SourceAnalysisCapabilityDescriptor {
     };
   }
 
-  emptyMatch(includeExamples = false): SourceAnalysisCapabilityMatch {
+  emptyMatch(includeExamples = false): CapabilityMatch {
     return {
       capability: this.toView(includeExamples),
       reasons: [],
@@ -248,10 +248,10 @@ export class SourceAnalysisCapabilityDescriptor {
   }
 
   matchContext(
-    context: SourceAnalysisIngressContext,
+    context: IngressContext,
     includeExamples = false,
-  ): SourceAnalysisCapabilityMatch | null {
-    const evaluation = evaluateSourceAnalysisIngressRules(context, this.#rules);
+  ): CapabilityMatch | null {
+    const evaluation = evaluateIngressRules(context, this.#rules);
     if (!evaluation.matched) {
       return null;
     }
@@ -265,7 +265,7 @@ export class SourceAnalysisCapabilityDescriptor {
       traces,
       captures: matchedTraces
         .map((trace) => trace.capture)
-        .filter((capture): capture is SourceAnalysisIngressCapture => capture !== undefined),
+        .filter((capture): capture is IngressCapture => capture !== undefined),
       requiredSatisfied: evaluation.requiredSatisfied,
       exactCommand: matchedTraces.some((trace) => trace.ruleId === 'exact-command'),
       aliasMatches: matchedTerms(matchedTraces, 'alias'),
@@ -278,40 +278,40 @@ export class SourceAnalysisCapabilityDescriptor {
   }
 }
 
-export class SourceAnalysisCapabilityCatalog {
-  readonly #descriptors: readonly SourceAnalysisCapabilityDescriptor[];
-  readonly #byCommand = new Map<string, SourceAnalysisCapabilityDescriptor>();
-  readonly #selectionPolicy: SourceAnalysisIngressSelectionPolicy<SourceAnalysisCapabilityMatchReasonKind>;
+export class CapabilityCatalog {
+  readonly #descriptors: readonly CapabilityDescriptor[];
+  readonly #byCommand = new Map<string, CapabilityDescriptor>();
+  readonly #selectionPolicy: IngressSelectionPolicy<CapabilityMatchReasonKind>;
 
   constructor(
-    definitions: readonly SourceAnalysisCapabilityDefinition[],
-    selectionPolicy: SourceAnalysisIngressSelectionPolicy<SourceAnalysisCapabilityMatchReasonKind> = DEFAULT_SOURCE_ANALYSIS_CAPABILITY_SELECTION_POLICY,
+    definitions: readonly CapabilityDefinition[],
+    selectionPolicy: IngressSelectionPolicy<CapabilityMatchReasonKind> = DEFAULT_CAPABILITY_SELECTION_POLICY,
   ) {
     this.#selectionPolicy = selectionPolicy;
-    this.#descriptors = definitions.map((definition) => new SourceAnalysisCapabilityDescriptor(definition));
+    this.#descriptors = definitions.map((definition) => new CapabilityDescriptor(definition));
     for (const descriptor of this.#descriptors) {
       this.#byCommand.set(descriptor.command, descriptor);
     }
   }
 
-  list(includeExamples = false): readonly SourceAnalysisCapabilityView[] {
+  list(includeExamples = false): readonly CapabilityView[] {
     return this.#descriptors
       .map((descriptor) => descriptor.toView(includeExamples))
       .sort((left, right) => left.command.localeCompare(right.command));
   }
 
-  resolve(command: string): SourceAnalysisCapabilityDescriptor | undefined {
+  resolve(command: string): CapabilityDescriptor | undefined {
     return this.#byCommand.get(command);
   }
 
   isAmbiguousTie(
-    left: SourceAnalysisCapabilityMatch,
-    right: SourceAnalysisCapabilityMatch,
+    left: CapabilityMatch,
+    right: CapabilityMatch,
   ): boolean {
     return compareCapabilityMatches(left, right, this.#selectionPolicy) === 0;
   }
 
-  discover(input: DiscoverSourceAnalysisCapabilitiesInput = {}): readonly SourceAnalysisCapabilityMatch[] {
+  discover(input: DiscoverCapabilitiesInput = {}): readonly CapabilityMatch[] {
     if (!input.question && !input.focusKind && !input.command) {
       return limitMatches(
         this.#descriptors
@@ -321,14 +321,14 @@ export class SourceAnalysisCapabilityCatalog {
       );
     }
 
-    const context = createSourceAnalysisIngressContext({
+    const context = createIngressContext({
       question: input.question,
       command: input.command,
       focusKind: input.focusKind,
     });
     const matches = this.#descriptors
       .map((descriptor) => descriptor.matchContext(context, input.includeExamples))
-      .filter((match): match is SourceAnalysisCapabilityMatch => match !== null);
+      .filter((match): match is CapabilityMatch => match !== null);
     const sorted = [...matches].sort((left, right) =>
       compareCapabilityMatches(left, right, this.#selectionPolicy)
       || left.capability.command.localeCompare(right.capability.command),
@@ -337,11 +337,11 @@ export class SourceAnalysisCapabilityCatalog {
   }
 }
 
-export function createDefaultSourceAnalysisCapabilityCatalog(): SourceAnalysisCapabilityCatalog {
-  return new SourceAnalysisCapabilityCatalog(DEFAULT_SOURCE_ANALYSIS_CAPABILITIES);
+export function createDefaultCapabilityCatalog(): CapabilityCatalog {
+  return new CapabilityCatalog(DEFAULT_CAPABILITIES);
 }
 
-const DEFAULT_SOURCE_ANALYSIS_CAPABILITIES: readonly SourceAnalysisCapabilityDefinition[] = [
+const DEFAULT_CAPABILITIES: readonly CapabilityDefinition[] = [
   ingressCapability({
     id: 'describe.capabilities',
     command: 'describe.capabilities',
@@ -856,11 +856,11 @@ const DEFAULT_SOURCE_ANALYSIS_CAPABILITIES: readonly SourceAnalysisCapabilityDef
 ];
 
 function ingressCapability(
-  definition: Omit<SourceAnalysisCapabilityDefinition, 'family' | 'focusKinds' | 'readModes'> & {
-    readonly focusKinds?: readonly SourceAnalysisFocusKind[];
-    readonly readModes?: readonly SourceAnalysisReadMode[];
+  definition: Omit<CapabilityDefinition, 'family' | 'focusKinds' | 'readModes'> & {
+    readonly focusKinds?: readonly FocusKind[];
+    readonly readModes?: readonly ReadMode[];
   },
-): SourceAnalysisCapabilityDefinition {
+): CapabilityDefinition {
   return {
     family: 'ingress',
     focusKinds: definition.focusKinds ?? ['repo', 'capability'],
@@ -870,8 +870,8 @@ function ingressCapability(
 }
 
 function sessionCapability(
-  definition: Omit<SourceAnalysisCapabilityDefinition, 'family' | 'focusKinds' | 'readModes'>,
-): SourceAnalysisCapabilityDefinition {
+  definition: Omit<CapabilityDefinition, 'family' | 'focusKinds' | 'readModes'>,
+): CapabilityDefinition {
   return {
     family: 'session',
     focusKinds: ['session', 'repo'],
@@ -881,12 +881,12 @@ function sessionCapability(
 }
 
 function queryCapability(
-  definition: Omit<SourceAnalysisCapabilityDefinition, 'family' | 'focusKinds' | 'readModes' | 'examples'> & {
-    readonly focusKinds?: readonly SourceAnalysisFocusKind[];
-    readonly readModes?: readonly SourceAnalysisReadMode[];
-    readonly examples: readonly SourceAnalysisCapabilityExample[];
+  definition: Omit<CapabilityDefinition, 'family' | 'focusKinds' | 'readModes' | 'examples'> & {
+    readonly focusKinds?: readonly FocusKind[];
+    readonly readModes?: readonly ReadMode[];
+    readonly examples: readonly CapabilityExample[];
   },
-): SourceAnalysisCapabilityDefinition {
+): CapabilityDefinition {
   return {
     family: 'query',
     focusKinds: definition.focusKinds ?? ['repo', 'package', 'file', 'type', 'export'],
@@ -896,8 +896,8 @@ function queryCapability(
 }
 
 function materializeCapability(
-  definition: Omit<SourceAnalysisCapabilityDefinition, 'family' | 'focusKinds' | 'readModes'>,
-): SourceAnalysisCapabilityDefinition {
+  definition: Omit<CapabilityDefinition, 'family' | 'focusKinds' | 'readModes'>,
+): CapabilityDefinition {
   return {
     family: 'materialize',
     focusKinds: ['session', 'repo'],
@@ -910,7 +910,7 @@ function requiredArg(
   name: string,
   summary: string,
   acceptedValues?: readonly string[],
-): SourceAnalysisCapabilityArgSpec {
+): CapabilityArgSpec {
   return {
     name,
     required: true,
@@ -923,7 +923,7 @@ function optionalArg(
   name: string,
   summary: string,
   acceptedValues?: readonly string[],
-): SourceAnalysisCapabilityArgSpec {
+): CapabilityArgSpec {
   return {
     name,
     required: false,
@@ -937,7 +937,7 @@ function example(
   question: string,
   command: string,
   args: Record<string, unknown>,
-): SourceAnalysisCapabilityExample {
+): CapabilityExample {
   return {
     label,
     question,
@@ -948,18 +948,18 @@ function example(
   };
 }
 
-const DEFAULT_SOURCE_ANALYSIS_CAPABILITY_SELECTION_POLICY: SourceAnalysisIngressSelectionPolicy<
-  SourceAnalysisCapabilityMatchReasonKind
+const DEFAULT_CAPABILITY_SELECTION_POLICY: IngressSelectionPolicy<
+  CapabilityMatchReasonKind
 > = {
   reasonKindOrder: ['command', 'alias', 'focus', 'route', 'noun', 'verb', 'example', 'confusion'],
 };
 
 function compareCapabilityMatches(
-  left: SourceAnalysisCapabilityMatch,
-  right: SourceAnalysisCapabilityMatch,
-  policy: SourceAnalysisIngressSelectionPolicy<SourceAnalysisCapabilityMatchReasonKind>,
+  left: CapabilityMatch,
+  right: CapabilityMatch,
+  policy: IngressSelectionPolicy<CapabilityMatchReasonKind>,
 ): number {
-  return compareSourceAnalysisIngressEvaluations(
+  return compareIngressEvaluations(
     evaluationForMatch(right),
     evaluationForMatch(left),
     policy,
@@ -967,9 +967,9 @@ function compareCapabilityMatches(
 }
 
 function limitMatches(
-  matches: readonly SourceAnalysisCapabilityMatch[],
+  matches: readonly CapabilityMatch[],
   topK: number | undefined,
-): readonly SourceAnalysisCapabilityMatch[] {
+): readonly CapabilityMatch[] {
   if (!topK || topK <= 0) {
     return matches;
   }
@@ -977,45 +977,45 @@ function limitMatches(
 }
 
 function createCapabilityMatchRules(
-  definition: SourceAnalysisCapabilityDefinition,
-): readonly SourceAnalysisIngressRuleSpec<SourceAnalysisCapabilityMatchReasonKind>[] {
+  definition: CapabilityDefinition,
+): readonly IngressRuleSpec<CapabilityMatchReasonKind>[] {
   const focusCaptureKinds = definition.focusKinds.flatMap((focusKind) => captureKindsForFocusKind(focusKind));
   return [
-    createSourceAnalysisExactRule(
+    createExactRule(
       'exact-command',
       'command',
       'command',
       definition.command,
       `Exact command match for "${definition.command}".`,
     ),
-    createSourceAnalysisPhraseRule(
+    createPhraseRule(
       'alias-phrases',
       'alias',
       [definition.label, definition.command, ...definition.aliases],
       'Question mentions a declared capability alias.',
     ),
-    createSourceAnalysisTokenRule(
+    createTokenRule(
       'noun-tokens',
       'noun',
       'question',
       definition.nouns,
       'Question contains a declared capability noun.',
     ),
-    createSourceAnalysisTokenRule(
+    createTokenRule(
       'verb-tokens',
       'verb',
       'question',
       definition.verbs,
       'Question contains a declared capability verb.',
     ),
-    createSourceAnalysisTokenRule(
+    createTokenRule(
       'route-tokens',
       'route',
       'question',
       definition.questionRoutes,
       'Question aligns with a declared question route.',
     ),
-    createSourceAnalysisTokenRule(
+    createTokenRule(
       'command-tokens',
       'command',
       'command',
@@ -1023,14 +1023,14 @@ function createCapabilityMatchRules(
       'Command hint overlaps declared command tokens.',
       'supporting',
     ),
-    createSourceAnalysisFocusRule(
+    createFocusRule(
       'focus-kind',
       'focus',
       definition.focusKinds,
       'The provided focus kind is supported by this capability.',
     ),
     ...(focusCaptureKinds.length > 0
-      ? [createSourceAnalysisCaptureRule(
+      ? [createCaptureRule(
         'focus-capture',
         'focus',
         focusCaptureKinds,
@@ -1038,7 +1038,7 @@ function createCapabilityMatchRules(
       )]
       : []),
     ...definition.examples.map((example, index) =>
-      createSourceAnalysisPhraseRule(
+      createPhraseRule(
         `example-${index}`,
         'example',
         [example.question],
@@ -1046,7 +1046,7 @@ function createCapabilityMatchRules(
         'supporting',
       )),
     ...definition.commonConfusions.map((confusion, index) =>
-      createSourceAnalysisPhraseRule(
+      createPhraseRule(
         `confusion-${index}`,
         'confusion',
         confusion.terms,
@@ -1057,14 +1057,14 @@ function createCapabilityMatchRules(
 }
 
 function evaluationForMatch(
-  match: SourceAnalysisCapabilityMatch,
+  match: CapabilityMatch,
 ) {
-  return rehydrateSourceAnalysisIngressEvaluation(match.traces, match.requiredSatisfied);
+  return rehydrateIngressEvaluation(match.traces, match.requiredSatisfied);
 }
 
 function matchedTerms(
-  traces: readonly SourceAnalysisIngressMatchTrace<SourceAnalysisCapabilityMatchReasonKind>[],
-  reasonKind: SourceAnalysisCapabilityMatchReasonKind,
+  traces: readonly IngressMatchTrace<CapabilityMatchReasonKind>[],
+  reasonKind: CapabilityMatchReasonKind,
 ): readonly string[] {
   return traces
     .filter((trace) => trace.matched && trace.reasonKind === reasonKind && trace.term !== undefined)
@@ -1073,8 +1073,8 @@ function matchedTerms(
 }
 
 function toCapabilityMatchReason(
-  trace: SourceAnalysisIngressMatchTrace<SourceAnalysisCapabilityMatchReasonKind>,
-): SourceAnalysisCapabilityMatchReason {
+  trace: IngressMatchTrace<CapabilityMatchReasonKind>,
+): CapabilityMatchReason {
   return {
     kind: trace.reasonKind,
     detail: trace.capture ? `${trace.detail} ${trace.capture.detail}` : trace.detail,

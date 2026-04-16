@@ -5,8 +5,8 @@ import { dirname, join, relative, resolve } from 'node:path';
 
 import * as ts from 'typescript';
 
-import type { SourceAnalysisAnalysisOptions } from '../analysis-options.js';
-import { SourceAnalysisSession } from '../session.js';
+import type { ProgramReuseOptions } from '../program-reuse-options.js';
+import { RepoSession } from '../repo-session.js';
 import type {
   ExportChainStep,
   ExportFaceKind,
@@ -113,7 +113,7 @@ export interface ExportsAnalysisResult {
   warnings: string[];
 }
 
-let session: SourceAnalysisSession | null = null;
+let session: RepoSession | null = null;
 let repoPath = resolve(process.cwd());
 const workspacePackageEntrypointsByName = new Map<string, string>();
 let repoPathNormalized = toForwardSlash(repoPath).toLowerCase();
@@ -126,7 +126,7 @@ function toRepoRelative(absPath: string): string {
   return toForwardSlash(relative(repoPath, absPath));
 }
 
-function requireSession(): SourceAnalysisSession {
+function requireSession(): RepoSession {
   if (!session) {
     throw new Error('source-analysis exports session is not initialized');
   }
@@ -288,7 +288,7 @@ function createFallbackProgram(entrypointAbs: string): ts.Program {
 
 function createPackageProgram(
   descriptor: PackageDescriptor,
-  options: SourceAnalysisAnalysisOptions,
+  options: ProgramReuseOptions,
 ): ts.Program {
   const entrypointAbs = resolve(repoPath, descriptor.analysisEntrypoint);
   const tsconfigPath = resolveTsconfigForPackage(descriptor.packageDir);
@@ -932,7 +932,7 @@ function computePackageRevision(files: Iterable<string>): string {
 
 function analyzePackage(
   descriptor: PackageDescriptor,
-  options: SourceAnalysisAnalysisOptions,
+  options: ProgramReuseOptions,
 ): {
   summary: PackageExportsSummary;
   records: PackageExportRecord[];
@@ -1070,8 +1070,8 @@ function analyzePackage(
 }
 
 export function generateExportsAnalysis(
-  nextSession: SourceAnalysisSession,
-  options: SourceAnalysisAnalysisOptions = {},
+  nextSession: RepoSession,
+  options: ProgramReuseOptions = {},
 ): ExportsAnalysisResult {
   session = nextSession;
   repoPath = nextSession.repoPath;

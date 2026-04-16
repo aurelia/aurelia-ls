@@ -1,100 +1,100 @@
-import { loadCurrentSourceAnalysisSnapshots, type LoadedCurrentSourceAnalysisSnapshots } from './current-snapshots.js';
+import { loadCurrentSnapshots, type LoadedCurrentSnapshotSet } from './current-snapshots.js';
 import type { PackageExportRecord, PackageExportsSummary } from './exports/schema.js';
 import type { TypeDecl } from './typerefs/schema.js';
-import type { SourceAnalysisAnswerCard, SourceAnalysisAnswerRef } from './answer-card.js';
+import type { AnswerCard, AnswerRef } from './answer-card.js';
 import {
-  createStructuredSourceAnalysisAnswerCard,
+  createStructuredAnswerCard,
 } from './answer-card.js';
-import { createSourceAnalysisAnswerDocument } from './answer-document.js';
-import { createSourceAnalysisAnswerEnvelope } from './answer-envelope.js';
+import { createAnswerDocument } from './answer-document.js';
+import { createAnswerEnvelope } from './answer-envelope.js';
 import {
   compareByPrecedence,
   compareNumbersDescending,
   compareStringsAscending,
-  resolveSourceAnalysisInquiryPolicy,
-  type SourceAnalysisAuditMetric,
-  type SourceAnalysisInquiryPolicy,
+  resolveInquiryPolicy,
+  type AuditMetric,
+  type InquiryPolicy,
 } from './inquiry-policy.js';
 import type {
-  SourceAnalysisClosureBasis,
-  SourceAnalysisContinuation,
-  SourceAnalysisIssue,
-  SourceAnalysisIssueOrigin,
-  SourceAnalysisIssueSeverity,
-  SourceAnalysisTrustKind,
-  SourceAnalysisTrustProfile,
+  ClosureBasis,
+  Continuation,
+  Issue,
+  IssueOrigin,
+  IssueSeverity,
+  TrustKind,
+  TrustProfile,
 } from './outcome-algebra.js';
 import type {
-  SourceAnalysisAnswer,
-  SourceAnalysisAnswerProvenanceEntry,
-  SourceAnalysisFocusRef,
-  SourceAnalysisQuery,
-  SourceAnalysisReadMode,
-  SourceAnalysisWorldFrame,
-} from './query-model.js';
+  InquiryAnswer,
+  InquiryProvenanceEntry,
+  FocusRef,
+  Inquiry,
+  ReadMode,
+  WorldFrame,
+} from './inquiry-model.js';
 import type {
-  SourceAnalysisPackageFileReachability,
-  SourceAnalysisPackageReachability,
+  PackageFileReachability,
+  PackageReachability,
 } from './reachability.js';
-import { createSourceAnalysisPackageReachability } from './reachability.js';
-import type { SourceAnalysisPackageCoordinationSurface } from './coordination-surface.js';
-import { createSourceAnalysisPackageCoordinationSurface } from './coordination-surface.js';
+import { createPackageReachability } from './reachability.js';
+import type { PackageCoordinationSurface } from './coordination-surface.js';
+import { createPackageCoordinationSurface } from './coordination-surface.js';
 
-export const SOURCE_ANALYSIS_AUDIT_FINDING_KINDS = [
+export const AUDIT_FINDING_KINDS = [
   'blindspot',
   'under-integrated-file',
   'surface-drift',
 ] as const;
 
-export type SourceAnalysisAuditFindingKind =
-  typeof SOURCE_ANALYSIS_AUDIT_FINDING_KINDS[number];
+export type AuditFindingKind =
+  typeof AUDIT_FINDING_KINDS[number];
 
-export type SourceAnalysisAuditRef = SourceAnalysisAnswerRef;
+export type AuditRef = AnswerRef;
 
-export interface SourceAnalysisAuditFinding {
+export interface AuditFinding {
   readonly code: string;
-  readonly kind: SourceAnalysisAuditFindingKind;
-  readonly severity: SourceAnalysisIssueSeverity;
-  readonly confidence: SourceAnalysisTrustKind;
+  readonly kind: AuditFindingKind;
+  readonly severity: IssueSeverity;
+  readonly confidence: TrustKind;
   readonly title: string;
   readonly summary: string;
-  readonly primaryRef: SourceAnalysisAuditRef;
-  readonly relatedRefs: readonly SourceAnalysisAuditRef[];
+  readonly primaryRef: AuditRef;
+  readonly relatedRefs: readonly AuditRef[];
   readonly evidence: readonly string[];
 }
 
-export type SourceAnalysisAuditValue = SourceAnalysisAnswerCard<SourceAnalysisAuditRef> & {
-  readonly findings: readonly SourceAnalysisAuditFinding[];
+export type AuditValue = AnswerCard<AuditRef> & {
+  readonly findings: readonly AuditFinding[];
 };
 
 interface PackageAuditContext {
-  readonly snapshots: LoadedCurrentSourceAnalysisSnapshots;
+  readonly snapshots: LoadedCurrentSnapshotSet;
   readonly pkg: PackageExportsSummary;
   readonly packageFiles: readonly string[];
   readonly uncoveredFiles: readonly string[];
-  readonly unresolvedImports: LoadedCurrentSourceAnalysisSnapshots['deps']['unresolved_imports'];
+  readonly unresolvedImports: LoadedCurrentSnapshotSet['deps']['unresolved_imports'];
   readonly declarationsByFile: ReadonlyMap<string, readonly TypeDecl[]>;
   readonly exportRecordsByFile: ReadonlyMap<string, readonly PackageExportRecord[]>;
-  readonly reachability: SourceAnalysisPackageReachability;
-  readonly coordinationSurface: SourceAnalysisPackageCoordinationSurface | null;
-  readonly policy: SourceAnalysisInquiryPolicy;
+  readonly reachability: PackageReachability;
+  readonly coordinationSurface: PackageCoordinationSurface | null;
+  readonly policy: InquiryPolicy;
 }
 
-export function createCurrentSourceAnalysisAuditAnswer(
-  query: SourceAnalysisQuery,
+export function createCurrentAuditAnswer(
+  query: Inquiry,
   target?: string,
   waitMs = 0,
-): SourceAnalysisAnswer<SourceAnalysisAuditValue> {
-  return createSourceAnalysisAuditAnswer(
+): InquiryAnswer<AuditValue> {
+  return createAuditAnswer(
     query,
-    loadCurrentSourceAnalysisSnapshots(target, waitMs),
+    loadCurrentSnapshots(target, waitMs),
   );
 }
 
-export function createSourceAnalysisAuditAnswer(
-  query: SourceAnalysisQuery,
-  snapshots: LoadedCurrentSourceAnalysisSnapshots,
-): SourceAnalysisAnswer<SourceAnalysisAuditValue> {
+export function createAuditAnswer(
+  query: Inquiry,
+  snapshots: LoadedCurrentSnapshotSet,
+): InquiryAnswer<AuditValue> {
   switch (query.focusRef.kind) {
     case 'package':
       return buildPackageAuditAnswer(query, snapshots, query.focusRef.value);
@@ -108,10 +108,10 @@ export function createSourceAnalysisAuditAnswer(
 }
 
 function buildPackageAuditAnswer(
-  query: SourceAnalysisQuery,
-  snapshots: LoadedCurrentSourceAnalysisSnapshots,
+  query: Inquiry,
+  snapshots: LoadedCurrentSnapshotSet,
   packageQuery: string,
-): SourceAnalysisAnswer<SourceAnalysisAuditValue> {
+): InquiryAnswer<AuditValue> {
   const pkgMatches = resolvePackages(snapshots, packageQuery);
   if (pkgMatches.length === 0) {
     return createMissAnswer(
@@ -134,7 +134,7 @@ function buildPackageAuditAnswer(
   }
 
   const pkg = pkgMatches[0]!;
-  const policy = resolveSourceAnalysisInquiryPolicy(query, {
+  const policy = resolveInquiryPolicy(query, {
     focusKind: 'package',
     inquiryEpisode: 'inventory-and-audit-sweep',
     readMode: defaultReadMode(query.questionRoute),
@@ -189,7 +189,7 @@ function buildPackageAuditAnswer(
     policy,
     { kind: 'package', value: pkg.package_name, label: pkg.package_name },
     tag,
-    createStructuredSourceAnalysisAnswerCard({
+    createStructuredAnswerCard({
       title: `${pkg.package_name} package audit`,
       primaryRef: packageRef(pkg),
       relatedRefs,
@@ -208,12 +208,12 @@ function buildPackageAuditAnswer(
 }
 
 function createPackageAuditContext(
-  snapshots: LoadedCurrentSourceAnalysisSnapshots,
+  snapshots: LoadedCurrentSnapshotSet,
   pkg: PackageExportsSummary,
   repoPath: string,
-  policy: SourceAnalysisInquiryPolicy,
+  policy: InquiryPolicy,
 ): PackageAuditContext {
-  const reachability = createSourceAnalysisPackageReachability(snapshots, pkg, {
+  const reachability = createPackageReachability(snapshots, pkg, {
     ordering: policy.ordering,
   });
   const packagePrefix = pkg.package_dir.length > 0 ? `${pkg.package_dir}/` : '';
@@ -284,7 +284,7 @@ function createPackageAuditContext(
 
 function collectPackageAuditFindings(
   context: PackageAuditContext,
-): readonly SourceAnalysisAuditFinding[] {
+): readonly AuditFinding[] {
   const findings = [
     collectUncoveredFilesFinding(context),
     collectUnresolvedImportsFinding(context),
@@ -294,7 +294,7 @@ function collectPackageAuditFindings(
     collectPresentationFragmentationFinding(context),
     ...collectDormantFileFindings(context),
     collectUnanchoredCandidateRootsFinding(context),
-  ].filter((finding): finding is SourceAnalysisAuditFinding => Boolean(finding));
+  ].filter((finding): finding is AuditFinding => Boolean(finding));
 
   return findings.sort((left, right) =>
     compareByPrecedence(context.policy.ordering.issueSeverity, left.severity, right.severity)
@@ -305,7 +305,7 @@ function collectPackageAuditFindings(
 
 function collectUncoveredFilesFinding(
   context: PackageAuditContext,
-): SourceAnalysisAuditFinding | null {
+): AuditFinding | null {
   if (context.uncoveredFiles.length === 0) {
     return null;
   }
@@ -352,7 +352,7 @@ function collectUncoveredFilesFinding(
 
 function collectUnresolvedImportsFinding(
   context: PackageAuditContext,
-): SourceAnalysisAuditFinding | null {
+): AuditFinding | null {
   if (context.unresolvedImports.length === 0) {
     return null;
   }
@@ -380,7 +380,7 @@ function collectUnresolvedImportsFinding(
 
 function collectDormantFileFindings(
   context: PackageAuditContext,
-): readonly SourceAnalysisAuditFinding[] {
+): readonly AuditFinding[] {
   const dormantFiles = context.reachability.files
     .filter((file) => isDormantCandidate(context, file))
     .slice(0, 3);
@@ -422,7 +422,7 @@ function collectDormantFileFindings(
 
 function collectExerciseOnlyFilesFinding(
   context: PackageAuditContext,
-): SourceAnalysisAuditFinding | null {
+): AuditFinding | null {
   const exerciseOnlyFiles = context.reachability.files
     .filter((file) => isExerciseOnlyCandidate(context, file))
     .sort((left, right) =>
@@ -456,7 +456,7 @@ function collectExerciseOnlyFilesFinding(
 
 function collectPublicSurfaceUnexercisedFinding(
   context: PackageAuditContext,
-): SourceAnalysisAuditFinding | null {
+): AuditFinding | null {
   const unexercisedPublicFiles = context.reachability.files
     .filter((file) => isPublicSurfaceUnexercisedCandidate(context, file))
     .sort((left, right) =>
@@ -490,7 +490,7 @@ function collectPublicSurfaceUnexercisedFinding(
 
 function collectAnswerCoordinationFragmentationFinding(
   context: PackageAuditContext,
-): SourceAnalysisAuditFinding | null {
+): AuditFinding | null {
   const surface = context.coordinationSurface;
   if (!surface || surface.answerBuilderFiles.length < 2) {
     return null;
@@ -525,7 +525,7 @@ function collectAnswerCoordinationFragmentationFinding(
 
 function collectPresentationFragmentationFinding(
   context: PackageAuditContext,
-): SourceAnalysisAuditFinding | null {
+): AuditFinding | null {
   const surface = context.coordinationSurface;
   if (!surface || surface.presentationCarrierFiles.length < 2) {
     return null;
@@ -560,14 +560,14 @@ function collectPresentationFragmentationFinding(
 
 function collectUnanchoredCandidateRootsFinding(
   context: PackageAuditContext,
-): SourceAnalysisAuditFinding | null {
+): AuditFinding | null {
   const candidateRoots = context.reachability.roots
     .filter((root) => root.kind === 'candidate-entry')
     .map((root) => ({
       root,
       file: context.reachability.filesByPath.get(root.filePath),
     }))
-    .filter((entry): entry is { root: SourceAnalysisPackageReachability['roots'][number]; file: SourceAnalysisPackageFileReachability } =>
+    .filter((entry): entry is { root: PackageReachability['roots'][number]; file: PackageFileReachability } =>
       Boolean(entry.file),
     )
     .sort((left, right) =>
@@ -598,7 +598,7 @@ function collectUnanchoredCandidateRootsFinding(
 
 function isDormantCandidate(
   context: PackageAuditContext,
-  file: SourceAnalysisPackageFileReachability,
+  file: PackageFileReachability,
 ): boolean {
   const sourcePrefix = context.pkg.package_dir.length > 0
     ? `${context.pkg.package_dir}/src/`
@@ -606,13 +606,14 @@ function isDormantCandidate(
   if (!file.filePath.startsWith(sourcePrefix)) return false;
   if (file.publicSurface) return false;
   if (file.productionRootIds.length > 0) return false;
+  if (file.exerciseRootIds.length > 0) return false;
   if (file.declarationCount === 0) return false;
   return true;
 }
 
 function isExerciseOnlyCandidate(
   context: PackageAuditContext,
-  file: SourceAnalysisPackageFileReachability,
+  file: PackageFileReachability,
 ): boolean {
   const sourcePrefix = context.pkg.package_dir.length > 0
     ? `${context.pkg.package_dir}/src/`
@@ -627,7 +628,7 @@ function isExerciseOnlyCandidate(
 
 function isPublicSurfaceUnexercisedCandidate(
   context: PackageAuditContext,
-  file: SourceAnalysisPackageFileReachability,
+  file: PackageFileReachability,
 ): boolean {
   if (!file.publicSurface) return false;
   if (file.exerciseRootIds.length > 0) return false;
@@ -638,15 +639,15 @@ function isPublicSurfaceUnexercisedCandidate(
 
 function createAuditDocument(
   summaryLines: readonly string[],
-  findings: readonly SourceAnalysisAuditFinding[],
-  relatedRefs: readonly SourceAnalysisAuditRef[],
+  findings: readonly AuditFinding[],
+  relatedRefs: readonly AuditRef[],
   counts: {
     readonly blindspotCount: number;
     readonly dormantCount: number;
     readonly driftCount: number;
   },
 ) {
-  return createSourceAnalysisAnswerDocument<SourceAnalysisAuditRef>([
+  return createAnswerDocument<AuditRef>([
     {
       kind: 'paragraph',
       importance: 'primary',
@@ -688,26 +689,26 @@ function createAuditDocument(
 }
 
 function compareFileAuditMetrics(
-  metrics: readonly SourceAnalysisAuditMetric[],
-  left: SourceAnalysisPackageFileReachability,
-  right: SourceAnalysisPackageFileReachability,
+  metrics: readonly AuditMetric[],
+  left: PackageFileReachability,
+  right: PackageFileReachability,
 ): number {
   return compareMetricSequence(metrics, left, right, fileAuditMetricValue);
 }
 
 function compareCoordinationAuditMetrics(
-  metrics: readonly SourceAnalysisAuditMetric[],
-  left: SourceAnalysisPackageCoordinationSurface['files'][number],
-  right: SourceAnalysisPackageCoordinationSurface['files'][number],
+  metrics: readonly AuditMetric[],
+  left: PackageCoordinationSurface['files'][number],
+  right: PackageCoordinationSurface['files'][number],
 ): number {
   return compareMetricSequence(metrics, left, right, coordinationAuditMetricValue);
 }
 
 function compareMetricSequence<T>(
-  metrics: readonly SourceAnalysisAuditMetric[],
+  metrics: readonly AuditMetric[],
   left: T,
   right: T,
-  valueForMetric: (metric: SourceAnalysisAuditMetric, item: T) => number,
+  valueForMetric: (metric: AuditMetric, item: T) => number,
 ): number {
   for (const metric of metrics) {
     const comparison = compareNumbersDescending(
@@ -723,8 +724,8 @@ function compareMetricSequence<T>(
 }
 
 function fileAuditMetricValue(
-  metric: SourceAnalysisAuditMetric,
-  file: SourceAnalysisPackageFileReachability,
+  metric: AuditMetric,
+  file: PackageFileReachability,
 ): number {
   switch (metric) {
     case 'outbound-count':
@@ -747,8 +748,8 @@ function fileAuditMetricValue(
 }
 
 function coordinationAuditMetricValue(
-  metric: SourceAnalysisAuditMetric,
-  file: SourceAnalysisPackageCoordinationSurface['files'][number],
+  metric: AuditMetric,
+  file: PackageCoordinationSurface['files'][number],
 ): number {
   switch (metric) {
     case 'builder-count':
@@ -769,8 +770,8 @@ function coordinationAuditMetricValue(
 }
 
 function trustForFindings(
-  findings: readonly SourceAnalysisAuditFinding[],
-): SourceAnalysisTrustProfile {
+  findings: readonly AuditFinding[],
+): TrustProfile {
   if (findings.length === 0) {
     return {
       kind: 'grounded',
@@ -793,8 +794,8 @@ function trustForFindings(
 
 function closureBasisForPackageAudit(
   context: PackageAuditContext,
-  findings: readonly SourceAnalysisAuditFinding[],
-): readonly SourceAnalysisClosureBasis[] {
+  findings: readonly AuditFinding[],
+): readonly ClosureBasis[] {
   const groundedRoots = context.reachability.roots.filter((root) => root.trust === 'grounded');
   const qualifiedRoots = context.reachability.roots.filter((root) => root.trust !== 'grounded');
   return [
@@ -825,8 +826,8 @@ function closureBasisForPackageAudit(
 }
 
 function issuesForFindings(
-  findings: readonly SourceAnalysisAuditFinding[],
-): readonly SourceAnalysisIssue[] {
+  findings: readonly AuditFinding[],
+): readonly Issue[] {
   return findings.slice(0, 6).map((finding) => ({
     code: finding.code,
     message: finding.summary,
@@ -837,8 +838,8 @@ function issuesForFindings(
 
 function provenanceForPackageAudit(
   context: PackageAuditContext,
-  findings: readonly SourceAnalysisAuditFinding[],
-): readonly SourceAnalysisAnswerProvenanceEntry[] {
+  findings: readonly AuditFinding[],
+): readonly InquiryProvenanceEntry[] {
   return [
     snapshotProvenanceEntry('deps', context.snapshots.deps.generated_at, context.snapshots.deps.source_commit),
     snapshotProvenanceEntry('typerefs', context.snapshots.typeRefs.generated_at, context.snapshots.typeRefs.source_commit),
@@ -865,8 +866,8 @@ function provenanceForPackageAudit(
 
 function continuationsForFindings(
   pkg: PackageExportsSummary,
-  findings: readonly SourceAnalysisAuditFinding[],
-): readonly SourceAnalysisContinuation[] {
+  findings: readonly AuditFinding[],
+): readonly Continuation[] {
   return dedupeContinuations([
     continuation('join', 'Inspect the package entrypoint', pkg.analysis_entrypoint, 'package entrypoint'),
     ...findings.slice(0, 4).map((finding) =>
@@ -876,20 +877,20 @@ function continuationsForFindings(
 }
 
 function createAnswer(
-  query: SourceAnalysisQuery,
-  snapshots: LoadedCurrentSourceAnalysisSnapshots,
-  policy: SourceAnalysisInquiryPolicy,
-  focusRef: SourceAnalysisFocusRef,
-  tag: SourceAnalysisAnswer<SourceAnalysisAuditValue>['outcome']['tag'],
-  value: SourceAnalysisAuditValue,
-  trust: SourceAnalysisTrustProfile,
-  closureBasis: readonly SourceAnalysisClosureBasis[],
-  issues: readonly SourceAnalysisIssue[],
-  continuations: readonly SourceAnalysisContinuation[],
-  provenance: readonly SourceAnalysisAnswerProvenanceEntry[],
-): SourceAnalysisAnswer<SourceAnalysisAuditValue> {
+  query: Inquiry,
+  snapshots: LoadedCurrentSnapshotSet,
+  policy: InquiryPolicy,
+  focusRef: FocusRef,
+  tag: InquiryAnswer<AuditValue>['outcome']['tag'],
+  value: AuditValue,
+  trust: TrustProfile,
+  closureBasis: readonly ClosureBasis[],
+  issues: readonly Issue[],
+  continuations: readonly Continuation[],
+  provenance: readonly InquiryProvenanceEntry[],
+): InquiryAnswer<AuditValue> {
   const worldFrame = defaultWorldFrame(snapshots, query.worldFrame);
-  return createSourceAnalysisAnswerEnvelope({
+  return createAnswerEnvelope({
     query,
     focusRef,
     inquiryEpisode: policy.inquiryEpisode,
@@ -906,13 +907,13 @@ function createAnswer(
 }
 
 function createMissAnswer(
-  query: SourceAnalysisQuery,
-  snapshots: LoadedCurrentSourceAnalysisSnapshots,
+  query: Inquiry,
+  snapshots: LoadedCurrentSnapshotSet,
   message: string,
-  focusRef: SourceAnalysisFocusRef,
-  relatedRefs: readonly SourceAnalysisAuditRef[],
-): SourceAnalysisAnswer<SourceAnalysisAuditValue> {
-  const policy = resolveSourceAnalysisInquiryPolicy(query, {
+  focusRef: FocusRef,
+  relatedRefs: readonly AuditRef[],
+): InquiryAnswer<AuditValue> {
+  const policy = resolveInquiryPolicy(query, {
     focusKind: focusRef.kind,
     inquiryEpisode: 'inventory-and-audit-sweep',
     readMode: defaultReadMode(query.questionRoute),
@@ -923,7 +924,7 @@ function createMissAnswer(
     policy,
     focusRef,
     'miss-unknown-shape',
-    createStructuredSourceAnalysisAnswerCard({
+    createStructuredAnswerCard({
       title: 'Package audit miss',
       primaryRef: {
         kind: focusRef.kind,
@@ -931,7 +932,7 @@ function createMissAnswer(
         label: focusRef.label ?? focusRef.value,
       },
       relatedRefs,
-      document: createSourceAnalysisAnswerDocument([
+      document: createAnswerDocument([
         {
           kind: 'paragraph',
           importance: 'primary',
@@ -970,13 +971,13 @@ function createMissAnswer(
 }
 
 function createAmbiguousAnswer(
-  query: SourceAnalysisQuery,
-  snapshots: LoadedCurrentSourceAnalysisSnapshots,
+  query: Inquiry,
+  snapshots: LoadedCurrentSnapshotSet,
   message: string,
-  focusRef: SourceAnalysisFocusRef,
-  relatedRefs: readonly SourceAnalysisAuditRef[],
-): SourceAnalysisAnswer<SourceAnalysisAuditValue> {
-  const policy = resolveSourceAnalysisInquiryPolicy(query, {
+  focusRef: FocusRef,
+  relatedRefs: readonly AuditRef[],
+): InquiryAnswer<AuditValue> {
+  const policy = resolveInquiryPolicy(query, {
     focusKind: focusRef.kind,
     inquiryEpisode: 'inventory-and-audit-sweep',
     readMode: defaultReadMode(query.questionRoute),
@@ -987,7 +988,7 @@ function createAmbiguousAnswer(
     policy,
     focusRef,
     'ambiguous',
-    createStructuredSourceAnalysisAnswerCard({
+    createStructuredAnswerCard({
       title: 'Package audit ambiguity',
       primaryRef: {
         kind: focusRef.kind,
@@ -995,7 +996,7 @@ function createAmbiguousAnswer(
         label: focusRef.label ?? focusRef.value,
       },
       relatedRefs,
-      document: createSourceAnalysisAnswerDocument([
+      document: createAnswerDocument([
         {
           kind: 'paragraph',
           importance: 'primary',
@@ -1034,11 +1035,11 @@ function createAmbiguousAnswer(
 }
 
 function createUnsupportedAnswer(
-  query: SourceAnalysisQuery,
-  snapshots: LoadedCurrentSourceAnalysisSnapshots,
+  query: Inquiry,
+  snapshots: LoadedCurrentSnapshotSet,
   message: string,
-): SourceAnalysisAnswer<SourceAnalysisAuditValue> {
-  const policy = resolveSourceAnalysisInquiryPolicy(query, {
+): InquiryAnswer<AuditValue> {
+  const policy = resolveInquiryPolicy(query, {
     focusKind: query.focusRef.kind,
     inquiryEpisode: 'inventory-and-audit-sweep',
     readMode: defaultReadMode(query.questionRoute),
@@ -1049,7 +1050,7 @@ function createUnsupportedAnswer(
     policy,
     query.focusRef,
     'unsupported',
-    createStructuredSourceAnalysisAnswerCard({
+    createStructuredAnswerCard({
       title: 'Package audit unsupported',
       primaryRef: {
         kind: query.focusRef.kind,
@@ -1057,7 +1058,7 @@ function createUnsupportedAnswer(
         label: query.focusRef.label ?? query.focusRef.value,
       },
       relatedRefs: [],
-      document: createSourceAnalysisAnswerDocument([
+      document: createAnswerDocument([
         {
           kind: 'paragraph',
           importance: 'primary',
@@ -1089,7 +1090,7 @@ function createUnsupportedAnswer(
 }
 
 function resolvePackages(
-  snapshots: LoadedCurrentSourceAnalysisSnapshots,
+  snapshots: LoadedCurrentSnapshotSet,
   query: string,
 ): readonly PackageExportsSummary[] {
   const normalized = query.toLowerCase();
@@ -1111,7 +1112,7 @@ function resolvePackages(
   );
 }
 
-function packageRef(pkg: PackageExportsSummary): SourceAnalysisAuditRef {
+function packageRef(pkg: PackageExportsSummary): AuditRef {
   return {
     kind: 'package',
     value: pkg.package_name,
@@ -1120,7 +1121,7 @@ function packageRef(pkg: PackageExportsSummary): SourceAnalysisAuditRef {
   };
 }
 
-function fileRef(filePath: string, detail?: string): SourceAnalysisAuditRef {
+function fileRef(filePath: string, detail?: string): AuditRef {
   return {
     kind: 'file',
     value: filePath,
@@ -1129,7 +1130,7 @@ function fileRef(filePath: string, detail?: string): SourceAnalysisAuditRef {
   };
 }
 
-function typeRef(declaration: TypeDecl): SourceAnalysisAuditRef {
+function typeRef(declaration: TypeDecl): AuditRef {
   return {
     kind: 'type',
     value: declaration.name,
@@ -1139,9 +1140,9 @@ function typeRef(declaration: TypeDecl): SourceAnalysisAuditRef {
 }
 
 function defaultWorldFrame(
-  snapshots: LoadedCurrentSourceAnalysisSnapshots,
-  worldFrame: SourceAnalysisWorldFrame | undefined,
-): SourceAnalysisWorldFrame {
+  snapshots: LoadedCurrentSnapshotSet,
+  worldFrame: WorldFrame | undefined,
+): WorldFrame {
   return {
     repoPath: worldFrame?.repoPath ?? snapshots.deps.root,
     target: worldFrame?.target ?? 'current',
@@ -1152,17 +1153,17 @@ function defaultWorldFrame(
 }
 
 function defaultReadMode(
-  questionRoute: SourceAnalysisQuery['questionRoute'],
-): SourceAnalysisReadMode {
+  questionRoute: Inquiry['questionRoute'],
+): ReadMode {
   return questionRoute === 'inventory' ? 'summary-card' : 'focus-card';
 }
 
 function continuation(
-  targetQuestionRoute: SourceAnalysisQuery['questionRoute'],
+  targetQuestionRoute: Inquiry['questionRoute'],
   label: string,
   targetFocusRef: string,
   detail: string,
-): SourceAnalysisContinuation {
+): Continuation {
   return {
     kind: targetQuestionRoute === 'route' ? 'reroute' : 'inspect-support',
     label,
@@ -1176,7 +1177,7 @@ function snapshotProvenanceEntry(
   kind: 'deps' | 'typerefs' | 'exports',
   generatedAt: string,
   sourceCommit: string,
-): SourceAnalysisAnswerProvenanceEntry {
+): InquiryProvenanceEntry {
   return {
     kind: 'snapshot',
     label: `${kind} snapshot`,
@@ -1186,8 +1187,8 @@ function snapshotProvenanceEntry(
 }
 
 function originForFinding(
-  kind: SourceAnalysisAuditFindingKind,
-): SourceAnalysisIssueOrigin {
+  kind: AuditFindingKind,
+): IssueOrigin {
   switch (kind) {
     case 'blindspot':
       return 'boundary';
@@ -1215,9 +1216,9 @@ function resolveAuditRepoPath(repoPath?: string): string {
 function createSafeCoordinationSurface(
   repoPath: string,
   packageFiles: readonly string[],
-): SourceAnalysisPackageCoordinationSurface | null {
+): PackageCoordinationSurface | null {
   try {
-    return createSourceAnalysisPackageCoordinationSurface(repoPath, packageFiles);
+    return createPackageCoordinationSurface(repoPath, packageFiles);
   } catch {
     return null;
   }
@@ -1237,10 +1238,10 @@ function renderNamedSurfaceMembers(
 }
 
 function dedupeRefs(
-  refs: readonly SourceAnalysisAuditRef[],
-): readonly SourceAnalysisAuditRef[] {
+  refs: readonly AuditRef[],
+): readonly AuditRef[] {
   const seen = new Set<string>();
-  const deduped: SourceAnalysisAuditRef[] = [];
+  const deduped: AuditRef[] = [];
   for (const ref of refs) {
     const key = `${ref.kind}\0${ref.value}`;
     if (seen.has(key)) continue;
@@ -1251,10 +1252,10 @@ function dedupeRefs(
 }
 
 function dedupeContinuations(
-  continuations: readonly SourceAnalysisContinuation[],
-): readonly SourceAnalysisContinuation[] {
+  continuations: readonly Continuation[],
+): readonly Continuation[] {
   const seen = new Set<string>();
-  const deduped: SourceAnalysisContinuation[] = [];
+  const deduped: Continuation[] = [];
   for (const continuation of continuations) {
     const key = `${continuation.targetQuestionRoute ?? ''}\0${continuation.targetFocusRef ?? ''}`;
     if (seen.has(key)) continue;

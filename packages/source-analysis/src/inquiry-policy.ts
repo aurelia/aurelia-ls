@@ -1,24 +1,24 @@
-import type { SourceAnalysisIssueSeverity, SourceAnalysisTrustKind } from './outcome-algebra.js';
+import type { IssueSeverity, TrustKind } from './outcome-algebra.js';
 import type {
-  SourceAnalysisFocusKind,
-  SourceAnalysisInquiryEpisode,
-  SourceAnalysisQuery,
-  SourceAnalysisQuestionRoute,
-  SourceAnalysisReadMode,
-} from './query-model.js';
+  FocusKind,
+  InquiryEpisode,
+  Inquiry,
+  QuestionRoute,
+  ReadMode,
+} from './inquiry-model.js';
 import type {
-  SourceAnalysisPackageRouteClass,
-  SourceAnalysisPackageRouteKind,
-  SourceAnalysisPackageRootKind,
+  PackageRouteClass,
+  PackageRouteKind,
+  PackageRootKind,
 } from './reachability.js';
-import type { SourceAnalysisAnswerBlockImportance } from './answer-document.js';
+import type { AnswerBlockImportance } from './answer-document.js';
 
-export const SOURCE_ANALYSIS_CONSUMER_KINDS = [
+export const CONSUMER_KINDS = [
   'human',
   'machine',
 ] as const;
 
-export const SOURCE_ANALYSIS_AUDIT_METRICS = [
+export const AUDIT_METRICS = [
   'outbound-count',
   'declaration-count',
   'export-count',
@@ -34,30 +34,30 @@ export const SOURCE_ANALYSIS_AUDIT_METRICS = [
   'card-interface-count',
 ] as const;
 
-export type SourceAnalysisConsumerKind =
-  typeof SOURCE_ANALYSIS_CONSUMER_KINDS[number];
+export type ConsumerKind =
+  typeof CONSUMER_KINDS[number];
 
-export type SourceAnalysisAuditMetric =
-  typeof SOURCE_ANALYSIS_AUDIT_METRICS[number];
+export type AuditMetric =
+  typeof AUDIT_METRICS[number];
 
-export interface SourceAnalysisInquiryOrdering {
-  readonly issueSeverity: readonly SourceAnalysisIssueSeverity[];
-  readonly trust: readonly SourceAnalysisTrustKind[];
-  readonly routeClass: readonly SourceAnalysisPackageRouteClass[];
-  readonly routeKind: readonly SourceAnalysisPackageRouteKind[];
-  readonly rootKind: readonly SourceAnalysisPackageRootKind[];
-  readonly blockImportance: readonly SourceAnalysisAnswerBlockImportance[];
+export interface InquiryOrdering {
+  readonly issueSeverity: readonly IssueSeverity[];
+  readonly trust: readonly TrustKind[];
+  readonly routeClass: readonly PackageRouteClass[];
+  readonly routeKind: readonly PackageRouteKind[];
+  readonly rootKind: readonly PackageRootKind[];
+  readonly blockImportance: readonly AnswerBlockImportance[];
 }
 
-export interface SourceAnalysisAuditMetricOrders {
-  readonly candidateEntry: readonly SourceAnalysisAuditMetric[];
-  readonly exerciseOnly: readonly SourceAnalysisAuditMetric[];
-  readonly publicSurface: readonly SourceAnalysisAuditMetric[];
-  readonly coordination: readonly SourceAnalysisAuditMetric[];
-  readonly presentation: readonly SourceAnalysisAuditMetric[];
+export interface AuditMetricOrders {
+  readonly candidateEntry: readonly AuditMetric[];
+  readonly exerciseOnly: readonly AuditMetric[];
+  readonly publicSurface: readonly AuditMetric[];
+  readonly coordination: readonly AuditMetric[];
+  readonly presentation: readonly AuditMetric[];
 }
 
-export interface SourceAnalysisInquiryLimits {
+export interface InquiryLimits {
   readonly summaryLineCount: number;
   readonly relatedRefCount: number;
   readonly continuationCount: number;
@@ -70,25 +70,25 @@ export interface SourceAnalysisInquiryLimits {
   readonly factCount: number;
 }
 
-export interface SourceAnalysisInquiryPolicy {
-  readonly focusKind: SourceAnalysisFocusKind;
-  readonly inquiryEpisode: SourceAnalysisInquiryEpisode;
-  readonly questionRoute: SourceAnalysisQuestionRoute;
-  readonly readMode: SourceAnalysisReadMode;
-  readonly consumer: SourceAnalysisConsumerKind;
-  readonly limits: SourceAnalysisInquiryLimits;
-  readonly ordering: SourceAnalysisInquiryOrdering;
-  readonly auditMetricOrders: SourceAnalysisAuditMetricOrders;
+export interface InquiryPolicy {
+  readonly focusKind: FocusKind;
+  readonly inquiryEpisode: InquiryEpisode;
+  readonly questionRoute: QuestionRoute;
+  readonly readMode: ReadMode;
+  readonly consumer: ConsumerKind;
+  readonly limits: InquiryLimits;
+  readonly ordering: InquiryOrdering;
+  readonly auditMetricOrders: AuditMetricOrders;
 }
 
-export interface ResolveSourceAnalysisInquiryPolicyDefaults {
-  readonly focusKind: SourceAnalysisFocusKind;
-  readonly inquiryEpisode: SourceAnalysisInquiryEpisode;
-  readonly readMode: SourceAnalysisReadMode;
-  readonly consumer?: SourceAnalysisConsumerKind;
+export interface ResolveInquiryPolicyDefaults {
+  readonly focusKind: FocusKind;
+  readonly inquiryEpisode: InquiryEpisode;
+  readonly readMode: ReadMode;
+  readonly consumer?: ConsumerKind;
 }
 
-export const DEFAULT_SOURCE_ANALYSIS_INQUIRY_ORDERING: SourceAnalysisInquiryOrdering = {
+export const DEFAULT_INQUIRY_ORDERING: InquiryOrdering = {
   issueSeverity: ['error', 'warning', 'info'],
   trust: ['grounded', 'qualified', 'frontier', 'unavailable'],
   routeClass: ['production', 'exercise', 'candidate'],
@@ -97,7 +97,7 @@ export const DEFAULT_SOURCE_ANALYSIS_INQUIRY_ORDERING: SourceAnalysisInquiryOrde
   blockImportance: ['primary', 'supporting', 'detail'],
 };
 
-const SUMMARY_CARD_LIMITS: SourceAnalysisInquiryLimits = {
+const SUMMARY_CARD_LIMITS: InquiryLimits = {
   summaryLineCount: 3,
   relatedRefCount: 10,
   continuationCount: 5,
@@ -110,7 +110,7 @@ const SUMMARY_CARD_LIMITS: SourceAnalysisInquiryLimits = {
   factCount: 5,
 };
 
-const FOCUS_CARD_LIMITS: SourceAnalysisInquiryLimits = {
+const FOCUS_CARD_LIMITS: InquiryLimits = {
   summaryLineCount: 4,
   relatedRefCount: 12,
   continuationCount: 6,
@@ -123,7 +123,7 @@ const FOCUS_CARD_LIMITS: SourceAnalysisInquiryLimits = {
   factCount: 6,
 };
 
-const SUPPORTING_EVIDENCE_LIMITS: SourceAnalysisInquiryLimits = {
+const SUPPORTING_EVIDENCE_LIMITS: InquiryLimits = {
   summaryLineCount: 5,
   relatedRefCount: 12,
   continuationCount: 6,
@@ -136,7 +136,7 @@ const SUPPORTING_EVIDENCE_LIMITS: SourceAnalysisInquiryLimits = {
   factCount: 8,
 };
 
-const SNAPSHOT_LIMITS: SourceAnalysisInquiryLimits = {
+const SNAPSHOT_LIMITS: InquiryLimits = {
   summaryLineCount: 4,
   relatedRefCount: 14,
   continuationCount: 6,
@@ -149,7 +149,7 @@ const SNAPSHOT_LIMITS: SourceAnalysisInquiryLimits = {
   factCount: 12,
 };
 
-const BASE_AUDIT_METRIC_ORDERS: SourceAnalysisAuditMetricOrders = {
+const BASE_AUDIT_METRIC_ORDERS: AuditMetricOrders = {
   candidateEntry: ['outbound-count', 'declaration-count', 'export-count', 'public-surface'],
   exerciseOnly: ['exercise-root-count', 'declaration-count', 'export-count', 'outbound-count'],
   publicSurface: ['grounded-production-root-count', 'production-root-count', 'declaration-count', 'export-count'],
@@ -157,10 +157,10 @@ const BASE_AUDIT_METRIC_ORDERS: SourceAnalysisAuditMetricOrders = {
   presentation: ['ref-interface-count', 'card-interface-count', 'card-literal-count', 'summary-site-count'],
 };
 
-export function resolveSourceAnalysisInquiryPolicy(
-  query: SourceAnalysisQuery,
-  defaults: ResolveSourceAnalysisInquiryPolicyDefaults,
-): SourceAnalysisInquiryPolicy {
+export function resolveInquiryPolicy(
+  query: Inquiry,
+  defaults: ResolveInquiryPolicyDefaults,
+): InquiryPolicy {
   const readMode = query.readMode ?? defaults.readMode;
   const inquiryEpisode = query.inquiryEpisode ?? defaults.inquiryEpisode;
   const consumer = defaults.consumer ?? (readMode === 'snapshot' ? 'machine' : 'human');
@@ -172,7 +172,7 @@ export function resolveSourceAnalysisInquiryPolicy(
     readMode,
     consumer,
     limits: limitsForPolicy(readMode, inquiryEpisode),
-    ordering: DEFAULT_SOURCE_ANALYSIS_INQUIRY_ORDERING,
+    ordering: DEFAULT_INQUIRY_ORDERING,
     auditMetricOrders: auditMetricOrdersForPolicy(readMode, inquiryEpisode),
   };
 }
@@ -206,9 +206,9 @@ function precedenceIndex<T extends string>(
 }
 
 function limitsForPolicy(
-  readMode: SourceAnalysisReadMode,
-  inquiryEpisode: SourceAnalysisInquiryEpisode,
-): SourceAnalysisInquiryLimits {
+  readMode: ReadMode,
+  inquiryEpisode: InquiryEpisode,
+): InquiryLimits {
   const base = readMode === 'summary-card'
     ? SUMMARY_CARD_LIMITS
     : readMode === 'supporting-evidence'
@@ -237,9 +237,9 @@ function limitsForPolicy(
 }
 
 function auditMetricOrdersForPolicy(
-  readMode: SourceAnalysisReadMode,
-  inquiryEpisode: SourceAnalysisInquiryEpisode,
-): SourceAnalysisAuditMetricOrders {
+  readMode: ReadMode,
+  inquiryEpisode: InquiryEpisode,
+): AuditMetricOrders {
   if (readMode === 'supporting-evidence' || inquiryEpisode === 'delta-and-reread-floor') {
     return {
       ...BASE_AUDIT_METRIC_ORDERS,

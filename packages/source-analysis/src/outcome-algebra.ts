@@ -1,12 +1,12 @@
 import type {
-  SourceAnalysisClaimHomeId,
-  SourceAnalysisClaimId,
+  ClaimHomeId,
+  ClaimId,
 } from './claim-lattice.js';
-import type { SourceAnalysisSubstrateNodeId } from './substrate.js';
+import type { SubstrateNodeId } from './substrate.js';
 
-export const SOURCE_ANALYSIS_OUTCOME_SCHEMA_VERSION = 'v0alpha1' as const;
+export const OUTCOME_SCHEMA_VERSION = 'v0alpha1' as const;
 
-export const SOURCE_ANALYSIS_OUTCOME_TAGS = [
+export const OUTCOME_TAGS = [
   'hit',
   'miss-unknown-shape',
   'ambiguous',
@@ -17,14 +17,14 @@ export const SOURCE_ANALYSIS_OUTCOME_TAGS = [
   'error',
 ] as const;
 
-export const SOURCE_ANALYSIS_TRUST_KINDS = [
+export const TRUST_KINDS = [
   'grounded',
   'qualified',
   'frontier',
   'unavailable',
 ] as const;
 
-export const SOURCE_ANALYSIS_CLOSURE_BASIS_KINDS = [
+export const CLOSURE_BASIS_KINDS = [
   'substrate',
   'claim',
   'route',
@@ -32,13 +32,13 @@ export const SOURCE_ANALYSIS_CLOSURE_BASIS_KINDS = [
   'boundary',
 ] as const;
 
-export const SOURCE_ANALYSIS_ISSUE_SEVERITIES = [
+export const ISSUE_SEVERITIES = [
   'info',
   'warning',
   'error',
 ] as const;
 
-export const SOURCE_ANALYSIS_ISSUE_ORIGINS = [
+export const ISSUE_ORIGINS = [
   'shape',
   'freshness',
   'boundary',
@@ -46,7 +46,7 @@ export const SOURCE_ANALYSIS_ISSUE_ORIGINS = [
   'query',
 ] as const;
 
-export const SOURCE_ANALYSIS_CONTINUATION_KINDS = [
+export const CONTINUATION_KINDS = [
   'narrow',
   'widen',
   'reroute',
@@ -55,60 +55,60 @@ export const SOURCE_ANALYSIS_CONTINUATION_KINDS = [
   'inspect-support',
 ] as const;
 
-export type SourceAnalysisOutcomeTag =
-  typeof SOURCE_ANALYSIS_OUTCOME_TAGS[number];
+export type OutcomeTag =
+  typeof OUTCOME_TAGS[number];
 
-export type SourceAnalysisTrustKind =
-  typeof SOURCE_ANALYSIS_TRUST_KINDS[number];
+export type TrustKind =
+  typeof TRUST_KINDS[number];
 
-export type SourceAnalysisClosureBasisKind =
-  typeof SOURCE_ANALYSIS_CLOSURE_BASIS_KINDS[number];
+export type ClosureBasisKind =
+  typeof CLOSURE_BASIS_KINDS[number];
 
-export type SourceAnalysisIssueSeverity =
-  typeof SOURCE_ANALYSIS_ISSUE_SEVERITIES[number];
+export type IssueSeverity =
+  typeof ISSUE_SEVERITIES[number];
 
-export type SourceAnalysisIssueOrigin =
-  typeof SOURCE_ANALYSIS_ISSUE_ORIGINS[number];
+export type IssueOrigin =
+  typeof ISSUE_ORIGINS[number];
 
-export type SourceAnalysisContinuationKind =
-  typeof SOURCE_ANALYSIS_CONTINUATION_KINDS[number];
+export type ContinuationKind =
+  typeof CONTINUATION_KINDS[number];
 
-export interface SourceAnalysisTrustProfile {
-  readonly kind: SourceAnalysisTrustKind;
+export interface TrustProfile {
+  readonly kind: TrustKind;
   readonly summary?: string;
 }
 
-export interface SourceAnalysisClosureBasis {
-  readonly kind: SourceAnalysisClosureBasisKind;
+export interface ClosureBasis {
+  readonly kind: ClosureBasisKind;
   readonly summary: string;
-  readonly claimIds?: readonly SourceAnalysisClaimId[];
-  readonly claimHomeIds?: readonly SourceAnalysisClaimHomeId[];
-  readonly substrateNodeIds?: readonly SourceAnalysisSubstrateNodeId[];
+  readonly claimIds?: readonly ClaimId[];
+  readonly claimHomeIds?: readonly ClaimHomeId[];
+  readonly substrateNodeIds?: readonly SubstrateNodeId[];
   readonly provenanceRefs?: readonly string[];
 }
 
-export interface SourceAnalysisIssue {
+export interface Issue {
   readonly code: string;
   readonly message: string;
-  readonly severity: SourceAnalysisIssueSeverity;
-  readonly origin: SourceAnalysisIssueOrigin;
+  readonly severity: IssueSeverity;
+  readonly origin: IssueOrigin;
 }
 
-export interface SourceAnalysisContinuation {
-  readonly kind: SourceAnalysisContinuationKind;
+export interface Continuation {
+  readonly kind: ContinuationKind;
   readonly label: string;
   readonly description?: string;
   readonly targetFocusRef?: string;
   readonly targetQuestionRoute?: string;
 }
 
-export interface SourceAnalysisOutcome<TResult = unknown> {
-  readonly schemaVersion: typeof SOURCE_ANALYSIS_OUTCOME_SCHEMA_VERSION;
-  readonly tag: SourceAnalysisOutcomeTag;
+export interface Outcome<TResult = unknown> {
+  readonly schemaVersion: typeof OUTCOME_SCHEMA_VERSION;
+  readonly tag: OutcomeTag;
   readonly summary: string;
-  readonly trust: SourceAnalysisTrustProfile;
+  readonly trust: TrustProfile;
   readonly value?: TResult;
-  readonly closureBasis: readonly SourceAnalysisClosureBasis[];
-  readonly issues: readonly SourceAnalysisIssue[];
-  readonly continuations: readonly SourceAnalysisContinuation[];
+  readonly closureBasis: readonly ClosureBasis[];
+  readonly issues: readonly Issue[];
+  readonly continuations: readonly Continuation[];
 }

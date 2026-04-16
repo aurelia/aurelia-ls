@@ -3,9 +3,9 @@
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
-import { createSourceAnalysisPaths } from './config.js';
+import { createSnapshotPaths } from './snapshot-config.js';
 
-const PATHS = createSourceAnalysisPaths(import.meta.url);
+const PATHS = createSnapshotPaths(import.meta.url);
 
 type EntryPoint = 'deps' | 'typerefs' | 'exports' | 'refresh';
 

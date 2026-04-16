@@ -1,32 +1,32 @@
 import type {
-  SourceAnalysisFocusKind,
-  SourceAnalysisInquiryEpisode,
-  SourceAnalysisQuestionRoute,
-  SourceAnalysisReadMode,
-} from './query-model.js';
-import type { SourceAnalysisCapabilityCatalog } from './capability-catalog.js';
+  FocusKind,
+  InquiryEpisode,
+  QuestionRoute,
+  ReadMode,
+} from './inquiry-model.js';
+import type { CapabilityCatalog } from './capability-catalog.js';
 import {
   captureKindsForFocusKind,
-  type SourceAnalysisIngressCapture,
+  type IngressCapture,
 } from './ingress-recognizers.js';
 import {
-  compareSourceAnalysisIngressEvaluations,
-  createSourceAnalysisCaptureRule,
-  createSourceAnalysisExactRule,
-  createSourceAnalysisFocusRule,
-  createSourceAnalysisIngressContext,
-  createSourceAnalysisPhraseRule,
-  createSourceAnalysisTokenRule,
-  evaluateSourceAnalysisIngressRules,
-  rehydrateSourceAnalysisIngressEvaluation,
-  type SourceAnalysisIngressContext,
-  type SourceAnalysisIngressMatchTrace,
-  type SourceAnalysisIngressRuleSpec,
-  type SourceAnalysisIngressSelectionPolicy,
+  compareIngressEvaluations,
+  createCaptureRule,
+  createExactRule,
+  createFocusRule,
+  createIngressContext,
+  createPhraseRule,
+  createTokenRule,
+  evaluateIngressRules,
+  rehydrateIngressEvaluation,
+  type IngressContext,
+  type IngressMatchTrace,
+  type IngressRuleSpec,
+  type IngressSelectionPolicy,
 } from './ingress-matcher.js';
 import { tokenize } from './ingress-normalization.js';
 
-export const SOURCE_ANALYSIS_INQUIRY_FAMILY_IDS = [
+export const INQUIRY_FAMILY_IDS = [
   'capability-guidance',
   'workspace-orientation',
   'package-audit',
@@ -34,7 +34,7 @@ export const SOURCE_ANALYSIS_INQUIRY_FAMILY_IDS = [
   'snapshot-maintenance',
 ] as const;
 
-export const SOURCE_ANALYSIS_INQUIRY_MATCH_REASON_KINDS = [
+export const INQUIRY_MATCH_REASON_KINDS = [
   'family',
   'alias',
   'noun',
@@ -45,70 +45,70 @@ export const SOURCE_ANALYSIS_INQUIRY_MATCH_REASON_KINDS = [
   'confusion',
 ] as const;
 
-export type SourceAnalysisInquiryFamilyId =
-  typeof SOURCE_ANALYSIS_INQUIRY_FAMILY_IDS[number];
+export type InquiryFamilyId =
+  typeof INQUIRY_FAMILY_IDS[number];
 
-export type SourceAnalysisInquiryMatchReasonKind =
-  typeof SOURCE_ANALYSIS_INQUIRY_MATCH_REASON_KINDS[number];
+export type InquiryMatchReasonKind =
+  typeof INQUIRY_MATCH_REASON_KINDS[number];
 
-export interface SourceAnalysisInquiryExample {
+export interface InquiryExample {
   readonly label: string;
   readonly question: string;
   readonly primaryCommand: string;
 }
 
-export interface SourceAnalysisInquiryConfusion {
+export interface InquiryConfusion {
   readonly label: string;
   readonly detail: string;
   readonly terms: readonly string[];
   readonly steer: string;
 }
 
-export interface SourceAnalysisInquiryFamilyDefinition {
-  readonly id: SourceAnalysisInquiryFamilyId;
+export interface InquiryFamilyDefinition {
+  readonly id: InquiryFamilyId;
   readonly label: string;
   readonly summary: string;
   readonly whenToUse: string;
-  readonly focusKinds: readonly SourceAnalysisFocusKind[];
-  readonly inquiryEpisodes: readonly SourceAnalysisInquiryEpisode[];
-  readonly questionRoutes: readonly SourceAnalysisQuestionRoute[];
-  readonly readModes: readonly SourceAnalysisReadMode[];
+  readonly focusKinds: readonly FocusKind[];
+  readonly inquiryEpisodes: readonly InquiryEpisode[];
+  readonly questionRoutes: readonly QuestionRoute[];
+  readonly readModes: readonly ReadMode[];
   readonly aliases: readonly string[];
   readonly nouns: readonly string[];
   readonly verbs: readonly string[];
   readonly primaryCommands: readonly string[];
   readonly supportingCommands: readonly string[];
-  readonly examples: readonly SourceAnalysisInquiryExample[];
-  readonly commonConfusions: readonly SourceAnalysisInquiryConfusion[];
+  readonly examples: readonly InquiryExample[];
+  readonly commonConfusions: readonly InquiryConfusion[];
 }
 
-export interface SourceAnalysisInquiryFamilyView {
-  readonly id: SourceAnalysisInquiryFamilyId;
+export interface InquiryFamilyView {
+  readonly id: InquiryFamilyId;
   readonly label: string;
   readonly summary: string;
   readonly whenToUse: string;
-  readonly focusKinds: readonly SourceAnalysisFocusKind[];
-  readonly inquiryEpisodes: readonly SourceAnalysisInquiryEpisode[];
-  readonly questionRoutes: readonly SourceAnalysisQuestionRoute[];
-  readonly readModes: readonly SourceAnalysisReadMode[];
+  readonly focusKinds: readonly FocusKind[];
+  readonly inquiryEpisodes: readonly InquiryEpisode[];
+  readonly questionRoutes: readonly QuestionRoute[];
+  readonly readModes: readonly ReadMode[];
   readonly aliases: readonly string[];
   readonly primaryCommands: readonly string[];
   readonly supportingCommands: readonly string[];
-  readonly examples: readonly SourceAnalysisInquiryExample[];
-  readonly commonConfusions: readonly SourceAnalysisInquiryConfusion[];
+  readonly examples: readonly InquiryExample[];
+  readonly commonConfusions: readonly InquiryConfusion[];
 }
 
-export interface SourceAnalysisInquiryMatchReason {
-  readonly kind: SourceAnalysisInquiryMatchReasonKind;
+export interface InquiryMatchReason {
+  readonly kind: InquiryMatchReasonKind;
   readonly detail: string;
   readonly term?: string;
 }
 
-export interface SourceAnalysisInquiryMatch {
-  readonly inquiry: SourceAnalysisInquiryFamilyView;
-  readonly reasons: readonly SourceAnalysisInquiryMatchReason[];
-  readonly traces: readonly SourceAnalysisIngressMatchTrace<SourceAnalysisInquiryMatchReasonKind>[];
-  readonly captures: readonly SourceAnalysisIngressCapture[];
+export interface InquiryMatch {
+  readonly inquiry: InquiryFamilyView;
+  readonly reasons: readonly InquiryMatchReason[];
+  readonly traces: readonly IngressMatchTrace<InquiryMatchReasonKind>[];
+  readonly captures: readonly IngressCapture[];
   readonly requiredSatisfied: boolean;
   readonly exactFamily: boolean;
   readonly aliasMatches: readonly string[];
@@ -120,29 +120,29 @@ export interface SourceAnalysisInquiryMatch {
   readonly focusMatched: boolean;
 }
 
-export interface DiscoverSourceAnalysisInquiriesInput {
+export interface DiscoverInquiriesInput {
   readonly question?: string;
-  readonly focusKind?: SourceAnalysisFocusKind;
+  readonly focusKind?: FocusKind;
   readonly familyId?: string;
   readonly includeExamples?: boolean;
   readonly topK?: number;
 }
 
-export interface SourceAnalysisInquiryCatalogDiagnostics {
+export interface InquiryCatalogDiagnostics {
   readonly uncoveredCommands: readonly string[];
   readonly familiesWithoutExamples: readonly string[];
 }
 
-export class SourceAnalysisInquiryFamilyDescriptor {
-  readonly #definition: SourceAnalysisInquiryFamilyDefinition;
-  readonly #rules: readonly SourceAnalysisIngressRuleSpec<SourceAnalysisInquiryMatchReasonKind>[];
+export class InquiryFamilyDescriptor {
+  readonly #definition: InquiryFamilyDefinition;
+  readonly #rules: readonly IngressRuleSpec<InquiryMatchReasonKind>[];
 
-  constructor(definition: SourceAnalysisInquiryFamilyDefinition) {
+  constructor(definition: InquiryFamilyDefinition) {
     this.#definition = definition;
     this.#rules = createInquiryMatchRules(definition);
   }
 
-  get id(): SourceAnalysisInquiryFamilyId {
+  get id(): InquiryFamilyId {
     return this.#definition.id;
   }
 
@@ -154,7 +154,7 @@ export class SourceAnalysisInquiryFamilyDescriptor {
     return this.#definition.supportingCommands;
   }
 
-  toView(includeExamples = false): SourceAnalysisInquiryFamilyView {
+  toView(includeExamples = false): InquiryFamilyView {
     return {
       id: this.#definition.id,
       label: this.#definition.label,
@@ -172,7 +172,7 @@ export class SourceAnalysisInquiryFamilyDescriptor {
     };
   }
 
-  emptyMatch(includeExamples = false): SourceAnalysisInquiryMatch {
+  emptyMatch(includeExamples = false): InquiryMatch {
     return {
       inquiry: this.toView(includeExamples),
       reasons: [],
@@ -191,10 +191,10 @@ export class SourceAnalysisInquiryFamilyDescriptor {
   }
 
   matchContext(
-    context: SourceAnalysisIngressContext,
+    context: IngressContext,
     includeExamples = false,
-  ): SourceAnalysisInquiryMatch | null {
-    const evaluation = evaluateSourceAnalysisIngressRules(context, this.#rules);
+  ): InquiryMatch | null {
+    const evaluation = evaluateIngressRules(context, this.#rules);
     if (!evaluation.matched) {
       return null;
     }
@@ -208,7 +208,7 @@ export class SourceAnalysisInquiryFamilyDescriptor {
       traces,
       captures: matchedTraces
         .map((trace) => trace.capture)
-        .filter((capture): capture is SourceAnalysisIngressCapture => capture !== undefined),
+        .filter((capture): capture is IngressCapture => capture !== undefined),
       requiredSatisfied: evaluation.requiredSatisfied,
       exactFamily: matchedTraces.some((trace) => trace.ruleId === 'exact-family'),
       aliasMatches: matchedTerms(matchedTraces, 'alias'),
@@ -222,35 +222,35 @@ export class SourceAnalysisInquiryFamilyDescriptor {
   }
 }
 
-export class SourceAnalysisInquiryCatalog {
-  readonly #descriptors: readonly SourceAnalysisInquiryFamilyDescriptor[];
-  readonly #selectionPolicy: SourceAnalysisIngressSelectionPolicy<SourceAnalysisInquiryMatchReasonKind>;
+export class InquiryCatalog {
+  readonly #descriptors: readonly InquiryFamilyDescriptor[];
+  readonly #selectionPolicy: IngressSelectionPolicy<InquiryMatchReasonKind>;
 
   constructor(
-    descriptors: readonly SourceAnalysisInquiryFamilyDescriptor[],
-    selectionPolicy: SourceAnalysisIngressSelectionPolicy<SourceAnalysisInquiryMatchReasonKind> = DEFAULT_SOURCE_ANALYSIS_INQUIRY_SELECTION_POLICY,
+    descriptors: readonly InquiryFamilyDescriptor[],
+    selectionPolicy: IngressSelectionPolicy<InquiryMatchReasonKind> = DEFAULT_INQUIRY_SELECTION_POLICY,
   ) {
     this.#descriptors = descriptors;
     this.#selectionPolicy = selectionPolicy;
   }
 
-  list(includeExamples = false): readonly SourceAnalysisInquiryFamilyView[] {
+  list(includeExamples = false): readonly InquiryFamilyView[] {
     return this.#descriptors.map((descriptor) => descriptor.toView(includeExamples));
   }
 
-  resolve(id: string): SourceAnalysisInquiryFamilyDescriptor | undefined {
+  resolve(id: string): InquiryFamilyDescriptor | undefined {
     const normalizedId = id.trim().toLowerCase();
     return this.#descriptors.find((descriptor) => descriptor.id.trim().toLowerCase() === normalizedId);
   }
 
   isAmbiguousTie(
-    left: SourceAnalysisInquiryMatch,
-    right: SourceAnalysisInquiryMatch,
+    left: InquiryMatch,
+    right: InquiryMatch,
   ): boolean {
     return compareInquiryMatches(left, right, this.#selectionPolicy) === 0;
   }
 
-  discover(input: DiscoverSourceAnalysisInquiriesInput = {}): readonly SourceAnalysisInquiryMatch[] {
+  discover(input: DiscoverInquiriesInput = {}): readonly InquiryMatch[] {
     if (!input.question && !input.focusKind && !input.familyId) {
       return limitMatches(
         this.#descriptors
@@ -260,14 +260,14 @@ export class SourceAnalysisInquiryCatalog {
       );
     }
 
-    const context = createSourceAnalysisIngressContext({
+    const context = createIngressContext({
       question: input.question,
       familyId: input.familyId,
       focusKind: input.focusKind,
     });
     const matches = this.#descriptors
       .map((descriptor) => descriptor.matchContext(context, input.includeExamples))
-      .filter((match): match is SourceAnalysisInquiryMatch => Boolean(match))
+      .filter((match): match is InquiryMatch => Boolean(match))
       .sort((left, right) =>
         compareInquiryMatches(left, right, this.#selectionPolicy)
         || left.inquiry.id.localeCompare(right.inquiry.id),
@@ -275,7 +275,7 @@ export class SourceAnalysisInquiryCatalog {
     return limitMatches(matches, input.topK);
   }
 
-  diagnose(capabilities: SourceAnalysisCapabilityCatalog): SourceAnalysisInquiryCatalogDiagnostics {
+  diagnose(capabilities: CapabilityCatalog): InquiryCatalogDiagnostics {
     const coveredCommands = new Set<string>();
     for (const descriptor of this.#descriptors) {
       for (const command of descriptor.primaryCommands) {
@@ -301,9 +301,9 @@ export class SourceAnalysisInquiryCatalog {
   }
 }
 
-export function createDefaultSourceAnalysisInquiryCatalog(): SourceAnalysisInquiryCatalog {
-  return new SourceAnalysisInquiryCatalog([
-    new SourceAnalysisInquiryFamilyDescriptor({
+export function createDefaultInquiryCatalog(): InquiryCatalog {
+  return new InquiryCatalog([
+    new InquiryFamilyDescriptor({
       id: 'capability-guidance',
       label: 'Capability guidance',
       summary: 'Teach the caller what source-analysis can do and how to shape a valid command.',
@@ -323,7 +323,7 @@ export function createDefaultSourceAnalysisInquiryCatalog(): SourceAnalysisInqui
       ],
       commonConfusions: [],
     }),
-    new SourceAnalysisInquiryFamilyDescriptor({
+    new InquiryFamilyDescriptor({
       id: 'workspace-orientation',
       label: 'Workspace orientation',
       summary: 'Orient an AI to a package, file, type, export, or repo before editing.',
@@ -348,7 +348,7 @@ export function createDefaultSourceAnalysisInquiryCatalog(): SourceAnalysisInqui
         steer: 'route-explanation',
       }],
     }),
-    new SourceAnalysisInquiryFamilyDescriptor({
+    new InquiryFamilyDescriptor({
       id: 'package-audit',
       label: 'Package audit',
       summary: 'Find package-local architecture debt, uncovered files, exercise gaps, and route blind spots.',
@@ -372,7 +372,7 @@ export function createDefaultSourceAnalysisInquiryCatalog(): SourceAnalysisInqui
         steer: 'route-explanation',
       }],
     }),
-    new SourceAnalysisInquiryFamilyDescriptor({
+    new InquiryFamilyDescriptor({
       id: 'route-explanation',
       label: 'Route explanation',
       summary: 'Explain why a file or type is alive by showing the strongest modeled route witness.',
@@ -396,7 +396,7 @@ export function createDefaultSourceAnalysisInquiryCatalog(): SourceAnalysisInqui
         steer: 'package-audit',
       }],
     }),
-    new SourceAnalysisInquiryFamilyDescriptor({
+    new InquiryFamilyDescriptor({
       id: 'snapshot-maintenance',
       label: 'Snapshot maintenance',
       summary: 'Inspect, refresh, invalidate, or materialize hosted snapshots and session state.',
@@ -430,7 +430,7 @@ function inquiryExample(
   label: string,
   question: string,
   primaryCommand: string,
-): SourceAnalysisInquiryExample {
+): InquiryExample {
   return {
     label,
     question,
@@ -438,18 +438,18 @@ function inquiryExample(
   };
 }
 
-const DEFAULT_SOURCE_ANALYSIS_INQUIRY_SELECTION_POLICY: SourceAnalysisIngressSelectionPolicy<
-  SourceAnalysisInquiryMatchReasonKind
+const DEFAULT_INQUIRY_SELECTION_POLICY: IngressSelectionPolicy<
+  InquiryMatchReasonKind
 > = {
   reasonKindOrder: ['family', 'alias', 'focus', 'route', 'command', 'noun', 'verb', 'confusion'],
 };
 
 function compareInquiryMatches(
-  left: SourceAnalysisInquiryMatch,
-  right: SourceAnalysisInquiryMatch,
-  policy: SourceAnalysisIngressSelectionPolicy<SourceAnalysisInquiryMatchReasonKind>,
+  left: InquiryMatch,
+  right: InquiryMatch,
+  policy: IngressSelectionPolicy<InquiryMatchReasonKind>,
 ): number {
-  return compareSourceAnalysisIngressEvaluations(
+  return compareIngressEvaluations(
     evaluationForMatch(right),
     evaluationForMatch(left),
     policy,
@@ -457,9 +457,9 @@ function compareInquiryMatches(
 }
 
 function limitMatches(
-  matches: readonly SourceAnalysisInquiryMatch[],
+  matches: readonly InquiryMatch[],
   topK: number | undefined,
-): readonly SourceAnalysisInquiryMatch[] {
+): readonly InquiryMatch[] {
   if (!topK || topK <= 0) {
     return matches;
   }
@@ -467,45 +467,45 @@ function limitMatches(
 }
 
 function createInquiryMatchRules(
-  definition: SourceAnalysisInquiryFamilyDefinition,
-): readonly SourceAnalysisIngressRuleSpec<SourceAnalysisInquiryMatchReasonKind>[] {
+  definition: InquiryFamilyDefinition,
+): readonly IngressRuleSpec<InquiryMatchReasonKind>[] {
   const focusCaptureKinds = definition.focusKinds.flatMap((focusKind) => captureKindsForFocusKind(focusKind));
   return [
-    createSourceAnalysisExactRule(
+    createExactRule(
       'exact-family',
       'family',
       'familyId',
       definition.id,
       `Exact inquiry-family match for "${definition.id}".`,
     ),
-    createSourceAnalysisPhraseRule(
+    createPhraseRule(
       'alias-phrases',
       'alias',
       [definition.label, definition.id, ...definition.aliases],
       'Question mentions a declared inquiry alias.',
     ),
-    createSourceAnalysisTokenRule(
+    createTokenRule(
       'noun-tokens',
       'noun',
       'question',
       definition.nouns,
       'Question uses a declared inquiry noun.',
     ),
-    createSourceAnalysisTokenRule(
+    createTokenRule(
       'verb-tokens',
       'verb',
       'question',
       definition.verbs,
       'Question uses a declared inquiry verb.',
     ),
-    createSourceAnalysisTokenRule(
+    createTokenRule(
       'route-tokens',
       'route',
       'question',
       definition.questionRoutes,
       'Question suggests a declared question route.',
     ),
-    createSourceAnalysisTokenRule(
+    createTokenRule(
       'command-tokens',
       'command',
       'question',
@@ -513,7 +513,7 @@ function createInquiryMatchRules(
       'Question lines up with a declared kernel command.',
       'supporting',
     ),
-    createSourceAnalysisTokenRule(
+    createTokenRule(
       'family-tokens',
       'family',
       'familyId',
@@ -521,14 +521,14 @@ function createInquiryMatchRules(
       'Family hint overlaps declared inquiry-family tokens.',
       'supporting',
     ),
-    createSourceAnalysisFocusRule(
+    createFocusRule(
       'focus-kind',
       'focus',
       definition.focusKinds,
       'The provided focus kind is accepted by this inquiry family.',
     ),
     ...(focusCaptureKinds.length > 0
-      ? [createSourceAnalysisCaptureRule(
+      ? [createCaptureRule(
         'focus-capture',
         'focus',
         focusCaptureKinds,
@@ -536,7 +536,7 @@ function createInquiryMatchRules(
       )]
       : []),
     ...definition.examples.map((example, index) =>
-      createSourceAnalysisPhraseRule(
+      createPhraseRule(
         `example-${index}`,
         'command',
         [example.question],
@@ -544,7 +544,7 @@ function createInquiryMatchRules(
         'supporting',
       )),
     ...definition.commonConfusions.map((confusion, index) =>
-      createSourceAnalysisPhraseRule(
+      createPhraseRule(
         `confusion-${index}`,
         'confusion',
         confusion.terms,
@@ -555,14 +555,14 @@ function createInquiryMatchRules(
 }
 
 function evaluationForMatch(
-  match: SourceAnalysisInquiryMatch,
+  match: InquiryMatch,
 ) {
-  return rehydrateSourceAnalysisIngressEvaluation(match.traces, match.requiredSatisfied);
+  return rehydrateIngressEvaluation(match.traces, match.requiredSatisfied);
 }
 
 function matchedTerms(
-  traces: readonly SourceAnalysisIngressMatchTrace<SourceAnalysisInquiryMatchReasonKind>[],
-  reasonKind: SourceAnalysisInquiryMatchReasonKind,
+  traces: readonly IngressMatchTrace<InquiryMatchReasonKind>[],
+  reasonKind: InquiryMatchReasonKind,
 ): readonly string[] {
   return traces
     .filter((trace) => trace.matched && trace.reasonKind === reasonKind && trace.term !== undefined)
@@ -571,8 +571,8 @@ function matchedTerms(
 }
 
 function toInquiryMatchReason(
-  trace: SourceAnalysisIngressMatchTrace<SourceAnalysisInquiryMatchReasonKind>,
-): SourceAnalysisInquiryMatchReason {
+  trace: IngressMatchTrace<InquiryMatchReasonKind>,
+): InquiryMatchReason {
   return {
     kind: trace.reasonKind,
     detail: trace.capture ? `${trace.detail} ${trace.capture.detail}` : trace.detail,

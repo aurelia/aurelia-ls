@@ -1,38 +1,39 @@
 import {
-  createSourceAnalysisSession,
-  type SourceAnalysisSession,
-} from '../session.js';
-import { resolveSourceAnalysisTarget } from '../config.js';
+  createRepoSession,
+  type RepoSession,
+} from '../repo-session.js';
+import {
+  SNAPSHOT_KINDS,
+  type SnapshotKind,
+} from '../snapshots.js';
+import { resolveSnapshotTarget } from '../snapshot-config.js';
 import type {
   SessionOpenArgs,
   SessionStatusEntry,
-  SourceAnalysisKind,
-  SourceAnalysisOutputByKind,
+  SnapshotOutputMap,
 } from './types.js';
 
-export interface SourceAnalysisHostSessionState {
+export interface HostSessionState {
   readonly sessionId: string;
   readonly repoPath: string;
   readonly target: string;
   readonly warmPrograms: boolean;
-  readonly session: SourceAnalysisSession;
-  readonly snapshots: Partial<SourceAnalysisOutputByKind>;
-  readonly warningsByKind: Partial<Record<SourceAnalysisKind, readonly string[]>>;
-  readonly lastRefreshAtByKind: Partial<Record<SourceAnalysisKind, string>>;
-  readonly dirtyKinds: Set<SourceAnalysisKind>;
+  readonly session: RepoSession;
+  readonly snapshots: Partial<SnapshotOutputMap>;
+  readonly warningsByKind: Partial<Record<SnapshotKind, readonly string[]>>;
+  readonly lastRefreshAtByKind: Partial<Record<SnapshotKind, string>>;
+  readonly dirtyKinds: Set<SnapshotKind>;
   readonly dirtyFiles: Set<string>;
   invalidationKind: 'none' | 'files' | 'project';
   invalidationCount: number;
 }
 
-const ALL_KINDS: readonly SourceAnalysisKind[] = ['deps', 'typerefs', 'exports'];
-
-export class SourceAnalysisHostSessionManager {
-  readonly #sessions = new Map<string, SourceAnalysisHostSessionState>();
+export class HostSessionManager {
+  readonly #sessions = new Map<string, HostSessionState>();
   #nextSessionId = 1;
 
-  open(args: SessionOpenArgs): SourceAnalysisHostSessionState {
-    const selection = resolveSourceAnalysisTarget({
+  open(args: SessionOpenArgs): HostSessionState {
+    const selection = resolveSnapshotTarget({
       target: args.target,
       repoPath: args.repoPath,
     });
@@ -41,13 +42,13 @@ export class SourceAnalysisHostSessionManager {
       throw new Error(`source-analysis host session "${sessionId}" already exists`);
     }
 
-    const session = createSourceAnalysisSession({
+    const session = createRepoSession({
       repoPath: selection.repoPath,
       target: selection.target,
       excludedRepoRelativePrefixes: args.excludedRepoRelativePrefixes,
     });
 
-    const state: SourceAnalysisHostSessionState = {
+    const state: HostSessionState = {
       sessionId,
       repoPath: session.repoPath,
       target: selection.target,
@@ -56,7 +57,7 @@ export class SourceAnalysisHostSessionManager {
       snapshots: {},
       warningsByKind: {},
       lastRefreshAtByKind: {},
-      dirtyKinds: new Set(ALL_KINDS),
+      dirtyKinds: new Set(SNAPSHOT_KINDS),
       dirtyFiles: new Set(),
       invalidationKind: 'project',
       invalidationCount: 1,
@@ -66,7 +67,7 @@ export class SourceAnalysisHostSessionManager {
     return state;
   }
 
-  get(sessionId: string): SourceAnalysisHostSessionState {
+  get(sessionId: string): HostSessionState {
     const state = this.#sessions.get(sessionId);
     if (!state) {
       throw new Error(`source-analysis host session "${sessionId}" was not found`);
@@ -78,7 +79,7 @@ export class SourceAnalysisHostSessionManager {
     return this.#sessions.delete(sessionId);
   }
 
-  list(sessionId?: string): readonly SourceAnalysisHostSessionState[] {
+  list(sessionId?: string): readonly HostSessionState[] {
     if (sessionId) {
       return [this.get(sessionId)];
     }
@@ -89,23 +90,23 @@ export class SourceAnalysisHostSessionManager {
 }
 
 export function toSessionStatusEntry(
-  state: SourceAnalysisHostSessionState,
+  state: HostSessionState,
 ): SessionStatusEntry {
   return {
     sessionId: state.sessionId,
     repoPath: state.repoPath,
     target: state.target,
     warmPrograms: state.warmPrograms,
-    dirtyKinds: sortKinds(state.dirtyKinds),
-    cachedKinds: sortKinds(Object.keys(state.snapshots) as SourceAnalysisKind[]),
+    dirtyKinds: sortSnapshotKinds(state.dirtyKinds),
+    cachedKinds: sortSnapshotKinds(Object.keys(state.snapshots) as SnapshotKind[]),
     dirtyFiles: [...state.dirtyFiles].sort(),
     lastRefreshAtByKind: { ...state.lastRefreshAtByKind },
   };
 }
 
-export function sortKinds(
-  kinds: Iterable<SourceAnalysisKind>,
-): readonly SourceAnalysisKind[] {
+export function sortSnapshotKinds(
+  kinds: Iterable<SnapshotKind>,
+): readonly SnapshotKind[] {
   const unique = new Set(kinds);
-  return ALL_KINDS.filter((kind) => unique.has(kind));
+  return SNAPSHOT_KINDS.filter((kind) => unique.has(kind));
 }

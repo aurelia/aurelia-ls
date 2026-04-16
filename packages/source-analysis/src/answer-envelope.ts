@@ -1,47 +1,47 @@
-import type { SourceAnalysisAnswerCard } from './answer-card.js';
+import type { AnswerCard } from './answer-card.js';
 import type {
-  SourceAnalysisClosureBasis,
-  SourceAnalysisContinuation,
-  SourceAnalysisIssue,
-  SourceAnalysisOutcome,
-  SourceAnalysisTrustProfile,
+  ClosureBasis,
+  Continuation,
+  Issue,
+  Outcome,
+  TrustProfile,
 } from './outcome-algebra.js';
-import { SOURCE_ANALYSIS_OUTCOME_SCHEMA_VERSION } from './outcome-algebra.js';
+import { OUTCOME_SCHEMA_VERSION } from './outcome-algebra.js';
 import type {
-  SourceAnalysisAnswer,
-  SourceAnalysisAnswerProvenanceEntry,
-  SourceAnalysisContinuationBasis,
-  SourceAnalysisFocusRef,
-  SourceAnalysisInquiryEpisode,
-  SourceAnalysisQuery,
-  SourceAnalysisReadMode,
-  SourceAnalysisWorldFrame,
-} from './query-model.js';
-import { SOURCE_ANALYSIS_QUERY_MODEL_SCHEMA_VERSION } from './query-model.js';
+  InquiryAnswer,
+  InquiryProvenanceEntry,
+  ContinuationBasis,
+  FocusRef,
+  InquiryEpisode,
+  Inquiry,
+  ReadMode,
+  WorldFrame,
+} from './inquiry-model.js';
+import { INQUIRY_MODEL_SCHEMA_VERSION } from './inquiry-model.js';
 
-export interface CreateSourceAnalysisAnswerEnvelopeOptions<
-  TResult extends SourceAnalysisAnswerCard,
+export interface CreateAnswerEnvelopeOptions<
+  TResult extends AnswerCard,
 > {
-  readonly query: SourceAnalysisQuery;
-  readonly focusRef: SourceAnalysisFocusRef;
-  readonly inquiryEpisode: SourceAnalysisInquiryEpisode;
-  readonly readMode: SourceAnalysisReadMode;
-  readonly worldFrame: SourceAnalysisWorldFrame;
-  readonly tag: SourceAnalysisOutcome<TResult>['tag'];
+  readonly query: Inquiry;
+  readonly focusRef: FocusRef;
+  readonly inquiryEpisode: InquiryEpisode;
+  readonly readMode: ReadMode;
+  readonly worldFrame: WorldFrame;
+  readonly tag: Outcome<TResult>['tag'];
   readonly value: TResult;
-  readonly trust: SourceAnalysisTrustProfile;
-  readonly closureBasis: readonly SourceAnalysisClosureBasis[];
-  readonly issues: readonly SourceAnalysisIssue[];
-  readonly continuations: readonly SourceAnalysisContinuation[];
-  readonly provenance: readonly SourceAnalysisAnswerProvenanceEntry[];
+  readonly trust: TrustProfile;
+  readonly closureBasis: readonly ClosureBasis[];
+  readonly issues: readonly Issue[];
+  readonly continuations: readonly Continuation[];
+  readonly provenance: readonly InquiryProvenanceEntry[];
 }
 
-export function createSourceAnalysisAnswerEnvelope<
-  TResult extends SourceAnalysisAnswerCard,
+export function createAnswerEnvelope<
+  TResult extends AnswerCard,
 >(
-  options: CreateSourceAnalysisAnswerEnvelopeOptions<TResult>,
-): SourceAnalysisAnswer<TResult> {
-  const continuationBasis: SourceAnalysisContinuationBasis = {
+  options: CreateAnswerEnvelopeOptions<TResult>,
+): InquiryAnswer<TResult> {
+  const continuationBasis: ContinuationBasis = {
     focusRef: options.focusRef,
     questionRoute: options.query.questionRoute,
     readMode: options.readMode,
@@ -49,8 +49,8 @@ export function createSourceAnalysisAnswerEnvelope<
     governingAnchorRefs: options.value.relatedRefs.map((ref) => ref.value).slice(0, 4),
   };
 
-  const outcome: SourceAnalysisOutcome<TResult> = {
-    schemaVersion: SOURCE_ANALYSIS_OUTCOME_SCHEMA_VERSION,
+  const outcome: Outcome<TResult> = {
+    schemaVersion: OUTCOME_SCHEMA_VERSION,
     tag: options.tag,
     summary: options.value.summaryLines[0] ?? options.value.title,
     trust: options.trust,
@@ -61,7 +61,7 @@ export function createSourceAnalysisAnswerEnvelope<
   };
 
   return {
-    schemaVersion: SOURCE_ANALYSIS_QUERY_MODEL_SCHEMA_VERSION,
+    schemaVersion: INQUIRY_MODEL_SCHEMA_VERSION,
     query: {
       inquiryEpisode: options.query.inquiryEpisode ?? options.inquiryEpisode,
       focusRef: options.focusRef,

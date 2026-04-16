@@ -1,90 +1,89 @@
 import type {
-  SourceAnalysisAnswer,
-  SourceAnalysisFocusKind,
-  SourceAnalysisQuestionRoute,
-  SourceAnalysisReadMode,
-} from '../query-model.js';
-import type { SourceAnalysisAuditValue } from '../audit.js';
-import type { SourceAnalysisAnswerDocument } from '../answer-document.js';
-import type { SourceAnalysisAnswerRef } from '../answer-card.js';
-import type { SourceAnalysisConsumerKind } from '../inquiry-policy.js';
-import type { SourceAnalysisRenderedPlainText } from '../answer-renderer.js';
+  InquiryAnswer,
+  FocusKind,
+  QuestionRoute,
+  ReadMode,
+} from '../inquiry-model.js';
+import type { AuditValue } from '../audit.js';
+import type { AnswerDocument } from '../answer-document.js';
+import type { AnswerRef } from '../answer-card.js';
+import type { ConsumerKind } from '../inquiry-policy.js';
+import type { RenderedPlainText } from '../answer-renderer.js';
 import type {
-  SourceAnalysisCapabilityDiscoveryValue,
-  SourceAnalysisCapabilityPlanValue,
-  SourceAnalysisCapabilityRepairValue,
-} from '../ingress.js';
+  CapabilityDiscoveryValue,
+  CapabilityPlanValue,
+  CapabilityRepairValue,
+} from '../capability-ingress.js';
 import type {
-  SourceAnalysisInquiryAskValue,
-  SourceAnalysisInquiryDiscoveryValue,
-  SourceAnalysisInquiryPlanValue,
+  InquiryAskValue,
+  InquiryDiscoveryValue,
+  InquiryPlanValue,
 } from '../inquiry-ingress.js';
-import type { SourceAnalysisInquiryFamilyId } from '../inquiry-catalog.js';
+import type { InquiryFamilyId } from '../inquiry-catalog.js';
 import type { DepsOutput } from '../deps/schema.js';
 import type { ExportsOutput } from '../exports/schema.js';
-import type { SourceAnalysisNavigationValue } from '../navigation.js';
-import type { SourceAnalysisRouteWitnessValue } from '../route-witness.js';
+import type { NavigationValue } from '../navigation.js';
+import type { RouteWitnessValue } from '../route-witness.js';
 import type { TypeRefsOutput } from '../typerefs/schema.js';
+import type { SnapshotKind } from '../snapshots.js';
 
-export const SOURCE_ANALYSIS_HOST_SCHEMA_VERSION = 'v1alpha1' as const;
-export const SOURCE_ANALYSIS_KINDS = ['deps', 'typerefs', 'exports'] as const;
-export const SOURCE_ANALYSIS_HOST_RENDER_STYLES = [
+export const HOST_SCHEMA_VERSION = 'v1alpha1' as const;
+export const HOST_RENDER_STYLES = [
   'answer',
   'plain-text',
   'json-document',
 ] as const;
 
-export type SourceAnalysisKind = typeof SOURCE_ANALYSIS_KINDS[number];
-export type SourceAnalysisHostRenderStyle =
-  typeof SOURCE_ANALYSIS_HOST_RENDER_STYLES[number];
+export type HostRenderStyle =
+  typeof HOST_RENDER_STYLES[number];
 
-export interface SourceAnalysisOutputByKind {
+export interface SnapshotOutputMap {
   deps: DepsOutput;
   typerefs: TypeRefsOutput;
   exports: ExportsOutput;
 }
 
-export interface SourceAnalysisSummaryByKind {
+export interface SnapshotSummaryMap {
   deps: DepsOutput['summary'];
   typerefs: TypeRefsOutput['summary'];
   exports: ExportsOutput['summary'];
 }
 
-export interface SourceAnalysisHostError {
+export interface HostError {
   readonly code: string;
   readonly message: string;
   readonly retryable?: boolean;
 }
 
-export interface SourceAnalysisHostCacheMeta {
+export interface HostCacheMeta {
   readonly hit: boolean;
   readonly tier: 'warm' | 'cold';
 }
 
-export interface SourceAnalysisHostInvalidationMeta {
+export interface HostInvalidationMeta {
   readonly kind: 'none' | 'files' | 'project';
   readonly count: number;
-  readonly dirtyKinds: readonly SourceAnalysisKind[];
+  readonly dirtyKinds: readonly SnapshotKind[];
   readonly dirtyFiles: readonly string[];
 }
 
-export interface SourceAnalysisHostEnvelopeMeta {
+export interface HostCommandMeta {
   readonly sessionId?: string;
   readonly durationMs: number;
-  readonly cache: SourceAnalysisHostCacheMeta;
-  readonly invalidation: SourceAnalysisHostInvalidationMeta;
-  readonly refreshedKinds: readonly SourceAnalysisKind[];
+  readonly cache: HostCacheMeta;
+  readonly invalidation: HostInvalidationMeta;
+  readonly refreshedKinds: readonly SnapshotKind[];
 }
 
-export type SourceAnalysisHostCommandStatus = 'ok' | 'error';
+export type HostCommandStatus = 'ok' | 'error';
 
-export interface SourceAnalysisHostEnvelope<TResult> {
-  readonly schemaVersion: typeof SOURCE_ANALYSIS_HOST_SCHEMA_VERSION;
-  readonly command: SourceAnalysisHostCommandName;
-  readonly status: SourceAnalysisHostCommandStatus;
+export interface HostCommandEnvelope<TResult> {
+  readonly schemaVersion: typeof HOST_SCHEMA_VERSION;
+  readonly command: HostCommandName;
+  readonly status: HostCommandStatus;
   readonly result: TResult;
-  readonly meta: SourceAnalysisHostEnvelopeMeta;
-  readonly errors: readonly SourceAnalysisHostError[];
+  readonly meta: HostCommandMeta;
+  readonly errors: readonly HostError[];
 }
 
 export interface SessionOpenArgs {
@@ -100,7 +99,7 @@ export interface SessionOpenResult {
   readonly repoPath: string;
   readonly target: string;
   readonly warmPrograms: boolean;
-  readonly dirtyKinds: readonly SourceAnalysisKind[];
+  readonly dirtyKinds: readonly SnapshotKind[];
 }
 
 export interface SessionCloseArgs {
@@ -121,10 +120,10 @@ export interface SessionStatusEntry {
   readonly repoPath: string;
   readonly target: string;
   readonly warmPrograms: boolean;
-  readonly dirtyKinds: readonly SourceAnalysisKind[];
-  readonly cachedKinds: readonly SourceAnalysisKind[];
+  readonly dirtyKinds: readonly SnapshotKind[];
+  readonly cachedKinds: readonly SnapshotKind[];
   readonly dirtyFiles: readonly string[];
-  readonly lastRefreshAtByKind: Partial<Record<SourceAnalysisKind, string>>;
+  readonly lastRefreshAtByKind: Partial<Record<SnapshotKind, string>>;
 }
 
 export interface SessionStatusResult {
@@ -141,163 +140,163 @@ export interface SessionInvalidateResult {
   readonly sessionId: string;
   readonly scope: 'files' | 'project';
   readonly invalidatedFiles: readonly string[];
-  readonly dirtyKinds: readonly SourceAnalysisKind[];
+  readonly dirtyKinds: readonly SnapshotKind[];
 }
 
 export interface SessionRefreshArgs {
   readonly sessionId: string;
-  readonly kinds?: readonly SourceAnalysisKind[];
+  readonly kinds?: readonly SnapshotKind[];
   readonly force?: boolean;
 }
 
 export interface SessionRefreshResult {
   readonly sessionId: string;
-  readonly refreshedKinds: readonly SourceAnalysisKind[];
-  readonly dirtyKinds: readonly SourceAnalysisKind[];
-  readonly warningsByKind: Partial<Record<SourceAnalysisKind, readonly string[]>>;
-  readonly lastRefreshAtByKind: Partial<Record<SourceAnalysisKind, string>>;
+  readonly refreshedKinds: readonly SnapshotKind[];
+  readonly dirtyKinds: readonly SnapshotKind[];
+  readonly warningsByKind: Partial<Record<SnapshotKind, readonly string[]>>;
+  readonly lastRefreshAtByKind: Partial<Record<SnapshotKind, string>>;
 }
 
-export interface QueryArgs {
+export interface SessionQueryArgs {
   readonly sessionId: string;
   readonly refreshIfNeeded?: boolean;
 }
 
-export interface RenderArgs {
-  readonly readMode?: SourceAnalysisReadMode;
-  readonly consumer?: SourceAnalysisConsumerKind;
-  readonly renderStyle?: SourceAnalysisHostRenderStyle;
+export interface HostRenderOptions {
+  readonly readMode?: ReadMode;
+  readonly consumer?: ConsumerKind;
+  readonly renderStyle?: HostRenderStyle;
 }
 
-export interface RenderQueryArgs extends QueryArgs, RenderArgs {}
+export interface SessionRenderQueryArgs extends SessionQueryArgs, HostRenderOptions {}
 
-export type SourceAnalysisHostRenderedView =
+export type HostRenderedView =
   | {
     readonly style: 'plain-text';
-    readonly rendered: SourceAnalysisRenderedPlainText;
+    readonly rendered: RenderedPlainText;
   }
   | {
     readonly style: 'json-document';
-    readonly document: SourceAnalysisAnswerDocument<SourceAnalysisAnswerRef>;
+    readonly document: AnswerDocument<AnswerRef>;
   };
 
-export interface QueryAuditPackageArgs extends RenderQueryArgs {
+export interface AuditPackageQueryArgs extends SessionRenderQueryArgs {
   readonly packageName: string;
 }
 
-export interface QueryRouteWitnessArgs extends RenderQueryArgs {
+export interface RouteWitnessQueryArgs extends SessionRenderQueryArgs {
   readonly focusKind: 'file' | 'type';
   readonly focusValue: string;
 }
 
-export interface QueryNavigateArgs extends RenderQueryArgs {
+export interface NavigateQueryArgs extends SessionRenderQueryArgs {
   readonly focusKind: 'package' | 'file' | 'type' | 'export';
   readonly focusValue: string;
-  readonly questionRoute?: SourceAnalysisQuestionRoute;
+  readonly questionRoute?: QuestionRoute;
 }
 
-export interface DescribeCapabilitiesArgs extends RenderArgs {
+export interface DescribeCapabilitiesArgs extends HostRenderOptions {
   readonly question?: string;
-  readonly focusKind?: SourceAnalysisFocusKind;
+  readonly focusKind?: FocusKind;
   readonly includeExamples?: boolean;
   readonly topK?: number;
 }
 
-export interface DescribeInquiriesArgs extends RenderArgs {
+export interface DescribeInquiriesArgs extends HostRenderOptions {
   readonly question?: string;
-  readonly focusKind?: SourceAnalysisFocusKind;
-  readonly familyId?: SourceAnalysisInquiryFamilyId;
+  readonly focusKind?: FocusKind;
+  readonly familyId?: InquiryFamilyId;
   readonly includeExamples?: boolean;
   readonly topK?: number;
 }
 
-export interface PlanQuestionArgs extends RenderArgs {
+export interface PlanQuestionArgs extends HostRenderOptions {
   readonly question: string;
   readonly sessionId?: string;
-  readonly focusKind?: SourceAnalysisFocusKind;
+  readonly focusKind?: FocusKind;
   readonly focusValue?: string;
 }
 
-export interface PlanInquiryArgs extends RenderArgs {
-  readonly question: string;
-  readonly sessionId?: string;
-  readonly repoPath?: string;
-  readonly target?: string;
-  readonly focusKind?: SourceAnalysisFocusKind;
-  readonly focusValue?: string;
-  readonly familyId?: SourceAnalysisInquiryFamilyId;
-}
-
-export interface AskQuestionArgs extends RenderArgs {
+export interface PlanInquiryArgs extends HostRenderOptions {
   readonly question: string;
   readonly sessionId?: string;
   readonly repoPath?: string;
   readonly target?: string;
-  readonly focusKind?: SourceAnalysisFocusKind;
+  readonly focusKind?: FocusKind;
   readonly focusValue?: string;
-  readonly familyId?: SourceAnalysisInquiryFamilyId;
+  readonly familyId?: InquiryFamilyId;
 }
 
-export interface RepairCommandArgs extends RenderArgs {
+export interface AskQuestionArgs extends HostRenderOptions {
+  readonly question: string;
+  readonly sessionId?: string;
+  readonly repoPath?: string;
+  readonly target?: string;
+  readonly focusKind?: FocusKind;
+  readonly focusValue?: string;
+  readonly familyId?: InquiryFamilyId;
+}
+
+export interface RepairCommandArgs extends HostRenderOptions {
   readonly command?: string;
   readonly args?: Record<string, unknown>;
   readonly question?: string;
 }
 
-export interface QuerySummaryResult<TKind extends SourceAnalysisKind> {
+export interface SessionSummaryQueryResult<TKind extends SnapshotKind> {
   readonly kind: TKind;
   readonly generatedAt: string;
-  readonly summary: SourceAnalysisSummaryByKind[TKind];
+  readonly summary: SnapshotSummaryMap[TKind];
   readonly warnings: readonly string[];
 }
 
-export interface QuerySnapshotResult<TKind extends SourceAnalysisKind> {
+export interface SessionSnapshotQueryResult<TKind extends SnapshotKind> {
   readonly kind: TKind;
-  readonly snapshot: SourceAnalysisOutputByKind[TKind];
+  readonly snapshot: SnapshotOutputMap[TKind];
   readonly warnings: readonly string[];
 }
 
-export interface QueryAuditPackageResult {
-  readonly answer: SourceAnalysisAnswer<SourceAnalysisAuditValue>;
-  readonly rendered?: SourceAnalysisHostRenderedView;
+export interface AuditPackageQueryResult {
+  readonly answer: InquiryAnswer<AuditValue>;
+  readonly rendered?: HostRenderedView;
   readonly warnings: readonly string[];
 }
 
-export interface QueryRouteWitnessResult {
-  readonly answer: SourceAnalysisAnswer<SourceAnalysisRouteWitnessValue>;
-  readonly rendered?: SourceAnalysisHostRenderedView;
+export interface RouteWitnessQueryResult {
+  readonly answer: InquiryAnswer<RouteWitnessValue>;
+  readonly rendered?: HostRenderedView;
   readonly warnings: readonly string[];
 }
 
-export interface QueryNavigateResult {
-  readonly answer: SourceAnalysisAnswer<SourceAnalysisNavigationValue>;
-  readonly rendered?: SourceAnalysisHostRenderedView;
+export interface NavigateQueryResult {
+  readonly answer: InquiryAnswer<NavigationValue>;
+  readonly rendered?: HostRenderedView;
   readonly warnings: readonly string[];
 }
 
 export interface DescribeCapabilitiesResult {
-  readonly answer: SourceAnalysisAnswer<SourceAnalysisCapabilityDiscoveryValue>;
-  readonly rendered?: SourceAnalysisHostRenderedView;
+  readonly answer: InquiryAnswer<CapabilityDiscoveryValue>;
+  readonly rendered?: HostRenderedView;
 }
 
 export interface DescribeInquiriesResult {
-  readonly answer: SourceAnalysisAnswer<SourceAnalysisInquiryDiscoveryValue>;
-  readonly rendered?: SourceAnalysisHostRenderedView;
+  readonly answer: InquiryAnswer<InquiryDiscoveryValue>;
+  readonly rendered?: HostRenderedView;
 }
 
 export interface PlanQuestionResult {
-  readonly answer: SourceAnalysisAnswer<SourceAnalysisCapabilityPlanValue>;
-  readonly rendered?: SourceAnalysisHostRenderedView;
+  readonly answer: InquiryAnswer<CapabilityPlanValue>;
+  readonly rendered?: HostRenderedView;
 }
 
 export interface PlanInquiryResult {
-  readonly answer: SourceAnalysisAnswer<SourceAnalysisInquiryPlanValue>;
-  readonly rendered?: SourceAnalysisHostRenderedView;
+  readonly answer: InquiryAnswer<InquiryPlanValue>;
+  readonly rendered?: HostRenderedView;
 }
 
 export interface RepairCommandResult {
-  readonly answer: SourceAnalysisAnswer<SourceAnalysisCapabilityRepairValue>;
-  readonly rendered?: SourceAnalysisHostRenderedView;
+  readonly answer: InquiryAnswer<CapabilityRepairValue>;
+  readonly rendered?: HostRenderedView;
 }
 
 export interface AskQuestionExecutionStep {
@@ -311,18 +310,18 @@ export interface AskQuestionExecution {
   readonly usedSessionId?: string;
   readonly ephemeralSession: boolean;
   readonly steps: readonly AskQuestionExecutionStep[];
-  readonly primaryEnvelope?: SourceAnalysisHostEnvelope<unknown>;
+  readonly primaryEnvelope?: HostCommandEnvelope<unknown>;
 }
 
 export interface AskQuestionResult {
-  readonly answer: SourceAnalysisAnswer<SourceAnalysisInquiryAskValue>;
-  readonly rendered?: SourceAnalysisHostRenderedView;
+  readonly answer: InquiryAnswer<InquiryAskValue>;
+  readonly rendered?: HostRenderedView;
   readonly execution?: AskQuestionExecution;
 }
 
 export interface MaterializeSnapshotsArgs {
   readonly sessionId: string;
-  readonly kinds?: readonly SourceAnalysisKind[];
+  readonly kinds?: readonly SnapshotKind[];
   readonly outDir?: string;
   readonly refreshIfNeeded?: boolean;
 }
@@ -330,10 +329,10 @@ export interface MaterializeSnapshotsArgs {
 export interface MaterializeSnapshotsResult {
   readonly sessionId: string;
   readonly outDir: string;
-  readonly files: Partial<Record<SourceAnalysisKind, string>>;
+  readonly files: Partial<Record<SnapshotKind, string>>;
 }
 
-export interface SourceAnalysisHostCommandArgsMap {
+export interface HostCommandArgsMap {
   'describe.inquiries': DescribeInquiriesArgs;
   'describe.capabilities': DescribeCapabilitiesArgs;
   'plan.inquiry': PlanInquiryArgs;
@@ -345,19 +344,19 @@ export interface SourceAnalysisHostCommandArgsMap {
   'session.status': SessionStatusArgs;
   'session.invalidate': SessionInvalidateArgs;
   'session.refresh': SessionRefreshArgs;
-  'query.deps.summary': QueryArgs;
-  'query.deps.snapshot': QueryArgs;
-  'query.typerefs.summary': QueryArgs;
-  'query.typerefs.snapshot': QueryArgs;
-  'query.exports.summary': QueryArgs;
-  'query.exports.snapshot': QueryArgs;
-  'query.audit.package': QueryAuditPackageArgs;
-  'query.route.witness': QueryRouteWitnessArgs;
-  'query.navigate': QueryNavigateArgs;
+  'query.deps.summary': SessionQueryArgs;
+  'query.deps.snapshot': SessionQueryArgs;
+  'query.typerefs.summary': SessionQueryArgs;
+  'query.typerefs.snapshot': SessionQueryArgs;
+  'query.exports.summary': SessionQueryArgs;
+  'query.exports.snapshot': SessionQueryArgs;
+  'query.audit.package': AuditPackageQueryArgs;
+  'query.route.witness': RouteWitnessQueryArgs;
+  'query.navigate': NavigateQueryArgs;
   'materializeSnapshots': MaterializeSnapshotsArgs;
 }
 
-export interface SourceAnalysisHostCommandResultMap {
+export interface HostCommandResultMap {
   'describe.inquiries': DescribeInquiriesResult;
   'describe.capabilities': DescribeCapabilitiesResult;
   'plan.inquiry': PlanInquiryResult;
@@ -369,27 +368,27 @@ export interface SourceAnalysisHostCommandResultMap {
   'session.status': SessionStatusResult;
   'session.invalidate': SessionInvalidateResult;
   'session.refresh': SessionRefreshResult;
-  'query.deps.summary': QuerySummaryResult<'deps'>;
-  'query.deps.snapshot': QuerySnapshotResult<'deps'>;
-  'query.typerefs.summary': QuerySummaryResult<'typerefs'>;
-  'query.typerefs.snapshot': QuerySnapshotResult<'typerefs'>;
-  'query.exports.summary': QuerySummaryResult<'exports'>;
-  'query.exports.snapshot': QuerySnapshotResult<'exports'>;
-  'query.audit.package': QueryAuditPackageResult;
-  'query.route.witness': QueryRouteWitnessResult;
-  'query.navigate': QueryNavigateResult;
+  'query.deps.summary': SessionSummaryQueryResult<'deps'>;
+  'query.deps.snapshot': SessionSnapshotQueryResult<'deps'>;
+  'query.typerefs.summary': SessionSummaryQueryResult<'typerefs'>;
+  'query.typerefs.snapshot': SessionSnapshotQueryResult<'typerefs'>;
+  'query.exports.summary': SessionSummaryQueryResult<'exports'>;
+  'query.exports.snapshot': SessionSnapshotQueryResult<'exports'>;
+  'query.audit.package': AuditPackageQueryResult;
+  'query.route.witness': RouteWitnessQueryResult;
+  'query.navigate': NavigateQueryResult;
   'materializeSnapshots': MaterializeSnapshotsResult;
 }
 
-export type SourceAnalysisHostCommandName = keyof SourceAnalysisHostCommandArgsMap;
+export type HostCommandName = keyof HostCommandArgsMap;
 
-export interface SourceAnalysisHostCommandInvocation<
-  TCommand extends SourceAnalysisHostCommandName = SourceAnalysisHostCommandName,
+export interface HostCommandInvocation<
+  TCommand extends HostCommandName = HostCommandName,
 > {
   readonly command: TCommand;
-  readonly args: SourceAnalysisHostCommandArgsMap[TCommand];
+  readonly args: HostCommandArgsMap[TCommand];
 }
 
-export type SourceAnalysisHostCommandResult<
-  TCommand extends SourceAnalysisHostCommandName,
-> = SourceAnalysisHostCommandResultMap[TCommand];
+export type HostCommandResult<
+  TCommand extends HostCommandName,
+> = HostCommandResultMap[TCommand];

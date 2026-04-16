@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { loadCurrentSourceAnalysisSnapshots } from '../src/current-snapshots.js';
+import { loadCurrentSnapshots } from '../src/current-snapshots.js';
 import {
   collectBindingSeams,
   collectSubsystemBindingPressure,
-} from '../src/index.js';
+} from '../src/subsystem-coupling.js';
 
 function loadSnapshotsForSubsystemCoupling() {
   try {
-    return loadCurrentSourceAnalysisSnapshots();
+    return loadCurrentSnapshots();
   } catch (error) {
     throw new Error(
       `Current source-analysis snapshots are required for subsystem coupling tests. Run "pnpm source-analysis refresh all".\n\n${(error as Error).message}`,

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createSourceAnalysisSession } from '../out/session.js';
+import { createRepoSession } from '../out/repo-session.js';
 
 const tempDirs: string[] = [];
 
@@ -17,10 +17,10 @@ afterEach(() => {
   }
 });
 
-describe('SourceAnalysisSession program caching', () => {
+describe('RepoSession program caching', () => {
   it('does not cache TypeScript programs unless asked to', () => {
     const repoPath = createFixtureRepo();
-    const session = createSourceAnalysisSession({ repoPath, target: 'fixture' });
+    const session = createRepoSession({ repoPath, target: 'fixture' });
     const [tsconfigPath] = session.findTsconfigs();
     expect(tsconfigPath).toBeTruthy();
 

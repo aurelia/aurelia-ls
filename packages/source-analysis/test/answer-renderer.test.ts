@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
-import { createSourceAnalysisAuditAnswer } from '../src/audit.js';
-import { loadCurrentSourceAnalysisSnapshots } from '../src/current-snapshots.js';
+import { createAuditAnswer } from '../src/audit.js';
+import { loadCurrentSnapshots } from '../src/current-snapshots.js';
 import {
-  renderSourceAnalysisAnswerDocumentToJson,
-  renderSourceAnalysisAnswerDocumentToPlainText,
+  renderAnswerDocumentToJson,
+  renderAnswerDocumentToPlainText,
 } from '../src/answer-renderer.js';
-import { resolveSourceAnalysisInquiryPolicy } from '../src/inquiry-policy.js';
-import { createSourceAnalysisRouteWitnessAnswer } from '../src/route-witness.js';
+import { resolveInquiryPolicy } from '../src/inquiry-policy.js';
+import { createRouteWitnessAnswer } from '../src/route-witness.js';
 
 function loadSnapshotsForStructuredAnswers() {
   try {
-    return loadCurrentSourceAnalysisSnapshots();
+    return loadCurrentSnapshots();
   } catch (error) {
     throw new Error(
       `Current source-analysis snapshots are required for structured answer tests. Run "pnpm source-analysis refresh all".\n\n${(error as Error).message}`,
@@ -22,7 +22,7 @@ function loadSnapshotsForStructuredAnswers() {
 describe('Source-analysis structured answer rendering', () => {
   it('renders one live audit document into compact and expanded views from policy', () => {
     const snapshots = loadSnapshotsForStructuredAnswers();
-    const answer = createSourceAnalysisAuditAnswer({
+    const answer = createAuditAnswer({
       focusRef: { kind: 'package', value: '@aurelia-ls/source-analysis' },
       questionRoute: 'inventory',
     }, snapshots);
@@ -30,7 +30,7 @@ describe('Source-analysis structured answer rendering', () => {
     const document = answer.outcome.value?.document;
     expect(document).toBeTruthy();
 
-    const compactPolicy = resolveSourceAnalysisInquiryPolicy({
+    const compactPolicy = resolveInquiryPolicy({
       focusRef: { kind: 'package', value: '@aurelia-ls/source-analysis' },
       questionRoute: 'inventory',
       readMode: 'summary-card',
@@ -39,7 +39,7 @@ describe('Source-analysis structured answer rendering', () => {
       inquiryEpisode: 'inventory-and-audit-sweep',
       readMode: 'summary-card',
     });
-    const expandedPolicy = resolveSourceAnalysisInquiryPolicy({
+    const expandedPolicy = resolveInquiryPolicy({
       focusRef: { kind: 'package', value: '@aurelia-ls/source-analysis' },
       questionRoute: 'inventory',
       readMode: 'supporting-evidence',
@@ -49,9 +49,9 @@ describe('Source-analysis structured answer rendering', () => {
       readMode: 'summary-card',
     });
 
-    const compact = renderSourceAnalysisAnswerDocumentToPlainText(document!, compactPolicy);
-    const expanded = renderSourceAnalysisAnswerDocumentToPlainText(document!, expandedPolicy);
-    const expandedJson = renderSourceAnalysisAnswerDocumentToJson(document!, expandedPolicy);
+    const compact = renderAnswerDocumentToPlainText(document!, compactPolicy);
+    const expanded = renderAnswerDocumentToPlainText(document!, expandedPolicy);
+    const expandedJson = renderAnswerDocumentToJson(document!, expandedPolicy);
 
     expect(compact.summaryLines.length).toBeLessThanOrEqual(compactPolicy.limits.summaryLineCount);
     expect(expanded.lines.length).toBeGreaterThan(compact.lines.length);
@@ -60,7 +60,7 @@ describe('Source-analysis structured answer rendering', () => {
 
   it('keeps route witnesses as a structured block that survives machine rendering', () => {
     const snapshots = loadSnapshotsForStructuredAnswers();
-    const answer = createSourceAnalysisRouteWitnessAnswer({
+    const answer = createRouteWitnessAnswer({
       focusRef: { kind: 'file', value: 'packages/source-analysis/src/refresh.ts' },
       questionRoute: 'route',
       readMode: 'supporting-evidence',
@@ -70,12 +70,12 @@ describe('Source-analysis structured answer rendering', () => {
     expect(document).toBeTruthy();
     expect(answer.query.readMode).toBe('supporting-evidence');
 
-    const policy = resolveSourceAnalysisInquiryPolicy(answer.query, {
+    const policy = resolveInquiryPolicy(answer.query, {
       focusKind: 'file',
       inquiryEpisode: 'bounded-closure-explanation',
       readMode: 'focus-card',
     });
-    const rendered = renderSourceAnalysisAnswerDocumentToJson(document!, policy);
+    const rendered = renderAnswerDocumentToJson(document!, policy);
     const witnessBlock = rendered.blocks.find((block) => block.kind === 'witness-list');
 
     expect(witnessBlock).toBeTruthy();

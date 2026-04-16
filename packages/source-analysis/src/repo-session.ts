@@ -4,11 +4,11 @@ import { dirname, join, relative, resolve } from 'node:path';
 
 import * as ts from 'typescript';
 
-import { getExcludedRepoRelativePrefixesForTarget } from './config.js';
+import { getExcludedRepoRelativePrefixesForTarget } from './snapshot-config.js';
 
-export type SourceAnalysisProgramProfile = 'analysis' | 'analysis-no-resolve';
+export type TsProgramProfile = 'analysis' | 'analysis-no-resolve';
 
-export interface SourceAnalysisSessionOptions {
+export interface RepoSessionOptions {
   readonly repoPath?: string;
   readonly target?: string;
   readonly excludedRepoRelativePrefixes?: readonly string[] | null;
@@ -26,7 +26,7 @@ export interface LoadTsconfigResult {
   readonly error: string | null;
 }
 
-export interface SourceAnalysisProgramOptions {
+export interface ProgramCacheOptions {
   readonly cache?: boolean;
 }
 
@@ -54,7 +54,7 @@ export function parseExcludedRepoRelativePrefixes(
   );
 }
 
-export class SourceAnalysisSession {
+export class RepoSession {
   readonly #repoPath: string;
   readonly #target: string;
   readonly #excludedRepoRelativePrefixes: readonly string[];
@@ -67,7 +67,7 @@ export class SourceAnalysisSession {
   #repoSourceFiles: readonly string[] | null = null;
   #tsconfigAbsPaths: readonly string[] | null = null;
 
-  constructor(options: SourceAnalysisSessionOptions = {}) {
+  constructor(options: RepoSessionOptions = {}) {
     this.#repoPath = resolve(options.repoPath ?? process.cwd());
     this.#target = options.target ?? '';
     this.#excludedRepoRelativePrefixes = (
@@ -160,8 +160,8 @@ export class SourceAnalysisSession {
 
   getProgram(
     tsconfigAbsPath: string,
-    profile: SourceAnalysisProgramProfile = 'analysis',
-    programOptions: SourceAnalysisProgramOptions = {},
+    profile: TsProgramProfile = 'analysis',
+    programOptions: ProgramCacheOptions = {},
   ): ts.Program | null {
     const resolvedTsconfigPath = resolve(tsconfigAbsPath);
     const cacheKey = `${profile}\0${resolvedTsconfigPath}`;
@@ -185,7 +185,7 @@ export class SourceAnalysisSession {
     return program;
   }
 
-  clearProgramCache(profile?: SourceAnalysisProgramProfile): void {
+  clearProgramCache(profile?: TsProgramProfile): void {
     if (!profile) {
       this.#programCache.clear();
       return;
@@ -274,7 +274,7 @@ export class SourceAnalysisSession {
 
   #compilerOptionsForProfile(
     options: ts.CompilerOptions,
-    profile: SourceAnalysisProgramProfile,
+    profile: TsProgramProfile,
   ): ts.CompilerOptions {
     if (profile === 'analysis-no-resolve') {
       return {
@@ -346,10 +346,10 @@ export class SourceAnalysisSession {
   }
 }
 
-export function createSourceAnalysisSession(
-  options: SourceAnalysisSessionOptions = {},
-): SourceAnalysisSession {
-  return new SourceAnalysisSession(options);
+export function createRepoSession(
+  options: RepoSessionOptions = {},
+): RepoSession {
+  return new RepoSession(options);
 }
 
 function normalizeRepoRelativePath(pathValue: string): string {

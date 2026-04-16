@@ -1,20 +1,20 @@
-import type { SourceAnalysisAnswerCard, SourceAnalysisAnswerRef } from './answer-card.js';
-import { createStructuredSourceAnalysisAnswerCard } from './answer-card.js';
-import { createSourceAnalysisAnswerDocument } from './answer-document.js';
-import { createSourceAnalysisAnswerEnvelope } from './answer-envelope.js';
+import type { AnswerCard, AnswerRef } from './answer-card.js';
+import { createStructuredAnswerCard } from './answer-card.js';
+import { createAnswerDocument } from './answer-document.js';
+import { createAnswerEnvelope } from './answer-envelope.js';
 import type {
-  SourceAnalysisCapabilityCatalog,
-  SourceAnalysisCapabilityDescriptor,
-  SourceAnalysisCapabilityMatch,
-  SourceAnalysisCapabilityMatchReason,
-  SourceAnalysisCapabilityView,
+  CapabilityCatalog,
+  CapabilityDescriptor,
+  CapabilityMatch,
+  CapabilityMatchReason,
+  CapabilityView,
 } from './capability-catalog.js';
-import { createDefaultSourceAnalysisCapabilityCatalog } from './capability-catalog.js';
-import type { SourceAnalysisConsumerKind } from './inquiry-policy.js';
-import { resolveSourceAnalysisInquiryPolicy } from './inquiry-policy.js';
+import { createDefaultCapabilityCatalog } from './capability-catalog.js';
+import type { ConsumerKind } from './inquiry-policy.js';
+import { resolveInquiryPolicy } from './inquiry-policy.js';
 import type {
-  SourceAnalysisIngressFocusHints,
-  SourceAnalysisIngressHintDetail,
+  IngressFocusHints,
+  IngressHintDetail,
 } from './ingress-hints.js';
 import {
   asFocusKind,
@@ -26,35 +26,35 @@ import {
   inferFocusKindFromArgs,
 } from './ingress-hints.js';
 import type {
-  SourceAnalysisClosureBasis,
-  SourceAnalysisContinuation,
-  SourceAnalysisIssue,
-  SourceAnalysisTrustProfile,
+  ClosureBasis,
+  Continuation,
+  Issue,
+  TrustProfile,
 } from './outcome-algebra.js';
 import type {
-  SourceAnalysisAnswer,
-  SourceAnalysisFocusKind,
-  SourceAnalysisFocusRef,
-  SourceAnalysisQuery,
-  SourceAnalysisReadMode,
-  SourceAnalysisWorldFrame,
-} from './query-model.js';
+  InquiryAnswer,
+  FocusKind,
+  FocusRef,
+  Inquiry,
+  ReadMode,
+  WorldFrame,
+} from './inquiry-model.js';
 
-export const SOURCE_ANALYSIS_CAPABILITY_PLAN_STATUSES = [
+export const CAPABILITY_PLAN_STATUSES = [
   'ready',
   'needs-input',
   'ambiguous',
   'no-match',
 ] as const;
 
-export const SOURCE_ANALYSIS_CAPABILITY_REPAIR_STATUSES = [
+export const CAPABILITY_REPAIR_STATUSES = [
   'ready',
   'repaired',
   'needs-input',
   'no-match',
 ] as const;
 
-export const SOURCE_ANALYSIS_CAPABILITY_PLAN_REASON_KINDS = [
+export const CAPABILITY_PLAN_REASON_KINDS = [
   'match',
   'input',
   'focus-inference',
@@ -63,114 +63,114 @@ export const SOURCE_ANALYSIS_CAPABILITY_PLAN_REASON_KINDS = [
   'alternative',
 ] as const;
 
-export type SourceAnalysisCapabilityPlanStatus =
-  typeof SOURCE_ANALYSIS_CAPABILITY_PLAN_STATUSES[number];
+export type CapabilityPlanStatus =
+  typeof CAPABILITY_PLAN_STATUSES[number];
 
-export type SourceAnalysisCapabilityRepairStatus =
-  typeof SOURCE_ANALYSIS_CAPABILITY_REPAIR_STATUSES[number];
+export type CapabilityRepairStatus =
+  typeof CAPABILITY_REPAIR_STATUSES[number];
 
-export type SourceAnalysisCapabilityPlanReasonKind =
-  typeof SOURCE_ANALYSIS_CAPABILITY_PLAN_REASON_KINDS[number];
+export type CapabilityPlanReasonKind =
+  typeof CAPABILITY_PLAN_REASON_KINDS[number];
 
-export type SourceAnalysisCapabilityRef =
-  SourceAnalysisAnswerRef & { readonly kind: 'capability' | 'repo' };
+export type CapabilityRef =
+  AnswerRef & { readonly kind: 'capability' | 'repo' };
 
-export interface SourceAnalysisPlannedInvocation {
+export interface PlannedInvocation {
   readonly command: string;
   readonly args: Record<string, unknown>;
 }
 
-export interface SourceAnalysisCapabilityPlanReason {
-  readonly kind: SourceAnalysisCapabilityPlanReasonKind;
+export interface CapabilityPlanReason {
+  readonly kind: CapabilityPlanReasonKind;
   readonly detail: string;
 }
 
-export interface SourceAnalysisCommandRepair {
+export interface CommandRepair {
   readonly kind: 'command' | 'args' | 'missing-input' | 'alternative';
   readonly detail: string;
   readonly from?: string;
   readonly to?: string;
 }
 
-export interface SourceAnalysisCapabilityDiscoveryOptions {
+export interface CapabilityDiscoveryOptions {
   readonly question?: string;
-  readonly focusKind?: SourceAnalysisFocusKind;
+  readonly focusKind?: FocusKind;
   readonly includeExamples?: boolean;
   readonly topK?: number;
-  readonly readMode?: SourceAnalysisReadMode;
-  readonly consumer?: SourceAnalysisConsumerKind;
-  readonly worldFrame?: SourceAnalysisWorldFrame;
+  readonly readMode?: ReadMode;
+  readonly consumer?: ConsumerKind;
+  readonly worldFrame?: WorldFrame;
 }
 
-export interface SourceAnalysisCapabilityPlanOptions {
+export interface CapabilityPlanOptions {
   readonly question: string;
   readonly sessionId?: string;
-  readonly focusKind?: SourceAnalysisFocusKind;
+  readonly focusKind?: FocusKind;
   readonly focusValue?: string;
-  readonly readMode?: SourceAnalysisReadMode;
-  readonly consumer?: SourceAnalysisConsumerKind;
-  readonly worldFrame?: SourceAnalysisWorldFrame;
+  readonly readMode?: ReadMode;
+  readonly consumer?: ConsumerKind;
+  readonly worldFrame?: WorldFrame;
 }
 
-export interface SourceAnalysisCapabilityRepairOptions {
+export interface CapabilityRepairOptions {
   readonly command?: string;
   readonly args?: Record<string, unknown>;
   readonly question?: string;
-  readonly readMode?: SourceAnalysisReadMode;
-  readonly consumer?: SourceAnalysisConsumerKind;
-  readonly worldFrame?: SourceAnalysisWorldFrame;
+  readonly readMode?: ReadMode;
+  readonly consumer?: ConsumerKind;
+  readonly worldFrame?: WorldFrame;
 }
 
-export interface SourceAnalysisCapabilityDiscoveryValue
-  extends SourceAnalysisAnswerCard<SourceAnalysisCapabilityRef> {
-  readonly capabilities: readonly SourceAnalysisCapabilityView[];
-  readonly matches: readonly SourceAnalysisCapabilityMatch[];
+export interface CapabilityDiscoveryValue
+  extends AnswerCard<CapabilityRef> {
+  readonly capabilities: readonly CapabilityView[];
+  readonly matches: readonly CapabilityMatch[];
 }
 
-export interface SourceAnalysisCapabilityPlanValue
-  extends SourceAnalysisAnswerCard<SourceAnalysisCapabilityRef> {
-  readonly status: SourceAnalysisCapabilityPlanStatus;
-  readonly capability?: SourceAnalysisCapabilityView;
-  readonly invocation?: SourceAnalysisPlannedInvocation;
-  readonly alternatives: readonly SourceAnalysisCapabilityView[];
-  readonly reasons: readonly SourceAnalysisCapabilityPlanReason[];
+export interface CapabilityPlanValue
+  extends AnswerCard<CapabilityRef> {
+  readonly status: CapabilityPlanStatus;
+  readonly capability?: CapabilityView;
+  readonly invocation?: PlannedInvocation;
+  readonly alternatives: readonly CapabilityView[];
+  readonly reasons: readonly CapabilityPlanReason[];
   readonly missingInputs: readonly string[];
 }
 
-export interface SourceAnalysisCapabilityRepairValue
-  extends SourceAnalysisAnswerCard<SourceAnalysisCapabilityRef> {
-  readonly status: SourceAnalysisCapabilityRepairStatus;
-  readonly capability?: SourceAnalysisCapabilityView;
-  readonly invocation?: SourceAnalysisPlannedInvocation;
-  readonly repairs: readonly SourceAnalysisCommandRepair[];
-  readonly alternatives: readonly SourceAnalysisCapabilityView[];
-  readonly reasons: readonly SourceAnalysisCapabilityPlanReason[];
+export interface CapabilityRepairValue
+  extends AnswerCard<CapabilityRef> {
+  readonly status: CapabilityRepairStatus;
+  readonly capability?: CapabilityView;
+  readonly invocation?: PlannedInvocation;
+  readonly repairs: readonly CommandRepair[];
+  readonly alternatives: readonly CapabilityView[];
+  readonly reasons: readonly CapabilityPlanReason[];
   readonly missingInputs: readonly string[];
 }
 
-type FocusHints = SourceAnalysisIngressFocusHints;
+type FocusHints = IngressFocusHints;
 
 interface BuiltInvocation {
   readonly status: 'ready' | 'needs-input';
-  readonly invocation?: SourceAnalysisPlannedInvocation;
+  readonly invocation?: PlannedInvocation;
   readonly missingInputs: readonly string[];
-  readonly reasons: readonly SourceAnalysisCapabilityPlanReason[];
+  readonly reasons: readonly CapabilityPlanReason[];
 }
 
-export class SourceAnalysisCapabilityIngress {
-  readonly #catalog: SourceAnalysisCapabilityCatalog;
+export class CapabilityIngress {
+  readonly #catalog: CapabilityCatalog;
 
-  constructor(catalog = createDefaultSourceAnalysisCapabilityCatalog()) {
+  constructor(catalog = createDefaultCapabilityCatalog()) {
     this.#catalog = catalog;
   }
 
-  get catalog(): SourceAnalysisCapabilityCatalog {
+  get catalog(): CapabilityCatalog {
     return this.#catalog;
   }
 
   createDiscoveryAnswer(
-    options: SourceAnalysisCapabilityDiscoveryOptions = {},
-  ): SourceAnalysisAnswer<SourceAnalysisCapabilityDiscoveryValue> {
+    options: CapabilityDiscoveryOptions = {},
+  ): InquiryAnswer<CapabilityDiscoveryValue> {
     const matches = this.#catalog.discover({
       question: options.question,
       focusKind: options.focusKind,
@@ -182,14 +182,14 @@ export class SourceAnalysisCapabilityIngress {
       : this.#catalog.list(options.includeExamples).slice(0, options.topK ?? 6);
     const readMode = options.readMode ?? 'summary-card';
     const worldFrame = options.worldFrame ?? defaultWorldFrame();
-    const query: SourceAnalysisQuery = {
+    const query: Inquiry = {
       inquiryEpisode: 'orient-and-localize',
       focusRef: repoFocusRef('source-analysis-capabilities'),
       questionRoute: 'search',
       readMode,
       worldFrame,
     };
-    const policy = resolveSourceAnalysisInquiryPolicy(query, {
+    const policy = resolveInquiryPolicy(query, {
       focusKind: 'repo',
       inquiryEpisode: 'orient-and-localize',
       readMode,
@@ -207,7 +207,7 @@ export class SourceAnalysisCapabilityIngress {
         ? `The best capability matches for "${options.question}" start with ${topCapability?.command ?? 'describe.capabilities'}.`
         : `No direct capability match closed on "${options.question}", so the catalog is shown instead.`)
       : `The catalog currently exposes ${capabilities.length} source-analysis capabilities.`;
-    const document = createSourceAnalysisAnswerDocument<SourceAnalysisCapabilityRef>([
+    const document = createAnswerDocument<CapabilityRef>([
       {
         kind: 'paragraph',
         importance: 'primary',
@@ -240,7 +240,7 @@ export class SourceAnalysisCapabilityIngress {
         refs: relatedRefs,
       },
     ]);
-    const value = createStructuredSourceAnalysisAnswerCard({
+    const value = createStructuredAnswerCard({
       title,
       primaryRef,
       relatedRefs,
@@ -255,7 +255,7 @@ export class SourceAnalysisCapabilityIngress {
     const trust = options.question && matches.length > 0
       ? qualifiedTrust('Capability discovery is grounded in the declared catalog plus question-term matching.')
       : groundedTrust('Capability discovery is reading the declared ingress catalog.');
-    return createSourceAnalysisAnswerEnvelope({
+    return createAnswerEnvelope({
       query,
       focusRef: query.focusRef,
       inquiryEpisode: 'orient-and-localize',
@@ -284,8 +284,8 @@ export class SourceAnalysisCapabilityIngress {
   }
 
   createPlanAnswer(
-    options: SourceAnalysisCapabilityPlanOptions,
-  ): SourceAnalysisAnswer<SourceAnalysisCapabilityPlanValue> {
+    options: CapabilityPlanOptions,
+  ): InquiryAnswer<CapabilityPlanValue> {
     const matches = this.#catalog.discover({
       question: options.question,
       focusKind: options.focusKind,
@@ -293,14 +293,14 @@ export class SourceAnalysisCapabilityIngress {
     });
     const readMode = options.readMode ?? 'focus-card';
     const worldFrame = options.worldFrame ?? defaultWorldFrame();
-    const query: SourceAnalysisQuery = {
+    const query: Inquiry = {
       inquiryEpisode: 'bounded-closure-explanation',
       focusRef: repoFocusRef('source-analysis-capability-plan'),
       questionRoute: 'route',
       readMode,
       worldFrame,
     };
-    const policy = resolveSourceAnalysisInquiryPolicy(query, {
+    const policy = resolveInquiryPolicy(query, {
       focusKind: 'repo',
       inquiryEpisode: 'bounded-closure-explanation',
       readMode,
@@ -329,7 +329,7 @@ export class SourceAnalysisCapabilityIngress {
       capabilityRef(capability.command, capability.label, capability.summary),
       ...matches.slice(1, 4).map((match) => capabilityRef(match.capability.command, match.capability.label, match.capability.summary)),
     ];
-    const document = createSourceAnalysisAnswerDocument<SourceAnalysisCapabilityRef>([
+    const document = createAnswerDocument<CapabilityRef>([
       {
         kind: 'paragraph',
         importance: 'primary',
@@ -369,7 +369,7 @@ export class SourceAnalysisCapabilityIngress {
         refs: relatedRefs,
       },
     ]);
-    const value = createStructuredSourceAnalysisAnswerCard({
+    const value = createStructuredAnswerCard({
       title: 'Source-analysis invocation plan',
       primaryRef: capabilityRef(capability.command, capability.label, capability.summary),
       relatedRefs,
@@ -392,7 +392,7 @@ export class SourceAnalysisCapabilityIngress {
     const trust = built.status === 'ready'
       ? qualifiedTrust('The plan is derived from the declared capability catalog and explicit/inferred focus hints.')
       : frontierTrust('The command family is identified, but invocation closure still depends on missing input.');
-    return createSourceAnalysisAnswerEnvelope({
+    return createAnswerEnvelope({
       query,
       focusRef: query.focusRef,
       inquiryEpisode: 'bounded-closure-explanation',
@@ -414,18 +414,18 @@ export class SourceAnalysisCapabilityIngress {
   }
 
   createRepairAnswer(
-    options: SourceAnalysisCapabilityRepairOptions,
-  ): SourceAnalysisAnswer<SourceAnalysisCapabilityRepairValue> {
+    options: CapabilityRepairOptions,
+  ): InquiryAnswer<CapabilityRepairValue> {
     const readMode = options.readMode ?? 'focus-card';
     const worldFrame = options.worldFrame ?? defaultWorldFrame();
-    const query: SourceAnalysisQuery = {
+    const query: Inquiry = {
       inquiryEpisode: 'bounded-closure-explanation',
       focusRef: repoFocusRef('source-analysis-capability-repair'),
       questionRoute: 'route',
       readMode,
       worldFrame,
     };
-    const policy = resolveSourceAnalysisInquiryPolicy(query, {
+    const policy = resolveInquiryPolicy(query, {
       focusKind: 'repo',
       inquiryEpisode: 'bounded-closure-explanation',
       readMode,
@@ -465,7 +465,7 @@ export class SourceAnalysisCapabilityIngress {
       capabilityRef(capability.command, capability.label, capability.summary),
       ...fallbackMatches.slice(1, 4).map((candidate) => capabilityRef(candidate.capability.command, candidate.capability.label, candidate.capability.summary)),
     ];
-    const document = createSourceAnalysisAnswerDocument<SourceAnalysisCapabilityRef>([
+    const document = createAnswerDocument<CapabilityRef>([
       {
         kind: 'paragraph',
         importance: 'primary',
@@ -504,7 +504,7 @@ export class SourceAnalysisCapabilityIngress {
         refs: relatedRefs,
       },
     ]);
-    const value = createStructuredSourceAnalysisAnswerCard({
+    const value = createStructuredAnswerCard({
       title: 'Source-analysis invocation repair',
       primaryRef: capabilityRef(capability.command, capability.label, capability.summary),
       relatedRefs,
@@ -528,7 +528,7 @@ export class SourceAnalysisCapabilityIngress {
     const trust = status === 'ready'
       ? groundedTrust('Repair validation confirms the attempted command already fits the declared capability.')
       : qualifiedTrust('Repair suggestions are derived from the declared capability catalog and arg-shape reconciliation.');
-    return createSourceAnalysisAnswerEnvelope({
+    return createAnswerEnvelope({
       query,
       focusRef: query.focusRef,
       inquiryEpisode: 'bounded-closure-explanation',
@@ -550,13 +550,13 @@ export class SourceAnalysisCapabilityIngress {
   }
 
   #createNoMatchPlanAnswer(
-    query: SourceAnalysisQuery,
-    policy: ReturnType<typeof resolveSourceAnalysisInquiryPolicy>,
+    query: Inquiry,
+    policy: ReturnType<typeof resolveInquiryPolicy>,
     question: string,
-  ): SourceAnalysisAnswer<SourceAnalysisCapabilityPlanValue> {
+  ): InquiryAnswer<CapabilityPlanValue> {
     const capabilities = this.#catalog.list(false).slice(0, 4);
     const relatedRefs = capabilities.map((capability) => capabilityRef(capability.command, capability.label, capability.summary));
-    const document = createSourceAnalysisAnswerDocument<SourceAnalysisCapabilityRef>([
+    const document = createAnswerDocument<CapabilityRef>([
       {
         kind: 'paragraph',
         importance: 'primary',
@@ -569,7 +569,7 @@ export class SourceAnalysisCapabilityIngress {
         items: capabilities.map((capability) => `${capability.command}: ${capability.summary}`),
       },
     ]);
-    const value = createStructuredSourceAnalysisAnswerCard({
+    const value = createStructuredAnswerCard({
       title: 'Source-analysis invocation plan',
       primaryRef: capabilityRef('describe.capabilities', 'Describe source-analysis capabilities'),
       relatedRefs,
@@ -583,9 +583,9 @@ export class SourceAnalysisCapabilityIngress {
           detail: 'The current capability catalog did not produce a direct plan for this question.',
         }],
         missingInputs: [],
-      } satisfies Pick<SourceAnalysisCapabilityPlanValue, 'status' | 'alternatives' | 'reasons' | 'missingInputs'>,
+      } satisfies Pick<CapabilityPlanValue, 'status' | 'alternatives' | 'reasons' | 'missingInputs'>,
     });
-    return createSourceAnalysisAnswerEnvelope({
+    return createAnswerEnvelope({
       query,
       focusRef: query.focusRef,
       inquiryEpisode: 'bounded-closure-explanation',
@@ -612,14 +612,14 @@ export class SourceAnalysisCapabilityIngress {
   }
 
   #createAmbiguousPlanAnswer(
-    query: SourceAnalysisQuery,
-    policy: ReturnType<typeof resolveSourceAnalysisInquiryPolicy>,
+    query: Inquiry,
+    policy: ReturnType<typeof resolveInquiryPolicy>,
     question: string,
-    matches: readonly SourceAnalysisCapabilityMatch[],
-  ): SourceAnalysisAnswer<SourceAnalysisCapabilityPlanValue> {
+    matches: readonly CapabilityMatch[],
+  ): InquiryAnswer<CapabilityPlanValue> {
     const capabilities = matches.slice(0, 4).map((match) => match.capability);
     const relatedRefs = capabilities.map((capability) => capabilityRef(capability.command, capability.label, capability.summary));
-    const document = createSourceAnalysisAnswerDocument<SourceAnalysisCapabilityRef>([
+    const document = createAnswerDocument<CapabilityRef>([
       {
         kind: 'paragraph',
         importance: 'primary',
@@ -632,7 +632,7 @@ export class SourceAnalysisCapabilityIngress {
         items: capabilities.map((capability) => `${capability.command}: ${capability.summary}`),
       },
     ]);
-    const value = createStructuredSourceAnalysisAnswerCard({
+    const value = createStructuredAnswerCard({
       title: 'Source-analysis invocation plan',
       primaryRef: capabilityRef(capabilities[0]?.command ?? 'describe.capabilities', capabilities[0]?.label ?? 'Describe source-analysis capabilities'),
       relatedRefs,
@@ -643,9 +643,9 @@ export class SourceAnalysisCapabilityIngress {
         alternatives: capabilities,
         reasons: matches[0]?.reasons.map(toPlanReason) ?? [],
         missingInputs: [],
-      } satisfies Pick<SourceAnalysisCapabilityPlanValue, 'status' | 'alternatives' | 'reasons' | 'missingInputs'>,
+      } satisfies Pick<CapabilityPlanValue, 'status' | 'alternatives' | 'reasons' | 'missingInputs'>,
     });
-    return createSourceAnalysisAnswerEnvelope({
+    return createAnswerEnvelope({
       query,
       focusRef: query.focusRef,
       inquiryEpisode: 'bounded-closure-explanation',
@@ -672,13 +672,13 @@ export class SourceAnalysisCapabilityIngress {
   }
 
   #createNoRepairAnswer(
-    query: SourceAnalysisQuery,
-    policy: ReturnType<typeof resolveSourceAnalysisInquiryPolicy>,
+    query: Inquiry,
+    policy: ReturnType<typeof resolveInquiryPolicy>,
     command: string | undefined,
-  ): SourceAnalysisAnswer<SourceAnalysisCapabilityRepairValue> {
+  ): InquiryAnswer<CapabilityRepairValue> {
     const capabilities = this.#catalog.list(false).slice(0, 4);
     const relatedRefs = capabilities.map((capability) => capabilityRef(capability.command, capability.label, capability.summary));
-    const document = createSourceAnalysisAnswerDocument<SourceAnalysisCapabilityRef>([
+    const document = createAnswerDocument<CapabilityRef>([
       {
         kind: 'paragraph',
         importance: 'primary',
@@ -693,7 +693,7 @@ export class SourceAnalysisCapabilityIngress {
         items: capabilities.map((capability) => `${capability.command}: ${capability.summary}`),
       },
     ]);
-    const value = createStructuredSourceAnalysisAnswerCard({
+    const value = createStructuredAnswerCard({
       title: 'Source-analysis invocation repair',
       primaryRef: capabilityRef('describe.capabilities', 'Describe source-analysis capabilities'),
       relatedRefs,
@@ -712,9 +712,9 @@ export class SourceAnalysisCapabilityIngress {
         alternatives: capabilities,
         reasons: [],
         missingInputs: command ? [] : ['command or question'],
-      } satisfies Pick<SourceAnalysisCapabilityRepairValue, 'status' | 'repairs' | 'alternatives' | 'reasons' | 'missingInputs'>,
+      } satisfies Pick<CapabilityRepairValue, 'status' | 'repairs' | 'alternatives' | 'reasons' | 'missingInputs'>,
     });
-    return createSourceAnalysisAnswerEnvelope({
+    return createAnswerEnvelope({
       query,
       focusRef: query.focusRef,
       inquiryEpisode: 'bounded-closure-explanation',
@@ -742,16 +742,16 @@ export class SourceAnalysisCapabilityIngress {
 }
 
 function buildInvocation(
-  descriptor: SourceAnalysisCapabilityDescriptor,
+  descriptor: CapabilityDescriptor,
   options: {
     readonly question: string;
     readonly sessionId?: string;
-    readonly focusKind?: SourceAnalysisFocusKind;
+    readonly focusKind?: FocusKind;
     readonly focusValue?: string;
   },
   hints: FocusHints,
 ): BuiltInvocation {
-  const reasons: SourceAnalysisCapabilityPlanReason[] = [];
+  const reasons: CapabilityPlanReason[] = [];
   const args: Record<string, unknown> = {};
   const missingInputs: string[] = [];
 
@@ -921,7 +921,7 @@ function buildInvocation(
 function readyInvocation(
   command: string,
   args: Record<string, unknown>,
-  reasons: readonly SourceAnalysisCapabilityPlanReason[],
+  reasons: readonly CapabilityPlanReason[],
 ): BuiltInvocation {
   return {
     status: 'ready',
@@ -934,7 +934,7 @@ function readyInvocation(
 function finalizeInvocation(
   command: string,
   args: Record<string, unknown>,
-  reasons: readonly SourceAnalysisCapabilityPlanReason[],
+  reasons: readonly CapabilityPlanReason[],
   missingInputs: readonly string[],
 ): BuiltInvocation {
   if (missingInputs.length > 0) {
@@ -964,9 +964,9 @@ function collectRepairs(
   repairedCommand: string,
   attemptedArgs: Record<string, unknown> | undefined,
   missingInputs: readonly string[],
-  reasons: readonly SourceAnalysisCapabilityMatchReason[],
-): readonly SourceAnalysisCommandRepair[] {
-  const repairs: SourceAnalysisCommandRepair[] = [];
+  reasons: readonly CapabilityMatchReason[],
+): readonly CommandRepair[] {
+  const repairs: CommandRepair[] = [];
 
   if (attemptedCommand && attemptedCommand !== repairedCommand) {
     repairs.push({
@@ -1013,7 +1013,7 @@ function determineRepairStatus(
   attemptedCommand: string | undefined,
   repairedCommand: string,
   builtStatus: BuiltInvocation['status'],
-): SourceAnalysisCapabilityRepairStatus {
+): CapabilityRepairStatus {
   if (!attemptedCommand) {
     return builtStatus === 'ready' ? 'repaired' : 'needs-input';
   }
@@ -1023,7 +1023,7 @@ function determineRepairStatus(
   return builtStatus === 'ready' ? 'repaired' : 'needs-input';
 }
 
-function repoFocusRef(value: string): SourceAnalysisFocusRef {
+function repoFocusRef(value: string): FocusRef {
   return { kind: 'repo', value };
 }
 
@@ -1031,7 +1031,7 @@ function capabilityRef(
   command: string,
   label: string,
   detail?: string,
-): SourceAnalysisCapabilityRef {
+): CapabilityRef {
   return {
     kind: 'capability',
     value: command,
@@ -1040,7 +1040,7 @@ function capabilityRef(
   };
 }
 
-function defaultWorldFrame(): SourceAnalysisWorldFrame {
+function defaultWorldFrame(): WorldFrame {
   return {
     regimeAnchor: 'hosted',
     partiality: 'complete',
@@ -1048,15 +1048,15 @@ function defaultWorldFrame(): SourceAnalysisWorldFrame {
   };
 }
 
-function groundedTrust(summary: string): SourceAnalysisTrustProfile {
+function groundedTrust(summary: string): TrustProfile {
   return { kind: 'grounded', summary };
 }
 
-function qualifiedTrust(summary: string): SourceAnalysisTrustProfile {
+function qualifiedTrust(summary: string): TrustProfile {
   return { kind: 'qualified', summary };
 }
 
-function frontierTrust(summary: string): SourceAnalysisTrustProfile {
+function frontierTrust(summary: string): TrustProfile {
   return { kind: 'frontier', summary };
 }
 
@@ -1068,7 +1068,7 @@ function capabilityProvenance() {
   }];
 }
 
-function discoveryClosureBasis(): readonly SourceAnalysisClosureBasis[] {
+function discoveryClosureBasis(): readonly ClosureBasis[] {
   return [{
     kind: 'route',
     summary: 'Capability discovery is derived from the declared ingress catalog.',
@@ -1076,7 +1076,7 @@ function discoveryClosureBasis(): readonly SourceAnalysisClosureBasis[] {
   }];
 }
 
-function capabilityClosureBasis(command: string): readonly SourceAnalysisClosureBasis[] {
+function capabilityClosureBasis(command: string): readonly ClosureBasis[] {
   return [{
     kind: 'route',
     summary: `The invocation is shaped by the declared capability descriptor for ${command}.`,
@@ -1084,14 +1084,14 @@ function capabilityClosureBasis(command: string): readonly SourceAnalysisClosure
   }];
 }
 
-function toPlanReason(reason: SourceAnalysisCapabilityMatchReason): SourceAnalysisCapabilityPlanReason {
+function toPlanReason(reason: CapabilityMatchReason): CapabilityPlanReason {
   return {
     kind: 'match',
     detail: reason.detail,
   };
 }
 
-function toHintPlanReason(reason: SourceAnalysisIngressHintDetail): SourceAnalysisCapabilityPlanReason {
+function toHintPlanReason(reason: IngressHintDetail): CapabilityPlanReason {
   return {
     kind: reason.kind,
     detail: reason.detail,
@@ -1101,7 +1101,7 @@ function toHintPlanReason(reason: SourceAnalysisIngressHintDetail): SourceAnalys
 function planContinuations(
   command: string,
   missingInputs: readonly string[],
-): readonly SourceAnalysisContinuation[] {
+): readonly Continuation[] {
   if (missingInputs.length > 0) {
     return [{
       kind: 'narrow',
@@ -1119,8 +1119,8 @@ function planContinuations(
   }];
 }
 
-export function createSourceAnalysisCapabilityIngress(
-  catalog?: SourceAnalysisCapabilityCatalog,
-): SourceAnalysisCapabilityIngress {
-  return new SourceAnalysisCapabilityIngress(catalog);
+export function createCapabilityIngress(
+  catalog?: CapabilityCatalog,
+): CapabilityIngress {
+  return new CapabilityIngress(catalog);
 }

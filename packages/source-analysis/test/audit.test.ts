@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { loadCurrentSourceAnalysisSnapshots } from '../src/current-snapshots.js';
-import { createSourceAnalysisAuditAnswer } from '../src/audit.js';
+import { loadCurrentSnapshots } from '../src/current-snapshots.js';
+import { createAuditAnswer } from '../src/audit.js';
 
 function loadSnapshotsForAudit() {
   try {
-    return loadCurrentSourceAnalysisSnapshots();
+    return loadCurrentSnapshots();
   } catch (error) {
     throw new Error(
       `Current source-analysis snapshots are required for live audit tests. Run "pnpm source-analysis refresh all".\n\n${(error as Error).message}`,
@@ -16,7 +16,7 @@ function loadSnapshotsForAudit() {
 describe('Source-analysis package audit', () => {
   it('flags blind spots that keep exercise and dead-code closure open', () => {
     const snapshots = loadSnapshotsForAudit();
-    const answer = createSourceAnalysisAuditAnswer({
+    const answer = createAuditAnswer({
       focusRef: { kind: 'package', value: '@aurelia-ls/source-analysis' },
       questionRoute: 'inventory',
     }, snapshots);
@@ -36,7 +36,7 @@ describe('Source-analysis package audit', () => {
 
   it('no longer reports an under-integrated orphan after the subsystem coupling helper was integrated', () => {
     const snapshots = loadSnapshotsForAudit();
-    const answer = createSourceAnalysisAuditAnswer({
+    const answer = createAuditAnswer({
       focusRef: { kind: 'package', value: '@aurelia-ls/source-analysis' },
       questionRoute: 'inventory',
     }, snapshots);
@@ -49,7 +49,7 @@ describe('Source-analysis package audit', () => {
 
   it('no longer reports unanchored candidate roots for the package after the helper integration', () => {
     const snapshots = loadSnapshotsForAudit();
-    const answer = createSourceAnalysisAuditAnswer({
+    const answer = createAuditAnswer({
       focusRef: { kind: 'package', value: '@aurelia-ls/source-analysis' },
       questionRoute: 'inventory',
     }, snapshots);
@@ -62,7 +62,7 @@ describe('Source-analysis package audit', () => {
 
   it('no longer reports public surface without exercise routes after the helper tests were added', () => {
     const snapshots = loadSnapshotsForAudit();
-    const answer = createSourceAnalysisAuditAnswer({
+    const answer = createAuditAnswer({
       focusRef: { kind: 'package', value: '@aurelia-ls/source-analysis' },
       questionRoute: 'inventory',
     }, snapshots);
@@ -75,7 +75,7 @@ describe('Source-analysis package audit', () => {
 
   it('no longer flags fragmented local answer builders after the shared envelope extraction', () => {
     const snapshots = loadSnapshotsForAudit();
-    const answer = createSourceAnalysisAuditAnswer({
+    const answer = createAuditAnswer({
       focusRef: { kind: 'package', value: '@aurelia-ls/source-analysis' },
       questionRoute: 'inventory',
     }, snapshots);
@@ -88,7 +88,7 @@ describe('Source-analysis package audit', () => {
 
   it('no longer flags fragmented local answer carriers after the shared card extraction', () => {
     const snapshots = loadSnapshotsForAudit();
-    const answer = createSourceAnalysisAuditAnswer({
+    const answer = createAuditAnswer({
       focusRef: { kind: 'package', value: '@aurelia-ls/source-analysis' },
       questionRoute: 'inventory',
     }, snapshots);

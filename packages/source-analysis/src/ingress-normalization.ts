@@ -1,12 +1,12 @@
-export interface SourceAnalysisNormalizedText {
+export interface NormalizedText {
   readonly raw?: string;
   readonly normalized: string;
   readonly tokens: readonly string[];
 }
 
-export function createSourceAnalysisNormalizedText(
+export function createNormalizedText(
   value: string | undefined,
-): SourceAnalysisNormalizedText {
+): NormalizedText {
   const normalized = normalizePhrase(value);
   return {
     ...(value !== undefined ? { raw: value } : {}),
@@ -34,11 +34,11 @@ export function normalizeToken(value: string): string {
 }
 
 export function tokenize(value: string | undefined): readonly string[] {
-  return createSourceAnalysisNormalizedText(value).tokens;
+  return createNormalizedText(value).tokens;
 }
 
 export function phraseMatches(
-  source: SourceAnalysisNormalizedText,
+  source: NormalizedText,
   phrases: readonly string[],
 ): readonly string[] {
   if (source.normalized.length === 0) {
@@ -50,7 +50,7 @@ export function phraseMatches(
 }
 
 export function tokenMatches(
-  source: SourceAnalysisNormalizedText,
+  source: NormalizedText,
   candidates: readonly string[],
 ): readonly string[] {
   const tokens = new Set(source.tokens);

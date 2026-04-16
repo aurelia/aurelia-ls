@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { loadCurrentSourceAnalysisSnapshots } from '../src/current-snapshots.js';
-import { createSourceAnalysisRouteWitnessAnswer } from '../src/route-witness.js';
+import { loadCurrentSnapshots } from '../src/current-snapshots.js';
+import { createRouteWitnessAnswer } from '../src/route-witness.js';
 
 function loadSnapshotsForRouteWitness() {
   try {
-    return loadCurrentSourceAnalysisSnapshots();
+    return loadCurrentSnapshots();
   } catch (error) {
     throw new Error(
       `Current source-analysis snapshots are required for live route witness tests. Run "pnpm source-analysis refresh all".\n\n${(error as Error).message}`,
@@ -16,7 +16,7 @@ function loadSnapshotsForRouteWitness() {
 describe('Source-analysis route witnesses', () => {
   it('explains refresh.ts through the manifest-backed CLI route', () => {
     const snapshots = loadSnapshotsForRouteWitness();
-    const answer = createSourceAnalysisRouteWitnessAnswer({
+    const answer = createRouteWitnessAnswer({
       focusRef: { kind: 'file', value: 'packages/source-analysis/src/refresh.ts' },
       questionRoute: 'route',
     }, snapshots);
@@ -32,10 +32,10 @@ describe('Source-analysis route witnesses', () => {
     )).toBe(true);
   });
 
-  it('explains SourceAnalysisHostRuntime from the public package surface', () => {
+  it('explains SnapshotHostRuntime from the public package surface', () => {
     const snapshots = loadSnapshotsForRouteWitness();
-    const answer = createSourceAnalysisRouteWitnessAnswer({
-      focusRef: { kind: 'type', value: 'SourceAnalysisHostRuntime' },
+    const answer = createRouteWitnessAnswer({
+      focusRef: { kind: 'type', value: 'SnapshotHostRuntime' },
       questionRoute: 'route',
     }, snapshots);
 

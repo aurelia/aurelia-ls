@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createSourceAnalysisHostRuntime } from '../out/index.js';
+import { createSnapshotHostRuntime } from '../out/host/runtime.js';
 
 const tempDirs: string[] = [];
 
@@ -17,10 +17,10 @@ afterEach(() => {
   }
 });
 
-describe('SourceAnalysisHostRuntime', () => {
+describe('SnapshotHostRuntime', () => {
   it('opens sessions, refreshes snapshots on demand, invalidates files, and materializes outputs', () => {
     const repoPath = createFixtureRepo();
-    const runtime = createSourceAnalysisHostRuntime();
+    const runtime = createSnapshotHostRuntime();
 
     const opened = runtime.execute({
       command: 'session.open',
@@ -121,7 +121,7 @@ describe('SourceAnalysisHostRuntime', () => {
 
   it('runs a package audit query that combines blind spots and under-integrated file hints', () => {
     const repoPath = createAuditFixtureRepo();
-    const runtime = createSourceAnalysisHostRuntime();
+    const runtime = createSnapshotHostRuntime();
 
     const opened = runtime.execute({
       command: 'session.open',
@@ -218,7 +218,7 @@ describe('SourceAnalysisHostRuntime', () => {
 
   it('detects fragmented answer coordination from repeated envelope builders and carriers', () => {
     const repoPath = createCoordinationFixtureRepo();
-    const runtime = createSourceAnalysisHostRuntime();
+    const runtime = createSnapshotHostRuntime();
 
     const opened = runtime.execute({
       command: 'session.open',
@@ -255,7 +255,7 @@ describe('SourceAnalysisHostRuntime', () => {
 
   it('describes, plans, and repairs capability ingress through the hosted runtime', () => {
     const repoPath = createAuditFixtureRepo();
-    const runtime = createSourceAnalysisHostRuntime();
+    const runtime = createSnapshotHostRuntime();
 
     const describe = runtime.execute({
       command: 'describe.capabilities',
@@ -323,7 +323,7 @@ describe('SourceAnalysisHostRuntime', () => {
 
   it('describes inquiry families, plans them, and answers questions end-to-end through the hosted runtime', () => {
     const repoPath = createAuditFixtureRepo();
-    const runtime = createSourceAnalysisHostRuntime();
+    const runtime = createSnapshotHostRuntime();
 
     const describe = runtime.execute({
       command: 'describe.inquiries',
@@ -399,7 +399,7 @@ describe('SourceAnalysisHostRuntime', () => {
   });
 
   it('uses current snapshots for live ask.question flows instead of opening a transient session', () => {
-    const runtime = createSourceAnalysisHostRuntime();
+    const runtime = createSnapshotHostRuntime();
 
     const asked = runtime.execute({
       command: 'ask.question',

@@ -13,9 +13,9 @@
 import * as ts from "typescript";
 import { resolve, relative, dirname } from "node:path";
 import { execFileSync } from "node:child_process";
-import type { SourceAnalysisAnalysisOptions } from '../analysis-options.js';
+import type { ProgramReuseOptions } from '../program-reuse-options.js';
 import type { TypeDecl, TypeRef, RefKind, DeclKind, Member, MemberKind, TypeRefsOutput } from './schema.js';
-import { SourceAnalysisSession } from '../session.js';
+import { RepoSession } from '../repo-session.js';
 
 export interface TypeRefsAnalysisResult {
   output: TypeRefsOutput;
@@ -23,7 +23,7 @@ export interface TypeRefsAnalysisResult {
   warnings: string[];
 }
 
-let session: SourceAnalysisSession | null = null;
+let session: RepoSession | null = null;
 let repoPath = resolve(process.cwd());
 let analyzed = new Map<string, ts.SourceFile>();
 
@@ -37,7 +37,7 @@ function toRepoRelative(absPath: string): string {
   return toForwardSlash(relative(repoPath, absPath));
 }
 
-function requireSession(): SourceAnalysisSession {
+function requireSession(): RepoSession {
   if (!session) {
     throw new Error('source-analysis typerefs session is not initialized');
   }
@@ -687,8 +687,8 @@ function gitBlobHash(filePath: string): string {
 }
 
 export function generateTypeRefsAnalysis(
-  nextSession: SourceAnalysisSession,
-  options: SourceAnalysisAnalysisOptions = {},
+  nextSession: RepoSession,
+  options: ProgramReuseOptions = {},
 ): TypeRefsAnalysisResult {
   session = nextSession;
   repoPath = nextSession.repoPath;

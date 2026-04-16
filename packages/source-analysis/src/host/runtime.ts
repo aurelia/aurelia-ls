@@ -7,36 +7,39 @@ import {
 } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 
-import { createSourceAnalysisAuditAnswer } from '../audit.js';
-import type { SourceAnalysisAnswerRef } from '../answer-card.js';
-import type { SourceAnalysisAnswerDocument } from '../answer-document.js';
+import { createAuditAnswer } from '../audit.js';
+import type { AnswerRef } from '../answer-card.js';
+import type { AnswerDocument } from '../answer-document.js';
 import {
-  renderSourceAnalysisAnswerDocumentToJson,
-  renderSourceAnalysisAnswerDocumentToPlainText,
+  renderAnswerDocumentToJson,
+  renderAnswerDocumentToPlainText,
 } from '../answer-renderer.js';
-import { createSourceAnalysisPaths, deriveTargetFromRepoPath } from '../config.js';
-import { loadCurrentSourceAnalysisSnapshots } from '../current-snapshots.js';
-import { SourceAnalysisCapabilityIngress } from '../ingress.js';
-import type { SourceAnalysisInquiryExecutionSummary } from '../inquiry-ingress.js';
-import { SourceAnalysisInquiryIngress } from '../inquiry-ingress.js';
-import type { SourceAnalysisConsumerKind } from '../inquiry-policy.js';
-import { resolveSourceAnalysisInquiryPolicy } from '../inquiry-policy.js';
-import type { SourceAnalysisFocusKind } from '../query-model.js';
-import { createSourceAnalysisNavigationEpisode } from '../navigation.js';
-import { createSourceAnalysisRouteWitnessAnswer } from '../route-witness.js';
-import type { SourceAnalysisAnalysisOptions } from '../analysis-options.js';
+import { createSnapshotPaths, deriveSnapshotTargetFromRepoPath } from '../snapshot-config.js';
+import { loadCurrentSnapshots } from '../current-snapshots.js';
+import {
+  SNAPSHOT_KINDS,
+  type SnapshotKind,
+} from '../snapshots.js';
+import { CapabilityIngress } from '../capability-ingress.js';
+import type { InquiryExecutionSummary } from '../inquiry-ingress.js';
+import { InquiryIngress } from '../inquiry-ingress.js';
+import type { ConsumerKind } from '../inquiry-policy.js';
+import { resolveInquiryPolicy } from '../inquiry-policy.js';
+import type { FocusKind } from '../inquiry-model.js';
+import { createNavigationEpisode } from '../navigation.js';
+import { createRouteWitnessAnswer } from '../route-witness.js';
+import type { ProgramReuseOptions } from '../program-reuse-options.js';
 import { generateDepsAnalysis } from '../deps/analyze.js';
 import { generateExportsAnalysis } from '../exports/analyze.js';
 import { generateTypeRefsAnalysis } from '../typerefs/analyze.js';
 import {
-  SourceAnalysisHostSessionManager,
-  type SourceAnalysisHostSessionState,
-  sortKinds,
+  HostSessionManager,
+  type HostSessionState,
+  sortSnapshotKinds,
   toSessionStatusEntry,
 } from './session-manager.js';
 import {
-  SOURCE_ANALYSIS_HOST_SCHEMA_VERSION,
-  SOURCE_ANALYSIS_KINDS,
+  HOST_SCHEMA_VERSION,
   type MaterializeSnapshotsArgs,
   type MaterializeSnapshotsResult,
   type AskQuestionArgs,
@@ -53,15 +56,15 @@ import {
   type PlanQuestionResult,
   type RepairCommandArgs,
   type RepairCommandResult,
-  type QueryAuditPackageArgs,
-  type QueryAuditPackageResult,
-  type QueryNavigateArgs,
-  type QueryNavigateResult,
-  type QueryRouteWitnessArgs,
-  type QueryRouteWitnessResult,
-  type QueryArgs,
-  type QuerySnapshotResult,
-  type QuerySummaryResult,
+  type AuditPackageQueryArgs,
+  type AuditPackageQueryResult,
+  type NavigateQueryArgs,
+  type NavigateQueryResult,
+  type RouteWitnessQueryArgs,
+  type RouteWitnessQueryResult,
+  type SessionQueryArgs,
+  type SessionSnapshotQueryResult,
+  type SessionSummaryQueryResult,
   type SessionCloseArgs,
   type SessionCloseResult,
   type SessionInvalidateArgs,
@@ -72,52 +75,51 @@ import {
   type SessionRefreshResult,
   type SessionStatusArgs,
   type SessionStatusResult,
-  type SourceAnalysisHostCacheMeta,
-  type SourceAnalysisHostCommandArgsMap,
-  type SourceAnalysisHostCommandInvocation,
-  type SourceAnalysisHostCommandName,
-  type SourceAnalysisHostCommandResult,
-  type SourceAnalysisHostCommandStatus,
-  type SourceAnalysisHostEnvelope,
-  type SourceAnalysisHostError,
-  type SourceAnalysisHostInvalidationMeta,
-  type SourceAnalysisKind,
-  type SourceAnalysisOutputByKind,
-  type SourceAnalysisSummaryByKind,
-  type SourceAnalysisHostRenderedView,
+  type HostCacheMeta,
+  type HostCommandArgsMap,
+  type HostCommandInvocation,
+  type HostCommandName,
+  type HostCommandResult,
+  type HostCommandStatus,
+  type HostCommandEnvelope,
+  type HostError,
+  type HostInvalidationMeta,
+  type SnapshotOutputMap,
+  type SnapshotSummaryMap,
+  type HostRenderedView,
 } from './types.js';
 
 interface CommandOutcome {
-  readonly status?: SourceAnalysisHostCommandStatus;
+  readonly status?: HostCommandStatus;
   readonly result?: unknown;
   readonly sessionId?: string;
-  readonly cache?: SourceAnalysisHostCacheMeta;
-  readonly refreshedKinds?: readonly SourceAnalysisKind[];
-  readonly invalidation?: SourceAnalysisHostInvalidationMeta;
-  readonly errors?: readonly SourceAnalysisHostError[];
+  readonly cache?: HostCacheMeta;
+  readonly refreshedKinds?: readonly SnapshotKind[];
+  readonly invalidation?: HostInvalidationMeta;
+  readonly errors?: readonly HostError[];
 }
 
 interface InquiryExecutionOutcome {
   readonly usedSessionId?: string;
-  readonly invalidation: SourceAnalysisHostInvalidationMeta;
-  readonly cache: SourceAnalysisHostCacheMeta;
-  readonly refreshedKinds: readonly SourceAnalysisKind[];
+  readonly invalidation: HostInvalidationMeta;
+  readonly cache: HostCacheMeta;
+  readonly refreshedKinds: readonly SnapshotKind[];
   readonly freshness: 'live' | 'snapshot';
   readonly execution: AskQuestionExecution;
 }
 
-const DEFAULT_CACHE: SourceAnalysisHostCacheMeta = { hit: false, tier: 'cold' };
-const ALL_KINDS = SOURCE_ANALYSIS_KINDS;
+const DEFAULT_CACHE: HostCacheMeta = { hit: false, tier: 'cold' };
+const ALL_SNAPSHOT_KINDS = SNAPSHOT_KINDS;
 const SOURCE_FILE_PATTERN = /(\.d\.ts|\.tsx|\.ts|\.mts|\.cts)$/i;
 
-export class SourceAnalysisHostRuntime {
-  readonly #sessions = new SourceAnalysisHostSessionManager();
-  readonly #ingress = new SourceAnalysisCapabilityIngress();
-  readonly #publicIngress = new SourceAnalysisInquiryIngress();
+export class SnapshotHostRuntime {
+  readonly #sessions = new HostSessionManager();
+  readonly #ingress = new CapabilityIngress();
+  readonly #publicIngress = new InquiryIngress();
 
-  execute<TCommand extends SourceAnalysisHostCommandName>(
-    invocation: SourceAnalysisHostCommandInvocation<TCommand>,
-  ): SourceAnalysisHostEnvelope<SourceAnalysisHostCommandResult<TCommand>> {
+  execute<TCommand extends HostCommandName>(
+    invocation: HostCommandInvocation<TCommand>,
+  ): HostCommandEnvelope<HostCommandResult<TCommand>> {
     const startedAt = Date.now();
 
     let outcome: CommandOutcome;
@@ -140,10 +142,10 @@ export class SourceAnalysisHostRuntime {
       ?? (sessionState ? buildInvalidationMeta(sessionState) : emptyInvalidationMeta());
 
     return {
-      schemaVersion: SOURCE_ANALYSIS_HOST_SCHEMA_VERSION,
+      schemaVersion: HOST_SCHEMA_VERSION,
       command: invocation.command,
       status: outcome.status ?? 'ok',
-      result: (outcome.result ?? null) as SourceAnalysisHostCommandResult<TCommand>,
+      result: (outcome.result ?? null) as HostCommandResult<TCommand>,
       meta: {
         ...(outcome.sessionId ? { sessionId: outcome.sessionId } : {}),
         durationMs: Date.now() - startedAt,
@@ -155,8 +157,8 @@ export class SourceAnalysisHostRuntime {
     };
   }
 
-  #dispatch<TCommand extends SourceAnalysisHostCommandName>(
-    invocation: SourceAnalysisHostCommandInvocation<TCommand>,
+  #dispatch<TCommand extends HostCommandName>(
+    invocation: HostCommandInvocation<TCommand>,
   ): CommandOutcome {
     switch (invocation.command) {
       case 'describe.inquiries': return this.#describeInquiries(invocation.args as DescribeInquiriesArgs);
@@ -170,15 +172,15 @@ export class SourceAnalysisHostRuntime {
       case 'session.status': return this.#sessionStatus(invocation.args as SessionStatusArgs);
       case 'session.invalidate': return this.#sessionInvalidate(invocation.args as SessionInvalidateArgs);
       case 'session.refresh': return this.#sessionRefresh(invocation.args as SessionRefreshArgs);
-      case 'query.deps.summary': return this.#querySummary('deps', invocation.args as QueryArgs);
-      case 'query.deps.snapshot': return this.#querySnapshot('deps', invocation.args as QueryArgs);
-      case 'query.typerefs.summary': return this.#querySummary('typerefs', invocation.args as QueryArgs);
-      case 'query.typerefs.snapshot': return this.#querySnapshot('typerefs', invocation.args as QueryArgs);
-      case 'query.exports.summary': return this.#querySummary('exports', invocation.args as QueryArgs);
-      case 'query.exports.snapshot': return this.#querySnapshot('exports', invocation.args as QueryArgs);
-      case 'query.audit.package': return this.#queryAuditPackage(invocation.args as QueryAuditPackageArgs);
-      case 'query.route.witness': return this.#queryRouteWitness(invocation.args as QueryRouteWitnessArgs);
-      case 'query.navigate': return this.#queryNavigate(invocation.args as QueryNavigateArgs);
+      case 'query.deps.summary': return this.#querySummary('deps', invocation.args as SessionQueryArgs);
+      case 'query.deps.snapshot': return this.#querySnapshot('deps', invocation.args as SessionQueryArgs);
+      case 'query.typerefs.summary': return this.#querySummary('typerefs', invocation.args as SessionQueryArgs);
+      case 'query.typerefs.snapshot': return this.#querySnapshot('typerefs', invocation.args as SessionQueryArgs);
+      case 'query.exports.summary': return this.#querySummary('exports', invocation.args as SessionQueryArgs);
+      case 'query.exports.snapshot': return this.#querySnapshot('exports', invocation.args as SessionQueryArgs);
+      case 'query.audit.package': return this.#queryAuditPackage(invocation.args as AuditPackageQueryArgs);
+      case 'query.route.witness': return this.#queryRouteWitness(invocation.args as RouteWitnessQueryArgs);
+      case 'query.navigate': return this.#queryNavigate(invocation.args as NavigateQueryArgs);
       case 'materializeSnapshots': return this.#materializeSnapshots(invocation.args as MaterializeSnapshotsArgs);
       default: return assertNever(invocation.command);
     }
@@ -393,7 +395,7 @@ export class SourceAnalysisHostRuntime {
       repoPath: state.repoPath,
       target: state.target,
       warmPrograms: state.warmPrograms,
-      dirtyKinds: sortKinds(state.dirtyKinds),
+      dirtyKinds: sortSnapshotKinds(state.dirtyKinds),
     };
     return {
       result,
@@ -438,7 +440,7 @@ export class SourceAnalysisHostRuntime {
       sessionId: state.sessionId,
       scope: args.scope === 'project' || !args.files || args.files.length === 0 ? 'project' : 'files',
       invalidatedFiles,
-      dirtyKinds: sortKinds(state.dirtyKinds),
+      dirtyKinds: sortSnapshotKinds(state.dirtyKinds),
     };
     return {
       result,
@@ -453,13 +455,13 @@ export class SourceAnalysisHostRuntime {
 
   #sessionRefresh(args: SessionRefreshArgs): CommandOutcome {
     const state = this.#sessions.get(args.sessionId);
-    const requestedKinds = normalizeKinds(args.kinds);
+    const requestedKinds = normalizeSnapshotKinds(args.kinds);
     const hadWarmSnapshot = requestedKinds.some((kind) => state.snapshots[kind] !== undefined);
     const refreshedKinds = refreshKinds(state, requestedKinds, { force: args.force });
     const result: SessionRefreshResult = {
       sessionId: state.sessionId,
       refreshedKinds,
-      dirtyKinds: sortKinds(state.dirtyKinds),
+      dirtyKinds: sortSnapshotKinds(state.dirtyKinds),
       warningsByKind: cloneWarningsByKind(state),
       lastRefreshAtByKind: { ...state.lastRefreshAtByKind },
     };
@@ -475,17 +477,17 @@ export class SourceAnalysisHostRuntime {
     };
   }
 
-  #querySummary<TKind extends SourceAnalysisKind>(
+  #querySummary<TKind extends SnapshotKind>(
     kind: TKind,
-    args: QueryArgs,
+    args: SessionQueryArgs,
   ): CommandOutcome {
     const state = this.#sessions.get(args.sessionId);
     const query = ensureFreshSnapshot(state, kind, args.refreshIfNeeded);
     const snapshot = query.snapshot;
-    const result: QuerySummaryResult<TKind> = {
+    const result: SessionSummaryQueryResult<TKind> = {
       kind,
       generatedAt: snapshot.generated_at,
-      summary: snapshot.summary as SourceAnalysisSummaryByKind[TKind],
+      summary: snapshot.summary as SnapshotSummaryMap[TKind],
       warnings: query.warnings,
     };
     return {
@@ -497,13 +499,13 @@ export class SourceAnalysisHostRuntime {
     };
   }
 
-  #querySnapshot<TKind extends SourceAnalysisKind>(
+  #querySnapshot<TKind extends SnapshotKind>(
     kind: TKind,
-    args: QueryArgs,
+    args: SessionQueryArgs,
   ): CommandOutcome {
     const state = this.#sessions.get(args.sessionId);
     const query = ensureFreshSnapshot(state, kind, args.refreshIfNeeded);
-    const result: QuerySnapshotResult<TKind> = {
+    const result: SessionSnapshotQueryResult<TKind> = {
       kind,
       snapshot: query.snapshot,
       warnings: query.warnings,
@@ -517,7 +519,7 @@ export class SourceAnalysisHostRuntime {
     };
   }
 
-  #queryAuditPackage(args: QueryAuditPackageArgs): CommandOutcome {
+  #queryAuditPackage(args: AuditPackageQueryArgs): CommandOutcome {
     const state = this.#sessions.get(args.sessionId);
     const depsQuery = ensureFreshSnapshot(state, 'deps', args.refreshIfNeeded);
     const typeRefsQuery = ensureFreshSnapshot(state, 'typerefs', args.refreshIfNeeded);
@@ -528,12 +530,12 @@ export class SourceAnalysisHostRuntime {
       ...typeRefsQuery.warnings,
       ...exportsQuery.warnings,
     ];
-    const refreshedKinds = sortKinds([
+    const refreshedKinds = sortSnapshotKinds([
       ...depsQuery.refreshedKinds,
       ...typeRefsQuery.refreshedKinds,
       ...exportsQuery.refreshedKinds,
     ]);
-    const answer = createSourceAnalysisAuditAnswer(
+    const answer = createAuditAnswer(
       {
         inquiryEpisode: 'inventory-and-audit-sweep',
         focusRef: { kind: 'package', value: args.packageName },
@@ -555,7 +557,7 @@ export class SourceAnalysisHostRuntime {
       },
     );
     const rendered = buildRenderedView(answer, args.consumer, args.renderStyle);
-    const result: QueryAuditPackageResult = {
+    const result: AuditPackageQueryResult = {
       answer,
       ...(rendered ? { rendered } : {}),
       warnings,
@@ -577,7 +579,7 @@ export class SourceAnalysisHostRuntime {
     };
   }
 
-  #queryRouteWitness(args: QueryRouteWitnessArgs): CommandOutcome {
+  #queryRouteWitness(args: RouteWitnessQueryArgs): CommandOutcome {
     const state = this.#sessions.get(args.sessionId);
     const depsQuery = ensureFreshSnapshot(state, 'deps', args.refreshIfNeeded);
     const typeRefsQuery = ensureFreshSnapshot(state, 'typerefs', args.refreshIfNeeded);
@@ -588,12 +590,12 @@ export class SourceAnalysisHostRuntime {
       ...typeRefsQuery.warnings,
       ...exportsQuery.warnings,
     ];
-    const refreshedKinds = sortKinds([
+    const refreshedKinds = sortSnapshotKinds([
       ...depsQuery.refreshedKinds,
       ...typeRefsQuery.refreshedKinds,
       ...exportsQuery.refreshedKinds,
     ]);
-    const answer = createSourceAnalysisRouteWitnessAnswer(
+    const answer = createRouteWitnessAnswer(
       {
         inquiryEpisode: 'bounded-closure-explanation',
         focusRef: {
@@ -618,7 +620,7 @@ export class SourceAnalysisHostRuntime {
       },
     );
     const rendered = buildRenderedView(answer, args.consumer, args.renderStyle);
-    const result: QueryRouteWitnessResult = {
+    const result: RouteWitnessQueryResult = {
       answer,
       ...(rendered ? { rendered } : {}),
       warnings,
@@ -640,7 +642,7 @@ export class SourceAnalysisHostRuntime {
     };
   }
 
-  #queryNavigate(args: QueryNavigateArgs): CommandOutcome {
+  #queryNavigate(args: NavigateQueryArgs): CommandOutcome {
     const state = this.#sessions.get(args.sessionId);
     const depsQuery = ensureFreshSnapshot(state, 'deps', args.refreshIfNeeded);
     const typeRefsQuery = ensureFreshSnapshot(state, 'typerefs', args.refreshIfNeeded);
@@ -651,12 +653,12 @@ export class SourceAnalysisHostRuntime {
       ...typeRefsQuery.warnings,
       ...exportsQuery.warnings,
     ];
-    const refreshedKinds = sortKinds([
+    const refreshedKinds = sortSnapshotKinds([
       ...depsQuery.refreshedKinds,
       ...typeRefsQuery.refreshedKinds,
       ...exportsQuery.refreshedKinds,
     ]);
-    const episode = createSourceAnalysisNavigationEpisode(
+    const episode = createNavigationEpisode(
       {
         inquiryEpisode: 'orient-and-localize',
         focusRef: {
@@ -681,7 +683,7 @@ export class SourceAnalysisHostRuntime {
       },
     );
     const rendered = buildRenderedView(episode.answer, args.consumer, args.renderStyle);
-    const result: QueryNavigateResult = {
+    const result: NavigateQueryResult = {
       answer: episode.answer,
       ...(rendered ? { rendered } : {}),
       warnings,
@@ -705,14 +707,14 @@ export class SourceAnalysisHostRuntime {
 
   #materializeSnapshots(args: MaterializeSnapshotsArgs): CommandOutcome {
     const state = this.#sessions.get(args.sessionId);
-    const kinds = normalizeKinds(args.kinds);
+    const kinds = normalizeSnapshotKinds(args.kinds);
     const outDir = resolve(
-      args.outDir ?? createSourceAnalysisPaths(import.meta.url).snapshotRootPath,
+      args.outDir ?? createSnapshotPaths(import.meta.url).snapshotRootPath,
     );
     mkdirSync(outDir, { recursive: true });
 
-    const refreshedKinds: SourceAnalysisKind[] = [];
-    const files: Partial<Record<SourceAnalysisKind, string>> = {};
+    const refreshedKinds: SnapshotKind[] = [];
+    const files: Partial<Record<SnapshotKind, string>> = {};
     let sawWarmSnapshot = false;
 
     for (const kind of kinds) {
@@ -735,7 +737,7 @@ export class SourceAnalysisHostRuntime {
     return {
       result,
       sessionId: state.sessionId,
-      refreshedKinds: sortKinds(refreshedKinds),
+      refreshedKinds: sortSnapshotKinds(refreshedKinds),
       invalidation: buildInvalidationMeta(state),
       cache: {
         hit: refreshedKinds.length === 0 && sawWarmSnapshot,
@@ -756,9 +758,9 @@ export class SourceAnalysisHostRuntime {
       return undefined;
     }
 
-    const target = context.target ?? deriveTargetFromRepoPath(context.repoPath);
+    const target = context.target ?? deriveSnapshotTargetFromRepoPath(context.repoPath);
     try {
-      const snapshots = loadCurrentSourceAnalysisSnapshots(target);
+      const snapshots = loadCurrentSnapshots(target);
       const primaryEnvelope = createCurrentSnapshotEnvelope(primaryStep.command, primaryStep.args, snapshots, context.repoPath, target);
       if (!primaryEnvelope) {
         return undefined;
@@ -793,7 +795,7 @@ export class SourceAnalysisHostRuntime {
   #executeInquiryPlan(
     plan: { readonly steps: readonly { readonly command: string; readonly args: Record<string, unknown>; }[] },
     context: {
-      readonly existingSession?: SourceAnalysisHostSessionState;
+      readonly existingSession?: HostSessionState;
       readonly repoPath: string;
       readonly target?: string;
     },
@@ -801,12 +803,12 @@ export class SourceAnalysisHostRuntime {
     const steps: AskQuestionExecutionStep[] = [];
     let sessionState = context.existingSession;
     let openedEphemeralSession = false;
-    let primaryEnvelope: SourceAnalysisHostEnvelope<unknown> | undefined;
-    let cache: SourceAnalysisHostCacheMeta = context.existingSession
+    let primaryEnvelope: HostCommandEnvelope<unknown> | undefined;
+    let cache: HostCacheMeta = context.existingSession
       ? { hit: hasCachedSnapshots(context.existingSession), tier: hasCachedSnapshots(context.existingSession) ? 'warm' : 'cold' }
       : DEFAULT_CACHE;
     let invalidation = context.existingSession ? buildInvalidationMeta(context.existingSession) : emptyInvalidationMeta();
-    let refreshedKinds: readonly SourceAnalysisKind[] = [];
+    let refreshedKinds: readonly SnapshotKind[] = [];
 
     try {
       for (const step of plan.steps) {
@@ -852,10 +854,10 @@ export class SourceAnalysisHostRuntime {
         }
 
         const envelope = this.execute({
-          command: step.command as SourceAnalysisHostCommandName,
-          args: resolvedArgs as SourceAnalysisHostCommandArgsMap[SourceAnalysisHostCommandName],
+          command: step.command as HostCommandName,
+          args: resolvedArgs as HostCommandArgsMap[HostCommandName],
         });
-        primaryEnvelope ??= envelope as SourceAnalysisHostEnvelope<unknown>;
+        primaryEnvelope ??= envelope as HostCommandEnvelope<unknown>;
         cache = envelope.meta.cache;
         invalidation = envelope.meta.invalidation;
         refreshedKinds = envelope.meta.refreshedKinds;
@@ -893,7 +895,7 @@ export class SourceAnalysisHostRuntime {
     };
   }
 
-  #tryGetSession(sessionId: string): SourceAnalysisHostSessionState | undefined {
+  #tryGetSession(sessionId: string): HostSessionState | undefined {
     try {
       return this.#sessions.get(sessionId);
     } catch {
@@ -902,13 +904,13 @@ export class SourceAnalysisHostRuntime {
   }
 }
 
-export function createSourceAnalysisHostRuntime(): SourceAnalysisHostRuntime {
-  return new SourceAnalysisHostRuntime();
+export function createSnapshotHostRuntime(): SnapshotHostRuntime {
+  return new SnapshotHostRuntime();
 }
 
 function summarizeInquiryExecution(
   executed: InquiryExecutionOutcome,
-): SourceAnalysisInquiryExecutionSummary {
+): InquiryExecutionSummary {
   const primaryEnvelope = executed.execution.primaryEnvelope;
   if (!primaryEnvelope) {
     return {
@@ -942,17 +944,17 @@ function supportsCurrentSnapshotExecution(command: string): boolean {
 function createCurrentSnapshotEnvelope(
   command: string,
   args: Record<string, unknown>,
-  snapshots: ReturnType<typeof loadCurrentSourceAnalysisSnapshots>,
+  snapshots: ReturnType<typeof loadCurrentSnapshots>,
   repoPath: string,
   target: string,
-): SourceAnalysisHostEnvelope<unknown> | undefined {
+): HostCommandEnvelope<unknown> | undefined {
   switch (command) {
     case 'query.audit.package': {
       const packageName = asStepString(args.packageName);
       if (!packageName) {
         return undefined;
       }
-      const answer = createSourceAnalysisAuditAnswer({
+      const answer = createAuditAnswer({
         inquiryEpisode: 'inventory-and-audit-sweep',
         focusRef: { kind: 'package', value: packageName },
         questionRoute: 'inventory',
@@ -976,7 +978,7 @@ function createCurrentSnapshotEnvelope(
       if (!focusKind || !focusValue) {
         return undefined;
       }
-      const answer = createSourceAnalysisRouteWitnessAnswer({
+      const answer = createRouteWitnessAnswer({
         inquiryEpisode: 'bounded-closure-explanation',
         focusRef: { kind: focusKind, value: focusValue },
         questionRoute: 'route',
@@ -1002,7 +1004,7 @@ function createCurrentSnapshotEnvelope(
       if (!focusKind || !focusValue) {
         return undefined;
       }
-      const episode = createSourceAnalysisNavigationEpisode({
+      const episode = createNavigationEpisode({
         inquiryEpisode: 'orient-and-localize',
         focusRef: { kind: focusKind, value: focusValue },
         questionRoute: args.questionRoute === 'route' || args.questionRoute === 'search' || args.questionRoute === 'join'
@@ -1048,11 +1050,11 @@ function createCurrentSnapshotEnvelope(
   }
 }
 
-function buildRenderedView<TResult extends { document?: SourceAnalysisAnswerDocument<SourceAnalysisAnswerRef> }>(
-  answer: { readonly query: { readonly focusRef: { readonly kind: SourceAnalysisFocusKind }; readonly inquiryEpisode?: string; readonly readMode?: string; }; readonly outcome: { readonly value?: TResult } },
-  consumer: SourceAnalysisConsumerKind | undefined,
+function buildRenderedView<TResult extends { document?: AnswerDocument<AnswerRef> }>(
+  answer: { readonly query: { readonly focusRef: { readonly kind: FocusKind }; readonly inquiryEpisode?: string; readonly readMode?: string; }; readonly outcome: { readonly value?: TResult } },
+  consumer: ConsumerKind | undefined,
   renderStyle: 'answer' | 'plain-text' | 'json-document' | undefined,
-): SourceAnalysisHostRenderedView | undefined {
+): HostRenderedView | undefined {
   if (!renderStyle || renderStyle === 'answer') {
     return undefined;
   }
@@ -1062,33 +1064,33 @@ function buildRenderedView<TResult extends { document?: SourceAnalysisAnswerDocu
     return undefined;
   }
 
-  const policy = resolveSourceAnalysisInquiryPolicy(answer.query as Parameters<typeof resolveSourceAnalysisInquiryPolicy>[0], {
+  const policy = resolveInquiryPolicy(answer.query as Parameters<typeof resolveInquiryPolicy>[0], {
     focusKind: answer.query.focusRef.kind,
-    inquiryEpisode: (answer.query.inquiryEpisode ?? 'orient-and-localize') as Parameters<typeof resolveSourceAnalysisInquiryPolicy>[1]['inquiryEpisode'],
-    readMode: (answer.query.readMode ?? 'focus-card') as Parameters<typeof resolveSourceAnalysisInquiryPolicy>[1]['readMode'],
+    inquiryEpisode: (answer.query.inquiryEpisode ?? 'orient-and-localize') as Parameters<typeof resolveInquiryPolicy>[1]['inquiryEpisode'],
+    readMode: (answer.query.readMode ?? 'focus-card') as Parameters<typeof resolveInquiryPolicy>[1]['readMode'],
     ...(consumer ? { consumer } : {}),
   });
 
   if (renderStyle === 'plain-text') {
     return {
       style: 'plain-text',
-      rendered: renderSourceAnalysisAnswerDocumentToPlainText(document, policy),
+      rendered: renderAnswerDocumentToPlainText(document, policy),
     };
   }
 
   return {
     style: 'json-document',
-    document: renderSourceAnalysisAnswerDocumentToJson(document, policy),
+    document: renderAnswerDocumentToJson(document, policy),
   };
 }
 
 function snapshotEnvelope(
   command: string,
   result: unknown,
-): SourceAnalysisHostEnvelope<unknown> {
+): HostCommandEnvelope<unknown> {
   return {
-    schemaVersion: SOURCE_ANALYSIS_HOST_SCHEMA_VERSION,
-    command: command as SourceAnalysisHostCommandName,
+    schemaVersion: HOST_SCHEMA_VERSION,
+    command: command as HostCommandName,
     status: 'ok',
     result,
     meta: {
@@ -1102,12 +1104,12 @@ function snapshotEnvelope(
 }
 
 function summarizePrimaryFacts(
-  envelope: SourceAnalysisHostEnvelope<unknown>,
+  envelope: HostCommandEnvelope<unknown>,
 ): readonly { readonly label: string; readonly value: string }[] {
   const result = envelope.result as Record<string, unknown> | null;
   switch (envelope.command) {
     case 'query.deps.summary': {
-      const summary = (result as unknown as QuerySummaryResult<'deps'>).summary;
+      const summary = (result as unknown as SessionSummaryQueryResult<'deps'>).summary;
       return [
         { label: 'files analyzed', value: `${summary.files_analyzed}` },
         { label: 'uncovered files', value: `${summary.uncovered_files}` },
@@ -1115,14 +1117,14 @@ function summarizePrimaryFacts(
       ];
     }
     case 'query.typerefs.summary': {
-      const summary = (result as unknown as QuerySummaryResult<'typerefs'>).summary;
+      const summary = (result as unknown as SessionSummaryQueryResult<'typerefs'>).summary;
       return [
         { label: 'declarations', value: `${summary.type_declarations}` },
         { label: 'references', value: `${summary.type_references}` },
       ];
     }
     case 'query.exports.summary': {
-      const summary = (result as unknown as QuerySummaryResult<'exports'>).summary;
+      const summary = (result as unknown as SessionSummaryQueryResult<'exports'>).summary;
       return [
         { label: 'packages', value: `${summary.packages_analyzed}` },
         { label: 'exports', value: `${summary.exports ?? 'unknown'}` },
@@ -1164,12 +1166,12 @@ function summarizePrimaryFacts(
 }
 
 function summarizePrimaryLines(
-  envelope: SourceAnalysisHostEnvelope<unknown>,
+  envelope: HostCommandEnvelope<unknown>,
 ): readonly string[] {
   const result = envelope.result as Record<string, unknown> | null;
   switch (envelope.command) {
     case 'query.deps.summary': {
-      const summary = (result as unknown as QuerySummaryResult<'deps'>).summary;
+      const summary = (result as unknown as SessionSummaryQueryResult<'deps'>).summary;
       return [
         `Dependency posture covers ${summary.files_analyzed} files with ${summary.uncovered_files} uncovered files and ${summary.unresolved} unresolved imports.`,
       ];
@@ -1234,15 +1236,15 @@ function asStepString(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
-function ensureFreshSnapshot<TKind extends SourceAnalysisKind>(
-  state: SourceAnalysisHostSessionState,
+function ensureFreshSnapshot<TKind extends SnapshotKind>(
+  state: HostSessionState,
   kind: TKind,
   refreshIfNeeded = true,
 ): {
-  snapshot: SourceAnalysisOutputByKind[TKind];
+  snapshot: SnapshotOutputMap[TKind];
   warnings: readonly string[];
   refreshedKinds: readonly TKind[];
-  cache: SourceAnalysisHostCacheMeta;
+  cache: HostCacheMeta;
 } {
   const hadSnapshot = state.snapshots[kind] !== undefined;
   const needsRefresh = state.dirtyKinds.has(kind) || !hadSnapshot;
@@ -1261,7 +1263,7 @@ function ensureFreshSnapshot<TKind extends SourceAnalysisKind>(
   }
 
   return {
-    snapshot: snapshot as SourceAnalysisOutputByKind[TKind],
+    snapshot: snapshot as SnapshotOutputMap[TKind],
     warnings: state.warningsByKind[kind] ?? [],
     refreshedKinds,
     cache: {
@@ -1272,13 +1274,13 @@ function ensureFreshSnapshot<TKind extends SourceAnalysisKind>(
 }
 
 function refreshKinds(
-  state: SourceAnalysisHostSessionState,
-  requestedKinds: readonly SourceAnalysisKind[],
+  state: HostSessionState,
+  requestedKinds: readonly SnapshotKind[],
   options: {
     force?: boolean;
   } = {},
-): readonly SourceAnalysisKind[] {
-  const refreshedKinds: SourceAnalysisKind[] = [];
+): readonly SnapshotKind[] {
+  const refreshedKinds: SnapshotKind[] = [];
   const kindsToRefresh = options.force
     ? requestedKinds
     : requestedKinds.filter((kind) => state.dirtyKinds.has(kind) || state.snapshots[kind] === undefined);
@@ -1298,17 +1300,17 @@ function refreshKinds(
     state.invalidationCount = 0;
   }
 
-  return sortKinds(refreshedKinds);
+  return sortSnapshotKinds(refreshedKinds);
 }
 
-function runAnalysis<TKind extends SourceAnalysisKind>(
-  state: SourceAnalysisHostSessionState,
+function runAnalysis<TKind extends SnapshotKind>(
+  state: HostSessionState,
   kind: TKind,
 ): {
-  output: SourceAnalysisOutputByKind[TKind];
+  output: SnapshotOutputMap[TKind];
   warnings: readonly string[];
 } {
-  const analysisOptions: SourceAnalysisAnalysisOptions = {
+  const analysisOptions: ProgramReuseOptions = {
     cachePrograms: state.warmPrograms,
   };
 
@@ -1316,21 +1318,21 @@ function runAnalysis<TKind extends SourceAnalysisKind>(
     case 'deps': {
       const result = generateDepsAnalysis(state.session, analysisOptions);
       return {
-        output: result.output as SourceAnalysisOutputByKind[TKind],
+        output: result.output as SnapshotOutputMap[TKind],
         warnings: result.warnings,
       };
     }
     case 'typerefs': {
       const result = generateTypeRefsAnalysis(state.session, analysisOptions);
       return {
-        output: result.output as SourceAnalysisOutputByKind[TKind],
+        output: result.output as SnapshotOutputMap[TKind],
         warnings: result.warnings,
       };
     }
     case 'exports': {
       const result = generateExportsAnalysis(state.session, analysisOptions);
       return {
-        output: result.output as SourceAnalysisOutputByKind[TKind],
+        output: result.output as SnapshotOutputMap[TKind],
         warnings: result.warnings,
       };
     }
@@ -1339,18 +1341,18 @@ function runAnalysis<TKind extends SourceAnalysisKind>(
   }
 }
 
-function setSnapshot<TKind extends SourceAnalysisKind>(
-  state: SourceAnalysisHostSessionState,
+function setSnapshot<TKind extends SnapshotKind>(
+  state: HostSessionState,
   kind: TKind,
-  output: SourceAnalysisOutputByKind[TKind],
+  output: SnapshotOutputMap[TKind],
 ): void {
   (
-    state.snapshots as Partial<Record<SourceAnalysisKind, SourceAnalysisOutputByKind[SourceAnalysisKind]>>
+    state.snapshots as Partial<Record<SnapshotKind, SnapshotOutputMap[SnapshotKind]>>
   )[kind] = output;
 }
 
 function invalidateSession(
-  state: SourceAnalysisHostSessionState,
+  state: HostSessionState,
   args: SessionInvalidateArgs,
 ): readonly string[] {
   const scope = args.scope === 'project' || !args.files || args.files.length === 0
@@ -1359,7 +1361,7 @@ function invalidateSession(
 
   if (scope === 'project') {
     state.session.clearProgramCache();
-    for (const kind of ALL_KINDS) {
+    for (const kind of ALL_SNAPSHOT_KINDS) {
       state.dirtyKinds.add(kind);
     }
     state.invalidationKind = 'project';
@@ -1376,14 +1378,14 @@ function invalidateSession(
   }
 
   const invalidatedFiles: string[] = [];
-  const affectedKinds = new Set<SourceAnalysisKind>();
+  const affectedKinds = new Set<SnapshotKind>();
   for (const filePath of args.files ?? []) {
     const normalized = normalizeSessionFilePath(state, filePath);
     if (!normalized) continue;
 
     invalidatedFiles.push(normalized);
     state.dirtyFiles.add(normalized);
-    for (const kind of affectedKindsForFile(normalized)) {
+    for (const kind of affectedSnapshotKindsForFile(normalized)) {
       affectedKinds.add(kind);
       state.dirtyKinds.add(kind);
     }
@@ -1398,22 +1400,22 @@ function invalidateSession(
   return [...new Set(invalidatedFiles)].sort();
 }
 
-function affectedKindsForFile(relPath: string): readonly SourceAnalysisKind[] {
+function affectedSnapshotKindsForFile(relPath: string): readonly SnapshotKind[] {
   const fileName = basename(relPath);
   if (fileName === 'package.json') {
-    return ALL_KINDS;
+    return ALL_SNAPSHOT_KINDS;
   }
   if (/^tsconfig(\..+)?\.json$/i.test(fileName)) {
-    return ALL_KINDS;
+    return ALL_SNAPSHOT_KINDS;
   }
   if (SOURCE_FILE_PATTERN.test(relPath)) {
-    return ALL_KINDS;
+    return ALL_SNAPSHOT_KINDS;
   }
   return [];
 }
 
 function normalizeSessionFilePath(
-  state: SourceAnalysisHostSessionState,
+  state: HostSessionState,
   pathValue: string,
 ): string | null {
   const absPath = isAbsoluteLike(pathValue)
@@ -1430,39 +1432,39 @@ function isAbsoluteLike(pathValue: string): boolean {
   return /^[a-z]:[\\/]/i.test(pathValue) || pathValue.startsWith('/') || pathValue.startsWith('\\\\');
 }
 
-function normalizeKinds(
-  kinds?: readonly SourceAnalysisKind[],
-): readonly SourceAnalysisKind[] {
+function normalizeSnapshotKinds(
+  kinds?: readonly SnapshotKind[],
+): readonly SnapshotKind[] {
   if (!kinds || kinds.length === 0) {
-    return ALL_KINDS;
+    return ALL_SNAPSHOT_KINDS;
   }
 
-  const unique = new Set<SourceAnalysisKind>();
+  const unique = new Set<SnapshotKind>();
   for (const kind of kinds) {
-    if (!ALL_KINDS.includes(kind)) {
+    if (!ALL_SNAPSHOT_KINDS.includes(kind)) {
       throw new Error(`unknown source-analysis kind "${kind}"`);
     }
     unique.add(kind);
   }
-  return sortKinds(unique);
+  return sortSnapshotKinds(unique);
 }
 
-function hasCachedSnapshots(state: SourceAnalysisHostSessionState): boolean {
+function hasCachedSnapshots(state: HostSessionState): boolean {
   return Object.keys(state.snapshots).length > 0;
 }
 
 function buildInvalidationMeta(
-  state: SourceAnalysisHostSessionState,
-): SourceAnalysisHostInvalidationMeta {
+  state: HostSessionState,
+): HostInvalidationMeta {
   return {
     kind: state.invalidationKind,
     count: state.invalidationCount,
-    dirtyKinds: sortKinds(state.dirtyKinds),
+    dirtyKinds: sortSnapshotKinds(state.dirtyKinds),
     dirtyFiles: [...state.dirtyFiles].sort(),
   };
 }
 
-function emptyInvalidationMeta(): SourceAnalysisHostInvalidationMeta {
+function emptyInvalidationMeta(): HostInvalidationMeta {
   return {
     kind: 'none',
     count: 0,
@@ -1472,8 +1474,8 @@ function emptyInvalidationMeta(): SourceAnalysisHostInvalidationMeta {
 }
 
 function cloneWarningsByKind(
-  state: SourceAnalysisHostSessionState,
-): Partial<Record<SourceAnalysisKind, readonly string[]>> {
+  state: HostSessionState,
+): Partial<Record<SnapshotKind, readonly string[]>> {
   return {
     ...(state.warningsByKind.deps ? { deps: [...state.warningsByKind.deps] } : {}),
     ...(state.warningsByKind.typerefs ? { typerefs: [...state.warningsByKind.typerefs] } : {}),
@@ -1497,22 +1499,22 @@ function writeSnapshotJson(path: string, snapshot: unknown): void {
 }
 
 function extractSessionId(
-  args: SourceAnalysisHostCommandArgsMap[SourceAnalysisHostCommandName],
+  args: HostCommandArgsMap[HostCommandName],
 ): string | null {
   return typeof args === 'object' && args !== null && 'sessionId' in args && typeof args.sessionId === 'string'
     ? args.sessionId
     : null;
 }
 
-function toHostError(error: unknown): SourceAnalysisHostError {
+function toHostError(error: unknown): HostError {
   if (error instanceof Error) {
     return {
-      code: 'SOURCE_ANALYSIS_HOST_ERROR',
+      code: 'HOST_ERROR',
       message: error.message,
     };
   }
   return {
-    code: 'SOURCE_ANALYSIS_HOST_ERROR',
+    code: 'HOST_ERROR',
     message: String(error),
   };
 }

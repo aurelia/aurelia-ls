@@ -1,9 +1,11 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-import type { SourceAnalysisPaths } from './config.js';
+import type { SnapshotPaths } from './snapshot-config.js';
 
-export type SnapshotKind = 'deps' | 'typerefs' | 'exports';
+export const SNAPSHOT_KINDS = ['deps', 'typerefs', 'exports'] as const;
+
+export type SnapshotKind = typeof SNAPSHOT_KINDS[number];
 
 export interface SnapshotOptions {
   target: string;
@@ -37,7 +39,7 @@ export function waitIfLocked(path: string, waitMs: number): void {
 }
 
 export function resolveCurrentSnapshotPath(
-  paths: SourceAnalysisPaths,
+  paths: SnapshotPaths,
   options: SnapshotOptions,
 ): string {
   const filename = `${options.target}-${options.kind}.json`;

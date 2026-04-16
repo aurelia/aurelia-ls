@@ -2,12 +2,12 @@ import { existsSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export interface SourceAnalysisPaths {
+export interface SnapshotPaths {
   toolRootPath: string;
   snapshotRootPath: string;
 }
 
-export interface SourceAnalysisTargetSelection {
+export interface SnapshotTargetSelection {
   target: string;
   repoPath?: string;
 }
@@ -18,7 +18,7 @@ function normalizePath(path: string): string {
   return resolve(path).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
 }
 
-export function deriveTargetFromRepoPath(repoPath: string): string {
+export function deriveSnapshotTargetFromRepoPath(repoPath: string): string {
   const repoName = basename(resolve(repoPath));
   const sanitized = repoName
     .toLowerCase()
@@ -27,22 +27,22 @@ export function deriveTargetFromRepoPath(repoPath: string): string {
   return sanitized || 'repo';
 }
 
-export function resolveSourceAnalysisTarget(
+export function resolveSnapshotTarget(
   options: {
     target?: string;
     repoPath?: string;
   } = {},
-): SourceAnalysisTargetSelection {
+): SnapshotTargetSelection {
   const repoPath = options.repoPath
     ? resolve(options.repoPath)
     : resolve(process.cwd());
-  const target = options.target ?? deriveTargetFromRepoPath(repoPath);
+  const target = options.target ?? deriveSnapshotTargetFromRepoPath(repoPath);
   return { target, repoPath };
 }
 
 export function createRefreshCommand(
   mode: RefreshMode,
-  selection: SourceAnalysisTargetSelection,
+  selection: SnapshotTargetSelection,
 ): string {
   const cwdPath = normalizePath(process.cwd());
   const parts = ['pnpm source-analysis', 'refresh', mode, '--target', selection.target];
@@ -72,13 +72,13 @@ function resolveToolRootPath(moduleUrl: string): string {
   }
 }
 
-export function createSourceAnalysisPaths(
+export function createSnapshotPaths(
   moduleUrl: string,
   env: NodeJS.ProcessEnv = process.env,
-): SourceAnalysisPaths {
+): SnapshotPaths {
   const toolRootPath = resolveToolRootPath(moduleUrl);
-  const snapshotRootPath = env.SOURCE_ANALYSIS_SNAPSHOT_ROOT
-    ? resolve(env.SOURCE_ANALYSIS_SNAPSHOT_ROOT)
+  const snapshotRootPath = env.SNAPSHOT_ROOT
+    ? resolve(env.SNAPSHOT_ROOT)
     : resolve(process.cwd(), '.source-analysis/snapshots');
   return {
     toolRootPath,

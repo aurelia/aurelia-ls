@@ -3,87 +3,87 @@ import { join, posix as pathPosix } from 'node:path';
 
 import * as ts from 'typescript';
 
-import type { LoadedCurrentSourceAnalysisSnapshots } from './current-snapshots.js';
+import type { LoadedCurrentSnapshotSet } from './current-snapshots.js';
 import type { PackageExportRecord, PackageExportsSummary } from './exports/schema.js';
-import type { SourceAnalysisTrustKind } from './outcome-algebra.js';
+import type { TrustKind } from './outcome-algebra.js';
 import type { TypeDecl } from './typerefs/schema.js';
 import {
   compareByPrecedence,
   compareStringsAscending,
-  DEFAULT_SOURCE_ANALYSIS_INQUIRY_ORDERING,
+  DEFAULT_INQUIRY_ORDERING,
 } from './inquiry-policy.js';
-import type { SourceAnalysisInquiryOrdering } from './inquiry-policy.js';
+import type { InquiryOrdering } from './inquiry-policy.js';
 
-export const SOURCE_ANALYSIS_PACKAGE_ROOT_KINDS = [
+export const PACKAGE_ROOT_KINDS = [
   'public-api',
   'manifest-bin',
   'exercise',
   'candidate-entry',
 ] as const;
 
-export const SOURCE_ANALYSIS_PACKAGE_ROUTE_KINDS = [
+export const PACKAGE_ROUTE_KINDS = [
   'dependency-import',
   'parse-import',
   'executable-handoff',
 ] as const;
 
-export const SOURCE_ANALYSIS_PACKAGE_ROUTE_CLASSES = [
+export const PACKAGE_ROUTE_CLASSES = [
   'production',
   'exercise',
   'candidate',
 ] as const;
 
-export type SourceAnalysisPackageRootKind =
-  typeof SOURCE_ANALYSIS_PACKAGE_ROOT_KINDS[number];
+export type PackageRootKind =
+  typeof PACKAGE_ROOT_KINDS[number];
 
-export type SourceAnalysisPackageRouteKind =
-  typeof SOURCE_ANALYSIS_PACKAGE_ROUTE_KINDS[number];
+export type PackageRouteKind =
+  typeof PACKAGE_ROUTE_KINDS[number];
 
-export type SourceAnalysisPackageRouteClass =
-  typeof SOURCE_ANALYSIS_PACKAGE_ROUTE_CLASSES[number];
+export type PackageRouteClass =
+  typeof PACKAGE_ROUTE_CLASSES[number];
 
-export interface SourceAnalysisPackageRoot {
+export interface PackageRoot {
   readonly id: string;
-  readonly kind: SourceAnalysisPackageRootKind;
+  readonly kind: PackageRootKind;
   readonly filePath: string;
-  readonly trust: SourceAnalysisTrustKind;
+  readonly trust: TrustKind;
   readonly summary: string;
   readonly detail?: string;
 }
 
-export interface SourceAnalysisPackageRouteEdge {
+export interface PackageRouteEdge {
   readonly id: string;
-  readonly kind: SourceAnalysisPackageRouteKind;
+  readonly kind: PackageRouteKind;
   readonly fromFilePath: string;
   readonly toFilePath: string;
-  readonly trust: SourceAnalysisTrustKind;
+  readonly trust: TrustKind;
   readonly summary: string;
   readonly detail?: string;
 }
 
-export interface SourceAnalysisPackageRouteStep {
-  readonly kind: SourceAnalysisPackageRouteKind;
+export interface PackageRouteStep {
+  readonly kind: PackageRouteKind;
   readonly fromFilePath: string;
   readonly toFilePath: string;
-  readonly trust: SourceAnalysisTrustKind;
+  readonly trust: TrustKind;
   readonly summary: string;
   readonly detail?: string;
 }
 
-export interface SourceAnalysisPackageRouteWitness {
+export interface PackageRouteWitness {
   readonly rootId: string;
-  readonly rootKind: SourceAnalysisPackageRootKind;
+  readonly rootKind: PackageRootKind;
   readonly rootFilePath: string;
-  readonly routeClass: SourceAnalysisPackageRouteClass;
+  readonly routeClass: PackageRouteClass;
   readonly filePath: string;
-  readonly trust: SourceAnalysisTrustKind;
+  readonly trust: TrustKind;
   readonly stepCount: number;
   readonly files: readonly string[];
-  readonly steps: readonly SourceAnalysisPackageRouteStep[];
+  readonly steps: readonly PackageRouteStep[];
   readonly summary: string;
 }
 
-export interface SourceAnalysisPackageFileReachability {
+export interface PackageFileReachability {
   readonly filePath: string;
   readonly inboundFiles: readonly string[];
   readonly outboundFiles: readonly string[];
@@ -98,35 +98,35 @@ export interface SourceAnalysisPackageFileReachability {
   readonly exerciseRootIds: readonly string[];
   readonly candidateRootIds: readonly string[];
   readonly publicSurface: boolean;
-  readonly routeWitnesses: readonly SourceAnalysisPackageRouteWitness[];
+  readonly routeWitnesses: readonly PackageRouteWitness[];
 }
 
-export interface SourceAnalysisPackageReachability {
+export interface PackageReachability {
   readonly pkg: PackageExportsSummary;
-  readonly files: readonly SourceAnalysisPackageFileReachability[];
-  readonly filesByPath: ReadonlyMap<string, SourceAnalysisPackageFileReachability>;
-  readonly roots: readonly SourceAnalysisPackageRoot[];
-  readonly rootsByFilePath: ReadonlyMap<string, readonly SourceAnalysisPackageRoot[]>;
-  readonly routeEdges: readonly SourceAnalysisPackageRouteEdge[];
-  readonly routeWitnessesByFilePath: ReadonlyMap<string, readonly SourceAnalysisPackageRouteWitness[]>;
+  readonly files: readonly PackageFileReachability[];
+  readonly filesByPath: ReadonlyMap<string, PackageFileReachability>;
+  readonly roots: readonly PackageRoot[];
+  readonly rootsByFilePath: ReadonlyMap<string, readonly PackageRoot[]>;
+  readonly routeEdges: readonly PackageRouteEdge[];
+  readonly routeWitnessesByFilePath: ReadonlyMap<string, readonly PackageRouteWitness[]>;
   readonly publicSurfaceFiles: readonly string[];
   readonly candidateEntryFiles: readonly string[];
   readonly exerciseFiles: readonly string[];
 }
 
-export interface SourceAnalysisPackageReachabilityOptions {
-  readonly ordering?: SourceAnalysisInquiryOrdering;
+export interface PackageReachabilityOptions {
+  readonly ordering?: InquiryOrdering;
 }
 
-export function createSourceAnalysisPackageReachability(
-  snapshots: LoadedCurrentSourceAnalysisSnapshots,
+export function createPackageReachability(
+  snapshots: LoadedCurrentSnapshotSet,
   pkg: PackageExportsSummary,
-  options?: SourceAnalysisPackageReachabilityOptions,
-): SourceAnalysisPackageReachability {
-  const ordering = options?.ordering ?? DEFAULT_SOURCE_ANALYSIS_INQUIRY_ORDERING;
+  options?: PackageReachabilityOptions,
+): PackageReachability {
+  const ordering = options?.ordering ?? DEFAULT_INQUIRY_ORDERING;
   const packagePrefix = pkg.package_dir.length > 0 ? `${pkg.package_dir}/` : '';
   const packageFiles = new Set<string>();
-  const routeEdges = new Map<string, SourceAnalysisPackageRouteEdge>();
+  const routeEdges = new Map<string, PackageRouteEdge>();
 
   for (const edge of snapshots.deps.edges) {
     const sourceInPackage = edge.source.startsWith(packagePrefix);
@@ -160,6 +160,11 @@ export function createSourceAnalysisPackageReachability(
   for (const filePath of exportRecordsByFile.keys()) {
     packageFiles.add(filePath);
   }
+  const manifestPublicApiRoots = resolveManifestPublicApiRoots(
+    snapshots.deps.root,
+    pkg,
+    packageFiles,
+  );
 
   packageFiles.add(pkg.analysis_entrypoint);
   const uncoveredPackageFiles = snapshots.deps.uncovered_files.filter((filePath) =>
@@ -187,7 +192,7 @@ export function createSourceAnalysisPackageReachability(
 
   const outboundByFile = new Map<string, Set<string>>();
   const inboundByFile = new Map<string, Set<string>>();
-  const outboundEdgesByFile = new Map<string, SourceAnalysisPackageRouteEdge[]>();
+  const outboundEdgesByFile = new Map<string, PackageRouteEdge[]>();
   for (const edge of routeEdges.values()) {
     addSetValue(outboundByFile, edge.fromFilePath, edge.toFilePath);
     addSetValue(inboundByFile, edge.toFilePath, edge.fromFilePath);
@@ -196,8 +201,12 @@ export function createSourceAnalysisPackageReachability(
     outboundEdgesByFile.set(edge.fromFilePath, existing);
   }
 
-  const publicSurfaceFiles = new Set<string>([pkg.analysis_entrypoint, ...exportRecordsByFile.keys()]);
-  const roots = new Map<string, SourceAnalysisPackageRoot>();
+  const publicSurfaceFiles = new Set<string>([
+    pkg.analysis_entrypoint,
+    ...exportRecordsByFile.keys(),
+    ...manifestPublicApiRoots.map((root) => root.filePath),
+  ]);
+  const roots = new Map<string, PackageRoot>();
 
   addRoot(
     roots,
@@ -209,6 +218,9 @@ export function createSourceAnalysisPackageReachability(
       pkg.package_name,
     ),
   );
+  for (const root of manifestPublicApiRoots) {
+    addRoot(roots, root);
+  }
 
   for (const root of resolveManifestBinRoots(snapshots.deps.root, pkg, packageFiles)) {
     addRoot(roots, root);
@@ -254,7 +266,7 @@ export function createSourceAnalysisPackageReachability(
     );
   }
 
-  const rootsByFilePath = new Map<string, SourceAnalysisPackageRoot[]>();
+  const rootsByFilePath = new Map<string, PackageRoot[]>();
   for (const root of roots.values()) {
     const existing = rootsByFilePath.get(root.filePath) ?? [];
     existing.push(root);
@@ -303,7 +315,7 @@ export function createSourceAnalysisPackageReachability(
         candidateRootIds: dedupeStrings(candidateRouteWitnesses.map((witness) => witness.rootId)),
         publicSurface: publicSurfaceFiles.has(filePath),
         routeWitnesses,
-      } satisfies SourceAnalysisPackageFileReachability;
+      } satisfies PackageFileReachability;
     });
 
   return {
@@ -341,10 +353,10 @@ export function createSourceAnalysisPackageReachability(
   };
 }
 
-export function getSourceAnalysisPackageRouteWitnesses(
-  reachability: SourceAnalysisPackageReachability,
+export function getPackageRouteWitnesses(
+  reachability: PackageReachability,
   filePath: string,
-): readonly SourceAnalysisPackageRouteWitness[] {
+): readonly PackageRouteWitness[] {
   return reachability.routeWitnessesByFilePath.get(filePath) ?? [];
 }
 
@@ -392,7 +404,7 @@ function resolveManifestBinRoots(
   repoRoot: string,
   pkg: PackageExportsSummary,
   packageFiles: ReadonlySet<string>,
-): readonly SourceAnalysisPackageRoot[] {
+): readonly PackageRoot[] {
   const packageJsonPath = join(repoRoot, pkg.package_dir, 'package.json');
   if (!existsSync(packageJsonPath)) {
     return [];
@@ -419,12 +431,43 @@ function resolveManifestBinRoots(
   }
 }
 
+function resolveManifestPublicApiRoots(
+  repoRoot: string,
+  pkg: PackageExportsSummary,
+  packageFiles: ReadonlySet<string>,
+): readonly PackageRoot[] {
+  const packageJsonPath = join(repoRoot, pkg.package_dir, 'package.json');
+  if (!existsSync(packageJsonPath)) {
+    return [];
+  }
+
+  try {
+    const manifest = JSON.parse(readFileSync(packageJsonPath, 'utf-8')) as {
+      readonly exports?: unknown;
+    };
+    const exportEntries = normalizeManifestExportEntries(manifest.exports);
+    return exportEntries.flatMap((entry) => {
+      const filePath = resolveManifestTargetToSourceFile(pkg.package_dir, entry.target, packageFiles);
+      if (!filePath) return [];
+      return [createRoot(
+        'public-api',
+        filePath,
+        'grounded',
+        'Package manifest exposes this file as a public import surface.',
+        `${entry.subpath} -> ${entry.target}`,
+      )];
+    });
+  } catch {
+    return [];
+  }
+}
+
 function discoverParseImportEdges(
   repoRoot: string,
   uncoveredPackageFiles: readonly string[],
   packageFiles: ReadonlySet<string>,
-): readonly SourceAnalysisPackageRouteEdge[] {
-  const edges: SourceAnalysisPackageRouteEdge[] = [];
+): readonly PackageRouteEdge[] {
+  const edges: PackageRouteEdge[] = [];
 
   for (const filePath of uncoveredPackageFiles) {
     const fileAbsPath = join(repoRoot, filePath);
@@ -468,8 +511,8 @@ function discoverExecutableHandoffEdges(
   repoRoot: string,
   packageDir: string,
   packageFiles: ReadonlySet<string>,
-): readonly SourceAnalysisPackageRouteEdge[] {
-  const edges: SourceAnalysisPackageRouteEdge[] = [];
+): readonly PackageRouteEdge[] {
+  const edges: PackageRouteEdge[] = [];
 
   for (const filePath of packageFiles) {
     const fileAbsPath = join(repoRoot, filePath);
@@ -553,6 +596,7 @@ function resolveRelativeModuleSpecifier(
     : pathPosix.normalize(pathPosix.join(sourceDir, specifier));
   const baseCandidates = dedupeStrings([
     normalized,
+    normalized.replace(/(^|\/)(out|dist|build)\//i, '$1src/'),
     normalized.replace(/\.[cm]?js$/i, '.ts'),
     normalized.replace(/\.[cm]?js$/i, '.tsx'),
     normalized.replace(/\.[cm]?js$/i, '.mts'),
@@ -560,6 +604,11 @@ function resolveRelativeModuleSpecifier(
   ]);
   const candidates = dedupeStrings(baseCandidates.flatMap((candidate) => [
     candidate,
+    candidate.replace(/\.d\.[cm]?ts$/i, '.ts'),
+    candidate.replace(/\.[cm]?js$/i, '.ts'),
+    candidate.replace(/\.[cm]?js$/i, '.tsx'),
+    candidate.replace(/\.[cm]?js$/i, '.mts'),
+    candidate.replace(/\.[cm]?js$/i, '.cts'),
     `${candidate}.ts`,
     `${candidate}.tsx`,
     `${candidate}.mts`,
@@ -605,6 +654,37 @@ function normalizeBinEntries(
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
+function normalizeManifestExportEntries(
+  value: unknown,
+): ReadonlyArray<{ readonly subpath: string; readonly target: string }> {
+  const entries: Array<{ readonly subpath: string; readonly target: string }> = [];
+
+  function visit(subpath: string, node: unknown): void {
+    if (typeof node === 'string') {
+      entries.push({ subpath, target: node });
+      return;
+    }
+    if (!node || typeof node !== 'object' || Array.isArray(node)) {
+      return;
+    }
+
+    for (const [key, child] of Object.entries(node)) {
+      if (subpath === '.' && key.startsWith('.')) {
+        visit(key, child);
+        continue;
+      }
+      visit(subpath, child);
+    }
+  }
+
+  visit('.', value);
+  return entries
+    .filter((entry) => entry.target.includes('/out/') || entry.target.startsWith('./out/'))
+    .sort((left, right) =>
+      left.subpath.localeCompare(right.subpath) || left.target.localeCompare(right.target),
+    );
+}
+
 function resolveManifestTargetToSourceFile(
   packageDir: string,
   target: string,
@@ -641,12 +721,12 @@ function normalizeRepoRelativePath(packageDir: string, pathValue: string): strin
 }
 
 function createRoot(
-  kind: SourceAnalysisPackageRootKind,
+  kind: PackageRootKind,
   filePath: string,
-  trust: SourceAnalysisTrustKind,
+  trust: TrustKind,
   summary: string,
   detail?: string,
-): SourceAnalysisPackageRoot {
+): PackageRoot {
   return {
     id: rootIdForFile(kind, filePath),
     kind,
@@ -658,13 +738,13 @@ function createRoot(
 }
 
 function createRouteEdge(
-  kind: SourceAnalysisPackageRouteKind,
+  kind: PackageRouteKind,
   fromFilePath: string,
   toFilePath: string,
-  trust: SourceAnalysisTrustKind,
+  trust: TrustKind,
   summary: string,
   detail?: string,
-): SourceAnalysisPackageRouteEdge {
+): PackageRouteEdge {
   return {
     id: `${kind}:${fromFilePath}->${toFilePath}`,
     kind,
@@ -677,8 +757,8 @@ function createRouteEdge(
 }
 
 function addRoot(
-  roots: Map<string, SourceAnalysisPackageRoot>,
-  root: SourceAnalysisPackageRoot,
+  roots: Map<string, PackageRoot>,
+  root: PackageRoot,
 ): void {
   if (!roots.has(root.id)) {
     roots.set(root.id, root);
@@ -686,8 +766,8 @@ function addRoot(
 }
 
 function addRouteEdge(
-  routeEdges: Map<string, SourceAnalysisPackageRouteEdge>,
-  edge: SourceAnalysisPackageRouteEdge,
+  routeEdges: Map<string, PackageRouteEdge>,
+  edge: PackageRouteEdge,
 ): void {
   if (!routeEdges.has(edge.id)) {
     routeEdges.set(edge.id, edge);
@@ -696,18 +776,18 @@ function addRouteEdge(
 
 function computeRouteWitnesses(
   packageFiles: ReadonlySet<string>,
-  outboundEdgesByFile: ReadonlyMap<string, readonly SourceAnalysisPackageRouteEdge[]>,
-  roots: Iterable<SourceAnalysisPackageRoot>,
-  ordering: SourceAnalysisInquiryOrdering,
-): ReadonlyMap<string, readonly SourceAnalysisPackageRouteWitness[]> {
-  const routeWitnessesByFilePath = new Map<string, SourceAnalysisPackageRouteWitness[]>();
+  outboundEdgesByFile: ReadonlyMap<string, readonly PackageRouteEdge[]>,
+  roots: Iterable<PackageRoot>,
+  ordering: InquiryOrdering,
+): ReadonlyMap<string, readonly PackageRouteWitness[]> {
+  const routeWitnessesByFilePath = new Map<string, PackageRouteWitness[]>();
   for (const filePath of packageFiles) {
     routeWitnessesByFilePath.set(filePath, []);
   }
 
   for (const root of roots) {
     const bestByFile = new Map<string, RouteScore>();
-    const previousEdgeByFile = new Map<string, SourceAnalysisPackageRouteEdge | null>();
+    const previousEdgeByFile = new Map<string, PackageRouteEdge | null>();
     const queue: RouteQueueEntry[] = [{
       filePath: root.filePath,
       score: routeScoreForTrust(root.trust),
@@ -756,11 +836,11 @@ function computeRouteWitnesses(
 }
 
 function createRouteWitness(
-  root: SourceAnalysisPackageRoot,
+  root: PackageRoot,
   filePath: string,
   score: RouteScore,
-  previousEdgeByFile: ReadonlyMap<string, SourceAnalysisPackageRouteEdge | null>,
-): SourceAnalysisPackageRouteWitness {
+  previousEdgeByFile: ReadonlyMap<string, PackageRouteEdge | null>,
+): PackageRouteWitness {
   const steps = reconstructRouteSteps(root.filePath, filePath, previousEdgeByFile);
   const files = [root.filePath, ...steps.map((step) => step.toFilePath)];
   const routeClass = routeClassForRootKind(root.kind);
@@ -783,13 +863,13 @@ function createRouteWitness(
 function reconstructRouteSteps(
   rootFilePath: string,
   filePath: string,
-  previousEdgeByFile: ReadonlyMap<string, SourceAnalysisPackageRouteEdge | null>,
-): readonly SourceAnalysisPackageRouteStep[] {
+  previousEdgeByFile: ReadonlyMap<string, PackageRouteEdge | null>,
+): readonly PackageRouteStep[] {
   if (filePath === rootFilePath) {
     return [];
   }
 
-  const reversed: SourceAnalysisPackageRouteStep[] = [];
+  const reversed: PackageRouteStep[] = [];
   let currentFilePath = filePath;
   while (currentFilePath !== rootFilePath) {
     const previousEdge = previousEdgeByFile.get(currentFilePath);
@@ -811,10 +891,10 @@ function reconstructRouteSteps(
 }
 
 function summarizeWitness(
-  root: SourceAnalysisPackageRoot,
+  root: PackageRoot,
   filePath: string,
-  steps: readonly SourceAnalysisPackageRouteStep[],
-  trust: SourceAnalysisTrustKind,
+  steps: readonly PackageRouteStep[],
+  trust: TrustKind,
 ): string {
   if (steps.length === 0) {
     return `${basename(filePath)} is itself a ${root.kind} route root (${trust}).`;
@@ -849,11 +929,11 @@ function isExerciseFile(packageDir: string, filePath: string): boolean {
     || /\.spec\.[cm]?[jt]sx?$/i.test(filePath);
 }
 
-function rootIdForFile(kind: SourceAnalysisPackageRootKind, filePath: string): string {
+function rootIdForFile(kind: PackageRootKind, filePath: string): string {
   return `${kind}:${filePath}`;
 }
 
-function routeClassForRootKind(kind: SourceAnalysisPackageRootKind): SourceAnalysisPackageRouteClass {
+function routeClassForRootKind(kind: PackageRootKind): PackageRouteClass {
   switch (kind) {
     case 'public-api':
     case 'manifest-bin':
@@ -872,9 +952,9 @@ function dedupeStrings(values: readonly string[]): readonly string[] {
 }
 
 function compareRouteWitnesses(
-  left: SourceAnalysisPackageRouteWitness,
-  right: SourceAnalysisPackageRouteWitness,
-  ordering: SourceAnalysisInquiryOrdering,
+  left: PackageRouteWitness,
+  right: PackageRouteWitness,
+  ordering: InquiryOrdering,
 ): number {
   return compareByPrecedence(ordering.routeClass, left.routeClass, right.routeClass)
     || compareByPrecedence(ordering.trust, left.trust, right.trust)
@@ -893,14 +973,14 @@ interface RouteQueueEntry {
   readonly score: RouteScore;
 }
 
-function routeScoreForTrust(trust: SourceAnalysisTrustKind): RouteScore {
+function routeScoreForTrust(trust: TrustKind): RouteScore {
   return {
     penalty: trust === 'grounded' ? 0 : 1,
     steps: 0,
   };
 }
 
-function addRouteScore(score: RouteScore, trust: SourceAnalysisTrustKind): RouteScore {
+function addRouteScore(score: RouteScore, trust: TrustKind): RouteScore {
   return {
     penalty: score.penalty + (trust === 'grounded' ? 0 : 1),
     steps: score.steps + 1,
@@ -917,7 +997,7 @@ function compareRouteQueueEntries(left: RouteQueueEntry, right: RouteQueueEntry)
     || left.filePath.localeCompare(right.filePath);
 }
 
-function trustForPenalty(penalty: number): SourceAnalysisTrustKind {
+function trustForPenalty(penalty: number): TrustKind {
   return penalty === 0 ? 'grounded' : 'qualified';
 }
 

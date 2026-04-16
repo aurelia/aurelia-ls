@@ -1,23 +1,23 @@
-import { createSourceAnalysisPaths, deriveTargetFromRepoPath } from './config.js';
+import { createSnapshotPaths, deriveSnapshotTargetFromRepoPath } from './snapshot-config.js';
 import { loadJsonSnapshot, resolveCurrentSnapshotPath, type SnapshotKind } from './snapshots.js';
 import type { DepsOutput } from './deps/schema.js';
 import type { ExportsOutput } from './exports/schema.js';
 import type { TypeRefsOutput } from './typerefs/schema.js';
 
-const PATHS = createSourceAnalysisPaths(import.meta.url);
+const PATHS = createSnapshotPaths(import.meta.url);
 
 function defaultTarget(): string {
-  return deriveTargetFromRepoPath(process.cwd());
+  return deriveSnapshotTargetFromRepoPath(process.cwd());
 }
 
-export interface CurrentSourceAnalysisSnapshots {
+export interface CurrentSnapshotSet {
   deps: DepsOutput | null;
   typeRefs: TypeRefsOutput | null;
   exports: ExportsOutput | null;
   warnings: string[];
 }
 
-export interface LoadedCurrentSourceAnalysisSnapshots {
+export interface LoadedCurrentSnapshotSet {
   deps: DepsOutput;
   typeRefs: TypeRefsOutput;
   exports: ExportsOutput;
@@ -49,10 +49,10 @@ function tryLoadSnapshot<T>(
   }
 }
 
-export function loadCurrentSourceAnalysisSnapshots(
+export function loadCurrentSnapshots(
   target = defaultTarget(),
   waitMs = 0,
-): LoadedCurrentSourceAnalysisSnapshots {
+): LoadedCurrentSnapshotSet {
   const deps = tryLoadSnapshot<DepsOutput>(target, 'deps', waitMs);
   const typeRefs = tryLoadSnapshot<TypeRefsOutput>(target, 'typerefs', waitMs);
   const exports = tryLoadSnapshot<ExportsOutput>(target, 'exports', waitMs);
@@ -70,10 +70,10 @@ export function loadCurrentSourceAnalysisSnapshots(
   };
 }
 
-export function tryLoadCurrentSourceAnalysisSnapshots(
+export function tryLoadCurrentSnapshots(
   target = defaultTarget(),
   waitMs = 0,
-): CurrentSourceAnalysisSnapshots {
+): CurrentSnapshotSet {
   const deps = tryLoadSnapshot<DepsOutput>(target, 'deps', waitMs);
   const typeRefs = tryLoadSnapshot<TypeRefsOutput>(target, 'typerefs', waitMs);
   const exports = tryLoadSnapshot<ExportsOutput>(target, 'exports', waitMs);

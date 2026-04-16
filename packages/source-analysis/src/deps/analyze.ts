@@ -34,9 +34,9 @@ import * as ts from "typescript";
 import { resolve, relative, dirname } from "node:path";
 import { realpathSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import type { SourceAnalysisAnalysisOptions } from '../analysis-options.js';
+import type { ProgramReuseOptions } from '../program-reuse-options.js';
 import type { DepsOutput } from './schema.js';
-import { SourceAnalysisSession } from '../session.js';
+import { RepoSession } from '../repo-session.js';
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -109,7 +109,7 @@ export interface DepsAnalysisResult {
   warnings: string[];
 }
 
-let session: SourceAnalysisSession | null = null;
+let session: RepoSession | null = null;
 let repoPath = resolve(process.cwd());
 let analyzed = new Set<string>();
 let allEdges: InternalEdge[] = [];
@@ -129,7 +129,7 @@ function toRepoRelative(absPath: string): string {
   return toForwardSlash(relative(repoPath, absPath));
 }
 
-function requireSession(): SourceAnalysisSession {
+function requireSession(): RepoSession {
   if (!session) {
     throw new Error('source-analysis deps session is not initialized');
   }
@@ -650,8 +650,8 @@ function gitBlobHash(filePath: string): string {
 }
 
 export function generateDepsAnalysis(
-  nextSession: SourceAnalysisSession,
-  options: SourceAnalysisAnalysisOptions = {},
+  nextSession: RepoSession,
+  options: ProgramReuseOptions = {},
 ): DepsAnalysisResult {
   session = nextSession;
   repoPath = nextSession.repoPath;
@@ -757,7 +757,7 @@ export function generateDepsAnalysis(
 
   const validationErrors: string[] = [];
   const isProductRepo = [...analyzed].some((filePath) => filePath.startsWith("packages/compiler/src/"));
-  const strictValidation = process.env.SOURCE_ANALYSIS_STRICT_VALIDATION === '1' || isProductRepo;
+  const strictValidation = process.env.STRICT_VALIDATION === '1' || isProductRepo;
 
   if (isProductRepo) {
     const compilerFiles = [...analyzed].filter((filePath) => filePath.startsWith("packages/compiler/src/"));

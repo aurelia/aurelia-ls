@@ -1,63 +1,63 @@
-import type { SourceAnalysisAnswerCard, SourceAnalysisAnswerRef } from './answer-card.js';
-import { createStructuredSourceAnalysisAnswerCard } from './answer-card.js';
-import { createSourceAnalysisAnswerDocument } from './answer-document.js';
-import { createSourceAnalysisAnswerEnvelope } from './answer-envelope.js';
-import type { SourceAnalysisCapabilityCatalog } from './capability-catalog.js';
-import { createDefaultSourceAnalysisCapabilityCatalog } from './capability-catalog.js';
+import type { AnswerCard, AnswerRef } from './answer-card.js';
+import { createStructuredAnswerCard } from './answer-card.js';
+import { createAnswerDocument } from './answer-document.js';
+import { createAnswerEnvelope } from './answer-envelope.js';
+import type { CapabilityCatalog } from './capability-catalog.js';
+import { createDefaultCapabilityCatalog } from './capability-catalog.js';
 import type {
-  DiscoverSourceAnalysisInquiriesInput,
-  SourceAnalysisInquiryCatalogDiagnostics,
-  SourceAnalysisInquiryFamilyDescriptor,
-  SourceAnalysisInquiryFamilyId,
-  SourceAnalysisInquiryFamilyView,
-  SourceAnalysisInquiryMatch,
-  SourceAnalysisInquiryMatchReason,
-  SourceAnalysisInquiryCatalog,
+  DiscoverInquiriesInput,
+  InquiryCatalogDiagnostics,
+  InquiryFamilyDescriptor,
+  InquiryFamilyId,
+  InquiryFamilyView,
+  InquiryMatch,
+  InquiryMatchReason,
+  InquiryCatalog,
 } from './inquiry-catalog.js';
-import { createDefaultSourceAnalysisInquiryCatalog } from './inquiry-catalog.js';
-import type { SourceAnalysisConsumerKind } from './inquiry-policy.js';
-import { resolveSourceAnalysisInquiryPolicy } from './inquiry-policy.js';
+import { createDefaultInquiryCatalog } from './inquiry-catalog.js';
+import type { ConsumerKind } from './inquiry-policy.js';
+import { resolveInquiryPolicy } from './inquiry-policy.js';
 import type {
-  SourceAnalysisIngressFocusHints,
-  SourceAnalysisIngressHintDetail,
+  IngressFocusHints,
+  IngressHintDetail,
 } from './ingress-hints.js';
 import {
   deriveFocusHints,
   extractRepoPath,
 } from './ingress-hints.js';
 import {
-  createSourceAnalysisNormalizedText,
+  createNormalizedText,
   tokenMatches,
 } from './ingress-normalization.js';
 import type {
-  SourceAnalysisClosureBasis,
-  SourceAnalysisContinuation,
-  SourceAnalysisTrustProfile,
+  ClosureBasis,
+  Continuation,
+  TrustProfile,
 } from './outcome-algebra.js';
 import type {
-  SourceAnalysisAnswer,
-  SourceAnalysisFocusKind,
-  SourceAnalysisFocusRef,
-  SourceAnalysisQuery,
-  SourceAnalysisReadMode,
-  SourceAnalysisWorldFrame,
-} from './query-model.js';
+  InquiryAnswer,
+  FocusKind,
+  FocusRef,
+  Inquiry,
+  ReadMode,
+  WorldFrame,
+} from './inquiry-model.js';
 
-export const SOURCE_ANALYSIS_INQUIRY_PLAN_STATUSES = [
+export const INQUIRY_PLAN_STATUSES = [
   'ready',
   'needs-input',
   'ambiguous',
   'no-match',
 ] as const;
 
-export const SOURCE_ANALYSIS_INQUIRY_ASK_STATUSES = [
+export const INQUIRY_ASK_STATUSES = [
   'answered',
   'planned',
   'ambiguous',
   'no-match',
 ] as const;
 
-export const SOURCE_ANALYSIS_INQUIRY_PLAN_REASON_KINDS = [
+export const INQUIRY_PLAN_REASON_KINDS = [
   'match',
   'input',
   'focus-inference',
@@ -67,43 +67,43 @@ export const SOURCE_ANALYSIS_INQUIRY_PLAN_REASON_KINDS = [
   'repair',
 ] as const;
 
-export const SOURCE_ANALYSIS_INQUIRY_STEP_PHASES = [
+export const INQUIRY_STEP_PHASES = [
   'prepare',
   'query',
   'guidance',
   'maintenance',
 ] as const;
 
-export type SourceAnalysisInquiryPlanStatus =
-  typeof SOURCE_ANALYSIS_INQUIRY_PLAN_STATUSES[number];
+export type InquiryPlanStatus =
+  typeof INQUIRY_PLAN_STATUSES[number];
 
-export type SourceAnalysisInquiryAskStatus =
-  typeof SOURCE_ANALYSIS_INQUIRY_ASK_STATUSES[number];
+export type InquiryAskStatus =
+  typeof INQUIRY_ASK_STATUSES[number];
 
-export type SourceAnalysisInquiryPlanReasonKind =
-  typeof SOURCE_ANALYSIS_INQUIRY_PLAN_REASON_KINDS[number];
+export type InquiryPlanReasonKind =
+  typeof INQUIRY_PLAN_REASON_KINDS[number];
 
-export type SourceAnalysisInquiryStepPhase =
-  typeof SOURCE_ANALYSIS_INQUIRY_STEP_PHASES[number];
+export type InquiryStepPhase =
+  typeof INQUIRY_STEP_PHASES[number];
 
-export type SourceAnalysisInquiryRef =
-  SourceAnalysisAnswerRef & { readonly kind: 'inquiry' | 'capability' | 'repo' };
+export type InquiryRef =
+  AnswerRef & { readonly kind: 'inquiry' | 'capability' | 'repo' };
 
-export interface SourceAnalysisInquiryPlanReason {
-  readonly kind: SourceAnalysisInquiryPlanReasonKind;
+export interface InquiryPlanReason {
+  readonly kind: InquiryPlanReasonKind;
   readonly detail: string;
 }
 
-export interface SourceAnalysisInquiryPlanStep {
+export interface InquiryPlanStep {
   readonly label: string;
   readonly summary: string;
-  readonly phase: SourceAnalysisInquiryStepPhase;
+  readonly phase: InquiryStepPhase;
   readonly command: string;
   readonly args: Record<string, unknown>;
   readonly required: boolean;
 }
 
-export interface SourceAnalysisInquiryExecutionSummary {
+export interface InquiryExecutionSummary {
   readonly status: 'executed' | 'skipped' | 'failed';
   readonly command?: string;
   readonly sessionId?: string;
@@ -115,102 +115,102 @@ export interface SourceAnalysisInquiryExecutionSummary {
   readonly lines: readonly string[];
 }
 
-export interface SourceAnalysisResolvedInquiryPlan {
-  readonly status: SourceAnalysisInquiryPlanStatus;
-  readonly inquiry?: SourceAnalysisInquiryFamilyView;
-  readonly steps: readonly SourceAnalysisInquiryPlanStep[];
-  readonly primaryStep?: SourceAnalysisInquiryPlanStep;
-  readonly alternatives: readonly SourceAnalysisInquiryFamilyView[];
-  readonly reasons: readonly SourceAnalysisInquiryPlanReason[];
+export interface ResolvedInquiryPlan {
+  readonly status: InquiryPlanStatus;
+  readonly inquiry?: InquiryFamilyView;
+  readonly steps: readonly InquiryPlanStep[];
+  readonly primaryStep?: InquiryPlanStep;
+  readonly alternatives: readonly InquiryFamilyView[];
+  readonly reasons: readonly InquiryPlanReason[];
   readonly missingInputs: readonly string[];
 }
 
-export interface SourceAnalysisInquiryDiscoveryOptions extends DiscoverSourceAnalysisInquiriesInput {
-  readonly readMode?: SourceAnalysisReadMode;
-  readonly consumer?: SourceAnalysisConsumerKind;
-  readonly worldFrame?: SourceAnalysisWorldFrame;
+export interface InquiryDiscoveryOptions extends DiscoverInquiriesInput {
+  readonly readMode?: ReadMode;
+  readonly consumer?: ConsumerKind;
+  readonly worldFrame?: WorldFrame;
 }
 
-export interface SourceAnalysisInquiryPlanOptions {
+export interface InquiryPlanOptions {
   readonly question: string;
   readonly sessionId?: string;
   readonly repoPath?: string;
   readonly target?: string;
-  readonly focusKind?: SourceAnalysisFocusKind;
+  readonly focusKind?: FocusKind;
   readonly focusValue?: string;
-  readonly familyId?: SourceAnalysisInquiryFamilyId;
-  readonly readMode?: SourceAnalysisReadMode;
-  readonly consumer?: SourceAnalysisConsumerKind;
-  readonly worldFrame?: SourceAnalysisWorldFrame;
+  readonly familyId?: InquiryFamilyId;
+  readonly readMode?: ReadMode;
+  readonly consumer?: ConsumerKind;
+  readonly worldFrame?: WorldFrame;
 }
 
-export interface SourceAnalysisInquiryAskOptions extends SourceAnalysisInquiryPlanOptions {
-  readonly plan: SourceAnalysisResolvedInquiryPlan;
-  readonly execution?: SourceAnalysisInquiryExecutionSummary;
+export interface InquiryAskOptions extends InquiryPlanOptions {
+  readonly plan: ResolvedInquiryPlan;
+  readonly execution?: InquiryExecutionSummary;
 }
 
-export interface SourceAnalysisInquiryDiscoveryValue
-  extends SourceAnalysisAnswerCard<SourceAnalysisInquiryRef> {
-  readonly inquiries: readonly SourceAnalysisInquiryFamilyView[];
-  readonly matches: readonly SourceAnalysisInquiryMatch[];
-  readonly diagnostics: SourceAnalysisInquiryCatalogDiagnostics;
+export interface InquiryDiscoveryValue
+  extends AnswerCard<InquiryRef> {
+  readonly inquiries: readonly InquiryFamilyView[];
+  readonly matches: readonly InquiryMatch[];
+  readonly diagnostics: InquiryCatalogDiagnostics;
 }
 
-export interface SourceAnalysisInquiryPlanValue
-  extends SourceAnalysisAnswerCard<SourceAnalysisInquiryRef> {
-  readonly status: SourceAnalysisInquiryPlanStatus;
-  readonly inquiry?: SourceAnalysisInquiryFamilyView;
-  readonly steps: readonly SourceAnalysisInquiryPlanStep[];
-  readonly primaryStep?: SourceAnalysisInquiryPlanStep;
-  readonly alternatives: readonly SourceAnalysisInquiryFamilyView[];
-  readonly reasons: readonly SourceAnalysisInquiryPlanReason[];
+export interface InquiryPlanValue
+  extends AnswerCard<InquiryRef> {
+  readonly status: InquiryPlanStatus;
+  readonly inquiry?: InquiryFamilyView;
+  readonly steps: readonly InquiryPlanStep[];
+  readonly primaryStep?: InquiryPlanStep;
+  readonly alternatives: readonly InquiryFamilyView[];
+  readonly reasons: readonly InquiryPlanReason[];
   readonly missingInputs: readonly string[];
 }
 
-export interface SourceAnalysisInquiryAskValue
-  extends SourceAnalysisAnswerCard<SourceAnalysisInquiryRef> {
-  readonly status: SourceAnalysisInquiryAskStatus;
-  readonly inquiry?: SourceAnalysisInquiryFamilyView;
-  readonly steps: readonly SourceAnalysisInquiryPlanStep[];
-  readonly primaryStep?: SourceAnalysisInquiryPlanStep;
-  readonly alternatives: readonly SourceAnalysisInquiryFamilyView[];
-  readonly reasons: readonly SourceAnalysisInquiryPlanReason[];
+export interface InquiryAskValue
+  extends AnswerCard<InquiryRef> {
+  readonly status: InquiryAskStatus;
+  readonly inquiry?: InquiryFamilyView;
+  readonly steps: readonly InquiryPlanStep[];
+  readonly primaryStep?: InquiryPlanStep;
+  readonly alternatives: readonly InquiryFamilyView[];
+  readonly reasons: readonly InquiryPlanReason[];
   readonly missingInputs: readonly string[];
-  readonly execution?: SourceAnalysisInquiryExecutionSummary;
+  readonly execution?: InquiryExecutionSummary;
 }
 
 interface BuiltInquirySteps {
-  readonly steps: readonly SourceAnalysisInquiryPlanStep[];
-  readonly primaryStep?: SourceAnalysisInquiryPlanStep;
+  readonly steps: readonly InquiryPlanStep[];
+  readonly primaryStep?: InquiryPlanStep;
   readonly missingInputs: readonly string[];
-  readonly reasons: readonly SourceAnalysisInquiryPlanReason[];
+  readonly reasons: readonly InquiryPlanReason[];
 }
 
-export class SourceAnalysisInquiryIngress {
-  readonly #inquiries: SourceAnalysisInquiryCatalog;
-  readonly #capabilities: SourceAnalysisCapabilityCatalog;
+export class InquiryIngress {
+  readonly #inquiries: InquiryCatalog;
+  readonly #capabilities: CapabilityCatalog;
 
   constructor(
-    inquiries = createDefaultSourceAnalysisInquiryCatalog(),
-    capabilities = createDefaultSourceAnalysisCapabilityCatalog(),
+    inquiries = createDefaultInquiryCatalog(),
+    capabilities = createDefaultCapabilityCatalog(),
   ) {
     this.#inquiries = inquiries;
     this.#capabilities = capabilities;
   }
 
-  get inquiries(): SourceAnalysisInquiryCatalog {
+  get inquiries(): InquiryCatalog {
     return this.#inquiries;
   }
 
-  get capabilities(): SourceAnalysisCapabilityCatalog {
+  get capabilities(): CapabilityCatalog {
     return this.#capabilities;
   }
 
-  diagnose(): SourceAnalysisInquiryCatalogDiagnostics {
+  diagnose(): InquiryCatalogDiagnostics {
     return this.#inquiries.diagnose(this.#capabilities);
   }
 
-  plan(options: SourceAnalysisInquiryPlanOptions): SourceAnalysisResolvedInquiryPlan {
+  plan(options: InquiryPlanOptions): ResolvedInquiryPlan {
     const hints = deriveFocusHints(options.question, options.focusKind, options.focusValue);
     const matches = this.#inquiries.discover({
       question: options.question,
@@ -277,8 +277,8 @@ export class SourceAnalysisInquiryIngress {
   }
 
   createDiscoveryAnswer(
-    options: SourceAnalysisInquiryDiscoveryOptions = {},
-  ): SourceAnalysisAnswer<SourceAnalysisInquiryDiscoveryValue> {
+    options: InquiryDiscoveryOptions = {},
+  ): InquiryAnswer<InquiryDiscoveryValue> {
     const matches = this.#inquiries.discover({
       question: options.question,
       focusKind: options.focusKind,
@@ -292,14 +292,14 @@ export class SourceAnalysisInquiryIngress {
     const diagnostics = this.diagnose();
     const readMode = options.readMode ?? 'summary-card';
     const worldFrame = options.worldFrame ?? defaultWorldFrame();
-    const query: SourceAnalysisQuery = {
+    const query: Inquiry = {
       inquiryEpisode: 'orient-and-localize',
       focusRef: inquiryFocusRef('source-analysis-inquiries'),
       questionRoute: 'search',
       readMode,
       worldFrame,
     };
-    const policy = resolveSourceAnalysisInquiryPolicy(query, {
+    const policy = resolveInquiryPolicy(query, {
       focusKind: 'inquiry',
       inquiryEpisode: 'orient-and-localize',
       readMode,
@@ -308,7 +308,7 @@ export class SourceAnalysisInquiryIngress {
     const relatedRefs = inquiries.map((inquiry) => inquiryRef(inquiry.id, inquiry.label, inquiry.summary));
     const topInquiry = inquiries[0];
     const topMatch = matches[0];
-    const document = createSourceAnalysisAnswerDocument<SourceAnalysisInquiryRef>([
+    const document = createAnswerDocument<InquiryRef>([
       {
         kind: 'paragraph',
         importance: 'primary',
@@ -351,7 +351,7 @@ export class SourceAnalysisInquiryIngress {
         refs: relatedRefs,
       },
     ]);
-    const value = createStructuredSourceAnalysisAnswerCard({
+    const value = createStructuredAnswerCard({
       title: 'Source-analysis inquiry catalog',
       primaryRef: inquiryRef(topInquiry?.id ?? 'capability-guidance', topInquiry?.label ?? 'Capability guidance'),
       relatedRefs,
@@ -363,7 +363,7 @@ export class SourceAnalysisInquiryIngress {
         diagnostics,
       },
     });
-    return createSourceAnalysisAnswerEnvelope({
+    return createAnswerEnvelope({
       query,
       focusRef: query.focusRef,
       inquiryEpisode: 'orient-and-localize',
@@ -392,19 +392,19 @@ export class SourceAnalysisInquiryIngress {
   }
 
   createPlanAnswer(
-    options: SourceAnalysisInquiryPlanOptions,
-  ): SourceAnalysisAnswer<SourceAnalysisInquiryPlanValue> {
+    options: InquiryPlanOptions,
+  ): InquiryAnswer<InquiryPlanValue> {
     const plan = this.plan(options);
     const readMode = options.readMode ?? 'focus-card';
     const worldFrame = options.worldFrame ?? defaultWorldFrame(options.repoPath, options.target);
-    const query: SourceAnalysisQuery = {
+    const query: Inquiry = {
       inquiryEpisode: 'bounded-closure-explanation',
       focusRef: inquiryFocusRef('source-analysis-inquiry-plan'),
       questionRoute: 'route',
       readMode,
       worldFrame,
     };
-    const policy = resolveSourceAnalysisInquiryPolicy(query, {
+    const policy = resolveInquiryPolicy(query, {
       focusKind: 'inquiry',
       inquiryEpisode: 'bounded-closure-explanation',
       readMode,
@@ -415,7 +415,7 @@ export class SourceAnalysisInquiryIngress {
       ...plan.alternatives.map((inquiry) => inquiryRef(inquiry.id, inquiry.label, inquiry.summary)),
       ...plan.steps.map((step) => capabilityRef(step.command, step.label, step.summary)),
     ];
-    const document = createSourceAnalysisAnswerDocument<SourceAnalysisInquiryRef>([
+    const document = createAnswerDocument<InquiryRef>([
       {
         kind: 'paragraph',
         importance: 'primary',
@@ -448,7 +448,7 @@ export class SourceAnalysisInquiryIngress {
         refs: dedupeRefs(relatedRefs),
       },
     ]);
-    const value = createStructuredSourceAnalysisAnswerCard({
+    const value = createStructuredAnswerCard({
       title: 'Source-analysis inquiry plan',
       primaryRef: plan.inquiry
         ? inquiryRef(plan.inquiry.id, plan.inquiry.label, plan.inquiry.summary)
@@ -458,7 +458,7 @@ export class SourceAnalysisInquiryIngress {
       policy,
       extra: plan,
     });
-    return createSourceAnalysisAnswerEnvelope({
+    return createAnswerEnvelope({
       query,
       focusRef: query.focusRef,
       inquiryEpisode: 'bounded-closure-explanation',
@@ -482,18 +482,18 @@ export class SourceAnalysisInquiryIngress {
   }
 
   createAskAnswer(
-    options: SourceAnalysisInquiryAskOptions,
-  ): SourceAnalysisAnswer<SourceAnalysisInquiryAskValue> {
+    options: InquiryAskOptions,
+  ): InquiryAnswer<InquiryAskValue> {
     const readMode = options.readMode ?? 'focus-card';
     const worldFrame = options.worldFrame ?? defaultWorldFrame(options.repoPath, options.target);
-    const query: SourceAnalysisQuery = {
+    const query: Inquiry = {
       inquiryEpisode: 'bounded-closure-explanation',
       focusRef: inquiryFocusRef('source-analysis-ask-question'),
       questionRoute: 'route',
       readMode,
       worldFrame,
     };
-    const policy = resolveSourceAnalysisInquiryPolicy(query, {
+    const policy = resolveInquiryPolicy(query, {
       focusKind: 'inquiry',
       inquiryEpisode: 'bounded-closure-explanation',
       readMode,
@@ -506,7 +506,7 @@ export class SourceAnalysisInquiryIngress {
       ...plan.steps.map((step) => capabilityRef(step.command, step.label, step.summary)),
     ];
     const askStatus = resolveAskStatus(plan, options.execution);
-    const document = createSourceAnalysisAnswerDocument<SourceAnalysisInquiryRef>([
+    const document = createAnswerDocument<InquiryRef>([
       {
         kind: 'paragraph',
         importance: 'primary',
@@ -544,7 +544,7 @@ export class SourceAnalysisInquiryIngress {
         refs: dedupeRefs(relatedRefs),
       },
     ]);
-    const value = createStructuredSourceAnalysisAnswerCard({
+    const value = createStructuredAnswerCard({
       title: 'Source-analysis inquiry answer',
       primaryRef: plan.inquiry
         ? inquiryRef(plan.inquiry.id, plan.inquiry.label, plan.inquiry.summary)
@@ -563,7 +563,7 @@ export class SourceAnalysisInquiryIngress {
         ...(options.execution ? { execution: options.execution } : {}),
       },
     });
-    return createSourceAnalysisAnswerEnvelope({
+    return createAnswerEnvelope({
       query,
       focusRef: query.focusRef,
       inquiryEpisode: 'bounded-closure-explanation',
@@ -597,17 +597,17 @@ export class SourceAnalysisInquiryIngress {
   }
 }
 
-export function createSourceAnalysisInquiryIngress(
-  inquiries?: SourceAnalysisInquiryCatalog,
-  capabilities?: SourceAnalysisCapabilityCatalog,
-): SourceAnalysisInquiryIngress {
-  return new SourceAnalysisInquiryIngress(inquiries, capabilities);
+export function createInquiryIngress(
+  inquiries?: InquiryCatalog,
+  capabilities?: CapabilityCatalog,
+): InquiryIngress {
+  return new InquiryIngress(inquiries, capabilities);
 }
 
 function buildInquirySteps(
-  descriptor: SourceAnalysisInquiryFamilyDescriptor,
-  options: SourceAnalysisInquiryPlanOptions,
-  hints: SourceAnalysisIngressFocusHints,
+  descriptor: InquiryFamilyDescriptor,
+  options: InquiryPlanOptions,
+  hints: IngressFocusHints,
 ): BuiltInquirySteps {
   switch (descriptor.id) {
     case 'capability-guidance':
@@ -633,10 +633,10 @@ function buildInquirySteps(
 }
 
 function buildCapabilityGuidanceSteps(
-  options: SourceAnalysisInquiryPlanOptions,
+  options: InquiryPlanOptions,
 ): BuiltInquirySteps {
   const command = chooseCapabilityGuidanceCommand(options.question);
-  const step: SourceAnalysisInquiryPlanStep = {
+  const step: InquiryPlanStep = {
     label: command === 'repair.command' ? 'Repair a command shape' : command === 'plan.question' ? 'Plan a command shape' : 'Describe capabilities',
     summary: command === 'repair.command'
       ? 'Route a wrong or incomplete command attempt toward the declared kernel surface.'
@@ -660,18 +660,18 @@ function buildCapabilityGuidanceSteps(
 }
 
 function buildWorkspaceOrientationSteps(
-  options: SourceAnalysisInquiryPlanOptions,
-  hints: SourceAnalysisIngressFocusHints,
+  options: InquiryPlanOptions,
+  hints: IngressFocusHints,
 ): BuiltInquirySteps {
-  const reasons: SourceAnalysisInquiryPlanReason[] = [];
+  const reasons: InquiryPlanReason[] = [];
   const missingInputs: string[] = [];
-  const steps: SourceAnalysisInquiryPlanStep[] = [];
+  const steps: InquiryPlanStep[] = [];
   const sessionStep = maybeCreateSessionStep(options, reasons, missingInputs);
   if (sessionStep) {
     steps.push(sessionStep);
   }
 
-  let queryStep: SourceAnalysisInquiryPlanStep;
+  let queryStep: InquiryPlanStep;
   if (hints.focusKind && (hints.focusKind === 'package' || hints.focusKind === 'file' || hints.focusKind === 'type' || hints.focusKind === 'export') && hints.focusValue) {
     queryStep = {
       label: 'Navigate the focused target',
@@ -745,12 +745,12 @@ function buildWorkspaceOrientationSteps(
 }
 
 function buildPackageAuditSteps(
-  options: SourceAnalysisInquiryPlanOptions,
-  hints: SourceAnalysisIngressFocusHints,
+  options: InquiryPlanOptions,
+  hints: IngressFocusHints,
 ): BuiltInquirySteps {
-  const reasons: SourceAnalysisInquiryPlanReason[] = [];
+  const reasons: InquiryPlanReason[] = [];
   const missingInputs: string[] = [];
-  const steps: SourceAnalysisInquiryPlanStep[] = [];
+  const steps: InquiryPlanStep[] = [];
   const sessionStep = maybeCreateSessionStep(options, reasons, missingInputs);
   if (sessionStep) {
     steps.push(sessionStep);
@@ -766,7 +766,7 @@ function buildPackageAuditSteps(
     });
   }
 
-  const auditStep: SourceAnalysisInquiryPlanStep = {
+  const auditStep: InquiryPlanStep = {
     label: 'Audit the package',
     summary: 'Inspect package-local debt, uncovered files, route gaps, and exercise posture.',
     phase: 'query',
@@ -797,12 +797,12 @@ function buildPackageAuditSteps(
 }
 
 function buildRouteExplanationSteps(
-  options: SourceAnalysisInquiryPlanOptions,
-  hints: SourceAnalysisIngressFocusHints,
+  options: InquiryPlanOptions,
+  hints: IngressFocusHints,
 ): BuiltInquirySteps {
-  const reasons: SourceAnalysisInquiryPlanReason[] = [];
+  const reasons: InquiryPlanReason[] = [];
   const missingInputs: string[] = [];
-  const steps: SourceAnalysisInquiryPlanStep[] = [];
+  const steps: InquiryPlanStep[] = [];
   const sessionStep = maybeCreateSessionStep(options, reasons, missingInputs);
   if (sessionStep) {
     steps.push(sessionStep);
@@ -823,7 +823,7 @@ function buildRouteExplanationSteps(
     });
   }
 
-  const witnessStep: SourceAnalysisInquiryPlanStep = {
+  const witnessStep: InquiryPlanStep = {
     label: 'Explain the route witness',
     summary: 'Show the strongest modeled route from an ingress root to the focused file or type.',
     phase: 'query',
@@ -855,12 +855,12 @@ function buildRouteExplanationSteps(
 }
 
 function buildSnapshotMaintenanceSteps(
-  options: SourceAnalysisInquiryPlanOptions,
-  hints: SourceAnalysisIngressFocusHints,
+  options: InquiryPlanOptions,
+  hints: IngressFocusHints,
 ): BuiltInquirySteps {
-  const reasons: SourceAnalysisInquiryPlanReason[] = [];
+  const reasons: InquiryPlanReason[] = [];
   const missingInputs: string[] = [];
-  const steps: SourceAnalysisInquiryPlanStep[] = [];
+  const steps: InquiryPlanStep[] = [];
   const sessionStep = maybeCreateSessionStep(options, reasons, missingInputs);
   if (sessionStep) {
     steps.push(sessionStep);
@@ -880,7 +880,7 @@ function buildSnapshotMaintenanceSteps(
     });
   }
 
-  const step: SourceAnalysisInquiryPlanStep = {
+  const step: InquiryPlanStep = {
     label: describeSnapshotMaintenanceLabel(primaryCommand),
     summary: describeSnapshotMaintenanceSummary(primaryCommand),
     phase: primaryCommand === 'materializeSnapshots' ? 'maintenance' : 'query',
@@ -908,10 +908,10 @@ function buildSnapshotMaintenanceSteps(
 }
 
 function maybeCreateSessionStep(
-  options: SourceAnalysisInquiryPlanOptions,
-  reasons: SourceAnalysisInquiryPlanReason[],
+  options: InquiryPlanOptions,
+  reasons: InquiryPlanReason[],
   missingInputs: string[],
-): SourceAnalysisInquiryPlanStep | undefined {
+): InquiryPlanStep | undefined {
   if (options.sessionId) {
     reasons.push({
       kind: 'input',
@@ -985,11 +985,11 @@ function describeSnapshotMaintenanceSummary(command: string): string {
 }
 
 function questionSuggests(question: string, terms: readonly string[]): boolean {
-  return tokenMatches(createSourceAnalysisNormalizedText(question), terms).length > 0
+  return tokenMatches(createNormalizedText(question), terms).length > 0
     || terms.some((term) => question.toLowerCase().includes(term.toLowerCase()));
 }
 
-function describePlanStatus(plan: SourceAnalysisResolvedInquiryPlan): string {
+function describePlanStatus(plan: ResolvedInquiryPlan): string {
   switch (plan.status) {
     case 'ready':
       return `The question maps most directly to ${plan.inquiry?.id ?? 'an inquiry family'}, and the plan is ready to execute.`;
@@ -1003,9 +1003,9 @@ function describePlanStatus(plan: SourceAnalysisResolvedInquiryPlan): string {
 }
 
 function resolveAskStatus(
-  plan: SourceAnalysisResolvedInquiryPlan,
-  execution: SourceAnalysisInquiryExecutionSummary | undefined,
-): SourceAnalysisInquiryAskStatus {
+  plan: ResolvedInquiryPlan,
+  execution: InquiryExecutionSummary | undefined,
+): InquiryAskStatus {
   if (plan.status === 'ambiguous') {
     return 'ambiguous';
   }
@@ -1019,9 +1019,9 @@ function resolveAskStatus(
 }
 
 function describeAskStatus(
-  status: SourceAnalysisInquiryAskStatus,
-  plan: SourceAnalysisResolvedInquiryPlan,
-  execution: SourceAnalysisInquiryExecutionSummary | undefined,
+  status: InquiryAskStatus,
+  plan: ResolvedInquiryPlan,
+  execution: InquiryExecutionSummary | undefined,
 ): string {
   switch (status) {
     case 'answered':
@@ -1035,7 +1035,7 @@ function describeAskStatus(
   }
 }
 
-function inquiryFocusRef(value: string): SourceAnalysisFocusRef {
+function inquiryFocusRef(value: string): FocusRef {
   return { kind: 'inquiry', value };
 }
 
@@ -1043,7 +1043,7 @@ function inquiryRef(
   value: string,
   label: string,
   detail?: string,
-): SourceAnalysisInquiryRef {
+): InquiryRef {
   return {
     kind: 'inquiry',
     value,
@@ -1056,7 +1056,7 @@ function capabilityRef(
   value: string,
   label: string,
   detail?: string,
-): SourceAnalysisInquiryRef {
+): InquiryRef {
   return {
     kind: 'capability',
     value,
@@ -1065,7 +1065,7 @@ function capabilityRef(
   };
 }
 
-function defaultWorldFrame(repoPath?: string, target?: string): SourceAnalysisWorldFrame {
+function defaultWorldFrame(repoPath?: string, target?: string): WorldFrame {
   return {
     ...(repoPath ? { repoPath } : {}),
     ...(target ? { target } : {}),
@@ -1075,15 +1075,15 @@ function defaultWorldFrame(repoPath?: string, target?: string): SourceAnalysisWo
   };
 }
 
-function groundedTrust(summary: string): SourceAnalysisTrustProfile {
+function groundedTrust(summary: string): TrustProfile {
   return { kind: 'grounded', summary };
 }
 
-function qualifiedTrust(summary: string): SourceAnalysisTrustProfile {
+function qualifiedTrust(summary: string): TrustProfile {
   return { kind: 'qualified', summary };
 }
 
-function frontierTrust(summary: string): SourceAnalysisTrustProfile {
+function frontierTrust(summary: string): TrustProfile {
   return { kind: 'frontier', summary };
 }
 
@@ -1095,7 +1095,7 @@ function inquiryProvenance() {
   })];
 }
 
-function inquiryClosureBasis(subject: string): readonly SourceAnalysisClosureBasis[] {
+function inquiryClosureBasis(subject: string): readonly ClosureBasis[] {
   return [{
     kind: 'route',
     summary: `The public inquiry plan is shaped by the declared inquiry family ${subject}.`,
@@ -1103,14 +1103,14 @@ function inquiryClosureBasis(subject: string): readonly SourceAnalysisClosureBas
   }];
 }
 
-function toPlanReason(reason: SourceAnalysisInquiryMatchReason): SourceAnalysisInquiryPlanReason {
+function toPlanReason(reason: InquiryMatchReason): InquiryPlanReason {
   return {
     kind: 'match',
     detail: reason.detail,
   };
 }
 
-function toHintPlanReason(reason: SourceAnalysisIngressHintDetail): SourceAnalysisInquiryPlanReason {
+function toHintPlanReason(reason: IngressHintDetail): InquiryPlanReason {
   return {
     kind: reason.kind,
     detail: reason.detail,
@@ -1118,8 +1118,8 @@ function toHintPlanReason(reason: SourceAnalysisIngressHintDetail): SourceAnalys
 }
 
 function inquiryContinuations(
-  plan: SourceAnalysisResolvedInquiryPlan,
-): readonly SourceAnalysisContinuation[] {
+  plan: ResolvedInquiryPlan,
+): readonly Continuation[] {
   if (plan.missingInputs.length > 0) {
     return [{
       kind: 'narrow',

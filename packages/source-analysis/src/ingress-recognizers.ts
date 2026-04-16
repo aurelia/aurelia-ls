@@ -1,56 +1,56 @@
-import type { SourceAnalysisFocusKind } from './query-model.js';
-import { createSourceAnalysisNormalizedText, type SourceAnalysisNormalizedText } from './ingress-normalization.js';
+import type { FocusKind } from './inquiry-model.js';
+import { createNormalizedText, type NormalizedText } from './ingress-normalization.js';
 
-export const SOURCE_ANALYSIS_INGRESS_CAPTURE_KINDS = [
+export const INGRESS_CAPTURE_KINDS = [
   'package-name',
   'file-path',
   'type-name',
   'repo-path',
 ] as const;
 
-export type SourceAnalysisIngressCaptureKind =
-  typeof SOURCE_ANALYSIS_INGRESS_CAPTURE_KINDS[number];
+export type IngressCaptureKind =
+  typeof INGRESS_CAPTURE_KINDS[number];
 
-export interface SourceAnalysisIngressCapture {
-  readonly kind: SourceAnalysisIngressCaptureKind;
+export interface IngressCapture {
+  readonly kind: IngressCaptureKind;
   readonly value: string;
   readonly source: 'question';
   readonly recognizerId: string;
   readonly detail: string;
 }
 
-export interface SourceAnalysisIngressRecognition {
-  readonly question: SourceAnalysisNormalizedText;
-  readonly captures: readonly SourceAnalysisIngressCapture[];
+export interface IngressRecognition {
+  readonly question: NormalizedText;
+  readonly captures: readonly IngressCapture[];
 }
 
-interface SourceAnalysisIngressRecognizerSpec {
+interface IngressRecognizerSpec {
   readonly id: string;
-  readonly kind: SourceAnalysisIngressCaptureKind;
+  readonly kind: IngressCaptureKind;
   readonly recognize: (question: string) => readonly string[];
   readonly describe: (value: string) => string;
 }
 
-export class SourceAnalysisIngressRecognizerRegistry {
-  readonly #specs: readonly SourceAnalysisIngressRecognizerSpec[];
+export class IngressRecognizerRegistry {
+  readonly #specs: readonly IngressRecognizerSpec[];
 
-  constructor(specs: readonly SourceAnalysisIngressRecognizerSpec[]) {
+  constructor(specs: readonly IngressRecognizerSpec[]) {
     this.#specs = specs;
   }
 
-  createRecognition(question: string | undefined): SourceAnalysisIngressRecognition {
+  createRecognition(question: string | undefined): IngressRecognition {
     return {
-      question: createSourceAnalysisNormalizedText(question),
+      question: createNormalizedText(question),
       captures: this.recognizeQuestion(question),
     };
   }
 
-  recognizeQuestion(question: string | undefined): readonly SourceAnalysisIngressCapture[] {
+  recognizeQuestion(question: string | undefined): readonly IngressCapture[] {
     if (!question) {
       return [];
     }
 
-    const captures: SourceAnalysisIngressCapture[] = [];
+    const captures: IngressCapture[] = [];
     const seen = new Set<string>();
 
     for (const spec of this.#specs) {
@@ -74,9 +74,9 @@ export class SourceAnalysisIngressRecognizerRegistry {
   }
 
   findFirst(
-    recognition: SourceAnalysisIngressRecognition | readonly SourceAnalysisIngressCapture[],
-    kind: SourceAnalysisIngressCaptureKind,
-  ): SourceAnalysisIngressCapture | undefined {
+    recognition: IngressRecognition | readonly IngressCapture[],
+    kind: IngressCaptureKind,
+  ): IngressCapture | undefined {
     const captures = Array.isArray(recognition) || !('captures' in recognition)
       ? recognition
       : recognition.captures;
@@ -84,8 +84,8 @@ export class SourceAnalysisIngressRecognizerRegistry {
   }
 }
 
-export function createDefaultSourceAnalysisIngressRecognizerRegistry(): SourceAnalysisIngressRecognizerRegistry {
-  return new SourceAnalysisIngressRecognizerRegistry([
+export function createDefaultIngressRecognizerRegistry(): IngressRecognizerRegistry {
+  return new IngressRecognizerRegistry([
     {
       id: 'package-name',
       kind: 'package-name',
@@ -113,12 +113,12 @@ export function createDefaultSourceAnalysisIngressRecognizerRegistry(): SourceAn
   ]);
 }
 
-export const DEFAULT_SOURCE_ANALYSIS_INGRESS_RECOGNIZER_REGISTRY =
-  createDefaultSourceAnalysisIngressRecognizerRegistry();
+export const DEFAULT_INGRESS_RECOGNIZER_REGISTRY =
+  createDefaultIngressRecognizerRegistry();
 
 export function captureKindsForFocusKind(
-  focusKind: SourceAnalysisFocusKind,
-): readonly SourceAnalysisIngressCaptureKind[] {
+  focusKind: FocusKind,
+): readonly IngressCaptureKind[] {
   switch (focusKind) {
     case 'package': return ['package-name'];
     case 'file': return ['file-path'];

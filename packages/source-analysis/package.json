@@ -13,9 +13,17 @@
       "import": "./out/index.js",
       "types": "./out/index.d.ts"
     },
-    "./*.js": {
-      "import": "./out/*.js",
-      "types": "./out/*.d.ts"
+    "./snapshots": {
+      "import": "./out/public/snapshots.js",
+      "types": "./out/public/snapshots.d.ts"
+    },
+    "./host": {
+      "import": "./out/public/host.js",
+      "types": "./out/public/host.d.ts"
+    },
+    "./inquiry": {
+      "import": "./out/public/inquiry.js",
+      "types": "./out/public/inquiry.d.ts"
     }
   },
   "scripts": {

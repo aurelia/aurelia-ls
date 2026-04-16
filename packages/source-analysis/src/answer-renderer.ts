@@ -1,28 +1,28 @@
-import type { SourceAnalysisAnswerRef } from './answer-card.js';
+import type { AnswerRef } from './answer-card.js';
 import type {
-  SourceAnalysisAnswerBulletListBlock,
-  SourceAnalysisAnswerDocument,
-  SourceAnalysisAnswerDocumentBlock,
-  SourceAnalysisAnswerFindingListBlock,
-  SourceAnalysisAnswerKeyFactListBlock,
-  SourceAnalysisAnswerParagraphBlock,
-  SourceAnalysisAnswerRefListBlock,
-  SourceAnalysisAnswerWitnessListBlock,
+  AnswerBulletListBlock,
+  AnswerDocument,
+  AnswerDocumentBlock,
+  AnswerFindingListBlock,
+  AnswerKeyFactListBlock,
+  AnswerParagraphBlock,
+  AnswerRefListBlock,
+  AnswerWitnessListBlock,
 } from './answer-document.js';
-import type { SourceAnalysisInquiryPolicy } from './inquiry-policy.js';
+import type { InquiryPolicy } from './inquiry-policy.js';
 import { compareByPrecedence } from './inquiry-policy.js';
 
-export interface SourceAnalysisRenderedPlainText {
+export interface RenderedPlainText {
   readonly summaryLines: readonly string[];
   readonly lines: readonly string[];
 }
 
-export function projectSourceAnalysisAnswerDocument<
-  TRef extends SourceAnalysisAnswerRef = SourceAnalysisAnswerRef,
+export function projectAnswerDocument<
+  TRef extends AnswerRef = AnswerRef,
 >(
-  document: SourceAnalysisAnswerDocument<TRef>,
-  policy: SourceAnalysisInquiryPolicy,
-): SourceAnalysisAnswerDocument<TRef> {
+  document: AnswerDocument<TRef>,
+  policy: InquiryPolicy,
+): AnswerDocument<TRef> {
   const blocks = document.blocks
     .slice()
     .sort((left, right) =>
@@ -34,7 +34,7 @@ export function projectSourceAnalysisAnswerDocument<
     )
     .slice(0, policy.limits.blockCount)
     .map((block) => projectBlock(block, policy))
-    .filter((block): block is SourceAnalysisAnswerDocumentBlock<TRef> => block !== null);
+    .filter((block): block is AnswerDocumentBlock<TRef> => block !== null);
 
   return {
     schemaVersion: document.schemaVersion,
@@ -42,13 +42,13 @@ export function projectSourceAnalysisAnswerDocument<
   };
 }
 
-export function renderSourceAnalysisAnswerDocumentToPlainText<
-  TRef extends SourceAnalysisAnswerRef = SourceAnalysisAnswerRef,
+export function renderAnswerDocumentToPlainText<
+  TRef extends AnswerRef = AnswerRef,
 >(
-  document: SourceAnalysisAnswerDocument<TRef>,
-  policy: SourceAnalysisInquiryPolicy,
-): SourceAnalysisRenderedPlainText {
-  const projected = projectSourceAnalysisAnswerDocument(document, policy);
+  document: AnswerDocument<TRef>,
+  policy: InquiryPolicy,
+): RenderedPlainText {
+  const projected = projectAnswerDocument(document, policy);
   const lines = projected.blocks.flatMap((block) => renderBlockToText(block));
   return {
     summaryLines: lines.slice(0, policy.limits.summaryLineCount),
@@ -56,21 +56,21 @@ export function renderSourceAnalysisAnswerDocumentToPlainText<
   };
 }
 
-export function renderSourceAnalysisAnswerDocumentToJson<
-  TRef extends SourceAnalysisAnswerRef = SourceAnalysisAnswerRef,
+export function renderAnswerDocumentToJson<
+  TRef extends AnswerRef = AnswerRef,
 >(
-  document: SourceAnalysisAnswerDocument<TRef>,
-  policy: SourceAnalysisInquiryPolicy,
-): SourceAnalysisAnswerDocument<TRef> {
-  return projectSourceAnalysisAnswerDocument(document, policy);
+  document: AnswerDocument<TRef>,
+  policy: InquiryPolicy,
+): AnswerDocument<TRef> {
+  return projectAnswerDocument(document, policy);
 }
 
 function projectBlock<
-  TRef extends SourceAnalysisAnswerRef = SourceAnalysisAnswerRef,
+  TRef extends AnswerRef = AnswerRef,
 >(
-  block: SourceAnalysisAnswerDocumentBlock<TRef>,
-  policy: SourceAnalysisInquiryPolicy,
-): SourceAnalysisAnswerDocumentBlock<TRef> | null {
+  block: AnswerDocumentBlock<TRef>,
+  policy: InquiryPolicy,
+): AnswerDocumentBlock<TRef> | null {
   switch (block.kind) {
     case 'paragraph':
       return projectParagraphBlock(block, policy);
@@ -90,29 +90,29 @@ function projectBlock<
 }
 
 function projectParagraphBlock(
-  block: SourceAnalysisAnswerParagraphBlock,
-  policy: SourceAnalysisInquiryPolicy,
-): SourceAnalysisAnswerParagraphBlock | null {
+  block: AnswerParagraphBlock,
+  policy: InquiryPolicy,
+): AnswerParagraphBlock | null {
   const lines = block.lines.slice(0, policy.limits.listItemCount);
   if (lines.length === 0) return null;
   return { ...block, lines };
 }
 
 function projectBulletListBlock(
-  block: SourceAnalysisAnswerBulletListBlock,
-  policy: SourceAnalysisInquiryPolicy,
-): SourceAnalysisAnswerBulletListBlock | null {
+  block: AnswerBulletListBlock,
+  policy: InquiryPolicy,
+): AnswerBulletListBlock | null {
   const items = block.items.slice(0, policy.limits.listItemCount);
   if (items.length === 0) return null;
   return { ...block, items };
 }
 
 function projectFindingListBlock<
-  TRef extends SourceAnalysisAnswerRef = SourceAnalysisAnswerRef,
+  TRef extends AnswerRef = AnswerRef,
 >(
-  block: SourceAnalysisAnswerFindingListBlock<TRef>,
-  policy: SourceAnalysisInquiryPolicy,
-): SourceAnalysisAnswerFindingListBlock<TRef> | null {
+  block: AnswerFindingListBlock<TRef>,
+  policy: InquiryPolicy,
+): AnswerFindingListBlock<TRef> | null {
   const findings = block.findings
     .slice(0, policy.limits.findingCount)
     .map((finding) => ({
@@ -125,11 +125,11 @@ function projectFindingListBlock<
 }
 
 function projectWitnessListBlock<
-  TRef extends SourceAnalysisAnswerRef = SourceAnalysisAnswerRef,
+  TRef extends AnswerRef = AnswerRef,
 >(
-  block: SourceAnalysisAnswerWitnessListBlock<TRef>,
-  policy: SourceAnalysisInquiryPolicy,
-): SourceAnalysisAnswerWitnessListBlock<TRef> | null {
+  block: AnswerWitnessListBlock<TRef>,
+  policy: InquiryPolicy,
+): AnswerWitnessListBlock<TRef> | null {
   const witnesses = block.witnesses
     .slice(0, policy.limits.witnessCount)
     .map((witness) => ({
@@ -141,29 +141,29 @@ function projectWitnessListBlock<
 }
 
 function projectRefListBlock<
-  TRef extends SourceAnalysisAnswerRef = SourceAnalysisAnswerRef,
+  TRef extends AnswerRef = AnswerRef,
 >(
-  block: SourceAnalysisAnswerRefListBlock<TRef>,
-  policy: SourceAnalysisInquiryPolicy,
-): SourceAnalysisAnswerRefListBlock<TRef> | null {
+  block: AnswerRefListBlock<TRef>,
+  policy: InquiryPolicy,
+): AnswerRefListBlock<TRef> | null {
   const refs = block.refs.slice(0, policy.limits.refListCount);
   if (refs.length === 0) return null;
   return { ...block, refs };
 }
 
 function projectKeyFactListBlock(
-  block: SourceAnalysisAnswerKeyFactListBlock,
-  policy: SourceAnalysisInquiryPolicy,
-): SourceAnalysisAnswerKeyFactListBlock | null {
+  block: AnswerKeyFactListBlock,
+  policy: InquiryPolicy,
+): AnswerKeyFactListBlock | null {
   const facts = block.facts.slice(0, policy.limits.factCount);
   if (facts.length === 0) return null;
   return { ...block, facts };
 }
 
 function renderBlockToText<
-  TRef extends SourceAnalysisAnswerRef = SourceAnalysisAnswerRef,
+  TRef extends AnswerRef = AnswerRef,
 >(
-  block: SourceAnalysisAnswerDocumentBlock<TRef>,
+  block: AnswerDocumentBlock<TRef>,
 ): readonly string[] {
   switch (block.kind) {
     case 'paragraph':

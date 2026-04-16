@@ -7,7 +7,7 @@
 import { execSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
-import { createRefreshCommand, createSourceAnalysisPaths, resolveSourceAnalysisTarget } from '../config.js';
+import { createRefreshCommand, createSnapshotPaths, resolveSnapshotTarget } from '../snapshot-config.js';
 import { loadJsonSnapshot, resolveCurrentSnapshotPath } from '../snapshots.js';
 import type { DepsOutput } from './schema.js';
 
@@ -45,8 +45,8 @@ const command = filteredArgs[0];
 const commandArgs = filteredArgs.slice(1);
 const lockWaitMsRaw = process.env.ANALYZER_LOCK_WAIT_MS;
 const lockWaitMs = lockWaitMsRaw ? Number(lockWaitMsRaw) : 5000;
-const PATHS = createSourceAnalysisPaths(import.meta.url);
-const selection = resolveSourceAnalysisTarget({ target: targetArg, repoPath: repoArg });
+const PATHS = createSnapshotPaths(import.meta.url);
+const selection = resolveSnapshotTarget({ target: targetArg, repoPath: repoArg });
 const target = selection.target;
 const refreshCommand = createRefreshCommand('deps', selection);
 

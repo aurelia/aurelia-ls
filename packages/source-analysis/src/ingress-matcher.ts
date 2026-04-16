@@ -1,20 +1,20 @@
-import type { SourceAnalysisFocusKind } from './query-model.js';
+import type { FocusKind } from './inquiry-model.js';
 import {
-  DEFAULT_SOURCE_ANALYSIS_INGRESS_RECOGNIZER_REGISTRY,
-  type SourceAnalysisIngressCapture,
-  type SourceAnalysisIngressCaptureKind,
-  type SourceAnalysisIngressRecognition,
-  type SourceAnalysisIngressRecognizerRegistry,
+  DEFAULT_INGRESS_RECOGNIZER_REGISTRY,
+  type IngressCapture,
+  type IngressCaptureKind,
+  type IngressRecognition,
+  type IngressRecognizerRegistry,
 } from './ingress-recognizers.js';
 import {
-  createSourceAnalysisNormalizedText,
+  createNormalizedText,
   normalizePhrase,
   phraseMatches,
   tokenMatches,
-  type SourceAnalysisNormalizedText,
+  type NormalizedText,
 } from './ingress-normalization.js';
 
-export const SOURCE_ANALYSIS_INGRESS_RULE_KINDS = [
+export const INGRESS_RULE_KINDS = [
   'exact-normalized',
   'phrase-any',
   'token-any',
@@ -22,126 +22,126 @@ export const SOURCE_ANALYSIS_INGRESS_RULE_KINDS = [
   'capture-present',
 ] as const;
 
-export const SOURCE_ANALYSIS_INGRESS_RULE_IMPORTANCE = [
+export const INGRESS_RULE_IMPORTANCE = [
   'required',
   'primary',
   'supporting',
   'negative',
 ] as const;
 
-export type SourceAnalysisIngressRuleKind =
-  typeof SOURCE_ANALYSIS_INGRESS_RULE_KINDS[number];
+export type IngressRuleKind =
+  typeof INGRESS_RULE_KINDS[number];
 
-export type SourceAnalysisIngressRuleImportance =
-  typeof SOURCE_ANALYSIS_INGRESS_RULE_IMPORTANCE[number];
+export type IngressRuleImportance =
+  typeof INGRESS_RULE_IMPORTANCE[number];
 
-export interface SourceAnalysisIngressContext {
+export interface IngressContext {
   readonly question?: string;
   readonly command?: string;
   readonly familyId?: string;
-  readonly focusKind?: SourceAnalysisFocusKind;
-  readonly questionText: SourceAnalysisNormalizedText;
-  readonly commandText: SourceAnalysisNormalizedText;
-  readonly familyText: SourceAnalysisNormalizedText;
-  readonly recognition: SourceAnalysisIngressRecognition;
+  readonly focusKind?: FocusKind;
+  readonly questionText: NormalizedText;
+  readonly commandText: NormalizedText;
+  readonly familyText: NormalizedText;
+  readonly recognition: IngressRecognition;
 }
 
-interface SourceAnalysisIngressRuleBase<TReasonKind extends string> {
+interface IngressRuleBase<TReasonKind extends string> {
   readonly id: string;
   readonly reasonKind: TReasonKind;
-  readonly importance: SourceAnalysisIngressRuleImportance;
+  readonly importance: IngressRuleImportance;
   readonly detail: string;
 }
 
-export interface SourceAnalysisIngressExactRule<TReasonKind extends string>
-  extends SourceAnalysisIngressRuleBase<TReasonKind> {
+export interface IngressExactRule<TReasonKind extends string>
+  extends IngressRuleBase<TReasonKind> {
   readonly kind: 'exact-normalized';
   readonly source: 'command' | 'familyId';
   readonly value: string;
 }
 
-export interface SourceAnalysisIngressPhraseRule<TReasonKind extends string>
-  extends SourceAnalysisIngressRuleBase<TReasonKind> {
+export interface IngressPhraseRule<TReasonKind extends string>
+  extends IngressRuleBase<TReasonKind> {
   readonly kind: 'phrase-any';
   readonly source: 'question';
   readonly values: readonly string[];
 }
 
-export interface SourceAnalysisIngressTokenRule<TReasonKind extends string>
-  extends SourceAnalysisIngressRuleBase<TReasonKind> {
+export interface IngressTokenRule<TReasonKind extends string>
+  extends IngressRuleBase<TReasonKind> {
   readonly kind: 'token-any';
   readonly source: 'question' | 'command' | 'familyId';
   readonly values: readonly string[];
 }
 
-export interface SourceAnalysisIngressFocusRule<TReasonKind extends string>
-  extends SourceAnalysisIngressRuleBase<TReasonKind> {
+export interface IngressFocusRule<TReasonKind extends string>
+  extends IngressRuleBase<TReasonKind> {
   readonly kind: 'focus-allowed';
-  readonly allowed: readonly SourceAnalysisFocusKind[];
+  readonly allowed: readonly FocusKind[];
 }
 
-export interface SourceAnalysisIngressCaptureRule<TReasonKind extends string>
-  extends SourceAnalysisIngressRuleBase<TReasonKind> {
+export interface IngressCaptureRule<TReasonKind extends string>
+  extends IngressRuleBase<TReasonKind> {
   readonly kind: 'capture-present';
-  readonly captureKinds: readonly SourceAnalysisIngressCaptureKind[];
+  readonly captureKinds: readonly IngressCaptureKind[];
 }
 
-export type SourceAnalysisIngressRuleSpec<TReasonKind extends string> =
-  | SourceAnalysisIngressExactRule<TReasonKind>
-  | SourceAnalysisIngressPhraseRule<TReasonKind>
-  | SourceAnalysisIngressTokenRule<TReasonKind>
-  | SourceAnalysisIngressFocusRule<TReasonKind>
-  | SourceAnalysisIngressCaptureRule<TReasonKind>;
+export type IngressRuleSpec<TReasonKind extends string> =
+  | IngressExactRule<TReasonKind>
+  | IngressPhraseRule<TReasonKind>
+  | IngressTokenRule<TReasonKind>
+  | IngressFocusRule<TReasonKind>
+  | IngressCaptureRule<TReasonKind>;
 
-export interface SourceAnalysisIngressMatchTrace<TReasonKind extends string> {
+export interface IngressMatchTrace<TReasonKind extends string> {
   readonly ruleId: string;
-  readonly ruleKind: SourceAnalysisIngressRuleKind;
+  readonly ruleKind: IngressRuleKind;
   readonly reasonKind: TReasonKind;
-  readonly importance: SourceAnalysisIngressRuleImportance;
+  readonly importance: IngressRuleImportance;
   readonly matched: boolean;
   readonly detail: string;
   readonly term?: string;
-  readonly capture?: SourceAnalysisIngressCapture;
+  readonly capture?: IngressCapture;
 }
 
-export interface SourceAnalysisIngressRuleEvaluation<TReasonKind extends string> {
+export interface IngressRuleEvaluation<TReasonKind extends string> {
   readonly matched: boolean;
   readonly requiredSatisfied: boolean;
-  readonly traces: readonly SourceAnalysisIngressMatchTrace<TReasonKind>[];
-  readonly matchedTraces: readonly SourceAnalysisIngressMatchTrace<TReasonKind>[];
-  readonly positiveTraces: readonly SourceAnalysisIngressMatchTrace<TReasonKind>[];
-  readonly negativeTraces: readonly SourceAnalysisIngressMatchTrace<TReasonKind>[];
+  readonly traces: readonly IngressMatchTrace<TReasonKind>[];
+  readonly matchedTraces: readonly IngressMatchTrace<TReasonKind>[];
+  readonly positiveTraces: readonly IngressMatchTrace<TReasonKind>[];
+  readonly negativeTraces: readonly IngressMatchTrace<TReasonKind>[];
 }
 
-export interface SourceAnalysisIngressSelectionPolicy<TReasonKind extends string> {
+export interface IngressSelectionPolicy<TReasonKind extends string> {
   readonly reasonKindOrder: readonly TReasonKind[];
 }
 
-export function createSourceAnalysisIngressContext(
+export function createIngressContext(
   input: {
     readonly question?: string;
     readonly command?: string;
     readonly familyId?: string;
-    readonly focusKind?: SourceAnalysisFocusKind;
+    readonly focusKind?: FocusKind;
   },
-  recognizers: SourceAnalysisIngressRecognizerRegistry = DEFAULT_SOURCE_ANALYSIS_INGRESS_RECOGNIZER_REGISTRY,
-): SourceAnalysisIngressContext {
+  recognizers: IngressRecognizerRegistry = DEFAULT_INGRESS_RECOGNIZER_REGISTRY,
+): IngressContext {
   return {
     question: input.question,
     command: input.command,
     familyId: input.familyId,
     focusKind: input.focusKind,
-    questionText: createSourceAnalysisNormalizedText(input.question),
-    commandText: createSourceAnalysisNormalizedText(input.command),
-    familyText: createSourceAnalysisNormalizedText(input.familyId),
+    questionText: createNormalizedText(input.question),
+    commandText: createNormalizedText(input.command),
+    familyText: createNormalizedText(input.familyId),
     recognition: recognizers.createRecognition(input.question),
   };
 }
 
-export function evaluateSourceAnalysisIngressRules<TReasonKind extends string>(
-  context: SourceAnalysisIngressContext,
-  rules: readonly SourceAnalysisIngressRuleSpec<TReasonKind>[],
-): SourceAnalysisIngressRuleEvaluation<TReasonKind> {
+export function evaluateIngressRules<TReasonKind extends string>(
+  context: IngressContext,
+  rules: readonly IngressRuleSpec<TReasonKind>[],
+): IngressRuleEvaluation<TReasonKind> {
   const traces = rules.flatMap((rule) => evaluateRule(context, rule));
   const matchedTraces = traces.filter((trace) => trace.matched);
   const positiveTraces = matchedTraces.filter((trace) => trace.importance !== 'negative');
@@ -161,18 +161,18 @@ export function evaluateSourceAnalysisIngressRules<TReasonKind extends string>(
   };
 }
 
-export function compareSourceAnalysisIngressEvaluations<TReasonKind extends string>(
-  left: SourceAnalysisIngressRuleEvaluation<TReasonKind>,
-  right: SourceAnalysisIngressRuleEvaluation<TReasonKind>,
-  policy: SourceAnalysisIngressSelectionPolicy<TReasonKind>,
+export function compareIngressEvaluations<TReasonKind extends string>(
+  left: IngressRuleEvaluation<TReasonKind>,
+  right: IngressRuleEvaluation<TReasonKind>,
+  policy: IngressSelectionPolicy<TReasonKind>,
 ): number {
   return compareSelectionKey(selectionKey(left, policy), selectionKey(right, policy));
 }
 
-export function rehydrateSourceAnalysisIngressEvaluation<TReasonKind extends string>(
-  traces: readonly SourceAnalysisIngressMatchTrace<TReasonKind>[],
+export function rehydrateIngressEvaluation<TReasonKind extends string>(
+  traces: readonly IngressMatchTrace<TReasonKind>[],
   requiredSatisfied: boolean,
-): SourceAnalysisIngressRuleEvaluation<TReasonKind> {
+): IngressRuleEvaluation<TReasonKind> {
   const matchedTraces = traces.filter((trace) => trace.matched);
   const positiveTraces = matchedTraces.filter((trace) => trace.importance !== 'negative');
   const negativeTraces = matchedTraces.filter((trace) => trace.importance === 'negative');
@@ -186,62 +186,62 @@ export function rehydrateSourceAnalysisIngressEvaluation<TReasonKind extends str
   };
 }
 
-export function createSourceAnalysisExactRule<TReasonKind extends string>(
+export function createExactRule<TReasonKind extends string>(
   id: string,
   reasonKind: TReasonKind,
   source: 'command' | 'familyId',
   value: string,
   detail: string,
-  importance: SourceAnalysisIngressRuleImportance = 'primary',
-): SourceAnalysisIngressExactRule<TReasonKind> {
+  importance: IngressRuleImportance = 'primary',
+): IngressExactRule<TReasonKind> {
   return { id, kind: 'exact-normalized', reasonKind, source, value, detail, importance };
 }
 
-export function createSourceAnalysisPhraseRule<TReasonKind extends string>(
+export function createPhraseRule<TReasonKind extends string>(
   id: string,
   reasonKind: TReasonKind,
   values: readonly string[],
   detail: string,
-  importance: SourceAnalysisIngressRuleImportance = 'primary',
-): SourceAnalysisIngressPhraseRule<TReasonKind> {
+  importance: IngressRuleImportance = 'primary',
+): IngressPhraseRule<TReasonKind> {
   return { id, kind: 'phrase-any', reasonKind, source: 'question', values, detail, importance };
 }
 
-export function createSourceAnalysisTokenRule<TReasonKind extends string>(
+export function createTokenRule<TReasonKind extends string>(
   id: string,
   reasonKind: TReasonKind,
   source: 'question' | 'command' | 'familyId',
   values: readonly string[],
   detail: string,
-  importance: SourceAnalysisIngressRuleImportance = 'supporting',
-): SourceAnalysisIngressTokenRule<TReasonKind> {
+  importance: IngressRuleImportance = 'supporting',
+): IngressTokenRule<TReasonKind> {
   return { id, kind: 'token-any', reasonKind, source, values, detail, importance };
 }
 
-export function createSourceAnalysisFocusRule<TReasonKind extends string>(
+export function createFocusRule<TReasonKind extends string>(
   id: string,
   reasonKind: TReasonKind,
-  allowed: readonly SourceAnalysisFocusKind[],
+  allowed: readonly FocusKind[],
   detail: string,
-  importance: SourceAnalysisIngressRuleImportance = 'supporting',
-): SourceAnalysisIngressFocusRule<TReasonKind> {
+  importance: IngressRuleImportance = 'supporting',
+): IngressFocusRule<TReasonKind> {
   return { id, kind: 'focus-allowed', reasonKind, allowed, detail, importance };
 }
 
-export function createSourceAnalysisCaptureRule<TReasonKind extends string>(
+export function createCaptureRule<TReasonKind extends string>(
   id: string,
   reasonKind: TReasonKind,
-  captureKinds: readonly SourceAnalysisIngressCaptureKind[],
+  captureKinds: readonly IngressCaptureKind[],
   detail: string,
-  importance: SourceAnalysisIngressRuleImportance = 'supporting',
-): SourceAnalysisIngressCaptureRule<TReasonKind> {
+  importance: IngressRuleImportance = 'supporting',
+): IngressCaptureRule<TReasonKind> {
   return { id, kind: 'capture-present', reasonKind, captureKinds, detail, importance };
 }
 
 function evaluateRule<TReasonKind extends string>(
-  context: SourceAnalysisIngressContext,
-  rule: SourceAnalysisIngressRuleSpec<TReasonKind>,
-): readonly SourceAnalysisIngressMatchTrace<TReasonKind>[] {
+  context: IngressContext,
+  rule: IngressRuleSpec<TReasonKind>,
+): readonly IngressMatchTrace<TReasonKind>[] {
   switch (rule.kind) {
     case 'exact-normalized': return evaluateExactRule(context, rule);
     case 'phrase-any': return evaluatePhraseRule(context, rule);
@@ -253,9 +253,9 @@ function evaluateRule<TReasonKind extends string>(
 }
 
 function evaluateExactRule<TReasonKind extends string>(
-  context: SourceAnalysisIngressContext,
-  rule: SourceAnalysisIngressExactRule<TReasonKind>,
-): readonly SourceAnalysisIngressMatchTrace<TReasonKind>[] {
+  context: IngressContext,
+  rule: IngressExactRule<TReasonKind>,
+): readonly IngressMatchTrace<TReasonKind>[] {
   const source = rule.source === 'command'
     ? context.commandText
     : context.familyText;
@@ -273,17 +273,17 @@ function evaluateExactRule<TReasonKind extends string>(
 }
 
 function evaluatePhraseRule<TReasonKind extends string>(
-  context: SourceAnalysisIngressContext,
-  rule: SourceAnalysisIngressPhraseRule<TReasonKind>,
-): readonly SourceAnalysisIngressMatchTrace<TReasonKind>[] {
+  context: IngressContext,
+  rule: IngressPhraseRule<TReasonKind>,
+): readonly IngressMatchTrace<TReasonKind>[] {
   const matches = phraseMatches(context.questionText, rule.values);
   return tracesForTerms(rule, matches);
 }
 
 function evaluateTokenRule<TReasonKind extends string>(
-  context: SourceAnalysisIngressContext,
-  rule: SourceAnalysisIngressTokenRule<TReasonKind>,
-): readonly SourceAnalysisIngressMatchTrace<TReasonKind>[] {
+  context: IngressContext,
+  rule: IngressTokenRule<TReasonKind>,
+): readonly IngressMatchTrace<TReasonKind>[] {
   const source = rule.source === 'question'
     ? context.questionText
     : rule.source === 'command'
@@ -294,9 +294,9 @@ function evaluateTokenRule<TReasonKind extends string>(
 }
 
 function evaluateFocusRule<TReasonKind extends string>(
-  context: SourceAnalysisIngressContext,
-  rule: SourceAnalysisIngressFocusRule<TReasonKind>,
-): readonly SourceAnalysisIngressMatchTrace<TReasonKind>[] {
+  context: IngressContext,
+  rule: IngressFocusRule<TReasonKind>,
+): readonly IngressMatchTrace<TReasonKind>[] {
   const matched = context.focusKind !== undefined && rule.allowed.includes(context.focusKind);
   return [{
     ruleId: rule.id,
@@ -312,9 +312,9 @@ function evaluateFocusRule<TReasonKind extends string>(
 }
 
 function evaluateCaptureRule<TReasonKind extends string>(
-  context: SourceAnalysisIngressContext,
-  rule: SourceAnalysisIngressCaptureRule<TReasonKind>,
-): readonly SourceAnalysisIngressMatchTrace<TReasonKind>[] {
+  context: IngressContext,
+  rule: IngressCaptureRule<TReasonKind>,
+): readonly IngressMatchTrace<TReasonKind>[] {
   const captures = context.recognition.captures
     .filter((capture) => rule.captureKinds.includes(capture.kind));
   if (captures.length === 0) {
@@ -341,9 +341,9 @@ function evaluateCaptureRule<TReasonKind extends string>(
 }
 
 function tracesForTerms<TReasonKind extends string>(
-  rule: SourceAnalysisIngressPhraseRule<TReasonKind> | SourceAnalysisIngressTokenRule<TReasonKind>,
+  rule: IngressPhraseRule<TReasonKind> | IngressTokenRule<TReasonKind>,
   matches: readonly string[],
-): readonly SourceAnalysisIngressMatchTrace<TReasonKind>[] {
+): readonly IngressMatchTrace<TReasonKind>[] {
   if (matches.length === 0) {
     return [{
       ruleId: rule.id,
@@ -367,8 +367,8 @@ function tracesForTerms<TReasonKind extends string>(
 }
 
 function selectionKey<TReasonKind extends string>(
-  evaluation: SourceAnalysisIngressRuleEvaluation<TReasonKind>,
-  policy: SourceAnalysisIngressSelectionPolicy<TReasonKind>,
+  evaluation: IngressRuleEvaluation<TReasonKind>,
+  policy: IngressSelectionPolicy<TReasonKind>,
 ): readonly number[] {
   const required = evaluation.requiredSatisfied ? 1 : 0;
   const primary = policy.reasonKindOrder.map((reasonKind) =>
@@ -392,9 +392,9 @@ function selectionKey<TReasonKind extends string>(
 }
 
 function countMatched<TReasonKind extends string>(
-  evaluation: SourceAnalysisIngressRuleEvaluation<TReasonKind>,
+  evaluation: IngressRuleEvaluation<TReasonKind>,
   reasonKind: TReasonKind,
-  importance: readonly SourceAnalysisIngressRuleImportance[],
+  importance: readonly IngressRuleImportance[],
 ): number {
   return evaluation.matchedTraces.filter((trace) =>
     trace.reasonKind === reasonKind && importance.includes(trace.importance),

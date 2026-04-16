@@ -20,8 +20,8 @@ Build when tool source changes. Refresh when the codebase under analysis changes
 ### Programmatic API
 
 ```ts
-import { loadCurrentSourceAnalysisSnapshots } from '@aurelia-ls/source-analysis';
-const { deps, exports, typeRefs } = loadCurrentSourceAnalysisSnapshots();
+import { loadCurrentSnapshots } from '@aurelia-ls/source-analysis/snapshots';
+const { deps, exports, typeRefs } = loadCurrentSnapshots();
 ```
 
 Prototype new queries in user-space against loaded snapshots before promoting them to CLI subcommands.
