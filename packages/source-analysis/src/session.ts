@@ -1,0 +1,357 @@
+import { execSync } from 'node:child_process';
+import { existsSync, readdirSync, type Dirent } from 'node:fs';
+import { dirname, join, relative, resolve } from 'node:path';
+
+import * as ts from 'typescript';
+
+import { getExcludedRepoRelativePrefixesForTarget } from './config.js';
+
+export type SourceAnalysisProgramProfile = 'analysis' | 'analysis-no-resolve';
+
+export interface SourceAnalysisSessionOptions {
+  readonly repoPath?: string;
+  readonly target?: string;
+  readonly excludedRepoRelativePrefixes?: readonly string[] | null;
+}
+
+export interface LoadedTsconfigSnapshot {
+  readonly absPath: string;
+  readonly relPath: string;
+  readonly configDir: string;
+  readonly parsed: ts.ParsedCommandLine;
+}
+
+export interface LoadTsconfigResult {
+  readonly snapshot: LoadedTsconfigSnapshot | null;
+  readonly error: string | null;
+}
+
+export interface SourceAnalysisProgramOptions {
+  readonly cache?: boolean;
+}
+
+const SOURCE_FILE_PATTERN = /\.(tsx?|mts|cts)$/;
+
+export function parseExcludedRepoRelativePrefixes(
+  rawValue: string | undefined,
+  target = '',
+): readonly string[] {
+  if (rawValue) {
+    try {
+      const parsed = JSON.parse(rawValue);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .filter((value): value is string => typeof value === 'string' && value.length > 0)
+          .map((value) => normalizeRepoRelativePath(value));
+      }
+    } catch {
+      // Fall back to target-derived defaults below.
+    }
+  }
+
+  return getExcludedRepoRelativePrefixesForTarget(target).map((value) =>
+    normalizeRepoRelativePath(value),
+  );
+}
+
+export class SourceAnalysisSession {
+  readonly #repoPath: string;
+  readonly #target: string;
+  readonly #excludedRepoRelativePrefixes: readonly string[];
+  readonly #skipDirs = new Set(['node_modules', '.git', 'dist', '__tests__']);
+  readonly #submodulePaths = new Set<string>();
+  readonly #tsconfigCache = new Map<string, LoadTsconfigResult>();
+  readonly #programCache = new Map<string, ts.Program>();
+
+  #packageDirs: readonly string[] | null = null;
+  #repoSourceFiles: readonly string[] | null = null;
+  #tsconfigAbsPaths: readonly string[] | null = null;
+
+  constructor(options: SourceAnalysisSessionOptions = {}) {
+    this.#repoPath = resolve(options.repoPath ?? process.cwd());
+    this.#target = options.target ?? '';
+    this.#excludedRepoRelativePrefixes = (
+      options.excludedRepoRelativePrefixes
+      ?? getExcludedRepoRelativePrefixesForTarget(this.#target)
+    ).map((value) => normalizeRepoRelativePath(value));
+
+    this.#loadSubmodules();
+  }
+
+  get repoPath(): string {
+    return this.#repoPath;
+  }
+
+  get target(): string {
+    return this.#target;
+  }
+
+  get excludedRepoRelativePrefixes(): readonly string[] {
+    return this.#excludedRepoRelativePrefixes;
+  }
+
+  toForwardSlash(value: string): string {
+    return value.replace(/\\/g, '/');
+  }
+
+  toRepoRelative(absPath: string): string {
+    return this.toForwardSlash(relative(this.#repoPath, absPath));
+  }
+
+  isInSubmodule(relPath: string): boolean {
+    const normalized = normalizeRepoRelativePath(relPath);
+    for (const submodulePath of this.#submodulePaths) {
+      if (normalized === submodulePath || normalized.startsWith(`${submodulePath}/`)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  isExcludedRepoRelativePath(relPath: string): boolean {
+    const normalized = normalizeRepoRelativePath(relPath);
+    return this.#excludedRepoRelativePrefixes.some((prefix) =>
+      normalized === prefix || normalized.startsWith(`${prefix}/`)
+    );
+  }
+
+  findTsconfigs(): readonly string[] {
+    if (this.#tsconfigAbsPaths) {
+      return this.#tsconfigAbsPaths;
+    }
+
+    const results = this.#walkRepo(
+      this.#repoPath,
+      (entryAbs) => entryAbs.endsWith('tsconfig.json') || entryAbs.endsWith('tsconfig.test.json'),
+    );
+    this.#tsconfigAbsPaths = results.sort();
+    return this.#tsconfigAbsPaths;
+  }
+
+  tryLoadTsconfig(tsconfigAbsPath: string): LoadTsconfigResult {
+    const resolvedTsconfigPath = resolve(tsconfigAbsPath);
+    const cached = this.#tsconfigCache.get(resolvedTsconfigPath);
+    if (cached) {
+      return cached;
+    }
+
+    const configFile = ts.readConfigFile(resolvedTsconfigPath, ts.sys.readFile);
+    if (configFile.error) {
+      const error = ts.flattenDiagnosticMessageText(configFile.error.messageText, '\n');
+      const result = { snapshot: null, error };
+      this.#tsconfigCache.set(resolvedTsconfigPath, result);
+      return result;
+    }
+
+    const configDir = dirname(resolvedTsconfigPath);
+    const parsed = ts.parseJsonConfigFileContent(configFile.config, ts.sys, configDir);
+    const result = {
+      snapshot: {
+        absPath: resolvedTsconfigPath,
+        relPath: this.toRepoRelative(resolvedTsconfigPath),
+        configDir,
+        parsed,
+      },
+      error: null,
+    };
+    this.#tsconfigCache.set(resolvedTsconfigPath, result);
+    return result;
+  }
+
+  getProgram(
+    tsconfigAbsPath: string,
+    profile: SourceAnalysisProgramProfile = 'analysis',
+    programOptions: SourceAnalysisProgramOptions = {},
+  ): ts.Program | null {
+    const resolvedTsconfigPath = resolve(tsconfigAbsPath);
+    const cacheKey = `${profile}\0${resolvedTsconfigPath}`;
+    if (programOptions.cache) {
+      const cached = this.#programCache.get(cacheKey);
+      if (cached) {
+        return cached;
+      }
+    }
+
+    const loaded = this.tryLoadTsconfig(resolvedTsconfigPath);
+    if (!loaded.snapshot) {
+      return null;
+    }
+
+    const compilerOptions = this.#compilerOptionsForProfile(loaded.snapshot.parsed.options, profile);
+    const program = ts.createProgram(loaded.snapshot.parsed.fileNames, compilerOptions);
+    if (programOptions.cache) {
+      this.#programCache.set(cacheKey, program);
+    }
+    return program;
+  }
+
+  clearProgramCache(profile?: SourceAnalysisProgramProfile): void {
+    if (!profile) {
+      this.#programCache.clear();
+      return;
+    }
+
+    const prefix = `${profile}\0`;
+    for (const key of this.#programCache.keys()) {
+      if (key.startsWith(prefix)) {
+        this.#programCache.delete(key);
+      }
+    }
+  }
+
+  listRepoSourceFiles(): readonly string[] {
+    if (this.#repoSourceFiles) {
+      return this.#repoSourceFiles;
+    }
+
+    const results = this.#walkRepo(
+      this.#repoPath,
+      (_entryAbs, entryRel) => SOURCE_FILE_PATTERN.test(entryRel) && !entryRel.endsWith('.d.ts'),
+    );
+    this.#repoSourceFiles = results
+      .map((entryAbs) => this.toRepoRelative(entryAbs))
+      .sort();
+    return this.#repoSourceFiles;
+  }
+
+  listPackageDirs(): readonly string[] {
+    if (this.#packageDirs) {
+      return this.#packageDirs;
+    }
+
+    const packagesRoot = join(this.#repoPath, 'packages');
+    const results = new Set<string>();
+
+    if (existsSync(packagesRoot)) {
+      for (const entry of readdirSync(packagesRoot, { withFileTypes: true })) {
+        if (!entry.isDirectory()) continue;
+        const packageDir = resolve(packagesRoot, entry.name);
+        const relDir = this.toRepoRelative(packageDir);
+        if (relDir.startsWith('..') || this.isExcludedRepoRelativePath(relDir)) continue;
+
+        const packageJsonPath = join(packageDir, 'package.json');
+        if (existsSync(packageJsonPath)) {
+          results.add(packageDir);
+        }
+      }
+    }
+
+    if (results.size === 0 && existsSync(join(this.#repoPath, 'package.json'))) {
+      results.add(this.#repoPath);
+    }
+
+    this.#packageDirs = [...results].sort();
+    return this.#packageDirs;
+  }
+
+  resolveNearestTsconfig(startPath: string): string | null {
+    let currentDir = resolve(this.#repoPath, startPath);
+    if (!existsSync(currentDir) || !ts.sys.directoryExists(currentDir)) {
+      currentDir = dirname(currentDir);
+    }
+
+    const repoRoot = this.#repoPath;
+    const repoRootNormalized = this.toForwardSlash(repoRoot).toLowerCase();
+
+    while (true) {
+      const tsconfigPath = join(currentDir, 'tsconfig.json');
+      if (existsSync(tsconfigPath)) return tsconfigPath;
+
+      const testTsconfigPath = join(currentDir, 'tsconfig.test.json');
+      if (existsSync(testTsconfigPath)) return testTsconfigPath;
+
+      if (this.toForwardSlash(currentDir).toLowerCase() === repoRootNormalized) {
+        return null;
+      }
+
+      const parentDir = dirname(currentDir);
+      if (parentDir === currentDir) {
+        return null;
+      }
+      currentDir = parentDir;
+    }
+  }
+
+  #compilerOptionsForProfile(
+    options: ts.CompilerOptions,
+    profile: SourceAnalysisProgramProfile,
+  ): ts.CompilerOptions {
+    if (profile === 'analysis-no-resolve') {
+      return {
+        ...options,
+        noEmit: true,
+        noResolve: true,
+      };
+    }
+
+    return {
+      ...options,
+      noEmit: true,
+    };
+  }
+
+  #loadSubmodules(): void {
+    try {
+      const raw = execSync('git submodule status', {
+        cwd: this.#repoPath,
+        encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+      for (const line of raw.split('\n')) {
+        const match = line.match(/^\s*[+-]?\w+\s+(\S+)/);
+        if (!match?.[1]) continue;
+        const submodulePath = normalizeRepoRelativePath(match[1]);
+        this.#submodulePaths.add(submodulePath);
+        this.#skipDirs.add(submodulePath);
+      }
+    } catch {
+      // Repos without submodules are fine.
+    }
+  }
+
+  #walkRepo(
+    dir: string,
+    shouldInclude: (entryAbs: string, entryRel: string) => boolean,
+  ): string[] {
+    const results: string[] = [];
+    let entries: Dirent<string>[];
+    try {
+      entries = readdirSync(dir, { withFileTypes: true, encoding: 'utf8' });
+    } catch {
+      return results;
+    }
+
+    for (const entry of entries) {
+      const entryAbs = join(dir, entry.name);
+      const entryRel = this.toRepoRelative(entryAbs);
+      if (!entryRel.startsWith('..')) {
+        if (this.isExcludedRepoRelativePath(entryRel) || this.isInSubmodule(entryRel)) {
+          continue;
+        }
+      }
+
+      if (entry.isDirectory()) {
+        if (!this.#skipDirs.has(entry.name)) {
+          results.push(...this.#walkRepo(entryAbs, shouldInclude));
+        }
+        continue;
+      }
+
+      if (shouldInclude(entryAbs, entryRel)) {
+        results.push(this.toForwardSlash(entryAbs));
+      }
+    }
+
+    return results;
+  }
+}
+
+export function createSourceAnalysisSession(
+  options: SourceAnalysisSessionOptions = {},
+): SourceAnalysisSession {
+  return new SourceAnalysisSession(options);
+}
+
+function normalizeRepoRelativePath(pathValue: string): string {
+  return pathValue.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+}

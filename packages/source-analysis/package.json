@@ -1,0 +1,27 @@
+{
+  "name": "@aurelia-ls/source-analysis",
+  "version": "0.0.0",
+  "description": "Structural analysis over a TypeScript codebase — deterministic, bounded queries designed for AI orientation",
+  "type": "module",
+  "main": "./out/index.js",
+  "types": "./out/index.d.ts",
+  "bin": {
+    "source-analysis": "./out/cli.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./out/index.js",
+      "types": "./out/index.d.ts"
+    },
+    "./*.js": {
+      "import": "./out/*.js",
+      "types": "./out/*.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "peerDependencies": {
+    "typescript": "^5.5.4"
+  }
+}
