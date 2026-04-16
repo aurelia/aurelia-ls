@@ -2,6 +2,27 @@ export type { DepsOutput } from './deps/schema.js';
 export type { ExportsOutput } from './exports/schema.js';
 export type { TypeRefsOutput } from './typerefs/schema.js';
 export type { SourceAnalysisAnalysisOptions } from './analysis-options.js';
+export type {
+  DiscoverSourceAnalysisCapabilitiesInput,
+  SourceAnalysisCapabilityArgSpec,
+  SourceAnalysisCapabilityConfusion,
+  SourceAnalysisCapabilityDefinition,
+  SourceAnalysisCapabilityExample,
+  SourceAnalysisCapabilityFamily,
+  SourceAnalysisCapabilityMatch,
+  SourceAnalysisCapabilityMatchReason,
+  SourceAnalysisCapabilityMatchReasonKind,
+  SourceAnalysisCapabilityPlannerKind,
+  SourceAnalysisCapabilityView,
+} from './capability-catalog.js';
+export {
+  createDefaultSourceAnalysisCapabilityCatalog,
+  SourceAnalysisCapabilityCatalog,
+  SourceAnalysisCapabilityDescriptor,
+  SOURCE_ANALYSIS_CAPABILITY_FAMILIES,
+  SOURCE_ANALYSIS_CAPABILITY_MATCH_REASON_KINDS,
+  SOURCE_ANALYSIS_CAPABILITY_PLANNER_KINDS,
+} from './capability-catalog.js';
 export {
   createCurrentSourceAnalysisAuditAnswer,
   createSourceAnalysisAuditAnswer,
@@ -154,6 +175,28 @@ export {
   resolveSourceAnalysisInquiryPolicy,
 } from './inquiry-policy.js';
 export type {
+  SourceAnalysisCapabilityDiscoveryOptions,
+  SourceAnalysisCapabilityDiscoveryValue,
+  SourceAnalysisCapabilityPlanOptions,
+  SourceAnalysisCapabilityPlanReason,
+  SourceAnalysisCapabilityPlanReasonKind,
+  SourceAnalysisCapabilityPlanStatus,
+  SourceAnalysisCapabilityPlanValue,
+  SourceAnalysisCapabilityRef,
+  SourceAnalysisCapabilityRepairOptions,
+  SourceAnalysisCapabilityRepairStatus,
+  SourceAnalysisCapabilityRepairValue,
+  SourceAnalysisCommandRepair,
+  SourceAnalysisPlannedInvocation,
+} from './ingress.js';
+export {
+  createSourceAnalysisCapabilityIngress,
+  SourceAnalysisCapabilityIngress,
+  SOURCE_ANALYSIS_CAPABILITY_PLAN_REASON_KINDS,
+  SOURCE_ANALYSIS_CAPABILITY_PLAN_STATUSES,
+  SOURCE_ANALYSIS_CAPABILITY_REPAIR_STATUSES,
+} from './ingress.js';
+export type {
   SourceAnalysisLocationPoint,
   SourceAnalysisLocationRange,
   SourceAnalysisObservationProvenance,
@@ -265,14 +308,21 @@ export type {
 
 export { createSourceAnalysisHostRuntime, SourceAnalysisHostRuntime } from './host/runtime.js';
 export type {
+  DescribeCapabilitiesArgs,
+  DescribeCapabilitiesResult,
   MaterializeSnapshotsArgs,
   MaterializeSnapshotsResult,
+  PlanQuestionArgs,
+  PlanQuestionResult,
   QueryArgs,
   QuerySnapshotResult,
   QuerySummaryResult,
+  RepairCommandArgs,
+  RepairCommandResult,
   QueryRouteWitnessArgs,
   QueryRouteWitnessResult,
   RenderQueryArgs,
+  RenderArgs,
   SessionCloseArgs,
   SessionCloseResult,
   SessionInvalidateArgs,

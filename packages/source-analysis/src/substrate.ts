@@ -1,6 +1,3 @@
-// Type scaffold for the future shared observation graph.
-// This file is intentionally structural only and does not change analyzer behavior.
-
 export const SOURCE_ANALYSIS_SUBSTRATE_SCHEMA_VERSION = 'v0alpha1' as const;
 
 export const SOURCE_ANALYSIS_SUBSTRATE_NODE_KINDS = [
@@ -80,7 +77,6 @@ export interface SourceAnalysisSubstrateNode {
   readonly attributes?: SourceAnalysisSubstrateAttributes;
 }
 
-// "Fact" is the intended semantic reading of a substrate node.
 export type SourceAnalysisSubstrateFact = SourceAnalysisSubstrateNode;
 
 export interface SourceAnalysisSubstrateEdge {

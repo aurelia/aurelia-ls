@@ -15,6 +15,7 @@ import {
   renderSourceAnalysisAnswerDocumentToPlainText,
 } from '../answer-renderer.js';
 import { createSourceAnalysisPaths } from '../config.js';
+import { SourceAnalysisCapabilityIngress } from '../ingress.js';
 import type { SourceAnalysisConsumerKind } from '../inquiry-policy.js';
 import { resolveSourceAnalysisInquiryPolicy } from '../inquiry-policy.js';
 import type { SourceAnalysisFocusKind } from '../query-model.js';
@@ -34,6 +35,12 @@ import {
   SOURCE_ANALYSIS_KINDS,
   type MaterializeSnapshotsArgs,
   type MaterializeSnapshotsResult,
+  type DescribeCapabilitiesArgs,
+  type DescribeCapabilitiesResult,
+  type PlanQuestionArgs,
+  type PlanQuestionResult,
+  type RepairCommandArgs,
+  type RepairCommandResult,
   type QueryAuditPackageArgs,
   type QueryAuditPackageResult,
   type QueryRouteWitnessArgs,
@@ -82,6 +89,7 @@ const SOURCE_FILE_PATTERN = /(\.d\.ts|\.tsx|\.ts|\.mts|\.cts)$/i;
 
 export class SourceAnalysisHostRuntime {
   readonly #sessions = new SourceAnalysisHostSessionManager();
+  readonly #ingress = new SourceAnalysisCapabilityIngress();
 
   execute<TCommand extends SourceAnalysisHostCommandName>(
     invocation: SourceAnalysisHostCommandInvocation<TCommand>,
@@ -127,6 +135,9 @@ export class SourceAnalysisHostRuntime {
     invocation: SourceAnalysisHostCommandInvocation<TCommand>,
   ): CommandOutcome {
     switch (invocation.command) {
+      case 'describe.capabilities': return this.#describeCapabilities(invocation.args as DescribeCapabilitiesArgs);
+      case 'plan.question': return this.#planQuestion(invocation.args as PlanQuestionArgs);
+      case 'repair.command': return this.#repairCommand(invocation.args as RepairCommandArgs);
       case 'session.open': return this.#sessionOpen(invocation.args as SessionOpenArgs);
       case 'session.close': return this.#sessionClose(invocation.args as SessionCloseArgs);
       case 'session.status': return this.#sessionStatus(invocation.args as SessionStatusArgs);
@@ -143,6 +154,86 @@ export class SourceAnalysisHostRuntime {
       case 'materializeSnapshots': return this.#materializeSnapshots(invocation.args as MaterializeSnapshotsArgs);
       default: return assertNever(invocation.command);
     }
+  }
+
+  #describeCapabilities(args: DescribeCapabilitiesArgs): CommandOutcome {
+    const answer = this.#ingress.createDiscoveryAnswer({
+      question: args.question,
+      focusKind: args.focusKind,
+      includeExamples: args.includeExamples,
+      topK: args.topK,
+      readMode: args.readMode,
+      consumer: args.consumer,
+      worldFrame: {
+        regimeAnchor: 'hosted',
+        partiality: 'complete',
+        freshness: 'live',
+      },
+    });
+    const rendered = buildRenderedView(answer, args.consumer, args.renderStyle);
+    const result: DescribeCapabilitiesResult = {
+      answer,
+      ...(rendered ? { rendered } : {}),
+    };
+    return {
+      result,
+      invalidation: emptyInvalidationMeta(),
+    };
+  }
+
+  #planQuestion(args: PlanQuestionArgs): CommandOutcome {
+    const sessionState = args.sessionId ? this.#tryGetSession(args.sessionId) : undefined;
+    const answer = this.#ingress.createPlanAnswer({
+      question: args.question,
+      sessionId: args.sessionId,
+      focusKind: args.focusKind,
+      focusValue: args.focusValue,
+      readMode: args.readMode,
+      consumer: args.consumer,
+      worldFrame: {
+        ...(sessionState ? { repoPath: sessionState.repoPath, target: sessionState.target } : {}),
+        regimeAnchor: 'hosted',
+        partiality: 'complete',
+        freshness: 'live',
+      },
+    });
+    const rendered = buildRenderedView(answer, args.consumer, args.renderStyle);
+    const result: PlanQuestionResult = {
+      answer,
+      ...(rendered ? { rendered } : {}),
+    };
+    return {
+      result,
+      sessionId: sessionState?.sessionId,
+      invalidation: sessionState ? buildInvalidationMeta(sessionState) : emptyInvalidationMeta(),
+      cache: sessionState
+        ? { hit: hasCachedSnapshots(sessionState), tier: hasCachedSnapshots(sessionState) ? 'warm' : 'cold' }
+        : DEFAULT_CACHE,
+    };
+  }
+
+  #repairCommand(args: RepairCommandArgs): CommandOutcome {
+    const answer = this.#ingress.createRepairAnswer({
+      command: args.command,
+      args: args.args,
+      question: args.question,
+      readMode: args.readMode,
+      consumer: args.consumer,
+      worldFrame: {
+        regimeAnchor: 'hosted',
+        partiality: 'complete',
+        freshness: 'live',
+      },
+    });
+    const rendered = buildRenderedView(answer, args.consumer, args.renderStyle);
+    const result: RepairCommandResult = {
+      answer,
+      ...(rendered ? { rendered } : {}),
+    };
+    return {
+      result,
+      invalidation: emptyInvalidationMeta(),
+    };
   }
 
   #sessionOpen(args: SessionOpenArgs): CommandOutcome {
@@ -744,7 +835,6 @@ function writeSnapshotJson(path: string, snapshot: unknown): void {
       try {
         unlinkSync(tempPath);
       } catch {
-        // Best-effort cleanup for failed writes.
       }
     }
   }

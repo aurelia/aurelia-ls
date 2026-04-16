@@ -1,9 +1,14 @@
-import type { SourceAnalysisAnswer, SourceAnalysisReadMode } from '../query-model.js';
+import type { SourceAnalysisAnswer, SourceAnalysisFocusKind, SourceAnalysisReadMode } from '../query-model.js';
 import type { SourceAnalysisAuditValue } from '../audit.js';
 import type { SourceAnalysisAnswerDocument } from '../answer-document.js';
 import type { SourceAnalysisAnswerRef } from '../answer-card.js';
 import type { SourceAnalysisConsumerKind } from '../inquiry-policy.js';
 import type { SourceAnalysisRenderedPlainText } from '../answer-renderer.js';
+import type {
+  SourceAnalysisCapabilityDiscoveryValue,
+  SourceAnalysisCapabilityPlanValue,
+  SourceAnalysisCapabilityRepairValue,
+} from '../ingress.js';
 import type { DepsOutput } from '../deps/schema.js';
 import type { ExportsOutput } from '../exports/schema.js';
 import type { SourceAnalysisRouteWitnessValue } from '../route-witness.js';
@@ -146,11 +151,13 @@ export interface QueryArgs {
   readonly refreshIfNeeded?: boolean;
 }
 
-export interface RenderQueryArgs extends QueryArgs {
+export interface RenderArgs {
   readonly readMode?: SourceAnalysisReadMode;
   readonly consumer?: SourceAnalysisConsumerKind;
   readonly renderStyle?: SourceAnalysisHostRenderStyle;
 }
+
+export interface RenderQueryArgs extends QueryArgs, RenderArgs {}
 
 export type SourceAnalysisHostRenderedView =
   | {
@@ -169,6 +176,26 @@ export interface QueryAuditPackageArgs extends RenderQueryArgs {
 export interface QueryRouteWitnessArgs extends RenderQueryArgs {
   readonly focusKind: 'file' | 'type';
   readonly focusValue: string;
+}
+
+export interface DescribeCapabilitiesArgs extends RenderArgs {
+  readonly question?: string;
+  readonly focusKind?: SourceAnalysisFocusKind;
+  readonly includeExamples?: boolean;
+  readonly topK?: number;
+}
+
+export interface PlanQuestionArgs extends RenderArgs {
+  readonly question: string;
+  readonly sessionId?: string;
+  readonly focusKind?: SourceAnalysisFocusKind;
+  readonly focusValue?: string;
+}
+
+export interface RepairCommandArgs extends RenderArgs {
+  readonly command?: string;
+  readonly args?: Record<string, unknown>;
+  readonly question?: string;
 }
 
 export interface QuerySummaryResult<TKind extends SourceAnalysisKind> {
@@ -196,6 +223,21 @@ export interface QueryRouteWitnessResult {
   readonly warnings: readonly string[];
 }
 
+export interface DescribeCapabilitiesResult {
+  readonly answer: SourceAnalysisAnswer<SourceAnalysisCapabilityDiscoveryValue>;
+  readonly rendered?: SourceAnalysisHostRenderedView;
+}
+
+export interface PlanQuestionResult {
+  readonly answer: SourceAnalysisAnswer<SourceAnalysisCapabilityPlanValue>;
+  readonly rendered?: SourceAnalysisHostRenderedView;
+}
+
+export interface RepairCommandResult {
+  readonly answer: SourceAnalysisAnswer<SourceAnalysisCapabilityRepairValue>;
+  readonly rendered?: SourceAnalysisHostRenderedView;
+}
+
 export interface MaterializeSnapshotsArgs {
   readonly sessionId: string;
   readonly kinds?: readonly SourceAnalysisKind[];
@@ -210,6 +252,9 @@ export interface MaterializeSnapshotsResult {
 }
 
 export interface SourceAnalysisHostCommandArgsMap {
+  'describe.capabilities': DescribeCapabilitiesArgs;
+  'plan.question': PlanQuestionArgs;
+  'repair.command': RepairCommandArgs;
   'session.open': SessionOpenArgs;
   'session.close': SessionCloseArgs;
   'session.status': SessionStatusArgs;
@@ -227,6 +272,9 @@ export interface SourceAnalysisHostCommandArgsMap {
 }
 
 export interface SourceAnalysisHostCommandResultMap {
+  'describe.capabilities': DescribeCapabilitiesResult;
+  'plan.question': PlanQuestionResult;
+  'repair.command': RepairCommandResult;
   'session.open': SessionOpenResult;
   'session.close': SessionCloseResult;
   'session.status': SessionStatusResult;

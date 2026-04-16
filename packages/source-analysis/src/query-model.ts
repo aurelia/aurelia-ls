@@ -1,6 +1,3 @@
-// Type scaffold for the future API/query surface.
-// This file is intentionally structural only and does not change analyzer behavior.
-
 import type {
   SourceAnalysisClosureBasis,
   SourceAnalysisOutcome,
@@ -56,6 +53,7 @@ export const SOURCE_ANALYSIS_FOCUS_KINDS = [
   'export',
   'claim',
   'session',
+  'capability',
 ] as const;
 
 export const SOURCE_ANALYSIS_REGIME_ANCHORS = [

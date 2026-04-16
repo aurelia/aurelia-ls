@@ -252,6 +252,74 @@ describe('SourceAnalysisHostRuntime', () => {
     expect(presentationFinding?.evidence.some((line) => line.includes('AlphaValue'))).toBe(true);
     expect(presentationFinding?.evidence.some((line) => line.includes('BetaValue'))).toBe(true);
   });
+
+  it('describes, plans, and repairs capability ingress through the hosted runtime', () => {
+    const repoPath = createAuditFixtureRepo();
+    const runtime = createSourceAnalysisHostRuntime();
+
+    const describe = runtime.execute({
+      command: 'describe.capabilities',
+      args: {
+        question: 'Why is src/live.ts alive?',
+        renderStyle: 'plain-text',
+      },
+    });
+
+    expect(describe.status).toBe('ok');
+    expect(describe.result.answer.outcome.value?.capabilities[0]?.command).toBe('query.route.witness');
+    expect(describe.result.rendered?.style).toBe('plain-text');
+
+    const opened = runtime.execute({
+      command: 'session.open',
+      args: {
+        repoPath,
+        target: 'fixture-ingress',
+      },
+    });
+
+    const sessionId = opened.result.sessionId;
+    const plan = runtime.execute({
+      command: 'plan.question',
+      args: {
+        question: 'Audit @fixture/source-analysis-audit for tech debt.',
+        sessionId,
+        renderStyle: 'json-document',
+      },
+    });
+
+    expect(plan.status).toBe('ok');
+    expect(plan.result.answer.outcome.value?.status).toBe('ready');
+    expect(plan.result.answer.outcome.value?.invocation).toEqual({
+      command: 'query.audit.package',
+      args: {
+        sessionId,
+        packageName: '@fixture/source-analysis-audit',
+      },
+    });
+    expect(plan.result.rendered?.style).toBe('json-document');
+
+    const repair = runtime.execute({
+      command: 'repair.command',
+      args: {
+        command: 'query.audit.pkg',
+        question: 'Audit @fixture/source-analysis-audit for tech debt.',
+        args: {
+          sessionId,
+          packageName: '@fixture/source-analysis-audit',
+        },
+      },
+    });
+
+    expect(repair.status).toBe('ok');
+    expect(repair.result.answer.outcome.value?.status).toBe('repaired');
+    expect(repair.result.answer.outcome.value?.invocation).toEqual({
+      command: 'query.audit.package',
+      args: {
+        sessionId,
+        packageName: '@fixture/source-analysis-audit',
+      },
+    });
+  });
 });
 
 function createFixtureRepo(): string {

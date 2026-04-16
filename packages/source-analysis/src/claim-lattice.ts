@@ -1,6 +1,3 @@
-// Type scaffold for the future claim DAG derived from the shared substrate.
-// This file is intentionally structural only and does not change analyzer behavior.
-
 import type {
   SourceAnalysisSubstrateAttributes,
   SourceAnalysisSubstrateEdgeId,

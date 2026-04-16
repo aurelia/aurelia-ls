@@ -1,6 +1,3 @@
-// Type scaffold for the future query/result algebra.
-// This file is intentionally structural only and does not change analyzer behavior.
-
 import type {
   SourceAnalysisClaimHomeId,
   SourceAnalysisClaimId,
