@@ -3,6 +3,7 @@
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
+import { isHostedCliMode, runHostedCli } from './cli-hosted.js';
 import { createSnapshotPaths } from './snapshot-config.js';
 
 const PATHS = createSnapshotPaths(import.meta.url);
@@ -27,6 +28,9 @@ function printHelp(): void {
       'Usage: pnpm source-analysis <mode> [args]',
       '',
       'Modes:',
+      '  describe <profile|inquiries|capabilities> [question] [--repo <path>] [--json]',
+      '  plan <inquiry|question> <question> [--repo <path>] [--target <name>] [--json]',
+      '  ask <question> [--repo <path>] [--target <name>] [--json]',
       '  refresh [deps|typerefs|exports|all] [--target <name>] [--repo <path>] [--profile-path <path>] [--out-dir <dir>] [--wait-ms <ms>]',
       '  deps <command> [args] [--target <name>] [--repo <path>] [--profile-path <path>] [--file path.json]',
       '  typerefs <command> [args] [--target <name>] [--repo <path>] [--profile-path <path>] [--file path.json]',
@@ -36,6 +40,9 @@ function printHelp(): void {
       'If --target is omitted, a target label is derived from the repo path.',
       '',
       'Examples:',
+      '  pnpm source-analysis describe profile',
+      '  pnpm source-analysis describe inquiries "How do I discover what this tool can answer?"',
+      '  pnpm source-analysis ask "Audit @aurelia-ls/source-analysis for tech debt." --repo /path/to/repo',
       '  pnpm source-analysis refresh all',
       '  pnpm source-analysis deps summary',
       '  pnpm source-analysis deps packages',
@@ -47,8 +54,12 @@ function printHelp(): void {
 }
 
 if (!entrypoint || !(entrypoint in ENTRYPOINTS)) {
-  printHelp();
-  process.exitCode = entrypoint ? 1 : 0;
+  if (isHostedCliMode(entrypoint)) {
+    process.exitCode = runHostedCli(args);
+  } else {
+    printHelp();
+    process.exitCode = entrypoint ? 1 : 0;
+  }
 } else {
   const result = spawnSync(
     process.execPath,

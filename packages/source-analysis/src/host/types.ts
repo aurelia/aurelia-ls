@@ -27,6 +27,7 @@ import type { RouteWitnessValue } from '../route-witness.js';
 import type { TypeRefsOutput } from '../typerefs/schema.js';
 import type { SnapshotKind } from '../snapshots.js';
 import type { AnalysisProfile } from '../analysis-profile.js';
+import type { ProfileSnapshotSupport } from '../profile-support.js';
 
 export const HOST_SCHEMA_VERSION = 'v1alpha1' as const;
 export const HOST_RENDER_STYLES = [
@@ -293,6 +294,7 @@ export interface DescribeCapabilitiesResult {
 
 export interface DescribeProfileResult {
   readonly profile: AnalysisProfile;
+  readonly snapshotSupport: ProfileSnapshotSupport;
 }
 
 export interface DescribeInquiriesResult {

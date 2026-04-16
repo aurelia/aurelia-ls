@@ -485,6 +485,8 @@ describe('SnapshotHostRuntime', () => {
     expect(described.status).toBe('ok');
     expect(described.result.profile.profileId).toBe('fixture-profile');
     expect(described.result.profile.snapshotTarget).toBe('fixture-profile-target');
+    expect(described.result.snapshotSupport.target).toBe('fixture-profile-target');
+    expect(described.result.snapshotSupport.missingKinds).toEqual(['deps', 'typerefs', 'exports']);
 
     const opened = runtime.execute({
       command: 'session.open',

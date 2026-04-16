@@ -10,7 +10,10 @@ import {
   SnapshotHostRuntime,
 } from '../out/public/host.js';
 import { createInquiryIngress } from '../out/public/inquiry.js';
-import { resolveAnalysisProfile } from '../out/public/profile.js';
+import {
+  inspectProfileSnapshotSupport,
+  resolveAnalysisProfile,
+} from '../out/public/profile.js';
 import { tryLoadCurrentSnapshots } from '../out/public/snapshots.js';
 
 describe('Source-analysis public API surface', () => {
@@ -38,5 +41,15 @@ describe('Source-analysis public API surface', () => {
 
     const profile = resolveAnalysisProfile({ repoPath: process.cwd() });
     expect(profile.repoPath.replace(/\\/g, '/')).toBe(process.cwd().replace(/\\/g, '/').replace(/\/+$/g, ''));
+
+    const support = inspectProfileSnapshotSupport(
+      {
+        toolRootPath: process.cwd(),
+        envSnapshotRootPath: null,
+        snapshotRootPath: `${process.cwd()}/.source-analysis/snapshots`,
+      },
+      profile,
+    );
+    expect(Array.isArray(support.snapshots)).toBe(true);
   });
 });

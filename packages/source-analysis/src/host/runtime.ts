@@ -15,6 +15,7 @@ import {
   renderAnswerDocumentToPlainText,
 } from '../answer-renderer.js';
 import { resolveAnalysisProfile } from '../analysis-profile.js';
+import { inspectProfileSnapshotSupport } from '../profile-support.js';
 import {
   createSnapshotPaths,
   resolveSnapshotRootPath,
@@ -225,12 +226,17 @@ export class SnapshotHostRuntime {
   }
 
   #describeProfile(args: DescribeProfileArgs): CommandOutcome {
+    const profile = resolveAnalysisProfile({
+      repoPath: args.repoPath,
+      target: args.target,
+      profilePath: args.profilePath,
+    });
     const result: DescribeProfileResult = {
-      profile: resolveAnalysisProfile({
-        repoPath: args.repoPath,
-        target: args.target,
-        profilePath: args.profilePath,
-      }),
+      profile,
+      snapshotSupport: inspectProfileSnapshotSupport(
+        createSnapshotPaths(import.meta.url),
+        profile,
+      ),
     };
     return {
       result,
