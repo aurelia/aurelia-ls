@@ -115,6 +115,16 @@ export {
   SOURCE_ANALYSIS_SUBSTRATE_NODE_KINDS,
   SOURCE_ANALYSIS_SUBSTRATE_SCHEMA_VERSION,
 } from './substrate.js';
+export type {
+  SourceAnalysisPackageFileReachability,
+  SourceAnalysisPackageReachability,
+  SourceAnalysisPackageRoot,
+  SourceAnalysisPackageRootKind,
+} from './reachability.js';
+export {
+  createSourceAnalysisPackageReachability,
+  SOURCE_ANALYSIS_PACKAGE_ROOT_KINDS,
+} from './reachability.js';
 
 export {
   loadCurrentSourceAnalysisSnapshots,

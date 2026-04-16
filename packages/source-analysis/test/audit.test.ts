@@ -48,4 +48,20 @@ describe('Source-analysis package audit', () => {
       step.targetFocusRef === 'packages/source-analysis/src/semantic-runtime.ts',
     )).toBe(true);
   });
+
+  it('surfaces unanchored candidate entry roots that the audit cannot yet ground', () => {
+    const snapshots = loadSnapshotsForAudit();
+    const answer = createSourceAnalysisAuditAnswer({
+      focusRef: { kind: 'package', value: '@aurelia-ls/source-analysis' },
+      questionRoute: 'inventory',
+    }, snapshots);
+
+    const candidateRootsFinding = answer.outcome.value?.findings.find((finding) =>
+      finding.code === 'candidate-entry-roots',
+    );
+    expect(candidateRootsFinding).toBeTruthy();
+    expect(candidateRootsFinding?.relatedRefs.some((ref) =>
+      ref.value === 'packages/source-analysis/src/semantic-runtime.ts',
+    )).toBe(true);
+  });
 });

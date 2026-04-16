@@ -150,6 +150,12 @@ describe('SourceAnalysisHostRuntime', () => {
       finding.code === 'under-integrated-file'
       && finding.primaryRef.value === 'src/dormant.ts',
     )).toBe(true);
+    const candidateRootsFinding = audit.result.answer.outcome.value?.findings.find((finding) =>
+      finding.code === 'candidate-entry-roots',
+    );
+    expect(candidateRootsFinding).toBeTruthy();
+    expect(candidateRootsFinding?.relatedRefs.some((ref) => ref.value === 'src/tool.ts')).toBe(true);
+    expect(candidateRootsFinding?.relatedRefs.some((ref) => ref.value === 'src/cli.ts')).toBe(false);
   });
 });
 
@@ -213,6 +219,9 @@ function createAuditFixtureRepo(): string {
       {
         name: '@fixture/source-analysis-audit',
         type: 'module',
+        bin: {
+          'fixture-audit': './out/cli.js',
+        },
       },
       null,
       2,
@@ -239,8 +248,24 @@ function createAuditFixtureRepo(): string {
     'export interface LiveShape { value: string; }\n',
   );
   writeFileSync(
+    join(repoPath, 'src', 'cli.ts'),
+    [
+      "import { auditReady } from './index.js';",
+      'void auditReady;',
+      '',
+    ].join('\n'),
+  );
+  writeFileSync(
     join(repoPath, 'src', 'dormant.ts'),
     'export interface DormantShape { parked: boolean; }\n',
+  );
+  writeFileSync(
+    join(repoPath, 'src', 'tool.ts'),
+    [
+      "import { auditReady } from './index.js';",
+      'void auditReady;',
+      '',
+    ].join('\n'),
   );
   writeFileSync(
     join(repoPath, 'src', 'index.ts'),

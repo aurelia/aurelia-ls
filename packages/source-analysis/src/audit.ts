@@ -23,20 +23,11 @@ import type {
   SourceAnalysisWorldFrame,
 } from './query-model.js';
 import { SOURCE_ANALYSIS_QUERY_MODEL_SCHEMA_VERSION } from './query-model.js';
-
-const SELF_AUDIT_MODEL_CLUSTER_FILES = [
-  'packages/source-analysis/src/query-model.ts',
-  'packages/source-analysis/src/outcome-algebra.ts',
-  'packages/source-analysis/src/claim-lattice.ts',
-  'packages/source-analysis/src/substrate.ts',
-] as const;
-
-const SELF_AUDIT_ALLOWED_MODEL_IMPORTERS = new Set<string>([
-  ...SELF_AUDIT_MODEL_CLUSTER_FILES,
-  'packages/source-analysis/src/index.ts',
-  'packages/source-analysis/src/navigation.ts',
-  'packages/source-analysis/src/audit.ts',
-]);
+import type {
+  SourceAnalysisPackageFileReachability,
+  SourceAnalysisPackageReachability,
+} from './reachability.js';
+import { createSourceAnalysisPackageReachability } from './reachability.js';
 
 export const SOURCE_ANALYSIS_AUDIT_FINDING_KINDS = [
   'blindspot',
@@ -84,6 +75,7 @@ interface PackageAuditContext {
   readonly inboundSourcesByFile: ReadonlyMap<string, readonly string[]>;
   readonly declarationsByFile: ReadonlyMap<string, readonly TypeDecl[]>;
   readonly exportRecordsByFile: ReadonlyMap<string, readonly PackageExportRecord[]>;
+  readonly reachability: SourceAnalysisPackageReachability;
 }
 
 export function createCurrentSourceAnalysisAuditAnswer(
@@ -198,8 +190,9 @@ function createPackageAuditContext(
   snapshots: LoadedCurrentSourceAnalysisSnapshots,
   pkg: PackageExportsSummary,
 ): PackageAuditContext {
+  const reachability = createSourceAnalysisPackageReachability(snapshots, pkg);
   const packagePrefix = pkg.package_dir.length > 0 ? `${pkg.package_dir}/` : '';
-  const packageFiles = new Set<string>();
+  const packageFiles = new Set<string>(reachability.files.map((file) => file.filePath));
   const uncoveredFiles = snapshots.deps.uncovered_files.filter((filePath) =>
     filePath.startsWith(packagePrefix),
   );
@@ -269,6 +262,7 @@ function createPackageAuditContext(
         [...exportRecords].sort((left, right) => left.exported_name.localeCompare(right.exported_name)),
       ]),
     ),
+    reachability,
   };
 }
 
@@ -279,7 +273,7 @@ function collectPackageAuditFindings(
     collectUncoveredFilesFinding(context),
     collectUnresolvedImportsFinding(context),
     ...collectDormantFileFindings(context),
-    collectSelfAuditModelClusterFinding(context),
+    collectUnanchoredCandidateRootsFinding(context),
   ].filter((finding): finding is SourceAnalysisAuditFinding => Boolean(finding));
 
   return findings.sort((left, right) =>
@@ -296,12 +290,14 @@ function collectUncoveredFilesFinding(
     return null;
   }
 
-  const uncoveredTests = context.uncoveredFiles.filter((filePath) => isTestLikeFile(filePath));
-  const primaryPath = uncoveredTests[0] ?? context.uncoveredFiles[0]!;
-  const title = uncoveredTests.length === context.uncoveredFiles.length
+  const uncoveredExercises = context.uncoveredFiles.filter((filePath) =>
+    context.reachability.exerciseFiles.includes(filePath),
+  );
+  const primaryPath = uncoveredExercises[0] ?? context.uncoveredFiles[0]!;
+  const title = uncoveredExercises.length === context.uncoveredFiles.length
     ? 'Tests sit outside the graph coverage'
     : 'Some package files sit outside the graph coverage';
-  const summary = uncoveredTests.length === context.uncoveredFiles.length
+  const summary = uncoveredExercises.length === context.uncoveredFiles.length
     ? `${context.uncoveredFiles.length} test file${pluralize(context.uncoveredFiles.length)} under ${context.pkg.package_dir} are outside every tsconfig, so the audit cannot honestly close on which package surfaces are exercised.`
     : `${context.uncoveredFiles.length} file${pluralize(context.uncoveredFiles.length)} under ${context.pkg.package_dir} are outside every tsconfig, so the dependency graph has a real blind spot.`;
 
@@ -316,8 +312,8 @@ function collectUncoveredFilesFinding(
     relatedRefs: context.uncoveredFiles.slice(0, 8).map((filePath) => fileRef(filePath, 'uncovered file')),
     evidence: [
       `${context.uncoveredFiles.length} uncovered file${pluralize(context.uncoveredFiles.length)} under ${context.pkg.package_dir}.`,
-      ...(uncoveredTests.length > 0
-        ? [`${uncoveredTests.length} uncovered file${pluralize(uncoveredTests.length)} look like tests, which hides exercise coverage from the graph.`]
+      ...(uncoveredExercises.length > 0
+        ? [`${uncoveredExercises.length} uncovered file${pluralize(uncoveredExercises.length)} currently classify as exercise roots, which hides exercise coverage from the graph.`]
         : []),
       ...context.uncoveredFiles.slice(0, 4).map((filePath) => `uncovered: ${filePath}`),
     ],
@@ -355,37 +351,34 @@ function collectUnresolvedImportsFinding(
 function collectDormantFileFindings(
   context: PackageAuditContext,
 ): readonly SourceAnalysisAuditFinding[] {
-  const publicFiles = new Set(context.exportRecordsByFile.keys());
-  const sourcePrefix = context.pkg.package_dir.length > 0
-    ? `${context.pkg.package_dir}/src/`
-    : 'src/';
-  const dormantFiles = context.packageFiles.filter((filePath) => {
-    if (!filePath.startsWith(sourcePrefix)) return false;
-    if ((context.inboundCountsByFile.get(filePath) ?? 0) > 0) return false;
-    if (publicFiles.has(filePath)) return false;
-    if (filePath === context.pkg.analysis_entrypoint) return false;
-    if (isEntrypointLike(filePath)) return false;
-    return true;
-  });
+  const dormantFiles = context.reachability.files
+    .filter((file) => isDormantCandidate(context, file))
+    .slice(0, 3);
 
-  return dormantFiles.slice(0, 3).map((filePath) => {
-    const declarations = context.declarationsByFile.get(filePath) ?? [];
+  return dormantFiles.map((file) => {
+    const declarations = context.declarationsByFile.get(file.filePath) ?? [];
+    const roots = context.reachability.rootsByFilePath.get(file.filePath) ?? [];
     return {
       code: 'under-integrated-file',
       kind: 'under-integrated-file' as const,
       severity: 'warning' as const,
       confidence: 'grounded' as const,
-      title: `${basename(filePath)} looks parked rather than integrated`,
-      summary: `${filePath} has no inbound imports in the current graph, is not on the public package surface, and still carries ${declarations.length} tracked declaration${pluralize(declarations.length)}.`,
-      primaryRef: fileRef(filePath, 'under-integrated file'),
+      title: `${basename(file.filePath)} looks parked rather than integrated`,
+      summary: `${file.filePath} is not reachable from a grounded package root, has no inbound imports in the current graph, is not on the public package surface, and still carries ${declarations.length} tracked declaration${pluralize(declarations.length)}.`,
+      primaryRef: fileRef(file.filePath, 'under-integrated file'),
       relatedRefs: dedupeRefs([
         packageRef(context.pkg),
         ...declarations.slice(0, 4).map((declaration) => typeRef(declaration)),
       ]),
       evidence: [
-        'inbound imports: 0',
-        `public export records: ${publicFiles.has(filePath) ? 1 : 0}`,
+        `grounded roots: ${file.groundedRootIds.length}`,
+        `qualified roots: ${file.qualifiedRootIds.length}`,
+        `inbound imports: ${file.inboundFiles.length}`,
+        `public export records: ${file.exportCount}`,
         `tracked declarations: ${declarations.length}`,
+        ...(roots.length > 0
+          ? [`root roles: ${roots.map((root) => root.kind).join(', ')}`]
+          : []),
         ...(declarations.length > 0
           ? [`declared types: ${declarations.map((declaration) => declaration.name).join(', ')}`]
           : []),
@@ -394,50 +387,64 @@ function collectDormantFileFindings(
   });
 }
 
-function collectSelfAuditModelClusterFinding(
+function collectUnanchoredCandidateRootsFinding(
   context: PackageAuditContext,
 ): SourceAnalysisAuditFinding | null {
-  if (context.pkg.package_name !== '@aurelia-ls/source-analysis') {
+  const candidateRoots = context.reachability.roots
+    .filter((root) => root.kind === 'candidate-entry')
+    .map((root) => ({
+      root,
+      file: context.reachability.filesByPath.get(root.filePath),
+    }))
+    .filter((entry): entry is { root: SourceAnalysisPackageReachability['roots'][number]; file: SourceAnalysisPackageFileReachability } =>
+      Boolean(entry.file),
+    )
+    .sort((left, right) =>
+      scoreCandidateEntry(right.file) - scoreCandidateEntry(left.file)
+      || left.root.filePath.localeCompare(right.root.filePath),
+    );
+
+  if (candidateRoots.length === 0) {
     return null;
   }
 
-  const modelClusterFiles = SELF_AUDIT_MODEL_CLUSTER_FILES.filter((filePath) =>
-    context.packageFiles.includes(filePath),
-  );
-  if (modelClusterFiles.length !== SELF_AUDIT_MODEL_CLUSTER_FILES.length) {
-    return null;
-  }
-
-  const directImportersByFile = modelClusterFiles.map((filePath) => ({
-    filePath,
-    importers: context.inboundSourcesByFile.get(filePath) ?? [],
-  }));
-  const unexpectedImporters = [...new Set(
-    directImportersByFile.flatMap(({ importers }) =>
-      importers.filter((importer) => !SELF_AUDIT_ALLOWED_MODEL_IMPORTERS.has(importer)),
-    ),
-  )];
-  if (unexpectedImporters.length > 0) {
-    return null;
-  }
-
+  const topCandidates = candidateRoots.slice(0, 6);
+  const primary = topCandidates[0]!;
   return {
-    code: 'answer-model-local-cluster',
+    code: 'candidate-entry-roots',
     kind: 'surface-drift',
     severity: 'info',
     confidence: 'grounded',
-    title: 'The answer model still behaves like a local cluster',
-    summary: 'The answer-model files are on the public package surface, but their direct consumers are still mostly the entrypoint, navigation, audit, and each other. That suggests the architectural vocabulary exists, while most core analyzer paths still bypass it directly.',
-    primaryRef: fileRef('packages/source-analysis/src/query-model.ts', 'answer model'),
-    relatedRefs: dedupeRefs([
-      ...modelClusterFiles.map((filePath) => fileRef(filePath, 'answer-model file')),
-      fileRef('packages/source-analysis/src/navigation.ts', 'orientation layer'),
-      fileRef('packages/source-analysis/src/audit.ts', 'audit layer'),
-    ]),
-    evidence: directImportersByFile.map(({ filePath, importers }) =>
-      `${basename(filePath)} direct importers: ${importers.map((importer) => basename(importer)).join(', ') || '(none)'}`,
+    title: 'Some files act like entry roots without a grounded route',
+    summary: `${candidateRoots.length} file${pluralize(candidateRoots.length)} under ${context.pkg.package_name} ${candidateRoots.length === 1 ? 'has' : 'have'} no inbound imports but still drive package-local edges. The audit cannot tie ${candidateRoots.length === 1 ? 'it' : 'them'} to the public API or a manifest-backed executable surface, so ${candidateRoots.length === 1 ? 'it remains' : 'they remain'} under-modeled route heads.`,
+    primaryRef: fileRef(primary.root.filePath, 'candidate entry root'),
+    relatedRefs: topCandidates.map(({ root }) => fileRef(root.filePath, root.kind)),
+    evidence: topCandidates.map(({ root, file }) =>
+      `${root.filePath}: outbound=${file.outboundFiles.length}, declarations=${file.declarationCount}, publicSurface=${file.publicSurface ? 'yes' : 'no'}`,
     ),
   };
+}
+
+function isDormantCandidate(
+  context: PackageAuditContext,
+  file: SourceAnalysisPackageFileReachability,
+): boolean {
+  const sourcePrefix = context.pkg.package_dir.length > 0
+    ? `${context.pkg.package_dir}/src/`
+    : 'src/';
+  if (!file.filePath.startsWith(sourcePrefix)) return false;
+  if (file.publicSurface) return false;
+  if (file.groundedRootIds.length > 0) return false;
+  if (file.inboundFiles.length > 0) return false;
+  if (file.declarationCount === 0) return false;
+  return true;
+}
+
+function scoreCandidateEntry(file: SourceAnalysisPackageFileReachability): number {
+  return file.outboundFiles.length * 10
+    + file.declarationCount * 5
+    + file.exportCount * 3
+    + (file.publicSurface ? 1 : 0);
 }
 
 function trustForFindings(
@@ -467,10 +474,16 @@ function closureBasisForPackageAudit(
   context: PackageAuditContext,
   findings: readonly SourceAnalysisAuditFinding[],
 ): readonly SourceAnalysisClosureBasis[] {
+  const groundedRoots = context.reachability.roots.filter((root) => root.trust === 'grounded');
+  const qualifiedRoots = context.reachability.roots.filter((root) => root.trust !== 'grounded');
   return [
     {
       kind: 'route',
-      summary: 'This audit composes dependency coverage, type declarations, and public export surface into package-level red flags.',
+      summary: `This audit composes dependency coverage, type declarations, public export surface, and ${groundedRoots.length} grounded root${pluralize(groundedRoots.length)} plus ${qualifiedRoots.length} qualified root${pluralize(qualifiedRoots.length)} into package-level red flags.`,
+      provenanceRefs: [
+        ...groundedRoots.map((root) => `${root.kind}:${root.filePath}`),
+        ...qualifiedRoots.map((root) => `${root.kind}:${root.filePath}`),
+      ].slice(0, 10),
     },
     {
       kind: 'freshness',
@@ -517,6 +530,15 @@ function provenanceForPackageAudit(
         detail: `findings=${findings.length}`,
       }]
       : []),
+    {
+      kind: 'route',
+      label: 'package reachability roots',
+      ref: context.pkg.package_name,
+      detail: context.reachability.roots
+        .map((root) => `${root.kind}:${basename(root.filePath)}`)
+        .slice(0, 8)
+        .join(', '),
+    },
   ];
 }
 
