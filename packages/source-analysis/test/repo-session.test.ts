@@ -42,9 +42,32 @@ describe('RepoSession program caching', () => {
     expect(cachedAfterClear).toBeTruthy();
     expect(cachedAfterClear).not.toBe(cachedFirst);
   });
+
+  it('evicts least-recently-used cached programs when the cache budget is reached', () => {
+    const repoPath = createFixtureRepo({ includeSecondTsconfig: true });
+    const session = createRepoSession({
+      repoPath,
+      target: 'fixture',
+      maxCachedPrograms: 1,
+    });
+    const tsconfigPaths = session.findTsconfigs().slice().sort();
+
+    expect(tsconfigPaths).toHaveLength(2);
+
+    const first = session.getProgram(tsconfigPaths[0]!, 'analysis', { cache: true });
+    const second = session.getProgram(tsconfigPaths[1]!, 'analysis', { cache: true });
+    const firstReloaded = session.getProgram(tsconfigPaths[0]!, 'analysis', { cache: true });
+
+    expect(first).toBeTruthy();
+    expect(second).toBeTruthy();
+    expect(firstReloaded).toBeTruthy();
+    expect(firstReloaded).not.toBe(first);
+  });
 });
 
-function createFixtureRepo(): string {
+function createFixtureRepo(
+  options: { includeSecondTsconfig?: boolean } = {},
+): string {
   const repoPath = mkdtempSync(join(tmpdir(), 'source-analysis-session-'));
   tempDirs.push(repoPath);
 
@@ -69,6 +92,30 @@ function createFixtureRepo(): string {
     join(repoPath, 'src', 'index.ts'),
     'export interface Example { value: string; }\n',
   );
+
+  if (options.includeSecondTsconfig) {
+    mkdirSync(join(repoPath, 'extra', 'src'), { recursive: true });
+    writeFileSync(
+      join(repoPath, 'extra', 'tsconfig.json'),
+      JSON.stringify(
+        {
+          compilerOptions: {
+            module: 'NodeNext',
+            moduleResolution: 'NodeNext',
+            target: 'ES2022',
+            noEmit: true,
+          },
+          include: ['src/**/*.ts'],
+        },
+        null,
+        2,
+      ),
+    );
+    writeFileSync(
+      join(repoPath, 'extra', 'src', 'index.ts'),
+      'export interface ExtraExample { value: number; }\n',
+    );
+  }
 
   return repoPath;
 }

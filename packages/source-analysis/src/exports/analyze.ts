@@ -5,6 +5,10 @@ import { dirname, join, relative, resolve } from 'node:path';
 
 import * as ts from 'typescript';
 
+import {
+  loadPackageDescriptors,
+  type PackageDescriptor,
+} from '../package-descriptors.js';
 import type { ProgramReuseOptions } from '../program-reuse-options.js';
 import { RepoSession } from '../repo-session.js';
 import type {
@@ -14,16 +18,6 @@ import type {
   PackageExportRecord,
   PackageExportsSummary,
 } from './schema.js';
-
-interface PackageDescriptor {
-  packageName: string;
-  packageDir: string;
-  packageJsonPath: string;
-  sourceEntrypoint: string | null;
-  publicTypesEntrypoint: string | null;
-  analysisBasis: 'source' | 'types';
-  analysisEntrypoint: string;
-}
 
 interface ModuleDeclarationInfo {
   name: string;
@@ -96,7 +90,14 @@ interface SymbolClassification {
   valueExported: boolean;
 }
 
-interface PackageAnalysisContext {
+interface ExportsAnalysisScope {
+  readonly session: RepoSession;
+  readonly repoPath: string;
+  readonly repoPathNormalized: string;
+  readonly workspacePackageEntrypointsByName: ReadonlyMap<string, string>;
+}
+
+interface PackageAnalysisContext extends ExportsAnalysisScope {
   program: ts.Program;
   checker: ts.TypeChecker;
   compilerOptions: ts.CompilerOptions;
@@ -113,28 +114,12 @@ export interface ExportsAnalysisResult {
   warnings: string[];
 }
 
-let session: RepoSession | null = null;
-let repoPath = resolve(process.cwd());
-const workspacePackageEntrypointsByName = new Map<string, string>();
-let repoPathNormalized = toForwardSlash(repoPath).toLowerCase();
-
 function toForwardSlash(value: string): string {
   return value.replace(/\\/g, '/');
 }
 
-function toRepoRelative(absPath: string): string {
-  return toForwardSlash(relative(repoPath, absPath));
-}
-
-function requireSession(): RepoSession {
-  if (!session) {
-    throw new Error('source-analysis exports session is not initialized');
-  }
-  return session;
-}
-
-function isExcludedRepoRelativePath(relPath: string): boolean {
-  return requireSession().isExcludedRepoRelativePath(relPath);
+function toRepoRelative(scope: ExportsAnalysisScope, absPath: string): string {
+  return toForwardSlash(relative(scope.repoPath, absPath));
 }
 
 function readJsonFile<T>(absPath: string): T {
@@ -164,111 +149,11 @@ function gitBlobHash(filePath: string): string {
   }
 }
 
-function collectTypesEntrypointCandidates(value: unknown, candidates: string[]): void {
-  if (!value) return;
-  if (typeof value === 'string') {
-    if (value.endsWith('.d.ts')) candidates.push(value);
-    return;
-  }
-  if (Array.isArray(value)) {
-    for (const item of value) collectTypesEntrypointCandidates(item, candidates);
-    return;
-  }
-  if (typeof value === 'object') {
-    const record = value as Record<string, unknown>;
-    if (typeof record.types === 'string') candidates.push(record.types);
-    if (record.default) collectTypesEntrypointCandidates(record.default, candidates);
-  }
-}
-
-function resolvePackageFile(packageDir: string, candidate: string | undefined): string | null {
-  if (!candidate) return null;
-  const absPath = resolve(packageDir, candidate);
-  const relPath = toRepoRelative(absPath);
-  if (relPath.startsWith('..') || isExcludedRepoRelativePath(relPath)) return null;
-  return existsSync(absPath) ? relPath : null;
-}
-
-function resolvePublicTypesEntrypoint(
+function resolveTsconfigForPackage(
+  scope: ExportsAnalysisScope,
   packageDir: string,
-  packageJson: Record<string, unknown>,
 ): string | null {
-  const candidates: string[] = [];
-  const exportsField = packageJson.exports;
-
-  if (exportsField && typeof exportsField === 'object') {
-    const record = exportsField as Record<string, unknown>;
-    const mainExport = record['.'] ?? exportsField;
-    collectTypesEntrypointCandidates(mainExport, candidates);
-  }
-
-  if (typeof packageJson.types === 'string') candidates.push(packageJson.types);
-  if (typeof packageJson.typings === 'string') candidates.push(packageJson.typings);
-  candidates.push('dist/types/index.d.ts');
-
-  for (const candidate of candidates) {
-    const resolvedPath = resolvePackageFile(packageDir, candidate);
-    if (resolvedPath) return resolvedPath;
-  }
-
-  return null;
-}
-
-function resolveSourceEntrypoint(
-  packageDir: string,
-  packageJson: Record<string, unknown>,
-  publicTypesEntrypoint: string | null,
-): string | null {
-  const candidates: Array<string | undefined> = [
-    typeof packageJson.source === 'string' ? packageJson.source : undefined,
-    'src/index.ts',
-    'src/index.tsx',
-  ];
-
-  if (publicTypesEntrypoint) {
-    const derived = publicTypesEntrypoint
-      .replace(/^packages\/[^/]+\//, '')
-      .replace(/^dist\/types\//, 'src/')
-      .replace(/\.d\.ts$/, '.ts');
-    candidates.push(derived, derived.replace(/\.ts$/, '.tsx'));
-  }
-
-  for (const candidate of candidates) {
-    const resolvedPath = resolvePackageFile(packageDir, candidate);
-    if (resolvedPath) return resolvedPath;
-  }
-
-  return null;
-}
-
-function loadPackageDescriptor(packageDirAbs: string): PackageDescriptor | null {
-  const packageJsonAbs = join(packageDirAbs, 'package.json');
-  if (!existsSync(packageJsonAbs)) return null;
-
-  const packageJson = readJsonFile<Record<string, unknown>>(packageJsonAbs);
-  const packageName = typeof packageJson.name === 'string'
-    ? packageJson.name
-    : toRepoRelative(packageDirAbs);
-  const packageDir = toRepoRelative(packageDirAbs);
-  const publicTypesEntrypoint = resolvePublicTypesEntrypoint(packageDirAbs, packageJson);
-  const sourceEntrypoint = resolveSourceEntrypoint(packageDirAbs, packageJson, publicTypesEntrypoint);
-  const analysisEntrypoint = sourceEntrypoint ?? publicTypesEntrypoint;
-
-  if (!analysisEntrypoint) return null;
-
-  return {
-    packageName,
-    packageDir,
-    packageJsonPath: toRepoRelative(packageJsonAbs),
-    sourceEntrypoint,
-    publicTypesEntrypoint,
-    analysisBasis: sourceEntrypoint ? 'source' : 'types',
-    analysisEntrypoint,
-  };
-}
-
-function resolveTsconfigForPackage(packageDir: string): string | null {
-  return requireSession().resolveNearestTsconfig(packageDir);
+  return scope.session.resolveNearestTsconfig(packageDir);
 }
 
 function createFallbackProgram(entrypointAbs: string): ts.Program {
@@ -287,23 +172,24 @@ function createFallbackProgram(entrypointAbs: string): ts.Program {
 }
 
 function createPackageProgram(
+  scope: ExportsAnalysisScope,
   descriptor: PackageDescriptor,
   options: ProgramReuseOptions,
 ): ts.Program {
-  const entrypointAbs = resolve(repoPath, descriptor.analysisEntrypoint);
-  const tsconfigPath = resolveTsconfigForPackage(descriptor.packageDir);
+  const entrypointAbs = resolve(scope.repoPath, descriptor.analysisEntrypoint);
+  const tsconfigPath = resolveTsconfigForPackage(scope, descriptor.packageDir);
 
   if (!tsconfigPath) {
     return createFallbackProgram(entrypointAbs);
   }
 
-  const loaded = requireSession().tryLoadTsconfig(tsconfigPath);
+  const loaded = scope.session.tryLoadTsconfig(tsconfigPath);
   if (!loaded.snapshot) {
     return createFallbackProgram(entrypointAbs);
   }
 
   try {
-    return requireSession().getProgram(loaded.snapshot.absPath, 'analysis', {
+    return scope.session.getProgram(loaded.snapshot.absPath, 'analysis', {
       cache: options.cachePrograms,
     })
       ?? createFallbackProgram(entrypointAbs);
@@ -330,7 +216,7 @@ function getSourceFile(context: PackageAnalysisContext, relPath: string): ts.Sou
   const cached = context.sourceFileCache.get(relPath);
   if (cached !== undefined) return cached;
 
-  const absPath = resolve(repoPath, relPath);
+  const absPath = resolve(context.repoPath, relPath);
   let sourceFile = getProgramSourceFile(context.program, absPath);
 
   if (!sourceFile && existsSync(absPath)) {
@@ -375,7 +261,7 @@ function resolveModuleTarget(
   specifier: string,
 ): string | null {
   if (!specifier.startsWith('.')) {
-    const workspaceEntrypoint = workspacePackageEntrypointsByName.get(specifier);
+    const workspaceEntrypoint = context.workspacePackageEntrypointsByName.get(specifier);
     if (workspaceEntrypoint) return workspaceEntrypoint;
   }
 
@@ -390,14 +276,14 @@ function resolveModuleTarget(
 
   const resolvedAbsPath = toForwardSlash(resolve(resolvedModule.resolvedFileName));
   if (
-    resolvedAbsPath.toLowerCase() !== repoPathNormalized &&
-    !resolvedAbsPath.toLowerCase().startsWith(`${repoPathNormalized}/`)
+    resolvedAbsPath.toLowerCase() !== context.repoPathNormalized &&
+    !resolvedAbsPath.toLowerCase().startsWith(`${context.repoPathNormalized}/`)
   ) {
     return null;
   }
 
-  const relPath = toRepoRelative(resolvedAbsPath);
-  if (relPath.startsWith('..') || isExcludedRepoRelativePath(relPath)) return null;
+  const relPath = toRepoRelative(context, resolvedAbsPath);
+  if (relPath.startsWith('..') || context.session.isExcludedRepoRelativePath(relPath)) return null;
   return relPath;
 }
 
@@ -811,6 +697,7 @@ function faceKindForDeclaration(node: ts.Declaration): ExportFaceKind {
 }
 
 function classifyDeclarations(
+  scope: ExportsAnalysisScope,
   declarations: readonly ts.Declaration[],
 ): SymbolClassification {
   const faceKinds = new Set<ExportFaceKind>();
@@ -830,7 +717,7 @@ function classifyDeclarations(
     const faceKind = faceKindForDeclaration(declaration);
     faceKinds.add(faceKind);
     const sourceFile = declaration.getSourceFile();
-    const relPath = toRepoRelative(sourceFile.fileName);
+    const relPath = toRepoRelative(scope, sourceFile.fileName);
 
     if (!declarationFile && !relPath.startsWith('..')) {
       declarationFile = relPath;
@@ -873,6 +760,7 @@ function classifyDeclarations(
 }
 
 function classifySymbol(
+  scope: ExportsAnalysisScope,
   checker: ts.TypeChecker,
   exportSymbol: ts.Symbol,
 ): SymbolClassification {
@@ -893,7 +781,7 @@ function classifySymbol(
     };
   }
 
-  const classified = classifyDeclarations(declarations);
+  const classified = classifyDeclarations(scope, declarations);
   if (!classified.declarationName) {
     classified.declarationName = resolvedSymbol.getName();
   }
@@ -909,14 +797,17 @@ function classifySymbol(
   return classified;
 }
 
-function computePackageRevision(files: Iterable<string>): string {
+function computePackageRevision(
+  scope: ExportsAnalysisScope,
+  files: Iterable<string>,
+): string {
   const hash = createHash('sha1');
 
   for (const relPath of [...new Set(files)].sort()) {
     hash.update(relPath);
     hash.update('\0');
 
-    const absPath = resolve(repoPath, relPath);
+    const absPath = resolve(scope.repoPath, relPath);
     if (!existsSync(absPath)) {
       hash.update('(missing)');
       hash.update('\0');
@@ -931,14 +822,16 @@ function computePackageRevision(files: Iterable<string>): string {
 }
 
 function analyzePackage(
+  scope: ExportsAnalysisScope,
   descriptor: PackageDescriptor,
   options: ProgramReuseOptions,
 ): {
   summary: PackageExportsSummary;
   records: PackageExportRecord[];
 } {
-  const program = createPackageProgram(descriptor, options);
+  const program = createPackageProgram(scope, descriptor, options);
   const context: PackageAnalysisContext = {
+    ...scope,
     program,
     checker: program.getTypeChecker(),
     compilerOptions: program.getCompilerOptions(),
@@ -949,7 +842,7 @@ function analyzePackage(
     sourceFileCache: new Map(),
   };
 
-  const entrypointAbs = resolve(repoPath, descriptor.analysisEntrypoint);
+  const entrypointAbs = resolve(scope.repoPath, descriptor.analysisEntrypoint);
   const entrypointSourceFile = getProgramSourceFile(program, entrypointAbs);
   const entrypointModuleSymbol = entrypointSourceFile
     ? getModuleSymbol(context.checker, entrypointSourceFile)
@@ -960,7 +853,7 @@ function analyzePackage(
       summary: {
         package_name: descriptor.packageName,
         package_dir: descriptor.packageDir,
-        package_revision: computePackageRevision([
+        package_revision: computePackageRevision(scope, [
           descriptor.packageJsonPath,
           descriptor.analysisEntrypoint,
           descriptor.sourceEntrypoint ?? '',
@@ -995,7 +888,7 @@ function analyzePackage(
   const records: PackageExportRecord[] = exportSymbols.map((exportSymbol) => {
     const exportedName = exportSymbol.getName();
     const trace = traceExport(context, descriptor.analysisEntrypoint, exportedName);
-    const classification = classifySymbol(context.checker, exportSymbol);
+    const classification = classifySymbol(scope, context.checker, exportSymbol);
 
     if (trace) {
       for (const step of trace.chain) {
@@ -1055,7 +948,7 @@ function analyzePackage(
     summary: {
       package_name: descriptor.packageName,
       package_dir: descriptor.packageDir,
-      package_revision: computePackageRevision(packageFiles),
+      package_revision: computePackageRevision(scope, packageFiles),
       analysis_basis: descriptor.analysisBasis,
       analysis_entrypoint: descriptor.analysisEntrypoint,
       source_entrypoint: descriptor.sourceEntrypoint,
@@ -1073,15 +966,8 @@ export function generateExportsAnalysis(
   nextSession: RepoSession,
   options: ProgramReuseOptions = {},
 ): ExportsAnalysisResult {
-  session = nextSession;
-  repoPath = nextSession.repoPath;
-  repoPathNormalized = toForwardSlash(repoPath).toLowerCase();
-  workspacePackageEntrypointsByName.clear();
-
-  const descriptors = nextSession
-    .listPackageDirs()
-    .map(loadPackageDescriptor)
-    .filter((value): value is PackageDescriptor => value !== null);
+  const descriptors = loadPackageDescriptors(nextSession);
+  const workspacePackageEntrypointsByName = new Map<string, string>();
 
   for (const descriptor of descriptors) {
     workspacePackageEntrypointsByName.set(
@@ -1090,7 +976,14 @@ export function generateExportsAnalysis(
     );
   }
 
-  const packageAnalyses = descriptors.map((descriptor) => analyzePackage(descriptor, options));
+  const scope: ExportsAnalysisScope = {
+    session: nextSession,
+    repoPath: nextSession.repoPath,
+    repoPathNormalized: toForwardSlash(nextSession.repoPath).toLowerCase(),
+    workspacePackageEntrypointsByName,
+  };
+
+  const packageAnalyses = descriptors.map((descriptor) => analyzePackage(scope, descriptor, options));
   const packageSummaries = packageAnalyses
     .map((analysis) => analysis.summary)
     .sort((left, right) => left.package_name.localeCompare(right.package_name));
@@ -1102,9 +995,9 @@ export function generateExportsAnalysis(
     );
 
   const output: ExportsOutput = {
-    root: repoPath,
+    root: scope.repoPath,
     generated_at: new Date().toISOString(),
-    source_commit: gitHead(repoPath),
+    source_commit: gitHead(scope.repoPath),
     analyzer_commit: gitBlobHash(resolve(import.meta.dirname!, 'analyze.js')),
     summary: {
       packages_analyzed: packageSummaries.length,

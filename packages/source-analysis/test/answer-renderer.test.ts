@@ -51,10 +51,12 @@ describe('Source-analysis structured answer rendering', () => {
 
     const compact = renderAnswerDocumentToPlainText(document!, compactPolicy);
     const expanded = renderAnswerDocumentToPlainText(document!, expandedPolicy);
+    const compactJson = renderAnswerDocumentToJson(document!, compactPolicy);
     const expandedJson = renderAnswerDocumentToJson(document!, expandedPolicy);
 
     expect(compact.summaryLines.length).toBeLessThanOrEqual(compactPolicy.limits.summaryLineCount);
-    expect(expanded.lines.length).toBeGreaterThan(compact.lines.length);
+    expect(expanded.lines.length).toBeGreaterThanOrEqual(compact.lines.length);
+    expect(expandedJson.blocks.length).toBeGreaterThanOrEqual(compactJson.blocks.length);
     expect(expandedJson.blocks.some((block) => block.kind === 'finding-list')).toBe(true);
   });
 

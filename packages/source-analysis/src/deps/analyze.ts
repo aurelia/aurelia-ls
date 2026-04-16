@@ -37,6 +37,10 @@ import { execFileSync } from "node:child_process";
 import type { ProgramReuseOptions } from '../program-reuse-options.js';
 import type { DepsOutput } from './schema.js';
 import { RepoSession } from '../repo-session.js';
+import {
+  scanParsedTsconfigSourceFiles,
+  type ParsedTsconfigSourceFileScanResult,
+} from '../tsconfig-source-files.js';
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -652,7 +656,9 @@ function gitBlobHash(filePath: string): string {
 export function generateDepsAnalysis(
   nextSession: RepoSession,
   options: ProgramReuseOptions = {},
+  sourceFileScan?: ParsedTsconfigSourceFileScanResult,
 ): DepsAnalysisResult {
+  void options;
   session = nextSession;
   repoPath = nextSession.repoPath;
   analyzed = new Set();
@@ -664,35 +670,14 @@ export function generateDepsAnalysis(
   barrelFiles = new Set();
 
   const warnings: string[] = [];
-  const tsconfigAbsPaths = nextSession.findTsconfigs();
-  if (tsconfigAbsPaths.length === 0) {
+  const { batches, warnings: scanWarnings } = sourceFileScan ?? scanParsedTsconfigSourceFiles(nextSession);
+  warnings.push(...scanWarnings);
+  if (batches.length === 0) {
     throw new Error(`no tsconfig.json files found in ${repoPath}`);
   }
 
-  for (const tsconfigAbs of tsconfigAbsPaths) {
-    const loaded = nextSession.tryLoadTsconfig(tsconfigAbs);
-    if (!loaded.snapshot) {
-      warnings.push(`Warning: failed to read ${tsconfigAbs}: ${loaded.error ?? 'unknown error'}`);
-      continue;
-    }
-
-    const { snapshot } = loaded;
-    if (snapshot.parsed.fileNames.length === 0) continue;
-
-    let program: ts.Program;
-    try {
-      const maybeProgram = nextSession.getProgram(snapshot.absPath, 'analysis', {
-        cache: options.cachePrograms,
-      });
-      if (!maybeProgram) {
-        warnings.push(`Warning: skipped ${snapshot.absPath}: no TypeScript program available`);
-        continue;
-      }
-      program = maybeProgram;
-    } catch (err) {
-      throw new Error(`ts.createProgram failed for ${snapshot.absPath}: ${(err as Error).message}`);
-    }
-
+  for (const batch of batches) {
+    const { snapshot } = batch;
     usedTsconfigs.push(snapshot.relPath);
 
     const resolutionCache = ts.createModuleResolutionCache(
@@ -701,19 +686,12 @@ export function generateDepsAnalysis(
       snapshot.parsed.options,
     );
 
-    for (const sf of program.getSourceFiles()) {
-      const absNorm = toForwardSlash(sf.fileName);
-      if (absNorm.includes("/node_modules/")) continue;
-      if (sf.isDeclarationFile) continue;
-      const rel = toRepoRelative(absNorm);
-      if (rel.startsWith("..")) continue;
-      if (isInSubmodule(rel)) continue;
-      if (isExcludedRepoRelativePath(rel)) continue;
-      if (analyzed.has(rel)) continue;
-      analyzed.add(rel);
-      sourceFileMap.set(rel, sf);
+    for (const file of batch.sourceFiles) {
+      if (analyzed.has(file.relPath)) continue;
+      analyzed.add(file.relPath);
+      sourceFileMap.set(file.relPath, file.sourceFile);
 
-      extractImports(sf, rel, snapshot.parsed.options, resolutionCache);
+      extractImports(file.sourceFile, file.relPath, snapshot.parsed.options, resolutionCache);
     }
   }
 

@@ -14,23 +14,34 @@ function loadSnapshotsForAudit() {
 }
 
 describe('Source-analysis package audit', () => {
-  it('flags blind spots that keep exercise and dead-code closure open', () => {
+  it('no longer reports package blind spots after the tests gained explicit tsconfig coverage', () => {
     const snapshots = loadSnapshotsForAudit();
     const answer = createAuditAnswer({
       focusRef: { kind: 'package', value: '@aurelia-ls/source-analysis' },
       questionRoute: 'inventory',
     }, snapshots);
 
-    expect(answer.outcome.tag).toBe('open-boundary');
+    expect(answer.outcome.tag).toBe('hit');
     const uncoveredFinding = answer.outcome.value?.findings.find((finding) =>
       finding.code === 'package-uncovered-files',
     );
-    expect(uncoveredFinding).toBeTruthy();
-    expect(uncoveredFinding?.relatedRefs.some((ref) =>
-      ref.value === 'packages/source-analysis/test/navigation.test.ts',
-    )).toBe(true);
-    expect(uncoveredFinding?.evidence.some((line) =>
-      line.includes('parse-only exercise routes currently reach'),
+    expect(uncoveredFinding).toBeUndefined();
+  });
+
+  it('still surfaces files that are only justified by exercise routes', () => {
+    const snapshots = loadSnapshotsForAudit();
+    const answer = createAuditAnswer({
+      focusRef: { kind: 'package', value: '@aurelia-ls/source-analysis' },
+      questionRoute: 'inventory',
+    }, snapshots);
+
+    const exerciseOnlyFinding = answer.outcome.value?.findings.find((finding) =>
+      finding.code === 'exercise-only-files',
+    );
+    expect(exerciseOnlyFinding).toBeTruthy();
+    expect(exerciseOnlyFinding?.primaryRef.value).toBe('packages/source-analysis/src/subsystem-coupling.ts');
+    expect(exerciseOnlyFinding?.evidence.some((line) =>
+      line.includes('subsystem-coupling.test.ts -> subsystem-coupling.ts (grounded)'),
     )).toBe(true);
   });
 

@@ -31,9 +31,12 @@ export interface ExportSymbolInspection {
 interface CachedProgram {
   program: ts.Program;
   checker: ts.TypeChecker;
+  lastAccessToken: number;
 }
 
 const PROGRAM_CACHE = new Map<string, CachedProgram>();
+const MAX_CACHED_PROGRAMS = 8;
+let nextProgramAccessToken = 1;
 
 function normalizePath(pathValue: string): string {
   return resolve(pathValue).replace(/\\/g, '/');
@@ -68,7 +71,10 @@ function findNearestTsconfig(startPath: string): string | null {
 function loadProgram(tsconfigPath: string): CachedProgram {
   const normalizedTsconfigPath = normalizePath(tsconfigPath);
   const cached = PROGRAM_CACHE.get(normalizedTsconfigPath);
-  if (cached) return cached;
+  if (cached) {
+    cached.lastAccessToken = nextProgramAccessToken++;
+    return cached;
+  }
 
   const configFile = ts.readConfigFile(normalizedTsconfigPath, ts.sys.readFile);
   if (configFile.error) {
@@ -84,9 +90,31 @@ function loadProgram(tsconfigPath: string): CachedProgram {
   const entry = {
     program,
     checker: program.getTypeChecker(),
+    lastAccessToken: nextProgramAccessToken++,
   };
   PROGRAM_CACHE.set(normalizedTsconfigPath, entry);
+  trimProgramCache();
   return entry;
+}
+
+function trimProgramCache(): void {
+  while (PROGRAM_CACHE.size > MAX_CACHED_PROGRAMS) {
+    let oldestKey: string | null = null;
+    let oldestAccessToken = Number.POSITIVE_INFINITY;
+
+    for (const [key, entry] of PROGRAM_CACHE.entries()) {
+      if (entry.lastAccessToken < oldestAccessToken) {
+        oldestAccessToken = entry.lastAccessToken;
+        oldestKey = key;
+      }
+    }
+
+    if (!oldestKey) {
+      return;
+    }
+
+    PROGRAM_CACHE.delete(oldestKey);
+  }
 }
 
 function declarationName(node: ts.Node): string | null {

@@ -16,6 +16,10 @@ import { execFileSync } from "node:child_process";
 import type { ProgramReuseOptions } from '../program-reuse-options.js';
 import type { TypeDecl, TypeRef, RefKind, DeclKind, Member, MemberKind, TypeRefsOutput } from './schema.js';
 import { RepoSession } from '../repo-session.js';
+import {
+  scanParsedTsconfigSourceFiles,
+  type ParsedTsconfigSourceFileScanResult,
+} from '../tsconfig-source-files.js';
 
 export interface TypeRefsAnalysisResult {
   output: TypeRefsOutput;
@@ -23,7 +27,6 @@ export interface TypeRefsAnalysisResult {
   warnings: string[];
 }
 
-let session: RepoSession | null = null;
 let repoPath = resolve(process.cwd());
 let analyzed = new Map<string, ts.SourceFile>();
 
@@ -35,21 +38,6 @@ function toForwardSlash(p: string): string {
 
 function toRepoRelative(absPath: string): string {
   return toForwardSlash(relative(repoPath, absPath));
-}
-
-function requireSession(): RepoSession {
-  if (!session) {
-    throw new Error('source-analysis typerefs session is not initialized');
-  }
-  return session;
-}
-
-function isInSubmodule(relPath: string): boolean {
-  return requireSession().isInSubmodule(relPath);
-}
-
-function isExcludedRepoRelativePath(relPath: string): boolean {
-  return requireSession().isExcludedRepoRelativePath(relPath);
 }
 
 // ── Pass 1: Index all type declarations ────────────────────────────────
@@ -689,52 +677,23 @@ function gitBlobHash(filePath: string): string {
 export function generateTypeRefsAnalysis(
   nextSession: RepoSession,
   options: ProgramReuseOptions = {},
+  sourceFileScan?: ParsedTsconfigSourceFileScanResult,
 ): TypeRefsAnalysisResult {
-  session = nextSession;
+  void options;
   repoPath = nextSession.repoPath;
   analyzed = new Map();
 
   const warnings: string[] = [];
-  const tsconfigAbsPaths = nextSession.findTsconfigs();
-  if (tsconfigAbsPaths.length === 0) {
+  const { batches, warnings: scanWarnings } = sourceFileScan ?? scanParsedTsconfigSourceFiles(nextSession);
+  warnings.push(...scanWarnings);
+  if (batches.length === 0) {
     throw new Error(`no tsconfig files found in ${repoPath}`);
   }
 
-  for (const tsconfigAbs of tsconfigAbsPaths) {
-    const loaded = nextSession.tryLoadTsconfig(tsconfigAbs);
-    if (!loaded.snapshot) {
-      warnings.push(`Warning: failed to read ${tsconfigAbs}: ${loaded.error ?? 'unknown error'}`);
-      continue;
-    }
-
-    const { snapshot } = loaded;
-    if (snapshot.parsed.fileNames.length === 0) continue;
-
-    let program: ts.Program;
-    try {
-      const maybeProgram = nextSession.getProgram(snapshot.absPath, 'analysis-no-resolve', {
-        cache: options.cachePrograms,
-      });
-      if (!maybeProgram) {
-        warnings.push(`Warning: skipped ${snapshot.absPath}: no TypeScript program available`);
-        continue;
-      }
-      program = maybeProgram;
-    } catch (err) {
-      warnings.push(`Warning: createProgram failed for ${snapshot.absPath}: ${(err as Error).message}`);
-      continue;
-    }
-
-    for (const sf of program.getSourceFiles()) {
-      const absNorm = toForwardSlash(sf.fileName);
-      if (absNorm.includes("/node_modules/")) continue;
-      if (sf.isDeclarationFile) continue;
-      const rel = toRepoRelative(absNorm);
-      if (rel.startsWith("..")) continue;
-      if (isInSubmodule(rel)) continue;
-      if (isExcludedRepoRelativePath(rel)) continue;
-      if (analyzed.has(rel)) continue;
-      analyzed.set(rel, sf);
+  for (const batch of batches) {
+    for (const file of batch.sourceFiles) {
+      if (analyzed.has(file.relPath)) continue;
+      analyzed.set(file.relPath, file.sourceFile);
     }
   }
 

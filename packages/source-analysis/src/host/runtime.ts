@@ -31,6 +31,10 @@ import { createRouteWitnessAnswer } from '../route-witness.js';
 import type { ProgramReuseOptions } from '../program-reuse-options.js';
 import { generateDepsAnalysis } from '../deps/analyze.js';
 import { generateExportsAnalysis } from '../exports/analyze.js';
+import {
+  scanParsedTsconfigSourceFiles,
+  type ParsedTsconfigSourceFileScanResult,
+} from '../tsconfig-source-files.js';
 import { generateTypeRefsAnalysis } from '../typerefs/analyze.js';
 import {
   HostSessionManager,
@@ -1280,13 +1284,16 @@ function refreshKinds(
     force?: boolean;
   } = {},
 ): readonly SnapshotKind[] {
+  const sharedSourceFileScan = shouldShareSourceFileScan(requestedKinds)
+    ? scanParsedTsconfigSourceFiles(state.session)
+    : undefined;
   const refreshedKinds: SnapshotKind[] = [];
   const kindsToRefresh = options.force
     ? requestedKinds
     : requestedKinds.filter((kind) => state.dirtyKinds.has(kind) || state.snapshots[kind] === undefined);
 
   for (const kind of kindsToRefresh) {
-    const result = runAnalysis(state, kind);
+    const result = runAnalysis(state, kind, sharedSourceFileScan);
     setSnapshot(state, kind, result.output);
     state.warningsByKind[kind] = result.warnings;
     state.lastRefreshAtByKind[kind] = result.output.generated_at;
@@ -1306,6 +1313,7 @@ function refreshKinds(
 function runAnalysis<TKind extends SnapshotKind>(
   state: HostSessionState,
   kind: TKind,
+  sharedSourceFileScan?: ParsedTsconfigSourceFileScanResult,
 ): {
   output: SnapshotOutputMap[TKind];
   warnings: readonly string[];
@@ -1316,14 +1324,14 @@ function runAnalysis<TKind extends SnapshotKind>(
 
   switch (kind) {
     case 'deps': {
-      const result = generateDepsAnalysis(state.session, analysisOptions);
+      const result = generateDepsAnalysis(state.session, analysisOptions, sharedSourceFileScan);
       return {
         output: result.output as SnapshotOutputMap[TKind],
         warnings: result.warnings,
       };
     }
     case 'typerefs': {
-      const result = generateTypeRefsAnalysis(state.session, analysisOptions);
+      const result = generateTypeRefsAnalysis(state.session, analysisOptions, sharedSourceFileScan);
       return {
         output: result.output as SnapshotOutputMap[TKind],
         warnings: result.warnings,
@@ -1339,6 +1347,13 @@ function runAnalysis<TKind extends SnapshotKind>(
     default:
       return assertNever(kind);
   }
+}
+
+function shouldShareSourceFileScan(
+  requestedKinds: readonly SnapshotKind[],
+): boolean {
+  const unique = new Set(requestedKinds);
+  return unique.has('deps') && unique.has('typerefs');
 }
 
 function setSnapshot<TKind extends SnapshotKind>(

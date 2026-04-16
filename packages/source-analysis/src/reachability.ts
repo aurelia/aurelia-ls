@@ -127,22 +127,31 @@ export function createPackageReachability(
   const packagePrefix = pkg.package_dir.length > 0 ? `${pkg.package_dir}/` : '';
   const packageFiles = new Set<string>();
   const routeEdges = new Map<string, PackageRouteEdge>();
+  const canonicalizePackageFilePath = (filePath: string): string =>
+    canonicalizeSourceBackedPackageFile(snapshots.deps.root, filePath);
 
   for (const edge of snapshots.deps.edges) {
     const sourceInPackage = edge.source.startsWith(packagePrefix);
     const targetInPackage = edge.target.startsWith(packagePrefix);
     if (!sourceInPackage && !targetInPackage) continue;
 
-    if (sourceInPackage) packageFiles.add(edge.source);
-    if (targetInPackage) packageFiles.add(edge.target);
+    const sourcePath = sourceInPackage
+      ? canonicalizePackageFilePath(edge.source)
+      : edge.source;
+    const targetPath = targetInPackage
+      ? canonicalizePackageFilePath(edge.target)
+      : edge.target;
+
+    if (sourceInPackage) packageFiles.add(sourcePath);
+    if (targetInPackage) packageFiles.add(targetPath);
 
     if (sourceInPackage && targetInPackage) {
       addRouteEdge(
         routeEdges,
         createRouteEdge(
           'dependency-import',
-          edge.source,
-          edge.target,
+          sourcePath,
+          targetPath,
           'grounded',
           'Static package-local import captured in the deps snapshot.',
           `${edge.specifier} @ line ${edge.line}`,
@@ -229,14 +238,17 @@ export function createPackageReachability(
   const exerciseFiles = [...packageFiles]
     .filter((filePath) => isExerciseFile(pkg.package_dir, filePath))
     .sort((left, right) => left.localeCompare(right));
+  const uncoveredExerciseFiles = new Set(uncoveredPackageFiles);
   for (const filePath of exerciseFiles) {
     addRoot(
       roots,
       createRoot(
         'exercise',
         filePath,
-        'qualified',
-        'This file looks like an exercise/test root from package layout.',
+        uncoveredExerciseFiles.has(filePath) ? 'qualified' : 'grounded',
+        uncoveredExerciseFiles.has(filePath)
+          ? 'This file looks like an exercise/test root from package layout, but it still sits outside grounded graph coverage.'
+          : 'This file is a test/exercise root with grounded graph coverage.',
       ),
     );
   }
@@ -711,6 +723,31 @@ function resolveManifestTargetToSourceFile(
   }
 
   return null;
+}
+
+function canonicalizeSourceBackedPackageFile(
+  repoRoot: string,
+  filePath: string,
+): string {
+  const candidates = dedupeStrings([
+    filePath.replace(/(^|\/)(out|dist|build)\//i, '$1src/'),
+    filePath,
+  ].flatMap((candidate) => [
+    candidate,
+    candidate.replace(/\.d\.[cm]?ts$/i, '.ts'),
+    candidate.replace(/\.[cm]?js$/i, '.ts'),
+    candidate.replace(/\.[cm]?js$/i, '.tsx'),
+    candidate.replace(/\.[cm]?js$/i, '.mts'),
+    candidate.replace(/\.[cm]?js$/i, '.cts'),
+  ]));
+
+  for (const candidate of candidates) {
+    if (existsSync(join(repoRoot, candidate))) {
+      return candidate;
+    }
+  }
+
+  return filePath;
 }
 
 function normalizeRepoRelativePath(packageDir: string, pathValue: string): string {

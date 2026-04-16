@@ -12,6 +12,7 @@ export interface RepoSessionOptions {
   readonly repoPath?: string;
   readonly target?: string;
   readonly excludedRepoRelativePrefixes?: readonly string[] | null;
+  readonly maxCachedPrograms?: number;
 }
 
 export interface LoadedTsconfigSnapshot {
@@ -28,6 +29,11 @@ export interface LoadTsconfigResult {
 
 export interface ProgramCacheOptions {
   readonly cache?: boolean;
+}
+
+interface CachedProgramEntry {
+  readonly program: ts.Program;
+  lastAccessToken: number;
 }
 
 const SOURCE_FILE_PATTERN = /\.(tsx?|mts|cts)$/;
@@ -58,14 +64,16 @@ export class RepoSession {
   readonly #repoPath: string;
   readonly #target: string;
   readonly #excludedRepoRelativePrefixes: readonly string[];
+  readonly #maxCachedPrograms: number;
   readonly #skipDirs = new Set(['node_modules', '.git', 'dist', '__tests__']);
   readonly #submodulePaths = new Set<string>();
   readonly #tsconfigCache = new Map<string, LoadTsconfigResult>();
-  readonly #programCache = new Map<string, ts.Program>();
+  readonly #programCache = new Map<string, CachedProgramEntry>();
 
   #packageDirs: readonly string[] | null = null;
   #repoSourceFiles: readonly string[] | null = null;
   #tsconfigAbsPaths: readonly string[] | null = null;
+  #nextProgramAccessToken = 1;
 
   constructor(options: RepoSessionOptions = {}) {
     this.#repoPath = resolve(options.repoPath ?? process.cwd());
@@ -74,6 +82,9 @@ export class RepoSession {
       options.excludedRepoRelativePrefixes
       ?? getExcludedRepoRelativePrefixesForTarget(this.#target)
     ).map((value) => normalizeRepoRelativePath(value));
+    this.#maxCachedPrograms = Number.isFinite(options.maxCachedPrograms)
+      ? Math.max(0, Math.trunc(options.maxCachedPrograms!))
+      : 8;
 
     this.#loadSubmodules();
   }
@@ -168,7 +179,8 @@ export class RepoSession {
     if (programOptions.cache) {
       const cached = this.#programCache.get(cacheKey);
       if (cached) {
-        return cached;
+        cached.lastAccessToken = this.#nextProgramAccessToken++;
+        return cached.program;
       }
     }
 
@@ -179,8 +191,12 @@ export class RepoSession {
 
     const compilerOptions = this.#compilerOptionsForProfile(loaded.snapshot.parsed.options, profile);
     const program = ts.createProgram(loaded.snapshot.parsed.fileNames, compilerOptions);
-    if (programOptions.cache) {
-      this.#programCache.set(cacheKey, program);
+    if (programOptions.cache && this.#maxCachedPrograms > 0) {
+      this.#programCache.set(cacheKey, {
+        program,
+        lastAccessToken: this.#nextProgramAccessToken++,
+      });
+      this.#trimProgramCache();
     }
     return program;
   }
@@ -196,6 +212,26 @@ export class RepoSession {
       if (key.startsWith(prefix)) {
         this.#programCache.delete(key);
       }
+    }
+  }
+
+  #trimProgramCache(): void {
+    while (this.#programCache.size > this.#maxCachedPrograms) {
+      let oldestKey: string | null = null;
+      let oldestAccessToken = Number.POSITIVE_INFINITY;
+
+      for (const [key, entry] of this.#programCache.entries()) {
+        if (entry.lastAccessToken < oldestAccessToken) {
+          oldestAccessToken = entry.lastAccessToken;
+          oldestKey = key;
+        }
+      }
+
+      if (!oldestKey) {
+        return;
+      }
+
+      this.#programCache.delete(oldestKey);
     }
   }
 
