@@ -271,15 +271,23 @@ export class SnapshotHostRuntime {
 
   #planQuestion(args: PlanQuestionArgs): CommandOutcome {
     const sessionState = args.sessionId ? this.#tryGetSession(args.sessionId) : undefined;
+    const repoPath = args.repoPath ?? sessionState?.repoPath;
+    const target = args.target ?? sessionState?.target;
+    const profilePath = args.profilePath ?? sessionState?.profilePath ?? undefined;
     const answer = this.#ingress.createPlanAnswer({
       question: args.question,
       sessionId: args.sessionId,
+      repoPath,
+      target,
+      profilePath,
       focusKind: args.focusKind,
       focusValue: args.focusValue,
       readMode: args.readMode,
       consumer: args.consumer,
       worldFrame: {
-        ...(sessionState ? { repoPath: sessionState.repoPath, target: sessionState.target } : {}),
+        ...(repoPath ? { repoPath } : {}),
+        ...(target ? { target } : {}),
+        ...(profilePath ? { profilePath } : {}),
         regimeAnchor: 'hosted',
         partiality: 'complete',
         freshness: 'live',
@@ -302,19 +310,24 @@ export class SnapshotHostRuntime {
 
   #planInquiry(args: PlanInquiryArgs): CommandOutcome {
     const sessionState = args.sessionId ? this.#tryGetSession(args.sessionId) : undefined;
+    const repoPath = args.repoPath ?? sessionState?.repoPath ?? process.cwd();
+    const target = args.target ?? sessionState?.target;
+    const profilePath = args.profilePath ?? sessionState?.profilePath ?? undefined;
     const answer = this.#publicIngress.createPlanAnswer({
       question: args.question,
       sessionId: args.sessionId,
-      repoPath: args.repoPath ?? sessionState?.repoPath ?? process.cwd(),
-      target: args.target ?? sessionState?.target,
+      repoPath,
+      target,
+      profilePath,
       focusKind: args.focusKind,
       focusValue: args.focusValue,
       familyId: args.familyId,
       readMode: args.readMode,
       consumer: args.consumer,
       worldFrame: {
-        repoPath: args.repoPath ?? sessionState?.repoPath ?? process.cwd(),
-        target: args.target ?? sessionState?.target,
+        repoPath,
+        ...(target ? { target } : {}),
+        ...(profilePath ? { profilePath } : {}),
         regimeAnchor: 'hosted',
         partiality: 'complete',
         freshness: 'live',
@@ -363,11 +376,13 @@ export class SnapshotHostRuntime {
     const existingSession = args.sessionId ? this.#tryGetSession(args.sessionId) : undefined;
     const repoPath = args.repoPath ?? existingSession?.repoPath ?? process.cwd();
     const target = args.target ?? existingSession?.target;
+    const profilePath = args.profilePath ?? existingSession?.profilePath ?? undefined;
     const plan = this.#publicIngress.plan({
       question: args.question,
       sessionId: args.sessionId,
       repoPath,
       target,
+      profilePath,
       focusKind: args.focusKind,
       focusValue: args.focusValue,
       familyId: args.familyId,
@@ -377,10 +392,12 @@ export class SnapshotHostRuntime {
       ? this.#tryExecuteInquiryPlanAgainstCurrentSnapshots(plan, {
         repoPath,
         target,
+        profilePath,
       }) ?? this.#executeInquiryPlan(plan, {
         existingSession,
         repoPath,
         target,
+        profilePath,
       })
       : undefined;
     const answer = this.#publicIngress.createAskAnswer({
@@ -388,6 +405,7 @@ export class SnapshotHostRuntime {
       sessionId: executed?.usedSessionId ?? args.sessionId,
       repoPath,
       target,
+      profilePath,
       focusKind: args.focusKind,
       focusValue: args.focusValue,
       familyId: args.familyId,
@@ -396,6 +414,7 @@ export class SnapshotHostRuntime {
       worldFrame: {
         repoPath,
         target,
+        ...(profilePath ? { profilePath } : {}),
         regimeAnchor: 'hosted',
         partiality: 'complete',
         freshness: executed?.freshness ?? 'live',
@@ -785,6 +804,7 @@ export class SnapshotHostRuntime {
     context: {
       readonly repoPath: string;
       readonly target?: string;
+      readonly profilePath?: string;
     },
   ): InquiryExecutionOutcome | undefined {
     const primaryStep = plan.primaryStep;
@@ -792,10 +812,17 @@ export class SnapshotHostRuntime {
       return undefined;
     }
 
-    const target = context.target ?? resolveSnapshotTarget({ repoPath: context.repoPath }).target;
+    const target = context.target ?? resolveSnapshotTarget({
+      repoPath: context.repoPath,
+      profilePath: context.profilePath,
+    }).target;
     try {
-      const snapshots = loadCurrentSnapshots(target, 0, context.repoPath);
-      const primaryEnvelope = createCurrentSnapshotEnvelope(primaryStep.command, primaryStep.args, snapshots, context.repoPath, target);
+      const snapshots = loadCurrentSnapshots(target, 0, context.repoPath, context.profilePath);
+      const primaryEnvelope = createCurrentSnapshotEnvelope(primaryStep.command, primaryStep.args, snapshots, {
+        repoPath: context.repoPath,
+        target,
+        profilePath: context.profilePath,
+      });
       if (!primaryEnvelope) {
         return undefined;
       }
@@ -832,6 +859,7 @@ export class SnapshotHostRuntime {
       readonly existingSession?: HostSessionState;
       readonly repoPath: string;
       readonly target?: string;
+      readonly profilePath?: string;
     },
   ): InquiryExecutionOutcome {
     const steps: AskQuestionExecutionStep[] = [];
@@ -860,6 +888,7 @@ export class SnapshotHostRuntime {
           const openOutcome = this.#sessionOpen({
             repoPath: asStepString(step.args.repoPath) ?? context.repoPath,
             ...(asStepString(step.args.target) ? { target: asStepString(step.args.target) } : {}),
+            ...(asStepString(step.args.profilePath) ? { profilePath: asStepString(step.args.profilePath) } : context.profilePath ? { profilePath: context.profilePath } : {}),
           });
           const openResult = openOutcome.result as SessionOpenResult;
           sessionState = this.#sessions.get(openResult.sessionId);
@@ -979,8 +1008,11 @@ function createCurrentSnapshotEnvelope(
   command: string,
   args: Record<string, unknown>,
   snapshots: ReturnType<typeof loadCurrentSnapshots>,
-  repoPath: string,
-  target: string,
+  context: {
+    readonly repoPath: string;
+    readonly target: string;
+    readonly profilePath?: string;
+  },
 ): HostCommandEnvelope<unknown> | undefined {
   switch (command) {
     case 'query.audit.package': {
@@ -994,8 +1026,9 @@ function createCurrentSnapshotEnvelope(
         questionRoute: 'inventory',
         readMode: 'summary-card',
         worldFrame: {
-          repoPath,
-          target,
+          repoPath: context.repoPath,
+          target: context.target,
+          ...(context.profilePath ? { profilePath: context.profilePath } : {}),
           regimeAnchor: 'batch',
           partiality: 'complete',
           freshness: 'snapshot',
@@ -1018,8 +1051,9 @@ function createCurrentSnapshotEnvelope(
         questionRoute: 'route',
         readMode: 'focus-card',
         worldFrame: {
-          repoPath,
-          target,
+          repoPath: context.repoPath,
+          target: context.target,
+          ...(context.profilePath ? { profilePath: context.profilePath } : {}),
           regimeAnchor: 'batch',
           partiality: 'complete',
           freshness: 'snapshot',
@@ -1046,8 +1080,9 @@ function createCurrentSnapshotEnvelope(
           : 'join',
         readMode: 'focus-card',
         worldFrame: {
-          repoPath,
-          target,
+          repoPath: context.repoPath,
+          target: context.target,
+          ...(context.profilePath ? { profilePath: context.profilePath } : {}),
           regimeAnchor: 'batch',
           partiality: 'complete',
           freshness: 'snapshot',

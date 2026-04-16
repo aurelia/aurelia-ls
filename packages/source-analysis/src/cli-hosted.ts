@@ -168,6 +168,9 @@ function buildPlanInvocation(
         args: {
           question,
           sessionId: common.sessionId,
+          repoPath: common.repoPath,
+          target: common.target,
+          profilePath: common.profilePath,
           focusKind: common.focusKind,
           focusValue: common.focusValue,
           readMode: common.readMode,
@@ -196,6 +199,7 @@ function buildAskInvocation(
       sessionId: common.sessionId,
       repoPath: common.repoPath,
       target: common.target,
+      profilePath: common.profilePath,
       focusKind: common.focusKind,
       focusValue: common.focusValue,
       familyId: common.familyId,

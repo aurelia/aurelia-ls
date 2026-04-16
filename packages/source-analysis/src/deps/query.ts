@@ -1221,7 +1221,7 @@ Flags (for seam/bindings):
   --type-only                   Show only type-level imports
   --value-only                  Show only value-level imports
 
-Use --target <name> to select a named repo target (default: aurelia-ls2).
+Use --target <name> to override the snapshot target; otherwise it is derived from the active profile or repo path.
 Use --repo <path> to derive or override the current snapshot target from a repo path.
 Use --profile-path <path> to select a non-default profile file relative to the repo root.
 Defaults to .source-analysis/snapshots/<target>-deps.json under the analyzed repo.

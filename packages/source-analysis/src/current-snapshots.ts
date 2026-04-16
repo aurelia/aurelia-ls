@@ -17,13 +17,6 @@ import type { TypeRefsOutput } from './typerefs/schema.js';
 
 const PATHS = createSnapshotPaths(import.meta.url);
 
-function defaultProfile(
-  repoPath?: string,
-  profilePath?: string,
-) {
-  return resolveAnalysisProfile({ repoPath, profilePath });
-}
-
 export interface CurrentSnapshotSet {
   deps: DepsOutput | null;
   typeRefs: TypeRefsOutput | null;
@@ -72,7 +65,7 @@ function tryLoadSnapshot<T>(
 }
 
 export function loadCurrentSnapshots(
-  target = defaultProfile().snapshotTarget,
+  target: string | undefined = undefined,
   waitMs = 0,
   repoPath?: string,
   profilePath?: string,
@@ -98,7 +91,7 @@ export function loadCurrentSnapshots(
 }
 
 export function tryLoadCurrentSnapshots(
-  target = defaultProfile().snapshotTarget,
+  target: string | undefined = undefined,
   waitMs = 0,
   repoPath?: string,
   profilePath?: string,

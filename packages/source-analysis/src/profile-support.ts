@@ -238,6 +238,44 @@ function compareSnapshotProfile(
     );
   }
 
+  const expectedPackageDiscoveryRoots = normalizePackageDiscoveryRoots(expected);
+  const actualPackageDiscoveryRoots = normalizeSnapshotPackageDiscoveryRoots(actual.packageDiscoveryRoots);
+  if (!sameStringList(expectedPackageDiscoveryRoots, actualPackageDiscoveryRoots)) {
+    issues.push(
+      `Snapshot package discovery roots ${JSON.stringify(actualPackageDiscoveryRoots)} do not match resolved package discovery roots ${JSON.stringify(expectedPackageDiscoveryRoots)}.`,
+    );
+  }
+
+  if (actual.includeRepoRootPackage !== expected.includeRepoRootPackage) {
+    issues.push(
+      `Snapshot includeRepoRootPackage ${JSON.stringify(actual.includeRepoRootPackage)} does not match resolved includeRepoRootPackage ${JSON.stringify(expected.includeRepoRootPackage)}.`,
+    );
+  }
+
+  const expectedPathMappings = normalizePathMappings(expected);
+  const actualPathMappings = normalizeSnapshotPathMappings(actual.pathMappings);
+  if (!sameStringList(expectedPathMappings, actualPathMappings)) {
+    issues.push(
+      `Snapshot path mappings ${JSON.stringify(actualPathMappings)} do not match resolved path mappings ${JSON.stringify(expectedPathMappings)}.`,
+    );
+  }
+
+  const expectedExercisePatterns = normalizeComparableGlobList(expected.exercisePatterns);
+  const actualExercisePatterns = normalizeComparableGlobList(actual.exercisePatterns);
+  if (!sameStringList(expectedExercisePatterns, actualExercisePatterns)) {
+    issues.push(
+      `Snapshot exercise patterns ${JSON.stringify(actualExercisePatterns)} do not match resolved exercise patterns ${JSON.stringify(expectedExercisePatterns)}.`,
+    );
+  }
+
+  const expectedPartitionSchemes = normalizePartitionSchemes(expected);
+  const actualPartitionSchemes = normalizeSnapshotPartitionSchemes(actual.partitionSchemes);
+  if (!sameStringList(expectedPartitionSchemes, actualPartitionSchemes)) {
+    issues.push(
+      `Snapshot partition schemes ${JSON.stringify(actualPartitionSchemes)} do not match resolved partition schemes ${JSON.stringify(expectedPartitionSchemes)}.`,
+    );
+  }
+
   return issues;
 }
 
@@ -255,6 +293,17 @@ function parseSnapshotProfile(
       .filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)
       .map((entry) => entry.replace(/\\/g, '/').replace(/^\/+|\/+$/g, ''))
     : [];
+  const packageDiscoveryRoots = parseSnapshotPackageDiscoveryRoots(record.packageDiscoveryRoots);
+  const includeRepoRootPackage = typeof record.includeRepoRootPackage === 'boolean'
+    ? record.includeRepoRootPackage
+    : false;
+  const pathMappings = parseSnapshotPathMappings(record.pathMappings);
+  const exercisePatterns = Array.isArray(record.exercisePatterns)
+    ? record.exercisePatterns
+      .filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)
+      .map((entry) => entry.replace(/\\/g, '/'))
+    : [];
+  const partitionSchemes = parseSnapshotPartitionSchemes(record.partitionSchemes);
   if (!target || !profileId) {
     return null;
   }
@@ -263,6 +312,11 @@ function parseSnapshotProfile(
     profileId,
     profilePath: asOptionalString(record.profilePath),
     excludedRepoRelativePrefixes,
+    packageDiscoveryRoots,
+    includeRepoRootPackage,
+    pathMappings,
+    exercisePatterns,
+    partitionSchemes,
   };
 }
 
@@ -280,6 +334,158 @@ function normalizeComparablePrefixList(
   return values
     .map((value) => value.replace(/\\/g, '/').replace(/^\/+|\/+$/g, ''))
     .sort();
+}
+
+function normalizeComparableGlobList(
+  values: readonly string[],
+): readonly string[] {
+  return values
+    .map((value) => value.replace(/\\/g, '/'))
+    .sort();
+}
+
+function normalizePackageDiscoveryRoots(
+  profile: AnalysisProfile,
+): readonly string[] {
+  return profile.packageDiscoveryRoots
+    .map((root) => `${root.root}:${root.mode}`)
+    .sort();
+}
+
+function normalizeSnapshotPackageDiscoveryRoots(
+  roots: SnapshotProfileProvenance['packageDiscoveryRoots'],
+): readonly string[] {
+  return roots
+    .map((root) => `${root.root}:${root.mode}`)
+    .sort();
+}
+
+function normalizePathMappings(
+  profile: AnalysisProfile,
+): readonly string[] {
+  return profile.pathMappings
+    .map((mapping) => `${mapping.id}:${mapping.from}->${mapping.to}`)
+    .sort();
+}
+
+function normalizeSnapshotPathMappings(
+  mappings: SnapshotProfileProvenance['pathMappings'],
+): readonly string[] {
+  return mappings
+    .map((mapping) => `${mapping.id}:${mapping.from}->${mapping.to}`)
+    .sort();
+}
+
+function normalizePartitionSchemes(
+  profile: AnalysisProfile,
+): readonly string[] {
+  return profile.partitionSchemes
+    .map((scheme) => `${scheme.id}:${scheme.summary}:${scheme.rules
+      .map((rule) => `${rule.pattern}->${rule.partitionTemplate}:${rule.labelTemplate ?? ''}`)
+      .join('|')}`)
+    .sort();
+}
+
+function normalizeSnapshotPartitionSchemes(
+  schemes: SnapshotProfileProvenance['partitionSchemes'],
+): readonly string[] {
+  return schemes
+    .map((scheme) => `${scheme.id}:${scheme.summary}:${scheme.rules
+      .map((rule) => `${rule.pattern}->${rule.partitionTemplate}:${rule.labelTemplate ?? ''}`)
+      .join('|')}`)
+    .sort();
+}
+
+function parseSnapshotPackageDiscoveryRoots(
+  value: unknown,
+): SnapshotProfileProvenance['packageDiscoveryRoots'] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      return [];
+    }
+    const record = entry as Record<string, unknown>;
+    const root = asOptionalString(record.root);
+    const mode = record.mode === 'children-with-package-json'
+      ? 'children-with-package-json'
+      : null;
+    if (!root || !mode) {
+      return [];
+    }
+    return [{
+      root: root.replace(/\\/g, '/').replace(/^\/+|\/+$/g, ''),
+      mode,
+    }];
+  });
+}
+
+function parseSnapshotPathMappings(
+  value: unknown,
+): SnapshotProfileProvenance['pathMappings'] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      return [];
+    }
+    const record = entry as Record<string, unknown>;
+    const id = asOptionalString(record.id);
+    const from = asOptionalString(record.from);
+    const to = asOptionalString(record.to);
+    if (!id || !from || !to) {
+      return [];
+    }
+    return [{
+      id,
+      from: from.replace(/\\/g, '/').replace(/^\/+|\/+$/g, ''),
+      to: to.replace(/\\/g, '/').replace(/^\/+|\/+$/g, ''),
+    }];
+  });
+}
+
+function parseSnapshotPartitionSchemes(
+  value: unknown,
+): SnapshotProfileProvenance['partitionSchemes'] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      return [];
+    }
+    const record = entry as Record<string, unknown>;
+    const id = asOptionalString(record.id);
+    const summary = asOptionalString(record.summary);
+    const rules = Array.isArray(record.rules)
+      ? record.rules.flatMap((ruleEntry) => {
+        if (!ruleEntry || typeof ruleEntry !== 'object' || Array.isArray(ruleEntry)) {
+          return [];
+        }
+        const ruleRecord = ruleEntry as Record<string, unknown>;
+        const pattern = asOptionalString(ruleRecord.pattern);
+        const partitionTemplate = asOptionalString(ruleRecord.partitionTemplate);
+        if (!pattern || !partitionTemplate) {
+          return [];
+        }
+        return [{
+          pattern: pattern.replace(/\\/g, '/'),
+          partitionTemplate: partitionTemplate.replace(/\\/g, '/'),
+          labelTemplate: asOptionalString(ruleRecord.labelTemplate),
+        }];
+      })
+      : [];
+    if (!id || !summary) {
+      return [];
+    }
+    return [{
+      id,
+      summary,
+      rules,
+    }];
+  });
 }
 
 function sameStringList(

@@ -1352,7 +1352,7 @@ File and structure:
   cross-subsystem [scope]       Type refs crossing subsystem boundaries
   bridging <sub1> <sub2>        Types referencing both subsystems
 
-Use --target <name> to select a named repo target (default: aurelia-ls2).
+Use --target <name> to override the snapshot target; otherwise it is derived from the active profile or repo path.
 Use --repo <path> to derive or override the current snapshot target from a repo path.
 Use --profile-path <path> to select a non-default profile file relative to the repo root.
 Defaults to .source-analysis/snapshots/<target>-typerefs.json under the analyzed repo.

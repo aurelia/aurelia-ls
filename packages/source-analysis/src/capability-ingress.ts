@@ -105,6 +105,9 @@ export interface CapabilityDiscoveryOptions {
 export interface CapabilityPlanOptions {
   readonly question: string;
   readonly sessionId?: string;
+  readonly repoPath?: string;
+  readonly target?: string;
+  readonly profilePath?: string;
   readonly focusKind?: FocusKind;
   readonly focusValue?: string;
   readonly readMode?: ReadMode;
@@ -292,7 +295,7 @@ export class CapabilityIngress {
       topK: 5,
     });
     const readMode = options.readMode ?? 'focus-card';
-    const worldFrame = options.worldFrame ?? defaultWorldFrame();
+    const worldFrame = options.worldFrame ?? defaultWorldFrame(options.repoPath, options.target, options.profilePath);
     const query: Inquiry = {
       inquiryEpisode: 'bounded-closure-explanation',
       focusRef: repoFocusRef('source-analysis-capability-plan'),
@@ -746,6 +749,9 @@ function buildInvocation(
   options: {
     readonly question: string;
     readonly sessionId?: string;
+    readonly repoPath?: string;
+    readonly target?: string;
+    readonly profilePath?: string;
     readonly focusKind?: FocusKind;
     readonly focusValue?: string;
   },
@@ -776,15 +782,23 @@ function buildInvocation(
       args.question = options.question;
       return readyInvocation(descriptor.command, args, reasons);
     case 'session-open': {
-      const repoPath = extractRepoPath(options.question);
+      const repoPath = options.repoPath ?? extractRepoPath(options.question);
       if (!repoPath) {
         missingInputs.push('repoPath');
       } else {
         args.repoPath = repoPath;
         reasons.push({
-          kind: 'focus-inference',
-          detail: `Inferred repoPath "${repoPath}" from the question text.`,
+          kind: options.repoPath ? 'input' : 'focus-inference',
+          detail: options.repoPath
+            ? `Using the provided repoPath "${repoPath}".`
+            : `Inferred repoPath "${repoPath}" from the question text.`,
         });
+      }
+      if (options.target) {
+        args.target = options.target;
+      }
+      if (options.profilePath) {
+        args.profilePath = options.profilePath;
       }
       return finalizeInvocation(descriptor.command, args, reasons, missingInputs);
     }
@@ -1040,8 +1054,15 @@ function capabilityRef(
   };
 }
 
-function defaultWorldFrame(): WorldFrame {
+function defaultWorldFrame(
+  repoPath?: string,
+  target?: string,
+  profilePath?: string,
+): WorldFrame {
   return {
+    ...(repoPath ? { repoPath } : {}),
+    ...(target ? { target } : {}),
+    ...(profilePath ? { profilePath } : {}),
     regimeAnchor: 'hosted',
     partiality: 'complete',
     freshness: 'live',

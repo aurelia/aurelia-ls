@@ -226,6 +226,9 @@ export interface DescribeInquiriesArgs extends HostRenderOptions {
 export interface PlanQuestionArgs extends HostRenderOptions {
   readonly question: string;
   readonly sessionId?: string;
+  readonly repoPath?: string;
+  readonly target?: string;
+  readonly profilePath?: string;
   readonly focusKind?: FocusKind;
   readonly focusValue?: string;
 }
@@ -235,6 +238,7 @@ export interface PlanInquiryArgs extends HostRenderOptions {
   readonly sessionId?: string;
   readonly repoPath?: string;
   readonly target?: string;
+  readonly profilePath?: string;
   readonly focusKind?: FocusKind;
   readonly focusValue?: string;
   readonly familyId?: InquiryFamilyId;
@@ -245,6 +249,7 @@ export interface AskQuestionArgs extends HostRenderOptions {
   readonly sessionId?: string;
   readonly repoPath?: string;
   readonly target?: string;
+  readonly profilePath?: string;
   readonly focusKind?: FocusKind;
   readonly focusValue?: string;
   readonly familyId?: InquiryFamilyId;

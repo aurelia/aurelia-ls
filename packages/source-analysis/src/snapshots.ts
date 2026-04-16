@@ -22,6 +22,26 @@ export interface SnapshotProfileProvenance {
   readonly profileId: string;
   readonly profilePath: string | null;
   readonly excludedRepoRelativePrefixes: readonly string[];
+  readonly packageDiscoveryRoots: readonly {
+    readonly root: string;
+    readonly mode: 'children-with-package-json';
+  }[];
+  readonly includeRepoRootPackage: boolean;
+  readonly pathMappings: readonly {
+    readonly id: string;
+    readonly from: string;
+    readonly to: string;
+  }[];
+  readonly exercisePatterns: readonly string[];
+  readonly partitionSchemes: readonly {
+    readonly id: string;
+    readonly summary: string;
+    readonly rules: readonly {
+      readonly pattern: string;
+      readonly partitionTemplate: string;
+      readonly labelTemplate: string | null;
+    }[];
+  }[];
 }
 
 export function describeSnapshotProfile(
@@ -32,6 +52,26 @@ export function describeSnapshotProfile(
     profileId: profile.profileId,
     profilePath: profile.profilePath,
     excludedRepoRelativePrefixes: profile.excludedRepoRelativePrefixes,
+    packageDiscoveryRoots: profile.packageDiscoveryRoots.map((root) => ({
+      root: root.root,
+      mode: root.mode,
+    })),
+    includeRepoRootPackage: profile.includeRepoRootPackage,
+    pathMappings: profile.pathMappings.map((mapping) => ({
+      id: mapping.id,
+      from: mapping.from,
+      to: mapping.to,
+    })),
+    exercisePatterns: [...profile.exercisePatterns],
+    partitionSchemes: profile.partitionSchemes.map((scheme) => ({
+      id: scheme.id,
+      summary: scheme.summary,
+      rules: scheme.rules.map((rule) => ({
+        pattern: rule.pattern,
+        partitionTemplate: rule.partitionTemplate,
+        labelTemplate: rule.labelTemplate ?? null,
+      })),
+    })),
   };
 }
 

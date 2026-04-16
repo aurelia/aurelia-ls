@@ -122,6 +122,7 @@ export interface FocusRef {
 export interface WorldFrame {
   readonly repoPath?: string;
   readonly target?: string;
+  readonly profilePath?: string;
   readonly regimeAnchor?: RegimeAnchor;
   readonly partiality?: PartialityMode;
   readonly freshness?: FreshnessMode;

@@ -81,6 +81,51 @@ describe('source-analysis hosted CLI', () => {
     ]);
     expect(parsed.result.execution?.steps.every((step) => step.status === 'executed')).toBe(true);
   });
+
+  it('keeps explicit repo and profile targeting visible in plan.question flows', () => {
+    const repoPath = createExplicitProfileFixtureRepo();
+    const raw = runCli([
+      'plan',
+      'question',
+      `Open a source-analysis session for ${repoPath}.`,
+      '--repo',
+      repoPath,
+      '--target',
+      'fixture-explicit-target',
+      '--profile-path',
+      'profiles/framework-core.json',
+      '--json',
+    ]);
+    const parsed = JSON.parse(raw) as {
+      readonly command: string;
+      readonly result: {
+        readonly answer: {
+          readonly query: {
+            readonly worldFrame?: {
+              readonly repoPath?: string;
+              readonly target?: string;
+              readonly profilePath?: string;
+            };
+          };
+          readonly outcome: {
+            readonly value?: {
+              readonly status?: string;
+              readonly capability?: {
+                readonly command?: string;
+              };
+            };
+          };
+        };
+      };
+    };
+
+    expect(parsed.command).toBe('plan.question');
+    expect(parsed.result.answer.query.worldFrame?.repoPath).toBe(repoPath);
+    expect(parsed.result.answer.query.worldFrame?.target).toBe('fixture-explicit-target');
+    expect(parsed.result.answer.query.worldFrame?.profilePath).toBe('profiles/framework-core.json');
+    expect(parsed.result.answer.outcome.value?.status).toBe('ready');
+    expect(parsed.result.answer.outcome.value?.capability?.command).toBe('session.open');
+  });
 });
 
 function runCli(
@@ -182,6 +227,28 @@ function createAuditFixtureRepo(): string {
       'type _ExerciseOnly = TestOnlyShape;',
       '',
     ].join('\n'),
+  );
+
+  return repoPath;
+}
+
+function createExplicitProfileFixtureRepo(): string {
+  const repoPath = mkdtempSync(join(tmpdir(), 'source-analysis-cli-explicit-profile-'));
+  tempDirs.push(repoPath);
+
+  mkdirSync(join(repoPath, 'profiles'), { recursive: true });
+  writeFileSync(
+    join(repoPath, 'profiles', 'framework-core.json'),
+    JSON.stringify(
+      {
+        id: 'fixture-explicit-profile',
+        target: 'fixture-explicit-target',
+        packageDiscoveryRoots: ['packages'],
+        includeRepoRootPackage: false,
+      },
+      null,
+      2,
+    ),
   );
 
   return repoPath;

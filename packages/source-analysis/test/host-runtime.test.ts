@@ -414,6 +414,18 @@ describe('SnapshotHostRuntime', () => {
 
   it('uses current snapshots for live ask.question flows instead of opening a transient session', () => {
     const runtime = createSnapshotHostRuntime();
+    const opened = runtime.execute({
+      command: 'session.open',
+      args: {
+        repoPath: process.cwd(),
+      },
+    });
+    runtime.execute({
+      command: 'materializeSnapshots',
+      args: {
+        sessionId: opened.result.sessionId,
+      },
+    });
 
     const asked = runtime.execute({
       command: 'ask.question',
@@ -466,6 +478,43 @@ describe('SnapshotHostRuntime', () => {
     });
 
     expect(asked.status).toBe('ok');
+    expect(asked.result.execution?.ephemeralSession).toBe(false);
+    expect(asked.result.execution?.steps.some((step) =>
+      step.command === 'session.open' && step.status === 'skipped',
+    )).toBe(true);
+  });
+
+  it('uses explicit profile-path targeting for current-snapshot inquiry execution', () => {
+    const repoPath = createExplicitProfileAuditFixtureRepo();
+    const runtime = createSnapshotHostRuntime();
+
+    const opened = runtime.execute({
+      command: 'session.open',
+      args: {
+        repoPath,
+        profilePath: 'profiles/framework-core.json',
+      },
+    });
+
+    const sessionId = opened.result.sessionId;
+    runtime.execute({
+      command: 'materializeSnapshots',
+      args: {
+        sessionId,
+      },
+    });
+
+    const asked = runtime.execute({
+      command: 'ask.question',
+      args: {
+        question: 'Audit @fixture/source-analysis-explicit for tech debt.',
+        repoPath,
+        profilePath: 'profiles/framework-core.json',
+      },
+    });
+
+    expect(asked.status).toBe('ok');
+    expect(asked.result.answer.query.worldFrame?.profilePath).toBe('profiles/framework-core.json');
     expect(asked.result.execution?.ephemeralSession).toBe(false);
     expect(asked.result.execution?.steps.some((step) =>
       step.command === 'session.open' && step.status === 'skipped',
@@ -846,6 +895,77 @@ function createProfileFixtureRepo(): string {
   );
   writeFileSync(join(repoPath, 'modules', 'alpha', 'src', 'index.ts'), 'export const alpha = true;\n');
   writeFileSync(join(repoPath, 'modules', 'beta', 'src', 'index.ts'), 'export const beta = true;\n');
+
+  return repoPath;
+}
+
+function createExplicitProfileAuditFixtureRepo(): string {
+  const repoPath = mkdtempSync(join(tmpdir(), 'source-analysis-host-explicit-profile-'));
+  tempDirs.push(repoPath);
+
+  mkdirSync(join(repoPath, 'profiles'), { recursive: true });
+  mkdirSync(join(repoPath, 'packages', 'alpha', 'src'), { recursive: true });
+  mkdirSync(join(repoPath, 'packages', 'alpha', 'test'), { recursive: true });
+  writeFileSync(
+    join(repoPath, 'profiles', 'framework-core.json'),
+    JSON.stringify(
+      {
+        id: 'fixture-explicit-profile',
+        target: 'fixture-explicit-target',
+        packageDiscoveryRoots: ['packages'],
+        includeRepoRootPackage: false,
+      },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(
+    join(repoPath, 'packages', 'alpha', 'package.json'),
+    JSON.stringify(
+      {
+        name: '@fixture/source-analysis-explicit',
+        type: 'module',
+      },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(
+    join(repoPath, 'packages', 'alpha', 'tsconfig.json'),
+    JSON.stringify(
+      {
+        compilerOptions: {
+          module: 'NodeNext',
+          moduleResolution: 'NodeNext',
+          target: 'ES2022',
+          noEmit: true,
+        },
+        include: ['src/**/*.ts', 'test/**/*.ts'],
+      },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(
+    join(repoPath, 'packages', 'alpha', 'src', 'live.ts'),
+    'export interface LiveShape { value: string; }\n',
+  );
+  writeFileSync(
+    join(repoPath, 'packages', 'alpha', 'src', 'index.ts'),
+    [
+      "export type { LiveShape } from './live.js';",
+      'export const auditReady = true;',
+      '',
+    ].join('\n'),
+  );
+  writeFileSync(
+    join(repoPath, 'packages', 'alpha', 'test', 'index.test.ts'),
+    [
+      "import { auditReady } from '../src/index.js';",
+      'void auditReady;',
+      '',
+    ].join('\n'),
+  );
 
   return repoPath;
 }

@@ -404,7 +404,7 @@ Export queries:
   members <name>                Resolve members for one exported value or merged surface
   search <pattern>              Reverse lookup by exported/original name regex
 
-Use --target <name> to select a named repo target (default: aurelia-ls2).
+Use --target <name> to override the snapshot target; otherwise it is derived from the active profile or repo path.
 Use --repo <path> to derive or override the current snapshot target from a repo path.
 Use --profile-path <path> to select a non-default profile file relative to the repo root.
 Defaults to .source-analysis/snapshots/<target>-exports.json under the analyzed repo.

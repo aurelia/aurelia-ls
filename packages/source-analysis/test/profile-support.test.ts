@@ -24,6 +24,14 @@ afterEach(() => {
 });
 
 describe('profile snapshot support', () => {
+  it('derives the current-snapshot target from the resolved profile when repoPath changes', () => {
+    const repoPath = createProfileFixtureRepo();
+    const snapshots = tryLoadCurrentSnapshots(undefined, 0, repoPath);
+
+    expect(snapshots.warnings).toHaveLength(3);
+    expect(snapshots.warnings.every((warning) => warning.includes('fixture-profile-target'))).toBe(true);
+  });
+
   it('describes missing snapshots as explicit support gaps', () => {
     const repoPath = createProfileFixtureRepo();
     const profile = resolveAnalysisProfile({ repoPath });
@@ -79,6 +87,50 @@ describe('profile snapshot support', () => {
     expect(snapshots.deps).toBeNull();
     expect(snapshots.support?.mismatchedKinds).toEqual(['deps']);
     expect(snapshots.warnings.some((warning) => warning.includes('wrong-profile'))).toBe(true);
+  });
+
+  it('treats deeper profile-law drift as a regime mismatch even when id and target still match', () => {
+    const repoPath = createProfileFixtureRepo();
+    mkdirSync(join(repoPath, '.source-analysis', 'snapshots'), { recursive: true });
+    writeFileSync(
+      join(repoPath, '.source-analysis', 'snapshots', 'fixture-profile-target-deps.json'),
+      JSON.stringify(
+        {
+          generated_at: '2026-04-16T00:00:00.000Z',
+          source_commit: 'abc',
+          analyzer_commit: 'def',
+          profile: {
+            target: 'fixture-profile-target',
+            profileId: 'fixture-profile',
+            profilePath: join(repoPath, '.source-analysis', 'profile.json'),
+            excludedRepoRelativePrefixes: [],
+            packageDiscoveryRoots: [{ root: 'wrong-root', mode: 'children-with-package-json' }],
+            includeRepoRootPackage: false,
+            pathMappings: [],
+            exercisePatterns: [],
+            partitionSchemes: [],
+          },
+          summary: { files_analyzed: 0, internal_edges: 0, external_imports: 0, unresolved: 0, uncovered_files: 0 },
+          tsconfigs: [],
+          edges: [],
+          external_imports: [],
+          unresolved_imports: [],
+          uncovered_files: [],
+          directory_crossings: [],
+          directory_profiles: [],
+          orphans: { no_inbound: [], no_outbound: [] },
+          cycles: [],
+          coupling_matrices: [],
+        },
+        null,
+        2,
+      ),
+    );
+
+    const profile = resolveAnalysisProfile({ repoPath });
+    const support = inspectProfileSnapshotSupport(createSnapshotPaths(import.meta.url, {}), profile);
+    expect(support.mismatchedKinds).toEqual(['deps']);
+    expect(support.snapshots[0]?.issues.some((issue) => issue.includes('package discovery roots'))).toBe(true);
   });
 });
 

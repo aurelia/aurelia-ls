@@ -136,6 +136,7 @@ export interface InquiryPlanOptions {
   readonly sessionId?: string;
   readonly repoPath?: string;
   readonly target?: string;
+  readonly profilePath?: string;
   readonly focusKind?: FocusKind;
   readonly focusValue?: string;
   readonly familyId?: InquiryFamilyId;
@@ -396,7 +397,7 @@ export class InquiryIngress {
   ): InquiryAnswer<InquiryPlanValue> {
     const plan = this.plan(options);
     const readMode = options.readMode ?? 'focus-card';
-    const worldFrame = options.worldFrame ?? defaultWorldFrame(options.repoPath, options.target);
+    const worldFrame = options.worldFrame ?? defaultWorldFrame(options.repoPath, options.target, options.profilePath);
     const query: Inquiry = {
       inquiryEpisode: 'bounded-closure-explanation',
       focusRef: inquiryFocusRef('source-analysis-inquiry-plan'),
@@ -485,7 +486,7 @@ export class InquiryIngress {
     options: InquiryAskOptions,
   ): InquiryAnswer<InquiryAskValue> {
     const readMode = options.readMode ?? 'focus-card';
-    const worldFrame = options.worldFrame ?? defaultWorldFrame(options.repoPath, options.target);
+    const worldFrame = options.worldFrame ?? defaultWorldFrame(options.repoPath, options.target, options.profilePath);
     const query: Inquiry = {
       inquiryEpisode: 'bounded-closure-explanation',
       focusRef: inquiryFocusRef('source-analysis-ask-question'),
@@ -938,6 +939,7 @@ function maybeCreateSessionStep(
     args: {
       repoPath,
       ...(options.target ? { target: options.target } : {}),
+      ...(options.profilePath ? { profilePath: options.profilePath } : {}),
     },
     required: true,
   };
@@ -1065,10 +1067,15 @@ function capabilityRef(
   };
 }
 
-function defaultWorldFrame(repoPath?: string, target?: string): WorldFrame {
+function defaultWorldFrame(
+  repoPath?: string,
+  target?: string,
+  profilePath?: string,
+): WorldFrame {
   return {
     ...(repoPath ? { repoPath } : {}),
     ...(target ? { target } : {}),
+    ...(profilePath ? { profilePath } : {}),
     regimeAnchor: 'hosted',
     partiality: 'complete',
     freshness: 'live',
