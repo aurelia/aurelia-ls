@@ -54,6 +54,7 @@ export const SOURCE_ANALYSIS_FOCUS_KINDS = [
   'claim',
   'session',
   'capability',
+  'inquiry',
 ] as const;
 
 export const SOURCE_ANALYSIS_REGIME_ANCHORS = [

@@ -197,6 +197,74 @@ export {
   SOURCE_ANALYSIS_CAPABILITY_REPAIR_STATUSES,
 } from './ingress.js';
 export type {
+  DiscoverSourceAnalysisInquiriesInput,
+  SourceAnalysisInquiryCatalogDiagnostics,
+  SourceAnalysisInquiryConfusion,
+  SourceAnalysisInquiryExample,
+  SourceAnalysisInquiryFamilyDefinition,
+  SourceAnalysisInquiryFamilyId,
+  SourceAnalysisInquiryFamilyView,
+  SourceAnalysisInquiryMatch,
+  SourceAnalysisInquiryMatchReason,
+  SourceAnalysisInquiryMatchReasonKind,
+} from './inquiry-catalog.js';
+export {
+  createDefaultSourceAnalysisInquiryCatalog,
+  SourceAnalysisInquiryCatalog,
+  SourceAnalysisInquiryFamilyDescriptor,
+  SOURCE_ANALYSIS_INQUIRY_FAMILY_IDS,
+  SOURCE_ANALYSIS_INQUIRY_MATCH_REASON_KINDS,
+} from './inquiry-catalog.js';
+export type {
+  SourceAnalysisInquiryAskOptions,
+  SourceAnalysisInquiryAskStatus,
+  SourceAnalysisInquiryAskValue,
+  SourceAnalysisInquiryDiscoveryOptions,
+  SourceAnalysisInquiryDiscoveryValue,
+  SourceAnalysisInquiryExecutionSummary,
+  SourceAnalysisInquiryPlanOptions,
+  SourceAnalysisInquiryPlanReason,
+  SourceAnalysisInquiryPlanReasonKind,
+  SourceAnalysisInquiryPlanStatus,
+  SourceAnalysisInquiryPlanStep,
+  SourceAnalysisInquiryRef,
+  SourceAnalysisInquiryStepPhase,
+  SourceAnalysisInquiryPlanValue,
+  SourceAnalysisResolvedInquiryPlan,
+} from './inquiry-ingress.js';
+export {
+  createSourceAnalysisInquiryIngress,
+  SourceAnalysisInquiryIngress,
+  SOURCE_ANALYSIS_INQUIRY_ASK_STATUSES,
+  SOURCE_ANALYSIS_INQUIRY_PLAN_REASON_KINDS,
+  SOURCE_ANALYSIS_INQUIRY_PLAN_STATUSES,
+  SOURCE_ANALYSIS_INQUIRY_STEP_PHASES,
+} from './inquiry-ingress.js';
+export {
+  intersect,
+  matchPhrases,
+  matchTokens,
+  normalizePhrase,
+  normalizeToken,
+  tokenize,
+} from './ingress-language.js';
+export type {
+  SourceAnalysisIngressFocusHints,
+  SourceAnalysisIngressHintDetail,
+} from './ingress-hints.js';
+export {
+  asFocusKind,
+  asString,
+  deriveFocusHints,
+  deriveRepairHints,
+  describeFocusHints,
+  extractFilePath,
+  extractPackageName,
+  extractRepoPath,
+  extractTypeName,
+  inferFocusKindFromArgs,
+} from './ingress-hints.js';
+export type {
   SourceAnalysisLocationPoint,
   SourceAnalysisLocationRange,
   SourceAnalysisObservationProvenance,
@@ -308,13 +376,23 @@ export type {
 
 export { createSourceAnalysisHostRuntime, SourceAnalysisHostRuntime } from './host/runtime.js';
 export type {
+  AskQuestionArgs,
+  AskQuestionExecution,
+  AskQuestionExecutionStep,
+  AskQuestionResult,
+  DescribeInquiriesArgs,
+  DescribeInquiriesResult,
   DescribeCapabilitiesArgs,
   DescribeCapabilitiesResult,
   MaterializeSnapshotsArgs,
   MaterializeSnapshotsResult,
+  PlanInquiryArgs,
+  PlanInquiryResult,
   PlanQuestionArgs,
   PlanQuestionResult,
   QueryArgs,
+  QueryNavigateArgs,
+  QueryNavigateResult,
   QuerySnapshotResult,
   QuerySummaryResult,
   RepairCommandArgs,

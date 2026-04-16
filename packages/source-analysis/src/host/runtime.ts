@@ -14,11 +14,15 @@ import {
   renderSourceAnalysisAnswerDocumentToJson,
   renderSourceAnalysisAnswerDocumentToPlainText,
 } from '../answer-renderer.js';
-import { createSourceAnalysisPaths } from '../config.js';
+import { createSourceAnalysisPaths, deriveTargetFromRepoPath } from '../config.js';
+import { loadCurrentSourceAnalysisSnapshots } from '../current-snapshots.js';
 import { SourceAnalysisCapabilityIngress } from '../ingress.js';
+import type { SourceAnalysisInquiryExecutionSummary } from '../inquiry-ingress.js';
+import { SourceAnalysisInquiryIngress } from '../inquiry-ingress.js';
 import type { SourceAnalysisConsumerKind } from '../inquiry-policy.js';
 import { resolveSourceAnalysisInquiryPolicy } from '../inquiry-policy.js';
 import type { SourceAnalysisFocusKind } from '../query-model.js';
+import { createSourceAnalysisNavigationEpisode } from '../navigation.js';
 import { createSourceAnalysisRouteWitnessAnswer } from '../route-witness.js';
 import type { SourceAnalysisAnalysisOptions } from '../analysis-options.js';
 import { generateDepsAnalysis } from '../deps/analyze.js';
@@ -35,14 +39,24 @@ import {
   SOURCE_ANALYSIS_KINDS,
   type MaterializeSnapshotsArgs,
   type MaterializeSnapshotsResult,
+  type AskQuestionArgs,
+  type AskQuestionExecution,
+  type AskQuestionExecutionStep,
+  type AskQuestionResult,
+  type DescribeInquiriesArgs,
+  type DescribeInquiriesResult,
   type DescribeCapabilitiesArgs,
   type DescribeCapabilitiesResult,
+  type PlanInquiryArgs,
+  type PlanInquiryResult,
   type PlanQuestionArgs,
   type PlanQuestionResult,
   type RepairCommandArgs,
   type RepairCommandResult,
   type QueryAuditPackageArgs,
   type QueryAuditPackageResult,
+  type QueryNavigateArgs,
+  type QueryNavigateResult,
   type QueryRouteWitnessArgs,
   type QueryRouteWitnessResult,
   type QueryArgs,
@@ -83,6 +97,15 @@ interface CommandOutcome {
   readonly errors?: readonly SourceAnalysisHostError[];
 }
 
+interface InquiryExecutionOutcome {
+  readonly usedSessionId?: string;
+  readonly invalidation: SourceAnalysisHostInvalidationMeta;
+  readonly cache: SourceAnalysisHostCacheMeta;
+  readonly refreshedKinds: readonly SourceAnalysisKind[];
+  readonly freshness: 'live' | 'snapshot';
+  readonly execution: AskQuestionExecution;
+}
+
 const DEFAULT_CACHE: SourceAnalysisHostCacheMeta = { hit: false, tier: 'cold' };
 const ALL_KINDS = SOURCE_ANALYSIS_KINDS;
 const SOURCE_FILE_PATTERN = /(\.d\.ts|\.tsx|\.ts|\.mts|\.cts)$/i;
@@ -90,6 +113,7 @@ const SOURCE_FILE_PATTERN = /(\.d\.ts|\.tsx|\.ts|\.mts|\.cts)$/i;
 export class SourceAnalysisHostRuntime {
   readonly #sessions = new SourceAnalysisHostSessionManager();
   readonly #ingress = new SourceAnalysisCapabilityIngress();
+  readonly #publicIngress = new SourceAnalysisInquiryIngress();
 
   execute<TCommand extends SourceAnalysisHostCommandName>(
     invocation: SourceAnalysisHostCommandInvocation<TCommand>,
@@ -135,8 +159,11 @@ export class SourceAnalysisHostRuntime {
     invocation: SourceAnalysisHostCommandInvocation<TCommand>,
   ): CommandOutcome {
     switch (invocation.command) {
+      case 'describe.inquiries': return this.#describeInquiries(invocation.args as DescribeInquiriesArgs);
       case 'describe.capabilities': return this.#describeCapabilities(invocation.args as DescribeCapabilitiesArgs);
+      case 'plan.inquiry': return this.#planInquiry(invocation.args as PlanInquiryArgs);
       case 'plan.question': return this.#planQuestion(invocation.args as PlanQuestionArgs);
+      case 'ask.question': return this.#askQuestion(invocation.args as AskQuestionArgs);
       case 'repair.command': return this.#repairCommand(invocation.args as RepairCommandArgs);
       case 'session.open': return this.#sessionOpen(invocation.args as SessionOpenArgs);
       case 'session.close': return this.#sessionClose(invocation.args as SessionCloseArgs);
@@ -151,9 +178,36 @@ export class SourceAnalysisHostRuntime {
       case 'query.exports.snapshot': return this.#querySnapshot('exports', invocation.args as QueryArgs);
       case 'query.audit.package': return this.#queryAuditPackage(invocation.args as QueryAuditPackageArgs);
       case 'query.route.witness': return this.#queryRouteWitness(invocation.args as QueryRouteWitnessArgs);
+      case 'query.navigate': return this.#queryNavigate(invocation.args as QueryNavigateArgs);
       case 'materializeSnapshots': return this.#materializeSnapshots(invocation.args as MaterializeSnapshotsArgs);
       default: return assertNever(invocation.command);
     }
+  }
+
+  #describeInquiries(args: DescribeInquiriesArgs): CommandOutcome {
+    const answer = this.#publicIngress.createDiscoveryAnswer({
+      question: args.question,
+      focusKind: args.focusKind,
+      familyId: args.familyId,
+      includeExamples: args.includeExamples,
+      topK: args.topK,
+      readMode: args.readMode,
+      consumer: args.consumer,
+      worldFrame: {
+        regimeAnchor: 'hosted',
+        partiality: 'complete',
+        freshness: 'live',
+      },
+    });
+    const rendered = buildRenderedView(answer, args.consumer, args.renderStyle);
+    const result: DescribeInquiriesResult = {
+      answer,
+      ...(rendered ? { rendered } : {}),
+    };
+    return {
+      result,
+      invalidation: emptyInvalidationMeta(),
+    };
   }
 
   #describeCapabilities(args: DescribeCapabilitiesArgs): CommandOutcome {
@@ -212,6 +266,41 @@ export class SourceAnalysisHostRuntime {
     };
   }
 
+  #planInquiry(args: PlanInquiryArgs): CommandOutcome {
+    const sessionState = args.sessionId ? this.#tryGetSession(args.sessionId) : undefined;
+    const answer = this.#publicIngress.createPlanAnswer({
+      question: args.question,
+      sessionId: args.sessionId,
+      repoPath: args.repoPath ?? sessionState?.repoPath ?? process.cwd(),
+      target: args.target ?? sessionState?.target,
+      focusKind: args.focusKind,
+      focusValue: args.focusValue,
+      familyId: args.familyId,
+      readMode: args.readMode,
+      consumer: args.consumer,
+      worldFrame: {
+        repoPath: args.repoPath ?? sessionState?.repoPath ?? process.cwd(),
+        target: args.target ?? sessionState?.target,
+        regimeAnchor: 'hosted',
+        partiality: 'complete',
+        freshness: 'live',
+      },
+    });
+    const rendered = buildRenderedView(answer, args.consumer, args.renderStyle);
+    const result: PlanInquiryResult = {
+      answer,
+      ...(rendered ? { rendered } : {}),
+    };
+    return {
+      result,
+      sessionId: sessionState?.sessionId,
+      invalidation: sessionState ? buildInvalidationMeta(sessionState) : emptyInvalidationMeta(),
+      cache: sessionState
+        ? { hit: hasCachedSnapshots(sessionState), tier: hasCachedSnapshots(sessionState) ? 'warm' : 'cold' }
+        : DEFAULT_CACHE,
+    };
+  }
+
   #repairCommand(args: RepairCommandArgs): CommandOutcome {
     const answer = this.#ingress.createRepairAnswer({
       command: args.command,
@@ -233,6 +322,67 @@ export class SourceAnalysisHostRuntime {
     return {
       result,
       invalidation: emptyInvalidationMeta(),
+    };
+  }
+
+  #askQuestion(args: AskQuestionArgs): CommandOutcome {
+    const existingSession = args.sessionId ? this.#tryGetSession(args.sessionId) : undefined;
+    const repoPath = args.repoPath ?? existingSession?.repoPath ?? process.cwd();
+    const target = args.target ?? existingSession?.target;
+    const plan = this.#publicIngress.plan({
+      question: args.question,
+      sessionId: args.sessionId,
+      repoPath,
+      target,
+      focusKind: args.focusKind,
+      focusValue: args.focusValue,
+      familyId: args.familyId,
+    });
+
+    const executed = plan.status === 'ready' && plan.primaryStep
+      ? this.#tryExecuteInquiryPlanAgainstCurrentSnapshots(plan, {
+        repoPath,
+        target,
+      }) ?? this.#executeInquiryPlan(plan, {
+        existingSession,
+        repoPath,
+        target,
+      })
+      : undefined;
+    const answer = this.#publicIngress.createAskAnswer({
+      question: args.question,
+      sessionId: executed?.usedSessionId ?? args.sessionId,
+      repoPath,
+      target,
+      focusKind: args.focusKind,
+      focusValue: args.focusValue,
+      familyId: args.familyId,
+      readMode: args.readMode,
+      consumer: args.consumer,
+      worldFrame: {
+        repoPath,
+        target,
+        regimeAnchor: 'hosted',
+        partiality: 'complete',
+        freshness: executed?.freshness ?? 'live',
+      },
+      plan,
+      execution: executed ? summarizeInquiryExecution(executed) : undefined,
+    });
+    const rendered = buildRenderedView(answer, args.consumer, args.renderStyle);
+    const result: AskQuestionResult = {
+      answer,
+      ...(rendered ? { rendered } : {}),
+      ...(executed ? { execution: executed.execution } : {}),
+    };
+    return {
+      result,
+      sessionId: existingSession?.sessionId,
+      invalidation: executed?.invalidation ?? (existingSession ? buildInvalidationMeta(existingSession) : emptyInvalidationMeta()),
+      cache: executed?.cache ?? (existingSession
+        ? { hit: hasCachedSnapshots(existingSession), tier: hasCachedSnapshots(existingSession) ? 'warm' : 'cold' }
+        : DEFAULT_CACHE),
+      refreshedKinds: executed?.refreshedKinds ?? [],
     };
   }
 
@@ -485,6 +635,69 @@ export class SourceAnalysisHostRuntime {
           || typeRefsQuery.cache.tier === 'warm'
           || exportsQuery.cache.tier === 'warm'
           ? 'warm'
+        : 'cold',
+      },
+    };
+  }
+
+  #queryNavigate(args: QueryNavigateArgs): CommandOutcome {
+    const state = this.#sessions.get(args.sessionId);
+    const depsQuery = ensureFreshSnapshot(state, 'deps', args.refreshIfNeeded);
+    const typeRefsQuery = ensureFreshSnapshot(state, 'typerefs', args.refreshIfNeeded);
+    const exportsQuery = ensureFreshSnapshot(state, 'exports', args.refreshIfNeeded);
+
+    const warnings = [
+      ...depsQuery.warnings,
+      ...typeRefsQuery.warnings,
+      ...exportsQuery.warnings,
+    ];
+    const refreshedKinds = sortKinds([
+      ...depsQuery.refreshedKinds,
+      ...typeRefsQuery.refreshedKinds,
+      ...exportsQuery.refreshedKinds,
+    ]);
+    const episode = createSourceAnalysisNavigationEpisode(
+      {
+        inquiryEpisode: 'orient-and-localize',
+        focusRef: {
+          kind: args.focusKind,
+          value: args.focusValue,
+        },
+        questionRoute: args.questionRoute ?? 'join',
+        readMode: args.readMode ?? 'focus-card',
+        worldFrame: {
+          repoPath: state.repoPath,
+          target: state.target,
+          regimeAnchor: 'hosted',
+          partiality: 'complete',
+          freshness: 'snapshot',
+        },
+      },
+      {
+        deps: depsQuery.snapshot,
+        typeRefs: typeRefsQuery.snapshot,
+        exports: exportsQuery.snapshot,
+        warnings,
+      },
+    );
+    const rendered = buildRenderedView(episode.answer, args.consumer, args.renderStyle);
+    const result: QueryNavigateResult = {
+      answer: episode.answer,
+      ...(rendered ? { rendered } : {}),
+      warnings,
+    };
+
+    return {
+      result,
+      sessionId: state.sessionId,
+      refreshedKinds,
+      invalidation: buildInvalidationMeta(state),
+      cache: {
+        hit: depsQuery.cache.hit && typeRefsQuery.cache.hit && exportsQuery.cache.hit,
+        tier: depsQuery.cache.tier === 'warm'
+          || typeRefsQuery.cache.tier === 'warm'
+          || exportsQuery.cache.tier === 'warm'
+          ? 'warm'
           : 'cold',
       },
     };
@@ -531,6 +744,155 @@ export class SourceAnalysisHostRuntime {
     };
   }
 
+  #tryExecuteInquiryPlanAgainstCurrentSnapshots(
+    plan: { readonly steps: readonly { readonly command: string; readonly args: Record<string, unknown>; }[]; readonly primaryStep?: { readonly command: string; readonly args: Record<string, unknown>; } },
+    context: {
+      readonly repoPath: string;
+      readonly target?: string;
+    },
+  ): InquiryExecutionOutcome | undefined {
+    const primaryStep = plan.primaryStep;
+    if (!primaryStep || !supportsCurrentSnapshotExecution(primaryStep.command)) {
+      return undefined;
+    }
+
+    const target = context.target ?? deriveTargetFromRepoPath(context.repoPath);
+    try {
+      const snapshots = loadCurrentSourceAnalysisSnapshots(target);
+      const primaryEnvelope = createCurrentSnapshotEnvelope(primaryStep.command, primaryStep.args, snapshots, context.repoPath, target);
+      if (!primaryEnvelope) {
+        return undefined;
+      }
+      const steps: AskQuestionExecutionStep[] = plan.steps.map((step) => ({
+        command: step.command,
+        args: step.args,
+        status: step.command === 'session.open' ? 'skipped' : step.command === primaryStep.command ? 'executed' : 'skipped',
+        detail: step.command === 'session.open'
+          ? 'Used current materialized snapshots instead of opening a transient live session.'
+          : step.command === primaryStep.command
+            ? 'Executed against the current snapshot contract.'
+            : 'This step was not needed once current snapshots were available.',
+      }));
+
+      return {
+        invalidation: emptyInvalidationMeta(),
+        cache: { hit: true, tier: 'warm' },
+        refreshedKinds: [],
+        freshness: 'snapshot',
+        execution: {
+          ephemeralSession: false,
+          steps,
+          primaryEnvelope,
+        },
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
+  #executeInquiryPlan(
+    plan: { readonly steps: readonly { readonly command: string; readonly args: Record<string, unknown>; }[] },
+    context: {
+      readonly existingSession?: SourceAnalysisHostSessionState;
+      readonly repoPath: string;
+      readonly target?: string;
+    },
+  ): InquiryExecutionOutcome {
+    const steps: AskQuestionExecutionStep[] = [];
+    let sessionState = context.existingSession;
+    let openedEphemeralSession = false;
+    let primaryEnvelope: SourceAnalysisHostEnvelope<unknown> | undefined;
+    let cache: SourceAnalysisHostCacheMeta = context.existingSession
+      ? { hit: hasCachedSnapshots(context.existingSession), tier: hasCachedSnapshots(context.existingSession) ? 'warm' : 'cold' }
+      : DEFAULT_CACHE;
+    let invalidation = context.existingSession ? buildInvalidationMeta(context.existingSession) : emptyInvalidationMeta();
+    let refreshedKinds: readonly SourceAnalysisKind[] = [];
+
+    try {
+      for (const step of plan.steps) {
+        if (step.command === 'session.open') {
+          if (sessionState) {
+            steps.push({
+              command: step.command,
+              args: step.args,
+              status: 'skipped',
+              detail: `Reusing the existing session "${sessionState.sessionId}".`,
+            });
+            continue;
+          }
+
+          const openOutcome = this.#sessionOpen({
+            repoPath: asStepString(step.args.repoPath) ?? context.repoPath,
+            ...(asStepString(step.args.target) ? { target: asStepString(step.args.target) } : {}),
+          });
+          const openResult = openOutcome.result as SessionOpenResult;
+          sessionState = this.#sessions.get(openResult.sessionId);
+          openedEphemeralSession = true;
+          cache = openOutcome.cache ?? DEFAULT_CACHE;
+          invalidation = openOutcome.invalidation ?? buildInvalidationMeta(sessionState);
+          refreshedKinds = openOutcome.refreshedKinds ?? [];
+          steps.push({
+            command: step.command,
+            args: step.args,
+            status: 'executed',
+            detail: `Opened session "${openResult.sessionId}".`,
+          });
+          continue;
+        }
+
+        const resolvedArgs = resolveInquiryStepArgs(step.args, sessionState?.sessionId);
+        if (resolvedArgs === null) {
+          steps.push({
+            command: step.command,
+            args: step.args,
+            status: 'failed',
+            detail: 'The inquiry plan still requires a session before this step can execute.',
+          });
+          break;
+        }
+
+        const envelope = this.execute({
+          command: step.command as SourceAnalysisHostCommandName,
+          args: resolvedArgs as SourceAnalysisHostCommandArgsMap[SourceAnalysisHostCommandName],
+        });
+        primaryEnvelope ??= envelope as SourceAnalysisHostEnvelope<unknown>;
+        cache = envelope.meta.cache;
+        invalidation = envelope.meta.invalidation;
+        refreshedKinds = envelope.meta.refreshedKinds;
+        steps.push({
+          command: step.command,
+          args: resolvedArgs,
+          status: envelope.status === 'ok' && envelope.errors.length === 0 ? 'executed' : 'failed',
+          ...(envelope.errors[0] ? { detail: envelope.errors[0].message } : {}),
+        });
+        if (envelope.status !== 'ok' || envelope.errors.length > 0) {
+          break;
+        }
+        if (envelope.meta.sessionId) {
+          sessionState = this.#tryGetSession(envelope.meta.sessionId) ?? sessionState;
+        }
+      }
+    } finally {
+      if (openedEphemeralSession && sessionState) {
+        this.#sessionClose({ sessionId: sessionState.sessionId });
+      }
+    }
+
+    return {
+      usedSessionId: sessionState?.sessionId,
+      invalidation,
+      cache,
+      refreshedKinds,
+      freshness: 'live',
+      execution: {
+        usedSessionId: sessionState?.sessionId,
+        ephemeralSession: openedEphemeralSession,
+        steps,
+        ...(primaryEnvelope ? { primaryEnvelope } : {}),
+      },
+    };
+  }
+
   #tryGetSession(sessionId: string): SourceAnalysisHostSessionState | undefined {
     try {
       return this.#sessions.get(sessionId);
@@ -542,6 +904,148 @@ export class SourceAnalysisHostRuntime {
 
 export function createSourceAnalysisHostRuntime(): SourceAnalysisHostRuntime {
   return new SourceAnalysisHostRuntime();
+}
+
+function summarizeInquiryExecution(
+  executed: InquiryExecutionOutcome,
+): SourceAnalysisInquiryExecutionSummary {
+  const primaryEnvelope = executed.execution.primaryEnvelope;
+  if (!primaryEnvelope) {
+    return {
+      status: 'skipped',
+      ephemeralSession: executed.execution.ephemeralSession,
+      ...(executed.usedSessionId ? { sessionId: executed.usedSessionId } : {}),
+      facts: [],
+      lines: [],
+    };
+  }
+
+  return {
+    status: primaryEnvelope.status === 'ok' && primaryEnvelope.errors.length === 0 ? 'executed' : 'failed',
+    command: primaryEnvelope.command,
+    ...(executed.usedSessionId ? { sessionId: executed.usedSessionId } : {}),
+    ephemeralSession: executed.execution.ephemeralSession,
+    facts: summarizePrimaryFacts(primaryEnvelope),
+    lines: summarizePrimaryLines(primaryEnvelope),
+  };
+}
+
+function supportsCurrentSnapshotExecution(command: string): boolean {
+  return command === 'query.audit.package'
+    || command === 'query.route.witness'
+    || command === 'query.navigate'
+    || command === 'query.deps.summary'
+    || command === 'query.typerefs.summary'
+    || command === 'query.exports.summary';
+}
+
+function createCurrentSnapshotEnvelope(
+  command: string,
+  args: Record<string, unknown>,
+  snapshots: ReturnType<typeof loadCurrentSourceAnalysisSnapshots>,
+  repoPath: string,
+  target: string,
+): SourceAnalysisHostEnvelope<unknown> | undefined {
+  switch (command) {
+    case 'query.audit.package': {
+      const packageName = asStepString(args.packageName);
+      if (!packageName) {
+        return undefined;
+      }
+      const answer = createSourceAnalysisAuditAnswer({
+        inquiryEpisode: 'inventory-and-audit-sweep',
+        focusRef: { kind: 'package', value: packageName },
+        questionRoute: 'inventory',
+        readMode: 'summary-card',
+        worldFrame: {
+          repoPath,
+          target,
+          regimeAnchor: 'batch',
+          partiality: 'complete',
+          freshness: 'snapshot',
+        },
+      }, snapshots);
+      return snapshotEnvelope(command, {
+        answer,
+        warnings: snapshots.warnings,
+      });
+    }
+    case 'query.route.witness': {
+      const focusKind = args.focusKind === 'file' || args.focusKind === 'type' ? args.focusKind : undefined;
+      const focusValue = asStepString(args.focusValue);
+      if (!focusKind || !focusValue) {
+        return undefined;
+      }
+      const answer = createSourceAnalysisRouteWitnessAnswer({
+        inquiryEpisode: 'bounded-closure-explanation',
+        focusRef: { kind: focusKind, value: focusValue },
+        questionRoute: 'route',
+        readMode: 'focus-card',
+        worldFrame: {
+          repoPath,
+          target,
+          regimeAnchor: 'batch',
+          partiality: 'complete',
+          freshness: 'snapshot',
+        },
+      }, snapshots);
+      return snapshotEnvelope(command, {
+        answer,
+        warnings: snapshots.warnings,
+      });
+    }
+    case 'query.navigate': {
+      const focusKind = args.focusKind === 'package' || args.focusKind === 'file' || args.focusKind === 'type' || args.focusKind === 'export'
+        ? args.focusKind
+        : undefined;
+      const focusValue = asStepString(args.focusValue);
+      if (!focusKind || !focusValue) {
+        return undefined;
+      }
+      const episode = createSourceAnalysisNavigationEpisode({
+        inquiryEpisode: 'orient-and-localize',
+        focusRef: { kind: focusKind, value: focusValue },
+        questionRoute: args.questionRoute === 'route' || args.questionRoute === 'search' || args.questionRoute === 'join'
+          ? args.questionRoute
+          : 'join',
+        readMode: 'focus-card',
+        worldFrame: {
+          repoPath,
+          target,
+          regimeAnchor: 'batch',
+          partiality: 'complete',
+          freshness: 'snapshot',
+        },
+      }, snapshots);
+      return snapshotEnvelope(command, {
+        answer: episode.answer,
+        warnings: snapshots.warnings,
+      });
+    }
+    case 'query.deps.summary':
+      return snapshotEnvelope(command, {
+        kind: 'deps',
+        generatedAt: snapshots.deps.generated_at,
+        summary: snapshots.deps.summary,
+        warnings: snapshots.warnings,
+      });
+    case 'query.typerefs.summary':
+      return snapshotEnvelope(command, {
+        kind: 'typerefs',
+        generatedAt: snapshots.typeRefs.generated_at,
+        summary: snapshots.typeRefs.summary,
+        warnings: snapshots.warnings,
+      });
+    case 'query.exports.summary':
+      return snapshotEnvelope(command, {
+        kind: 'exports',
+        generatedAt: snapshots.exports.generated_at,
+        summary: snapshots.exports.summary,
+        warnings: snapshots.warnings,
+      });
+    default:
+      return undefined;
+  }
 }
 
 function buildRenderedView<TResult extends { document?: SourceAnalysisAnswerDocument<SourceAnalysisAnswerRef> }>(
@@ -576,6 +1080,158 @@ function buildRenderedView<TResult extends { document?: SourceAnalysisAnswerDocu
     style: 'json-document',
     document: renderSourceAnalysisAnswerDocumentToJson(document, policy),
   };
+}
+
+function snapshotEnvelope(
+  command: string,
+  result: unknown,
+): SourceAnalysisHostEnvelope<unknown> {
+  return {
+    schemaVersion: SOURCE_ANALYSIS_HOST_SCHEMA_VERSION,
+    command: command as SourceAnalysisHostCommandName,
+    status: 'ok',
+    result,
+    meta: {
+      durationMs: 0,
+      cache: { hit: true, tier: 'warm' },
+      invalidation: emptyInvalidationMeta(),
+      refreshedKinds: [],
+    },
+    errors: [],
+  };
+}
+
+function summarizePrimaryFacts(
+  envelope: SourceAnalysisHostEnvelope<unknown>,
+): readonly { readonly label: string; readonly value: string }[] {
+  const result = envelope.result as Record<string, unknown> | null;
+  switch (envelope.command) {
+    case 'query.deps.summary': {
+      const summary = (result as unknown as QuerySummaryResult<'deps'>).summary;
+      return [
+        { label: 'files analyzed', value: `${summary.files_analyzed}` },
+        { label: 'uncovered files', value: `${summary.uncovered_files}` },
+        { label: 'unresolved imports', value: `${summary.unresolved}` },
+      ];
+    }
+    case 'query.typerefs.summary': {
+      const summary = (result as unknown as QuerySummaryResult<'typerefs'>).summary;
+      return [
+        { label: 'declarations', value: `${summary.type_declarations}` },
+        { label: 'references', value: `${summary.type_references}` },
+      ];
+    }
+    case 'query.exports.summary': {
+      const summary = (result as unknown as QuerySummaryResult<'exports'>).summary;
+      return [
+        { label: 'packages', value: `${summary.packages_analyzed}` },
+        { label: 'exports', value: `${summary.exports ?? 'unknown'}` },
+      ];
+    }
+    case 'session.status': {
+      const sessions = (result as unknown as SessionStatusResult).sessions;
+      return [
+        { label: 'sessions', value: `${sessions.length}` },
+        { label: 'warm sessions', value: `${sessions.filter((session) => session.cachedKinds.length > 0).length}` },
+      ];
+    }
+    case 'session.refresh': {
+      const refresh = result as unknown as SessionRefreshResult;
+      return [
+        { label: 'refreshed kinds', value: refresh.refreshedKinds.join(', ') || 'none' },
+        { label: 'dirty kinds', value: refresh.dirtyKinds.join(', ') || 'none' },
+      ];
+    }
+    case 'materializeSnapshots': {
+      const materialized = result as unknown as MaterializeSnapshotsResult;
+      return [
+        { label: 'out dir', value: materialized.outDir },
+        { label: 'files written', value: `${Object.keys(materialized.files).length}` },
+      ];
+    }
+    default: {
+      const answer = (result as { answer?: { outcome?: { value?: { summaryLines?: readonly string[] } } } }).answer;
+      if (answer?.outcome?.value) {
+        const value = answer.outcome.value as { title?: string; primaryRef?: { label?: string; value?: string } };
+        return [
+          ...(value.title ? [{ label: 'answer title', value: value.title }] : []),
+          ...(value.primaryRef?.value ? [{ label: 'primary ref', value: value.primaryRef.value }] : []),
+        ];
+      }
+      return [];
+    }
+  }
+}
+
+function summarizePrimaryLines(
+  envelope: SourceAnalysisHostEnvelope<unknown>,
+): readonly string[] {
+  const result = envelope.result as Record<string, unknown> | null;
+  switch (envelope.command) {
+    case 'query.deps.summary': {
+      const summary = (result as unknown as QuerySummaryResult<'deps'>).summary;
+      return [
+        `Dependency posture covers ${summary.files_analyzed} files with ${summary.uncovered_files} uncovered files and ${summary.unresolved} unresolved imports.`,
+      ];
+    }
+    case 'query.typerefs.summary':
+    case 'query.exports.summary':
+    case 'query.audit.package':
+    case 'query.route.witness':
+    case 'query.navigate':
+    case 'describe.capabilities':
+    case 'describe.inquiries':
+    case 'plan.question':
+    case 'plan.inquiry':
+    case 'repair.command': {
+      const answer = (result as { answer?: { outcome?: { value?: { summaryLines?: readonly string[] } } } }).answer;
+      return answer?.outcome?.value?.summaryLines?.slice(0, 4) ?? [];
+    }
+    case 'session.status': {
+      const sessions = (result as unknown as SessionStatusResult).sessions;
+      return [
+        `Session status currently tracks ${sessions.length} hosted session${sessions.length === 1 ? '' : 's'}.`,
+      ];
+    }
+    case 'session.refresh': {
+      const refresh = result as unknown as SessionRefreshResult;
+      return [
+        refresh.refreshedKinds.length > 0
+          ? `Refreshed ${refresh.refreshedKinds.join(', ')}.`
+          : 'No dirty kinds required refresh.',
+      ];
+    }
+    case 'materializeSnapshots': {
+      const materialized = result as unknown as MaterializeSnapshotsResult;
+      return [
+        `Materialized ${Object.keys(materialized.files).length} snapshot file${Object.keys(materialized.files).length === 1 ? '' : 's'} to ${materialized.outDir}.`,
+      ];
+    }
+    default:
+      return [];
+  }
+}
+
+function resolveInquiryStepArgs(
+  args: Record<string, unknown>,
+  sessionId: string | undefined,
+): Record<string, unknown> | null {
+  const resolved: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(args)) {
+    if (value === '$session.open') {
+      if (!sessionId) {
+        return null;
+      }
+      resolved[key] = sessionId;
+      continue;
+    }
+    resolved[key] = value;
+  }
+  return resolved;
+}
+
+function asStepString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
 function ensureFreshSnapshot<TKind extends SourceAnalysisKind>(

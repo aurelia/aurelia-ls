@@ -19,7 +19,7 @@
     }
   },
   "scripts": {
-    "build": "tsc -b"
+    "build": "node ./scripts/build.mjs"
   },
   "peerDependencies": {
     "typescript": "^5.5.4"

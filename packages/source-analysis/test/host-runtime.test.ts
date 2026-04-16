@@ -320,6 +320,104 @@ describe('SourceAnalysisHostRuntime', () => {
       },
     });
   });
+
+  it('describes inquiry families, plans them, and answers questions end-to-end through the hosted runtime', () => {
+    const repoPath = createAuditFixtureRepo();
+    const runtime = createSourceAnalysisHostRuntime();
+
+    const describe = runtime.execute({
+      command: 'describe.inquiries',
+      args: {
+        question: 'I want to understand the repo before editing it.',
+        renderStyle: 'plain-text',
+      },
+    });
+
+    expect(describe.status).toBe('ok');
+    expect(describe.result.answer.outcome.value?.inquiries[0]?.id).toBe('workspace-orientation');
+    expect(describe.result.answer.outcome.value?.diagnostics.uncoveredCommands).toEqual([]);
+    expect(describe.result.rendered?.style).toBe('plain-text');
+
+    const plan = runtime.execute({
+      command: 'plan.inquiry',
+      args: {
+        question: 'Audit @fixture/source-analysis-audit for tech debt.',
+        repoPath,
+        target: 'fixture-inquiry',
+        renderStyle: 'json-document',
+      },
+    });
+
+    expect(plan.status).toBe('ok');
+    expect(plan.result.answer.outcome.value?.status).toBe('ready');
+    expect(plan.result.answer.outcome.value?.inquiry?.id).toBe('package-audit');
+    expect(plan.result.answer.outcome.value?.steps.map((step) => step.command)).toEqual([
+      'session.open',
+      'query.audit.package',
+    ]);
+    expect(plan.result.rendered?.style).toBe('json-document');
+
+    const askedAudit = runtime.execute({
+      command: 'ask.question',
+      args: {
+        question: 'Audit @fixture/source-analysis-audit for tech debt.',
+        repoPath,
+        target: 'fixture-inquiry',
+      },
+    });
+
+    expect(askedAudit.status).toBe('ok');
+    expect(askedAudit.result.answer.outcome.value?.status).toBe('answered');
+    expect(askedAudit.result.answer.outcome.value?.inquiry?.id).toBe('package-audit');
+    expect(askedAudit.result.execution?.ephemeralSession).toBe(true);
+    expect(askedAudit.result.execution?.steps.map((step) => step.command)).toEqual([
+      'session.open',
+      'query.audit.package',
+    ]);
+    expect(askedAudit.result.execution?.steps.every((step) => step.status === 'executed')).toBe(true);
+    expect(askedAudit.result.answer.outcome.value?.execution?.command).toBe('query.audit.package');
+
+    const askedOrientation = runtime.execute({
+      command: 'ask.question',
+      args: {
+        question: 'Orient me to @fixture/source-analysis-audit before I edit it.',
+        repoPath,
+        target: 'fixture-inquiry',
+        renderStyle: 'plain-text',
+      },
+    });
+
+    expect(askedOrientation.status).toBe('ok');
+    expect(askedOrientation.result.answer.outcome.value?.status).toBe('answered');
+    expect(askedOrientation.result.answer.outcome.value?.inquiry?.id).toBe('workspace-orientation');
+    expect(askedOrientation.result.execution?.steps.map((step) => step.command)).toEqual([
+      'session.open',
+      'query.navigate',
+    ]);
+    expect(askedOrientation.result.answer.outcome.value?.execution?.command).toBe('query.navigate');
+    expect(askedOrientation.result.rendered?.style).toBe('plain-text');
+  });
+
+  it('uses current snapshots for live ask.question flows instead of opening a transient session', () => {
+    const runtime = createSourceAnalysisHostRuntime();
+
+    const asked = runtime.execute({
+      command: 'ask.question',
+      args: {
+        question: 'Audit @aurelia-ls/source-analysis for tech debt.',
+        repoPath: process.cwd(),
+      },
+    });
+
+    expect(asked.status).toBe('ok');
+    expect(asked.result.answer.outcome.value?.status).toBe('answered');
+    expect(asked.result.answer.outcome.value?.execution?.command).toBe('query.audit.package');
+    expect(asked.result.answer.query.worldFrame?.freshness).toBe('snapshot');
+    expect(asked.result.execution?.ephemeralSession).toBe(false);
+    expect(asked.result.execution?.steps.some((step) =>
+      step.command === 'session.open' && step.status === 'skipped',
+    )).toBe(true);
+  });
 });
 
 function createFixtureRepo(): string {

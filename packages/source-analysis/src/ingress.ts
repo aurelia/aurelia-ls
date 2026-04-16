@@ -13,6 +13,19 @@ import { createDefaultSourceAnalysisCapabilityCatalog } from './capability-catal
 import type { SourceAnalysisConsumerKind } from './inquiry-policy.js';
 import { resolveSourceAnalysisInquiryPolicy } from './inquiry-policy.js';
 import type {
+  SourceAnalysisIngressFocusHints,
+  SourceAnalysisIngressHintDetail,
+} from './ingress-hints.js';
+import {
+  asFocusKind,
+  asString,
+  deriveFocusHints,
+  deriveRepairHints,
+  describeFocusHints,
+  extractRepoPath,
+  inferFocusKindFromArgs,
+} from './ingress-hints.js';
+import type {
   SourceAnalysisClosureBasis,
   SourceAnalysisContinuation,
   SourceAnalysisIssue,
@@ -135,12 +148,7 @@ export interface SourceAnalysisCapabilityRepairValue
   readonly missingInputs: readonly string[];
 }
 
-interface FocusHints {
-  readonly focusKind?: SourceAnalysisFocusKind;
-  readonly focusValue?: string;
-  readonly packageName?: string;
-  readonly reasons: readonly SourceAnalysisCapabilityPlanReason[];
-}
+type FocusHints = SourceAnalysisIngressFocusHints;
 
 interface BuiltInvocation {
   readonly status: 'ready' | 'needs-input';
@@ -367,7 +375,7 @@ export class SourceAnalysisCapabilityIngress {
         alternatives: matches.slice(1, 4).map((match) => match.capability),
         reasons: [
           ...top.reasons.map(toPlanReason),
-          ...hints.reasons,
+          ...hints.reasons.map(toHintPlanReason),
           ...built.reasons,
         ],
         missingInputs: built.missingInputs,
@@ -503,7 +511,7 @@ export class SourceAnalysisCapabilityIngress {
         alternatives: fallbackMatches.slice(1, 4).map((candidate) => candidate.capability),
         reasons: [
           ...match.reasons.map(toPlanReason),
-          ...hints.reasons,
+          ...hints.reasons.map(toHintPlanReason),
           ...built.reasons,
         ],
         missingInputs: built.missingInputs,
@@ -815,6 +823,32 @@ function buildInvocation(
         });
       }
       return finalizeInvocation(descriptor.command, args, reasons, missingInputs);
+    case 'navigate':
+      if (!options.sessionId) {
+        missingInputs.push('sessionId');
+      } else {
+        args.sessionId = options.sessionId;
+        reasons.push({
+          kind: 'input',
+          detail: `Using the provided sessionId "${options.sessionId}".`,
+        });
+      }
+      if (!hints.focusKind || !['package', 'file', 'type', 'export'].includes(hints.focusKind)) {
+        missingInputs.push('focusKind');
+      } else {
+        args.focusKind = hints.focusKind;
+      }
+      if (!hints.focusValue) {
+        missingInputs.push('focusValue');
+      } else {
+        args.focusValue = hints.focusValue;
+        reasons.push({
+          kind: 'focus-inference',
+          detail: `Using "${hints.focusValue}" as the navigation focus.`,
+        });
+      }
+      args.questionRoute = hints.focusKind === 'package' ? 'join' : 'route';
+      return finalizeInvocation(descriptor.command, args, reasons, missingInputs);
     case 'kind-summary':
     case 'kind-snapshot':
       if (!options.sessionId) {
@@ -875,94 +909,6 @@ function buildInvocation(
     default:
       return finalizeInvocation(descriptor.command, args, reasons, ['unsupported planner kind']);
   }
-}
-
-function deriveFocusHints(
-  question: string,
-  explicitFocusKind?: SourceAnalysisFocusKind,
-  explicitFocusValue?: string,
-): FocusHints {
-  const reasons: SourceAnalysisCapabilityPlanReason[] = [];
-  if (explicitFocusKind && explicitFocusValue) {
-    reasons.push({
-      kind: 'input',
-      detail: `The focus was provided explicitly as ${explicitFocusKind}:${explicitFocusValue}.`,
-    });
-    return {
-      focusKind: explicitFocusKind,
-      focusValue: explicitFocusValue,
-      packageName: explicitFocusKind === 'package' ? explicitFocusValue : extractPackageName(question),
-      reasons,
-    };
-  }
-
-  const packageName = extractPackageName(question);
-  const filePath = extractFilePath(question);
-  const typeName = extractTypeName(question);
-
-  if (packageName) {
-    reasons.push({
-      kind: 'focus-inference',
-      detail: `Inferred the package focus "${packageName}" from the question text.`,
-    });
-    return {
-      focusKind: 'package',
-      focusValue: packageName,
-      packageName,
-      reasons,
-    };
-  }
-  if (filePath) {
-    reasons.push({
-      kind: 'focus-inference',
-      detail: `Inferred the file focus "${filePath}" from the question text.`,
-    });
-    return {
-      focusKind: 'file',
-      focusValue: filePath,
-      reasons,
-    };
-  }
-  if (typeName) {
-    reasons.push({
-      kind: 'focus-inference',
-      detail: `Inferred the type focus "${typeName}" from the question text.`,
-    });
-    return {
-      focusKind: 'type',
-      focusValue: typeName,
-      reasons,
-    };
-  }
-
-  return { reasons };
-}
-
-function deriveRepairHints(
-  args: Record<string, unknown> | undefined,
-  question: string | undefined,
-): FocusHints {
-  const focusKind = asFocusKind(args?.focusKind) ?? inferFocusKindFromArgs(args);
-  const focusValue = asString(args?.focusValue)
-    ?? asString(args?.packageName)
-    ?? extractPackageName(question ?? '')
-    ?? extractFilePath(question ?? '')
-    ?? extractTypeName(question ?? '');
-  const reasons: SourceAnalysisCapabilityPlanReason[] = [];
-
-  if (focusKind && focusValue) {
-    reasons.push({
-      kind: 'repair',
-      detail: `Recovered ${focusKind}:${focusValue} from the attempted args or fallback question.`,
-    });
-  }
-
-  return {
-    focusKind,
-    focusValue,
-    packageName: asString(args?.packageName) ?? (focusKind === 'package' ? focusValue : undefined),
-    reasons,
-  };
 }
 
 function readyInvocation(
@@ -1082,64 +1028,6 @@ function compareMatchesForAmbiguity(
     && left.focusMatched === right.focusMatched;
 }
 
-function inferFocusKindFromArgs(
-  args: Record<string, unknown> | undefined,
-): SourceAnalysisFocusKind | undefined {
-  if (!args) {
-    return undefined;
-  }
-  if (asFocusKind(args.focusKind)) {
-    return asFocusKind(args.focusKind);
-  }
-  if (typeof args.packageName === 'string') {
-    return 'package';
-  }
-  if (typeof args.focusValue === 'string' && /\.([cm]?ts|tsx)$/i.test(args.focusValue)) {
-    return 'file';
-  }
-  return undefined;
-}
-
-function extractPackageName(question: string): string | undefined {
-  const packageMatch = question.match(/@[\w.-]+\/[\w.-]+/);
-  if (packageMatch) {
-    return packageMatch[0];
-  }
-  return undefined;
-}
-
-function extractFilePath(question: string): string | undefined {
-  const fileMatch = question.match(/[A-Za-z0-9_./\\-]+\.(?:cts|mts|ts|tsx|js|mjs|cjs)/);
-  return fileMatch ? fileMatch[0].replace(/\\/g, '/') : undefined;
-}
-
-function extractTypeName(question: string): string | undefined {
-  const typedMatch = question.match(/\b(?:type|class|interface)\s+([A-Z][A-Za-z0-9_]*)\b/);
-  if (typedMatch) {
-    return typedMatch[1];
-  }
-
-  const backtickMatch = question.match(/`([A-Z][A-Za-z0-9_]*)`/);
-  if (backtickMatch) {
-    return backtickMatch[1];
-  }
-
-  const pascalMatches = question.match(/\b[A-Z][A-Za-z0-9_]*\b/g) ?? [];
-  return pascalMatches.length === 1 ? pascalMatches[0] : undefined;
-}
-
-function extractRepoPath(question: string): string | undefined {
-  const absoluteMatch = question.match(/[A-Za-z]:[\\/][A-Za-z0-9_.\\/ -]+/);
-  return absoluteMatch ? absoluteMatch[0].replace(/\\/g, '/') : undefined;
-}
-
-function describeFocusHints(hints: FocusHints): string {
-  if (!hints.focusKind || !hints.focusValue) {
-    return 'none';
-  }
-  return `${hints.focusKind}:${hints.focusValue}`;
-}
-
 function repoFocusRef(value: string): SourceAnalysisFocusRef {
   return { kind: 'repo', value };
 }
@@ -1208,6 +1096,13 @@ function toPlanReason(reason: SourceAnalysisCapabilityMatchReason): SourceAnalys
   };
 }
 
+function toHintPlanReason(reason: SourceAnalysisIngressHintDetail): SourceAnalysisCapabilityPlanReason {
+  return {
+    kind: reason.kind,
+    detail: reason.detail,
+  };
+}
+
 function planContinuations(
   command: string,
   missingInputs: readonly string[],
@@ -1227,19 +1122,6 @@ function planContinuations(
     description: `Execute the canonical invocation for ${command}.`,
     targetQuestionRoute: 'route',
   }];
-}
-
-function asString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.length > 0 ? value : undefined;
-}
-
-function asFocusKind(value: unknown): SourceAnalysisFocusKind | undefined {
-  if (value === 'repo' || value === 'package' || value === 'directory' || value === 'file'
-    || value === 'symbol' || value === 'type' || value === 'export' || value === 'claim'
-    || value === 'session' || value === 'capability') {
-    return value;
-  }
-  return undefined;
 }
 
 export function createSourceAnalysisCapabilityIngress(

@@ -3,6 +3,13 @@ import type {
   SourceAnalysisQuestionRoute,
   SourceAnalysisReadMode,
 } from './query-model.js';
+import {
+  intersect,
+  matchPhrases,
+  matchTokens,
+  normalizePhrase,
+  tokenize,
+} from './ingress-language.js';
 
 export const SOURCE_ANALYSIS_CAPABILITY_FAMILIES = [
   'ingress',
@@ -20,6 +27,7 @@ export const SOURCE_ANALYSIS_CAPABILITY_PLANNER_KINDS = [
   'session-status',
   'session-invalidate',
   'session-refresh',
+  'navigate',
   'kind-summary',
   'kind-snapshot',
   'package-audit',
@@ -710,6 +718,48 @@ const DEFAULT_SOURCE_ANALYSIS_CAPABILITIES: readonly SourceAnalysisCapabilityDef
     commonConfusions: [],
   }),
   queryCapability({
+    id: 'query.navigate',
+    command: 'query.navigate',
+    plannerKind: 'navigate',
+    label: 'Navigate a package, file, type, or export',
+    summary: 'Return a structured navigation episode that orients the caller to a focused workspace target.',
+    whenToUse: 'Use this when you need a grounded starting point, neighborhood view, or export route before editing.',
+    aliases: ['navigate workspace', 'orient me', 'package overview', 'type neighborhood', 'file neighborhood'],
+    nouns: ['navigate', 'orientation', 'package', 'file', 'type', 'export', 'overview', 'neighborhood'],
+    verbs: ['navigate', 'orient', 'inspect', 'show', 'explore'],
+    questionRoutes: ['join', 'route', 'search'],
+    focusKinds: ['package', 'file', 'type', 'export'],
+    requiredArgs: [
+      requiredArg('sessionId', 'Hosted session id with snapshots to query.'),
+      requiredArg('focusKind', 'The workspace focus kind.', ['package', 'file', 'type', 'export']),
+      requiredArg('focusValue', 'Package name, repo-relative file path, type name, or export name to navigate.'),
+    ],
+    optionalArgs: [
+      optionalArg('questionRoute', 'Optional route emphasis.', ['search', 'join', 'route']),
+      optionalArg('readMode', 'Presentation style for the answer document.'),
+      optionalArg('consumer', 'Whether to optimize the answer for a human or machine caller.', ['human', 'machine']),
+      optionalArg('renderStyle', 'Optional rendered projection.', ['answer', 'plain-text', 'json-document']),
+      optionalArg('refreshIfNeeded', 'Whether to refresh dirty snapshots before reading them.'),
+    ],
+    relatedCommands: ['query.audit.package', 'query.route.witness', 'query.exports.summary'],
+    examples: [
+      example(
+        'package orientation',
+        'Orient me to @aurelia-ls/source-analysis before I edit it.',
+        'query.navigate',
+        { sessionId: 'sa-1', focusKind: 'package', focusValue: '@aurelia-ls/source-analysis', questionRoute: 'join' },
+      ),
+    ],
+    commonConfusions: [
+      {
+        label: 'why alive',
+        detail: 'If you already know the file or type and need a proof chain for reachability, a route witness fits better.',
+        terms: ['why alive', 'reachable', 'proof'],
+        preferredCommand: 'query.route.witness',
+      },
+    ],
+  }),
+  queryCapability({
     id: 'query.audit.package',
     command: 'query.audit.package',
     plannerKind: 'package-audit',
@@ -951,59 +1001,4 @@ function compareMatchKey(
     }
   }
   return 0;
-}
-
-function matchPhrases(
-  question: string | undefined,
-  phrases: readonly string[],
-): readonly string[] {
-  const normalizedQuestion = normalizePhrase(question);
-  if (!normalizedQuestion) {
-    return [];
-  }
-
-  return phrases
-    .map((phrase) => phrase.trim())
-    .filter((phrase, index, values) => phrase.length > 0 && values.indexOf(phrase) === index)
-    .filter((phrase) => normalizedQuestion.includes(normalizePhrase(phrase)));
-}
-
-function matchTokens(
-  question: string | undefined,
-  candidates: readonly string[],
-): readonly string[] {
-  const tokens = new Set(tokenize(question));
-  return candidates.filter((candidate) => tokens.has(normalizeToken(candidate)));
-}
-
-function tokenize(value: string | undefined): readonly string[] {
-  const normalized = normalizePhrase(value);
-  if (!normalized) {
-    return [];
-  }
-  return normalized
-    .split(/\s+/)
-    .map((token) => normalizeToken(token))
-    .filter((token) => token.length > 0);
-}
-
-function normalizePhrase(value: string | undefined): string {
-  return (value ?? '')
-    .trim()
-    .toLowerCase()
-    .replace(/[`"'“”‘’]/g, ' ')
-    .replace(/[^a-z0-9@/._:-]+/g, ' ')
-    .replace(/\s+/g, ' ');
-}
-
-function normalizeToken(value: string): string {
-  return value.replace(/^[._:-]+|[._:-]+$/g, '');
-}
-
-function intersect(
-  left: readonly string[],
-  right: readonly string[],
-): readonly string[] {
-  const rightSet = new Set(right);
-  return left.filter((value, index, values) => rightSet.has(value) && values.indexOf(value) === index);
 }

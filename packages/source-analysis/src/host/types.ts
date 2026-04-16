@@ -1,4 +1,9 @@
-import type { SourceAnalysisAnswer, SourceAnalysisFocusKind, SourceAnalysisReadMode } from '../query-model.js';
+import type {
+  SourceAnalysisAnswer,
+  SourceAnalysisFocusKind,
+  SourceAnalysisQuestionRoute,
+  SourceAnalysisReadMode,
+} from '../query-model.js';
 import type { SourceAnalysisAuditValue } from '../audit.js';
 import type { SourceAnalysisAnswerDocument } from '../answer-document.js';
 import type { SourceAnalysisAnswerRef } from '../answer-card.js';
@@ -9,8 +14,15 @@ import type {
   SourceAnalysisCapabilityPlanValue,
   SourceAnalysisCapabilityRepairValue,
 } from '../ingress.js';
+import type {
+  SourceAnalysisInquiryAskValue,
+  SourceAnalysisInquiryDiscoveryValue,
+  SourceAnalysisInquiryPlanValue,
+} from '../inquiry-ingress.js';
+import type { SourceAnalysisInquiryFamilyId } from '../inquiry-catalog.js';
 import type { DepsOutput } from '../deps/schema.js';
 import type { ExportsOutput } from '../exports/schema.js';
+import type { SourceAnalysisNavigationValue } from '../navigation.js';
 import type { SourceAnalysisRouteWitnessValue } from '../route-witness.js';
 import type { TypeRefsOutput } from '../typerefs/schema.js';
 
@@ -178,9 +190,23 @@ export interface QueryRouteWitnessArgs extends RenderQueryArgs {
   readonly focusValue: string;
 }
 
+export interface QueryNavigateArgs extends RenderQueryArgs {
+  readonly focusKind: 'package' | 'file' | 'type' | 'export';
+  readonly focusValue: string;
+  readonly questionRoute?: SourceAnalysisQuestionRoute;
+}
+
 export interface DescribeCapabilitiesArgs extends RenderArgs {
   readonly question?: string;
   readonly focusKind?: SourceAnalysisFocusKind;
+  readonly includeExamples?: boolean;
+  readonly topK?: number;
+}
+
+export interface DescribeInquiriesArgs extends RenderArgs {
+  readonly question?: string;
+  readonly focusKind?: SourceAnalysisFocusKind;
+  readonly familyId?: SourceAnalysisInquiryFamilyId;
   readonly includeExamples?: boolean;
   readonly topK?: number;
 }
@@ -190,6 +216,26 @@ export interface PlanQuestionArgs extends RenderArgs {
   readonly sessionId?: string;
   readonly focusKind?: SourceAnalysisFocusKind;
   readonly focusValue?: string;
+}
+
+export interface PlanInquiryArgs extends RenderArgs {
+  readonly question: string;
+  readonly sessionId?: string;
+  readonly repoPath?: string;
+  readonly target?: string;
+  readonly focusKind?: SourceAnalysisFocusKind;
+  readonly focusValue?: string;
+  readonly familyId?: SourceAnalysisInquiryFamilyId;
+}
+
+export interface AskQuestionArgs extends RenderArgs {
+  readonly question: string;
+  readonly sessionId?: string;
+  readonly repoPath?: string;
+  readonly target?: string;
+  readonly focusKind?: SourceAnalysisFocusKind;
+  readonly focusValue?: string;
+  readonly familyId?: SourceAnalysisInquiryFamilyId;
 }
 
 export interface RepairCommandArgs extends RenderArgs {
@@ -223,8 +269,19 @@ export interface QueryRouteWitnessResult {
   readonly warnings: readonly string[];
 }
 
+export interface QueryNavigateResult {
+  readonly answer: SourceAnalysisAnswer<SourceAnalysisNavigationValue>;
+  readonly rendered?: SourceAnalysisHostRenderedView;
+  readonly warnings: readonly string[];
+}
+
 export interface DescribeCapabilitiesResult {
   readonly answer: SourceAnalysisAnswer<SourceAnalysisCapabilityDiscoveryValue>;
+  readonly rendered?: SourceAnalysisHostRenderedView;
+}
+
+export interface DescribeInquiriesResult {
+  readonly answer: SourceAnalysisAnswer<SourceAnalysisInquiryDiscoveryValue>;
   readonly rendered?: SourceAnalysisHostRenderedView;
 }
 
@@ -233,9 +290,34 @@ export interface PlanQuestionResult {
   readonly rendered?: SourceAnalysisHostRenderedView;
 }
 
+export interface PlanInquiryResult {
+  readonly answer: SourceAnalysisAnswer<SourceAnalysisInquiryPlanValue>;
+  readonly rendered?: SourceAnalysisHostRenderedView;
+}
+
 export interface RepairCommandResult {
   readonly answer: SourceAnalysisAnswer<SourceAnalysisCapabilityRepairValue>;
   readonly rendered?: SourceAnalysisHostRenderedView;
+}
+
+export interface AskQuestionExecutionStep {
+  readonly command: string;
+  readonly args: Record<string, unknown>;
+  readonly status: 'executed' | 'skipped' | 'failed';
+  readonly detail?: string;
+}
+
+export interface AskQuestionExecution {
+  readonly usedSessionId?: string;
+  readonly ephemeralSession: boolean;
+  readonly steps: readonly AskQuestionExecutionStep[];
+  readonly primaryEnvelope?: SourceAnalysisHostEnvelope<unknown>;
+}
+
+export interface AskQuestionResult {
+  readonly answer: SourceAnalysisAnswer<SourceAnalysisInquiryAskValue>;
+  readonly rendered?: SourceAnalysisHostRenderedView;
+  readonly execution?: AskQuestionExecution;
 }
 
 export interface MaterializeSnapshotsArgs {
@@ -252,8 +334,11 @@ export interface MaterializeSnapshotsResult {
 }
 
 export interface SourceAnalysisHostCommandArgsMap {
+  'describe.inquiries': DescribeInquiriesArgs;
   'describe.capabilities': DescribeCapabilitiesArgs;
+  'plan.inquiry': PlanInquiryArgs;
   'plan.question': PlanQuestionArgs;
+  'ask.question': AskQuestionArgs;
   'repair.command': RepairCommandArgs;
   'session.open': SessionOpenArgs;
   'session.close': SessionCloseArgs;
@@ -268,12 +353,16 @@ export interface SourceAnalysisHostCommandArgsMap {
   'query.exports.snapshot': QueryArgs;
   'query.audit.package': QueryAuditPackageArgs;
   'query.route.witness': QueryRouteWitnessArgs;
+  'query.navigate': QueryNavigateArgs;
   'materializeSnapshots': MaterializeSnapshotsArgs;
 }
 
 export interface SourceAnalysisHostCommandResultMap {
+  'describe.inquiries': DescribeInquiriesResult;
   'describe.capabilities': DescribeCapabilitiesResult;
+  'plan.inquiry': PlanInquiryResult;
   'plan.question': PlanQuestionResult;
+  'ask.question': AskQuestionResult;
   'repair.command': RepairCommandResult;
   'session.open': SessionOpenResult;
   'session.close': SessionCloseResult;
@@ -288,6 +377,7 @@ export interface SourceAnalysisHostCommandResultMap {
   'query.exports.snapshot': QuerySnapshotResult<'exports'>;
   'query.audit.package': QueryAuditPackageResult;
   'query.route.witness': QueryRouteWitnessResult;
+  'query.navigate': QueryNavigateResult;
   'materializeSnapshots': MaterializeSnapshotsResult;
 }
 
