@@ -181,6 +181,43 @@ describe('SourceAnalysisHostRuntime', () => {
       'src/live.ts',
     ]);
   });
+
+  it('detects fragmented answer coordination from repeated envelope builders and carriers', () => {
+    const repoPath = createCoordinationFixtureRepo();
+    const runtime = createSourceAnalysisHostRuntime();
+
+    const opened = runtime.execute({
+      command: 'session.open',
+      args: {
+        repoPath,
+        target: 'fixture-coordination',
+      },
+    });
+
+    const sessionId = opened.result.sessionId;
+    const audit = runtime.execute({
+      command: 'query.audit.package',
+      args: {
+        sessionId,
+        packageName: '@fixture/source-analysis-coordination',
+      },
+    });
+
+    expect(audit.status).toBe('ok');
+    const coordinationFinding = audit.result.answer.outcome.value?.findings.find((finding) =>
+      finding.code === 'answer-coordination-fragmentation',
+    );
+    expect(coordinationFinding).toBeTruthy();
+    expect(coordinationFinding?.relatedRefs.some((ref) => ref.value === 'src/alpha.ts')).toBe(true);
+    expect(coordinationFinding?.relatedRefs.some((ref) => ref.value === 'src/beta.ts')).toBe(true);
+
+    const presentationFinding = audit.result.answer.outcome.value?.findings.find((finding) =>
+      finding.code === 'answer-presentation-fragmentation',
+    );
+    expect(presentationFinding).toBeTruthy();
+    expect(presentationFinding?.evidence.some((line) => line.includes('AlphaValue'))).toBe(true);
+    expect(presentationFinding?.evidence.some((line) => line.includes('BetaValue'))).toBe(true);
+  });
 });
 
 function createFixtureRepo(): string {
@@ -310,6 +347,142 @@ function createAuditFixtureRepo(): string {
       "import type { TestOnlyShape } from '../src/test-only.js';",
       'void auditReady;',
       'type _ExerciseOnly = TestOnlyShape;',
+      '',
+    ].join('\n'),
+  );
+
+  return repoPath;
+}
+
+function createCoordinationFixtureRepo(): string {
+  const repoPath = mkdtempSync(join(tmpdir(), 'source-analysis-host-coordination-'));
+  tempDirs.push(repoPath);
+
+  mkdirSync(join(repoPath, 'src'), { recursive: true });
+  writeFileSync(
+    join(repoPath, 'package.json'),
+    JSON.stringify(
+      {
+        name: '@fixture/source-analysis-coordination',
+        type: 'module',
+      },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(
+    join(repoPath, 'tsconfig.json'),
+    JSON.stringify(
+      {
+        compilerOptions: {
+          module: 'NodeNext',
+          moduleResolution: 'NodeNext',
+          target: 'ES2022',
+          noEmit: true,
+        },
+        include: ['src/**/*.ts'],
+      },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(
+    join(repoPath, 'src', 'alpha.ts'),
+    [
+      "type FocusRef = { kind: string; value: string; };",
+      '',
+      'export interface AlphaRef {',
+      '  readonly kind: string;',
+      '  readonly value: string;',
+      '  readonly label: string;',
+      '  readonly detail?: string;',
+      '}',
+      '',
+      'export interface AlphaValue {',
+      '  readonly title: string;',
+      '  readonly summaryLines: readonly string[];',
+      '  readonly primaryRef: AlphaRef;',
+      '  readonly relatedRefs: readonly AlphaRef[];',
+      '}',
+      '',
+      'function createAlphaAnswer() {',
+      "  const summaryLines = ['alpha summary'];",
+      "  const focusRef: FocusRef = { kind: 'package', value: 'alpha' };",
+      '  const value: AlphaValue = {',
+      "    title: 'Alpha answer',",
+      '    summaryLines,',
+      "    primaryRef: { kind: 'package', value: 'alpha', label: 'alpha' },",
+      '    relatedRefs: [],',
+      '  };',
+      '  return {',
+      "    schemaVersion: 'v0alpha1',",
+      "    query: { focusRef, questionRoute: 'inventory' },",
+      '    slots: {',
+      "      focus_ref: focusRef,",
+      "      question_route: 'inventory',",
+      "      outcome: { tag: 'hit', summary: summaryLines[0], value },",
+      '    },',
+      "    outcome: { tag: 'hit', summary: summaryLines[0], value },",
+      '  };',
+      '}',
+      '',
+      'export function buildAlphaCard() {',
+      '  return createAlphaAnswer();',
+      '}',
+      '',
+    ].join('\n'),
+  );
+  writeFileSync(
+    join(repoPath, 'src', 'beta.ts'),
+    [
+      "type FocusRef = { kind: string; value: string; };",
+      '',
+      'export interface BetaRef {',
+      '  readonly kind: string;',
+      '  readonly value: string;',
+      '  readonly label: string;',
+      '  readonly detail?: string;',
+      '}',
+      '',
+      'export interface BetaValue {',
+      '  readonly title: string;',
+      '  readonly summaryLines: readonly string[];',
+      '  readonly primaryRef: BetaRef;',
+      '  readonly relatedRefs: readonly BetaRef[];',
+      '}',
+      '',
+      'function createBetaAnswer() {',
+      "  const summaryLines = ['beta summary'];",
+      "  const focusRef: FocusRef = { kind: 'package', value: 'beta' };",
+      '  const value: BetaValue = {',
+      "    title: 'Beta answer',",
+      '    summaryLines,',
+      "    primaryRef: { kind: 'package', value: 'beta', label: 'beta' },",
+      '    relatedRefs: [],',
+      '  };',
+      '  return {',
+      "    schemaVersion: 'v0alpha1',",
+      "    query: { focusRef, questionRoute: 'inventory' },",
+      '    slots: {',
+      "      focus_ref: focusRef,",
+      "      question_route: 'inventory',",
+      "      outcome: { tag: 'hit', summary: summaryLines[0], value },",
+      '    },',
+      "    outcome: { tag: 'hit', summary: summaryLines[0], value },",
+      '  };',
+      '}',
+      '',
+      'export function buildBetaCard() {',
+      '  return createBetaAnswer();',
+      '}',
+      '',
+    ].join('\n'),
+  );
+  writeFileSync(
+    join(repoPath, 'src', 'index.ts'),
+    [
+      "export { buildAlphaCard } from './alpha.js';",
+      "export { buildBetaCard } from './beta.js';",
       '',
     ].join('\n'),
   );

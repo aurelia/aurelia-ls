@@ -1,24 +1,22 @@
 import { loadCurrentSourceAnalysisSnapshots, type LoadedCurrentSourceAnalysisSnapshots } from './current-snapshots.js';
 import type { PackageExportsSummary } from './exports/schema.js';
+import type { SourceAnalysisAnswerCard, SourceAnalysisAnswerRef } from './answer-card.js';
+import { createSourceAnalysisAnswerCard } from './answer-card.js';
+import { createSourceAnalysisAnswerEnvelope } from './answer-envelope.js';
 import type {
   SourceAnalysisClosureBasis,
   SourceAnalysisContinuation,
   SourceAnalysisIssue,
-  SourceAnalysisOutcome,
   SourceAnalysisTrustProfile,
 } from './outcome-algebra.js';
-import { SOURCE_ANALYSIS_OUTCOME_SCHEMA_VERSION } from './outcome-algebra.js';
 import type {
   SourceAnalysisAnswer,
   SourceAnalysisAnswerProvenanceEntry,
-  SourceAnalysisContinuationBasis,
-  SourceAnalysisFocusKind,
   SourceAnalysisFocusRef,
   SourceAnalysisQuery,
   SourceAnalysisReadMode,
   SourceAnalysisWorldFrame,
 } from './query-model.js';
-import { SOURCE_ANALYSIS_QUERY_MODEL_SCHEMA_VERSION } from './query-model.js';
 import type { SourceAnalysisPackageRouteWitness } from './reachability.js';
 import {
   createSourceAnalysisPackageReachability,
@@ -26,20 +24,11 @@ import {
 } from './reachability.js';
 import type { TypeDecl } from './typerefs/schema.js';
 
-export interface SourceAnalysisRouteWitnessRef {
-  readonly kind: SourceAnalysisFocusKind | 'subsystem';
-  readonly value: string;
-  readonly label: string;
-  readonly detail?: string;
-}
+export type SourceAnalysisRouteWitnessRef = SourceAnalysisAnswerRef;
 
-export interface SourceAnalysisRouteWitnessValue {
-  readonly title: string;
-  readonly summaryLines: readonly string[];
-  readonly primaryRef: SourceAnalysisRouteWitnessRef;
-  readonly relatedRefs: readonly SourceAnalysisRouteWitnessRef[];
+export type SourceAnalysisRouteWitnessValue = SourceAnalysisAnswerCard<SourceAnalysisRouteWitnessRef> & {
   readonly witnesses: readonly SourceAnalysisPackageRouteWitness[];
-}
+};
 
 export function createCurrentSourceAnalysisRouteWitnessAnswer(
   query: SourceAnalysisQuery,
@@ -231,13 +220,13 @@ function createRouteWitnessAnswer(
     snapshots,
     focusRef,
     'hit',
-    {
+    createSourceAnalysisAnswerCard({
       title: `${primaryRef.label} route witnesses`,
       summaryLines,
       primaryRef,
       relatedRefs,
       witnesses: witnesses.slice(0, 6),
-    },
+    }),
     trust,
     [
       {
@@ -305,7 +294,7 @@ function createAnswer(
   query: SourceAnalysisQuery,
   snapshots: LoadedCurrentSourceAnalysisSnapshots,
   focusRef: SourceAnalysisFocusRef,
-  tag: SourceAnalysisOutcome<SourceAnalysisRouteWitnessValue>['tag'],
+  tag: SourceAnalysisAnswer<SourceAnalysisRouteWitnessValue>['outcome']['tag'],
   value: SourceAnalysisRouteWitnessValue,
   trust: SourceAnalysisTrustProfile,
   closureBasis: readonly SourceAnalysisClosureBasis[],
@@ -315,53 +304,20 @@ function createAnswer(
 ): SourceAnalysisAnswer<SourceAnalysisRouteWitnessValue> {
   const readMode = defaultReadMode();
   const worldFrame = defaultWorldFrame(snapshots, query.worldFrame);
-  const continuationBasis: SourceAnalysisContinuationBasis = {
+  return createSourceAnalysisAnswerEnvelope({
+    query,
     focusRef,
-    questionRoute: query.questionRoute,
+    inquiryEpisode: 'bounded-closure-explanation',
     readMode,
     worldFrame,
-    governingAnchorRefs: value.relatedRefs.map((ref) => ref.value).slice(0, 4),
-  };
-
-  const outcome: SourceAnalysisOutcome<SourceAnalysisRouteWitnessValue> = {
-    schemaVersion: SOURCE_ANALYSIS_OUTCOME_SCHEMA_VERSION,
     tag,
-    summary: value.summaryLines[0] ?? value.title,
-    trust,
     value,
+    trust,
     closureBasis,
     issues,
     continuations,
-  };
-
-  return {
-    schemaVersion: SOURCE_ANALYSIS_QUERY_MODEL_SCHEMA_VERSION,
-    query: {
-      inquiryEpisode: query.inquiryEpisode ?? 'bounded-closure-explanation',
-      focusRef,
-      questionRoute: query.questionRoute,
-      readMode,
-      worldFrame,
-      requestedSlotIds: query.requestedSlotIds,
-      continuationBasis: query.continuationBasis ?? continuationBasis,
-    },
-    slots: {
-      focus_ref: focusRef,
-      question_route: query.questionRoute,
-      read_mode: readMode,
-      world_frame: worldFrame,
-      outcome,
-      closure_basis: closureBasis,
-      provenance,
-      continuation_basis: continuationBasis,
-      delta: {
-        kind: 'none',
-        count: 0,
-        affectedRefs: [],
-      },
-    },
-    outcome,
-  };
+    provenance,
+  });
 }
 
 function createMissAnswer(
@@ -376,7 +332,7 @@ function createMissAnswer(
     snapshots,
     focusRef,
     'miss-unknown-shape',
-    {
+    createSourceAnalysisAnswerCard({
       title: 'Route witness miss',
       summaryLines: [message],
       primaryRef: {
@@ -386,7 +342,7 @@ function createMissAnswer(
       },
       relatedRefs,
       witnesses: [],
-    },
+    }),
     {
       kind: 'unavailable',
       summary: 'No route witness target closed for this focus.',
@@ -418,7 +374,7 @@ function createAmbiguousAnswer(
     snapshots,
     focusRef,
     'ambiguous',
-    {
+    createSourceAnalysisAnswerCard({
       title: 'Route witness ambiguity',
       summaryLines: [message],
       primaryRef: {
@@ -428,7 +384,7 @@ function createAmbiguousAnswer(
       },
       relatedRefs,
       witnesses: [],
-    },
+    }),
     {
       kind: 'qualified',
       summary: 'Multiple targets match the current route witness focus.',
@@ -463,7 +419,7 @@ function createOpenBoundaryAnswer(
     snapshots,
     focusRef,
     'open-boundary',
-    {
+    createSourceAnalysisAnswerCard({
       title: 'Route witness boundary',
       summaryLines: [message],
       primaryRef: {
@@ -473,7 +429,7 @@ function createOpenBoundaryAnswer(
       },
       relatedRefs,
       witnesses: [],
-    },
+    }),
     {
       kind: 'qualified',
       summary: 'The current route model cannot yet close on a witness path for this focus.',
@@ -503,7 +459,7 @@ function createUnsupportedAnswer(
     snapshots,
     query.focusRef,
     'unsupported',
-    {
+    createSourceAnalysisAnswerCard({
       title: 'Route witness unsupported',
       summaryLines: [message],
       primaryRef: {
@@ -513,7 +469,7 @@ function createUnsupportedAnswer(
       },
       relatedRefs: [],
       witnesses: [],
-    },
+    }),
     {
       kind: 'unavailable',
       summary: 'The current route witness surface supports file and type focuses only.',

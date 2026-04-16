@@ -25,7 +25,7 @@ describe('Source-analysis live navigation', () => {
     expect(episode.answer.outcome.value?.primaryRef.value).toBe('@aurelia-ls/source-analysis');
     expect(episode.answer.outcome.value?.summaryLines.some((line) => line.includes('host -> deps'))).toBe(true);
     expect(episode.answer.outcome.value?.relatedRefs.some((ref) => ref.value === 'packages/source-analysis/src/index.ts')).toBe(true);
-    expect(episode.answer.outcome.value?.relatedRefs.some((ref) => ref.value === 'createSourceAnalysisHostRuntime')).toBe(true);
+    expect(episode.answer.outcome.value?.relatedRefs.some((ref) => ref.value === 'createSourceAnalysisAnswerEnvelope')).toBe(true);
     expect(episode.answer.slots.closure_basis?.some((basis) => basis.kind === 'substrate')).toBe(true);
   });
 

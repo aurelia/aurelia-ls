@@ -83,4 +83,30 @@ describe('Source-analysis package audit', () => {
       ref.value === 'packages/source-analysis/src/host/runtime.ts',
     )).toBe(true);
   });
+
+  it('no longer flags fragmented local answer builders after the shared envelope extraction', () => {
+    const snapshots = loadSnapshotsForAudit();
+    const answer = createSourceAnalysisAuditAnswer({
+      focusRef: { kind: 'package', value: '@aurelia-ls/source-analysis' },
+      questionRoute: 'inventory',
+    }, snapshots);
+
+    const coordinationFinding = answer.outcome.value?.findings.find((finding) =>
+      finding.code === 'answer-coordination-fragmentation',
+    );
+    expect(coordinationFinding).toBeUndefined();
+  });
+
+  it('no longer flags fragmented local answer carriers after the shared card extraction', () => {
+    const snapshots = loadSnapshotsForAudit();
+    const answer = createSourceAnalysisAuditAnswer({
+      focusRef: { kind: 'package', value: '@aurelia-ls/source-analysis' },
+      questionRoute: 'inventory',
+    }, snapshots);
+
+    const presentationFinding = answer.outcome.value?.findings.find((finding) =>
+      finding.code === 'answer-presentation-fragmentation',
+    );
+    expect(presentationFinding).toBeUndefined();
+  });
 });

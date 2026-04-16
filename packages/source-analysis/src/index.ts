@@ -8,6 +8,13 @@ export {
   SOURCE_ANALYSIS_AUDIT_FINDING_KINDS,
 } from './audit.js';
 export type {
+  SourceAnalysisAnswerCard,
+  SourceAnalysisAnswerRef,
+} from './answer-card.js';
+export { createSourceAnalysisAnswerCard } from './answer-card.js';
+export type { CreateSourceAnalysisAnswerEnvelopeOptions } from './answer-envelope.js';
+export { createSourceAnalysisAnswerEnvelope } from './answer-envelope.js';
+export type {
   SourceAnalysisAuditFinding,
   SourceAnalysisAuditFindingKind,
   SourceAnalysisAuditRef,
@@ -141,6 +148,13 @@ export {
   SOURCE_ANALYSIS_PACKAGE_ROUTE_KINDS,
   SOURCE_ANALYSIS_PACKAGE_ROOT_KINDS,
 } from './reachability.js';
+export type {
+  SourceAnalysisCoordinationFunctionSurface,
+  SourceAnalysisCoordinationInterfaceSurface,
+  SourceAnalysisFileCoordinationSurface,
+  SourceAnalysisPackageCoordinationSurface,
+} from './coordination-surface.js';
+export { createSourceAnalysisPackageCoordinationSurface } from './coordination-surface.js';
 
 export {
   loadCurrentSourceAnalysisSnapshots,

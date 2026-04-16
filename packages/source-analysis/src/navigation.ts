@@ -1,6 +1,9 @@
 import { loadCurrentSourceAnalysisSnapshots, type LoadedCurrentSourceAnalysisSnapshots } from './current-snapshots.js';
 import type { PackageExportRecord, PackageExportsSummary } from './exports/schema.js';
 import type { TypeDecl } from './typerefs/schema.js';
+import type { SourceAnalysisAnswerCard, SourceAnalysisAnswerRef } from './answer-card.js';
+import { createSourceAnalysisAnswerCard } from './answer-card.js';
+import { createSourceAnalysisAnswerEnvelope } from './answer-envelope.js';
 import type {
   SourceAnalysisClaimEdge,
   SourceAnalysisClaimHome,
@@ -12,21 +15,17 @@ import type {
   SourceAnalysisClosureBasis,
   SourceAnalysisContinuation,
   SourceAnalysisIssue,
-  SourceAnalysisOutcome,
   SourceAnalysisTrustProfile,
 } from './outcome-algebra.js';
-import { SOURCE_ANALYSIS_OUTCOME_SCHEMA_VERSION } from './outcome-algebra.js';
 import type {
   SourceAnalysisAnswer,
   SourceAnalysisAnswerProvenanceEntry,
-  SourceAnalysisContinuationBasis,
   SourceAnalysisFocusKind,
   SourceAnalysisFocusRef,
   SourceAnalysisQuery,
   SourceAnalysisReadMode,
   SourceAnalysisWorldFrame,
 } from './query-model.js';
-import { SOURCE_ANALYSIS_QUERY_MODEL_SCHEMA_VERSION } from './query-model.js';
 import type {
   SourceAnalysisObservationProvenance,
   SourceAnalysisSubstrateEdge,
@@ -35,19 +34,9 @@ import type {
 } from './substrate.js';
 import { SOURCE_ANALYSIS_SUBSTRATE_SCHEMA_VERSION } from './substrate.js';
 
-export interface SourceAnalysisNavigationRef {
-  readonly kind: SourceAnalysisFocusKind | 'subsystem';
-  readonly value: string;
-  readonly label: string;
-  readonly detail?: string;
-}
+export type SourceAnalysisNavigationRef = SourceAnalysisAnswerRef;
 
-export interface SourceAnalysisNavigationValue {
-  readonly title: string;
-  readonly summaryLines: readonly string[];
-  readonly primaryRef: SourceAnalysisNavigationRef;
-  readonly relatedRefs: readonly SourceAnalysisNavigationRef[];
-}
+export type SourceAnalysisNavigationValue = SourceAnalysisAnswerCard<SourceAnalysisNavigationRef>;
 
 export interface SourceAnalysisNavigationEpisode {
   readonly substrate: SourceAnalysisSubstrateGraph;
@@ -462,7 +451,7 @@ function buildPackageEpisode(
     builder,
     { kind: 'package', value: pkg.package_name, label: pkg.package_name },
     'hit',
-    {
+    createSourceAnalysisAnswerCard({
       title: `${pkg.package_name} package overview`,
       summaryLines,
       primaryRef: packageRef(pkg),
@@ -475,7 +464,7 @@ function buildPackageEpisode(
         },
         ...keyExports.map((record) => exportRef(record)),
       ],
-    },
+    }),
     {
       kind: 'grounded',
       summary: 'This overview is grounded in the live deps and exports snapshots for the current workspace.',
@@ -601,7 +590,7 @@ function buildTypeEpisode(
     builder,
     { kind: 'type', value: decl.name, label: decl.name },
     'hit',
-    {
+    createSourceAnalysisAnswerCard({
       title: `${decl.name} type neighborhood`,
       summaryLines,
       primaryRef: typeRef(decl),
@@ -620,7 +609,7 @@ function buildTypeEpisode(
           detail: `${ref.kind}${ref.context ? ` (${ref.context})` : ''}`,
         })),
       ],
-    },
+    }),
     {
       kind: 'grounded',
       summary: 'This neighborhood is grounded in live typerefs data and, when available, the export surface snapshot.',
@@ -735,7 +724,7 @@ function buildExportEpisode(
     builder,
     { kind: 'export', value: record.exported_name, label: record.exported_name },
     'reroute',
-    {
+    createSourceAnalysisAnswerCard({
       title: `${record.exported_name} export route`,
       summaryLines,
       primaryRef: exportRef(record),
@@ -751,7 +740,7 @@ function buildExportEpisode(
           : []),
         ...(declarationType ? [typeRef(declarationType)] : []),
       ],
-    },
+    }),
     {
       kind: 'grounded',
       summary: 'This route is grounded in the live export chain for the current workspace package.',
@@ -891,7 +880,7 @@ function buildFileEpisode(
     builder,
     { kind: 'file', value: filePath, label: basename(filePath) },
     'hit',
-    {
+    createSourceAnalysisAnswerCard({
       title: `${basename(filePath)} file neighborhood`,
       summaryLines,
       primaryRef: {
@@ -910,7 +899,7 @@ function buildFileEpisode(
           detail: `imports ${edge.bindings.join(', ') || '(side effect)'}`,
         })),
       ],
-    },
+    }),
     {
       kind: 'grounded',
       summary: 'This file neighborhood is grounded in the live deps, typerefs, and exports snapshots.',
@@ -946,7 +935,7 @@ function buildFileEpisode(
 function createAnswer(
   builder: EpisodeBuilder,
   focusRef: SourceAnalysisFocusRef,
-  tag: SourceAnalysisOutcome<SourceAnalysisNavigationValue>['tag'],
+  tag: SourceAnalysisAnswer<SourceAnalysisNavigationValue>['outcome']['tag'],
   value: SourceAnalysisNavigationValue,
   trust: SourceAnalysisTrustProfile,
   closureBasis: readonly SourceAnalysisClosureBasis[],
@@ -956,53 +945,20 @@ function createAnswer(
 ): SourceAnalysisAnswer<SourceAnalysisNavigationValue> {
   const readMode = defaultReadMode(focusRef.kind, builder.query.questionRoute);
   const worldFrame = defaultWorldFrame(builder.snapshots, builder.query.worldFrame);
-  const continuationBasis: SourceAnalysisContinuationBasis = {
+  return createSourceAnalysisAnswerEnvelope({
+    query: builder.query,
     focusRef,
-    questionRoute: builder.query.questionRoute,
+    inquiryEpisode: 'orient-and-localize',
     readMode,
     worldFrame,
-    governingAnchorRefs: value.relatedRefs.map((ref) => ref.value).slice(0, 4),
-  };
-
-  const outcome: SourceAnalysisOutcome<SourceAnalysisNavigationValue> = {
-    schemaVersion: SOURCE_ANALYSIS_OUTCOME_SCHEMA_VERSION,
     tag,
-    summary: value.summaryLines[0] ?? value.title,
-    trust,
     value,
+    trust,
     closureBasis,
     issues,
     continuations,
-  };
-
-  return {
-    schemaVersion: SOURCE_ANALYSIS_QUERY_MODEL_SCHEMA_VERSION,
-    query: {
-      inquiryEpisode: builder.query.inquiryEpisode ?? 'orient-and-localize',
-      focusRef,
-      questionRoute: builder.query.questionRoute,
-      readMode,
-      worldFrame,
-      requestedSlotIds: builder.query.requestedSlotIds,
-      continuationBasis: builder.query.continuationBasis ?? continuationBasis,
-    },
-    slots: {
-      focus_ref: focusRef,
-      question_route: builder.query.questionRoute,
-      read_mode: readMode,
-      world_frame: worldFrame,
-      outcome,
-      closure_basis: closureBasis,
-      provenance,
-      continuation_basis: continuationBasis,
-      delta: {
-        kind: 'none',
-        count: 0,
-        affectedRefs: [],
-      },
-    },
-    outcome,
-  };
+    provenance,
+  });
 }
 
 function createMissAnswer(
@@ -1015,7 +971,7 @@ function createMissAnswer(
     builder,
     focusRef,
     'miss-unknown-shape',
-    {
+    createSourceAnalysisAnswerCard({
       title: 'Workspace navigation miss',
       summaryLines: [message],
       primaryRef: {
@@ -1024,7 +980,7 @@ function createMissAnswer(
         label: focusRef.label ?? focusRef.value,
       },
       relatedRefs,
-    },
+    }),
     {
       kind: 'unavailable',
       summary: 'No grounded workspace navigation target closed for this focus.',
@@ -1054,7 +1010,7 @@ function createAmbiguousAnswer(
     builder,
     focusRef,
     'ambiguous',
-    {
+    createSourceAnalysisAnswerCard({
       title: 'Workspace navigation ambiguity',
       summaryLines: [message],
       primaryRef: {
@@ -1063,7 +1019,7 @@ function createAmbiguousAnswer(
         label: focusRef.label ?? focusRef.value,
       },
       relatedRefs,
-    },
+    }),
     {
       kind: 'qualified',
       summary: 'Multiple grounded workspace targets match the current focus.',
@@ -1092,7 +1048,7 @@ function createUnsupportedAnswer(
     builder,
     focusRef,
     'unsupported',
-    {
+    createSourceAnalysisAnswerCard({
       title: 'Workspace navigation unsupported',
       summaryLines: [message],
       primaryRef: {
@@ -1101,7 +1057,7 @@ function createUnsupportedAnswer(
         label: focusRef.label ?? focusRef.value,
       },
       relatedRefs: [],
-    },
+    }),
     {
       kind: 'unavailable',
       summary: 'This focus kind is not implemented by the current live navigator.',

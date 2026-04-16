@@ -1,33 +1,33 @@
 import { loadCurrentSourceAnalysisSnapshots, type LoadedCurrentSourceAnalysisSnapshots } from './current-snapshots.js';
 import type { PackageExportRecord, PackageExportsSummary } from './exports/schema.js';
 import type { TypeDecl } from './typerefs/schema.js';
+import type { SourceAnalysisAnswerCard, SourceAnalysisAnswerRef } from './answer-card.js';
+import { createSourceAnalysisAnswerCard } from './answer-card.js';
+import { createSourceAnalysisAnswerEnvelope } from './answer-envelope.js';
 import type {
   SourceAnalysisClosureBasis,
   SourceAnalysisContinuation,
   SourceAnalysisIssue,
   SourceAnalysisIssueOrigin,
   SourceAnalysisIssueSeverity,
-  SourceAnalysisOutcome,
   SourceAnalysisTrustKind,
   SourceAnalysisTrustProfile,
 } from './outcome-algebra.js';
-import { SOURCE_ANALYSIS_OUTCOME_SCHEMA_VERSION } from './outcome-algebra.js';
 import type {
   SourceAnalysisAnswer,
   SourceAnalysisAnswerProvenanceEntry,
-  SourceAnalysisContinuationBasis,
-  SourceAnalysisFocusKind,
   SourceAnalysisFocusRef,
   SourceAnalysisQuery,
   SourceAnalysisReadMode,
   SourceAnalysisWorldFrame,
 } from './query-model.js';
-import { SOURCE_ANALYSIS_QUERY_MODEL_SCHEMA_VERSION } from './query-model.js';
 import type {
   SourceAnalysisPackageFileReachability,
   SourceAnalysisPackageReachability,
 } from './reachability.js';
 import { createSourceAnalysisPackageReachability } from './reachability.js';
+import type { SourceAnalysisPackageCoordinationSurface } from './coordination-surface.js';
+import { createSourceAnalysisPackageCoordinationSurface } from './coordination-surface.js';
 
 export const SOURCE_ANALYSIS_AUDIT_FINDING_KINDS = [
   'blindspot',
@@ -38,12 +38,7 @@ export const SOURCE_ANALYSIS_AUDIT_FINDING_KINDS = [
 export type SourceAnalysisAuditFindingKind =
   typeof SOURCE_ANALYSIS_AUDIT_FINDING_KINDS[number];
 
-export interface SourceAnalysisAuditRef {
-  readonly kind: SourceAnalysisFocusKind | 'subsystem';
-  readonly value: string;
-  readonly label: string;
-  readonly detail?: string;
-}
+export type SourceAnalysisAuditRef = SourceAnalysisAnswerRef;
 
 export interface SourceAnalysisAuditFinding {
   readonly code: string;
@@ -57,13 +52,9 @@ export interface SourceAnalysisAuditFinding {
   readonly evidence: readonly string[];
 }
 
-export interface SourceAnalysisAuditValue {
-  readonly title: string;
-  readonly summaryLines: readonly string[];
-  readonly primaryRef: SourceAnalysisAuditRef;
-  readonly relatedRefs: readonly SourceAnalysisAuditRef[];
+export type SourceAnalysisAuditValue = SourceAnalysisAnswerCard<SourceAnalysisAuditRef> & {
   readonly findings: readonly SourceAnalysisAuditFinding[];
-}
+};
 
 interface PackageAuditContext {
   readonly snapshots: LoadedCurrentSourceAnalysisSnapshots;
@@ -74,6 +65,7 @@ interface PackageAuditContext {
   readonly declarationsByFile: ReadonlyMap<string, readonly TypeDecl[]>;
   readonly exportRecordsByFile: ReadonlyMap<string, readonly PackageExportRecord[]>;
   readonly reachability: SourceAnalysisPackageReachability;
+  readonly coordinationSurface: SourceAnalysisPackageCoordinationSurface | null;
 }
 
 export function createCurrentSourceAnalysisAuditAnswer(
@@ -130,7 +122,11 @@ function buildPackageAuditAnswer(
   }
 
   const pkg = pkgMatches[0]!;
-  const context = createPackageAuditContext(snapshots, pkg);
+  const context = createPackageAuditContext(
+    snapshots,
+    pkg,
+    resolveAuditRepoPath(query.worldFrame?.repoPath),
+  );
   const findings = collectPackageAuditFindings(context);
 
   const blindspotCount = findings.filter((finding) => finding.kind === 'blindspot').length;
@@ -169,13 +165,13 @@ function buildPackageAuditAnswer(
     snapshots,
     { kind: 'package', value: pkg.package_name, label: pkg.package_name },
     tag,
-    {
+    createSourceAnalysisAnswerCard({
       title: `${pkg.package_name} package audit`,
       summaryLines,
       primaryRef: packageRef(pkg),
       relatedRefs,
       findings,
-    },
+    }),
     trust,
     closureBasis,
     issues,
@@ -187,6 +183,7 @@ function buildPackageAuditAnswer(
 function createPackageAuditContext(
   snapshots: LoadedCurrentSourceAnalysisSnapshots,
   pkg: PackageExportsSummary,
+  repoPath: string,
 ): PackageAuditContext {
   const reachability = createSourceAnalysisPackageReachability(snapshots, pkg);
   const packagePrefix = pkg.package_dir.length > 0 ? `${pkg.package_dir}/` : '';
@@ -227,6 +224,8 @@ function createPackageAuditContext(
     exportRecordsByFile.set(record.declaration_file, exportRecords);
   }
 
+  const coordinationSurface = createSafeCoordinationSurface(repoPath, [...packageFiles]);
+
   return {
     snapshots,
     pkg,
@@ -248,6 +247,7 @@ function createPackageAuditContext(
       ]),
     ),
     reachability,
+    coordinationSurface,
   };
 }
 
@@ -259,6 +259,8 @@ function collectPackageAuditFindings(
     collectUnresolvedImportsFinding(context),
     collectExerciseOnlyFilesFinding(context),
     collectPublicSurfaceUnexercisedFinding(context),
+    collectAnswerCoordinationFragmentationFinding(context),
+    collectPresentationFragmentationFinding(context),
     ...collectDormantFileFindings(context),
     collectUnanchoredCandidateRootsFinding(context),
   ].filter((finding): finding is SourceAnalysisAuditFinding => Boolean(finding));
@@ -455,6 +457,76 @@ function collectPublicSurfaceUnexercisedFinding(
   };
 }
 
+function collectAnswerCoordinationFragmentationFinding(
+  context: PackageAuditContext,
+): SourceAnalysisAuditFinding | null {
+  const surface = context.coordinationSurface;
+  if (!surface || surface.answerBuilderFiles.length < 2) {
+    return null;
+  }
+
+  const files = surface.answerBuilderFiles
+    .slice()
+    .sort((left, right) =>
+      scoreCoordinationSurface(right) - scoreCoordinationSurface(left)
+      || left.filePath.localeCompare(right.filePath),
+    );
+  const primary = files[0]!;
+  const totalBuilders = files.reduce((count, file) => count + file.envelopeBuilderFunctions.length, 0);
+  const totalWrappers = files.reduce((count, file) => count + file.envelopeWrapperFunctions.length, 0);
+  const totalSummarySites = files.reduce((count, file) => count + file.summaryLineSites.length, 0);
+
+  return {
+    code: 'answer-coordination-fragmentation',
+    kind: 'surface-drift',
+    severity: 'warning',
+    confidence: 'grounded',
+    title: 'Answer construction is coordinated by repeated local builders',
+    summary: `${files.length} file${pluralize(files.length)} under ${context.pkg.package_name} independently build answer envelopes with ${totalBuilders} direct envelope builder${pluralize(totalBuilders)} and ${totalWrappers} local answer specializer${pluralize(totalWrappers)}. That usually means the query/result contract is still coordinated by repeated object assembly rather than one shared answer coordinator.`,
+    primaryRef: fileRef(primary.filePath, 'answer coordination hotspot'),
+    relatedRefs: files.slice(0, 8).map((file) => fileRef(file.filePath, 'answer coordination hotspot')),
+    evidence: files.slice(0, 6).flatMap((file) => [
+      `${file.filePath}: builders=${renderNamedSurfaceMembers(file.envelopeBuilderFunctions)}, specializers=${renderNamedSurfaceMembers(file.envelopeWrapperFunctions)}`,
+      `card literals=${file.cardObjectLiteralLines.length}, summary-line sites=${file.summaryLineSites.length}`,
+    ]),
+  };
+}
+
+function collectPresentationFragmentationFinding(
+  context: PackageAuditContext,
+): SourceAnalysisAuditFinding | null {
+  const surface = context.coordinationSurface;
+  if (!surface || surface.presentationCarrierFiles.length < 2) {
+    return null;
+  }
+
+  const files = surface.presentationCarrierFiles
+    .slice()
+    .sort((left, right) =>
+      scorePresentationSurface(right) - scorePresentationSurface(left)
+      || left.filePath.localeCompare(right.filePath),
+    );
+  const primary = files[0]!;
+  const totalRefInterfaces = files.reduce((count, file) => count + file.refLikeInterfaces.length, 0);
+  const totalCardInterfaces = files.reduce((count, file) => count + file.cardLikeInterfaces.length, 0);
+
+  return {
+    code: 'answer-presentation-fragmentation',
+    kind: 'surface-drift',
+    severity: 'info',
+    confidence: 'grounded',
+    title: 'Presentation carriers are repeated across multiple answer modules',
+    summary: `${files.length} file${pluralize(files.length)} under ${context.pkg.package_name} each declare local ref/value answer carriers and inline card-like object literals. That suggests the package still lacks a shared intermediate presentation model or renderer seam for answer cards and consumer-specific output styles.`,
+    primaryRef: fileRef(primary.filePath, 'presentation model hotspot'),
+    relatedRefs: files.slice(0, 8).map((file) => fileRef(file.filePath, 'presentation model hotspot')),
+    evidence: files.slice(0, 6).map((file) =>
+      `${file.filePath}: ref-like interfaces=${renderNamedSurfaceMembers(file.refLikeInterfaces)}, card-like interfaces=${renderNamedSurfaceMembers(file.cardLikeInterfaces)}, card literals=${file.cardObjectLiteralLines.length}`,
+    ).concat([
+      `total ref-like interfaces=${totalRefInterfaces}, total card-like interfaces=${totalCardInterfaces}`,
+    ]),
+  };
+}
+
 function collectUnanchoredCandidateRootsFinding(
   context: PackageAuditContext,
 ): SourceAnalysisAuditFinding | null {
@@ -552,6 +624,24 @@ function scorePublicSurfaceCandidate(file: SourceAnalysisPackageFileReachability
     + file.groundedProductionRootIds.length * 10
     + file.declarationCount * 5
     + file.exportCount * 3;
+}
+
+function scoreCoordinationSurface(
+  file: SourceAnalysisPackageCoordinationSurface['files'][number],
+): number {
+  return file.envelopeBuilderFunctions.length * 20
+    + file.envelopeWrapperFunctions.length * 10
+    + file.cardObjectLiteralLines.length * 5
+    + file.summaryLineSites.length;
+}
+
+function scorePresentationSurface(
+  file: SourceAnalysisPackageCoordinationSurface['files'][number],
+): number {
+  return file.refLikeInterfaces.length * 20
+    + file.cardLikeInterfaces.length * 20
+    + file.cardObjectLiteralLines.length * 5
+    + file.summaryLineSites.length;
 }
 
 function trustForFindings(
@@ -665,7 +755,7 @@ function createAnswer(
   query: SourceAnalysisQuery,
   snapshots: LoadedCurrentSourceAnalysisSnapshots,
   focusRef: SourceAnalysisFocusRef,
-  tag: SourceAnalysisOutcome<SourceAnalysisAuditValue>['tag'],
+  tag: SourceAnalysisAnswer<SourceAnalysisAuditValue>['outcome']['tag'],
   value: SourceAnalysisAuditValue,
   trust: SourceAnalysisTrustProfile,
   closureBasis: readonly SourceAnalysisClosureBasis[],
@@ -675,53 +765,20 @@ function createAnswer(
 ): SourceAnalysisAnswer<SourceAnalysisAuditValue> {
   const readMode = defaultReadMode(query.questionRoute);
   const worldFrame = defaultWorldFrame(snapshots, query.worldFrame);
-  const continuationBasis: SourceAnalysisContinuationBasis = {
+  return createSourceAnalysisAnswerEnvelope({
+    query,
     focusRef,
-    questionRoute: query.questionRoute,
+    inquiryEpisode: 'inventory-and-audit-sweep',
     readMode,
     worldFrame,
-    governingAnchorRefs: value.relatedRefs.map((ref) => ref.value).slice(0, 4),
-  };
-
-  const outcome: SourceAnalysisOutcome<SourceAnalysisAuditValue> = {
-    schemaVersion: SOURCE_ANALYSIS_OUTCOME_SCHEMA_VERSION,
     tag,
-    summary: value.summaryLines[0] ?? value.title,
-    trust,
     value,
+    trust,
     closureBasis,
     issues,
     continuations,
-  };
-
-  return {
-    schemaVersion: SOURCE_ANALYSIS_QUERY_MODEL_SCHEMA_VERSION,
-    query: {
-      inquiryEpisode: query.inquiryEpisode ?? 'inventory-and-audit-sweep',
-      focusRef,
-      questionRoute: query.questionRoute,
-      readMode,
-      worldFrame,
-      requestedSlotIds: query.requestedSlotIds,
-      continuationBasis: query.continuationBasis ?? continuationBasis,
-    },
-    slots: {
-      focus_ref: focusRef,
-      question_route: query.questionRoute,
-      read_mode: readMode,
-      world_frame: worldFrame,
-      outcome,
-      closure_basis: closureBasis,
-      provenance,
-      continuation_basis: continuationBasis,
-      delta: {
-        kind: 'none',
-        count: 0,
-        affectedRefs: [],
-      },
-    },
-    outcome,
-  };
+    provenance,
+  });
 }
 
 function createMissAnswer(
@@ -736,7 +793,7 @@ function createMissAnswer(
     snapshots,
     focusRef,
     'miss-unknown-shape',
-    {
+    createSourceAnalysisAnswerCard({
       title: 'Package audit miss',
       summaryLines: [message],
       primaryRef: {
@@ -746,7 +803,7 @@ function createMissAnswer(
       },
       relatedRefs,
       findings: [],
-    },
+    }),
     {
       kind: 'unavailable',
       summary: 'No package-level audit target closed for this focus.',
@@ -778,7 +835,7 @@ function createAmbiguousAnswer(
     snapshots,
     focusRef,
     'ambiguous',
-    {
+    createSourceAnalysisAnswerCard({
       title: 'Package audit ambiguity',
       summaryLines: [message],
       primaryRef: {
@@ -788,7 +845,7 @@ function createAmbiguousAnswer(
       },
       relatedRefs,
       findings: [],
-    },
+    }),
     {
       kind: 'qualified',
       summary: 'Multiple package-level audit targets match the current focus.',
@@ -820,7 +877,7 @@ function createUnsupportedAnswer(
     snapshots,
     query.focusRef,
     'unsupported',
-    {
+    createSourceAnalysisAnswerCard({
       title: 'Package audit unsupported',
       summaryLines: [message],
       primaryRef: {
@@ -830,7 +887,7 @@ function createUnsupportedAnswer(
       },
       relatedRefs: [],
       findings: [],
-    },
+    }),
     {
       kind: 'unavailable',
       summary: 'The current audit surface only supports package focuses.',
@@ -968,6 +1025,34 @@ function pluralize(count: number): string {
 
 function basename(filePath: string): string {
   return filePath.split('/').at(-1) ?? filePath;
+}
+
+function resolveAuditRepoPath(repoPath?: string): string {
+  return repoPath && repoPath.length > 0 ? repoPath : process.cwd();
+}
+
+function createSafeCoordinationSurface(
+  repoPath: string,
+  packageFiles: readonly string[],
+): SourceAnalysisPackageCoordinationSurface | null {
+  try {
+    return createSourceAnalysisPackageCoordinationSurface(repoPath, packageFiles);
+  } catch {
+    return null;
+  }
+}
+
+function renderNamedSurfaceMembers(
+  members: readonly { name: string; line: number }[],
+): string {
+  if (members.length === 0) {
+    return 'none';
+  }
+
+  return members
+    .slice(0, 4)
+    .map((member) => `${member.name}@${member.line}`)
+    .join(', ');
 }
 
 function dedupeRefs(
