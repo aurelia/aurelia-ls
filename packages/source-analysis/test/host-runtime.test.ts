@@ -118,6 +118,39 @@ describe('SourceAnalysisHostRuntime', () => {
     });
     expect(finalStatus.result.sessions[0]?.dirtyKinds).toEqual(['exports']);
   });
+
+  it('runs a package audit query that combines blind spots and under-integrated file hints', () => {
+    const repoPath = createAuditFixtureRepo();
+    const runtime = createSourceAnalysisHostRuntime();
+
+    const opened = runtime.execute({
+      command: 'session.open',
+      args: {
+        repoPath,
+        target: 'fixture-audit',
+      },
+    });
+
+    const sessionId = opened.result.sessionId;
+    const audit = runtime.execute({
+      command: 'query.audit.package',
+      args: {
+        sessionId,
+        packageName: '@fixture/source-analysis-audit',
+      },
+    });
+
+    expect(audit.status).toBe('ok');
+    expect(audit.meta.refreshedKinds).toEqual(['deps', 'typerefs', 'exports']);
+    expect(audit.result.answer.outcome.tag).toBe('open-boundary');
+    expect(audit.result.answer.outcome.value?.findings.some((finding) =>
+      finding.code === 'package-uncovered-files',
+    )).toBe(true);
+    expect(audit.result.answer.outcome.value?.findings.some((finding) =>
+      finding.code === 'under-integrated-file'
+      && finding.primaryRef.value === 'src/dormant.ts',
+    )).toBe(true);
+  });
 });
 
 function createFixtureRepo(): string {
@@ -161,6 +194,67 @@ function createFixtureRepo(): string {
     [
       "export type { Example } from './types.js';",
       'export const answer = 42;',
+      '',
+    ].join('\n'),
+  );
+
+  return repoPath;
+}
+
+function createAuditFixtureRepo(): string {
+  const repoPath = mkdtempSync(join(tmpdir(), 'source-analysis-host-audit-'));
+  tempDirs.push(repoPath);
+
+  mkdirSync(join(repoPath, 'src'), { recursive: true });
+  mkdirSync(join(repoPath, 'test'), { recursive: true });
+  writeFileSync(
+    join(repoPath, 'package.json'),
+    JSON.stringify(
+      {
+        name: '@fixture/source-analysis-audit',
+        type: 'module',
+      },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(
+    join(repoPath, 'tsconfig.json'),
+    JSON.stringify(
+      {
+        compilerOptions: {
+          module: 'NodeNext',
+          moduleResolution: 'NodeNext',
+          target: 'ES2022',
+          noEmit: true,
+        },
+        include: ['src/**/*.ts'],
+      },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(
+    join(repoPath, 'src', 'live.ts'),
+    'export interface LiveShape { value: string; }\n',
+  );
+  writeFileSync(
+    join(repoPath, 'src', 'dormant.ts'),
+    'export interface DormantShape { parked: boolean; }\n',
+  );
+  writeFileSync(
+    join(repoPath, 'src', 'index.ts'),
+    [
+      "export type { LiveShape } from './live.js';",
+      'export const auditReady = true;',
+      '',
+    ].join('\n'),
+  );
+  writeFileSync(
+    join(repoPath, 'test', 'index.test.ts'),
+    [
+      "import { auditReady } from '../src/index.js';",
+      'void auditReady;',
       '',
     ].join('\n'),
   );

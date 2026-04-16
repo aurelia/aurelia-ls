@@ -3,6 +3,17 @@ export type { ExportsOutput } from './exports/schema.js';
 export type { TypeRefsOutput } from './typerefs/schema.js';
 export type { SourceAnalysisAnalysisOptions } from './analysis-options.js';
 export {
+  createCurrentSourceAnalysisAuditAnswer,
+  createSourceAnalysisAuditAnswer,
+  SOURCE_ANALYSIS_AUDIT_FINDING_KINDS,
+} from './audit.js';
+export type {
+  SourceAnalysisAuditFinding,
+  SourceAnalysisAuditFindingKind,
+  SourceAnalysisAuditRef,
+  SourceAnalysisAuditValue,
+} from './audit.js';
+export {
   createCurrentSourceAnalysisNavigationEpisode,
   createSourceAnalysisNavigationEpisode,
 } from './navigation.js';

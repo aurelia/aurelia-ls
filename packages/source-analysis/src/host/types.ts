@@ -1,3 +1,5 @@
+import type { SourceAnalysisAnswer } from '../query-model.js';
+import type { SourceAnalysisAuditValue } from '../audit.js';
 import type { DepsOutput } from '../deps/schema.js';
 import type { ExportsOutput } from '../exports/schema.js';
 import type { TypeRefsOutput } from '../typerefs/schema.js';
@@ -132,6 +134,10 @@ export interface QueryArgs {
   readonly refreshIfNeeded?: boolean;
 }
 
+export interface QueryAuditPackageArgs extends QueryArgs {
+  readonly packageName: string;
+}
+
 export interface QuerySummaryResult<TKind extends SourceAnalysisKind> {
   readonly kind: TKind;
   readonly generatedAt: string;
@@ -142,6 +148,11 @@ export interface QuerySummaryResult<TKind extends SourceAnalysisKind> {
 export interface QuerySnapshotResult<TKind extends SourceAnalysisKind> {
   readonly kind: TKind;
   readonly snapshot: SourceAnalysisOutputByKind[TKind];
+  readonly warnings: readonly string[];
+}
+
+export interface QueryAuditPackageResult {
+  readonly answer: SourceAnalysisAnswer<SourceAnalysisAuditValue>;
   readonly warnings: readonly string[];
 }
 
@@ -170,6 +181,7 @@ export interface SourceAnalysisHostCommandArgsMap {
   'query.typerefs.snapshot': QueryArgs;
   'query.exports.summary': QueryArgs;
   'query.exports.snapshot': QueryArgs;
+  'query.audit.package': QueryAuditPackageArgs;
   'materializeSnapshots': MaterializeSnapshotsArgs;
 }
 
@@ -185,6 +197,7 @@ export interface SourceAnalysisHostCommandResultMap {
   'query.typerefs.snapshot': QuerySnapshotResult<'typerefs'>;
   'query.exports.summary': QuerySummaryResult<'exports'>;
   'query.exports.snapshot': QuerySnapshotResult<'exports'>;
+  'query.audit.package': QueryAuditPackageResult;
   'materializeSnapshots': MaterializeSnapshotsResult;
 }
 
