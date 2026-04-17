@@ -17,11 +17,13 @@ import {
   type StructuralPackageFileSurface,
 } from './structural-source-file-surface.js';
 import {
-  compareByPrecedence,
-  compareStringsAscending,
   DEFAULT_INQUIRY_ORDERING,
 } from './inquiry-policy.js';
 import type { InquiryOrdering } from './inquiry-policy.js';
+import {
+  compareByPrecedence,
+  compareStringsAscending,
+} from './ordering.js';
 
 export const PACKAGE_ROOT_KINDS = [
   'public-api',

@@ -1,4 +1,4 @@
-import type { AnswerRef } from './answer-card.js';
+import type { AnswerRef } from './answer-ref.js';
 import type {
   AnswerBulletListBlock,
   AnswerDocument,
@@ -9,8 +9,8 @@ import type {
   AnswerRefListBlock,
   AnswerWitnessListBlock,
 } from './answer-document.js';
-import type { InquiryPolicy } from './inquiry-policy.js';
-import { compareByPrecedence } from './inquiry-policy.js';
+import type { AnswerRenderPolicy } from './answer-render-policy.js';
+import { compareByPrecedence } from './ordering.js';
 
 export interface RenderedPlainText {
   readonly summaryLines: readonly string[];
@@ -21,7 +21,7 @@ export function projectAnswerDocument<
   TRef extends AnswerRef = AnswerRef,
 >(
   document: AnswerDocument<TRef>,
-  policy: InquiryPolicy,
+  policy: AnswerRenderPolicy,
 ): AnswerDocument<TRef> {
   const blocks = document.blocks
     .slice()
@@ -46,7 +46,7 @@ export function renderAnswerDocumentToPlainText<
   TRef extends AnswerRef = AnswerRef,
 >(
   document: AnswerDocument<TRef>,
-  policy: InquiryPolicy,
+  policy: AnswerRenderPolicy,
 ): RenderedPlainText {
   const projected = projectAnswerDocument(document, policy);
   const lines = projected.blocks.flatMap((block) => renderBlockToText(block));
@@ -60,7 +60,7 @@ export function renderAnswerDocumentToJson<
   TRef extends AnswerRef = AnswerRef,
 >(
   document: AnswerDocument<TRef>,
-  policy: InquiryPolicy,
+  policy: AnswerRenderPolicy,
 ): AnswerDocument<TRef> {
   return projectAnswerDocument(document, policy);
 }
@@ -69,7 +69,7 @@ function projectBlock<
   TRef extends AnswerRef = AnswerRef,
 >(
   block: AnswerDocumentBlock<TRef>,
-  policy: InquiryPolicy,
+  policy: AnswerRenderPolicy,
 ): AnswerDocumentBlock<TRef> | null {
   switch (block.kind) {
     case 'paragraph':
@@ -91,7 +91,7 @@ function projectBlock<
 
 function projectParagraphBlock(
   block: AnswerParagraphBlock,
-  policy: InquiryPolicy,
+  policy: AnswerRenderPolicy,
 ): AnswerParagraphBlock | null {
   const lines = block.lines.slice(0, policy.limits.listItemCount);
   if (lines.length === 0) return null;
@@ -100,7 +100,7 @@ function projectParagraphBlock(
 
 function projectBulletListBlock(
   block: AnswerBulletListBlock,
-  policy: InquiryPolicy,
+  policy: AnswerRenderPolicy,
 ): AnswerBulletListBlock | null {
   const items = block.items.slice(0, policy.limits.listItemCount);
   if (items.length === 0) return null;
@@ -111,7 +111,7 @@ function projectFindingListBlock<
   TRef extends AnswerRef = AnswerRef,
 >(
   block: AnswerFindingListBlock<TRef>,
-  policy: InquiryPolicy,
+  policy: AnswerRenderPolicy,
 ): AnswerFindingListBlock<TRef> | null {
   const findings = block.findings
     .slice(0, policy.limits.findingCount)
@@ -128,7 +128,7 @@ function projectWitnessListBlock<
   TRef extends AnswerRef = AnswerRef,
 >(
   block: AnswerWitnessListBlock<TRef>,
-  policy: InquiryPolicy,
+  policy: AnswerRenderPolicy,
 ): AnswerWitnessListBlock<TRef> | null {
   const witnesses = block.witnesses
     .slice(0, policy.limits.witnessCount)
@@ -144,7 +144,7 @@ function projectRefListBlock<
   TRef extends AnswerRef = AnswerRef,
 >(
   block: AnswerRefListBlock<TRef>,
-  policy: InquiryPolicy,
+  policy: AnswerRenderPolicy,
 ): AnswerRefListBlock<TRef> | null {
   const refs = block.refs.slice(0, policy.limits.refListCount);
   if (refs.length === 0) return null;
@@ -153,7 +153,7 @@ function projectRefListBlock<
 
 function projectKeyFactListBlock(
   block: AnswerKeyFactListBlock,
-  policy: InquiryPolicy,
+  policy: AnswerRenderPolicy,
 ): AnswerKeyFactListBlock | null {
   const facts = block.facts.slice(0, policy.limits.factCount);
   if (facts.length === 0) return null;

@@ -1,4 +1,5 @@
-import type { AnswerCard, AnswerRef } from './answer-card.js';
+import type { AnswerCard } from './answer-card.js';
+import type { AnswerRef } from './answer-ref.js';
 import { createStructuredAnswerCard } from './answer-card.js';
 import { createCapabilityAnswerRef } from './answer-refs.js';
 import { createAnswerDocument } from './answer-document.js';

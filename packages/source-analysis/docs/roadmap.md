@@ -105,6 +105,7 @@ Next:
 
 - push policy, ingress, catalog, and answer-envelope call sites onto narrower route families
 - separate presentation read modes from payload/materialization modes at more call sites
+- keep answer rendering and answer-reference surfaces separate from broader inquiry/session policy carriers
 - keep shrinking APIs that accept the broad `FocusKind` union when they only honestly support a narrower family
 - separate request targeting from observed execution posture inside `WorldFrame` or its successor types
 - separate evidence provenance from carrier provenance in answer-layer payloads
@@ -224,6 +225,8 @@ These are the points where operator judgement should usually decide direction:
 - [x] Extract checker-backed export symbol-face classification into `src/semantic/`
 - [x] Extract a shared semantic export surface from `exports/analyze.ts`
 - [x] Route live export navigation through the shared export trace surface
+- [x] Extract answer rendering into its own policy surface instead of spending `InquiryPolicy` directly
+- [x] Extract answer refs into a shared model instead of keeping them folded into `answer-card.ts`
 - [ ] Push inquiry policy and ingress onto narrower ontology families
 - [ ] Make `deps` / `typerefs` / `exports` feel like projections rather than architectural peers
 - [x] Reduce the 6-directory SCC in a measurable way

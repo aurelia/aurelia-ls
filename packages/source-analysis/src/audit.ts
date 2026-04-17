@@ -21,7 +21,8 @@ import {
   inspectAnalyzabilityPostureFromAnalysisViews,
   inspectFocusedAnalyzabilityContext,
 } from './analyzability-posture.js';
-import type { AnswerCard, AnswerRef } from './answer-card.js';
+import type { AnswerCard } from './answer-card.js';
+import type { AnswerRef } from './answer-ref.js';
 import {
   createStructuredAnswerCard,
 } from './answer-card.js';
@@ -35,13 +36,15 @@ import { createAnswerDocument } from './answer-document.js';
 import { createAnswerEnvelope } from './answer-envelope.js';
 import { trimTrailingFocusPunctuation } from './focus-normalization.js';
 import {
-  compareByPrecedence,
-  compareNumbersDescending,
-  compareStringsAscending,
   resolveInquiryPolicy,
   type AuditMetric,
   type InquiryPolicy,
 } from './inquiry-policy.js';
+import {
+  compareByPrecedence,
+  compareNumbersDescending,
+  compareStringsAscending,
+} from './ordering.js';
 import type {
   ClosureBasis,
   Continuation,

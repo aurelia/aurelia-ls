@@ -1,7 +1,7 @@
 import type {
   AnswerRef,
   AnswerRefKind,
-} from './answer-card.js';
+} from './answer-ref.js';
 import type {
   PackageExportRecord,
   PackageExportsSummary,

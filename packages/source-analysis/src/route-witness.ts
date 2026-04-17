@@ -9,7 +9,8 @@ import {
 } from './analysis-surface.js';
 import type { LoadedCurrentSnapshotSet } from './current-snapshots.js';
 import type { PackageExportsSummary } from './exports/schema.js';
-import type { AnswerCard, AnswerRef } from './answer-card.js';
+import type { AnswerCard } from './answer-card.js';
+import type { AnswerRef } from './answer-ref.js';
 import { createStructuredAnswerCard } from './answer-card.js';
 import {
   createAnswerRef,

@@ -8,8 +8,8 @@ import {
 import { basename, join, resolve } from 'node:path';
 
 import { createAuditAnswer } from '../audit.js';
-import type { AnswerRef } from '../answer-card.js';
 import type { AnswerDocument } from '../answer-document.js';
+import type { AnswerRef } from '../answer-ref.js';
 import {
   renderAnswerDocumentToJson,
   renderAnswerDocumentToPlainText,

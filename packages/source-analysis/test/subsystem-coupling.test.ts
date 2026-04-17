@@ -56,6 +56,56 @@ describe('Source-analysis subsystem coupling helpers', () => {
     expect(exportToSemantic).toBeDefined();
     expect(semanticToExport).toBeUndefined();
   });
+
+  it('keeps answer rendering one-way from inquiry policy', () => {
+    const analysis = loadCurrentLiveAnalysisViews();
+    const rendererToInquiry = analysis.deps.edges.find((edge) =>
+      edge.source === 'packages/source-analysis/src/answer-renderer.ts'
+      && edge.target === 'packages/source-analysis/src/inquiry-policy.ts',
+    );
+    const cardToInquiry = analysis.deps.edges.find((edge) =>
+      edge.source === 'packages/source-analysis/src/answer-card.ts'
+      && edge.target === 'packages/source-analysis/src/inquiry-policy.ts',
+    );
+    const inquiryToRenderPolicy = analysis.deps.edges.find((edge) =>
+      edge.source === 'packages/source-analysis/src/inquiry-policy.ts'
+      && edge.target === 'packages/source-analysis/src/answer-render-policy.ts',
+    );
+    const renderPolicyToInquiry = analysis.deps.edges.find((edge) =>
+      edge.source === 'packages/source-analysis/src/answer-render-policy.ts'
+      && edge.target === 'packages/source-analysis/src/inquiry-policy.ts',
+    );
+
+    expect(rendererToInquiry).toBeUndefined();
+    expect(cardToInquiry).toBeUndefined();
+    expect(inquiryToRenderPolicy).toBeDefined();
+    expect(renderPolicyToInquiry).toBeUndefined();
+  });
+
+  it('keeps answer refs as a shared model instead of a card-document cycle', () => {
+    const analysis = loadCurrentLiveAnalysisViews();
+    const documentToCard = analysis.deps.edges.find((edge) =>
+      edge.source === 'packages/source-analysis/src/answer-document.ts'
+      && edge.target === 'packages/source-analysis/src/answer-card.ts',
+    );
+    const cardToRef = analysis.deps.edges.find((edge) =>
+      edge.source === 'packages/source-analysis/src/answer-card.ts'
+      && edge.target === 'packages/source-analysis/src/answer-ref.ts',
+    );
+    const documentToRef = analysis.deps.edges.find((edge) =>
+      edge.source === 'packages/source-analysis/src/answer-document.ts'
+      && edge.target === 'packages/source-analysis/src/answer-ref.ts',
+    );
+    const refToCard = analysis.deps.edges.find((edge) =>
+      edge.source === 'packages/source-analysis/src/answer-ref.ts'
+      && edge.target === 'packages/source-analysis/src/answer-card.ts',
+    );
+
+    expect(documentToCard).toBeUndefined();
+    expect(cardToRef).toBeDefined();
+    expect(documentToRef).toBeDefined();
+    expect(refToCard).toBeUndefined();
+  });
 });
 
 function createSubsystemFixtureRepo(): string {

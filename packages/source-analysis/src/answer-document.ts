@@ -1,6 +1,6 @@
 import type { IssueSeverity, TrustKind } from './outcome-algebra.js';
 
-import type { AnswerRef } from './answer-card.js';
+import type { AnswerRef } from './answer-ref.js';
 
 export const ANSWER_DOCUMENT_SCHEMA_VERSION = 'v1alpha1' as const;
 

@@ -20,7 +20,8 @@ import {
 } from './analyzability-posture.js';
 import { inspectFocusedFileQuery } from './focused-file-query.js';
 import type { FocusedStructuralPathContext } from './focused-structural-path.js';
-import type { AnswerCard, AnswerRef } from './answer-card.js';
+import type { AnswerCard } from './answer-card.js';
+import type { AnswerRef } from './answer-ref.js';
 import {
   createStructuredAnswerCard,
 } from './answer-card.js';

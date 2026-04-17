@@ -45,6 +45,10 @@ export function loadCurrentAnalysisViews(
   target?: string,
   waitMs = 0,
 ): AnalysisViews {
+  // TODO: analysis-views.ts still reaches into current-snapshots.ts to acquire
+  // snapshot contracts before composing neutral AnalysisViews. Split snapshot
+  // loading from view composition so the next root-file seam
+  // (analysis-views.ts -> current-snapshots.ts) can collapse cleanly.
   return createAnalysisViewsFromSnapshots(loadCurrentSnapshots(target, waitMs));
 }
 

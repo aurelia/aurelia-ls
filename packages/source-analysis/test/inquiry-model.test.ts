@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ANSWER_REF_KINDS } from '../src/answer-card.js';
+import { ANSWER_REF_KINDS } from '../src/answer-ref.js';
 import {
   CARRIER_PROVENANCE_ENTRY_KINDS,
   COGNITIVE_QUESTION_ROUTES,

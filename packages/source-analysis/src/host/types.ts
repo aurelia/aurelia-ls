@@ -6,7 +6,7 @@ import type {
 } from '../inquiry-model.js';
 import type { AuditValue } from '../audit.js';
 import type { AnswerDocument } from '../answer-document.js';
-import type { AnswerRef } from '../answer-card.js';
+import type { AnswerRef } from '../answer-ref.js';
 import type { ConsumerKind } from '../inquiry-policy.js';
 import type { RenderedPlainText } from '../answer-renderer.js';
 import type {
