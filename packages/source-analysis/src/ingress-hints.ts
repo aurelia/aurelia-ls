@@ -1,11 +1,15 @@
-import type { FocusKind } from './inquiry-model.js';
+import {
+  type FocusKind,
+  isFocusKind,
+} from './inquiry-model.js';
 import {
   DEFAULT_INGRESS_RECOGNIZER_REGISTRY,
-  captureKindsForFocusKind,
+  captureKindsForFocusKinds,
   extractFilePaths,
   extractPackageNames,
   extractRepoPaths,
   extractTypeNames,
+  isIngressRecognizableFocusKind,
   type IngressCapture,
   type IngressRecognition,
   type IngressRecognizerRegistry,
@@ -195,21 +199,19 @@ export function asString(value: unknown): string | undefined {
 }
 
 export function asFocusKind(value: unknown): FocusKind | undefined {
-  if (value === 'repo' || value === 'package' || value === 'directory' || value === 'file'
-    || value === 'symbol' || value === 'type' || value === 'export' || value === 'claim'
-    || value === 'session' || value === 'capability' || value === 'inquiry') {
-    return value;
-  }
-  return undefined;
+  return isFocusKind(value) ? value : undefined;
 }
 
 export function supportsRecognizedFocus(
   focusKind: FocusKind,
   recognition: IngressRecognition | readonly IngressCapture[],
 ): boolean {
+  if (!isIngressRecognizableFocusKind(focusKind)) {
+    return false;
+  }
   const captures = Array.isArray(recognition) || !('captures' in recognition)
     ? recognition
     : recognition.captures;
-  const captureKinds = captureKindsForFocusKind(focusKind);
+  const captureKinds = captureKindsForFocusKinds([focusKind]);
   return captures.some((capture) => captureKinds.includes(capture.kind));
 }

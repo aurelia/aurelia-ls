@@ -1,5 +1,6 @@
 import type { AnswerCard, AnswerRef } from './answer-card.js';
 import { createStructuredAnswerCard } from './answer-card.js';
+import { createCapabilityAnswerRef } from './answer-refs.js';
 import { createAnswerDocument } from './answer-document.js';
 import { createAnswerEnvelope } from './answer-envelope.js';
 import { createHostedWorldFrame } from './analysis-surface.js';
@@ -1066,12 +1067,7 @@ function capabilityRef(
   label: string,
   detail?: string,
 ): CapabilityRef {
-  return {
-    kind: 'capability',
-    value: command,
-    label,
-    ...(detail ? { detail } : {}),
-  };
+  return createCapabilityAnswerRef(command, label, detail);
 }
 
 function groundedTrust(summary: string): TrustProfile {

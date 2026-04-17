@@ -6,7 +6,7 @@ import type {
 } from './inquiry-model.js';
 import type { CapabilityCatalog } from './capability-catalog.js';
 import {
-  captureKindsForFocusKind,
+  captureKindsForFocusKinds,
   type IngressCapture,
 } from './ingress-recognizers.js';
 import {
@@ -495,7 +495,7 @@ function limitMatches(
 function createInquiryMatchRules(
   definition: InquiryFamilyDefinition,
 ): readonly IngressRuleSpec<InquiryMatchReasonKind>[] {
-  const focusCaptureKinds = definition.focusKinds.flatMap((focusKind) => captureKindsForFocusKind(focusKind));
+  const focusCaptureKinds = captureKindsForFocusKinds(definition.focusKinds);
   return [
     createExactRule(
       'exact-family',

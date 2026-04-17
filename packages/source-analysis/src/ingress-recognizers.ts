@@ -15,6 +15,16 @@ export const INGRESS_CAPTURE_KINDS = [
 export type IngressCaptureKind =
   typeof INGRESS_CAPTURE_KINDS[number];
 
+export const INGRESS_RECOGNIZABLE_FOCUS_KINDS = [
+  'package',
+  'file',
+  'type',
+  'repo',
+] as const;
+
+export type IngressRecognizableFocusKind =
+  typeof INGRESS_RECOGNIZABLE_FOCUS_KINDS[number];
+
 export interface IngressCapture {
   readonly kind: IngressCaptureKind;
   readonly value: string;
@@ -120,20 +130,41 @@ export function createDefaultIngressRecognizerRegistry(): IngressRecognizerRegis
 export const DEFAULT_INGRESS_RECOGNIZER_REGISTRY =
   createDefaultIngressRecognizerRegistry();
 
-export function captureKindsForFocusKind(
+const INGRESS_RECOGNIZABLE_FOCUS_KIND_SET = new Set<string>(
+  INGRESS_RECOGNIZABLE_FOCUS_KINDS,
+);
+
+export function isIngressRecognizableFocusKind(
   focusKind: FocusKind,
+): focusKind is IngressRecognizableFocusKind {
+  return INGRESS_RECOGNIZABLE_FOCUS_KIND_SET.has(focusKind);
+}
+
+export function captureKindsForFocusKind(
+  focusKind: IngressRecognizableFocusKind,
 ): readonly IngressCaptureKind[] {
-  // TODO: Only a subset of FocusKind currently maps to ingress recognizers.
-  // That is another sign the focus union is carrying multiple semantic families:
-  // some entries are user-observable subject kinds, others are meta/control
-  // anchors that are never recognized directly from source-like text.
   switch (focusKind) {
     case 'package': return ['package-name'];
     case 'file': return ['file-path'];
     case 'type': return ['type-name'];
     case 'repo': return ['repo-path'];
-    default: return [];
+    default: return assertNever(focusKind);
   }
+}
+
+export function captureKindsForFocusKinds(
+  focusKinds: readonly FocusKind[],
+): readonly IngressCaptureKind[] {
+  const captureKinds = new Set<IngressCaptureKind>();
+  for (const focusKind of focusKinds) {
+    if (!isIngressRecognizableFocusKind(focusKind)) {
+      continue;
+    }
+    for (const captureKind of captureKindsForFocusKind(focusKind)) {
+      captureKinds.add(captureKind);
+    }
+  }
+  return [...captureKinds];
 }
 
 export function extractPackageNames(question: string): readonly string[] {
@@ -227,4 +258,8 @@ function filterPathDerivedTypeCaptures(
   return captures.filter((capture) =>
     capture.kind !== 'type-name' || !pathSegments.has(capture.value),
   );
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unhandled ingress-recognizable focus kind: ${String(value)}`);
 }

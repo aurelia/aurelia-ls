@@ -20,6 +20,12 @@ import type { AnswerCard, AnswerRef } from './answer-card.js';
 import {
   createStructuredAnswerCard,
 } from './answer-card.js';
+import {
+  createAnswerRef,
+  createFileAnswerRef,
+  createPackageSummaryAnswerRef,
+  createTypeDeclarationAnswerRef,
+} from './answer-refs.js';
 import { createAnswerDocument } from './answer-document.js';
 import { createAnswerEnvelope } from './answer-envelope.js';
 import { trimTrailingFocusPunctuation } from './focus-normalization.js';
@@ -388,12 +394,9 @@ function collectUnresolvedImportsFinding(
     title: 'Some imports do not resolve in the current graph',
     summary: `${context.unresolvedImports.length} relative import${pluralize(context.unresolvedImports.length)} inside ${context.pkg.package_name} failed to resolve, so the dependency graph is missing expected edges.`,
     primaryRef: fileRef(first.source, 'unresolved import source'),
-    relatedRefs: context.unresolvedImports.slice(0, 8).map((entry) => ({
-      kind: 'file' as const,
-      value: entry.source,
-      label: basename(entry.source),
-      detail: `${entry.specifier} @ line ${entry.line}`,
-    })),
+    relatedRefs: context.unresolvedImports.slice(0, 8).map((entry) =>
+      createFileAnswerRef(entry.source, `${entry.specifier} @ line ${entry.line}`),
+    ),
     evidence: context.unresolvedImports.slice(0, 4).map((entry) =>
       `${entry.source}:${entry.line} -> ${entry.specifier}`,
     ),
@@ -953,11 +956,11 @@ function createMissAnswer(
     'miss-unknown-shape',
     createStructuredAnswerCard({
       title: 'Package audit miss',
-      primaryRef: {
-        kind: focusRef.kind,
-        value: focusRef.value,
-        label: focusRef.label ?? focusRef.value,
-      },
+      primaryRef: createAnswerRef(
+        focusRef.kind,
+        focusRef.value,
+        focusRef.label ?? focusRef.value,
+      ),
       relatedRefs,
       document: createAnswerDocument([
         {
@@ -1021,11 +1024,7 @@ function createExcludedFrontierAnswer(
     'open-boundary',
     createStructuredAnswerCard({
       title: 'Package audit boundary',
-      primaryRef: {
-        kind: 'package',
-        value: packageQuery,
-        label: packageQuery,
-      },
+      primaryRef: createAnswerRef('package', packageQuery, packageQuery),
       relatedRefs: [],
       document: createAnswerDocument([
         {
@@ -1138,11 +1137,11 @@ function createAmbiguousAnswer(
     'ambiguous',
     createStructuredAnswerCard({
       title: 'Package audit ambiguity',
-      primaryRef: {
-        kind: focusRef.kind,
-        value: focusRef.value,
-        label: focusRef.label ?? focusRef.value,
-      },
+      primaryRef: createAnswerRef(
+        focusRef.kind,
+        focusRef.value,
+        focusRef.label ?? focusRef.value,
+      ),
       relatedRefs,
       document: createAnswerDocument([
         {
@@ -1200,11 +1199,11 @@ function createUnsupportedAnswer(
     'unsupported',
     createStructuredAnswerCard({
       title: 'Package audit unsupported',
-      primaryRef: {
-        kind: query.focusRef.kind,
-        value: query.focusRef.value,
-        label: query.focusRef.label ?? query.focusRef.value,
-      },
+      primaryRef: createAnswerRef(
+        query.focusRef.kind,
+        query.focusRef.value,
+        query.focusRef.label ?? query.focusRef.value,
+      ),
       relatedRefs: [],
       document: createAnswerDocument([
         {
@@ -1261,30 +1260,15 @@ function resolvePackages(
 }
 
 function packageRef(pkg: PackageExportsSummary): AuditRef {
-  return {
-    kind: 'package',
-    value: pkg.package_name,
-    label: pkg.package_name,
-    ...(pkg.package_dir.length > 0 ? { detail: pkg.package_dir } : {}),
-  };
+  return createPackageSummaryAnswerRef(pkg);
 }
 
 function fileRef(filePath: string, detail?: string): AuditRef {
-  return {
-    kind: 'file',
-    value: filePath,
-    label: basename(filePath),
-    ...(detail ? { detail } : {}),
-  };
+  return createFileAnswerRef(filePath, detail);
 }
 
 function typeRef(declaration: TypeDecl): AuditRef {
-  return {
-    kind: 'type',
-    value: declaration.name,
-    label: declaration.name,
-    detail: `${declaration.file}:${declaration.line}`,
-  };
+  return createTypeDeclarationAnswerRef(declaration);
 }
 
 function defaultReadMode(

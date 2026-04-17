@@ -11,6 +11,12 @@ import type { LoadedCurrentSnapshotSet } from './current-snapshots.js';
 import type { PackageExportsSummary } from './exports/schema.js';
 import type { AnswerCard, AnswerRef } from './answer-card.js';
 import { createStructuredAnswerCard } from './answer-card.js';
+import {
+  createAnswerRef,
+  createFileAnswerRef,
+  createPackageSummaryAnswerRef,
+  createTypeDeclarationAnswerRef,
+} from './answer-refs.js';
 import { createAnswerDocument } from './answer-document.js';
 import { createAnswerEnvelope } from './answer-envelope.js';
 import {
@@ -419,11 +425,11 @@ function createMissAnswer(
     'miss-unknown-shape',
     createStructuredAnswerCard({
       title: 'Route witness miss',
-      primaryRef: {
-        kind: focusRef.kind,
-        value: focusRef.value,
-        label: focusRef.label ?? focusRef.value,
-      },
+      primaryRef: createAnswerRef(
+        focusRef.kind,
+        focusRef.value,
+        focusRef.label ?? focusRef.value,
+      ),
       relatedRefs,
       document: createRouteWitnessDocument([message], relatedRefs, []),
       policy,
@@ -466,11 +472,11 @@ function createAmbiguousAnswer(
     'ambiguous',
     createStructuredAnswerCard({
       title: 'Route witness ambiguity',
-      primaryRef: {
-        kind: focusRef.kind,
-        value: focusRef.value,
-        label: focusRef.label ?? focusRef.value,
-      },
+      primaryRef: createAnswerRef(
+        focusRef.kind,
+        focusRef.value,
+        focusRef.label ?? focusRef.value,
+      ),
       relatedRefs,
       document: createRouteWitnessDocument([message], relatedRefs, []),
       policy,
@@ -524,11 +530,11 @@ function createOpenBoundaryAnswer(
     'open-boundary',
     createStructuredAnswerCard({
       title: 'Route witness boundary',
-      primaryRef: {
-        kind: focusRef.kind,
-        value: focusRef.value,
-        label: focusRef.label ?? focusRef.value,
-      },
+      primaryRef: createAnswerRef(
+        focusRef.kind,
+        focusRef.value,
+        focusRef.label ?? focusRef.value,
+      ),
       relatedRefs,
       document: createRouteWitnessDocument(
         [
@@ -589,11 +595,11 @@ function createUnsupportedAnswer(
     'unsupported',
     createStructuredAnswerCard({
       title: 'Route witness unsupported',
-      primaryRef: {
-        kind: query.focusRef.kind,
-        value: query.focusRef.value,
-        label: query.focusRef.label ?? query.focusRef.value,
-      },
+      primaryRef: createAnswerRef(
+        query.focusRef.kind,
+        query.focusRef.value,
+        query.focusRef.label ?? query.focusRef.value,
+      ),
       relatedRefs: [],
       document: createRouteWitnessDocument([message], [], []),
       policy,
@@ -639,30 +645,15 @@ function resolveTypeDeclarations(
 }
 
 function fileRef(filePath: string, detail?: string): RouteWitnessRef {
-  return {
-    kind: 'file',
-    value: filePath,
-    label: basename(filePath),
-    ...(detail ? { detail } : {}),
-  };
+  return createFileAnswerRef(filePath, detail);
 }
 
 function typeRef(declaration: TypeDecl): RouteWitnessRef {
-  return {
-    kind: 'type',
-    value: declaration.name,
-    label: declaration.name,
-    detail: `${declaration.file}:${declaration.line}`,
-  };
+  return createTypeDeclarationAnswerRef(declaration);
 }
 
 function packageRef(pkg: PackageExportsSummary): RouteWitnessRef {
-  return {
-    kind: 'package',
-    value: pkg.package_name,
-    label: pkg.package_name,
-    detail: pkg.package_dir,
-  };
+  return createPackageSummaryAnswerRef(pkg);
 }
 
 function policyForRouteWitness(

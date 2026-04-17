@@ -1,5 +1,9 @@
 import type { AnswerCard, AnswerRef } from './answer-card.js';
 import { createStructuredAnswerCard } from './answer-card.js';
+import {
+  createCapabilityAnswerRef,
+  createInquiryAnswerRef,
+} from './answer-refs.js';
 import { createAnswerDocument } from './answer-document.js';
 import { createAnswerEnvelope } from './answer-envelope.js';
 import { createHostedWorldFrame } from './analysis-surface.js';
@@ -1114,12 +1118,7 @@ function inquiryRef(
   label: string,
   detail?: string,
 ): InquiryRef {
-  return {
-    kind: 'inquiry',
-    value,
-    label,
-    ...(detail ? { detail } : {}),
-  };
+  return createInquiryAnswerRef(value, label, detail);
 }
 
 function capabilityRef(
@@ -1127,12 +1126,7 @@ function capabilityRef(
   label: string,
   detail?: string,
 ): InquiryRef {
-  return {
-    kind: 'capability',
-    value,
-    label,
-    ...(detail ? { detail } : {}),
-  };
+  return createCapabilityAnswerRef(value, label, detail);
 }
 
 function groundedTrust(summary: string): TrustProfile {

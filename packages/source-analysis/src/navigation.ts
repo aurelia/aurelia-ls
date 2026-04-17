@@ -22,6 +22,14 @@ import type { AnswerCard, AnswerRef } from './answer-card.js';
 import {
   createStructuredAnswerCard,
 } from './answer-card.js';
+import {
+  createAnswerRef,
+  createExportRecordAnswerRef,
+  createFileAnswerRef,
+  createPackageSummaryAnswerRef,
+  createTypeAnswerRef,
+  createTypeDeclarationAnswerRef,
+} from './answer-refs.js';
 import { createAnswerDocument } from './answer-document.js';
 import { createAnswerEnvelope } from './answer-envelope.js';
 import { trimTrailingFocusPunctuation } from './focus-normalization.js';
@@ -499,12 +507,7 @@ function buildPackageEpisode(
   }
   const policy = policyForNavigation(builder, 'package');
   const relatedRefs = [
-    {
-      kind: 'file' as const,
-      value: pkg.analysis_entrypoint,
-      label: basename(pkg.analysis_entrypoint),
-      detail: 'package entrypoint',
-    },
+    createFileAnswerRef(pkg.analysis_entrypoint, 'package entrypoint'),
     ...keyExports.map((record) => exportRef(record)),
   ];
 
@@ -651,19 +654,11 @@ function buildTypeEpisode(
   ];
   const policy = policyForNavigation(builder, 'type');
   const relatedRefs = [
-    {
-      kind: 'file' as const,
-      value: decl.file,
-      label: basename(decl.file),
-      detail: 'declaration file',
-    },
+    createFileAnswerRef(decl.file, 'declaration file'),
     ...(pkg ? [packageRef(pkg)] : []),
-    ...uniqueRefs.slice(0, 4).map((ref) => ({
-      kind: 'type' as const,
-      value: ref.target,
-      label: ref.target,
-      detail: `${ref.kind}${ref.context ? ` (${ref.context})` : ''}`,
-    })),
+    ...uniqueRefs.slice(0, 4).map((ref) =>
+      createTypeAnswerRef(ref.target, `${ref.kind}${ref.context ? ` (${ref.context})` : ''}`),
+    ),
   ];
 
   return builder.finish(createAnswer(
@@ -796,12 +791,7 @@ function buildExportEpisode(
   const relatedRefs = [
     packageRef(pkg),
     ...(record.declaration_file
-      ? [{
-        kind: 'file' as const,
-        value: record.declaration_file,
-        label: basename(record.declaration_file),
-        detail: 'implementation file',
-      }]
+      ? [createFileAnswerRef(record.declaration_file, 'implementation file')]
       : []),
     ...(declarationType ? [typeRef(declarationType)] : []),
   ];
@@ -897,12 +887,9 @@ function buildFileEpisode(
       builder,
       `File query "${fileInspection.normalizedQuery}" is ambiguous.`,
       { kind: 'file', value: fileInspection.normalizedQuery },
-      fileInspection.matches.slice(0, 8).map((filePath) => ({
-        kind: 'file',
-        value: filePath,
-        label: basename(filePath),
-        detail: filePath,
-      })),
+      fileInspection.matches.slice(0, 8).map((filePath) =>
+        createFileAnswerRef(filePath, filePath),
+      ),
     ));
   }
 
@@ -981,12 +968,9 @@ function buildFileEpisode(
   const relatedRefs = [
     ...(pkg ? [packageRef(pkg)] : []),
     ...declarations.slice(0, 4).map((decl) => typeRef(decl)),
-    ...outboundEdges.slice(0, 3).map((edge) => ({
-      kind: 'file' as const,
-      value: edge.target,
-      label: basename(edge.target),
-      detail: `imports ${edge.bindings.join(', ') || '(side effect)'}`,
-    })),
+    ...outboundEdges.slice(0, 3).map((edge) =>
+      createFileAnswerRef(edge.target, `imports ${edge.bindings.join(', ') || '(side effect)'}`),
+    ),
   ];
 
   return builder.finish(createAnswer(
@@ -998,12 +982,7 @@ function buildFileEpisode(
       : 'hit',
     createStructuredAnswerCard({
       title: `${basename(filePath)} file neighborhood`,
-      primaryRef: {
-        kind: 'file',
-        value: filePath,
-        label: basename(filePath),
-        detail: filePath,
-      },
+      primaryRef: createFileAnswerRef(filePath, filePath),
       relatedRefs,
       document: createNavigationDocument(summaryLines, relatedRefs, [
         { label: 'outbound imports', value: String(outboundEdges.length) },
@@ -1098,11 +1077,11 @@ function createMissAnswer(
     'miss-unknown-shape',
     createStructuredAnswerCard({
       title: 'Workspace navigation miss',
-      primaryRef: {
-        kind: focusRef.kind,
-        value: focusRef.value,
-        label: focusRef.label ?? focusRef.value,
-      },
+      primaryRef: createAnswerRef(
+        focusRef.kind,
+        focusRef.value,
+        focusRef.label ?? focusRef.value,
+      ),
       relatedRefs,
       document: createNavigationDocument([message], relatedRefs),
       policy,
@@ -1140,11 +1119,11 @@ function createAmbiguousAnswer(
     'ambiguous',
     createStructuredAnswerCard({
       title: 'Workspace navigation ambiguity',
-      primaryRef: {
-        kind: focusRef.kind,
-        value: focusRef.value,
-        label: focusRef.label ?? focusRef.value,
-      },
+      primaryRef: createAnswerRef(
+        focusRef.kind,
+        focusRef.value,
+        focusRef.label ?? focusRef.value,
+      ),
       relatedRefs,
       document: createNavigationDocument([message], relatedRefs),
       policy,
@@ -1190,11 +1169,11 @@ function createOpenBoundaryAnswer(
     'open-boundary',
     createStructuredAnswerCard({
       title: 'Workspace navigation boundary',
-      primaryRef: {
-        kind: focusRef.kind,
-        value: focusRef.value,
-        label: focusRef.label ?? focusRef.value,
-      },
+      primaryRef: createAnswerRef(
+        focusRef.kind,
+        focusRef.value,
+        focusRef.label ?? focusRef.value,
+      ),
       relatedRefs,
       document: createNavigationDocument(
         [
@@ -1240,11 +1219,11 @@ function createUnsupportedAnswer(
     'unsupported',
     createStructuredAnswerCard({
       title: 'Workspace navigation unsupported',
-      primaryRef: {
-        kind: focusRef.kind,
-        value: focusRef.value,
-        label: focusRef.label ?? focusRef.value,
-      },
+      primaryRef: createAnswerRef(
+        focusRef.kind,
+        focusRef.value,
+        focusRef.label ?? focusRef.value,
+      ),
       relatedRefs: [],
       document: createNavigationDocument([message], []),
       policy,
@@ -1340,30 +1319,15 @@ function uniqueTypeRefs(refs: readonly TypeDecl['refs'][number][]): readonly Typ
 }
 
 function packageRef(pkg: PackageExportsSummary): NavigationRef {
-  return {
-    kind: 'package',
-    value: pkg.package_name,
-    label: pkg.package_name,
-    detail: pkg.package_dir,
-  };
+  return createPackageSummaryAnswerRef(pkg);
 }
 
 function typeRef(decl: TypeDecl): NavigationRef {
-  return {
-    kind: 'type',
-    value: decl.name,
-    label: decl.name,
-    detail: `${decl.file}:${decl.line}`,
-  };
+  return createTypeDeclarationAnswerRef(decl);
 }
 
 function exportRef(record: PackageExportRecord): NavigationRef {
-  return {
-    kind: 'export',
-    value: record.exported_name,
-    label: record.exported_name,
-    detail: record.package_name,
-  };
+  return createExportRecordAnswerRef(record);
 }
 
 function policyForNavigation(

@@ -1,18 +1,26 @@
-import type { FocusKind } from './inquiry-model.js';
+import { FOCUS_KINDS } from './inquiry-model.js';
 import type { AnswerDocument } from './answer-document.js';
 import type { InquiryPolicy } from './inquiry-policy.js';
 import { renderAnswerDocumentToPlainText } from './answer-renderer.js';
 
+export const ANSWER_REF_KINDS = [
+  ...FOCUS_KINDS,
+  'subsystem',
+] as const;
+
+export type AnswerRefKind =
+  typeof ANSWER_REF_KINDS[number];
+
 export interface AnswerRef {
-  readonly kind: FocusKind | 'subsystem';
+  readonly kind: AnswerRefKind;
   readonly value: string;
   readonly label: string;
   readonly detail?: string;
 }
-// TODO: AnswerRef currently reuses FocusKind plus one ad hoc extra ('subsystem').
-// If focus taxonomy gets split into subject/meta/control families, give answer
-// references their own reference-kind model instead of inheriting inquiry focus
-// labels by convenience.
+// TODO: AnswerRefKind is now separate from FocusKind, but many call sites still
+// populate answer refs by copying inquiry focus kinds directly. If answer cards
+// gain richer evidence/control refs, move their constructors onto a dedicated
+// answer-reference layer instead of relying on ad hoc object literals.
 
 export interface AnswerCard<
   TRef extends AnswerRef = AnswerRef,

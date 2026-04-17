@@ -13,30 +13,46 @@ export const INQUIRY_EPISODES = [
   'delta-and-reread-floor',
 ] as const;
 
-export const QUESTION_ROUTES = [
+export const COGNITIVE_QUESTION_ROUTES = [
   'search',
   'join',
   'route',
   'inventory',
+] as const;
+
+export const MAINTENANCE_QUESTION_ROUTES = [
   'materialize',
   'refresh',
   'diff',
 ] as const;
+export const QUESTION_ROUTES = [
+  ...COGNITIVE_QUESTION_ROUTES,
+  ...MAINTENANCE_QUESTION_ROUTES,
+] as const;
 // TODO: This currently mixes cognitive inquiry moves (search/join/route/inventory)
-// with control-plane or maintenance operations (materialize/refresh/diff). If
-// route planning keeps growing, split inquiry route from execution/maintenance
-// route so planner and policy code stop carrying both concerns in one enum.
+// with control-plane or maintenance operations (materialize/refresh/diff).
+// The families are explicit now, but most planner/policy call sites still
+// carry the broad QuestionRoute union. Push those sites onto the narrower
+// route families before execution planning grows further.
 
-export const READ_MODES = [
+export const PRESENTATION_READ_MODES = [
   'focus-card',
   'summary-card',
   'supporting-evidence',
-  'snapshot',
   'delta-card',
 ] as const;
+export const PAYLOAD_READ_MODES = [
+  'snapshot',
+] as const;
+export const READ_MODES = [
+  ...PRESENTATION_READ_MODES,
+  ...PAYLOAD_READ_MODES,
+] as const;
 // TODO: 'snapshot' is not really a presentation mode like the other entries;
-// it is a transport/materialization mode. Separate presentation style from
-// payload mode before more rendering logic has to special-case this enum.
+// it is a transport/materialization mode. The families are explicit now, but
+// most policy/rendering code still carries the broad ReadMode union. Separate
+// presentation style from payload mode at the call sites before more rendering
+// logic has to special-case this enum.
 
 export const INQUIRY_SLOT_IDS = [
   'focus_ref',
@@ -50,7 +66,7 @@ export const INQUIRY_SLOT_IDS = [
   'delta',
 ] as const;
 
-export const FOCUS_KINDS = [
+export const SUBJECT_FOCUS_KINDS = [
   'repo',
   'package',
   'directory',
@@ -58,16 +74,28 @@ export const FOCUS_KINDS = [
   'symbol',
   'type',
   'export',
+] as const;
+
+export const EVIDENCE_FOCUS_KINDS = [
   'claim',
+] as const;
+
+export const CONTROL_FOCUS_KINDS = [
   'session',
   'capability',
   'inquiry',
 ] as const;
+export const FOCUS_KINDS = [
+  ...SUBJECT_FOCUS_KINDS,
+  ...EVIDENCE_FOCUS_KINDS,
+  ...CONTROL_FOCUS_KINDS,
+] as const;
 // TODO: This union currently mixes at least three semantic categories:
 // concrete code/world subjects (package/file/type/export), evidence/model
 // objects (claim), and control-plane/API anchors (session/capability/inquiry).
-// Split these into clearer families before more routing/policy logic starts
-// treating them as one coherent ontology just because they share one label slot.
+// The families are explicit now, but many APIs still accept the broad
+// FocusKind union. Push those APIs onto narrower kinds where possible so
+// routing/policy logic stops treating the whole ontology as one label slot.
 
 export const REGIME_ANCHORS = [
   'batch',
@@ -87,28 +115,57 @@ export const FRESHNESS_MODES = [
   'mixed',
 ] as const;
 
-export const PROVENANCE_ENTRY_KINDS = [
+export const EVIDENCE_PROVENANCE_ENTRY_KINDS = [
   'substrate',
   'claim',
   'route',
+] as const;
+
+export const CARRIER_PROVENANCE_ENTRY_KINDS = [
   'snapshot',
   'host',
 ] as const;
+export const PROVENANCE_ENTRY_KINDS = [
+  ...EVIDENCE_PROVENANCE_ENTRY_KINDS,
+  ...CARRIER_PROVENANCE_ENTRY_KINDS,
+] as const;
 // TODO: This currently combines reasoning-layer provenance (substrate/claim/route)
-// with carrier/origin provenance (snapshot/host). If provenance gets richer,
-// break this into evidence kind versus carrier kind so grounding stays honest.
+// with carrier/origin provenance (snapshot/host). The families are explicit
+// now, but provenance payloads still carry the broad union. Push codec and
+// answer-layer APIs onto the narrower provenance families as grounding grows.
 
 export type InquiryEpisode =
   typeof INQUIRY_EPISODES[number];
 
+export type CognitiveQuestionRoute =
+  typeof COGNITIVE_QUESTION_ROUTES[number];
+
+export type MaintenanceQuestionRoute =
+  typeof MAINTENANCE_QUESTION_ROUTES[number];
+
 export type QuestionRoute =
   typeof QUESTION_ROUTES[number];
+
+export type PresentationReadMode =
+  typeof PRESENTATION_READ_MODES[number];
+
+export type PayloadReadMode =
+  typeof PAYLOAD_READ_MODES[number];
 
 export type ReadMode =
   typeof READ_MODES[number];
 
 export type InquirySlotId =
   typeof INQUIRY_SLOT_IDS[number];
+
+export type SubjectFocusKind =
+  typeof SUBJECT_FOCUS_KINDS[number];
+
+export type EvidenceFocusKind =
+  typeof EVIDENCE_FOCUS_KINDS[number];
+
+export type ControlFocusKind =
+  typeof CONTROL_FOCUS_KINDS[number];
 
 export type FocusKind =
   typeof FOCUS_KINDS[number];
@@ -121,6 +178,12 @@ export type PartialityMode =
 
 export type FreshnessMode =
   typeof FRESHNESS_MODES[number];
+
+export type EvidenceProvenanceEntryKind =
+  typeof EVIDENCE_PROVENANCE_ENTRY_KINDS[number];
+
+export type CarrierProvenanceEntryKind =
+  typeof CARRIER_PROVENANCE_ENTRY_KINDS[number];
 
 export type ProvenanceEntryKind =
   typeof PROVENANCE_ENTRY_KINDS[number];
@@ -218,4 +281,47 @@ export interface InquiryAnswer<TResult = unknown> {
   readonly query: Inquiry;
   readonly slots: InquiryAnswerSlots<TResult>;
   readonly outcome: Outcome<TResult>;
+}
+
+const FOCUS_KIND_SET = new Set<string>(FOCUS_KINDS);
+const SUBJECT_FOCUS_KIND_SET = new Set<string>(SUBJECT_FOCUS_KINDS);
+const EVIDENCE_FOCUS_KIND_SET = new Set<string>(EVIDENCE_FOCUS_KINDS);
+const CONTROL_FOCUS_KIND_SET = new Set<string>(CONTROL_FOCUS_KINDS);
+const MAINTENANCE_QUESTION_ROUTE_SET = new Set<string>(MAINTENANCE_QUESTION_ROUTES);
+const PAYLOAD_READ_MODE_SET = new Set<string>(PAYLOAD_READ_MODES);
+
+export function isFocusKind(
+  value: unknown,
+): value is FocusKind {
+  return typeof value === 'string' && FOCUS_KIND_SET.has(value);
+}
+
+export function isSubjectFocusKind(
+  value: FocusKind,
+): value is SubjectFocusKind {
+  return SUBJECT_FOCUS_KIND_SET.has(value);
+}
+
+export function isEvidenceFocusKind(
+  value: FocusKind,
+): value is EvidenceFocusKind {
+  return EVIDENCE_FOCUS_KIND_SET.has(value);
+}
+
+export function isControlFocusKind(
+  value: FocusKind,
+): value is ControlFocusKind {
+  return CONTROL_FOCUS_KIND_SET.has(value);
+}
+
+export function isMaintenanceQuestionRoute(
+  value: QuestionRoute,
+): value is MaintenanceQuestionRoute {
+  return MAINTENANCE_QUESTION_ROUTE_SET.has(value);
+}
+
+export function isPayloadReadMode(
+  value: ReadMode,
+): value is PayloadReadMode {
+  return PAYLOAD_READ_MODE_SET.has(value);
 }

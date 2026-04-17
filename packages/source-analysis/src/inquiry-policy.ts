@@ -6,6 +6,7 @@ import type {
   QuestionRoute,
   ReadMode,
 } from './inquiry-model.js';
+import { isPayloadReadMode } from './inquiry-model.js';
 import type {
   PackageRouteClass,
   PackageRouteKind,
@@ -163,7 +164,7 @@ export function resolveInquiryPolicy(
 ): InquiryPolicy {
   const readMode = query.readMode ?? defaults.readMode;
   const inquiryEpisode = query.inquiryEpisode ?? defaults.inquiryEpisode;
-  const consumer = defaults.consumer ?? (readMode === 'snapshot' ? 'machine' : 'human');
+  const consumer = defaults.consumer ?? (isPayloadReadMode(readMode) ? 'machine' : 'human');
 
   return {
     focusKind: defaults.focusKind,
@@ -213,7 +214,7 @@ function limitsForPolicy(
     ? SUMMARY_CARD_LIMITS
     : readMode === 'supporting-evidence'
       ? SUPPORTING_EVIDENCE_LIMITS
-      : readMode === 'snapshot'
+      : isPayloadReadMode(readMode)
         ? SNAPSHOT_LIMITS
         : FOCUS_CARD_LIMITS;
 

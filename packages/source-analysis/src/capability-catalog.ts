@@ -4,7 +4,7 @@ import type {
   ReadMode,
 } from './inquiry-model.js';
 import {
-  captureKindsForFocusKind,
+  captureKindsForFocusKinds,
   type IngressCapture,
 } from './ingress-recognizers.js';
 import {
@@ -1024,7 +1024,7 @@ function limitMatches(
 function createCapabilityMatchRules(
   definition: CapabilityDefinition,
 ): readonly IngressRuleSpec<CapabilityMatchReasonKind>[] {
-  const focusCaptureKinds = definition.focusKinds.flatMap((focusKind) => captureKindsForFocusKind(focusKind));
+  const focusCaptureKinds = captureKindsForFocusKinds(definition.focusKinds);
   return [
     createExactRule(
       'exact-command',
