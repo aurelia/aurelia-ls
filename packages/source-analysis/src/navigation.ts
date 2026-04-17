@@ -11,6 +11,7 @@ import {
   describeAnalysisSurfaceEvidence,
 } from './analysis-surface.js';
 import type { LoadedCurrentSnapshotSet } from './current-snapshots.js';
+import { resolveExportRoute } from './export-trace-runtime-surface.js';
 import type { PackageExportRecord, PackageExportsSummary } from './exports/schema.js';
 import type { TypeDecl } from './typerefs/schema.js';
 import {
@@ -739,9 +740,23 @@ function buildExportEpisode(
   }
 
   const record = matches[0]!;
-  // TODO: Route export navigation through the shared semantic export surface
-  // directly once hosted inquiry can read live semantic traces without going
-  // back through the materialized exports snapshot record.
+  const route = resolveExportRoute({
+    repoPath: builder.snapshots.root,
+    ...(builder.snapshots.repoSession ? { repoSession: builder.snapshots.repoSession } : {}),
+    ...(builder.snapshots.structuralRuntime ? { structuralRuntime: builder.snapshots.structuralRuntime } : {}),
+    workspacePackageEntrypointsByName: workspacePackageEntrypointsByName(builder.snapshots),
+    analysisEntrypoint: record.analysis_entrypoint,
+    exportedName: record.exported_name,
+    fallback: {
+      originalName: record.original_name,
+      declarationFile: record.declaration_file,
+      declarationLine: record.declaration_line,
+      declarationName: record.declaration_name,
+      typeOnly: record.type_only,
+      namespaceExport: record.namespace_export,
+      chain: record.chain,
+    },
+  })!;
   const pkg = builder.snapshots.exports.packages.find((candidate) => candidate.package_dir === record.package_dir)!;
   const exportsSnapshotId = builder.addSnapshotNode('exports');
   const packageNodeId = builder.addPackageNode(pkg);
@@ -749,7 +764,7 @@ function buildExportEpisode(
   builder.addEdge({ id: `exports:${packageNodeId}->${exportNodeId}`, kind: 'exports', from: packageNodeId, to: exportNodeId });
   builder.addEdge({ id: `materializes:${exportsSnapshotId}->${exportNodeId}`, kind: 'materializes', from: exportsSnapshotId, to: exportNodeId });
 
-  const chainFileNodeIds = record.chain.map((step) => {
+  const chainFileNodeIds = route.chain.map((step) => {
     const nodeId = builder.addFileNode(step.file);
     builder.addEdge({ id: `materializes:${exportsSnapshotId}->${nodeId}:${step.line}`, kind: 'materializes', from: exportsSnapshotId, to: nodeId });
     builder.addEdge({ id: `contains:${packageNodeId}->${nodeId}`, kind: 'contains', from: packageNodeId, to: nodeId });
@@ -778,24 +793,36 @@ function buildExportEpisode(
   });
   builder.addClaimEdge({ kind: 'routes-through', from: exportClaimId, to: routeClaimId });
 
-  const declarationType = record.declaration_file
+  const declarationType = route.declarationFile
     ? builder.snapshots.typeRefs.declarations.find((decl) =>
-      decl.file === record.declaration_file && decl.name === record.declaration_name,
+      decl.file === route.declarationFile && decl.name === route.declarationName,
     )
     : undefined;
+  const usedSnapshotFallback = route.source === 'snapshot-fallback';
+  const liveFallbackIssue = usedSnapshotFallback && builder.snapshots.source === 'hosted-analysis'
+    ? [{
+      code: 'export-route-fallback',
+      message: `${record.exported_name} fell back to the materialized export record because the live semantic export trace did not close on a better route.`,
+      severity: 'warning' as const,
+      origin: 'boundary' as const,
+    }]
+    : [];
 
   const summaryLines = [
     `${record.exported_name} is exported by ${record.package_name}.`,
-    record.declaration_file
-      ? `Its implementation lands in ${record.declaration_file}:${record.declaration_line ?? '?'}.`
-      : 'Its implementation file could not be resolved in the current export chain.',
-    `The public chain is ${record.chain.map((step) => `${basename(step.file)}:${step.kind}`).join(' -> ')}.`,
+    route.declarationFile
+      ? `Its implementation lands in ${route.declarationFile}:${route.declarationLine ?? '?'}.`
+      : 'Its implementation file could not be resolved in the current export route.',
+    `The public chain is ${route.chain.map((step) => `${basename(step.file)}:${step.kind}`).join(' -> ')}.`,
+    ...(liveFallbackIssue.length > 0
+      ? ['Live semantic export tracing did not close here, so this answer is temporarily falling back to the materialized export record.']
+      : []),
   ];
   const policy = policyForNavigation(builder, 'export');
   const relatedRefs = [
     packageRef(pkg),
-    ...(record.declaration_file
-      ? [createFileAnswerRef(record.declaration_file, 'implementation file')]
+    ...(route.declarationFile
+      ? [createFileAnswerRef(route.declarationFile, 'implementation file')]
       : []),
     ...(declarationType ? [typeRef(declarationType)] : []),
   ];
@@ -810,15 +837,26 @@ function buildExportEpisode(
       primaryRef: exportRef(record),
       relatedRefs,
       document: createNavigationDocument(summaryLines, relatedRefs, [
-        { label: 'chain length', value: String(record.chain.length) },
-        { label: 'type-only', value: record.type_only ? 'yes' : 'no' },
+        { label: 'chain length', value: String(route.chain.length) },
+        { label: 'type-only', value: route.typeOnly ? 'yes' : 'no' },
+        { label: 'route source', value: route.source === 'semantic-runtime' ? 'semantic runtime' : 'snapshot fallback' },
       ]),
       policy,
     }),
-    {
-      kind: 'grounded',
-      summary: 'This route is grounded in the live export chain for the current workspace package.',
-    },
+    route.source === 'semantic-runtime'
+      ? {
+        kind: 'grounded',
+        summary: 'This route is grounded in the shared semantic export trace surface for the current workspace package.',
+      }
+      : builder.snapshots.source === 'hosted-analysis'
+        ? {
+          kind: 'qualified',
+          summary: 'The live semantic export trace did not close here, so this route currently falls back to the materialized export record.',
+        }
+        : {
+          kind: 'grounded',
+          summary: 'This route is grounded in the materialized export record for the current workspace package.',
+        },
     [
       {
         kind: 'claim',
@@ -828,7 +866,9 @@ function buildExportEpisode(
       },
       {
         kind: 'substrate',
-        summary: 'The route is backed by the package export record and its chain through the public entrypoint.',
+        summary: route.source === 'semantic-runtime'
+          ? 'The route is backed by the shared semantic export trace surface plus the package export observation.'
+          : 'The route is backed by the materialized package export record and its carried chain through the public entrypoint.',
         substrateNodeIds: [exportsSnapshotId, packageNodeId, exportNodeId, ...chainFileNodeIds],
       },
       {
@@ -836,10 +876,10 @@ function buildExportEpisode(
         summary: 'This answer intentionally routes from a public API symbol into the owning implementation file.',
       },
     ],
-    [],
+    liveFallbackIssue,
     [
-      ...(record.declaration_file
-        ? [continuation('join', 'Open the implementation file', record.declaration_file, 'implementation file')]
+      ...(route.declarationFile
+        ? [continuation('join', 'Open the implementation file', route.declarationFile, 'implementation file')]
         : []),
       ...(declarationType
         ? [continuation('join', 'Inspect the matching type declaration', declarationType.name, 'type declaration')]
@@ -1345,6 +1385,17 @@ function typeRef(decl: TypeDecl): NavigationRef {
 
 function exportRef(record: PackageExportRecord): NavigationRef {
   return createExportRecordAnswerRef(record);
+}
+
+function workspacePackageEntrypointsByName(
+  analysis: AnalysisViews,
+): ReadonlyMap<string, string> {
+  return new Map(
+    analysis.exports.packages.map((pkg) => [
+      pkg.package_name,
+      pkg.source_entrypoint ?? pkg.analysis_entrypoint,
+    ]),
+  );
 }
 
 function policyForNavigation(

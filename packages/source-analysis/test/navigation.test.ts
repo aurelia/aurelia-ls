@@ -44,6 +44,43 @@ describe('Source-analysis live navigation', () => {
     expect(episode.answer.outcome.continuations.some((step) => step.targetFocusRef === 'packages/source-analysis/src/host/runtime.ts')).toBe(true);
   });
 
+  it('spends the live semantic export trace surface even when the export snapshot chain is stale', () => {
+    const analysis = loadCurrentLiveAnalysisViews();
+    const staleAnalysis = {
+      ...analysis,
+      exports: {
+        ...analysis.exports,
+        exports: analysis.exports.exports.map((record) =>
+          record.exported_name === 'createSnapshotHostRuntime'
+            ? {
+              ...record,
+              declaration_file: 'packages/source-analysis/src/fake.ts',
+              declaration_line: 99,
+              declaration_name: 'FakeHostRuntime',
+              chain: [{
+                file: 'packages/source-analysis/src/fake.ts',
+                line: 99,
+                kind: 'fallback' as const,
+                exported_name: record.exported_name,
+                original_name: record.exported_name,
+              }],
+            }
+            : record,
+        ),
+      },
+    };
+    const episode = createNavigationEpisode({
+      focusRef: { kind: 'export', value: 'createSnapshotHostRuntime' },
+      questionRoute: 'route',
+    }, staleAnalysis);
+
+    expect(episode.answer.outcome.tag).toBe('reroute');
+    expect(episode.answer.outcome.trust.kind).toBe('grounded');
+    expect(episode.answer.outcome.value?.summaryLines.some((line) => line.includes('packages/source-analysis/src/host/runtime.ts'))).toBe(true);
+    expect(episode.answer.outcome.value?.summaryLines.some((line) => line.includes('packages/source-analysis/src/fake.ts'))).toBe(false);
+    expect(episode.answer.outcome.issues.some((issue) => issue.code === 'export-route-fallback')).toBe(false);
+  });
+
   it('shows the hosted runtime type neighborhood and next inspection steps', () => {
     const snapshots = loadSnapshotsForNavigation();
     const episode = createNavigationEpisode({

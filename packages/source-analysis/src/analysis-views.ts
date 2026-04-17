@@ -3,6 +3,7 @@ import { loadCurrentSnapshots } from './current-snapshots.js';
 import type { DepsOutput } from './deps/schema.js';
 import type { ExportsOutput } from './exports/schema.js';
 import type { ProfileSnapshotSupport } from './profile-support.js';
+import type { RepoSession } from './repo-session.js';
 import type { StructuralClaimGraphRuntime } from './structural-claim-graph.js';
 import type { ParsedTsconfigSourceFileScanResult } from './tsconfig-source-files.js';
 import type { TypeRefsOutput } from './typerefs/schema.js';
@@ -22,6 +23,7 @@ export interface AnalysisViews {
   readonly typeRefs: TypeRefsOutput;
   readonly exports: ExportsOutput;
   readonly support?: ProfileSnapshotSupport;
+  readonly repoSession?: RepoSession;
   readonly structuralRuntime?: StructuralClaimGraphRuntime;
   readonly sourceFileScan?: ParsedTsconfigSourceFileScanResult;
   readonly repoSourceFiles?: readonly string[];
@@ -33,6 +35,7 @@ export interface AnalysisViewsOptions {
   readonly typeRefs: TypeRefsOutput;
   readonly exports: ExportsOutput;
   readonly support?: ProfileSnapshotSupport;
+  readonly repoSession?: RepoSession;
   readonly structuralRuntime?: StructuralClaimGraphRuntime;
   readonly sourceFileScan?: ParsedTsconfigSourceFileScanResult;
   readonly repoSourceFiles?: readonly string[];
@@ -55,6 +58,7 @@ export function createAnalysisViews(
     typeRefs: options.typeRefs,
     exports: options.exports,
     ...(options.support ? { support: options.support } : {}),
+    ...(options.repoSession ? { repoSession: options.repoSession } : {}),
     ...(options.structuralRuntime ? { structuralRuntime: options.structuralRuntime } : {}),
     ...(options.sourceFileScan ? { sourceFileScan: options.sourceFileScan } : {}),
     ...(options.repoSourceFiles ? { repoSourceFiles: options.repoSourceFiles } : {}),

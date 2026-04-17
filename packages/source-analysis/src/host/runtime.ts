@@ -1151,6 +1151,7 @@ function ensureFreshHostedInquiryContext(
       deps: depsQuery.snapshot,
       typeRefs: typeRefsQuery.snapshot,
       exports: exportsQuery.snapshot,
+      repoSession: state.session,
       structuralRuntime: liveStructuralSurface.structuralRuntime,
       sourceFileScan: liveStructuralSurface.sourceFileScan,
       repoSourceFiles: liveStructuralSurface.repoSourceFiles,

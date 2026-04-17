@@ -51,6 +51,7 @@ export function loadCurrentLiveAnalysisViews(): AnalysisViews {
     deps,
     typeRefs,
     exports,
+    repoSession: session,
     structuralRuntime,
     sourceFileScan,
     repoSourceFiles: session.listRepoSourceFiles(),

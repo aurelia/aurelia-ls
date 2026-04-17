@@ -82,7 +82,7 @@ Next:
 
 - establish a dedicated semantic module family, likely under `src/semantic/`
 - keep extracting shared export/alias/symbol-face reasoning out of `exports/analyze.ts`
-- let navigation and related inquiry surfaces spend the shared export trace surface directly instead of only the materialized export snapshot record
+- let more inquiry surfaces and snapshot-only readers spend the shared export trace surface directly instead of falling back to historical export-record chain carriers
 - add semantic symbol and declaration surfaces that live inquiry can consume directly
 - treat repeated raw source reading by the AI as evidence that semantic inquiry is still missing a capability
 - make analyzer ceilings explicit when a question crosses from static semantic recovery into genuinely runtime-only territory
@@ -223,6 +223,7 @@ These are the points where operator judgement should usually decide direction:
 - [x] Establish the dedicated semantic analysis module family
 - [x] Extract checker-backed export symbol-face classification into `src/semantic/`
 - [x] Extract a shared semantic export surface from `exports/analyze.ts`
+- [x] Route live export navigation through the shared export trace surface
 - [ ] Push inquiry policy and ingress onto narrower ontology families
 - [ ] Make `deps` / `typerefs` / `exports` feel like projections rather than architectural peers
 - [x] Reduce the 6-directory SCC in a measurable way

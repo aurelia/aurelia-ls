@@ -80,6 +80,20 @@ export function deriveFocusHints(
     };
   }
 
+  const exportCapture = recognizers.findFirst(recognition, 'export-name');
+  if (exportCapture) {
+    reasons.push({
+      kind: 'focus-inference',
+      detail: exportCapture.detail,
+    });
+    return {
+      focusKind: 'export',
+      focusValue: exportCapture.value,
+      recognition,
+      reasons,
+    };
+  }
+
   const typeCapture = recognizers.findFirst(recognition, 'type-name');
   if (typeCapture) {
     reasons.push({

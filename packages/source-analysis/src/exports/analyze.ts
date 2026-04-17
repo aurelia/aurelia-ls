@@ -1,10 +1,11 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
-import { dirname, relative, resolve } from 'node:path';
+import { resolve } from 'node:path';
 
 import * as ts from 'typescript';
 
+import { createExportTraceRuntime } from '../export-trace-runtime-surface.js';
 import { collectSnapshotFrontierEvidence } from '../frontier-evidence.js';
 import type { ProgramReuseOptions } from '../program-reuse-options.js';
 import { RepoSession } from '../repo-session.js';
@@ -12,12 +13,6 @@ import {
   classifyExportSymbol,
   type ExportSymbolClassification,
 } from '../semantic/export-symbol-surface.js';
-import {
-  traceModuleExport,
-  type ExportModuleInfo,
-  type ExportTraceContext,
-  type ExportTraceResult,
-} from '../semantic/export-trace-surface.js';
 import { describeSnapshotProfile } from '../snapshots.js';
 import {
   buildStructuralClaimGraph,
@@ -33,33 +28,14 @@ import type {
 interface ExportsAnalysisScope {
   readonly session: RepoSession;
   readonly repoPath: string;
-  readonly repoPathNormalized: string;
   readonly runtime: StructuralClaimGraphRuntime;
   readonly workspacePackageEntrypointsByName: ReadonlyMap<string, string>;
-}
-
-interface PackageAnalysisContext extends ExportsAnalysisScope {
-  readonly program: ts.Program;
-  readonly checker: ts.TypeChecker;
-  readonly compilerOptions: ts.CompilerOptions;
-  readonly packageClaim: PackageClaim;
-  readonly moduleInfoCache: Map<string, ExportModuleInfo>;
-  readonly moduleExportsCache: Map<string, Set<string>>;
-  readonly sourceFileCache: Map<string, ts.SourceFile | null>;
 }
 
 export interface ExportsAnalysisResult {
   output: ExportsOutput;
   reportLines: string[];
   warnings: string[];
-}
-
-function toForwardSlash(value: string): string {
-  return value.replace(/\\/g, '/');
-}
-
-function toRepoRelative(scope: ExportsAnalysisScope, absPath: string): string {
-  return toForwardSlash(relative(scope.repoPath, absPath));
 }
 
 function gitHead(cwd: string): string {
@@ -83,17 +59,6 @@ function gitBlobHash(filePath: string): string {
   } catch {
     return 'unknown';
   }
-}
-
-function createEmptyModuleInfo(): ExportModuleInfo {
-  return {
-    exportedDeclarations: new Map(),
-    localExportSpecifiers: [],
-    importBindings: new Map(),
-    namedReexports: [],
-    starReexports: [],
-    namespaceReexports: [],
-  };
 }
 
 function resolveTsconfigForPackage(
@@ -144,399 +109,12 @@ function createPackageProgram(
   }
 }
 
-function getProgramSourceFile(program: ts.Program, absPath: string): ts.SourceFile | null {
-  const direct = program.getSourceFile(absPath);
-  if (direct) return direct;
-
-  const normalizedTarget = toForwardSlash(resolve(absPath)).toLowerCase();
-  for (const sourceFile of program.getSourceFiles()) {
-    if (toForwardSlash(resolve(sourceFile.fileName)).toLowerCase() === normalizedTarget) {
-      return sourceFile;
-    }
-  }
-
-  return null;
-}
-
-function getSourceFile(
-  context: PackageAnalysisContext,
-  relPath: string,
-): ts.SourceFile | null {
-  const cached = context.sourceFileCache.get(relPath);
-  if (cached !== undefined) return cached;
-
-  const absPath = resolve(context.repoPath, relPath);
-  let sourceFile = getProgramSourceFile(context.program, absPath);
-
-  if (!sourceFile && existsSync(absPath)) {
-    const scriptKind = relPath.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
-    sourceFile = ts.createSourceFile(
-      absPath,
-      readFileSync(absPath, 'utf-8'),
-      ts.ScriptTarget.Latest,
-      true,
-      scriptKind,
-    );
-  }
-
-  context.sourceFileCache.set(relPath, sourceFile ?? null);
-  return sourceFile ?? null;
-}
-
 function getModuleSymbol(
   checker: ts.TypeChecker,
   sourceFile: ts.SourceFile,
 ): ts.Symbol | null {
   const direct = (sourceFile as ts.SourceFile & { symbol?: ts.Symbol }).symbol;
   return direct ?? checker.getSymbolAtLocation(sourceFile) ?? null;
-}
-
-function lineOfNode(sourceFile: ts.SourceFile, node: ts.Node): number {
-  return sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
-}
-
-function declarationIsTypeOnly(faceKind: string): boolean {
-  return faceKind === 'interface' || faceKind === 'type';
-}
-
-function buildModuleInfoFromClaims(
-  context: PackageAnalysisContext,
-  relPath: string,
-): ExportModuleInfo | null {
-  const fileClaim = context.runtime.index.sourceFileByPath.get(relPath);
-  const declarations = context.runtime.index.declarationsByFilePath.get(relPath) ?? [];
-  const importBindings = context.runtime.index.importBindingsBySourceFilePath.get(relPath) ?? [];
-  const exportObservations = context.runtime.index.exportObservationsBySourceFilePath.get(relPath) ?? [];
-
-  if (!fileClaim && declarations.length === 0 && importBindings.length === 0 && exportObservations.length === 0) {
-    return null;
-  }
-
-  const info = createEmptyModuleInfo();
-
-  for (const declaration of declarations) {
-    if (!declaration.attributes.exported) {
-      continue;
-    }
-    const current = info.exportedDeclarations.get(declaration.attributes.name) ?? [];
-    current.push({
-      name: declaration.attributes.name,
-      line: declaration.attributes.line,
-      inherentlyTypeOnly: declarationIsTypeOnly(declaration.attributes.declarationKind),
-    });
-    info.exportedDeclarations.set(declaration.attributes.name, current);
-  }
-
-  for (const binding of importBindings) {
-    info.importBindings.set(binding.attributes.localName, {
-      localName: binding.attributes.localName,
-      importedName: binding.attributes.importedName,
-      line: binding.attributes.line,
-      typeOnly: binding.attributes.typeOnly,
-      specifier: binding.attributes.specifier,
-      targetFile: binding.attributes.targetFile,
-    });
-  }
-
-  for (const observation of exportObservations) {
-    switch (observation.attributes.observationKind) {
-      case 'local-export':
-        if (observation.attributes.exportedName && observation.attributes.originalName) {
-          info.localExportSpecifiers.push({
-            exportedName: observation.attributes.exportedName,
-            originalName: observation.attributes.originalName,
-            line: observation.attributes.line,
-            typeOnly: observation.attributes.typeOnly,
-          });
-        }
-        break;
-      case 'named-reexport':
-        if (observation.attributes.exportedName && observation.attributes.originalName) {
-          info.namedReexports.push({
-            exportedName: observation.attributes.exportedName,
-            originalName: observation.attributes.originalName,
-            line: observation.attributes.line,
-            typeOnly: observation.attributes.typeOnly,
-            specifier: observation.attributes.specifier ?? '',
-            targetFile: observation.attributes.targetFile,
-          });
-        }
-        break;
-      case 'star-reexport':
-        info.starReexports.push({
-          line: observation.attributes.line,
-          typeOnly: observation.attributes.typeOnly,
-          specifier: observation.attributes.specifier ?? '',
-          targetFile: observation.attributes.targetFile,
-        });
-        break;
-      case 'namespace-reexport':
-        if (observation.attributes.exportedName) {
-          info.namespaceReexports.push({
-            exportedName: observation.attributes.exportedName,
-            line: observation.attributes.line,
-            specifier: observation.attributes.specifier ?? '',
-            targetFile: observation.attributes.targetFile,
-          });
-        }
-        break;
-    }
-  }
-
-  return info;
-}
-
-function resolveModuleTargetFallback(
-  context: PackageAnalysisContext,
-  sourceFile: ts.SourceFile,
-  specifier: string,
-): string | null {
-  if (!specifier.startsWith('.')) {
-    const workspaceEntrypoint = context.workspacePackageEntrypointsByName.get(specifier);
-    if (workspaceEntrypoint) {
-      return workspaceEntrypoint;
-    }
-  }
-
-  const resolvedModule = ts.resolveModuleName(
-    specifier,
-    sourceFile.fileName,
-    context.compilerOptions,
-    ts.sys,
-  ).resolvedModule;
-
-  if (!resolvedModule) {
-    return null;
-  }
-
-  const resolvedAbsPath = toForwardSlash(resolve(resolvedModule.resolvedFileName));
-  if (
-    resolvedAbsPath.toLowerCase() !== context.repoPathNormalized
-    && !resolvedAbsPath.toLowerCase().startsWith(`${context.repoPathNormalized}/`)
-  ) {
-    return null;
-  }
-
-  const relPath = toRepoRelative(context, resolvedAbsPath);
-  if (relPath.startsWith('..') || context.session.isExcludedRepoRelativePath(relPath)) {
-    return null;
-  }
-
-  return relPath;
-}
-
-function getModuleInfoFromAstFallback(
-  context: PackageAnalysisContext,
-  relPath: string,
-): ExportModuleInfo | null {
-  const sourceFile = getSourceFile(context, relPath);
-  if (!sourceFile) {
-    return null;
-  }
-  const moduleSourceFile = sourceFile;
-
-  const info = createEmptyModuleInfo();
-
-  function addExportedDeclaration(name: string, node: ts.Node): void {
-    const current = info.exportedDeclarations.get(name) ?? [];
-    current.push({
-      name,
-      line: lineOfNode(moduleSourceFile, node),
-      inherentlyTypeOnly: ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node),
-    });
-    info.exportedDeclarations.set(name, current);
-  }
-
-  function hasExportModifier(node: ts.Node): boolean {
-    const modifiers = ts.canHaveModifiers(node) ? ts.getModifiers(node) : undefined;
-    return modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) ?? false;
-  }
-
-  for (const statement of moduleSourceFile.statements) {
-    if (ts.isImportDeclaration(statement) && statement.importClause && ts.isStringLiteral(statement.moduleSpecifier)) {
-      const specifier = statement.moduleSpecifier.text;
-      const targetFile = resolveModuleTargetFallback(context, moduleSourceFile, specifier);
-      const clause = statement.importClause;
-      const baseTypeOnly = clause.isTypeOnly;
-      const importLine = lineOfNode(moduleSourceFile, statement);
-
-      if (clause.name) {
-        info.importBindings.set(clause.name.text, {
-          localName: clause.name.text,
-          importedName: 'default',
-          line: importLine,
-          typeOnly: baseTypeOnly,
-          specifier,
-          targetFile,
-        });
-      }
-
-      if (clause.namedBindings) {
-        if (ts.isNamedImports(clause.namedBindings)) {
-          for (const element of clause.namedBindings.elements) {
-            info.importBindings.set(element.name.text, {
-              localName: element.name.text,
-              importedName: (element.propertyName ?? element.name).text,
-              line: lineOfNode(moduleSourceFile, element),
-              typeOnly: baseTypeOnly || element.isTypeOnly,
-              specifier,
-              targetFile,
-            });
-          }
-        } else if (ts.isNamespaceImport(clause.namedBindings)) {
-          info.importBindings.set(clause.namedBindings.name.text, {
-            localName: clause.namedBindings.name.text,
-            importedName: '*',
-            line: lineOfNode(moduleSourceFile, clause.namedBindings),
-            typeOnly: baseTypeOnly,
-            specifier,
-            targetFile,
-          });
-        }
-      }
-
-      continue;
-    }
-
-    if (ts.isFunctionDeclaration(statement) && statement.name && hasExportModifier(statement)) {
-      addExportedDeclaration(statement.name.text, statement);
-      continue;
-    }
-    if (ts.isClassDeclaration(statement) && statement.name && hasExportModifier(statement)) {
-      addExportedDeclaration(statement.name.text, statement);
-      continue;
-    }
-    if (ts.isInterfaceDeclaration(statement) && hasExportModifier(statement)) {
-      addExportedDeclaration(statement.name.text, statement);
-      continue;
-    }
-    if (ts.isTypeAliasDeclaration(statement) && hasExportModifier(statement)) {
-      addExportedDeclaration(statement.name.text, statement);
-      continue;
-    }
-    if (ts.isEnumDeclaration(statement) && hasExportModifier(statement)) {
-      addExportedDeclaration(statement.name.text, statement);
-      continue;
-    }
-    if (ts.isModuleDeclaration(statement) && hasExportModifier(statement) && ts.isIdentifier(statement.name)) {
-      addExportedDeclaration(statement.name.text, statement);
-      continue;
-    }
-    if (ts.isVariableStatement(statement) && hasExportModifier(statement)) {
-      for (const declaration of statement.declarationList.declarations) {
-        if (ts.isIdentifier(declaration.name)) {
-          addExportedDeclaration(declaration.name.text, declaration);
-        }
-      }
-      continue;
-    }
-    if (!ts.isExportDeclaration(statement)) {
-      continue;
-    }
-
-    const specifier = statement.moduleSpecifier && ts.isStringLiteral(statement.moduleSpecifier)
-      ? statement.moduleSpecifier.text
-      : undefined;
-    const targetFile = specifier ? resolveModuleTargetFallback(context, sourceFile, specifier) : null;
-    const declarationTypeOnly = statement.isTypeOnly;
-
-    if (statement.exportClause && ts.isNamedExports(statement.exportClause)) {
-      for (const element of statement.exportClause.elements) {
-        const record = {
-          exportedName: element.name.text,
-          originalName: (element.propertyName ?? element.name).text,
-          line: lineOfNode(moduleSourceFile, element),
-          typeOnly: declarationTypeOnly || element.isTypeOnly,
-        };
-
-        if (specifier) {
-          info.namedReexports.push({
-            ...record,
-            specifier,
-            targetFile,
-          });
-        } else {
-          info.localExportSpecifiers.push(record);
-        }
-      }
-      continue;
-    }
-
-    if (statement.exportClause && ts.isNamespaceExport(statement.exportClause) && specifier) {
-      info.namespaceReexports.push({
-        exportedName: statement.exportClause.name.text,
-        line: lineOfNode(moduleSourceFile, statement.exportClause),
-        specifier,
-        targetFile,
-      });
-      continue;
-    }
-
-    if (!statement.exportClause && specifier) {
-      info.starReexports.push({
-        line: lineOfNode(moduleSourceFile, statement),
-        typeOnly: declarationTypeOnly,
-        specifier,
-        targetFile,
-      });
-    }
-  }
-
-  return info;
-}
-
-function getModuleInfo(
-  context: PackageAnalysisContext,
-  relPath: string,
-): ExportModuleInfo {
-  const cached = context.moduleInfoCache.get(relPath);
-  if (cached) return cached;
-
-  const info = buildModuleInfoFromClaims(context, relPath)
-    ?? getModuleInfoFromAstFallback(context, relPath)
-    ?? createEmptyModuleInfo();
-  context.moduleInfoCache.set(relPath, info);
-  return info;
-}
-
-function getExportedNamesForModule(
-  context: PackageAnalysisContext,
-  relPath: string,
-): Set<string> {
-  const cached = context.moduleExportsCache.get(relPath);
-  if (cached) return cached;
-
-  const names = new Set<string>();
-  const sourceFile = getSourceFile(context, relPath);
-  if (sourceFile) {
-    const moduleSymbol = getModuleSymbol(context.checker, sourceFile);
-    if (moduleSymbol) {
-      for (const exportSymbol of context.checker.getExportsOfModule(moduleSymbol)) {
-        names.add(exportSymbol.getName());
-      }
-    }
-  }
-
-  if (names.size === 0) {
-    const moduleInfo = getModuleInfo(context, relPath);
-    for (const name of moduleInfo.exportedDeclarations.keys()) names.add(name);
-    for (const item of moduleInfo.localExportSpecifiers) names.add(item.exportedName);
-    for (const item of moduleInfo.namedReexports) names.add(item.exportedName);
-    for (const item of moduleInfo.namespaceReexports) names.add(item.exportedName);
-  }
-
-  context.moduleExportsCache.set(relPath, names);
-  return names;
-}
-
-function createExportTraceContext(
-  context: PackageAnalysisContext,
-): ExportTraceContext {
-  return {
-    getModuleInfo: (relPath) => getModuleInfo(context, relPath),
-    getSourceFile: (relPath) => getSourceFile(context, relPath),
-    getExportedNamesForModule: (relPath) => getExportedNamesForModule(context, relPath),
-  };
 }
 
 function computePackageRevision(
@@ -596,22 +174,20 @@ function analyzePackage(
   records: PackageExportRecord[];
 } {
   const program = createPackageProgram(scope, packageClaim, options);
-  const context: PackageAnalysisContext = {
-    ...scope,
+  const checker = program.getTypeChecker();
+  const exportTraceRuntime = createExportTraceRuntime({
+    repoPath: scope.repoPath,
+    repoSession: scope.session,
+    structuralRuntime: scope.runtime,
     program,
-    checker: program.getTypeChecker(),
+    checker,
     compilerOptions: program.getCompilerOptions(),
-    packageClaim,
-    moduleInfoCache: new Map(),
-    moduleExportsCache: new Map(),
-    sourceFileCache: new Map(),
-  };
-  const exportTraceContext = createExportTraceContext(context);
+    workspacePackageEntrypointsByName: scope.workspacePackageEntrypointsByName,
+  });
 
-  const entrypointAbs = resolve(scope.repoPath, packageClaim.attributes.analysisEntrypoint);
-  const entrypointSourceFile = getProgramSourceFile(program, entrypointAbs);
+  const entrypointSourceFile = exportTraceRuntime.getSourceFile(packageClaim.attributes.analysisEntrypoint);
   const entrypointModuleSymbol = entrypointSourceFile
-    ? getModuleSymbol(context.checker, entrypointSourceFile)
+    ? getModuleSymbol(checker, entrypointSourceFile)
     : null;
 
   if (!entrypointSourceFile || !entrypointModuleSymbol) {
@@ -628,19 +204,18 @@ function analyzePackage(
   if (packageClaim.attributes.sourceEntrypoint) packageFiles.add(packageClaim.attributes.sourceEntrypoint);
   if (packageClaim.attributes.publicTypesEntrypoint) packageFiles.add(packageClaim.attributes.publicTypesEntrypoint);
 
-  const exportSymbols = context.checker
+  const exportSymbols = checker
     .getExportsOfModule(entrypointModuleSymbol)
     .filter((symbol) => symbol.getName() !== '__esModule')
     .sort((left, right) => left.getName().localeCompare(right.getName()));
 
   const records: PackageExportRecord[] = exportSymbols.map((exportSymbol) => {
     const exportedName = exportSymbol.getName();
-    const trace: ExportTraceResult | null = traceModuleExport(
-      exportTraceContext,
+    const trace = exportTraceRuntime.traceExport(
       packageClaim.attributes.analysisEntrypoint,
       exportedName,
     );
-    const classification: ExportSymbolClassification = classifyExportSymbol(scope, context.checker, exportSymbol);
+    const classification: ExportSymbolClassification = classifyExportSymbol(scope, checker, exportSymbol);
 
     if (trace) {
       for (const step of trace.chain) {
@@ -737,7 +312,6 @@ export function generateExportsAnalysisFromRuntime(
   const scope: ExportsAnalysisScope = {
     session: nextSession,
     repoPath: nextSession.repoPath,
-    repoPathNormalized: toForwardSlash(nextSession.repoPath).toLowerCase(),
     runtime,
     workspacePackageEntrypointsByName,
   };

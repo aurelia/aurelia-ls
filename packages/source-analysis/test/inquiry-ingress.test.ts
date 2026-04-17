@@ -46,6 +46,26 @@ describe('InquiryIngress', () => {
     expect(answer.outcome.value?.primaryStep?.command).toBe('query.deps.summary');
   });
 
+  it('plans export-oriented workspace navigation when the question names a public export', () => {
+    const ingress = createInquiryIngress();
+
+    const answer = ingress.createPlanAnswer({
+      question: 'Show the public export route for createSnapshotHostRuntime.',
+      repoPath: 'C:/projects/aurelia-ls2',
+    });
+
+    expect(answer.outcome.tag).toBe('hit');
+    expect(answer.outcome.value?.status).toBe('ready');
+    expect(answer.outcome.value?.inquiry?.id).toBe('workspace-orientation');
+    expect(answer.outcome.value?.primaryStep?.command).toBe('query.navigate');
+    expect(answer.outcome.value?.primaryStep?.args).toEqual({
+      sessionId: '$session.open',
+      focusKind: 'export',
+      focusValue: 'createSnapshotHostRuntime',
+      questionRoute: 'join',
+    });
+  });
+
   it('plans package audit for source-area cycle seam questions without asking for another narrowing move', () => {
     const ingress = createInquiryIngress();
 

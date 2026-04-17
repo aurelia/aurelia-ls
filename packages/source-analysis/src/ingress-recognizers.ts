@@ -8,6 +8,7 @@ import { createNormalizedText, type NormalizedText } from './ingress-normalizati
 export const INGRESS_CAPTURE_KINDS = [
   'package-name',
   'file-path',
+  'export-name',
   'type-name',
   'repo-path',
 ] as const;
@@ -18,6 +19,7 @@ export type IngressCaptureKind =
 export const INGRESS_RECOGNIZABLE_FOCUS_KINDS = [
   'package',
   'file',
+  'export',
   'type',
   'repo',
 ] as const;
@@ -113,6 +115,12 @@ export function createDefaultIngressRecognizerRegistry(): IngressRecognizerRegis
       describe: (value) => `Recognized file path "${value}" from the question.`,
     },
     {
+      id: 'export-name',
+      kind: 'export-name',
+      recognize: extractExportNames,
+      describe: (value) => `Recognized export name "${value}" from the question.`,
+    },
+    {
       id: 'type-name',
       kind: 'type-name',
       recognize: extractTypeNames,
@@ -146,6 +154,7 @@ export function captureKindsForFocusKind(
   switch (focusKind) {
     case 'package': return ['package-name'];
     case 'file': return ['file-path'];
+    case 'export': return ['export-name'];
     case 'type': return ['type-name'];
     case 'repo': return ['repo-path'];
     default: return assertNever(focusKind);
@@ -194,6 +203,31 @@ export function extractTypeNames(question: string): readonly string[] {
   return pascalMatches.length === 1 ? pascalMatches : [];
 }
 
+export function extractExportNames(question: string): readonly string[] {
+  const direct = [
+    ...captureGroupMatches(question, /\b(?:public\s+)?export\s+route\s+for\s+`?([A-Za-z_][A-Za-z0-9_]*)`?/gi),
+    ...captureGroupMatches(question, /\b(?:public\s+)?export\s+for\s+`?([A-Za-z_][A-Za-z0-9_]*)`?/gi),
+    ...captureGroupMatches(question, /\bexport\s+`?([A-Za-z_][A-Za-z0-9_]*)`?/gi),
+  ].map((match) => trimTrailingFocusPunctuation(match));
+  if (direct.length > 0) {
+    return uniqueStrings(direct);
+  }
+
+  if (!/\b(?:export|exports|public\s+api|public\s+route|public\s+surface)\b/i.test(question)) {
+    return [];
+  }
+
+  const quoted = captureGroupMatches(question, /`([A-Za-z_][A-Za-z0-9_]*)`/g)
+    .map((match) => trimTrailingFocusPunctuation(match));
+  if (quoted.length > 0) {
+    return uniqueStrings(quoted);
+  }
+
+  const camelMatches = extractStandaloneIdentifierMatches(question)
+    .filter((match) => /[A-Z]/.test(match.slice(1)));
+  return camelMatches.length === 1 ? camelMatches : [];
+}
+
 export function extractRepoPaths(question: string): readonly string[] {
   return uniqueMatches(question, /[A-Za-z]:[\\/][A-Za-z0-9_.\\/ -]+/g)
     .map((match) => sanitizePathLikeFocusValue(match));
@@ -220,8 +254,15 @@ function uniqueStrings(values: readonly string[]): readonly string[] {
 function extractStandalonePascalMatches(
   question: string,
 ): readonly string[] {
+  return extractStandaloneIdentifierMatches(question)
+    .filter((value) => /^[A-Z]/.test(value));
+}
+
+function extractStandaloneIdentifierMatches(
+  question: string,
+): readonly string[] {
   const matches: string[] = [];
-  const pattern = /\b[A-Z][A-Za-z0-9_]*\b/g;
+  const pattern = /\b[A-Za-z_][A-Za-z0-9_]*\b/g;
   for (const match of question.matchAll(pattern)) {
     const value = match[0] ?? '';
     const index = match.index ?? -1;
