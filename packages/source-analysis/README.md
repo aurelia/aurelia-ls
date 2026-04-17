@@ -8,7 +8,7 @@ Two things at once:
 That means it is both:
 
 - an internal self-development instrument that helps the package understand and improve its own architecture
-- an external engineering interface that helps humans and AI work on Aurelia codebases with better structural and semantic awareness
+- an external engineering interface that exposes structured and semantic program knowledge to AI while giving operators more clarity, confidence, and reviewability over the resulting work
 
 # What problem should it solve?
 
@@ -17,7 +17,7 @@ It is meant to solve a problem that is very specific to exactly today's zeitgeis
 More specifically, it should:
 
 - compress large TypeScript codebases into queryable, provenance-bearing structure
-- make AI-generated changes more understandable, reviewable, and steerable for human operators
+- make AI-generated changes more understandable, reviewable, and steerable for operators
 - provide a self-healing intermediate interface that can guide inquiry, explain misses, and suggest continuations
 - carry design intent and operator direction forward instead of forcing every session to reconstruct them from scratch
 
@@ -29,6 +29,8 @@ These are short guidance notes, not a frozen design:
 
 - [docs/strategy.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/strategy.md)
 - [docs/architecture-layers.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/architecture-layers.md)
+- [docs/roadmap.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/roadmap.md)
+- [docs/semantic-analysis.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/semantic-analysis.md)
 - [docs/provenance-and-steering.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/provenance-and-steering.md)
 - [docs/analyzability.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/analyzability.md)
 - [docs/self-pressure-test.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/self-pressure-test.md)
@@ -38,11 +40,11 @@ These are short guidance notes, not a frozen design:
 
 Some important questions are still intentionally open:
 
-- What is the true center of gravity of the system: snapshot producer, live inquiry engine, language-service substrate, or a layered combination of all three?
-- What should count as canonical truth for which concern: live TypeScript sessions, the claim graph, an internal persistent store, or materialized JSON views?
+- What is the true center of gravity of the system: live inquiry engine, language-service substrate, derived projection/export producer, or a layered combination of all three?
+- What should count as canonical truth for which concern: live TypeScript sessions, the claim graph, an internal persistent store, or derived projections?
 - How should analyzability be represented operationally: who classifies it, from what evidence, and how are blockers and open fronts carried forward?
 - Where is the boundary between framework-agnostic substrate and Aurelia-specific semantic adapters?
 - How should the system balance broad cheap structural recovery against deeper semantic interpretation?
 - How should it balance stable public contracts against a rapidly evolving internal model while the architecture is still taking shape?
-- How should it preserve human control and operator taste without reducing everything to undocumented heuristics?
+- How should it preserve operator control and taste without reducing everything to undocumented heuristics?
 

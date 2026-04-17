@@ -2,7 +2,7 @@
 
 This tool is being built by an AI agent under operator steering.
 
-That matters because the API it exposes is mainly meant to be used by AI. The human operator governs the direction, but the day-to-day pressure test is: does this interface actually help the AI do its job well?
+That matters because the API it exposes is meant to be used by AI. The operator governs the direction, but the day-to-day pressure test is: does this interface help the AI understand the codebase well enough to do better engineering work on the operator's behalf?
 
 That means tool-use friction is not just annoyance. It is design feedback.
 
@@ -18,6 +18,6 @@ Right now there is no write surface yet, so it is normal that code changes still
 
 So the standing question is:
 
-Is this API helping the AI engineer work with clarity, confidence, and good reviewability?
+Is this API helping the AI build enough understanding and context to produce work with clarity, confidence, and good reviewability for the operator?
 
 If the answer is no, that is not just usage friction. It is a signal that the product still has a missing capability, a missing explanation, or a poor abstraction boundary.

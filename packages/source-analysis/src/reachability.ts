@@ -8,6 +8,7 @@ import {
   type AnalysisProfile,
 } from './analysis-profile.js';
 import type { AnalysisViews } from './analysis-views.js';
+import { loadDependencySurface } from './dependency-surface.js';
 import type { PackageExportsSummary } from './exports/schema.js';
 import type { TrustKind } from './outcome-algebra.js';
 import {
@@ -136,6 +137,7 @@ export function createPackageReachability(
   if (!packageSurface) {
     throw new Error(describeMissingStructuralPackageSurface());
   }
+  const dependencySurface = loadDependencySurface(analysis);
   const profile = resolveAnalysisProfile({ repoPath: analysis.root });
   const packageFiles = new Set<string>(packageSurface.files);
   const routeEdges = new Map<string, PackageRouteEdge>();
@@ -148,7 +150,7 @@ export function createPackageReachability(
   // through explicit blindspot evaluators rather than by promoting them back
   // into the canonical package file surface.
 
-  for (const edge of analysis.deps.edges) {
+  for (const edge of dependencySurface.edges) {
     const sourcePath = canonicalizePackageFilePath(edge.source);
     const targetPath = canonicalizePackageFilePath(edge.target);
     const sourceInPackage = packageFiles.has(sourcePath);
@@ -163,7 +165,7 @@ export function createPackageReachability(
           sourcePath,
           targetPath,
           'grounded',
-          'Static package-local import captured in the deps analysis view.',
+          'Static package-local import captured in the shared dependency surface.',
           `${edge.specifier} @ line ${edge.line}`,
         ),
       );

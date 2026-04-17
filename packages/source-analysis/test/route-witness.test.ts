@@ -38,4 +38,22 @@ describe('Source-analysis route witnesses', () => {
       ref.value === 'packages/source-analysis/src/host/runtime.ts',
     )).toBe(true);
   });
+
+  it('keeps route witnesses grounded in the structural dependency surface when deps snapshot edges drift', () => {
+    const analysis = loadCurrentLiveAnalysisViews();
+    const answer = createRouteWitnessAnswer({
+      focusRef: { kind: 'type', value: 'SnapshotHostRuntime' },
+      questionRoute: 'route',
+    }, {
+      ...analysis,
+      deps: {
+        ...analysis.deps,
+        edges: [],
+      },
+    });
+
+    expect(answer.outcome.tag).toBe('hit');
+    expect(answer.outcome.trust.kind).toBe('grounded');
+    expect(answer.outcome.value?.witnesses[0]?.files).toContain('packages/source-analysis/src/host/runtime.ts');
+  });
 });

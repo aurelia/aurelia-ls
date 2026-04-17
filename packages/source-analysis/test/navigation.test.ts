@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { loadCurrentSnapshots } from '../src/current-snapshots.js';
 import { createNavigationEpisode } from '../src/navigation.js';
+import { loadCurrentLiveAnalysisViews } from './live-analysis-views.js';
 
 function loadSnapshotsForNavigation() {
   try {
@@ -56,5 +57,23 @@ describe('Source-analysis live navigation', () => {
     expect(episode.answer.outcome.value?.relatedRefs.some((ref) => ref.value === 'packages/source-analysis/src/host/runtime.ts')).toBe(true);
     expect(episode.answer.outcome.value?.relatedRefs.some((ref) => ref.value === 'HostCommandEnvelope')).toBe(true);
     expect(episode.answer.outcome.continuations.some((step) => step.targetFocusRef === 'packages/source-analysis/src/host/runtime.ts')).toBe(true);
+  });
+
+  it('uses the live structural dependency surface for file neighborhoods when deps snapshot edges are stale', () => {
+    const analysis = loadCurrentLiveAnalysisViews();
+    const episode = createNavigationEpisode({
+      focusRef: { kind: 'file', value: 'packages/source-analysis/src/host/runtime.ts' },
+      questionRoute: 'join',
+    }, {
+      ...analysis,
+      deps: {
+        ...analysis.deps,
+        edges: [],
+      },
+    });
+
+    expect(episode.answer.outcome.tag).toBe('hit');
+    expect(episode.answer.outcome.value?.summaryLines[0]).toContain('packages/source-analysis/src/host/runtime.ts has ');
+    expect(episode.answer.outcome.value?.summaryLines[0]).not.toContain('has 0 outbound imports');
   });
 });

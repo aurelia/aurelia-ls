@@ -945,9 +945,9 @@ function analyzePackage(
   summary: PackageExportsSummary;
   records: PackageExportRecord[];
 } {
-  // TODO: Replace this package-local checker walk with shared semantic export,
-  // alias, and symbol-face claims once the semantic layer is no longer trapped
-  // inside the exports compatibility surface.
+  // TODO: Replace this package-local checker walk with shared semantic-kernel
+  // export, alias, and symbol-face claims so the live architecture no longer
+  // depends on semantic reasoning trapped inside the exports projection.
   const program = createPackageProgram(scope, packageClaim, options);
   const context: PackageAnalysisContext = {
     ...scope,

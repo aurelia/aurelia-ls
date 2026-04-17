@@ -8,6 +8,9 @@
 import { execFileSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 
+import {
+  materializeDependencySurfaceFromRuntime,
+} from '../dependency-surface.js';
 import type { ProgramReuseOptions } from '../program-reuse-options.js';
 import { collectSnapshotFrontierEvidence } from '../frontier-evidence.js';
 import { RepoSession } from '../repo-session.js';
@@ -16,31 +19,13 @@ import {
   buildStructuralClaimGraph,
   type StructuralClaimGraphRuntime,
 } from '../structural-claim-graph.js';
-import type { DepsOutput } from './schema.js';
+import type {
+  DepsOutput,
+  ExternalImport,
+  OutputEdge,
+  UnresolvedImport,
+} from './schema.js';
 import type { ParsedTsconfigSourceFileScanResult } from '../tsconfig-source-files.js';
-
-interface InternalEdge {
-  source: string;
-  target: string;
-  specifier: string;
-  bindings: string[];
-  type_only: boolean;
-  via_barrel?: true;
-  dts_target?: true;
-  line: number;
-}
-
-interface ExternalImport {
-  source: string;
-  package: string;
-  specifier: string;
-}
-
-interface UnresolvedImport {
-  source: string;
-  specifier: string;
-  line: number;
-}
 
 interface DirectoryCrossing {
   from_dir: string;
@@ -56,17 +41,6 @@ interface DirectoryProfile {
   inbound_edges: number;
   outbound_edges: number;
   external_packages: string[];
-}
-
-interface OutputEdge {
-  source: string;
-  target: string;
-  specifier: string;
-  bindings: string[];
-  type_only: boolean;
-  line: number;
-  via_barrel?: true;
-  dts_target?: true;
 }
 
 interface CycleGroup {
@@ -90,7 +64,7 @@ interface CouplingMatrix {
 
 interface MaterializedDepsClaims {
   analyzed: Set<string>;
-  allEdges: InternalEdge[];
+  allEdges: OutputEdge[];
   allExternals: ExternalImport[];
   allUnresolved: UnresolvedImport[];
   usedTsconfigs: string[];
@@ -119,74 +93,31 @@ function fileDirParts(filePath: string): string[] {
 function materializeDepsClaims(
   runtime: StructuralClaimGraphRuntime,
 ): MaterializedDepsClaims {
-  const analyzed = new Set(
-    runtime.index.sourceFiles.map((claim) => claim.attributes.filePath),
-  );
-  const allEdges: InternalEdge[] = [];
-  const allExternals: ExternalImport[] = [];
-  const allUnresolved: UnresolvedImport[] = [];
+  const surface = materializeDependencySurfaceFromRuntime(runtime);
   const usedTsconfigs = runtime.index.tsconfigs
     .filter((claim) => claim.attributes.sourceFileCount > 0)
     .map((claim) => claim.attributes.tsconfigPath)
     .sort();
   const barrelFiles = new Set<string>();
 
-  for (const importClaim of runtime.index.imports) {
-    const resolution = runtime.index.resolutionByImportId.get(importClaim.id);
-    if (!resolution) {
-      continue;
-    }
-
-    if (resolution.attributes.status === 'internal' && resolution.attributes.targetFile) {
-      const edge: InternalEdge = {
-        source: importClaim.attributes.sourceFile,
-        target: resolution.attributes.targetFile,
-        specifier: importClaim.attributes.specifier,
-        bindings: [...importClaim.attributes.bindings],
-        type_only: importClaim.attributes.typeOnly,
-        line: importClaim.attributes.line,
-      };
-      if (resolution.attributes.viaBarrel) {
-        edge.via_barrel = true;
-        barrelFiles.add(resolution.attributes.targetFile);
-      }
-      if (resolution.attributes.dtsTarget) {
-        edge.dts_target = true;
-      }
-      allEdges.push(edge);
-      continue;
-    }
-
-    if (resolution.attributes.status === 'external' && resolution.attributes.externalPackage) {
-      allExternals.push({
-        source: importClaim.attributes.sourceFile,
-        package: resolution.attributes.externalPackage,
-        specifier: importClaim.attributes.specifier,
-      });
-      continue;
-    }
-
-    if (resolution.attributes.status === 'unresolved') {
-      allUnresolved.push({
-        source: importClaim.attributes.sourceFile,
-        specifier: importClaim.attributes.specifier,
-        line: importClaim.attributes.line,
-      });
+  for (const edge of surface.edges) {
+    if (edge.via_barrel) {
+      barrelFiles.add(edge.target);
     }
   }
 
   return {
-    analyzed,
-    allEdges,
-    allExternals,
-    allUnresolved,
+    analyzed: new Set(surface.analyzedFiles),
+    allEdges: [...surface.edges],
+    allExternals: [...surface.externalImports],
+    allUnresolved: [...surface.unresolvedImports],
     usedTsconfigs,
     barrelFiles,
   };
 }
 
 function computeDirectoryCrossings(
-  allEdges: readonly InternalEdge[],
+  allEdges: readonly OutputEdge[],
 ): DirectoryCrossing[] {
   const map = new Map<string, { count: number; type_only_count: number; edges: string[] }>();
 
@@ -248,7 +179,7 @@ function computeDirectoryCrossings(
 }
 
 function computeDirectoryProfiles(
-  allEdges: readonly InternalEdge[],
+  allEdges: readonly OutputEdge[],
   allExternals: readonly ExternalImport[],
   analyzed: ReadonlySet<string>,
 ): DirectoryProfile[] {
@@ -298,7 +229,7 @@ function computeDirectoryProfiles(
 }
 
 function computeOrphans(
-  allEdges: readonly InternalEdge[],
+  allEdges: readonly OutputEdge[],
   analyzed: ReadonlySet<string>,
 ): { no_inbound: string[]; no_outbound: string[] } {
   const hasInbound = new Set<string>();
@@ -327,7 +258,7 @@ function computeOrphans(
 }
 
 function computeCycles(
-  allEdges: readonly InternalEdge[],
+  allEdges: readonly OutputEdge[],
 ): CycleGroup[] {
   const directoryEdges = new Map<string, Map<string, number>>();
   for (const edge of allEdges) {
@@ -428,7 +359,7 @@ function computeCycles(
 
 function computeCouplingMatrices(
   analyzed: ReadonlySet<string>,
-  allEdges: readonly InternalEdge[],
+  allEdges: readonly OutputEdge[],
 ): CouplingMatrix[] {
   const packageSubsystems = new Map<string, Set<string>>();
 

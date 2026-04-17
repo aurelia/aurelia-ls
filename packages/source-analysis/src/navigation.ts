@@ -3,6 +3,7 @@ import {
   loadCurrentAnalysisViews,
   type AnalysisViews,
 } from './analysis-views.js';
+import { loadDependencySurface } from './dependency-surface.js';
 import {
   createAnalysisProvenanceEntry,
   defaultWorldFrameForAnalysis,
@@ -909,6 +910,7 @@ function buildFileEpisode(
   const depsSnapshotId = builder.addSnapshotNode('deps');
   const typerefsSnapshotId = builder.addSnapshotNode('typerefs');
   const exportsSnapshotId = builder.addSnapshotNode('exports');
+  const dependencySurface = loadDependencySurface(builder.snapshots);
   const fileNodeId = builder.addFileNode(filePath);
   const pkg = resolveStructuralOwningPackage(builder.snapshots, filePath) ?? undefined;
   const packageNodeId = pkg ? builder.addPackageNode(pkg) : undefined;
@@ -916,8 +918,8 @@ function buildFileEpisode(
     builder.addEdge({ id: `contains:${packageNodeId}->${fileNodeId}`, kind: 'contains', from: packageNodeId, to: fileNodeId });
   }
 
-  const outboundEdges = builder.snapshots.deps.edges.filter((edge) => edge.source === filePath);
-  const inboundEdges = builder.snapshots.deps.edges.filter((edge) => edge.target === filePath);
+  const outboundEdges = dependencySurface.edgesBySourceFile.get(filePath) ?? [];
+  const inboundEdges = dependencySurface.edgesByTargetFile.get(filePath) ?? [];
   const declarations = builder.snapshots.typeRefs.declarations.filter((decl) => decl.file === filePath);
   const exportRecords = builder.snapshots.exports.exports.filter((record) => record.declaration_file === filePath);
 
@@ -966,7 +968,7 @@ function buildFileEpisode(
   const structuralPathContext = fileInspection.structuralPathContext;
 
   const summaryLines = [
-    `${filePath} has ${outboundEdges.length} outbound imports and ${inboundEdges.length} inbound imports in the dependency graph.`,
+    `${filePath} has ${outboundEdges.length} outbound imports and ${inboundEdges.length} inbound imports in the dependency surface.`,
     declarations.length > 0
       ? `It declares ${declarations.length} types: ${declarations.slice(0, 4).map((decl) => decl.name).join(', ')}.`
       : 'It does not declare any tracked project types.',

@@ -5,7 +5,7 @@
 - help build itself
 - help Aurelia developers build and maintain Aurelia apps and plugins
 
-The near-term job is to make large TypeScript codebases easier for AI and humans to work with by turning them into something queryable, explainable, and reviewable.
+The near-term job is to make large TypeScript codebases easier for AI to work with at scale by turning them into something queryable, explainable, and steerable, while making the resulting engineering work more reviewable for operators.
 
 The package needs a clean separation between a framework-agnostic core and a framework-aware semantic layer on top. Aurelia-specific meaning should arrive fairly soon, but it should land on better shared primitives rather than getting mixed into the base substrate too early.
 

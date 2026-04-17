@@ -5,11 +5,14 @@ The package is moving toward a layered shape:
 1. Structural substrate
    Cheap facts about files, packages, imports, exports, declarations, and relations.
 
-2. Evaluators
-   Logic that spends those facts to classify paths, explain blockers, and answer deeper semantic questions.
+2. Semantic analysis kernel
+   Checker-backed semantic claims and evaluators over symbols, exports, aliases, declarations, references, control flow, data flow, and bounded interpretation.
 
-3. Materialized views
-   Snapshots and compatibility surfaces.
+3. Evaluators
+   Logic that spends structural and semantic claims to classify paths, explain blockers, and answer deeper questions.
+
+4. Derived projections
+   Optional materializations, caches, or export artifacts derived from the live layers.
 
    `deps`, `typerefs`, and `exports` started as three ad-hoc tools that solved very specific problems:
 
@@ -19,10 +22,10 @@ The package is moving toward a layered shape:
 
    They proved the value of the approach, but they are not the intended long-term design. What they accomplish should be absorbed into better shared primitives and higher-order inquiry surfaces.
 
-4. Inquiry surface
+5. Inquiry surface
    The API that helps a caller discover what can be asked, ask it, recover from misses, and continue.
 
-5. Semantic adapters
+6. Semantic adapters
    Aurelia-specific meaning on top of the shared substrate, then later a richer program/runtime/editing layer.
 
-Snapshots should remain a stable contract. They only became the main storage shape because there was not yet a durable hosted program behind them. They do not have to remain the main runtime truth for live inquiry.
+The intended center of gravity is the live structural and semantic runtime. Any projections or export artifacts should be derived from that live system rather than defining it.
