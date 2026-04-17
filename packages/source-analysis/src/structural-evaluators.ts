@@ -50,6 +50,9 @@ export function evaluateFilePathStructuralClaims(
   runtime: StructuralClaimGraphRuntime,
   filePath: string,
 ): StructuralPathEvaluation {
+  // TODO: Extend this into a real path evaluator with checker-backed blocker
+  // reasons such as typed residuals, alias/export opacity, and runtime-only
+  // registration/value flow once the shared semantic claim layer lands.
   const sourceFileClaim = runtime.index.sourceFileByPath.get(filePath);
   if (!sourceFileClaim) {
     return {
@@ -118,4 +121,3 @@ export function evaluateFilePathStructuralClaims(
     blockerReasons: [],
   };
 }
-

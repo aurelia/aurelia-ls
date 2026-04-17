@@ -536,7 +536,7 @@ function createInquiryMatchRules(
       'command',
       'question',
       definition.primaryCommands,
-      'Question lines up with a declared kernel command.',
+      'Question lines up with a declared host command.',
       'supporting',
     ),
     createTokenRule(

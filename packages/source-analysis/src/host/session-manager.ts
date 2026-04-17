@@ -2,16 +2,23 @@ import {
   createRepoSession,
   type RepoSession,
 } from '../repo-session.js';
+import type { StructuralClaimGraphRuntime } from '../structural-claim-graph.js';
 import {
   SNAPSHOT_KINDS,
   type SnapshotKind,
 } from '../snapshots.js';
+import type { ParsedTsconfigSourceFileScanResult } from '../tsconfig-source-files.js';
 import { resolveSnapshotTarget } from '../snapshot-config.js';
 import type {
   SessionOpenArgs,
   SessionStatusEntry,
   SnapshotOutputMap,
 } from './types.js';
+
+export interface HostLiveAnalysisState {
+  structuralRuntime?: StructuralClaimGraphRuntime;
+  sourceFileScan?: ParsedTsconfigSourceFileScanResult;
+}
 
 export interface HostSessionState {
   readonly sessionId: string;
@@ -24,6 +31,7 @@ export interface HostSessionState {
   readonly snapshots: Partial<SnapshotOutputMap>;
   readonly warningsByKind: Partial<Record<SnapshotKind, readonly string[]>>;
   readonly lastRefreshAtByKind: Partial<Record<SnapshotKind, string>>;
+  readonly liveAnalysis: HostLiveAnalysisState;
   readonly dirtyKinds: Set<SnapshotKind>;
   readonly dirtyFiles: Set<string>;
   invalidationKind: 'none' | 'files' | 'project';
@@ -63,6 +71,7 @@ export class HostSessionManager {
       snapshots: {},
       warningsByKind: {},
       lastRefreshAtByKind: {},
+      liveAnalysis: {},
       dirtyKinds: new Set(SNAPSHOT_KINDS),
       dirtyFiles: new Set(),
       invalidationKind: 'project',
@@ -108,7 +117,7 @@ export class HostSessionManager {
     return this.list().find((state) =>
       state.repoPath === selection.repoPath
       && state.target === selection.target
-      && (state.profilePath ?? null) === (args.profilePath ?? null),
+      && (state.profilePath ?? null) === (selection.profilePath ?? null),
     );
   }
 }

@@ -251,7 +251,7 @@ function createHitRouteWitnessAnswer(
     }
     : {
       kind: 'qualified',
-      summary: 'Route witnesses exist, but the best path still depends on qualified recovery rather than only grounded snapshot edges.',
+      summary: 'Route witnesses exist, but the best path still depends on qualified recovery rather than only grounded analysis edges.',
     };
 
   const summaryLines = [
@@ -291,7 +291,9 @@ function createHitRouteWitnessAnswer(
       },
       {
         kind: 'freshness',
-        summary: `The route witnesses are grounded in snapshots generated at ${snapshots.deps.generated_at}, ${snapshots.typeRefs.generated_at}, and ${snapshots.exports.generated_at}.`,
+        summary: query.worldFrame?.freshness === 'live'
+          ? `The route witnesses are grounded in live deps, typerefs, and exports analysis views refreshed at ${snapshots.deps.generated_at}, ${snapshots.typeRefs.generated_at}, and ${snapshots.exports.generated_at}.`
+          : `The route witnesses are grounded in snapshots generated at ${snapshots.deps.generated_at}, ${snapshots.typeRefs.generated_at}, and ${snapshots.exports.generated_at}.`,
         provenanceRefs: [
           snapshots.deps.generated_at,
           snapshots.typeRefs.generated_at,
@@ -311,9 +313,9 @@ function createHitRouteWitnessAnswer(
       ...regimeContext.continuations,
     ]),
     [
-      snapshotProvenanceEntry('deps', snapshots.deps.generated_at, snapshots.deps.source_commit),
-      snapshotProvenanceEntry('typerefs', snapshots.typeRefs.generated_at, snapshots.typeRefs.source_commit),
-      snapshotProvenanceEntry('exports', snapshots.exports.generated_at, snapshots.exports.source_commit),
+      analysisProvenanceEntry('deps', snapshots.deps.generated_at, snapshots.deps.source_commit, query.worldFrame?.freshness),
+      analysisProvenanceEntry('typerefs', snapshots.typeRefs.generated_at, snapshots.typeRefs.source_commit, query.worldFrame?.freshness),
+      analysisProvenanceEntry('exports', snapshots.exports.generated_at, snapshots.exports.source_commit, query.worldFrame?.freshness),
       {
         kind: 'route',
         label: `${primaryRef.label} route witness`,
@@ -412,7 +414,7 @@ function createMissAnswer(
     },
     [{
       kind: 'route',
-      summary: 'No file or type in the current snapshots matched the requested focus.',
+      summary: 'No file or type in the current analysis matched the requested focus.',
     }],
     [{
       code: 'route-witness-miss',
@@ -768,11 +770,21 @@ function continuation(
   };
 }
 
-function snapshotProvenanceEntry(
+function analysisProvenanceEntry(
   kind: 'deps' | 'typerefs' | 'exports',
   generatedAt: string,
   sourceCommit: string,
+  freshness: WorldFrame['freshness'],
 ): InquiryProvenanceEntry {
+  if (freshness === 'live') {
+    return {
+      kind: 'host',
+      label: `${kind} analysis view`,
+      ref: generatedAt,
+      detail: `source_commit=${sourceCommit}`,
+    };
+  }
+
   return {
     kind: 'snapshot',
     label: `${kind} snapshot`,

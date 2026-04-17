@@ -539,6 +539,14 @@ export function generateDepsAnalysis(
   const runtime = buildStructuralClaimGraph(nextSession, {
     ...(parsedSourceFileScan ? { sourceFileScan: parsedSourceFileScan } : {}),
   });
+  return generateDepsAnalysisFromRuntime(nextSession, runtime, parsedSourceFileScan);
+}
+
+export function generateDepsAnalysisFromRuntime(
+  nextSession: RepoSession,
+  runtime: StructuralClaimGraphRuntime,
+  sourceFileScan?: ParsedTsconfigSourceFileScanResult,
+): DepsAnalysisResult {
   const {
     analyzed,
     allEdges,
@@ -616,7 +624,7 @@ export function generateDepsAnalysis(
 
   const frontiers = collectSnapshotFrontierEvidence(
     nextSession,
-    parsedSourceFileScan,
+    sourceFileScan,
   );
   const output: DepsOutput = {
     root: toForwardSlash(nextSession.repoPath),
@@ -724,4 +732,3 @@ export function generateDepsAnalysis(
     warnings: [...runtime.graph.warnings],
   };
 }
-

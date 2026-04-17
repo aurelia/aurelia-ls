@@ -74,6 +74,7 @@ export type AuditValue = AnswerCard<AuditRef> & {
 
 interface PackageAuditContext {
   readonly snapshots: LoadedCurrentSnapshotSet;
+  readonly analysisFreshness: WorldFrame['freshness'];
   readonly pkg: PackageExportsSummary;
   readonly packageFiles: readonly string[];
   readonly uncoveredFiles: readonly string[];
@@ -162,6 +163,7 @@ function buildPackageAuditAnswer(
     snapshots,
     pkg,
     resolveAuditRepoPath(query.worldFrame?.repoPath),
+    query.worldFrame?.freshness,
     policy,
   );
   const findings = collectPackageAuditFindings(context);
@@ -176,9 +178,9 @@ function buildPackageAuditAnswer(
   const driftCount = findings.filter((finding) => finding.kind === 'surface-drift').length;
 
   const summaryLines = findings.length === 0
-    ? [`No strong integration red flags closed for ${pkg.package_name} in the current snapshots.`]
+    ? [`No strong integration red flags closed for ${pkg.package_name} in the ${analysisSurfaceLabel(query.worldFrame)}.`]
     : [
-      `${pkg.package_name} shows ${findings.length} likely integration red flag${pluralize(findings.length)} in the current snapshots.`,
+      `${pkg.package_name} shows ${findings.length} likely integration red flag${pluralize(findings.length)} in the ${analysisSurfaceLabel(query.worldFrame)}.`,
       ...(blindspotCount > 0
         ? [`${blindspotCount} blind spot${pluralize(blindspotCount)} keep the exercise/dead-code picture open.`]
         : []),
@@ -199,7 +201,7 @@ function buildPackageAuditAnswer(
   const tag = blindspotCount > 0 || regimeContext.tag === 'open-boundary'
     ? 'open-boundary'
     : 'hit';
-  const trust = mergeTrustProfiles(trustForFindings(findings), regimeContext.trust);
+  const trust = mergeTrustProfiles(trustForFindings(findings, context.analysisFreshness), regimeContext.trust);
   const closureBasis = [
     ...closureBasisForPackageAudit(context, findings),
     ...regimeContext.closureBasis,
@@ -251,6 +253,7 @@ function createPackageAuditContext(
   snapshots: LoadedCurrentSnapshotSet,
   pkg: PackageExportsSummary,
   repoPath: string,
+  analysisFreshness: WorldFrame['freshness'],
   policy: InquiryPolicy,
 ): PackageAuditContext {
   const reachability = createPackageReachability(snapshots, pkg, {
@@ -298,6 +301,7 @@ function createPackageAuditContext(
 
   return {
     snapshots,
+    analysisFreshness,
     pkg,
     packageFiles: [...packageFiles].sort((left, right) => left.localeCompare(right)),
     uncoveredFiles,
@@ -813,6 +817,7 @@ function coordinationAuditMetricValue(
 
 function trustForFindings(
   findings: readonly AuditFinding[],
+  analysisFreshness: WorldFrame['freshness'],
 ): TrustProfile {
   if (findings.length === 0) {
     return {
@@ -830,7 +835,7 @@ function trustForFindings(
 
   return {
     kind: 'grounded',
-    summary: 'The audit findings are grounded in the current deps, typerefs, and exports snapshots.',
+    summary: `The audit findings are grounded in the current ${analysisSurfaceEvidenceLabel(analysisFreshness)}.`,
   };
 }
 
@@ -851,7 +856,9 @@ function closureBasisForPackageAudit(
     },
     {
       kind: 'freshness',
-      summary: `The audit is grounded in snapshots generated at ${context.snapshots.deps.generated_at}, ${context.snapshots.typeRefs.generated_at}, and ${context.snapshots.exports.generated_at}.`,
+      summary: context.analysisFreshness === 'live'
+        ? `The audit is grounded in live deps, typerefs, and exports analysis views refreshed at ${context.snapshots.deps.generated_at}, ${context.snapshots.typeRefs.generated_at}, and ${context.snapshots.exports.generated_at}.`
+        : `The audit is grounded in snapshots generated at ${context.snapshots.deps.generated_at}, ${context.snapshots.typeRefs.generated_at}, and ${context.snapshots.exports.generated_at}.`,
       provenanceRefs: [
         context.snapshots.deps.generated_at,
         context.snapshots.typeRefs.generated_at,
@@ -883,9 +890,9 @@ function provenanceForPackageAudit(
   findings: readonly AuditFinding[],
 ): readonly InquiryProvenanceEntry[] {
   return [
-    snapshotProvenanceEntry('deps', context.snapshots.deps.generated_at, context.snapshots.deps.source_commit),
-    snapshotProvenanceEntry('typerefs', context.snapshots.typeRefs.generated_at, context.snapshots.typeRefs.source_commit),
-    snapshotProvenanceEntry('exports', context.snapshots.exports.generated_at, context.snapshots.exports.source_commit),
+    analysisProvenanceEntry('deps', context.snapshots.deps.generated_at, context.snapshots.deps.source_commit, context.analysisFreshness),
+    analysisProvenanceEntry('typerefs', context.snapshots.typeRefs.generated_at, context.snapshots.typeRefs.source_commit, context.analysisFreshness),
+    analysisProvenanceEntry('exports', context.snapshots.exports.generated_at, context.snapshots.exports.source_commit, context.analysisFreshness),
     ...(findings.length > 0
       ? [{
         kind: 'route' as const,
@@ -995,11 +1002,11 @@ function createMissAnswer(
     }),
     {
       kind: 'unavailable',
-      summary: 'No package-level audit target closed for this focus.',
+      summary: 'No package-level audit target closed for this focus in the current analysis.',
     },
     [{
       kind: 'route',
-      summary: 'No package in the current snapshots matched the requested focus.',
+      summary: 'No package in the current analysis matched the requested focus.',
     }],
     [{
       code: 'audit-miss',
@@ -1275,17 +1282,41 @@ function continuation(
   };
 }
 
-function snapshotProvenanceEntry(
+function analysisProvenanceEntry(
   kind: 'deps' | 'typerefs' | 'exports',
   generatedAt: string,
   sourceCommit: string,
+  freshness: WorldFrame['freshness'],
 ): InquiryProvenanceEntry {
+  if (freshness === 'live') {
+    return {
+      kind: 'host',
+      label: `${kind} analysis view`,
+      ref: generatedAt,
+      detail: `source_commit=${sourceCommit}`,
+    };
+  }
+
   return {
     kind: 'snapshot',
     label: `${kind} snapshot`,
     ref: generatedAt,
     detail: `source_commit=${sourceCommit}`,
   };
+}
+
+function analysisSurfaceLabel(
+  worldFrame: WorldFrame | undefined,
+): string {
+  return worldFrame?.freshness === 'live' ? 'current analysis' : 'current snapshots';
+}
+
+function analysisSurfaceEvidenceLabel(
+  freshness: WorldFrame['freshness'],
+): string {
+  return freshness === 'live'
+    ? 'deps, typerefs, and exports analysis views'
+    : 'deps, typerefs, and exports snapshots';
 }
 
 function mergeTrustProfiles(

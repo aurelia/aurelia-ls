@@ -332,8 +332,8 @@ export class InquiryIngress {
         importance: 'supporting',
         facts: [
           { label: 'inquiry families', value: `${inquiries.length}` },
-          { label: 'kernel commands covered', value: `${this.#capabilities.list(false).length - diagnostics.uncoveredCommands.length}` },
-          { label: 'kernel commands uncovered', value: `${diagnostics.uncoveredCommands.length}` },
+          { label: 'host commands covered', value: `${this.#capabilities.list(false).length - diagnostics.uncoveredCommands.length}` },
+          { label: 'host commands uncovered', value: `${diagnostics.uncoveredCommands.length}` },
         ],
       },
       {
@@ -351,7 +351,7 @@ export class InquiryIngress {
       ...(diagnostics.uncoveredCommands.length > 0 ? [{
         kind: 'bullet-list' as const,
         importance: 'detail' as const,
-        title: 'Uncovered kernel commands',
+        title: 'Uncovered host commands',
         items: diagnostics.uncoveredCommands.map((command) => `${command} is not routed through any inquiry family yet.`),
       }] : []),
       {
@@ -384,8 +384,8 @@ export class InquiryIngress {
       closureBasis: inquiryClosureBasis('describe.inquiries'),
       issues: diagnostics.uncoveredCommands.length > 0
         ? [{
-          code: 'inquiry-kernel-coverage-gap',
-          message: `${diagnostics.uncoveredCommands.length} kernel commands are not yet covered by any inquiry family.`,
+          code: 'inquiry-host-command-coverage-gap',
+          message: `${diagnostics.uncoveredCommands.length} host commands are not yet covered by any inquiry family.`,
           severity: 'warning',
           origin: 'infrastructure',
         }]
@@ -593,7 +593,7 @@ export class InquiryIngress {
             : 'open-boundary',
       value,
       trust: askStatus === 'answered'
-        ? executionTrust ?? qualifiedTrust('The public inquiry plan closed and its primary kernel step executed successfully.')
+        ? executionTrust ?? qualifiedTrust('The public inquiry plan closed and its primary host command executed successfully.')
         : frontierTrust('The public inquiry face identified the right family, but more narrowing or input is still required.'),
       closureBasis: dedupeClosureBasis([
         ...inquiryClosureBasis(plan.inquiry?.id ?? 'capability-guidance'),
@@ -610,7 +610,7 @@ export class InquiryIngress {
         ...(options.execution?.status === 'failed'
           ? [{
             code: 'ask-execution-failed',
-            message: 'The inquiry plan closed, but the primary kernel command failed during execution.',
+            message: 'The inquiry plan closed, but the primary host command failed during execution.',
             severity: 'warning' as const,
             origin: 'infrastructure' as const,
           }]
@@ -699,7 +699,7 @@ function buildCapabilityGuidanceSteps(
   const step: InquiryPlanStep = {
     label: command === 'repair.command' ? 'Repair a command shape' : command === 'plan.question' ? 'Plan a command shape' : 'Describe capabilities',
     summary: command === 'repair.command'
-      ? 'Route a wrong or incomplete command attempt toward the declared kernel surface.'
+      ? 'Route a wrong or incomplete command attempt toward the declared host command surface.'
       : command === 'plan.question'
         ? 'Turn the natural-language question into a canonical command invocation.'
         : 'Show the declared commands, focus kinds, and examples that fit the question.',
@@ -992,7 +992,7 @@ function maybeCreateSessionStep(
   });
   return {
     label: 'Open a workspace session',
-    summary: 'Prepare a hosted session so the kernel can read or refresh live snapshots.',
+    summary: 'Prepare a hosted session so the host can read or refresh live analysis.',
     phase: 'prepare',
     command: 'session.open',
     args: {
@@ -1086,7 +1086,7 @@ function describeAskStatus(
 ): string {
   switch (status) {
     case 'answered':
-      return `The public inquiry face answered the question through ${execution?.command ?? plan.primaryStep?.command ?? 'the planned kernel step'}.`;
+      return `The public inquiry face answered the question through ${execution?.command ?? plan.primaryStep?.command ?? 'the planned host command'}.`;
     case 'planned':
       return `The public inquiry face identified ${plan.inquiry?.id ?? 'the right inquiry family'}, but more input or a stronger focus is still needed before execution.`;
     case 'ambiguous':
@@ -1157,7 +1157,7 @@ function inquiryProvenance() {
   return [({
     kind: 'host' as const,
     label: 'Declared inquiry-family ingress catalog',
-    detail: 'Public inquiry discovery and planning are derived from declared inquiry-family descriptors over the kernel command surface.',
+    detail: 'Public inquiry discovery and planning are derived from declared inquiry-family descriptors over the host command surface.',
   })];
 }
 
@@ -1199,7 +1199,7 @@ function inquiryContinuations(
     return [{
       kind: 'reroute',
       label: `Run ${plan.primaryStep.command}`,
-      description: `Execute the primary kernel step for ${plan.inquiry?.id ?? 'the selected inquiry family'}.`,
+      description: `Execute the primary host command for ${plan.inquiry?.id ?? 'the selected inquiry family'}.`,
       targetQuestionRoute: 'route',
     }];
   }

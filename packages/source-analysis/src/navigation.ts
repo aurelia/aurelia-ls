@@ -508,7 +508,7 @@ function buildPackageEpisode(
     mergeTrustProfiles(
       {
         kind: 'grounded',
-        summary: 'This overview is grounded in the live deps and exports snapshots for the current workspace.',
+        summary: `This overview is grounded in the live ${analysisSurfaceEvidenceLabel(builder.query.worldFrame?.freshness, ['deps', 'exports'])} for the current workspace.`,
       },
       regimeContext.trust,
     ),
@@ -521,7 +521,9 @@ function buildPackageEpisode(
       },
       {
         kind: 'substrate',
-        summary: 'The package overview is backed by the exports snapshot and package coupling observations.',
+        summary: builder.query.worldFrame?.freshness === 'live'
+          ? 'The package overview is backed by the live exports analysis view and package coupling observations.'
+          : 'The package overview is backed by the exports snapshot and package coupling observations.',
         substrateNodeIds: [exportsSnapshotId, depsSnapshotId, packageNodeId, entrypointNodeId, ...exportNodeIds, ...couplingNodeIds],
       },
       {
@@ -533,8 +535,8 @@ function buildPackageEpisode(
     regimeContext.issues,
     [...continuations, ...regimeContext.continuations],
     [
-      snapshotProvenanceEntry('exports', builder.snapshots.exports.generated_at, builder.snapshots.exports.source_commit),
-      snapshotProvenanceEntry('deps', builder.snapshots.deps.generated_at, builder.snapshots.deps.source_commit),
+      analysisProvenanceEntry('exports', builder.snapshots.exports.generated_at, builder.snapshots.exports.source_commit, builder.query.worldFrame?.freshness),
+      analysisProvenanceEntry('deps', builder.snapshots.deps.generated_at, builder.snapshots.deps.source_commit, builder.query.worldFrame?.freshness),
       claimProvenanceEntry(`${pkg.package_name} package overview`, packageClaimId),
       ...regimeContext.provenance,
     ],
@@ -625,7 +627,7 @@ function buildTypeEpisode(
     `${decl.kind} ${decl.name} is declared in ${decl.file}:${decl.line}.`,
     uniqueRefs.length > 0
       ? `It directly references ${decl.refs.length} project types, including ${uniqueRefs.slice(0, 4).map((ref) => ref.target).join(', ')}.`
-      : 'It has no outbound project type references in the current snapshot.',
+      : `It has no outbound project type references in the ${analysisSurfaceLabel(builder.query.worldFrame)}.`,
     matchingExport
       ? `It is also part of the public export surface for ${matchingExport.package_name}.`
       : 'It is not currently resolved as part of the package export surface.',
@@ -662,10 +664,12 @@ function buildTypeEpisode(
       ]),
       policy,
     }),
-    {
-      kind: 'grounded',
-      summary: 'This neighborhood is grounded in live typerefs data and, when available, the export surface snapshot.',
-    },
+      {
+        kind: 'grounded',
+        summary: builder.query.worldFrame?.freshness === 'live'
+          ? 'This neighborhood is grounded in live typerefs data and, when available, the live export surface view.'
+          : 'This neighborhood is grounded in live typerefs data and, when available, the export surface snapshot.',
+      },
     [
       {
         kind: 'claim',
@@ -690,9 +694,9 @@ function buildTypeEpisode(
         : []),
     ],
     [
-      snapshotProvenanceEntry('typerefs', builder.snapshots.typeRefs.generated_at, builder.snapshots.typeRefs.source_commit),
+      analysisProvenanceEntry('typerefs', builder.snapshots.typeRefs.generated_at, builder.snapshots.typeRefs.source_commit, builder.query.worldFrame?.freshness),
       ...(matchingExport
-        ? [snapshotProvenanceEntry('exports', builder.snapshots.exports.generated_at, builder.snapshots.exports.source_commit)]
+        ? [analysisProvenanceEntry('exports', builder.snapshots.exports.generated_at, builder.snapshots.exports.source_commit, builder.query.worldFrame?.freshness)]
         : []),
       claimProvenanceEntry(`${decl.name} type neighborhood`, typeClaimId),
     ],
@@ -832,7 +836,7 @@ function buildExportEpisode(
       continuation('join', 'Inspect the owning package', record.package_name, 'owning package'),
     ],
     [
-      snapshotProvenanceEntry('exports', builder.snapshots.exports.generated_at, builder.snapshots.exports.source_commit),
+      analysisProvenanceEntry('exports', builder.snapshots.exports.generated_at, builder.snapshots.exports.source_commit, builder.query.worldFrame?.freshness),
       claimProvenanceEntry(`${record.exported_name} export route`, exportClaimId),
     ],
   ));
@@ -995,7 +999,7 @@ function buildFileEpisode(
     mergeTrustProfiles(
       {
         kind: 'grounded',
-        summary: 'This file neighborhood is grounded in the live deps, typerefs, and exports snapshots.',
+        summary: `This file neighborhood is grounded in the live ${analysisSurfaceEvidenceLabel(builder.query.worldFrame?.freshness, ['deps', 'typerefs', 'exports'])}.`,
       },
       regimeContext.trust,
     ),
@@ -1021,9 +1025,9 @@ function buildFileEpisode(
       ...regimeContext.continuations,
     ],
     [
-      snapshotProvenanceEntry('deps', builder.snapshots.deps.generated_at, builder.snapshots.deps.source_commit),
-      snapshotProvenanceEntry('typerefs', builder.snapshots.typeRefs.generated_at, builder.snapshots.typeRefs.source_commit),
-      snapshotProvenanceEntry('exports', builder.snapshots.exports.generated_at, builder.snapshots.exports.source_commit),
+      analysisProvenanceEntry('deps', builder.snapshots.deps.generated_at, builder.snapshots.deps.source_commit, builder.query.worldFrame?.freshness),
+      analysisProvenanceEntry('typerefs', builder.snapshots.typeRefs.generated_at, builder.snapshots.typeRefs.source_commit, builder.query.worldFrame?.freshness),
+      analysisProvenanceEntry('exports', builder.snapshots.exports.generated_at, builder.snapshots.exports.source_commit, builder.query.worldFrame?.freshness),
       claimProvenanceEntry(`${basename(filePath)} file neighborhood`, fileClaimId),
       ...regimeContext.provenance,
     ],
@@ -1088,7 +1092,7 @@ function createMissAnswer(
     },
     [{
       kind: 'route',
-      summary: 'No package, file, type, or export in the current snapshots matched the requested focus.',
+      summary: 'No package, file, type, or export in the current analysis matched the requested focus.',
     }],
     [{
       code: 'navigation-miss',
@@ -1445,17 +1449,41 @@ function continuation(
   };
 }
 
-function snapshotProvenanceEntry(
+function analysisProvenanceEntry(
   kind: 'deps' | 'typerefs' | 'exports',
   generatedAt: string,
   sourceCommit: string,
+  freshness: WorldFrame['freshness'],
 ): InquiryProvenanceEntry {
+  if (freshness === 'live') {
+    return {
+      kind: 'host',
+      label: `${kind} analysis view`,
+      ref: generatedAt,
+      detail: `source_commit=${sourceCommit}`,
+    };
+  }
+
   return {
     kind: 'snapshot',
     label: `${kind} snapshot`,
     ref: generatedAt,
     detail: `source_commit=${sourceCommit}`,
   };
+}
+
+function analysisSurfaceLabel(
+  worldFrame: WorldFrame | undefined,
+): string {
+  return worldFrame?.freshness === 'live' ? 'current analysis' : 'current snapshot';
+}
+
+function analysisSurfaceEvidenceLabel(
+  freshness: WorldFrame['freshness'],
+  kinds: readonly string[],
+): string {
+  const joined = kinds.join(', ');
+  return freshness === 'live' ? `${joined} analysis views` : `${joined} snapshots`;
 }
 
 function claimProvenanceEntry(label: string, claimId: string): InquiryProvenanceEntry {

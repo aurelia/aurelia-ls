@@ -24,7 +24,6 @@ import {
   resolveSnapshotRootPath,
   resolveSnapshotTarget,
 } from '../snapshot-config.js';
-import { loadCurrentSnapshots } from '../current-snapshots.js';
 import {
   SNAPSHOT_KINDS,
   type SnapshotKind,
@@ -38,13 +37,23 @@ import type { FocusKind } from '../inquiry-model.js';
 import { createNavigationEpisode } from '../navigation.js';
 import { createRouteWitnessAnswer } from '../route-witness.js';
 import type { ProgramReuseOptions } from '../program-reuse-options.js';
-import { generateDepsAnalysis } from '../deps/analyze.js';
-import { generateExportsAnalysis } from '../exports/analyze.js';
+import {
+  generateDepsAnalysisFromRuntime,
+} from '../deps/analyze.js';
+import {
+  generateExportsAnalysisFromRuntime,
+} from '../exports/analyze.js';
+import {
+  buildStructuralClaimGraph,
+  type StructuralClaimGraphRuntime,
+} from '../structural-claim-graph.js';
 import {
   scanParsedTsconfigSourceFiles,
   type ParsedTsconfigSourceFileScanResult,
 } from '../tsconfig-source-files.js';
-import { generateTypeRefsAnalysis } from '../typerefs/analyze.js';
+import {
+  generateTypeRefsAnalysisFromRuntime,
+} from '../typerefs/analyze.js';
 import {
   HostSessionManager,
   type HostSessionState,
@@ -124,7 +133,7 @@ interface InquiryExecutionOutcome {
 }
 
 export interface SnapshotHostRuntimeOptions {
-  readonly executionMode?: 'snapshot-first' | 'session-first';
+  readonly executionMode?: 'session-first';
 }
 
 const DEFAULT_CACHE: HostCacheMeta = { hit: false, tier: 'cold' };
@@ -135,12 +144,10 @@ export class SnapshotHostRuntime {
   readonly #sessions = new HostSessionManager();
   readonly #ingress = new CapabilityIngress();
   readonly #publicIngress = new InquiryIngress();
-  readonly #executionMode: 'snapshot-first' | 'session-first';
 
   constructor(
-    options: SnapshotHostRuntimeOptions = {},
+    _options: SnapshotHostRuntimeOptions = {},
   ) {
-    this.#executionMode = options.executionMode ?? 'session-first';
   }
 
   execute<TCommand extends HostCommandName>(
@@ -391,7 +398,7 @@ export class SnapshotHostRuntime {
 
   #askQuestion(args: AskQuestionArgs): CommandOutcome {
     const explicitSession = args.sessionId ? this.#tryGetSession(args.sessionId) : undefined;
-    const ambientSession = !args.sessionId && this.#executionMode === 'session-first'
+    const ambientSession = !args.sessionId
       ? this.#sessions.findMatching({
         repoPath: args.repoPath ?? process.cwd(),
         target: args.target,
@@ -414,13 +421,7 @@ export class SnapshotHostRuntime {
     });
 
     const executed = plan.status === 'ready' && plan.primaryStep
-      ? (this.#executionMode === 'snapshot-first'
-        ? this.#tryExecuteInquiryPlanAgainstCurrentSnapshots(plan, {
-        repoPath,
-        target,
-        profilePath,
-      })
-        : undefined) ?? this.#executeInquiryPlan(plan, {
+      ? this.#executeInquiryPlan(plan, {
         existingSession,
         repoPath,
         target,
@@ -615,10 +616,9 @@ export class SnapshotHostRuntime {
       ...typeRefsQuery.refreshedKinds,
       ...exportsQuery.refreshedKinds,
     ]);
-    // TODO: Thread live structural claim/evaluator context from the warm repo
-    // session into audit/navigation/route answer builders so hosted inquiry can
-    // classify focused paths from the live substrate and eventually stop
-    // reporting these answers as snapshot-shaped freshness.
+    // TODO: Thread live structural claims and path-evaluator results directly
+    // into audit answers instead of adapting through the legacy deps/typerefs/
+    // exports materialized views first.
     const answer = createAuditAnswer(
       {
         inquiryEpisode: 'inventory-and-audit-sweep',
@@ -630,7 +630,7 @@ export class SnapshotHostRuntime {
           target: state.target,
           regimeAnchor: 'hosted',
           partiality: 'complete',
-          freshness: 'snapshot',
+          freshness: 'live',
         },
       },
       {
@@ -679,6 +679,8 @@ export class SnapshotHostRuntime {
       ...typeRefsQuery.refreshedKinds,
       ...exportsQuery.refreshedKinds,
     ]);
+    // TODO: Move route witnesses onto direct structural route claims so the
+    // host no longer has to adapt live state through snapshot-shaped outputs.
     const answer = createRouteWitnessAnswer(
       {
         inquiryEpisode: 'bounded-closure-explanation',
@@ -693,7 +695,7 @@ export class SnapshotHostRuntime {
           target: state.target,
           regimeAnchor: 'hosted',
           partiality: 'complete',
-          freshness: 'snapshot',
+          freshness: 'live',
         },
       },
       {
@@ -742,6 +744,8 @@ export class SnapshotHostRuntime {
       ...typeRefsQuery.refreshedKinds,
       ...exportsQuery.refreshedKinds,
     ]);
+    // TODO: Let navigation spend live structural/evaluator context directly and
+    // demote these adapted materialized views to compatibility-only surfaces.
     const episode = createNavigationEpisode(
       {
         inquiryEpisode: 'orient-and-localize',
@@ -756,7 +760,7 @@ export class SnapshotHostRuntime {
           target: state.target,
           regimeAnchor: 'hosted',
           partiality: 'complete',
-          freshness: 'snapshot',
+          freshness: 'live',
         },
       },
       {
@@ -830,63 +834,6 @@ export class SnapshotHostRuntime {
     };
   }
 
-  #tryExecuteInquiryPlanAgainstCurrentSnapshots(
-    plan: { readonly steps: readonly { readonly command: string; readonly args: Record<string, unknown>; }[]; readonly primaryStep?: { readonly command: string; readonly args: Record<string, unknown>; } },
-    context: {
-      readonly repoPath: string;
-      readonly target?: string;
-      readonly profilePath?: string;
-    },
-  ): InquiryExecutionOutcome | undefined {
-    // TODO: Remove this snapshot-first fast path once the live host/session path
-    // can answer the same inquiries with acceptable cold-start performance and
-    // snapshots are demoted to export/debug materialization only.
-    const primaryStep = plan.primaryStep;
-    if (!primaryStep || !supportsCurrentSnapshotExecution(primaryStep.command)) {
-      return undefined;
-    }
-
-    const target = context.target ?? resolveSnapshotTarget({
-      repoPath: context.repoPath,
-      profilePath: context.profilePath,
-    }).target;
-    try {
-      const snapshots = loadCurrentSnapshots(target, 0, context.repoPath, context.profilePath);
-      const primaryEnvelope = createCurrentSnapshotEnvelope(primaryStep.command, primaryStep.args, snapshots, {
-        repoPath: context.repoPath,
-        target,
-        profilePath: context.profilePath,
-      });
-      if (!primaryEnvelope) {
-        return undefined;
-      }
-      const steps: AskQuestionExecutionStep[] = plan.steps.map((step) => ({
-        command: step.command,
-        args: step.args,
-        status: step.command === 'session.open' ? 'skipped' : step.command === primaryStep.command ? 'executed' : 'skipped',
-        detail: step.command === 'session.open'
-          ? 'Used current materialized snapshots instead of opening a transient live session.'
-          : step.command === primaryStep.command
-            ? 'Executed against the current snapshot contract.'
-            : 'This step was not needed once current snapshots were available.',
-      }));
-
-      return {
-        invalidation: emptyInvalidationMeta(),
-        cache: { hit: true, tier: 'warm' },
-        refreshedKinds: [],
-        freshness: 'snapshot',
-        execution: {
-          ephemeralSession: false,
-          steps,
-          primaryEnvelope,
-        },
-      };
-    } catch {
-      return undefined;
-    }
-  }
-
   #executeInquiryPlan(
     plan: { readonly steps: readonly { readonly command: string; readonly args: Record<string, unknown>; }[] },
     context: {
@@ -926,7 +873,7 @@ export class SnapshotHostRuntime {
           });
           const openResult = openOutcome.result as SessionOpenResult;
           sessionState = this.#sessions.get(openResult.sessionId);
-          openedEphemeralSession = this.#executionMode !== 'session-first';
+          openedEphemeralSession = false;
           cache = openOutcome.cache ?? DEFAULT_CACHE;
           invalidation = openOutcome.invalidation ?? buildInvalidationMeta(sessionState);
           refreshedKinds = openOutcome.refreshedKinds ?? [];
@@ -934,9 +881,7 @@ export class SnapshotHostRuntime {
             command: step.command,
             args: step.args,
             status: 'executed',
-            detail: this.#executionMode === 'session-first'
-              ? `Opened live ambient session "${openResult.sessionId}".`
-              : `Opened session "${openResult.sessionId}".`,
+            detail: `Opened live ambient session "${openResult.sessionId}".`,
           });
           continue;
         }
@@ -1041,130 +986,6 @@ function summarizeInquiryExecution(
   };
 }
 
-function supportsCurrentSnapshotExecution(command: string): boolean {
-  return command === 'query.audit.package'
-    || command === 'query.route.witness'
-    || command === 'query.navigate'
-    || command === 'query.deps.summary'
-    || command === 'query.typerefs.summary'
-    || command === 'query.exports.summary';
-}
-
-function createCurrentSnapshotEnvelope(
-  command: string,
-  args: Record<string, unknown>,
-  snapshots: ReturnType<typeof loadCurrentSnapshots>,
-  context: {
-    readonly repoPath: string;
-    readonly target: string;
-    readonly profilePath?: string;
-  },
-): HostCommandEnvelope<unknown> | undefined {
-  switch (command) {
-    case 'query.audit.package': {
-      const packageName = asStepString(args.packageName);
-      if (!packageName) {
-        return undefined;
-      }
-      const answer = createAuditAnswer({
-        inquiryEpisode: 'inventory-and-audit-sweep',
-        focusRef: { kind: 'package', value: packageName },
-        questionRoute: 'inventory',
-        readMode: 'summary-card',
-        worldFrame: {
-          repoPath: context.repoPath,
-          target: context.target,
-          ...(context.profilePath ? { profilePath: context.profilePath } : {}),
-          regimeAnchor: 'batch',
-          partiality: 'complete',
-          freshness: 'snapshot',
-        },
-      }, snapshots);
-      return snapshotEnvelope(command, {
-        answer,
-        warnings: snapshots.warnings,
-      });
-    }
-    case 'query.route.witness': {
-      const focusKind = args.focusKind === 'file' || args.focusKind === 'type' ? args.focusKind : undefined;
-      const focusValue = asStepString(args.focusValue);
-      if (!focusKind || !focusValue) {
-        return undefined;
-      }
-      const answer = createRouteWitnessAnswer({
-        inquiryEpisode: 'bounded-closure-explanation',
-        focusRef: { kind: focusKind, value: focusValue },
-        questionRoute: 'route',
-        readMode: 'focus-card',
-        worldFrame: {
-          repoPath: context.repoPath,
-          target: context.target,
-          ...(context.profilePath ? { profilePath: context.profilePath } : {}),
-          regimeAnchor: 'batch',
-          partiality: 'complete',
-          freshness: 'snapshot',
-        },
-      }, snapshots);
-      return snapshotEnvelope(command, {
-        answer,
-        warnings: snapshots.warnings,
-      });
-    }
-    case 'query.navigate': {
-      const focusKind = args.focusKind === 'package' || args.focusKind === 'file' || args.focusKind === 'type' || args.focusKind === 'export'
-        ? args.focusKind
-        : undefined;
-      const focusValue = asStepString(args.focusValue);
-      if (!focusKind || !focusValue) {
-        return undefined;
-      }
-      const episode = createNavigationEpisode({
-        inquiryEpisode: 'orient-and-localize',
-        focusRef: { kind: focusKind, value: focusValue },
-        questionRoute: args.questionRoute === 'route' || args.questionRoute === 'search' || args.questionRoute === 'join'
-          ? args.questionRoute
-          : 'join',
-        readMode: 'focus-card',
-        worldFrame: {
-          repoPath: context.repoPath,
-          target: context.target,
-          ...(context.profilePath ? { profilePath: context.profilePath } : {}),
-          regimeAnchor: 'batch',
-          partiality: 'complete',
-          freshness: 'snapshot',
-        },
-      }, snapshots);
-      return snapshotEnvelope(command, {
-        answer: episode.answer,
-        warnings: snapshots.warnings,
-      });
-    }
-    case 'query.deps.summary':
-      return snapshotEnvelope(command, {
-        kind: 'deps',
-        generatedAt: snapshots.deps.generated_at,
-        summary: snapshots.deps.summary,
-        warnings: snapshots.warnings,
-      });
-    case 'query.typerefs.summary':
-      return snapshotEnvelope(command, {
-        kind: 'typerefs',
-        generatedAt: snapshots.typeRefs.generated_at,
-        summary: snapshots.typeRefs.summary,
-        warnings: snapshots.warnings,
-      });
-    case 'query.exports.summary':
-      return snapshotEnvelope(command, {
-        kind: 'exports',
-        generatedAt: snapshots.exports.generated_at,
-        summary: snapshots.exports.summary,
-        warnings: snapshots.warnings,
-      });
-    default:
-      return undefined;
-  }
-}
-
 function buildRenderedView<TResult extends { document?: AnswerDocument<AnswerRef> }>(
   answer: { readonly query: { readonly focusRef: { readonly kind: FocusKind }; readonly inquiryEpisode?: string; readonly readMode?: string; }; readonly outcome: { readonly value?: TResult } },
   consumer: ConsumerKind | undefined,
@@ -1196,25 +1017,6 @@ function buildRenderedView<TResult extends { document?: AnswerDocument<AnswerRef
   return {
     style: 'json-document',
     document: renderAnswerDocumentToJson(document, policy),
-  };
-}
-
-function snapshotEnvelope(
-  command: string,
-  result: unknown,
-): HostCommandEnvelope<unknown> {
-  return {
-    schemaVersion: HOST_SCHEMA_VERSION,
-    command: command as HostCommandName,
-    status: 'ok',
-    result,
-    meta: {
-      durationMs: 0,
-      cache: { hit: true, tier: 'warm' },
-      invalidation: emptyInvalidationMeta(),
-      refreshedKinds: [],
-    },
-    errors: [],
   };
 }
 
@@ -1491,16 +1293,19 @@ function refreshKinds(
     force?: boolean;
   } = {},
 ): readonly SnapshotKind[] {
-  const sharedSourceFileScan = shouldShareSourceFileScan(requestedKinds)
-    ? scanParsedTsconfigSourceFiles(state.session)
-    : undefined;
   const refreshedKinds: SnapshotKind[] = [];
   const kindsToRefresh = options.force
     ? requestedKinds
     : requestedKinds.filter((kind) => state.dirtyKinds.has(kind) || state.snapshots[kind] === undefined);
 
+  if (kindsToRefresh.length === 0) {
+    return [];
+  }
+
+  const liveRuntime = ensureLiveStructuralRuntime(state);
+
   for (const kind of kindsToRefresh) {
-    const result = runAnalysis(state, kind, sharedSourceFileScan);
+    const result = runAnalysis(state, kind, liveRuntime);
     setSnapshot(state, kind, result.output);
     state.warningsByKind[kind] = result.warnings;
     state.lastRefreshAtByKind[kind] = result.output.generated_at;
@@ -1520,7 +1325,10 @@ function refreshKinds(
 function runAnalysis<TKind extends SnapshotKind>(
   state: HostSessionState,
   kind: TKind,
-  sharedSourceFileScan?: ParsedTsconfigSourceFileScanResult,
+  liveRuntime: {
+    readonly sourceFileScan: ParsedTsconfigSourceFileScanResult;
+    readonly structuralRuntime: StructuralClaimGraphRuntime;
+  },
 ): {
   output: SnapshotOutputMap[TKind];
   warnings: readonly string[];
@@ -1531,21 +1339,33 @@ function runAnalysis<TKind extends SnapshotKind>(
 
   switch (kind) {
     case 'deps': {
-      const result = generateDepsAnalysis(state.session, analysisOptions, sharedSourceFileScan);
+      const result = generateDepsAnalysisFromRuntime(
+        state.session,
+        liveRuntime.structuralRuntime,
+        liveRuntime.sourceFileScan,
+      );
       return {
         output: result.output as SnapshotOutputMap[TKind],
         warnings: result.warnings,
       };
     }
     case 'typerefs': {
-      const result = generateTypeRefsAnalysis(state.session, analysisOptions, sharedSourceFileScan);
+      const result = generateTypeRefsAnalysisFromRuntime(
+        state.session,
+        liveRuntime.structuralRuntime,
+        liveRuntime.sourceFileScan,
+      );
       return {
         output: result.output as SnapshotOutputMap[TKind],
         warnings: result.warnings,
       };
     }
     case 'exports': {
-      const result = generateExportsAnalysis(state.session, analysisOptions);
+      const result = generateExportsAnalysisFromRuntime(
+        state.session,
+        liveRuntime.structuralRuntime,
+        analysisOptions,
+      );
       return {
         output: result.output as SnapshotOutputMap[TKind],
         warnings: result.warnings,
@@ -1556,11 +1376,28 @@ function runAnalysis<TKind extends SnapshotKind>(
   }
 }
 
-function shouldShareSourceFileScan(
-  requestedKinds: readonly SnapshotKind[],
-): boolean {
-  const unique = new Set(requestedKinds);
-  return unique.has('deps') && unique.has('typerefs');
+function ensureLiveStructuralRuntime(
+  state: HostSessionState,
+): {
+  readonly sourceFileScan: ParsedTsconfigSourceFileScanResult;
+  readonly structuralRuntime: StructuralClaimGraphRuntime;
+} {
+  const sourceFileScan = state.liveAnalysis.sourceFileScan
+    ?? scanParsedTsconfigSourceFiles(state.session);
+  if (!state.liveAnalysis.sourceFileScan) {
+    state.liveAnalysis.sourceFileScan = sourceFileScan;
+  }
+
+  const structuralRuntime = state.liveAnalysis.structuralRuntime
+    ?? buildStructuralClaimGraph(state.session, { sourceFileScan });
+  if (!state.liveAnalysis.structuralRuntime) {
+    state.liveAnalysis.structuralRuntime = structuralRuntime;
+  }
+
+  return {
+    sourceFileScan,
+    structuralRuntime,
+  };
 }
 
 function setSnapshot<TKind extends SnapshotKind>(
@@ -1583,6 +1420,8 @@ function invalidateSession(
 
   if (scope === 'project') {
     state.session.clearProgramCache();
+    state.liveAnalysis.sourceFileScan = undefined;
+    state.liveAnalysis.structuralRuntime = undefined;
     for (const kind of ALL_SNAPSHOT_KINDS) {
       state.dirtyKinds.add(kind);
     }
@@ -1615,6 +1454,8 @@ function invalidateSession(
 
   if (affectedKinds.size > 0) {
     state.session.clearProgramCache();
+    state.liveAnalysis.sourceFileScan = undefined;
+    state.liveAnalysis.structuralRuntime = undefined;
     state.invalidationKind = 'files';
     state.invalidationCount = invalidatedFiles.length;
   }

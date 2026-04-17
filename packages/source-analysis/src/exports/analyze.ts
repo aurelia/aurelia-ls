@@ -945,6 +945,9 @@ function analyzePackage(
   summary: PackageExportsSummary;
   records: PackageExportRecord[];
 } {
+  // TODO: Replace this package-local checker walk with shared semantic export,
+  // alias, and symbol-face claims once the semantic layer is no longer trapped
+  // inside the exports compatibility surface.
   const program = createPackageProgram(scope, packageClaim, options);
   const context: PackageAnalysisContext = {
     ...scope,
@@ -1063,6 +1066,14 @@ export function generateExportsAnalysis(
   options: ProgramReuseOptions = {},
 ): ExportsAnalysisResult {
   const runtime = buildStructuralClaimGraph(nextSession);
+  return generateExportsAnalysisFromRuntime(nextSession, runtime, options);
+}
+
+export function generateExportsAnalysisFromRuntime(
+  nextSession: RepoSession,
+  runtime: StructuralClaimGraphRuntime,
+  options: ProgramReuseOptions = {},
+): ExportsAnalysisResult {
   const workspacePackageEntrypointsByName = new Map<string, string>();
   for (const packageClaim of runtime.index.packages) {
     workspacePackageEntrypointsByName.set(

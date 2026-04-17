@@ -106,6 +106,14 @@ export function generateTypeRefsAnalysis(
   const runtime = buildStructuralClaimGraph(nextSession, {
     ...(sourceFileScan ? { sourceFileScan } : {}),
   });
+  return generateTypeRefsAnalysisFromRuntime(nextSession, runtime, sourceFileScan);
+}
+
+export function generateTypeRefsAnalysisFromRuntime(
+  nextSession: RepoSession,
+  runtime: StructuralClaimGraphRuntime,
+  sourceFileScan?: ParsedTsconfigSourceFileScanResult,
+): TypeRefsAnalysisResult {
   const allDeclarations = materializeTypeDeclarations(runtime);
   const totalRefs = allDeclarations.reduce((sum, declaration) => sum + declaration.refs.length, 0);
   const totalMembers = allDeclarations.reduce((sum, declaration) => sum + (declaration.members?.length ?? 0), 0);

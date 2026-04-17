@@ -467,10 +467,8 @@ describe('SnapshotHostRuntime', () => {
     expect(askedOrientation.result.rendered?.style).toBe('plain-text');
   });
 
-  it('uses current snapshots for live ask.question flows instead of opening a transient session', () => {
-    const runtime = createSnapshotHostRuntime({
-      executionMode: 'snapshot-first',
-    });
+  it('opens and keeps a live ambient session for ask.question flows', () => {
+    const runtime = createSnapshotHostRuntime();
     const opened = runtime.execute({
       command: 'session.open',
       args: {
@@ -495,18 +493,15 @@ describe('SnapshotHostRuntime', () => {
     expect(asked.status).toBe('ok');
     expect(asked.result.answer.outcome.value?.status).toBe('answered');
     expect(asked.result.answer.outcome.value?.execution?.command).toBe('query.audit.package');
-    expect(asked.result.answer.query.worldFrame?.freshness).toBe('snapshot');
+    expect(asked.result.answer.query.worldFrame?.freshness).toBe('live');
     expect(asked.result.execution?.ephemeralSession).toBe(false);
-    expect(asked.result.execution?.steps.some((step) =>
-      step.command === 'session.open' && step.status === 'skipped',
-    )).toBe(true);
+    expect(asked.result.execution?.usedSessionId).toBe(opened.result.sessionId);
+    expect(asked.result.execution?.steps.some((step) => step.command === 'query.audit.package')).toBe(true);
   });
 
   it('reuses an ambient live session in session-first mode for repeated ask.question flows', () => {
     const repoPath = createAuditFixtureRepo();
-    const runtime = createSnapshotHostRuntime({
-      executionMode: 'session-first',
-    });
+    const runtime = createSnapshotHostRuntime();
 
     const firstAsk = runtime.execute({
       command: 'ask.question',
@@ -553,11 +548,9 @@ describe('SnapshotHostRuntime', () => {
     expect(status.result.sessions[0]?.sessionId).toBe(firstSessionId);
   });
 
-  it('uses repo-local current snapshots for non-cwd repos', () => {
+  it('uses repo-local live sessions for non-cwd repos', () => {
     const repoPath = createAuditFixtureRepo();
-    const runtime = createSnapshotHostRuntime({
-      executionMode: 'snapshot-first',
-    });
+    const runtime = createSnapshotHostRuntime();
 
     const opened = runtime.execute({
       command: 'session.open',
@@ -589,16 +582,14 @@ describe('SnapshotHostRuntime', () => {
 
     expect(asked.status).toBe('ok');
     expect(asked.result.execution?.ephemeralSession).toBe(false);
-    expect(asked.result.execution?.steps.some((step) =>
-      step.command === 'session.open' && step.status === 'skipped',
-    )).toBe(true);
+    expect(asked.result.answer.query.worldFrame?.freshness).toBe('live');
+    expect(asked.result.execution?.usedSessionId).toBe(sessionId);
+    expect(asked.result.execution?.steps.some((step) => step.command === 'query.audit.package')).toBe(true);
   });
 
-  it('uses explicit profile-path targeting for current-snapshot inquiry execution', () => {
+  it('uses explicit profile-path targeting for live inquiry execution', () => {
     const repoPath = createExplicitProfileAuditFixtureRepo();
-    const runtime = createSnapshotHostRuntime({
-      executionMode: 'snapshot-first',
-    });
+    const runtime = createSnapshotHostRuntime();
 
     const opened = runtime.execute({
       command: 'session.open',
@@ -627,10 +618,10 @@ describe('SnapshotHostRuntime', () => {
 
     expect(asked.status).toBe('ok');
     expect(asked.result.answer.query.worldFrame?.profilePath).toBe('profiles/framework-core.json');
+    expect(asked.result.answer.query.worldFrame?.freshness).toBe('live');
     expect(asked.result.execution?.ephemeralSession).toBe(false);
-    expect(asked.result.execution?.steps.some((step) =>
-      step.command === 'session.open' && step.status === 'skipped',
-    )).toBe(true);
+    expect(asked.result.execution?.usedSessionId).toBe(sessionId);
+    expect(asked.result.execution?.steps.some((step) => step.command === 'query.audit.package')).toBe(true);
   });
 
   it('derives session targeting and package discovery from a repo profile', () => {
