@@ -4,6 +4,21 @@ import { createAuditAnswer } from '../src/audit.js';
 import { loadCurrentLiveAnalysisViews } from './live-analysis-views.js';
 
 describe('Source-analysis package audit', () => {
+  it('reports the documented source-area cycle pressure instead of returning a false clean bill', () => {
+    const analysis = loadCurrentLiveAnalysisViews();
+    const answer = createAuditAnswer({
+      focusRef: { kind: 'package', value: '@aurelia-ls/source-analysis' },
+      questionRoute: 'inventory',
+    }, analysis);
+
+    const cycleFinding = answer.outcome.value?.findings.find((finding) =>
+      finding.code === 'source-area-cycle',
+    );
+    expect(cycleFinding).toBeDefined();
+    expect(cycleFinding?.summary).toContain('@aurelia-ls/source-analysis');
+    expect(cycleFinding?.evidence[0]).toContain('packages/source-analysis/src/');
+  });
+
   it('no longer reports package blind spots after the tests gained explicit tsconfig coverage', () => {
     const analysis = loadCurrentLiveAnalysisViews();
     const answer = createAuditAnswer({

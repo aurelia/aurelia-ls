@@ -10,7 +10,12 @@ import {
   describeAnalysisSurfaceEvidence,
 } from './analysis-surface.js';
 import type { LoadedCurrentSnapshotSet } from './current-snapshots.js';
+import {
+  loadDependencySurface,
+  type DependencySurface,
+} from './dependency-surface.js';
 import type { PackageExportRecord, PackageExportsSummary } from './exports/schema.js';
+import { collectPartitionBindingCycles } from './partition-coupling.js';
 import type { TypeDecl } from './typerefs/schema.js';
 import {
   inspectAnalyzabilityPostureFromAnalysisViews,
@@ -70,6 +75,7 @@ import { createPackageCoordinationSurface } from './coordination-surface.js';
 export const AUDIT_FINDING_KINDS = [
   'blindspot',
   'under-integrated-file',
+  'layer-cycle',
   'surface-drift',
 ] as const;
 
@@ -103,6 +109,7 @@ interface PackageAuditContext {
   readonly unresolvedImports: readonly AnalysisViews['deps']['unresolved_imports'][number][];
   readonly declarationsByFile: ReadonlyMap<string, readonly TypeDecl[]>;
   readonly exportRecordsByFile: ReadonlyMap<string, readonly PackageExportRecord[]>;
+  readonly dependencySurface: DependencySurface;
   readonly reachability: PackageReachability;
   readonly coordinationSurface: PackageCoordinationSurface | null;
   readonly policy: InquiryPolicy;
@@ -205,6 +212,7 @@ function buildPackageAuditAnswer(
 
   const blindspotCount = findings.filter((finding) => finding.kind === 'blindspot').length;
   const dormantCount = findings.filter((finding) => finding.kind === 'under-integrated-file').length;
+  const cycleCount = findings.filter((finding) => finding.kind === 'layer-cycle').length;
   const driftCount = findings.filter((finding) => finding.kind === 'surface-drift').length;
 
   const summaryLines = findings.length === 0
@@ -216,6 +224,9 @@ function buildPackageAuditAnswer(
         : []),
       ...(dormantCount > 0
         ? [`${dormantCount} file${pluralize(dormantCount)} look${dormantCount === 1 ? 's' : ''} parked rather than integrated.`]
+        : []),
+      ...(cycleCount > 0
+        ? [`${cycleCount} finding${pluralize(cycleCount)} shows package-internal layer cycles that still defeat the intended source-area DAG.`]
         : []),
       ...(driftCount > 0
         ? [`${driftCount} finding${pluralize(driftCount)} points at architectural surface drift rather than direct dead code.`]
@@ -251,6 +262,7 @@ function buildPackageAuditAnswer(
   const document = createAuditDocument(summaryLines, findings, relatedRefs, {
     blindspotCount,
     dormantCount,
+    cycleCount,
     driftCount,
     regimeFacts: regimeContext.facts,
   });
@@ -292,6 +304,7 @@ function createPackageAuditContext(
     packageSurface,
   });
   const coordinationSurface = createSafeCoordinationSurface(repoPath, packageSurface.files);
+  const dependencySurface = loadDependencySurface(analysis);
 
   return {
     analysis,
@@ -302,6 +315,7 @@ function createPackageAuditContext(
     unresolvedImports: packageSurface.unresolvedImports,
     declarationsByFile: packageSurface.declarationsByFile,
     exportRecordsByFile: packageSurface.exportRecordsByFile,
+    dependencySurface,
     reachability,
     coordinationSurface,
     policy,
@@ -328,6 +342,7 @@ function collectPackageAuditFindings(
     collectUnresolvedImportsFinding(context),
     collectExerciseOnlyFilesFinding(context),
     collectPublicSurfaceUnexercisedFinding(context),
+    collectSourceAreaCycleFinding(context),
     collectAnswerCoordinationFragmentationFinding(context),
     collectPresentationFragmentationFinding(context),
     ...collectDormantFileFindings(context),
@@ -513,6 +528,55 @@ function collectPublicSurfaceUnexercisedFinding(
   };
 }
 
+function collectSourceAreaCycleFinding(
+  context: PackageAuditContext,
+): AuditFinding | null {
+  const sourcePrefix = context.pkg.package_dir.length > 0
+    ? `${context.pkg.package_dir}/src/`
+    : 'src/';
+  const cycles = collectPartitionBindingCycles(
+    {
+      root: context.analysis.root,
+      edges: context.dependencySurface.edges,
+    },
+    'source-area',
+    sourcePrefix,
+  );
+
+  if (cycles.length === 0) {
+    return null;
+  }
+
+  const strongestCycle = cycles[0]!;
+  const representativeFiles = strongestCycle.partitions
+    .map((partition) => representativeFileForPartition(context, partition.partitionId))
+    .filter((filePath): filePath is string => Boolean(filePath));
+  const primaryRef = representativeFiles[0]
+    ? fileRef(representativeFiles[0], 'cyclic source area')
+    : packageRef(context.pkg);
+
+  return {
+    code: 'source-area-cycle',
+    kind: 'layer-cycle',
+    severity: 'warning',
+    confidence: 'grounded',
+    title: 'Top-level source areas still form a dependency cycle',
+    summary: `${context.pkg.package_name} still has ${cycles.length} source-area cycle${pluralize(cycles.length)}. The strongest cycle ties together ${strongestCycle.partitions.length} top-level areas (${strongestCycle.partitions.map((partition) => renderPartitionTail(partition.partitionId)).join(', ')}), so the intended internal layer boundary still does not close on a DAG.`,
+    primaryRef,
+    relatedRefs: dedupeRefs([
+      packageRef(context.pkg),
+      ...representativeFiles.slice(1, 8).map((filePath) => fileRef(filePath, 'cyclic source area')),
+    ]),
+    evidence: [
+      `cycle partitions: ${strongestCycle.partitions.map((partition) => partition.partitionId).join(', ')}`,
+      `cycle edge weight: ${strongestCycle.edgeCount}`,
+      ...strongestCycle.edges.slice(0, 6).map((edge) =>
+        `${renderPartitionTail(edge.from.partitionId)} -> ${renderPartitionTail(edge.to.partitionId)}: edges=${edge.edgeCount}, bindings=${edge.bindings.length}`,
+      ),
+    ],
+  };
+}
+
 function collectAnswerCoordinationFragmentationFinding(
   context: PackageAuditContext,
 ): AuditFinding | null {
@@ -669,6 +733,7 @@ function createAuditDocument(
   counts: {
     readonly blindspotCount: number;
     readonly dormantCount: number;
+    readonly cycleCount: number;
     readonly driftCount: number;
     readonly regimeFacts?: readonly { readonly label: string; readonly value: string }[];
   },
@@ -685,6 +750,7 @@ function createAuditDocument(
       facts: [
         { label: 'blindspots', value: String(counts.blindspotCount) },
         { label: 'under-integrated files', value: String(counts.dormantCount) },
+        { label: 'layer-cycle findings', value: String(counts.cycleCount) },
         { label: 'surface drift findings', value: String(counts.driftCount) },
         ...(counts.regimeFacts ?? []),
       ],
@@ -1318,6 +1384,7 @@ function originForFinding(
     case 'blindspot':
       return 'boundary';
     case 'under-integrated-file':
+    case 'layer-cycle':
       return 'shape';
     case 'surface-drift':
       return 'shape';
@@ -1360,6 +1427,20 @@ function renderNamedSurfaceMembers(
     .slice(0, 4)
     .map((member) => `${member.name}@${member.line}`)
     .join(', ');
+}
+
+function representativeFileForPartition(
+  context: PackageAuditContext,
+  partitionId: string,
+): string | null {
+  const prefix = `${partitionId}/`;
+  return context.packageFiles.find((filePath) => filePath.startsWith(prefix)) ?? null;
+}
+
+function renderPartitionTail(
+  partitionId: string,
+): string {
+  return partitionId.split('/').at(-1) ?? partitionId;
 }
 
 function dedupeRefs(

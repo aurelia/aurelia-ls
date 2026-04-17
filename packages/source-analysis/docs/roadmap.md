@@ -81,7 +81,8 @@ Current anchors:
 Next:
 
 - establish a dedicated semantic module family, likely under `src/semantic/`
-- extract shared export/alias/symbol-face reasoning out of `exports/analyze.ts`
+- keep extracting shared export/alias/symbol-face reasoning out of `exports/analyze.ts`
+- finish moving the remaining package-local reexport/alias-chain trace out of `exports/analyze.ts` now that checker-backed symbol-face classification has landed under `src/semantic/`
 - add semantic symbol and declaration surfaces that live inquiry can consume directly
 - treat repeated raw source reading by the AI as evidence that semantic inquiry is still missing a capability
 - make analyzer ceilings explicit when a question crosses from static semantic recovery into genuinely runtime-only territory
@@ -142,6 +143,7 @@ Next:
 - keep shared substrate/evaluator code in neutral modules instead of inside compatibility or ingress surfaces
 - make hosted runtime orchestration depend on shared layers, not on compatibility tools as peers
 - keep public exports thin and projection-oriented
+- make package audit and related evaluator surfaces report package-internal source-area cycles honestly instead of letting known SCC pressure disappear behind a false clean bill
 
 Exit condition:
 
@@ -219,10 +221,12 @@ These are the points where operator judgement should usually decide direction:
 - [x] Move file identity and blindspots onto the structural source-file surface
 - [x] Move live dependency reasoning for reachability and file navigation onto a shared dependency surface
 - [ ] Establish the dedicated semantic analysis module family
+- [x] Extract checker-backed export symbol-face classification into `src/semantic/`
 - [ ] Extract a shared semantic export surface from `exports/analyze.ts`
 - [ ] Push inquiry policy and ingress onto narrower ontology families
 - [ ] Make `deps` / `typerefs` / `exports` feel like projections rather than architectural peers
 - [ ] Reduce the 6-directory SCC in a measurable way
+- [x] Make package audit surface package-internal source-area cycle pressure honestly
 - [ ] Define the landing contract for Aurelia semantic adapters
 
 ## How To Use This Roadmap

@@ -10,6 +10,7 @@ import {
   collectPartitionBindingPressure,
   collectPartitionBindingSeams,
 } from '../out/public/structural.js';
+import { collectPartitionBindingCycles } from '../src/partition-coupling.js';
 import type { DepsOutput } from '../out/deps/schema.js';
 import type { TypeRefsOutput } from '../out/typerefs/schema.js';
 
@@ -44,6 +45,26 @@ describe('partition coupling', () => {
     const pressure = collectPartitionBindingPressure(deps, 'source-area', 'packages/demo/src/', profile);
     expect(pressure[0]?.partition.partitionId).toBe('packages/demo/src/model');
     expect(pressure[0]?.incomingCounterparts[0]?.partitionId).toBe('packages/demo/src/host');
+  });
+
+  it('detects source-area cycles from shared partition seams', () => {
+    const repoPath = createPartitionFixtureRepo();
+    const profile = resolveAnalysisProfile({ repoPath });
+    const deps = createCyclicDepsOutput(repoPath);
+
+    const cycles = collectPartitionBindingCycles(deps, 'source-area', 'packages/demo/src/', profile);
+
+    expect(cycles[0]?.partitions.map((partition) => partition.partitionId)).toEqual([
+      'packages/demo/src/host',
+      'packages/demo/src/model',
+      'packages/demo/src/service',
+    ]);
+    expect(cycles[0]?.edgeCount).toBe(3);
+    expect(cycles[0]?.edges.map((edge) => [edge.from.partitionId, edge.to.partitionId])).toEqual([
+      ['packages/demo/src/host', 'packages/demo/src/model'],
+      ['packages/demo/src/model', 'packages/demo/src/service'],
+      ['packages/demo/src/service', 'packages/demo/src/host'],
+    ]);
   });
 });
 
@@ -162,6 +183,30 @@ function createTypeRefsOutput(repoPath: string): TypeRefsOutput {
         line: 1,
         exported: true,
         refs: [],
+      },
+    ],
+  };
+}
+
+function createCyclicDepsOutput(repoPath: string): DepsOutput {
+  return {
+    ...createDepsOutput(repoPath),
+    summary: {
+      files_analyzed: 3,
+      internal_edges: 3,
+      external_imports: 0,
+      unresolved: 0,
+      uncovered_files: 0,
+    },
+    edges: [
+      ...createDepsOutput(repoPath).edges,
+      {
+        source: 'packages/demo/src/service/container.ts',
+        target: 'packages/demo/src/host/runtime.ts',
+        specifier: '../host/runtime.js',
+        line: 3,
+        bindings: ['HostShape'],
+        type_only: false,
       },
     ],
   };

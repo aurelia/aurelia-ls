@@ -1,4 +1,4 @@
-import type { DepsOutput } from './deps/schema.js';
+import type { DepsOutput, OutputEdge } from './deps/schema.js';
 import type { AnalysisProfile, PartitionScheme } from './analysis-profile.js';
 import { resolveAnalysisProfile } from './analysis-profile.js';
 import type { TypeRefsOutput } from './typerefs/schema.js';
@@ -34,6 +34,17 @@ export interface PartitionCouplingPressure<TSeam> {
   readonly topOutgoingSeams: readonly TSeam[];
   readonly topIncomingSeams: readonly TSeam[];
 }
+
+export interface PartitionCycleGroup<TSeam extends { from: PartitionRef; to: PartitionRef }> {
+  readonly partitions: readonly PartitionRef[];
+  readonly edgeCount: number;
+  readonly edges: readonly TSeam[];
+}
+
+type DependencyEdgeCarrier = {
+  readonly root: string;
+  readonly edges: readonly OutputEdge[];
+};
 
 export function collectCrossPartitionTypeRefSummaries(
   typeRefs: TypeRefsOutput,
@@ -89,7 +100,7 @@ export function collectCrossPartitionTypeRefSummaries(
 }
 
 export function collectPartitionBindingSeams(
-  deps: DepsOutput,
+  deps: DependencyEdgeCarrier,
   schemeId: string,
   scopePrefix?: string,
   profile = resolveAnalysisProfile({ repoPath: deps.root }),
@@ -159,12 +170,24 @@ export function collectPartitionTypeRefPressure(
 }
 
 export function collectPartitionBindingPressure(
-  deps: DepsOutput,
+  deps: DependencyEdgeCarrier,
   schemeId: string,
   scopePrefix?: string,
   profile = resolveAnalysisProfile({ repoPath: deps.root }),
 ): readonly PartitionCouplingPressure<PartitionBindingSeamSummary>[] {
   return collectPartitionPressure(
+    collectPartitionBindingSeams(deps, schemeId, scopePrefix, profile),
+    (seam) => seam.edgeCount,
+  );
+}
+
+export function collectPartitionBindingCycles(
+  deps: DependencyEdgeCarrier,
+  schemeId: string,
+  scopePrefix?: string,
+  profile = resolveAnalysisProfile({ repoPath: deps.root }),
+): readonly PartitionCycleGroup<PartitionBindingSeamSummary>[] {
+  return collectPartitionCycles(
     collectPartitionBindingSeams(deps, schemeId, scopePrefix, profile),
     (seam) => seam.edgeCount,
   );
@@ -233,6 +256,107 @@ function collectPartitionPressure<TSeam extends { from: PartitionRef; to: Partit
     right.outgoingCount + right.incomingCount - (left.outgoingCount + left.incomingCount)
     || left.partition.partitionId.localeCompare(right.partition.partitionId),
   );
+}
+
+function collectPartitionCycles<TSeam extends { from: PartitionRef; to: PartitionRef }>(
+  seams: readonly TSeam[],
+  countOf: (seam: TSeam) => number,
+): readonly PartitionCycleGroup<TSeam>[] {
+  const nodes = new Map<string, PartitionRef>();
+  const adjacency = new Map<string, Map<string, TSeam[]>>();
+
+  for (const seam of seams) {
+    nodes.set(seam.from.partitionId, seam.from);
+    nodes.set(seam.to.partitionId, seam.to);
+
+    const targets = adjacency.get(seam.from.partitionId) ?? new Map<string, TSeam[]>();
+    const targetSeams = targets.get(seam.to.partitionId) ?? [];
+    targetSeams.push(seam);
+    targets.set(seam.to.partitionId, targetSeams);
+    adjacency.set(seam.from.partitionId, targets);
+  }
+
+  let index = 0;
+  const stack: string[] = [];
+  const onStack = new Set<string>();
+  const indices = new Map<string, number>();
+  const lowlinks = new Map<string, number>();
+  const components: string[][] = [];
+
+  function strongConnect(nodeId: string): void {
+    indices.set(nodeId, index);
+    lowlinks.set(nodeId, index);
+    index += 1;
+    stack.push(nodeId);
+    onStack.add(nodeId);
+
+    const successors = adjacency.get(nodeId);
+    if (successors) {
+      for (const successorId of successors.keys()) {
+        if (!indices.has(successorId)) {
+          strongConnect(successorId);
+          lowlinks.set(nodeId, Math.min(lowlinks.get(nodeId)!, lowlinks.get(successorId)!));
+        } else if (onStack.has(successorId)) {
+          lowlinks.set(nodeId, Math.min(lowlinks.get(nodeId)!, indices.get(successorId)!));
+        }
+      }
+    }
+
+    if (lowlinks.get(nodeId) === indices.get(nodeId)) {
+      const component: string[] = [];
+      let currentId: string;
+      do {
+        currentId = stack.pop()!;
+        onStack.delete(currentId);
+        component.push(currentId);
+      } while (currentId !== nodeId);
+
+      if (component.length > 1) {
+        components.push(component);
+      }
+    }
+  }
+
+  for (const nodeId of nodes.keys()) {
+    if (!indices.has(nodeId)) {
+      strongConnect(nodeId);
+    }
+  }
+
+  return components
+    .map((component) => {
+      const componentIds = new Set(component);
+      const cycleEdges: TSeam[] = [];
+      let edgeCount = 0;
+
+      for (const sourceId of component) {
+        const targets = adjacency.get(sourceId);
+        if (!targets) continue;
+
+        for (const [targetId, targetSeams] of targets) {
+          if (!componentIds.has(targetId)) continue;
+          cycleEdges.push(...targetSeams);
+          edgeCount += targetSeams.reduce((sum, seam) => sum + countOf(seam), 0);
+        }
+      }
+
+      return {
+        partitions: component
+          .map((partitionId) => nodes.get(partitionId)!)
+          .sort((left, right) => left.partitionId.localeCompare(right.partitionId)),
+        edgeCount,
+        edges: cycleEdges.sort((left, right) =>
+          countOf(right) - countOf(left)
+          || left.from.partitionId.localeCompare(right.from.partitionId)
+          || left.to.partitionId.localeCompare(right.to.partitionId),
+        ),
+      };
+    })
+    .sort((left, right) =>
+      right.edgeCount - left.edgeCount
+      || right.partitions.length - left.partitions.length
+      || left.partitions[0]!.partitionId.localeCompare(right.partitions[0]!.partitionId),
+    );
 }
 
 function collectCounterparts<TSeam extends { from: PartitionRef; to: PartitionRef }>(

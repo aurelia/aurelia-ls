@@ -8,6 +8,10 @@ import * as ts from 'typescript';
 import { collectSnapshotFrontierEvidence } from '../frontier-evidence.js';
 import type { ProgramReuseOptions } from '../program-reuse-options.js';
 import { RepoSession } from '../repo-session.js';
+import {
+  classifyExportSymbol,
+  type ExportSymbolClassification,
+} from '../semantic/export-symbol-surface.js';
 import { describeSnapshotProfile } from '../snapshots.js';
 import {
   buildStructuralClaimGraph,
@@ -16,7 +20,6 @@ import {
 } from '../structural-claim-graph.js';
 import type {
   ExportChainStep,
-  ExportFaceKind,
   ExportsOutput,
   PackageExportRecord,
   PackageExportsSummary,
@@ -81,16 +84,6 @@ interface TraceResult {
   typeOnly: boolean;
   namespaceExport: boolean;
   chain: ExportChainStep[];
-}
-
-interface SymbolClassification {
-  declarationName: string;
-  declarationFile: string | null;
-  declarationLine: number | null;
-  faceKind: ExportFaceKind | 'merged';
-  faceKinds: ExportFaceKind[];
-  typeExported: boolean;
-  valueExported: boolean;
 }
 
 interface ExportsAnalysisScope {
@@ -598,6 +591,10 @@ function traceExport(
   exportedName: string,
   visited = new Set<string>(),
 ): TraceResult | null {
+  // TODO: Move this package-local reexport/alias-chain walk into the semantic
+  // export surface beside the shared symbol-face classifier. The trace should
+  // stop living inside the exports projection before live inquiry can spend it
+  // directly without projection-owned split-brain.
   const visitKey = `${relPath}\0${exportedName}`;
   if (visited.has(visitKey)) return null;
   visited.add(visitKey);
@@ -778,117 +775,6 @@ function traceExport(
   return null;
 }
 
-function faceKindForDeclaration(node: ts.Declaration): ExportFaceKind {
-  if (ts.isTypeAliasDeclaration(node)) return 'type-alias';
-  if (ts.isInterfaceDeclaration(node)) return 'interface';
-  if (ts.isClassDeclaration(node)) return 'class';
-  if (ts.isFunctionDeclaration(node)) return 'function';
-  if (ts.isEnumDeclaration(node)) return 'enum';
-  if (ts.isModuleDeclaration(node)) return 'namespace';
-  if (ts.isVariableDeclaration(node)) {
-    const flags = ts.getCombinedNodeFlags(node.parent);
-    return (flags & ts.NodeFlags.Const) !== 0 ? 'const' : 'variable';
-  }
-  return 'unknown';
-}
-
-function classifyDeclarations(
-  scope: ExportsAnalysisScope,
-  declarations: readonly ts.Declaration[],
-): SymbolClassification {
-  const faceKinds = new Set<ExportFaceKind>();
-  let declarationName = '';
-  let declarationFile: string | null = null;
-  let declarationLine: number | null = null;
-  let typeExported = false;
-  let valueExported = false;
-
-  const preferredDeclarations = [...declarations].sort((left, right) => {
-    const leftIsDeclarationFile = left.getSourceFile().isDeclarationFile ? 1 : 0;
-    const rightIsDeclarationFile = right.getSourceFile().isDeclarationFile ? 1 : 0;
-    return leftIsDeclarationFile - rightIsDeclarationFile;
-  });
-
-  for (const declaration of preferredDeclarations) {
-    const faceKind = faceKindForDeclaration(declaration);
-    faceKinds.add(faceKind);
-    const sourceFile = declaration.getSourceFile();
-    const relPath = toRepoRelative(scope, sourceFile.fileName);
-
-    if (!declarationFile && !relPath.startsWith('..')) {
-      declarationFile = relPath;
-      declarationLine = lineOfNode(sourceFile, declaration);
-      const maybeNamed = declaration as ts.NamedDeclaration;
-      if (maybeNamed.name && ts.isIdentifier(maybeNamed.name)) {
-        declarationName = maybeNamed.name.text;
-      }
-    }
-
-    if (faceKind === 'interface' || faceKind === 'type-alias') {
-      typeExported = true;
-      continue;
-    }
-
-    if (faceKind === 'class' || faceKind === 'enum') {
-      typeExported = true;
-      valueExported = true;
-      continue;
-    }
-
-    if (faceKind === 'function' || faceKind === 'const' || faceKind === 'variable' || faceKind === 'namespace') {
-      valueExported = true;
-    }
-  }
-
-  const orderedFaceKinds = [...faceKinds].sort();
-  return {
-    declarationName,
-    declarationFile,
-    declarationLine,
-    faceKind: orderedFaceKinds.length > 1
-      ? 'merged'
-      : (orderedFaceKinds[0] ?? 'unknown'),
-    faceKinds: orderedFaceKinds,
-    typeExported,
-    valueExported,
-  };
-}
-
-function classifySymbol(
-  scope: ExportsAnalysisScope,
-  checker: ts.TypeChecker,
-  exportSymbol: ts.Symbol,
-): SymbolClassification {
-  const resolvedSymbol = (exportSymbol.flags & ts.SymbolFlags.Alias) !== 0
-    ? checker.getAliasedSymbol(exportSymbol)
-    : exportSymbol;
-  const declarations = resolvedSymbol.declarations ?? exportSymbol.declarations ?? [];
-
-  if (declarations.length === 0) {
-    return {
-      declarationName: resolvedSymbol.getName(),
-      declarationFile: null,
-      declarationLine: null,
-      faceKind: 'unknown',
-      faceKinds: ['unknown'],
-      typeExported: (resolvedSymbol.flags & ts.SymbolFlags.Type) !== 0,
-      valueExported: (resolvedSymbol.flags & ts.SymbolFlags.Value) !== 0,
-    };
-  }
-
-  const classified = classifyDeclarations(scope, declarations);
-  if (!classified.declarationName) {
-    classified.declarationName = resolvedSymbol.getName();
-  }
-  if (!classified.typeExported && (resolvedSymbol.flags & ts.SymbolFlags.Type) !== 0) {
-    classified.typeExported = true;
-  }
-  if (!classified.valueExported && (resolvedSymbol.flags & ts.SymbolFlags.Value) !== 0) {
-    classified.valueExported = true;
-  }
-  return classified;
-}
-
 function computePackageRevision(
   scope: ExportsAnalysisScope,
   files: Iterable<string>,
@@ -945,9 +831,9 @@ function analyzePackage(
   summary: PackageExportsSummary;
   records: PackageExportRecord[];
 } {
-  // TODO: Replace this package-local checker walk with shared semantic-kernel
-  // export, alias, and symbol-face claims so the live architecture no longer
-  // depends on semantic reasoning trapped inside the exports projection.
+  // TODO: Move the remaining export trace/alias-chain walk onto the semantic
+  // kernel once the shared export surface can carry both symbol-face and
+  // reexport-chain claims without projection-owned split-brain.
   const program = createPackageProgram(scope, packageClaim, options);
   const context: PackageAnalysisContext = {
     ...scope,
@@ -988,7 +874,7 @@ function analyzePackage(
   const records: PackageExportRecord[] = exportSymbols.map((exportSymbol) => {
     const exportedName = exportSymbol.getName();
     const trace = traceExport(context, packageClaim.attributes.analysisEntrypoint, exportedName);
-    const classification = classifySymbol(scope, context.checker, exportSymbol);
+    const classification: ExportSymbolClassification = classifyExportSymbol(scope, context.checker, exportSymbol);
 
     if (trace) {
       for (const step of trace.chain) {
