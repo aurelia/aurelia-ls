@@ -214,6 +214,13 @@ function buildPackageAuditAnswer(
   const dormantCount = findings.filter((finding) => finding.kind === 'under-integrated-file').length;
   const cycleCount = findings.filter((finding) => finding.kind === 'layer-cycle').length;
   const driftCount = findings.filter((finding) => finding.kind === 'surface-drift').length;
+  const strongestCycleFinding = findings.find((finding) => finding.kind === 'layer-cycle');
+  const cycleSummaryLines = strongestCycleFinding
+    ? strongestCycleFinding.evidence
+      .filter((line) => line.includes('->'))
+      .slice(0, 2)
+      .map((line) => `Top cycle seam: ${line}`)
+    : [];
 
   const summaryLines = findings.length === 0
     ? [`No strong integration red flags closed for ${pkg.package_name} in the ${describeAnalysisSurface(query.worldFrame?.freshness)}.`]
@@ -228,6 +235,7 @@ function buildPackageAuditAnswer(
       ...(cycleCount > 0
         ? [`${cycleCount} finding${pluralize(cycleCount)} shows package-internal layer cycles that still defeat the intended source-area DAG.`]
         : []),
+      ...cycleSummaryLines,
       ...(driftCount > 0
         ? [`${driftCount} finding${pluralize(driftCount)} points at architectural surface drift rather than direct dead code.`]
         : []),

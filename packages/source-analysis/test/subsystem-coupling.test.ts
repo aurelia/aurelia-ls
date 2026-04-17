@@ -10,6 +10,7 @@ import {
   collectSubsystemBindingPressure,
 } from '../out/public/structural.js';
 import type { DepsOutput } from '../out/deps/schema.js';
+import { loadCurrentLiveAnalysisViews } from './live-analysis-views.js';
 
 const tempDirs: string[] = [];
 
@@ -37,6 +38,23 @@ describe('Source-analysis subsystem coupling helpers', () => {
     const pressure = collectSubsystemBindingPressure(deps, 'packages/demo/src/', profile);
     expect(pressure[0]?.partition.partitionId).toBe('packages/demo/src/model');
     expect(pressure[0]?.incomingCounterparts[0]?.partitionId).toBe('packages/demo/src/host');
+  });
+
+  it('keeps the semantic export kernel one-way from the compatibility projection', () => {
+    const analysis = loadCurrentLiveAnalysisViews();
+    const seams = collectBindingSeams(analysis.deps, 'packages/source-analysis/src/');
+
+    const exportToSemantic = seams.find((seam) =>
+      seam.from.partitionId === 'packages/source-analysis/src/exports'
+      && seam.to.partitionId === 'packages/source-analysis/src/semantic',
+    );
+    const semanticToExport = seams.find((seam) =>
+      seam.from.partitionId === 'packages/source-analysis/src/semantic'
+      && seam.to.partitionId === 'packages/source-analysis/src/exports',
+    );
+
+    expect(exportToSemantic).toBeDefined();
+    expect(semanticToExport).toBeUndefined();
   });
 });
 

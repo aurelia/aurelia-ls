@@ -17,6 +17,7 @@ describe('Source-analysis package audit', () => {
     expect(cycleFinding).toBeDefined();
     expect(cycleFinding?.summary).toContain('@aurelia-ls/source-analysis');
     expect(cycleFinding?.evidence[0]).toContain('packages/source-analysis/src/');
+    expect(answer.outcome.value?.summaryLines.some((line) => line.startsWith('Top cycle seam: '))).toBe(true);
   });
 
   it('no longer reports package blind spots after the tests gained explicit tsconfig coverage', () => {

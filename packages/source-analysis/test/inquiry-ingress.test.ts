@@ -46,6 +46,20 @@ describe('InquiryIngress', () => {
     expect(answer.outcome.value?.primaryStep?.command).toBe('query.deps.summary');
   });
 
+  it('plans package audit for source-area cycle seam questions without asking for another narrowing move', () => {
+    const ingress = createInquiryIngress();
+
+    const answer = ingress.createPlanAnswer({
+      question: 'Which package-internal dependency seams keep @aurelia-ls/source-analysis in a source-area cycle?',
+      repoPath: 'C:/projects/aurelia-ls2',
+    });
+
+    expect(answer.outcome.tag).toBe('hit');
+    expect(answer.outcome.value?.status).toBe('ready');
+    expect(answer.outcome.value?.inquiry?.id).toBe('package-audit');
+    expect(answer.outcome.value?.primaryStep?.command).toBe('query.audit.package');
+  });
+
   it('keeps sentence-leading words out of type captures when routing why-alive questions', () => {
     const ingress = createInquiryIngress();
 

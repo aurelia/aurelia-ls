@@ -383,13 +383,14 @@ export function createDefaultInquiryCatalog(): InquiryCatalog {
       inquiryEpisodes: ['inventory-and-audit-sweep', 'bounded-closure-explanation'],
       questionRoutes: ['inventory', 'route'],
       readModes: ['summary-card', 'focus-card', 'supporting-evidence'],
-      aliases: ['tech debt', 'dead code', 'audit this package', 'integration gaps'],
-      nouns: ['audit', 'debt', 'coverage', 'integration', 'dead', 'exercise'],
-      verbs: ['audit', 'review', 'improve', 'triage', 'find'],
+      aliases: ['tech debt', 'dead code', 'audit this package', 'integration gaps', 'layer cycles', 'dependency seams'],
+      nouns: ['audit', 'debt', 'coverage', 'integration', 'dead', 'exercise', 'cycle', 'layer', 'seam', 'coupling', 'architecture'],
+      verbs: ['audit', 'review', 'improve', 'triage', 'find', 'explain', 'trace'],
       primaryCommands: ['query.audit.package'],
       supportingCommands: ['query.route.witness', 'query.navigate', 'session.open', 'session.status'],
       examples: [
         inquiryExample('Package debt scan', 'Audit @aurelia-ls/source-analysis for tech debt.', 'query.audit.package'),
+        inquiryExample('Cycle seam scan', 'Which package-internal dependency seams keep @aurelia-ls/source-analysis in a source-area cycle?', 'query.audit.package'),
       ],
       commonConfusions: [{
         label: 'Package audit versus route explanation',

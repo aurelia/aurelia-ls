@@ -12,6 +12,12 @@ import {
   classifyExportSymbol,
   type ExportSymbolClassification,
 } from '../semantic/export-symbol-surface.js';
+import {
+  traceModuleExport,
+  type ExportModuleInfo,
+  type ExportTraceContext,
+  type ExportTraceResult,
+} from '../semantic/export-trace-surface.js';
 import { describeSnapshotProfile } from '../snapshots.js';
 import {
   buildStructuralClaimGraph,
@@ -19,72 +25,10 @@ import {
   type StructuralClaimGraphRuntime,
 } from '../structural-claim-graph.js';
 import type {
-  ExportChainStep,
   ExportsOutput,
   PackageExportRecord,
   PackageExportsSummary,
 } from './schema.js';
-
-interface ModuleDeclarationInfo {
-  name: string;
-  line: number;
-  inherentlyTypeOnly: boolean;
-}
-
-interface LocalExportSpecifierInfo {
-  exportedName: string;
-  originalName: string;
-  line: number;
-  typeOnly: boolean;
-}
-
-interface ImportBindingInfo {
-  localName: string;
-  importedName: string;
-  line: number;
-  typeOnly: boolean;
-  specifier: string;
-  targetFile: string | null;
-}
-
-interface NamedReexportInfo {
-  exportedName: string;
-  originalName: string;
-  line: number;
-  typeOnly: boolean;
-  specifier: string;
-  targetFile: string | null;
-}
-
-interface StarReexportInfo {
-  line: number;
-  typeOnly: boolean;
-  specifier: string;
-  targetFile: string | null;
-}
-
-interface NamespaceReexportInfo {
-  exportedName: string;
-  line: number;
-  specifier: string;
-  targetFile: string | null;
-}
-
-interface ModuleInfo {
-  exportedDeclarations: Map<string, ModuleDeclarationInfo[]>;
-  localExportSpecifiers: LocalExportSpecifierInfo[];
-  importBindings: Map<string, ImportBindingInfo>;
-  namedReexports: NamedReexportInfo[];
-  starReexports: StarReexportInfo[];
-  namespaceReexports: NamespaceReexportInfo[];
-}
-
-interface TraceResult {
-  originalName: string;
-  typeOnly: boolean;
-  namespaceExport: boolean;
-  chain: ExportChainStep[];
-}
 
 interface ExportsAnalysisScope {
   readonly session: RepoSession;
@@ -99,7 +43,7 @@ interface PackageAnalysisContext extends ExportsAnalysisScope {
   readonly checker: ts.TypeChecker;
   readonly compilerOptions: ts.CompilerOptions;
   readonly packageClaim: PackageClaim;
-  readonly moduleInfoCache: Map<string, ModuleInfo>;
+  readonly moduleInfoCache: Map<string, ExportModuleInfo>;
   readonly moduleExportsCache: Map<string, Set<string>>;
   readonly sourceFileCache: Map<string, ts.SourceFile | null>;
 }
@@ -141,7 +85,7 @@ function gitBlobHash(filePath: string): string {
   }
 }
 
-function createEmptyModuleInfo(): ModuleInfo {
+function createEmptyModuleInfo(): ExportModuleInfo {
   return {
     exportedDeclarations: new Map(),
     localExportSpecifiers: [],
@@ -258,7 +202,7 @@ function declarationIsTypeOnly(faceKind: string): boolean {
 function buildModuleInfoFromClaims(
   context: PackageAnalysisContext,
   relPath: string,
-): ModuleInfo | null {
+): ExportModuleInfo | null {
   const fileClaim = context.runtime.index.sourceFileByPath.get(relPath);
   const declarations = context.runtime.index.declarationsByFilePath.get(relPath) ?? [];
   const importBindings = context.runtime.index.importBindingsBySourceFilePath.get(relPath) ?? [];
@@ -384,7 +328,7 @@ function resolveModuleTargetFallback(
 function getModuleInfoFromAstFallback(
   context: PackageAnalysisContext,
   relPath: string,
-): ModuleInfo | null {
+): ExportModuleInfo | null {
   const sourceFile = getSourceFile(context, relPath);
   if (!sourceFile) {
     return null;
@@ -544,7 +488,7 @@ function getModuleInfoFromAstFallback(
 function getModuleInfo(
   context: PackageAnalysisContext,
   relPath: string,
-): ModuleInfo {
+): ExportModuleInfo {
   const cached = context.moduleInfoCache.get(relPath);
   if (cached) return cached;
 
@@ -585,194 +529,14 @@ function getExportedNamesForModule(
   return names;
 }
 
-function traceExport(
+function createExportTraceContext(
   context: PackageAnalysisContext,
-  relPath: string,
-  exportedName: string,
-  visited = new Set<string>(),
-): TraceResult | null {
-  // TODO: Move this package-local reexport/alias-chain walk into the semantic
-  // export surface beside the shared symbol-face classifier. The trace should
-  // stop living inside the exports projection before live inquiry can spend it
-  // directly without projection-owned split-brain.
-  const visitKey = `${relPath}\0${exportedName}`;
-  if (visited.has(visitKey)) return null;
-  visited.add(visitKey);
-
-  const sourceFile = getSourceFile(context, relPath);
-  const moduleInfo = getModuleInfo(context, relPath);
-
-  const localDeclarations = moduleInfo.exportedDeclarations.get(exportedName);
-  if (localDeclarations && localDeclarations.length > 0) {
-    const declaration = localDeclarations[0]!;
-    return {
-      originalName: declaration.name,
-      typeOnly: declaration.inherentlyTypeOnly,
-      namespaceExport: false,
-      chain: [{
-        file: relPath,
-        line: declaration.line,
-        kind: 'local-declaration',
-        exported_name: exportedName,
-        original_name: declaration.name,
-        type_only: declaration.inherentlyTypeOnly,
-      }],
-    };
-  }
-
-  for (const localExport of moduleInfo.localExportSpecifiers) {
-    if (localExport.exportedName !== exportedName) continue;
-
-    const directLocalDeclarations = moduleInfo.exportedDeclarations.get(localExport.originalName);
-    if (directLocalDeclarations && directLocalDeclarations.length > 0) {
-      const declaration = directLocalDeclarations[0]!;
-      return {
-        originalName: declaration.name,
-        typeOnly: localExport.typeOnly || declaration.inherentlyTypeOnly,
-        namespaceExport: false,
-        chain: [
-          {
-            file: relPath,
-            line: localExport.line,
-            kind: 'local-export',
-            exported_name: localExport.exportedName,
-            original_name: localExport.originalName,
-            type_only: localExport.typeOnly,
-          },
-          {
-            file: relPath,
-            line: declaration.line,
-            kind: 'local-declaration',
-            exported_name: declaration.name,
-            original_name: declaration.name,
-            type_only: declaration.inherentlyTypeOnly,
-          },
-        ],
-      };
-    }
-
-    const binding = moduleInfo.importBindings.get(localExport.originalName);
-    if (binding?.targetFile) {
-      const traced = traceExport(context, binding.targetFile, binding.importedName, visited);
-      if (traced) {
-        return {
-          originalName: traced.originalName,
-          typeOnly: localExport.typeOnly || binding.typeOnly || traced.typeOnly,
-          namespaceExport: traced.namespaceExport,
-          chain: [
-            {
-              file: relPath,
-              line: localExport.line,
-              kind: 'local-export',
-              exported_name: localExport.exportedName,
-              original_name: localExport.originalName,
-              type_only: localExport.typeOnly,
-            },
-            {
-              file: relPath,
-              line: binding.line,
-              kind: 'import-alias',
-              exported_name: localExport.originalName,
-              original_name: binding.importedName,
-              specifier: binding.specifier,
-              target_file: binding.targetFile,
-              type_only: binding.typeOnly,
-            },
-            ...traced.chain,
-          ],
-        };
-      }
-    }
-  }
-
-  for (const reexport of moduleInfo.namedReexports) {
-    if (reexport.exportedName !== exportedName || !reexport.targetFile) continue;
-    const traced = traceExport(context, reexport.targetFile, reexport.originalName, visited);
-    if (traced) {
-      return {
-        originalName: traced.originalName,
-        typeOnly: reexport.typeOnly || traced.typeOnly,
-        namespaceExport: traced.namespaceExport,
-        chain: [
-          {
-            file: relPath,
-            line: reexport.line,
-            kind: 'named-reexport',
-            exported_name: reexport.exportedName,
-            original_name: reexport.originalName,
-            specifier: reexport.specifier,
-            target_file: reexport.targetFile,
-            type_only: reexport.typeOnly,
-          },
-          ...traced.chain,
-        ],
-      };
-    }
-  }
-
-  for (const namespaceReexport of moduleInfo.namespaceReexports) {
-    if (namespaceReexport.exportedName !== exportedName) continue;
-    return {
-      originalName: exportedName,
-      typeOnly: false,
-      namespaceExport: true,
-      chain: [{
-        file: relPath,
-        line: namespaceReexport.line,
-        kind: 'namespace-reexport',
-        exported_name: namespaceReexport.exportedName,
-        original_name: namespaceReexport.exportedName,
-        specifier: namespaceReexport.specifier,
-        target_file: namespaceReexport.targetFile ?? undefined,
-        type_only: false,
-      }],
-    };
-  }
-
-  for (const starReexport of moduleInfo.starReexports) {
-    if (!starReexport.targetFile) continue;
-    const exportedNames = getExportedNamesForModule(context, starReexport.targetFile);
-    if (!exportedNames.has(exportedName)) continue;
-
-    const traced = traceExport(context, starReexport.targetFile, exportedName, visited);
-    if (traced) {
-      return {
-        originalName: traced.originalName,
-        typeOnly: starReexport.typeOnly || traced.typeOnly,
-        namespaceExport: traced.namespaceExport,
-        chain: [
-          {
-            file: relPath,
-            line: starReexport.line,
-            kind: 'star-reexport',
-            exported_name: exportedName,
-            original_name: exportedName,
-            specifier: starReexport.specifier,
-            target_file: starReexport.targetFile,
-            type_only: starReexport.typeOnly,
-          },
-          ...traced.chain,
-        ],
-      };
-    }
-  }
-
-  if (sourceFile) {
-    return {
-      originalName: exportedName,
-      typeOnly: false,
-      namespaceExport: false,
-      chain: [{
-        file: relPath,
-        line: 1,
-        kind: 'fallback',
-        exported_name: exportedName,
-        original_name: exportedName,
-      }],
-    };
-  }
-
-  return null;
+): ExportTraceContext {
+  return {
+    getModuleInfo: (relPath) => getModuleInfo(context, relPath),
+    getSourceFile: (relPath) => getSourceFile(context, relPath),
+    getExportedNamesForModule: (relPath) => getExportedNamesForModule(context, relPath),
+  };
 }
 
 function computePackageRevision(
@@ -831,9 +595,6 @@ function analyzePackage(
   summary: PackageExportsSummary;
   records: PackageExportRecord[];
 } {
-  // TODO: Move the remaining export trace/alias-chain walk onto the semantic
-  // kernel once the shared export surface can carry both symbol-face and
-  // reexport-chain claims without projection-owned split-brain.
   const program = createPackageProgram(scope, packageClaim, options);
   const context: PackageAnalysisContext = {
     ...scope,
@@ -845,6 +606,7 @@ function analyzePackage(
     moduleExportsCache: new Map(),
     sourceFileCache: new Map(),
   };
+  const exportTraceContext = createExportTraceContext(context);
 
   const entrypointAbs = resolve(scope.repoPath, packageClaim.attributes.analysisEntrypoint);
   const entrypointSourceFile = getProgramSourceFile(program, entrypointAbs);
@@ -873,7 +635,11 @@ function analyzePackage(
 
   const records: PackageExportRecord[] = exportSymbols.map((exportSymbol) => {
     const exportedName = exportSymbol.getName();
-    const trace = traceExport(context, packageClaim.attributes.analysisEntrypoint, exportedName);
+    const trace: ExportTraceResult | null = traceModuleExport(
+      exportTraceContext,
+      packageClaim.attributes.analysisEntrypoint,
+      exportedName,
+    );
     const classification: ExportSymbolClassification = classifyExportSymbol(scope, context.checker, exportSymbol);
 
     if (trace) {

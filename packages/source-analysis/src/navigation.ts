@@ -739,6 +739,9 @@ function buildExportEpisode(
   }
 
   const record = matches[0]!;
+  // TODO: Route export navigation through the shared semantic export surface
+  // directly once hosted inquiry can read live semantic traces without going
+  // back through the materialized exports snapshot record.
   const pkg = builder.snapshots.exports.packages.find((candidate) => candidate.package_dir === record.package_dir)!;
   const exportsSnapshotId = builder.addSnapshotNode('exports');
   const packageNodeId = builder.addPackageNode(pkg);

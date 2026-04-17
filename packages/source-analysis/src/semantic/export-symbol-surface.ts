@@ -2,7 +2,7 @@ import { relative } from 'node:path';
 
 import * as ts from 'typescript';
 
-import type { ExportFaceKind } from '../exports/schema.js';
+import type { ExportFaceKind } from './export-contract.js';
 
 export interface ExportSymbolSemanticScope {
   readonly repoPath: string;

@@ -784,9 +784,9 @@ const DEFAULT_CAPABILITIES: readonly CapabilityDefinition[] = [
     label: 'Audit a package for integration and architecture red flags',
     summary: 'Return a package self-audit with reachability, exercise, structural, and uncovered-file findings.',
     whenToUse: 'Use this for package-level tech debt, dead-code suspicion, under-integration, or self-improvement questions.',
-    aliases: ['package audit', 'tech debt', 'dead code', 'red flags', 'self audit'],
-    nouns: ['package', 'audit', 'debt', 'dead', 'red', 'flags', 'coverage', 'integration'],
-    verbs: ['audit', 'inspect', 'find', 'surface'],
+    aliases: ['package audit', 'tech debt', 'dead code', 'red flags', 'self audit', 'layer cycles', 'dependency seams'],
+    nouns: ['package', 'audit', 'debt', 'dead', 'red', 'flags', 'coverage', 'integration', 'cycle', 'layer', 'seam', 'coupling', 'architecture'],
+    verbs: ['audit', 'inspect', 'find', 'surface', 'explain', 'trace'],
     questionRoutes: ['inventory'],
     requiredArgs: [
       requiredArg('sessionId', 'Hosted session id with snapshots to query.'),
@@ -803,6 +803,12 @@ const DEFAULT_CAPABILITIES: readonly CapabilityDefinition[] = [
       example(
         'package self-audit',
         'Audit @aurelia-ls/source-analysis for tech debt.',
+        'query.audit.package',
+        { sessionId: 'sa-1', packageName: '@aurelia-ls/source-analysis' },
+      ),
+      example(
+        'cycle seam scan',
+        'Which package-internal dependency seams keep @aurelia-ls/source-analysis in a source-area cycle?',
         'query.audit.package',
         { sessionId: 'sa-1', packageName: '@aurelia-ls/source-analysis' },
       ),
