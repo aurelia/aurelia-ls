@@ -894,6 +894,18 @@ function buildFileEpisode(
   }
 
   const filePath = fileInspection.matchedFilePath!;
+  if (requiresSourceCatalogBoundary(fileInspection.structuralPathContext)) {
+    const pkg = resolveStructuralOwningPackage(builder.snapshots, filePath) ?? undefined;
+    return builder.finish(createOpenBoundaryAnswer(
+      builder,
+      describeStructuralSourceBoundary(filePath, fileInspection.structuralPathContext),
+      { kind: 'file', value: filePath, label: basename(filePath) },
+      pkg ? [packageRef(pkg)] : [],
+      fileInspection.matchedRegimeContext!,
+      fileInspection.structuralPathContext,
+    ));
+  }
+
   const depsSnapshotId = builder.addSnapshotNode('deps');
   const typerefsSnapshotId = builder.addSnapshotNode('typerefs');
   const exportsSnapshotId = builder.addSnapshotNode('exports');
@@ -1381,6 +1393,27 @@ function defaultReadMode(
 
 function basename(filePath: string): string {
   return filePath.split('/').at(-1) ?? filePath;
+}
+
+function requiresSourceCatalogBoundary(
+  structuralPathContext: FocusedStructuralPathContext | null,
+): boolean {
+  return structuralPathContext?.evaluation.sourceCoverage === 'repo-blindspot'
+    || structuralPathContext?.evaluation.sourceCoverage === 'not-in-repo-scan';
+}
+
+function describeStructuralSourceBoundary(
+  filePath: string,
+  structuralPathContext: FocusedStructuralPathContext | null,
+): string {
+  switch (structuralPathContext?.evaluation.sourceCoverage) {
+    case 'repo-blindspot':
+      return `${filePath} exists in the live repo source scan but is not admitted by any loaded tsconfig/project claim, so workspace navigation cannot close on it as a source-backed file.`;
+    case 'not-in-repo-scan':
+      return `${filePath} is outside the live structural source-file catalog, so workspace navigation cannot close on it as a source-backed file.`;
+    default:
+      return `${filePath} is outside the live structural source-file catalog, so workspace navigation cannot close on it as a source-backed file.`;
+  }
 }
 
 function continuation(

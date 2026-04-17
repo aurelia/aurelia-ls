@@ -17,10 +17,9 @@ export interface AnswerRef {
   readonly label: string;
   readonly detail?: string;
 }
-// TODO: AnswerRefKind is now separate from FocusKind, but many call sites still
-// populate answer refs by copying inquiry focus kinds directly. If answer cards
-// gain richer evidence/control refs, move their constructors onto a dedicated
-// answer-reference layer instead of relying on ad hoc object literals.
+// Answer refs now travel through the shared answer-reference helpers in
+// answer-refs.ts. If cards gain richer evidence/control refs later, keep that
+// constructor layer separate instead of folding those rules back into card code.
 
 export interface AnswerCard<
   TRef extends AnswerRef = AnswerRef,

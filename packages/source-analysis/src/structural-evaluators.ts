@@ -14,6 +14,12 @@ export const STRUCTURAL_PATH_EVALUATOR_IDS = [
 export const STRUCTURAL_OPERATIONAL_TIERS =
   STRUCTURAL_OPERATIONAL_ANALYZABILITY_TIER_IDS;
 
+export const STRUCTURAL_PATH_SOURCE_COVERAGE_IDS = [
+  'source-backed',
+  'repo-blindspot',
+  'not-in-repo-scan',
+] as const;
+
 export const STRUCTURAL_PATH_EVALUATION_STATUSES = [
   'supported',
   'blocked',
@@ -26,21 +32,30 @@ export type StructuralPathEvaluatorId =
 export type StructuralOperationalTier =
   StructuralOperationalAnalyzabilityTierId;
 
+export type StructuralPathSourceCoverageId =
+  typeof STRUCTURAL_PATH_SOURCE_COVERAGE_IDS[number];
+
 export type StructuralPathEvaluationStatus =
   typeof STRUCTURAL_PATH_EVALUATION_STATUSES[number];
 
 export interface StructuralPathBlockerReason {
   readonly code:
     | 'file-not-produced'
+    | 'file-outside-tsconfig'
     | 'file-not-in-project-graph'
     | 'unresolved-relative-imports';
   readonly message: string;
   readonly claimIds: readonly StructuralClaimId[];
 }
 
+export interface StructuralPathEvaluationOptions {
+  readonly repoSourceFiles?: readonly string[];
+}
+
 export interface StructuralPathEvaluation {
   readonly evaluatorId: StructuralPathEvaluatorId;
   readonly path: string;
+  readonly sourceCoverage: StructuralPathSourceCoverageId;
   readonly status: StructuralPathEvaluationStatus;
   readonly operationalAnalyzabilityTier: StructuralOperationalTier | null;
   readonly supportingClaimIds: readonly StructuralClaimId[];
@@ -50,15 +65,30 @@ export interface StructuralPathEvaluation {
 export function evaluateFilePathStructuralClaims(
   runtime: StructuralClaimGraphRuntime,
   filePath: string,
+  options: StructuralPathEvaluationOptions = {},
 ): StructuralPathEvaluation {
-  // TODO: Extend this into a real path evaluator with checker-backed blocker
-  // reasons such as typed residuals, alias/export opacity, and runtime-only
-  // registration/value flow once the shared semantic claim layer lands.
   const sourceFileClaim = runtime.index.sourceFileByPath.get(filePath);
   if (!sourceFileClaim) {
+    if (options.repoSourceFiles?.includes(filePath)) {
+      return {
+        evaluatorId: 'file-path-deterministic-ceiling',
+        path: filePath,
+        sourceCoverage: 'repo-blindspot',
+        status: 'blocked',
+        operationalAnalyzabilityTier: null,
+        supportingClaimIds: [],
+        blockerReasons: [{
+          code: 'file-outside-tsconfig',
+          message: `${filePath} exists in the repo source scan but is not admitted by any loaded tsconfig/project claim.`,
+          claimIds: [],
+        }],
+      };
+    }
+
     return {
       evaluatorId: 'file-path-deterministic-ceiling',
       path: filePath,
+      sourceCoverage: 'not-in-repo-scan',
       status: 'unclaimed',
       operationalAnalyzabilityTier: null,
       supportingClaimIds: [],
@@ -79,6 +109,7 @@ export function evaluateFilePathStructuralClaims(
     return {
       evaluatorId: 'file-path-deterministic-ceiling',
       path: filePath,
+      sourceCoverage: 'source-backed',
       status: 'blocked',
       operationalAnalyzabilityTier: null,
       supportingClaimIds,
@@ -102,6 +133,7 @@ export function evaluateFilePathStructuralClaims(
     return {
       evaluatorId: 'file-path-deterministic-ceiling',
       path: filePath,
+      sourceCoverage: 'source-backed',
       status: 'blocked',
       operationalAnalyzabilityTier: null,
       supportingClaimIds,
@@ -116,6 +148,7 @@ export function evaluateFilePathStructuralClaims(
   return {
     evaluatorId: 'file-path-deterministic-ceiling',
     path: filePath,
+    sourceCoverage: 'source-backed',
     status: 'supported',
     operationalAnalyzabilityTier: 'source-analyzable',
     supportingClaimIds,

@@ -136,6 +136,20 @@ function buildFileRouteWitnessAnswer(
   }
 
   const filePath = fileInspection.matchedFilePath!;
+  if (requiresSourceCatalogBoundary(fileInspection.structuralPathContext)) {
+    const pkg = resolveStructuralOwningPackage(analysis, filePath);
+    return createOpenBoundaryAnswer(
+      query,
+      analysis,
+      { kind: 'file', value: filePath, label: basename(filePath) },
+      describeStructuralSourceBoundary(filePath, fileInspection.structuralPathContext),
+      pkg ? [packageRef(pkg)] : [],
+      [],
+      fileInspection.matchedRegimeContext!,
+      fileInspection.structuralPathContext,
+    );
+  }
+
   const pkg = resolveStructuralOwningPackage(analysis, filePath);
   if (!pkg) {
     return createOpenBoundaryAnswer(
@@ -784,6 +798,27 @@ function pluralize(count: number): string {
 
 function basename(filePath: string): string {
   return filePath.split('/').at(-1) ?? filePath;
+}
+
+function requiresSourceCatalogBoundary(
+  structuralPathContext: FocusedStructuralPathContext | null,
+): boolean {
+  return structuralPathContext?.evaluation.sourceCoverage === 'repo-blindspot'
+    || structuralPathContext?.evaluation.sourceCoverage === 'not-in-repo-scan';
+}
+
+function describeStructuralSourceBoundary(
+  filePath: string,
+  structuralPathContext: FocusedStructuralPathContext | null,
+): string {
+  switch (structuralPathContext?.evaluation.sourceCoverage) {
+    case 'repo-blindspot':
+      return `${filePath} exists in the live repo source scan but is not admitted by any loaded tsconfig/project claim, so the current route model cannot close on it as a source-backed file.`;
+    case 'not-in-repo-scan':
+      return `${filePath} is outside the live structural source-file catalog, so the current route model cannot close on it as a source-backed file.`;
+    default:
+      return `${filePath} is outside the live structural source-file catalog, so the current route model cannot close on it as a source-backed file.`;
+  }
 }
 
 function assertNever(value: never): never {

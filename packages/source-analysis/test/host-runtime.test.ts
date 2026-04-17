@@ -254,11 +254,11 @@ describe('SnapshotHostRuntime', () => {
     expect(navigate.result.answer.outcome.tag).toBe('open-boundary');
     expect(navigate.result.answer.outcome.value?.primaryRef.value).toBe('notes/isolated.ts');
     expect(navigate.result.answer.outcome.value?.summaryLines.some((line) =>
-      line.includes('outside the live structural source-file catalog')
-      || line.includes('source-file catalog'),
+      line.includes('repo source scan')
+      || line.includes('source-backed file'),
     )).toBe(true);
     expect(navigate.result.answer.outcome.issues.some((issue) =>
-      issue.code === 'path-evaluator-unclaimed'
+      issue.code === 'path-evaluator-blocked'
       && issue.message.includes('notes/isolated.ts'),
     )).toBe(true);
 
@@ -274,8 +274,8 @@ describe('SnapshotHostRuntime', () => {
     expect(witness.status).toBe('ok');
     expect(witness.result.answer.outcome.tag).toBe('open-boundary');
     expect(witness.result.answer.outcome.value?.summaryLines.some((line) =>
-      line.includes('outside the live structural source-file catalog')
-      || line.includes('source-file catalog'),
+      line.includes('repo source scan')
+      || line.includes('source-backed file'),
     )).toBe(true);
 
     const admitted = runtime.execute({

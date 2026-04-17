@@ -2,6 +2,7 @@ import type {
   ClosureBasis,
   Outcome,
 } from './outcome-algebra.js';
+import type { InquiryAnswerSlots } from './inquiry-wire.js';
 
 export const INQUIRY_MODEL_SCHEMA_VERSION = 'v0alpha1' as const;
 
@@ -218,26 +219,11 @@ export interface ContinuationBasis {
   readonly governingAnchorRefs?: readonly string[];
 }
 
-export interface WireContinuationBasis {
-  readonly focus_ref?: FocusRef;
-  readonly question_route?: QuestionRoute;
-  readonly read_mode?: ReadMode;
-  readonly world_frame?: WorldFrame;
-  readonly governing_anchor_refs?: readonly string[];
-}
-
 export interface DeltaDescriptor {
   readonly kind: 'none' | 'files' | 'project' | 'claims';
   readonly count: number;
   readonly affectedRefs: readonly string[];
   readonly rereadFloor?: QuestionRoute;
-}
-
-export interface WireDeltaDescriptor {
-  readonly kind: DeltaDescriptor['kind'];
-  readonly count: number;
-  readonly affected_refs: readonly string[];
-  readonly reread_floor?: QuestionRoute;
 }
 
 export interface InquiryProvenanceEntry {
@@ -255,25 +241,6 @@ export interface Inquiry {
   readonly worldFrame?: WorldFrame;
   readonly requestedSlotIds?: readonly InquirySlotId[];
   readonly continuationBasis?: ContinuationBasis;
-}
-
-// TODO: The answer envelope still carries the same semantics twice: once as the
-// domain-native query/outcome shape and once as this wire-oriented slots map.
-// If both remain public long-term, extract an explicit codec boundary so these
-// two representations stop evolving by convention inside the same model file.
-export interface InquiryAnswerSlots<TResult = unknown> {
-  readonly focus_ref?: FocusRef;
-  readonly question_route?: QuestionRoute;
-  readonly read_mode?: ReadMode;
-  readonly world_frame?: WorldFrame;
-  readonly outcome?: Outcome<TResult>;
-  // TODO: closure_basis and provenance still reuse domain payloads inside the
-  // wire-shaped slots bag. If slots remain part of the public interchange
-  // contract, give these nested payloads explicit wire codecs too.
-  readonly closure_basis?: readonly ClosureBasis[];
-  readonly provenance?: readonly InquiryProvenanceEntry[];
-  readonly continuation_basis?: WireContinuationBasis;
-  readonly delta?: WireDeltaDescriptor;
 }
 
 export interface InquiryAnswer<TResult = unknown> {

@@ -584,10 +584,7 @@ export class SnapshotHostRuntime {
 
   #queryAuditPackage(args: AuditPackageQueryArgs): CommandOutcome {
     const state = this.#sessions.get(args.sessionId);
-    const hostedAnalysis = ensureFreshHostedAnalysisViews(state, args.refreshIfNeeded);
-    // TODO: Thread live structural claims and path-evaluator results directly
-    // into audit answers instead of adapting through the legacy deps/typerefs/
-    // exports materialized views first.
+    const hostedInquiry = ensureFreshHostedInquiryContext(state, args.refreshIfNeeded);
     const answer = createAuditAnswer(
       {
         inquiryEpisode: 'inventory-and-audit-sweep',
@@ -599,29 +596,27 @@ export class SnapshotHostRuntime {
           target: state.target,
         }),
       },
-      hostedAnalysis.analysis,
+      hostedInquiry.analysis,
     );
     const rendered = buildRenderedView(answer, args.consumer, args.renderStyle);
     const result: AuditPackageQueryResult = {
       answer,
       ...(rendered ? { rendered } : {}),
-      warnings: hostedAnalysis.warnings,
+      warnings: hostedInquiry.warnings,
     };
 
     return {
       result,
       sessionId: state.sessionId,
-      refreshedKinds: hostedAnalysis.refreshedKinds,
+      refreshedKinds: hostedInquiry.refreshedKinds,
       invalidation: buildInvalidationMeta(state),
-      cache: hostedAnalysis.cache,
+      cache: hostedInquiry.cache,
     };
   }
 
   #queryRouteWitness(args: RouteWitnessQueryArgs): CommandOutcome {
     const state = this.#sessions.get(args.sessionId);
-    const hostedAnalysis = ensureFreshHostedAnalysisViews(state, args.refreshIfNeeded);
-    // TODO: Move route witnesses onto direct structural route claims so the
-    // host no longer has to adapt live state through snapshot-shaped outputs.
+    const hostedInquiry = ensureFreshHostedInquiryContext(state, args.refreshIfNeeded);
     const answer = createRouteWitnessAnswer(
       {
         inquiryEpisode: 'bounded-closure-explanation',
@@ -636,29 +631,27 @@ export class SnapshotHostRuntime {
           target: state.target,
         }),
       },
-      hostedAnalysis.analysis,
+      hostedInquiry.analysis,
     );
     const rendered = buildRenderedView(answer, args.consumer, args.renderStyle);
     const result: RouteWitnessQueryResult = {
       answer,
       ...(rendered ? { rendered } : {}),
-      warnings: hostedAnalysis.warnings,
+      warnings: hostedInquiry.warnings,
     };
 
     return {
       result,
       sessionId: state.sessionId,
-      refreshedKinds: hostedAnalysis.refreshedKinds,
+      refreshedKinds: hostedInquiry.refreshedKinds,
       invalidation: buildInvalidationMeta(state),
-      cache: hostedAnalysis.cache,
+      cache: hostedInquiry.cache,
     };
   }
 
   #queryNavigate(args: NavigateQueryArgs): CommandOutcome {
     const state = this.#sessions.get(args.sessionId);
-    const hostedAnalysis = ensureFreshHostedAnalysisViews(state, args.refreshIfNeeded);
-    // TODO: Let navigation spend live structural/evaluator context directly and
-    // demote these adapted materialized views to compatibility-only surfaces.
+    const hostedInquiry = ensureFreshHostedInquiryContext(state, args.refreshIfNeeded);
     const episode = createNavigationEpisode(
       {
         inquiryEpisode: 'orient-and-localize',
@@ -673,21 +666,21 @@ export class SnapshotHostRuntime {
           target: state.target,
         }),
       },
-      hostedAnalysis.analysis,
+      hostedInquiry.analysis,
     );
     const rendered = buildRenderedView(episode.answer, args.consumer, args.renderStyle);
     const result: NavigateQueryResult = {
       answer: episode.answer,
       ...(rendered ? { rendered } : {}),
-      warnings: hostedAnalysis.warnings,
+      warnings: hostedInquiry.warnings,
     };
 
     return {
       result,
       sessionId: state.sessionId,
-      refreshedKinds: hostedAnalysis.refreshedKinds,
+      refreshedKinds: hostedInquiry.refreshedKinds,
       invalidation: buildInvalidationMeta(state),
-      cache: hostedAnalysis.cache,
+      cache: hostedInquiry.cache,
     };
   }
 
@@ -1138,7 +1131,7 @@ function asStepString(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
-function ensureFreshHostedAnalysisViews(
+function ensureFreshHostedInquiryContext(
   state: HostSessionState,
   refreshIfNeeded = true,
 ): {
@@ -1147,6 +1140,7 @@ function ensureFreshHostedAnalysisViews(
   refreshedKinds: readonly SnapshotKind[];
   cache: HostCacheMeta;
 } {
+  const liveStructuralSurface = ensureLiveStructuralSurface(state);
   const depsQuery = ensureFreshSnapshot(state, 'deps', refreshIfNeeded);
   const typeRefsQuery = ensureFreshSnapshot(state, 'typerefs', refreshIfNeeded);
   const exportsQuery = ensureFreshSnapshot(state, 'exports', refreshIfNeeded);
@@ -1157,8 +1151,9 @@ function ensureFreshHostedAnalysisViews(
       deps: depsQuery.snapshot,
       typeRefs: typeRefsQuery.snapshot,
       exports: exportsQuery.snapshot,
-      structuralRuntime: ensureLiveStructuralRuntime(state).structuralRuntime,
-      sourceFileScan: state.liveAnalysis.sourceFileScan,
+      structuralRuntime: liveStructuralSurface.structuralRuntime,
+      sourceFileScan: liveStructuralSurface.sourceFileScan,
+      repoSourceFiles: liveStructuralSurface.repoSourceFiles,
     }),
     warnings: [
       ...depsQuery.warnings,
@@ -1234,7 +1229,7 @@ function refreshKinds(
     return [];
   }
 
-  const liveRuntime = ensureLiveStructuralRuntime(state);
+  const liveRuntime = ensureLiveStructuralSurface(state);
 
   for (const kind of kindsToRefresh) {
     const result = runAnalysis(state, kind, liveRuntime);
@@ -1258,6 +1253,7 @@ function runAnalysis<TKind extends SnapshotKind>(
   state: HostSessionState,
   kind: TKind,
   liveRuntime: {
+    readonly repoSourceFiles: readonly string[];
     readonly sourceFileScan: ParsedTsconfigSourceFileScanResult;
     readonly structuralRuntime: StructuralClaimGraphRuntime;
   },
@@ -1308,12 +1304,19 @@ function runAnalysis<TKind extends SnapshotKind>(
   }
 }
 
-function ensureLiveStructuralRuntime(
+function ensureLiveStructuralSurface(
   state: HostSessionState,
 ): {
+  readonly repoSourceFiles: readonly string[];
   readonly sourceFileScan: ParsedTsconfigSourceFileScanResult;
   readonly structuralRuntime: StructuralClaimGraphRuntime;
 } {
+  const repoSourceFiles = state.liveAnalysis.repoSourceFiles
+    ?? state.session.listRepoSourceFiles();
+  if (!state.liveAnalysis.repoSourceFiles) {
+    state.liveAnalysis.repoSourceFiles = repoSourceFiles;
+  }
+
   const sourceFileScan = state.liveAnalysis.sourceFileScan
     ?? scanParsedTsconfigSourceFiles(state.session);
   if (!state.liveAnalysis.sourceFileScan) {
@@ -1327,6 +1330,7 @@ function ensureLiveStructuralRuntime(
   }
 
   return {
+    repoSourceFiles,
     sourceFileScan,
     structuralRuntime,
   };
@@ -1352,6 +1356,7 @@ function invalidateSession(
 
   if (scope === 'project') {
     state.session.clearProgramCache();
+    state.liveAnalysis.repoSourceFiles = undefined;
     state.liveAnalysis.sourceFileScan = undefined;
     state.liveAnalysis.structuralRuntime = undefined;
     for (const kind of ALL_SNAPSHOT_KINDS) {
@@ -1386,6 +1391,7 @@ function invalidateSession(
 
   if (affectedKinds.size > 0) {
     state.session.clearProgramCache();
+    state.liveAnalysis.repoSourceFiles = undefined;
     state.liveAnalysis.sourceFileScan = undefined;
     state.liveAnalysis.structuralRuntime = undefined;
     state.invalidationKind = 'files';

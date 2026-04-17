@@ -18,6 +18,7 @@ import type {
 export interface HostLiveAnalysisState {
   structuralRuntime?: StructuralClaimGraphRuntime;
   sourceFileScan?: ParsedTsconfigSourceFileScanResult;
+  repoSourceFiles?: readonly string[];
 }
 
 export interface HostSessionState {

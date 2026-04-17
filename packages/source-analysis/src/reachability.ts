@@ -143,9 +143,10 @@ export function createPackageReachability(
     canonicalizeSourceBackedPackageFile(profile, analysis.root, filePath);
   const declarationsByFile = packageSurface.declarationsByFile;
   const exportRecordsByFile = packageSurface.exportRecordsByFile;
-  // TODO: If uncovered files need to influence route reasoning again, spend
-  // them as explicit blindspot evidence/evaluator inputs rather than promoting
-  // them back into the canonical package file surface.
+  // Uncovered files now stay on the structural blindspot side of the package
+  // surface. If they influence route reasoning later, that should happen
+  // through explicit blindspot evaluators rather than by promoting them back
+  // into the canonical package file surface.
 
   for (const edge of analysis.deps.edges) {
     const sourcePath = canonicalizePackageFilePath(edge.source);

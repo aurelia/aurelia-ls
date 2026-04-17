@@ -5,19 +5,37 @@ import type {
   PackageExportsSummary,
 } from './exports/schema.js';
 import { trimTrailingFocusPunctuation } from './focus-normalization.js';
+import type { StructuralClaimId } from './structural-claim-graph.js';
 import type { TypeDecl } from './typerefs/schema.js';
 
 export const STRUCTURAL_SOURCE_FILE_CATALOG_SOURCES = [
   'structural-runtime',
+  'repo-source-scan',
   'source-file-scan',
+] as const;
+
+export const STRUCTURAL_SOURCE_FILE_COVERAGE_KINDS = [
+  'source-backed',
+  'repo-blindspot',
 ] as const;
 
 export type StructuralSourceFileCatalogSource =
   typeof STRUCTURAL_SOURCE_FILE_CATALOG_SOURCES[number];
 
+export type StructuralSourceFileCoverageKind =
+  typeof STRUCTURAL_SOURCE_FILE_COVERAGE_KINDS[number];
+
+export interface StructuralSourceFileCatalogEntry {
+  readonly filePath: string;
+  readonly coverage: StructuralSourceFileCoverageKind;
+  readonly sourceFileClaimId: StructuralClaimId | null;
+  readonly projectClaimIds: readonly StructuralClaimId[];
+}
+
 export interface StructuralSourceFileCatalog {
-  readonly source: StructuralSourceFileCatalogSource;
+  readonly sources: readonly StructuralSourceFileCatalogSource[];
   readonly files: readonly string[];
+  readonly entriesByFile: ReadonlyMap<string, StructuralSourceFileCatalogEntry>;
 }
 
 export interface StructuralPackageFileSurface {
@@ -29,7 +47,7 @@ export interface StructuralPackageFileSurface {
 }
 
 export function describeMissingStructuralSourceFileCatalog(): string {
-  return 'File focus now depends on the live structural source-file catalog, but the current analysis views do not carry structural file claims or a source-file scan.';
+  return 'File focus now depends on the live structural source-file catalog, but the current analysis views do not carry structural file claims, a repo source scan, or a source-file scan.';
 }
 
 export function describeMissingStructuralPackageSurface(): string {
@@ -39,30 +57,68 @@ export function describeMissingStructuralPackageSurface(): string {
 export function loadStructuralSourceFileCatalog(
   analysis: AnalysisViews,
 ): StructuralSourceFileCatalog | null {
-  if (analysis.structuralRuntime) {
-    return {
-      source: 'structural-runtime',
-      files: analysis.structuralRuntime.index.sourceFiles
-        .map((claim) => claim.attributes.filePath)
-        .sort((left, right) => left.localeCompare(right)),
-    };
+  const sources: StructuralSourceFileCatalogSource[] = [];
+  const entries = new Map<string, StructuralSourceFileCatalogEntry>();
+
+  if (analysis.repoSourceFiles) {
+    sources.push('repo-source-scan');
+    for (const filePath of analysis.repoSourceFiles) {
+      entries.set(filePath, {
+        filePath,
+        coverage: 'repo-blindspot',
+        sourceFileClaimId: null,
+        projectClaimIds: [],
+      });
+    }
   }
 
-  if (analysis.sourceFileScan) {
-    const files = new Set<string>();
+  if (analysis.structuralRuntime) {
+    sources.push('structural-runtime');
+    for (const claim of analysis.structuralRuntime.index.sourceFiles) {
+      const filePath = claim.attributes.filePath;
+      const projectClaimIds = (
+        analysis.structuralRuntime.index.projectSourceFilesByFilePath.get(filePath) ?? []
+      ).map((projectClaim) => projectClaim.id).sort((left, right) => left.localeCompare(right));
+      entries.set(filePath, {
+        filePath,
+        coverage: 'source-backed',
+        sourceFileClaimId: claim.id,
+        projectClaimIds,
+      });
+    }
+  }
+
+  if (analysis.sourceFileScan && !analysis.structuralRuntime) {
+    sources.push('source-file-scan');
     for (const batch of analysis.sourceFileScan.batches) {
       for (const sourceFile of batch.sourceFiles) {
-        files.add(sourceFile.relPath);
+        entries.set(sourceFile.relPath, {
+          filePath: sourceFile.relPath,
+          coverage: 'source-backed',
+          sourceFileClaimId: null,
+          projectClaimIds: [],
+        });
       }
     }
-
-    return {
-      source: 'source-file-scan',
-      files: [...files].sort((left, right) => left.localeCompare(right)),
-    };
   }
 
-  return null;
+  if (sources.length === 0) {
+    return null;
+  }
+
+  const files = [...entries.keys()].sort((left, right) => left.localeCompare(right));
+  return {
+    sources,
+    files,
+    entriesByFile: new Map(files.map((filePath) => [filePath, entries.get(filePath)!])),
+  };
+}
+
+export function getStructuralSourceFileCatalogEntry(
+  analysis: AnalysisViews,
+  filePath: string,
+): StructuralSourceFileCatalogEntry | null {
+  return loadStructuralSourceFileCatalog(analysis)?.entriesByFile.get(filePath) ?? null;
 }
 
 export function resolveStructuralSourceFileQuery(
@@ -74,10 +130,6 @@ export function resolveStructuralSourceFileQuery(
     return null;
   }
 
-  // TODO: The structural source-file catalog currently covers tsconfig-admitted
-  // source files only. Uncovered repo files should become explicit structural
-  // blindspot claims/evaluator inputs, not a second file catalog rebuilt from
-  // snapshot carriers.
   const normalized = trimTrailingFocusPunctuation(query).replace(/\\/g, '/');
   if (catalog.files.includes(normalized)) {
     return [normalized];
@@ -132,7 +184,12 @@ export function collectStructuralPackageFileSurface(
   const ownsFile = (filePath: string): boolean =>
     resolveStructuralOwningPackage(analysis, filePath)?.package_dir === pkg.package_dir;
 
-  const files = catalog.files.filter(ownsFile);
+  const files = catalog.files.filter((filePath) =>
+    ownsFile(filePath) && catalog.entriesByFile.get(filePath)?.coverage === 'source-backed',
+  );
+  const uncoveredFiles = catalog.files.filter((filePath) =>
+    ownsFile(filePath) && catalog.entriesByFile.get(filePath)?.coverage === 'repo-blindspot',
+  );
   const declarationsByFile = new Map<string, TypeDecl[]>();
   for (const declaration of analysis.typeRefs.declarations) {
     if (!ownsFile(declaration.file)) {
@@ -155,16 +212,7 @@ export function collectStructuralPackageFileSurface(
     exportRecordsByFile.set(record.declaration_file, exportRecords);
   }
 
-  const unresolvedImports = analysis.deps.unresolved_imports
-    .filter((entry) => ownsFile(entry.source))
-    .sort((left, right) =>
-      left.source.localeCompare(right.source)
-      || left.line - right.line
-      || left.specifier.localeCompare(right.specifier),
-    );
-  const uncoveredFiles = analysis.deps.uncovered_files
-    .filter(ownsFile)
-    .sort((left, right) => left.localeCompare(right));
+  const unresolvedImports = collectStructuralUnresolvedImports(analysis, ownsFile);
 
   return {
     files,
@@ -187,6 +235,42 @@ export function collectStructuralPackageFileSurface(
       ]),
     ),
   };
+}
+
+function collectStructuralUnresolvedImports(
+  analysis: AnalysisViews,
+  ownsFile: (filePath: string) => boolean,
+): readonly UnresolvedImport[] {
+  if (analysis.structuralRuntime) {
+    return analysis.structuralRuntime.index.imports
+      .flatMap((importClaim) => {
+        if (!ownsFile(importClaim.attributes.sourceFile)) {
+          return [];
+        }
+        const resolution = analysis.structuralRuntime?.index.resolutionByImportId.get(importClaim.id);
+        if (resolution?.attributes.status !== 'unresolved') {
+          return [];
+        }
+        return [{
+          source: importClaim.attributes.sourceFile,
+          specifier: importClaim.attributes.specifier,
+          line: importClaim.attributes.line,
+        }];
+      })
+      .sort((left, right) =>
+        left.source.localeCompare(right.source)
+        || left.line - right.line
+        || left.specifier.localeCompare(right.specifier),
+      );
+  }
+
+  return analysis.deps.unresolved_imports
+    .filter((entry) => ownsFile(entry.source))
+    .sort((left, right) =>
+      left.source.localeCompare(right.source)
+      || left.line - right.line
+      || left.specifier.localeCompare(right.specifier),
+    );
 }
 
 function filePathBelongsToPackageDir(

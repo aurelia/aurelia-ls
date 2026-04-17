@@ -24,6 +24,7 @@ export interface AnalysisViews {
   readonly support?: ProfileSnapshotSupport;
   readonly structuralRuntime?: StructuralClaimGraphRuntime;
   readonly sourceFileScan?: ParsedTsconfigSourceFileScanResult;
+  readonly repoSourceFiles?: readonly string[];
 }
 
 export interface AnalysisViewsOptions {
@@ -34,6 +35,7 @@ export interface AnalysisViewsOptions {
   readonly support?: ProfileSnapshotSupport;
   readonly structuralRuntime?: StructuralClaimGraphRuntime;
   readonly sourceFileScan?: ParsedTsconfigSourceFileScanResult;
+  readonly repoSourceFiles?: readonly string[];
 }
 
 export function loadCurrentAnalysisViews(
@@ -55,6 +57,7 @@ export function createAnalysisViews(
     ...(options.support ? { support: options.support } : {}),
     ...(options.structuralRuntime ? { structuralRuntime: options.structuralRuntime } : {}),
     ...(options.sourceFileScan ? { sourceFileScan: options.sourceFileScan } : {}),
+    ...(options.repoSourceFiles ? { repoSourceFiles: options.repoSourceFiles } : {}),
   };
 }
 

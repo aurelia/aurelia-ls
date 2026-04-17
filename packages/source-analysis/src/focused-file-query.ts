@@ -9,6 +9,7 @@ import { inspectFocusedStructuralPath } from './focused-structural-path.js';
 import { trimTrailingFocusPunctuation } from './focus-normalization.js';
 import {
   describeMissingStructuralSourceFileCatalog,
+  loadStructuralSourceFileCatalog,
   type StructuralSourceFileCatalogSource,
   resolveStructuralSourceFileQuery,
 } from './structural-source-file-surface.js';
@@ -16,7 +17,7 @@ import {
 export interface FocusedFileQueryInspection {
   readonly normalizedQuery: string;
   readonly requestedRegimeContext: FocusedAnalyzabilityContext;
-  readonly catalogSource: StructuralSourceFileCatalogSource | null;
+  readonly catalogSources: readonly StructuralSourceFileCatalogSource[];
   readonly catalogIssue: string | null;
   readonly matches: readonly string[];
   readonly matchedFilePath: string | null;
@@ -35,6 +36,7 @@ export function inspectFocusedFileQuery(
     pathPrefixes: [normalizedQuery],
     queryHints: [normalizedQuery],
   });
+  const catalog = loadStructuralSourceFileCatalog(analysis);
   const matches = resolveStructuralSourceFileQuery(analysis, normalizedQuery) ?? [];
   const matchedFilePath = matches.length === 1 ? matches[0]! : null;
   const structuralPathContext = inspectStructuralPathContext(
@@ -46,14 +48,8 @@ export function inspectFocusedFileQuery(
     return {
       normalizedQuery,
       requestedRegimeContext,
-      catalogSource: analysis.structuralRuntime
-        ? 'structural-runtime'
-        : analysis.sourceFileScan
-          ? 'source-file-scan'
-          : null,
-      catalogIssue: analysis.structuralRuntime || analysis.sourceFileScan
-        ? null
-        : describeMissingStructuralSourceFileCatalog(),
+      catalogSources: catalog?.sources ?? [],
+      catalogIssue: catalog ? null : describeMissingStructuralSourceFileCatalog(),
       matches,
       matchedFilePath: null,
       matchedRegimeContext: null,
@@ -64,11 +60,7 @@ export function inspectFocusedFileQuery(
   return {
     normalizedQuery,
     requestedRegimeContext,
-    catalogSource: analysis.structuralRuntime
-      ? 'structural-runtime'
-      : analysis.sourceFileScan
-        ? 'source-file-scan'
-        : null,
+    catalogSources: catalog?.sources ?? [],
     catalogIssue: null,
     matches,
     matchedFilePath,

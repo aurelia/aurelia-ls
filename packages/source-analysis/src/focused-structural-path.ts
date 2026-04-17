@@ -33,48 +33,51 @@ export function inspectFocusedStructuralPath(
     return null;
   }
 
-  const evaluation = evaluateFilePathStructuralClaims(analysis.structuralRuntime, filePath);
-  const tierLabel = evaluation.operationalAnalyzabilityTier ?? '(not yet closed)';
-  const blockerSummary = evaluation.blockerReasons[0]?.message ?? 'No structural blocker recorded.';
-  const lines = evaluation.status === 'supported'
+  const finalEvaluation = evaluateFilePathStructuralClaims(analysis.structuralRuntime, filePath, {
+    repoSourceFiles: analysis.repoSourceFiles,
+  });
+  const tierLabel = finalEvaluation.operationalAnalyzabilityTier ?? '(not yet closed)';
+  const blockerSummary = finalEvaluation.blockerReasons[0]?.message ?? 'No structural blocker recorded.';
+  const lines = finalEvaluation.status === 'supported'
     ? [`Path evaluator closes on ${filePath} as ${tierLabel}.`]
     : [`Path evaluator still leaves ${filePath} open: ${blockerSummary}`];
-  const tag: OutcomeTag | null = evaluation.status === 'supported' ? null : 'open-boundary';
-  const trust: TrustProfile | null = evaluation.status === 'supported'
+  const tag: OutcomeTag | null = finalEvaluation.status === 'supported' ? null : 'open-boundary';
+  const trust: TrustProfile | null = finalEvaluation.status === 'supported'
     ? {
       kind: 'grounded',
       summary: `The live path evaluator closes on ${filePath} through structural claim evidence.`,
     }
     : {
-      kind: evaluation.status === 'unclaimed' ? 'frontier' : 'qualified',
+      kind: finalEvaluation.status === 'unclaimed' ? 'frontier' : 'qualified',
       summary: blockerSummary,
     };
 
   return {
-    evaluation,
+    evaluation: finalEvaluation,
     facts: [
-      { label: 'path evaluator status', value: evaluation.status },
+      { label: 'path source coverage', value: finalEvaluation.sourceCoverage },
+      { label: 'path evaluator status', value: finalEvaluation.status },
       { label: 'path evaluator tier', value: tierLabel },
-      { label: 'path evaluator blockers', value: `${evaluation.blockerReasons.length}` },
+      { label: 'path evaluator blockers', value: `${finalEvaluation.blockerReasons.length}` },
     ],
     lines,
     tag,
     trust,
     closureBasis: [{
-      kind: evaluation.status === 'supported' ? 'route' : 'boundary',
-      summary: evaluation.status === 'supported'
-        ? `${filePath} closes as ${tierLabel} under structural path evaluator ${evaluation.evaluatorId}.`
-        : `${filePath} is still blocked under structural path evaluator ${evaluation.evaluatorId}: ${blockerSummary}`,
+      kind: finalEvaluation.status === 'supported' ? 'route' : 'boundary',
+      summary: finalEvaluation.status === 'supported'
+        ? `${filePath} closes as ${tierLabel} under structural path evaluator ${finalEvaluation.evaluatorId}.`
+        : `${filePath} is still blocked under structural path evaluator ${finalEvaluation.evaluatorId}: ${blockerSummary}`,
       provenanceRefs: [
-        evaluation.evaluatorId,
-        ...evaluation.supportingClaimIds,
-        ...evaluation.blockerReasons.flatMap((reason) => reason.claimIds),
+        finalEvaluation.evaluatorId,
+        ...finalEvaluation.supportingClaimIds,
+        ...finalEvaluation.blockerReasons.flatMap((reason) => reason.claimIds),
       ].slice(0, 16),
     }],
-    issues: evaluation.status === 'supported'
+    issues: finalEvaluation.status === 'supported'
       ? []
       : [{
-        code: `path-evaluator-${evaluation.status}`,
+        code: `path-evaluator-${finalEvaluation.status}`,
         message: blockerSummary,
         severity: 'warning',
         origin: 'boundary',
@@ -82,7 +85,7 @@ export function inspectFocusedStructuralPath(
     provenance: [{
       kind: 'route',
       label: 'Focused structural path evaluation',
-      detail: `${evaluation.evaluatorId}:${evaluation.status}:${evaluation.operationalAnalyzabilityTier ?? 'none'}`,
+      detail: `${finalEvaluation.evaluatorId}:${finalEvaluation.sourceCoverage}:${finalEvaluation.status}:${finalEvaluation.operationalAnalyzabilityTier ?? 'none'}`,
     }],
   };
 }

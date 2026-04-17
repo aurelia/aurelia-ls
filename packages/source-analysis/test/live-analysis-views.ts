@@ -53,6 +53,7 @@ export function loadCurrentLiveAnalysisViews(): AnalysisViews {
     exports,
     structuralRuntime,
     sourceFileScan,
+    repoSourceFiles: session.listRepoSourceFiles(),
     ...(snapshots.support ? { support: snapshots.support } : {}),
   });
 }

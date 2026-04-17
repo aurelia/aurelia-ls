@@ -49,11 +49,8 @@ export type {
   InquiryAnswer,
   InquiryProvenanceEntry,
   InquiryProvenanceEntryKind,
-  InquiryAnswerSlots,
   ContinuationBasis,
-  WireContinuationBasis,
   DeltaDescriptor,
-  WireDeltaDescriptor,
   EvidenceFocusKind,
   EvidenceProvenanceEntryKind,
   FocusKind,
@@ -73,6 +70,11 @@ export type {
   SubjectFocusKind,
   WorldFrame,
 } from '../inquiry-model.js';
+export type {
+  InquiryAnswerSlots,
+  WireContinuationBasis,
+  WireDeltaDescriptor,
+} from '../inquiry-wire.js';
 export {
   CARRIER_PROVENANCE_ENTRY_KINDS,
   COGNITIVE_QUESTION_ROUTES,

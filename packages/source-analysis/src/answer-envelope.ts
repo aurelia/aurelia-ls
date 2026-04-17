@@ -11,8 +11,6 @@ import type {
   InquiryAnswer,
   InquiryProvenanceEntry,
   ContinuationBasis,
-  WireContinuationBasis,
-  WireDeltaDescriptor,
   FocusRef,
   InquiryEpisode,
   Inquiry,
@@ -20,6 +18,10 @@ import type {
   WorldFrame,
 } from './inquiry-model.js';
 import { INQUIRY_MODEL_SCHEMA_VERSION } from './inquiry-model.js';
+import {
+  toWireContinuationBasis,
+  toWireDeltaDescriptor,
+} from './inquiry-wire.js';
 
 export interface CreateAnswerEnvelopeOptions<
   TResult extends AnswerCard,
@@ -89,33 +91,5 @@ export function createAnswerEnvelope<
       }),
     },
     outcome,
-  };
-}
-
-function toWireContinuationBasis(
-  value: ContinuationBasis,
-): WireContinuationBasis {
-  return {
-    ...(value.focusRef ? { focus_ref: value.focusRef } : {}),
-    ...(value.questionRoute ? { question_route: value.questionRoute } : {}),
-    ...(value.readMode ? { read_mode: value.readMode } : {}),
-    ...(value.worldFrame ? { world_frame: value.worldFrame } : {}),
-    ...(value.governingAnchorRefs ? { governing_anchor_refs: value.governingAnchorRefs } : {}),
-  };
-}
-
-function toWireDeltaDescriptor(
-  value: {
-    readonly kind: 'none' | 'files' | 'project' | 'claims';
-    readonly count: number;
-    readonly affectedRefs: readonly string[];
-    readonly rereadFloor?: Inquiry['questionRoute'];
-  },
-): WireDeltaDescriptor {
-  return {
-    kind: value.kind,
-    count: value.count,
-    affected_refs: value.affectedRefs,
-    ...(value.rereadFloor ? { reread_floor: value.rereadFloor } : {}),
   };
 }
