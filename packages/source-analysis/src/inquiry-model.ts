@@ -22,6 +22,10 @@ export const QUESTION_ROUTES = [
   'refresh',
   'diff',
 ] as const;
+// TODO: This currently mixes cognitive inquiry moves (search/join/route/inventory)
+// with control-plane or maintenance operations (materialize/refresh/diff). If
+// route planning keeps growing, split inquiry route from execution/maintenance
+// route so planner and policy code stop carrying both concerns in one enum.
 
 export const READ_MODES = [
   'focus-card',
@@ -30,6 +34,9 @@ export const READ_MODES = [
   'snapshot',
   'delta-card',
 ] as const;
+// TODO: 'snapshot' is not really a presentation mode like the other entries;
+// it is a transport/materialization mode. Separate presentation style from
+// payload mode before more rendering logic has to special-case this enum.
 
 export const INQUIRY_SLOT_IDS = [
   'focus_ref',
@@ -56,6 +63,11 @@ export const FOCUS_KINDS = [
   'capability',
   'inquiry',
 ] as const;
+// TODO: This union currently mixes at least three semantic categories:
+// concrete code/world subjects (package/file/type/export), evidence/model
+// objects (claim), and control-plane/API anchors (session/capability/inquiry).
+// Split these into clearer families before more routing/policy logic starts
+// treating them as one coherent ontology just because they share one label slot.
 
 export const REGIME_ANCHORS = [
   'batch',
@@ -82,6 +94,9 @@ export const PROVENANCE_ENTRY_KINDS = [
   'snapshot',
   'host',
 ] as const;
+// TODO: This currently combines reasoning-layer provenance (substrate/claim/route)
+// with carrier/origin provenance (snapshot/host). If provenance gets richer,
+// break this into evidence kind versus carrier kind so grounding stays honest.
 
 export type InquiryEpisode =
   typeof INQUIRY_EPISODES[number];
@@ -127,6 +142,10 @@ export interface WorldFrame {
   readonly partiality?: PartialityMode;
   readonly freshness?: FreshnessMode;
 }
+// TODO: WorldFrame currently blends targeting inputs (repoPath/target/profilePath)
+// with execution/provenance posture (regimeAnchor/partiality/freshness). If the
+// host gains richer session and write semantics, split request targeting from
+// observed execution frame so answers stop carrying one overloaded bundle.
 
 export interface ContinuationBasis {
   readonly focusRef?: FocusRef;

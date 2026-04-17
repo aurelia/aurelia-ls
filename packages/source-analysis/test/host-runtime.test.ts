@@ -170,11 +170,9 @@ describe('SnapshotHostRuntime', () => {
     expect(candidateRootsFinding).toBeTruthy();
     expect(candidateRootsFinding?.relatedRefs.some((ref) => ref.value === 'src/tool.ts')).toBe(true);
     expect(candidateRootsFinding?.relatedRefs.some((ref) => ref.value === 'src/cli.ts')).toBe(false);
-    const exerciseOnlyFinding = audit.result.answer.outcome.value?.findings.find((finding) =>
+    expect(audit.result.answer.outcome.value?.findings.some((finding) =>
       finding.code === 'exercise-only-files',
-    );
-    expect(exerciseOnlyFinding).toBeTruthy();
-    expect(exerciseOnlyFinding?.relatedRefs.some((ref) => ref.value === 'src/test-only.ts')).toBe(true);
+    )).toBe(false);
 
     const routeWitness = runtime.execute({
       command: 'query.route.witness',
@@ -230,7 +228,7 @@ describe('SnapshotHostRuntime', () => {
     expect(renderedWitness.result.rendered.document.blocks.some((block) => block.kind === 'witness-list')).toBe(true);
   });
 
-  it('keeps file-focus resolution aligned between navigation and route witnesses for uncovered files', () => {
+  it('keeps structural file focus honest for uncovered files and admitted edge-free files', () => {
     const repoPath = createSparseFileFixtureRepo();
     const runtime = createSnapshotHostRuntime();
 
@@ -256,7 +254,8 @@ describe('SnapshotHostRuntime', () => {
     expect(navigate.result.answer.outcome.tag).toBe('open-boundary');
     expect(navigate.result.answer.outcome.value?.primaryRef.value).toBe('notes/isolated.ts');
     expect(navigate.result.answer.outcome.value?.summaryLines.some((line) =>
-      line.includes('does not declare any tracked project types'),
+      line.includes('outside the live structural source-file catalog')
+      || line.includes('source-file catalog'),
     )).toBe(true);
     expect(navigate.result.answer.outcome.issues.some((issue) =>
       issue.code === 'path-evaluator-unclaimed'
@@ -275,7 +274,27 @@ describe('SnapshotHostRuntime', () => {
     expect(witness.status).toBe('ok');
     expect(witness.result.answer.outcome.tag).toBe('open-boundary');
     expect(witness.result.answer.outcome.value?.summaryLines.some((line) =>
-      line.includes('notes/isolated.ts currently has no modeled route witness'),
+      line.includes('outside the live structural source-file catalog')
+      || line.includes('source-file catalog'),
+    )).toBe(true);
+
+    const admitted = runtime.execute({
+      command: 'query.navigate',
+      args: {
+        sessionId,
+        focusKind: 'file',
+        focusValue: 'src/idle.ts',
+      },
+    });
+
+    expect(admitted.status).toBe('ok');
+    expect(admitted.result.answer.outcome.tag).toBe('hit');
+    expect(admitted.result.answer.outcome.value?.primaryRef.value).toBe('src/idle.ts');
+    expect(admitted.result.answer.outcome.value?.summaryLines.some((line) =>
+      line.includes('src/idle.ts has 0 outbound imports and 0 inbound imports'),
+    )).toBe(true);
+    expect(admitted.result.answer.outcome.value?.relatedRefs.some((ref) =>
+      ref.kind === 'package' && ref.value === '@fixture/source-analysis-sparse',
     )).toBe(true);
   });
 
@@ -716,6 +735,20 @@ describe('SnapshotHostRuntime', () => {
     });
     expect(exportsSummary.status).toBe('ok');
     expect(exportsSummary.result.summary.packages_analyzed).toBe(2);
+
+    const navigate = runtime.execute({
+      command: 'query.navigate',
+      args: {
+        sessionId: opened.result.sessionId,
+        focusKind: 'file',
+        focusValue: 'modules/alpha/src/index.ts',
+      },
+    });
+    expect(navigate.status).toBe('ok');
+    expect(navigate.result.answer.outcome.tag).toBe('hit');
+    expect(navigate.result.answer.outcome.value?.relatedRefs.some((ref) =>
+      ref.kind === 'package' && ref.value === '@fixture/alpha',
+    )).toBe(true);
   });
 });
 
@@ -889,6 +922,10 @@ function createSparseFileFixtureRepo(): string {
   writeFileSync(
     join(repoPath, 'src', 'live.ts'),
     'export interface LiveShape { value: string; }\n',
+  );
+  writeFileSync(
+    join(repoPath, 'src', 'idle.ts'),
+    'export {};\n',
   );
   writeFileSync(
     join(repoPath, 'src', 'index.ts'),

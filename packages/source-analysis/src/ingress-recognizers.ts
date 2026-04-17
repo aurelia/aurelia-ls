@@ -123,6 +123,10 @@ export const DEFAULT_INGRESS_RECOGNIZER_REGISTRY =
 export function captureKindsForFocusKind(
   focusKind: FocusKind,
 ): readonly IngressCaptureKind[] {
+  // TODO: Only a subset of FocusKind currently maps to ingress recognizers.
+  // That is another sign the focus union is carrying multiple semantic families:
+  // some entries are user-observable subject kinds, others are meta/control
+  // anchors that are never recognized directly from source-like text.
   switch (focusKind) {
     case 'package': return ['package-name'];
     case 'file': return ['file-path'];

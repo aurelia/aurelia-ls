@@ -9,6 +9,10 @@ export interface AnswerRef {
   readonly label: string;
   readonly detail?: string;
 }
+// TODO: AnswerRef currently reuses FocusKind plus one ad hoc extra ('subsystem').
+// If focus taxonomy gets split into subject/meta/control families, give answer
+// references their own reference-kind model instead of inheriting inquiry focus
+// labels by convenience.
 
 export interface AnswerCard<
   TRef extends AnswerRef = AnswerRef,

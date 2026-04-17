@@ -1,31 +1,21 @@
 import { describe, expect, it } from 'vitest';
 
 import { createAuditAnswer } from '../src/audit.js';
-import { loadCurrentSnapshots } from '../src/current-snapshots.js';
 import {
   renderAnswerDocumentToJson,
   renderAnswerDocumentToPlainText,
 } from '../src/answer-renderer.js';
 import { resolveInquiryPolicy } from '../src/inquiry-policy.js';
 import { createRouteWitnessAnswer } from '../src/route-witness.js';
-
-function loadSnapshotsForStructuredAnswers() {
-  try {
-    return loadCurrentSnapshots();
-  } catch (error) {
-    throw new Error(
-      `Current source-analysis snapshots are required for structured answer tests. Run "pnpm source-analysis refresh all".\n\n${(error as Error).message}`,
-    );
-  }
-}
+import { loadCurrentLiveAnalysisViews } from './live-analysis-views.js';
 
 describe('Source-analysis structured answer rendering', () => {
   it('renders one live audit document into compact and expanded views from policy', () => {
-    const snapshots = loadSnapshotsForStructuredAnswers();
+    const analysis = loadCurrentLiveAnalysisViews();
     const answer = createAuditAnswer({
       focusRef: { kind: 'package', value: '@aurelia-ls/source-analysis' },
       questionRoute: 'inventory',
-    }, snapshots);
+    }, analysis);
 
     const document = answer.outcome.value?.document;
     expect(document).toBeTruthy();
@@ -63,12 +53,12 @@ describe('Source-analysis structured answer rendering', () => {
   });
 
   it('keeps route witnesses as a structured block that survives machine rendering', () => {
-    const snapshots = loadSnapshotsForStructuredAnswers();
+    const analysis = loadCurrentLiveAnalysisViews();
     const answer = createRouteWitnessAnswer({
       focusRef: { kind: 'file', value: 'packages/source-analysis/src/refresh.ts' },
       questionRoute: 'route',
       readMode: 'supporting-evidence',
-    }, snapshots);
+    }, analysis);
 
     const document = answer.outcome.value?.document;
     expect(document).toBeTruthy();

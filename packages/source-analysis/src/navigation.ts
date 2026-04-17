@@ -17,6 +17,7 @@ import {
   inspectFocusedAnalyzabilityContext,
 } from './analyzability-posture.js';
 import { inspectFocusedFileQuery } from './focused-file-query.js';
+import type { FocusedStructuralPathContext } from './focused-structural-path.js';
 import type { AnswerCard, AnswerRef } from './answer-card.js';
 import {
   createStructuredAnswerCard,
@@ -53,6 +54,7 @@ import type {
   SubstrateGraph,
   SubstrateNode,
 } from './substrate.js';
+import { resolveStructuralOwningPackage } from './structural-source-file-surface.js';
 import { SUBSTRATE_SCHEMA_VERSION } from './substrate.js';
 
 export type NavigationRef = AnswerRef;
@@ -586,10 +588,7 @@ function buildTypeEpisode(
   const decl = declMatches[0]!;
   const typerefsSnapshotId = builder.addSnapshotNode('typerefs');
   const exportsSnapshotId = builder.addSnapshotNode('exports');
-  const packageDir = packageDirForFile(decl.file);
-  const pkg = packageDir
-    ? builder.snapshots.exports.packages.find((candidate) => candidate.package_dir === packageDir)
-    : undefined;
+  const pkg = resolveStructuralOwningPackage(builder.snapshots, decl.file) ?? undefined;
 
   const fileNodeId = builder.addFileNode(decl.file);
   const declNodeId = builder.addDeclarationNode(decl);
@@ -875,6 +874,17 @@ function buildFileEpisode(
         fileInspection.requestedRegimeContext,
       ));
     }
+    if (fileInspection.catalogIssue || fileInspection.structuralPathContext?.tag === 'open-boundary') {
+      return builder.finish(createOpenBoundaryAnswer(
+        builder,
+        fileInspection.catalogIssue
+          ?? `${fileInspection.normalizedQuery} is outside the live structural source-file catalog, so workspace navigation cannot close on it as a source-backed file.`,
+        { kind: 'file', value: fileInspection.normalizedQuery },
+        [],
+        fileInspection.requestedRegimeContext,
+        fileInspection.structuralPathContext,
+      ));
+    }
     return builder.finish(createMissAnswer(
       builder,
       `No file matches "${fileInspection.normalizedQuery}".`,
@@ -901,10 +911,7 @@ function buildFileEpisode(
   const typerefsSnapshotId = builder.addSnapshotNode('typerefs');
   const exportsSnapshotId = builder.addSnapshotNode('exports');
   const fileNodeId = builder.addFileNode(filePath);
-  const packageDir = packageDirForFile(filePath);
-  const pkg = packageDir
-    ? builder.snapshots.exports.packages.find((candidate) => candidate.package_dir === packageDir)
-    : undefined;
+  const pkg = resolveStructuralOwningPackage(builder.snapshots, filePath) ?? undefined;
   const packageNodeId = pkg ? builder.addPackageNode(pkg) : undefined;
   if (packageNodeId) {
     builder.addEdge({ id: `contains:${packageNodeId}->${fileNodeId}`, kind: 'contains', from: packageNodeId, to: fileNodeId });
@@ -1167,8 +1174,15 @@ function createOpenBoundaryAnswer(
   focusRef: FocusRef,
   relatedRefs: readonly NavigationRef[],
   regimeContext: ReturnType<typeof inspectFocusedAnalyzabilityContext>,
+  structuralPathContext: FocusedStructuralPathContext | null = null,
 ): InquiryAnswer<NavigationValue> {
   const policy = policyForNavigation(builder, focusRef.kind);
+  const trust = regimeContext.trust
+    ? mergeTrustProfiles(regimeContext.trust, structuralPathContext?.trust ?? null)
+    : structuralPathContext?.trust ?? {
+      kind: 'frontier',
+      summary: 'The requested focus sits outside the included regime.',
+    };
   return createAnswer(
     builder,
     policy,
@@ -1183,20 +1197,33 @@ function createOpenBoundaryAnswer(
       },
       relatedRefs,
       document: createNavigationDocument(
-        [message, ...regimeContext.lines.slice(1)],
+        [
+          message,
+          ...regimeContext.lines.slice(1),
+          ...(structuralPathContext?.lines ?? []),
+        ],
         relatedRefs,
-        regimeContext.facts,
+        [
+          ...regimeContext.facts,
+          ...(structuralPathContext?.facts ?? []),
+        ],
       ),
       policy,
     }),
-    regimeContext.trust ?? {
-      kind: 'frontier',
-      summary: 'The requested focus sits outside the included regime.',
-    },
-    regimeContext.closureBasis,
-    regimeContext.issues,
+    trust,
+    [
+      ...regimeContext.closureBasis,
+      ...(structuralPathContext?.closureBasis ?? []),
+    ],
+    [
+      ...regimeContext.issues,
+      ...(structuralPathContext?.issues ?? []),
+    ],
     regimeContext.continuations,
-    regimeContext.provenance,
+    [
+      ...regimeContext.provenance,
+      ...(structuralPathContext?.provenance ?? []),
+    ],
   );
 }
 
@@ -1310,14 +1337,6 @@ function uniqueTypeRefs(refs: readonly TypeDecl['refs'][number][]): readonly Typ
     unique.push(ref);
   }
   return unique;
-}
-
-function packageDirForFile(filePath: string): string | null {
-  const parts = filePath.split('/');
-  if (parts[0] === 'packages' && parts.length >= 2) {
-    return `${parts[0]}/${parts[1]}`;
-  }
-  return null;
 }
 
 function packageRef(pkg: PackageExportsSummary): NavigationRef {

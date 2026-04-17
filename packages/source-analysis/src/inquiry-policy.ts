@@ -92,7 +92,7 @@ export const DEFAULT_INQUIRY_ORDERING: InquiryOrdering = {
   issueSeverity: ['error', 'warning', 'info'],
   trust: ['grounded', 'qualified', 'frontier', 'unavailable'],
   routeClass: ['production', 'exercise', 'candidate'],
-  routeKind: ['dependency-import', 'parse-import', 'executable-handoff'],
+  routeKind: ['dependency-import', 'executable-handoff'],
   rootKind: ['public-api', 'manifest-bin', 'exercise', 'candidate-entry'],
   blockImportance: ['primary', 'supporting', 'detail'],
 };

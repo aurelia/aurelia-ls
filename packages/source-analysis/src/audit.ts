@@ -53,6 +53,11 @@ import type {
   PackageReachability,
 } from './reachability.js';
 import { createPackageReachability } from './reachability.js';
+import type { StructuralPackageFileSurface } from './structural-source-file-surface.js';
+import {
+  collectStructuralPackageFileSurface,
+  describeMissingStructuralPackageSurface,
+} from './structural-source-file-surface.js';
 import type { PackageCoordinationSurface } from './coordination-surface.js';
 import { createPackageCoordinationSurface } from './coordination-surface.js';
 
@@ -89,7 +94,7 @@ interface PackageAuditContext {
   readonly pkg: PackageExportsSummary;
   readonly packageFiles: readonly string[];
   readonly uncoveredFiles: readonly string[];
-  readonly unresolvedImports: AnalysisViews['deps']['unresolved_imports'];
+  readonly unresolvedImports: readonly AnalysisViews['deps']['unresolved_imports'][number][];
   readonly declarationsByFile: ReadonlyMap<string, readonly TypeDecl[]>;
   readonly exportRecordsByFile: ReadonlyMap<string, readonly PackageExportRecord[]>;
   readonly reachability: PackageReachability;
@@ -171,19 +176,26 @@ function buildPackageAuditAnswer(
     inquiryEpisode: 'inventory-and-audit-sweep',
     readMode: defaultReadMode(query.questionRoute),
   });
+  const packageSurface = collectStructuralPackageFileSurface(analysis, pkg);
+  if (!packageSurface) {
+    return createStructuralPackageBoundaryAnswer(
+      query,
+      analysis,
+      pkg,
+      describeMissingStructuralPackageSurface(),
+      regimeContextForPackage(posture, pkg, normalizedPackageQuery),
+    );
+  }
   const context = createPackageAuditContext(
     analysis,
     pkg,
     resolveAuditRepoPath(query.worldFrame?.repoPath),
     query.worldFrame?.freshness,
     policy,
+    packageSurface,
   );
   const findings = collectPackageAuditFindings(context);
-  const regimeContext = inspectFocusedAnalyzabilityContext(posture, {
-    focusLabel: pkg.package_name,
-    pathPrefixes: [pkg.package_dir],
-    queryHints: [pkg.package_name, pkg.package_dir, normalizedPackageQuery],
-  });
+  const regimeContext = regimeContextForPackage(posture, pkg, normalizedPackageQuery);
 
   const blindspotCount = findings.filter((finding) => finding.kind === 'blindspot').length;
   const dormantCount = findings.filter((finding) => finding.kind === 'under-integrated-file').length;
@@ -267,75 +279,39 @@ function createPackageAuditContext(
   repoPath: string,
   analysisFreshness: WorldFrame['freshness'],
   policy: InquiryPolicy,
+  packageSurface: StructuralPackageFileSurface,
 ): PackageAuditContext {
   const reachability = createPackageReachability(analysis, pkg, {
     ordering: policy.ordering,
+    packageSurface,
   });
-  const packagePrefix = pkg.package_dir.length > 0 ? `${pkg.package_dir}/` : '';
-  const packageFiles = new Set<string>(reachability.files.map((file) => file.filePath));
-  const uncoveredFiles = analysis.deps.uncovered_files.filter((filePath) =>
-    filePath.startsWith(packagePrefix),
-  );
-  const unresolvedImports = analysis.deps.unresolved_imports.filter((entry) =>
-    entry.source.startsWith(packagePrefix),
-  );
-
-  for (const edge of analysis.deps.edges) {
-    if (edge.source.startsWith(packagePrefix)) {
-      packageFiles.add(edge.source);
-    }
-    if (edge.target.startsWith(packagePrefix)) {
-      packageFiles.add(edge.target);
-    }
-  }
-
-  const declarationsByFile = new Map<string, TypeDecl[]>();
-  for (const declaration of analysis.typeRefs.declarations) {
-    if (!declaration.file.startsWith(packagePrefix)) continue;
-    packageFiles.add(declaration.file);
-    const declarations = declarationsByFile.get(declaration.file) ?? [];
-    declarations.push(declaration);
-    declarationsByFile.set(declaration.file, declarations);
-  }
-
-  const exportRecordsByFile = new Map<string, PackageExportRecord[]>();
-  for (const record of analysis.exports.exports) {
-    if (record.package_dir !== pkg.package_dir) continue;
-    packageFiles.add(record.analysis_entrypoint);
-    if (!record.declaration_file) continue;
-    packageFiles.add(record.declaration_file);
-    const exportRecords = exportRecordsByFile.get(record.declaration_file) ?? [];
-    exportRecords.push(record);
-    exportRecordsByFile.set(record.declaration_file, exportRecords);
-  }
-
-  const coordinationSurface = createSafeCoordinationSurface(repoPath, [...packageFiles]);
+  const coordinationSurface = createSafeCoordinationSurface(repoPath, packageSurface.files);
 
   return {
     analysis,
     analysisFreshness,
     pkg,
-    packageFiles: [...packageFiles].sort((left, right) => left.localeCompare(right)),
-    uncoveredFiles,
-    unresolvedImports,
-    declarationsByFile: new Map(
-      [...declarationsByFile.entries()].map(([filePath, declarations]) => [
-        filePath,
-        [...declarations].sort((left, right) =>
-          left.line - right.line || left.name.localeCompare(right.name),
-        ),
-      ]),
-    ),
-    exportRecordsByFile: new Map(
-      [...exportRecordsByFile.entries()].map(([filePath, exportRecords]) => [
-        filePath,
-        [...exportRecords].sort((left, right) => left.exported_name.localeCompare(right.exported_name)),
-      ]),
-    ),
+    packageFiles: packageSurface.files,
+    uncoveredFiles: packageSurface.uncoveredFiles,
+    unresolvedImports: packageSurface.unresolvedImports,
+    declarationsByFile: packageSurface.declarationsByFile,
+    exportRecordsByFile: packageSurface.exportRecordsByFile,
     reachability,
     coordinationSurface,
     policy,
   };
+}
+
+function regimeContextForPackage(
+  posture: ReturnType<typeof inspectAnalyzabilityPostureFromAnalysisViews>,
+  pkg: PackageExportsSummary,
+  normalizedPackageQuery: string,
+): ReturnType<typeof inspectFocusedAnalyzabilityContext> {
+  return inspectFocusedAnalyzabilityContext(posture, {
+    focusLabel: pkg.package_name,
+    pathPrefixes: [pkg.package_dir],
+    queryHints: [pkg.package_name, pkg.package_dir, normalizedPackageQuery],
+  });
 }
 
 function collectPackageAuditFindings(
@@ -369,19 +345,13 @@ function collectUncoveredFilesFinding(
   const uncoveredExercises = context.uncoveredFiles.filter((filePath) =>
     context.reachability.exerciseFiles.includes(filePath),
   );
-  const exerciseTargets = context.reachability.files
-    .filter((file) =>
-      file.exerciseRootIds.length > 0
-      && !context.reachability.exerciseFiles.includes(file.filePath),
-    )
-    .map((file) => file.filePath);
   const primaryPath = uncoveredExercises[0] ?? context.uncoveredFiles[0]!;
   const title = uncoveredExercises.length === context.uncoveredFiles.length
     ? 'Tests sit outside the graph coverage'
     : 'Some package files sit outside the graph coverage';
   const summary = uncoveredExercises.length === context.uncoveredFiles.length
-    ? `${context.uncoveredFiles.length} test file${pluralize(context.uncoveredFiles.length)} under ${context.pkg.package_dir} are outside every tsconfig. Parse-only route recovery now reaches ${exerciseTargets.length} package file${pluralize(exerciseTargets.length)}, but that exercise evidence is still qualified rather than fully grounded in the current analysis views.`
-    : `${context.uncoveredFiles.length} file${pluralize(context.uncoveredFiles.length)} under ${context.pkg.package_dir} are outside every tsconfig, so the dependency graph has a real blind spot.`;
+    ? `${context.uncoveredFiles.length} test file${pluralize(context.uncoveredFiles.length)} under ${context.pkg.package_dir} are outside every tsconfig, so they remain blindspot evidence rather than part of the structural source-file surface.`
+    : `${context.uncoveredFiles.length} file${pluralize(context.uncoveredFiles.length)} under ${context.pkg.package_dir} are outside every tsconfig, so the structural source-file surface still has a real blind spot.`;
 
   return {
     code: 'package-uncovered-files',
@@ -395,12 +365,8 @@ function collectUncoveredFilesFinding(
     evidence: [
       `${context.uncoveredFiles.length} uncovered file${pluralize(context.uncoveredFiles.length)} under ${context.pkg.package_dir}.`,
       ...(uncoveredExercises.length > 0
-        ? [`${uncoveredExercises.length} uncovered file${pluralize(uncoveredExercises.length)} currently classify as exercise roots, so exercise reachability depends on parse-only recovery.`]
+        ? [`${uncoveredExercises.length} uncovered file${pluralize(uncoveredExercises.length)} currently classify as exercise-layout files, but they stay outside the canonical structural file surface.`]
         : []),
-      ...(exerciseTargets.length > 0
-        ? [`parse-only exercise routes currently reach ${exerciseTargets.length} package file${pluralize(exerciseTargets.length)}.`]
-        : []),
-      ...exerciseTargets.slice(0, 4).map((filePath) => `exercise route target: ${filePath}`),
       ...context.uncoveredFiles.slice(0, 4).map((filePath) => `uncovered: ${filePath}`),
     ],
   };
@@ -1086,6 +1052,67 @@ function createExcludedFrontierAnswer(
     },
     regimeContext.closureBasis,
     regimeContext.issues,
+    regimeContext.continuations,
+    regimeContext.provenance,
+  );
+}
+
+function createStructuralPackageBoundaryAnswer(
+  query: Inquiry,
+  analysis: AnalysisViews,
+  pkg: PackageExportsSummary,
+  message: string,
+  regimeContext: ReturnType<typeof inspectFocusedAnalyzabilityContext>,
+): InquiryAnswer<AuditValue> {
+  const policy = resolveInquiryPolicy(query, {
+    focusKind: 'package',
+    inquiryEpisode: 'inventory-and-audit-sweep',
+    readMode: defaultReadMode(query.questionRoute),
+  });
+
+  return createAnswer(
+    query,
+    analysis,
+    policy,
+    { kind: 'package', value: pkg.package_name, label: pkg.package_name },
+    'open-boundary',
+    createStructuredAnswerCard({
+      title: 'Package audit boundary',
+      primaryRef: packageRef(pkg),
+      relatedRefs: [],
+      document: createAnswerDocument([
+        {
+          kind: 'paragraph',
+          importance: 'primary',
+          lines: [message, ...regimeContext.lines],
+        },
+        ...(regimeContext.facts.length > 0
+          ? [{
+            kind: 'key-fact-list' as const,
+            importance: 'supporting' as const,
+            facts: regimeContext.facts,
+          }]
+          : []),
+      ]),
+      policy,
+      extra: {
+        findings: [],
+      },
+    }),
+    regimeContext.trust ?? {
+      kind: 'qualified',
+      summary: message,
+    },
+    [{
+      kind: 'boundary',
+      summary: message,
+    }, ...regimeContext.closureBasis],
+    [{
+      code: 'audit-structural-package-boundary',
+      message,
+      severity: 'warning',
+      origin: 'boundary',
+    }, ...regimeContext.issues],
     regimeContext.continuations,
     regimeContext.provenance,
   );

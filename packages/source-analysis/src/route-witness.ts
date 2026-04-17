@@ -41,6 +41,7 @@ import {
   getPackageRouteWitnesses,
 } from './reachability.js';
 import type { TypeDecl } from './typerefs/schema.js';
+import { resolveStructuralOwningPackage } from './structural-source-file-surface.js';
 
 export type RouteWitnessRef = AnswerRef;
 
@@ -96,6 +97,19 @@ function buildFileRouteWitnessAnswer(
         fileInspection.requestedRegimeContext,
       );
     }
+    if (fileInspection.catalogIssue || fileInspection.structuralPathContext?.tag === 'open-boundary') {
+      return createOpenBoundaryAnswer(
+        query,
+        analysis,
+        { kind: 'file', value: fileInspection.normalizedQuery, label: basename(fileInspection.normalizedQuery) },
+        fileInspection.catalogIssue
+          ?? `${fileInspection.normalizedQuery} is outside the live structural source-file catalog, so the current route model cannot close on it as a source-backed file.`,
+        [],
+        [],
+        fileInspection.requestedRegimeContext,
+        fileInspection.structuralPathContext,
+      );
+    }
     return createMissAnswer(
       query,
       analysis,
@@ -116,7 +130,7 @@ function buildFileRouteWitnessAnswer(
   }
 
   const filePath = fileInspection.matchedFilePath!;
-  const pkg = resolveOwningPackage(analysis, filePath);
+  const pkg = resolveStructuralOwningPackage(analysis, filePath);
   if (!pkg) {
     return createOpenBoundaryAnswer(
       query,
@@ -175,7 +189,7 @@ function buildTypeRouteWitnessAnswer(
   }
 
   const declaration = declarationMatches[0]!;
-  const pkg = resolveOwningPackage(analysis, declaration.file);
+  const pkg = resolveStructuralOwningPackage(analysis, declaration.file);
   if (!pkg) {
     return createOpenBoundaryAnswer(
       query,
@@ -493,8 +507,15 @@ function createOpenBoundaryAnswer(
   relatedRefs: readonly RouteWitnessRef[],
   continuations: readonly Continuation[],
   regimeContext?: ReturnType<typeof inspectFocusedAnalyzabilityContext>,
+  structuralPathContext: FocusedStructuralPathContext | null = null,
 ): InquiryAnswer<RouteWitnessValue> {
   const policy = policyForRouteWitness(query, focusRef.kind);
+  const trust = regimeContext?.trust
+    ? mergeTrustProfiles(regimeContext.trust, structuralPathContext?.trust ?? null)
+    : structuralPathContext?.trust ?? {
+      kind: 'qualified',
+      summary: 'The current route model cannot yet close on a witness path for this focus.',
+    };
   return createAnswer(
     query,
     analysis,
@@ -510,26 +531,31 @@ function createOpenBoundaryAnswer(
       },
       relatedRefs,
       document: createRouteWitnessDocument(
-        [message, ...(regimeContext?.lines.slice(1) ?? [])],
+        [
+          message,
+          ...(regimeContext?.lines.slice(1) ?? []),
+          ...(structuralPathContext?.lines ?? []),
+        ],
         relatedRefs,
         [],
-        regimeContext?.facts ?? [],
+        [
+          ...(regimeContext?.facts ?? []),
+          ...(structuralPathContext?.facts ?? []),
+        ],
       ),
       policy,
       extra: {
         witnesses: [],
       },
     }),
-    regimeContext?.trust ?? {
-      kind: 'qualified',
-      summary: 'The current route model cannot yet close on a witness path for this focus.',
-    },
+    trust,
     [
       {
         kind: 'boundary',
         summary: 'A missing or under-modeled route boundary is still open for this focus.',
       },
       ...(regimeContext?.closureBasis ?? []),
+      ...(structuralPathContext?.closureBasis ?? []),
     ],
     [
       {
@@ -539,9 +565,13 @@ function createOpenBoundaryAnswer(
         origin: 'boundary',
       },
       ...(regimeContext?.issues ?? []),
+      ...(structuralPathContext?.issues ?? []),
     ],
     [...continuations, ...(regimeContext?.continuations ?? [])],
-    [...(regimeContext?.provenance ?? [])],
+    [
+      ...(regimeContext?.provenance ?? []),
+      ...(structuralPathContext?.provenance ?? []),
+    ],
   );
 }
 
@@ -606,24 +636,6 @@ function resolveTypeDeclarations(
   return analysis.typeRefs.declarations.filter((declaration) =>
     declaration.name.toLowerCase().includes(normalized.toLowerCase()),
   );
-}
-
-function resolveOwningPackage(
-  analysis: AnalysisViews,
-  filePath: string,
-): PackageExportsSummary | null {
-  let bestMatch: PackageExportsSummary | null = null;
-  for (const pkg of analysis.exports.packages) {
-    const packagePrefix = pkg.package_dir.length > 0 ? `${pkg.package_dir}/` : '';
-    const matches = pkg.package_dir.length === 0
-      ? !filePath.startsWith('packages/')
-      : filePath.startsWith(packagePrefix);
-    if (!matches) continue;
-    if (!bestMatch || pkg.package_dir.length > bestMatch.package_dir.length) {
-      bestMatch = pkg;
-    }
-  }
-  return bestMatch;
 }
 
 function fileRef(filePath: string, detail?: string): RouteWitnessRef {

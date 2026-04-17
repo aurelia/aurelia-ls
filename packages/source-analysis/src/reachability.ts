@@ -1,7 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { join, posix as pathPosix } from 'node:path';
-
-import * as ts from 'typescript';
+import { join } from 'node:path';
 
 import {
   expandMappedRepoRelativePathCandidates,
@@ -10,9 +8,13 @@ import {
   type AnalysisProfile,
 } from './analysis-profile.js';
 import type { AnalysisViews } from './analysis-views.js';
-import type { PackageExportRecord, PackageExportsSummary } from './exports/schema.js';
+import type { PackageExportsSummary } from './exports/schema.js';
 import type { TrustKind } from './outcome-algebra.js';
-import type { TypeDecl } from './typerefs/schema.js';
+import {
+  collectStructuralPackageFileSurface,
+  describeMissingStructuralPackageSurface,
+  type StructuralPackageFileSurface,
+} from './structural-source-file-surface.js';
 import {
   compareByPrecedence,
   compareStringsAscending,
@@ -29,7 +31,6 @@ export const PACKAGE_ROOT_KINDS = [
 
 export const PACKAGE_ROUTE_KINDS = [
   'dependency-import',
-  'parse-import',
   'executable-handoff',
 ] as const;
 
@@ -122,6 +123,7 @@ export interface PackageReachability {
 
 export interface PackageReachabilityOptions {
   readonly ordering?: InquiryOrdering;
+  readonly packageSurface?: StructuralPackageFileSurface;
 }
 
 export function createPackageReachability(
@@ -130,27 +132,27 @@ export function createPackageReachability(
   options?: PackageReachabilityOptions,
 ): PackageReachability {
   const ordering = options?.ordering ?? DEFAULT_INQUIRY_ORDERING;
+  const packageSurface = options?.packageSurface ?? collectStructuralPackageFileSurface(analysis, pkg);
+  if (!packageSurface) {
+    throw new Error(describeMissingStructuralPackageSurface());
+  }
   const profile = resolveAnalysisProfile({ repoPath: analysis.root });
-  const packagePrefix = pkg.package_dir.length > 0 ? `${pkg.package_dir}/` : '';
-  const packageFiles = new Set<string>();
+  const packageFiles = new Set<string>(packageSurface.files);
   const routeEdges = new Map<string, PackageRouteEdge>();
   const canonicalizePackageFilePath = (filePath: string): string =>
     canonicalizeSourceBackedPackageFile(profile, analysis.root, filePath);
+  const declarationsByFile = packageSurface.declarationsByFile;
+  const exportRecordsByFile = packageSurface.exportRecordsByFile;
+  // TODO: If uncovered files need to influence route reasoning again, spend
+  // them as explicit blindspot evidence/evaluator inputs rather than promoting
+  // them back into the canonical package file surface.
 
   for (const edge of analysis.deps.edges) {
-    const sourceInPackage = edge.source.startsWith(packagePrefix);
-    const targetInPackage = edge.target.startsWith(packagePrefix);
+    const sourcePath = canonicalizePackageFilePath(edge.source);
+    const targetPath = canonicalizePackageFilePath(edge.target);
+    const sourceInPackage = packageFiles.has(sourcePath);
+    const targetInPackage = packageFiles.has(targetPath);
     if (!sourceInPackage && !targetInPackage) continue;
-
-    const sourcePath = sourceInPackage
-      ? canonicalizePackageFilePath(edge.source)
-      : edge.source;
-    const targetPath = targetInPackage
-      ? canonicalizePackageFilePath(edge.target)
-      : edge.target;
-
-    if (sourceInPackage) packageFiles.add(sourcePath);
-    if (targetInPackage) packageFiles.add(targetPath);
 
     if (sourceInPackage && targetInPackage) {
       addRouteEdge(
@@ -166,39 +168,12 @@ export function createPackageReachability(
       );
     }
   }
-
-  const declarationsByFile = groupDeclarationsByFile(analysis.typeRefs.declarations, packagePrefix);
-  for (const filePath of declarationsByFile.keys()) {
-    packageFiles.add(filePath);
-  }
-
-  const exportRecordsByFile = groupExportRecordsByFile(analysis.exports.exports, pkg.package_dir);
-  for (const filePath of exportRecordsByFile.keys()) {
-    packageFiles.add(filePath);
-  }
   const manifestPublicApiRoots = resolveManifestPublicApiRoots(
     profile,
     analysis.root,
     pkg,
     packageFiles,
   );
-
-  packageFiles.add(pkg.analysis_entrypoint);
-  const uncoveredPackageFiles = analysis.deps.uncovered_files.filter((filePath) =>
-    filePath.startsWith(packagePrefix),
-  );
-  for (const uncoveredFile of uncoveredPackageFiles) {
-    packageFiles.add(uncoveredFile);
-  }
-
-  for (const edge of discoverParseImportEdges(
-    profile,
-    analysis.root,
-    uncoveredPackageFiles,
-    packageFiles,
-  )) {
-    addRouteEdge(routeEdges, edge);
-  }
 
   for (const edge of discoverExecutableHandoffEdges(
     profile,
@@ -248,17 +223,14 @@ export function createPackageReachability(
   const exerciseFiles = [...packageFiles]
     .filter((filePath) => isExerciseFile(profile, pkg.package_dir, filePath))
     .sort((left, right) => left.localeCompare(right));
-  const uncoveredExerciseFiles = new Set(uncoveredPackageFiles);
   for (const filePath of exerciseFiles) {
     addRoot(
       roots,
       createRoot(
         'exercise',
         filePath,
-        uncoveredExerciseFiles.has(filePath) ? 'qualified' : 'grounded',
-        uncoveredExerciseFiles.has(filePath)
-          ? 'This file looks like an exercise/test root from package layout, but it still sits outside grounded graph coverage.'
-          : 'This file is a test/exercise root with grounded graph coverage.',
+        'grounded',
+        'This file is a test/exercise root with grounded structural file coverage.',
       ),
     );
   }
@@ -382,46 +354,6 @@ export function getPackageRouteWitnesses(
   return reachability.routeWitnessesByFilePath.get(filePath) ?? [];
 }
 
-function groupDeclarationsByFile(
-  declarations: readonly TypeDecl[],
-  packagePrefix: string,
-): ReadonlyMap<string, readonly TypeDecl[]> {
-  const grouped = new Map<string, TypeDecl[]>();
-  for (const declaration of declarations) {
-    if (!declaration.file.startsWith(packagePrefix)) continue;
-    const fileDeclarations = grouped.get(declaration.file) ?? [];
-    fileDeclarations.push(declaration);
-    grouped.set(declaration.file, fileDeclarations);
-  }
-  return new Map(
-    [...grouped.entries()].map(([filePath, fileDeclarations]) => [
-      filePath,
-      [...fileDeclarations].sort((left, right) =>
-        left.line - right.line || left.name.localeCompare(right.name),
-      ),
-    ]),
-  );
-}
-
-function groupExportRecordsByFile(
-  records: readonly PackageExportRecord[],
-  packageDir: string,
-): ReadonlyMap<string, readonly PackageExportRecord[]> {
-  const grouped = new Map<string, PackageExportRecord[]>();
-  for (const record of records) {
-    if (record.package_dir !== packageDir || !record.declaration_file) continue;
-    const fileRecords = grouped.get(record.declaration_file) ?? [];
-    fileRecords.push(record);
-    grouped.set(record.declaration_file, fileRecords);
-  }
-  return new Map(
-    [...grouped.entries()].map(([filePath, fileRecords]) => [
-      filePath,
-      [...fileRecords].sort((left, right) => left.exported_name.localeCompare(right.exported_name)),
-    ]),
-  );
-}
-
 function resolveManifestBinRoots(
   profile: AnalysisProfile,
   repoRoot: string,
@@ -486,52 +418,6 @@ function resolveManifestPublicApiRoots(
   }
 }
 
-function discoverParseImportEdges(
-  profile: AnalysisProfile,
-  repoRoot: string,
-  uncoveredPackageFiles: readonly string[],
-  packageFiles: ReadonlySet<string>,
-): readonly PackageRouteEdge[] {
-  const edges: PackageRouteEdge[] = [];
-
-  for (const filePath of uncoveredPackageFiles) {
-    const fileAbsPath = join(repoRoot, filePath);
-    if (!existsSync(fileAbsPath)) continue;
-
-    let sourceText: string;
-    try {
-      sourceText = readFileSync(fileAbsPath, 'utf-8');
-    } catch {
-      continue;
-    }
-
-    const sourceFile = ts.createSourceFile(
-      fileAbsPath,
-      sourceText,
-      ts.ScriptTarget.Latest,
-      true,
-      scriptKindForPath(filePath),
-    );
-
-    for (const reference of collectModuleReferences(sourceFile)) {
-      if (!isPackageLocalSpecifier(reference.specifier)) continue;
-      const targetFilePath = resolveRelativeModuleSpecifier(profile, filePath, reference.specifier, packageFiles);
-      if (!targetFilePath || targetFilePath === filePath) continue;
-
-      edges.push(createRouteEdge(
-        'parse-import',
-        filePath,
-        targetFilePath,
-        'qualified',
-        'Parse-only package-local import recovered from an uncovered source file.',
-        `${reference.specifier} @ line ${reference.line}`,
-      ));
-    }
-  }
-
-  return edges;
-}
-
 function discoverExecutableHandoffEdges(
   profile: AnalysisProfile,
   repoRoot: string,
@@ -570,88 +456,6 @@ function discoverExecutableHandoffEdges(
   }
 
   return edges;
-}
-
-function collectModuleReferences(
-  sourceFile: ts.SourceFile,
-): ReadonlyArray<{ readonly specifier: string; readonly line: number }> {
-  const references: Array<{ readonly specifier: string; readonly line: number }> = [];
-
-  function addReference(specifier: string, line: number): void {
-    references.push({ specifier, line });
-  }
-
-  function visit(node: ts.Node): void {
-    if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node))
-      && node.moduleSpecifier
-      && ts.isStringLiteral(node.moduleSpecifier)) {
-      const line = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
-      addReference(node.moduleSpecifier.text, line);
-    } else if (ts.isCallExpression(node)
-      && node.expression.kind === ts.SyntaxKind.ImportKeyword
-      && node.arguments.length > 0
-      && ts.isStringLiteral(node.arguments[0]!)) {
-      const line = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
-      addReference(node.arguments[0]!.text, line);
-    }
-    ts.forEachChild(node, visit);
-  }
-
-  ts.forEachChild(sourceFile, visit);
-  return references;
-}
-
-function scriptKindForPath(filePath: string): ts.ScriptKind {
-  if (filePath.endsWith('.tsx')) return ts.ScriptKind.TSX;
-  if (filePath.endsWith('.jsx')) return ts.ScriptKind.JSX;
-  return ts.ScriptKind.TS;
-}
-
-function isPackageLocalSpecifier(specifier: string): boolean {
-  return specifier.startsWith('.') || specifier.startsWith('/');
-}
-
-function resolveRelativeModuleSpecifier(
-  profile: AnalysisProfile,
-  sourceFilePath: string,
-  specifier: string,
-  packageFiles: ReadonlySet<string>,
-): string | null {
-  const sourceDir = pathPosix.dirname(sourceFilePath);
-  const normalized = specifier.startsWith('/')
-    ? specifier.slice(1)
-    : pathPosix.normalize(pathPosix.join(sourceDir, specifier));
-  const baseCandidates = dedupeStrings([
-    ...expandMappedRepoRelativePathCandidates(profile, normalized),
-    normalized.replace(/\.[cm]?js$/i, '.ts'),
-    normalized.replace(/\.[cm]?js$/i, '.tsx'),
-    normalized.replace(/\.[cm]?js$/i, '.mts'),
-    normalized.replace(/\.[cm]?js$/i, '.cts'),
-  ]);
-  const candidates = dedupeStrings(baseCandidates.flatMap((candidate) => [
-    candidate,
-    candidate.replace(/\.d\.[cm]?ts$/i, '.ts'),
-    candidate.replace(/\.[cm]?js$/i, '.ts'),
-    candidate.replace(/\.[cm]?js$/i, '.tsx'),
-    candidate.replace(/\.[cm]?js$/i, '.mts'),
-    candidate.replace(/\.[cm]?js$/i, '.cts'),
-    `${candidate}.ts`,
-    `${candidate}.tsx`,
-    `${candidate}.mts`,
-    `${candidate}.cts`,
-    `${candidate}/index.ts`,
-    `${candidate}/index.tsx`,
-    `${candidate}/index.mts`,
-    `${candidate}/index.cts`,
-  ]));
-
-  for (const candidate of candidates) {
-    if (packageFiles.has(candidate)) {
-      return candidate;
-    }
-  }
-
-  return null;
 }
 
 function discoverExecutableHandoffTargets(sourceText: string): readonly string[] {

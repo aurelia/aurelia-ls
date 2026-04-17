@@ -1,25 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { loadCurrentSnapshots } from '../src/current-snapshots.js';
 import { createRouteWitnessAnswer } from '../src/route-witness.js';
-
-function loadSnapshotsForRouteWitness() {
-  try {
-    return loadCurrentSnapshots();
-  } catch (error) {
-    throw new Error(
-      `Current source-analysis snapshots are required for live route witness tests. Run "pnpm source-analysis refresh all".\n\n${(error as Error).message}`,
-    );
-  }
-}
+import { loadCurrentLiveAnalysisViews } from './live-analysis-views.js';
 
 describe('Source-analysis route witnesses', () => {
   it('explains refresh.ts through the manifest-backed CLI route', () => {
-    const snapshots = loadSnapshotsForRouteWitness();
+    const analysis = loadCurrentLiveAnalysisViews();
     const answer = createRouteWitnessAnswer({
       focusRef: { kind: 'file', value: 'packages/source-analysis/src/refresh.ts' },
       questionRoute: 'route',
-    }, snapshots);
+    }, analysis);
 
     expect(answer.outcome.tag).toBe('hit');
     expect(answer.outcome.trust.kind).toBe('qualified');
@@ -33,11 +23,11 @@ describe('Source-analysis route witnesses', () => {
   });
 
   it('explains SnapshotHostRuntime from the public package surface', () => {
-    const snapshots = loadSnapshotsForRouteWitness();
+    const analysis = loadCurrentLiveAnalysisViews();
     const answer = createRouteWitnessAnswer({
       focusRef: { kind: 'type', value: 'SnapshotHostRuntime' },
       questionRoute: 'route',
-    }, snapshots);
+    }, analysis);
 
     expect(answer.outcome.tag).toBe('hit');
     expect(answer.outcome.trust.kind).toBe('grounded');
