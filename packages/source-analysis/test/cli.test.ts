@@ -1,13 +1,40 @@
-import { execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { promisify } from 'node:util';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import {
+  startHostServiceServer,
+  type HostServiceServer,
+} from '../src/host/service-server.js';
 
 const tempDirs: string[] = [];
+let hostServer: HostServiceServer | undefined;
+let previousHostEndpoint = process.env.SOURCE_ANALYSIS_HOST_ENDPOINT;
+const execFileAsync = promisify(execFile);
 
-afterEach(() => {
+beforeEach(async () => {
+  previousHostEndpoint = process.env.SOURCE_ANALYSIS_HOST_ENDPOINT;
+  hostServer = await startHostServiceServer({
+    endpoint: createTestHostEndpoint(),
+    idleTimeoutMs: 60_000,
+  });
+  process.env.SOURCE_ANALYSIS_HOST_ENDPOINT = hostServer.endpoint;
+});
+
+afterEach(async () => {
+  if (hostServer) {
+    await hostServer.close();
+    hostServer = undefined;
+  }
+  if (previousHostEndpoint === undefined) {
+    delete process.env.SOURCE_ANALYSIS_HOST_ENDPOINT;
+  } else {
+    process.env.SOURCE_ANALYSIS_HOST_ENDPOINT = previousHostEndpoint;
+  }
+
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop();
     if (dir) {
@@ -17,9 +44,9 @@ afterEach(() => {
 });
 
 describe('source-analysis hosted CLI', () => {
-  it('describes the resolved profile and snapshot support as JSON', () => {
+  it('describes the resolved profile and snapshot support as JSON', async () => {
     const repoPath = createProfileFixtureRepo();
-    const raw = runCli(['describe', 'profile', '--repo', repoPath, '--json']);
+    const raw = await runCliAsync(['describe', 'profile', '--repo', repoPath, '--json']);
     const parsed = JSON.parse(raw) as {
       readonly command: string;
       readonly result: {
@@ -55,9 +82,9 @@ describe('source-analysis hosted CLI', () => {
     expect(parsed.result.snapshotSupport.missingKinds).toEqual(['deps', 'typerefs', 'exports']);
   });
 
-  it('answers questions end-to-end through the top-level ask command', () => {
+  it('answers questions end-to-end through the top-level ask command', async () => {
     const repoPath = createAuditFixtureRepo();
-    const raw = runCli([
+    const raw = await runCliAsync([
       'ask',
       'Audit @fixture/source-analysis-audit for tech debt.',
       '--repo',
@@ -98,9 +125,65 @@ describe('source-analysis hosted CLI', () => {
     expect(parsed.result.execution?.steps.every((step) => step.status === 'executed')).toBe(true);
   });
 
-  it('routes analyzability questions through profile posture instead of workspace orientation', () => {
+  it('reuses an opened hosted session across separate CLI invocations', async () => {
+    const repoPath = createAuditFixtureRepo();
+    const openRaw = await runCliAsync([
+      'session',
+      'open',
+      '--repo',
+      repoPath,
+      '--target',
+      'fixture-cli-session',
+      '--json',
+    ]);
+    const opened = JSON.parse(openRaw) as {
+      readonly command: string;
+      readonly result: {
+        readonly sessionId: string;
+      };
+    };
+
+    const askRaw = await runCliAsync([
+      'ask',
+      'Audit @fixture/source-analysis-audit for tech debt.',
+      '--session-id',
+      opened.result.sessionId,
+      '--json',
+    ]);
+    const asked = JSON.parse(askRaw) as {
+      readonly result: {
+        readonly execution?: {
+          readonly usedSessionId?: string;
+          readonly ephemeralSession: boolean;
+          readonly steps: ReadonlyArray<{
+            readonly command: string;
+            readonly status: string;
+          }>;
+        };
+      };
+    };
+
+    expect(asked.result.execution?.usedSessionId).toBe(opened.result.sessionId);
+    expect(asked.result.execution?.ephemeralSession).toBe(false);
+    expect(asked.result.execution?.steps.map((step) => step.command)).toEqual([
+      'query.audit.package',
+    ]);
+
+    const statusRaw = await runCliAsync(['session', 'status', '--json']);
+    const status = JSON.parse(statusRaw) as {
+      readonly result: {
+        readonly sessions: ReadonlyArray<{
+          readonly sessionId: string;
+        }>;
+      };
+    };
+
+    expect(status.result.sessions.some((session) => session.sessionId === opened.result.sessionId)).toBe(true);
+  });
+
+  it('routes analyzability questions through profile posture instead of workspace orientation', async () => {
     const repoPath = createExcludedFrontierFixtureRepo();
-    const raw = runCli([
+    const raw = await runCliAsync([
       'ask',
       'What boundaries are open because parts of the repo are excluded from analysis?',
       '--repo',
@@ -132,9 +215,9 @@ describe('source-analysis hosted CLI', () => {
     expect(parsed.result.answer.outcome.value?.execution?.command).toBe('describe.profile');
   });
 
-  it('treats excluded package focuses as explicit boundaries instead of silent misses', () => {
+  it('treats excluded package focuses as explicit boundaries instead of silent misses', async () => {
     const repoPath = createExcludedFrontierFixtureRepo();
-    const raw = runCli([
+    const raw = await runCliAsync([
       'ask',
       'Orient me to @fixture/excluded.',
       '--repo',
@@ -170,9 +253,9 @@ describe('source-analysis hosted CLI', () => {
     expect(parsed.result.answer.outcome.issues.some((issue) => issue.code.includes('focus-excluded'))).toBe(true);
   });
 
-  it('spends excluded-frontier seams inside package-audit answers', () => {
+  it('spends excluded-frontier seams inside package-audit answers', async () => {
     const repoPath = createExcludedFrontierFixtureRepo();
-    const raw = runCli([
+    const raw = await runCliAsync([
       'ask',
       'Audit @fixture/app for tech debt.',
       '--repo',
@@ -206,9 +289,9 @@ describe('source-analysis hosted CLI', () => {
     )).toBe(true);
   });
 
-  it('keeps explicit repo and profile targeting visible in plan.question flows', () => {
+  it('keeps explicit repo and profile targeting visible in plan.question flows', async () => {
     const repoPath = createExplicitProfileFixtureRepo();
-    const raw = runCli([
+    const raw = await runCliAsync([
       'plan',
       'question',
       `Open a source-analysis session for ${repoPath}.`,
@@ -252,10 +335,10 @@ describe('source-analysis hosted CLI', () => {
   });
 });
 
-function runCli(
+async function runCliAsync(
   args: readonly string[],
-): string {
-  return execFileSync(
+): Promise<string> {
+  const result = await execFileAsync(
     process.execPath,
     [
       join(process.cwd(), 'packages', 'source-analysis', 'out', 'cli.js'),
@@ -264,8 +347,18 @@ function runCli(
     {
       encoding: 'utf-8',
       cwd: process.cwd(),
+      env: process.env,
     },
   );
+  return result.stdout;
+}
+
+function createTestHostEndpoint(): string {
+  const suffix = `${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  if (process.platform === 'win32') {
+    return `\\\\.\\pipe\\source-analysis-test-${suffix}`;
+  }
+  return join(tmpdir(), `source-analysis-test-${suffix}.sock`);
 }
 
 function createProfileFixtureRepo(): string {

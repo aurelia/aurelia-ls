@@ -93,6 +93,24 @@ export class HostSessionManager {
       left.sessionId.localeCompare(right.sessionId),
     );
   }
+
+  findMatching(args: {
+    readonly repoPath: string;
+    readonly target?: string;
+    readonly profilePath?: string;
+  }): HostSessionState | undefined {
+    const selection = resolveSnapshotTarget({
+      repoPath: args.repoPath,
+      target: args.target,
+      profilePath: args.profilePath,
+    });
+
+    return this.list().find((state) =>
+      state.repoPath === selection.repoPath
+      && state.target === selection.target
+      && (state.profilePath ?? null) === (args.profilePath ?? null),
+    );
+  }
 }
 
 export function toSessionStatusEntry(

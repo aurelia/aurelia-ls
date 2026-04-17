@@ -123,6 +123,10 @@ interface InquiryExecutionOutcome {
   readonly execution: AskQuestionExecution;
 }
 
+export interface SnapshotHostRuntimeOptions {
+  readonly executionMode?: 'snapshot-first' | 'session-first';
+}
+
 const DEFAULT_CACHE: HostCacheMeta = { hit: false, tier: 'cold' };
 const ALL_SNAPSHOT_KINDS = SNAPSHOT_KINDS;
 const SOURCE_FILE_PATTERN = /(\.d\.ts|\.tsx|\.ts|\.mts|\.cts)$/i;
@@ -131,6 +135,13 @@ export class SnapshotHostRuntime {
   readonly #sessions = new HostSessionManager();
   readonly #ingress = new CapabilityIngress();
   readonly #publicIngress = new InquiryIngress();
+  readonly #executionMode: 'snapshot-first' | 'session-first';
+
+  constructor(
+    options: SnapshotHostRuntimeOptions = {},
+  ) {
+    this.#executionMode = options.executionMode ?? 'session-first';
+  }
 
   execute<TCommand extends HostCommandName>(
     invocation: HostCommandInvocation<TCommand>,
@@ -379,13 +390,21 @@ export class SnapshotHostRuntime {
   }
 
   #askQuestion(args: AskQuestionArgs): CommandOutcome {
-    const existingSession = args.sessionId ? this.#tryGetSession(args.sessionId) : undefined;
+    const explicitSession = args.sessionId ? this.#tryGetSession(args.sessionId) : undefined;
+    const ambientSession = !args.sessionId && this.#executionMode === 'session-first'
+      ? this.#sessions.findMatching({
+        repoPath: args.repoPath ?? process.cwd(),
+        target: args.target,
+        profilePath: args.profilePath,
+      })
+      : undefined;
+    const existingSession = explicitSession ?? ambientSession;
     const repoPath = args.repoPath ?? existingSession?.repoPath ?? process.cwd();
     const target = args.target ?? existingSession?.target;
     const profilePath = args.profilePath ?? existingSession?.profilePath ?? undefined;
     const plan = this.#publicIngress.plan({
       question: args.question,
-      sessionId: args.sessionId,
+      sessionId: existingSession?.sessionId ?? args.sessionId,
       repoPath,
       target,
       profilePath,
@@ -395,11 +414,13 @@ export class SnapshotHostRuntime {
     });
 
     const executed = plan.status === 'ready' && plan.primaryStep
-      ? this.#tryExecuteInquiryPlanAgainstCurrentSnapshots(plan, {
+      ? (this.#executionMode === 'snapshot-first'
+        ? this.#tryExecuteInquiryPlanAgainstCurrentSnapshots(plan, {
         repoPath,
         target,
         profilePath,
-      }) ?? this.#executeInquiryPlan(plan, {
+      })
+        : undefined) ?? this.#executeInquiryPlan(plan, {
         existingSession,
         repoPath,
         target,
@@ -436,7 +457,7 @@ export class SnapshotHostRuntime {
     };
     return {
       result,
-      sessionId: existingSession?.sessionId,
+      sessionId: executed?.usedSessionId ?? existingSession?.sessionId,
       invalidation: executed?.invalidation ?? (existingSession ? buildInvalidationMeta(existingSession) : emptyInvalidationMeta()),
       cache: executed?.cache ?? (existingSession
         ? { hit: hasCachedSnapshots(existingSession), tier: hasCachedSnapshots(existingSession) ? 'warm' : 'cold' }
@@ -594,6 +615,10 @@ export class SnapshotHostRuntime {
       ...typeRefsQuery.refreshedKinds,
       ...exportsQuery.refreshedKinds,
     ]);
+    // TODO: Thread live structural claim/evaluator context from the warm repo
+    // session into audit/navigation/route answer builders so hosted inquiry can
+    // classify focused paths from the live substrate and eventually stop
+    // reporting these answers as snapshot-shaped freshness.
     const answer = createAuditAnswer(
       {
         inquiryEpisode: 'inventory-and-audit-sweep',
@@ -813,6 +838,9 @@ export class SnapshotHostRuntime {
       readonly profilePath?: string;
     },
   ): InquiryExecutionOutcome | undefined {
+    // TODO: Remove this snapshot-first fast path once the live host/session path
+    // can answer the same inquiries with acceptable cold-start performance and
+    // snapshots are demoted to export/debug materialization only.
     const primaryStep = plan.primaryStep;
     if (!primaryStep || !supportsCurrentSnapshotExecution(primaryStep.command)) {
       return undefined;
@@ -898,7 +926,7 @@ export class SnapshotHostRuntime {
           });
           const openResult = openOutcome.result as SessionOpenResult;
           sessionState = this.#sessions.get(openResult.sessionId);
-          openedEphemeralSession = true;
+          openedEphemeralSession = this.#executionMode !== 'session-first';
           cache = openOutcome.cache ?? DEFAULT_CACHE;
           invalidation = openOutcome.invalidation ?? buildInvalidationMeta(sessionState);
           refreshedKinds = openOutcome.refreshedKinds ?? [];
@@ -906,7 +934,9 @@ export class SnapshotHostRuntime {
             command: step.command,
             args: step.args,
             status: 'executed',
-            detail: `Opened session "${openResult.sessionId}".`,
+            detail: this.#executionMode === 'session-first'
+              ? `Opened live ambient session "${openResult.sessionId}".`
+              : `Opened session "${openResult.sessionId}".`,
           });
           continue;
         }
@@ -973,8 +1003,10 @@ export class SnapshotHostRuntime {
   }
 }
 
-export function createSnapshotHostRuntime(): SnapshotHostRuntime {
-  return new SnapshotHostRuntime();
+export function createSnapshotHostRuntime(
+  options: SnapshotHostRuntimeOptions = {},
+): SnapshotHostRuntime {
+  return new SnapshotHostRuntime(options);
 }
 
 function summarizeInquiryExecution(

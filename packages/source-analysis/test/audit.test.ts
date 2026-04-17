@@ -28,7 +28,7 @@ describe('Source-analysis package audit', () => {
     expect(uncoveredFinding).toBeUndefined();
   });
 
-  it('still surfaces files that are only justified by exercise routes', () => {
+  it('no longer reports exercise-only structural substrate helpers after they became an intentional public subpath', () => {
     const snapshots = loadSnapshotsForAudit();
     const answer = createAuditAnswer({
       focusRef: { kind: 'package', value: '@aurelia-ls/source-analysis' },
@@ -38,17 +38,7 @@ describe('Source-analysis package audit', () => {
     const exerciseOnlyFinding = answer.outcome.value?.findings.find((finding) =>
       finding.code === 'exercise-only-files',
     );
-    expect(exerciseOnlyFinding).toBeTruthy();
-    expect(exerciseOnlyFinding?.primaryRef.value).toBe('packages/source-analysis/src/partition-coupling.ts');
-    expect(exerciseOnlyFinding?.relatedRefs.some((ref) =>
-      ref.value === 'packages/source-analysis/src/subsystem-coupling.ts',
-    )).toBe(true);
-    expect(exerciseOnlyFinding?.evidence.some((line) =>
-      line.includes('partition-coupling.test.ts -> partition-coupling.ts (grounded)'),
-    )).toBe(true);
-    expect(exerciseOnlyFinding?.evidence.some((line) =>
-      line.includes('subsystem-coupling.test.ts -> subsystem-coupling.ts (grounded)'),
-    )).toBe(true);
+    expect(exerciseOnlyFinding).toBeUndefined();
   });
 
   it('no longer reports an under-integrated orphan after the subsystem coupling helper was integrated', () => {

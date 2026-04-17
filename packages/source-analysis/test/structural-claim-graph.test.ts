@@ -4,11 +4,13 @@ import { tmpdir } from 'node:os';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { createRepoSession } from '../out/repo-session.js';
 import { generateDepsAnalysis } from '../out/deps/analyze.js';
 import { generateExportsAnalysis } from '../out/exports/analyze.js';
-import { createRepoSession } from '../out/repo-session.js';
-import { buildStructuralClaimGraph } from '../out/structural-claim-graph.js';
-import { evaluateFilePathStructuralClaims } from '../out/structural-evaluators.js';
+import {
+  buildStructuralClaimGraph,
+  evaluateFilePathStructuralClaims,
+} from '../out/public/structural.js';
 import { generateTypeRefsAnalysis } from '../out/typerefs/analyze.js';
 
 const tempDirs: string[] = [];

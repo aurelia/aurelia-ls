@@ -28,9 +28,11 @@ function printHelp(): void {
       'Usage: pnpm source-analysis <mode> [args]',
       '',
       'Modes:',
+      '  host <start|status|stop> [--json]',
       '  describe <profile|inquiries|capabilities> [question] [--repo <path>] [--json]',
       '  plan <inquiry|question> <question> [--repo <path>] [--target <name>] [--profile-path <path>] [--json]',
       '  ask <question> [--repo <path>] [--target <name>] [--profile-path <path>] [--json]',
+      '  session <open|status|close|refresh> [--session-id <id>] [--repo <path>] [--json]',
       '  refresh [deps|typerefs|exports|all] [--target <name>] [--repo <path>] [--profile-path <path>] [--out-dir <dir>] [--wait-ms <ms>]',
       '  deps <command> [args] [--target <name>] [--repo <path>] [--profile-path <path>] [--file path.json]',
       '  typerefs <command> [args] [--target <name>] [--repo <path>] [--profile-path <path>] [--file path.json]',
@@ -40,7 +42,9 @@ function printHelp(): void {
       'If --target is omitted, a target label is derived from the repo path.',
       '',
       'Examples:',
+      '  pnpm source-analysis host start',
       '  pnpm source-analysis describe profile',
+      '  pnpm source-analysis session open --repo /path/to/repo',
       '  pnpm source-analysis describe inquiries "How do I discover what this tool can answer?"',
       '  pnpm source-analysis ask "Audit @aurelia-ls/source-analysis for tech debt." --repo /path/to/repo',
       '  pnpm source-analysis refresh all',
@@ -55,7 +59,7 @@ function printHelp(): void {
 
 if (!entrypoint || !(entrypoint in ENTRYPOINTS)) {
   if (isHostedCliMode(entrypoint)) {
-    process.exitCode = runHostedCli(args);
+    process.exitCode = await runHostedCli(args);
   } else {
     printHelp();
     process.exitCode = entrypoint ? 1 : 0;

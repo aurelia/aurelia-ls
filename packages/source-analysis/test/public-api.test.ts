@@ -15,6 +15,10 @@ import {
   inspectProfileSnapshotSupport,
   resolveAnalysisProfile,
 } from '../out/public/profile.js';
+import {
+  STRUCTURAL_PATH_EVALUATOR_IDS,
+  resolvePartitionRef,
+} from '../out/public/structural.js';
 import { tryLoadCurrentSnapshots } from '../out/public/snapshots.js';
 
 describe('Source-analysis public API surface', () => {
@@ -29,8 +33,9 @@ describe('Source-analysis public API surface', () => {
     expect(typeof loadCurrentSnapshots).toBe('function');
   });
 
-  it('exposes named subpaths for host and inquiry surfaces', () => {
+  it('exposes named subpaths for host, inquiry, profile, and structural surfaces', () => {
     expect(HOST_RENDER_STYLES).toContain('plain-text');
+    expect(STRUCTURAL_PATH_EVALUATOR_IDS).toContain('file-path-deterministic-ceiling');
 
     const inquiry = createInquiryIngress();
     const answer = inquiry.createDiscoveryAnswer({
@@ -62,5 +67,8 @@ describe('Source-analysis public API surface', () => {
       profile,
     );
     expect(Array.isArray(posture.summaryLines)).toBe(true);
+
+    const partitionRef = resolvePartitionRef(profile, 'source-area', 'packages/source-analysis/src/host/runtime.ts');
+    expect(partitionRef?.partitionId).toBe('packages/source-analysis/src/host');
   });
 });

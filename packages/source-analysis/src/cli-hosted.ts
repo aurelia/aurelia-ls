@@ -1,4 +1,3 @@
-import { createSnapshotHostRuntime } from './host/runtime.js';
 import type {
   DescribeProfileResult,
   HostCommandEnvelope,
@@ -6,11 +5,18 @@ import type {
   HostCommandName,
   HostRenderedView,
 } from './host/types.js';
+import type { SnapshotKind } from './snapshots.js';
+import {
+  ensureHostServiceRunning,
+  executeHostServiceInvocation,
+  inspectHostServiceStatus,
+  stopHostService,
+} from './host/service-client.js';
 import type { InquiryFamilyId } from './inquiry-catalog.js';
 import type { ConsumerKind } from './inquiry-policy.js';
 import type { FocusKind, ReadMode } from './inquiry-model.js';
 
-const HOSTED_CLI_MODES = ['describe', 'plan', 'ask'] as const;
+const HOSTED_CLI_MODES = ['describe', 'plan', 'ask', 'session', 'host'] as const;
 
 type HostedCliMode =
   typeof HOSTED_CLI_MODES[number];
@@ -29,6 +35,9 @@ interface ParsedCommonArgs {
   readonly includeExamples?: boolean;
   readonly topK?: number;
   readonly question?: string;
+  readonly warmPrograms?: boolean;
+  readonly force?: boolean;
+  readonly kinds?: readonly SnapshotKind[];
 }
 
 export function isHostedCliMode(
@@ -37,9 +46,9 @@ export function isHostedCliMode(
   return Boolean(value && HOSTED_CLI_MODES.includes(value as HostedCliMode));
 }
 
-export function runHostedCli(
+export async function runHostedCli(
   argv: readonly string[],
-): number {
+): Promise<number> {
   const args = [...argv];
   const mode = args.shift();
 
@@ -47,10 +56,13 @@ export function runHostedCli(
     throw new Error(`Unsupported hosted CLI mode: ${String(mode)}`);
   }
 
-  const runtime = createSnapshotHostRuntime();
+  if (mode === 'host') {
+    return runHostManagementCli(args);
+  }
+
   const common = parseCommonArgs(args);
-  const invocation = buildInvocation(mode, args, common);
-  const envelope = runtime.execute(invocation as HostCommandInvocation<HostCommandName>);
+  const invocation = buildInvocation(mode as Exclude<HostedCliMode, 'host'>, args, common);
+  const envelope = await executeInvocation(mode, invocation as HostCommandInvocation<HostCommandName>);
 
   if (common.json) {
     process.stdout.write(`${JSON.stringify(envelope, null, 2)}\n`);
@@ -67,8 +79,16 @@ export function runHostedCli(
   return envelope.status === 'ok' && envelope.errors.length === 0 ? 0 : 1;
 }
 
+async function executeInvocation(
+  mode: Exclude<HostedCliMode, 'host'>,
+  invocation: HostCommandInvocation<HostCommandName>,
+): Promise<HostCommandEnvelope<unknown>> {
+  await ensureHostServiceRunning();
+  return executeHostServiceInvocation(invocation);
+}
+
 function buildInvocation(
-  mode: HostedCliMode,
+  mode: Exclude<HostedCliMode, 'host'>,
   remainingArgs: readonly string[],
   common: ParsedCommonArgs,
 ): HostCommandInvocation<HostCommandName> {
@@ -79,6 +99,8 @@ function buildInvocation(
       return buildPlanInvocation(remainingArgs, common);
     case 'ask':
       return buildAskInvocation(remainingArgs, common);
+    case 'session':
+      return buildSessionInvocation(remainingArgs, common);
     default:
       return assertNever(mode);
   }
@@ -211,6 +233,57 @@ function buildAskInvocation(
   };
 }
 
+function buildSessionInvocation(
+  remainingArgs: readonly string[],
+  common: ParsedCommonArgs,
+): HostCommandInvocation<HostCommandName> {
+  const topic = remainingArgs[0];
+  if (!topic) {
+    throw new Error('Usage: pnpm source-analysis session <open|status|close|refresh>');
+  }
+
+  switch (topic) {
+    case 'open':
+      return {
+        command: 'session.open',
+        args: {
+          repoPath: common.repoPath ?? process.cwd(),
+          target: common.target,
+          profilePath: common.profilePath,
+          sessionId: common.sessionId,
+          warmPrograms: common.warmPrograms,
+        },
+      };
+    case 'status':
+      return {
+        command: 'session.status',
+        args: {
+          sessionId: common.sessionId,
+        },
+      };
+    case 'close': {
+      const sessionId = requireSessionId(common.sessionId, 'session close');
+      return {
+        command: 'session.close',
+        args: { sessionId },
+      };
+    }
+    case 'refresh': {
+      const sessionId = requireSessionId(common.sessionId, 'session refresh');
+      return {
+        command: 'session.refresh',
+        args: {
+          sessionId,
+          ...(common.kinds && common.kinds.length > 0 ? { kinds: common.kinds } : {}),
+          ...(common.force ? { force: true } : {}),
+        },
+      };
+    }
+    default:
+      throw new Error(`Unknown session topic: ${topic}`);
+  }
+}
+
 function parseCommonArgs(
   args: string[],
 ): ParsedCommonArgs {
@@ -227,6 +300,9 @@ function parseCommonArgs(
   const familyId = takeOption(args, '--family-id') as InquiryFamilyId | undefined;
   const topKRaw = takeOption(args, '--top-k');
   const questionFromFlag = takeOption(args, '--question');
+  const warmPrograms = !takeBooleanFlag(args, '--cold');
+  const force = takeBooleanFlag(args, '--force');
+  const kinds = takeRepeatableKinds(args, '--kind');
   const topK = topKRaw ? Number(topKRaw) : undefined;
 
   if (topKRaw && !Number.isFinite(topK)) {
@@ -247,6 +323,9 @@ function parseCommonArgs(
     ...(includeExamples ? { includeExamples: true } : {}),
     ...(typeof topK === 'number' ? { topK } : {}),
     ...(questionFromFlag ? { question: questionFromFlag } : {}),
+    ...(warmPrograms ? { warmPrograms: true } : { warmPrograms: false }),
+    ...(force ? { force: true } : {}),
+    ...(kinds.length > 0 ? { kinds } : {}),
   };
 }
 
@@ -276,6 +355,38 @@ function takeOption(
   }
   args.splice(index, 2);
   return value;
+}
+
+function takeRepeatableOption(
+  args: string[],
+  flag: string,
+): readonly string[] {
+  const values: string[] = [];
+  while (true) {
+    const index = args.indexOf(flag);
+    if (index === -1) {
+      return values;
+    }
+    const value = args[index + 1];
+    if (!value || value.startsWith('--')) {
+      throw new Error(`Missing value for ${flag}`);
+    }
+    values.push(value);
+    args.splice(index, 2);
+  }
+}
+
+function takeRepeatableKinds(
+  args: string[],
+  flag: string,
+): readonly SnapshotKind[] {
+  const values = takeRepeatableOption(args, flag);
+  for (const value of values) {
+    if (value !== 'deps' && value !== 'typerefs' && value !== 'exports') {
+      throw new Error(`Invalid ${flag} value: ${value}`);
+    }
+  }
+  return values as readonly SnapshotKind[];
 }
 
 function renderEnvelopeText(
@@ -387,4 +498,62 @@ function assertNever(
   value: never,
 ): never {
   throw new Error(`Unexpected hosted CLI mode: ${JSON.stringify(value)}`);
+}
+
+function requireSessionId(
+  sessionId: string | undefined,
+  topic: string,
+): string {
+  if (!sessionId) {
+    throw new Error(`Usage: pnpm source-analysis ${topic} --session-id <id>`);
+  }
+  return sessionId;
+}
+
+async function runHostManagementCli(
+  args: readonly string[],
+): Promise<number> {
+  const rawArgs = [...args];
+  const common = parseCommonArgs(rawArgs);
+  const topic = rawArgs[0] ?? 'status';
+
+  switch (topic) {
+    case 'start': {
+      const status = await ensureHostServiceRunning();
+      renderHostStatus(status, common.json);
+      return status.running ? 0 : 1;
+    }
+    case 'status': {
+      const status = await inspectHostServiceStatus();
+      renderHostStatus(status, common.json);
+      return status.running ? 0 : 1;
+    }
+    case 'stop': {
+      const status = await stopHostService();
+      renderHostStatus(status, common.json);
+      return status.stopped || !status.running ? 0 : 1;
+    }
+    default:
+      throw new Error('Usage: pnpm source-analysis host <start|status|stop> [--json]');
+  }
+}
+
+function renderHostStatus(
+  status: Awaited<ReturnType<typeof inspectHostServiceStatus>>,
+  json: boolean,
+): void {
+  if (json) {
+    process.stdout.write(`${JSON.stringify(status, null, 2)}\n`);
+    return;
+  }
+
+  const lines = [
+    `Running:      ${status.running ? 'yes' : 'no'}`,
+    `Endpoint:     ${status.endpoint}`,
+    ...(typeof status.pid === 'number' ? [`PID:          ${status.pid}`] : []),
+    ...(typeof status.sessionCount === 'number' ? [`Sessions:     ${status.sessionCount}`] : []),
+    ...(status.started ? ['Started:      yes'] : []),
+    ...(status.stopped ? ['Stopped:      yes'] : []),
+  ];
+  process.stdout.write(`${lines.join('\n')}\n`);
 }

@@ -28,6 +28,10 @@
     "./profile": {
       "import": "./out/public/profile.js",
       "types": "./out/public/profile.d.ts"
+    },
+    "./structural": {
+      "import": "./out/public/structural.js",
+      "types": "./out/public/structural.d.ts"
     }
   },
   "scripts": {

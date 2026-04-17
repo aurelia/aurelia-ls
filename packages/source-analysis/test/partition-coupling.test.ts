@@ -9,7 +9,7 @@ import {
   collectCrossPartitionTypeRefSummaries,
   collectPartitionBindingPressure,
   collectPartitionBindingSeams,
-} from '../out/partition-coupling.js';
+} from '../out/public/structural.js';
 import type { DepsOutput } from '../out/deps/schema.js';
 import type { TypeRefsOutput } from '../out/typerefs/schema.js';
 

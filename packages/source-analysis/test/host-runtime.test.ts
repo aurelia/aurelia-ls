@@ -439,7 +439,7 @@ describe('SnapshotHostRuntime', () => {
     expect(askedAudit.status).toBe('ok');
     expect(askedAudit.result.answer.outcome.value?.status).toBe('answered');
     expect(askedAudit.result.answer.outcome.value?.inquiry?.id).toBe('package-audit');
-    expect(askedAudit.result.execution?.ephemeralSession).toBe(true);
+    expect(askedAudit.result.execution?.ephemeralSession).toBe(false);
     expect(askedAudit.result.execution?.steps.map((step) => step.command)).toEqual([
       'session.open',
       'query.audit.package',
@@ -461,7 +461,6 @@ describe('SnapshotHostRuntime', () => {
     expect(askedOrientation.result.answer.outcome.value?.status).toBe('answered');
     expect(askedOrientation.result.answer.outcome.value?.inquiry?.id).toBe('workspace-orientation');
     expect(askedOrientation.result.execution?.steps.map((step) => step.command)).toEqual([
-      'session.open',
       'query.navigate',
     ]);
     expect(askedOrientation.result.answer.outcome.value?.execution?.command).toBe('query.navigate');
@@ -469,7 +468,9 @@ describe('SnapshotHostRuntime', () => {
   });
 
   it('uses current snapshots for live ask.question flows instead of opening a transient session', () => {
-    const runtime = createSnapshotHostRuntime();
+    const runtime = createSnapshotHostRuntime({
+      executionMode: 'snapshot-first',
+    });
     const opened = runtime.execute({
       command: 'session.open',
       args: {
@@ -501,9 +502,62 @@ describe('SnapshotHostRuntime', () => {
     )).toBe(true);
   });
 
+  it('reuses an ambient live session in session-first mode for repeated ask.question flows', () => {
+    const repoPath = createAuditFixtureRepo();
+    const runtime = createSnapshotHostRuntime({
+      executionMode: 'session-first',
+    });
+
+    const firstAsk = runtime.execute({
+      command: 'ask.question',
+      args: {
+        question: 'Audit @fixture/source-analysis-audit for tech debt.',
+        repoPath,
+        target: 'fixture-live',
+      },
+    });
+
+    expect(firstAsk.status).toBe('ok');
+    expect(firstAsk.result.answer.query.worldFrame?.freshness).toBe('live');
+    expect(firstAsk.result.execution?.ephemeralSession).toBe(false);
+    expect(firstAsk.result.execution?.usedSessionId).toBeTruthy();
+    expect(firstAsk.result.execution?.steps.map((step) => step.command)).toEqual([
+      'session.open',
+      'query.audit.package',
+    ]);
+
+    const firstSessionId = firstAsk.result.execution?.usedSessionId;
+
+    const secondAsk = runtime.execute({
+      command: 'ask.question',
+      args: {
+        question: 'Why is src/live.ts alive?',
+        repoPath,
+        target: 'fixture-live',
+      },
+    });
+
+    expect(secondAsk.status).toBe('ok');
+    expect(secondAsk.result.answer.query.worldFrame?.freshness).toBe('live');
+    expect(secondAsk.result.execution?.ephemeralSession).toBe(false);
+    expect(secondAsk.result.execution?.usedSessionId).toBe(firstSessionId);
+    expect(secondAsk.result.execution?.steps.some((step) =>
+      step.command === 'session.open' && step.status === 'executed',
+    )).toBe(false);
+
+    const status = runtime.execute({
+      command: 'session.status',
+      args: {},
+    });
+    expect(status.result.sessions).toHaveLength(1);
+    expect(status.result.sessions[0]?.sessionId).toBe(firstSessionId);
+  });
+
   it('uses repo-local current snapshots for non-cwd repos', () => {
     const repoPath = createAuditFixtureRepo();
-    const runtime = createSnapshotHostRuntime();
+    const runtime = createSnapshotHostRuntime({
+      executionMode: 'snapshot-first',
+    });
 
     const opened = runtime.execute({
       command: 'session.open',
@@ -542,7 +596,9 @@ describe('SnapshotHostRuntime', () => {
 
   it('uses explicit profile-path targeting for current-snapshot inquiry execution', () => {
     const repoPath = createExplicitProfileAuditFixtureRepo();
-    const runtime = createSnapshotHostRuntime();
+    const runtime = createSnapshotHostRuntime({
+      executionMode: 'snapshot-first',
+    });
 
     const opened = runtime.execute({
       command: 'session.open',
