@@ -230,6 +230,55 @@ describe('SnapshotHostRuntime', () => {
     expect(renderedWitness.result.rendered.document.blocks.some((block) => block.kind === 'witness-list')).toBe(true);
   });
 
+  it('keeps file-focus resolution aligned between navigation and route witnesses for uncovered files', () => {
+    const repoPath = createSparseFileFixtureRepo();
+    const runtime = createSnapshotHostRuntime();
+
+    const opened = runtime.execute({
+      command: 'session.open',
+      args: {
+        repoPath,
+        target: 'fixture-sparse',
+      },
+    });
+
+    const sessionId = opened.result.sessionId;
+    const navigate = runtime.execute({
+      command: 'query.navigate',
+      args: {
+        sessionId,
+        focusKind: 'file',
+        focusValue: 'notes/isolated.ts',
+      },
+    });
+
+    expect(navigate.status).toBe('ok');
+    expect(navigate.result.answer.outcome.tag).toBe('open-boundary');
+    expect(navigate.result.answer.outcome.value?.primaryRef.value).toBe('notes/isolated.ts');
+    expect(navigate.result.answer.outcome.value?.summaryLines.some((line) =>
+      line.includes('does not declare any tracked project types'),
+    )).toBe(true);
+    expect(navigate.result.answer.outcome.issues.some((issue) =>
+      issue.code === 'path-evaluator-unclaimed'
+      && issue.message.includes('notes/isolated.ts'),
+    )).toBe(true);
+
+    const witness = runtime.execute({
+      command: 'query.route.witness',
+      args: {
+        sessionId,
+        focusKind: 'file',
+        focusValue: 'notes/isolated.ts',
+      },
+    });
+
+    expect(witness.status).toBe('ok');
+    expect(witness.result.answer.outcome.tag).toBe('open-boundary');
+    expect(witness.result.answer.outcome.value?.summaryLines.some((line) =>
+      line.includes('notes/isolated.ts currently has no modeled route witness'),
+    )).toBe(true);
+  });
+
   it('detects fragmented answer coordination from repeated envelope builders and carriers', () => {
     const repoPath = createCoordinationFixtureRepo();
     const runtime = createSnapshotHostRuntime();
@@ -799,6 +848,55 @@ function createAuditFixtureRepo(): string {
       'type _ExerciseOnly = TestOnlyShape;',
       '',
     ].join('\n'),
+  );
+
+  return repoPath;
+}
+
+function createSparseFileFixtureRepo(): string {
+  const repoPath = mkdtempSync(join(tmpdir(), 'source-analysis-host-sparse-'));
+  tempDirs.push(repoPath);
+
+  mkdirSync(join(repoPath, 'src'), { recursive: true });
+  mkdirSync(join(repoPath, 'notes'), { recursive: true });
+  writeFileSync(
+    join(repoPath, 'package.json'),
+    JSON.stringify(
+      {
+        name: '@fixture/source-analysis-sparse',
+        type: 'module',
+      },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(
+    join(repoPath, 'tsconfig.json'),
+    JSON.stringify(
+      {
+        compilerOptions: {
+          module: 'NodeNext',
+          moduleResolution: 'NodeNext',
+          target: 'ES2022',
+          noEmit: true,
+        },
+        include: ['src/**/*.ts'],
+      },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(
+    join(repoPath, 'src', 'live.ts'),
+    'export interface LiveShape { value: string; }\n',
+  );
+  writeFileSync(
+    join(repoPath, 'src', 'index.ts'),
+    "export type { LiveShape } from './live.js';\n",
+  );
+  writeFileSync(
+    join(repoPath, 'notes', 'isolated.ts'),
+    'export {};\n',
   );
 
   return repoPath;

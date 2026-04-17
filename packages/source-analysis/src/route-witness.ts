@@ -17,7 +17,8 @@ import {
   inspectAnalyzabilityPostureFromAnalysisViews,
   inspectFocusedAnalyzabilityContext,
 } from './analyzability-posture.js';
-import { inspectFocusedStructuralPath } from './focused-structural-path.js';
+import { inspectFocusedFileQuery } from './focused-file-query.js';
+import type { FocusedStructuralPathContext } from './focused-structural-path.js';
 import { trimTrailingFocusPunctuation } from './focus-normalization.js';
 import { resolveInquiryPolicy, type InquiryPolicy } from './inquiry-policy.js';
 import type {
@@ -82,46 +83,39 @@ function buildFileRouteWitnessAnswer(
   analysis: AnalysisViews,
   fileQuery: string,
 ): InquiryAnswer<RouteWitnessValue> {
-  const normalizedFileQuery = trimTrailingFocusPunctuation(fileQuery);
-  const posture = inspectAnalyzabilityPostureFromAnalysisViews(analysis);
-  const requestedRegimeContext = inspectFocusedAnalyzabilityContext(posture, {
-    focusLabel: normalizedFileQuery,
-    pathPrefixes: [normalizedFileQuery],
-    queryHints: [normalizedFileQuery],
-  });
-  const fileMatches = resolveFiles(analysis, normalizedFileQuery);
-  if (fileMatches.length === 0) {
-    if (requestedRegimeContext.directlyExcludedFrontier) {
+  const fileInspection = inspectFocusedFileQuery(analysis, fileQuery);
+  if (fileInspection.matches.length === 0) {
+    if (fileInspection.requestedRegimeContext.directlyExcludedFrontier) {
       return createOpenBoundaryAnswer(
         query,
         analysis,
-        { kind: 'file', value: normalizedFileQuery, label: basename(normalizedFileQuery) },
-        `${normalizedFileQuery} falls under excluded frontier ${requestedRegimeContext.directlyExcludedFrontier.prefix}, so the current route model cannot close on it inside this profile.`,
+        { kind: 'file', value: fileInspection.normalizedQuery, label: basename(fileInspection.normalizedQuery) },
+        `${fileInspection.normalizedQuery} falls under excluded frontier ${fileInspection.requestedRegimeContext.directlyExcludedFrontier.prefix}, so the current route model cannot close on it inside this profile.`,
         [],
-        requestedRegimeContext.continuations,
-        requestedRegimeContext,
+        fileInspection.requestedRegimeContext.continuations,
+        fileInspection.requestedRegimeContext,
       );
     }
     return createMissAnswer(
       query,
       analysis,
-      `No file matches "${normalizedFileQuery}".`,
-      { kind: 'file', value: normalizedFileQuery },
+      `No file matches "${fileInspection.normalizedQuery}".`,
+      { kind: 'file', value: fileInspection.normalizedQuery },
       [],
     );
   }
 
-  if (fileMatches.length > 1) {
+  if (fileInspection.matches.length > 1) {
     return createAmbiguousAnswer(
       query,
       analysis,
       `File query "${fileQuery}" is ambiguous.`,
       { kind: 'file', value: fileQuery },
-      fileMatches.slice(0, 8).map((filePath) => fileRef(filePath, filePath)),
+      fileInspection.matches.slice(0, 8).map((filePath) => fileRef(filePath, filePath)),
     );
   }
 
-  const filePath = fileMatches[0]!;
+  const filePath = fileInspection.matchedFilePath!;
   const pkg = resolveOwningPackage(analysis, filePath);
   if (!pkg) {
     return createOpenBoundaryAnswer(
@@ -139,12 +133,6 @@ function buildFileRouteWitnessAnswer(
     ordering: policy.ordering,
   });
   const witnesses = getPackageRouteWitnesses(reachability, filePath);
-  const regimeContext = inspectFocusedAnalyzabilityContext(posture, {
-    focusLabel: filePath,
-    pathPrefixes: [filePath],
-    queryHints: [normalizedFileQuery, filePath],
-  });
-  const structuralPathContext = inspectFocusedStructuralPath(analysis, filePath);
   return createHitRouteWitnessAnswer(
     query,
     analysis,
@@ -153,8 +141,8 @@ function buildFileRouteWitnessAnswer(
     fileRef(filePath, filePath),
     witnesses,
     [],
-    regimeContext,
-    structuralPathContext,
+    fileInspection.matchedRegimeContext!,
+    fileInspection.structuralPathContext,
   );
 }
 
@@ -231,7 +219,7 @@ function createHitRouteWitnessAnswer(
   witnesses: readonly PackageRouteWitness[],
   extraRelatedRefs: readonly RouteWitnessRef[],
   regimeContext: ReturnType<typeof inspectFocusedAnalyzabilityContext>,
-  structuralPathContext: ReturnType<typeof inspectFocusedStructuralPath>,
+  structuralPathContext: FocusedStructuralPathContext | null,
 ): InquiryAnswer<RouteWitnessValue> {
   const bestWitness = witnesses[0];
   const relatedRefs = dedupeRefs([
@@ -600,44 +588,6 @@ function createUnsupportedAnswer(
     [],
     [],
   );
-}
-
-function resolveFiles(
-  analysis: AnalysisViews,
-  query: string,
-): readonly string[] {
-  const normalized = trimTrailingFocusPunctuation(query).replace(/\\/g, '/');
-  const allFiles = new Set<string>();
-  for (const edge of analysis.deps.edges) {
-    allFiles.add(edge.source);
-    allFiles.add(edge.target);
-  }
-  for (const filePath of analysis.deps.uncovered_files) {
-    allFiles.add(filePath);
-  }
-  for (const declaration of analysis.typeRefs.declarations) {
-    allFiles.add(declaration.file);
-  }
-  for (const record of analysis.exports.exports) {
-    if (record.declaration_file) allFiles.add(record.declaration_file);
-    allFiles.add(record.analysis_entrypoint);
-    for (const step of record.chain) {
-      allFiles.add(step.file);
-    }
-  }
-
-  if (allFiles.has(normalized)) {
-    return [normalized];
-  }
-
-  const suffixMatches = [...allFiles].filter((filePath) => filePath.endsWith(normalized));
-  if (suffixMatches.length > 0) {
-    return suffixMatches.sort();
-  }
-
-  return [...allFiles].filter((filePath) =>
-    filePath.toLowerCase().includes(normalized.toLowerCase()),
-  ).sort();
 }
 
 function resolveTypeDeclarations(

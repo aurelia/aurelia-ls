@@ -16,7 +16,7 @@ import {
   inspectAnalyzabilityPostureFromAnalysisViews,
   inspectFocusedAnalyzabilityContext,
 } from './analyzability-posture.js';
-import { inspectFocusedStructuralPath } from './focused-structural-path.js';
+import { inspectFocusedFileQuery } from './focused-file-query.js';
 import type { AnswerCard, AnswerRef } from './answer-card.js';
 import {
   createStructuredAnswerCard,
@@ -864,37 +864,30 @@ function buildFileEpisode(
   builder: EpisodeBuilder,
   fileQuery: string,
 ): NavigationEpisode {
-  const normalizedFileQuery = trimTrailingFocusPunctuation(fileQuery);
-  const posture = inspectAnalyzabilityPostureFromAnalysisViews(builder.snapshots);
-  const requestedRegimeContext = inspectFocusedAnalyzabilityContext(posture, {
-    focusLabel: normalizedFileQuery,
-    pathPrefixes: [normalizedFileQuery],
-    queryHints: [normalizedFileQuery],
-  });
-  const matches = resolveFiles(builder.snapshots, normalizedFileQuery);
-  if (matches.length === 0) {
-    if (requestedRegimeContext.directlyExcludedFrontier) {
+  const fileInspection = inspectFocusedFileQuery(builder.snapshots, fileQuery);
+  if (fileInspection.matches.length === 0) {
+    if (fileInspection.requestedRegimeContext.directlyExcludedFrontier) {
       return builder.finish(createOpenBoundaryAnswer(
         builder,
-        `${normalizedFileQuery} falls under excluded frontier ${requestedRegimeContext.directlyExcludedFrontier.prefix}, so workspace navigation cannot close on it inside the current profile.`,
-        { kind: 'file', value: normalizedFileQuery },
+        `${fileInspection.normalizedQuery} falls under excluded frontier ${fileInspection.requestedRegimeContext.directlyExcludedFrontier.prefix}, so workspace navigation cannot close on it inside the current profile.`,
+        { kind: 'file', value: fileInspection.normalizedQuery },
         [],
-        requestedRegimeContext,
+        fileInspection.requestedRegimeContext,
       ));
     }
     return builder.finish(createMissAnswer(
       builder,
-      `No file matches "${normalizedFileQuery}".`,
-      { kind: 'file', value: normalizedFileQuery },
+      `No file matches "${fileInspection.normalizedQuery}".`,
+      { kind: 'file', value: fileInspection.normalizedQuery },
       [],
     ));
   }
-  if (matches.length > 1) {
+  if (fileInspection.matches.length > 1) {
     return builder.finish(createAmbiguousAnswer(
       builder,
-      `File query "${normalizedFileQuery}" is ambiguous.`,
-      { kind: 'file', value: normalizedFileQuery },
-      matches.slice(0, 8).map((filePath) => ({
+      `File query "${fileInspection.normalizedQuery}" is ambiguous.`,
+      { kind: 'file', value: fileInspection.normalizedQuery },
+      fileInspection.matches.slice(0, 8).map((filePath) => ({
         kind: 'file',
         value: filePath,
         label: basename(filePath),
@@ -903,7 +896,7 @@ function buildFileEpisode(
     ));
   }
 
-  const filePath = matches[0]!;
+  const filePath = fileInspection.matchedFilePath!;
   const depsSnapshotId = builder.addSnapshotNode('deps');
   const typerefsSnapshotId = builder.addSnapshotNode('typerefs');
   const exportsSnapshotId = builder.addSnapshotNode('exports');
@@ -963,12 +956,8 @@ function buildFileEpisode(
   });
   builder.addClaimEdge({ kind: 'supports', from: fileClaimId, to: routeClaimId });
 
-  const regimeContext = inspectFocusedAnalyzabilityContext(posture, {
-    focusLabel: filePath,
-    pathPrefixes: [filePath],
-    queryHints: [normalizedFileQuery, filePath],
-  });
-  const structuralPathContext = inspectFocusedStructuralPath(builder.snapshots, filePath);
+  const regimeContext = fileInspection.matchedRegimeContext!;
+  const structuralPathContext = fileInspection.structuralPathContext;
 
   const summaryLines = [
     `${filePath} has ${outboundEdges.length} outbound imports and ${inboundEdges.length} inbound imports in the dependency graph.`,
@@ -1309,41 +1298,6 @@ function resolveExports(
   return snapshots.exports.exports.filter((record) =>
     record.exported_name.toLowerCase().includes(normalized.toLowerCase()),
   );
-}
-
-function resolveFiles(
-  snapshots: AnalysisViews,
-  query: string,
-): readonly string[] {
-  const normalized = trimTrailingFocusPunctuation(query).replace(/\\/g, '/');
-  const allFiles = new Set<string>();
-  for (const edge of snapshots.deps.edges) {
-    allFiles.add(edge.source);
-    allFiles.add(edge.target);
-  }
-  for (const decl of snapshots.typeRefs.declarations) {
-    allFiles.add(decl.file);
-  }
-  for (const record of snapshots.exports.exports) {
-    if (record.declaration_file) allFiles.add(record.declaration_file);
-    allFiles.add(record.analysis_entrypoint);
-    for (const step of record.chain) {
-      allFiles.add(step.file);
-    }
-  }
-
-  if (allFiles.has(normalized)) {
-    return [normalized];
-  }
-
-  const suffixMatches = [...allFiles].filter((filePath) => filePath.endsWith(normalized));
-  if (suffixMatches.length > 0) {
-    return suffixMatches.sort();
-  }
-
-  return [...allFiles].filter((filePath) =>
-    filePath.toLowerCase().includes(normalized.toLowerCase()),
-  ).sort();
 }
 
 function uniqueTypeRefs(refs: readonly TypeDecl['refs'][number][]): readonly TypeDecl['refs'][number][] {
