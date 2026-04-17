@@ -14,6 +14,7 @@ import {
   renderAnswerDocumentToJson,
   renderAnswerDocumentToPlainText,
 } from '../answer-renderer.js';
+import { createAnalysisViews } from '../analysis-views.js';
 import { resolveAnalysisProfile } from '../analysis-profile.js';
 import {
   inspectAnalyzabilityPosture,
@@ -537,7 +538,7 @@ export class SnapshotHostRuntime {
   #sessionRefresh(args: SessionRefreshArgs): CommandOutcome {
     const state = this.#sessions.get(args.sessionId);
     const requestedKinds = normalizeSnapshotKinds(args.kinds);
-    const hadWarmSnapshot = requestedKinds.some((kind) => state.snapshots[kind] !== undefined);
+    const hadWarmSnapshot = requestedKinds.some((kind) => state.analysisViews[kind] !== undefined);
     const refreshedKinds = refreshKinds(state, requestedKinds, { force: args.force });
     const result: SessionRefreshResult = {
       sessionId: state.sessionId,
@@ -616,6 +617,14 @@ export class SnapshotHostRuntime {
       ...typeRefsQuery.refreshedKinds,
       ...exportsQuery.refreshedKinds,
     ]);
+    const analysis = createAnalysisViews({
+      source: 'hosted-analysis',
+      deps: depsQuery.snapshot,
+      typeRefs: typeRefsQuery.snapshot,
+      exports: exportsQuery.snapshot,
+      structuralRuntime: ensureLiveStructuralRuntime(state).structuralRuntime,
+      sourceFileScan: state.liveAnalysis.sourceFileScan,
+    });
     // TODO: Thread live structural claims and path-evaluator results directly
     // into audit answers instead of adapting through the legacy deps/typerefs/
     // exports materialized views first.
@@ -633,12 +642,7 @@ export class SnapshotHostRuntime {
           freshness: 'live',
         },
       },
-      {
-        deps: depsQuery.snapshot,
-        typeRefs: typeRefsQuery.snapshot,
-        exports: exportsQuery.snapshot,
-        warnings,
-      },
+      analysis,
     );
     const rendered = buildRenderedView(answer, args.consumer, args.renderStyle);
     const result: AuditPackageQueryResult = {
@@ -679,6 +683,14 @@ export class SnapshotHostRuntime {
       ...typeRefsQuery.refreshedKinds,
       ...exportsQuery.refreshedKinds,
     ]);
+    const analysis = createAnalysisViews({
+      source: 'hosted-analysis',
+      deps: depsQuery.snapshot,
+      typeRefs: typeRefsQuery.snapshot,
+      exports: exportsQuery.snapshot,
+      structuralRuntime: ensureLiveStructuralRuntime(state).structuralRuntime,
+      sourceFileScan: state.liveAnalysis.sourceFileScan,
+    });
     // TODO: Move route witnesses onto direct structural route claims so the
     // host no longer has to adapt live state through snapshot-shaped outputs.
     const answer = createRouteWitnessAnswer(
@@ -698,12 +710,7 @@ export class SnapshotHostRuntime {
           freshness: 'live',
         },
       },
-      {
-        deps: depsQuery.snapshot,
-        typeRefs: typeRefsQuery.snapshot,
-        exports: exportsQuery.snapshot,
-        warnings,
-      },
+      analysis,
     );
     const rendered = buildRenderedView(answer, args.consumer, args.renderStyle);
     const result: RouteWitnessQueryResult = {
@@ -744,6 +751,14 @@ export class SnapshotHostRuntime {
       ...typeRefsQuery.refreshedKinds,
       ...exportsQuery.refreshedKinds,
     ]);
+    const analysis = createAnalysisViews({
+      source: 'hosted-analysis',
+      deps: depsQuery.snapshot,
+      typeRefs: typeRefsQuery.snapshot,
+      exports: exportsQuery.snapshot,
+      structuralRuntime: ensureLiveStructuralRuntime(state).structuralRuntime,
+      sourceFileScan: state.liveAnalysis.sourceFileScan,
+    });
     // TODO: Let navigation spend live structural/evaluator context directly and
     // demote these adapted materialized views to compatibility-only surfaces.
     const episode = createNavigationEpisode(
@@ -763,12 +778,7 @@ export class SnapshotHostRuntime {
           freshness: 'live',
         },
       },
-      {
-        deps: depsQuery.snapshot,
-        typeRefs: typeRefsQuery.snapshot,
-        exports: exportsQuery.snapshot,
-        warnings,
-      },
+      analysis,
     );
     const rendered = buildRenderedView(episode.answer, args.consumer, args.renderStyle);
     const result: NavigateQueryResult = {
@@ -1259,7 +1269,7 @@ function ensureFreshSnapshot<TKind extends SnapshotKind>(
   refreshedKinds: readonly TKind[];
   cache: HostCacheMeta;
 } {
-  const hadSnapshot = state.snapshots[kind] !== undefined;
+  const hadSnapshot = state.analysisViews[kind] !== undefined;
   const needsRefresh = state.dirtyKinds.has(kind) || !hadSnapshot;
 
   let refreshedKinds: readonly TKind[] = [];
@@ -1270,7 +1280,7 @@ function ensureFreshSnapshot<TKind extends SnapshotKind>(
     refreshedKinds = refreshKinds(state, [kind]) as readonly TKind[];
   }
 
-  const snapshot = state.snapshots[kind];
+  const snapshot = state.analysisViews[kind];
   if (!snapshot) {
     throw new Error(`source-analysis ${kind} snapshot is unavailable for session "${state.sessionId}"`);
   }
@@ -1296,7 +1306,7 @@ function refreshKinds(
   const refreshedKinds: SnapshotKind[] = [];
   const kindsToRefresh = options.force
     ? requestedKinds
-    : requestedKinds.filter((kind) => state.dirtyKinds.has(kind) || state.snapshots[kind] === undefined);
+    : requestedKinds.filter((kind) => state.dirtyKinds.has(kind) || state.analysisViews[kind] === undefined);
 
   if (kindsToRefresh.length === 0) {
     return [];
@@ -1406,7 +1416,7 @@ function setSnapshot<TKind extends SnapshotKind>(
   output: SnapshotOutputMap[TKind],
 ): void {
   (
-    state.snapshots as Partial<Record<SnapshotKind, SnapshotOutputMap[SnapshotKind]>>
+    state.analysisViews as Partial<Record<SnapshotKind, SnapshotOutputMap[SnapshotKind]>>
   )[kind] = output;
 }
 
@@ -1513,7 +1523,7 @@ function normalizeSnapshotKinds(
 }
 
 function hasCachedSnapshots(state: HostSessionState): boolean {
-  return Object.keys(state.snapshots).length > 0;
+  return Object.keys(state.analysisViews).length > 0;
 }
 
 function buildInvalidationMeta(

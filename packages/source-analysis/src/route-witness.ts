@@ -1,13 +1,19 @@
-import { loadCurrentSnapshots, type LoadedCurrentSnapshotSet } from './current-snapshots.js';
+import {
+  coerceAnalysisViews,
+  loadCurrentAnalysisViews,
+  type AnalysisViews,
+} from './analysis-views.js';
+import type { LoadedCurrentSnapshotSet } from './current-snapshots.js';
 import type { PackageExportsSummary } from './exports/schema.js';
 import type { AnswerCard, AnswerRef } from './answer-card.js';
 import { createStructuredAnswerCard } from './answer-card.js';
 import { createAnswerDocument } from './answer-document.js';
 import { createAnswerEnvelope } from './answer-envelope.js';
 import {
-  inspectAnalyzabilityPostureFromSnapshots,
+  inspectAnalyzabilityPostureFromAnalysisViews,
   inspectFocusedAnalyzabilityContext,
 } from './analyzability-posture.js';
+import { inspectFocusedStructuralPath } from './focused-structural-path.js';
 import { trimTrailingFocusPunctuation } from './focus-normalization.js';
 import { resolveInquiryPolicy, type InquiryPolicy } from './inquiry-policy.js';
 import type {
@@ -44,23 +50,24 @@ export function createCurrentRouteWitnessAnswer(
 ): InquiryAnswer<RouteWitnessValue> {
   return createRouteWitnessAnswer(
     query,
-    loadCurrentSnapshots(target, waitMs),
+    loadCurrentAnalysisViews(target, waitMs),
   );
 }
 
 export function createRouteWitnessAnswer(
   query: Inquiry,
-  snapshots: LoadedCurrentSnapshotSet,
+  analysisInput: AnalysisViews | LoadedCurrentSnapshotSet,
 ): InquiryAnswer<RouteWitnessValue> {
+  const analysis = coerceAnalysisViews(analysisInput);
   switch (query.focusRef.kind) {
     case 'file':
-      return buildFileRouteWitnessAnswer(query, snapshots, query.focusRef.value);
+      return buildFileRouteWitnessAnswer(query, analysis, query.focusRef.value);
     case 'type':
-      return buildTypeRouteWitnessAnswer(query, snapshots, query.focusRef.value);
+      return buildTypeRouteWitnessAnswer(query, analysis, query.focusRef.value);
     default:
       return createUnsupportedAnswer(
         query,
-        snapshots,
+        analysis,
         `Route witnesses for focus kind "${query.focusRef.kind}" are not implemented yet.`,
       );
   }
@@ -68,22 +75,22 @@ export function createRouteWitnessAnswer(
 
 function buildFileRouteWitnessAnswer(
   query: Inquiry,
-  snapshots: LoadedCurrentSnapshotSet,
+  analysis: AnalysisViews,
   fileQuery: string,
 ): InquiryAnswer<RouteWitnessValue> {
   const normalizedFileQuery = trimTrailingFocusPunctuation(fileQuery);
-  const posture = inspectAnalyzabilityPostureFromSnapshots(snapshots);
+  const posture = inspectAnalyzabilityPostureFromAnalysisViews(analysis);
   const requestedRegimeContext = inspectFocusedAnalyzabilityContext(posture, {
     focusLabel: normalizedFileQuery,
     pathPrefixes: [normalizedFileQuery],
     queryHints: [normalizedFileQuery],
   });
-  const fileMatches = resolveFiles(snapshots, normalizedFileQuery);
+  const fileMatches = resolveFiles(analysis, normalizedFileQuery);
   if (fileMatches.length === 0) {
     if (requestedRegimeContext.directlyExcludedFrontier) {
       return createOpenBoundaryAnswer(
         query,
-        snapshots,
+        analysis,
         { kind: 'file', value: normalizedFileQuery, label: basename(normalizedFileQuery) },
         `${normalizedFileQuery} falls under excluded frontier ${requestedRegimeContext.directlyExcludedFrontier.prefix}, so the current route model cannot close on it inside this profile.`,
         [],
@@ -93,7 +100,7 @@ function buildFileRouteWitnessAnswer(
     }
     return createMissAnswer(
       query,
-      snapshots,
+      analysis,
       `No file matches "${normalizedFileQuery}".`,
       { kind: 'file', value: normalizedFileQuery },
       [],
@@ -103,7 +110,7 @@ function buildFileRouteWitnessAnswer(
   if (fileMatches.length > 1) {
     return createAmbiguousAnswer(
       query,
-      snapshots,
+      analysis,
       `File query "${fileQuery}" is ambiguous.`,
       { kind: 'file', value: fileQuery },
       fileMatches.slice(0, 8).map((filePath) => fileRef(filePath, filePath)),
@@ -111,11 +118,11 @@ function buildFileRouteWitnessAnswer(
   }
 
   const filePath = fileMatches[0]!;
-  const pkg = resolveOwningPackage(snapshots, filePath);
+  const pkg = resolveOwningPackage(analysis, filePath);
   if (!pkg) {
     return createOpenBoundaryAnswer(
       query,
-      snapshots,
+      analysis,
       { kind: 'file', value: filePath, label: basename(filePath) },
       `No owning package route surface is modeled for ${filePath}.`,
       [],
@@ -124,7 +131,7 @@ function buildFileRouteWitnessAnswer(
   }
 
   const policy = policyForRouteWitness(query, 'file');
-  const reachability = createPackageReachability(snapshots, pkg, {
+  const reachability = createPackageReachability(analysis, pkg, {
     ordering: policy.ordering,
   });
   const witnesses = getPackageRouteWitnesses(reachability, filePath);
@@ -133,30 +140,32 @@ function buildFileRouteWitnessAnswer(
     pathPrefixes: [filePath],
     queryHints: [normalizedFileQuery, filePath],
   });
+  const structuralPathContext = inspectFocusedStructuralPath(analysis, filePath);
   return createHitRouteWitnessAnswer(
     query,
-    snapshots,
+    analysis,
     pkg,
     { kind: 'file', value: filePath, label: basename(filePath) },
     fileRef(filePath, filePath),
     witnesses,
     [],
     regimeContext,
+    structuralPathContext,
   );
 }
 
 function buildTypeRouteWitnessAnswer(
   query: Inquiry,
-  snapshots: LoadedCurrentSnapshotSet,
+  analysis: AnalysisViews,
   typeQuery: string,
 ): InquiryAnswer<RouteWitnessValue> {
   const normalizedTypeQuery = trimTrailingFocusPunctuation(typeQuery);
-  const posture = inspectAnalyzabilityPostureFromSnapshots(snapshots);
-  const declarationMatches = resolveTypeDeclarations(snapshots, normalizedTypeQuery);
+  const posture = inspectAnalyzabilityPostureFromAnalysisViews(analysis);
+  const declarationMatches = resolveTypeDeclarations(analysis, normalizedTypeQuery);
   if (declarationMatches.length === 0) {
     return createMissAnswer(
       query,
-      snapshots,
+      analysis,
       `No type declaration matches "${normalizedTypeQuery}".`,
       { kind: 'type', value: normalizedTypeQuery },
       [],
@@ -166,7 +175,7 @@ function buildTypeRouteWitnessAnswer(
   if (declarationMatches.length > 1) {
     return createAmbiguousAnswer(
       query,
-      snapshots,
+      analysis,
       `Type query "${normalizedTypeQuery}" matches multiple declarations.`,
       { kind: 'type', value: normalizedTypeQuery },
       declarationMatches.slice(0, 8).map((declaration) => typeRef(declaration)),
@@ -174,11 +183,11 @@ function buildTypeRouteWitnessAnswer(
   }
 
   const declaration = declarationMatches[0]!;
-  const pkg = resolveOwningPackage(snapshots, declaration.file);
+  const pkg = resolveOwningPackage(analysis, declaration.file);
   if (!pkg) {
     return createOpenBoundaryAnswer(
       query,
-      snapshots,
+      analysis,
       { kind: 'type', value: declaration.name, label: declaration.name },
       `No owning package route surface is modeled for ${declaration.name}.`,
       [fileRef(declaration.file, 'declaring file')],
@@ -187,7 +196,7 @@ function buildTypeRouteWitnessAnswer(
   }
 
   const policy = policyForRouteWitness(query, 'type');
-  const reachability = createPackageReachability(snapshots, pkg, {
+  const reachability = createPackageReachability(analysis, pkg, {
     ordering: policy.ordering,
   });
   const witnesses = getPackageRouteWitnesses(reachability, declaration.file);
@@ -198,25 +207,27 @@ function buildTypeRouteWitnessAnswer(
   });
   return createHitRouteWitnessAnswer(
     query,
-    snapshots,
+    analysis,
     pkg,
     { kind: 'type', value: declaration.name, label: declaration.name },
     typeRef(declaration),
     witnesses,
     [fileRef(declaration.file, 'declaring file')],
     regimeContext,
+    null,
   );
 }
 
 function createHitRouteWitnessAnswer(
   query: Inquiry,
-  snapshots: LoadedCurrentSnapshotSet,
+  analysis: AnalysisViews,
   pkg: PackageExportsSummary,
   focusRef: FocusRef,
   primaryRef: RouteWitnessRef,
   witnesses: readonly PackageRouteWitness[],
   extraRelatedRefs: readonly RouteWitnessRef[],
   regimeContext: ReturnType<typeof inspectFocusedAnalyzabilityContext>,
+  structuralPathContext: ReturnType<typeof inspectFocusedStructuralPath>,
 ): InquiryAnswer<RouteWitnessValue> {
   const bestWitness = witnesses[0];
   const relatedRefs = dedupeRefs([
@@ -234,7 +245,7 @@ function createHitRouteWitnessAnswer(
   if (!bestWitness) {
     return createOpenBoundaryAnswer(
       query,
-      snapshots,
+      analysis,
       focusRef,
       `${primaryRef.value} currently has no modeled route witness inside ${pkg.package_name}.`,
       relatedRefs,
@@ -260,18 +271,22 @@ function createHitRouteWitnessAnswer(
       ? [`Additional route witnesses: ${witnesses.slice(1, 4).map((witness) => renderWitnessChain(witness)).join('; ')}.`]
       : []),
     ...regimeContext.lines,
+    ...(structuralPathContext?.lines ?? []),
   ];
   const policy = policyForRouteWitness(query, focusRef.kind);
   const facts = [
     ...regimeContext.facts,
+    ...(structuralPathContext?.facts ?? []),
   ];
 
   return createAnswer(
     query,
-    snapshots,
+    analysis,
     policy,
     focusRef,
-    regimeContext.tag === 'open-boundary' ? 'open-boundary' : 'hit',
+    regimeContext.tag === 'open-boundary' || structuralPathContext?.tag === 'open-boundary'
+      ? 'open-boundary'
+      : 'hit',
     createStructuredAnswerCard({
       title: `${primaryRef.label} route witnesses`,
       primaryRef,
@@ -282,7 +297,7 @@ function createHitRouteWitnessAnswer(
         witnesses: witnesses.slice(0, 6),
       },
     }),
-    mergeTrustProfiles(trust, regimeContext.trust),
+    mergeTrustProfiles(mergeTrustProfiles(trust, regimeContext.trust), structuralPathContext?.trust ?? null),
     [
       {
         kind: 'route',
@@ -292,17 +307,18 @@ function createHitRouteWitnessAnswer(
       {
         kind: 'freshness',
         summary: query.worldFrame?.freshness === 'live'
-          ? `The route witnesses are grounded in live deps, typerefs, and exports analysis views refreshed at ${snapshots.deps.generated_at}, ${snapshots.typeRefs.generated_at}, and ${snapshots.exports.generated_at}.`
-          : `The route witnesses are grounded in snapshots generated at ${snapshots.deps.generated_at}, ${snapshots.typeRefs.generated_at}, and ${snapshots.exports.generated_at}.`,
+          ? `The route witnesses are grounded in live deps, typerefs, and exports analysis views refreshed at ${analysis.deps.generated_at}, ${analysis.typeRefs.generated_at}, and ${analysis.exports.generated_at}.`
+          : `The route witnesses are grounded in materialized analysis views generated at ${analysis.deps.generated_at}, ${analysis.typeRefs.generated_at}, and ${analysis.exports.generated_at}.`,
         provenanceRefs: [
-          snapshots.deps.generated_at,
-          snapshots.typeRefs.generated_at,
-          snapshots.exports.generated_at,
+          analysis.deps.generated_at,
+          analysis.typeRefs.generated_at,
+          analysis.exports.generated_at,
         ],
       },
       ...regimeContext.closureBasis,
+      ...(structuralPathContext?.closureBasis ?? []),
     ],
-    regimeContext.issues,
+    [...regimeContext.issues, ...(structuralPathContext?.issues ?? [])],
     dedupeContinuations([
       continuation('join', 'Inspect the owning package', pkg.package_name, 'owning package'),
       continuation('inventory', `Audit ${pkg.package_name}`, pkg.package_name, 'package audit'),
@@ -313,9 +329,9 @@ function createHitRouteWitnessAnswer(
       ...regimeContext.continuations,
     ]),
     [
-      analysisProvenanceEntry('deps', snapshots.deps.generated_at, snapshots.deps.source_commit, query.worldFrame?.freshness),
-      analysisProvenanceEntry('typerefs', snapshots.typeRefs.generated_at, snapshots.typeRefs.source_commit, query.worldFrame?.freshness),
-      analysisProvenanceEntry('exports', snapshots.exports.generated_at, snapshots.exports.source_commit, query.worldFrame?.freshness),
+      analysisProvenanceEntry('deps', analysis.deps.generated_at, analysis.deps.source_commit, query.worldFrame?.freshness),
+      analysisProvenanceEntry('typerefs', analysis.typeRefs.generated_at, analysis.typeRefs.source_commit, query.worldFrame?.freshness),
+      analysisProvenanceEntry('exports', analysis.exports.generated_at, analysis.exports.source_commit, query.worldFrame?.freshness),
       {
         kind: 'route',
         label: `${primaryRef.label} route witness`,
@@ -323,6 +339,7 @@ function createHitRouteWitnessAnswer(
         detail: renderWitnessChain(bestWitness),
       },
       ...regimeContext.provenance,
+      ...(structuralPathContext?.provenance ?? []),
     ],
   );
 }
@@ -352,7 +369,7 @@ function renderWitnessChain(witness: PackageRouteWitness): string {
 
 function createAnswer(
   query: Inquiry,
-  snapshots: LoadedCurrentSnapshotSet,
+  analysis: AnalysisViews,
   policy: InquiryPolicy,
   focusRef: FocusRef,
   tag: InquiryAnswer<RouteWitnessValue>['outcome']['tag'],
@@ -363,7 +380,7 @@ function createAnswer(
   continuations: readonly Continuation[],
   provenance: readonly InquiryProvenanceEntry[],
 ): InquiryAnswer<RouteWitnessValue> {
-  const worldFrame = defaultWorldFrame(snapshots, query.worldFrame);
+  const worldFrame = defaultWorldFrame(analysis, query.worldFrame);
   return createAnswerEnvelope({
     query,
     focusRef,
@@ -382,7 +399,7 @@ function createAnswer(
 
 function createMissAnswer(
   query: Inquiry,
-  snapshots: LoadedCurrentSnapshotSet,
+  analysis: AnalysisViews,
   message: string,
   focusRef: FocusRef,
   relatedRefs: readonly RouteWitnessRef[],
@@ -390,7 +407,7 @@ function createMissAnswer(
   const policy = policyForRouteWitness(query, focusRef.kind);
   return createAnswer(
     query,
-    snapshots,
+    analysis,
     policy,
     focusRef,
     'miss-unknown-shape',
@@ -429,7 +446,7 @@ function createMissAnswer(
 
 function createAmbiguousAnswer(
   query: Inquiry,
-  snapshots: LoadedCurrentSnapshotSet,
+  analysis: AnalysisViews,
   message: string,
   focusRef: FocusRef,
   relatedRefs: readonly RouteWitnessRef[],
@@ -437,7 +454,7 @@ function createAmbiguousAnswer(
   const policy = policyForRouteWitness(query, focusRef.kind);
   return createAnswer(
     query,
-    snapshots,
+    analysis,
     policy,
     focusRef,
     'ambiguous',
@@ -478,7 +495,7 @@ function createAmbiguousAnswer(
 
 function createOpenBoundaryAnswer(
   query: Inquiry,
-  snapshots: LoadedCurrentSnapshotSet,
+  analysis: AnalysisViews,
   focusRef: FocusRef,
   message: string,
   relatedRefs: readonly RouteWitnessRef[],
@@ -488,7 +505,7 @@ function createOpenBoundaryAnswer(
   const policy = policyForRouteWitness(query, focusRef.kind);
   return createAnswer(
     query,
-    snapshots,
+    analysis,
     policy,
     focusRef,
     'open-boundary',
@@ -538,13 +555,13 @@ function createOpenBoundaryAnswer(
 
 function createUnsupportedAnswer(
   query: Inquiry,
-  snapshots: LoadedCurrentSnapshotSet,
+  analysis: AnalysisViews,
   message: string,
 ): InquiryAnswer<RouteWitnessValue> {
   const policy = policyForRouteWitness(query, query.focusRef.kind);
   return createAnswer(
     query,
-    snapshots,
+    analysis,
     policy,
     query.focusRef,
     'unsupported',
@@ -582,22 +599,22 @@ function createUnsupportedAnswer(
 }
 
 function resolveFiles(
-  snapshots: LoadedCurrentSnapshotSet,
+  analysis: AnalysisViews,
   query: string,
 ): readonly string[] {
   const normalized = trimTrailingFocusPunctuation(query).replace(/\\/g, '/');
   const allFiles = new Set<string>();
-  for (const edge of snapshots.deps.edges) {
+  for (const edge of analysis.deps.edges) {
     allFiles.add(edge.source);
     allFiles.add(edge.target);
   }
-  for (const filePath of snapshots.deps.uncovered_files) {
+  for (const filePath of analysis.deps.uncovered_files) {
     allFiles.add(filePath);
   }
-  for (const declaration of snapshots.typeRefs.declarations) {
+  for (const declaration of analysis.typeRefs.declarations) {
     allFiles.add(declaration.file);
   }
-  for (const record of snapshots.exports.exports) {
+  for (const record of analysis.exports.exports) {
     if (record.declaration_file) allFiles.add(record.declaration_file);
     allFiles.add(record.analysis_entrypoint);
     for (const step of record.chain) {
@@ -620,29 +637,29 @@ function resolveFiles(
 }
 
 function resolveTypeDeclarations(
-  snapshots: LoadedCurrentSnapshotSet,
+  analysis: AnalysisViews,
   query: string,
 ): readonly TypeDecl[] {
   const normalized = trimTrailingFocusPunctuation(query);
-  const exact = snapshots.typeRefs.declarations.filter((declaration) => declaration.name === normalized);
+  const exact = analysis.typeRefs.declarations.filter((declaration) => declaration.name === normalized);
   if (exact.length > 0) return exact;
 
-  const exactCaseInsensitive = snapshots.typeRefs.declarations.filter((declaration) =>
+  const exactCaseInsensitive = analysis.typeRefs.declarations.filter((declaration) =>
     declaration.name.toLowerCase() === normalized.toLowerCase(),
   );
   if (exactCaseInsensitive.length > 0) return exactCaseInsensitive;
 
-  return snapshots.typeRefs.declarations.filter((declaration) =>
+  return analysis.typeRefs.declarations.filter((declaration) =>
     declaration.name.toLowerCase().includes(normalized.toLowerCase()),
   );
 }
 
 function resolveOwningPackage(
-  snapshots: LoadedCurrentSnapshotSet,
+  analysis: AnalysisViews,
   filePath: string,
 ): PackageExportsSummary | null {
   let bestMatch: PackageExportsSummary | null = null;
-  for (const pkg of snapshots.exports.packages) {
+  for (const pkg of analysis.exports.packages) {
     const packagePrefix = pkg.package_dir.length > 0 ? `${pkg.package_dir}/` : '';
     const matches = pkg.package_dir.length === 0
       ? !filePath.startsWith('packages/')
@@ -683,15 +700,15 @@ function packageRef(pkg: PackageExportsSummary): RouteWitnessRef {
 }
 
 function defaultWorldFrame(
-  snapshots: LoadedCurrentSnapshotSet,
+  analysis: AnalysisViews,
   worldFrame: WorldFrame | undefined,
 ): WorldFrame {
   return {
-    repoPath: worldFrame?.repoPath ?? snapshots.deps.root,
+    repoPath: worldFrame?.repoPath ?? analysis.root,
     target: worldFrame?.target ?? 'current',
     regimeAnchor: worldFrame?.regimeAnchor ?? 'hosted',
     partiality: worldFrame?.partiality ?? 'complete',
-    freshness: worldFrame?.freshness ?? 'snapshot',
+    freshness: worldFrame?.freshness ?? (analysis.source === 'hosted-analysis' ? 'live' : 'snapshot'),
   };
 }
 

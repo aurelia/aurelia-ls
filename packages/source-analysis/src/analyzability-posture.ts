@@ -2,6 +2,7 @@ import { join } from 'node:path';
 
 import { collectSnapshotFrontierEvidence } from './frontier-evidence.js';
 import type { AnalysisProfile } from './analysis-profile.js';
+import type { AnalysisViews } from './analysis-views.js';
 import type { LoadedCurrentSnapshotSet } from './current-snapshots.js';
 import type { WorldFrame, InquiryProvenanceEntry } from './inquiry-model.js';
 import type {
@@ -281,14 +282,27 @@ export function inspectAnalyzabilityPosture(
 export function inspectAnalyzabilityPostureFromSnapshots(
   snapshots: LoadedCurrentSnapshotSet,
 ): AnalyzabilityPosture {
+  return inspectAnalyzabilityPostureFromAnalysisViews({
+    source: 'snapshot-contract',
+    root: snapshots.deps.root,
+    deps: snapshots.deps,
+    typeRefs: snapshots.typeRefs,
+    exports: snapshots.exports,
+    ...(snapshots.support ? { support: snapshots.support } : {}),
+  });
+}
+
+export function inspectAnalyzabilityPostureFromAnalysisViews(
+  analysis: AnalysisViews,
+): AnalyzabilityPosture {
   const profile = profileFromSnapshotContract(
-    selectSnapshotProfile(snapshots),
-    snapshots.deps.root,
+    selectAnalysisProfile(analysis),
+    analysis.root,
   );
-  const excluded = inspectExcludedFrontiersFromLoadedSnapshots(snapshots, profile);
+  const excluded = inspectExcludedFrontiersFromAnalysisViews(analysis, profile);
   return createAnalyzabilityPosture(
     profile,
-    snapshots.support ?? createSyntheticSnapshotSupport(snapshots),
+    analysis.support ?? createSyntheticSnapshotSupportFromAnalysisViews(analysis),
     excluded,
   );
 }
@@ -682,11 +696,11 @@ function inspectExcludedFrontiers(
   };
 }
 
-function inspectExcludedFrontiersFromLoadedSnapshots(
-  snapshots: LoadedCurrentSnapshotSet,
+function inspectExcludedFrontiersFromAnalysisViews(
+  analysis: AnalysisViews,
   profile: AnalysisProfile,
 ): ExcludedFrontierInspection {
-  const parsed = selectSnapshotFrontierEvidenceFromLoadedSnapshots(snapshots);
+  const parsed = selectSnapshotFrontierEvidenceFromAnalysisViews(analysis);
   if (parsed) {
     return {
       frontiers: parsed.excluded_frontiers.map(toExcludedFrontierEvidence),
@@ -723,13 +737,13 @@ function parseSnapshotFrontierEvidence(
   return value as unknown as SnapshotFrontierEvidence;
 }
 
-function selectSnapshotFrontierEvidenceFromLoadedSnapshots(
-  snapshots: LoadedCurrentSnapshotSet,
+function selectSnapshotFrontierEvidenceFromAnalysisViews(
+  analysis: AnalysisViews,
 ): SnapshotFrontierEvidence | null {
   const candidates = [
-    snapshots.deps.frontiers,
-    snapshots.typeRefs.frontiers,
-    snapshots.exports.frontiers,
+    analysis.deps.frontiers,
+    analysis.typeRefs.frontiers,
+    analysis.exports.frontiers,
   ].map((candidate) => parseSnapshotFrontierEvidence(candidate));
   const parsed = candidates
     .filter((candidate): candidate is SnapshotFrontierEvidence => candidate !== null)
@@ -980,15 +994,34 @@ function selectSnapshotProfile(
   return snapshots.deps.profile;
 }
 
+function selectAnalysisProfile(
+  analysis: AnalysisViews,
+): SnapshotProfileProvenance {
+  return analysis.deps.profile;
+}
+
 function createSyntheticSnapshotSupport(
   snapshots: LoadedCurrentSnapshotSet,
 ): ProfileSnapshotSupport {
-  const profile = selectSnapshotProfile(snapshots);
-  const snapshotRootPath = join(snapshots.deps.root, '.source-analysis', 'snapshots');
+  return createSyntheticSnapshotSupportFromAnalysisViews({
+    source: 'snapshot-contract',
+    root: snapshots.deps.root,
+    deps: snapshots.deps,
+    typeRefs: snapshots.typeRefs,
+    exports: snapshots.exports,
+    ...(snapshots.support ? { support: snapshots.support } : {}),
+  });
+}
+
+function createSyntheticSnapshotSupportFromAnalysisViews(
+  analysis: AnalysisViews,
+): ProfileSnapshotSupport {
+  const profile = selectAnalysisProfile(analysis);
+  const snapshotRootPath = join(analysis.root, '.source-analysis', 'snapshots');
   const artifacts: SnapshotArtifactSupport[] = [
-    createSyntheticSnapshotArtifactSupport('deps', snapshots.deps.generated_at, snapshots.deps.source_commit, snapshots.deps.analyzer_commit, profile, snapshotRootPath),
-    createSyntheticSnapshotArtifactSupport('typerefs', snapshots.typeRefs.generated_at, snapshots.typeRefs.source_commit, snapshots.typeRefs.analyzer_commit, profile, snapshotRootPath),
-    createSyntheticSnapshotArtifactSupport('exports', snapshots.exports.generated_at, snapshots.exports.source_commit, snapshots.exports.analyzer_commit, profile, snapshotRootPath),
+    createSyntheticSnapshotArtifactSupport('deps', analysis.deps.generated_at, analysis.deps.source_commit, analysis.deps.analyzer_commit, profile, snapshotRootPath),
+    createSyntheticSnapshotArtifactSupport('typerefs', analysis.typeRefs.generated_at, analysis.typeRefs.source_commit, analysis.typeRefs.analyzer_commit, profile, snapshotRootPath),
+    createSyntheticSnapshotArtifactSupport('exports', analysis.exports.generated_at, analysis.exports.source_commit, analysis.exports.analyzer_commit, profile, snapshotRootPath),
   ];
 
   return {

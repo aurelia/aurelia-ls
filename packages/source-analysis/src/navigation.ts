@@ -1,10 +1,16 @@
-import { loadCurrentSnapshots, type LoadedCurrentSnapshotSet } from './current-snapshots.js';
+import {
+  coerceAnalysisViews,
+  loadCurrentAnalysisViews,
+  type AnalysisViews,
+} from './analysis-views.js';
+import type { LoadedCurrentSnapshotSet } from './current-snapshots.js';
 import type { PackageExportRecord, PackageExportsSummary } from './exports/schema.js';
 import type { TypeDecl } from './typerefs/schema.js';
 import {
-  inspectAnalyzabilityPostureFromSnapshots,
+  inspectAnalyzabilityPostureFromAnalysisViews,
   inspectFocusedAnalyzabilityContext,
 } from './analyzability-posture.js';
+import { inspectFocusedStructuralPath } from './focused-structural-path.js';
 import type { AnswerCard, AnswerRef } from './answer-card.js';
 import {
   createStructuredAnswerCard,
@@ -102,14 +108,15 @@ export function createCurrentNavigationEpisode(
 ): NavigationEpisode {
   return createNavigationEpisode(
     query,
-    loadCurrentSnapshots(target, waitMs),
+    loadCurrentAnalysisViews(target, waitMs),
   );
 }
 
 export function createNavigationEpisode(
   query: Inquiry,
-  snapshots: LoadedCurrentSnapshotSet,
+  snapshotsInput: AnalysisViews | LoadedCurrentSnapshotSet,
 ): NavigationEpisode {
+  const snapshots = coerceAnalysisViews(snapshotsInput);
   const builder = new EpisodeBuilder(query, snapshots);
   switch (query.focusRef.kind) {
     case 'package':
@@ -133,13 +140,13 @@ export function createNavigationEpisode(
 
 class EpisodeBuilder {
   readonly #query: Inquiry;
-  readonly #snapshots: LoadedCurrentSnapshotSet;
+  readonly #snapshots: AnalysisViews;
   readonly #nodes = new Map<string, SubstrateNode>();
   readonly #edges = new Map<string, SubstrateEdge>();
   readonly #claims = new Map<string, ClaimNode>();
   readonly #claimEdges = new Map<string, ClaimEdge>();
 
-  constructor(query: Inquiry, snapshots: LoadedCurrentSnapshotSet) {
+  constructor(query: Inquiry, snapshots: AnalysisViews) {
     this.#query = query;
     this.#snapshots = snapshots;
   }
@@ -148,7 +155,7 @@ class EpisodeBuilder {
     return this.#query;
   }
 
-  get snapshots(): LoadedCurrentSnapshotSet {
+  get snapshots(): AnalysisViews {
     return this.#snapshots;
   }
 
@@ -176,14 +183,17 @@ class EpisodeBuilder {
       : kind === 'typerefs'
         ? this.#snapshots.typeRefs
         : this.#snapshots.exports;
+    const label = `${kind} ${this.#snapshots.source === 'hosted-analysis' ? 'analysis view' : 'snapshot'}`;
     return this.addNode({
       id: `snapshot:${kind}`,
       kind: 'snapshot',
-      label: `${kind} snapshot`,
+      label,
       fingerprint: `${snapshot.source_commit}:${snapshot.generated_at}`,
       provenance: [{
-        kind: 'snapshot-materialization',
-        label: `${kind} snapshot`,
+        kind: this.#snapshots.source === 'hosted-analysis'
+          ? 'analysis-session'
+          : 'snapshot-materialization',
+        label,
         fingerprint: snapshot.generated_at,
         detail: `source_commit=${snapshot.source_commit}`,
       }],
@@ -313,8 +323,10 @@ class EpisodeBuilder {
         ? this.#snapshots.typeRefs
         : this.#snapshots.exports;
     return {
-      kind: 'snapshot-materialization',
-      label: `${kind} snapshot`,
+      kind: this.#snapshots.source === 'hosted-analysis'
+        ? 'analysis-session'
+        : 'snapshot-materialization',
+      label: `${kind} ${this.#snapshots.source === 'hosted-analysis' ? 'analysis view' : 'snapshot'}`,
       fingerprint: snapshot.generated_at,
       detail: `source_commit=${snapshot.source_commit}`,
     };
@@ -324,7 +336,7 @@ class EpisodeBuilder {
     return {
       substrate: {
         schemaVersion: SUBSTRATE_SCHEMA_VERSION,
-        repoPath: this.#snapshots.deps.root,
+        repoPath: this.#snapshots.root,
         target: answer.query.worldFrame?.target ?? 'current',
         nodes: [...this.#nodes.values()],
         edges: [...this.#edges.values()],
@@ -345,7 +357,7 @@ function buildPackageEpisode(
   packageQuery: string,
 ): NavigationEpisode {
   const normalizedPackageQuery = trimTrailingFocusPunctuation(packageQuery);
-  const posture = inspectAnalyzabilityPostureFromSnapshots(builder.snapshots);
+  const posture = inspectAnalyzabilityPostureFromAnalysisViews(builder.snapshots);
   const requestedRegimeContext = inspectFocusedAnalyzabilityContext(posture, {
     focusLabel: normalizedPackageQuery,
     queryHints: [normalizedPackageQuery],
@@ -470,11 +482,11 @@ function buildPackageEpisode(
 
   const continuations: Continuation[] = [
     continuation('join', 'Inspect the package entrypoint', pkg.analysis_entrypoint, 'package entrypoint'),
-    continuation('join', 'Inspect the snapshot host runtime type', 'SnapshotHostRuntime', 'snapshot host runtime type'),
+    continuation('join', 'Inspect the host runtime type', 'SnapshotHostRuntime', 'host runtime type'),
   ];
   if (keyExports.some((record) => record.exported_name === 'createSnapshotHostRuntime')) {
     continuations.push(
-      continuation('route', 'Follow the public snapshot host runtime factory', 'createSnapshotHostRuntime', 'public export route'),
+      continuation('route', 'Follow the public host runtime factory', 'createSnapshotHostRuntime', 'public export route'),
     );
   }
   const policy = policyForNavigation(builder, 'package');
@@ -523,7 +535,7 @@ function buildPackageEpisode(
         kind: 'substrate',
         summary: builder.query.worldFrame?.freshness === 'live'
           ? 'The package overview is backed by the live exports analysis view and package coupling observations.'
-          : 'The package overview is backed by the exports snapshot and package coupling observations.',
+          : 'The package overview is backed by the exports analysis view and package coupling observations.',
         substrateNodeIds: [exportsSnapshotId, depsSnapshotId, packageNodeId, entrypointNodeId, ...exportNodeIds, ...couplingNodeIds],
       },
       {
@@ -668,7 +680,7 @@ function buildTypeEpisode(
         kind: 'grounded',
         summary: builder.query.worldFrame?.freshness === 'live'
           ? 'This neighborhood is grounded in live typerefs data and, when available, the live export surface view.'
-          : 'This neighborhood is grounded in live typerefs data and, when available, the export surface snapshot.',
+          : 'This neighborhood is grounded in live typerefs data and, when available, the export surface analysis view.',
       },
     [
       {
@@ -847,7 +859,7 @@ function buildFileEpisode(
   fileQuery: string,
 ): NavigationEpisode {
   const normalizedFileQuery = trimTrailingFocusPunctuation(fileQuery);
-  const posture = inspectAnalyzabilityPostureFromSnapshots(builder.snapshots);
+  const posture = inspectAnalyzabilityPostureFromAnalysisViews(builder.snapshots);
   const requestedRegimeContext = inspectFocusedAnalyzabilityContext(posture, {
     focusLabel: normalizedFileQuery,
     pathPrefixes: [normalizedFileQuery],
@@ -950,6 +962,7 @@ function buildFileEpisode(
     pathPrefixes: [filePath],
     queryHints: [normalizedFileQuery, filePath],
   });
+  const structuralPathContext = inspectFocusedStructuralPath(builder.snapshots, filePath);
 
   const summaryLines = [
     `${filePath} has ${outboundEdges.length} outbound imports and ${inboundEdges.length} inbound imports in the dependency graph.`,
@@ -960,6 +973,7 @@ function buildFileEpisode(
       ? `It contributes ${exportRecords.length} package exports, including ${exportRecords.slice(0, 4).map((record) => record.exported_name).join(', ')}.`
       : 'It does not directly contribute any package export records.',
     ...regimeContext.lines,
+    ...(structuralPathContext?.lines ?? []),
   ];
   const policy = policyForNavigation(builder, 'file');
   const relatedRefs = [
@@ -977,7 +991,9 @@ function buildFileEpisode(
     builder,
     policy,
     { kind: 'file', value: filePath, label: basename(filePath) },
-    regimeContext.tag === 'open-boundary' ? 'open-boundary' : 'hit',
+    regimeContext.tag === 'open-boundary' || structuralPathContext?.tag === 'open-boundary'
+      ? 'open-boundary'
+      : 'hit',
     createStructuredAnswerCard({
       title: `${basename(filePath)} file neighborhood`,
       primaryRef: {
@@ -993,14 +1009,15 @@ function buildFileEpisode(
         { label: 'declared types', value: String(declarations.length) },
         { label: 'package exports', value: String(exportRecords.length) },
         ...regimeContext.facts,
+        ...(structuralPathContext?.facts ?? []),
       ]),
       policy,
     }),
     mergeTrustProfiles(
-      {
+      mergeTrustProfiles({
         kind: 'grounded',
         summary: `This file neighborhood is grounded in the live ${analysisSurfaceEvidenceLabel(builder.query.worldFrame?.freshness, ['deps', 'typerefs', 'exports'])}.`,
-      },
+      }, structuralPathContext?.trust ?? null),
       regimeContext.trust,
     ),
     [
@@ -1016,8 +1033,9 @@ function buildFileEpisode(
         substrateNodeIds: [depsSnapshotId, typerefsSnapshotId, exportsSnapshotId, fileNodeId, ...importNodeIds, ...declarationNodeIds, ...exportNodeIds],
       },
       ...regimeContext.closureBasis,
+      ...(structuralPathContext?.closureBasis ?? []),
     ],
-    regimeContext.issues,
+    [...regimeContext.issues, ...(structuralPathContext?.issues ?? [])],
     [
       ...declarations.slice(0, 3).map((decl) => continuation('join', `Inspect ${decl.name}`, decl.name, 'declared type')),
       ...outboundEdges.slice(0, 2).map((edge) => continuation('join', `Follow ${basename(edge.target)}`, edge.target, 'imported file')),
@@ -1030,6 +1048,7 @@ function buildFileEpisode(
       analysisProvenanceEntry('exports', builder.snapshots.exports.generated_at, builder.snapshots.exports.source_commit, builder.query.worldFrame?.freshness),
       claimProvenanceEntry(`${basename(filePath)} file neighborhood`, fileClaimId),
       ...regimeContext.provenance,
+      ...(structuralPathContext?.provenance ?? []),
     ],
   ));
 }
@@ -1228,7 +1247,7 @@ function createUnsupportedAnswer(
 }
 
 function resolvePackages(
-  snapshots: LoadedCurrentSnapshotSet,
+  snapshots: AnalysisViews,
   query: string,
 ): readonly PackageExportsSummary[] {
   const normalized = trimTrailingFocusPunctuation(query).toLowerCase();
@@ -1251,7 +1270,7 @@ function resolvePackages(
 }
 
 function resolveTypeDeclarations(
-  snapshots: LoadedCurrentSnapshotSet,
+  snapshots: AnalysisViews,
   query: string,
 ): readonly TypeDecl[] {
   const normalized = trimTrailingFocusPunctuation(query);
@@ -1269,7 +1288,7 @@ function resolveTypeDeclarations(
 }
 
 function resolveExports(
-  snapshots: LoadedCurrentSnapshotSet,
+  snapshots: AnalysisViews,
   query: string,
 ): readonly PackageExportRecord[] {
   const normalized = trimTrailingFocusPunctuation(query);
@@ -1287,7 +1306,7 @@ function resolveExports(
 }
 
 function resolveFiles(
-  snapshots: LoadedCurrentSnapshotSet,
+  snapshots: AnalysisViews,
   query: string,
 ): readonly string[] {
   const normalized = trimTrailingFocusPunctuation(query).replace(/\\/g, '/');
@@ -1369,15 +1388,15 @@ function exportRef(record: PackageExportRecord): NavigationRef {
 }
 
 function defaultWorldFrame(
-  snapshots: LoadedCurrentSnapshotSet,
+  snapshots: AnalysisViews,
   worldFrame: WorldFrame | undefined,
 ): WorldFrame {
   return {
-    repoPath: worldFrame?.repoPath ?? snapshots.deps.root,
+    repoPath: worldFrame?.repoPath ?? snapshots.root,
     target: worldFrame?.target ?? 'current',
     regimeAnchor: worldFrame?.regimeAnchor ?? 'hosted',
     partiality: worldFrame?.partiality ?? 'complete',
-    freshness: worldFrame?.freshness ?? 'snapshot',
+    freshness: worldFrame?.freshness ?? (snapshots.source === 'hosted-analysis' ? 'live' : 'snapshot'),
   };
 }
 
@@ -1475,7 +1494,7 @@ function analysisProvenanceEntry(
 function analysisSurfaceLabel(
   worldFrame: WorldFrame | undefined,
 ): string {
-  return worldFrame?.freshness === 'live' ? 'current analysis' : 'current snapshot';
+  return worldFrame?.freshness === 'live' ? 'current analysis' : 'current materialized analysis';
 }
 
 function analysisSurfaceEvidenceLabel(

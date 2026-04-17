@@ -9,7 +9,7 @@ import {
   resolveAnalysisProfile,
   type AnalysisProfile,
 } from './analysis-profile.js';
-import type { LoadedCurrentSnapshotSet } from './current-snapshots.js';
+import type { AnalysisViews } from './analysis-views.js';
 import type { PackageExportRecord, PackageExportsSummary } from './exports/schema.js';
 import type { TrustKind } from './outcome-algebra.js';
 import type { TypeDecl } from './typerefs/schema.js';
@@ -125,19 +125,19 @@ export interface PackageReachabilityOptions {
 }
 
 export function createPackageReachability(
-  snapshots: LoadedCurrentSnapshotSet,
+  analysis: AnalysisViews,
   pkg: PackageExportsSummary,
   options?: PackageReachabilityOptions,
 ): PackageReachability {
   const ordering = options?.ordering ?? DEFAULT_INQUIRY_ORDERING;
-  const profile = resolveAnalysisProfile({ repoPath: snapshots.deps.root });
+  const profile = resolveAnalysisProfile({ repoPath: analysis.root });
   const packagePrefix = pkg.package_dir.length > 0 ? `${pkg.package_dir}/` : '';
   const packageFiles = new Set<string>();
   const routeEdges = new Map<string, PackageRouteEdge>();
   const canonicalizePackageFilePath = (filePath: string): string =>
-    canonicalizeSourceBackedPackageFile(profile, snapshots.deps.root, filePath);
+    canonicalizeSourceBackedPackageFile(profile, analysis.root, filePath);
 
-  for (const edge of snapshots.deps.edges) {
+  for (const edge of analysis.deps.edges) {
     const sourceInPackage = edge.source.startsWith(packagePrefix);
     const targetInPackage = edge.target.startsWith(packagePrefix);
     if (!sourceInPackage && !targetInPackage) continue;
@@ -160,31 +160,31 @@ export function createPackageReachability(
           sourcePath,
           targetPath,
           'grounded',
-          'Static package-local import captured in the deps snapshot.',
+          'Static package-local import captured in the deps analysis view.',
           `${edge.specifier} @ line ${edge.line}`,
         ),
       );
     }
   }
 
-  const declarationsByFile = groupDeclarationsByFile(snapshots.typeRefs.declarations, packagePrefix);
+  const declarationsByFile = groupDeclarationsByFile(analysis.typeRefs.declarations, packagePrefix);
   for (const filePath of declarationsByFile.keys()) {
     packageFiles.add(filePath);
   }
 
-  const exportRecordsByFile = groupExportRecordsByFile(snapshots.exports.exports, pkg.package_dir);
+  const exportRecordsByFile = groupExportRecordsByFile(analysis.exports.exports, pkg.package_dir);
   for (const filePath of exportRecordsByFile.keys()) {
     packageFiles.add(filePath);
   }
   const manifestPublicApiRoots = resolveManifestPublicApiRoots(
     profile,
-    snapshots.deps.root,
+    analysis.root,
     pkg,
     packageFiles,
   );
 
   packageFiles.add(pkg.analysis_entrypoint);
-  const uncoveredPackageFiles = snapshots.deps.uncovered_files.filter((filePath) =>
+  const uncoveredPackageFiles = analysis.deps.uncovered_files.filter((filePath) =>
     filePath.startsWith(packagePrefix),
   );
   for (const uncoveredFile of uncoveredPackageFiles) {
@@ -193,7 +193,7 @@ export function createPackageReachability(
 
   for (const edge of discoverParseImportEdges(
     profile,
-    snapshots.deps.root,
+    analysis.root,
     uncoveredPackageFiles,
     packageFiles,
   )) {
@@ -202,7 +202,7 @@ export function createPackageReachability(
 
   for (const edge of discoverExecutableHandoffEdges(
     profile,
-    snapshots.deps.root,
+    analysis.root,
     pkg.package_dir,
     packageFiles,
   )) {
@@ -241,7 +241,7 @@ export function createPackageReachability(
     addRoot(roots, root);
   }
 
-  for (const root of resolveManifestBinRoots(profile, snapshots.deps.root, pkg, packageFiles)) {
+  for (const root of resolveManifestBinRoots(profile, analysis.root, pkg, packageFiles)) {
     addRoot(roots, root);
   }
 

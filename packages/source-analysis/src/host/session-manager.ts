@@ -28,7 +28,7 @@ export interface HostSessionState {
   readonly profilePath: string | null;
   readonly warmPrograms: boolean;
   readonly session: RepoSession;
-  readonly snapshots: Partial<SnapshotOutputMap>;
+  readonly analysisViews: Partial<SnapshotOutputMap>;
   readonly warningsByKind: Partial<Record<SnapshotKind, readonly string[]>>;
   readonly lastRefreshAtByKind: Partial<Record<SnapshotKind, string>>;
   readonly liveAnalysis: HostLiveAnalysisState;
@@ -68,7 +68,7 @@ export class HostSessionManager {
       profilePath: session.profile.profilePath,
       warmPrograms: args.warmPrograms ?? true,
       session,
-      snapshots: {},
+      analysisViews: {},
       warningsByKind: {},
       lastRefreshAtByKind: {},
       liveAnalysis: {},
@@ -133,7 +133,7 @@ export function toSessionStatusEntry(
     profilePath: state.profilePath,
     warmPrograms: state.warmPrograms,
     dirtyKinds: sortSnapshotKinds(state.dirtyKinds),
-    cachedKinds: sortSnapshotKinds(Object.keys(state.snapshots) as SnapshotKind[]),
+    cachedKinds: sortSnapshotKinds(Object.keys(state.analysisViews) as SnapshotKind[]),
     dirtyFiles: [...state.dirtyFiles].sort(),
     lastRefreshAtByKind: { ...state.lastRefreshAtByKind },
   };

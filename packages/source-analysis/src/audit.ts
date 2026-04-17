@@ -1,8 +1,13 @@
-import { loadCurrentSnapshots, type LoadedCurrentSnapshotSet } from './current-snapshots.js';
+import {
+  coerceAnalysisViews,
+  loadCurrentAnalysisViews,
+  type AnalysisViews,
+} from './analysis-views.js';
+import type { LoadedCurrentSnapshotSet } from './current-snapshots.js';
 import type { PackageExportRecord, PackageExportsSummary } from './exports/schema.js';
 import type { TypeDecl } from './typerefs/schema.js';
 import {
-  inspectAnalyzabilityPostureFromSnapshots,
+  inspectAnalyzabilityPostureFromAnalysisViews,
   inspectFocusedAnalyzabilityContext,
 } from './analyzability-posture.js';
 import type { AnswerCard, AnswerRef } from './answer-card.js';
@@ -73,12 +78,12 @@ export type AuditValue = AnswerCard<AuditRef> & {
 };
 
 interface PackageAuditContext {
-  readonly snapshots: LoadedCurrentSnapshotSet;
+  readonly analysis: AnalysisViews;
   readonly analysisFreshness: WorldFrame['freshness'];
   readonly pkg: PackageExportsSummary;
   readonly packageFiles: readonly string[];
   readonly uncoveredFiles: readonly string[];
-  readonly unresolvedImports: LoadedCurrentSnapshotSet['deps']['unresolved_imports'];
+  readonly unresolvedImports: AnalysisViews['deps']['unresolved_imports'];
   readonly declarationsByFile: ReadonlyMap<string, readonly TypeDecl[]>;
   readonly exportRecordsByFile: ReadonlyMap<string, readonly PackageExportRecord[]>;
   readonly reachability: PackageReachability;
@@ -93,21 +98,22 @@ export function createCurrentAuditAnswer(
 ): InquiryAnswer<AuditValue> {
   return createAuditAnswer(
     query,
-    loadCurrentSnapshots(target, waitMs),
+    loadCurrentAnalysisViews(target, waitMs),
   );
 }
 
 export function createAuditAnswer(
   query: Inquiry,
-  snapshots: LoadedCurrentSnapshotSet,
+  analysisInput: AnalysisViews | LoadedCurrentSnapshotSet,
 ): InquiryAnswer<AuditValue> {
+  const analysis = coerceAnalysisViews(analysisInput);
   switch (query.focusRef.kind) {
     case 'package':
-      return buildPackageAuditAnswer(query, snapshots, query.focusRef.value);
+      return buildPackageAuditAnswer(query, analysis, query.focusRef.value);
     default:
       return createUnsupportedAnswer(
         query,
-        snapshots,
+        analysis,
         `Audit for focus kind "${query.focusRef.kind}" is not implemented yet.`,
       );
   }
@@ -115,28 +121,28 @@ export function createAuditAnswer(
 
 function buildPackageAuditAnswer(
   query: Inquiry,
-  snapshots: LoadedCurrentSnapshotSet,
+  analysis: AnalysisViews,
   packageQuery: string,
 ): InquiryAnswer<AuditValue> {
   const normalizedPackageQuery = trimTrailingFocusPunctuation(packageQuery);
-  const posture = inspectAnalyzabilityPostureFromSnapshots(snapshots);
+  const posture = inspectAnalyzabilityPostureFromAnalysisViews(analysis);
   const requestedRegimeContext = inspectFocusedAnalyzabilityContext(posture, {
     focusLabel: normalizedPackageQuery,
     queryHints: [normalizedPackageQuery],
   });
-  const pkgMatches = resolvePackages(snapshots, normalizedPackageQuery);
+  const pkgMatches = resolvePackages(analysis, normalizedPackageQuery);
   if (pkgMatches.length === 0) {
     if (requestedRegimeContext.directlyExcludedFrontier) {
       return createExcludedFrontierAnswer(
         query,
-        snapshots,
+        analysis,
         normalizedPackageQuery,
         requestedRegimeContext,
       );
     }
     return createMissAnswer(
       query,
-      snapshots,
+      analysis,
       `No package matches "${normalizedPackageQuery}".`,
       { kind: 'package', value: normalizedPackageQuery },
       [],
@@ -146,7 +152,7 @@ function buildPackageAuditAnswer(
   if (pkgMatches.length > 1) {
     return createAmbiguousAnswer(
       query,
-      snapshots,
+      analysis,
       `Package query "${normalizedPackageQuery}" is ambiguous.`,
       { kind: 'package', value: normalizedPackageQuery },
       pkgMatches.map((pkg) => packageRef(pkg)),
@@ -160,7 +166,7 @@ function buildPackageAuditAnswer(
     readMode: defaultReadMode(query.questionRoute),
   });
   const context = createPackageAuditContext(
-    snapshots,
+    analysis,
     pkg,
     resolveAuditRepoPath(query.worldFrame?.repoPath),
     query.worldFrame?.freshness,
@@ -227,7 +233,7 @@ function buildPackageAuditAnswer(
 
   return createAnswer(
     query,
-    snapshots,
+    analysis,
     policy,
     { kind: 'package', value: pkg.package_name, label: pkg.package_name },
     tag,
@@ -250,25 +256,25 @@ function buildPackageAuditAnswer(
 }
 
 function createPackageAuditContext(
-  snapshots: LoadedCurrentSnapshotSet,
+  analysis: AnalysisViews,
   pkg: PackageExportsSummary,
   repoPath: string,
   analysisFreshness: WorldFrame['freshness'],
   policy: InquiryPolicy,
 ): PackageAuditContext {
-  const reachability = createPackageReachability(snapshots, pkg, {
+  const reachability = createPackageReachability(analysis, pkg, {
     ordering: policy.ordering,
   });
   const packagePrefix = pkg.package_dir.length > 0 ? `${pkg.package_dir}/` : '';
   const packageFiles = new Set<string>(reachability.files.map((file) => file.filePath));
-  const uncoveredFiles = snapshots.deps.uncovered_files.filter((filePath) =>
+  const uncoveredFiles = analysis.deps.uncovered_files.filter((filePath) =>
     filePath.startsWith(packagePrefix),
   );
-  const unresolvedImports = snapshots.deps.unresolved_imports.filter((entry) =>
+  const unresolvedImports = analysis.deps.unresolved_imports.filter((entry) =>
     entry.source.startsWith(packagePrefix),
   );
 
-  for (const edge of snapshots.deps.edges) {
+  for (const edge of analysis.deps.edges) {
     if (edge.source.startsWith(packagePrefix)) {
       packageFiles.add(edge.source);
     }
@@ -278,7 +284,7 @@ function createPackageAuditContext(
   }
 
   const declarationsByFile = new Map<string, TypeDecl[]>();
-  for (const declaration of snapshots.typeRefs.declarations) {
+  for (const declaration of analysis.typeRefs.declarations) {
     if (!declaration.file.startsWith(packagePrefix)) continue;
     packageFiles.add(declaration.file);
     const declarations = declarationsByFile.get(declaration.file) ?? [];
@@ -287,7 +293,7 @@ function createPackageAuditContext(
   }
 
   const exportRecordsByFile = new Map<string, PackageExportRecord[]>();
-  for (const record of snapshots.exports.exports) {
+  for (const record of analysis.exports.exports) {
     if (record.package_dir !== pkg.package_dir) continue;
     packageFiles.add(record.analysis_entrypoint);
     if (!record.declaration_file) continue;
@@ -300,7 +306,7 @@ function createPackageAuditContext(
   const coordinationSurface = createSafeCoordinationSurface(repoPath, [...packageFiles]);
 
   return {
-    snapshots,
+    analysis,
     analysisFreshness,
     pkg,
     packageFiles: [...packageFiles].sort((left, right) => left.localeCompare(right)),
@@ -368,7 +374,7 @@ function collectUncoveredFilesFinding(
     ? 'Tests sit outside the graph coverage'
     : 'Some package files sit outside the graph coverage';
   const summary = uncoveredExercises.length === context.uncoveredFiles.length
-    ? `${context.uncoveredFiles.length} test file${pluralize(context.uncoveredFiles.length)} under ${context.pkg.package_dir} are outside every tsconfig. Parse-only route recovery now reaches ${exerciseTargets.length} package file${pluralize(exerciseTargets.length)}, but that exercise evidence is still qualified rather than snapshot-grounded.`
+    ? `${context.uncoveredFiles.length} test file${pluralize(context.uncoveredFiles.length)} under ${context.pkg.package_dir} are outside every tsconfig. Parse-only route recovery now reaches ${exerciseTargets.length} package file${pluralize(exerciseTargets.length)}, but that exercise evidence is still qualified rather than fully grounded in the current analysis views.`
     : `${context.uncoveredFiles.length} file${pluralize(context.uncoveredFiles.length)} under ${context.pkg.package_dir} are outside every tsconfig, so the dependency graph has a real blind spot.`;
 
   return {
@@ -857,12 +863,12 @@ function closureBasisForPackageAudit(
     {
       kind: 'freshness',
       summary: context.analysisFreshness === 'live'
-        ? `The audit is grounded in live deps, typerefs, and exports analysis views refreshed at ${context.snapshots.deps.generated_at}, ${context.snapshots.typeRefs.generated_at}, and ${context.snapshots.exports.generated_at}.`
-        : `The audit is grounded in snapshots generated at ${context.snapshots.deps.generated_at}, ${context.snapshots.typeRefs.generated_at}, and ${context.snapshots.exports.generated_at}.`,
+        ? `The audit is grounded in live deps, typerefs, and exports analysis views refreshed at ${context.analysis.deps.generated_at}, ${context.analysis.typeRefs.generated_at}, and ${context.analysis.exports.generated_at}.`
+        : `The audit is grounded in materialized analysis views generated at ${context.analysis.deps.generated_at}, ${context.analysis.typeRefs.generated_at}, and ${context.analysis.exports.generated_at}.`,
       provenanceRefs: [
-        context.snapshots.deps.generated_at,
-        context.snapshots.typeRefs.generated_at,
-        context.snapshots.exports.generated_at,
+        context.analysis.deps.generated_at,
+        context.analysis.typeRefs.generated_at,
+        context.analysis.exports.generated_at,
       ],
     },
     ...(findings.some((finding) => finding.kind === 'blindspot')
@@ -890,9 +896,9 @@ function provenanceForPackageAudit(
   findings: readonly AuditFinding[],
 ): readonly InquiryProvenanceEntry[] {
   return [
-    analysisProvenanceEntry('deps', context.snapshots.deps.generated_at, context.snapshots.deps.source_commit, context.analysisFreshness),
-    analysisProvenanceEntry('typerefs', context.snapshots.typeRefs.generated_at, context.snapshots.typeRefs.source_commit, context.analysisFreshness),
-    analysisProvenanceEntry('exports', context.snapshots.exports.generated_at, context.snapshots.exports.source_commit, context.analysisFreshness),
+    analysisProvenanceEntry('deps', context.analysis.deps.generated_at, context.analysis.deps.source_commit, context.analysisFreshness),
+    analysisProvenanceEntry('typerefs', context.analysis.typeRefs.generated_at, context.analysis.typeRefs.source_commit, context.analysisFreshness),
+    analysisProvenanceEntry('exports', context.analysis.exports.generated_at, context.analysis.exports.source_commit, context.analysisFreshness),
     ...(findings.length > 0
       ? [{
         kind: 'route' as const,
@@ -927,7 +933,7 @@ function continuationsForFindings(
 
 function createAnswer(
   query: Inquiry,
-  snapshots: LoadedCurrentSnapshotSet,
+  analysis: AnalysisViews,
   policy: InquiryPolicy,
   focusRef: FocusRef,
   tag: InquiryAnswer<AuditValue>['outcome']['tag'],
@@ -938,7 +944,7 @@ function createAnswer(
   continuations: readonly Continuation[],
   provenance: readonly InquiryProvenanceEntry[],
 ): InquiryAnswer<AuditValue> {
-  const worldFrame = defaultWorldFrame(snapshots, query.worldFrame);
+  const worldFrame = defaultWorldFrame(analysis, query.worldFrame);
   return createAnswerEnvelope({
     query,
     focusRef,
@@ -957,7 +963,7 @@ function createAnswer(
 
 function createMissAnswer(
   query: Inquiry,
-  snapshots: LoadedCurrentSnapshotSet,
+  analysis: AnalysisViews,
   message: string,
   focusRef: FocusRef,
   relatedRefs: readonly AuditRef[],
@@ -969,7 +975,7 @@ function createMissAnswer(
   });
   return createAnswer(
     query,
-    snapshots,
+    analysis,
     policy,
     focusRef,
     'miss-unknown-shape',
@@ -1021,7 +1027,7 @@ function createMissAnswer(
 
 function createExcludedFrontierAnswer(
   query: Inquiry,
-  snapshots: LoadedCurrentSnapshotSet,
+  analysis: AnalysisViews,
   packageQuery: string,
   regimeContext: ReturnType<typeof inspectFocusedAnalyzabilityContext>,
 ): InquiryAnswer<AuditValue> {
@@ -1037,7 +1043,7 @@ function createExcludedFrontierAnswer(
 
   return createAnswer(
     query,
-    snapshots,
+    analysis,
     policy,
     { kind: 'package', value: packageQuery, label: packageQuery },
     'open-boundary',
@@ -1081,7 +1087,7 @@ function createExcludedFrontierAnswer(
 
 function createAmbiguousAnswer(
   query: Inquiry,
-  snapshots: LoadedCurrentSnapshotSet,
+  analysis: AnalysisViews,
   message: string,
   focusRef: FocusRef,
   relatedRefs: readonly AuditRef[],
@@ -1093,7 +1099,7 @@ function createAmbiguousAnswer(
   });
   return createAnswer(
     query,
-    snapshots,
+    analysis,
     policy,
     focusRef,
     'ambiguous',
@@ -1145,7 +1151,7 @@ function createAmbiguousAnswer(
 
 function createUnsupportedAnswer(
   query: Inquiry,
-  snapshots: LoadedCurrentSnapshotSet,
+  analysis: AnalysisViews,
   message: string,
 ): InquiryAnswer<AuditValue> {
   const policy = resolveInquiryPolicy(query, {
@@ -1155,7 +1161,7 @@ function createUnsupportedAnswer(
   });
   return createAnswer(
     query,
-    snapshots,
+    analysis,
     policy,
     query.focusRef,
     'unsupported',
@@ -1199,23 +1205,23 @@ function createUnsupportedAnswer(
 }
 
 function resolvePackages(
-  snapshots: LoadedCurrentSnapshotSet,
+  analysis: AnalysisViews,
   query: string,
 ): readonly PackageExportsSummary[] {
   const normalized = trimTrailingFocusPunctuation(query).toLowerCase();
-  const exact = snapshots.exports.packages.filter((pkg) =>
+  const exact = analysis.exports.packages.filter((pkg) =>
     pkg.package_name.toLowerCase() === normalized
     || pkg.package_dir.toLowerCase() === normalized,
   );
   if (exact.length > 0) return exact;
 
-  const shortMatches = snapshots.exports.packages.filter((pkg) =>
+  const shortMatches = analysis.exports.packages.filter((pkg) =>
     pkg.package_name.split('/').at(-1)?.toLowerCase() === normalized
     || pkg.package_dir.split('/').at(-1)?.toLowerCase() === normalized,
   );
   if (shortMatches.length > 0) return shortMatches;
 
-  return snapshots.exports.packages.filter((pkg) =>
+  return analysis.exports.packages.filter((pkg) =>
     pkg.package_name.toLowerCase().includes(normalized)
     || pkg.package_dir.toLowerCase().includes(normalized),
   );
@@ -1249,15 +1255,15 @@ function typeRef(declaration: TypeDecl): AuditRef {
 }
 
 function defaultWorldFrame(
-  snapshots: LoadedCurrentSnapshotSet,
+  analysis: AnalysisViews,
   worldFrame: WorldFrame | undefined,
 ): WorldFrame {
   return {
-    repoPath: worldFrame?.repoPath ?? snapshots.deps.root,
+    repoPath: worldFrame?.repoPath ?? analysis.root,
     target: worldFrame?.target ?? 'current',
     regimeAnchor: worldFrame?.regimeAnchor ?? 'hosted',
     partiality: worldFrame?.partiality ?? 'complete',
-    freshness: worldFrame?.freshness ?? 'snapshot',
+    freshness: worldFrame?.freshness ?? (analysis.source === 'hosted-analysis' ? 'live' : 'snapshot'),
   };
 }
 
@@ -1308,7 +1314,7 @@ function analysisProvenanceEntry(
 function analysisSurfaceLabel(
   worldFrame: WorldFrame | undefined,
 ): string {
-  return worldFrame?.freshness === 'live' ? 'current analysis' : 'current snapshots';
+  return worldFrame?.freshness === 'live' ? 'current analysis' : 'current materialized analysis';
 }
 
 function analysisSurfaceEvidenceLabel(
@@ -1316,7 +1322,7 @@ function analysisSurfaceEvidenceLabel(
 ): string {
   return freshness === 'live'
     ? 'deps, typerefs, and exports analysis views'
-    : 'deps, typerefs, and exports snapshots';
+    : 'materialized deps, typerefs, and exports analysis views';
 }
 
 function mergeTrustProfiles(
