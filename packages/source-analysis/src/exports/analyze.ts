@@ -1,18 +1,19 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, relative, resolve } from 'node:path';
 
 import * as ts from 'typescript';
 
-import {
-  loadPackageDescriptors,
-  type PackageDescriptor,
-} from '../package-descriptors.js';
 import { collectSnapshotFrontierEvidence } from '../frontier-evidence.js';
 import type { ProgramReuseOptions } from '../program-reuse-options.js';
 import { RepoSession } from '../repo-session.js';
 import { describeSnapshotProfile } from '../snapshots.js';
+import {
+  buildStructuralClaimGraph,
+  type PackageClaim,
+  type StructuralClaimGraphRuntime,
+} from '../structural-claim-graph.js';
 import type {
   ExportChainStep,
   ExportFaceKind,
@@ -96,18 +97,18 @@ interface ExportsAnalysisScope {
   readonly session: RepoSession;
   readonly repoPath: string;
   readonly repoPathNormalized: string;
+  readonly runtime: StructuralClaimGraphRuntime;
   readonly workspacePackageEntrypointsByName: ReadonlyMap<string, string>;
 }
 
 interface PackageAnalysisContext extends ExportsAnalysisScope {
-  program: ts.Program;
-  checker: ts.TypeChecker;
-  compilerOptions: ts.CompilerOptions;
-  packageDir: string;
-  entrypoint: string;
-  moduleInfoCache: Map<string, ModuleInfo>;
-  moduleExportsCache: Map<string, Set<string>>;
-  sourceFileCache: Map<string, ts.SourceFile | null>;
+  readonly program: ts.Program;
+  readonly checker: ts.TypeChecker;
+  readonly compilerOptions: ts.CompilerOptions;
+  readonly packageClaim: PackageClaim;
+  readonly moduleInfoCache: Map<string, ModuleInfo>;
+  readonly moduleExportsCache: Map<string, Set<string>>;
+  readonly sourceFileCache: Map<string, ts.SourceFile | null>;
 }
 
 export interface ExportsAnalysisResult {
@@ -122,10 +123,6 @@ function toForwardSlash(value: string): string {
 
 function toRepoRelative(scope: ExportsAnalysisScope, absPath: string): string {
   return toForwardSlash(relative(scope.repoPath, absPath));
-}
-
-function readJsonFile<T>(absPath: string): T {
-  return JSON.parse(readFileSync(absPath, 'utf-8')) as T;
 }
 
 function gitHead(cwd: string): string {
@@ -149,6 +146,17 @@ function gitBlobHash(filePath: string): string {
   } catch {
     return 'unknown';
   }
+}
+
+function createEmptyModuleInfo(): ModuleInfo {
+  return {
+    exportedDeclarations: new Map(),
+    localExportSpecifiers: [],
+    importBindings: new Map(),
+    namedReexports: [],
+    starReexports: [],
+    namespaceReexports: [],
+  };
 }
 
 function resolveTsconfigForPackage(
@@ -175,11 +183,11 @@ function createFallbackProgram(entrypointAbs: string): ts.Program {
 
 function createPackageProgram(
   scope: ExportsAnalysisScope,
-  descriptor: PackageDescriptor,
+  packageClaim: PackageClaim,
   options: ProgramReuseOptions,
 ): ts.Program {
-  const entrypointAbs = resolve(scope.repoPath, descriptor.analysisEntrypoint);
-  const tsconfigPath = resolveTsconfigForPackage(scope, descriptor.packageDir);
+  const entrypointAbs = resolve(scope.repoPath, packageClaim.attributes.analysisEntrypoint);
+  const tsconfigPath = resolveTsconfigForPackage(scope, packageClaim.attributes.packageDir);
 
   if (!tsconfigPath) {
     return createFallbackProgram(entrypointAbs);
@@ -193,8 +201,7 @@ function createPackageProgram(
   try {
     return scope.session.getProgram(loaded.snapshot.absPath, 'analysis', {
       cache: options.cachePrograms,
-    })
-      ?? createFallbackProgram(entrypointAbs);
+    }) ?? createFallbackProgram(entrypointAbs);
   } catch {
     return createFallbackProgram(entrypointAbs);
   }
@@ -214,7 +221,10 @@ function getProgramSourceFile(program: ts.Program, absPath: string): ts.SourceFi
   return null;
 }
 
-function getSourceFile(context: PackageAnalysisContext, relPath: string): ts.SourceFile | null {
+function getSourceFile(
+  context: PackageAnalysisContext,
+  relPath: string,
+): ts.SourceFile | null {
   const cached = context.sourceFileCache.get(relPath);
   if (cached !== undefined) return cached;
 
@@ -248,23 +258,107 @@ function lineOfNode(sourceFile: ts.SourceFile, node: ts.Node): number {
   return sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
 }
 
-function hasExportModifier(node: ts.Node): boolean {
-  const modifiers = ts.canHaveModifiers(node) ? ts.getModifiers(node) : undefined;
-  return modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) ?? false;
+function declarationIsTypeOnly(faceKind: string): boolean {
+  return faceKind === 'interface' || faceKind === 'type';
 }
 
-function declarationIsTypeOnly(node: ts.Node): boolean {
-  return ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node);
+function buildModuleInfoFromClaims(
+  context: PackageAnalysisContext,
+  relPath: string,
+): ModuleInfo | null {
+  const fileClaim = context.runtime.index.sourceFileByPath.get(relPath);
+  const declarations = context.runtime.index.declarationsByFilePath.get(relPath) ?? [];
+  const importBindings = context.runtime.index.importBindingsBySourceFilePath.get(relPath) ?? [];
+  const exportObservations = context.runtime.index.exportObservationsBySourceFilePath.get(relPath) ?? [];
+
+  if (!fileClaim && declarations.length === 0 && importBindings.length === 0 && exportObservations.length === 0) {
+    return null;
+  }
+
+  const info = createEmptyModuleInfo();
+
+  for (const declaration of declarations) {
+    if (!declaration.attributes.exported) {
+      continue;
+    }
+    const current = info.exportedDeclarations.get(declaration.attributes.name) ?? [];
+    current.push({
+      name: declaration.attributes.name,
+      line: declaration.attributes.line,
+      inherentlyTypeOnly: declarationIsTypeOnly(declaration.attributes.declarationKind),
+    });
+    info.exportedDeclarations.set(declaration.attributes.name, current);
+  }
+
+  for (const binding of importBindings) {
+    info.importBindings.set(binding.attributes.localName, {
+      localName: binding.attributes.localName,
+      importedName: binding.attributes.importedName,
+      line: binding.attributes.line,
+      typeOnly: binding.attributes.typeOnly,
+      specifier: binding.attributes.specifier,
+      targetFile: binding.attributes.targetFile,
+    });
+  }
+
+  for (const observation of exportObservations) {
+    switch (observation.attributes.observationKind) {
+      case 'local-export':
+        if (observation.attributes.exportedName && observation.attributes.originalName) {
+          info.localExportSpecifiers.push({
+            exportedName: observation.attributes.exportedName,
+            originalName: observation.attributes.originalName,
+            line: observation.attributes.line,
+            typeOnly: observation.attributes.typeOnly,
+          });
+        }
+        break;
+      case 'named-reexport':
+        if (observation.attributes.exportedName && observation.attributes.originalName) {
+          info.namedReexports.push({
+            exportedName: observation.attributes.exportedName,
+            originalName: observation.attributes.originalName,
+            line: observation.attributes.line,
+            typeOnly: observation.attributes.typeOnly,
+            specifier: observation.attributes.specifier ?? '',
+            targetFile: observation.attributes.targetFile,
+          });
+        }
+        break;
+      case 'star-reexport':
+        info.starReexports.push({
+          line: observation.attributes.line,
+          typeOnly: observation.attributes.typeOnly,
+          specifier: observation.attributes.specifier ?? '',
+          targetFile: observation.attributes.targetFile,
+        });
+        break;
+      case 'namespace-reexport':
+        if (observation.attributes.exportedName) {
+          info.namespaceReexports.push({
+            exportedName: observation.attributes.exportedName,
+            line: observation.attributes.line,
+            specifier: observation.attributes.specifier ?? '',
+            targetFile: observation.attributes.targetFile,
+          });
+        }
+        break;
+    }
+  }
+
+  return info;
 }
 
-function resolveModuleTarget(
+function resolveModuleTargetFallback(
   context: PackageAnalysisContext,
   sourceFile: ts.SourceFile,
   specifier: string,
 ): string | null {
   if (!specifier.startsWith('.')) {
     const workspaceEntrypoint = context.workspacePackageEntrypointsByName.get(specifier);
-    if (workspaceEntrypoint) return workspaceEntrypoint;
+    if (workspaceEntrypoint) {
+      return workspaceEntrypoint;
+    }
   }
 
   const resolvedModule = ts.resolveModuleName(
@@ -274,59 +368,57 @@ function resolveModuleTarget(
     ts.sys,
   ).resolvedModule;
 
-  if (!resolvedModule) return null;
+  if (!resolvedModule) {
+    return null;
+  }
 
   const resolvedAbsPath = toForwardSlash(resolve(resolvedModule.resolvedFileName));
   if (
-    resolvedAbsPath.toLowerCase() !== context.repoPathNormalized &&
-    !resolvedAbsPath.toLowerCase().startsWith(`${context.repoPathNormalized}/`)
+    resolvedAbsPath.toLowerCase() !== context.repoPathNormalized
+    && !resolvedAbsPath.toLowerCase().startsWith(`${context.repoPathNormalized}/`)
   ) {
     return null;
   }
 
   const relPath = toRepoRelative(context, resolvedAbsPath);
-  if (relPath.startsWith('..') || context.session.isExcludedRepoRelativePath(relPath)) return null;
+  if (relPath.startsWith('..') || context.session.isExcludedRepoRelativePath(relPath)) {
+    return null;
+  }
+
   return relPath;
 }
 
-function getModuleInfo(
+function getModuleInfoFromAstFallback(
   context: PackageAnalysisContext,
   relPath: string,
-): ModuleInfo {
-  const cached = context.moduleInfoCache.get(relPath);
-  if (cached) return cached;
-
+): ModuleInfo | null {
   const sourceFile = getSourceFile(context, relPath);
-  const info: ModuleInfo = {
-    exportedDeclarations: new Map(),
-    localExportSpecifiers: [],
-    importBindings: new Map(),
-    namedReexports: [],
-    starReexports: [],
-    namespaceReexports: [],
-  };
-
   if (!sourceFile) {
-    context.moduleInfoCache.set(relPath, info);
-    return info;
+    return null;
   }
-
   const moduleSourceFile = sourceFile;
+
+  const info = createEmptyModuleInfo();
 
   function addExportedDeclaration(name: string, node: ts.Node): void {
     const current = info.exportedDeclarations.get(name) ?? [];
     current.push({
       name,
       line: lineOfNode(moduleSourceFile, node),
-      inherentlyTypeOnly: declarationIsTypeOnly(node),
+      inherentlyTypeOnly: ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node),
     });
     info.exportedDeclarations.set(name, current);
+  }
+
+  function hasExportModifier(node: ts.Node): boolean {
+    const modifiers = ts.canHaveModifiers(node) ? ts.getModifiers(node) : undefined;
+    return modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) ?? false;
   }
 
   for (const statement of moduleSourceFile.statements) {
     if (ts.isImportDeclaration(statement) && statement.importClause && ts.isStringLiteral(statement.moduleSpecifier)) {
       const specifier = statement.moduleSpecifier.text;
-      const targetFile = resolveModuleTarget(context, moduleSourceFile, specifier);
+      const targetFile = resolveModuleTargetFallback(context, moduleSourceFile, specifier);
       const clause = statement.importClause;
       const baseTypeOnly = clause.isTypeOnly;
       const importLine = lineOfNode(moduleSourceFile, statement);
@@ -345,10 +437,9 @@ function getModuleInfo(
       if (clause.namedBindings) {
         if (ts.isNamedImports(clause.namedBindings)) {
           for (const element of clause.namedBindings.elements) {
-            const importedName = (element.propertyName ?? element.name).text;
             info.importBindings.set(element.name.text, {
               localName: element.name.text,
-              importedName,
+              importedName: (element.propertyName ?? element.name).text,
               line: lineOfNode(moduleSourceFile, element),
               typeOnly: baseTypeOnly || element.isTypeOnly,
               specifier,
@@ -374,32 +465,26 @@ function getModuleInfo(
       addExportedDeclaration(statement.name.text, statement);
       continue;
     }
-
     if (ts.isClassDeclaration(statement) && statement.name && hasExportModifier(statement)) {
       addExportedDeclaration(statement.name.text, statement);
       continue;
     }
-
     if (ts.isInterfaceDeclaration(statement) && hasExportModifier(statement)) {
       addExportedDeclaration(statement.name.text, statement);
       continue;
     }
-
     if (ts.isTypeAliasDeclaration(statement) && hasExportModifier(statement)) {
       addExportedDeclaration(statement.name.text, statement);
       continue;
     }
-
     if (ts.isEnumDeclaration(statement) && hasExportModifier(statement)) {
       addExportedDeclaration(statement.name.text, statement);
       continue;
     }
-
     if (ts.isModuleDeclaration(statement) && hasExportModifier(statement) && ts.isIdentifier(statement.name)) {
       addExportedDeclaration(statement.name.text, statement);
       continue;
     }
-
     if (ts.isVariableStatement(statement) && hasExportModifier(statement)) {
       for (const declaration of statement.declarationList.declarations) {
         if (ts.isIdentifier(declaration.name)) {
@@ -408,13 +493,14 @@ function getModuleInfo(
       }
       continue;
     }
-
-    if (!ts.isExportDeclaration(statement)) continue;
+    if (!ts.isExportDeclaration(statement)) {
+      continue;
+    }
 
     const specifier = statement.moduleSpecifier && ts.isStringLiteral(statement.moduleSpecifier)
       ? statement.moduleSpecifier.text
       : undefined;
-    const targetFile = specifier ? resolveModuleTarget(context, sourceFile, specifier) : null;
+    const targetFile = specifier ? resolveModuleTargetFallback(context, sourceFile, specifier) : null;
     const declarationTypeOnly = statement.isTypeOnly;
 
     if (statement.exportClause && ts.isNamedExports(statement.exportClause)) {
@@ -459,6 +545,19 @@ function getModuleInfo(
     }
   }
 
+  return info;
+}
+
+function getModuleInfo(
+  context: PackageAnalysisContext,
+  relPath: string,
+): ModuleInfo {
+  const cached = context.moduleInfoCache.get(relPath);
+  if (cached) return cached;
+
+  const info = buildModuleInfoFromClaims(context, relPath)
+    ?? getModuleInfoFromAstFallback(context, relPath)
+    ?? createEmptyModuleInfo();
   context.moduleInfoCache.set(relPath, info);
   return info;
 }
@@ -470,22 +569,23 @@ function getExportedNamesForModule(
   const cached = context.moduleExportsCache.get(relPath);
   if (cached) return cached;
 
-  const sourceFile = getSourceFile(context, relPath);
   const names = new Set<string>();
-
+  const sourceFile = getSourceFile(context, relPath);
   if (sourceFile) {
     const moduleSymbol = getModuleSymbol(context.checker, sourceFile);
     if (moduleSymbol) {
       for (const exportSymbol of context.checker.getExportsOfModule(moduleSymbol)) {
         names.add(exportSymbol.getName());
       }
-    } else {
-      const moduleInfo = getModuleInfo(context, relPath);
-      for (const name of moduleInfo.exportedDeclarations.keys()) names.add(name);
-      for (const item of moduleInfo.localExportSpecifiers) names.add(item.exportedName);
-      for (const item of moduleInfo.namedReexports) names.add(item.exportedName);
-      for (const item of moduleInfo.namespaceReexports) names.add(item.exportedName);
     }
+  }
+
+  if (names.size === 0) {
+    const moduleInfo = getModuleInfo(context, relPath);
+    for (const name of moduleInfo.exportedDeclarations.keys()) names.add(name);
+    for (const item of moduleInfo.localExportSpecifiers) names.add(item.exportedName);
+    for (const item of moduleInfo.namedReexports) names.add(item.exportedName);
+    for (const item of moduleInfo.namespaceReexports) names.add(item.exportedName);
   }
 
   context.moduleExportsCache.set(relPath, names);
@@ -512,16 +612,14 @@ function traceExport(
       originalName: declaration.name,
       typeOnly: declaration.inherentlyTypeOnly,
       namespaceExport: false,
-      chain: [
-        {
-          file: relPath,
-          line: declaration.line,
-          kind: 'local-declaration',
-          exported_name: exportedName,
-          original_name: declaration.name,
-          type_only: declaration.inherentlyTypeOnly,
-        },
-      ],
+      chain: [{
+        file: relPath,
+        line: declaration.line,
+        kind: 'local-declaration',
+        exported_name: exportedName,
+        original_name: declaration.name,
+        type_only: declaration.inherentlyTypeOnly,
+      }],
     };
   }
 
@@ -621,18 +719,16 @@ function traceExport(
       originalName: exportedName,
       typeOnly: false,
       namespaceExport: true,
-      chain: [
-        {
-          file: relPath,
-          line: namespaceReexport.line,
-          kind: 'namespace-reexport',
-          exported_name: namespaceReexport.exportedName,
-          original_name: namespaceReexport.exportedName,
-          specifier: namespaceReexport.specifier,
-          target_file: namespaceReexport.targetFile ?? undefined,
-          type_only: false,
-        },
-      ],
+      chain: [{
+        file: relPath,
+        line: namespaceReexport.line,
+        kind: 'namespace-reexport',
+        exported_name: namespaceReexport.exportedName,
+        original_name: namespaceReexport.exportedName,
+        specifier: namespaceReexport.specifier,
+        target_file: namespaceReexport.targetFile ?? undefined,
+        type_only: false,
+      }],
     };
   }
 
@@ -669,15 +765,13 @@ function traceExport(
       originalName: exportedName,
       typeOnly: false,
       namespaceExport: false,
-      chain: [
-        {
-          file: relPath,
-          line: 1,
-          kind: 'fallback',
-          exported_name: exportedName,
-          original_name: exportedName,
-        },
-      ],
+      chain: [{
+        file: relPath,
+        line: 1,
+        kind: 'fallback',
+        exported_name: exportedName,
+        original_name: exportedName,
+      }],
     };
   }
 
@@ -747,7 +841,6 @@ function classifyDeclarations(
   }
 
   const orderedFaceKinds = [...faceKinds].sort();
-
   return {
     declarationName,
     declarationFile,
@@ -787,15 +880,12 @@ function classifySymbol(
   if (!classified.declarationName) {
     classified.declarationName = resolvedSymbol.getName();
   }
-
   if (!classified.typeExported && (resolvedSymbol.flags & ts.SymbolFlags.Type) !== 0) {
     classified.typeExported = true;
   }
-
   if (!classified.valueExported && (resolvedSymbol.flags & ts.SymbolFlags.Value) !== 0) {
     classified.valueExported = true;
   }
-
   return classified;
 }
 
@@ -823,28 +913,51 @@ function computePackageRevision(
   return hash.digest('hex');
 }
 
+function createEmptyPackageSummary(
+  scope: ExportsAnalysisScope,
+  packageClaim: PackageClaim,
+): PackageExportsSummary {
+  return {
+    package_name: packageClaim.attributes.packageName,
+    package_dir: packageClaim.attributes.packageDir,
+    package_revision: computePackageRevision(scope, [
+      packageClaim.attributes.packageJsonPath,
+      packageClaim.attributes.analysisEntrypoint,
+      packageClaim.attributes.sourceEntrypoint ?? '',
+      packageClaim.attributes.publicTypesEntrypoint ?? '',
+    ].filter(Boolean)),
+    analysis_basis: packageClaim.attributes.analysisBasis,
+    analysis_entrypoint: packageClaim.attributes.analysisEntrypoint,
+    source_entrypoint: packageClaim.attributes.sourceEntrypoint,
+    public_types_entrypoint: packageClaim.attributes.publicTypesEntrypoint,
+    export_count: 0,
+    type_only_export_count: 0,
+    value_export_count: 0,
+    merged_export_count: 0,
+  };
+}
+
 function analyzePackage(
   scope: ExportsAnalysisScope,
-  descriptor: PackageDescriptor,
+  packageClaim: PackageClaim,
   options: ProgramReuseOptions,
 ): {
   summary: PackageExportsSummary;
   records: PackageExportRecord[];
 } {
-  const program = createPackageProgram(scope, descriptor, options);
+  const program = createPackageProgram(scope, packageClaim, options);
   const context: PackageAnalysisContext = {
     ...scope,
     program,
     checker: program.getTypeChecker(),
     compilerOptions: program.getCompilerOptions(),
-    packageDir: descriptor.packageDir,
-    entrypoint: descriptor.analysisEntrypoint,
+    packageClaim,
     moduleInfoCache: new Map(),
     moduleExportsCache: new Map(),
     sourceFileCache: new Map(),
   };
 
-  const entrypointAbs = resolve(scope.repoPath, descriptor.analysisEntrypoint);
+  const entrypointAbs = resolve(scope.repoPath, packageClaim.attributes.analysisEntrypoint);
   const entrypointSourceFile = getProgramSourceFile(program, entrypointAbs);
   const entrypointModuleSymbol = entrypointSourceFile
     ? getModuleSymbol(context.checker, entrypointSourceFile)
@@ -852,35 +965,17 @@ function analyzePackage(
 
   if (!entrypointSourceFile || !entrypointModuleSymbol) {
     return {
-      summary: {
-        package_name: descriptor.packageName,
-        package_dir: descriptor.packageDir,
-        package_revision: computePackageRevision(scope, [
-          descriptor.packageJsonPath,
-          descriptor.analysisEntrypoint,
-          descriptor.sourceEntrypoint ?? '',
-          descriptor.publicTypesEntrypoint ?? '',
-        ].filter(Boolean)),
-        analysis_basis: descriptor.analysisBasis,
-        analysis_entrypoint: descriptor.analysisEntrypoint,
-        source_entrypoint: descriptor.sourceEntrypoint,
-        public_types_entrypoint: descriptor.publicTypesEntrypoint,
-        export_count: 0,
-        type_only_export_count: 0,
-        value_export_count: 0,
-        merged_export_count: 0,
-      },
+      summary: createEmptyPackageSummary(scope, packageClaim),
       records: [],
     };
   }
 
   const packageFiles = new Set<string>([
-    descriptor.packageJsonPath,
-    descriptor.analysisEntrypoint,
+    packageClaim.attributes.packageJsonPath,
+    packageClaim.attributes.analysisEntrypoint,
   ]);
-
-  if (descriptor.sourceEntrypoint) packageFiles.add(descriptor.sourceEntrypoint);
-  if (descriptor.publicTypesEntrypoint) packageFiles.add(descriptor.publicTypesEntrypoint);
+  if (packageClaim.attributes.sourceEntrypoint) packageFiles.add(packageClaim.attributes.sourceEntrypoint);
+  if (packageClaim.attributes.publicTypesEntrypoint) packageFiles.add(packageClaim.attributes.publicTypesEntrypoint);
 
   const exportSymbols = context.checker
     .getExportsOfModule(entrypointModuleSymbol)
@@ -889,7 +984,7 @@ function analyzePackage(
 
   const records: PackageExportRecord[] = exportSymbols.map((exportSymbol) => {
     const exportedName = exportSymbol.getName();
-    const trace = traceExport(context, descriptor.analysisEntrypoint, exportedName);
+    const trace = traceExport(context, packageClaim.attributes.analysisEntrypoint, exportedName);
     const classification = classifySymbol(scope, context.checker, exportSymbol);
 
     if (trace) {
@@ -898,8 +993,9 @@ function analyzePackage(
         if (step.target_file) packageFiles.add(step.target_file);
       }
     }
-
-    if (classification.declarationFile) packageFiles.add(classification.declarationFile);
+    if (classification.declarationFile) {
+      packageFiles.add(classification.declarationFile);
+    }
 
     const typeOnly = trace?.typeOnly ?? (!classification.valueExported && classification.typeExported);
     const originalName = trace?.originalName ?? classification.declarationName ?? exportedName;
@@ -914,10 +1010,10 @@ function analyzePackage(
       ?? originalName;
 
     return {
-      package_name: descriptor.packageName,
-      package_dir: descriptor.packageDir,
-      analysis_basis: descriptor.analysisBasis,
-      analysis_entrypoint: descriptor.analysisEntrypoint,
+      package_name: packageClaim.attributes.packageName,
+      package_dir: packageClaim.attributes.packageDir,
+      analysis_basis: packageClaim.attributes.analysisBasis,
+      analysis_entrypoint: packageClaim.attributes.analysisEntrypoint,
       exported_name: exportedName,
       original_name: originalName,
       declaration_name: declarationName,
@@ -930,15 +1026,13 @@ function analyzePackage(
       face_kind: classification.faceKind,
       face_kinds: classification.faceKinds,
       namespace_export: trace?.namespaceExport ?? false,
-      chain: trace?.chain ?? [
-        {
-          file: descriptor.analysisEntrypoint,
-          line: 1,
-          kind: 'fallback',
-          exported_name: exportedName,
-          original_name: originalName,
-        },
-      ],
+      chain: trace?.chain ?? [{
+        file: packageClaim.attributes.analysisEntrypoint,
+        line: 1,
+        kind: 'fallback',
+        exported_name: exportedName,
+        original_name: originalName,
+      }],
     };
   });
 
@@ -948,13 +1042,13 @@ function analyzePackage(
 
   return {
     summary: {
-      package_name: descriptor.packageName,
-      package_dir: descriptor.packageDir,
+      package_name: packageClaim.attributes.packageName,
+      package_dir: packageClaim.attributes.packageDir,
       package_revision: computePackageRevision(scope, packageFiles),
-      analysis_basis: descriptor.analysisBasis,
-      analysis_entrypoint: descriptor.analysisEntrypoint,
-      source_entrypoint: descriptor.sourceEntrypoint,
-      public_types_entrypoint: descriptor.publicTypesEntrypoint,
+      analysis_basis: packageClaim.attributes.analysisBasis,
+      analysis_entrypoint: packageClaim.attributes.analysisEntrypoint,
+      source_entrypoint: packageClaim.attributes.sourceEntrypoint,
+      public_types_entrypoint: packageClaim.attributes.publicTypesEntrypoint,
       export_count: records.length,
       type_only_export_count: typeOnlyExportCount,
       value_export_count: valueExportCount,
@@ -968,13 +1062,12 @@ export function generateExportsAnalysis(
   nextSession: RepoSession,
   options: ProgramReuseOptions = {},
 ): ExportsAnalysisResult {
-  const descriptors = loadPackageDescriptors(nextSession);
+  const runtime = buildStructuralClaimGraph(nextSession);
   const workspacePackageEntrypointsByName = new Map<string, string>();
-
-  for (const descriptor of descriptors) {
+  for (const packageClaim of runtime.index.packages) {
     workspacePackageEntrypointsByName.set(
-      descriptor.packageName,
-      descriptor.sourceEntrypoint ?? descriptor.analysisEntrypoint,
+      packageClaim.attributes.packageName,
+      packageClaim.attributes.sourceEntrypoint ?? packageClaim.attributes.analysisEntrypoint,
     );
   }
 
@@ -982,18 +1075,19 @@ export function generateExportsAnalysis(
     session: nextSession,
     repoPath: nextSession.repoPath,
     repoPathNormalized: toForwardSlash(nextSession.repoPath).toLowerCase(),
+    runtime,
     workspacePackageEntrypointsByName,
   };
 
-  const packageAnalyses = descriptors.map((descriptor) => analyzePackage(scope, descriptor, options));
+  const packageAnalyses = runtime.index.packages.map((packageClaim) => analyzePackage(scope, packageClaim, options));
   const packageSummaries = packageAnalyses
     .map((analysis) => analysis.summary)
     .sort((left, right) => left.package_name.localeCompare(right.package_name));
   const exportRecords = packageAnalyses
     .flatMap((analysis) => analysis.records)
     .sort((left, right) =>
-      left.package_name.localeCompare(right.package_name) ||
-      left.exported_name.localeCompare(right.exported_name)
+      left.package_name.localeCompare(right.package_name)
+      || left.exported_name.localeCompare(right.exported_name),
     );
   const frontiers = collectSnapshotFrontierEvidence(nextSession);
 
@@ -1016,23 +1110,23 @@ export function generateExportsAnalysis(
   };
 
   const reportLines = [
-    "",
+    '',
     `Snapshot target:    ${output.profile.target}`,
     `Profile:            ${output.profile.profileId}${output.profile.profilePath ? ` (${output.profile.profilePath})` : ''}`,
     `Excluded prefixes:  ${output.profile.excludedRepoRelativePrefixes.length}`,
     `Named frontiers:    ${output.frontiers.excluded_frontiers.length}`,
-    "",
+    '',
     `Packages analyzed: ${packageSummaries.length}`,
     `Exports:           ${output.summary.exports}`,
     `Type-only exports: ${output.summary.type_only_exports}`,
     `Value exports:     ${output.summary.value_exports}`,
     `Merged exports:    ${output.summary.merged_exports}`,
-    "",
+    '',
   ];
 
   return {
     output,
     reportLines,
-    warnings: [...frontiers.warnings],
+    warnings: [...runtime.graph.warnings, ...frontiers.warnings],
   };
 }
