@@ -9,6 +9,7 @@ import {
   loadPackageDescriptors,
   type PackageDescriptor,
 } from '../package-descriptors.js';
+import { collectSnapshotFrontierEvidence } from '../frontier-evidence.js';
 import type { ProgramReuseOptions } from '../program-reuse-options.js';
 import { RepoSession } from '../repo-session.js';
 import { describeSnapshotProfile } from '../snapshots.js';
@@ -994,6 +995,7 @@ export function generateExportsAnalysis(
       left.package_name.localeCompare(right.package_name) ||
       left.exported_name.localeCompare(right.exported_name)
     );
+  const frontiers = collectSnapshotFrontierEvidence(nextSession);
 
   const output: ExportsOutput = {
     root: scope.repoPath,
@@ -1001,6 +1003,7 @@ export function generateExportsAnalysis(
     source_commit: gitHead(scope.repoPath),
     analyzer_commit: gitBlobHash(resolve(import.meta.dirname!, 'analyze.js')),
     profile: describeSnapshotProfile(nextSession.profile),
+    frontiers,
     summary: {
       packages_analyzed: packageSummaries.length,
       exports: exportRecords.length,
@@ -1017,6 +1020,7 @@ export function generateExportsAnalysis(
     `Snapshot target:    ${output.profile.target}`,
     `Profile:            ${output.profile.profileId}${output.profile.profilePath ? ` (${output.profile.profilePath})` : ''}`,
     `Excluded prefixes:  ${output.profile.excludedRepoRelativePrefixes.length}`,
+    `Named frontiers:    ${output.frontiers.excluded_frontiers.length}`,
     "",
     `Packages analyzed: ${packageSummaries.length}`,
     `Exports:           ${output.summary.exports}`,
@@ -1029,6 +1033,6 @@ export function generateExportsAnalysis(
   return {
     output,
     reportLines,
-    warnings: [],
+    warnings: [...frontiers.warnings],
   };
 }

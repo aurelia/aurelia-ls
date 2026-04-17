@@ -15,7 +15,10 @@ import {
   renderAnswerDocumentToPlainText,
 } from '../answer-renderer.js';
 import { resolveAnalysisProfile } from '../analysis-profile.js';
-import { inspectProfileSnapshotSupport } from '../profile-support.js';
+import {
+  inspectAnalyzabilityPosture,
+  summarizeAnalyzabilityPosture,
+} from '../analyzability-posture.js';
 import {
   createSnapshotPaths,
   resolveSnapshotRootPath,
@@ -231,12 +234,15 @@ export class SnapshotHostRuntime {
       target: args.target,
       profilePath: args.profilePath,
     });
+    const snapshotPaths = createSnapshotPaths(import.meta.url);
+    const posture = inspectAnalyzabilityPosture(
+      snapshotPaths,
+      profile,
+    );
     const result: DescribeProfileResult = {
       profile,
-      snapshotSupport: inspectProfileSnapshotSupport(
-        createSnapshotPaths(import.meta.url),
-        profile,
-      ),
+      snapshotSupport: posture.snapshotSupport,
+      posture,
     };
     return {
       result,
@@ -985,6 +991,8 @@ function summarizeInquiryExecution(
     };
   }
 
+  const summarizedOutcome = summarizePrimaryOutcome(primaryEnvelope);
+
   return {
     status: primaryEnvelope.status === 'ok' && primaryEnvelope.errors.length === 0 ? 'executed' : 'failed',
     command: primaryEnvelope.command,
@@ -992,6 +1000,12 @@ function summarizeInquiryExecution(
     ephemeralSession: executed.execution.ephemeralSession,
     facts: summarizePrimaryFacts(primaryEnvelope),
     lines: summarizePrimaryLines(primaryEnvelope),
+    ...(summarizedOutcome?.outcomeTag ? { outcomeTag: summarizedOutcome.outcomeTag } : {}),
+    ...(summarizedOutcome?.trust ? { trust: summarizedOutcome.trust } : {}),
+    ...(summarizedOutcome?.closureBasis ? { closureBasis: summarizedOutcome.closureBasis } : {}),
+    ...(summarizedOutcome?.issues ? { issues: summarizedOutcome.issues } : {}),
+    ...(summarizedOutcome?.continuations ? { continuations: summarizedOutcome.continuations } : {}),
+    ...(summarizedOutcome?.provenance ? { provenance: summarizedOutcome.provenance } : {}),
   };
 }
 
@@ -1177,6 +1191,22 @@ function summarizePrimaryFacts(
 ): readonly { readonly label: string; readonly value: string }[] {
   const result = envelope.result as Record<string, unknown> | null;
   switch (envelope.command) {
+    case 'describe.profile': {
+      const summary = summarizeAnalyzabilityPosture(
+        (result as unknown as DescribeProfileResult).posture,
+        {
+          repoPath: (result as unknown as DescribeProfileResult).profile.repoPath,
+          target: (result as unknown as DescribeProfileResult).profile.snapshotTarget,
+          ...((result as unknown as DescribeProfileResult).profile.profilePath
+            ? { profilePath: (result as unknown as DescribeProfileResult).profile.profilePath ?? undefined }
+            : {}),
+          regimeAnchor: 'hosted',
+          partiality: 'complete',
+          freshness: 'live',
+        },
+      );
+      return summary.facts;
+    }
     case 'query.deps.summary': {
       const summary = (result as unknown as SessionSummaryQueryResult<'deps'>).summary;
       return [
@@ -1239,6 +1269,22 @@ function summarizePrimaryLines(
 ): readonly string[] {
   const result = envelope.result as Record<string, unknown> | null;
   switch (envelope.command) {
+    case 'describe.profile': {
+      const summary = summarizeAnalyzabilityPosture(
+        (result as unknown as DescribeProfileResult).posture,
+        {
+          repoPath: (result as unknown as DescribeProfileResult).profile.repoPath,
+          target: (result as unknown as DescribeProfileResult).profile.snapshotTarget,
+          ...((result as unknown as DescribeProfileResult).profile.profilePath
+            ? { profilePath: (result as unknown as DescribeProfileResult).profile.profilePath ?? undefined }
+            : {}),
+          regimeAnchor: 'hosted',
+          partiality: 'complete',
+          freshness: 'live',
+        },
+      );
+      return summary.lines;
+    }
     case 'query.deps.summary': {
       const summary = (result as unknown as SessionSummaryQueryResult<'deps'>).summary;
       return [
@@ -1281,6 +1327,70 @@ function summarizePrimaryLines(
     default:
       return [];
   }
+}
+
+function summarizePrimaryOutcome(
+  envelope: HostCommandEnvelope<unknown>,
+): {
+  readonly outcomeTag?: InquiryExecutionSummary['outcomeTag'];
+  readonly trust?: InquiryExecutionSummary['trust'];
+  readonly closureBasis?: InquiryExecutionSummary['closureBasis'];
+  readonly issues?: InquiryExecutionSummary['issues'];
+  readonly continuations?: InquiryExecutionSummary['continuations'];
+  readonly provenance?: InquiryExecutionSummary['provenance'];
+} | null {
+  const result = envelope.result as Record<string, unknown> | null;
+  const answer = result && typeof result === 'object' && !Array.isArray(result)
+    ? (result.answer as {
+      readonly outcome?: InquiryExecutionSummary & {
+        readonly tag?: InquiryExecutionSummary['outcomeTag'];
+        readonly trust?: InquiryExecutionSummary['trust'];
+        readonly issues?: InquiryExecutionSummary['issues'];
+        readonly continuations?: InquiryExecutionSummary['continuations'];
+        readonly closureBasis?: InquiryExecutionSummary['closureBasis'];
+      };
+      readonly slots?: {
+        readonly closure_basis?: InquiryExecutionSummary['closureBasis'];
+        readonly provenance?: InquiryExecutionSummary['provenance'];
+      };
+    } | undefined)
+    : undefined;
+
+  if (answer?.outcome) {
+    return {
+      ...(answer.outcome.tag ? { outcomeTag: answer.outcome.tag } : {}),
+      ...(answer.outcome.trust ? { trust: answer.outcome.trust } : {}),
+      ...(answer.slots?.closure_basis ? { closureBasis: answer.slots.closure_basis } : {}),
+      ...(answer.outcome.issues ? { issues: answer.outcome.issues } : {}),
+      ...(answer.outcome.continuations ? { continuations: answer.outcome.continuations } : {}),
+      ...(answer.slots?.provenance ? { provenance: answer.slots.provenance } : {}),
+    };
+  }
+
+  if (envelope.command === 'describe.profile') {
+    const describe = result as unknown as DescribeProfileResult;
+    const summary = summarizeAnalyzabilityPosture(
+      describe.posture,
+      {
+        repoPath: describe.profile.repoPath,
+        target: describe.profile.snapshotTarget,
+        ...(describe.profile.profilePath ? { profilePath: describe.profile.profilePath ?? undefined } : {}),
+        regimeAnchor: 'hosted',
+        partiality: 'complete',
+        freshness: 'live',
+      },
+    );
+    return {
+      outcomeTag: summary.tag,
+      trust: summary.trust,
+      closureBasis: summary.closureBasis,
+      issues: summary.issues,
+      continuations: summary.continuations,
+      provenance: summary.provenance,
+    };
+  }
+
+  return null;
 }
 
 function resolveInquiryStepArgs(

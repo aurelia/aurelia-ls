@@ -1,12 +1,17 @@
 import { loadCurrentSnapshots, type LoadedCurrentSnapshotSet } from './current-snapshots.js';
 import type { PackageExportRecord, PackageExportsSummary } from './exports/schema.js';
 import type { TypeDecl } from './typerefs/schema.js';
+import {
+  inspectAnalyzabilityPostureFromSnapshots,
+  inspectFocusedAnalyzabilityContext,
+} from './analyzability-posture.js';
 import type { AnswerCard, AnswerRef } from './answer-card.js';
 import {
   createStructuredAnswerCard,
 } from './answer-card.js';
 import { createAnswerDocument } from './answer-document.js';
 import { createAnswerEnvelope } from './answer-envelope.js';
+import { trimTrailingFocusPunctuation } from './focus-normalization.js';
 import {
   compareByPrecedence,
   compareNumbersDescending,
@@ -112,13 +117,27 @@ function buildPackageAuditAnswer(
   snapshots: LoadedCurrentSnapshotSet,
   packageQuery: string,
 ): InquiryAnswer<AuditValue> {
-  const pkgMatches = resolvePackages(snapshots, packageQuery);
+  const normalizedPackageQuery = trimTrailingFocusPunctuation(packageQuery);
+  const posture = inspectAnalyzabilityPostureFromSnapshots(snapshots);
+  const requestedRegimeContext = inspectFocusedAnalyzabilityContext(posture, {
+    focusLabel: normalizedPackageQuery,
+    queryHints: [normalizedPackageQuery],
+  });
+  const pkgMatches = resolvePackages(snapshots, normalizedPackageQuery);
   if (pkgMatches.length === 0) {
+    if (requestedRegimeContext.directlyExcludedFrontier) {
+      return createExcludedFrontierAnswer(
+        query,
+        snapshots,
+        normalizedPackageQuery,
+        requestedRegimeContext,
+      );
+    }
     return createMissAnswer(
       query,
       snapshots,
-      `No package matches "${packageQuery}".`,
-      { kind: 'package', value: packageQuery },
+      `No package matches "${normalizedPackageQuery}".`,
+      { kind: 'package', value: normalizedPackageQuery },
       [],
     );
   }
@@ -127,8 +146,8 @@ function buildPackageAuditAnswer(
     return createAmbiguousAnswer(
       query,
       snapshots,
-      `Package query "${packageQuery}" is ambiguous.`,
-      { kind: 'package', value: packageQuery },
+      `Package query "${normalizedPackageQuery}" is ambiguous.`,
+      { kind: 'package', value: normalizedPackageQuery },
       pkgMatches.map((pkg) => packageRef(pkg)),
     );
   }
@@ -146,6 +165,11 @@ function buildPackageAuditAnswer(
     policy,
   );
   const findings = collectPackageAuditFindings(context);
+  const regimeContext = inspectFocusedAnalyzabilityContext(posture, {
+    focusLabel: pkg.package_name,
+    pathPrefixes: [pkg.package_dir],
+    queryHints: [pkg.package_name, pkg.package_dir, normalizedPackageQuery],
+  });
 
   const blindspotCount = findings.filter((finding) => finding.kind === 'blindspot').length;
   const dormantCount = findings.filter((finding) => finding.kind === 'under-integrated-file').length;
@@ -164,6 +188,7 @@ function buildPackageAuditAnswer(
       ...(driftCount > 0
         ? [`${driftCount} finding${pluralize(driftCount)} points at architectural surface drift rather than direct dead code.`]
         : []),
+      ...regimeContext.lines,
     ];
 
   const relatedRefs = dedupeRefs([
@@ -171,16 +196,31 @@ function buildPackageAuditAnswer(
     ...findings.flatMap((finding) => [finding.primaryRef, ...finding.relatedRefs]),
   ]).slice(0, 12);
 
-  const tag = blindspotCount > 0 ? 'open-boundary' : 'hit';
-  const trust = trustForFindings(findings);
-  const closureBasis = closureBasisForPackageAudit(context, findings);
-  const issues = issuesForFindings(findings);
-  const continuations = continuationsForFindings(pkg, findings);
-  const provenance = provenanceForPackageAudit(context, findings);
+  const tag = blindspotCount > 0 || regimeContext.tag === 'open-boundary'
+    ? 'open-boundary'
+    : 'hit';
+  const trust = mergeTrustProfiles(trustForFindings(findings), regimeContext.trust);
+  const closureBasis = [
+    ...closureBasisForPackageAudit(context, findings),
+    ...regimeContext.closureBasis,
+  ];
+  const issues = [
+    ...issuesForFindings(findings),
+    ...regimeContext.issues,
+  ];
+  const continuations = [
+    ...continuationsForFindings(pkg, findings),
+    ...regimeContext.continuations,
+  ];
+  const provenance = [
+    ...provenanceForPackageAudit(context, findings),
+    ...regimeContext.provenance,
+  ];
   const document = createAuditDocument(summaryLines, findings, relatedRefs, {
     blindspotCount,
     dormantCount,
     driftCount,
+    regimeFacts: regimeContext.facts,
   });
 
   return createAnswer(
@@ -645,6 +685,7 @@ function createAuditDocument(
     readonly blindspotCount: number;
     readonly dormantCount: number;
     readonly driftCount: number;
+    readonly regimeFacts?: readonly { readonly label: string; readonly value: string }[];
   },
 ) {
   return createAnswerDocument<AuditRef>([
@@ -660,6 +701,7 @@ function createAuditDocument(
         { label: 'blindspots', value: String(counts.blindspotCount) },
         { label: 'under-integrated files', value: String(counts.dormantCount) },
         { label: 'surface drift findings', value: String(counts.driftCount) },
+        ...(counts.regimeFacts ?? []),
       ],
     },
     ...(findings.length > 0
@@ -970,6 +1012,66 @@ function createMissAnswer(
   );
 }
 
+function createExcludedFrontierAnswer(
+  query: Inquiry,
+  snapshots: LoadedCurrentSnapshotSet,
+  packageQuery: string,
+  regimeContext: ReturnType<typeof inspectFocusedAnalyzabilityContext>,
+): InquiryAnswer<AuditValue> {
+  const policy = resolveInquiryPolicy(query, {
+    focusKind: 'package',
+    inquiryEpisode: 'inventory-and-audit-sweep',
+    readMode: defaultReadMode(query.questionRoute),
+  });
+  const frontier = regimeContext.directlyExcludedFrontier;
+  const message = frontier
+    ? `${packageQuery} falls under excluded frontier ${frontier.prefix}, so the current package audit cannot close on it inside this profile.`
+    : `${packageQuery} is outside the current included regime.`;
+
+  return createAnswer(
+    query,
+    snapshots,
+    policy,
+    { kind: 'package', value: packageQuery, label: packageQuery },
+    'open-boundary',
+    createStructuredAnswerCard({
+      title: 'Package audit boundary',
+      primaryRef: {
+        kind: 'package',
+        value: packageQuery,
+        label: packageQuery,
+      },
+      relatedRefs: [],
+      document: createAnswerDocument([
+        {
+          kind: 'paragraph',
+          importance: 'primary',
+          lines: [message, ...regimeContext.lines.slice(1)],
+        },
+        ...(regimeContext.facts.length > 0
+          ? [{
+            kind: 'key-fact-list' as const,
+            importance: 'supporting' as const,
+            facts: regimeContext.facts,
+          }]
+          : []),
+      ]),
+      policy,
+      extra: {
+        findings: [],
+      },
+    }),
+    regimeContext.trust ?? {
+      kind: 'frontier',
+      summary: 'The requested package sits outside the included regime.',
+    },
+    regimeContext.closureBasis,
+    regimeContext.issues,
+    regimeContext.continuations,
+    regimeContext.provenance,
+  );
+}
+
 function createAmbiguousAnswer(
   query: Inquiry,
   snapshots: LoadedCurrentSnapshotSet,
@@ -1093,7 +1195,7 @@ function resolvePackages(
   snapshots: LoadedCurrentSnapshotSet,
   query: string,
 ): readonly PackageExportsSummary[] {
-  const normalized = query.toLowerCase();
+  const normalized = trimTrailingFocusPunctuation(query).toLowerCase();
   const exact = snapshots.exports.packages.filter((pkg) =>
     pkg.package_name.toLowerCase() === normalized
     || pkg.package_dir.toLowerCase() === normalized,
@@ -1184,6 +1286,25 @@ function snapshotProvenanceEntry(
     ref: generatedAt,
     detail: `source_commit=${sourceCommit}`,
   };
+}
+
+function mergeTrustProfiles(
+  base: TrustProfile,
+  regime: TrustProfile | null,
+): TrustProfile {
+  if (!regime) {
+    return base;
+  }
+
+  if (regime.kind === 'frontier') {
+    return regime;
+  }
+
+  if (base.kind === 'grounded' && regime.kind === 'qualified') {
+    return regime;
+  }
+
+  return base;
 }
 
 function originForFinding(

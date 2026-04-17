@@ -27,6 +27,12 @@ describe('source-analysis hosted CLI', () => {
           readonly profileId: string;
           readonly snapshotTarget: string;
         };
+        readonly posture: {
+          readonly currentBand: {
+            readonly id: string;
+          };
+          readonly frontierEvidenceSource: string;
+        };
         readonly snapshotSupport: {
           readonly missingKinds: readonly string[];
         };
@@ -36,6 +42,8 @@ describe('source-analysis hosted CLI', () => {
     expect(parsed.command).toBe('describe.profile');
     expect(parsed.result.profile.profileId).toBe('fixture-profile');
     expect(parsed.result.profile.snapshotTarget).toBe('fixture-profile-target');
+    expect(parsed.result.posture.currentBand.id).toBe('explicit-open-named-fronts');
+    expect(parsed.result.posture.frontierEvidenceSource).toBe('live-scan');
     expect(parsed.result.snapshotSupport.missingKinds).toEqual(['deps', 'typerefs', 'exports']);
   });
 
@@ -80,6 +88,114 @@ describe('source-analysis hosted CLI', () => {
       'query.audit.package',
     ]);
     expect(parsed.result.execution?.steps.every((step) => step.status === 'executed')).toBe(true);
+  });
+
+  it('routes analyzability questions through profile posture instead of workspace orientation', () => {
+    const repoPath = createExcludedFrontierFixtureRepo();
+    const raw = runCli([
+      'ask',
+      'What boundaries are open because parts of the repo are excluded from analysis?',
+      '--repo',
+      repoPath,
+      '--json',
+    ]);
+    const parsed = JSON.parse(raw) as {
+      readonly command: string;
+      readonly result: {
+        readonly answer: {
+          readonly outcome: {
+            readonly tag: string;
+            readonly value?: {
+              readonly inquiry?: {
+                readonly id?: string;
+              };
+              readonly execution?: {
+                readonly command?: string;
+              };
+            };
+          };
+        };
+      };
+    };
+
+    expect(parsed.command).toBe('ask.question');
+    expect(parsed.result.answer.outcome.tag).toBe('open-boundary');
+    expect(parsed.result.answer.outcome.value?.inquiry?.id).toBe('analyzability-posture');
+    expect(parsed.result.answer.outcome.value?.execution?.command).toBe('describe.profile');
+  });
+
+  it('treats excluded package focuses as explicit boundaries instead of silent misses', () => {
+    const repoPath = createExcludedFrontierFixtureRepo();
+    const raw = runCli([
+      'ask',
+      'Orient me to @fixture/excluded.',
+      '--repo',
+      repoPath,
+      '--json',
+    ]);
+    const parsed = JSON.parse(raw) as {
+      readonly result: {
+        readonly answer: {
+          readonly outcome: {
+            readonly tag: string;
+            readonly value?: {
+              readonly inquiry?: {
+                readonly id?: string;
+              };
+              readonly execution?: {
+                readonly command?: string;
+              };
+            };
+            readonly summary: string;
+            readonly issues: ReadonlyArray<{
+              readonly code: string;
+            }>;
+          };
+        };
+      };
+    };
+
+    expect(parsed.result.answer.outcome.tag).toBe('open-boundary');
+    expect(parsed.result.answer.outcome.value?.inquiry?.id).toBe('workspace-orientation');
+    expect(parsed.result.answer.outcome.value?.execution?.command).toBe('query.navigate');
+    expect(parsed.result.answer.outcome.summary).toContain('query.navigate');
+    expect(parsed.result.answer.outcome.issues.some((issue) => issue.code.includes('focus-excluded'))).toBe(true);
+  });
+
+  it('spends excluded-frontier seams inside package-audit answers', () => {
+    const repoPath = createExcludedFrontierFixtureRepo();
+    const raw = runCli([
+      'ask',
+      'Audit @fixture/app for tech debt.',
+      '--repo',
+      repoPath,
+      '--json',
+    ]);
+    const parsed = JSON.parse(raw) as {
+      readonly result: {
+        readonly answer: {
+          readonly outcome: {
+            readonly tag: string;
+            readonly value?: {
+              readonly execution?: {
+                readonly command?: string;
+              };
+            };
+            readonly issues: ReadonlyArray<{
+              readonly code: string;
+              readonly message: string;
+            }>;
+          };
+        };
+      };
+    };
+
+    expect(parsed.result.answer.outcome.tag).toBe('open-boundary');
+    expect(parsed.result.answer.outcome.value?.execution?.command).toBe('query.audit.package');
+    expect(parsed.result.answer.outcome.issues.some((issue) =>
+      issue.code === 'focus-excluded-boundary-seams'
+      && issue.message.includes('touches 1 observed seam'),
+    )).toBe(true);
   });
 
   it('keeps explicit repo and profile targeting visible in plan.question flows', () => {
@@ -249,6 +365,79 @@ function createExplicitProfileFixtureRepo(): string {
       null,
       2,
     ),
+  );
+
+  return repoPath;
+}
+
+function createExcludedFrontierFixtureRepo(): string {
+  const repoPath = mkdtempSync(join(tmpdir(), 'source-analysis-cli-frontier-profile-'));
+  tempDirs.push(repoPath);
+
+  mkdirSync(join(repoPath, '.source-analysis'), { recursive: true });
+  mkdirSync(join(repoPath, 'packages', 'app', 'src'), { recursive: true });
+  mkdirSync(join(repoPath, 'packages', 'excluded', 'src'), { recursive: true });
+  writeFileSync(
+    join(repoPath, '.source-analysis', 'profile.json'),
+    JSON.stringify(
+      {
+        id: 'fixture-frontier-profile',
+        target: 'fixture-frontier-target',
+        packageDiscoveryRoots: ['packages'],
+        includeRepoRootPackage: false,
+        excludedRepoRelativePrefixes: ['packages/excluded'],
+      },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(
+    join(repoPath, 'packages', 'app', 'package.json'),
+    JSON.stringify({ name: '@fixture/app', type: 'module' }, null, 2),
+  );
+  writeFileSync(
+    join(repoPath, 'packages', 'excluded', 'package.json'),
+    JSON.stringify({ name: '@fixture/excluded', type: 'module' }, null, 2),
+  );
+  writeFileSync(
+    join(repoPath, 'packages', 'app', 'tsconfig.json'),
+    JSON.stringify(
+      {
+        compilerOptions: {
+          module: 'NodeNext',
+          moduleResolution: 'NodeNext',
+          target: 'ES2022',
+          noEmit: true,
+        },
+        include: ['src/**/*.ts'],
+      },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(
+    join(repoPath, 'packages', 'excluded', 'tsconfig.json'),
+    JSON.stringify(
+      {
+        compilerOptions: {
+          module: 'NodeNext',
+          moduleResolution: 'NodeNext',
+          target: 'ES2022',
+          noEmit: true,
+        },
+        include: ['src/**/*.ts'],
+      },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(
+    join(repoPath, 'packages', 'app', 'src', 'index.ts'),
+    "export { hiddenValue } from '../../excluded/src/hidden.js';\n",
+  );
+  writeFileSync(
+    join(repoPath, 'packages', 'excluded', 'src', 'hidden.ts'),
+    'export const hiddenValue = 1;\n',
   );
 
   return repoPath;

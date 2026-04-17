@@ -1,4 +1,7 @@
-import type { SnapshotProfileProvenance } from '../snapshots.js';
+import type {
+  SnapshotFrontierEvidence,
+  SnapshotProfileProvenance,
+} from '../snapshots.js';
 
 export type ExportFaceKind =
   | 'type-alias'
@@ -72,6 +75,8 @@ export interface ExportsOutput {
   analyzer_commit: string;
   /** Profile and exclusion regime used to derive this snapshot. */
   profile: SnapshotProfileProvenance;
+  /** Explicit frontier evidence named during snapshot generation. */
+  frontiers: SnapshotFrontierEvidence;
   summary: {
     packages_analyzed: number;
     exports: number;

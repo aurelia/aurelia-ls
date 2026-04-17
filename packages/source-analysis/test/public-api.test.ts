@@ -11,6 +11,7 @@ import {
 } from '../out/public/host.js';
 import { createInquiryIngress } from '../out/public/inquiry.js';
 import {
+  inspectAnalyzabilityPosture,
   inspectProfileSnapshotSupport,
   resolveAnalysisProfile,
 } from '../out/public/profile.js';
@@ -51,5 +52,15 @@ describe('Source-analysis public API surface', () => {
       profile,
     );
     expect(Array.isArray(support.snapshots)).toBe(true);
+
+    const posture = inspectAnalyzabilityPosture(
+      {
+        toolRootPath: process.cwd(),
+        envSnapshotRootPath: null,
+        snapshotRootPath: `${process.cwd()}/.source-analysis/snapshots`,
+      },
+      profile,
+    );
+    expect(Array.isArray(posture.summaryLines)).toBe(true);
   });
 });

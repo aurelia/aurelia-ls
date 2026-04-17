@@ -28,6 +28,7 @@ import { tokenize } from './ingress-normalization.js';
 
 export const INQUIRY_FAMILY_IDS = [
   'capability-guidance',
+  'analyzability-posture',
   'workspace-orientation',
   'package-audit',
   'route-explanation',
@@ -322,6 +323,31 @@ export function createDefaultInquiryCatalog(): InquiryCatalog {
         inquiryExample('Repair a bad label', 'I tried query.audit.pkg and it failed.', 'repair.command'),
       ],
       commonConfusions: [],
+    }),
+    new InquiryFamilyDescriptor({
+      id: 'analyzability-posture',
+      label: 'Analyzability posture',
+      summary: 'Explain the active profile regime, current snapshot support, and named open fronts.',
+      whenToUse: 'Use this when you need to know what regime you are in, how far the current analyzability closes, or which excluded/frontier boundaries remain open.',
+      focusKinds: ['repo'],
+      inquiryEpisodes: ['bounded-closure-explanation', 'orient-and-localize'],
+      questionRoutes: ['route', 'search'],
+      readModes: ['summary-card', 'focus-card', 'supporting-evidence'],
+      aliases: ['what regime am i in', 'analyzability posture', 'open fronts', 'excluded boundaries', 'profile posture'],
+      nouns: ['profile', 'regime', 'analyzability', 'posture', 'boundary', 'boundaries', 'frontier', 'frontiers', 'excluded', 'open'],
+      verbs: ['describe', 'inspect', 'explain', 'surface', 'qualify'],
+      primaryCommands: ['describe.profile'],
+      supportingCommands: ['session.refresh', 'materializeSnapshots'],
+      examples: [
+        inquiryExample('Regime posture', 'How analyzable is this repo under the current regime?', 'describe.profile'),
+        inquiryExample('Excluded fronts', 'What boundaries are open because parts of the repo are excluded from analysis?', 'describe.profile'),
+      ],
+      commonConfusions: [{
+        label: 'Posture versus workspace overview',
+        detail: 'If the question is just where to start editing, workspace-orientation is a better fit than a regime posture readout.',
+        terms: ['where do i start', 'orient me', 'overview before editing'],
+        steer: 'workspace-orientation',
+      }],
     }),
     new InquiryFamilyDescriptor({
       id: 'workspace-orientation',

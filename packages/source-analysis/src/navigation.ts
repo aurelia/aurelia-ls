@@ -1,12 +1,17 @@
 import { loadCurrentSnapshots, type LoadedCurrentSnapshotSet } from './current-snapshots.js';
 import type { PackageExportRecord, PackageExportsSummary } from './exports/schema.js';
 import type { TypeDecl } from './typerefs/schema.js';
+import {
+  inspectAnalyzabilityPostureFromSnapshots,
+  inspectFocusedAnalyzabilityContext,
+} from './analyzability-posture.js';
 import type { AnswerCard, AnswerRef } from './answer-card.js';
 import {
   createStructuredAnswerCard,
 } from './answer-card.js';
 import { createAnswerDocument } from './answer-document.js';
 import { createAnswerEnvelope } from './answer-envelope.js';
+import { trimTrailingFocusPunctuation } from './focus-normalization.js';
 import { resolveInquiryPolicy, type InquiryPolicy } from './inquiry-policy.js';
 import type {
   ClaimEdge,
@@ -339,20 +344,35 @@ function buildPackageEpisode(
   builder: EpisodeBuilder,
   packageQuery: string,
 ): NavigationEpisode {
-  const pkgMatches = resolvePackages(builder.snapshots, packageQuery);
+  const normalizedPackageQuery = trimTrailingFocusPunctuation(packageQuery);
+  const posture = inspectAnalyzabilityPostureFromSnapshots(builder.snapshots);
+  const requestedRegimeContext = inspectFocusedAnalyzabilityContext(posture, {
+    focusLabel: normalizedPackageQuery,
+    queryHints: [normalizedPackageQuery],
+  });
+  const pkgMatches = resolvePackages(builder.snapshots, normalizedPackageQuery);
   if (pkgMatches.length === 0) {
+    if (requestedRegimeContext.directlyExcludedFrontier) {
+      return builder.finish(createOpenBoundaryAnswer(
+        builder,
+        `${normalizedPackageQuery} falls under excluded frontier ${requestedRegimeContext.directlyExcludedFrontier.prefix}, so workspace navigation cannot close on it inside the current profile.`,
+        { kind: 'package', value: normalizedPackageQuery },
+        [],
+        requestedRegimeContext,
+      ));
+    }
     return builder.finish(createMissAnswer(
       builder,
-      `No package matches "${packageQuery}".`,
-      { kind: 'package', value: packageQuery },
+      `No package matches "${normalizedPackageQuery}".`,
+      { kind: 'package', value: normalizedPackageQuery },
       [],
     ));
   }
   if (pkgMatches.length > 1) {
     return builder.finish(createAmbiguousAnswer(
       builder,
-      `Package query "${packageQuery}" is ambiguous.`,
-      { kind: 'package', value: packageQuery },
+      `Package query "${normalizedPackageQuery}" is ambiguous.`,
+      { kind: 'package', value: normalizedPackageQuery },
       pkgMatches.map((pkg) => packageRef(pkg)),
     ));
   }
@@ -431,6 +451,12 @@ function buildPackageEpisode(
   }
   builder.addClaimEdge({ kind: 'supports', from: packageClaimId, to: routeClaimId });
 
+  const regimeContext = inspectFocusedAnalyzabilityContext(posture, {
+    focusLabel: pkg.package_name,
+    pathPrefixes: [pkg.package_dir],
+    queryHints: [pkg.package_name, pkg.package_dir, normalizedPackageQuery],
+  });
+
   const summaryLines = [
     `Entrypoint ${pkg.analysis_entrypoint} publishes ${pkg.value_export_count} value exports and ${pkg.type_only_export_count} type-only exports.`,
     matrix && matrix.cells.length > 0
@@ -439,6 +465,7 @@ function buildPackageEpisode(
     keyExports.length > 0
       ? `Representative value exports: ${keyExports.map((record) => record.exported_name).join(', ')}.`
       : 'No representative value exports were available for this package.',
+    ...regimeContext.lines,
   ];
 
   const continuations: Continuation[] = [
@@ -465,7 +492,7 @@ function buildPackageEpisode(
     builder,
     policy,
     { kind: 'package', value: pkg.package_name, label: pkg.package_name },
-    'hit',
+    regimeContext.tag === 'open-boundary' ? 'open-boundary' : 'hit',
     createStructuredAnswerCard({
       title: `${pkg.package_name} package overview`,
       primaryRef: packageRef(pkg),
@@ -474,13 +501,17 @@ function buildPackageEpisode(
         { label: 'value exports', value: String(pkg.value_export_count) },
         { label: 'type-only exports', value: String(pkg.type_only_export_count) },
         { label: 'coupling cells', value: String(matrix?.cells.length ?? 0) },
+        ...regimeContext.facts,
       ]),
       policy,
     }),
-    {
-      kind: 'grounded',
-      summary: 'This overview is grounded in the live deps and exports snapshots for the current workspace.',
-    },
+    mergeTrustProfiles(
+      {
+        kind: 'grounded',
+        summary: 'This overview is grounded in the live deps and exports snapshots for the current workspace.',
+      },
+      regimeContext.trust,
+    ),
     [
       {
         kind: 'claim',
@@ -497,13 +528,15 @@ function buildPackageEpisode(
         kind: 'route',
         summary: 'This answer is shaped as a package overview that suggests the next concrete implementation entrypoints.',
       },
+      ...regimeContext.closureBasis,
     ],
-    [],
-    continuations,
+    regimeContext.issues,
+    [...continuations, ...regimeContext.continuations],
     [
       snapshotProvenanceEntry('exports', builder.snapshots.exports.generated_at, builder.snapshots.exports.source_commit),
       snapshotProvenanceEntry('deps', builder.snapshots.deps.generated_at, builder.snapshots.deps.source_commit),
       claimProvenanceEntry(`${pkg.package_name} package overview`, packageClaimId),
+      ...regimeContext.provenance,
     ],
   ));
 }
@@ -809,20 +842,36 @@ function buildFileEpisode(
   builder: EpisodeBuilder,
   fileQuery: string,
 ): NavigationEpisode {
-  const matches = resolveFiles(builder.snapshots, fileQuery);
+  const normalizedFileQuery = trimTrailingFocusPunctuation(fileQuery);
+  const posture = inspectAnalyzabilityPostureFromSnapshots(builder.snapshots);
+  const requestedRegimeContext = inspectFocusedAnalyzabilityContext(posture, {
+    focusLabel: normalizedFileQuery,
+    pathPrefixes: [normalizedFileQuery],
+    queryHints: [normalizedFileQuery],
+  });
+  const matches = resolveFiles(builder.snapshots, normalizedFileQuery);
   if (matches.length === 0) {
+    if (requestedRegimeContext.directlyExcludedFrontier) {
+      return builder.finish(createOpenBoundaryAnswer(
+        builder,
+        `${normalizedFileQuery} falls under excluded frontier ${requestedRegimeContext.directlyExcludedFrontier.prefix}, so workspace navigation cannot close on it inside the current profile.`,
+        { kind: 'file', value: normalizedFileQuery },
+        [],
+        requestedRegimeContext,
+      ));
+    }
     return builder.finish(createMissAnswer(
       builder,
-      `No file matches "${fileQuery}".`,
-      { kind: 'file', value: fileQuery },
+      `No file matches "${normalizedFileQuery}".`,
+      { kind: 'file', value: normalizedFileQuery },
       [],
     ));
   }
   if (matches.length > 1) {
     return builder.finish(createAmbiguousAnswer(
       builder,
-      `File query "${fileQuery}" is ambiguous.`,
-      { kind: 'file', value: fileQuery },
+      `File query "${normalizedFileQuery}" is ambiguous.`,
+      { kind: 'file', value: normalizedFileQuery },
       matches.slice(0, 8).map((filePath) => ({
         kind: 'file',
         value: filePath,
@@ -892,6 +941,12 @@ function buildFileEpisode(
   });
   builder.addClaimEdge({ kind: 'supports', from: fileClaimId, to: routeClaimId });
 
+  const regimeContext = inspectFocusedAnalyzabilityContext(posture, {
+    focusLabel: filePath,
+    pathPrefixes: [filePath],
+    queryHints: [normalizedFileQuery, filePath],
+  });
+
   const summaryLines = [
     `${filePath} has ${outboundEdges.length} outbound imports and ${inboundEdges.length} inbound imports in the dependency graph.`,
     declarations.length > 0
@@ -900,6 +955,7 @@ function buildFileEpisode(
     exportRecords.length > 0
       ? `It contributes ${exportRecords.length} package exports, including ${exportRecords.slice(0, 4).map((record) => record.exported_name).join(', ')}.`
       : 'It does not directly contribute any package export records.',
+    ...regimeContext.lines,
   ];
   const policy = policyForNavigation(builder, 'file');
   const relatedRefs = [
@@ -917,7 +973,7 @@ function buildFileEpisode(
     builder,
     policy,
     { kind: 'file', value: filePath, label: basename(filePath) },
-    'hit',
+    regimeContext.tag === 'open-boundary' ? 'open-boundary' : 'hit',
     createStructuredAnswerCard({
       title: `${basename(filePath)} file neighborhood`,
       primaryRef: {
@@ -932,13 +988,17 @@ function buildFileEpisode(
         { label: 'inbound imports', value: String(inboundEdges.length) },
         { label: 'declared types', value: String(declarations.length) },
         { label: 'package exports', value: String(exportRecords.length) },
+        ...regimeContext.facts,
       ]),
       policy,
     }),
-    {
-      kind: 'grounded',
-      summary: 'This file neighborhood is grounded in the live deps, typerefs, and exports snapshots.',
-    },
+    mergeTrustProfiles(
+      {
+        kind: 'grounded',
+        summary: 'This file neighborhood is grounded in the live deps, typerefs, and exports snapshots.',
+      },
+      regimeContext.trust,
+    ),
     [
       {
         kind: 'claim',
@@ -951,18 +1011,21 @@ function buildFileEpisode(
         summary: 'The neighborhood is backed by the file node, import observations, declarations, and export observations.',
         substrateNodeIds: [depsSnapshotId, typerefsSnapshotId, exportsSnapshotId, fileNodeId, ...importNodeIds, ...declarationNodeIds, ...exportNodeIds],
       },
+      ...regimeContext.closureBasis,
     ],
-    [],
+    regimeContext.issues,
     [
       ...declarations.slice(0, 3).map((decl) => continuation('join', `Inspect ${decl.name}`, decl.name, 'declared type')),
       ...outboundEdges.slice(0, 2).map((edge) => continuation('join', `Follow ${basename(edge.target)}`, edge.target, 'imported file')),
       ...(pkg ? [continuation('join', 'Inspect the owning package', pkg.package_name, 'owning package')] : []),
+      ...regimeContext.continuations,
     ],
     [
       snapshotProvenanceEntry('deps', builder.snapshots.deps.generated_at, builder.snapshots.deps.source_commit),
       snapshotProvenanceEntry('typerefs', builder.snapshots.typeRefs.generated_at, builder.snapshots.typeRefs.source_commit),
       snapshotProvenanceEntry('exports', builder.snapshots.exports.generated_at, builder.snapshots.exports.source_commit),
       claimProvenanceEntry(`${basename(filePath)} file neighborhood`, fileClaimId),
+      ...regimeContext.provenance,
     ],
   ));
 }
@@ -1080,6 +1143,45 @@ function createAmbiguousAnswer(
   );
 }
 
+function createOpenBoundaryAnswer(
+  builder: EpisodeBuilder,
+  message: string,
+  focusRef: FocusRef,
+  relatedRefs: readonly NavigationRef[],
+  regimeContext: ReturnType<typeof inspectFocusedAnalyzabilityContext>,
+): InquiryAnswer<NavigationValue> {
+  const policy = policyForNavigation(builder, focusRef.kind);
+  return createAnswer(
+    builder,
+    policy,
+    focusRef,
+    'open-boundary',
+    createStructuredAnswerCard({
+      title: 'Workspace navigation boundary',
+      primaryRef: {
+        kind: focusRef.kind,
+        value: focusRef.value,
+        label: focusRef.label ?? focusRef.value,
+      },
+      relatedRefs,
+      document: createNavigationDocument(
+        [message, ...regimeContext.lines.slice(1)],
+        relatedRefs,
+        regimeContext.facts,
+      ),
+      policy,
+    }),
+    regimeContext.trust ?? {
+      kind: 'frontier',
+      summary: 'The requested focus sits outside the included regime.',
+    },
+    regimeContext.closureBasis,
+    regimeContext.issues,
+    regimeContext.continuations,
+    regimeContext.provenance,
+  );
+}
+
 function createUnsupportedAnswer(
   builder: EpisodeBuilder,
   focusRef: FocusRef,
@@ -1125,7 +1227,7 @@ function resolvePackages(
   snapshots: LoadedCurrentSnapshotSet,
   query: string,
 ): readonly PackageExportsSummary[] {
-  const normalized = query.toLowerCase();
+  const normalized = trimTrailingFocusPunctuation(query).toLowerCase();
   const exact = snapshots.exports.packages.filter((pkg) =>
     pkg.package_name.toLowerCase() === normalized ||
     pkg.package_dir.toLowerCase() === normalized,
@@ -1148,16 +1250,17 @@ function resolveTypeDeclarations(
   snapshots: LoadedCurrentSnapshotSet,
   query: string,
 ): readonly TypeDecl[] {
-  const exact = snapshots.typeRefs.declarations.filter((decl) => decl.name === query);
+  const normalized = trimTrailingFocusPunctuation(query);
+  const exact = snapshots.typeRefs.declarations.filter((decl) => decl.name === normalized);
   if (exact.length > 0) return exact;
 
   const exactCaseInsensitive = snapshots.typeRefs.declarations.filter((decl) =>
-    decl.name.toLowerCase() === query.toLowerCase(),
+    decl.name.toLowerCase() === normalized.toLowerCase(),
   );
   if (exactCaseInsensitive.length > 0) return exactCaseInsensitive;
 
   return snapshots.typeRefs.declarations.filter((decl) =>
-    decl.name.toLowerCase().includes(query.toLowerCase()),
+    decl.name.toLowerCase().includes(normalized.toLowerCase()),
   );
 }
 
@@ -1165,16 +1268,17 @@ function resolveExports(
   snapshots: LoadedCurrentSnapshotSet,
   query: string,
 ): readonly PackageExportRecord[] {
-  const exact = snapshots.exports.exports.filter((record) => record.exported_name === query);
+  const normalized = trimTrailingFocusPunctuation(query);
+  const exact = snapshots.exports.exports.filter((record) => record.exported_name === normalized);
   if (exact.length > 0) return exact;
 
   const exactCaseInsensitive = snapshots.exports.exports.filter((record) =>
-    record.exported_name.toLowerCase() === query.toLowerCase(),
+    record.exported_name.toLowerCase() === normalized.toLowerCase(),
   );
   if (exactCaseInsensitive.length > 0) return exactCaseInsensitive;
 
   return snapshots.exports.exports.filter((record) =>
-    record.exported_name.toLowerCase().includes(query.toLowerCase()),
+    record.exported_name.toLowerCase().includes(normalized.toLowerCase()),
   );
 }
 
@@ -1182,6 +1286,7 @@ function resolveFiles(
   snapshots: LoadedCurrentSnapshotSet,
   query: string,
 ): readonly string[] {
+  const normalized = trimTrailingFocusPunctuation(query).replace(/\\/g, '/');
   const allFiles = new Set<string>();
   for (const edge of snapshots.deps.edges) {
     allFiles.add(edge.source);
@@ -1198,17 +1303,17 @@ function resolveFiles(
     }
   }
 
-  if (allFiles.has(query)) {
-    return [query];
+  if (allFiles.has(normalized)) {
+    return [normalized];
   }
 
-  const suffixMatches = [...allFiles].filter((filePath) => filePath.endsWith(query));
+  const suffixMatches = [...allFiles].filter((filePath) => filePath.endsWith(normalized));
   if (suffixMatches.length > 0) {
     return suffixMatches.sort();
   }
 
   return [...allFiles].filter((filePath) =>
-    filePath.toLowerCase().includes(query.toLowerCase()),
+    filePath.toLowerCase().includes(normalized.toLowerCase()),
   ).sort();
 }
 
@@ -1359,4 +1464,23 @@ function claimProvenanceEntry(label: string, claimId: string): InquiryProvenance
     label,
     ref: claimId,
   };
+}
+
+function mergeTrustProfiles(
+  base: TrustProfile,
+  regime: TrustProfile | null,
+): TrustProfile {
+  if (!regime) {
+    return base;
+  }
+
+  if (regime.kind === 'frontier') {
+    return regime;
+  }
+
+  if (base.kind === 'grounded' && regime.kind === 'qualified') {
+    return regime;
+  }
+
+  return base;
 }

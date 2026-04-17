@@ -32,6 +32,7 @@ import {
 import type {
   ClosureBasis,
   Continuation,
+  Issue,
   TrustProfile,
 } from './outcome-algebra.js';
 import type {
@@ -39,6 +40,7 @@ import type {
   FocusKind,
   FocusRef,
   Inquiry,
+  InquiryProvenanceEntry,
   ReadMode,
   WorldFrame,
 } from './inquiry-model.js';
@@ -113,6 +115,12 @@ export interface InquiryExecutionSummary {
     readonly value: string;
   }[];
   readonly lines: readonly string[];
+  readonly outcomeTag?: InquiryAnswer['outcome']['tag'];
+  readonly trust?: TrustProfile;
+  readonly closureBasis?: readonly ClosureBasis[];
+  readonly issues?: readonly Issue[];
+  readonly continuations?: readonly Continuation[];
+  readonly provenance?: readonly InquiryProvenanceEntry[];
 }
 
 export interface ResolvedInquiryPlan {
@@ -507,6 +515,12 @@ export class InquiryIngress {
       ...plan.steps.map((step) => capabilityRef(step.command, step.label, step.summary)),
     ];
     const askStatus = resolveAskStatus(plan, options.execution);
+    const executionOutcomeTag = options.execution?.outcomeTag;
+    const executionTrust = options.execution?.trust;
+    const executionClosureBasis = options.execution?.closureBasis ?? [];
+    const executionIssues = options.execution?.issues ?? [];
+    const executionContinuations = options.execution?.continuations ?? [];
+    const executionProvenance = options.execution?.provenance ?? [];
     const document = createAnswerDocument<InquiryRef>([
       {
         kind: 'paragraph',
@@ -570,12 +584,21 @@ export class InquiryIngress {
       inquiryEpisode: 'bounded-closure-explanation',
       readMode,
       worldFrame,
-      tag: askStatus === 'answered' ? 'hit' : askStatus === 'ambiguous' ? 'ambiguous' : askStatus === 'no-match' ? 'reroute' : 'open-boundary',
+      tag: askStatus === 'answered'
+        ? executionOutcomeTag ?? 'hit'
+        : askStatus === 'ambiguous'
+          ? 'ambiguous'
+          : askStatus === 'no-match'
+            ? 'reroute'
+            : 'open-boundary',
       value,
       trust: askStatus === 'answered'
-        ? qualifiedTrust('The public inquiry plan closed and its primary kernel step executed successfully.')
+        ? executionTrust ?? qualifiedTrust('The public inquiry plan closed and its primary kernel step executed successfully.')
         : frontierTrust('The public inquiry face identified the right family, but more narrowing or input is still required.'),
-      closureBasis: inquiryClosureBasis(plan.inquiry?.id ?? 'capability-guidance'),
+      closureBasis: dedupeClosureBasis([
+        ...inquiryClosureBasis(plan.inquiry?.id ?? 'capability-guidance'),
+        ...executionClosureBasis,
+      ]),
       issues: [
         ...plan.missingInputs.map((missing) => ({
           code: 'ask-missing-input',
@@ -583,6 +606,7 @@ export class InquiryIngress {
           severity: 'warning' as const,
           origin: 'query' as const,
         })),
+        ...executionIssues,
         ...(options.execution?.status === 'failed'
           ? [{
             code: 'ask-execution-failed',
@@ -592,8 +616,14 @@ export class InquiryIngress {
           }]
           : []),
       ],
-      continuations: inquiryContinuations(plan),
-      provenance: inquiryProvenance(),
+      continuations: dedupeContinuations([
+        ...executionContinuations,
+        ...inquiryContinuations(plan),
+      ]),
+      provenance: dedupeProvenance([
+        ...inquiryProvenance(),
+        ...executionProvenance,
+      ]),
     });
   }
 }
@@ -613,6 +643,8 @@ function buildInquirySteps(
   switch (descriptor.id) {
     case 'capability-guidance':
       return buildCapabilityGuidanceSteps(options);
+    case 'analyzability-posture':
+      return buildAnalyzabilityPostureSteps(options);
     case 'workspace-orientation':
       return buildWorkspaceOrientationSteps(options, hints);
     case 'package-audit':
@@ -631,6 +663,33 @@ function buildInquirySteps(
         }],
       };
   }
+}
+
+function buildAnalyzabilityPostureSteps(
+  options: InquiryPlanOptions,
+): BuiltInquirySteps {
+  const step: InquiryPlanStep = {
+    label: 'Describe the active regime posture',
+    summary: 'Resolve the active profile, inspect current snapshot support, and name any explicit open fronts.',
+    phase: 'query',
+    command: 'describe.profile',
+    args: {
+      ...(options.repoPath ? { repoPath: options.repoPath } : {}),
+      ...(options.target ? { target: options.target } : {}),
+      ...(options.profilePath ? { profilePath: options.profilePath } : {}),
+    },
+    required: true,
+  };
+
+  return {
+    steps: [step],
+    primaryStep: step,
+    missingInputs: [],
+    reasons: [{
+      kind: 'input',
+      detail: 'Regime and analyzability questions are best served by resolving the active profile posture directly.',
+    }],
+  };
 }
 
 function buildCapabilityGuidanceSteps(
@@ -1160,6 +1219,68 @@ function dedupeRefs<TRef extends { readonly kind: string; readonly value: string
     }
     seen.add(key);
     deduped.push(ref);
+  }
+  return deduped;
+}
+
+function dedupeContinuations(
+  continuations: readonly Continuation[],
+): readonly Continuation[] {
+  const seen = new Set<string>();
+  const deduped: Continuation[] = [];
+  for (const continuation of continuations) {
+    const key = [
+      continuation.kind,
+      continuation.label,
+      continuation.targetQuestionRoute ?? '',
+      continuation.targetFocusRef ?? '',
+    ].join('\0');
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    deduped.push(continuation);
+  }
+  return deduped;
+}
+
+function dedupeClosureBasis(
+  basis: readonly ClosureBasis[],
+): readonly ClosureBasis[] {
+  const seen = new Set<string>();
+  const deduped: ClosureBasis[] = [];
+  for (const entry of basis) {
+    const key = [
+      entry.kind,
+      entry.summary,
+      ...(entry.provenanceRefs ?? []),
+    ].join('\0');
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    deduped.push(entry);
+  }
+  return deduped;
+}
+
+function dedupeProvenance(
+  entries: readonly InquiryProvenanceEntry[],
+): readonly InquiryProvenanceEntry[] {
+  const seen = new Set<string>();
+  const deduped: InquiryProvenanceEntry[] = [];
+  for (const entry of entries) {
+    const key = [
+      entry.kind,
+      entry.label,
+      entry.ref ?? '',
+      entry.detail ?? '',
+    ].join('\0');
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    deduped.push(entry);
   }
   return deduped;
 }

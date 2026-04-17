@@ -36,6 +36,7 @@ import { realpathSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import type { ProgramReuseOptions } from '../program-reuse-options.js';
 import type { DepsOutput } from './schema.js';
+import { collectSnapshotFrontierEvidence } from '../frontier-evidence.js';
 import { RepoSession } from '../repo-session.js';
 import { describeSnapshotProfile } from '../snapshots.js';
 import {
@@ -671,7 +672,8 @@ export function generateDepsAnalysis(
   barrelFiles = new Set();
 
   const warnings: string[] = [];
-  const { batches, warnings: scanWarnings } = sourceFileScan ?? scanParsedTsconfigSourceFiles(nextSession);
+  const parsedSourceFileScan = sourceFileScan ?? scanParsedTsconfigSourceFiles(nextSession);
+  const { batches, warnings: scanWarnings } = parsedSourceFileScan;
   warnings.push(...scanWarnings);
   if (batches.length === 0) {
     throw new Error(`no tsconfig.json files found in ${repoPath}`);
@@ -773,12 +775,15 @@ export function generateDepsAnalysis(
     throw new Error(validationErrors.join("\n"));
   }
 
+  const frontiers = collectSnapshotFrontierEvidence(nextSession, parsedSourceFileScan);
+
   const output: DepsOutput = {
     root: toForwardSlash(repoPath),
     generated_at: new Date().toISOString(),
     source_commit: gitHead(repoPath),
     analyzer_commit: gitBlobHash(resolve(import.meta.dirname!, 'analyze.js')),
     profile: describeSnapshotProfile(nextSession.profile),
+    frontiers,
     tsconfigs: usedTsconfigs.slice().sort(),
     summary: {
       files_analyzed: analyzed.size,
@@ -817,6 +822,7 @@ export function generateDepsAnalysis(
     `Snapshot target:    ${output.profile.target}`,
     `Profile:            ${output.profile.profileId}${output.profile.profilePath ? ` (${output.profile.profilePath})` : ''}`,
     `Excluded prefixes:  ${output.profile.excludedRepoRelativePrefixes.length}`,
+    `Named frontiers:    ${output.frontiers.excluded_frontiers.length}`,
     "",
     `Files analyzed:     ${analyzed.size}`,
     `Internal edges:     ${allEdges.length}`,

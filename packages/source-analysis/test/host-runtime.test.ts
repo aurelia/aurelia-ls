@@ -267,6 +267,62 @@ describe('SnapshotHostRuntime', () => {
     expect(presentationFinding?.evidence.some((line) => line.includes('BetaValue'))).toBe(true);
   });
 
+  it('spends excluded-frontier regime context in navigation, audit, and route answers', () => {
+    const repoPath = createExcludedFrontierFixtureRepo();
+    const runtime = createSnapshotHostRuntime();
+
+    const opened = runtime.execute({
+      command: 'session.open',
+      args: {
+        repoPath,
+      },
+    });
+
+    const sessionId = opened.result.sessionId;
+    const navigateExcluded = runtime.execute({
+      command: 'query.navigate',
+      args: {
+        sessionId,
+        focusKind: 'package',
+        focusValue: '@fixture/excluded.',
+      },
+    });
+
+    expect(navigateExcluded.result.answer.outcome.tag).toBe('open-boundary');
+    expect(navigateExcluded.result.answer.outcome.summary).toContain('excluded frontier packages/excluded');
+    expect(navigateExcluded.result.answer.outcome.issues.some((issue) =>
+      issue.code.includes('focus-excluded-packages-excluded'),
+    )).toBe(true);
+
+    const auditIncluded = runtime.execute({
+      command: 'query.audit.package',
+      args: {
+        sessionId,
+        packageName: '@fixture/app',
+      },
+    });
+
+    expect(auditIncluded.result.answer.outcome.tag).toBe('open-boundary');
+    expect(auditIncluded.result.answer.outcome.issues.some((issue) =>
+      issue.code === 'focus-excluded-boundary-seams'
+      && issue.message.includes('touches 1 observed seam'),
+    )).toBe(true);
+
+    const witnessIncluded = runtime.execute({
+      command: 'query.route.witness',
+      args: {
+        sessionId,
+        focusKind: 'file',
+        focusValue: 'packages/app/src/index.ts',
+      },
+    });
+
+    expect(witnessIncluded.result.answer.outcome.tag).toBe('open-boundary');
+    expect(witnessIncluded.result.answer.outcome.issues.some((issue) =>
+      issue.code === 'focus-excluded-boundary-seams',
+    )).toBe(true);
+  });
+
   it('describes, plans, and repairs capability ingress through the hosted runtime', () => {
     const repoPath = createAuditFixtureRepo();
     const runtime = createSnapshotHostRuntime();
@@ -535,6 +591,8 @@ describe('SnapshotHostRuntime', () => {
     expect(described.result.profile.profileId).toBe('fixture-profile');
     expect(described.result.profile.snapshotTarget).toBe('fixture-profile-target');
     expect(described.result.snapshotSupport.target).toBe('fixture-profile-target');
+    expect(described.result.posture.currentBand.id).toBe('explicit-open-named-fronts');
+    expect(described.result.posture.frontierEvidenceSource).toBe('live-scan');
     expect(described.result.snapshotSupport.missingKinds).toEqual(['deps', 'typerefs', 'exports']);
 
     const opened = runtime.execute({
@@ -895,6 +953,79 @@ function createProfileFixtureRepo(): string {
   );
   writeFileSync(join(repoPath, 'modules', 'alpha', 'src', 'index.ts'), 'export const alpha = true;\n');
   writeFileSync(join(repoPath, 'modules', 'beta', 'src', 'index.ts'), 'export const beta = true;\n');
+
+  return repoPath;
+}
+
+function createExcludedFrontierFixtureRepo(): string {
+  const repoPath = mkdtempSync(join(tmpdir(), 'source-analysis-host-frontier-'));
+  tempDirs.push(repoPath);
+
+  mkdirSync(join(repoPath, '.source-analysis'), { recursive: true });
+  mkdirSync(join(repoPath, 'packages', 'app', 'src'), { recursive: true });
+  mkdirSync(join(repoPath, 'packages', 'excluded', 'src'), { recursive: true });
+  writeFileSync(
+    join(repoPath, '.source-analysis', 'profile.json'),
+    JSON.stringify(
+      {
+        id: 'fixture-frontier-profile',
+        target: 'fixture-frontier-target',
+        packageDiscoveryRoots: ['packages'],
+        includeRepoRootPackage: false,
+        excludedRepoRelativePrefixes: ['packages/excluded'],
+      },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(
+    join(repoPath, 'packages', 'app', 'package.json'),
+    JSON.stringify({ name: '@fixture/app', type: 'module' }, null, 2),
+  );
+  writeFileSync(
+    join(repoPath, 'packages', 'excluded', 'package.json'),
+    JSON.stringify({ name: '@fixture/excluded', type: 'module' }, null, 2),
+  );
+  writeFileSync(
+    join(repoPath, 'packages', 'app', 'tsconfig.json'),
+    JSON.stringify(
+      {
+        compilerOptions: {
+          module: 'NodeNext',
+          moduleResolution: 'NodeNext',
+          target: 'ES2022',
+          noEmit: true,
+        },
+        include: ['src/**/*.ts'],
+      },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(
+    join(repoPath, 'packages', 'excluded', 'tsconfig.json'),
+    JSON.stringify(
+      {
+        compilerOptions: {
+          module: 'NodeNext',
+          moduleResolution: 'NodeNext',
+          target: 'ES2022',
+          noEmit: true,
+        },
+        include: ['src/**/*.ts'],
+      },
+      null,
+      2,
+    ),
+  );
+  writeFileSync(
+    join(repoPath, 'packages', 'app', 'src', 'index.ts'),
+    "export { hiddenValue } from '../../excluded/src/hidden.js';\n",
+  );
+  writeFileSync(
+    join(repoPath, 'packages', 'excluded', 'src', 'hidden.ts'),
+    'export const hiddenValue = 1;\n',
+  );
 
   return repoPath;
 }

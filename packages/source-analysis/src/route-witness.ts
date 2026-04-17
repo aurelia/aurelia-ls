@@ -4,6 +4,11 @@ import type { AnswerCard, AnswerRef } from './answer-card.js';
 import { createStructuredAnswerCard } from './answer-card.js';
 import { createAnswerDocument } from './answer-document.js';
 import { createAnswerEnvelope } from './answer-envelope.js';
+import {
+  inspectAnalyzabilityPostureFromSnapshots,
+  inspectFocusedAnalyzabilityContext,
+} from './analyzability-posture.js';
+import { trimTrailingFocusPunctuation } from './focus-normalization.js';
 import { resolveInquiryPolicy, type InquiryPolicy } from './inquiry-policy.js';
 import type {
   ClosureBasis,
@@ -66,13 +71,31 @@ function buildFileRouteWitnessAnswer(
   snapshots: LoadedCurrentSnapshotSet,
   fileQuery: string,
 ): InquiryAnswer<RouteWitnessValue> {
-  const fileMatches = resolveFiles(snapshots, fileQuery);
+  const normalizedFileQuery = trimTrailingFocusPunctuation(fileQuery);
+  const posture = inspectAnalyzabilityPostureFromSnapshots(snapshots);
+  const requestedRegimeContext = inspectFocusedAnalyzabilityContext(posture, {
+    focusLabel: normalizedFileQuery,
+    pathPrefixes: [normalizedFileQuery],
+    queryHints: [normalizedFileQuery],
+  });
+  const fileMatches = resolveFiles(snapshots, normalizedFileQuery);
   if (fileMatches.length === 0) {
+    if (requestedRegimeContext.directlyExcludedFrontier) {
+      return createOpenBoundaryAnswer(
+        query,
+        snapshots,
+        { kind: 'file', value: normalizedFileQuery, label: basename(normalizedFileQuery) },
+        `${normalizedFileQuery} falls under excluded frontier ${requestedRegimeContext.directlyExcludedFrontier.prefix}, so the current route model cannot close on it inside this profile.`,
+        [],
+        requestedRegimeContext.continuations,
+        requestedRegimeContext,
+      );
+    }
     return createMissAnswer(
       query,
       snapshots,
-      `No file matches "${fileQuery}".`,
-      { kind: 'file', value: fileQuery },
+      `No file matches "${normalizedFileQuery}".`,
+      { kind: 'file', value: normalizedFileQuery },
       [],
     );
   }
@@ -105,6 +128,11 @@ function buildFileRouteWitnessAnswer(
     ordering: policy.ordering,
   });
   const witnesses = getPackageRouteWitnesses(reachability, filePath);
+  const regimeContext = inspectFocusedAnalyzabilityContext(posture, {
+    focusLabel: filePath,
+    pathPrefixes: [filePath],
+    queryHints: [normalizedFileQuery, filePath],
+  });
   return createHitRouteWitnessAnswer(
     query,
     snapshots,
@@ -113,6 +141,7 @@ function buildFileRouteWitnessAnswer(
     fileRef(filePath, filePath),
     witnesses,
     [],
+    regimeContext,
   );
 }
 
@@ -121,13 +150,15 @@ function buildTypeRouteWitnessAnswer(
   snapshots: LoadedCurrentSnapshotSet,
   typeQuery: string,
 ): InquiryAnswer<RouteWitnessValue> {
-  const declarationMatches = resolveTypeDeclarations(snapshots, typeQuery);
+  const normalizedTypeQuery = trimTrailingFocusPunctuation(typeQuery);
+  const posture = inspectAnalyzabilityPostureFromSnapshots(snapshots);
+  const declarationMatches = resolveTypeDeclarations(snapshots, normalizedTypeQuery);
   if (declarationMatches.length === 0) {
     return createMissAnswer(
       query,
       snapshots,
-      `No type declaration matches "${typeQuery}".`,
-      { kind: 'type', value: typeQuery },
+      `No type declaration matches "${normalizedTypeQuery}".`,
+      { kind: 'type', value: normalizedTypeQuery },
       [],
     );
   }
@@ -136,8 +167,8 @@ function buildTypeRouteWitnessAnswer(
     return createAmbiguousAnswer(
       query,
       snapshots,
-      `Type query "${typeQuery}" matches multiple declarations.`,
-      { kind: 'type', value: typeQuery },
+      `Type query "${normalizedTypeQuery}" matches multiple declarations.`,
+      { kind: 'type', value: normalizedTypeQuery },
       declarationMatches.slice(0, 8).map((declaration) => typeRef(declaration)),
     );
   }
@@ -160,6 +191,11 @@ function buildTypeRouteWitnessAnswer(
     ordering: policy.ordering,
   });
   const witnesses = getPackageRouteWitnesses(reachability, declaration.file);
+  const regimeContext = inspectFocusedAnalyzabilityContext(posture, {
+    focusLabel: declaration.name,
+    pathPrefixes: [declaration.file],
+    queryHints: [normalizedTypeQuery, declaration.name, declaration.file],
+  });
   return createHitRouteWitnessAnswer(
     query,
     snapshots,
@@ -168,6 +204,7 @@ function buildTypeRouteWitnessAnswer(
     typeRef(declaration),
     witnesses,
     [fileRef(declaration.file, 'declaring file')],
+    regimeContext,
   );
 }
 
@@ -179,6 +216,7 @@ function createHitRouteWitnessAnswer(
   primaryRef: RouteWitnessRef,
   witnesses: readonly PackageRouteWitness[],
   extraRelatedRefs: readonly RouteWitnessRef[],
+  regimeContext: ReturnType<typeof inspectFocusedAnalyzabilityContext>,
 ): InquiryAnswer<RouteWitnessValue> {
   const bestWitness = witnesses[0];
   const relatedRefs = dedupeRefs([
@@ -221,6 +259,7 @@ function createHitRouteWitnessAnswer(
     ...(witnesses.length > 1
       ? [`Additional route witnesses: ${witnesses.slice(1, 4).map((witness) => renderWitnessChain(witness)).join('; ')}.`]
       : []),
+    ...regimeContext.lines,
   ];
   const policy = policyForRouteWitness(query, focusRef.kind);
   const document = createRouteWitnessDocument(summaryLines, relatedRefs, witnesses);
@@ -230,7 +269,7 @@ function createHitRouteWitnessAnswer(
     snapshots,
     policy,
     focusRef,
-    'hit',
+    regimeContext.tag === 'open-boundary' ? 'open-boundary' : 'hit',
     createStructuredAnswerCard({
       title: `${primaryRef.label} route witnesses`,
       primaryRef,
@@ -241,7 +280,7 @@ function createHitRouteWitnessAnswer(
         witnesses: witnesses.slice(0, 6),
       },
     }),
-    trust,
+    mergeTrustProfiles(trust, regimeContext.trust),
     [
       {
         kind: 'route',
@@ -257,8 +296,9 @@ function createHitRouteWitnessAnswer(
           snapshots.exports.generated_at,
         ],
       },
+      ...regimeContext.closureBasis,
     ],
-    [],
+    regimeContext.issues,
     dedupeContinuations([
       continuation('join', 'Inspect the owning package', pkg.package_name, 'owning package'),
       continuation('inventory', `Audit ${pkg.package_name}`, pkg.package_name, 'package audit'),
@@ -266,6 +306,7 @@ function createHitRouteWitnessAnswer(
       ...bestWitness.steps.slice(0, 3).map((step) =>
         continuation('join', `Inspect ${basename(step.toFilePath)}`, step.toFilePath, step.summary),
       ),
+      ...regimeContext.continuations,
     ]),
     [
       snapshotProvenanceEntry('deps', snapshots.deps.generated_at, snapshots.deps.source_commit),
@@ -277,6 +318,7 @@ function createHitRouteWitnessAnswer(
         ref: primaryRef.value,
         detail: renderWitnessChain(bestWitness),
       },
+      ...regimeContext.provenance,
     ],
   );
 }
@@ -437,6 +479,7 @@ function createOpenBoundaryAnswer(
   message: string,
   relatedRefs: readonly RouteWitnessRef[],
   continuations: readonly Continuation[],
+  regimeContext?: ReturnType<typeof inspectFocusedAnalyzabilityContext>,
 ): InquiryAnswer<RouteWitnessValue> {
   const policy = policyForRouteWitness(query, focusRef.kind);
   return createAnswer(
@@ -453,28 +496,38 @@ function createOpenBoundaryAnswer(
         label: focusRef.label ?? focusRef.value,
       },
       relatedRefs,
-      document: createRouteWitnessDocument([message], relatedRefs, []),
+      document: createRouteWitnessDocument(
+        [message, ...(regimeContext?.lines.slice(1) ?? [])],
+        relatedRefs,
+        [],
+      ),
       policy,
       extra: {
         witnesses: [],
       },
     }),
-    {
+    regimeContext?.trust ?? {
       kind: 'qualified',
       summary: 'The current route model cannot yet close on a witness path for this focus.',
     },
-    [{
-      kind: 'boundary',
-      summary: 'A missing or under-modeled route boundary is still open for this focus.',
-    }],
-    [{
-      code: 'route-witness-open-boundary',
-      message,
-      severity: 'warning',
-      origin: 'boundary',
-    }],
-    continuations,
-    [],
+    [
+      {
+        kind: 'boundary',
+        summary: 'A missing or under-modeled route boundary is still open for this focus.',
+      },
+      ...(regimeContext?.closureBasis ?? []),
+    ],
+    [
+      {
+        code: 'route-witness-open-boundary',
+        message,
+        severity: 'warning',
+        origin: 'boundary',
+      },
+      ...(regimeContext?.issues ?? []),
+    ],
+    [...continuations, ...(regimeContext?.continuations ?? [])],
+    [...(regimeContext?.provenance ?? [])],
   );
 }
 
@@ -527,6 +580,7 @@ function resolveFiles(
   snapshots: LoadedCurrentSnapshotSet,
   query: string,
 ): readonly string[] {
+  const normalized = trimTrailingFocusPunctuation(query).replace(/\\/g, '/');
   const allFiles = new Set<string>();
   for (const edge of snapshots.deps.edges) {
     allFiles.add(edge.source);
@@ -546,17 +600,17 @@ function resolveFiles(
     }
   }
 
-  if (allFiles.has(query)) {
-    return [query];
+  if (allFiles.has(normalized)) {
+    return [normalized];
   }
 
-  const suffixMatches = [...allFiles].filter((filePath) => filePath.endsWith(query));
+  const suffixMatches = [...allFiles].filter((filePath) => filePath.endsWith(normalized));
   if (suffixMatches.length > 0) {
     return suffixMatches.sort();
   }
 
   return [...allFiles].filter((filePath) =>
-    filePath.toLowerCase().includes(query.toLowerCase()),
+    filePath.toLowerCase().includes(normalized.toLowerCase()),
   ).sort();
 }
 
@@ -564,16 +618,17 @@ function resolveTypeDeclarations(
   snapshots: LoadedCurrentSnapshotSet,
   query: string,
 ): readonly TypeDecl[] {
-  const exact = snapshots.typeRefs.declarations.filter((declaration) => declaration.name === query);
+  const normalized = trimTrailingFocusPunctuation(query);
+  const exact = snapshots.typeRefs.declarations.filter((declaration) => declaration.name === normalized);
   if (exact.length > 0) return exact;
 
   const exactCaseInsensitive = snapshots.typeRefs.declarations.filter((declaration) =>
-    declaration.name.toLowerCase() === query.toLowerCase(),
+    declaration.name.toLowerCase() === normalized.toLowerCase(),
   );
   if (exactCaseInsensitive.length > 0) return exactCaseInsensitive;
 
   return snapshots.typeRefs.declarations.filter((declaration) =>
-    declaration.name.toLowerCase().includes(query.toLowerCase()),
+    declaration.name.toLowerCase().includes(normalized.toLowerCase()),
   );
 }
 
@@ -713,6 +768,25 @@ function snapshotProvenanceEntry(
     ref: generatedAt,
     detail: `source_commit=${sourceCommit}`,
   };
+}
+
+function mergeTrustProfiles(
+  base: TrustProfile,
+  regime: TrustProfile | null,
+): TrustProfile {
+  if (!regime) {
+    return base;
+  }
+
+  if (regime.kind === 'frontier') {
+    return regime;
+  }
+
+  if (base.kind === 'grounded' && regime.kind === 'qualified') {
+    return regime;
+  }
+
+  return base;
 }
 
 function dedupeRefs(

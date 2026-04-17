@@ -1,4 +1,7 @@
-import type { SnapshotProfileProvenance } from '../snapshots.js';
+import type {
+  SnapshotFrontierEvidence,
+  SnapshotProfileProvenance,
+} from '../snapshots.js';
 
 /**
  * Schema for the dependency graph JSON produced by `pnpm deps`.
@@ -225,6 +228,8 @@ export interface DepsOutput {
   analyzer_commit: string;
   /** Profile and exclusion regime used to derive this snapshot. */
   profile: SnapshotProfileProvenance;
+  /** Explicit frontier evidence named during snapshot generation. */
+  frontiers: SnapshotFrontierEvidence;
   tsconfigs: string[];
   summary: {
     files_analyzed: number;

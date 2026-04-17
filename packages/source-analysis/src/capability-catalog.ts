@@ -26,6 +26,7 @@ import { tokenize } from './ingress-normalization.js';
 
 export const CAPABILITY_FAMILIES = [
   'ingress',
+  'regime',
   'session',
   'query',
   'materialize',
@@ -35,6 +36,7 @@ export const CAPABILITY_PLANNER_KINDS = [
   'discover',
   'plan',
   'repair',
+  'profile-describe',
   'session-open',
   'session-close',
   'session-status',
@@ -425,6 +427,35 @@ const DEFAULT_CAPABILITIES: readonly CapabilityDefinition[] = [
       optionalArg('question', 'Optional natural-language intent if the command alone is not enough.'),
     ],
     relatedCommands: ['describe.capabilities', 'plan.question'],
+    commonConfusions: [],
+  }),
+  regimeCapability({
+    id: 'describe.profile',
+    command: 'describe.profile',
+    plannerKind: 'profile-describe',
+    label: 'Describe profile regime and analyzability posture',
+    summary: 'Resolve the active profile, inspect current snapshot support, and surface named open fronts.',
+    whenToUse: 'Use this when you need to know which regime is active, whether current snapshots align with it, and which excluded or support boundaries remain open.',
+    aliases: ['describe profile', 'what regime am i in', 'analyzability posture', 'open fronts', 'excluded boundaries'],
+    nouns: ['profile', 'regime', 'analyzability', 'posture', 'boundary', 'frontier', 'excluded', 'support'],
+    verbs: ['describe', 'inspect', 'explain', 'surface'],
+    questionRoutes: ['search', 'route'],
+    focusKinds: [],
+    requiredArgs: [],
+    optionalArgs: [
+      optionalArg('repoPath', 'Optional repo checkout to analyze. Defaults to the current repo when omitted.'),
+      optionalArg('target', 'Optional explicit target name for the snapshot space.'),
+      optionalArg('profilePath', 'Optional explicit profile path inside the analyzed repo.'),
+    ],
+    examples: [
+      example(
+        'regime posture',
+        'How analyzable is this repo under the current regime?',
+        'describe.profile',
+        {},
+      ),
+    ],
+    relatedCommands: ['session.refresh', 'materializeSnapshots'],
     commonConfusions: [],
   }),
   sessionCapability({
@@ -876,6 +907,20 @@ function sessionCapability(
     family: 'session',
     focusKinds: ['session', 'repo'],
     readModes: [],
+    ...definition,
+  };
+}
+
+function regimeCapability(
+  definition: Omit<CapabilityDefinition, 'family' | 'focusKinds' | 'readModes'> & {
+    readonly focusKinds?: readonly FocusKind[];
+    readonly readModes?: readonly ReadMode[];
+  },
+): CapabilityDefinition {
+  return {
+    family: 'regime',
+    focusKinds: definition.focusKinds ?? ['repo'],
+    readModes: definition.readModes ?? ['summary-card', 'focus-card', 'supporting-evidence'],
     ...definition,
   };
 }

@@ -6,8 +6,15 @@ import type { SnapshotPaths } from './snapshot-config.js';
 import { resolveSnapshotRootPath } from './snapshot-config.js';
 
 export const SNAPSHOT_KINDS = ['deps', 'typerefs', 'exports'] as const;
+export const SNAPSHOT_EXCLUDED_BOUNDARY_EDGE_KINDS = [
+  'import',
+  'reexport',
+  'dynamic-import',
+] as const;
 
 export type SnapshotKind = typeof SNAPSHOT_KINDS[number];
+export type SnapshotExcludedBoundaryEdgeKind =
+  typeof SNAPSHOT_EXCLUDED_BOUNDARY_EDGE_KINDS[number];
 
 export interface SnapshotOptions {
   target: string;
@@ -42,6 +49,29 @@ export interface SnapshotProfileProvenance {
       readonly labelTemplate: string | null;
     }[];
   }[];
+}
+
+export interface SnapshotExcludedBoundaryReference {
+  readonly source: string;
+  readonly target: string;
+  readonly specifier: string;
+  readonly line: number;
+  readonly edge_kind: SnapshotExcludedBoundaryEdgeKind;
+  readonly type_only: boolean;
+  readonly excluded_prefix: string;
+}
+
+export interface SnapshotExcludedFrontierEvidence {
+  readonly prefix: string;
+  readonly source_file_count: number;
+  readonly package_count: number;
+  readonly inbound_boundary_count: number;
+  readonly boundary_references: readonly SnapshotExcludedBoundaryReference[];
+}
+
+export interface SnapshotFrontierEvidence {
+  readonly excluded_frontiers: readonly SnapshotExcludedFrontierEvidence[];
+  readonly warnings: readonly string[];
 }
 
 export function describeSnapshotProfile(

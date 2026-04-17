@@ -154,6 +154,7 @@ function buildPlanInvocation(
           sessionId: common.sessionId,
           repoPath: common.repoPath,
           target: common.target,
+          profilePath: common.profilePath,
           focusKind: common.focusKind,
           focusValue: common.focusValue,
           familyId: common.familyId,
@@ -312,6 +313,13 @@ function renderDescribeProfileText(
     `Include repo root:   ${result.profile.includeRepoRootPackage ? 'yes' : 'no'}`,
     `Excluded prefixes:   ${result.profile.excludedRepoRelativePrefixes.length}`,
     `Partition schemes:   ${result.profile.partitionSchemes.map((scheme) => scheme.id).join(', ') || '(none)'}`,
+    `Current band:        ${result.posture.currentBand.label}`,
+    `Deterministic ceiling: ${result.posture.deterministicCeilingBand.label}`,
+    `Frontier evidence:   ${result.posture.frontierEvidenceSource}`,
+    `Named open fronts:   ${result.posture.openFronts.length}`,
+    '',
+    'Analyzability posture:',
+    ...result.posture.summaryLines.map((line) => `  ${line}`),
     '',
     'Snapshot support:',
   ];
@@ -325,6 +333,16 @@ function renderDescribeProfileText(
     );
     for (const issue of snapshot.issues) {
       lines.push(`    - ${issue}`);
+    }
+  }
+
+  if (result.posture.openFronts.length > 0) {
+    lines.push('', 'Named open fronts:');
+    for (const front of result.posture.openFronts) {
+      lines.push(`  ${front.title}: ${front.summary}`);
+      for (const evidence of front.evidence.slice(0, 4)) {
+        lines.push(`    - ${evidence}`);
+      }
     }
   }
 

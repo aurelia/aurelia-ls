@@ -1,4 +1,8 @@
 import type { FocusKind } from './inquiry-model.js';
+import {
+  sanitizePathLikeFocusValue,
+  trimTrailingFocusPunctuation,
+} from './focus-normalization.js';
 import { createNormalizedText, type NormalizedText } from './ingress-normalization.js';
 
 export const INGRESS_CAPTURE_KINDS = [
@@ -70,7 +74,7 @@ export class IngressRecognizerRegistry {
       }
     }
 
-    return captures;
+    return filterPathDerivedTypeCaptures(captures);
   }
 
   findFirst(
@@ -129,12 +133,13 @@ export function captureKindsForFocusKind(
 }
 
 export function extractPackageNames(question: string): readonly string[] {
-  return uniqueMatches(question, /@[\w.-]+\/[\w.-]+/g);
+  return uniqueMatches(question, /@[\w.-]+\/[\w.-]+/g)
+    .map((match) => trimTrailingFocusPunctuation(match));
 }
 
 export function extractFilePaths(question: string): readonly string[] {
   return uniqueMatches(question, /[A-Za-z0-9_./\\-]+\.(?:cts|mts|ts|tsx|js|mjs|cjs)/g)
-    .map((match) => match.replace(/\\/g, '/'));
+    .map((match) => sanitizePathLikeFocusValue(match));
 }
 
 export function extractTypeNames(question: string): readonly string[] {
@@ -146,7 +151,7 @@ export function extractTypeNames(question: string): readonly string[] {
     return uniqueStrings(direct);
   }
 
-  const pascalMatches = uniqueMatches(question, /\b[A-Z][A-Za-z0-9_]*\b/g)
+  const pascalMatches = extractStandalonePascalMatches(question)
     .filter((match) =>
       match.length > 1
       && /[A-Z]/.test(match.slice(1)),
@@ -156,7 +161,7 @@ export function extractTypeNames(question: string): readonly string[] {
 
 export function extractRepoPaths(question: string): readonly string[] {
   return uniqueMatches(question, /[A-Za-z]:[\\/][A-Za-z0-9_.\\/ -]+/g)
-    .map((match) => match.replace(/\\/g, '/'));
+    .map((match) => sanitizePathLikeFocusValue(match));
 }
 
 function uniqueMatches(
@@ -175,4 +180,47 @@ function captureGroupMatches(
 
 function uniqueStrings(values: readonly string[]): readonly string[] {
   return values.filter((value, index, all) => value.length > 0 && all.indexOf(value) === index);
+}
+
+function extractStandalonePascalMatches(
+  question: string,
+): readonly string[] {
+  const matches: string[] = [];
+  const pattern = /\b[A-Z][A-Za-z0-9_]*\b/g;
+  for (const match of question.matchAll(pattern)) {
+    const value = match[0] ?? '';
+    const index = match.index ?? -1;
+    if (value.length === 0 || index < 0) {
+      continue;
+    }
+
+    const previous = index > 0 ? question[index - 1] : '';
+    const next = index + value.length < question.length ? question[index + value.length] : '';
+    if (previous === '/' || previous === '\\' || next === '/' || next === '\\') {
+      continue;
+    }
+
+    matches.push(value);
+  }
+
+  return uniqueStrings(matches);
+}
+
+function filterPathDerivedTypeCaptures(
+  captures: readonly IngressCapture[],
+): readonly IngressCapture[] {
+  const pathSegments = new Set(
+    captures
+      .filter((capture) => capture.kind === 'repo-path' || capture.kind === 'file-path')
+      .flatMap((capture) => capture.value.split(/[\\/._:-]+/))
+      .filter((segment) => segment.length > 0),
+  );
+
+  if (pathSegments.size === 0) {
+    return captures;
+  }
+
+  return captures.filter((capture) =>
+    capture.kind !== 'type-name' || !pathSegments.has(capture.value),
+  );
 }

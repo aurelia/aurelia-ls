@@ -126,15 +126,16 @@ export function createIngressContext(
   },
   recognizers: IngressRecognizerRegistry = DEFAULT_INGRESS_RECOGNIZER_REGISTRY,
 ): IngressContext {
+  const recognition = recognizers.createRecognition(input.question);
   return {
     question: input.question,
     command: input.command,
     familyId: input.familyId,
     focusKind: input.focusKind,
-    questionText: createNormalizedText(input.question),
+    questionText: createNormalizedText(stripPathCapturesForMatching(input.question)),
     commandText: createNormalizedText(input.command),
     familyText: createNormalizedText(input.familyId),
-    recognition: recognizers.createRecognition(input.question),
+    recognition,
   };
 }
 
@@ -416,4 +417,16 @@ function compareSelectionKey(
 
 function assertNever(value: never): never {
   throw new Error(`Unhandled ingress rule: ${JSON.stringify(value)}`);
+}
+
+function stripPathCapturesForMatching(
+  question: string | undefined,
+): string | undefined {
+  if (!question) {
+    return question;
+  }
+
+  return question
+    .replace(/[A-Za-z]:[\\/][A-Za-z0-9_.\\/ -]+/g, ' ')
+    .replace(/[A-Za-z0-9_./\\-]+\.(?:cts|mts|ts|tsx|js|mjs|cjs)/g, ' ');
 }

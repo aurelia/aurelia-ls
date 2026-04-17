@@ -768,6 +768,21 @@ function buildInvocation(
         args.focusKind = hints.focusKind;
       }
       return readyInvocation(descriptor.command, args, reasons);
+    case 'profile-describe':
+      if (options.repoPath) {
+        args.repoPath = options.repoPath;
+        reasons.push({
+          kind: 'input',
+          detail: `Using the provided repoPath "${options.repoPath}".`,
+        });
+      }
+      if (options.target) {
+        args.target = options.target;
+      }
+      if (options.profilePath) {
+        args.profilePath = options.profilePath;
+      }
+      return readyInvocation(descriptor.command, args, reasons);
     case 'plan':
       args.question = options.question;
       if (options.sessionId) {

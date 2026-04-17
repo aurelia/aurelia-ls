@@ -1,4 +1,7 @@
-import type { SnapshotProfileProvenance } from '../snapshots.js';
+import type {
+  SnapshotFrontierEvidence,
+  SnapshotProfileProvenance,
+} from '../snapshots.js';
 
 /**
  * Schema for the type-reference graph JSON produced by `pnpm typerefs`.
@@ -162,6 +165,8 @@ export interface TypeRefsOutput {
   analyzer_commit: string;
   /** Profile and exclusion regime used to derive this snapshot. */
   profile: SnapshotProfileProvenance;
+  /** Explicit frontier evidence named during snapshot generation. */
+  frontiers: SnapshotFrontierEvidence;
   summary: {
     files_analyzed: number;
     type_declarations: number;
