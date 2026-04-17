@@ -2,6 +2,7 @@ import type { AnswerCard, AnswerRef } from './answer-card.js';
 import { createStructuredAnswerCard } from './answer-card.js';
 import { createAnswerDocument } from './answer-document.js';
 import { createAnswerEnvelope } from './answer-envelope.js';
+import { createHostedWorldFrame } from './analysis-surface.js';
 import type {
   CapabilityCatalog,
   CapabilityDescriptor,
@@ -184,7 +185,7 @@ export class CapabilityIngress {
       ? matches.map((match) => match.capability)
       : this.#catalog.list(options.includeExamples).slice(0, options.topK ?? 6);
     const readMode = options.readMode ?? 'summary-card';
-    const worldFrame = options.worldFrame ?? defaultWorldFrame();
+    const worldFrame = options.worldFrame ?? createHostedWorldFrame();
     const query: Inquiry = {
       inquiryEpisode: 'orient-and-localize',
       focusRef: repoFocusRef('source-analysis-capabilities'),
@@ -295,7 +296,11 @@ export class CapabilityIngress {
       topK: 5,
     });
     const readMode = options.readMode ?? 'focus-card';
-    const worldFrame = options.worldFrame ?? defaultWorldFrame(options.repoPath, options.target, options.profilePath);
+    const worldFrame = options.worldFrame ?? createHostedWorldFrame({
+      repoPath: options.repoPath,
+      target: options.target,
+      profilePath: options.profilePath,
+    });
     const query: Inquiry = {
       inquiryEpisode: 'bounded-closure-explanation',
       focusRef: repoFocusRef('source-analysis-capability-plan'),
@@ -420,7 +425,7 @@ export class CapabilityIngress {
     options: CapabilityRepairOptions,
   ): InquiryAnswer<CapabilityRepairValue> {
     const readMode = options.readMode ?? 'focus-card';
-    const worldFrame = options.worldFrame ?? defaultWorldFrame();
+    const worldFrame = options.worldFrame ?? createHostedWorldFrame();
     const query: Inquiry = {
       inquiryEpisode: 'bounded-closure-explanation',
       focusRef: repoFocusRef('source-analysis-capability-repair'),
@@ -593,7 +598,7 @@ export class CapabilityIngress {
       focusRef: query.focusRef,
       inquiryEpisode: 'bounded-closure-explanation',
       readMode: query.readMode ?? 'focus-card',
-      worldFrame: query.worldFrame ?? defaultWorldFrame(),
+      worldFrame: query.worldFrame ?? createHostedWorldFrame(),
       tag: 'reroute',
       value,
       trust: frontierTrust('No declared capability closed directly on the question.'),
@@ -653,7 +658,7 @@ export class CapabilityIngress {
       focusRef: query.focusRef,
       inquiryEpisode: 'bounded-closure-explanation',
       readMode: query.readMode ?? 'focus-card',
-      worldFrame: query.worldFrame ?? defaultWorldFrame(),
+      worldFrame: query.worldFrame ?? createHostedWorldFrame(),
       tag: 'ambiguous',
       value,
       trust: frontierTrust('The question overlaps multiple declared capabilities at the same strength.'),
@@ -722,7 +727,7 @@ export class CapabilityIngress {
       focusRef: query.focusRef,
       inquiryEpisode: 'bounded-closure-explanation',
       readMode: query.readMode ?? 'focus-card',
-      worldFrame: query.worldFrame ?? defaultWorldFrame(),
+      worldFrame: query.worldFrame ?? createHostedWorldFrame(),
       tag: 'reroute',
       value,
       trust: frontierTrust('Repair could not map the attempted command to a declared capability.'),
@@ -1066,21 +1071,6 @@ function capabilityRef(
     value: command,
     label,
     ...(detail ? { detail } : {}),
-  };
-}
-
-function defaultWorldFrame(
-  repoPath?: string,
-  target?: string,
-  profilePath?: string,
-): WorldFrame {
-  return {
-    ...(repoPath ? { repoPath } : {}),
-    ...(target ? { target } : {}),
-    ...(profilePath ? { profilePath } : {}),
-    regimeAnchor: 'hosted',
-    partiality: 'complete',
-    freshness: 'live',
   };
 }
 

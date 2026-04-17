@@ -3,6 +3,12 @@ import {
   loadCurrentAnalysisViews,
   type AnalysisViews,
 } from './analysis-views.js';
+import {
+  createAnalysisProvenanceEntry,
+  defaultWorldFrameForAnalysis,
+  describeAnalysisSurface,
+  describeAnalysisSurfaceEvidence,
+} from './analysis-surface.js';
 import type { LoadedCurrentSnapshotSet } from './current-snapshots.js';
 import type { PackageExportRecord, PackageExportsSummary } from './exports/schema.js';
 import type { TypeDecl } from './typerefs/schema.js';
@@ -520,7 +526,7 @@ function buildPackageEpisode(
     mergeTrustProfiles(
       {
         kind: 'grounded',
-        summary: `This overview is grounded in the live ${analysisSurfaceEvidenceLabel(builder.query.worldFrame?.freshness, ['deps', 'exports'])} for the current workspace.`,
+        summary: `This overview is grounded in the ${describeAnalysisSurfaceEvidence(builder.query.worldFrame?.freshness, ['deps', 'exports'])} for the current workspace.`,
       },
       regimeContext.trust,
     ),
@@ -547,8 +553,8 @@ function buildPackageEpisode(
     regimeContext.issues,
     [...continuations, ...regimeContext.continuations],
     [
-      analysisProvenanceEntry('exports', builder.snapshots.exports.generated_at, builder.snapshots.exports.source_commit, builder.query.worldFrame?.freshness),
-      analysisProvenanceEntry('deps', builder.snapshots.deps.generated_at, builder.snapshots.deps.source_commit, builder.query.worldFrame?.freshness),
+      createAnalysisProvenanceEntry('exports', builder.snapshots.exports.generated_at, builder.snapshots.exports.source_commit, builder.query.worldFrame?.freshness),
+      createAnalysisProvenanceEntry('deps', builder.snapshots.deps.generated_at, builder.snapshots.deps.source_commit, builder.query.worldFrame?.freshness),
       claimProvenanceEntry(`${pkg.package_name} package overview`, packageClaimId),
       ...regimeContext.provenance,
     ],
@@ -639,7 +645,7 @@ function buildTypeEpisode(
     `${decl.kind} ${decl.name} is declared in ${decl.file}:${decl.line}.`,
     uniqueRefs.length > 0
       ? `It directly references ${decl.refs.length} project types, including ${uniqueRefs.slice(0, 4).map((ref) => ref.target).join(', ')}.`
-      : `It has no outbound project type references in the ${analysisSurfaceLabel(builder.query.worldFrame)}.`,
+      : `It has no outbound project type references in the ${describeAnalysisSurface(builder.query.worldFrame?.freshness)}.`,
     matchingExport
       ? `It is also part of the public export surface for ${matchingExport.package_name}.`
       : 'It is not currently resolved as part of the package export surface.',
@@ -706,9 +712,9 @@ function buildTypeEpisode(
         : []),
     ],
     [
-      analysisProvenanceEntry('typerefs', builder.snapshots.typeRefs.generated_at, builder.snapshots.typeRefs.source_commit, builder.query.worldFrame?.freshness),
+      createAnalysisProvenanceEntry('typerefs', builder.snapshots.typeRefs.generated_at, builder.snapshots.typeRefs.source_commit, builder.query.worldFrame?.freshness),
       ...(matchingExport
-        ? [analysisProvenanceEntry('exports', builder.snapshots.exports.generated_at, builder.snapshots.exports.source_commit, builder.query.worldFrame?.freshness)]
+        ? [createAnalysisProvenanceEntry('exports', builder.snapshots.exports.generated_at, builder.snapshots.exports.source_commit, builder.query.worldFrame?.freshness)]
         : []),
       claimProvenanceEntry(`${decl.name} type neighborhood`, typeClaimId),
     ],
@@ -848,7 +854,7 @@ function buildExportEpisode(
       continuation('join', 'Inspect the owning package', record.package_name, 'owning package'),
     ],
     [
-      analysisProvenanceEntry('exports', builder.snapshots.exports.generated_at, builder.snapshots.exports.source_commit, builder.query.worldFrame?.freshness),
+      createAnalysisProvenanceEntry('exports', builder.snapshots.exports.generated_at, builder.snapshots.exports.source_commit, builder.query.worldFrame?.freshness),
       claimProvenanceEntry(`${record.exported_name} export route`, exportClaimId),
     ],
   ));
@@ -1016,7 +1022,7 @@ function buildFileEpisode(
     mergeTrustProfiles(
       mergeTrustProfiles({
         kind: 'grounded',
-        summary: `This file neighborhood is grounded in the live ${analysisSurfaceEvidenceLabel(builder.query.worldFrame?.freshness, ['deps', 'typerefs', 'exports'])}.`,
+        summary: `This file neighborhood is grounded in the ${describeAnalysisSurfaceEvidence(builder.query.worldFrame?.freshness, ['deps', 'typerefs', 'exports'])}.`,
       }, structuralPathContext?.trust ?? null),
       regimeContext.trust,
     ),
@@ -1043,9 +1049,9 @@ function buildFileEpisode(
       ...regimeContext.continuations,
     ],
     [
-      analysisProvenanceEntry('deps', builder.snapshots.deps.generated_at, builder.snapshots.deps.source_commit, builder.query.worldFrame?.freshness),
-      analysisProvenanceEntry('typerefs', builder.snapshots.typeRefs.generated_at, builder.snapshots.typeRefs.source_commit, builder.query.worldFrame?.freshness),
-      analysisProvenanceEntry('exports', builder.snapshots.exports.generated_at, builder.snapshots.exports.source_commit, builder.query.worldFrame?.freshness),
+      createAnalysisProvenanceEntry('deps', builder.snapshots.deps.generated_at, builder.snapshots.deps.source_commit, builder.query.worldFrame?.freshness),
+      createAnalysisProvenanceEntry('typerefs', builder.snapshots.typeRefs.generated_at, builder.snapshots.typeRefs.source_commit, builder.query.worldFrame?.freshness),
+      createAnalysisProvenanceEntry('exports', builder.snapshots.exports.generated_at, builder.snapshots.exports.source_commit, builder.query.worldFrame?.freshness),
       claimProvenanceEntry(`${basename(filePath)} file neighborhood`, fileClaimId),
       ...regimeContext.provenance,
       ...(structuralPathContext?.provenance ?? []),
@@ -1065,7 +1071,7 @@ function createAnswer(
   continuations: readonly Continuation[],
   provenance: readonly InquiryProvenanceEntry[],
 ): InquiryAnswer<NavigationValue> {
-  const worldFrame = defaultWorldFrame(builder.snapshots, builder.query.worldFrame);
+  const worldFrame = defaultWorldFrameForAnalysis(builder.snapshots, builder.query.worldFrame);
   return createAnswerEnvelope({
     query: builder.query,
     focusRef,
@@ -1387,19 +1393,6 @@ function exportRef(record: PackageExportRecord): NavigationRef {
   };
 }
 
-function defaultWorldFrame(
-  snapshots: AnalysisViews,
-  worldFrame: WorldFrame | undefined,
-): WorldFrame {
-  return {
-    repoPath: worldFrame?.repoPath ?? snapshots.root,
-    target: worldFrame?.target ?? 'current',
-    regimeAnchor: worldFrame?.regimeAnchor ?? 'hosted',
-    partiality: worldFrame?.partiality ?? 'complete',
-    freshness: worldFrame?.freshness ?? (snapshots.source === 'hosted-analysis' ? 'live' : 'snapshot'),
-  };
-}
-
 function policyForNavigation(
   builder: EpisodeBuilder,
   focusKind: FocusKind,
@@ -1466,43 +1459,6 @@ function continuation(
     targetQuestionRoute,
     targetFocusRef,
   };
-}
-
-function analysisProvenanceEntry(
-  kind: 'deps' | 'typerefs' | 'exports',
-  generatedAt: string,
-  sourceCommit: string,
-  freshness: WorldFrame['freshness'],
-): InquiryProvenanceEntry {
-  if (freshness === 'live') {
-    return {
-      kind: 'host',
-      label: `${kind} analysis view`,
-      ref: generatedAt,
-      detail: `source_commit=${sourceCommit}`,
-    };
-  }
-
-  return {
-    kind: 'snapshot',
-    label: `${kind} snapshot`,
-    ref: generatedAt,
-    detail: `source_commit=${sourceCommit}`,
-  };
-}
-
-function analysisSurfaceLabel(
-  worldFrame: WorldFrame | undefined,
-): string {
-  return worldFrame?.freshness === 'live' ? 'current analysis' : 'current materialized analysis';
-}
-
-function analysisSurfaceEvidenceLabel(
-  freshness: WorldFrame['freshness'],
-  kinds: readonly string[],
-): string {
-  const joined = kinds.join(', ');
-  return freshness === 'live' ? `${joined} analysis views` : `${joined} snapshots`;
 }
 
 function claimProvenanceEntry(label: string, claimId: string): InquiryProvenanceEntry {

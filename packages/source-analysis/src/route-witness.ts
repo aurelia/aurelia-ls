@@ -3,6 +3,10 @@ import {
   loadCurrentAnalysisViews,
   type AnalysisViews,
 } from './analysis-views.js';
+import {
+  createAnalysisProvenanceEntry,
+  defaultWorldFrameForAnalysis,
+} from './analysis-surface.js';
 import type { LoadedCurrentSnapshotSet } from './current-snapshots.js';
 import type { PackageExportsSummary } from './exports/schema.js';
 import type { AnswerCard, AnswerRef } from './answer-card.js';
@@ -329,9 +333,9 @@ function createHitRouteWitnessAnswer(
       ...regimeContext.continuations,
     ]),
     [
-      analysisProvenanceEntry('deps', analysis.deps.generated_at, analysis.deps.source_commit, query.worldFrame?.freshness),
-      analysisProvenanceEntry('typerefs', analysis.typeRefs.generated_at, analysis.typeRefs.source_commit, query.worldFrame?.freshness),
-      analysisProvenanceEntry('exports', analysis.exports.generated_at, analysis.exports.source_commit, query.worldFrame?.freshness),
+      createAnalysisProvenanceEntry('deps', analysis.deps.generated_at, analysis.deps.source_commit, query.worldFrame?.freshness),
+      createAnalysisProvenanceEntry('typerefs', analysis.typeRefs.generated_at, analysis.typeRefs.source_commit, query.worldFrame?.freshness),
+      createAnalysisProvenanceEntry('exports', analysis.exports.generated_at, analysis.exports.source_commit, query.worldFrame?.freshness),
       {
         kind: 'route',
         label: `${primaryRef.label} route witness`,
@@ -380,7 +384,7 @@ function createAnswer(
   continuations: readonly Continuation[],
   provenance: readonly InquiryProvenanceEntry[],
 ): InquiryAnswer<RouteWitnessValue> {
-  const worldFrame = defaultWorldFrame(analysis, query.worldFrame);
+  const worldFrame = defaultWorldFrameForAnalysis(analysis, query.worldFrame);
   return createAnswerEnvelope({
     query,
     focusRef,
@@ -699,19 +703,6 @@ function packageRef(pkg: PackageExportsSummary): RouteWitnessRef {
   };
 }
 
-function defaultWorldFrame(
-  analysis: AnalysisViews,
-  worldFrame: WorldFrame | undefined,
-): WorldFrame {
-  return {
-    repoPath: worldFrame?.repoPath ?? analysis.root,
-    target: worldFrame?.target ?? 'current',
-    regimeAnchor: worldFrame?.regimeAnchor ?? 'hosted',
-    partiality: worldFrame?.partiality ?? 'complete',
-    freshness: worldFrame?.freshness ?? (analysis.source === 'hosted-analysis' ? 'live' : 'snapshot'),
-  };
-}
-
 function policyForRouteWitness(
   query: Inquiry,
   focusKind: FocusRef['kind'],
@@ -784,29 +775,6 @@ function continuation(
     description: detail,
     targetQuestionRoute,
     targetFocusRef,
-  };
-}
-
-function analysisProvenanceEntry(
-  kind: 'deps' | 'typerefs' | 'exports',
-  generatedAt: string,
-  sourceCommit: string,
-  freshness: WorldFrame['freshness'],
-): InquiryProvenanceEntry {
-  if (freshness === 'live') {
-    return {
-      kind: 'host',
-      label: `${kind} analysis view`,
-      ref: generatedAt,
-      detail: `source_commit=${sourceCommit}`,
-    };
-  }
-
-  return {
-    kind: 'snapshot',
-    label: `${kind} snapshot`,
-    ref: generatedAt,
-    detail: `source_commit=${sourceCommit}`,
   };
 }
 

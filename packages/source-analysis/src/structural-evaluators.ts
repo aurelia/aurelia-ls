@@ -2,16 +2,17 @@ import type {
   StructuralClaimGraphRuntime,
   StructuralClaimId,
 } from './structural-claim-graph.js';
+import {
+  STRUCTURAL_OPERATIONAL_ANALYZABILITY_TIER_IDS,
+  type StructuralOperationalAnalyzabilityTierId,
+} from './operational-analyzability.js';
 
 export const STRUCTURAL_PATH_EVALUATOR_IDS = [
   'file-path-deterministic-ceiling',
 ] as const;
 
-export const STRUCTURAL_OPERATIONAL_TIERS = [
-  'source-analyzable',
-  'type-assisted',
-  'runtime-only',
-] as const;
+export const STRUCTURAL_OPERATIONAL_TIERS =
+  STRUCTURAL_OPERATIONAL_ANALYZABILITY_TIER_IDS;
 
 export const STRUCTURAL_PATH_EVALUATION_STATUSES = [
   'supported',
@@ -23,7 +24,7 @@ export type StructuralPathEvaluatorId =
   typeof STRUCTURAL_PATH_EVALUATOR_IDS[number];
 
 export type StructuralOperationalTier =
-  typeof STRUCTURAL_OPERATIONAL_TIERS[number];
+  StructuralOperationalAnalyzabilityTierId;
 
 export type StructuralPathEvaluationStatus =
   typeof STRUCTURAL_PATH_EVALUATION_STATUSES[number];

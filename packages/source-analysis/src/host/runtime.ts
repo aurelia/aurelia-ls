@@ -15,6 +15,7 @@ import {
   renderAnswerDocumentToPlainText,
 } from '../answer-renderer.js';
 import { createAnalysisViews } from '../analysis-views.js';
+import { createHostedWorldFrame } from '../analysis-surface.js';
 import { resolveAnalysisProfile } from '../analysis-profile.js';
 import {
   inspectAnalyzabilityPosture,
@@ -230,11 +231,7 @@ export class SnapshotHostRuntime {
       topK: args.topK,
       readMode: args.readMode,
       consumer: args.consumer,
-      worldFrame: {
-        regimeAnchor: 'hosted',
-        partiality: 'complete',
-        freshness: 'live',
-      },
+      worldFrame: createHostedWorldFrame(),
     });
     const rendered = buildRenderedView(answer, args.consumer, args.renderStyle);
     const result: DescribeInquiriesResult = {
@@ -277,11 +274,7 @@ export class SnapshotHostRuntime {
       topK: args.topK,
       readMode: args.readMode,
       consumer: args.consumer,
-      worldFrame: {
-        regimeAnchor: 'hosted',
-        partiality: 'complete',
-        freshness: 'live',
-      },
+      worldFrame: createHostedWorldFrame(),
     });
     const rendered = buildRenderedView(answer, args.consumer, args.renderStyle);
     const result: DescribeCapabilitiesResult = {
@@ -309,14 +302,11 @@ export class SnapshotHostRuntime {
       focusValue: args.focusValue,
       readMode: args.readMode,
       consumer: args.consumer,
-      worldFrame: {
-        ...(repoPath ? { repoPath } : {}),
-        ...(target ? { target } : {}),
-        ...(profilePath ? { profilePath } : {}),
-        regimeAnchor: 'hosted',
-        partiality: 'complete',
-        freshness: 'live',
-      },
+      worldFrame: createHostedWorldFrame({
+        repoPath,
+        target,
+        profilePath,
+      }),
     });
     const rendered = buildRenderedView(answer, args.consumer, args.renderStyle);
     const result: PlanQuestionResult = {
@@ -349,14 +339,11 @@ export class SnapshotHostRuntime {
       familyId: args.familyId,
       readMode: args.readMode,
       consumer: args.consumer,
-      worldFrame: {
+      worldFrame: createHostedWorldFrame({
         repoPath,
-        ...(target ? { target } : {}),
-        ...(profilePath ? { profilePath } : {}),
-        regimeAnchor: 'hosted',
-        partiality: 'complete',
-        freshness: 'live',
-      },
+        target,
+        profilePath,
+      }),
     });
     const rendered = buildRenderedView(answer, args.consumer, args.renderStyle);
     const result: PlanInquiryResult = {
@@ -380,11 +367,7 @@ export class SnapshotHostRuntime {
       question: args.question,
       readMode: args.readMode,
       consumer: args.consumer,
-      worldFrame: {
-        regimeAnchor: 'hosted',
-        partiality: 'complete',
-        freshness: 'live',
-      },
+      worldFrame: createHostedWorldFrame(),
     });
     const rendered = buildRenderedView(answer, args.consumer, args.renderStyle);
     const result: RepairCommandResult = {
@@ -440,14 +423,12 @@ export class SnapshotHostRuntime {
       familyId: args.familyId,
       readMode: args.readMode,
       consumer: args.consumer,
-      worldFrame: {
+      worldFrame: createHostedWorldFrame({
         repoPath,
         target,
-        ...(profilePath ? { profilePath } : {}),
-        regimeAnchor: 'hosted',
-        partiality: 'complete',
+        profilePath,
         freshness: executed?.freshness ?? 'live',
-      },
+      }),
       plan,
       execution: executed ? summarizeInquiryExecution(executed) : undefined,
     });
@@ -603,28 +584,7 @@ export class SnapshotHostRuntime {
 
   #queryAuditPackage(args: AuditPackageQueryArgs): CommandOutcome {
     const state = this.#sessions.get(args.sessionId);
-    const depsQuery = ensureFreshSnapshot(state, 'deps', args.refreshIfNeeded);
-    const typeRefsQuery = ensureFreshSnapshot(state, 'typerefs', args.refreshIfNeeded);
-    const exportsQuery = ensureFreshSnapshot(state, 'exports', args.refreshIfNeeded);
-
-    const warnings = [
-      ...depsQuery.warnings,
-      ...typeRefsQuery.warnings,
-      ...exportsQuery.warnings,
-    ];
-    const refreshedKinds = sortSnapshotKinds([
-      ...depsQuery.refreshedKinds,
-      ...typeRefsQuery.refreshedKinds,
-      ...exportsQuery.refreshedKinds,
-    ]);
-    const analysis = createAnalysisViews({
-      source: 'hosted-analysis',
-      deps: depsQuery.snapshot,
-      typeRefs: typeRefsQuery.snapshot,
-      exports: exportsQuery.snapshot,
-      structuralRuntime: ensureLiveStructuralRuntime(state).structuralRuntime,
-      sourceFileScan: state.liveAnalysis.sourceFileScan,
-    });
+    const hostedAnalysis = ensureFreshHostedAnalysisViews(state, args.refreshIfNeeded);
     // TODO: Thread live structural claims and path-evaluator results directly
     // into audit answers instead of adapting through the legacy deps/typerefs/
     // exports materialized views first.
@@ -634,63 +594,32 @@ export class SnapshotHostRuntime {
         focusRef: { kind: 'package', value: args.packageName },
         questionRoute: 'inventory',
         readMode: args.readMode ?? 'summary-card',
-        worldFrame: {
+        worldFrame: createHostedWorldFrame({
           repoPath: state.repoPath,
           target: state.target,
-          regimeAnchor: 'hosted',
-          partiality: 'complete',
-          freshness: 'live',
-        },
+        }),
       },
-      analysis,
+      hostedAnalysis.analysis,
     );
     const rendered = buildRenderedView(answer, args.consumer, args.renderStyle);
     const result: AuditPackageQueryResult = {
       answer,
       ...(rendered ? { rendered } : {}),
-      warnings,
+      warnings: hostedAnalysis.warnings,
     };
 
     return {
       result,
       sessionId: state.sessionId,
-      refreshedKinds,
+      refreshedKinds: hostedAnalysis.refreshedKinds,
       invalidation: buildInvalidationMeta(state),
-      cache: {
-        hit: depsQuery.cache.hit && typeRefsQuery.cache.hit && exportsQuery.cache.hit,
-        tier: depsQuery.cache.tier === 'warm'
-          || typeRefsQuery.cache.tier === 'warm'
-          || exportsQuery.cache.tier === 'warm'
-          ? 'warm'
-          : 'cold',
-      },
+      cache: hostedAnalysis.cache,
     };
   }
 
   #queryRouteWitness(args: RouteWitnessQueryArgs): CommandOutcome {
     const state = this.#sessions.get(args.sessionId);
-    const depsQuery = ensureFreshSnapshot(state, 'deps', args.refreshIfNeeded);
-    const typeRefsQuery = ensureFreshSnapshot(state, 'typerefs', args.refreshIfNeeded);
-    const exportsQuery = ensureFreshSnapshot(state, 'exports', args.refreshIfNeeded);
-
-    const warnings = [
-      ...depsQuery.warnings,
-      ...typeRefsQuery.warnings,
-      ...exportsQuery.warnings,
-    ];
-    const refreshedKinds = sortSnapshotKinds([
-      ...depsQuery.refreshedKinds,
-      ...typeRefsQuery.refreshedKinds,
-      ...exportsQuery.refreshedKinds,
-    ]);
-    const analysis = createAnalysisViews({
-      source: 'hosted-analysis',
-      deps: depsQuery.snapshot,
-      typeRefs: typeRefsQuery.snapshot,
-      exports: exportsQuery.snapshot,
-      structuralRuntime: ensureLiveStructuralRuntime(state).structuralRuntime,
-      sourceFileScan: state.liveAnalysis.sourceFileScan,
-    });
+    const hostedAnalysis = ensureFreshHostedAnalysisViews(state, args.refreshIfNeeded);
     // TODO: Move route witnesses onto direct structural route claims so the
     // host no longer has to adapt live state through snapshot-shaped outputs.
     const answer = createRouteWitnessAnswer(
@@ -702,63 +631,32 @@ export class SnapshotHostRuntime {
         },
         questionRoute: 'route',
         readMode: args.readMode ?? 'focus-card',
-        worldFrame: {
+        worldFrame: createHostedWorldFrame({
           repoPath: state.repoPath,
           target: state.target,
-          regimeAnchor: 'hosted',
-          partiality: 'complete',
-          freshness: 'live',
-        },
+        }),
       },
-      analysis,
+      hostedAnalysis.analysis,
     );
     const rendered = buildRenderedView(answer, args.consumer, args.renderStyle);
     const result: RouteWitnessQueryResult = {
       answer,
       ...(rendered ? { rendered } : {}),
-      warnings,
+      warnings: hostedAnalysis.warnings,
     };
 
     return {
       result,
       sessionId: state.sessionId,
-      refreshedKinds,
+      refreshedKinds: hostedAnalysis.refreshedKinds,
       invalidation: buildInvalidationMeta(state),
-      cache: {
-        hit: depsQuery.cache.hit && typeRefsQuery.cache.hit && exportsQuery.cache.hit,
-        tier: depsQuery.cache.tier === 'warm'
-          || typeRefsQuery.cache.tier === 'warm'
-          || exportsQuery.cache.tier === 'warm'
-          ? 'warm'
-        : 'cold',
-      },
+      cache: hostedAnalysis.cache,
     };
   }
 
   #queryNavigate(args: NavigateQueryArgs): CommandOutcome {
     const state = this.#sessions.get(args.sessionId);
-    const depsQuery = ensureFreshSnapshot(state, 'deps', args.refreshIfNeeded);
-    const typeRefsQuery = ensureFreshSnapshot(state, 'typerefs', args.refreshIfNeeded);
-    const exportsQuery = ensureFreshSnapshot(state, 'exports', args.refreshIfNeeded);
-
-    const warnings = [
-      ...depsQuery.warnings,
-      ...typeRefsQuery.warnings,
-      ...exportsQuery.warnings,
-    ];
-    const refreshedKinds = sortSnapshotKinds([
-      ...depsQuery.refreshedKinds,
-      ...typeRefsQuery.refreshedKinds,
-      ...exportsQuery.refreshedKinds,
-    ]);
-    const analysis = createAnalysisViews({
-      source: 'hosted-analysis',
-      deps: depsQuery.snapshot,
-      typeRefs: typeRefsQuery.snapshot,
-      exports: exportsQuery.snapshot,
-      structuralRuntime: ensureLiveStructuralRuntime(state).structuralRuntime,
-      sourceFileScan: state.liveAnalysis.sourceFileScan,
-    });
+    const hostedAnalysis = ensureFreshHostedAnalysisViews(state, args.refreshIfNeeded);
     // TODO: Let navigation spend live structural/evaluator context directly and
     // demote these adapted materialized views to compatibility-only surfaces.
     const episode = createNavigationEpisode(
@@ -770,36 +668,26 @@ export class SnapshotHostRuntime {
         },
         questionRoute: args.questionRoute ?? 'join',
         readMode: args.readMode ?? 'focus-card',
-        worldFrame: {
+        worldFrame: createHostedWorldFrame({
           repoPath: state.repoPath,
           target: state.target,
-          regimeAnchor: 'hosted',
-          partiality: 'complete',
-          freshness: 'live',
-        },
+        }),
       },
-      analysis,
+      hostedAnalysis.analysis,
     );
     const rendered = buildRenderedView(episode.answer, args.consumer, args.renderStyle);
     const result: NavigateQueryResult = {
       answer: episode.answer,
       ...(rendered ? { rendered } : {}),
-      warnings,
+      warnings: hostedAnalysis.warnings,
     };
 
     return {
       result,
       sessionId: state.sessionId,
-      refreshedKinds,
+      refreshedKinds: hostedAnalysis.refreshedKinds,
       invalidation: buildInvalidationMeta(state),
-      cache: {
-        hit: depsQuery.cache.hit && typeRefsQuery.cache.hit && exportsQuery.cache.hit,
-        tier: depsQuery.cache.tier === 'warm'
-          || typeRefsQuery.cache.tier === 'warm'
-          || exportsQuery.cache.tier === 'warm'
-          ? 'warm'
-          : 'cold',
-      },
+      cache: hostedAnalysis.cache,
     };
   }
 
@@ -1038,16 +926,13 @@ function summarizePrimaryFacts(
     case 'describe.profile': {
       const summary = summarizeAnalyzabilityPosture(
         (result as unknown as DescribeProfileResult).posture,
-        {
+        createHostedWorldFrame({
           repoPath: (result as unknown as DescribeProfileResult).profile.repoPath,
           target: (result as unknown as DescribeProfileResult).profile.snapshotTarget,
           ...((result as unknown as DescribeProfileResult).profile.profilePath
             ? { profilePath: (result as unknown as DescribeProfileResult).profile.profilePath ?? undefined }
             : {}),
-          regimeAnchor: 'hosted',
-          partiality: 'complete',
-          freshness: 'live',
-        },
+        }),
       );
       return summary.facts;
     }
@@ -1116,16 +1001,13 @@ function summarizePrimaryLines(
     case 'describe.profile': {
       const summary = summarizeAnalyzabilityPosture(
         (result as unknown as DescribeProfileResult).posture,
-        {
+        createHostedWorldFrame({
           repoPath: (result as unknown as DescribeProfileResult).profile.repoPath,
           target: (result as unknown as DescribeProfileResult).profile.snapshotTarget,
           ...((result as unknown as DescribeProfileResult).profile.profilePath
             ? { profilePath: (result as unknown as DescribeProfileResult).profile.profilePath ?? undefined }
             : {}),
-          regimeAnchor: 'hosted',
-          partiality: 'complete',
-          freshness: 'live',
-        },
+        }),
       );
       return summary.lines;
     }
@@ -1215,14 +1097,11 @@ function summarizePrimaryOutcome(
     const describe = result as unknown as DescribeProfileResult;
     const summary = summarizeAnalyzabilityPosture(
       describe.posture,
-      {
+      createHostedWorldFrame({
         repoPath: describe.profile.repoPath,
         target: describe.profile.snapshotTarget,
         ...(describe.profile.profilePath ? { profilePath: describe.profile.profilePath ?? undefined } : {}),
-        regimeAnchor: 'hosted',
-        partiality: 'complete',
-        freshness: 'live',
-      },
+      }),
     );
     return {
       outcomeTag: summary.tag,
@@ -1257,6 +1136,49 @@ function resolveInquiryStepArgs(
 
 function asStepString(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function ensureFreshHostedAnalysisViews(
+  state: HostSessionState,
+  refreshIfNeeded = true,
+): {
+  analysis: ReturnType<typeof createAnalysisViews>;
+  warnings: readonly string[];
+  refreshedKinds: readonly SnapshotKind[];
+  cache: HostCacheMeta;
+} {
+  const depsQuery = ensureFreshSnapshot(state, 'deps', refreshIfNeeded);
+  const typeRefsQuery = ensureFreshSnapshot(state, 'typerefs', refreshIfNeeded);
+  const exportsQuery = ensureFreshSnapshot(state, 'exports', refreshIfNeeded);
+
+  return {
+    analysis: createAnalysisViews({
+      source: 'hosted-analysis',
+      deps: depsQuery.snapshot,
+      typeRefs: typeRefsQuery.snapshot,
+      exports: exportsQuery.snapshot,
+      structuralRuntime: ensureLiveStructuralRuntime(state).structuralRuntime,
+      sourceFileScan: state.liveAnalysis.sourceFileScan,
+    }),
+    warnings: [
+      ...depsQuery.warnings,
+      ...typeRefsQuery.warnings,
+      ...exportsQuery.warnings,
+    ],
+    refreshedKinds: sortSnapshotKinds([
+      ...depsQuery.refreshedKinds,
+      ...typeRefsQuery.refreshedKinds,
+      ...exportsQuery.refreshedKinds,
+    ]),
+    cache: {
+      hit: depsQuery.cache.hit && typeRefsQuery.cache.hit && exportsQuery.cache.hit,
+      tier: depsQuery.cache.tier === 'warm'
+        || typeRefsQuery.cache.tier === 'warm'
+        || exportsQuery.cache.tier === 'warm'
+        ? 'warm'
+        : 'cold',
+    },
+  };
 }
 
 function ensureFreshSnapshot<TKind extends SnapshotKind>(

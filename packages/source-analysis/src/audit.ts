@@ -3,6 +3,12 @@ import {
   loadCurrentAnalysisViews,
   type AnalysisViews,
 } from './analysis-views.js';
+import {
+  createAnalysisProvenanceEntry,
+  defaultWorldFrameForAnalysis,
+  describeAnalysisSurface,
+  describeAnalysisSurfaceEvidence,
+} from './analysis-surface.js';
 import type { LoadedCurrentSnapshotSet } from './current-snapshots.js';
 import type { PackageExportRecord, PackageExportsSummary } from './exports/schema.js';
 import type { TypeDecl } from './typerefs/schema.js';
@@ -184,9 +190,9 @@ function buildPackageAuditAnswer(
   const driftCount = findings.filter((finding) => finding.kind === 'surface-drift').length;
 
   const summaryLines = findings.length === 0
-    ? [`No strong integration red flags closed for ${pkg.package_name} in the ${analysisSurfaceLabel(query.worldFrame)}.`]
+    ? [`No strong integration red flags closed for ${pkg.package_name} in the ${describeAnalysisSurface(query.worldFrame?.freshness)}.`]
     : [
-      `${pkg.package_name} shows ${findings.length} likely integration red flag${pluralize(findings.length)} in the ${analysisSurfaceLabel(query.worldFrame)}.`,
+      `${pkg.package_name} shows ${findings.length} likely integration red flag${pluralize(findings.length)} in the ${describeAnalysisSurface(query.worldFrame?.freshness)}.`,
       ...(blindspotCount > 0
         ? [`${blindspotCount} blind spot${pluralize(blindspotCount)} keep the exercise/dead-code picture open.`]
         : []),
@@ -841,7 +847,7 @@ function trustForFindings(
 
   return {
     kind: 'grounded',
-    summary: `The audit findings are grounded in the current ${analysisSurfaceEvidenceLabel(analysisFreshness)}.`,
+    summary: `The audit findings are grounded in the current ${describeAnalysisSurfaceEvidence(analysisFreshness, ['deps', 'typerefs', 'exports'])}.`,
   };
 }
 
@@ -896,9 +902,9 @@ function provenanceForPackageAudit(
   findings: readonly AuditFinding[],
 ): readonly InquiryProvenanceEntry[] {
   return [
-    analysisProvenanceEntry('deps', context.analysis.deps.generated_at, context.analysis.deps.source_commit, context.analysisFreshness),
-    analysisProvenanceEntry('typerefs', context.analysis.typeRefs.generated_at, context.analysis.typeRefs.source_commit, context.analysisFreshness),
-    analysisProvenanceEntry('exports', context.analysis.exports.generated_at, context.analysis.exports.source_commit, context.analysisFreshness),
+    createAnalysisProvenanceEntry('deps', context.analysis.deps.generated_at, context.analysis.deps.source_commit, context.analysisFreshness),
+    createAnalysisProvenanceEntry('typerefs', context.analysis.typeRefs.generated_at, context.analysis.typeRefs.source_commit, context.analysisFreshness),
+    createAnalysisProvenanceEntry('exports', context.analysis.exports.generated_at, context.analysis.exports.source_commit, context.analysisFreshness),
     ...(findings.length > 0
       ? [{
         kind: 'route' as const,
@@ -944,7 +950,7 @@ function createAnswer(
   continuations: readonly Continuation[],
   provenance: readonly InquiryProvenanceEntry[],
 ): InquiryAnswer<AuditValue> {
-  const worldFrame = defaultWorldFrame(analysis, query.worldFrame);
+  const worldFrame = defaultWorldFrameForAnalysis(analysis, query.worldFrame);
   return createAnswerEnvelope({
     query,
     focusRef,
@@ -1254,19 +1260,6 @@ function typeRef(declaration: TypeDecl): AuditRef {
   };
 }
 
-function defaultWorldFrame(
-  analysis: AnalysisViews,
-  worldFrame: WorldFrame | undefined,
-): WorldFrame {
-  return {
-    repoPath: worldFrame?.repoPath ?? analysis.root,
-    target: worldFrame?.target ?? 'current',
-    regimeAnchor: worldFrame?.regimeAnchor ?? 'hosted',
-    partiality: worldFrame?.partiality ?? 'complete',
-    freshness: worldFrame?.freshness ?? (analysis.source === 'hosted-analysis' ? 'live' : 'snapshot'),
-  };
-}
-
 function defaultReadMode(
   questionRoute: Inquiry['questionRoute'],
 ): ReadMode {
@@ -1286,43 +1279,6 @@ function continuation(
     targetQuestionRoute,
     targetFocusRef,
   };
-}
-
-function analysisProvenanceEntry(
-  kind: 'deps' | 'typerefs' | 'exports',
-  generatedAt: string,
-  sourceCommit: string,
-  freshness: WorldFrame['freshness'],
-): InquiryProvenanceEntry {
-  if (freshness === 'live') {
-    return {
-      kind: 'host',
-      label: `${kind} analysis view`,
-      ref: generatedAt,
-      detail: `source_commit=${sourceCommit}`,
-    };
-  }
-
-  return {
-    kind: 'snapshot',
-    label: `${kind} snapshot`,
-    ref: generatedAt,
-    detail: `source_commit=${sourceCommit}`,
-  };
-}
-
-function analysisSurfaceLabel(
-  worldFrame: WorldFrame | undefined,
-): string {
-  return worldFrame?.freshness === 'live' ? 'current analysis' : 'current materialized analysis';
-}
-
-function analysisSurfaceEvidenceLabel(
-  freshness: WorldFrame['freshness'],
-): string {
-  return freshness === 'live'
-    ? 'deps, typerefs, and exports analysis views'
-    : 'materialized deps, typerefs, and exports analysis views';
 }
 
 function mergeTrustProfiles(

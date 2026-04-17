@@ -2,6 +2,7 @@ import type { AnswerCard, AnswerRef } from './answer-card.js';
 import { createStructuredAnswerCard } from './answer-card.js';
 import { createAnswerDocument } from './answer-document.js';
 import { createAnswerEnvelope } from './answer-envelope.js';
+import { createHostedWorldFrame } from './analysis-surface.js';
 import type { CapabilityCatalog } from './capability-catalog.js';
 import { createDefaultCapabilityCatalog } from './capability-catalog.js';
 import type {
@@ -300,7 +301,7 @@ export class InquiryIngress {
       : this.#inquiries.list(options.includeExamples).slice(0, options.topK ?? 6);
     const diagnostics = this.diagnose();
     const readMode = options.readMode ?? 'summary-card';
-    const worldFrame = options.worldFrame ?? defaultWorldFrame();
+    const worldFrame = options.worldFrame ?? createHostedWorldFrame();
     const query: Inquiry = {
       inquiryEpisode: 'orient-and-localize',
       focusRef: inquiryFocusRef('source-analysis-inquiries'),
@@ -405,7 +406,11 @@ export class InquiryIngress {
   ): InquiryAnswer<InquiryPlanValue> {
     const plan = this.plan(options);
     const readMode = options.readMode ?? 'focus-card';
-    const worldFrame = options.worldFrame ?? defaultWorldFrame(options.repoPath, options.target, options.profilePath);
+    const worldFrame = options.worldFrame ?? createHostedWorldFrame({
+      repoPath: options.repoPath,
+      target: options.target,
+      profilePath: options.profilePath,
+    });
     const query: Inquiry = {
       inquiryEpisode: 'bounded-closure-explanation',
       focusRef: inquiryFocusRef('source-analysis-inquiry-plan'),
@@ -494,7 +499,11 @@ export class InquiryIngress {
     options: InquiryAskOptions,
   ): InquiryAnswer<InquiryAskValue> {
     const readMode = options.readMode ?? 'focus-card';
-    const worldFrame = options.worldFrame ?? defaultWorldFrame(options.repoPath, options.target, options.profilePath);
+    const worldFrame = options.worldFrame ?? createHostedWorldFrame({
+      repoPath: options.repoPath,
+      target: options.target,
+      profilePath: options.profilePath,
+    });
     const query: Inquiry = {
       inquiryEpisode: 'bounded-closure-explanation',
       focusRef: inquiryFocusRef('source-analysis-ask-question'),
@@ -1123,21 +1132,6 @@ function capabilityRef(
     value,
     label,
     ...(detail ? { detail } : {}),
-  };
-}
-
-function defaultWorldFrame(
-  repoPath?: string,
-  target?: string,
-  profilePath?: string,
-): WorldFrame {
-  return {
-    ...(repoPath ? { repoPath } : {}),
-    ...(target ? { target } : {}),
-    ...(profilePath ? { profilePath } : {}),
-    regimeAnchor: 'hosted',
-    partiality: 'complete',
-    freshness: 'live',
   };
 }
 

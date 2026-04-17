@@ -24,29 +24,22 @@ import {
   type SnapshotKind,
   type SnapshotProfileProvenance,
 } from './snapshots.js';
+import {
+  PRODUCT_OPERATIONAL_ANALYZABILITY_TIER_IDS,
+  productOperationalAnalyzabilityTierForId,
+  type ProductOperationalAnalyzabilityTier,
+  type ProductOperationalAnalyzabilityTierId,
+} from './operational-analyzability.js';
+
+export {
+  PRODUCT_OPERATIONAL_ANALYZABILITY_TIER_IDS,
+  type ProductOperationalAnalyzabilityTier,
+  type ProductOperationalAnalyzabilityTierId,
+} from './operational-analyzability.js';
 
 // Keep the package's main posture vocabulary aligned with the shared
 // product-operational analyzability tiers, not the inquiry-surface scoping
 // overlay or declaration-world family-local analyzability bands.
-export const PRODUCT_OPERATIONAL_ANALYZABILITY_TIER_IDS = [
-  'declared-explicit',
-  'generated-explicit',
-  'source-analyzable',
-  'type-assisted',
-  'candidate-only',
-  'runtime-only',
-] as const;
-
-export type ProductOperationalAnalyzabilityTierId =
-  typeof PRODUCT_OPERATIONAL_ANALYZABILITY_TIER_IDS[number];
-
-export interface ProductOperationalAnalyzabilityTier {
-  readonly id: ProductOperationalAnalyzabilityTierId;
-  readonly rank: number;
-  readonly label: string;
-  readonly summary: string;
-}
-
 export const ANALYZABILITY_BOUNDARY_STATE_IDS = [
   'locally-closed',
   'named-open-fronts',
@@ -210,45 +203,6 @@ interface ExcludedFrontierInspection {
   readonly warnings: readonly string[];
   readonly source: AnalyzabilityFrontierEvidenceSource;
 }
-
-const TIER_BY_ID: Record<ProductOperationalAnalyzabilityTierId, ProductOperationalAnalyzabilityTier> = {
-  'declared-explicit': {
-    id: 'declared-explicit',
-    rank: 1,
-    label: 'declared-explicit',
-    summary: 'Closure is driven by explicit declaration metadata or already-modeled declaration surfaces.',
-  },
-  'generated-explicit': {
-    id: 'generated-explicit',
-    rank: 2,
-    label: 'generated-explicit',
-    summary: 'Closure is driven by explicit generated/configured carriers already modeled by product law.',
-  },
-  'source-analyzable': {
-    id: 'source-analyzable',
-    rank: 3,
-    label: 'source-analyzable',
-    summary: 'Closure is recovered from materially analyzable source structure without runtime execution.',
-  },
-  'type-assisted': {
-    id: 'type-assisted',
-    rank: 4,
-    label: 'type-assisted',
-    summary: 'The target would otherwise close honestly, but typed evidence remains the only blocker.',
-  },
-  'candidate-only': {
-    id: 'candidate-only',
-    rank: 5,
-    label: 'candidate-only',
-    summary: 'A larger possible surface is known, but it is not admitted as current-world closure for this question.',
-  },
-  'runtime-only': {
-    id: 'runtime-only',
-    rank: 6,
-    label: 'runtime-only',
-    summary: 'Decisive meaning depends on runtime-only opacity, late binding, or materially unanalyzable body computation.',
-  },
-};
 
 const BOUNDARY_STATE_BY_ID: Record<AnalyzabilityBoundaryStateId, AnalyzabilityBoundaryState> = {
   'locally-closed': {
@@ -1112,13 +1066,7 @@ function determineOperationalAnalyzabilityTier(): ProductOperationalAnalyzabilit
   // The package can recover meaningful structure from source-backed facts inside
   // explicit bounds, but it does not yet have a checker-driven residual
   // `type-assisted` path strong enough to make that the default posture tier.
-  return tierForId('source-analyzable');
-}
-
-function tierForId(
-  id: ProductOperationalAnalyzabilityTierId,
-): ProductOperationalAnalyzabilityTier {
-  return TIER_BY_ID[id];
+  return productOperationalAnalyzabilityTierForId('source-analyzable');
 }
 
 function boundaryStateForId(

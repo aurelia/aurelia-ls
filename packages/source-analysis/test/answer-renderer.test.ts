@@ -53,11 +53,13 @@ describe('Source-analysis structured answer rendering', () => {
     const expanded = renderAnswerDocumentToPlainText(document!, expandedPolicy);
     const compactJson = renderAnswerDocumentToJson(document!, compactPolicy);
     const expandedJson = renderAnswerDocumentToJson(document!, expandedPolicy);
+    const findingCount = answer.outcome.value?.findings.length ?? 0;
 
     expect(compact.summaryLines.length).toBeLessThanOrEqual(compactPolicy.limits.summaryLineCount);
     expect(expanded.lines.length).toBeGreaterThanOrEqual(compact.lines.length);
     expect(expandedJson.blocks.length).toBeGreaterThanOrEqual(compactJson.blocks.length);
-    expect(expandedJson.blocks.some((block) => block.kind === 'finding-list')).toBe(true);
+    expect(expandedJson.blocks.some((block) => block.kind === 'key-fact-list')).toBe(true);
+    expect(expandedJson.blocks.some((block) => block.kind === 'finding-list')).toBe(findingCount > 0);
   });
 
   it('keeps route witnesses as a structured block that survives machine rendering', () => {
