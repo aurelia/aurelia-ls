@@ -1,6 +1,9 @@
 export {
-  ANALYZABILITY_BAND_IDS,
+  ANALYZABILITY_BOUNDARY_STATE_IDS,
   ANALYZABILITY_OPEN_FRONT_ORIGINS,
+  FOCUSED_ANALYZABILITY_CLASSIFICATION_SOURCE_IDS,
+  FOCUSED_CURRENT_WORLD_PATH_STATE_IDS,
+  PRODUCT_OPERATIONAL_ANALYZABILITY_TIER_IDS,
   EXCLUDED_BOUNDARY_EDGE_KINDS,
   inspectAnalyzabilityPosture,
   inspectAnalyzabilityPostureFromSnapshots,
@@ -23,16 +26,23 @@ export {
   SNAPSHOT_SUPPORT_STATUSES,
 } from '../profile-support.js';
 export type {
-  AnalyzabilityBand,
-  AnalyzabilityBandId,
+  AnalyzabilityBoundaryState,
+  AnalyzabilityBoundaryStateId,
+  FocusedAnalyzabilityBlockingReason,
+  FocusedAnalyzabilityClassification,
+  FocusedAnalyzabilityClassificationSourceId,
   AnalyzabilityOpenFront,
   AnalyzabilityOpenFrontOrigin,
   AnalyzabilityPosture,
   AnalyzabilityPostureSummary,
+  DeterministicInterpretationCeiling,
   FocusedAnalyzabilityContext,
+  FocusedCurrentWorldPathStateId,
   ExcludedBoundaryEdgeKind,
   ExcludedBoundaryReference,
   ExcludedFrontierEvidence,
+  ProductOperationalAnalyzabilityTier,
+  ProductOperationalAnalyzabilityTierId,
 } from '../analyzability-posture.js';
 export type {
   AnalysisProfile,

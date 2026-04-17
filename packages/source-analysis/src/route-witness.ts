@@ -262,7 +262,9 @@ function createHitRouteWitnessAnswer(
     ...regimeContext.lines,
   ];
   const policy = policyForRouteWitness(query, focusRef.kind);
-  const document = createRouteWitnessDocument(summaryLines, relatedRefs, witnesses);
+  const facts = [
+    ...regimeContext.facts,
+  ];
 
   return createAnswer(
     query,
@@ -274,7 +276,7 @@ function createHitRouteWitnessAnswer(
       title: `${primaryRef.label} route witnesses`,
       primaryRef,
       relatedRefs,
-      document,
+      document: createRouteWitnessDocument(summaryLines, relatedRefs, witnesses, facts),
       policy,
       extra: {
         witnesses: witnesses.slice(0, 6),
@@ -500,6 +502,7 @@ function createOpenBoundaryAnswer(
         [message, ...(regimeContext?.lines.slice(1) ?? [])],
         relatedRefs,
         [],
+        regimeContext?.facts ?? [],
       ),
       policy,
       extra: {
@@ -705,6 +708,7 @@ function createRouteWitnessDocument(
   summaryLines: readonly string[],
   relatedRefs: readonly RouteWitnessRef[],
   witnesses: readonly PackageRouteWitness[],
+  facts: readonly { readonly label: string; readonly value: string }[] = [],
 ) {
   return createAnswerDocument<RouteWitnessRef>([
     {
@@ -712,6 +716,13 @@ function createRouteWitnessDocument(
       importance: 'primary',
       lines: summaryLines,
     },
+    ...(facts.length > 0
+      ? [{
+        kind: 'key-fact-list' as const,
+        importance: 'supporting' as const,
+        facts,
+      }]
+      : []),
     ...(witnesses.length > 0
       ? [{
         kind: 'witness-list' as const,

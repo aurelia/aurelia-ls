@@ -28,7 +28,13 @@ describe('source-analysis hosted CLI', () => {
           readonly snapshotTarget: string;
         };
         readonly posture: {
-          readonly currentBand: {
+          readonly operationalAnalyzabilityTier: {
+            readonly id: string;
+          };
+          readonly minimumDeterministicInterpretationCeiling: {
+            readonly id: string;
+          };
+          readonly boundaryState: {
             readonly id: string;
           };
           readonly frontierEvidenceSource: string;
@@ -42,7 +48,9 @@ describe('source-analysis hosted CLI', () => {
     expect(parsed.command).toBe('describe.profile');
     expect(parsed.result.profile.profileId).toBe('fixture-profile');
     expect(parsed.result.profile.snapshotTarget).toBe('fixture-profile-target');
-    expect(parsed.result.posture.currentBand.id).toBe('explicit-open-named-fronts');
+    expect(parsed.result.posture.operationalAnalyzabilityTier.id).toBe('source-analyzable');
+    expect(parsed.result.posture.minimumDeterministicInterpretationCeiling.id).toBe('bounded-source-analyzable-closure');
+    expect(parsed.result.posture.boundaryState.id).toBe('named-open-fronts');
     expect(parsed.result.posture.frontierEvidenceSource).toBe('live-scan');
     expect(parsed.result.snapshotSupport.missingKinds).toEqual(['deps', 'typerefs', 'exports']);
   });

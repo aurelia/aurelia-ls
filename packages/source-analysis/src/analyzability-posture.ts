@@ -24,23 +24,46 @@ import {
   type SnapshotProfileProvenance,
 } from './snapshots.js';
 
-export const ANALYZABILITY_BAND_IDS = [
-  'closed-direct-carrier-truth',
-  'closed-opaque-carried-truth',
-  'bounded-deeper-deterministic-interpretation',
-  'regime-qualified-deterministic-truth',
-  'deterministic-predictive-companion-spend',
-  'ai-assisted-external-closure',
-  'explicit-open-named-fronts',
+// Keep the package's main posture vocabulary aligned with the shared
+// product-operational analyzability tiers, not the inquiry-surface scoping
+// overlay or declaration-world family-local analyzability bands.
+export const PRODUCT_OPERATIONAL_ANALYZABILITY_TIER_IDS = [
+  'declared-explicit',
+  'generated-explicit',
+  'source-analyzable',
+  'type-assisted',
+  'candidate-only',
+  'runtime-only',
 ] as const;
 
-export type AnalyzabilityBandId =
-  typeof ANALYZABILITY_BAND_IDS[number];
+export type ProductOperationalAnalyzabilityTierId =
+  typeof PRODUCT_OPERATIONAL_ANALYZABILITY_TIER_IDS[number];
 
-export interface AnalyzabilityBand {
-  readonly id: AnalyzabilityBandId;
+export interface ProductOperationalAnalyzabilityTier {
+  readonly id: ProductOperationalAnalyzabilityTierId;
   readonly rank: number;
   readonly label: string;
+  readonly summary: string;
+}
+
+export const ANALYZABILITY_BOUNDARY_STATE_IDS = [
+  'locally-closed',
+  'named-open-fronts',
+] as const;
+
+export type AnalyzabilityBoundaryStateId =
+  typeof ANALYZABILITY_BOUNDARY_STATE_IDS[number];
+
+export interface AnalyzabilityBoundaryState {
+  readonly id: AnalyzabilityBoundaryStateId;
+  readonly label: string;
+  readonly summary: string;
+}
+
+export interface DeterministicInterpretationCeiling {
+  readonly id: 'bounded-source-analyzable-closure';
+  readonly label: string;
+  readonly summary: string;
 }
 
 export const ANALYZABILITY_OPEN_FRONT_ORIGINS = [
@@ -104,8 +127,9 @@ export interface AnalyzabilityOpenFront {
 export interface AnalyzabilityPosture {
   readonly profileId: string;
   readonly target: string;
-  readonly currentBand: AnalyzabilityBand;
-  readonly deterministicCeilingBand: AnalyzabilityBand;
+  readonly operationalAnalyzabilityTier: ProductOperationalAnalyzabilityTier;
+  readonly minimumDeterministicInterpretationCeiling: DeterministicInterpretationCeiling;
+  readonly boundaryState: AnalyzabilityBoundaryState;
   readonly frontierEvidenceSource: AnalyzabilityFrontierEvidenceSource;
   readonly summaryLines: readonly string[];
   readonly snapshotSupport: ProfileSnapshotSupport;
@@ -129,8 +153,41 @@ export interface AnalyzabilityPostureSummary {
   readonly worldFrame: WorldFrame;
 }
 
+export const FOCUSED_ANALYZABILITY_CLASSIFICATION_SOURCE_IDS = [
+  'regime-context',
+  'path-evaluator',
+] as const;
+
+export type FocusedAnalyzabilityClassificationSourceId =
+  typeof FOCUSED_ANALYZABILITY_CLASSIFICATION_SOURCE_IDS[number];
+
+export const FOCUSED_CURRENT_WORLD_PATH_STATE_IDS = [
+  'inside-current-world',
+  'outside-current-world',
+] as const;
+
+export type FocusedCurrentWorldPathStateId =
+  typeof FOCUSED_CURRENT_WORLD_PATH_STATE_IDS[number];
+
+export interface FocusedAnalyzabilityBlockingReason {
+  readonly code: string;
+  readonly summary: string;
+  readonly consequence: 'keeps-boundary-open' | 'prevents-current-world-classification';
+}
+
+export interface FocusedAnalyzabilityClassification {
+  readonly source: FocusedAnalyzabilityClassificationSourceId;
+  readonly focusLabel: string;
+  readonly currentWorldPathState: FocusedCurrentWorldPathStateId;
+  readonly currentWorldPathTier: ProductOperationalAnalyzabilityTier | null;
+  readonly minimumDeterministicInterpretationCeiling: DeterministicInterpretationCeiling;
+  readonly blockingReasons: readonly FocusedAnalyzabilityBlockingReason[];
+  readonly summary: string;
+}
+
 export interface FocusedAnalyzabilityContext {
   readonly focusLabel: string;
+  readonly classification: FocusedAnalyzabilityClassification;
   readonly directlyExcludedFrontier: ExcludedFrontierEvidence | null;
   readonly matchingFrontiers: readonly ExcludedFrontierEvidence[];
   readonly matchingBoundaryReferences: readonly ExcludedBoundaryReference[];
@@ -153,42 +210,62 @@ interface ExcludedFrontierInspection {
   readonly source: AnalyzabilityFrontierEvidenceSource;
 }
 
-const BAND_BY_ID: Record<AnalyzabilityBandId, AnalyzabilityBand> = {
-  'closed-direct-carrier-truth': {
-    id: 'closed-direct-carrier-truth',
+const TIER_BY_ID: Record<ProductOperationalAnalyzabilityTierId, ProductOperationalAnalyzabilityTier> = {
+  'declared-explicit': {
+    id: 'declared-explicit',
     rank: 1,
-    label: 'closed direct carrier truth',
+    label: 'declared-explicit',
+    summary: 'Closure is driven by explicit declaration metadata or already-modeled declaration surfaces.',
   },
-  'closed-opaque-carried-truth': {
-    id: 'closed-opaque-carried-truth',
+  'generated-explicit': {
+    id: 'generated-explicit',
     rank: 2,
-    label: 'closed opaque-carried truth',
+    label: 'generated-explicit',
+    summary: 'Closure is driven by explicit generated/configured carriers already modeled by product law.',
   },
-  'bounded-deeper-deterministic-interpretation': {
-    id: 'bounded-deeper-deterministic-interpretation',
+  'source-analyzable': {
+    id: 'source-analyzable',
     rank: 3,
-    label: 'bounded deeper deterministic interpretation',
+    label: 'source-analyzable',
+    summary: 'Closure is recovered from materially analyzable source structure without runtime execution.',
   },
-  'regime-qualified-deterministic-truth': {
-    id: 'regime-qualified-deterministic-truth',
+  'type-assisted': {
+    id: 'type-assisted',
     rank: 4,
-    label: 'regime-qualified deterministic truth',
+    label: 'type-assisted',
+    summary: 'The target would otherwise close honestly, but typed evidence remains the only blocker.',
   },
-  'deterministic-predictive-companion-spend': {
-    id: 'deterministic-predictive-companion-spend',
+  'candidate-only': {
+    id: 'candidate-only',
     rank: 5,
-    label: 'deterministic predictive companion spend',
+    label: 'candidate-only',
+    summary: 'A larger possible surface is known, but it is not admitted as current-world closure for this question.',
   },
-  'ai-assisted-external-closure': {
-    id: 'ai-assisted-external-closure',
+  'runtime-only': {
+    id: 'runtime-only',
     rank: 6,
-    label: 'AI-assisted external closure',
+    label: 'runtime-only',
+    summary: 'Decisive meaning depends on runtime-only opacity, late binding, or materially unanalyzable body computation.',
   },
-  'explicit-open-named-fronts': {
-    id: 'explicit-open-named-fronts',
-    rank: 7,
-    label: 'explicit-open named fronts',
+};
+
+const BOUNDARY_STATE_BY_ID: Record<AnalyzabilityBoundaryStateId, AnalyzabilityBoundaryState> = {
+  'locally-closed': {
+    id: 'locally-closed',
+    label: 'locally closed',
+    summary: 'No named open fronts currently remain under the resolved profile regime.',
   },
+  'named-open-fronts': {
+    id: 'named-open-fronts',
+    label: 'named open fronts',
+    summary: 'The resolved profile regime still leaves explicit named fronts open.',
+  },
+};
+
+const MINIMUM_DETERMINISTIC_INTERPRETATION_CEILING: DeterministicInterpretationCeiling = {
+  id: 'bounded-source-analyzable-closure',
+  label: 'bounded source-analyzable closure',
+  summary: 'Deterministic spend currently includes explicit carriers plus bounded source-analyzable closure inside the included regime. Future path evaluators classify specific paths against this floor without pretending runtime-only opacity is already closed.',
 };
 
 export function inspectAnalyzabilityPosture(
@@ -224,23 +301,6 @@ export function inspectFocusedAnalyzabilityContext(
     readonly queryHints?: readonly string[];
   },
 ): FocusedAnalyzabilityContext {
-  if (posture.openFronts.length === 0) {
-    return {
-      focusLabel: focus.focusLabel,
-      directlyExcludedFrontier: null,
-      matchingFrontiers: [],
-      matchingBoundaryReferences: [],
-      facts: [],
-      lines: [],
-      tag: null,
-      trust: null,
-      closureBasis: [],
-      issues: [],
-      continuations: [],
-      provenance: [],
-    };
-  }
-
   const pathPrefixes = (focus.pathPrefixes ?? [])
     .map(normalizeComparableFocusHint)
     .filter((value) => value.length > 0);
@@ -261,15 +321,27 @@ export function inspectFocusedAnalyzabilityContext(
   const matchingFrontiers = posture.excludedFrontiers.filter((frontier) =>
     frontier === directlyExcludedFrontier || matchingPrefixes.has(frontier.prefix),
   );
+  const classification = classifyFocusedAnalyzability(
+    posture,
+    focus.focusLabel,
+    directlyExcludedFrontier,
+    matchingBoundaryReferences,
+  );
 
   const facts = [
-    { label: 'regime band', value: posture.currentBand.label },
+    { label: 'focus path state', value: renderFocusedPathState(classification.currentWorldPathState) },
+    { label: 'focus path tier', value: classification.currentWorldPathTier?.label ?? '(outside current world)' },
+    { label: 'focus blocker count', value: `${classification.blockingReasons.length}` },
+    { label: 'operational tier', value: posture.operationalAnalyzabilityTier.label },
+    { label: 'minimum deterministic ceiling', value: posture.minimumDeterministicInterpretationCeiling.label },
+    { label: 'boundary state', value: posture.boundaryState.label },
     { label: 'named open fronts', value: `${posture.openFronts.length}` },
     { label: 'focus-adjacent frontiers', value: `${matchingFrontiers.length + (directlyExcludedFrontier && !matchingFrontiers.includes(directlyExcludedFrontier) ? 1 : 0)}` },
     { label: 'focus-adjacent excluded seams', value: `${matchingBoundaryReferences.length}` },
   ];
   const lines = focusedAnalyzabilityLines(
     posture,
+    classification,
     focus.focusLabel,
     directlyExcludedFrontier,
     matchingBoundaryReferences,
@@ -285,11 +357,24 @@ export function inspectFocusedAnalyzabilityContext(
     : matchingBoundaryReferences.length > 0
       ? {
         kind: 'qualified' as const,
-        summary: `${focus.focusLabel} is modeled inside the included regime, but observed seams into excluded frontiers still keep boundary closure open.`,
+        summary: classification.summary,
       }
       : null;
-  const closureBasis = posture.openFronts.length > 0
-    ? [{
+  const closureBasis: ClosureBasis[] = [{
+    kind: classification.currentWorldPathState === 'outside-current-world'
+      ? 'boundary'
+      : 'route',
+    summary: classification.currentWorldPathState === 'outside-current-world'
+      ? `${focus.focusLabel} falls outside the current world admitted by profile ${posture.profileId}, so no current-world path tier is claimed for it.`
+      : `${focus.focusLabel} currently inhabits the ${classification.currentWorldPathTier?.label ?? 'unknown'} path tier relative to minimum deterministic ceiling ${classification.minimumDeterministicInterpretationCeiling.label}.`,
+    provenanceRefs: dedupeStrings([
+      posture.profileId,
+      classification.minimumDeterministicInterpretationCeiling.id,
+      ...(classification.currentWorldPathTier ? [classification.currentWorldPathTier.id] : []),
+    ]),
+  }];
+  if (posture.openFronts.length > 0) {
+    closureBasis.push({
       kind: 'boundary' as const,
       summary: directlyExcludedFrontier
         ? `${focus.focusLabel} falls under excluded frontier ${directlyExcludedFrontier.prefix}, which the current profile law leaves outside the included regime.`
@@ -301,20 +386,23 @@ export function inspectFocusedAnalyzabilityContext(
         ...matchingFrontiers.map((frontier) => frontier.prefix),
         ...(directlyExcludedFrontier ? [directlyExcludedFrontier.prefix] : []),
       ]),
-    }]
-    : [];
-  const issues = posture.openFronts.length > 0
-    ? [{
+    });
+  }
+  const issues: Issue[] = [];
+  if (classification.blockingReasons.length > 0 || posture.openFronts.length > 0) {
+    issues.push({
       code: directlyExcludedFrontier
         ? `focus-excluded-${sanitizeCode(directlyExcludedFrontier.prefix)}`
         : matchingBoundaryReferences.length > 0
           ? 'focus-excluded-boundary-seams'
-          : 'regime-open-fronts',
-      message: lines[0] ?? `Named open fronts remain under profile ${posture.profileId}.`,
+          : posture.openFronts.length > 0
+            ? 'regime-open-fronts'
+            : 'focus-analyzability-classification',
+      message: lines[0] ?? classification.summary,
       severity: directlyExcludedFrontier || matchingBoundaryReferences.length > 0 ? 'warning' as const : 'info' as const,
       origin: 'boundary' as const,
-    }]
-    : [];
+    });
+  }
   const primaryFrontier = directlyExcludedFrontier ?? matchingFrontiers[0] ?? posture.excludedFrontiers[0] ?? null;
   const continuations = primaryFrontier
     ? [{
@@ -337,11 +425,20 @@ export function inspectFocusedAnalyzabilityContext(
         : matchingBoundaryReferences.length > 0
           ? `boundary-seams=${matchingBoundaryReferences.length}`
           : `open-fronts=${posture.openFronts.length}`,
+    }, {
+      kind: 'route' as const,
+      label: 'Focused analyzability classification',
+      detail: `${classification.source}:${classification.currentWorldPathState}:${classification.currentWorldPathTier?.id ?? 'none'}`,
     }]
-    : [];
+    : [{
+      kind: 'route' as const,
+      label: 'Focused analyzability classification',
+      detail: `${classification.source}:${classification.currentWorldPathState}:${classification.currentWorldPathTier?.id ?? 'none'}`,
+    }];
 
   return {
     focusLabel: focus.focusLabel,
+    classification,
     directlyExcludedFrontier,
     matchingFrontiers,
     matchingBoundaryReferences,
@@ -371,8 +468,9 @@ export function summarizeAnalyzabilityPosture(
     .flatMap((snapshot) => snapshot.generatedAt ? [snapshot.generatedAt] : [])
     .slice(0, 8);
   const facts = [
-    { label: 'current band', value: posture.currentBand.label },
-    { label: 'deterministic ceiling', value: posture.deterministicCeilingBand.label },
+    { label: 'operational tier', value: posture.operationalAnalyzabilityTier.label },
+    { label: 'minimum deterministic ceiling', value: posture.minimumDeterministicInterpretationCeiling.label },
+    { label: 'boundary state', value: posture.boundaryState.label },
     { label: 'usable snapshot kinds', value: `${usableKinds}/${posture.snapshotSupport.snapshots.length}` },
     { label: 'frontier evidence source', value: posture.frontierEvidenceSource },
     { label: 'named open fronts', value: `${posture.openFronts.length}` },
@@ -435,6 +533,11 @@ export function summarizeAnalyzabilityPosture(
         kind: 'route',
         summary: `The active regime is ${posture.profileId} targeting ${posture.target}.`,
         provenanceRefs: [posture.profileId, posture.target],
+      },
+      {
+        kind: 'route',
+        summary: `Inside the included regime, the current operational tier is ${posture.operationalAnalyzabilityTier.label} and the minimum deterministic ceiling is ${posture.minimumDeterministicInterpretationCeiling.label}.`,
+        provenanceRefs: [posture.operationalAnalyzabilityTier.id, posture.minimumDeterministicInterpretationCeiling.id],
       },
       {
         kind: 'freshness',
@@ -513,17 +616,18 @@ function createAnalyzabilityPosture(
     ...snapshotSupportOpenFronts(snapshotSupport),
     ...excludedFrontierOpenFronts(excluded.frontiers),
   ];
-  const currentBand = bandForId(
+  const boundaryState = boundaryStateForId(
     openFronts.length > 0
-      ? 'explicit-open-named-fronts'
-      : 'regime-qualified-deterministic-truth',
+      ? 'named-open-fronts'
+      : 'locally-closed',
   );
 
   return {
     profileId: profile.profileId,
     target: profile.snapshotTarget,
-    currentBand,
-    deterministicCeilingBand: bandForId('regime-qualified-deterministic-truth'),
+    operationalAnalyzabilityTier: determineOperationalAnalyzabilityTier(),
+    minimumDeterministicInterpretationCeiling: MINIMUM_DETERMINISTIC_INTERPRETATION_CEILING,
+    boundaryState,
     frontierEvidenceSource: excluded.source,
     summaryLines: postureSummaryLines(profile, snapshotSupport, excluded, openFronts),
     snapshotSupport,
@@ -726,7 +830,8 @@ function postureSummaryLines(
 
   if (openFronts.length === 0) {
     return [
-      `The current posture closes as regime-qualified deterministic truth under profile ${profile.profileId}.`,
+      `The included regime currently closes at the ${determineOperationalAnalyzabilityTier().label} operational tier under profile ${profile.profileId}.`,
+      `The minimum deterministic interpretation ceiling is ${MINIMUM_DETERMINISTIC_INTERPRETATION_CEILING.label}, which future path evaluators classify specific code against.`,
       `All ${snapshotSupport.snapshots.length} snapshot kinds align with the resolved regime.`,
       frontiers.length === 0
         ? 'No named excluded frontiers are declared in the current profile.'
@@ -735,8 +840,8 @@ function postureSummaryLines(
   }
 
   return [
-    `The current posture sits at explicit-open named fronts because ${openFronts.length} open front${pluralize(openFronts.length)} remain under profile ${profile.profileId}.`,
-    `Deterministic closure inside the included regime still tops out at regime-qualified deterministic truth.`,
+    `The included regime still closes at the ${determineOperationalAnalyzabilityTier().label} operational tier, but ${openFronts.length} named open front${pluralize(openFronts.length)} remain under profile ${profile.profileId}.`,
+    `The minimum deterministic interpretation ceiling inside the included regime remains ${MINIMUM_DETERMINISTIC_INTERPRETATION_CEILING.label}, which future path evaluators classify specific code against.`,
     blockedKinds > 0
       ? `${blockedKinds} snapshot kind${pluralize(blockedKinds)} ${blockedKinds === 1 ? 'is' : 'are'} still unusable or regime-mismatched.`
       : `${frontiers.length} excluded frontier${pluralize(frontiers.length)} remain named open fronts, with ${seamCount} observed seam${pluralize(seamCount)} from included code.`,
@@ -748,15 +853,68 @@ function postureSummaryLines(
   ];
 }
 
+function classifyFocusedAnalyzability(
+  posture: AnalyzabilityPosture,
+  focusLabel: string,
+  directlyExcludedFrontier: ExcludedFrontierEvidence | null,
+  matchingBoundaryReferences: readonly ExcludedBoundaryReference[],
+): FocusedAnalyzabilityClassification {
+  if (directlyExcludedFrontier) {
+    return {
+      source: 'regime-context',
+      focusLabel,
+      currentWorldPathState: 'outside-current-world',
+      currentWorldPathTier: null,
+      minimumDeterministicInterpretationCeiling: posture.minimumDeterministicInterpretationCeiling,
+      blockingReasons: [{
+        code: 'focus-outside-current-world',
+        summary: `${focusLabel} falls under excluded frontier ${directlyExcludedFrontier.prefix}, so the current profile does not admit it as a current-world path.`,
+        consequence: 'prevents-current-world-classification',
+      }],
+      summary: `${focusLabel} falls outside the current world admitted by profile ${posture.profileId}, so no current-world path tier is claimed for it.`,
+    };
+  }
+
+  const blockingReasons: FocusedAnalyzabilityBlockingReason[] = [];
+  if (matchingBoundaryReferences.length > 0) {
+    blockingReasons.push({
+      code: 'observed-excluded-boundary-seam',
+      summary: `${focusLabel} has ${matchingBoundaryReferences.length} observed seam${pluralize(matchingBoundaryReferences.length)} into excluded frontier${pluralize(matchingBoundaryReferences.length)}.`,
+      consequence: 'keeps-boundary-open',
+    });
+  } else if (posture.openFronts.length > 0) {
+    blockingReasons.push({
+      code: 'named-open-fronts-elsewhere',
+      summary: `${posture.openFronts.length} named open frontier${pluralize(posture.openFronts.length)} remain elsewhere under profile ${posture.profileId}.`,
+      consequence: 'keeps-boundary-open',
+    });
+  }
+
+  return {
+    source: 'regime-context',
+    focusLabel,
+    currentWorldPathState: 'inside-current-world',
+    currentWorldPathTier: posture.operationalAnalyzabilityTier,
+    minimumDeterministicInterpretationCeiling: posture.minimumDeterministicInterpretationCeiling,
+    blockingReasons,
+    summary: matchingBoundaryReferences.length > 0
+      ? `${focusLabel} currently inhabits the ${posture.operationalAnalyzabilityTier.label} path tier under the active deterministic ceiling and touches ${matchingBoundaryReferences.length} observed seam${pluralize(matchingBoundaryReferences.length)} into excluded frontier${pluralize(matchingBoundaryReferences.length)}, so boundary closure remains open.`
+      : posture.openFronts.length > 0
+        ? `${focusLabel} currently inhabits the ${posture.operationalAnalyzabilityTier.label} path tier under the active deterministic ceiling. Named open fronts remain elsewhere in the active profile regime.`
+        : `${focusLabel} currently inhabits the ${posture.operationalAnalyzabilityTier.label} path tier under the active deterministic ceiling.`,
+  };
+}
+
 function focusedAnalyzabilityLines(
   posture: AnalyzabilityPosture,
+  classification: FocusedAnalyzabilityClassification,
   focusLabel: string,
   directlyExcludedFrontier: ExcludedFrontierEvidence | null,
   matchingBoundaryReferences: readonly ExcludedBoundaryReference[],
 ): readonly string[] {
   if (directlyExcludedFrontier) {
     return [
-      `${focusLabel} falls under excluded frontier ${directlyExcludedFrontier.prefix}, so this answer cannot close inside the current profile.`,
+      classification.summary,
       directlyExcludedFrontier.inboundBoundaryCount > 0
         ? `${directlyExcludedFrontier.inboundBoundaryCount} observed seam${pluralize(directlyExcludedFrontier.inboundBoundaryCount)} currently cross from included code into ${directlyExcludedFrontier.prefix}.`
         : `${directlyExcludedFrontier.prefix} remains outside the included regime, and the current snapshot contract shows no included-to-excluded seam into it.`,
@@ -766,13 +924,20 @@ function focusedAnalyzabilityLines(
   if (matchingBoundaryReferences.length > 0) {
     const first = matchingBoundaryReferences[0]!;
     return [
-      `${focusLabel} touches ${matchingBoundaryReferences.length} observed seam${pluralize(matchingBoundaryReferences.length)} into excluded frontier${pluralize(matchingBoundaryReferences.length)} under profile ${posture.profileId}.`,
+      classification.summary,
       `${first.source}:${first.line} reaches ${first.excludedPrefix} through ${first.specifier}.`,
     ];
   }
 
+  if (posture.openFronts.length > 0) {
+    return [
+      classification.summary,
+      `The active profile still leaves ${posture.openFronts.length} named open frontier${pluralize(posture.openFronts.length)} outside the included regime, but no observed seam from ${focusLabel} into them appears in the current snapshot contract.`,
+    ];
+  }
+
   return [
-    `The active profile still leaves ${posture.openFronts.length} named open frontier${pluralize(posture.openFronts.length)} outside the included regime, but no observed seam from ${focusLabel} into them appears in the current snapshot contract.`,
+    classification.summary,
   ];
 }
 
@@ -902,10 +1067,31 @@ function normalizeComparableFocusHint(
   return value.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').toLowerCase();
 }
 
-function bandForId(
-  id: AnalyzabilityBandId,
-): AnalyzabilityBand {
-  return BAND_BY_ID[id];
+function renderFocusedPathState(
+  state: FocusedCurrentWorldPathStateId,
+): string {
+  return state === 'inside-current-world'
+    ? 'inside current world'
+    : 'outside current world';
+}
+
+function determineOperationalAnalyzabilityTier(): ProductOperationalAnalyzabilityTier {
+  // The package can recover meaningful structure from source-backed facts inside
+  // explicit bounds, but it does not yet have a checker-driven residual
+  // `type-assisted` path strong enough to make that the default posture tier.
+  return tierForId('source-analyzable');
+}
+
+function tierForId(
+  id: ProductOperationalAnalyzabilityTierId,
+): ProductOperationalAnalyzabilityTier {
+  return TIER_BY_ID[id];
+}
+
+function boundaryStateForId(
+  id: AnalyzabilityBoundaryStateId,
+): AnalyzabilityBoundaryState {
+  return BOUNDARY_STATE_BY_ID[id];
 }
 
 function sanitizeCode(

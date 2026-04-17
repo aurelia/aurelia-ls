@@ -591,7 +591,9 @@ describe('SnapshotHostRuntime', () => {
     expect(described.result.profile.profileId).toBe('fixture-profile');
     expect(described.result.profile.snapshotTarget).toBe('fixture-profile-target');
     expect(described.result.snapshotSupport.target).toBe('fixture-profile-target');
-    expect(described.result.posture.currentBand.id).toBe('explicit-open-named-fronts');
+    expect(described.result.posture.operationalAnalyzabilityTier.id).toBe('source-analyzable');
+    expect(described.result.posture.minimumDeterministicInterpretationCeiling.id).toBe('bounded-source-analyzable-closure');
+    expect(described.result.posture.boundaryState.id).toBe('named-open-fronts');
     expect(described.result.posture.frontierEvidenceSource).toBe('live-scan');
     expect(described.result.snapshotSupport.missingKinds).toEqual(['deps', 'typerefs', 'exports']);
 

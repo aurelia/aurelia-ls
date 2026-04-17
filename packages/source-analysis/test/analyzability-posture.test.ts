@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createSnapshotHostRuntime } from '../out/host/runtime.js';
 import {
   inspectAnalyzabilityPosture,
+  inspectFocusedAnalyzabilityContext,
   resolveAnalysisProfile,
 } from '../out/public/profile.js';
 import { createSnapshotPaths } from '../out/snapshot-config.js';
@@ -32,8 +33,9 @@ describe('analyzability posture', () => {
     );
 
     expect(posture.frontierEvidenceSource).toBe('live-scan');
-    expect(posture.currentBand.id).toBe('explicit-open-named-fronts');
-    expect(posture.deterministicCeilingBand.id).toBe('regime-qualified-deterministic-truth');
+    expect(posture.operationalAnalyzabilityTier.id).toBe('source-analyzable');
+    expect(posture.minimumDeterministicInterpretationCeiling.id).toBe('bounded-source-analyzable-closure');
+    expect(posture.boundaryState.id).toBe('named-open-fronts');
     expect(posture.excludedFrontiers).toHaveLength(1);
     expect(posture.excludedFrontiers[0]?.prefix).toBe('packages/excluded');
     expect(posture.excludedFrontiers[0]?.packageCount).toBe(1);
@@ -96,6 +98,36 @@ describe('analyzability posture', () => {
     expect(asked.result.execution?.steps.map((step) => step.command)).toEqual([
       'describe.profile',
     ]);
+  });
+
+  it('classifies focused paths separately from repo-level posture', () => {
+    const repoPath = createExcludedFrontierFixtureRepo();
+    const profile = resolveAnalysisProfile({ repoPath });
+    const posture = inspectAnalyzabilityPosture(
+      createSnapshotPaths(import.meta.url, {}),
+      profile,
+    );
+
+    const included = inspectFocusedAnalyzabilityContext(posture, {
+      focusLabel: 'packages/app/src/index.ts',
+      pathPrefixes: ['packages/app/src/index.ts'],
+      queryHints: ['@fixture/app'],
+    });
+    expect(included.classification.currentWorldPathState).toBe('inside-current-world');
+    expect(included.classification.currentWorldPathTier?.id).toBe('source-analyzable');
+    expect(included.classification.blockingReasons.some((reason) =>
+      reason.code === 'observed-excluded-boundary-seam',
+    )).toBe(true);
+    expect(included.lines[0]).toContain('currently inhabits the source-analyzable path tier');
+
+    const excluded = inspectFocusedAnalyzabilityContext(posture, {
+      focusLabel: '@fixture/excluded',
+      queryHints: ['@fixture/excluded'],
+    });
+    expect(excluded.classification.currentWorldPathState).toBe('outside-current-world');
+    expect(excluded.classification.currentWorldPathTier).toBeNull();
+    expect(excluded.classification.blockingReasons[0]?.code).toBe('focus-outside-current-world');
+    expect(excluded.lines[0]).toContain('no current-world path tier is claimed');
   });
 });
 
