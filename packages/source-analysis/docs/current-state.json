@@ -4,7 +4,7 @@
   "campaignDoc": "docs/authority-first-campaign.md",
   "resumeProtocol": "docs/resume-protocol.md",
   "updatedAt": "2026-04-18",
-  "currentStepId": "route-and-audit-migration",
+  "currentStepId": "inquiry-ontology-split",
   "steps": [
     {
       "id": "continuity-scaffolding",
@@ -50,7 +50,7 @@
     {
       "id": "route-and-audit-migration",
       "title": "Move route-witness and audit onto shared authority and evaluators",
-      "status": "in_progress",
+      "status": "done",
       "goal": "Move route-witness and then audit off raw legacy projection carriers so they spend the same shared authority and evaluator seams already used by query.navigate.",
       "files": [
         "src/route-witness.ts",
@@ -71,7 +71,22 @@
     {
       "id": "inquiry-ontology-split",
       "title": "Split the overloaded inquiry ontology into narrower families",
-      "status": "pending"
+      "status": "in_progress",
+      "goal": "Separate route families, read modes, provenance families, and execution posture so broad inquiry unions remain only at the outer boundary where they are genuinely needed.",
+      "files": [
+        "src/inquiry-model.ts",
+        "src/inquiry-policy.ts",
+        "src/inquiry-catalog.ts",
+        "src/capability-catalog.ts",
+        "src/host/runtime.ts",
+        "src/answer-envelope.ts",
+        "src/answer-card.ts"
+      ],
+      "exitCriteria": [
+        "High-fanout internal call sites no longer need the broad FocusKind or world/provenance unions when they only support a narrower family.",
+        "Policy, catalog, and answer-envelope code mostly speak narrower route, read-mode, and provenance families.",
+        "The refactor avoids freezing premature public names for ontology slices that still need operator steering."
+      ]
     },
     {
       "id": "semantic-kernel-deepening",

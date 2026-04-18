@@ -4,21 +4,19 @@ Last updated: 2026-04-18
 
 ## Current objective
 
-Finish the `route-witness` / `audit` migration by deciding which remaining
-package-diagnostics and answer-packaging pieces should stay query-local versus
-graduate into shared helpers now that lookup, regime classification, package
-surface, and reachability all spend the shared workspace authority seam.
+Start the inquiry-ontology split by separating route families, read modes,
+provenance families, and execution posture so the outer inquiry boundary stops
+carrying one overloaded label space.
 
 ## Exact next slice
 
-1. Decide whether audit-only package diagnostics such as coordination surface
-   recovery and partition-cycle collection should stay query-local or move
-   behind shared package-evaluator helpers.
-2. Decide whether `navigation.ts` should adopt the new
-   `analysis-metadata-support.ts` helper so snapshot provenance/freshness
-   packaging stops re-reading the legacy triplet there too.
-3. If those remaining seams are acceptable, mark
-   `route-and-audit-migration` done and advance to the inquiry-ontology split.
+1. Inventory the overloaded families currently collapsed into
+   `src/inquiry-model.ts`, especially route, read mode, provenance, focus, and
+   world-frame posture.
+2. Introduce narrower internal family types for the highest-pressure seams
+   first, likely policy/input routing and answer-envelope provenance.
+3. Migrate one or two high-fanout consumers off the broad unions without
+   freezing premature public names.
 
 ## Recently landed
 
@@ -49,6 +47,14 @@ surface, and reachability all spend the shared workspace authority seam.
   `workspace-authority.ts` so the boundary name matches its broader role.
 - Added direct tests for the workspace authority adapter and kept the existing
   live navigation, route-witness, and audit suites green.
+- Moved route/reachability package diagnostics out of `audit.ts` and behind the
+  shared `src/package-audit-evaluator.ts` seam while intentionally keeping
+  answer-coordination and presentation-fragmentation checks audit-local.
+- Updated `navigation.ts` to spend `analysis-metadata-support.ts` for snapshot
+  provenance/metadata packaging instead of re-reading the legacy projection
+  triplet directly.
+- Finished the `route-and-audit-migration` step and advanced the campaign to
+  the inquiry-ontology split.
 
 ## Constraints
 
@@ -71,12 +77,11 @@ surface, and reachability all spend the shared workspace authority seam.
   provenance kinds, and execution posture.
 - `route-witness` and `audit` still describe freshness in terms of the legacy
   projections rather than a named shared route/reachability authority.
-- `query.navigate` still uses raw snapshot metadata for provenance, snapshot
-  nodes, export-route freshness notes, and default world-frame assembly even
-  though its primary resolution path now spends authority-backed seams.
-- `audit` still owns package-diagnostic interpretation such as coordination
-  fragmentation and source-area cycle findings even though package surfaces and
-  reachability are now authority-backed inputs.
+- `query.navigate`, `route-witness`, and `audit` still describe freshness in
+  terms of legacy projection labels even though metadata packaging has started
+  to converge behind shared helpers.
+- `audit` still owns coordination and presentation fragmentation checks as
+  package-self-pressure heuristics rather than shared semantic evaluators.
 - Default world-frame assembly still lives separately in navigation,
   route-witness, and audit even after snapshot metadata packaging started to
   converge.
@@ -85,12 +90,13 @@ surface, and reachability all spend the shared workspace authority seam.
 
 - `src/route-witness.ts`
 - `src/audit.ts`
-- `src/navigation.ts`
-- `src/analysis-metadata-support.ts`
-- `src/reachability.ts`
-- `src/coordination-surface.ts`
-- `src/structural-source-file-surface.ts`
-- `src/authority/workspace-authority.ts`
+- `src/inquiry-model.ts`
+- `src/inquiry-policy.ts`
+- `src/inquiry-catalog.ts`
+- `src/capability-catalog.ts`
+- `src/host/runtime.ts`
+- `src/answer-envelope.ts`
+- `src/answer-card.ts`
 
 ## Verification reminders
 
@@ -99,6 +105,8 @@ surface, and reachability all spend the shared workspace authority seam.
 - Re-run `pnpm --filter @aurelia-ls/source-analysis build:tests`.
 - Re-run `node ./out-test/test/workspace-authority.test.js`.
 - Re-run `node ./out-test/test/navigation.test.js`.
+- Re-run `node ./out-test/test/route-witness.test.js`.
+- Re-run `node ./out-test/test/audit.test.js`.
 
 ## Resume command
 

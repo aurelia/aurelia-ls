@@ -18,8 +18,7 @@ import {
   loadCurrentAnalysisViews,
 } from './snapshot-analysis-views.js';
 import type { LoadedCurrentSnapshotSet } from './snapshot-contract.js';
-import type { PackageExportRecord, PackageExportsSummary } from './exports/schema.js';
-import { collectPartitionBindingCycles } from './partition-coupling.js';
+import type { PackageExportsSummary } from './exports/schema.js';
 import type { TypeDecl } from './typerefs/schema.js';
 import {
   type FocusedAnalyzabilityContext,
@@ -48,6 +47,14 @@ import {
   compareNumbersDescending,
   compareStringsAscending,
 } from './ordering.js';
+import {
+  PACKAGE_AUDIT_SIGNAL_KINDS,
+  collectSharedPackageAuditSignals,
+  type PackageAuditEvaluatorContext,
+  type PackageAuditSignal,
+  type PackageAuditSignalKind,
+  type PackageAuditSignalSubject,
+} from './package-audit-evaluator.js';
 import type {
   ClosureBasis,
   Continuation,
@@ -65,10 +72,7 @@ import type {
   ReadMode,
   WorldFrame,
 } from './inquiry-model.js';
-import type {
-  PackageFileReachability,
-  PackageReachability,
-} from './reachability.js';
+import type { PackageReachability } from './reachability.js';
 import {
   describeMissingStructuralPackageSurface,
 } from './structural-source-file-surface.js';
@@ -81,15 +85,10 @@ import {
 } from './authority/workspace-authority.js';
 import type { Locator } from './authority/contracts.js';
 
-export const AUDIT_FINDING_KINDS = [
-  'blindspot',
-  'under-integrated-file',
-  'layer-cycle',
-  'surface-drift',
-] as const;
+export const AUDIT_FINDING_KINDS = PACKAGE_AUDIT_SIGNAL_KINDS;
 
 export type AuditFindingKind =
-  typeof AUDIT_FINDING_KINDS[number];
+  PackageAuditSignalKind;
 
 export type AuditRef = AnswerRef;
 
@@ -117,7 +116,6 @@ interface PackageAuditContext {
   readonly uncoveredFiles: readonly string[];
   readonly unresolvedImports: readonly AnalysisViews['deps']['unresolved_imports'][number][];
   readonly declarationsByFile: ReadonlyMap<string, readonly TypeDecl[]>;
-  readonly exportRecordsByFile: ReadonlyMap<string, readonly PackageExportRecord[]>;
   readonly dependencySurface: DependencySurface;
   readonly reachability: PackageReachability;
   readonly coordinationSurface: PackageCoordinationSurface | null;
@@ -157,11 +155,10 @@ function buildPackageAuditAnswer(
   authority: WorkspaceAuthority,
   packageQuery: string,
 ): InquiryAnswer<AuditValue> {
-  // TODO: Package audit now enters through authority-backed package lookup and
-  // regime classification, but the later finding assembly still spends raw
-  // AnalysisViews/reachability/package-surface joins. Keep pulling those
-  // internals behind shared package/evaluator surfaces so audit consults one
-  // authority instead of re-deriving meaning from legacy carriers.
+  // TODO: Package audit now spends shared package evaluators for
+  // route/reachability findings, but coordination-surface heuristics still
+  // live here as audit-local self-pressure checks. Revisit that seam once a
+  // broader answer/runtime coordinator exists.
   const analysis = authority.analysis;
   const normalizedPackageQuery = trimTrailingFocusPunctuation(packageQuery);
   const requestedRegimeContext = authority.inspectFocusedAnalyzability({
@@ -340,7 +337,6 @@ function createPackageAuditContext(
     uncoveredFiles: packageSurface.uncoveredFiles,
     unresolvedImports: packageSurface.unresolvedImports,
     declarationsByFile: packageSurface.declarationsByFile,
-    exportRecordsByFile: packageSurface.exportRecordsByFile,
     dependencySurface,
     reachability,
     coordinationSurface,
@@ -351,249 +347,31 @@ function createPackageAuditContext(
 function collectPackageAuditFindings(
   context: PackageAuditContext,
 ): readonly AuditFinding[] {
-  const findings = [
-    collectUncoveredFilesFinding(context),
-    collectUnresolvedImportsFinding(context),
-    collectExerciseOnlyFilesFinding(context),
-    collectPublicSurfaceUnexercisedFinding(context),
-    collectSourceAreaCycleFinding(context),
-    collectAnswerCoordinationFragmentationFinding(context),
-    collectPresentationFragmentationFinding(context),
-    ...collectDormantFileFindings(context),
-    collectUnanchoredCandidateRootsFinding(context),
-  ].filter((finding): finding is AuditFinding => Boolean(finding));
+  // Keep route/reachability/blindspot findings behind the shared package audit
+  // evaluator seam. Coordination and presentation fragmentation stay local here
+  // because they are still audit-shaped judgments about this package's own
+  // self-pressure rather than shared program meaning.
+  const signals = [
+    ...collectSharedPackageAuditSignals(toPackageAuditEvaluatorContext(context)),
+    collectAnswerCoordinationFragmentationSignal(context),
+    collectPresentationFragmentationSignal(context),
+  ].filter((signal): signal is PackageAuditSignal => Boolean(signal));
 
-  return findings.sort((left, right) =>
-    compareByPrecedence(context.policy.ordering.issueSeverity, left.severity, right.severity)
-    || compareByPrecedence(context.policy.ordering.trust, left.confidence, right.confidence)
-    || compareStringsAscending(left.title, right.title),
-  );
-}
-
-function collectUncoveredFilesFinding(
-  context: PackageAuditContext,
-): AuditFinding | null {
-  if (context.uncoveredFiles.length === 0) {
-    return null;
-  }
-
-  const uncoveredExercises = context.uncoveredFiles.filter((filePath) =>
-    context.reachability.exerciseFiles.includes(filePath),
-  );
-  const primaryPath = uncoveredExercises[0] ?? context.uncoveredFiles[0]!;
-  const title = uncoveredExercises.length === context.uncoveredFiles.length
-    ? 'Tests sit outside the graph coverage'
-    : 'Some package files sit outside the graph coverage';
-  const summary = uncoveredExercises.length === context.uncoveredFiles.length
-    ? `${context.uncoveredFiles.length} test file${pluralize(context.uncoveredFiles.length)} under ${context.pkg.package_dir} are outside every tsconfig, so they remain blindspot evidence rather than part of the structural source-file surface.`
-    : `${context.uncoveredFiles.length} file${pluralize(context.uncoveredFiles.length)} under ${context.pkg.package_dir} are outside every tsconfig, so the structural source-file surface still has a real blind spot.`;
-
-  return {
-    code: 'package-uncovered-files',
-    kind: 'blindspot',
-    severity: 'warning',
-    confidence: 'grounded',
-    title,
-    summary,
-    primaryRef: fileRef(primaryPath, 'uncovered file'),
-    relatedRefs: context.uncoveredFiles.slice(0, 8).map((filePath) => fileRef(filePath, 'uncovered file')),
-    evidence: [
-      `${context.uncoveredFiles.length} uncovered file${pluralize(context.uncoveredFiles.length)} under ${context.pkg.package_dir}.`,
-      ...(uncoveredExercises.length > 0
-        ? [`${uncoveredExercises.length} uncovered file${pluralize(uncoveredExercises.length)} currently classify as exercise-layout files, but they stay outside the canonical structural file surface.`]
-        : []),
-      ...context.uncoveredFiles.slice(0, 4).map((filePath) => `uncovered: ${filePath}`),
-    ],
-  };
-}
-
-function collectUnresolvedImportsFinding(
-  context: PackageAuditContext,
-): AuditFinding | null {
-  if (context.unresolvedImports.length === 0) {
-    return null;
-  }
-
-  const first = context.unresolvedImports[0]!;
-  return {
-    code: 'package-unresolved-imports',
-    kind: 'blindspot',
-    severity: 'error',
-    confidence: 'grounded',
-    title: 'Some imports do not resolve in the current graph',
-    summary: `${context.unresolvedImports.length} relative import${pluralize(context.unresolvedImports.length)} inside ${context.pkg.package_name} failed to resolve, so the dependency graph is missing expected edges.`,
-    primaryRef: fileRef(first.source, 'unresolved import source'),
-    relatedRefs: context.unresolvedImports.slice(0, 8).map((entry) =>
-      createFileAnswerRef(entry.source, `${entry.specifier} @ line ${entry.line}`),
-    ),
-    evidence: context.unresolvedImports.slice(0, 4).map((entry) =>
-      `${entry.source}:${entry.line} -> ${entry.specifier}`,
-    ),
-  };
-}
-
-function collectDormantFileFindings(
-  context: PackageAuditContext,
-): readonly AuditFinding[] {
-  const dormantFiles = context.reachability.files
-    .filter((file) => isDormantCandidate(context, file))
-    .slice(0, 3);
-
-  return dormantFiles.map((file) => {
-    const declarations = context.declarationsByFile.get(file.filePath) ?? [];
-    const roots = context.reachability.rootsByFilePath.get(file.filePath) ?? [];
-    const topWitnesses = file.routeWitnesses.slice(0, 3);
-    return {
-      code: 'under-integrated-file',
-      kind: 'under-integrated-file' as const,
-      severity: 'warning' as const,
-      confidence: 'grounded' as const,
-      title: `${basename(file.filePath)} looks parked rather than integrated`,
-      summary: `${file.filePath} has no modeled production route through the public API or manifest-backed executables, is not on the public package surface, and still carries ${declarations.length} tracked declaration${pluralize(declarations.length)}.`,
-      primaryRef: fileRef(file.filePath, 'under-integrated file'),
-      relatedRefs: dedupeRefs([
-        packageRef(context.pkg),
-        ...declarations.slice(0, 4).map((declaration) => typeRef(declaration)),
-      ]),
-      evidence: [
-        `grounded production roots: ${file.groundedProductionRootIds.length}`,
-        `qualified production roots: ${file.qualifiedProductionRootIds.length}`,
-        `exercise roots: ${file.exerciseRootIds.length}`,
-        `candidate roots: ${file.candidateRootIds.length}`,
-        `public export records: ${file.exportCount}`,
-        `tracked declarations: ${declarations.length}`,
-        ...(roots.length > 0
-          ? [`root roles: ${roots.map((root) => root.kind).join(', ')}`]
-          : []),
-        ...topWitnesses.map((witness) => `witness: ${witness.summary}`),
-        ...(declarations.length > 0
-          ? [`declared types: ${declarations.map((declaration) => declaration.name).join(', ')}`]
-          : []),
-      ],
-    };
-  });
-}
-
-function collectExerciseOnlyFilesFinding(
-  context: PackageAuditContext,
-): AuditFinding | null {
-  const exerciseOnlyFiles = context.reachability.files
-    .filter((file) => isExerciseOnlyCandidate(context, file))
+  return signals
     .sort((left, right) =>
-      compareFileAuditMetrics(context.policy.auditMetricOrders.exerciseOnly, left, right)
-      || compareStringsAscending(left.filePath, right.filePath),
-    );
-
-  if (exerciseOnlyFiles.length === 0) {
-    return null;
-  }
-
-  const primary = exerciseOnlyFiles[0]!;
-  return {
-    code: 'exercise-only-files',
-    kind: 'surface-drift',
-    severity: 'warning',
-    confidence: 'qualified',
-    title: 'Some source files are only justified by exercise routes',
-    summary: `${exerciseOnlyFiles.length} source file${pluralize(exerciseOnlyFiles.length)} under ${context.pkg.package_name} ${exerciseOnlyFiles.length === 1 ? 'is' : 'are'} currently reachable only from exercise roots and ${exerciseOnlyFiles.length === 1 ? 'has' : 'have'} no modeled production route. That usually means the implementation is test-only, scaffold-only, or still missing its intended product integration.`,
-    primaryRef: fileRef(primary.filePath, 'exercise-only source file'),
-    relatedRefs: exerciseOnlyFiles.slice(0, 8).map((file) => fileRef(file.filePath, 'exercise-only source file')),
-    evidence: exerciseOnlyFiles.slice(0, 6).flatMap((file) => {
-      const witness = file.routeWitnesses.find((candidate) => candidate.routeClass === 'exercise');
-      return [
-        `${file.filePath}: exerciseRoots=${file.exerciseRootIds.length}, declarations=${file.declarationCount}, exports=${file.exportCount}`,
-        ...(witness ? [`witness: ${witness.summary}`] : []),
-      ];
-    }),
-  };
+      compareByPrecedence(context.policy.ordering.issueSeverity, left.severity, right.severity)
+      || compareByPrecedence(context.policy.ordering.trust, left.confidence, right.confidence)
+      || compareStringsAscending(left.title, right.title),
+    )
+    .map((signal) => toAuditFinding(signal));
 }
 
-function collectPublicSurfaceUnexercisedFinding(
+function collectAnswerCoordinationFragmentationSignal(
   context: PackageAuditContext,
-): AuditFinding | null {
-  const unexercisedPublicFiles = context.reachability.files
-    .filter((file) => isPublicSurfaceUnexercisedCandidate(context, file))
-    .sort((left, right) =>
-      compareFileAuditMetrics(context.policy.auditMetricOrders.publicSurface, left, right)
-      || compareStringsAscending(left.filePath, right.filePath),
-    );
-
-  if (unexercisedPublicFiles.length === 0) {
-    return null;
-  }
-
-  const primary = unexercisedPublicFiles[0]!;
-  return {
-    code: 'public-surface-unexercised',
-    kind: 'surface-drift',
-    severity: 'info',
-    confidence: 'qualified',
-    title: 'Some public surface files have no modeled exercise route',
-    summary: `${unexercisedPublicFiles.length} public surface file${pluralize(unexercisedPublicFiles.length)} under ${context.pkg.package_name} ${unexercisedPublicFiles.length === 1 ? 'has' : 'have'} production reachability but no modeled exercise route. That leaves the public contract structurally present but unexercised by the current test/runtime witness model.`,
-    primaryRef: fileRef(primary.filePath, 'public surface without exercise route'),
-    relatedRefs: unexercisedPublicFiles.slice(0, 8).map((file) => fileRef(file.filePath, 'public surface without exercise route')),
-    evidence: unexercisedPublicFiles.slice(0, 6).flatMap((file) => {
-      const productionWitness = file.routeWitnesses.find((candidate) => candidate.routeClass === 'production');
-      return [
-        `${file.filePath}: productionRoots=${file.productionRootIds.length}, groundedProductionRoots=${file.groundedProductionRootIds.length}, declarations=${file.declarationCount}, exports=${file.exportCount}`,
-        ...(productionWitness ? [`production witness: ${productionWitness.summary}`] : []),
-      ];
-    }),
-  };
-}
-
-function collectSourceAreaCycleFinding(
-  context: PackageAuditContext,
-): AuditFinding | null {
-  const sourcePrefix = context.pkg.package_dir.length > 0
-    ? `${context.pkg.package_dir}/src/`
-    : 'src/';
-  const cycles = collectPartitionBindingCycles(
-    {
-      root: context.analysis.root,
-      edges: context.dependencySurface.edges,
-    },
-    'source-area',
-    sourcePrefix,
-  );
-
-  if (cycles.length === 0) {
-    return null;
-  }
-
-  const strongestCycle = cycles[0]!;
-  const representativeFiles = strongestCycle.partitions
-    .map((partition) => representativeFileForPartition(context, partition.partitionId))
-    .filter((filePath): filePath is string => Boolean(filePath));
-  const primaryRef = representativeFiles[0]
-    ? fileRef(representativeFiles[0], 'cyclic source area')
-    : packageRef(context.pkg);
-
-  return {
-    code: 'source-area-cycle',
-    kind: 'layer-cycle',
-    severity: 'warning',
-    confidence: 'grounded',
-    title: 'Top-level source areas still form a dependency cycle',
-    summary: `${context.pkg.package_name} still has ${cycles.length} source-area cycle${pluralize(cycles.length)}. The strongest cycle ties together ${strongestCycle.partitions.length} top-level areas (${strongestCycle.partitions.map((partition) => renderPartitionTail(partition.partitionId)).join(', ')}), so the intended internal layer boundary still does not close on a DAG.`,
-    primaryRef,
-    relatedRefs: dedupeRefs([
-      packageRef(context.pkg),
-      ...representativeFiles.slice(1, 8).map((filePath) => fileRef(filePath, 'cyclic source area')),
-    ]),
-    evidence: [
-      `cycle partitions: ${strongestCycle.partitions.map((partition) => partition.partitionId).join(', ')}`,
-      `cycle edge weight: ${strongestCycle.edgeCount}`,
-      ...strongestCycle.edges.slice(0, 6).map((edge) =>
-        `${renderPartitionTail(edge.from.partitionId)} -> ${renderPartitionTail(edge.to.partitionId)}: edges=${edge.edgeCount}, bindings=${edge.bindings.length}`,
-      ),
-    ],
-  };
-}
-
-function collectAnswerCoordinationFragmentationFinding(
-  context: PackageAuditContext,
-): AuditFinding | null {
+): PackageAuditSignal | null {
+  // TODO: If a broader answer/runtime authority emerges, this audit-local
+  // fragmentation heuristic should either move there or disappear behind a
+  // stronger shared coordinator instead of remaining a permanent local smell.
   const surface = context.coordinationSurface;
   if (!surface || surface.answerBuilderFiles.length < 2) {
     return null;
@@ -617,8 +395,16 @@ function collectAnswerCoordinationFragmentationFinding(
     confidence: 'grounded',
     title: 'Answer construction is coordinated by repeated local builders',
     summary: `${files.length} file${pluralize(files.length)} under ${context.pkg.package_name} independently build answer envelopes with ${totalBuilders} direct envelope builder${pluralize(totalBuilders)} and ${totalWrappers} local answer specializer${pluralize(totalWrappers)}. That usually means the query/result contract is still coordinated by repeated object assembly rather than one shared answer coordinator.`,
-    primaryRef: fileRef(primary.filePath, 'answer coordination hotspot'),
-    relatedRefs: files.slice(0, 8).map((file) => fileRef(file.filePath, 'answer coordination hotspot')),
+    primarySubject: {
+      kind: 'file',
+      filePath: primary.filePath,
+      detail: 'answer coordination hotspot',
+    },
+    relatedSubjects: files.slice(0, 8).map((file) => ({
+      kind: 'file' as const,
+      filePath: file.filePath,
+      detail: 'answer coordination hotspot',
+    })),
     evidence: files.slice(0, 6).flatMap((file) => [
       `${file.filePath}: builders=${renderNamedSurfaceMembers(file.envelopeBuilderFunctions)}, specializers=${renderNamedSurfaceMembers(file.envelopeWrapperFunctions)}`,
       `card literals=${file.cardObjectLiteralLines.length}, summary-line sites=${file.summaryLineSites.length}`,
@@ -626,9 +412,9 @@ function collectAnswerCoordinationFragmentationFinding(
   };
 }
 
-function collectPresentationFragmentationFinding(
+function collectPresentationFragmentationSignal(
   context: PackageAuditContext,
-): AuditFinding | null {
+): PackageAuditSignal | null {
   const surface = context.coordinationSurface;
   if (!surface || surface.presentationCarrierFiles.length < 2) {
     return null;
@@ -651,8 +437,16 @@ function collectPresentationFragmentationFinding(
     confidence: 'grounded',
     title: 'Presentation carriers are repeated across multiple answer modules',
     summary: `${files.length} file${pluralize(files.length)} under ${context.pkg.package_name} each declare local ref/value answer carriers and inline card-like object literals. That suggests the package still lacks a shared intermediate presentation model or renderer seam for answer cards and consumer-specific output styles.`,
-    primaryRef: fileRef(primary.filePath, 'presentation model hotspot'),
-    relatedRefs: files.slice(0, 8).map((file) => fileRef(file.filePath, 'presentation model hotspot')),
+    primarySubject: {
+      kind: 'file',
+      filePath: primary.filePath,
+      detail: 'presentation model hotspot',
+    },
+    relatedSubjects: files.slice(0, 8).map((file) => ({
+      kind: 'file' as const,
+      filePath: file.filePath,
+      detail: 'presentation model hotspot',
+    })),
     evidence: files.slice(0, 6).map((file) =>
       `${file.filePath}: ref-like interfaces=${renderNamedSurfaceMembers(file.refLikeInterfaces)}, card-like interfaces=${renderNamedSurfaceMembers(file.cardLikeInterfaces)}, card literals=${file.cardObjectLiteralLines.length}`,
     ).concat([
@@ -661,83 +455,51 @@ function collectPresentationFragmentationFinding(
   };
 }
 
-function collectUnanchoredCandidateRootsFinding(
+function toPackageAuditEvaluatorContext(
   context: PackageAuditContext,
-): AuditFinding | null {
-  const candidateRoots = context.reachability.roots
-    .filter((root) => root.kind === 'candidate-entry')
-    .map((root) => ({
-      root,
-      file: context.reachability.filesByPath.get(root.filePath),
-    }))
-    .filter((entry): entry is { root: PackageReachability['roots'][number]; file: PackageFileReachability } =>
-      Boolean(entry.file),
-    )
-    .sort((left, right) =>
-      compareFileAuditMetrics(context.policy.auditMetricOrders.candidateEntry, left.file, right.file)
-      || compareStringsAscending(left.root.filePath, right.root.filePath),
-    );
-
-  if (candidateRoots.length === 0) {
-    return null;
-  }
-
-  const topCandidates = candidateRoots.slice(0, 6);
-  const primary = topCandidates[0]!;
+): PackageAuditEvaluatorContext {
   return {
-    code: 'candidate-entry-roots',
-    kind: 'surface-drift',
-    severity: 'info',
-    confidence: 'grounded',
-    title: 'Some files act like entry roots without a grounded route',
-    summary: `${candidateRoots.length} file${pluralize(candidateRoots.length)} under ${context.pkg.package_name} ${candidateRoots.length === 1 ? 'has' : 'have'} no inbound imports but still drive package-local edges. The audit cannot tie ${candidateRoots.length === 1 ? 'it' : 'them'} to the public API or a manifest-backed executable surface, so ${candidateRoots.length === 1 ? 'it remains' : 'they remain'} under-modeled route heads.`,
-    primaryRef: fileRef(primary.root.filePath, 'candidate entry root'),
-    relatedRefs: topCandidates.map(({ root }) => fileRef(root.filePath, root.kind)),
-    evidence: topCandidates.map(({ root, file }) =>
-      `${root.filePath}: outbound=${file.outboundFiles.length}, declarations=${file.declarationCount}, publicSurface=${file.publicSurface ? 'yes' : 'no'}`,
-    ),
+    analysis: context.analysis,
+    pkg: context.pkg,
+    packageFiles: context.packageFiles,
+    uncoveredFiles: context.uncoveredFiles,
+    unresolvedImports: context.unresolvedImports,
+    declarationsByFile: context.declarationsByFile,
+    dependencySurface: context.dependencySurface,
+    reachability: context.reachability,
+    policy: context.policy,
   };
 }
 
-function isDormantCandidate(
-  context: PackageAuditContext,
-  file: PackageFileReachability,
-): boolean {
-  const sourcePrefix = context.pkg.package_dir.length > 0
-    ? `${context.pkg.package_dir}/src/`
-    : 'src/';
-  if (!file.filePath.startsWith(sourcePrefix)) return false;
-  if (file.publicSurface) return false;
-  if (file.productionRootIds.length > 0) return false;
-  if (file.exerciseRootIds.length > 0) return false;
-  if (file.declarationCount === 0) return false;
-  return true;
+function toAuditFinding(
+  signal: PackageAuditSignal,
+): AuditFinding {
+  return {
+    code: signal.code,
+    kind: signal.kind,
+    severity: signal.severity,
+    confidence: signal.confidence,
+    title: signal.title,
+    summary: signal.summary,
+    primaryRef: toAuditRef(signal.primarySubject),
+    relatedRefs: dedupeRefs(signal.relatedSubjects.map((subject) => toAuditRef(subject))),
+    evidence: signal.evidence,
+  };
 }
 
-function isExerciseOnlyCandidate(
-  context: PackageAuditContext,
-  file: PackageFileReachability,
-): boolean {
-  const sourcePrefix = context.pkg.package_dir.length > 0
-    ? `${context.pkg.package_dir}/src/`
-    : 'src/';
-  if (!file.filePath.startsWith(sourcePrefix)) return false;
-  if (file.publicSurface) return false;
-  if (file.productionRootIds.length > 0) return false;
-  if (file.exerciseRootIds.length === 0) return false;
-  if (file.declarationCount === 0 && file.exportCount === 0) return false;
-  return true;
-}
-
-function isPublicSurfaceUnexercisedCandidate(
-  context: PackageAuditContext,
-  file: PackageFileReachability,
-): boolean {
-  if (!file.publicSurface) return false;
-  if (file.exerciseRootIds.length > 0) return false;
-  if (file.productionRootIds.length === 0) return false;
-  if (file.filePath === context.pkg.analysis_entrypoint) return false;
-  return true;
+function toAuditRef(
+  subject: PackageAuditSignalSubject,
+): AuditRef {
+  switch (subject.kind) {
+    case 'package':
+      return createPackageSummaryAnswerRef(subject.pkg);
+    case 'file':
+      return createFileAnswerRef(subject.filePath, subject.detail);
+    case 'type-declaration':
+      return createTypeDeclarationAnswerRef(subject.declaration);
+    default:
+      return assertNever(subject);
+  }
 }
 
 function createAuditDocument(
@@ -795,14 +557,6 @@ function createAuditDocument(
   ]);
 }
 
-function compareFileAuditMetrics(
-  metrics: readonly AuditMetric[],
-  left: PackageFileReachability,
-  right: PackageFileReachability,
-): number {
-  return compareMetricSequence(metrics, left, right, fileAuditMetricValue);
-}
-
 function compareCoordinationAuditMetrics(
   metrics: readonly AuditMetric[],
   left: PackageCoordinationSurface['files'][number],
@@ -828,30 +582,6 @@ function compareMetricSequence<T>(
   }
 
   return 0;
-}
-
-function fileAuditMetricValue(
-  metric: AuditMetric,
-  file: PackageFileReachability,
-): number {
-  switch (metric) {
-    case 'outbound-count':
-      return file.outboundFiles.length;
-    case 'declaration-count':
-      return file.declarationCount;
-    case 'export-count':
-      return file.exportCount;
-    case 'public-surface':
-      return file.publicSurface ? 1 : 0;
-    case 'exercise-root-count':
-      return file.exerciseRootIds.length;
-    case 'production-root-count':
-      return file.productionRootIds.length;
-    case 'grounded-production-root-count':
-      return file.groundedProductionRootIds.length;
-    default:
-      return 0;
-  }
 }
 
 function coordinationAuditMetricValue(
@@ -1430,20 +1160,6 @@ function renderNamedSurfaceMembers(
     .slice(0, 4)
     .map((member) => `${member.name}@${member.line}`)
     .join(', ');
-}
-
-function representativeFileForPartition(
-  context: PackageAuditContext,
-  partitionId: string,
-): string | null {
-  const prefix = `${partitionId}/`;
-  return context.packageFiles.find((filePath) => filePath.startsWith(prefix)) ?? null;
-}
-
-function renderPartitionTail(
-  partitionId: string,
-): string {
-  return partitionId.split('/').at(-1) ?? partitionId;
 }
 
 function dedupeRefs(

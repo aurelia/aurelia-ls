@@ -60,3 +60,19 @@ decision trail in order.
   `analysis-metadata-support.ts`, but navigation still needs the same cleanup.
 - The authority file was renamed from `navigation-authority.ts` to
   `workspace-authority.ts` because it now serves multiple query families.
+
+## 2026-04-18 - Route and audit migration completed
+
+- Package route/reachability/blindspot diagnostics now live behind the shared
+  `package-audit-evaluator.ts` seam instead of remaining embedded inside
+  `audit.ts`.
+- Coordination and presentation fragmentation checks intentionally remain
+  audit-local for now because they are still package-self-pressure heuristics
+  about answer construction, not shared semantic truth.
+- `navigation.ts` now spends `analysis-metadata-support.ts` for snapshot
+  provenance/metadata packaging so legacy projection metadata reads continue to
+  converge behind one helper.
+- The `route-and-audit-migration` campaign step is now considered complete.
+- The next campaign step is the inquiry-ontology split, with pressure centered
+  on `inquiry-model.ts` and the broad unions consumed by policy, catalogs, and
+  answer envelopes.

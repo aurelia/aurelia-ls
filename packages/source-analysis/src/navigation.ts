@@ -2,11 +2,15 @@ import {
   type AnalysisViews,
 } from './analysis-views.js';
 import {
-  createAnalysisProvenanceEntry,
   defaultWorldFrameForAnalysis,
   describeAnalysisSurface,
   describeAnalysisSurfaceEvidence,
 } from './analysis-surface.js';
+import {
+  createAnalysisProvenanceEntriesForKinds,
+  getAnalysisSnapshotMetadata,
+  type AnalysisMetadataKind,
+} from './analysis-metadata-support.js';
 import type { PackageExportRecord, PackageExportsSummary } from './exports/schema.js';
 import {
   loadCurrentAnalysisViews,
@@ -58,7 +62,6 @@ import type {
   WorldFrame,
 } from './inquiry-model.js';
 import type {
-  ObservationProvenance,
   SubstrateEdge,
   SubstrateGraph,
   SubstrateNode,
@@ -219,30 +222,40 @@ class EpisodeBuilder {
     this.#claimEdges.set(`${edge.kind}:${edge.from}->${edge.to}`, edge);
   }
 
-  addSnapshotNode(kind: 'deps' | 'typerefs' | 'exports'): string {
-    const snapshot = kind === 'deps'
-      ? this.snapshots.deps
-      : kind === 'typerefs'
-        ? this.snapshots.typeRefs
-        : this.snapshots.exports;
+  snapshotMetadata(kind: AnalysisMetadataKind) {
+    return getAnalysisSnapshotMetadata(this.snapshots, kind);
+  }
+
+  createAnalysisProvenanceEntries(
+    kinds: readonly AnalysisMetadataKind[],
+  ): readonly InquiryProvenanceEntry[] {
+    return createAnalysisProvenanceEntriesForKinds(
+      this.snapshots,
+      kinds,
+      this.query.worldFrame?.freshness,
+    );
+  }
+
+  addSnapshotNode(kind: AnalysisMetadataKind): string {
+    const snapshot = this.snapshotMetadata(kind);
     const label = `${kind} ${this.snapshots.source === 'hosted-analysis' ? 'analysis view' : 'snapshot'}`;
     return this.addNode({
       id: `snapshot:${kind}`,
       kind: 'snapshot',
       label,
-      fingerprint: `${snapshot.source_commit}:${snapshot.generated_at}`,
+      fingerprint: `${snapshot.sourceCommit}:${snapshot.generatedAt}`,
       provenance: [{
         kind: this.snapshots.source === 'hosted-analysis'
           ? 'analysis-session'
           : 'snapshot-materialization',
         label,
-        fingerprint: snapshot.generated_at,
-        detail: `source_commit=${snapshot.source_commit}`,
+        fingerprint: snapshot.generatedAt,
+        detail: `source_commit=${snapshot.sourceCommit}`,
       }],
       attributes: {
-        generatedAt: snapshot.generated_at,
-        sourceCommit: snapshot.source_commit,
-        analyzerCommit: snapshot.analyzer_commit,
+        generatedAt: snapshot.generatedAt,
+        sourceCommit: snapshot.sourceCommit,
+        analyzerCommit: snapshot.analyzerCommit,
       },
     });
   }
@@ -398,22 +411,6 @@ class EpisodeBuilder {
         context,
       },
     });
-  }
-
-  snapshotProvenance(kind: 'deps' | 'typerefs' | 'exports'): ObservationProvenance {
-    const snapshot = kind === 'deps'
-      ? this.snapshots.deps
-      : kind === 'typerefs'
-        ? this.snapshots.typeRefs
-        : this.snapshots.exports;
-    return {
-      kind: this.snapshots.source === 'hosted-analysis'
-        ? 'analysis-session'
-        : 'snapshot-materialization',
-      label: `${kind} ${this.snapshots.source === 'hosted-analysis' ? 'analysis view' : 'snapshot'}`,
-      fingerprint: snapshot.generated_at,
-      detail: `source_commit=${snapshot.source_commit}`,
-    };
   }
 
   finish(answer: InquiryAnswer<NavigationValue>): NavigationEpisode {
@@ -622,8 +619,7 @@ function buildPackageEpisode(
     regimeContext.issues,
     [...continuations, ...regimeContext.continuations],
     [
-      createAnalysisProvenanceEntry('exports', builder.snapshots.exports.generated_at, builder.snapshots.exports.source_commit, builder.query.worldFrame?.freshness),
-      createAnalysisProvenanceEntry('deps', builder.snapshots.deps.generated_at, builder.snapshots.deps.source_commit, builder.query.worldFrame?.freshness),
+      ...builder.createAnalysisProvenanceEntries(['exports', 'deps']),
       claimProvenanceEntry(`${pkg.package_name} package overview`, packageClaimId),
       ...regimeContext.provenance,
     ],
@@ -770,9 +766,9 @@ function buildTypeEpisode(
         : []),
     ],
     [
-      createAnalysisProvenanceEntry('typerefs', builder.snapshots.typeRefs.generated_at, builder.snapshots.typeRefs.source_commit, builder.query.worldFrame?.freshness),
+      ...builder.createAnalysisProvenanceEntries(['typerefs']),
       ...(matchingExport
-        ? [createAnalysisProvenanceEntry('exports', builder.snapshots.exports.generated_at, builder.snapshots.exports.source_commit, builder.query.worldFrame?.freshness)]
+        ? builder.createAnalysisProvenanceEntries(['exports'])
         : []),
       claimProvenanceEntry(`${decl.name} type neighborhood`, typeClaimId),
     ],
@@ -989,7 +985,7 @@ function buildSymbolEpisode(
         detail: 'Checker-adjacent declaration, member, and type-reference claims from the structural claim graph.',
       },
       ...(match.publicExports.length > 0
-        ? [createAnalysisProvenanceEntry('exports', builder.snapshots.exports.generated_at, builder.snapshots.exports.source_commit, builder.query.worldFrame?.freshness)]
+        ? builder.createAnalysisProvenanceEntries(['exports'])
         : []),
       claimProvenanceEntry(`${decl.attributes.name} symbol neighborhood`, symbolClaimId),
     ],
@@ -1148,7 +1144,7 @@ function buildExportEpisode(
       continuation('join', 'Inspect the owning package', record.package_name, 'owning package'),
     ],
     [
-      createAnalysisProvenanceEntry('exports', builder.snapshots.exports.generated_at, builder.snapshots.exports.source_commit, builder.query.worldFrame?.freshness),
+      ...builder.createAnalysisProvenanceEntries(['exports']),
       claimProvenanceEntry(`${record.exported_name} export route`, exportClaimId),
     ],
   ));
@@ -1346,9 +1342,7 @@ function buildFileEpisode(
       ...regimeContext.continuations,
     ],
     [
-      createAnalysisProvenanceEntry('deps', builder.snapshots.deps.generated_at, builder.snapshots.deps.source_commit, builder.query.worldFrame?.freshness),
-      createAnalysisProvenanceEntry('typerefs', builder.snapshots.typeRefs.generated_at, builder.snapshots.typeRefs.source_commit, builder.query.worldFrame?.freshness),
-      createAnalysisProvenanceEntry('exports', builder.snapshots.exports.generated_at, builder.snapshots.exports.source_commit, builder.query.worldFrame?.freshness),
+      ...builder.createAnalysisProvenanceEntries(['deps', 'typerefs', 'exports']),
       claimProvenanceEntry(`${basename(filePath)} file neighborhood`, fileClaimId),
       ...regimeContext.provenance,
       ...(structuralPathContext?.provenance ?? []),
