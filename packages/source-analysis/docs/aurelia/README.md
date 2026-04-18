@@ -28,7 +28,8 @@ Read these notes before:
 5. [compile-time-di-container-state.md](./compile-time-di-container-state.md)
 6. [proof-basis.md](./proof-basis.md)
 7. [semantic-stack.md](./semantic-stack.md)
-8. [ai-capability-catalog.md](./ai-capability-catalog.md)
+8. [ai-capability-surface-map.md](./ai-capability-surface-map.md)
+9. [ai-capability-catalog.md](./ai-capability-catalog.md)
 
 ## Local Rules
 

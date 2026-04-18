@@ -4,6 +4,9 @@ Use this note when deciding which Aurelia-aware capabilities to prioritize in
 `packages/source-analysis` for AI-assisted work on large or growing Aurelia
 applications.
 
+For a neutral inventory of Aurelia capability regions, read
+[ai-capability-surface-map.md](./ai-capability-surface-map.md) first.
+
 This note is derived from Atlas ledger truth and the attractor experience
 theses, but it is intentionally re-expressed in local package language.
 
@@ -349,7 +352,6 @@ rather than declaration presence.
 The tool should answer:
 
 - which declaration came from explicit code versus policy-derived convention
-- which compat or deprecation widening is in play
 - which alias won when several naming surfaces competed
 
 This is useful because a landed name or syntax does not reveal whether its
