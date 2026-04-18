@@ -301,3 +301,17 @@ decision trail in order.
   symbol localization still closes through `query.symbol.lookup`, export
   routing already has a direct trace primitive, and the broad shell is losing
   reasons to exist as a truth owner.
+
+## 2026-04-18 - Deps / typerefs / exports reset moved from rhetoric to concrete retirement work
+
+- We explicitly stopped treating the historical `deps` / `typerefs` /
+  `exports` query scripts as a surface to keep rationalizing.
+- A new live kernel now exists in `src/live-query/` as the cleaner center of
+  gravity for current-query bootstrapping over repo session, tsconfig scan,
+  structural runtime, and live deps/typerefs/exports materialization.
+- The historical query scripts now carry local TODOs marking them as
+  retirement candidates to be rewritten as thin adapters over that live
+  kernel.
+- A repo-owned reset note now records the stronger direction:
+  snapshot materialization may remain as an optional artifact, but it should
+  not remain the default substrate for current queries.

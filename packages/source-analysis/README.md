@@ -31,6 +31,10 @@ Before non-trivial work, start with [docs/working-map.md](C:/projects/aurelia-ls
 
 For machine-facing API work, read [docs/machine-legible-api-reset.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/machine-legible-api-reset.md) before touching inquiry or host surfaces.
 
+For the current reset of the historical `deps` / `typerefs` / `exports`
+surface, read [docs/deps-typerefs-exports-retirement.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/deps-typerefs-exports-retirement.md)
+before investing in snapshot-first query paths.
+
 For framework-aware work, read [docs/aurelia/README.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/aurelia/README.md) before designing Aurelia-specific surfaces.
 
 # Campaign continuity
@@ -62,6 +66,7 @@ These are short guidance notes, not a frozen design:
 - [docs/self-pressure-test.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/self-pressure-test.md)
 - [docs/open-tensions.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/open-tensions.md)
 - [docs/machine-legible-api-reset.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/machine-legible-api-reset.md)
+- [docs/deps-typerefs-exports-retirement.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/deps-typerefs-exports-retirement.md)
 - [docs/aurelia/README.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/aurelia/README.md)
 
 # Open tensions

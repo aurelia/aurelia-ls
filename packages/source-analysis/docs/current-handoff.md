@@ -10,19 +10,14 @@ question routing, family ranking, or conversational ingress.
 
 ## Exact next slice
 
-1. Keep shrinking the remaining compatibility query surfaces
-   (`query.navigate`, `query.route.witness`, `query.audit.package`) into
-   wrappers over the direct primitives rather than letting them regrow into
-   new multiplexing shells.
-2. Add the next missing primitive families after the new
-   export-trace/package-context/package-surface/package-reachability/file-context/file-route/type-context/type-route/audit-signals
-   slice, especially framework-oriented world/registration evidence queries.
-3. Keep structured answer algebra available where it helps, but make sure the
-   machine-facing contract does not require presentation-first answer builders
-   or prose-oriented discovery layers to reach semantic work.
-4. Narrow the remaining broad compatibility carriers (`ReadMode`,
-   `WorldFrame`, legacy snapshot-query shims) so the host speaks more explicit
-   typed selectors and posture slices end to end.
+1. Treat the historical `deps` / `typerefs` / `exports` query scripts as
+   retirement candidates rather than architecture to preserve.
+2. Move current-query boot paths onto the live query kernel in
+   `src/live-query/` instead of materialized snapshot resolution.
+3. Keep useful command intent, but rebuild the commands as thin adapters over
+   shared live runtime/evaluator surfaces.
+4. Only after that reset is visibly underway should framework-world and
+   registration evidence become the next major primitive family.
 
 ## Recently landed
 
@@ -147,6 +142,12 @@ question routing, family ranking, or conversational ingress.
   carriers plus `query.navigate` now spend the same lower-level
   package/file/type adjudication paths instead of maintaining separate host-
   local truth assembly.
+- Added an initial `src/live-query/` kernel scaffold that can open the current
+  workspace, build the structural runtime once, and materialize current
+  deps/typerefs/exports outputs plus `AnalysisViews` without going through the
+  snapshot boot path.
+- Added a repo-owned retirement note for the old `deps` / `typerefs` /
+  `exports` split-brain surface and linked it from the main package docs.
 - Moved `route-witness` file/type inspection onto explicit shared helpers so
   the compatibility answer and the direct `query.file.route` /
   `query.type.route` primitives now spend the same lower-level route-target
@@ -176,6 +177,9 @@ question routing, family ranking, or conversational ingress.
 
 - `AnalysisViews` still carries the historical projection triple and remains a
   major continuity seam.
+- The old `deps` / `typerefs` / `exports` query scripts still boot from
+  snapshot resolution and still own large local index/render layers, even
+  though a new live kernel now exists under `src/live-query/`.
 - The hosted/public API no longer depends on the conversational ingress shell,
   but several answer-bearing compatibility queries still aggregate too much
   semantic work behind broad labels.
@@ -207,6 +211,10 @@ question routing, family ranking, or conversational ingress.
 - `query.navigate` is now the broadest remaining compatibility shell and the
   likeliest next target for further decomposition now that its package/file/
   type branches share direct context helpers.
+- The command-level reset now has two centers in tension: the newer live host
+  runtime and the older snapshot-first `deps` / `typerefs` / `exports` CLI
+  scripts. The next pass should reduce that split rather than document around
+  it.
 - `WorldFrame` is now split internally into `WorldTargeting` and
   `ExecutionPosture`, and answer/wire adapters now spend those slices
   internally, but the public query and wire carriers still flatten them for
@@ -226,8 +234,13 @@ question routing, family ranking, or conversational ingress.
 - `src/public/host.ts`
 - `src/cli.ts`
 - `src/cli-hosted.ts`
+- `src/live-query/contracts.ts`
+- `src/live-query/runtime.ts`
 - `src/navigation.ts`
 - `src/authority/workspace-authority.ts`
+- `src/deps/query.ts`
+- `src/typerefs/query.ts`
+- `src/exports/query.ts`
 - `src/export-trace-runtime-surface.ts`
 - `src/reachability.ts`
 - `src/structural-source-file-surface.ts`

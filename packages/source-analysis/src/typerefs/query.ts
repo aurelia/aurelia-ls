@@ -4,6 +4,10 @@
  * Usage: pnpm source-analysis typerefs <command> [args] [--file path/to/typerefs.json]
  */
 
+// TODO: Retire this snapshot-first compatibility script in favor of thin
+// adapters over `src/live-query/`. The command surface is useful; the current
+// loader/index/UI architecture is not.
+
 import { execSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
