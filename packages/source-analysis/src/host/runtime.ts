@@ -238,13 +238,14 @@ export class SnapshotHostRuntime {
   }
 
   #describeInquiries(args: DescribeInquiriesArgs): CommandOutcome {
+    const readMode = presentationReadMode(args.readMode, 'summary-card');
     const answer = this.#publicIngress.createDiscoveryAnswer({
       question: args.question,
       focusKind: args.focusKind,
       familyId: args.familyId,
       includeExamples: args.includeExamples,
       topK: args.topK,
-      readMode: args.readMode,
+      readMode,
       consumer: args.consumer,
       worldFrame: createHostedWorldFrame(),
     });
@@ -282,12 +283,13 @@ export class SnapshotHostRuntime {
   }
 
   #describeCapabilities(args: DescribeCapabilitiesArgs): CommandOutcome {
+    const readMode = presentationReadMode(args.readMode, 'summary-card');
     const answer = this.#ingress.createDiscoveryAnswer({
       question: args.question,
       focusKind: args.focusKind,
       includeExamples: args.includeExamples,
       topK: args.topK,
-      readMode: args.readMode,
+      readMode,
       consumer: args.consumer,
       worldFrame: createHostedWorldFrame(),
     });
@@ -307,6 +309,7 @@ export class SnapshotHostRuntime {
     const repoPath = args.repoPath ?? sessionState?.repoPath;
     const target = args.target ?? sessionState?.target;
     const profilePath = args.profilePath ?? sessionState?.profilePath ?? undefined;
+    const readMode = presentationReadMode(args.readMode, 'focus-card');
     const answer = this.#ingress.createPlanAnswer({
       question: args.question,
       sessionId: args.sessionId,
@@ -315,7 +318,7 @@ export class SnapshotHostRuntime {
       profilePath,
       focusKind: args.focusKind,
       focusValue: args.focusValue,
-      readMode: args.readMode,
+      readMode,
       consumer: args.consumer,
       worldFrame: createRuntimeWorldFrame({ repoPath, target, profilePath }),
     });
@@ -339,6 +342,7 @@ export class SnapshotHostRuntime {
     const repoPath = args.repoPath ?? sessionState?.repoPath ?? process.cwd();
     const target = args.target ?? sessionState?.target;
     const profilePath = args.profilePath ?? sessionState?.profilePath ?? undefined;
+    const readMode = presentationReadMode(args.readMode, 'focus-card');
     const answer = this.#publicIngress.createPlanAnswer({
       question: args.question,
       sessionId: args.sessionId,
@@ -348,7 +352,7 @@ export class SnapshotHostRuntime {
       focusKind: args.focusKind,
       focusValue: args.focusValue,
       familyId: args.familyId,
-      readMode: args.readMode,
+      readMode,
       consumer: args.consumer,
       worldFrame: createRuntimeWorldFrame({ repoPath, target, profilePath }),
     });
@@ -368,11 +372,12 @@ export class SnapshotHostRuntime {
   }
 
   #repairCommand(args: RepairCommandArgs): CommandOutcome {
+    const readMode = presentationReadMode(args.readMode, 'focus-card');
     const answer = this.#ingress.createRepairAnswer({
       command: args.command,
       args: args.args,
       question: args.question,
-      readMode: args.readMode,
+      readMode,
       consumer: args.consumer,
       worldFrame: createHostedWorldFrame(),
     });
@@ -400,6 +405,7 @@ export class SnapshotHostRuntime {
     const repoPath = args.repoPath ?? existingSession?.repoPath ?? process.cwd();
     const target = args.target ?? existingSession?.target;
     const profilePath = args.profilePath ?? existingSession?.profilePath ?? undefined;
+    const readMode = presentationReadMode(args.readMode, 'focus-card');
     const plan = this.#publicIngress.plan({
       question: args.question,
       sessionId: existingSession?.sessionId ?? args.sessionId,
@@ -428,7 +434,7 @@ export class SnapshotHostRuntime {
       focusKind: args.focusKind,
       focusValue: args.focusValue,
       familyId: args.familyId,
-      readMode: args.readMode,
+      readMode,
       consumer: args.consumer,
       worldFrame: createRuntimeWorldFrame({
         repoPath,
@@ -592,12 +598,13 @@ export class SnapshotHostRuntime {
   #queryAuditPackage(args: AuditPackageQueryArgs): CommandOutcome {
     const state = this.#sessions.get(args.sessionId);
     const hostedInquiry = ensureFreshHostedInquiryContext(state, args.refreshIfNeeded);
+    const readMode = presentationReadMode(args.readMode, 'summary-card');
     const answer = createAuditAnswer(
       {
         inquiryEpisode: 'inventory-and-audit-sweep',
         focusRef: { kind: 'package', value: args.packageName },
         questionRoute: 'inventory',
-        readMode: args.readMode ?? 'summary-card',
+        readMode,
         worldFrame: createRuntimeWorldFrame({
           repoPath: state.repoPath,
           target: state.target,
@@ -624,6 +631,7 @@ export class SnapshotHostRuntime {
   #queryRouteWitness(args: RouteWitnessQueryArgs): CommandOutcome {
     const state = this.#sessions.get(args.sessionId);
     const hostedInquiry = ensureFreshHostedInquiryContext(state, args.refreshIfNeeded);
+    const readMode = presentationReadMode(args.readMode, 'focus-card');
     const answer = createRouteWitnessAnswer(
       {
         inquiryEpisode: 'bounded-closure-explanation',
@@ -632,7 +640,7 @@ export class SnapshotHostRuntime {
           value: args.focusValue,
         },
         questionRoute: 'route',
-        readMode: args.readMode ?? 'focus-card',
+        readMode,
         worldFrame: createRuntimeWorldFrame({
           repoPath: state.repoPath,
           target: state.target,
@@ -660,6 +668,7 @@ export class SnapshotHostRuntime {
     const state = this.#sessions.get(args.sessionId);
     const hostedInquiry = ensureFreshHostedInquiryContext(state, args.refreshIfNeeded);
     const authority = createLegacyProjectionWorkspaceAuthority(hostedInquiry.analysis);
+    const readMode = presentationReadMode(args.readMode, 'focus-card');
     const episode = createNavigationEpisode(
       {
         inquiryEpisode: 'orient-and-localize',
@@ -668,7 +677,7 @@ export class SnapshotHostRuntime {
           value: args.focusValue,
         },
         questionRoute: args.questionRoute ?? 'join',
-        readMode: args.readMode ?? 'focus-card',
+        readMode,
         worldFrame: createRuntimeWorldFrame({
           repoPath: state.repoPath,
           target: state.target,
@@ -1217,6 +1226,13 @@ function createRuntimeWorldFrame(
       ...(options.freshness ? { freshness: options.freshness } : {}),
     },
   });
+}
+
+function presentationReadMode(
+  readMode: ReadMode | undefined,
+  fallback: 'summary-card' | 'focus-card',
+) {
+  return resolvePresentationReadMode(readMode, fallback);
 }
 
 function ensureFreshSnapshot<TKind extends SnapshotKind>(

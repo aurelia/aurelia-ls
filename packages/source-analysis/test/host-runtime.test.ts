@@ -552,6 +552,47 @@ describe('SnapshotHostRuntime', () => {
     expect(askedOrientation.result.rendered?.style).toBe('plain-text');
   });
 
+  it('normalizes payload read-mode requests at the host boundary for presentation answers', () => {
+    const repoPath = createAuditFixtureRepo();
+    const runtime = createSnapshotHostRuntime();
+
+    const opened = runtime.execute({
+      command: 'session.open',
+      args: {
+        repoPath,
+        target: 'fixture-host-read-mode',
+      },
+    });
+
+    const sessionId = opened.result.sessionId;
+    const audit = runtime.execute({
+      command: 'query.audit.package',
+      args: {
+        sessionId,
+        packageName: '@fixture/source-analysis-audit',
+        readMode: 'snapshot',
+      },
+    });
+
+    expect(audit.status).toBe('ok');
+    expect(audit.result.answer.query.readMode).toBe('summary-card');
+    expect(audit.result.answer.slots.read_mode).toBe('summary-card');
+
+    const plan = runtime.execute({
+      command: 'plan.inquiry',
+      args: {
+        question: 'Audit @fixture/source-analysis-audit for tech debt.',
+        repoPath,
+        target: 'fixture-host-read-mode',
+        readMode: 'snapshot',
+      },
+    });
+
+    expect(plan.status).toBe('ok');
+    expect(plan.result.answer.query.readMode).toBe('focus-card');
+    expect(plan.result.answer.slots.read_mode).toBe('focus-card');
+  });
+
   it('opens and keeps a live ambient session for ask.question flows', () => {
     const runtime = createSnapshotHostRuntime();
     const opened = runtime.execute({

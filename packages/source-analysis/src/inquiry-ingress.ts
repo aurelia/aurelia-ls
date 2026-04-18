@@ -55,10 +55,9 @@ import type {
   Inquiry,
   InquiryCarrierProvenanceEntry,
   InquiryProvenanceEntry,
-  ReadMode,
+  PresentationReadMode,
   WorldFrame,
 } from './inquiry-model.js';
-import { resolvePresentationReadMode } from './inquiry-model.js';
 
 export const INQUIRY_PLAN_STATUSES = [
   'ready',
@@ -149,7 +148,7 @@ export interface ResolvedInquiryPlan {
 }
 
 export interface InquiryDiscoveryOptions extends DiscoverInquiriesInput {
-  readonly readMode?: ReadMode;
+  readonly readMode?: PresentationReadMode;
   readonly consumer?: ConsumerKind;
   readonly worldFrame?: WorldFrame;
 }
@@ -163,7 +162,7 @@ export interface InquiryPlanOptions {
   readonly focusKind?: FocusKind;
   readonly focusValue?: string;
   readonly familyId?: InquiryFamilyId;
-  readonly readMode?: ReadMode;
+  readonly readMode?: PresentationReadMode;
   readonly consumer?: ConsumerKind;
   readonly worldFrame?: WorldFrame;
 }
@@ -209,6 +208,16 @@ interface BuiltInquirySteps {
   readonly missingInputs: readonly string[];
   readonly reasons: readonly InquiryPlanReason[];
 }
+
+const SNAPSHOT_MAINTENANCE_INTENTS = [
+  'inspect-session',
+  'refresh-session',
+  'invalidate-session',
+  'materialize-snapshots',
+] as const;
+
+type SnapshotMaintenanceIntent =
+  typeof SNAPSHOT_MAINTENANCE_INTENTS[number];
 
 export class InquiryIngress {
   readonly #inquiries: InquiryCatalog;
@@ -314,7 +323,7 @@ export class InquiryIngress {
       ? matches.map((match) => match.inquiry)
       : this.#inquiries.list(options.includeExamples).slice(0, options.topK ?? 6);
     const diagnostics = this.diagnose();
-    const readMode = resolvePresentationReadMode(options.readMode, 'summary-card');
+    const readMode = options.readMode ?? 'summary-card';
     const worldFrame = options.worldFrame ?? createHostedWorldFrame();
     const query: Inquiry = {
       inquiryEpisode: 'orient-and-localize',
@@ -419,7 +428,7 @@ export class InquiryIngress {
     options: InquiryPlanOptions,
   ): InquiryAnswer<InquiryPlanValue> {
     const plan = this.plan(options);
-    const readMode = resolvePresentationReadMode(options.readMode, 'focus-card');
+    const readMode = options.readMode ?? 'focus-card';
     const worldFrame = options.worldFrame ?? createHostedWorldFrame({
       targeting: {
         ...(options.repoPath ? { repoPath: options.repoPath } : {}),
@@ -514,7 +523,7 @@ export class InquiryIngress {
   createAskAnswer(
     options: InquiryAskOptions,
   ): InquiryAnswer<InquiryAskValue> {
-    const readMode = resolvePresentationReadMode(options.readMode, 'focus-card');
+    const readMode = options.readMode ?? 'focus-card';
     const worldFrame = options.worldFrame ?? createHostedWorldFrame({
       targeting: {
         ...(options.repoPath ? { repoPath: options.repoPath } : {}),
@@ -953,10 +962,16 @@ function buildSnapshotMaintenanceSteps(
     steps.push(sessionStep);
   }
 
-  const primaryCommand = chooseSnapshotMaintenanceCommand(options.question);
+  const intent = resolveSnapshotMaintenanceIntent(options.question, hints);
+  const primaryCommand = commandForSnapshotMaintenanceIntent(intent);
   const args: Record<string, unknown> = {
     ...(options.sessionId ? { sessionId: options.sessionId } : {}),
   };
+
+  reasons.push({
+    kind: 'input',
+    detail: describeSnapshotMaintenanceIntent(intent),
+  });
 
   if (primaryCommand === 'session.invalidate' && hints.focusKind === 'file' && hints.focusValue) {
     args.scope = 'files';
@@ -1041,17 +1056,51 @@ function chooseCapabilityGuidanceCommand(question: string): string {
   return 'describe.capabilities';
 }
 
-function chooseSnapshotMaintenanceCommand(question: string): string {
+function resolveSnapshotMaintenanceIntent(
+  question: string,
+  hints?: Pick<IngressFocusHints, 'focusKind' | 'focusValue'>,
+): SnapshotMaintenanceIntent {
   if (questionSuggests(question, ['materialize', 'json', 'snapshot file', 'write'])) {
-    return 'materializeSnapshots';
+    return 'materialize-snapshots';
   }
-  if (questionSuggests(question, ['invalidate', 'dirty file', 'dirty files'])) {
-    return 'session.invalidate';
+  if (questionSuggests(question, ['invalidate', 'dirty file', 'dirty files'])
+    || (hints?.focusKind === 'file' && Boolean(hints.focusValue) && questionSuggests(question, ['dirty', 'stale']))) {
+    return 'invalidate-session';
   }
   if (questionSuggests(question, ['refresh', 'stale', 'dirty', 'rebuild'])) {
-    return 'session.refresh';
+    return 'refresh-session';
   }
-  return 'session.status';
+  return 'inspect-session';
+}
+
+function commandForSnapshotMaintenanceIntent(
+  intent: SnapshotMaintenanceIntent,
+): string {
+  switch (intent) {
+    case 'materialize-snapshots':
+      return 'materializeSnapshots';
+    case 'invalidate-session':
+      return 'session.invalidate';
+    case 'refresh-session':
+      return 'session.refresh';
+    default:
+      return 'session.status';
+  }
+}
+
+function describeSnapshotMaintenanceIntent(
+  intent: SnapshotMaintenanceIntent,
+): string {
+  switch (intent) {
+    case 'materialize-snapshots':
+      return 'This snapshot-maintenance question is a materialization request, so the plan routes to snapshot export rather than a presentation-only session read.';
+    case 'invalidate-session':
+      return 'This snapshot-maintenance question is a file or project invalidation request, so the plan stays in session-maintenance rather than falling through to refresh or materialization.';
+    case 'refresh-session':
+      return 'This snapshot-maintenance question is a refresh request, so the plan targets session refresh instead of snapshot materialization.';
+    default:
+      return 'This snapshot-maintenance question is a status/inspection read, so the plan stays on session status rather than mutating or materializing state.';
+  }
 }
 
 function describeSnapshotMaintenanceLabel(command: string): string {

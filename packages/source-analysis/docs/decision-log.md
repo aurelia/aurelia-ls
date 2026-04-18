@@ -138,3 +138,21 @@ decision trail in order.
 - The remaining read-mode pressure is now at the public compatibility
   carriers: `Inquiry.readMode`, ingress option types, host render/query args,
   and the still-mixed `snapshot-maintenance` inquiry family.
+
+## 2026-04-18 - Ingress internals now speak presentation-only reads and snapshot maintenance has explicit planner intent
+
+- `CapabilityIngress` and `InquiryIngress` option contracts now accept
+  `PresentationReadMode` instead of the broad `ReadMode` union, so payload
+  materialization no longer masquerades as a valid internal rendering peer.
+- Hosted runtime entrypoints now normalize broad host-side `ReadMode` values at
+  the outer boundary before they call discovery, planning, repair, audit,
+  route-witness, or navigation answer builders.
+- The `snapshot-maintenance` planner now resolves explicit maintenance intent
+  (`inspect-session`, `refresh-session`, `invalidate-session`,
+  `materialize-snapshots`) so session-state moves and snapshot export stop
+  sharing one ad hoc branch even though the catalog still exposes one
+  compatibility family label.
+- The remaining pressure is now centered on the broad public carriers and
+  discovery labels themselves: `Inquiry.readMode`, `HostRenderOptions`,
+  CLI `--read-mode`, and whether `snapshot-maintenance` should remain a
+  compatibility family or split into narrower discovery-facing labels.

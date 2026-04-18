@@ -46,7 +46,7 @@ import type {
   FocusKind,
   FocusRef,
   Inquiry,
-  ReadMode,
+  PresentationReadMode,
   WorldFrame,
 } from './inquiry-model.js';
 import { resolvePresentationReadMode } from './inquiry-model.js';
@@ -108,7 +108,7 @@ export interface CapabilityDiscoveryOptions {
   readonly focusKind?: FocusKind;
   readonly includeExamples?: boolean;
   readonly topK?: number;
-  readonly readMode?: ReadMode;
+  readonly readMode?: PresentationReadMode;
   readonly consumer?: ConsumerKind;
   readonly worldFrame?: WorldFrame;
 }
@@ -121,7 +121,7 @@ export interface CapabilityPlanOptions {
   readonly profilePath?: string;
   readonly focusKind?: FocusKind;
   readonly focusValue?: string;
-  readonly readMode?: ReadMode;
+  readonly readMode?: PresentationReadMode;
   readonly consumer?: ConsumerKind;
   readonly worldFrame?: WorldFrame;
 }
@@ -130,7 +130,7 @@ export interface CapabilityRepairOptions {
   readonly command?: string;
   readonly args?: Record<string, unknown>;
   readonly question?: string;
-  readonly readMode?: ReadMode;
+  readonly readMode?: PresentationReadMode;
   readonly consumer?: ConsumerKind;
   readonly worldFrame?: WorldFrame;
 }
@@ -194,7 +194,7 @@ export class CapabilityIngress {
     const capabilities = matches.length > 0
       ? matches.map((match) => match.capability)
       : this.#catalog.list(options.includeExamples).slice(0, options.topK ?? 6);
-    const readMode = resolvePresentationReadMode(options.readMode, 'summary-card');
+    const readMode = options.readMode ?? 'summary-card';
     const worldFrame = options.worldFrame ?? createHostedWorldFrame();
     const query: Inquiry = {
       inquiryEpisode: 'orient-and-localize',
@@ -305,7 +305,7 @@ export class CapabilityIngress {
       focusKind: options.focusKind,
       topK: 5,
     });
-    const readMode = resolvePresentationReadMode(options.readMode, 'focus-card');
+    const readMode = options.readMode ?? 'focus-card';
     const worldFrame = options.worldFrame ?? createHostedWorldFrame({
       targeting: {
         ...(options.repoPath ? { repoPath: options.repoPath } : {}),
@@ -436,7 +436,7 @@ export class CapabilityIngress {
   createRepairAnswer(
     options: CapabilityRepairOptions,
   ): InquiryAnswer<CapabilityRepairValue> {
-    const readMode = resolvePresentationReadMode(options.readMode, 'focus-card');
+    const readMode = options.readMode ?? 'focus-card';
     const worldFrame = options.worldFrame ?? createHostedWorldFrame();
     const query: Inquiry = {
       inquiryEpisode: 'bounded-closure-explanation',

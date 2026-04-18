@@ -116,4 +116,41 @@ describe('InquiryIngress', () => {
       match.inquiry.id === 'workspace-orientation',
     )?.confusionMatches).toContain('alive');
   });
+
+  it('plans snapshot materialization as a maintenance intent instead of a presentation read', () => {
+    const ingress = createInquiryIngress();
+
+    const answer = ingress.createPlanAnswer({
+      question: 'Materialize the current snapshots to disk.',
+      repoPath: 'C:/projects/aurelia-ls2',
+    });
+
+    expect(answer.outcome.tag).toBe('hit');
+    expect(answer.outcome.value?.inquiry?.id).toBe('snapshot-maintenance');
+    expect(answer.outcome.value?.steps.map((step) => step.command)).toEqual([
+      'session.open',
+      'materializeSnapshots',
+    ]);
+    expect(answer.outcome.value?.primaryStep?.command).toBe('materializeSnapshots');
+  });
+
+  it('plans file invalidation as a session-maintenance intent with file-scoped args', () => {
+    const ingress = createInquiryIngress();
+
+    const answer = ingress.createPlanAnswer({
+      question: 'Invalidate this dirty file in the current source-analysis session.',
+      repoPath: 'C:/projects/aurelia-ls2',
+      focusKind: 'file',
+      focusValue: 'packages/source-analysis/src/inquiry-ingress.ts',
+    });
+
+    expect(answer.outcome.tag).toBe('hit');
+    expect(answer.outcome.value?.inquiry?.id).toBe('snapshot-maintenance');
+    expect(answer.outcome.value?.primaryStep?.command).toBe('session.invalidate');
+    expect(answer.outcome.value?.primaryStep?.args).toEqual({
+      sessionId: '$session.open',
+      scope: 'files',
+      files: ['packages/source-analysis/src/inquiry-ingress.ts'],
+    });
+  });
 });

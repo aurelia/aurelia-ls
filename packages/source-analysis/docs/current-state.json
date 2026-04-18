@@ -92,9 +92,14 @@
         "src/inquiry-wire.ts",
         "src/outcome-algebra.ts",
         "src/public/inquiry.ts",
+        "src/host/types.ts",
+        "src/public/host.ts",
+        "src/cli-hosted.ts",
         "test/inquiry-wire.test.ts",
         "test/inquiry-model.test.ts",
-        "test/answer-renderer.test.ts"
+        "test/answer-renderer.test.ts",
+        "test/inquiry-ingress.test.ts",
+        "test/host-runtime.test.ts"
       ],
       "exitCriteria": [
         "High-fanout internal call sites no longer need the broad FocusKind or world/provenance unions when they only support a narrower family.",
