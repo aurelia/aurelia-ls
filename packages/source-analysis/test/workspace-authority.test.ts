@@ -1,7 +1,7 @@
 import { describe, expect, it } from './test-harness.js';
 
 import { loadCurrentSnapshots } from '../src/current-snapshots.js';
-import { createLegacyProjectionNavigationAuthority } from '../src/authority/navigation-authority.js';
+import { createLegacyProjectionWorkspaceAuthority } from '../src/authority/workspace-authority.js';
 import { loadCurrentLiveAnalysisViews } from './live-analysis-views.js';
 
 function loadSnapshotsForAuthority() {
@@ -14,9 +14,9 @@ function loadSnapshotsForAuthority() {
   }
 }
 
-describe('Source-analysis navigation authority', () => {
+describe('Source-analysis workspace authority', () => {
   it('adjudicates a unique package locator through the legacy projection adapter', () => {
-    const authority = createLegacyProjectionNavigationAuthority(loadSnapshotsForAuthority());
+    const authority = createLegacyProjectionWorkspaceAuthority(loadSnapshotsForAuthority());
     const outcome = authority.resolvePackage({
       kind: 'package-name',
       value: '@aurelia-ls/source-analysis',
@@ -30,7 +30,7 @@ describe('Source-analysis navigation authority', () => {
   });
 
   it('returns an explicit no-claim outcome for a missing type locator', () => {
-    const authority = createLegacyProjectionNavigationAuthority(loadSnapshotsForAuthority());
+    const authority = createLegacyProjectionWorkspaceAuthority(loadSnapshotsForAuthority());
     const outcome = authority.resolveTypeDeclaration({
       kind: 'type-name',
       value: 'DefinitelyMissingSourceAnalysisType',
@@ -44,7 +44,7 @@ describe('Source-analysis navigation authority', () => {
   });
 
   it('classifies focused analyzability through the shared evaluator seam', () => {
-    const authority = createLegacyProjectionNavigationAuthority(loadSnapshotsForAuthority());
+    const authority = createLegacyProjectionWorkspaceAuthority(loadSnapshotsForAuthority());
     const context = authority.inspectFocusedAnalyzability({
       focusLabel: '@aurelia-ls/source-analysis',
       queryHints: ['@aurelia-ls/source-analysis'],
@@ -55,7 +55,7 @@ describe('Source-analysis navigation authority', () => {
   });
 
   it('localizes live symbol declarations through the authority seam', () => {
-    const authority = createLegacyProjectionNavigationAuthority(loadCurrentLiveAnalysisViews());
+    const authority = createLegacyProjectionWorkspaceAuthority(loadCurrentLiveAnalysisViews());
     const lookup = authority.lookupSymbolDeclaration({
       kind: 'symbol-name',
       value: 'createAnalysisViews',
@@ -66,7 +66,7 @@ describe('Source-analysis navigation authority', () => {
   });
 
   it('inspects focused file queries through the authority seam', () => {
-    const authority = createLegacyProjectionNavigationAuthority(loadCurrentLiveAnalysisViews());
+    const authority = createLegacyProjectionWorkspaceAuthority(loadCurrentLiveAnalysisViews());
     const inspection = authority.inspectFocusedFile({
       kind: 'file-path',
       value: 'packages/source-analysis/src/host/runtime.ts',

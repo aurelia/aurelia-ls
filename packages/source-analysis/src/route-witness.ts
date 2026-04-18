@@ -2,9 +2,13 @@ import {
   type AnalysisViews,
 } from './analysis-views.js';
 import {
-  createAnalysisProvenanceEntry,
   defaultWorldFrameForAnalysis,
 } from './analysis-surface.js';
+import {
+  analysisGeneratedAtRefs,
+  createAnalysisProvenanceEntriesForKinds,
+  describeAnalysisMaterializationTiming,
+} from './analysis-metadata-support.js';
 import type { PackageExportsSummary } from './exports/schema.js';
 import type { AnswerCard } from './answer-card.js';
 import type { AnswerRef } from './answer-ref.js';
@@ -16,7 +20,6 @@ import {
   createTypeDeclarationAnswerRef,
 } from './answer-refs.js';
 import {
-  coerceAnalysisViews,
   loadCurrentAnalysisViews,
 } from './snapshot-analysis-views.js';
 import type { LoadedCurrentSnapshotSet } from './snapshot-contract.js';
@@ -43,16 +46,12 @@ import type {
   WorldFrame,
 } from './inquiry-model.js';
 import type { PackageRouteWitness } from './reachability.js';
-import {
-  createPackageReachability,
-  getPackageRouteWitnesses,
-} from './reachability.js';
 import type { TypeDecl } from './typerefs/schema.js';
 import {
-  coerceNavigationAuthority,
-  createLegacyProjectionNavigationAuthority,
-  type NavigationAuthority,
-} from './authority/navigation-authority.js';
+  coerceWorkspaceAuthority,
+  createLegacyProjectionWorkspaceAuthority,
+  type WorkspaceAuthority,
+} from './authority/workspace-authority.js';
 import type { Locator } from './authority/contracts.js';
 
 export type RouteWitnessRef = AnswerRef;
@@ -68,15 +67,15 @@ export function createCurrentRouteWitnessAnswer(
 ): InquiryAnswer<RouteWitnessValue> {
   return createRouteWitnessAnswer(
     query,
-    createLegacyProjectionNavigationAuthority(loadCurrentAnalysisViews(target, waitMs)),
+    createLegacyProjectionWorkspaceAuthority(loadCurrentAnalysisViews(target, waitMs)),
   );
 }
 
 export function createRouteWitnessAnswer(
   query: Inquiry,
-  authorityInput: NavigationAuthority | AnalysisViews | LoadedCurrentSnapshotSet,
+  authorityInput: WorkspaceAuthority | AnalysisViews | LoadedCurrentSnapshotSet,
 ): InquiryAnswer<RouteWitnessValue> {
-  const authority = coerceNavigationAuthority(authorityInput);
+  const authority = coerceWorkspaceAuthority(authorityInput);
   switch (query.focusRef.kind) {
     case 'file':
       return buildFileRouteWitnessAnswer(query, authority, query.focusRef.value);
@@ -93,7 +92,7 @@ export function createRouteWitnessAnswer(
 
 function buildFileRouteWitnessAnswer(
   query: Inquiry,
-  authority: NavigationAuthority,
+  authority: WorkspaceAuthority,
   fileQuery: string,
 ): InquiryAnswer<RouteWitnessValue> {
   const analysis = authority.analysis;
@@ -170,14 +169,23 @@ function buildFileRouteWitnessAnswer(
   }
 
   const policy = policyForRouteWitness(query, 'file');
-  // TODO: Route witnesses still spend reachability assembled from the legacy
-  // analysis view carrier. Introduce a named route/reachability authority so
-  // "why is this alive?" closes through shared evaluators instead of depending
-  // on deps/typerefs/exports remaining visible architectural peers.
-  const reachability = createPackageReachability(analysis, pkg, {
-    ordering: policy.ordering,
-  });
-  const witnesses = getPackageRouteWitnesses(reachability, filePath);
+  const witnesses = authority.getPackageRouteWitnesses(
+    pkg.package_dir,
+    filePath,
+    policy.ordering,
+  );
+  if (!witnesses) {
+    return createOpenBoundaryAnswer(
+      query,
+      analysis,
+      { kind: 'file', value: filePath, label: basename(filePath) },
+      `Route witnesses for ${filePath} still need a shared structural package surface before the current authority can close on them.`,
+      [packageRef(pkg)],
+      [],
+      fileInspection.matchedRegimeContext!,
+      fileInspection.structuralPathContext,
+    );
+  }
   return createHitRouteWitnessAnswer(
     query,
     analysis,
@@ -193,7 +201,7 @@ function buildFileRouteWitnessAnswer(
 
 function buildTypeRouteWitnessAnswer(
   query: Inquiry,
-  authority: NavigationAuthority,
+  authority: WorkspaceAuthority,
   typeQuery: string,
 ): InquiryAnswer<RouteWitnessValue> {
   const normalizedTypeQuery = trimTrailingFocusPunctuation(typeQuery);
@@ -233,15 +241,27 @@ function buildTypeRouteWitnessAnswer(
   }
 
   const policy = policyForRouteWitness(query, 'type');
-  const reachability = createPackageReachability(analysis, pkg, {
-    ordering: policy.ordering,
-  });
-  const witnesses = getPackageRouteWitnesses(reachability, declaration.file);
   const regimeContext = authority.inspectFocusedAnalyzability({
     focusLabel: declaration.name,
     pathPrefixes: [declaration.file],
     queryHints: [normalizedTypeQuery, declaration.name, declaration.file],
   });
+  const witnesses = authority.getPackageRouteWitnesses(
+    pkg.package_dir,
+    declaration.file,
+    policy.ordering,
+  );
+  if (!witnesses) {
+    return createOpenBoundaryAnswer(
+      query,
+      analysis,
+      { kind: 'type', value: declaration.name, label: declaration.name },
+      `Route witnesses for ${declaration.name} still need a shared structural package surface before the current authority can close on them.`,
+      [fileRef(declaration.file, 'declaring file'), packageRef(pkg)],
+      [],
+      regimeContext,
+    );
+  }
   return createHitRouteWitnessAnswer(
     query,
     analysis,
@@ -346,14 +366,12 @@ function createHitRouteWitnessAnswer(
         // TODO: This freshness explanation still names deps/typerefs/exports as
         // the grounding surfaces. Rephrase it around shared route/reachability
         // authority once those projections stop being the user-visible center.
-        summary: query.worldFrame?.freshness === 'live'
-          ? `The route witnesses are grounded in live deps, typerefs, and exports analysis views refreshed at ${analysis.deps.generated_at}, ${analysis.typeRefs.generated_at}, and ${analysis.exports.generated_at}.`
-          : `The route witnesses are grounded in materialized analysis views generated at ${analysis.deps.generated_at}, ${analysis.typeRefs.generated_at}, and ${analysis.exports.generated_at}.`,
-        provenanceRefs: [
-          analysis.deps.generated_at,
-          analysis.typeRefs.generated_at,
-          analysis.exports.generated_at,
-        ],
+        summary: `The route witnesses are grounded in ${describeAnalysisMaterializationTiming(
+          analysis,
+          query.worldFrame?.freshness,
+          ['deps', 'typerefs', 'exports'],
+        )}`,
+        provenanceRefs: analysisGeneratedAtRefs(analysis, ['deps', 'typerefs', 'exports']),
       },
       ...regimeContext.closureBasis,
       ...(structuralPathContext?.closureBasis ?? []),
@@ -369,9 +387,11 @@ function createHitRouteWitnessAnswer(
       ...regimeContext.continuations,
     ]),
     [
-      createAnalysisProvenanceEntry('deps', analysis.deps.generated_at, analysis.deps.source_commit, query.worldFrame?.freshness),
-      createAnalysisProvenanceEntry('typerefs', analysis.typeRefs.generated_at, analysis.typeRefs.source_commit, query.worldFrame?.freshness),
-      createAnalysisProvenanceEntry('exports', analysis.exports.generated_at, analysis.exports.source_commit, query.worldFrame?.freshness),
+      ...createAnalysisProvenanceEntriesForKinds(
+        analysis,
+        ['deps', 'typerefs', 'exports'],
+        query.worldFrame?.freshness,
+      ),
       {
         kind: 'route',
         label: `${primaryRef.label} route witness`,

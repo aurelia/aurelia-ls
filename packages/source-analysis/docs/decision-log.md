@@ -49,3 +49,14 @@ decision trail in order.
 - The next pressure point is no longer entry-path ambiguity. It is the deeper
   route/reachability and package-surface construction that still happens
   directly against `AnalysisViews`.
+
+## 2026-04-18 - Workspace authority now owns package surface and reachability setup
+
+- The shared authority seam now owns structural package-surface lookup,
+  package-reachability construction, and route-witness retrieval.
+- `route-witness` and `audit` should spend those shared package surfaces rather
+  than constructing them locally.
+- Snapshot provenance/freshness packaging has started to converge through
+  `analysis-metadata-support.ts`, but navigation still needs the same cleanup.
+- The authority file was renamed from `navigation-authority.ts` to
+  `workspace-authority.ts` because it now serves multiple query families.

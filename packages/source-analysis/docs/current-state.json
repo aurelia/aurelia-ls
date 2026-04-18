@@ -35,7 +35,7 @@
       "status": "done",
       "goal": "Keep moving navigation logic off direct legacy projection stitching and onto shared authority and evaluator surfaces.",
       "files": [
-        "src/authority/navigation-authority.ts",
+        "src/authority/workspace-authority.ts",
         "src/navigation.ts",
         "src/focused-file-query.ts",
         "src/structural-declaration-surface.ts",
@@ -55,10 +55,12 @@
       "files": [
         "src/route-witness.ts",
         "src/audit.ts",
-        "src/authority/navigation-authority.ts",
-        "src/analyzability-posture.ts",
-        "src/focused-file-query.ts",
-        "src/structural-declaration-surface.ts"
+        "src/navigation.ts",
+        "src/analysis-metadata-support.ts",
+        "src/authority/workspace-authority.ts",
+        "src/reachability.ts",
+        "src/coordination-surface.ts",
+        "src/structural-source-file-surface.ts"
       ],
       "exitCriteria": [
         "route-witness primary route and freshness classification paths no longer assemble truth directly from analysis.deps, analysis.typeRefs, and analysis.exports.",

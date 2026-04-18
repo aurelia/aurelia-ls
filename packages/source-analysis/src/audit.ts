@@ -2,13 +2,16 @@ import {
   type AnalysisViews,
 } from './analysis-views.js';
 import {
-  createAnalysisProvenanceEntry,
   defaultWorldFrameForAnalysis,
   describeAnalysisSurface,
   describeAnalysisSurfaceEvidence,
 } from './analysis-surface.js';
 import {
-  loadDependencySurface,
+  analysisGeneratedAtRefs,
+  createAnalysisProvenanceEntriesForKinds,
+  describeAnalysisMaterializationTiming,
+} from './analysis-metadata-support.js';
+import {
   type DependencySurface,
 } from './dependency-surface.js';
 import {
@@ -66,19 +69,16 @@ import type {
   PackageFileReachability,
   PackageReachability,
 } from './reachability.js';
-import { createPackageReachability } from './reachability.js';
-import type { StructuralPackageFileSurface } from './structural-source-file-surface.js';
 import {
-  collectStructuralPackageFileSurface,
   describeMissingStructuralPackageSurface,
 } from './structural-source-file-surface.js';
 import type { PackageCoordinationSurface } from './coordination-surface.js';
 import { createPackageCoordinationSurface } from './coordination-surface.js';
 import {
-  coerceNavigationAuthority,
-  createLegacyProjectionNavigationAuthority,
-  type NavigationAuthority,
-} from './authority/navigation-authority.js';
+  coerceWorkspaceAuthority,
+  createLegacyProjectionWorkspaceAuthority,
+  type WorkspaceAuthority,
+} from './authority/workspace-authority.js';
 import type { Locator } from './authority/contracts.js';
 
 export const AUDIT_FINDING_KINDS = [
@@ -131,15 +131,15 @@ export function createCurrentAuditAnswer(
 ): InquiryAnswer<AuditValue> {
   return createAuditAnswer(
     query,
-    createLegacyProjectionNavigationAuthority(loadCurrentAnalysisViews(target, waitMs)),
+    createLegacyProjectionWorkspaceAuthority(loadCurrentAnalysisViews(target, waitMs)),
   );
 }
 
 export function createAuditAnswer(
   query: Inquiry,
-  authorityInput: NavigationAuthority | AnalysisViews | LoadedCurrentSnapshotSet,
+  authorityInput: WorkspaceAuthority | AnalysisViews | LoadedCurrentSnapshotSet,
 ): InquiryAnswer<AuditValue> {
-  const authority = coerceNavigationAuthority(authorityInput);
+  const authority = coerceWorkspaceAuthority(authorityInput);
   switch (query.focusRef.kind) {
     case 'package':
       return buildPackageAuditAnswer(query, authority, query.focusRef.value);
@@ -154,7 +154,7 @@ export function createAuditAnswer(
 
 function buildPackageAuditAnswer(
   query: Inquiry,
-  authority: NavigationAuthority,
+  authority: WorkspaceAuthority,
   packageQuery: string,
 ): InquiryAnswer<AuditValue> {
   // TODO: Package audit now enters through authority-backed package lookup and
@@ -208,8 +208,9 @@ function buildPackageAuditAnswer(
     pathPrefixes: [pkg.package_dir],
     queryHints: [pkg.package_name, pkg.package_dir, normalizedPackageQuery],
   });
-  const packageSurface = collectStructuralPackageFileSurface(analysis, pkg);
-  if (!packageSurface) {
+  const packageSurface = authority.getStructuralPackageSurface(pkg.package_dir);
+  const reachability = authority.getPackageReachability(pkg.package_dir, policy.ordering);
+  if (!packageSurface || !reachability) {
     return createStructuralPackageBoundaryAnswer(
       query,
       analysis,
@@ -225,6 +226,8 @@ function buildPackageAuditAnswer(
     query.worldFrame?.freshness,
     policy,
     packageSurface,
+    reachability,
+    authority.getDependencySurface(),
   );
   const findings = collectPackageAuditFindings(context);
 
@@ -323,14 +326,11 @@ function createPackageAuditContext(
   repoPath: string,
   analysisFreshness: WorldFrame['freshness'],
   policy: InquiryPolicy,
-  packageSurface: StructuralPackageFileSurface,
+  packageSurface: NonNullable<ReturnType<WorkspaceAuthority['getStructuralPackageSurface']>>,
+  reachability: PackageReachability,
+  dependencySurface: DependencySurface,
 ): PackageAuditContext {
-  const reachability = createPackageReachability(analysis, pkg, {
-    ordering: policy.ordering,
-    packageSurface,
-  });
   const coordinationSurface = createSafeCoordinationSurface(repoPath, packageSurface.files);
-  const dependencySurface = loadDependencySurface(analysis);
 
   return {
     analysis,
@@ -917,14 +917,12 @@ function closureBasisForPackageAudit(
     },
     {
       kind: 'freshness',
-      summary: context.analysisFreshness === 'live'
-        ? `The audit is grounded in live deps, typerefs, and exports analysis views refreshed at ${context.analysis.deps.generated_at}, ${context.analysis.typeRefs.generated_at}, and ${context.analysis.exports.generated_at}.`
-        : `The audit is grounded in materialized analysis views generated at ${context.analysis.deps.generated_at}, ${context.analysis.typeRefs.generated_at}, and ${context.analysis.exports.generated_at}.`,
-      provenanceRefs: [
-        context.analysis.deps.generated_at,
-        context.analysis.typeRefs.generated_at,
-        context.analysis.exports.generated_at,
-      ],
+      summary: `The audit is grounded in ${describeAnalysisMaterializationTiming(
+        context.analysis,
+        context.analysisFreshness,
+        ['deps', 'typerefs', 'exports'],
+      )}`,
+      provenanceRefs: analysisGeneratedAtRefs(context.analysis, ['deps', 'typerefs', 'exports']),
     },
     ...(findings.some((finding) => finding.kind === 'blindspot')
       ? [{
@@ -951,9 +949,11 @@ function provenanceForPackageAudit(
   findings: readonly AuditFinding[],
 ): readonly InquiryProvenanceEntry[] {
   return [
-    createAnalysisProvenanceEntry('deps', context.analysis.deps.generated_at, context.analysis.deps.source_commit, context.analysisFreshness),
-    createAnalysisProvenanceEntry('typerefs', context.analysis.typeRefs.generated_at, context.analysis.typeRefs.source_commit, context.analysisFreshness),
-    createAnalysisProvenanceEntry('exports', context.analysis.exports.generated_at, context.analysis.exports.source_commit, context.analysisFreshness),
+    ...createAnalysisProvenanceEntriesForKinds(
+      context.analysis,
+      ['deps', 'typerefs', 'exports'],
+      context.analysisFreshness,
+    ),
     ...(findings.length > 0
       ? [{
         kind: 'route' as const,

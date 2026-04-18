@@ -15,6 +15,13 @@ import {
   type FocusedFileQueryInspection,
 } from '../focused-file-query.js';
 import {
+  getPackageRouteWitnesses,
+  createPackageReachability,
+  type PackageReachability,
+  type PackageRouteWitness,
+} from '../reachability.js';
+import type { InquiryOrdering } from '../inquiry-policy.js';
+import {
   coerceAnalysisViews,
 } from '../snapshot-analysis-views.js';
 import type { LoadedCurrentSnapshotSet } from '../snapshot-contract.js';
@@ -22,7 +29,11 @@ import {
   lookupStructuralDeclarations,
   type StructuralDeclarationLookup,
 } from '../structural-declaration-surface.js';
-import { resolveStructuralOwningPackage } from '../structural-source-file-surface.js';
+import {
+  collectStructuralPackageFileSurface,
+  resolveStructuralOwningPackage,
+  type StructuralPackageFileSurface,
+} from '../structural-source-file-surface.js';
 import type { TypeDecl } from '../typerefs/schema.js';
 import type {
   AuthorityEvidence,
@@ -31,19 +42,19 @@ import type {
   SpendThreshold,
 } from './contracts.js';
 
-export interface NavigationAnalyzabilityFocus {
+export interface WorkspaceAnalyzabilityFocus {
   readonly focusLabel: string;
   readonly pathPrefixes?: readonly string[];
   readonly queryHints?: readonly string[];
 }
 
-export interface NavigationAuthority {
+export interface WorkspaceAuthority {
   readonly kind: 'legacy-projection-adapter';
   readonly analysis: AnalysisViews;
   readonly evidence: readonly AuthorityEvidence[];
   getDependencySurface(): DependencySurface;
   inspectFocusedAnalyzability(
-    focus: NavigationAnalyzabilityFocus,
+    focus: WorkspaceAnalyzabilityFocus,
   ): FocusedAnalyzabilityContext;
   inspectFocusedFile(
     locator: Locator,
@@ -73,6 +84,18 @@ export interface NavigationAuthority {
   getPackageByDir(
     packageDir: string,
   ): PackageExportsSummary | undefined;
+  getStructuralPackageSurface(
+    packageDir: string,
+  ): StructuralPackageFileSurface | null;
+  getPackageReachability(
+    packageDir: string,
+    ordering?: InquiryOrdering,
+  ): PackageReachability | null;
+  getPackageRouteWitnesses(
+    packageDir: string,
+    filePath: string,
+    ordering?: InquiryOrdering,
+  ): readonly PackageRouteWitness[] | null;
   resolveOwningPackage(
     filePath: string,
   ): PackageExportsSummary | null;
@@ -96,12 +119,14 @@ export interface NavigationAuthority {
 // without pretending the legacy projections are already gone. As more shared
 // substrate, semantic, and evaluator surfaces land, keep shrinking this file
 // until it becomes a thin compatibility materializer rather than a truth owner.
-export function createLegacyProjectionNavigationAuthority(
+export function createLegacyProjectionWorkspaceAuthority(
   input: AnalysisViews | LoadedCurrentSnapshotSet,
-): NavigationAuthority {
+): WorkspaceAuthority {
   const analysis = coerceAnalysisViews(input);
   let dependencySurface: DependencySurface | undefined;
   let analyzabilityPosture: AnalyzabilityPosture | undefined;
+  const packageSurfacesByDir = new Map<string, StructuralPackageFileSurface | null>();
+  const packageReachabilityByFingerprint = new Map<string, PackageReachability | null>();
   let workspacePackageEntrypointsByName: ReadonlyMap<string, string> | undefined;
 
   const sharedProjectionEvidence: readonly AuthorityEvidence[] = [
@@ -122,7 +147,7 @@ export function createLegacyProjectionNavigationAuthority(
       return dependencySurface;
     },
     inspectFocusedAnalyzability(
-      focus: NavigationAnalyzabilityFocus,
+      focus: WorkspaceAnalyzabilityFocus,
     ): FocusedAnalyzabilityContext {
       analyzabilityPosture ??= inspectAnalyzabilityPostureFromAnalysisViews(analysis);
       return inspectFocusedAnalyzabilityContext(analyzabilityPosture, focus);
@@ -302,6 +327,48 @@ export function createLegacyProjectionNavigationAuthority(
     ): PackageExportsSummary | undefined {
       return analysis.exports.packages.find((candidate) => candidate.package_dir === packageDir);
     },
+    getStructuralPackageSurface(
+      packageDir: string,
+    ): StructuralPackageFileSurface | null {
+      if (packageSurfacesByDir.has(packageDir)) {
+        return packageSurfacesByDir.get(packageDir) ?? null;
+      }
+      const pkg = this.getPackageByDir(packageDir);
+      const surface = pkg
+        ? collectStructuralPackageFileSurface(analysis, pkg)
+        : null;
+      packageSurfacesByDir.set(packageDir, surface);
+      return surface;
+    },
+    getPackageReachability(
+      packageDir: string,
+      ordering?: InquiryOrdering,
+    ): PackageReachability | null {
+      const fingerprint = `${packageDir}\0${orderingFingerprint(ordering)}`;
+      if (packageReachabilityByFingerprint.has(fingerprint)) {
+        return packageReachabilityByFingerprint.get(fingerprint) ?? null;
+      }
+      const pkg = this.getPackageByDir(packageDir);
+      const packageSurface = this.getStructuralPackageSurface(packageDir);
+      const reachability = pkg && packageSurface
+        ? createPackageReachability(analysis, pkg, {
+          ordering,
+          packageSurface,
+        })
+        : null;
+      packageReachabilityByFingerprint.set(fingerprint, reachability);
+      return reachability;
+    },
+    getPackageRouteWitnesses(
+      packageDir: string,
+      filePath: string,
+      ordering?: InquiryOrdering,
+    ): readonly PackageRouteWitness[] | null {
+      const reachability = this.getPackageReachability(packageDir, ordering);
+      return reachability
+        ? getPackageRouteWitnesses(reachability, filePath)
+        : null;
+    },
     resolveOwningPackage(
       filePath: string,
     ): PackageExportsSummary | null {
@@ -358,17 +425,17 @@ export function createLegacyProjectionNavigationAuthority(
   };
 }
 
-export function coerceNavigationAuthority(
-  input: NavigationAuthority | AnalysisViews | LoadedCurrentSnapshotSet,
-): NavigationAuthority {
-  return isNavigationAuthority(input)
+export function coerceWorkspaceAuthority(
+  input: WorkspaceAuthority | AnalysisViews | LoadedCurrentSnapshotSet,
+): WorkspaceAuthority {
+  return isWorkspaceAuthority(input)
     ? input
-    : createLegacyProjectionNavigationAuthority(input);
+    : createLegacyProjectionWorkspaceAuthority(input);
 }
 
-function isNavigationAuthority(
-  value: NavigationAuthority | AnalysisViews | LoadedCurrentSnapshotSet,
-): value is NavigationAuthority {
+function isWorkspaceAuthority(
+  value: WorkspaceAuthority | AnalysisViews | LoadedCurrentSnapshotSet,
+): value is WorkspaceAuthority {
   return 'kind' in value && value.kind === 'legacy-projection-adapter' && 'analysis' in value;
 }
 
@@ -443,4 +510,20 @@ function noClaim(
       detail: summary,
     }],
   };
+}
+
+function orderingFingerprint(
+  ordering?: InquiryOrdering,
+): string {
+  if (!ordering) {
+    return 'default';
+  }
+
+  return [
+    ordering.issueSeverity.join(','),
+    ordering.trust.join(','),
+    ordering.routeClass.join(','),
+    ordering.routeKind.join(','),
+    ordering.rootKind.join(','),
+  ].join('|');
 }

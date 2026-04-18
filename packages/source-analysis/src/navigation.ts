@@ -69,10 +69,10 @@ import {
 import { SUBSTRATE_SCHEMA_VERSION } from './substrate.js';
 import type { DeclarationClaim } from './structural-claim-graph.js';
 import {
-  coerceNavigationAuthority,
-  createLegacyProjectionNavigationAuthority,
-  type NavigationAuthority,
-} from './authority/navigation-authority.js';
+  coerceWorkspaceAuthority,
+  createLegacyProjectionWorkspaceAuthority,
+  type WorkspaceAuthority,
+} from './authority/workspace-authority.js';
 import type { Locator } from './authority/contracts.js';
 
 export type NavigationRef = AnswerRef;
@@ -140,19 +140,19 @@ export function createCurrentNavigationEpisode(
 ): NavigationEpisode {
   return createNavigationEpisode(
     query,
-    createLegacyProjectionNavigationAuthority(loadCurrentAnalysisViews(target, waitMs)),
+    createLegacyProjectionWorkspaceAuthority(loadCurrentAnalysisViews(target, waitMs)),
   );
 }
 
 export function createNavigationEpisode(
   query: Inquiry,
-  authorityInput: NavigationAuthority | AnalysisViews | LoadedCurrentSnapshotSet,
+  authorityInput: WorkspaceAuthority | AnalysisViews | LoadedCurrentSnapshotSet,
 ): NavigationEpisode {
   // TODO: Navigation still starts from an AnalysisViews carrier and then builds
   // answer-local substrate/claim objects on demand. Pull this behind a named
   // shared navigation authority so query surfaces consult one runtime instead
   // of reconstructing truth from projection bundles.
-  const authority = coerceNavigationAuthority(authorityInput);
+  const authority = coerceWorkspaceAuthority(authorityInput);
   const builder = new EpisodeBuilder(query, authority);
   switch (query.focusRef.kind) {
     case 'package':
@@ -178,13 +178,13 @@ export function createNavigationEpisode(
 
 class EpisodeBuilder {
   readonly #query: Inquiry;
-  readonly #authority: NavigationAuthority;
+  readonly #authority: WorkspaceAuthority;
   readonly #nodes = new Map<string, SubstrateNode>();
   readonly #edges = new Map<string, SubstrateEdge>();
   readonly #claims = new Map<string, ClaimNode>();
   readonly #claimEdges = new Map<string, ClaimEdge>();
 
-  constructor(query: Inquiry, authority: NavigationAuthority) {
+  constructor(query: Inquiry, authority: WorkspaceAuthority) {
     this.#query = query;
     this.#authority = authority;
   }
@@ -193,7 +193,7 @@ class EpisodeBuilder {
     return this.#query;
   }
 
-  get authority(): NavigationAuthority {
+  get authority(): WorkspaceAuthority {
     return this.#authority;
   }
 

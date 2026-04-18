@@ -4,21 +4,21 @@ Last updated: 2026-04-18
 
 ## Current objective
 
-Start moving `route-witness` and then `audit` onto the same shared authority
-and evaluator seams that now carry the primary `query.navigate` resolution
-paths.
+Finish the `route-witness` / `audit` migration by deciding which remaining
+package-diagnostics and answer-packaging pieces should stay query-local versus
+graduate into shared helpers now that lookup, regime classification, package
+surface, and reachability all spend the shared workspace authority seam.
 
 ## Exact next slice
 
-1. Pull `route-witness` reachability construction and witness retrieval behind a
-   named shared route/reachability authority instead of letting the query
-   surface assemble those internals directly from `AnalysisViews`.
-2. Pull `audit` package-surface, dependency-surface, and reachability setup
-   behind the same authority/evaluator seams so finding collection starts from
-   shared semantic inputs rather than a fresh local join.
-3. Decide whether snapshot provenance/world-frame assembly should remain query-
-   local or graduate into a thinner shared helper now that navigation,
-   route-witness, and audit all depend on the same metadata contract.
+1. Decide whether audit-only package diagnostics such as coordination surface
+   recovery and partition-cycle collection should stay query-local or move
+   behind shared package-evaluator helpers.
+2. Decide whether `navigation.ts` should adopt the new
+   `analysis-metadata-support.ts` helper so snapshot provenance/freshness
+   packaging stops re-reading the legacy triplet there too.
+3. If those remaining seams are acceptable, mark
+   `route-and-audit-migration` done and advance to the inquiry-ontology split.
 
 ## Recently landed
 
@@ -27,7 +27,7 @@ paths.
 - Established repo-owned continuity files and a preflight command so future
   sessions resume through the same state instead of relying on chat memory.
 - Added `src/authority/contracts.ts` and a transitional
-  `src/authority/navigation-authority.ts` adapter over the legacy projection
+  `src/authority/workspace-authority.ts` adapter over the legacy projection
   bundle.
 - Routed the host-side `query.navigate` path through the new navigation
   authority and moved package/type/export resolution plus some neighborhood
@@ -39,9 +39,15 @@ paths.
 - Moved the primary `route-witness` file/type localization and analyzability
   entry paths onto the same authority seam used by navigation.
 - Moved the `audit` package lookup and regime-classification entry path onto
-  authority-backed adjudication while leaving deeper finding assembly for the
-  next pass.
-- Added direct tests for the navigation authority adapter and kept the existing
+  authority-backed adjudication.
+- Moved structural package-surface and package-reachability construction behind
+  the shared authority seam so `route-witness` and `audit` no longer build
+  those internals directly from raw `AnalysisViews`.
+- Added `src/analysis-metadata-support.ts` so route-witness and audit share one
+  thin helper for analysis snapshot provenance/freshness packaging.
+- Renamed the shared authority file from `navigation-authority.ts` to
+  `workspace-authority.ts` so the boundary name matches its broader role.
+- Added direct tests for the workspace authority adapter and kept the existing
   live navigation, route-witness, and audit suites green.
 
 ## Constraints
@@ -68,30 +74,30 @@ paths.
 - `query.navigate` still uses raw snapshot metadata for provenance, snapshot
   nodes, export-route freshness notes, and default world-frame assembly even
   though its primary resolution path now spends authority-backed seams.
-- `route-witness` still constructs reachability and route witnesses directly
-  from `AnalysisViews` even though its focus localization and regime
-  classification now spend authority-backed seams.
-- `audit` still constructs package surfaces, dependency surfaces, reachability,
-  and findings directly from raw analysis carriers after the initial package
-  adjudication step.
+- `audit` still owns package-diagnostic interpretation such as coordination
+  fragmentation and source-area cycle findings even though package surfaces and
+  reachability are now authority-backed inputs.
+- Default world-frame assembly still lives separately in navigation,
+  route-witness, and audit even after snapshot metadata packaging started to
+  converge.
 
 ## Likely files for the next pass
 
 - `src/route-witness.ts`
 - `src/audit.ts`
+- `src/navigation.ts`
+- `src/analysis-metadata-support.ts`
 - `src/reachability.ts`
+- `src/coordination-surface.ts`
 - `src/structural-source-file-surface.ts`
-- `src/authority/navigation-authority.ts`
-- `src/analyzability-posture.ts`
-- `src/focused-file-query.ts`
-- `src/structural-declaration-surface.ts`
+- `src/authority/workspace-authority.ts`
 
 ## Verification reminders
 
 - Run `pnpm preflight` before non-trivial work.
 - Re-run `pnpm --filter @aurelia-ls/source-analysis build`.
 - Re-run `pnpm --filter @aurelia-ls/source-analysis build:tests`.
-- Re-run `node ./out-test/test/navigation-authority.test.js`.
+- Re-run `node ./out-test/test/workspace-authority.test.js`.
 - Re-run `node ./out-test/test/navigation.test.js`.
 
 ## Resume command
