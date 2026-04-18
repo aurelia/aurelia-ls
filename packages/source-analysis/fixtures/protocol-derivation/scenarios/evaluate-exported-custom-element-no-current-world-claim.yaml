@@ -9,18 +9,44 @@ selector_seed:
   value: src/index.ts#GhostPanel
 operation: evaluate
 aspect: current-world-status
+expected_consulted_world:
+  semantic_world: current-world
+  lookup_regime: local-template-without-registration-path
+  summary: Evaluate current-world activity where the template spends the tag but no registration path admits the export.
 expected_shape:
   dominant_outcomes:
     - no-claim
+  dominant_trust_kinds:
+    - grounded
   basis_kinds:
     - substrate
     - claim
   continuation_kinds:
-    - trace-missing-registration-path
-    - inspect-export-kind
-    - narrow-template-usage
-  identity_expectation: export identity should still close at project scope
-  anchor_expectation: emit declaration anchor
+    - strengthen-evidence
+    - narrow
+    - reroute
+  followup_queries:
+    - operation: trace
+      aspect: registration-path
+      summary: Trace the absence of any registration path for the exported custom element.
+    - operation: inspect
+      aspect: export-kind
+      summary: Inspect the export itself without assuming that template use creates a world claim.
+    - operation: inspect
+      aspect: template-usage-site
+      summary: Narrow onto the template site that spends the tag without a registration path.
+  identity_expectation:
+    emit: expected
+    minimum_uniqueness: project
+    scheme_hint: ts-export
+    strength: strong
+    summary: Export identity should still close even though the world-role burden returns no-claim.
+  anchor_expectation:
+    emit: expected
+    scheme_hint: ts-decl-anchor
+    strength: strong
+    reread_hint: optional
+    summary: Declaration anchor should remain available from the exported owner carrier.
 notes:
   - this scenario should stay closed rather than drifting into open-boundary language
   - the template tag usage should not be enough to create a current-world claim by itself

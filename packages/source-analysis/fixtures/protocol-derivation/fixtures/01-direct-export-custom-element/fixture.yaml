@@ -21,6 +21,19 @@ source_files:
   - src/index.ts
   - src/app-root.ts
   - src/app-root.html
+detection_signals:
+  - signal_id: runtime-html-imports
+    kind: package-import
+    sources:
+      - src/info-box.ts
+      - src/app-root.ts
+    summary: Fixture imports `@aurelia/runtime-html` from both owner and app-root carriers.
+  - signal_id: custom-element-carriers
+    kind: decorator-usage
+    sources:
+      - src/info-box.ts
+      - src/app-root.ts
+    summary: Fixture declares Aurelia `customElement` carriers and root dependency contribution.
 known_subjects:
   - subject_id: info-box-export
     label: InfoBox export

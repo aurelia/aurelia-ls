@@ -8,6 +8,7 @@ The goal is to make derivation cheaper and less prose-heavy by giving us:
 - tiny concrete source workspaces
 - machine-legible fixture packets
 - machine-legible scenario packets
+- structured framework-detection evidence
 - stable query seeds for repeated pressure tests
 
 These fixtures are intentionally small and opinionated.
@@ -46,3 +47,10 @@ workspace copy for every before-and-after variant.
 Framework detection should be automatic.
 If a fixture is Aurelia-shaped, the fixture packet declares that and scenario
 derivation should assume Aurelia semantics are active.
+
+Scenario packets should also keep a few layers separate on purpose:
+
+- `dominant_outcomes` versus `dominant_trust_kinds`
+- kernel `continuation_kinds` versus scenario-local `followup_queries`
+- structured `identity_expectation` versus structured `anchor_expectation`
+- explicit `expected_consulted_world` instead of only implied world assumptions

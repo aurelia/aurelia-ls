@@ -9,17 +9,42 @@ selector_seed:
   value: src/app-config.ts#AppConfig
 operation: evaluate
 aspect: consulted-world
+expected_consulted_world:
+  semantic_world: consulted-world
+  lookup_regime: configuration-contributed-root
+  summary: Evaluate world-shaping behavior from the exported configuration rather than only declaration identity.
 expected_shape:
   dominant_outcomes:
     - hit
+  dominant_trust_kinds:
     - qualified
   basis_kinds:
     - claim
     - boundary
   continuation_kinds:
-    - trace-admission
-    - evaluate-world-status
-  identity_expectation: semantic identity may remain secondary to world-role explanation
-  anchor_expectation: anchor optional
+    - strengthen-evidence
+    - reroute
+  followup_queries:
+    - operation: trace
+      aspect: registration-path
+      summary: Trace which registrations or vocabulary this configuration contributes.
+    - operation: evaluate
+      aspect: current-world-status
+      summary: Evaluate whether a concrete owner world actually spends the contributed surface.
+    - operation: inspect
+      aspect: configuration-kind
+      summary: Inspect the configuration export as a registry-like surface rather than a resource definition.
+  identity_expectation:
+    emit: optional
+    minimum_uniqueness: project
+    scheme_hint: ts-local
+    strength: weak
+    summary: Identity may remain secondary to the consulted-world explanation.
+  anchor_expectation:
+    emit: optional
+    scheme_hint: ts-decl-anchor
+    strength: weak
+    reread_hint: absent
+    summary: Anchor is helpful but not central to this world-role burden.
 notes:
   - useful pressure on configuration and registry archetypes

@@ -8,18 +8,43 @@ selector_seed:
   kind: export-locator
   value: src/index.ts#InfoBox
 operation: resolve
+expected_consulted_world:
+  semantic_world: declaration-world
+  lookup_regime: direct-export
+  summary: Resolve the exported declaration first and defer world-role questions to follow-up reads.
 expected_shape:
   dominant_outcomes:
     - hit
+  dominant_trust_kinds:
+    - grounded
   basis_kinds:
     - substrate
     - claim
   continuation_kinds:
-    - inspect-kind
-    - trace-admission
-    - evaluate-world-status
-  identity_expectation: emit project-scoped export identity
-  anchor_expectation: emit declaration anchor
+    - reroute
+    - switch-world
+  followup_queries:
+    - operation: inspect
+      aspect: resource-kind
+      summary: Inspect the resolved export as an Aurelia resource owner surface.
+    - operation: trace
+      aspect: registration-path
+      summary: Trace how the resolved export becomes admitted or spent.
+    - operation: evaluate
+      aspect: current-world-status
+      summary: Evaluate whether the resolved export is current-world active in AppRoot.
+  identity_expectation:
+    emit: expected
+    minimum_uniqueness: project
+    scheme_hint: ts-export
+    strength: strong
+    summary: Direct export identity should close without re-export normalization.
+  anchor_expectation:
+    emit: expected
+    scheme_hint: ts-decl-anchor
+    strength: strong
+    reread_hint: optional
+    summary: Declaration anchor should be available from the defining source file.
 notes:
   - direct export should make export identity closure straightforward
   - Aurelia semantics should auto-detect and classify the export as a custom element owner surface

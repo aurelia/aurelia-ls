@@ -10,19 +10,48 @@ selector_seed:
   value: src/index.ts#StatusBadge
 operation: evaluate
 aspect: current-world-status
+expected_consulted_world:
+  semantic_world: current-world
+  lookup_regime: local-dependencies-after-removal
+  summary: Evaluate current-world activity after a previously contributing local dependency is removed.
+relational_expectation:
+  baseline_fixture_state: base
+  expected_change_kind: withdrawal
+  changed_claim_summary: Current-world activity should withdraw after the local dependency contribution is removed.
 expected_shape:
   dominant_outcomes:
     - withdrawn
+  dominant_trust_kinds:
+    - grounded
   basis_kinds:
     - claim
     - freshness
     - boundary
   continuation_kinds:
-    - trace-registration-loss
-    - compare-with-base-state
-    - inspect-declaration-anchor
-  identity_expectation: declaration identity should remain available even though world-role claim withdraws
-  anchor_expectation: emit declaration anchor and typed reread hint
+    - strengthen-evidence
+    - reroute
+  followup_queries:
+    - operation: trace
+      aspect: registration-loss
+      summary: Trace which world contribution was removed across the mutation.
+    - operation: evaluate
+      aspect: current-world-status
+      summary: Compare the current state against the baseline world-role claim.
+    - operation: inspect
+      aspect: declaration-anchor
+      summary: Inspect the declaration anchor and reread posture after withdrawal.
+  identity_expectation:
+    emit: expected
+    minimum_uniqueness: project
+    scheme_hint: ts-export
+    strength: strong
+    summary: Declaration identity should remain available even though the world-role claim withdraws.
+  anchor_expectation:
+    emit: expected
+    scheme_hint: ts-decl-anchor
+    strength: strong
+    reread_hint: expected
+    summary: Anchor should stay available and should carry a typed reread hint after withdrawal.
 notes:
   - this scenario is meant to pressure retreat rather than a plain no-claim
   - the export surface stays stable while current-world activity is withdrawn

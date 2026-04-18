@@ -9,17 +9,42 @@ selector_seed:
   value: src/app-config.ts#AppConfig
 operation: inspect
 aspect: export-shape
+expected_consulted_world:
+  semantic_world: declaration-world
+  lookup_regime: direct-export
+  summary: Start from the exported configuration surface before widening into world-shaping effects.
 expected_shape:
   dominant_outcomes:
     - hit
+  dominant_trust_kinds:
+    - grounded
   basis_kinds:
     - substrate
     - claim
   continuation_kinds:
-    - trace-admission
-    - evaluate-world-status
-    - inspect-kind
-  identity_expectation: identity may stay weak or absent if export identity is not the main value
-  anchor_expectation: emit declaration anchor if source site closes
+    - reroute
+    - switch-world
+  followup_queries:
+    - operation: trace
+      aspect: registration-path
+      summary: Trace which registrations or vocabulary this configuration contributes.
+    - operation: evaluate
+      aspect: consulted-world
+      summary: Evaluate how the exported configuration shapes the consulted Aurelia world.
+    - operation: inspect
+      aspect: configuration-kind
+      summary: Refine the export-shape classification into a more specific configuration archetype.
+  identity_expectation:
+    emit: optional
+    minimum_uniqueness: project
+    scheme_hint: ts-local
+    strength: weak
+    summary: Export identity is secondary here because the main burden is classification of the configuration surface.
+  anchor_expectation:
+    emit: expected
+    scheme_hint: ts-decl-anchor
+    strength: moderate
+    reread_hint: optional
+    summary: Declaration anchor should close if the source carrier is available.
 notes:
   - this scenario should prefer registry-like classification over resource-definition closure

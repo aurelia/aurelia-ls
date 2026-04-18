@@ -9,18 +9,44 @@ selector_seed:
   value: src/index.ts#LazyPanel
 operation: trace
 aspect: activation-dependency
+expected_consulted_world:
+  semantic_world: current-world
+  lookup_regime: activation-dependency-walk
+  summary: Trace from the exported owner into the dependency walk that blocks current-world activation.
 expected_shape:
   dominant_outcomes:
     - open
+  dominant_trust_kinds:
+    - frontier
   basis_kinds:
     - claim
     - route
     - boundary
   continuation_kinds:
-    - inspect-iloadstate-export
-    - narrow-missing-registration
-    - evaluate-current-world-status
-  identity_expectation: export identity should already be known strongly enough to trace from it
-  anchor_expectation: emit declaration anchor
+    - narrow
+    - strengthen-evidence
+    - reroute
+  followup_queries:
+    - operation: inspect
+      aspect: di-key-surface
+      summary: Inspect the exported `ILoadState` surface as the missing dependency key.
+    - operation: trace
+      aspect: registration-path
+      summary: Narrow the trace onto the missing registration bridge for `ILoadState`.
+    - operation: evaluate
+      aspect: current-world-status
+      summary: Re-evaluate current-world activity after the missing dependency path is understood.
+  identity_expectation:
+    emit: expected
+    minimum_uniqueness: project
+    scheme_hint: ts-export
+    strength: strong
+    summary: Export identity should already be strong enough to anchor this trace.
+  anchor_expectation:
+    emit: expected
+    scheme_hint: ts-decl-anchor
+    strength: strong
+    reread_hint: optional
+    summary: Declaration anchor should remain available from the owner carrier.
 notes:
   - this scenario should bridge from an exported resource owner to the missing DI key that blocks admission

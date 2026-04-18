@@ -22,6 +22,19 @@ source_files:
   - src/index.ts
   - src/app-root.ts
   - src/app-root.html
+detection_signals:
+  - signal_id: runtime-html-custom-elements
+    kind: package-import
+    sources:
+      - src/ghost-panel.ts
+      - src/app-root.ts
+    summary: Fixture imports `@aurelia/runtime-html` and declares both the exported element and the app root as Aurelia carriers.
+  - signal_id: template-usage-without-registration
+    kind: missing-world-contribution
+    sources:
+      - src/app-root.html
+      - src/app-root.ts
+    summary: AppRoot template spends the custom-element tag, but AppRoot provides no dependency or registration path for that export.
 known_subjects:
   - subject_id: ghost-panel-export
     label: GhostPanel export

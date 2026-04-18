@@ -22,6 +22,20 @@ source_files:
   - src/index.ts
   - src/app-root.ts
   - src/app-root.html
+detection_signals:
+  - signal_id: runtime-html-imports
+    kind: package-import
+    sources:
+      - src/components/info-box.ts
+      - src/app-root.ts
+    summary: Fixture imports `@aurelia/runtime-html` in both the resource carrier and the app root.
+  - signal_id: barrel-plus-custom-element
+    kind: mixed-signal
+    sources:
+      - src/components/index.ts
+      - src/index.ts
+      - src/components/info-box.ts
+    summary: Re-export topology sits on top of a concrete Aurelia `customElement` declaration.
 known_subjects:
   - subject_id: top-level-infobox-export
     label: top-level InfoBox re-export

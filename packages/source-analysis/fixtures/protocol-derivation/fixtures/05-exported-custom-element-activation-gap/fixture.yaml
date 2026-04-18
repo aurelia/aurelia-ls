@@ -22,6 +22,19 @@ source_files:
   - src/index.ts
   - src/app-root.ts
   - src/app-root.html
+detection_signals:
+  - signal_id: mixed-runtime-and-kernel-imports
+    kind: package-import
+    sources:
+      - src/lazy-panel.ts
+      - src/app-root.ts
+    summary: Fixture combines `@aurelia/runtime-html` resource carriers with `@aurelia/kernel` DI key construction.
+  - signal_id: unresolved-activation-dependency
+    kind: open-boundary
+    sources:
+      - src/lazy-panel.ts
+      - src/app-root.ts
+    summary: AppRoot contributes the exported custom element, but the element depends on an unregistered interface key.
 known_subjects:
   - subject_id: lazy-panel-export
     label: LazyPanel export

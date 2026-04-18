@@ -9,19 +9,44 @@ selector_seed:
   value: src/index.ts#LazyPanel
 operation: evaluate
 aspect: current-world-status
+expected_consulted_world:
+  semantic_world: current-world
+  lookup_regime: local-dependencies-world
+  summary: Evaluate current-world activity after the export closes and AppRoot contributes the resource locally.
 expected_shape:
   dominant_outcomes:
     - open
+  dominant_trust_kinds:
+    - frontier
   basis_kinds:
     - substrate
     - claim
     - boundary
   continuation_kinds:
-    - trace-missing-activation-dependency
-    - inspect-iloadstate-export
-    - evaluate-registration-path
-  identity_expectation: export identity should still close at project scope
-  anchor_expectation: emit declaration anchor
+    - strengthen-evidence
+    - reroute
+  followup_queries:
+    - operation: trace
+      aspect: activation-dependency
+      summary: Trace the missing dependency that blocks activation.
+    - operation: inspect
+      aspect: di-key-surface
+      summary: Inspect the exported `ILoadState` surface as the likely missing dependency key.
+    - operation: trace
+      aspect: registration-path
+      summary: Trace whether any registration path exists for the missing dependency.
+  identity_expectation:
+    emit: expected
+    minimum_uniqueness: project
+    scheme_hint: ts-export
+    strength: strong
+    summary: Export identity should close even though current-world activity remains open.
+  anchor_expectation:
+    emit: expected
+    scheme_hint: ts-decl-anchor
+    strength: strong
+    reread_hint: optional
+    summary: Declaration anchor should remain available on the exported owner carrier.
 notes:
   - identity closure should remain stronger than current-world activity closure
   - the missing ILoadState registration should dominate the open-boundary explanation

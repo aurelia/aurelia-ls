@@ -9,18 +9,44 @@ selector_seed:
   value: src/index.ts#LoggerRegistration
 operation: trace
 aspect: registration-path
+expected_consulted_world:
+  semantic_world: compile-time-di
+  lookup_regime: exported-registration-bridge
+  summary: Trace from the exported registration surface into the compile-time DI world.
 expected_shape:
   dominant_outcomes:
     - hit
     - open
+  dominant_trust_kinds:
+    - qualified
   basis_kinds:
     - claim
+    - route
     - boundary
   continuation_kinds:
-    - evaluate-lookup-regime
-    - inspect-kind
-    - trace-consumer-policy
-  identity_expectation: registry-like identity may remain provisional
-  anchor_expectation: emit declaration anchor
+    - strengthen-evidence
+    - reroute
+  followup_queries:
+    - operation: evaluate
+      aspect: lookup-regime
+      summary: Evaluate how the exported registration is expected to resolve for consumers.
+    - operation: inspect
+      aspect: export-kind
+      summary: Inspect the exported registration as a registry-like carrier.
+    - operation: trace
+      aspect: consumer-policy
+      summary: Trace which consumer-side policy or owner world makes the registration relevant.
+  identity_expectation:
+    emit: optional
+    minimum_uniqueness: project
+    scheme_hint: ts-local
+    strength: weak
+    summary: Registry-like identity may remain provisional even when a useful trace closes.
+  anchor_expectation:
+    emit: expected
+    scheme_hint: ts-decl-anchor
+    strength: strong
+    reread_hint: optional
+    summary: Declaration anchor should remain available from the exported registration carrier.
 notes:
   - this is intentionally a bridge scenario rather than a pure identity scenario

@@ -19,6 +19,17 @@ source_files:
   - src/logger.ts
   - src/index.ts
   - src/app-root.ts
+detection_signals:
+  - signal_id: kernel-di-imports
+    kind: package-import
+    sources:
+      - src/logger.ts
+    summary: Fixture imports `DI`, `Registration`, and `inject` from `@aurelia/kernel`.
+  - signal_id: aurelia-owner-and-registration
+    kind: mixed-signal
+    sources:
+      - src/logger.ts
+    summary: Fixture combines an Aurelia `customElement` owner with exported DI key and registration surfaces.
 known_subjects:
   - subject_id: ilogger-export
     label: ILogger export

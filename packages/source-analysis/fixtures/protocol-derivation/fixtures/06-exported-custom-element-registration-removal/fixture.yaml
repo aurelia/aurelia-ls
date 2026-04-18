@@ -22,6 +22,18 @@ source_files:
   - src/index.ts
   - src/app-root.ts
   - src/app-root.html
+detection_signals:
+  - signal_id: runtime-html-custom-element
+    kind: package-import
+    sources:
+      - src/status-badge.ts
+      - src/app-root.ts
+    summary: Fixture imports `@aurelia/runtime-html` and contributes an exported custom element into AppRoot dependencies.
+  - signal_id: mutation-removes-world-contribution
+    kind: mutation-signal
+    sources:
+      - src/app-root.ts
+    summary: Derived mutation removes the local dependency contribution while leaving export and declaration surfaces intact.
 known_subjects:
   - subject_id: status-badge-export
     label: StatusBadge export
