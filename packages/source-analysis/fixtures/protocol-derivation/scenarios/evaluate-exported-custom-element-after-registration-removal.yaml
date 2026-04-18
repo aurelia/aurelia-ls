@@ -23,6 +23,8 @@ expected_shape:
     - withdrawn
   dominant_trust_kinds:
     - grounded
+  resolution_expectation:
+    status: single
   basis_kinds:
     - claim
     - freshness

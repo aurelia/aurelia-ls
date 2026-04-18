@@ -18,6 +18,8 @@ expected_shape:
     - open
   dominant_trust_kinds:
     - frontier
+  resolution_expectation:
+    status: single
   basis_kinds:
     - claim
     - route

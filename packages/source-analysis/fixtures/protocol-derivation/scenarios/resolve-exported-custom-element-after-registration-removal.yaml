@@ -22,6 +22,8 @@ expected_shape:
     - hit
   dominant_trust_kinds:
     - grounded
+  resolution_expectation:
+    status: single
   basis_kinds:
     - substrate
     - claim

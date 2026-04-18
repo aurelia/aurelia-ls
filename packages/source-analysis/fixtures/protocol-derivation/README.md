@@ -19,6 +19,9 @@ They are meant to pressure the protocol kernel at specific semantic seams.
 
 - [schema.yaml](./schema.yaml)
   Packet shape for fixtures and scenarios.
+- [vocabulary.yaml](./vocabulary.yaml)
+  Lightweight registry for current semantic-world, lookup-regime, and
+  subject-kind leaf names used by the packet set.
 - [manifest.yaml](./manifest.yaml)
   Top-level index of the current derivation fixture set.
 - `fixtures/<fixture-id>/`
@@ -53,4 +56,6 @@ Scenario packets should also keep a few layers separate on purpose:
 - `dominant_outcomes` versus `dominant_trust_kinds`
 - kernel `continuation_kinds` versus scenario-local `followup_queries`
 - structured `identity_expectation` versus structured `anchor_expectation`
+- structured `resolution_expectation` when single versus ambiguous closure matters
 - explicit `expected_consulted_world` instead of only implied world assumptions
+- light registered leaf names in `vocabulary.yaml` instead of silent free-text drift

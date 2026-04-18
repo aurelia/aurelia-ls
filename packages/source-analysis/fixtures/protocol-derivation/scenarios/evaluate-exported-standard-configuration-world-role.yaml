@@ -18,6 +18,8 @@ expected_shape:
     - hit
   dominant_trust_kinds:
     - qualified
+  resolution_expectation:
+    status: single
   basis_kinds:
     - claim
     - boundary

@@ -19,6 +19,8 @@ expected_shape:
     - open
   dominant_trust_kinds:
     - qualified
+  resolution_expectation:
+    status: single
   basis_kinds:
     - claim
     - route

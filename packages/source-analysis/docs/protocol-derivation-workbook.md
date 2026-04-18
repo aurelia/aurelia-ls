@@ -122,7 +122,8 @@ Use this record for every scenario.
 - Provenance:
 - Issues:
 
-- Continuations:
+- Kernel continuation kinds:
+- Follow-up query seeds:
 - Retreat triggers:
 - Change notice:
 
@@ -146,7 +147,7 @@ When filling the record, use these rules:
 
 1. `preserved`, `claim`, and `spendable` must stay separate.
 2. Non-positive outcomes are normal protocol behavior.
-3. Continuations must stay inside the read/adjudicate scope.
+3. Kernel continuation kinds must stay separate from scenario-local follow-up query seeds.
 4. Identity is canonical naming, not a relocation hint.
 5. Anchor is reacquisition, not canonical naming.
 6. If the burden cannot be supported honestly, do not smooth it into a weaker

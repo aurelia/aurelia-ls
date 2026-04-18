@@ -1,6 +1,7 @@
 schema_version: v0alpha1
 title: Protocol Derivation Fixture Packet Schema
 status: provisional
+vocabulary_registry: ./vocabulary.yaml
 
 packet_families:
   fixture_packet:
@@ -58,6 +59,7 @@ packet_families:
       aspect: Optional aspect seed.
       expected_consulted_world: Expected semantic world and lookup-regime burden for this scenario.
       expected_shape: Expected answer-shape guidance, not yet a full golden payload.
+      resolution_expectation: Optional expected resolution posture such as `single` or `ambiguous`.
       relational_expectation: Optional baseline relationship for mutation-sensitive outcomes such as `withdrawn`.
       notes: Optional author notes about why this scenario matters.
 
@@ -88,6 +90,8 @@ shared_vocabulary:
       summary: Likely primary outcome tags under honest closure.
     dominant_trust_kinds:
       summary: Likely trust kinds under honest closure. Keep this separate from outcome tags.
+    resolution_expectation:
+      summary: Structured resolution expectation such as `single`, `ambiguous`, or `unresolved`.
     basis_kinds:
       summary: Basis kinds that should probably appear.
     continuation_kinds:
@@ -100,11 +104,16 @@ shared_vocabulary:
       summary: Structured anchor expectation such as emit, scheme hint, and strength.
   consulted_world_fields:
     semantic_world:
-      summary: Which semantic world the authority is expected to spend.
+      summary: Which semantic world the authority is expected to spend. Prefer registered values from `vocabulary.yaml`.
     lookup_regime:
-      summary: Which lookup or consultation regime should dominate the derivation.
+      summary: Which lookup or consultation regime should dominate the derivation. Prefer registered values from `vocabulary.yaml`.
     summary:
       summary: Short human-readable explanation of that world choice.
+  resolution_expectation_fields:
+    status:
+      summary: Expected resolution status such as `single`, `ambiguous`, or `unresolved`.
+    summary:
+      summary: Optional clarification about why that resolution posture is honest.
   relational_expectation_fields:
     baseline_fixture_state:
       summary: Prior fixture state against which relational outcomes should be judged.
@@ -142,7 +151,9 @@ authoring_rules:
   - Human questions should sound like something a real caller might ask.
   - Aurelia should be treated as auto-detected when the fixture contains Aurelia semantics.
   - Fixture packets should prefer small concrete workspaces over large synthetic apps.
+  - Prefer registered semantic-world, lookup-regime, and subject-kind leaf names from `vocabulary.yaml` when one already exists.
   - Keep outcome and trust vocabulary in separate fields.
+  - Add `resolution_expectation` when single versus ambiguous closure is part of the scenario burden.
   - Keep kernel continuation kinds separate from scenario-specific follow-up query seeds.
   - Make expected semantic world and lookup regime explicit when the burden depends on them.
   - Mutation scenarios should pin a fixture_state instead of implying change only in prose.
