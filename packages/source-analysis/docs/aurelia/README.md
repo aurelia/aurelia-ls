@@ -14,6 +14,8 @@ Read these notes before:
 - building a framework API registry
 - modeling the Aurelia resource world
 - modeling compile-time DI state or registration-side consequence
+- prioritizing which Aurelia-aware capabilities should land first for AI and
+  scalable app work
 - deciding build-time DI linkage closure
 - adding framework-aware inquiry answers or proofs
 
@@ -26,6 +28,7 @@ Read these notes before:
 5. [compile-time-di-container-state.md](./compile-time-di-container-state.md)
 6. [proof-basis.md](./proof-basis.md)
 7. [semantic-stack.md](./semantic-stack.md)
+8. [ai-capability-catalog.md](./ai-capability-catalog.md)
 
 ## Local Rules
 
