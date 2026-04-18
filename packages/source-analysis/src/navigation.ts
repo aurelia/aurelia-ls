@@ -39,6 +39,10 @@ import { createAnswerDocument } from './answer-document.js';
 import { createAnswerEnvelope } from './answer-envelope.js';
 import { trimTrailingFocusPunctuation } from './focus-normalization.js';
 import { resolveInquiryPolicy, type InquiryPolicy } from './inquiry-policy.js';
+import {
+  executionPostureFromFrame,
+  worldTargetingFromFrame,
+} from './inquiry-model.js';
 import type {
   ClaimEdge,
   ClaimHome,
@@ -231,10 +235,11 @@ class EpisodeBuilder {
   createAnalysisProvenanceEntries(
     kinds: readonly AnalysisMetadataKind[],
   ): readonly InquiryProvenanceEntry[] {
+    const posture = executionPostureFromFrame(this.query.worldFrame);
     return createAnalysisProvenanceEntriesForKinds(
       this.snapshots,
       kinds,
-      this.query.worldFrame?.freshness,
+      posture.freshness,
     );
   }
 
@@ -420,7 +425,7 @@ class EpisodeBuilder {
       substrate: {
         schemaVersion: SUBSTRATE_SCHEMA_VERSION,
         repoPath: this.snapshots.root,
-        target: answer.query.worldFrame?.target ?? 'current',
+        target: worldTargetingFromFrame(answer.query.worldFrame).target ?? 'current',
         nodes: [...this.#nodes.values()],
         edges: [...this.#edges.values()],
       },
@@ -594,7 +599,7 @@ function buildPackageEpisode(
     mergeTrustProfiles(
       {
         kind: 'grounded',
-        summary: `This overview is grounded in the ${describeAnalysisSurfaceEvidence(builder.query.worldFrame?.freshness, ['deps', 'exports'])} for the current workspace.`,
+        summary: `This overview is grounded in the ${describeAnalysisSurfaceEvidence(executionPostureFromFrame(builder.query.worldFrame).freshness, ['deps', 'exports'])} for the current workspace.`,
       },
       regimeContext.trust,
     ),
@@ -607,7 +612,7 @@ function buildPackageEpisode(
       },
       {
         kind: 'substrate',
-        summary: builder.query.worldFrame?.freshness === 'live'
+        summary: executionPostureFromFrame(builder.query.worldFrame).freshness === 'live'
           ? 'The package overview is backed by the live exports analysis view and package coupling observations.'
           : 'The package overview is backed by the exports analysis view and package coupling observations.',
         substrateNodeIds: [exportsSnapshotId, depsSnapshotId, packageNodeId, entrypointNodeId, ...exportNodeIds, ...couplingNodeIds],
@@ -709,7 +714,7 @@ function buildTypeEpisode(
     `${decl.kind} ${decl.name} is declared in ${decl.file}:${decl.line}.`,
     uniqueRefs.length > 0
       ? `It directly references ${decl.refs.length} project types, including ${uniqueRefs.slice(0, 4).map((ref) => ref.target).join(', ')}.`
-      : `It has no outbound project type references in the ${describeAnalysisSurface(builder.query.worldFrame?.freshness)}.`,
+      : `It has no outbound project type references in the ${describeAnalysisSurface(executionPostureFromFrame(builder.query.worldFrame).freshness)}.`,
     matchingExport
       ? `It is also part of the public export surface for ${matchingExport.package_name}.`
       : 'It is not currently resolved as part of the package export surface.',
@@ -740,7 +745,7 @@ function buildTypeEpisode(
     }),
       {
         kind: 'grounded',
-        summary: builder.query.worldFrame?.freshness === 'live'
+        summary: executionPostureFromFrame(builder.query.worldFrame).freshness === 'live'
           ? 'This neighborhood is grounded in live typerefs data and, when available, the live export surface view.'
           : 'This neighborhood is grounded in live typerefs data and, when available, the export surface analysis view.',
       },
@@ -1317,7 +1322,7 @@ function buildFileEpisode(
     mergeTrustProfiles(
       mergeTrustProfiles({
         kind: 'grounded',
-        summary: `This file neighborhood is grounded in the ${describeAnalysisSurfaceEvidence(builder.query.worldFrame?.freshness, ['deps', 'typerefs', 'exports'])}.`,
+        summary: `This file neighborhood is grounded in the ${describeAnalysisSurfaceEvidence(executionPostureFromFrame(builder.query.worldFrame).freshness, ['deps', 'typerefs', 'exports'])}.`,
       }, structuralPathContext?.trust ?? null),
       regimeContext.trust,
     ),

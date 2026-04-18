@@ -1,9 +1,15 @@
 import type {
+  CognitiveQuestionRoute,
   FocusKind,
   InquiryEpisode,
   PolicyFocusKind,
+  QuestionRouteFamilies,
   QuestionRoute,
   ReadMode,
+} from './inquiry-model.js';
+import {
+  createQuestionRouteFamilies,
+  flattenQuestionRouteFamilies,
 } from './inquiry-model.js';
 import type { CapabilityCatalog } from './capability-catalog.js';
 import {
@@ -73,7 +79,7 @@ export interface InquiryFamilyDefinition {
   readonly whenToUse: string;
   readonly focusKinds: readonly PolicyFocusKind[];
   readonly inquiryEpisodes: readonly InquiryEpisode[];
-  readonly questionRoutes: readonly QuestionRoute[];
+  readonly questionRouteFamilies: QuestionRouteFamilies;
   readonly readModes: readonly ReadMode[];
   readonly aliases: readonly string[];
   readonly nouns: readonly string[];
@@ -164,7 +170,7 @@ export class InquiryFamilyDescriptor {
       whenToUse: this.#definition.whenToUse,
       focusKinds: this.#definition.focusKinds,
       inquiryEpisodes: this.#definition.inquiryEpisodes,
-      questionRoutes: this.#definition.questionRoutes,
+      questionRoutes: flattenQuestionRouteFamilies(this.#definition.questionRouteFamilies),
       readModes: this.#definition.readModes,
       aliases: this.#definition.aliases,
       primaryCommands: this.#definition.primaryCommands,
@@ -316,7 +322,7 @@ export function createDefaultInquiryCatalog(): InquiryCatalog {
       whenToUse: 'Use this when you are unsure what the tool can answer, how to phrase a question, or which command shape is valid.',
       focusKinds: ['repo', 'capability', 'inquiry'],
       inquiryEpisodes: ['orient-and-localize', 'bounded-closure-explanation'],
-      questionRoutes: ['search', 'route'],
+      questionRouteFamilies: cognitiveRoutes('search', 'route'),
       readModes: ['summary-card', 'focus-card', 'supporting-evidence'],
       aliases: ['what can this tool do', 'how do i use source analysis', 'help', 'discover commands'],
       nouns: ['capability', 'command', 'surface', 'tool', 'help'],
@@ -336,7 +342,7 @@ export function createDefaultInquiryCatalog(): InquiryCatalog {
       whenToUse: 'Use this when you need to know what regime you are in, how far the current analyzability closes, or which excluded/frontier boundaries remain open.',
       focusKinds: ['repo'],
       inquiryEpisodes: ['bounded-closure-explanation', 'orient-and-localize'],
-      questionRoutes: ['route', 'search'],
+      questionRouteFamilies: cognitiveRoutes('route', 'search'),
       readModes: ['summary-card', 'focus-card', 'supporting-evidence'],
       aliases: ['what regime am i in', 'analyzability posture', 'open fronts', 'excluded boundaries', 'profile posture'],
       nouns: ['profile', 'regime', 'analyzability', 'posture', 'boundary', 'boundaries', 'frontier', 'frontiers', 'excluded', 'open'],
@@ -361,7 +367,7 @@ export function createDefaultInquiryCatalog(): InquiryCatalog {
       whenToUse: 'Use this when you need a starting point, declaration location, neighborhood view, or quick structural posture before making changes.',
       focusKinds: ['repo', 'package', 'file', 'symbol', 'type', 'export'],
       inquiryEpisodes: ['orient-and-localize', 'bounded-closure-explanation'],
-      questionRoutes: ['search', 'join', 'inventory', 'route'],
+      questionRouteFamilies: cognitiveRoutes('search', 'join', 'inventory', 'route'),
       readModes: ['summary-card', 'focus-card', 'supporting-evidence'],
       aliases: ['where do i start', 'understand the workspace', 'orient me', 'overview before editing'],
       nouns: ['workspace', 'repo', 'package', 'file', 'symbol', 'type', 'export', 'overview', 'orientation', 'declaration', 'definition', 'implementation'],
@@ -387,7 +393,7 @@ export function createDefaultInquiryCatalog(): InquiryCatalog {
       whenToUse: 'Use this for tech debt, dead-code suspicion, under-integration, or self-improvement passes on a package.',
       focusKinds: ['package'],
       inquiryEpisodes: ['inventory-and-audit-sweep', 'bounded-closure-explanation'],
-      questionRoutes: ['inventory', 'route'],
+      questionRouteFamilies: cognitiveRoutes('inventory', 'route'),
       readModes: ['summary-card', 'focus-card', 'supporting-evidence'],
       aliases: ['tech debt', 'dead code', 'audit this package', 'integration gaps', 'layer cycles', 'dependency seams'],
       nouns: ['audit', 'debt', 'coverage', 'integration', 'dead', 'exercise', 'cycle', 'layer', 'seam', 'coupling', 'architecture'],
@@ -412,7 +418,7 @@ export function createDefaultInquiryCatalog(): InquiryCatalog {
       whenToUse: 'Use this when you want a proof chain from an ingress root to a file or type.',
       focusKinds: ['file', 'type'],
       inquiryEpisodes: ['bounded-closure-explanation'],
-      questionRoutes: ['route', 'join'],
+      questionRouteFamilies: cognitiveRoutes('route', 'join'),
       readModes: ['focus-card', 'supporting-evidence'],
       aliases: ['why alive', 'why reachable', 'route witness', 'why does this survive'],
       nouns: ['route', 'witness', 'reachability', 'path', 'survival', 'alive'],
@@ -441,7 +447,10 @@ export function createDefaultInquiryCatalog(): InquiryCatalog {
       whenToUse: 'Use this when snapshots are stale, dirty, missing, or you need materialized JSON for external use.',
       focusKinds: ['repo', 'session', 'file'],
       inquiryEpisodes: ['delta-and-reread-floor', 'bounded-closure-explanation'],
-      questionRoutes: ['refresh', 'diff', 'materialize', 'search'],
+      questionRouteFamilies: createQuestionRouteFamilies({
+        cognitive: ['search'],
+        maintenance: ['refresh', 'diff', 'materialize'],
+      }),
       readModes: ['summary-card', 'focus-card', 'delta-card', 'snapshot'],
       aliases: ['stale snapshots', 'refresh analysis', 'materialize snapshots', 'dirty session'],
       nouns: ['snapshot', 'session', 'refresh', 'invalidate', 'materialize', 'stale'],
@@ -474,6 +483,12 @@ function inquiryExample(
     question,
     primaryCommand,
   };
+}
+
+function cognitiveRoutes(
+  ...routes: readonly CognitiveQuestionRoute[]
+): QuestionRouteFamilies {
+  return createQuestionRouteFamilies({ cognitive: routes });
 }
 
 const DEFAULT_INQUIRY_SELECTION_POLICY: IngressSelectionPolicy<
@@ -544,7 +559,7 @@ function createInquiryMatchRules(
       'route-tokens',
       'route',
       'question',
-      definition.questionRoutes,
+      flattenQuestionRouteFamilies(definition.questionRouteFamilies),
       'Question suggests a declared question route.',
     ),
     createTokenRule(

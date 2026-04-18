@@ -10,15 +10,16 @@ carrying one overloaded label space.
 
 ## Exact next slice
 
-1. Split route-family usage in planner/runtime code so cognitive inquiry moves
-   (`search` / `join` / `route` / `inventory`) stop sharing one label space
-   with maintenance/control moves (`refresh` / `diff` / `materialize`).
-2. Separate request targeting from observed execution posture inside
-   `WorldFrame` or a successor type so repo/target/profile selection stops
-   traveling in the same bundle as regime/freshness/partiality.
-3. Migrate one or two more high-fanout consumers, likely host runtime
-   rendering/execution summaries plus inquiry/capability planning helpers, onto
-   those narrower families without freezing premature public names.
+1. Keep shrinking the broad route carriers around continuations, delta floors,
+   and wire payloads so cognitive inquiry moves (`search` / `join` / `route` /
+   `inventory`) stop sharing one label slot with maintenance/control moves
+   (`refresh` / `diff` / `materialize`) after the catalog split.
+2. Push `WorldFrame` flattening outward toward compatibility-only boundaries by
+   letting more answer/wire/runtime surfaces spend `WorldTargeting` and
+   `ExecutionPosture` directly.
+3. Decide how payload/materialization mode should escape the remaining broad
+   `ReadMode` union without prematurely freezing a public materialization
+   contract.
 
 ## Recently landed
 
@@ -66,6 +67,16 @@ carrying one overloaded label space.
 - Moved capability/inquiry ingress and the main structured answer builders onto
   the narrowed policy/provenance seams while keeping the outer query model
   broad enough to avoid freezing premature public names.
+- Split capability and inquiry catalog definitions onto explicit cognitive
+  versus maintenance route families while preserving the flattened
+  `questionRoutes` view for compatibility/read surfaces.
+- Added shared `WorldTargeting`, `ExecutionPosture`, and world-frame helper
+  contracts so high-fanout planning/runtime consumers can stop mixing repo
+  targeting with observed freshness/posture in one local ad hoc bundle.
+- Moved `analysis-surface`, `analysis-metadata-support`, host runtime world
+  frame construction, and navigation/audit/route-witness freshness reads onto
+  those new targeting/posture helpers while keeping the flattened `WorldFrame`
+  wire shape intact.
 
 ## Constraints
 
@@ -87,8 +98,8 @@ carrying one overloaded label space.
 - `inquiry-model.ts` still overloads routes, read modes, focus kinds,
   provenance kinds, and execution posture.
 - `resolveInquiryPolicy` still carries the broad `QuestionRoute` union because
-  route-family planning/execution has not yet split cognitive inquiry moves
-  from maintenance/control moves.
+  continuation/delta/wire carriers still flatten the route families back into
+  one label space after the catalog split.
 - `route-witness` and `audit` still describe freshness in terms of the legacy
   projections rather than a named shared route/reachability authority.
 - `query.navigate`, `route-witness`, and `audit` still describe freshness in
@@ -96,24 +107,23 @@ carrying one overloaded label space.
   to converge behind shared helpers.
 - `audit` still owns coordination and presentation fragmentation checks as
   package-self-pressure heuristics rather than shared semantic evaluators.
-- `WorldFrame` still blends request targeting inputs with observed execution
-  posture, and default world-frame assembly still lives separately in
-  navigation, route-witness, and audit even after snapshot metadata packaging
-  started to converge.
+- `WorldFrame` is now split internally into `WorldTargeting` and
+  `ExecutionPosture`, but the flattened carrier still travels through answer
+  and wire payloads for compatibility.
 
 ## Likely files for the next pass
 
-- `src/route-witness.ts`
-- `src/audit.ts`
 - `src/inquiry-model.ts`
 - `src/inquiry-policy.ts`
+- `src/inquiry-wire.ts`
+- `src/answer-envelope.ts`
+- `src/outcome-algebra.ts`
 - `src/inquiry-catalog.ts`
 - `src/capability-catalog.ts`
 - `src/inquiry-ingress.ts`
 - `src/capability-ingress.ts`
 - `src/host/runtime.ts`
 - `src/analysis-surface.ts`
-- `src/answer-envelope.ts`
 
 ## Verification reminders
 

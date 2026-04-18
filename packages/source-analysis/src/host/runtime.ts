@@ -308,11 +308,7 @@ export class SnapshotHostRuntime {
       focusValue: args.focusValue,
       readMode: args.readMode,
       consumer: args.consumer,
-      worldFrame: createHostedWorldFrame({
-        repoPath,
-        target,
-        profilePath,
-      }),
+      worldFrame: createRuntimeWorldFrame({ repoPath, target, profilePath }),
     });
     const rendered = buildRenderedView(answer, args.consumer, args.renderStyle);
     const result: PlanQuestionResult = {
@@ -345,11 +341,7 @@ export class SnapshotHostRuntime {
       familyId: args.familyId,
       readMode: args.readMode,
       consumer: args.consumer,
-      worldFrame: createHostedWorldFrame({
-        repoPath,
-        target,
-        profilePath,
-      }),
+      worldFrame: createRuntimeWorldFrame({ repoPath, target, profilePath }),
     });
     const rendered = buildRenderedView(answer, args.consumer, args.renderStyle);
     const result: PlanInquiryResult = {
@@ -429,7 +421,7 @@ export class SnapshotHostRuntime {
       familyId: args.familyId,
       readMode: args.readMode,
       consumer: args.consumer,
-      worldFrame: createHostedWorldFrame({
+      worldFrame: createRuntimeWorldFrame({
         repoPath,
         target,
         profilePath,
@@ -597,7 +589,7 @@ export class SnapshotHostRuntime {
         focusRef: { kind: 'package', value: args.packageName },
         questionRoute: 'inventory',
         readMode: args.readMode ?? 'summary-card',
-        worldFrame: createHostedWorldFrame({
+        worldFrame: createRuntimeWorldFrame({
           repoPath: state.repoPath,
           target: state.target,
         }),
@@ -632,7 +624,7 @@ export class SnapshotHostRuntime {
         },
         questionRoute: 'route',
         readMode: args.readMode ?? 'focus-card',
-        worldFrame: createHostedWorldFrame({
+        worldFrame: createRuntimeWorldFrame({
           repoPath: state.repoPath,
           target: state.target,
         }),
@@ -668,7 +660,7 @@ export class SnapshotHostRuntime {
         },
         questionRoute: args.questionRoute ?? 'join',
         readMode: args.readMode ?? 'focus-card',
-        worldFrame: createHostedWorldFrame({
+        worldFrame: createRuntimeWorldFrame({
           repoPath: state.repoPath,
           target: state.target,
         }),
@@ -943,12 +935,10 @@ function summarizePrimaryFacts(
     case 'describe.profile': {
       const summary = summarizeAnalyzabilityPosture(
         (result as unknown as DescribeProfileResult).posture,
-        createHostedWorldFrame({
+        createRuntimeWorldFrame({
           repoPath: (result as unknown as DescribeProfileResult).profile.repoPath,
           target: (result as unknown as DescribeProfileResult).profile.snapshotTarget,
-          ...((result as unknown as DescribeProfileResult).profile.profilePath
-            ? { profilePath: (result as unknown as DescribeProfileResult).profile.profilePath ?? undefined }
-            : {}),
+          profilePath: (result as unknown as DescribeProfileResult).profile.profilePath ?? undefined,
         }),
       );
       return summary.facts;
@@ -1018,12 +1008,10 @@ function summarizePrimaryLines(
     case 'describe.profile': {
       const summary = summarizeAnalyzabilityPosture(
         (result as unknown as DescribeProfileResult).posture,
-        createHostedWorldFrame({
+        createRuntimeWorldFrame({
           repoPath: (result as unknown as DescribeProfileResult).profile.repoPath,
           target: (result as unknown as DescribeProfileResult).profile.snapshotTarget,
-          ...((result as unknown as DescribeProfileResult).profile.profilePath
-            ? { profilePath: (result as unknown as DescribeProfileResult).profile.profilePath ?? undefined }
-            : {}),
+          profilePath: (result as unknown as DescribeProfileResult).profile.profilePath ?? undefined,
         }),
       );
       return summary.lines;
@@ -1114,10 +1102,10 @@ function summarizePrimaryOutcome(
     const describe = result as unknown as DescribeProfileResult;
     const summary = summarizeAnalyzabilityPosture(
       describe.posture,
-      createHostedWorldFrame({
+      createRuntimeWorldFrame({
         repoPath: describe.profile.repoPath,
         target: describe.profile.snapshotTarget,
-        ...(describe.profile.profilePath ? { profilePath: describe.profile.profilePath ?? undefined } : {}),
+        profilePath: describe.profile.profilePath ?? undefined,
       }),
     );
     return {
@@ -1199,6 +1187,26 @@ function ensureFreshHostedInquiryContext(
         : 'cold',
     },
   };
+}
+
+function createRuntimeWorldFrame(
+  options: {
+    readonly repoPath?: string;
+    readonly target?: string;
+    readonly profilePath?: string;
+    readonly freshness?: 'live' | 'snapshot';
+  },
+) {
+  return createHostedWorldFrame({
+    targeting: {
+      ...(options.repoPath ? { repoPath: options.repoPath } : {}),
+      ...(options.target ? { target: options.target } : {}),
+      ...(options.profilePath ? { profilePath: options.profilePath } : {}),
+    },
+    posture: {
+      ...(options.freshness ? { freshness: options.freshness } : {}),
+    },
+  });
 }
 
 function ensureFreshSnapshot<TKind extends SnapshotKind>(

@@ -1,7 +1,14 @@
 import type { AnalysisViews } from './analysis-views.js';
 import type {
+  ExecutionPosture,
   InquiryCarrierProvenanceEntry,
   WorldFrame,
+  WorldTargeting,
+} from './inquiry-model.js';
+import {
+  composeWorldFrame,
+  executionPostureFromFrame,
+  worldTargetingFromFrame,
 } from './inquiry-model.js';
 
 export const ANALYSIS_SURFACE_KINDS = [
@@ -14,38 +21,39 @@ export type AnalysisSurfaceKind =
   typeof ANALYSIS_SURFACE_KINDS[number];
 
 export interface HostedWorldFrameOptions {
-  readonly repoPath?: string;
-  readonly target?: string;
-  readonly profilePath?: string;
-  readonly regimeAnchor?: WorldFrame['regimeAnchor'];
-  readonly partiality?: WorldFrame['partiality'];
-  readonly freshness?: WorldFrame['freshness'];
+  readonly targeting?: WorldTargeting;
+  readonly posture?: ExecutionPosture;
 }
 
 export function createHostedWorldFrame(
   options: HostedWorldFrameOptions = {},
 ): WorldFrame {
-  return {
-    ...(options.repoPath ? { repoPath: options.repoPath } : {}),
-    ...(options.target ? { target: options.target } : {}),
-    ...(options.profilePath ? { profilePath: options.profilePath } : {}),
-    regimeAnchor: options.regimeAnchor ?? 'hosted',
-    partiality: options.partiality ?? 'complete',
-    freshness: options.freshness ?? 'live',
-  };
+  const targeting = options.targeting ?? {};
+  const posture = options.posture ?? {};
+  return composeWorldFrame(targeting, {
+    regimeAnchor: posture.regimeAnchor ?? 'hosted',
+    partiality: posture.partiality ?? 'complete',
+    freshness: posture.freshness ?? 'live',
+  });
 }
 
 export function defaultWorldFrameForAnalysis(
   analysis: AnalysisViews,
   worldFrame: WorldFrame | undefined,
 ): WorldFrame {
+  const targeting = worldTargetingFromFrame(worldFrame);
+  const posture = executionPostureFromFrame(worldFrame);
   return createHostedWorldFrame({
-    repoPath: worldFrame?.repoPath ?? analysis.root,
-    target: worldFrame?.target ?? 'current',
-    ...(worldFrame?.profilePath ? { profilePath: worldFrame.profilePath } : {}),
-    regimeAnchor: worldFrame?.regimeAnchor,
-    partiality: worldFrame?.partiality,
-    freshness: worldFrame?.freshness ?? (analysis.source === 'hosted-analysis' ? 'live' : 'snapshot'),
+    targeting: {
+      repoPath: targeting.repoPath ?? analysis.root,
+      target: targeting.target ?? 'current',
+      ...(targeting.profilePath ? { profilePath: targeting.profilePath } : {}),
+    },
+    posture: {
+      regimeAnchor: posture.regimeAnchor,
+      partiality: posture.partiality,
+      freshness: posture.freshness ?? (analysis.source === 'hosted-analysis' ? 'live' : 'snapshot'),
+    },
   });
 }
 
@@ -53,7 +61,7 @@ export function createAnalysisProvenanceEntry(
   kind: AnalysisSurfaceKind,
   generatedAt: string,
   sourceCommit: string,
-  freshness: WorldFrame['freshness'],
+  freshness: ExecutionPosture['freshness'],
 ): InquiryCarrierProvenanceEntry {
   if (freshness === 'live') {
     return {
@@ -73,13 +81,13 @@ export function createAnalysisProvenanceEntry(
 }
 
 export function describeAnalysisSurface(
-  freshness: WorldFrame['freshness'] | undefined,
+  freshness: ExecutionPosture['freshness'] | undefined,
 ): string {
   return freshness === 'live' ? 'current analysis' : 'current materialized analysis';
 }
 
 export function describeAnalysisSurfaceEvidence(
-  freshness: WorldFrame['freshness'] | undefined,
+  freshness: ExecutionPosture['freshness'] | undefined,
   kinds: readonly AnalysisSurfaceKind[],
 ): string {
   const joined = kinds.join(', ');

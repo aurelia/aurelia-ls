@@ -38,6 +38,10 @@ import { createAnswerDocument } from './answer-document.js';
 import { createAnswerEnvelope } from './answer-envelope.js';
 import { trimTrailingFocusPunctuation } from './focus-normalization.js';
 import {
+  executionPostureFromFrame,
+  worldTargetingFromFrame,
+} from './inquiry-model.js';
+import {
   resolveInquiryPolicy,
   type AuditMetric,
   type InquiryPolicy,
@@ -221,8 +225,8 @@ function buildPackageAuditAnswer(
   const context = createPackageAuditContext(
     analysis,
     pkg,
-    resolveAuditRepoPath(query.worldFrame?.repoPath),
-    query.worldFrame?.freshness,
+    resolveAuditRepoPath(worldTargetingFromFrame(query.worldFrame).repoPath),
+    executionPostureFromFrame(query.worldFrame).freshness,
     policy,
     packageSurface,
     reachability,
@@ -243,9 +247,9 @@ function buildPackageAuditAnswer(
     : [];
 
   const summaryLines = findings.length === 0
-    ? [`No strong integration red flags closed for ${pkg.package_name} in the ${describeAnalysisSurface(query.worldFrame?.freshness)}.`]
+    ? [`No strong integration red flags closed for ${pkg.package_name} in the ${describeAnalysisSurface(executionPostureFromFrame(query.worldFrame).freshness)}.`]
     : [
-      `${pkg.package_name} shows ${findings.length} likely integration red flag${pluralize(findings.length)} in the ${describeAnalysisSurface(query.worldFrame?.freshness)}.`,
+      `${pkg.package_name} shows ${findings.length} likely integration red flag${pluralize(findings.length)} in the ${describeAnalysisSurface(executionPostureFromFrame(query.worldFrame).freshness)}.`,
       ...(blindspotCount > 0
         ? [`${blindspotCount} blind spot${pluralize(blindspotCount)} keep the exercise/dead-code picture open.`]
         : []),

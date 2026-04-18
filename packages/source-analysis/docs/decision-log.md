@@ -95,3 +95,18 @@ decision trail in order.
 - The remaining ontology pressure is now centered on route-family planning and
   `WorldFrame` posture/targeting overload, not on presentation-mode or
   provenance family confusion.
+
+## 2026-04-18 - Route families and world-frame slices now have shared contracts
+
+- Capability and inquiry catalog definitions now record cognitive versus
+  maintenance route families explicitly, then flatten them only for
+  compatibility views and ingress matching.
+- Shared inquiry-model helpers now expose `WorldTargeting`,
+  `ExecutionPosture`, `composeWorldFrame(...)`, and extractors so high-fanout
+  runtime/planning code can stop rebuilding those slices locally.
+- `analysis-surface`, `analysis-metadata-support`, host runtime world-frame
+  construction, and navigation/audit/route-witness freshness/target reads now
+  spend those shared targeting/posture helpers.
+- The remaining ontology pressure is now in the still-broad outer carriers:
+  continuation routing, delta reread floors, and the flattened `WorldFrame`
+  that still travels through answer/wire payloads for compatibility.

@@ -15,7 +15,12 @@ import {
   QUESTION_ROUTES,
   READ_MODES,
   SUBJECT_FOCUS_KINDS,
+  composeWorldFrame,
+  createQuestionRouteFamilies,
+  executionPostureFromFrame,
+  flattenQuestionRouteFamilies,
   isCarrierProvenanceEntryKind,
+  isCognitiveQuestionRoute,
   isControlFocusKind,
   isEvidenceProvenanceEntryKind,
   isEvidenceFocusKind,
@@ -24,6 +29,7 @@ import {
   isPolicyFocusKind,
   isPresentationReadMode,
   isSubjectFocusKind,
+  worldTargetingFromFrame,
 } from '../src/inquiry-model.js';
 import { asFocusKind, supportsRecognizedFocus } from '../src/ingress-hints.js';
 import {
@@ -64,11 +70,53 @@ describe('Source-analysis inquiry ontology', () => {
     expect(isControlFocusKind('session')).toBe(true);
     expect(isPolicyFocusKind('package')).toBe(true);
     expect(isPolicyFocusKind('claim')).toBe(false);
+    expect(isCognitiveQuestionRoute('route')).toBe(true);
     expect(isMaintenanceQuestionRoute('refresh')).toBe(true);
     expect(isPresentationReadMode('focus-card')).toBe(true);
     expect(isPayloadReadMode('snapshot')).toBe(true);
     expect(isEvidenceProvenanceEntryKind('route')).toBe(true);
     expect(isCarrierProvenanceEntryKind('snapshot')).toBe(true);
+  });
+
+  it('can split and recompose route families and world-frame slices', () => {
+    const routeFamilies = createQuestionRouteFamilies({
+      cognitive: ['search', 'route'],
+      maintenance: ['refresh'],
+    });
+
+    expect(routeFamilies).toEqual({
+      cognitive: ['search', 'route'],
+      maintenance: ['refresh'],
+    });
+    expect(flattenQuestionRouteFamilies(routeFamilies)).toEqual([
+      'search',
+      'route',
+      'refresh',
+    ]);
+
+    const worldFrame = composeWorldFrame(
+      {
+        repoPath: 'C:/projects/aurelia-ls2',
+        target: 'fixture-target',
+        profilePath: 'profiles/framework-core.json',
+      },
+      {
+        regimeAnchor: 'hosted',
+        partiality: 'complete',
+        freshness: 'live',
+      },
+    );
+
+    expect(worldTargetingFromFrame(worldFrame)).toEqual({
+      repoPath: 'C:/projects/aurelia-ls2',
+      target: 'fixture-target',
+      profilePath: 'profiles/framework-core.json',
+    });
+    expect(executionPostureFromFrame(worldFrame)).toEqual({
+      regimeAnchor: 'hosted',
+      partiality: 'complete',
+      freshness: 'live',
+    });
   });
 
   it('keeps ingress-recognizable focus kinds as an explicit subset', () => {

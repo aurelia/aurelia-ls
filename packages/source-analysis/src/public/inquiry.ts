@@ -46,6 +46,7 @@ export type {
   CarrierProvenanceEntryKind,
   CognitiveQuestionRoute,
   ControlFocusKind,
+  ExecutionPosture,
   InquiryCarrierProvenanceEntry,
   InquiryAnswer,
   InquiryProvenanceEntry,
@@ -65,6 +66,7 @@ export type {
   PolicyFocusKind,
   PresentationReadMode,
   ProvenanceEntryKind,
+  QuestionRouteFamilies,
   Inquiry,
   InquirySlotId,
   QuestionRoute,
@@ -72,6 +74,7 @@ export type {
   RegimeAnchor,
   SubjectFocusKind,
   WorldFrame,
+  WorldTargeting,
 } from '../inquiry-model.js';
 export type {
   InquiryAnswerSlots,
@@ -99,7 +102,12 @@ export {
   READ_MODES,
   REGIME_ANCHORS,
   SUBJECT_FOCUS_KINDS,
+  composeWorldFrame,
+  createQuestionRouteFamilies,
+  executionPostureFromFrame,
+  flattenQuestionRouteFamilies,
   isCarrierProvenanceEntryKind,
+  isCognitiveQuestionRoute,
   isControlFocusKind,
   isEvidenceProvenanceEntryKind,
   isEvidenceFocusKind,
@@ -109,4 +117,5 @@ export {
   isPolicyFocusKind,
   isPresentationReadMode,
   isSubjectFocusKind,
+  worldTargetingFromFrame,
 } from '../inquiry-model.js';

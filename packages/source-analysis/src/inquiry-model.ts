@@ -32,9 +32,9 @@ export const QUESTION_ROUTES = [
 ] as const;
 // TODO: This currently mixes cognitive inquiry moves (search/join/route/inventory)
 // with control-plane or maintenance operations (materialize/refresh/diff).
-// The families are explicit now, but most planner/policy call sites still
-// carry the broad QuestionRoute union. Push those sites onto the narrower
-// route families before execution planning grows further.
+// Catalog definitions now spend explicit route families, but the outer query,
+// continuation, and delta carriers still flatten them back into QuestionRoute.
+// Keep shrinking those broad carriers before execution planning grows further.
 
 export const PRESENTATION_READ_MODES = [
   'focus-card',
@@ -151,6 +151,11 @@ export type MaintenanceQuestionRoute =
 export type QuestionRoute =
   typeof QUESTION_ROUTES[number];
 
+export interface QuestionRouteFamilies {
+  readonly cognitive?: readonly CognitiveQuestionRoute[];
+  readonly maintenance?: readonly MaintenanceQuestionRoute[];
+}
+
 export type PresentationReadMode =
   typeof PRESENTATION_READ_MODES[number];
 
@@ -207,18 +212,30 @@ export interface FocusRef<
   readonly label?: string;
 }
 
-export interface WorldFrame {
+export interface WorldTargeting {
   readonly repoPath?: string;
   readonly target?: string;
   readonly profilePath?: string;
+}
+
+export interface ExecutionPosture {
   readonly regimeAnchor?: RegimeAnchor;
   readonly partiality?: PartialityMode;
   readonly freshness?: FreshnessMode;
 }
-// TODO: WorldFrame currently blends targeting inputs (repoPath/target/profilePath)
-// with execution/provenance posture (regimeAnchor/partiality/freshness). If the
-// host gains richer session and write semantics, split request targeting from
-// observed execution frame so answers stop carrying one overloaded bundle.
+
+export interface WorldFrame {
+  readonly repoPath?: WorldTargeting['repoPath'];
+  readonly target?: WorldTargeting['target'];
+  readonly profilePath?: WorldTargeting['profilePath'];
+  readonly regimeAnchor?: ExecutionPosture['regimeAnchor'];
+  readonly partiality?: ExecutionPosture['partiality'];
+  readonly freshness?: ExecutionPosture['freshness'];
+}
+// TODO: WorldFrame remains the wire-compatible flattened carrier, but shared
+// helpers now expose WorldTargeting and ExecutionPosture as the honest internal
+// slices. Keep pushing high-fanout consumers onto those slices until the
+// flattened carrier becomes compatibility-only.
 
 export interface ContinuationBasis<
   TFocusKind extends FocusKind = FocusKind,
@@ -279,6 +296,7 @@ const POLICY_FOCUS_KIND_SET = new Set<string>(POLICY_FOCUS_KINDS);
 const SUBJECT_FOCUS_KIND_SET = new Set<string>(SUBJECT_FOCUS_KINDS);
 const EVIDENCE_FOCUS_KIND_SET = new Set<string>(EVIDENCE_FOCUS_KINDS);
 const CONTROL_FOCUS_KIND_SET = new Set<string>(CONTROL_FOCUS_KINDS);
+const COGNITIVE_QUESTION_ROUTE_SET = new Set<string>(COGNITIVE_QUESTION_ROUTES);
 const MAINTENANCE_QUESTION_ROUTE_SET = new Set<string>(MAINTENANCE_QUESTION_ROUTES);
 const PRESENTATION_READ_MODE_SET = new Set<string>(PRESENTATION_READ_MODES);
 const PAYLOAD_READ_MODE_SET = new Set<string>(PAYLOAD_READ_MODES);
@@ -315,6 +333,12 @@ export function isControlFocusKind(
   return CONTROL_FOCUS_KIND_SET.has(value);
 }
 
+export function isCognitiveQuestionRoute(
+  value: QuestionRoute,
+): value is CognitiveQuestionRoute {
+  return COGNITIVE_QUESTION_ROUTE_SET.has(value);
+}
+
 export function isMaintenanceQuestionRoute(
   value: QuestionRoute,
 ): value is MaintenanceQuestionRoute {
@@ -343,4 +367,52 @@ export function isCarrierProvenanceEntryKind(
   value: ProvenanceEntryKind,
 ): value is CarrierProvenanceEntryKind {
   return CARRIER_PROVENANCE_ENTRY_KIND_SET.has(value);
+}
+
+export function flattenQuestionRouteFamilies(
+  families: QuestionRouteFamilies,
+): readonly QuestionRoute[] {
+  return [
+    ...(families.cognitive ?? []),
+    ...(families.maintenance ?? []),
+  ];
+}
+
+export function createQuestionRouteFamilies(
+  families: QuestionRouteFamilies = {},
+): Required<QuestionRouteFamilies> {
+  return {
+    cognitive: families.cognitive ?? [],
+    maintenance: families.maintenance ?? [],
+  };
+}
+
+export function worldTargetingFromFrame(
+  worldFrame: WorldFrame | undefined,
+): WorldTargeting {
+  return {
+    ...(worldFrame?.repoPath ? { repoPath: worldFrame.repoPath } : {}),
+    ...(worldFrame?.target ? { target: worldFrame.target } : {}),
+    ...(worldFrame?.profilePath ? { profilePath: worldFrame.profilePath } : {}),
+  };
+}
+
+export function executionPostureFromFrame(
+  worldFrame: WorldFrame | undefined,
+): ExecutionPosture {
+  return {
+    ...(worldFrame?.regimeAnchor ? { regimeAnchor: worldFrame.regimeAnchor } : {}),
+    ...(worldFrame?.partiality ? { partiality: worldFrame.partiality } : {}),
+    ...(worldFrame?.freshness ? { freshness: worldFrame.freshness } : {}),
+  };
+}
+
+export function composeWorldFrame(
+  targeting: WorldTargeting = {},
+  posture: ExecutionPosture = {},
+): WorldFrame {
+  return {
+    ...targeting,
+    ...posture,
+  };
 }

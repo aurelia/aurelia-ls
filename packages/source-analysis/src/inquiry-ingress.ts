@@ -418,9 +418,11 @@ export class InquiryIngress {
       ? options.readMode
       : 'focus-card';
     const worldFrame = options.worldFrame ?? createHostedWorldFrame({
-      repoPath: options.repoPath,
-      target: options.target,
-      profilePath: options.profilePath,
+      targeting: {
+        ...(options.repoPath ? { repoPath: options.repoPath } : {}),
+        ...(options.target ? { target: options.target } : {}),
+        ...(options.profilePath ? { profilePath: options.profilePath } : {}),
+      },
     });
     const query: Inquiry = {
       inquiryEpisode: 'bounded-closure-explanation',
@@ -513,9 +515,11 @@ export class InquiryIngress {
       ? options.readMode
       : 'focus-card';
     const worldFrame = options.worldFrame ?? createHostedWorldFrame({
-      repoPath: options.repoPath,
-      target: options.target,
-      profilePath: options.profilePath,
+      targeting: {
+        ...(options.repoPath ? { repoPath: options.repoPath } : {}),
+        ...(options.target ? { target: options.target } : {}),
+        ...(options.profilePath ? { profilePath: options.profilePath } : {}),
+      },
     });
     const query: Inquiry = {
       inquiryEpisode: 'bounded-closure-explanation',

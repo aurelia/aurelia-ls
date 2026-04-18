@@ -83,9 +83,14 @@
         "src/host/runtime.ts",
         "src/analysis-surface.ts",
         "src/analysis-metadata-support.ts",
+        "src/navigation.ts",
+        "src/route-witness.ts",
+        "src/audit.ts",
         "src/answer-render-policy.ts",
         "src/answer-envelope.ts",
-        "src/answer-card.ts"
+        "src/answer-card.ts",
+        "src/inquiry-wire.ts",
+        "src/outcome-algebra.ts"
       ],
       "exitCriteria": [
         "High-fanout internal call sites no longer need the broad FocusKind or world/provenance unions when they only support a narrower family.",

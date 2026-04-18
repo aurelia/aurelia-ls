@@ -1,6 +1,6 @@
 import type { AnalysisViews } from './analysis-views.js';
 import { createAnalysisProvenanceEntry } from './analysis-surface.js';
-import type { WorldFrame, InquiryCarrierProvenanceEntry } from './inquiry-model.js';
+import type { ExecutionPosture, InquiryCarrierProvenanceEntry } from './inquiry-model.js';
 
 export const ANALYSIS_METADATA_KINDS = [
   'deps',
@@ -38,7 +38,7 @@ export function getAnalysisSnapshotMetadata(
 export function createAnalysisProvenanceEntriesForKinds(
   analysis: AnalysisViews,
   kinds: readonly AnalysisMetadataKind[],
-  freshness: WorldFrame['freshness'],
+  freshness: ExecutionPosture['freshness'],
 ): readonly InquiryCarrierProvenanceEntry[] {
   return kinds.map((kind) => {
     const metadata = getAnalysisSnapshotMetadata(analysis, kind);
@@ -53,7 +53,7 @@ export function createAnalysisProvenanceEntriesForKinds(
 
 export function describeAnalysisMaterializationTiming(
   analysis: AnalysisViews,
-  freshness: WorldFrame['freshness'],
+  freshness: ExecutionPosture['freshness'],
   kinds: readonly AnalysisMetadataKind[],
 ): string {
   const labels = kinds.join(', ');

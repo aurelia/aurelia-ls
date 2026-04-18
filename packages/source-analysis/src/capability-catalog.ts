@@ -1,8 +1,15 @@
 import type {
+  CognitiveQuestionRoute,
   FocusKind,
+  MaintenanceQuestionRoute,
   PolicyFocusKind,
+  QuestionRouteFamilies,
   QuestionRoute,
   ReadMode,
+} from './inquiry-model.js';
+import {
+  createQuestionRouteFamilies,
+  flattenQuestionRouteFamilies,
 } from './inquiry-model.js';
 import {
   captureKindsForFocusKinds,
@@ -103,7 +110,7 @@ export interface CapabilityDefinition {
   readonly summary: string;
   readonly whenToUse: string;
   readonly focusKinds: readonly PolicyFocusKind[];
-  readonly questionRoutes: readonly QuestionRoute[];
+  readonly questionRouteFamilies: QuestionRouteFamilies;
   readonly readModes: readonly ReadMode[];
   readonly aliases: readonly string[];
   readonly nouns: readonly string[];
@@ -193,7 +200,7 @@ export class CapabilityDescriptor {
   }
 
   get questionRoutes(): readonly QuestionRoute[] {
-    return this.#definition.questionRoutes;
+    return flattenQuestionRouteFamilies(this.#definition.questionRouteFamilies);
   }
 
   get readModes(): readonly ReadMode[] {
@@ -222,7 +229,7 @@ export class CapabilityDescriptor {
       summary: this.#definition.summary,
       whenToUse: this.#definition.whenToUse,
       focusKinds: this.#definition.focusKinds,
-      questionRoutes: this.#definition.questionRoutes,
+      questionRoutes: flattenQuestionRouteFamilies(this.#definition.questionRouteFamilies),
       readModes: this.#definition.readModes,
       aliases: this.#definition.aliases,
       requiredArgs: this.#definition.requiredArgs,
@@ -355,7 +362,7 @@ const DEFAULT_CAPABILITIES: readonly CapabilityDefinition[] = [
     aliases: ['describe capabilities', 'what can you do', 'discover capabilities', 'help me choose'],
     nouns: ['capabilities', 'commands', 'help', 'catalog', 'surface'],
     verbs: ['describe', 'discover', 'list', 'teach', 'show'],
-    questionRoutes: ['search'],
+    questionRouteFamilies: cognitiveRoutes('search'),
     examples: [
       example(
         'general capability discovery',
@@ -384,7 +391,7 @@ const DEFAULT_CAPABILITIES: readonly CapabilityDefinition[] = [
     aliases: ['plan question', 'which command should i use', 'map this question', 'choose the api'],
     nouns: ['question', 'plan', 'invocation', 'command', 'api'],
     verbs: ['plan', 'map', 'choose', 'route'],
-    questionRoutes: ['route'],
+    questionRouteFamilies: cognitiveRoutes('route'),
     examples: [
       example(
         'package audit planning',
@@ -412,7 +419,7 @@ const DEFAULT_CAPABILITIES: readonly CapabilityDefinition[] = [
     aliases: ['repair command', 'fix invocation', 'wrong labels', 'wrong args', 'did you mean'],
     nouns: ['repair', 'command', 'invocation', 'args', 'labels'],
     verbs: ['repair', 'fix', 'correct', 'reroute'],
-    questionRoutes: ['route'],
+    questionRouteFamilies: cognitiveRoutes('route'),
     examples: [
       example(
         'command repair',
@@ -440,7 +447,7 @@ const DEFAULT_CAPABILITIES: readonly CapabilityDefinition[] = [
     aliases: ['describe profile', 'what regime am i in', 'analyzability posture', 'open fronts', 'excluded boundaries'],
     nouns: ['profile', 'regime', 'analyzability', 'posture', 'boundary', 'frontier', 'excluded', 'support'],
     verbs: ['describe', 'inspect', 'explain', 'surface'],
-    questionRoutes: ['search', 'route'],
+    questionRouteFamilies: cognitiveRoutes('search', 'route'),
     focusKinds: [],
     requiredArgs: [],
     optionalArgs: [
@@ -469,7 +476,7 @@ const DEFAULT_CAPABILITIES: readonly CapabilityDefinition[] = [
     aliases: ['open session', 'start session', 'create hosted session'],
     nouns: ['session', 'host', 'repo', 'target'],
     verbs: ['open', 'start', 'create'],
-    questionRoutes: ['refresh'],
+    questionRouteFamilies: maintenanceRoutes('refresh'),
     requiredArgs: [requiredArg('repoPath', 'Repo checkout to analyze.')],
     optionalArgs: [
       optionalArg('sessionId', 'Optional session id to reuse.'),
@@ -497,7 +504,7 @@ const DEFAULT_CAPABILITIES: readonly CapabilityDefinition[] = [
     aliases: ['close session', 'dispose session'],
     nouns: ['session'],
     verbs: ['close', 'dispose'],
-    questionRoutes: ['refresh'],
+    questionRouteFamilies: maintenanceRoutes('refresh'),
     requiredArgs: [requiredArg('sessionId', 'Hosted session id to close.')],
     optionalArgs: [],
     examples: [
@@ -521,7 +528,7 @@ const DEFAULT_CAPABILITIES: readonly CapabilityDefinition[] = [
     aliases: ['session status', 'list sessions', 'session cache state'],
     nouns: ['session', 'status', 'cache', 'dirty'],
     verbs: ['show', 'list', 'inspect'],
-    questionRoutes: ['search'],
+    questionRouteFamilies: cognitiveRoutes('search'),
     requiredArgs: [],
     optionalArgs: [optionalArg('sessionId', 'Optional session id to inspect instead of listing all sessions.')],
     examples: [
@@ -545,7 +552,7 @@ const DEFAULT_CAPABILITIES: readonly CapabilityDefinition[] = [
     aliases: ['invalidate session', 'mark dirty', 'watcher delta'],
     nouns: ['invalidate', 'dirty', 'files', 'project'],
     verbs: ['invalidate', 'mark', 'dirty'],
-    questionRoutes: ['diff'],
+    questionRouteFamilies: maintenanceRoutes('diff'),
     requiredArgs: [requiredArg('sessionId', 'Hosted session id to invalidate.')],
     optionalArgs: [
       optionalArg('files', 'Optional repo-relative files to invalidate instead of the whole project.'),
@@ -572,7 +579,7 @@ const DEFAULT_CAPABILITIES: readonly CapabilityDefinition[] = [
     aliases: ['refresh session', 'refresh snapshots', 'rebuild analysis'],
     nouns: ['refresh', 'snapshots', 'deps', 'typerefs', 'exports'],
     verbs: ['refresh', 'rebuild', 'update'],
-    questionRoutes: ['refresh'],
+    questionRouteFamilies: maintenanceRoutes('refresh'),
     requiredArgs: [requiredArg('sessionId', 'Hosted session id to refresh.')],
     optionalArgs: [
       optionalArg('kinds', 'Optional subset of kinds to refresh.', ['deps', 'typerefs', 'exports']),
@@ -604,7 +611,7 @@ const DEFAULT_CAPABILITIES: readonly CapabilityDefinition[] = [
     aliases: ['dependency summary', 'deps summary', 'import overview'],
     nouns: ['dependencies', 'dependency', 'imports', 'summary', 'overview'],
     verbs: ['summarize', 'inspect', 'show'],
-    questionRoutes: ['inventory'],
+    questionRouteFamilies: cognitiveRoutes('inventory'),
     requiredArgs: [requiredArg('sessionId', 'Hosted session id with snapshots to query.')],
     optionalArgs: [optionalArg('refreshIfNeeded', 'Whether to refresh dirty snapshots before reading them.')],
     relatedCommands: ['query.deps.snapshot', 'query.audit.package'],
@@ -628,7 +635,7 @@ const DEFAULT_CAPABILITIES: readonly CapabilityDefinition[] = [
     aliases: ['dependency snapshot', 'deps snapshot', 'raw deps json'],
     nouns: ['dependencies', 'dependency', 'imports', 'snapshot', 'json'],
     verbs: ['read', 'materialize', 'fetch'],
-    questionRoutes: ['materialize'],
+    questionRouteFamilies: maintenanceRoutes('materialize'),
     readModes: ['snapshot'],
     requiredArgs: [requiredArg('sessionId', 'Hosted session id with snapshots to query.')],
     optionalArgs: [optionalArg('refreshIfNeeded', 'Whether to refresh dirty snapshots before reading them.')],
@@ -653,7 +660,7 @@ const DEFAULT_CAPABILITIES: readonly CapabilityDefinition[] = [
     aliases: ['type refs summary', 'typerefs summary', 'type reference overview'],
     nouns: ['types', 'typerefs', 'references', 'summary', 'overview'],
     verbs: ['summarize', 'inspect', 'show'],
-    questionRoutes: ['inventory'],
+    questionRouteFamilies: cognitiveRoutes('inventory'),
     requiredArgs: [requiredArg('sessionId', 'Hosted session id with snapshots to query.')],
     optionalArgs: [optionalArg('refreshIfNeeded', 'Whether to refresh dirty snapshots before reading them.')],
     relatedCommands: ['query.typerefs.snapshot', 'query.route.witness'],
@@ -677,7 +684,7 @@ const DEFAULT_CAPABILITIES: readonly CapabilityDefinition[] = [
     aliases: ['type refs snapshot', 'typerefs snapshot', 'raw typerefs json'],
     nouns: ['types', 'typerefs', 'references', 'snapshot', 'json'],
     verbs: ['read', 'materialize', 'fetch'],
-    questionRoutes: ['materialize'],
+    questionRouteFamilies: maintenanceRoutes('materialize'),
     readModes: ['snapshot'],
     requiredArgs: [requiredArg('sessionId', 'Hosted session id with snapshots to query.')],
     optionalArgs: [optionalArg('refreshIfNeeded', 'Whether to refresh dirty snapshots before reading them.')],
@@ -702,7 +709,7 @@ const DEFAULT_CAPABILITIES: readonly CapabilityDefinition[] = [
     aliases: ['exports summary', 'public api summary', 'export overview'],
     nouns: ['exports', 'public', 'api', 'summary', 'overview'],
     verbs: ['summarize', 'inspect', 'show'],
-    questionRoutes: ['inventory'],
+    questionRouteFamilies: cognitiveRoutes('inventory'),
     requiredArgs: [requiredArg('sessionId', 'Hosted session id with snapshots to query.')],
     optionalArgs: [optionalArg('refreshIfNeeded', 'Whether to refresh dirty snapshots before reading them.')],
     relatedCommands: ['query.exports.snapshot', 'query.audit.package'],
@@ -726,7 +733,7 @@ const DEFAULT_CAPABILITIES: readonly CapabilityDefinition[] = [
     aliases: ['exports snapshot', 'raw exports json', 'public api snapshot'],
     nouns: ['exports', 'public', 'api', 'snapshot', 'json'],
     verbs: ['read', 'materialize', 'fetch'],
-    questionRoutes: ['materialize'],
+    questionRouteFamilies: maintenanceRoutes('materialize'),
     readModes: ['snapshot'],
     requiredArgs: [requiredArg('sessionId', 'Hosted session id with snapshots to query.')],
     optionalArgs: [optionalArg('refreshIfNeeded', 'Whether to refresh dirty snapshots before reading them.')],
@@ -751,7 +758,7 @@ const DEFAULT_CAPABILITIES: readonly CapabilityDefinition[] = [
     aliases: ['navigate workspace', 'orient me', 'package overview', 'type neighborhood', 'file neighborhood', 'symbol declaration'],
     nouns: ['navigate', 'orientation', 'package', 'file', 'symbol', 'type', 'export', 'overview', 'neighborhood', 'declaration', 'definition', 'implementation'],
     verbs: ['navigate', 'orient', 'inspect', 'show', 'explore', 'find', 'locate', 'defined', 'declared', 'implemented'],
-    questionRoutes: ['join', 'route', 'search'],
+    questionRouteFamilies: cognitiveRoutes('join', 'route', 'search'),
     focusKinds: ['package', 'file', 'symbol', 'type', 'export'],
     requiredArgs: [
       requiredArg('sessionId', 'Hosted session id with snapshots to query.'),
@@ -793,7 +800,7 @@ const DEFAULT_CAPABILITIES: readonly CapabilityDefinition[] = [
     aliases: ['package audit', 'tech debt', 'dead code', 'red flags', 'self audit', 'layer cycles', 'dependency seams'],
     nouns: ['package', 'audit', 'debt', 'dead', 'red', 'flags', 'coverage', 'integration', 'cycle', 'layer', 'seam', 'coupling', 'architecture'],
     verbs: ['audit', 'inspect', 'find', 'surface', 'explain', 'trace'],
-    questionRoutes: ['inventory'],
+    questionRouteFamilies: cognitiveRoutes('inventory'),
     focusKinds: ['package'],
     requiredArgs: [
       requiredArg('sessionId', 'Hosted session id with snapshots to query.'),
@@ -839,7 +846,7 @@ const DEFAULT_CAPABILITIES: readonly CapabilityDefinition[] = [
     aliases: ['why alive', 'route witness', 'reachable proof', 'why is this alive'],
     nouns: ['route', 'witness', 'alive', 'reachable', 'proof', 'file', 'type'],
     verbs: ['explain', 'prove', 'show', 'trace'],
-    questionRoutes: ['route'],
+    questionRouteFamilies: cognitiveRoutes('route'),
     focusKinds: ['file', 'type'],
     requiredArgs: [
       requiredArg('sessionId', 'Hosted session id with snapshots to query.'),
@@ -880,7 +887,7 @@ const DEFAULT_CAPABILITIES: readonly CapabilityDefinition[] = [
     aliases: ['materialize snapshots', 'write snapshots', 'export json files'],
     nouns: ['materialize', 'snapshots', 'json', 'files', 'disk'],
     verbs: ['materialize', 'write', 'export'],
-    questionRoutes: ['materialize'],
+    questionRouteFamilies: maintenanceRoutes('materialize'),
     requiredArgs: [requiredArg('sessionId', 'Hosted session id whose snapshots should be written.')],
     optionalArgs: [
       optionalArg('kinds', 'Optional subset of kinds to materialize.', ['deps', 'typerefs', 'exports']),
@@ -901,47 +908,55 @@ const DEFAULT_CAPABILITIES: readonly CapabilityDefinition[] = [
 ];
 
 function ingressCapability(
-  definition: Omit<CapabilityDefinition, 'family' | 'focusKinds' | 'readModes'> & {
+  definition: Omit<CapabilityDefinition, 'family' | 'focusKinds' | 'questionRouteFamilies' | 'readModes'> & {
     readonly focusKinds?: readonly PolicyFocusKind[];
+    readonly questionRouteFamilies?: QuestionRouteFamilies;
     readonly readModes?: readonly ReadMode[];
   },
 ): CapabilityDefinition {
   return {
     family: 'ingress',
     focusKinds: definition.focusKinds ?? ['repo', 'capability'],
+    questionRouteFamilies: createQuestionRouteFamilies(definition.questionRouteFamilies),
     readModes: definition.readModes ?? ['summary-card', 'focus-card', 'supporting-evidence'],
     ...definition,
   };
 }
 
 function sessionCapability(
-  definition: Omit<CapabilityDefinition, 'family' | 'focusKinds' | 'readModes'>,
+  definition: Omit<CapabilityDefinition, 'family' | 'focusKinds' | 'questionRouteFamilies' | 'readModes'> & {
+    readonly questionRouteFamilies?: QuestionRouteFamilies;
+  },
 ): CapabilityDefinition {
   return {
     family: 'session',
     focusKinds: ['session', 'repo'],
+    questionRouteFamilies: createQuestionRouteFamilies(definition.questionRouteFamilies),
     readModes: [],
     ...definition,
   };
 }
 
 function regimeCapability(
-  definition: Omit<CapabilityDefinition, 'family' | 'focusKinds' | 'readModes'> & {
+  definition: Omit<CapabilityDefinition, 'family' | 'focusKinds' | 'questionRouteFamilies' | 'readModes'> & {
     readonly focusKinds?: readonly PolicyFocusKind[];
+    readonly questionRouteFamilies?: QuestionRouteFamilies;
     readonly readModes?: readonly ReadMode[];
   },
 ): CapabilityDefinition {
   return {
     family: 'regime',
     focusKinds: definition.focusKinds ?? ['repo'],
+    questionRouteFamilies: createQuestionRouteFamilies(definition.questionRouteFamilies),
     readModes: definition.readModes ?? ['summary-card', 'focus-card', 'supporting-evidence'],
     ...definition,
   };
 }
 
 function queryCapability(
-  definition: Omit<CapabilityDefinition, 'family' | 'focusKinds' | 'readModes' | 'examples'> & {
+  definition: Omit<CapabilityDefinition, 'family' | 'focusKinds' | 'questionRouteFamilies' | 'readModes' | 'examples'> & {
     readonly focusKinds?: readonly PolicyFocusKind[];
+    readonly questionRouteFamilies?: QuestionRouteFamilies;
     readonly readModes?: readonly ReadMode[];
     readonly examples: readonly CapabilityExample[];
   },
@@ -949,20 +964,36 @@ function queryCapability(
   return {
     family: 'query',
     focusKinds: definition.focusKinds ?? ['repo'],
+    questionRouteFamilies: createQuestionRouteFamilies(definition.questionRouteFamilies),
     readModes: definition.readModes ?? ['summary-card', 'focus-card', 'supporting-evidence'],
     ...definition,
   };
 }
 
 function materializeCapability(
-  definition: Omit<CapabilityDefinition, 'family' | 'focusKinds' | 'readModes'>,
+  definition: Omit<CapabilityDefinition, 'family' | 'focusKinds' | 'questionRouteFamilies' | 'readModes'> & {
+    readonly questionRouteFamilies?: QuestionRouteFamilies;
+  },
 ): CapabilityDefinition {
   return {
     family: 'materialize',
     focusKinds: ['session', 'repo'],
+    questionRouteFamilies: createQuestionRouteFamilies(definition.questionRouteFamilies),
     readModes: ['snapshot'],
     ...definition,
   };
+}
+
+function cognitiveRoutes(
+  ...routes: readonly CognitiveQuestionRoute[]
+): QuestionRouteFamilies {
+  return { cognitive: routes };
+}
+
+function maintenanceRoutes(
+  ...routes: readonly MaintenanceQuestionRoute[]
+): QuestionRouteFamilies {
+  return { maintenance: routes };
 }
 
 function requiredArg(
@@ -1075,7 +1106,7 @@ function createCapabilityMatchRules(
       'route-tokens',
       'route',
       'question',
-      definition.questionRoutes,
+      flattenQuestionRouteFamilies(definition.questionRouteFamilies),
       'Question aligns with a declared question route.',
     ),
     createTokenRule(

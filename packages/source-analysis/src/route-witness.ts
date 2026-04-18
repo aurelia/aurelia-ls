@@ -30,6 +30,7 @@ import {
 } from './analyzability-posture.js';
 import type { FocusedStructuralPathContext } from './focused-structural-path.js';
 import { trimTrailingFocusPunctuation } from './focus-normalization.js';
+import { executionPostureFromFrame } from './inquiry-model.js';
 import { resolveInquiryPolicy, type InquiryPolicy } from './inquiry-policy.js';
 import type {
   ClosureBasis,
@@ -370,7 +371,7 @@ function createHitRouteWitnessAnswer(
         // authority once those projections stop being the user-visible center.
         summary: `The route witnesses are grounded in ${describeAnalysisMaterializationTiming(
           analysis,
-          query.worldFrame?.freshness,
+          executionPostureFromFrame(query.worldFrame).freshness,
           ['deps', 'typerefs', 'exports'],
         )}`,
         provenanceRefs: analysisGeneratedAtRefs(analysis, ['deps', 'typerefs', 'exports']),
@@ -392,7 +393,7 @@ function createHitRouteWitnessAnswer(
       ...createAnalysisProvenanceEntriesForKinds(
         analysis,
         ['deps', 'typerefs', 'exports'],
-        query.worldFrame?.freshness,
+        executionPostureFromFrame(query.worldFrame).freshness,
       ),
       ({
         kind: 'route',
