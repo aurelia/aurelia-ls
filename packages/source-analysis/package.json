@@ -37,6 +37,7 @@
   "scripts": {
     "build": "node ./scripts/build.mjs",
     "build:tests": "node ./scripts/build-tests.mjs",
+    "preflight": "node ./scripts/preflight.mjs",
     "test": "node ./scripts/build.mjs && node ./scripts/build-tests.mjs && node ./scripts/run-node-tests.mjs",
     "test:node": "node ./scripts/run-node-tests.mjs",
     "test:node:cov": "node ./scripts/run-node-tests.mjs --coverage"

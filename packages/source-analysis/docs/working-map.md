@@ -6,7 +6,11 @@ Use this note when resuming work or choosing the next slice.
 
 1. Read [README.md](C:/projects/aurelia-ls2/packages/source-analysis/README.md).
 2. Read this file.
-3. Read [roadmap.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/roadmap.md).
+3. If resuming long-running work, read [resume-protocol.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/resume-protocol.md).
+4. Read [authority-first-campaign.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/authority-first-campaign.md).
+5. Read [current-handoff.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/current-handoff.md) and [current-state.json](C:/projects/aurelia-ls2/packages/source-analysis/docs/current-state.json).
+6. Run `pnpm preflight`.
+7. Read [roadmap.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/roadmap.md).
 
 ## When Working On X, Read Y
 
@@ -19,6 +23,7 @@ Use this note when resuming work or choosing the next slice.
 | Improving the AI-facing read surface, guidance, continuations, or self-usefulness | [self-pressure-test.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/self-pressure-test.md) | [governing-axes.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/governing-axes.md), [shared-semantic-authority.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/shared-semantic-authority.md), [strategy.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/strategy.md) |
 | Working on provenance, operator steering, or explicit taste surfaces | [provenance-and-steering.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/provenance-and-steering.md) | [shared-semantic-authority.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/shared-semantic-authority.md), [roadmap.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/roadmap.md) |
 | Checking unresolved design pressure before a large move | [open-tensions.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/open-tensions.md) | [roadmap.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/roadmap.md) |
+| Resuming after compaction or context loss | [resume-protocol.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/resume-protocol.md) | [authority-first-campaign.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/authority-first-campaign.md), [current-handoff.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/current-handoff.md), [current-state.json](C:/projects/aurelia-ls2/packages/source-analysis/docs/current-state.json) |
 
 ## Two Questions Before You Commit To A Direction
 

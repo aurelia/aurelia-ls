@@ -247,7 +247,9 @@ When resuming after compaction:
 
 1. Re-read the README and seed docs.
    Start with `docs/working-map.md` and follow it before choosing a slice.
-2. Re-read this roadmap.
-3. Use self-analysis to see which pressure points still show up in the package itself.
-4. Pick the highest-leverage slice that reduces split-brain or raises the analyzability ceiling.
-5. If a seam cannot be finished honestly in one pass, leave a local `// TODO` near the code that still carries the pressure.
+2. Read `docs/authority-first-campaign.md`, `docs/current-handoff.md`, `docs/decision-log.md`, and `docs/current-state.json`.
+3. Run `pnpm preflight`.
+4. Re-read this roadmap.
+5. Use self-analysis to see which pressure points still show up in the package itself.
+6. Continue only the first `in_progress` step from `docs/current-state.json` unless the operator redirects the campaign.
+7. If a seam cannot be finished honestly in one pass, leave a local `// TODO` near the code that still carries the pressure and update `current-handoff.md` before stopping.

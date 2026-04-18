@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "campaignId": "authority-first-v1",
+  "campaignDoc": "docs/authority-first-campaign.md",
+  "resumeProtocol": "docs/resume-protocol.md",
+  "updatedAt": "2026-04-18",
+  "currentStepId": "authority-contracts",
+  "steps": [
+    {
+      "id": "continuity-scaffolding",
+      "title": "Set up repo-owned continuity scaffolding",
+      "status": "done"
+    },
+    {
+      "id": "authority-contracts",
+      "title": "Define typed locator and shared authority contracts",
+      "status": "in_progress",
+      "goal": "Create venue-neutral contracts for entity identity, locators, ambiguity sets, no-claim outcomes, evaluator evidence, and spend thresholds.",
+      "files": [
+        "src/inquiry-model.ts",
+        "src/analysis-views.ts",
+        "src/navigation.ts",
+        "src/capability-catalog.ts",
+        "src/inquiry-catalog.ts"
+      ],
+      "exitCriteria": [
+        "At least one new shared authority contract module exists.",
+        "One live query surface consumes the new contract directly.",
+        "The contract names do not freeze legacy projection identity into the public center of gravity."
+      ]
+    },
+    {
+      "id": "navigate-vertical-slice",
+      "title": "Move query.navigate onto shared authority contracts",
+      "status": "pending"
+    },
+    {
+      "id": "route-and-audit-migration",
+      "title": "Move route-witness and audit onto shared authority and evaluators",
+      "status": "pending"
+    },
+    {
+      "id": "inquiry-ontology-split",
+      "title": "Split the overloaded inquiry ontology into narrower families",
+      "status": "pending"
+    },
+    {
+      "id": "semantic-kernel-deepening",
+      "title": "Deepen symbol, export, call, and flow semantics",
+      "status": "pending"
+    },
+    {
+      "id": "aurelia-semantic-adapters",
+      "title": "Land Aurelia-aware semantics on top of shared primitives",
+      "status": "pending"
+    }
+  ]
+}
+

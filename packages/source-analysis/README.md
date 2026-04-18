@@ -29,11 +29,24 @@ The governing notes are meant to be read directly, not restated here.
 
 Before non-trivial work, start with [docs/working-map.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/working-map.md).
 
+# Campaign continuity
+
+Long-running autonomous work should resume through repo-owned continuity files,
+not chat memory.
+
+Start with [docs/resume-protocol.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/resume-protocol.md),
+then read the campaign and handoff files it points to.
+
 # Seed docs
 
 These are short guidance notes, not a frozen design:
 
 - [docs/working-map.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/working-map.md)
+- [docs/resume-protocol.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/resume-protocol.md)
+- [docs/authority-first-campaign.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/authority-first-campaign.md)
+- [docs/current-handoff.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/current-handoff.md)
+- [docs/decision-log.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/decision-log.md)
+- [docs/current-state.json](C:/projects/aurelia-ls2/packages/source-analysis/docs/current-state.json)
 - [docs/governing-axes.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/governing-axes.md)
 - [docs/shared-semantic-authority.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/shared-semantic-authority.md)
 - [docs/strategy.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/strategy.md)
