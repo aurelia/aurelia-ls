@@ -28,8 +28,9 @@ The target layering remains:
   contracts, not the durable semantic axes of the package.
 - New semantic capability work should land in shared authority, substrate,
   semantic, or evaluator layers first.
-- Natural-language ingress, ranking, repair, and examples are edge adapters
-  only. They must not become the place where semantic ambiguity is resolved.
+- The package's machine-facing API should be primitive-first and
+  machine-legible. Natural-language ingress, ranking, repair, and examples are
+  transitional scaffolding to remove, not stable product center.
 - No-claim, refusal, blocked, stale, and withdrawn outcomes are first-class
   product behavior.
 - Aurelia-aware meaning must land on top of shared primitives, not by
@@ -43,6 +44,8 @@ The target layering remains:
 - Do not extend noun/verb/alias ranking to solve semantic ambiguity that should
   be handled by typed locators, candidate sets, narrowing axes, or authority
   adjudication.
+- Do not preserve `ask.question`, `plan.question`, `describe.*`, `repair`, or
+  family-ranking shells as the stable machine-facing API.
 - Do not add more broad ontology unions when a narrower family would be more
   honest.
 - Do not let answer-local assembly become the long-term owner of truth when a
@@ -100,4 +103,3 @@ Operator judgement is still required for:
 - defining the framework-agnostic versus Aurelia-specific boundary
 - deciding compatibility breakage for legacy projection shims
 - turning operator taste into explicit steering surfaces
-

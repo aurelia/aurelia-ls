@@ -4,27 +4,26 @@ Last updated: 2026-04-18
 
 ## Current objective
 
-Start the inquiry-ontology split by separating route families, read modes,
-provenance families, and execution posture so the outer inquiry boundary stops
-carrying one overloaded label space.
+Aggressively replace the current natural-language and heuristic machine-facing
+API shell with typed semantic primitives so steering no longer depends on
+question routing, family ranking, or conversational ingress.
 
 ## Exact next slice
 
-1. Keep shrinking the broad route carriers around continuations, delta floors,
-   and wire payloads so cognitive inquiry moves (`search` / `join` / `route` /
-   `inventory`) stop sharing one label slot with maintenance/control moves
-   (`refresh` / `diff` / `materialize`) after the catalog split.
-2. Keep pushing route selection and world-frame flattening outward from the
-   compatibility boundary itself so the public query and outcome carriers stop
-   being the next place that route/world family information gets collapsed.
-3. Keep pushing payload/materialization mode outward from the remaining broad
-   public compatibility carriers (`Inquiry.readMode`, host render/query args,
-   CLI `--read-mode`, and host/public type exports) now that ingress internals
-   and live query entrypoints normalize onto presentation-only requests.
-4. Decide whether the next honest move is to split the public
-   `snapshot-maintenance` family into narrower discovery families or to keep it
-   as a compatibility label while moving more explicit maintenance intent into
-   the catalog and wire model.
+1. Remove the primary hosted command paths that exist only to interpret
+   natural-language intent or repair command shapes:
+   `ask.question`, `plan.question`, `describe.capabilities`,
+   `describe.inquiries`, and `repair.command`.
+2. Remove capability/inquiry family ranking, noun/verb/alias/confusion
+   matching, and other heuristic command-selection surfaces from the primary
+   machine-facing path.
+3. Replace those paths with typed primitive operations and selectors that let a
+   machine consumer directly ask semantic questions about declarations,
+   references, exports, world construction, registration evidence, and closure
+   posture without routing through a conversational shell.
+4. Preserve the structured answer algebra, result kinds, governing-anchor
+   refs, provenance, closure basis, and continuation basis while demoting or
+   deleting the conversational adapter layer around them.
 
 ## Recently landed
 
@@ -127,11 +126,16 @@ carrying one overloaded label space.
   and current-world construction notes so compiler-facing Aurelia work can
   start from a repo-owned world-formation model instead of reconstructing one
   from Atlas on every pass.
+- Added `docs/machine-legible-api-reset.md` and redirected the active campaign
+  state around removing the current natural-language/heuristic API shell in
+  favor of typed semantic primitives.
 
 ## Constraints
 
 - Do not solve semantic ambiguity by adding more alias, noun, verb, or example
   matching to the ingress layer.
+- Do not preserve conversational ingress or heuristic question routing as the
+  machine-facing center of gravity of the package.
 - Do not grow `query.deps.*`, `query.typerefs.*`, or `query.exports.*` into a
   larger architectural family. Treat them as legacy compatibility shims.
 - Prefer shared authority or evaluator surfaces over direct
@@ -143,6 +147,9 @@ carrying one overloaded label space.
 
 - `AnalysisViews` still carries the historical projection triple and remains a
   major continuity seam.
+- The hosted/public API still routes too much semantic work through
+  conversational ingress, capability discovery, and family ranking instead of
+  typed primitives.
 - `claim-lattice.ts` is promising, but it is not yet clearly the persistent
   authority runtime consulted by all live query surfaces.
 - `inquiry-model.ts` still overloads routes, read modes, focus kinds,
@@ -171,6 +178,11 @@ carrying one overloaded label space.
 ## Likely files for the next pass
 
 - `src/inquiry-model.ts`
+- `src/host/runtime.ts`
+- `src/host/types.ts`
+- `src/public/host.ts`
+- `src/public/inquiry.ts`
+- `src/cli-hosted.ts`
 - `src/inquiry-policy.ts`
 - `src/inquiry-wire.ts`
 - `src/answer-envelope.ts`
@@ -179,12 +191,7 @@ carrying one overloaded label space.
 - `src/capability-catalog.ts`
 - `src/inquiry-ingress.ts`
 - `src/capability-ingress.ts`
-- `src/host/runtime.ts`
 - `src/analysis-surface.ts`
-- `src/public/inquiry.ts`
-- `src/host/types.ts`
-- `src/public/host.ts`
-- `src/cli-hosted.ts`
 - `test/inquiry-model.test.ts`
 - `test/answer-renderer.test.ts`
 - `test/inquiry-wire.test.ts`

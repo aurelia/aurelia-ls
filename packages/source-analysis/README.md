@@ -29,6 +29,8 @@ The governing notes are meant to be read directly, not restated here.
 
 Before non-trivial work, start with [docs/working-map.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/working-map.md).
 
+For machine-facing API work, read [docs/machine-legible-api-reset.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/machine-legible-api-reset.md) before touching inquiry or host surfaces.
+
 For framework-aware work, read [docs/aurelia/README.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/aurelia/README.md) before designing Aurelia-specific surfaces.
 
 # Campaign continuity
@@ -59,6 +61,7 @@ These are short guidance notes, not a frozen design:
 - [docs/analyzability.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/analyzability.md)
 - [docs/self-pressure-test.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/self-pressure-test.md)
 - [docs/open-tensions.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/open-tensions.md)
+- [docs/machine-legible-api-reset.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/machine-legible-api-reset.md)
 - [docs/aurelia/README.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/aurelia/README.md)
 
 # Open tensions

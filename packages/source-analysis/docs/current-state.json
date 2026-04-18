@@ -4,7 +4,7 @@
   "campaignDoc": "docs/authority-first-campaign.md",
   "resumeProtocol": "docs/resume-protocol.md",
   "updatedAt": "2026-04-18",
-  "currentStepId": "inquiry-ontology-split",
+  "currentStepId": "machine-legible-api-reset",
   "steps": [
     {
       "id": "continuity-scaffolding",
@@ -69,9 +69,37 @@
       ]
     },
     {
+      "id": "machine-legible-api-reset",
+      "title": "Replace natural-language and heuristic API paths with machine-legible primitives",
+      "status": "in_progress",
+      "goal": "Remove the current conversational ingress shell from the primary package API and replace it with typed semantic primitives that expose one truth core through durable answer algebra, result kinds, governing-anchor refs, provenance, closure basis, and continuation basis.",
+      "files": [
+        "src/host/runtime.ts",
+        "src/host/types.ts",
+        "src/public/host.ts",
+        "src/public/inquiry.ts",
+        "src/cli-hosted.ts",
+        "src/inquiry-ingress.ts",
+        "src/capability-ingress.ts",
+        "src/inquiry-catalog.ts",
+        "src/capability-catalog.ts",
+        "src/inquiry-model.ts",
+        "src/inquiry-wire.ts",
+        "src/outcome-algebra.ts",
+        "src/analysis-surface.ts",
+        "docs/machine-legible-api-reset.md"
+      ],
+      "exitCriteria": [
+        "The primary machine-facing API no longer requires natural-language question strings to reach semantic work.",
+        "Semantic work is reachable through typed primitives and selectors rather than capability or inquiry family ranking.",
+        "Noun/verb/alias/confusion matching is gone from the primary machine-facing path.",
+        "Structured answer algebra, result kinds, governing anchors, provenance, closure basis, and continuation basis remain available without the conversational shell."
+      ]
+    },
+    {
       "id": "inquiry-ontology-split",
       "title": "Split the overloaded inquiry ontology into narrower families",
-      "status": "in_progress",
+      "status": "pending",
       "goal": "Separate route families, read modes, provenance families, and execution posture so broad inquiry unions remain only at the outer boundary where they are genuinely needed.",
       "files": [
         "src/inquiry-model.ts",

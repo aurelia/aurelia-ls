@@ -193,3 +193,18 @@ decision trail in order.
 - Runtime-world formation remains a later neighboring slice. Framework-aware
   compiler work in this package should not collapse declaration-world
   construction into runtime-world semantics prematurely.
+
+## 2026-04-18 - Primitive machine-legible API reset declared
+
+- The operator clarified that `source-analysis` was never meant to become a
+  natural-language AI conversation surface.
+- The intended target is a machine-legible semantic inquiry API whose durable
+  commitments are answer algebra, result kinds, miss-path honesty,
+  governing-anchor jump, and continuation basis over one truth core.
+- The current conversational shell (`ask.question`, `plan.question`,
+  `describe.*`, `repair.command`, capability/inquiry ingress catalogs, and
+  noun/verb/alias/confusion ranking) is now treated as architectural drift to
+  remove, not a surface to refine.
+- The package is not considered directionally back on track until those
+  natural-language and heuristic paths are gone from the primary API and
+  replaced by typed semantic primitives.
