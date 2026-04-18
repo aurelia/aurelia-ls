@@ -4,18 +4,20 @@ Last updated: 2026-04-18
 
 ## Current objective
 
-Define typed locator and shared authority contracts so future work starts
-resolving ambiguity by adjudication instead of by better ranking.
+Deepen the `query.navigate` vertical slice so more of its remaining file,
+symbol, analyzability, and neighborhood logic spends shared authority or
+evaluator surfaces instead of direct legacy projection stitching.
 
 ## Exact next slice
 
-1. Introduce venue-neutral authority contract types for entity identity,
-   locators, ambiguity sets, no-claim outcomes, evaluator evidence, and spend
-   thresholds.
-2. Keep `deps`, `typerefs`, and `exports` in compatibility posture while the
-   new contracts land. Do not add new projection-shaped peers.
-3. Thread the first new contract through one live vertical slice, preferably
-   `query.navigate`, so the contracts stop being abstract paperwork.
+1. Keep `query.navigate` moving inward by replacing more direct
+   `builder.snapshots` reads with authority-backed surfaces, especially around
+   symbol/file localization and package/file neighborhood assembly.
+2. Decide which remaining navigation helpers should become authority methods
+   versus shared evaluator surfaces so the adapter does not turn into a second
+   hidden center of gravity.
+3. Once the navigation slice is cleaner, use the same contracts to start moving
+   `route-witness` and then `audit` off raw legacy projection carriers.
 
 ## Recently landed
 
@@ -23,6 +25,14 @@ resolving ambiguity by adjudication instead of by better ranking.
   ingress-ranking pressure, and answer-local truth assembly seams.
 - Established repo-owned continuity files and a preflight command so future
   sessions resume through the same state instead of relying on chat memory.
+- Added `src/authority/contracts.ts` and a transitional
+  `src/authority/navigation-authority.ts` adapter over the legacy projection
+  bundle.
+- Routed the host-side `query.navigate` path through the new navigation
+  authority and moved package/type/export resolution plus some neighborhood
+  reads onto authority methods.
+- Added direct tests for the navigation authority adapter and kept the existing
+  live navigation suite green.
 
 ## Constraints
 
@@ -45,24 +55,27 @@ resolving ambiguity by adjudication instead of by better ranking.
   provenance kinds, and execution posture.
 - `route-witness` and `audit` still describe freshness in terms of the legacy
   projections rather than a named shared route/reachability authority.
+- `query.navigate` now enters through authority contracts, but much of its file
+  and symbol logic still reaches through transitional `analysis` access instead
+  of fully authority-owned surfaces.
 
 ## Likely files for the next pass
 
-- `src/inquiry-model.ts`
-- `src/analysis-views.ts`
+- `src/authority/navigation-authority.ts`
 - `src/navigation.ts`
-- `src/capability-catalog.ts`
-- `src/inquiry-catalog.ts`
-- a new shared authority module family, likely under `src/authority/` or a
-  similarly neutral shared location
+- `src/analysis-views.ts`
+- `src/focused-file-query.ts`
+- `src/structural-declaration-surface.ts`
+- `src/analyzability-posture.ts`
 
 ## Verification reminders
 
 - Run `pnpm preflight` before non-trivial work.
-- Re-run `pnpm --filter @aurelia-ls/source-analysis test` once the next slice
-  changes executable code rather than only docs/comments.
+- Re-run `pnpm --filter @aurelia-ls/source-analysis build`.
+- Re-run `pnpm --filter @aurelia-ls/source-analysis build:tests`.
+- Re-run `node ./out-test/test/navigation-authority.test.js`.
+- Re-run `node ./out-test/test/navigation.test.js`.
 
 ## Resume command
 
 `pnpm --filter @aurelia-ls/source-analysis preflight`
-

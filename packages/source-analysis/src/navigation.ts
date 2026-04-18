@@ -1,17 +1,14 @@
 import {
   type AnalysisViews,
 } from './analysis-views.js';
-import { loadDependencySurface } from './dependency-surface.js';
 import {
   createAnalysisProvenanceEntry,
   defaultWorldFrameForAnalysis,
   describeAnalysisSurface,
   describeAnalysisSurfaceEvidence,
 } from './analysis-surface.js';
-import { resolveExportRoute } from './export-trace-runtime-surface.js';
 import type { PackageExportRecord, PackageExportsSummary } from './exports/schema.js';
 import {
-  coerceAnalysisViews,
   loadCurrentAnalysisViews,
 } from './snapshot-analysis-views.js';
 import type { LoadedCurrentSnapshotSet } from './snapshot-contract.js';
@@ -75,6 +72,12 @@ import {
 import { resolveStructuralOwningPackage } from './structural-source-file-surface.js';
 import { SUBSTRATE_SCHEMA_VERSION } from './substrate.js';
 import type { DeclarationClaim } from './structural-claim-graph.js';
+import {
+  coerceNavigationAuthority,
+  createLegacyProjectionNavigationAuthority,
+  type NavigationAuthority,
+} from './authority/navigation-authority.js';
+import type { Locator } from './authority/contracts.js';
 
 export type NavigationRef = AnswerRef;
 
@@ -141,20 +144,20 @@ export function createCurrentNavigationEpisode(
 ): NavigationEpisode {
   return createNavigationEpisode(
     query,
-    loadCurrentAnalysisViews(target, waitMs),
+    createLegacyProjectionNavigationAuthority(loadCurrentAnalysisViews(target, waitMs)),
   );
 }
 
 export function createNavigationEpisode(
   query: Inquiry,
-  snapshotsInput: AnalysisViews | LoadedCurrentSnapshotSet,
+  authorityInput: NavigationAuthority | AnalysisViews | LoadedCurrentSnapshotSet,
 ): NavigationEpisode {
   // TODO: Navigation still starts from an AnalysisViews carrier and then builds
   // answer-local substrate/claim objects on demand. Pull this behind a named
   // shared navigation authority so query surfaces consult one runtime instead
   // of reconstructing truth from projection bundles.
-  const snapshots = coerceAnalysisViews(snapshotsInput);
-  const builder = new EpisodeBuilder(query, snapshots);
+  const authority = coerceNavigationAuthority(authorityInput);
+  const builder = new EpisodeBuilder(query, authority);
   switch (query.focusRef.kind) {
     case 'package':
       return buildPackageEpisode(builder, query.focusRef.value);
@@ -179,23 +182,27 @@ export function createNavigationEpisode(
 
 class EpisodeBuilder {
   readonly #query: Inquiry;
-  readonly #snapshots: AnalysisViews;
+  readonly #authority: NavigationAuthority;
   readonly #nodes = new Map<string, SubstrateNode>();
   readonly #edges = new Map<string, SubstrateEdge>();
   readonly #claims = new Map<string, ClaimNode>();
   readonly #claimEdges = new Map<string, ClaimEdge>();
 
-  constructor(query: Inquiry, snapshots: AnalysisViews) {
+  constructor(query: Inquiry, authority: NavigationAuthority) {
     this.#query = query;
-    this.#snapshots = snapshots;
+    this.#authority = authority;
   }
 
   get query(): Inquiry {
     return this.#query;
   }
 
+  get authority(): NavigationAuthority {
+    return this.#authority;
+  }
+
   get snapshots(): AnalysisViews {
-    return this.#snapshots;
+    return this.#authority.analysis;
   }
 
   addNode(node: SubstrateNode): string {
@@ -218,18 +225,18 @@ class EpisodeBuilder {
 
   addSnapshotNode(kind: 'deps' | 'typerefs' | 'exports'): string {
     const snapshot = kind === 'deps'
-      ? this.#snapshots.deps
+      ? this.snapshots.deps
       : kind === 'typerefs'
-        ? this.#snapshots.typeRefs
-        : this.#snapshots.exports;
-    const label = `${kind} ${this.#snapshots.source === 'hosted-analysis' ? 'analysis view' : 'snapshot'}`;
+        ? this.snapshots.typeRefs
+        : this.snapshots.exports;
+    const label = `${kind} ${this.snapshots.source === 'hosted-analysis' ? 'analysis view' : 'snapshot'}`;
     return this.addNode({
       id: `snapshot:${kind}`,
       kind: 'snapshot',
       label,
       fingerprint: `${snapshot.source_commit}:${snapshot.generated_at}`,
       provenance: [{
-        kind: this.#snapshots.source === 'hosted-analysis'
+        kind: this.snapshots.source === 'hosted-analysis'
           ? 'analysis-session'
           : 'snapshot-materialization',
         label,
@@ -399,15 +406,15 @@ class EpisodeBuilder {
 
   snapshotProvenance(kind: 'deps' | 'typerefs' | 'exports'): ObservationProvenance {
     const snapshot = kind === 'deps'
-      ? this.#snapshots.deps
+      ? this.snapshots.deps
       : kind === 'typerefs'
-        ? this.#snapshots.typeRefs
-        : this.#snapshots.exports;
+        ? this.snapshots.typeRefs
+        : this.snapshots.exports;
     return {
-      kind: this.#snapshots.source === 'hosted-analysis'
+      kind: this.snapshots.source === 'hosted-analysis'
         ? 'analysis-session'
         : 'snapshot-materialization',
-      label: `${kind} ${this.#snapshots.source === 'hosted-analysis' ? 'analysis view' : 'snapshot'}`,
+      label: `${kind} ${this.snapshots.source === 'hosted-analysis' ? 'analysis view' : 'snapshot'}`,
       fingerprint: snapshot.generated_at,
       detail: `source_commit=${snapshot.source_commit}`,
     };
@@ -417,7 +424,7 @@ class EpisodeBuilder {
     return {
       substrate: {
         schemaVersion: SUBSTRATE_SCHEMA_VERSION,
-        repoPath: this.#snapshots.root,
+        repoPath: this.snapshots.root,
         target: answer.query.worldFrame?.target ?? 'current',
         nodes: [...this.#nodes.values()],
         edges: [...this.#edges.values()],
@@ -443,8 +450,8 @@ function buildPackageEpisode(
     focusLabel: normalizedPackageQuery,
     queryHints: [normalizedPackageQuery],
   });
-  const pkgMatches = resolvePackages(builder.snapshots, normalizedPackageQuery);
-  if (pkgMatches.length === 0) {
+  const packageResolution = builder.authority.resolvePackage(locator('package-name', normalizedPackageQuery, 'package'));
+  if (packageResolution.kind === 'no-claim') {
     if (requestedRegimeContext.directlyExcludedFrontier) {
       return builder.finish(createOpenBoundaryAnswer(
         builder,
@@ -461,16 +468,16 @@ function buildPackageEpisode(
       [],
     ));
   }
-  if (pkgMatches.length > 1) {
+  if (packageResolution.kind === 'ambiguity') {
     return builder.finish(createAmbiguousAnswer(
       builder,
       `Package query "${normalizedPackageQuery}" is ambiguous.`,
       { kind: 'package', value: normalizedPackageQuery },
-      pkgMatches.map((pkg) => packageRef(pkg)),
+      packageResolution.ambiguity.candidates.map((pkg) => packageRef(pkg)),
     ));
   }
 
-  const pkg = pkgMatches[0]!;
+  const pkg = packageResolution.value;
   const depsSnapshotId = builder.addSnapshotNode('deps');
   const exportsSnapshotId = builder.addSnapshotNode('exports');
   const packageNodeId = builder.addPackageNode(pkg);
@@ -478,11 +485,8 @@ function buildPackageEpisode(
   builder.addEdge({ id: `contains:${packageNodeId}->${entrypointNodeId}`, kind: 'contains', from: packageNodeId, to: entrypointNodeId });
   builder.addEdge({ id: `materializes:${exportsSnapshotId}->${packageNodeId}`, kind: 'materializes', from: exportsSnapshotId, to: packageNodeId });
 
-  const matrix = builder.snapshots.deps.coupling_matrices.find((candidate) => candidate.scope === pkg.package_dir);
-  const keyExports = builder.snapshots.exports.exports
-    .filter((record) => record.package_dir === pkg.package_dir && !record.type_only)
-    .sort((left, right) => left.exported_name.localeCompare(right.exported_name))
-    .slice(0, 5);
+  const matrix = builder.authority.getPackageCouplingMatrix(pkg.package_dir);
+  const keyExports = builder.authority.getPackageValueExports(pkg.package_dir, 5);
 
   const exportNodeIds = keyExports.map((record) => {
     const exportNodeId = builder.addExportNode(record);
@@ -635,8 +639,8 @@ function buildTypeEpisode(
   builder: EpisodeBuilder,
   typeQuery: string,
 ): NavigationEpisode {
-  const declMatches = resolveTypeDeclarations(builder.snapshots, typeQuery);
-  if (declMatches.length === 0) {
+  const typeResolution = builder.authority.resolveTypeDeclaration(locator('type-name', trimTrailingFocusPunctuation(typeQuery), 'type'));
+  if (typeResolution.kind === 'no-claim') {
     return builder.finish(createMissAnswer(
       builder,
       `No type declaration matches "${typeQuery}".`,
@@ -644,16 +648,16 @@ function buildTypeEpisode(
       [],
     ));
   }
-  if (declMatches.length > 1) {
+  if (typeResolution.kind === 'ambiguity') {
     return builder.finish(createAmbiguousAnswer(
       builder,
       `Type query "${typeQuery}" matches multiple declarations.`,
       { kind: 'type', value: typeQuery },
-      declMatches.map((decl) => typeRef(decl)),
+      typeResolution.ambiguity.candidates.map((decl) => typeRef(decl)),
     ));
   }
 
-  const decl = declMatches[0]!;
+  const decl = typeResolution.value;
   const typerefsSnapshotId = builder.addSnapshotNode('typerefs');
   const exportsSnapshotId = builder.addSnapshotNode('exports');
   const pkg = resolveStructuralOwningPackage(builder.snapshots, decl.file) ?? undefined;
@@ -676,8 +680,8 @@ function buildTypeEpisode(
     return nodeId;
   });
 
-  const matchingExport = builder.snapshots.exports.exports.find((record) =>
-    record.declaration_name === decl.name && record.declaration_file === decl.file,
+  const matchingExport = builder.authority.getFileExportRecords(decl.file).find((record) =>
+    record.declaration_name === decl.name,
   );
   const exportNodeId = matchingExport ? builder.addExportNode(matchingExport) : undefined;
   if (exportNodeId) {
@@ -1001,8 +1005,8 @@ function buildExportEpisode(
   builder: EpisodeBuilder,
   exportQuery: string,
 ): NavigationEpisode {
-  const matches = resolveExports(builder.snapshots, exportQuery);
-  if (matches.length === 0) {
+  const exportResolution = builder.authority.resolveExport(locator('export-name', trimTrailingFocusPunctuation(exportQuery), 'export'));
+  if (exportResolution.kind === 'no-claim') {
     return builder.finish(createMissAnswer(
       builder,
       `No export matches "${exportQuery}".`,
@@ -1010,34 +1014,18 @@ function buildExportEpisode(
       [],
     ));
   }
-  if (matches.length > 1) {
+  if (exportResolution.kind === 'ambiguity') {
     return builder.finish(createAmbiguousAnswer(
       builder,
       `Export query "${exportQuery}" matches multiple package exports.`,
       { kind: 'export', value: exportQuery },
-      matches.map((record) => exportRef(record)),
+      exportResolution.ambiguity.candidates.map((record) => exportRef(record)),
     ));
   }
 
-  const record = matches[0]!;
-  const route = resolveExportRoute({
-    repoPath: builder.snapshots.root,
-    ...(builder.snapshots.repoSession ? { repoSession: builder.snapshots.repoSession } : {}),
-    ...(builder.snapshots.structuralRuntime ? { structuralRuntime: builder.snapshots.structuralRuntime } : {}),
-    workspacePackageEntrypointsByName: workspacePackageEntrypointsByName(builder.snapshots),
-    analysisEntrypoint: record.analysis_entrypoint,
-    exportedName: record.exported_name,
-    fallback: {
-      originalName: record.original_name,
-      declarationFile: record.declaration_file,
-      declarationLine: record.declaration_line,
-      declarationName: record.declaration_name,
-      typeOnly: record.type_only,
-      namespaceExport: record.namespace_export,
-      chain: record.chain,
-    },
-  })!;
-  const pkg = builder.snapshots.exports.packages.find((candidate) => candidate.package_dir === record.package_dir)!;
+  const record = exportResolution.value;
+  const route = builder.authority.resolveExportRoute(record)!;
+  const pkg = builder.authority.getPackageByDir(record.package_dir)!;
   const exportsSnapshotId = builder.addSnapshotNode('exports');
   const packageNodeId = builder.addPackageNode(pkg);
   const exportNodeId = builder.addExportNode(record);
@@ -1074,9 +1062,7 @@ function buildExportEpisode(
   builder.addClaimEdge({ kind: 'routes-through', from: exportClaimId, to: routeClaimId });
 
   const declarationType = route.declarationFile
-    ? builder.snapshots.typeRefs.declarations.find((decl) =>
-      decl.file === route.declarationFile && decl.name === route.declarationName,
-    )
+    ? builder.authority.getTypeDeclarationByFileAndName(route.declarationFile, route.declarationName)
     : undefined;
   const usedSnapshotFallback = route.source === 'snapshot-fallback';
   const liveFallbackIssue = usedSnapshotFallback && builder.snapshots.source === 'hosted-analysis'
@@ -1233,7 +1219,7 @@ function buildFileEpisode(
   const depsSnapshotId = builder.addSnapshotNode('deps');
   const typerefsSnapshotId = builder.addSnapshotNode('typerefs');
   const exportsSnapshotId = builder.addSnapshotNode('exports');
-  const dependencySurface = loadDependencySurface(builder.snapshots);
+  const dependencySurface = builder.authority.getDependencySurface();
   const fileNodeId = builder.addFileNode(filePath);
   const pkg = resolveStructuralOwningPackage(builder.snapshots, filePath) ?? undefined;
   const packageNodeId = pkg ? builder.addPackageNode(pkg) : undefined;
@@ -1247,8 +1233,8 @@ function buildFileEpisode(
   // alive as first-class architecture. Replace them with declaration/export
   // surfaces derived from shared authority and materialize projection tables
   // only when a caller explicitly asks for those historical payloads.
-  const declarations = builder.snapshots.typeRefs.declarations.filter((decl) => decl.file === filePath);
-  const exportRecords = builder.snapshots.exports.exports.filter((record) => record.declaration_file === filePath);
+  const declarations = builder.authority.getFileDeclarations(filePath);
+  const exportRecords = builder.authority.getFileExportRecords(filePath);
 
   const importNodeIds = outboundEdges.slice(0, 6).map((edge) => {
     const nodeId = builder.addImportObservation(edge.source, edge.target, edge.bindings, edge.type_only, edge.line);
@@ -1588,65 +1574,6 @@ function createUnsupportedAnswer(
   );
 }
 
-function resolvePackages(
-  snapshots: AnalysisViews,
-  query: string,
-): readonly PackageExportsSummary[] {
-  const normalized = trimTrailingFocusPunctuation(query).toLowerCase();
-  const exact = snapshots.exports.packages.filter((pkg) =>
-    pkg.package_name.toLowerCase() === normalized ||
-    pkg.package_dir.toLowerCase() === normalized,
-  );
-  if (exact.length > 0) return exact;
-
-  const shortMatches = snapshots.exports.packages.filter((pkg) =>
-    pkg.package_name.split('/').at(-1)?.toLowerCase() === normalized ||
-    pkg.package_dir.split('/').at(-1)?.toLowerCase() === normalized,
-  );
-  if (shortMatches.length > 0) return shortMatches;
-
-  return snapshots.exports.packages.filter((pkg) =>
-    pkg.package_name.toLowerCase().includes(normalized) ||
-    pkg.package_dir.toLowerCase().includes(normalized),
-  );
-}
-
-function resolveTypeDeclarations(
-  snapshots: AnalysisViews,
-  query: string,
-): readonly TypeDecl[] {
-  const normalized = trimTrailingFocusPunctuation(query);
-  const exact = snapshots.typeRefs.declarations.filter((decl) => decl.name === normalized);
-  if (exact.length > 0) return exact;
-
-  const exactCaseInsensitive = snapshots.typeRefs.declarations.filter((decl) =>
-    decl.name.toLowerCase() === normalized.toLowerCase(),
-  );
-  if (exactCaseInsensitive.length > 0) return exactCaseInsensitive;
-
-  return snapshots.typeRefs.declarations.filter((decl) =>
-    decl.name.toLowerCase().includes(normalized.toLowerCase()),
-  );
-}
-
-function resolveExports(
-  snapshots: AnalysisViews,
-  query: string,
-): readonly PackageExportRecord[] {
-  const normalized = trimTrailingFocusPunctuation(query);
-  const exact = snapshots.exports.exports.filter((record) => record.exported_name === normalized);
-  if (exact.length > 0) return exact;
-
-  const exactCaseInsensitive = snapshots.exports.exports.filter((record) =>
-    record.exported_name.toLowerCase() === normalized.toLowerCase(),
-  );
-  if (exactCaseInsensitive.length > 0) return exactCaseInsensitive;
-
-  return snapshots.exports.exports.filter((record) =>
-    record.exported_name.toLowerCase().includes(normalized.toLowerCase()),
-  );
-}
-
 function uniqueTypeRefs(refs: readonly TypeDecl['refs'][number][]): readonly TypeDecl['refs'][number][] {
   const seen = new Set<string>();
   const unique: TypeDecl['refs'][number][] = [];
@@ -1669,17 +1596,6 @@ function typeRef(decl: TypeDecl): NavigationRef {
 
 function exportRef(record: PackageExportRecord): NavigationRef {
   return createExportRecordAnswerRef(record);
-}
-
-function workspacePackageEntrypointsByName(
-  analysis: AnalysisViews,
-): ReadonlyMap<string, string> {
-  return new Map(
-    analysis.exports.packages.map((pkg) => [
-      pkg.package_name,
-      pkg.source_entrypoint ?? pkg.analysis_entrypoint,
-    ]),
-  );
 }
 
 function policyForNavigation(
@@ -1754,6 +1670,18 @@ function pluralize(
   count: number,
 ): string {
   return count === 1 ? '' : 's';
+}
+
+function locator(
+  kind: Locator['kind'],
+  value: string,
+  label?: string,
+): Locator {
+  return {
+    kind,
+    value,
+    ...(label ? { label } : {}),
+  };
 }
 
 function requiresSourceCatalogBoundary(

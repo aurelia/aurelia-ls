@@ -4,7 +4,7 @@
   "campaignDoc": "docs/authority-first-campaign.md",
   "resumeProtocol": "docs/resume-protocol.md",
   "updatedAt": "2026-04-18",
-  "currentStepId": "authority-contracts",
+  "currentStepId": "navigate-vertical-slice",
   "steps": [
     {
       "id": "continuity-scaffolding",
@@ -14,7 +14,7 @@
     {
       "id": "authority-contracts",
       "title": "Define typed locator and shared authority contracts",
-      "status": "in_progress",
+      "status": "done",
       "goal": "Create venue-neutral contracts for entity identity, locators, ambiguity sets, no-claim outcomes, evaluator evidence, and spend thresholds.",
       "files": [
         "src/inquiry-model.ts",
@@ -32,7 +32,20 @@
     {
       "id": "navigate-vertical-slice",
       "title": "Move query.navigate onto shared authority contracts",
-      "status": "pending"
+      "status": "in_progress",
+      "goal": "Keep moving navigation logic off direct legacy projection stitching and onto shared authority and evaluator surfaces.",
+      "files": [
+        "src/authority/navigation-authority.ts",
+        "src/navigation.ts",
+        "src/focused-file-query.ts",
+        "src/structural-declaration-surface.ts",
+        "src/analyzability-posture.ts"
+      ],
+      "exitCriteria": [
+        "Host-side query.navigate always enters through a named authority surface.",
+        "Package, type, export, file, and symbol navigation no longer rely on ad hoc direct projection reads for their primary resolution path.",
+        "The transitional adapter shrinks instead of accreting new projection-shaped reasoning."
+      ]
     },
     {
       "id": "route-and-audit-migration",
@@ -56,4 +69,3 @@
     }
   ]
 }
-

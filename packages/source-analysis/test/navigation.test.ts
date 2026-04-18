@@ -105,7 +105,7 @@ describe('Source-analysis live navigation', () => {
 
     expect(episode.answer.outcome.tag).toBe('hit');
     expect(episode.answer.outcome.value?.summaryLines.some((line) =>
-      line.includes('packages/source-analysis/src/analysis-views.ts:46'),
+      line.includes('function createAnalysisViews is declared in packages/source-analysis/src/analysis-views.ts:'),
     )).toBe(true);
     expect(episode.answer.outcome.value?.relatedRefs.some((ref) =>
       ref.kind === 'file' && ref.value === 'packages/source-analysis/src/analysis-views.ts',

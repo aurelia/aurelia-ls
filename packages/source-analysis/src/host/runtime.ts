@@ -37,6 +37,7 @@ import type { ConsumerKind } from '../inquiry-policy.js';
 import { resolveInquiryPolicy } from '../inquiry-policy.js';
 import type { FocusKind } from '../inquiry-model.js';
 import { createNavigationEpisode } from '../navigation.js';
+import { createLegacyProjectionNavigationAuthority } from '../authority/navigation-authority.js';
 import { createRouteWitnessAnswer } from '../route-witness.js';
 import type { ProgramReuseOptions } from '../program-reuse-options.js';
 import {
@@ -656,6 +657,7 @@ export class SnapshotHostRuntime {
   #queryNavigate(args: NavigateQueryArgs): CommandOutcome {
     const state = this.#sessions.get(args.sessionId);
     const hostedInquiry = ensureFreshHostedInquiryContext(state, args.refreshIfNeeded);
+    const authority = createLegacyProjectionNavigationAuthority(hostedInquiry.analysis);
     const episode = createNavigationEpisode(
       {
         inquiryEpisode: 'orient-and-localize',
@@ -670,7 +672,7 @@ export class SnapshotHostRuntime {
           target: state.target,
         }),
       },
-      hostedInquiry.analysis,
+      authority,
     );
     const rendered = buildRenderedView(episode.answer, args.consumer, args.renderStyle);
     const result: NavigateQueryResult = {

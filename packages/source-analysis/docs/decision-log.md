@@ -17,3 +17,13 @@ decision trail in order.
 - Future autonomous sessions should continue only the first `in_progress` step
   in `current-state.json` unless the operator explicitly redirects the work.
 
+## 2026-04-18 - Initial authority contracts and navigation seam
+
+- The first shared authority contracts now live under `src/authority/`.
+- `query.navigate` should enter through a named authority adapter from the host
+  side instead of receiving raw `AnalysisViews` directly.
+- The current authority adapter is explicitly transitional and is allowed to
+  read the legacy projection bundle, but it should shrink over time rather than
+  become a second hidden architecture center.
+- The next slice should deepen the navigation vertical slice before moving on to
+  `route-witness` or `audit`.
