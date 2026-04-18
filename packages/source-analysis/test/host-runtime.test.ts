@@ -504,6 +504,49 @@ describe('SnapshotHostRuntime', () => {
     expect(exportTrace.result.route?.declarationFile).toBe('src/index.ts');
     expect(exportTrace.result.route?.declarationName).toBe('auditReady');
 
+    const auditSignals = runtime.execute<'query.package.audit-signals'>({
+      command: 'query.package.audit-signals',
+      args: {
+        sessionId,
+        locator: '@fixture/source-analysis-audit',
+      },
+    });
+    expect(auditSignals.status).toBe('ok');
+    expect(auditSignals.result.packageOutcome.kind).toBe('claim');
+    expect(auditSignals.result.signals?.some((signal) => signal.code === 'package-uncovered-files')).toBe(true);
+    expect(auditSignals.result.signals?.some((signal) => signal.code === 'candidate-entry-roots')).toBe(true);
+    expect(auditSignals.result.signals?.some((signal) => signal.code === 'answer-coordination-fragmentation')).toBe(false);
+
+    const fileRoute = runtime.execute<'query.file.route'>({
+      command: 'query.file.route',
+      args: {
+        sessionId,
+        filePath: 'src/live.ts',
+      },
+    });
+    expect(fileRoute.status).toBe('ok');
+    expect(fileRoute.result.inspection.matchedFilePath).toBe('src/live.ts');
+    expect(fileRoute.result.package?.package_name).toBe('@fixture/source-analysis-audit');
+    expect(fileRoute.result.witnesses?.[0]?.rootKind).toBe('public-api');
+    expect(fileRoute.result.witnesses?.[0]?.files).toEqual(['src/index.ts', 'src/live.ts']);
+
+    const typeRoute = runtime.execute<'query.type.route'>({
+      command: 'query.type.route',
+      args: {
+        sessionId,
+        locator: 'LiveShape',
+      },
+    });
+    expect(typeRoute.status).toBe('ok');
+    expect(typeRoute.result.typeOutcome.kind).toBe('claim');
+    if (typeRoute.result.typeOutcome.kind !== 'claim') {
+      throw new Error('Expected type route query to resolve a declaration.');
+    }
+    expect(typeRoute.result.typeOutcome.value?.file).toBe('src/live.ts');
+    expect(typeRoute.result.package?.package_name).toBe('@fixture/source-analysis-audit');
+    expect(typeRoute.result.regimeContext?.focusLabel).toBe('LiveShape');
+    expect(typeRoute.result.witnesses?.[0]?.rootKind).toBe('public-api');
+
     const symbol = runtime.execute({
       command: 'query.symbol.lookup',
       args: {

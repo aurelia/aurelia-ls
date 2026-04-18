@@ -266,6 +266,98 @@ describe('source-analysis hosted CLI', () => {
     expect(trace.result.route?.declarationFile).toBe('src/index.ts');
     expect(trace.result.route?.declarationName).toBe('auditReady');
 
+    const auditSignalsRaw = await runCliAsync([
+      'inspect',
+      'package-audit-signals',
+      '@fixture/source-analysis-audit',
+      '--session-id',
+      opened.result.sessionId,
+      '--json',
+    ]);
+    const auditSignals = JSON.parse(auditSignalsRaw) as {
+      readonly command: string;
+      readonly result: {
+        readonly packageOutcome: {
+          readonly kind: string;
+        };
+        readonly signals: null | ReadonlyArray<{
+          readonly code: string;
+        }>;
+      };
+    };
+
+    expect(auditSignals.command).toBe('query.package.audit-signals');
+    expect(auditSignals.result.packageOutcome.kind).toBe('claim');
+    expect(auditSignals.result.signals?.some((signal) => signal.code === 'package-uncovered-files')).toBe(true);
+    expect(auditSignals.result.signals?.some((signal) => signal.code === 'candidate-entry-roots')).toBe(true);
+    expect(auditSignals.result.signals?.some((signal) => signal.code === 'answer-coordination-fragmentation')).toBe(false);
+
+    const fileRouteRaw = await runCliAsync([
+      'inspect',
+      'file-route',
+      'src/live.ts',
+      '--session-id',
+      opened.result.sessionId,
+      '--json',
+    ]);
+    const fileRoute = JSON.parse(fileRouteRaw) as {
+      readonly command: string;
+      readonly result: {
+        readonly inspection: {
+          readonly matchedFilePath: string | null;
+        };
+        readonly package: null | {
+          readonly package_name: string;
+        };
+        readonly witnesses: null | ReadonlyArray<{
+          readonly rootKind: string;
+          readonly files: readonly string[];
+        }>;
+      };
+    };
+
+    expect(fileRoute.command).toBe('query.file.route');
+    expect(fileRoute.result.inspection.matchedFilePath).toBe('src/live.ts');
+    expect(fileRoute.result.package?.package_name).toBe('@fixture/source-analysis-audit');
+    expect(fileRoute.result.witnesses?.[0]?.rootKind).toBe('public-api');
+    expect(fileRoute.result.witnesses?.[0]?.files).toEqual(['src/index.ts', 'src/live.ts']);
+
+    const typeRouteRaw = await runCliAsync([
+      'inspect',
+      'type-route',
+      'LiveShape',
+      '--session-id',
+      opened.result.sessionId,
+      '--json',
+    ]);
+    const typeRoute = JSON.parse(typeRouteRaw) as {
+      readonly command: string;
+      readonly result: {
+        readonly typeOutcome: {
+          readonly kind: string;
+          readonly value?: {
+            readonly file?: string;
+          };
+        };
+        readonly package: null | {
+          readonly package_name: string;
+        };
+        readonly regimeContext: null | {
+          readonly focusLabel: string;
+        };
+        readonly witnesses: null | ReadonlyArray<{
+          readonly rootKind: string;
+        }>;
+      };
+    };
+
+    expect(typeRoute.command).toBe('query.type.route');
+    expect(typeRoute.result.typeOutcome.kind).toBe('claim');
+    expect(typeRoute.result.typeOutcome.value?.file).toBe('src/live.ts');
+    expect(typeRoute.result.package?.package_name).toBe('@fixture/source-analysis-audit');
+    expect(typeRoute.result.regimeContext?.focusLabel).toBe('LiveShape');
+    expect(typeRoute.result.witnesses?.[0]?.rootKind).toBe('public-api');
+
     const symbolRaw = await runCliAsync([
       'lookup',
       'symbol',

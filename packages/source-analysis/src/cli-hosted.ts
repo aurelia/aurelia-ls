@@ -399,6 +399,22 @@ function buildInspectInvocation(
         },
       };
     }
+    case 'package-audit-signals': {
+      const locator = remainingArgs.slice(1).join(' ').trim();
+      if (!locator) {
+        throw new Error('Usage: pnpm source-analysis inspect package-audit-signals <locator> --session-id <id>');
+      }
+      return {
+        command: 'query.package.audit-signals',
+        args: {
+          sessionId: requireSessionId(common.sessionId, 'inspect package-audit-signals'),
+          locator,
+          ...(common.locatorKind ? { locatorKind: common.locatorKind } : {}),
+          ...(common.spendThreshold ? { spendThreshold: common.spendThreshold } : {}),
+          ...(common.force ? { refreshIfNeeded: true } : {}),
+        },
+      };
+    }
     case 'export-trace': {
       const packageLocator = remainingArgs[1];
       const exportedName = remainingArgs[2];
@@ -417,8 +433,37 @@ function buildInspectInvocation(
         },
       };
     }
+    case 'file-route': {
+      const filePath = remainingArgs.slice(1).join(' ').trim();
+      if (!filePath) {
+        throw new Error('Usage: pnpm source-analysis inspect file-route <path> --session-id <id>');
+      }
+      return {
+        command: 'query.file.route',
+        args: {
+          sessionId: requireSessionId(common.sessionId, 'inspect file-route'),
+          filePath,
+          ...(common.force ? { refreshIfNeeded: true } : {}),
+        },
+      };
+    }
+    case 'type-route': {
+      const locator = remainingArgs.slice(1).join(' ').trim();
+      if (!locator) {
+        throw new Error('Usage: pnpm source-analysis inspect type-route <locator> --session-id <id>');
+      }
+      return {
+        command: 'query.type.route',
+        args: {
+          sessionId: requireSessionId(common.sessionId, 'inspect type-route'),
+          locator,
+          ...(common.spendThreshold ? { spendThreshold: common.spendThreshold } : {}),
+          ...(common.force ? { refreshIfNeeded: true } : {}),
+        },
+      };
+    }
     default:
-      throw new Error('Usage: pnpm source-analysis inspect <file|package-surface|package-reachability|export-trace> ... --session-id <id>');
+      throw new Error('Usage: pnpm source-analysis inspect <file|package-surface|package-reachability|package-audit-signals|export-trace|file-route|type-route> ... --session-id <id>');
   }
 }
 

@@ -31,9 +31,15 @@ import {
 } from '../snapshots.js';
 import type { ConsumerKind } from '../inquiry-policy.js';
 import {
+  DEFAULT_INQUIRY_ORDERING,
   createPresentationPolicyInput,
   resolveInquiryPolicy,
 } from '../inquiry-policy.js';
+import {
+  collectSharedPackageAuditSignals,
+  type PackageAuditSignal,
+  type PackageAuditSignalSubject,
+} from '../package-audit-evaluator.js';
 import type {
   FocusKind,
   InquiryEpisode,
@@ -89,6 +95,14 @@ import {
   type InspectPackageReachabilityQueryResult,
   type TraceExportQueryArgs,
   type TraceExportQueryResult,
+  type InspectPackageAuditSignalsQueryArgs,
+  type InspectPackageAuditSignalsQueryResult,
+  type InspectFileRouteQueryArgs,
+  type InspectFileRouteQueryResult,
+  type InspectTypeRouteQueryArgs,
+  type InspectTypeRouteQueryResult,
+  type HostPackageAuditSignal,
+  type HostPackageAuditSignalSubject,
   type HostStructuralPackageSurface,
   type HostPackageReachability,
   type LookupSymbolDeclarationArgs,
@@ -221,6 +235,9 @@ export class SnapshotHostRuntime {
       case 'query.package.surface': return this.#queryInspectPackageSurface(invocation.args as InspectPackageSurfaceQueryArgs);
       case 'query.package.reachability': return this.#queryInspectPackageReachability(invocation.args as InspectPackageReachabilityQueryArgs);
       case 'query.export.trace': return this.#queryTraceExport(invocation.args as TraceExportQueryArgs);
+      case 'query.package.audit-signals': return this.#queryInspectPackageAuditSignals(invocation.args as InspectPackageAuditSignalsQueryArgs);
+      case 'query.file.route': return this.#queryInspectFileRoute(invocation.args as InspectFileRouteQueryArgs);
+      case 'query.type.route': return this.#queryInspectTypeRoute(invocation.args as InspectTypeRouteQueryArgs);
       case 'query.symbol.lookup': return this.#queryLookupSymbol(invocation.args as LookupSymbolDeclarationArgs);
       case 'query.file.inspect': return this.#queryInspectFile(invocation.args as InspectFileQueryArgs);
       case 'materializeSnapshots': return this.#materializeSnapshots(invocation.args as MaterializeSnapshotsArgs);
@@ -641,6 +658,144 @@ export class SnapshotHostRuntime {
       route: exportOutcome?.kind === 'claim'
         ? authority.resolveExportRoute(exportOutcome.value)
         : null,
+      warnings: hostedAnalysis.warnings,
+    };
+
+    return {
+      result,
+      sessionId: state.sessionId,
+      refreshedKinds: hostedAnalysis.refreshedKinds,
+      invalidation: buildInvalidationMeta(state),
+      cache: hostedAnalysis.cache,
+    };
+  }
+
+  #queryInspectPackageAuditSignals(args: InspectPackageAuditSignalsQueryArgs): CommandOutcome {
+    const state = this.#sessions.get(args.sessionId);
+    const hostedAnalysis = ensureFreshHostedAnalysisContext(state, args.refreshIfNeeded);
+    const authority = createLegacyProjectionWorkspaceAuthority(hostedAnalysis.analysis);
+    const packageOutcome = authority.resolvePackage(
+      {
+        kind: args.locatorKind ?? 'package-name',
+        value: args.locator,
+      },
+      args.spendThreshold,
+    );
+    const policy = resolveInquiryPolicy(
+      createPresentationPolicyInput(
+        {
+          questionRoute: 'inventory',
+          readMode: 'summary-card',
+        },
+        'summary-card',
+      ),
+      {
+        focusKind: 'package',
+        inquiryEpisode: 'inventory-and-audit-sweep',
+        readMode: 'summary-card',
+      },
+    );
+    const packageSurface = packageOutcome.kind === 'claim'
+      ? authority.getStructuralPackageSurface(packageOutcome.value.package_dir)
+      : null;
+    const reachability = packageOutcome.kind === 'claim'
+      ? authority.getPackageReachability(packageOutcome.value.package_dir, policy.ordering)
+      : null;
+    const signals = packageOutcome.kind === 'claim' && packageSurface && reachability
+      ? collectSharedPackageAuditSignals({
+        analysis: hostedAnalysis.analysis,
+        pkg: packageOutcome.value,
+        packageFiles: packageSurface.files,
+        uncoveredFiles: packageSurface.uncoveredFiles,
+        unresolvedImports: packageSurface.unresolvedImports,
+        declarationsByFile: packageSurface.declarationsByFile,
+        dependencySurface: authority.getDependencySurface(),
+        reachability,
+        policy,
+      }).map(serializePackageAuditSignal)
+      : null;
+    const result: InspectPackageAuditSignalsQueryResult = {
+      packageOutcome,
+      signals,
+      warnings: hostedAnalysis.warnings,
+    };
+
+    return {
+      result,
+      sessionId: state.sessionId,
+      refreshedKinds: hostedAnalysis.refreshedKinds,
+      invalidation: buildInvalidationMeta(state),
+      cache: hostedAnalysis.cache,
+    };
+  }
+
+  #queryInspectFileRoute(args: InspectFileRouteQueryArgs): CommandOutcome {
+    const state = this.#sessions.get(args.sessionId);
+    const hostedAnalysis = ensureFreshHostedAnalysisContext(state, args.refreshIfNeeded);
+    const authority = createLegacyProjectionWorkspaceAuthority(hostedAnalysis.analysis);
+    const inspection = authority.inspectFocusedFile({
+      kind: 'file-path',
+      value: args.filePath,
+    });
+    const pkg = inspection.matchedFilePath
+      ? authority.resolveOwningPackage(inspection.matchedFilePath)
+      : null;
+    const witnesses = inspection.matchedFilePath && pkg
+      ? authority.getPackageRouteWitnesses(
+        pkg.package_dir,
+        inspection.matchedFilePath,
+        DEFAULT_INQUIRY_ORDERING,
+      )
+      : null;
+    const result: InspectFileRouteQueryResult = {
+      inspection,
+      package: pkg,
+      witnesses,
+      warnings: hostedAnalysis.warnings,
+    };
+
+    return {
+      result,
+      sessionId: state.sessionId,
+      refreshedKinds: hostedAnalysis.refreshedKinds,
+      invalidation: buildInvalidationMeta(state),
+      cache: hostedAnalysis.cache,
+    };
+  }
+
+  #queryInspectTypeRoute(args: InspectTypeRouteQueryArgs): CommandOutcome {
+    const state = this.#sessions.get(args.sessionId);
+    const hostedAnalysis = ensureFreshHostedAnalysisContext(state, args.refreshIfNeeded);
+    const authority = createLegacyProjectionWorkspaceAuthority(hostedAnalysis.analysis);
+    const typeOutcome = authority.resolveTypeDeclaration(
+      {
+        kind: 'type-name',
+        value: args.locator,
+      },
+      args.spendThreshold,
+    );
+    const pkg = typeOutcome.kind === 'claim'
+      ? authority.resolveOwningPackage(typeOutcome.value.file)
+      : null;
+    const regimeContext = typeOutcome.kind === 'claim'
+      ? authority.inspectFocusedAnalyzability({
+        focusLabel: typeOutcome.value.name,
+        pathPrefixes: [typeOutcome.value.file],
+        queryHints: [args.locator, typeOutcome.value.name, typeOutcome.value.file],
+      })
+      : null;
+    const witnesses = typeOutcome.kind === 'claim' && pkg
+      ? authority.getPackageRouteWitnesses(
+        pkg.package_dir,
+        typeOutcome.value.file,
+        DEFAULT_INQUIRY_ORDERING,
+      )
+      : null;
+    const result: InspectTypeRouteQueryResult = {
+      typeOutcome,
+      package: pkg,
+      regimeContext,
+      witnesses,
       warnings: hostedAnalysis.warnings,
     };
 
@@ -1238,6 +1393,49 @@ function serializePackageReachability(
     candidateEntryFiles: [...reachability.candidateEntryFiles],
     exerciseFiles: [...reachability.exerciseFiles],
   };
+}
+
+function serializePackageAuditSignal(
+  signal: PackageAuditSignal,
+): HostPackageAuditSignal {
+  return {
+    code: signal.code,
+    kind: signal.kind,
+    severity: signal.severity,
+    confidence: signal.confidence,
+    title: signal.title,
+    summary: signal.summary,
+    primarySubject: serializePackageAuditSignalSubject(signal.primarySubject),
+    relatedSubjects: signal.relatedSubjects.map(serializePackageAuditSignalSubject),
+    evidence: [...signal.evidence],
+  };
+}
+
+function serializePackageAuditSignalSubject(
+  subject: PackageAuditSignalSubject,
+): HostPackageAuditSignalSubject {
+  switch (subject.kind) {
+    case 'package':
+      return {
+        kind: 'package',
+        pkg: subject.pkg,
+        ...(subject.detail ? { detail: subject.detail } : {}),
+      };
+    case 'file':
+      return {
+        kind: 'file',
+        filePath: subject.filePath,
+        ...(subject.detail ? { detail: subject.detail } : {}),
+      };
+    case 'type-declaration':
+      return {
+        kind: 'type-declaration',
+        declaration: subject.declaration,
+        ...(subject.detail ? { detail: subject.detail } : {}),
+      };
+    default:
+      return assertNever(subject);
+  }
 }
 
 function extractSessionId(

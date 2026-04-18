@@ -243,3 +243,21 @@ decision trail in order.
   `query.audit.package` alive as compatibility answers, but it narrows their
   monopoly over package/file route semantics by making the lower-level
   substrates directly queryable.
+
+## 2026-04-18 - Shared audit signals and file/type route evidence promoted
+
+- The hosted runtime now exposes direct machine-facing primitives for shared
+  package audit signals plus file-bounded and type-bounded route evidence.
+- `query.package.audit-signals` reaches the shared package-audit evaluator
+  seam directly instead of requiring the broad `query.audit.package` answer
+  surface just to inspect blindspots, dormant files, candidate roots, or
+  other evaluator signals.
+- `query.file.route` and `query.type.route` now expose focused file/type route
+  evidence directly, including route witnesses and regime context, instead of
+  forcing callers through the answer-shaped `query.route.witness` surface.
+- The hosted CLI `inspect` surface now maps directly onto these carriers:
+  `package-audit-signals`, `file-route`, and `type-route`.
+- This slice further narrows the compatibility monopoly of
+  `query.route.witness` and `query.audit.package`, and it makes the next
+  primitive step clearer: framework-world and registration evidence rather
+  than more general-purpose answer wrappers.

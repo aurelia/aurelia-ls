@@ -81,6 +81,7 @@
         "src/cli-hosted.ts",
         "src/authority/workspace-authority.ts",
         "src/export-trace-runtime-surface.ts",
+        "src/package-audit-evaluator.ts",
         "src/reachability.ts",
         "src/structural-source-file-surface.ts",
         "src/structural-declaration-surface.ts",
@@ -91,7 +92,8 @@
         "src/analysis-surface.ts",
         "docs/machine-legible-api-reset.md",
         "test/host-runtime.test.ts",
-        "test/cli.test.ts"
+        "test/cli.test.ts",
+        "test/public-api.test.ts"
       ],
       "exitCriteria": [
         "The primary machine-facing API no longer requires natural-language question strings to reach semantic work.",
