@@ -2,13 +2,18 @@ import type {
   CognitiveQuestionRoute,
   FocusKind,
   MaintenanceQuestionRoute,
+  PayloadReadMode,
   PolicyFocusKind,
+  PresentationReadMode,
   QuestionRouteFamilies,
   QuestionRoute,
+  ReadModeFamilies,
   ReadMode,
 } from './inquiry-model.js';
 import {
+  createReadModeFamilies,
   createQuestionRouteFamilies,
+  flattenReadModeFamilies,
   flattenQuestionRouteFamilies,
 } from './inquiry-model.js';
 import {
@@ -111,7 +116,7 @@ export interface CapabilityDefinition {
   readonly whenToUse: string;
   readonly focusKinds: readonly PolicyFocusKind[];
   readonly questionRouteFamilies: QuestionRouteFamilies;
-  readonly readModes: readonly ReadMode[];
+  readonly readModeFamilies: ReadModeFamilies;
   readonly aliases: readonly string[];
   readonly nouns: readonly string[];
   readonly verbs: readonly string[];
@@ -204,7 +209,7 @@ export class CapabilityDescriptor {
   }
 
   get readModes(): readonly ReadMode[] {
-    return this.#definition.readModes;
+    return flattenReadModeFamilies(this.#definition.readModeFamilies);
   }
 
   get requiredArgs(): readonly CapabilityArgSpec[] {
@@ -230,7 +235,7 @@ export class CapabilityDescriptor {
       whenToUse: this.#definition.whenToUse,
       focusKinds: this.#definition.focusKinds,
       questionRoutes: flattenQuestionRouteFamilies(this.#definition.questionRouteFamilies),
-      readModes: this.#definition.readModes,
+      readModes: flattenReadModeFamilies(this.#definition.readModeFamilies),
       aliases: this.#definition.aliases,
       requiredArgs: this.#definition.requiredArgs,
       optionalArgs: this.#definition.optionalArgs,
@@ -636,7 +641,7 @@ const DEFAULT_CAPABILITIES: readonly CapabilityDefinition[] = [
     nouns: ['dependencies', 'dependency', 'imports', 'snapshot', 'json'],
     verbs: ['read', 'materialize', 'fetch'],
     questionRouteFamilies: maintenanceRoutes('materialize'),
-    readModes: ['snapshot'],
+    readModeFamilies: payloadReadModes('snapshot'),
     requiredArgs: [requiredArg('sessionId', 'Hosted session id with snapshots to query.')],
     optionalArgs: [optionalArg('refreshIfNeeded', 'Whether to refresh dirty snapshots before reading them.')],
     relatedCommands: ['query.deps.summary', 'materializeSnapshots'],
@@ -685,7 +690,7 @@ const DEFAULT_CAPABILITIES: readonly CapabilityDefinition[] = [
     nouns: ['types', 'typerefs', 'references', 'snapshot', 'json'],
     verbs: ['read', 'materialize', 'fetch'],
     questionRouteFamilies: maintenanceRoutes('materialize'),
-    readModes: ['snapshot'],
+    readModeFamilies: payloadReadModes('snapshot'),
     requiredArgs: [requiredArg('sessionId', 'Hosted session id with snapshots to query.')],
     optionalArgs: [optionalArg('refreshIfNeeded', 'Whether to refresh dirty snapshots before reading them.')],
     relatedCommands: ['query.typerefs.summary', 'materializeSnapshots'],
@@ -734,7 +739,7 @@ const DEFAULT_CAPABILITIES: readonly CapabilityDefinition[] = [
     nouns: ['exports', 'public', 'api', 'snapshot', 'json'],
     verbs: ['read', 'materialize', 'fetch'],
     questionRouteFamilies: maintenanceRoutes('materialize'),
-    readModes: ['snapshot'],
+    readModeFamilies: payloadReadModes('snapshot'),
     requiredArgs: [requiredArg('sessionId', 'Hosted session id with snapshots to query.')],
     optionalArgs: [optionalArg('refreshIfNeeded', 'Whether to refresh dirty snapshots before reading them.')],
     relatedCommands: ['query.exports.summary', 'materializeSnapshots'],
@@ -908,23 +913,25 @@ const DEFAULT_CAPABILITIES: readonly CapabilityDefinition[] = [
 ];
 
 function ingressCapability(
-  definition: Omit<CapabilityDefinition, 'family' | 'focusKinds' | 'questionRouteFamilies' | 'readModes'> & {
+  definition: Omit<CapabilityDefinition, 'family' | 'focusKinds' | 'questionRouteFamilies' | 'readModeFamilies'> & {
     readonly focusKinds?: readonly PolicyFocusKind[];
     readonly questionRouteFamilies?: QuestionRouteFamilies;
-    readonly readModes?: readonly ReadMode[];
+    readonly readModeFamilies?: ReadModeFamilies;
   },
 ): CapabilityDefinition {
   return {
     family: 'ingress',
     focusKinds: definition.focusKinds ?? ['repo', 'capability'],
     questionRouteFamilies: createQuestionRouteFamilies(definition.questionRouteFamilies),
-    readModes: definition.readModes ?? ['summary-card', 'focus-card', 'supporting-evidence'],
+    readModeFamilies: createReadModeFamilies(
+      definition.readModeFamilies ?? presentationReadModes('summary-card', 'focus-card', 'supporting-evidence'),
+    ),
     ...definition,
   };
 }
 
 function sessionCapability(
-  definition: Omit<CapabilityDefinition, 'family' | 'focusKinds' | 'questionRouteFamilies' | 'readModes'> & {
+  definition: Omit<CapabilityDefinition, 'family' | 'focusKinds' | 'questionRouteFamilies' | 'readModeFamilies'> & {
     readonly questionRouteFamilies?: QuestionRouteFamilies;
   },
 ): CapabilityDefinition {
@@ -932,32 +939,34 @@ function sessionCapability(
     family: 'session',
     focusKinds: ['session', 'repo'],
     questionRouteFamilies: createQuestionRouteFamilies(definition.questionRouteFamilies),
-    readModes: [],
+    readModeFamilies: createReadModeFamilies(),
     ...definition,
   };
 }
 
 function regimeCapability(
-  definition: Omit<CapabilityDefinition, 'family' | 'focusKinds' | 'questionRouteFamilies' | 'readModes'> & {
+  definition: Omit<CapabilityDefinition, 'family' | 'focusKinds' | 'questionRouteFamilies' | 'readModeFamilies'> & {
     readonly focusKinds?: readonly PolicyFocusKind[];
     readonly questionRouteFamilies?: QuestionRouteFamilies;
-    readonly readModes?: readonly ReadMode[];
+    readonly readModeFamilies?: ReadModeFamilies;
   },
 ): CapabilityDefinition {
   return {
     family: 'regime',
     focusKinds: definition.focusKinds ?? ['repo'],
     questionRouteFamilies: createQuestionRouteFamilies(definition.questionRouteFamilies),
-    readModes: definition.readModes ?? ['summary-card', 'focus-card', 'supporting-evidence'],
+    readModeFamilies: createReadModeFamilies(
+      definition.readModeFamilies ?? presentationReadModes('summary-card', 'focus-card', 'supporting-evidence'),
+    ),
     ...definition,
   };
 }
 
 function queryCapability(
-  definition: Omit<CapabilityDefinition, 'family' | 'focusKinds' | 'questionRouteFamilies' | 'readModes' | 'examples'> & {
+  definition: Omit<CapabilityDefinition, 'family' | 'focusKinds' | 'questionRouteFamilies' | 'readModeFamilies' | 'examples'> & {
     readonly focusKinds?: readonly PolicyFocusKind[];
     readonly questionRouteFamilies?: QuestionRouteFamilies;
-    readonly readModes?: readonly ReadMode[];
+    readonly readModeFamilies?: ReadModeFamilies;
     readonly examples: readonly CapabilityExample[];
   },
 ): CapabilityDefinition {
@@ -965,13 +974,15 @@ function queryCapability(
     family: 'query',
     focusKinds: definition.focusKinds ?? ['repo'],
     questionRouteFamilies: createQuestionRouteFamilies(definition.questionRouteFamilies),
-    readModes: definition.readModes ?? ['summary-card', 'focus-card', 'supporting-evidence'],
+    readModeFamilies: createReadModeFamilies(
+      definition.readModeFamilies ?? presentationReadModes('summary-card', 'focus-card', 'supporting-evidence'),
+    ),
     ...definition,
   };
 }
 
 function materializeCapability(
-  definition: Omit<CapabilityDefinition, 'family' | 'focusKinds' | 'questionRouteFamilies' | 'readModes'> & {
+  definition: Omit<CapabilityDefinition, 'family' | 'focusKinds' | 'questionRouteFamilies' | 'readModeFamilies'> & {
     readonly questionRouteFamilies?: QuestionRouteFamilies;
   },
 ): CapabilityDefinition {
@@ -979,7 +990,7 @@ function materializeCapability(
     family: 'materialize',
     focusKinds: ['session', 'repo'],
     questionRouteFamilies: createQuestionRouteFamilies(definition.questionRouteFamilies),
-    readModes: ['snapshot'],
+    readModeFamilies: createReadModeFamilies(payloadReadModes('snapshot')),
     ...definition,
   };
 }
@@ -994,6 +1005,18 @@ function maintenanceRoutes(
   ...routes: readonly MaintenanceQuestionRoute[]
 ): QuestionRouteFamilies {
   return { maintenance: routes };
+}
+
+function presentationReadModes(
+  ...modes: readonly PresentationReadMode[]
+): ReadModeFamilies {
+  return { presentation: modes };
+}
+
+function payloadReadModes(
+  ...modes: readonly PayloadReadMode[]
+): ReadModeFamilies {
+  return { payload: modes };
 }
 
 function requiredArg(

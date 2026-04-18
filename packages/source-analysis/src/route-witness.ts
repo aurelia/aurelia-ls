@@ -31,7 +31,11 @@ import {
 import type { FocusedStructuralPathContext } from './focused-structural-path.js';
 import { trimTrailingFocusPunctuation } from './focus-normalization.js';
 import { executionPostureFromFrame } from './inquiry-model.js';
-import { resolveInquiryPolicy, type InquiryPolicy } from './inquiry-policy.js';
+import {
+  createPresentationPolicyInput,
+  resolveInquiryPolicy,
+  type InquiryPolicy,
+} from './inquiry-policy.js';
 import type {
   ClosureBasis,
   Continuation,
@@ -697,10 +701,11 @@ function policyForRouteWitness(
   query: Inquiry,
   focusKind: FocusRef['kind'],
 ): InquiryPolicy {
-  return resolveInquiryPolicy(query, {
+  const readMode = defaultReadMode();
+  return resolveInquiryPolicy(createPresentationPolicyInput(query, readMode), {
     focusKind: policyFocusKindForAnswerFocus(focusKind),
     inquiryEpisode: 'bounded-closure-explanation',
-    readMode: defaultReadMode(),
+    readMode,
   });
 }
 

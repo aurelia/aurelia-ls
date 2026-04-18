@@ -38,7 +38,11 @@ import {
 import { createAnswerDocument } from './answer-document.js';
 import { createAnswerEnvelope } from './answer-envelope.js';
 import { trimTrailingFocusPunctuation } from './focus-normalization.js';
-import { resolveInquiryPolicy, type InquiryPolicy } from './inquiry-policy.js';
+import {
+  createPresentationPolicyInput,
+  resolveInquiryPolicy,
+  type InquiryPolicy,
+} from './inquiry-policy.js';
 import {
   executionPostureFromFrame,
   worldTargetingFromFrame,
@@ -1599,10 +1603,11 @@ function policyForNavigation(
   builder: EpisodeBuilder,
   focusKind: FocusKind,
 ): InquiryPolicy {
-  return resolveInquiryPolicy(builder.query, {
+  const readMode = defaultReadMode(focusKind, builder.query.questionRoute);
+  return resolveInquiryPolicy(createPresentationPolicyInput(builder.query, readMode), {
     focusKind: policyFocusKindForAnswerFocus(focusKind),
     inquiryEpisode: 'orient-and-localize',
-    readMode: defaultReadMode(focusKind, builder.query.questionRoute),
+    readMode,
   });
 }
 

@@ -17,9 +17,10 @@ carrying one overloaded label space.
 2. Keep pushing route selection and world-frame flattening outward from the
    compatibility boundary itself so the public query and outcome carriers stop
    being the next place that route/world family information gets collapsed.
-3. Decide how payload/materialization mode should escape the remaining broad
-   `ReadMode` union in capability/inquiry catalogs, ingress options, and host
-   entrypoints without prematurely freezing a public materialization contract.
+3. Finish pushing payload/materialization mode outward from the remaining broad
+   public query/options carriers (`Inquiry.readMode`, ingress options, host
+   render/query args) without prematurely freezing a public materialization
+   contract or mixed maintenance family.
 
 ## Recently landed
 
@@ -89,6 +90,18 @@ carrying one overloaded label space.
   wire payload boundary.
 - Moved `answer-envelope.ts` onto those split wire adapters and added a direct
   `inquiry-wire` test that pins the compatibility payload shape.
+- Added shared `ReadModeFamilies`, `createReadModeFamilies(...)`,
+  `flattenReadModeFamilies(...)`, and `resolvePresentationReadMode(...)` so
+  read-mode splitting now has the same explicit family vocabulary as routes.
+- Moved capability and inquiry catalogs onto internal read-mode families while
+  preserving flattened `readModes` compatibility views for ingress discovery.
+- Narrowed `resolveInquiryPolicy(...)` onto presentation-only policy input and
+  moved the broad-to-narrow `ReadMode` normalization into explicit adapter
+  seams used by capability ingress, inquiry ingress, host rendering, and the
+  live answer builders.
+- Added direct read-mode family coverage in `test/inquiry-model.test.ts` and
+  updated `test/answer-renderer.test.ts` to pin the new explicit
+  presentation-policy adapter.
 
 ## Constraints
 
@@ -109,9 +122,6 @@ carrying one overloaded label space.
   authority runtime consulted by all live query surfaces.
 - `inquiry-model.ts` still overloads routes, read modes, focus kinds,
   provenance kinds, and execution posture.
-- `resolveInquiryPolicy` still carries the broad `QuestionRoute` union because
-  the public query/policy boundary still flattens route families back into one
-  label space after the newer continuation and wire adapters were narrowed.
 - `route-witness` and `audit` still describe freshness in terms of the legacy
   projections rather than a named shared route/reachability authority.
 - `query.navigate`, `route-witness`, and `audit` still describe freshness in
@@ -123,9 +133,15 @@ carrying one overloaded label space.
   `ExecutionPosture`, and answer/wire adapters now spend those slices
   internally, but the public query and wire carriers still flatten them for
   compatibility.
-- `ReadMode` still remains broad in capability/inquiry catalogs, ingress
-  options, and host entrypoints even though render policy and answer envelopes
-  now speak presentation mode only.
+- Capability and inquiry catalogs now hold explicit `ReadModeFamilies`
+  internally, but their public discovery/read surfaces still flatten back to
+  `readModes` for compatibility.
+- `resolveInquiryPolicy` is now presentation-only, but `Inquiry.readMode`,
+  ingress option types, and host render/query arg types still carry the broad
+  `ReadMode` union and normalize it at the boundary.
+- The `snapshot-maintenance` inquiry family still mixes session-maintenance and
+  payload/materialization concerns even though the underlying read-mode family
+  split is now explicit.
 
 ## Likely files for the next pass
 
@@ -140,6 +156,9 @@ carrying one overloaded label space.
 - `src/capability-ingress.ts`
 - `src/host/runtime.ts`
 - `src/analysis-surface.ts`
+- `src/public/inquiry.ts`
+- `test/inquiry-model.test.ts`
+- `test/answer-renderer.test.ts`
 - `test/inquiry-wire.test.ts`
 
 ## Verification reminders
@@ -148,7 +167,10 @@ carrying one overloaded label space.
 - Re-run `pnpm --filter @aurelia-ls/source-analysis build`.
 - Re-run `pnpm --filter @aurelia-ls/source-analysis build:tests`.
 - Re-run `node ./out-test/test/inquiry-model.test.js`.
+- Re-run `node ./out-test/test/answer-renderer.test.js`.
+- Re-run `node ./out-test/test/inquiry-ingress.test.js`.
 - Re-run `node ./out-test/test/inquiry-wire.test.js`.
+- Re-run `node ./out-test/test/host-runtime.test.js`.
 - Re-run `node ./out-test/test/workspace-authority.test.js`.
 - Re-run `node ./out-test/test/navigation.test.js`.
 - Re-run `node ./out-test/test/route-witness.test.js`.

@@ -51,10 +51,10 @@ export const READ_MODES = [
   ...PAYLOAD_READ_MODES,
 ] as const;
 // TODO: 'snapshot' is not really a presentation mode like the other entries;
-// it is a transport/materialization mode. The families are explicit now, but
-// most policy/rendering code still carries the broad ReadMode union. Separate
-// presentation style from payload mode at the call sites before more rendering
-// logic has to special-case this enum.
+// it is a transport/materialization mode. The families and presentation-policy
+// adapters are explicit now, but the outer public query/options carriers still
+// flatten everything back into ReadMode. Keep pushing that broad union outward
+// until only compatibility entrypoints still need it.
 
 export const INQUIRY_SLOT_IDS = [
   'focus_ref',
@@ -179,6 +179,11 @@ export type PayloadReadMode =
 
 export type ReadMode =
   typeof READ_MODES[number];
+
+export interface ReadModeFamilies {
+  readonly presentation?: readonly PresentationReadMode[];
+  readonly payload?: readonly PayloadReadMode[];
+}
 
 export type InquirySlotId =
   typeof INQUIRY_SLOT_IDS[number];
@@ -373,6 +378,15 @@ export function isPayloadReadMode(
   return PAYLOAD_READ_MODE_SET.has(value);
 }
 
+export function resolvePresentationReadMode(
+  readMode: ReadMode | undefined,
+  fallback: PresentationReadMode,
+): PresentationReadMode {
+  return readMode && isPresentationReadMode(readMode)
+    ? readMode
+    : fallback;
+}
+
 export function isEvidenceProvenanceEntryKind(
   value: ProvenanceEntryKind,
 ): value is EvidenceProvenanceEntryKind {
@@ -400,6 +414,24 @@ export function createQuestionRouteFamilies(
   return {
     cognitive: families.cognitive ?? [],
     maintenance: families.maintenance ?? [],
+  };
+}
+
+export function flattenReadModeFamilies(
+  families: ReadModeFamilies,
+): readonly ReadMode[] {
+  return [
+    ...(families.presentation ?? []),
+    ...(families.payload ?? []),
+  ];
+}
+
+export function createReadModeFamilies(
+  families: ReadModeFamilies = {},
+): Required<ReadModeFamilies> {
+  return {
+    presentation: families.presentation ?? [],
+    payload: families.payload ?? [],
   };
 }
 

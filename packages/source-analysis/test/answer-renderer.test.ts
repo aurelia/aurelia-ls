@@ -5,7 +5,10 @@ import {
   renderAnswerDocumentToJson,
   renderAnswerDocumentToPlainText,
 } from '../src/answer-renderer.js';
-import { resolveInquiryPolicy } from '../src/inquiry-policy.js';
+import {
+  createPresentationPolicyInput,
+  resolveInquiryPolicy,
+} from '../src/inquiry-policy.js';
 import { createRouteWitnessAnswer } from '../src/route-witness.js';
 import { loadCurrentLiveAnalysisViews } from './live-analysis-views.js';
 
@@ -20,20 +23,18 @@ describe('Source-analysis structured answer rendering', () => {
     const document = answer.outcome.value?.document;
     expect(document).toBeTruthy();
 
-    const compactPolicy = resolveInquiryPolicy({
-      focusRef: { kind: 'package', value: '@aurelia-ls/source-analysis' },
+    const compactPolicy = resolveInquiryPolicy(createPresentationPolicyInput({
       questionRoute: 'inventory',
       readMode: 'summary-card',
-    }, {
+    }, 'summary-card'), {
       focusKind: 'package',
       inquiryEpisode: 'inventory-and-audit-sweep',
       readMode: 'summary-card',
     });
-    const expandedPolicy = resolveInquiryPolicy({
-      focusRef: { kind: 'package', value: '@aurelia-ls/source-analysis' },
+    const expandedPolicy = resolveInquiryPolicy(createPresentationPolicyInput({
       questionRoute: 'inventory',
       readMode: 'supporting-evidence',
-    }, {
+    }, 'summary-card'), {
       focusKind: 'package',
       inquiryEpisode: 'inventory-and-audit-sweep',
       readMode: 'summary-card',
@@ -64,7 +65,7 @@ describe('Source-analysis structured answer rendering', () => {
     expect(document).toBeTruthy();
     expect(answer.query.readMode).toBe('supporting-evidence');
 
-    const policy = resolveInquiryPolicy(answer.query, {
+    const policy = resolveInquiryPolicy(createPresentationPolicyInput(answer.query, 'focus-card'), {
       focusKind: 'file',
       inquiryEpisode: 'bounded-closure-explanation',
       readMode: 'focus-card',
@@ -80,11 +81,10 @@ describe('Source-analysis structured answer rendering', () => {
   });
 
   it('keeps structured answer policy on presentation modes when a payload mode is requested', () => {
-    const policy = resolveInquiryPolicy({
-      focusRef: { kind: 'package', value: '@aurelia-ls/source-analysis' },
+    const policy = resolveInquiryPolicy(createPresentationPolicyInput({
       questionRoute: 'inventory',
       readMode: 'snapshot',
-    }, {
+    }, 'summary-card'), {
       focusKind: 'package',
       inquiryEpisode: 'inventory-and-audit-sweep',
       readMode: 'summary-card',

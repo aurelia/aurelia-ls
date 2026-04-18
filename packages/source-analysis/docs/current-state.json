@@ -91,7 +91,10 @@
         "src/answer-card.ts",
         "src/inquiry-wire.ts",
         "src/outcome-algebra.ts",
-        "test/inquiry-wire.test.ts"
+        "src/public/inquiry.ts",
+        "test/inquiry-wire.test.ts",
+        "test/inquiry-model.test.ts",
+        "test/answer-renderer.test.ts"
       ],
       "exitCriteria": [
         "High-fanout internal call sites no longer need the broad FocusKind or world/provenance unions when they only support a narrower family.",

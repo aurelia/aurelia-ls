@@ -124,3 +124,17 @@ decision trail in order.
 - The remaining ontology pressure is now centered on the broad public query and
   policy carriers (`QuestionRoute`, `WorldFrame`, and `ReadMode`) rather than
   on the newer continuation/delta/wire adapters.
+
+## 2026-04-18 - Read-mode families now live in the model and policy is presentation-only
+
+- Shared `ReadModeFamilies`, `createReadModeFamilies(...)`, and
+  `flattenReadModeFamilies(...)` now give read-mode splitting an explicit
+  ontology instead of treating `snapshot` as just another rendering label.
+- Capability and inquiry catalogs now store read-mode families internally and
+  flatten back to `readModes` only for compatibility views exposed at ingress.
+- `resolveInquiryPolicy(...)` now accepts presentation-only policy input; broad
+  `ReadMode` coercion moved into explicit adapter seams such as
+  `createPresentationPolicyInput(...)` and `resolvePresentationReadMode(...)`.
+- The remaining read-mode pressure is now at the public compatibility
+  carriers: `Inquiry.readMode`, ingress option types, host render/query args,
+  and the still-mixed `snapshot-maintenance` inquiry family.

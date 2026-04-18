@@ -34,9 +34,18 @@ import { CapabilityIngress } from '../capability-ingress.js';
 import type { InquiryExecutionSummary } from '../inquiry-ingress.js';
 import { InquiryIngress } from '../inquiry-ingress.js';
 import type { ConsumerKind } from '../inquiry-policy.js';
-import { resolveInquiryPolicy } from '../inquiry-policy.js';
-import type { FocusKind, PolicyFocusKind, PresentationReadMode, ReadMode } from '../inquiry-model.js';
-import { isPresentationReadMode } from '../inquiry-model.js';
+import {
+  createPresentationPolicyInput,
+  resolveInquiryPolicy,
+} from '../inquiry-policy.js';
+import type {
+  FocusKind,
+  InquiryEpisode,
+  PolicyFocusKind,
+  QuestionRoute,
+  ReadMode,
+} from '../inquiry-model.js';
+import { resolvePresentationReadMode } from '../inquiry-model.js';
 import { createNavigationEpisode } from '../navigation.js';
 import { createLegacyProjectionWorkspaceAuthority } from '../authority/workspace-authority.js';
 import { createRouteWitnessAnswer } from '../route-witness.js';
@@ -877,7 +886,15 @@ function summarizeInquiryExecution(
 }
 
 function buildRenderedView<TResult extends { document?: AnswerDocument<AnswerRef> }>(
-  answer: { readonly query: { readonly focusRef: { readonly kind: FocusKind }; readonly inquiryEpisode?: string; readonly readMode?: string; }; readonly outcome: { readonly value?: TResult } },
+  answer: {
+    readonly query: {
+      readonly focusRef: { readonly kind: FocusKind };
+      readonly questionRoute: QuestionRoute;
+      readonly inquiryEpisode?: InquiryEpisode;
+      readonly readMode?: ReadMode;
+    };
+    readonly outcome: { readonly value?: TResult };
+  },
   consumer: ConsumerKind | undefined,
   renderStyle: 'answer' | 'plain-text' | 'json-document' | undefined,
 ): HostRenderedView | undefined {
@@ -890,10 +907,12 @@ function buildRenderedView<TResult extends { document?: AnswerDocument<AnswerRef
     return undefined;
   }
 
-  const policy = resolveInquiryPolicy(answer.query as Parameters<typeof resolveInquiryPolicy>[0], {
+  const readMode = resolvePresentationReadMode(answer.query.readMode, 'focus-card');
+
+  const policy = resolveInquiryPolicy(createPresentationPolicyInput(answer.query, readMode), {
     focusKind: policyFocusKindForRenderedAnswer(answer.query.focusRef.kind),
     inquiryEpisode: (answer.query.inquiryEpisode ?? 'orient-and-localize') as Parameters<typeof resolveInquiryPolicy>[1]['inquiryEpisode'],
-    readMode: presentationReadModeOrDefault(answer.query.readMode, 'focus-card'),
+    readMode,
     ...(consumer ? { consumer } : {}),
   });
 
@@ -916,15 +935,6 @@ function policyFocusKindForRenderedAnswer(
   return focusKind === 'claim'
     ? 'inquiry'
     : focusKind;
-}
-
-function presentationReadModeOrDefault(
-  value: string | undefined,
-  fallback: PresentationReadMode,
-): PresentationReadMode {
-  return typeof value === 'string' && isPresentationReadMode(value as ReadMode)
-    ? value as PresentationReadMode
-    : fallback;
 }
 
 function summarizePrimaryFacts(

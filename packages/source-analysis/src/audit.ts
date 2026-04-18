@@ -42,6 +42,7 @@ import {
   worldTargetingFromFrame,
 } from './inquiry-model.js';
 import {
+  createPresentationPolicyInput,
   resolveInquiryPolicy,
   type AuditMetric,
   type InquiryPolicy,
@@ -205,7 +206,7 @@ function buildPackageAuditAnswer(
   }
 
   const pkg = packageResolution.value;
-  const policy = resolveInquiryPolicy(query, {
+  const policy = resolveInquiryPolicy(createPresentationPolicyInput(query, defaultReadMode(query.questionRoute)), {
     focusKind: 'package',
     inquiryEpisode: 'inventory-and-audit-sweep',
     readMode: defaultReadMode(query.questionRoute),
@@ -763,7 +764,7 @@ function createMissAnswer(
   focusRef: FocusRef,
   relatedRefs: readonly AuditRef[],
 ): InquiryAnswer<AuditValue> {
-  const policy = resolveInquiryPolicy(query, {
+  const policy = resolveInquiryPolicy(createPresentationPolicyInput(query, defaultReadMode(query.questionRoute)), {
     focusKind: policyFocusKindForAnswerFocus(focusRef.kind),
     inquiryEpisode: 'inventory-and-audit-sweep',
     readMode: defaultReadMode(query.questionRoute),
@@ -826,7 +827,7 @@ function createExcludedFrontierAnswer(
   packageQuery: string,
   regimeContext: FocusedAnalyzabilityContext,
 ): InquiryAnswer<AuditValue> {
-  const policy = resolveInquiryPolicy(query, {
+  const policy = resolveInquiryPolicy(createPresentationPolicyInput(query, defaultReadMode(query.questionRoute)), {
     focusKind: 'package',
     inquiryEpisode: 'inventory-and-audit-sweep',
     readMode: defaultReadMode(query.questionRoute),
@@ -883,7 +884,7 @@ function createStructuralPackageBoundaryAnswer(
   message: string,
   regimeContext: FocusedAnalyzabilityContext,
 ): InquiryAnswer<AuditValue> {
-  const policy = resolveInquiryPolicy(query, {
+  const policy = resolveInquiryPolicy(createPresentationPolicyInput(query, defaultReadMode(query.questionRoute)), {
     focusKind: 'package',
     inquiryEpisode: 'inventory-and-audit-sweep',
     readMode: defaultReadMode(query.questionRoute),
@@ -944,7 +945,7 @@ function createAmbiguousAnswer(
   focusRef: FocusRef,
   relatedRefs: readonly AuditRef[],
 ): InquiryAnswer<AuditValue> {
-  const policy = resolveInquiryPolicy(query, {
+  const policy = resolveInquiryPolicy(createPresentationPolicyInput(query, defaultReadMode(query.questionRoute)), {
     focusKind: policyFocusKindForAnswerFocus(focusRef.kind),
     inquiryEpisode: 'inventory-and-audit-sweep',
     readMode: defaultReadMode(query.questionRoute),
@@ -1006,7 +1007,7 @@ function createUnsupportedAnswer(
   analysis: AnalysisViews,
   message: string,
 ): InquiryAnswer<AuditValue> {
-  const policy = resolveInquiryPolicy(query, {
+  const policy = resolveInquiryPolicy(createPresentationPolicyInput(query, defaultReadMode(query.questionRoute)), {
     focusKind: policyFocusKindForAnswerFocus(query.focusRef.kind),
     inquiryEpisode: 'inventory-and-audit-sweep',
     readMode: defaultReadMode(query.questionRoute),

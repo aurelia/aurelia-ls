@@ -16,8 +16,10 @@ import {
   READ_MODES,
   SUBJECT_FOCUS_KINDS,
   composeWorldFrame,
+  createReadModeFamilies,
   createQuestionRouteFamilies,
   executionPostureFromFrame,
+  flattenReadModeFamilies,
   flattenQuestionRouteFamilies,
   isCarrierProvenanceEntryKind,
   isCognitiveQuestionRoute,
@@ -30,6 +32,7 @@ import {
   isPresentationReadMode,
   isSubjectFocusKind,
   questionRouteFromSelection,
+  resolvePresentationReadMode,
   selectCognitiveQuestionRoute,
   selectMaintenanceQuestionRoute,
   selectQuestionRoute,
@@ -134,6 +137,25 @@ describe('Source-analysis inquiry ontology', () => {
       route: 'inventory',
     });
     expect(questionRouteFromSelection(selectQuestionRoute('diff'))).toBe('diff');
+  });
+
+  it('keeps presentation and payload read modes in explicit families', () => {
+    const readModeFamilies = createReadModeFamilies({
+      presentation: ['summary-card', 'delta-card'],
+      payload: ['snapshot'],
+    });
+
+    expect(readModeFamilies).toEqual({
+      presentation: ['summary-card', 'delta-card'],
+      payload: ['snapshot'],
+    });
+    expect(flattenReadModeFamilies(readModeFamilies)).toEqual([
+      'summary-card',
+      'delta-card',
+      'snapshot',
+    ]);
+    expect(resolvePresentationReadMode('snapshot', 'focus-card')).toBe('focus-card');
+    expect(resolvePresentationReadMode('supporting-evidence', 'focus-card')).toBe('supporting-evidence');
   });
 
   it('keeps ingress-recognizable focus kinds as an explicit subset', () => {

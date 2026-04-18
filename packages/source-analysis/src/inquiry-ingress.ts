@@ -22,7 +22,10 @@ import type {
 } from './inquiry-catalog.js';
 import { createDefaultInquiryCatalog } from './inquiry-catalog.js';
 import type { ConsumerKind } from './inquiry-policy.js';
-import { resolveInquiryPolicy } from './inquiry-policy.js';
+import {
+  createPresentationPolicyInput,
+  resolveInquiryPolicy,
+} from './inquiry-policy.js';
 import type {
   IngressFocusHints,
   IngressHintDetail,
@@ -55,7 +58,7 @@ import type {
   ReadMode,
   WorldFrame,
 } from './inquiry-model.js';
-import { isPresentationReadMode } from './inquiry-model.js';
+import { resolvePresentationReadMode } from './inquiry-model.js';
 
 export const INQUIRY_PLAN_STATUSES = [
   'ready',
@@ -311,9 +314,7 @@ export class InquiryIngress {
       ? matches.map((match) => match.inquiry)
       : this.#inquiries.list(options.includeExamples).slice(0, options.topK ?? 6);
     const diagnostics = this.diagnose();
-    const readMode = options.readMode && isPresentationReadMode(options.readMode)
-      ? options.readMode
-      : 'summary-card';
+    const readMode = resolvePresentationReadMode(options.readMode, 'summary-card');
     const worldFrame = options.worldFrame ?? createHostedWorldFrame();
     const query: Inquiry = {
       inquiryEpisode: 'orient-and-localize',
@@ -322,7 +323,7 @@ export class InquiryIngress {
       readMode,
       worldFrame,
     };
-    const policy = resolveInquiryPolicy(query, {
+    const policy = resolveInquiryPolicy(createPresentationPolicyInput(query, readMode), {
       focusKind: 'inquiry',
       inquiryEpisode: 'orient-and-localize',
       readMode,
@@ -418,9 +419,7 @@ export class InquiryIngress {
     options: InquiryPlanOptions,
   ): InquiryAnswer<InquiryPlanValue> {
     const plan = this.plan(options);
-    const readMode = options.readMode && isPresentationReadMode(options.readMode)
-      ? options.readMode
-      : 'focus-card';
+    const readMode = resolvePresentationReadMode(options.readMode, 'focus-card');
     const worldFrame = options.worldFrame ?? createHostedWorldFrame({
       targeting: {
         ...(options.repoPath ? { repoPath: options.repoPath } : {}),
@@ -435,7 +434,7 @@ export class InquiryIngress {
       readMode,
       worldFrame,
     };
-    const policy = resolveInquiryPolicy(query, {
+    const policy = resolveInquiryPolicy(createPresentationPolicyInput(query, readMode), {
       focusKind: 'inquiry',
       inquiryEpisode: 'bounded-closure-explanation',
       readMode,
@@ -515,9 +514,7 @@ export class InquiryIngress {
   createAskAnswer(
     options: InquiryAskOptions,
   ): InquiryAnswer<InquiryAskValue> {
-    const readMode = options.readMode && isPresentationReadMode(options.readMode)
-      ? options.readMode
-      : 'focus-card';
+    const readMode = resolvePresentationReadMode(options.readMode, 'focus-card');
     const worldFrame = options.worldFrame ?? createHostedWorldFrame({
       targeting: {
         ...(options.repoPath ? { repoPath: options.repoPath } : {}),
@@ -532,7 +529,7 @@ export class InquiryIngress {
       readMode,
       worldFrame,
     };
-    const policy = resolveInquiryPolicy(query, {
+    const policy = resolveInquiryPolicy(createPresentationPolicyInput(query, readMode), {
       focusKind: 'inquiry',
       inquiryEpisode: 'bounded-closure-explanation',
       readMode,

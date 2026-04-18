@@ -1,13 +1,14 @@
 import type { IssueSeverity, TrustKind } from './outcome-algebra.js';
+import {
+  resolvePresentationReadMode,
+} from './inquiry-model.js';
 import type {
-  InquiryEpisode,
   Inquiry,
+  InquiryEpisode,
   PolicyFocusKind,
   QuestionRoute,
   PresentationReadMode,
-  ReadMode,
 } from './inquiry-model.js';
-import { isPresentationReadMode } from './inquiry-model.js';
 import type {
   PackageRouteClass,
   PackageRouteKind,
@@ -81,6 +82,23 @@ export interface InquiryPolicy extends AnswerRenderPolicy {
   readonly auditMetricOrders: AuditMetricOrders;
 }
 
+export interface InquiryPolicyInput {
+  readonly inquiryEpisode?: InquiryEpisode;
+  readonly questionRoute: QuestionRoute;
+  readonly readMode?: PresentationReadMode;
+}
+
+export function createPresentationPolicyInput(
+  query: Pick<Inquiry, 'inquiryEpisode' | 'questionRoute' | 'readMode'>,
+  fallback: PresentationReadMode,
+): InquiryPolicyInput {
+  return {
+    ...(query.inquiryEpisode ? { inquiryEpisode: query.inquiryEpisode } : {}),
+    questionRoute: query.questionRoute,
+    readMode: resolvePresentationReadMode(query.readMode, fallback),
+  };
+}
+
 export interface InquiryOrdering extends AnswerRenderOrdering {
   readonly issueSeverity: readonly IssueSeverity[];
   readonly trust: readonly TrustKind[];
@@ -114,10 +132,10 @@ const BASE_AUDIT_METRIC_ORDERS: AuditMetricOrders = {
 };
 
 export function resolveInquiryPolicy(
-  query: Inquiry,
+  query: InquiryPolicyInput,
   defaults: ResolveInquiryPolicyDefaults,
 ): InquiryPolicy {
-  const readMode = resolvePresentationReadMode(query.readMode, defaults.readMode);
+  const readMode = query.readMode ?? defaults.readMode;
   const inquiryEpisode = query.inquiryEpisode ?? defaults.inquiryEpisode;
   const consumer = defaults.consumer ?? 'human';
   const renderPolicy = resolveAnswerRenderPolicy(readMode, inquiryEpisode);
@@ -165,17 +183,4 @@ function auditMetricOrdersForPolicy(
   }
 
   return BASE_AUDIT_METRIC_ORDERS;
-}
-
-function resolvePresentationReadMode(
-  readMode: ReadMode | undefined,
-  fallback: PresentationReadMode,
-): PresentationReadMode {
-  // TODO: Structured answer surfaces now normalize payload/materialization
-  // modes back onto presentation modes. Once payload-mode queries have a
-  // first-class higher-order materialization surface, stop coercing here and
-  // return an explicit no-claim or reroute instead.
-  return readMode && isPresentationReadMode(readMode)
-    ? readMode
-    : fallback;
 }

@@ -14,7 +14,10 @@ import type {
 } from './capability-catalog.js';
 import { createDefaultCapabilityCatalog } from './capability-catalog.js';
 import type { ConsumerKind } from './inquiry-policy.js';
-import { resolveInquiryPolicy } from './inquiry-policy.js';
+import {
+  createPresentationPolicyInput,
+  resolveInquiryPolicy,
+} from './inquiry-policy.js';
 import type {
   IngressFocusHints,
   IngressHintDetail,
@@ -46,7 +49,7 @@ import type {
   ReadMode,
   WorldFrame,
 } from './inquiry-model.js';
-import { isPresentationReadMode } from './inquiry-model.js';
+import { resolvePresentationReadMode } from './inquiry-model.js';
 
 export const CAPABILITY_PLAN_STATUSES = [
   'ready',
@@ -191,9 +194,7 @@ export class CapabilityIngress {
     const capabilities = matches.length > 0
       ? matches.map((match) => match.capability)
       : this.#catalog.list(options.includeExamples).slice(0, options.topK ?? 6);
-    const readMode = options.readMode && isPresentationReadMode(options.readMode)
-      ? options.readMode
-      : 'summary-card';
+    const readMode = resolvePresentationReadMode(options.readMode, 'summary-card');
     const worldFrame = options.worldFrame ?? createHostedWorldFrame();
     const query: Inquiry = {
       inquiryEpisode: 'orient-and-localize',
@@ -202,7 +203,7 @@ export class CapabilityIngress {
       readMode,
       worldFrame,
     };
-    const policy = resolveInquiryPolicy(query, {
+    const policy = resolveInquiryPolicy(createPresentationPolicyInput(query, readMode), {
       focusKind: 'repo',
       inquiryEpisode: 'orient-and-localize',
       readMode,
@@ -304,9 +305,7 @@ export class CapabilityIngress {
       focusKind: options.focusKind,
       topK: 5,
     });
-    const readMode = options.readMode && isPresentationReadMode(options.readMode)
-      ? options.readMode
-      : 'focus-card';
+    const readMode = resolvePresentationReadMode(options.readMode, 'focus-card');
     const worldFrame = options.worldFrame ?? createHostedWorldFrame({
       targeting: {
         ...(options.repoPath ? { repoPath: options.repoPath } : {}),
@@ -321,7 +320,7 @@ export class CapabilityIngress {
       readMode,
       worldFrame,
     };
-    const policy = resolveInquiryPolicy(query, {
+    const policy = resolveInquiryPolicy(createPresentationPolicyInput(query, readMode), {
       focusKind: 'repo',
       inquiryEpisode: 'bounded-closure-explanation',
       readMode,
@@ -437,9 +436,7 @@ export class CapabilityIngress {
   createRepairAnswer(
     options: CapabilityRepairOptions,
   ): InquiryAnswer<CapabilityRepairValue> {
-    const readMode = options.readMode && isPresentationReadMode(options.readMode)
-      ? options.readMode
-      : 'focus-card';
+    const readMode = resolvePresentationReadMode(options.readMode, 'focus-card');
     const worldFrame = options.worldFrame ?? createHostedWorldFrame();
     const query: Inquiry = {
       inquiryEpisode: 'bounded-closure-explanation',
@@ -448,7 +445,7 @@ export class CapabilityIngress {
       readMode,
       worldFrame,
     };
-    const policy = resolveInquiryPolicy(query, {
+    const policy = resolveInquiryPolicy(createPresentationPolicyInput(query, readMode), {
       focusKind: 'repo',
       inquiryEpisode: 'bounded-closure-explanation',
       readMode,
@@ -612,9 +609,7 @@ export class CapabilityIngress {
       query,
       focusRef: query.focusRef,
       inquiryEpisode: 'bounded-closure-explanation',
-      readMode: query.readMode && isPresentationReadMode(query.readMode)
-        ? query.readMode
-        : 'focus-card',
+      readMode: resolvePresentationReadMode(query.readMode, 'focus-card'),
       worldFrame: query.worldFrame ?? createHostedWorldFrame(),
       tag: 'reroute',
       value,
@@ -674,9 +669,7 @@ export class CapabilityIngress {
       query,
       focusRef: query.focusRef,
       inquiryEpisode: 'bounded-closure-explanation',
-      readMode: query.readMode && isPresentationReadMode(query.readMode)
-        ? query.readMode
-        : 'focus-card',
+      readMode: resolvePresentationReadMode(query.readMode, 'focus-card'),
       worldFrame: query.worldFrame ?? createHostedWorldFrame(),
       tag: 'ambiguous',
       value,
@@ -745,9 +738,7 @@ export class CapabilityIngress {
       query,
       focusRef: query.focusRef,
       inquiryEpisode: 'bounded-closure-explanation',
-      readMode: query.readMode && isPresentationReadMode(query.readMode)
-        ? query.readMode
-        : 'focus-card',
+      readMode: resolvePresentationReadMode(query.readMode, 'focus-card'),
       worldFrame: query.worldFrame ?? createHostedWorldFrame(),
       tag: 'reroute',
       value,

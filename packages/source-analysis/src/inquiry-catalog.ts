@@ -3,12 +3,16 @@ import type {
   FocusKind,
   InquiryEpisode,
   PolicyFocusKind,
+  PresentationReadMode,
   QuestionRouteFamilies,
   QuestionRoute,
+  ReadModeFamilies,
   ReadMode,
 } from './inquiry-model.js';
 import {
+  createReadModeFamilies,
   createQuestionRouteFamilies,
+  flattenReadModeFamilies,
   flattenQuestionRouteFamilies,
 } from './inquiry-model.js';
 import type { CapabilityCatalog } from './capability-catalog.js';
@@ -80,7 +84,7 @@ export interface InquiryFamilyDefinition {
   readonly focusKinds: readonly PolicyFocusKind[];
   readonly inquiryEpisodes: readonly InquiryEpisode[];
   readonly questionRouteFamilies: QuestionRouteFamilies;
-  readonly readModes: readonly ReadMode[];
+  readonly readModeFamilies: ReadModeFamilies;
   readonly aliases: readonly string[];
   readonly nouns: readonly string[];
   readonly verbs: readonly string[];
@@ -171,7 +175,7 @@ export class InquiryFamilyDescriptor {
       focusKinds: this.#definition.focusKinds,
       inquiryEpisodes: this.#definition.inquiryEpisodes,
       questionRoutes: flattenQuestionRouteFamilies(this.#definition.questionRouteFamilies),
-      readModes: this.#definition.readModes,
+      readModes: flattenReadModeFamilies(this.#definition.readModeFamilies),
       aliases: this.#definition.aliases,
       primaryCommands: this.#definition.primaryCommands,
       supportingCommands: this.#definition.supportingCommands,
@@ -323,7 +327,7 @@ export function createDefaultInquiryCatalog(): InquiryCatalog {
       focusKinds: ['repo', 'capability', 'inquiry'],
       inquiryEpisodes: ['orient-and-localize', 'bounded-closure-explanation'],
       questionRouteFamilies: cognitiveRoutes('search', 'route'),
-      readModes: ['summary-card', 'focus-card', 'supporting-evidence'],
+      readModeFamilies: presentationReadModes('summary-card', 'focus-card', 'supporting-evidence'),
       aliases: ['what can this tool do', 'how do i use source analysis', 'help', 'discover commands'],
       nouns: ['capability', 'command', 'surface', 'tool', 'help'],
       verbs: ['discover', 'plan', 'repair', 'describe', 'use'],
@@ -343,7 +347,7 @@ export function createDefaultInquiryCatalog(): InquiryCatalog {
       focusKinds: ['repo'],
       inquiryEpisodes: ['bounded-closure-explanation', 'orient-and-localize'],
       questionRouteFamilies: cognitiveRoutes('route', 'search'),
-      readModes: ['summary-card', 'focus-card', 'supporting-evidence'],
+      readModeFamilies: presentationReadModes('summary-card', 'focus-card', 'supporting-evidence'),
       aliases: ['what regime am i in', 'analyzability posture', 'open fronts', 'excluded boundaries', 'profile posture'],
       nouns: ['profile', 'regime', 'analyzability', 'posture', 'boundary', 'boundaries', 'frontier', 'frontiers', 'excluded', 'open'],
       verbs: ['describe', 'inspect', 'explain', 'surface', 'qualify'],
@@ -368,7 +372,7 @@ export function createDefaultInquiryCatalog(): InquiryCatalog {
       focusKinds: ['repo', 'package', 'file', 'symbol', 'type', 'export'],
       inquiryEpisodes: ['orient-and-localize', 'bounded-closure-explanation'],
       questionRouteFamilies: cognitiveRoutes('search', 'join', 'inventory', 'route'),
-      readModes: ['summary-card', 'focus-card', 'supporting-evidence'],
+      readModeFamilies: presentationReadModes('summary-card', 'focus-card', 'supporting-evidence'),
       aliases: ['where do i start', 'understand the workspace', 'orient me', 'overview before editing'],
       nouns: ['workspace', 'repo', 'package', 'file', 'symbol', 'type', 'export', 'overview', 'orientation', 'declaration', 'definition', 'implementation'],
       verbs: ['understand', 'orient', 'inspect', 'start', 'explore', 'find', 'locate', 'defined', 'declared', 'implemented'],
@@ -394,7 +398,7 @@ export function createDefaultInquiryCatalog(): InquiryCatalog {
       focusKinds: ['package'],
       inquiryEpisodes: ['inventory-and-audit-sweep', 'bounded-closure-explanation'],
       questionRouteFamilies: cognitiveRoutes('inventory', 'route'),
-      readModes: ['summary-card', 'focus-card', 'supporting-evidence'],
+      readModeFamilies: presentationReadModes('summary-card', 'focus-card', 'supporting-evidence'),
       aliases: ['tech debt', 'dead code', 'audit this package', 'integration gaps', 'layer cycles', 'dependency seams'],
       nouns: ['audit', 'debt', 'coverage', 'integration', 'dead', 'exercise', 'cycle', 'layer', 'seam', 'coupling', 'architecture'],
       verbs: ['audit', 'review', 'improve', 'triage', 'find', 'explain', 'trace'],
@@ -419,7 +423,7 @@ export function createDefaultInquiryCatalog(): InquiryCatalog {
       focusKinds: ['file', 'type'],
       inquiryEpisodes: ['bounded-closure-explanation'],
       questionRouteFamilies: cognitiveRoutes('route', 'join'),
-      readModes: ['focus-card', 'supporting-evidence'],
+      readModeFamilies: presentationReadModes('focus-card', 'supporting-evidence'),
       aliases: ['why alive', 'why reachable', 'route witness', 'why does this survive'],
       nouns: ['route', 'witness', 'reachability', 'path', 'survival', 'alive'],
       verbs: ['explain', 'trace', 'prove', 'show', 'route'],
@@ -451,7 +455,10 @@ export function createDefaultInquiryCatalog(): InquiryCatalog {
         cognitive: ['search'],
         maintenance: ['refresh', 'diff', 'materialize'],
       }),
-      readModes: ['summary-card', 'focus-card', 'delta-card', 'snapshot'],
+      readModeFamilies: createReadModeFamilies({
+        presentation: ['summary-card', 'focus-card', 'delta-card'],
+        payload: ['snapshot'],
+      }),
       aliases: ['stale snapshots', 'refresh analysis', 'materialize snapshots', 'dirty session'],
       nouns: ['snapshot', 'session', 'refresh', 'invalidate', 'materialize', 'stale'],
       verbs: ['refresh', 'invalidate', 'materialize', 'debug', 'inspect'],
@@ -489,6 +496,12 @@ function cognitiveRoutes(
   ...routes: readonly CognitiveQuestionRoute[]
 ): QuestionRouteFamilies {
   return createQuestionRouteFamilies({ cognitive: routes });
+}
+
+function presentationReadModes(
+  ...modes: readonly PresentationReadMode[]
+): ReadModeFamilies {
+  return createReadModeFamilies({ presentation: modes });
 }
 
 const DEFAULT_INQUIRY_SELECTION_POLICY: IngressSelectionPolicy<
