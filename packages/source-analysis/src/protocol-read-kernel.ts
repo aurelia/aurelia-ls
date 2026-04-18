@@ -23,7 +23,7 @@
  * - `(tentative)`: useful placeholder or example, but not something I would freeze hard
  */
 
-export const PROTOCOL_READ_KERNEL_SCHEMA_VERSION = 'v1alpha1' as const;
+export const PROTOCOL_READ_KERNEL_SCHEMA_VERSION = 'v1alpha2' as const;
 
 /**
  * ExtensibleString keeps suggested literals visible in editors without closing
@@ -82,13 +82,175 @@ export type SelectorScheme =
   ExtensibleString<typeof SELECTOR_SCHEMES[number]>;
 
 /**
- * Selector is input-only. It says how the caller points at something.
+ * Text coordinates are useful enough across editor, CLI, and host surfaces to
+ * justify a small shared carrier.
  */
-export interface Selector {
+export interface TextCoordinate {
+  readonly line: number; // Line-oriented coordinates are a durable cross-surface convention.
+  readonly character: number; // Character-oriented columns are a durable cross-surface convention.
+}
+
+/**
+ * TextRange freezes only the ordered start/end shape.
+ */
+export interface TextRange {
+  readonly start: TextCoordinate; // Ranges should carry an explicit start coordinate.
+  readonly end: TextCoordinate; // Ranges should carry an explicit end coordinate.
+}
+
+/**
+ * IdentityUniquenessLevel defines the scope in which an identity handle is
+ * promised to remain unique.
+ */
+export const IDENTITY_UNIQUENESS_LEVELS = [
+  // The identity is only unique within one carrier or document.
+  'document',
+  // The identity is unique within one analyzed authority scope or project.
+  'project',
+  // The identity is unique within a wider package or product group. (provisional)
+  'group',
+  // The identity is unique within the issuing identity scheme.
+  'scheme',
+  // The identity is globally unique.
+  'global',
+] as const;
+
+export type IdentityUniquenessLevel =
+  ExtensibleString<typeof IDENTITY_UNIQUENESS_LEVELS[number]>;
+
+/**
+ * IdentityHandle is a canonical semantic identity token.
+ *
+ * Unlike anchors, identities are not relocation hints. They are claims about
+ * stable semantic naming within a declared uniqueness scope.
+ */
+export interface IdentityHandle {
+  readonly scheme: string; // The issuing identity scheme should remain explicit.
+  readonly identifier: string; // The identifier payload is opaque to the kernel.
+  readonly unique: IdentityUniquenessLevel; // Uniqueness scope is part of the truth contract.
+  readonly issuer?: string; // Useful when multiple authorities can issue identities. (provisional)
+  readonly scopeRef?: string; // Useful when uniqueness is narrower than scheme or global. (provisional)
+  readonly subject?: SubjectKind; // Useful when the handle is transported outside a typed envelope. (provisional)
+  readonly attributes?: JsonObject; // Escape hatch for scheme-local identity detail. (provisional)
+}
+
+/**
+ * AnchorFingerprint carries one relocatability witness for an anchor. (provisional)
+ */
+export interface AnchorFingerprint {
+  readonly algorithm: string; // Fingerprint algorithm should remain explicit. (provisional)
+  readonly value: string; // Fingerprint payload is opaque to the kernel. (provisional)
+  readonly role?: string; // Useful when several fingerprints cover different anchor regions. (provisional)
+}
+
+/**
+ * AnchorPath carries a structural path used during relocation. (provisional)
+ */
+export type AnchorPath =
+  readonly (string | number)[];
+
+/**
+ * AnchorHandle is a relocatable reacquisition handle.
+ *
+ * Unlike identities, anchors are not promises of canonical naming. They are
+ * typed hints the authority can use to reacquire a subject after change.
+ */
+export interface AnchorHandle {
+  readonly scheme: string; // The anchor relocation scheme should remain explicit.
+  readonly carrierRef: string; // A carrier ref identifies the text or artifact being anchored into.
+  readonly range: TextRange; // The last known anchor span.
+  readonly fingerprints?: readonly AnchorFingerprint[]; // Relocation witnesses beyond raw range. (provisional)
+  readonly astPath?: AnchorPath; // Useful when structural relocation is supported. (provisional)
+  readonly semanticHints?: JsonObject; // Useful when relocation needs semantic confirmation. (provisional)
+  readonly attributes?: JsonObject; // Escape hatch for anchor-local detail. (provisional)
+}
+
+/**
+ * SelectorBase keeps the subject dimension common across selector forms.
+ */
+export interface SelectorBase {
   readonly subject: SubjectKind; // Requests should state what kind of thing is being addressed.
-  readonly scheme: SelectorScheme; // Scheme is a durable protocol dimension.
-  readonly value: string; // A portable scalar carrier is safer than freezing many scheme-specific structs too early.
-  readonly attributes?: JsonObject; // Escape hatch for scheme-specific detail. (provisional)
+}
+
+/**
+ * LocatorSelector addresses a subject by a portable locator string.
+ */
+export interface LocatorSelector extends SelectorBase {
+  readonly scheme: 'locator'; // Locator addressing is a durable kernel scheme.
+  readonly locator: string; // The main locator token stays scalar for portability.
+  readonly namespace?: string; // Namespace is useful when locators are not globally unique. (provisional)
+  readonly attributes?: JsonObject; // Escape hatch for locator-local detail. (provisional)
+}
+
+/**
+ * PositionSelector addresses a single text position inside a carrier.
+ */
+export interface PositionSelector extends SelectorBase {
+  readonly scheme: 'position'; // Position addressing is a durable kernel scheme.
+  readonly carrierRef: string; // A carrier ref identifies the text container being addressed.
+  readonly position: TextCoordinate; // The pointed-at text position.
+  readonly attributes?: JsonObject; // Escape hatch for carrier-local detail. (provisional)
+}
+
+/**
+ * RangeSelector addresses a bounded text span inside a carrier.
+ */
+export interface RangeSelector extends SelectorBase {
+  readonly scheme: 'range'; // Range addressing is a durable kernel scheme.
+  readonly carrierRef: string; // A carrier ref identifies the text container being addressed.
+  readonly range: TextRange; // The bounded addressed span.
+  readonly attributes?: JsonObject; // Escape hatch for carrier-local detail. (provisional)
+}
+
+/**
+ * IdentitySelector addresses a subject by an authority-owned stable identity. (provisional)
+ */
+export interface IdentitySelector extends SelectorBase {
+  readonly scheme: 'identity'; // Identity addressing is useful but still somewhat authority-shaped. (provisional)
+  readonly identity: IdentityHandle; // Identity handles should carry explicit uniqueness scope.
+  readonly attributes?: JsonObject; // Escape hatch for identity-local detail. (provisional)
+}
+
+/**
+ * AnchorSelector addresses a subject through a relocatable content or semantic anchor. (provisional)
+ */
+export interface AnchorSelector extends SelectorBase {
+  readonly scheme: 'anchor'; // Anchor addressing is useful but still maturing. (provisional)
+  readonly anchor: AnchorHandle; // Anchors should be typed reacquisition handles, not bare strings.
+  readonly attributes?: JsonObject; // Escape hatch for anchor-local detail. (provisional)
+}
+
+/**
+ * ExtensionSelector keeps the selector slot open for future schemes without
+ * forcing the kernel to freeze their payload shape early. (provisional)
+ */
+export interface ExtensionSelector extends SelectorBase {
+  readonly scheme: SelectorScheme; // Open schemes should remain possible. (provisional)
+  readonly payload: JsonObject; // Future schemes need a structured escape hatch. (provisional)
+}
+
+/**
+ * Selector is input-only. It says how the caller points at something.
+ *
+ * The kernel now freezes a few high-value selector shapes directly while still
+ * leaving room for future schemes through ExtensionSelector.
+ */
+export type Selector =
+  | LocatorSelector
+  | PositionSelector
+  | RangeSelector
+  | IdentitySelector
+  | AnchorSelector
+  | ExtensionSelector;
+
+/**
+ * SelectorRuleRef gives capability and algebra layers a stable way to point at
+ * selector requirements without freezing a global rule enum too early. (provisional)
+ */
+export interface SelectorRuleRef {
+  readonly ref: string; // Rule refs make selector-specific capability notes addressable. (provisional)
+  readonly label?: string; // Human-readable labels help surface selector requirements. (provisional)
+  readonly attributes?: JsonObject; // Escape hatch for selector rule metadata. (provisional)
 }
 
 /**
@@ -268,9 +430,10 @@ export type ResolutionStatus =
  */
 export interface CandidateRef {
   readonly subject: SubjectKind; // Candidate identity should say what kind of thing it is.
-  readonly id?: string; // Stable IDs are valuable but not always available. (provisional)
+  readonly identity?: IdentityHandle; // Durable identity when the authority can issue one. (provisional)
   readonly label?: string; // Human-readable labels are broadly useful.
   readonly locator?: string; // A round-trippable locator is often more portable than an ID.
+  readonly anchor?: AnchorHandle; // Relocatable reacquisition handle when available. (provisional)
   readonly attributes?: JsonObject; // Candidate detail will vary by domain. (provisional)
 }
 
