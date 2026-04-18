@@ -13,6 +13,18 @@ They exist so this repo can:
 Each file is a compact excerpt or machine-legible reduction of a larger Atlas
 artifact, focused on the sections this repo currently uses.
 
+## Current Use
+
+Right now this bundle primarily supports:
+
+- [../export-semantic-surface-ledger.yaml](../export-semantic-surface-ledger.yaml)
+- protocol and fixture derivation work around export-addressable Aurelia
+  semantics
+
+This is still in-progress spec derivation work.
+Do not read these ports as a claim that the local export ontology is already
+closed or ready to harden into a public framework contract.
+
 ## Included Ports
 
 - [module-export-analysis-ledger.md](./module-export-analysis-ledger.md)

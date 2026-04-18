@@ -4,30 +4,31 @@ Use this note when resuming work or choosing the next slice.
 
 ## Start Here
 
-1. Read [README.md](C:/projects/aurelia-ls2/packages/source-analysis/README.md).
+1. Read [README.md](../README.md).
 2. Read this file.
-3. If resuming long-running work, read [resume-protocol.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/resume-protocol.md).
-4. Read [authority-first-campaign.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/authority-first-campaign.md).
-5. Read [current-handoff.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/current-handoff.md) and [current-state.json](C:/projects/aurelia-ls2/packages/source-analysis/docs/current-state.json).
+3. If resuming long-running work, read [resume-protocol.md](./resume-protocol.md).
+4. Read [authority-first-campaign.md](./authority-first-campaign.md).
+5. Read [current-handoff.md](./current-handoff.md) and [current-state.json](./current-state.json).
 6. Run `pnpm preflight`.
-7. Read [roadmap.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/roadmap.md).
-8. If the work touches the machine-facing API, read [machine-legible-api-reset.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/machine-legible-api-reset.md).
-9. If the work is framework-aware, read [aurelia/README.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/aurelia/README.md).
+7. Read [roadmap.md](./roadmap.md).
+8. If the work touches the machine-facing API, read [machine-legible-api-reset.md](./machine-legible-api-reset.md).
+9. If the work is framework-aware, read [aurelia/README.md](./aurelia/README.md).
+10. If the work is framework-aware and currently in spec or fixture derivation mode, also read [aurelia/export-semantic-surface-ledger.yaml](./aurelia/export-semantic-surface-ledger.yaml) and [aurelia/atlas/README.md](./aurelia/atlas/README.md).
 
 ## When Working On X, Read Y
 
 | Work you are doing | Read first | Then read |
 | --- | --- | --- |
-| Choosing or reshaping a capability | [governing-axes.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/governing-axes.md) | [architecture-layers.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/architecture-layers.md), [roadmap.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/roadmap.md) |
-| Changing what counts as truth, claim, no-claim, withdrawal, or consumer-safe action | [shared-semantic-authority.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/shared-semantic-authority.md) | [provenance-and-steering.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/provenance-and-steering.md), [analyzability.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/analyzability.md) |
-| Moving logic between core layers, projections, or adapters | [architecture-layers.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/architecture-layers.md) | [governing-axes.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/governing-axes.md), [shared-semantic-authority.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/shared-semantic-authority.md), [roadmap.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/roadmap.md) |
-| Resetting the machine-facing API away from natural-language routing and toward typed primitives | [machine-legible-api-reset.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/machine-legible-api-reset.md) | [authority-first-campaign.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/authority-first-campaign.md), [shared-semantic-authority.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/shared-semantic-authority.md), [roadmap.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/roadmap.md) |
-| Extending the semantic kernel or evaluator ceiling | [semantic-analysis.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/semantic-analysis.md) | [analyzability.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/analyzability.md), [shared-semantic-authority.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/shared-semantic-authority.md), [roadmap.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/roadmap.md) |
-| Starting framework-aware Aurelia work, framework API registry work, or build-time DI modeling | [aurelia/README.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/aurelia/README.md) | [aurelia/framework-owner-ingress.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/aurelia/framework-owner-ingress.md), [aurelia/compile-time-di-container-state.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/aurelia/compile-time-di-container-state.md), [shared-semantic-authority.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/shared-semantic-authority.md) |
-| Improving the AI-facing read surface, guidance, continuations, or self-usefulness | [self-pressure-test.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/self-pressure-test.md) | [governing-axes.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/governing-axes.md), [shared-semantic-authority.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/shared-semantic-authority.md), [strategy.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/strategy.md) |
-| Working on provenance, operator steering, or explicit taste surfaces | [provenance-and-steering.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/provenance-and-steering.md) | [shared-semantic-authority.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/shared-semantic-authority.md), [roadmap.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/roadmap.md) |
-| Checking unresolved design pressure before a large move | [open-tensions.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/open-tensions.md) | [roadmap.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/roadmap.md) |
-| Resuming after compaction or context loss | [resume-protocol.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/resume-protocol.md) | [authority-first-campaign.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/authority-first-campaign.md), [current-handoff.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/current-handoff.md), [current-state.json](C:/projects/aurelia-ls2/packages/source-analysis/docs/current-state.json) |
+| Choosing or reshaping a capability | [governing-axes.md](./governing-axes.md) | [architecture-layers.md](./architecture-layers.md), [roadmap.md](./roadmap.md) |
+| Changing what counts as truth, claim, no-claim, withdrawal, or consumer-safe action | [shared-semantic-authority.md](./shared-semantic-authority.md) | [provenance-and-steering.md](./provenance-and-steering.md), [analyzability.md](./analyzability.md) |
+| Moving logic between core layers, projections, or adapters | [architecture-layers.md](./architecture-layers.md) | [governing-axes.md](./governing-axes.md), [shared-semantic-authority.md](./shared-semantic-authority.md), [roadmap.md](./roadmap.md) |
+| Resetting the machine-facing API away from natural-language routing and toward typed primitives | [machine-legible-api-reset.md](./machine-legible-api-reset.md) | [authority-first-campaign.md](./authority-first-campaign.md), [shared-semantic-authority.md](./shared-semantic-authority.md), [roadmap.md](./roadmap.md) |
+| Extending the semantic kernel or evaluator ceiling | [semantic-analysis.md](./semantic-analysis.md) | [analyzability.md](./analyzability.md), [shared-semantic-authority.md](./shared-semantic-authority.md), [roadmap.md](./roadmap.md) |
+| Starting framework-aware Aurelia work, framework API registry work, or build-time DI modeling | [aurelia/README.md](./aurelia/README.md) | [aurelia/framework-owner-ingress.md](./aurelia/framework-owner-ingress.md), [aurelia/compile-time-di-container-state.md](./aurelia/compile-time-di-container-state.md), [aurelia/export-semantic-surface-ledger.yaml](./aurelia/export-semantic-surface-ledger.yaml), [aurelia/atlas/README.md](./aurelia/atlas/README.md), [shared-semantic-authority.md](./shared-semantic-authority.md) |
+| Improving the AI-facing read surface, guidance, continuations, or self-usefulness | [self-pressure-test.md](./self-pressure-test.md) | [governing-axes.md](./governing-axes.md), [shared-semantic-authority.md](./shared-semantic-authority.md), [strategy.md](./strategy.md) |
+| Working on provenance, operator steering, or explicit taste surfaces | [provenance-and-steering.md](./provenance-and-steering.md) | [shared-semantic-authority.md](./shared-semantic-authority.md), [roadmap.md](./roadmap.md) |
+| Checking unresolved design pressure before a large move | [open-tensions.md](./open-tensions.md) | [roadmap.md](./roadmap.md) |
+| Resuming after compaction or context loss | [resume-protocol.md](./resume-protocol.md) | [authority-first-campaign.md](./authority-first-campaign.md), [current-handoff.md](./current-handoff.md), [current-state.json](./current-state.json) |
 
 ## Two Questions Before You Commit To A Direction
 

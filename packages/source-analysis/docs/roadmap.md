@@ -39,6 +39,9 @@ The main recurring pressures right now are:
 - the AI still has to read too much raw source during inquiry-oriented work, which means the read surface and semantic layer are not strong enough yet
 - the inquiry ontology still overloads routes, read modes, focus kinds, provenance kinds, and world-frame posture in one model file
 - the `exports` compatibility surface still owns too much semantic reasoning locally
+- the new Aurelia export-lens grounding is promising, but it is still
+  work-in-progress derivation material and needs fixture pressure before it
+  should harden into public framework-facing ontology
 - self-analysis still shows a 6-directory SCC across `src`, `deps`, `exports`, `host`, `public`, and `typerefs`
 - `FocusKind` remains a type hub, which is a good smell for ontology gravity leaking too widely
 - the architecture still carries too much visible identity from `deps`, `typerefs`, and `exports` as if they were durable peers rather than transitional projections
@@ -77,8 +80,8 @@ Grow a dedicated checker-backed semantic module family that can power export, sy
 
 Current anchors:
 
-- [docs/semantic-analysis.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/semantic-analysis.md)
-- [exports/analyze.ts](C:/projects/aurelia-ls2/packages/source-analysis/src/exports/analyze.ts)
+- [docs/semantic-analysis.md](./semantic-analysis.md)
+- [exports/analyze.ts](../src/exports/analyze.ts)
 
 Next:
 
@@ -101,7 +104,7 @@ Stop treating focus, route, read mode, provenance, and execution posture as one 
 
 Current anchors:
 
-- [inquiry-model.ts](C:/projects/aurelia-ls2/packages/source-analysis/src/inquiry-model.ts)
+- [inquiry-model.ts](../src/inquiry-model.ts)
 
 Next:
 
@@ -179,6 +182,11 @@ Next:
 
 - define which semantic claims belong in the framework-agnostic core versus adapters
 - add Aurelia semantic surfaces as a new layer that spends shared substrate/evaluator primitives
+- use the local Aurelia Atlas ports and export semantic surface ledger as
+  derivation aids, not as already-settled framework contract
+- derive a small fixture matrix that pressures export identity, registry-like
+  exports, recognized/admissible/current-world distinctions, and DI/resource
+  key-space splits before freezing more public Aurelia request/response shapes
 
 Exit condition:
 
@@ -240,6 +248,9 @@ These are the points where operator judgement should usually decide direction:
 - [x] Make package audit surface package-internal source-area cycle pressure honestly
 - [ ] Decide whether `AnalysisViews` should remain a raw projection bundle or gain a narrower shared payload contract
 - [ ] Define the landing contract for Aurelia semantic adapters
+- [ ] Pressure-test the export semantic surface ledger against a small
+  repo-owned fixture matrix before promoting its categories into broader
+  framework-facing protocol surfaces
 
 ## How To Use This Roadmap
 

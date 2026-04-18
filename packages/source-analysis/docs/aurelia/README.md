@@ -19,6 +19,20 @@ Read these notes before:
 - deciding build-time DI linkage closure
 - adding framework-aware inquiry answers or proofs
 
+## Current WIP
+
+The export-lens and fixture-derivation work is currently active and still
+provisional.
+
+Use these two artifacts as derivation aids, not as frozen public contract:
+
+- [export-semantic-surface-ledger.yaml](./export-semantic-surface-ledger.yaml)
+- [atlas/README.md](./atlas/README.md)
+
+They exist to help current protocol and fixture derivation stay grounded while
+we pressure-test export-addressable Aurelia semantics before hardening more
+public framework-facing surfaces.
+
 ## Reading Order
 
 1. [framework-owner-ingress.md](./framework-owner-ingress.md)
@@ -28,8 +42,10 @@ Read these notes before:
 5. [compile-time-di-container-state.md](./compile-time-di-container-state.md)
 6. [proof-basis.md](./proof-basis.md)
 7. [semantic-stack.md](./semantic-stack.md)
-8. [ai-capability-surface-map.md](./ai-capability-surface-map.md)
-9. [ai-capability-catalog.md](./ai-capability-catalog.md)
+8. [export-semantic-surface-ledger.yaml](./export-semantic-surface-ledger.yaml)
+9. [atlas/README.md](./atlas/README.md)
+10. [ai-capability-surface-map.md](./ai-capability-surface-map.md)
+11. [ai-capability-catalog.md](./ai-capability-catalog.md)
 
 ## Local Rules
 
