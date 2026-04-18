@@ -1,0 +1,49 @@
+schema_version: v0alpha1
+title: Compile-Time DI Container-State Algebra
+excerpt_status: local-port
+
+key_families:
+  - key_family_id: property-key
+    summary: Property-key identity in the ordinary DI key space.
+  - key_family_id: object-key
+    summary: Object identity used directly as a DI key.
+  - key_family_id: constructable-key
+    summary: Constructable or class identity used as a DI key.
+  - key_family_id: interface-symbol-key
+    summary: Interface-symbol key created through interface construction helpers.
+  - key_family_id: resolver-key
+    summary: Resolver object identity spent directly as a key-like registration surface.
+  - key_family_id: resource-key
+    summary: >
+      Resource-key identity in the framework resource key space rather than the
+      generic DI key space.
+
+resolver_strategies:
+  - strategy_id: instance
+    summary: Direct instance registration.
+  - strategy_id: singleton
+    summary: Singleton resolver strategy over one implementation basis.
+  - strategy_id: transient
+    summary: Transient resolver strategy over one implementation basis.
+  - strategy_id: callback
+    summary: >
+      Callback-driven resolver strategy with bounded compile-time consequence
+      and possible opaque residuals.
+  - strategy_id: alias
+    summary: Alias registration that links one key identity to another.
+  - strategy_id: array-aggregation
+    summary: >
+      Multi-registration aggregation when several resolvers land on the same key
+      space.
+
+helper_read_modifiers:
+  - modifier_id: all
+    summary: Read all resolvers for the target key rather than one default result.
+  - modifier_id: lazy
+    summary: Lazy read posture over the target dependency.
+  - modifier_id: optional
+    summary: Optional read posture that tolerates absence.
+  - modifier_id: factory
+    summary: Factory read posture over the target dependency.
+  - modifier_id: own
+    summary: Own-container-only read posture.

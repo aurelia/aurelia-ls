@@ -1,0 +1,40 @@
+schema_version: v0alpha1
+title: Declaration World Searched Target And Space Surfaces
+excerpt_status: local-port
+
+declaration_world_target_rows:
+  - row_id: resource-admission-target-selection
+    label: resource-admission target selection
+    query_aliases:
+      - resource-admission-target
+      - resource-admission-absence
+      - searched-resource
+      - missing-resource
+    keywords:
+      - resource definition lookup target
+      - resource key and alias target
+      - admitted resource searched space
+    projection_shape: resource-bearing-target-and-searched-space
+    summary: >
+      Resource-bearing declaration-side target and searched-space law for
+      exhaustive absence over admitted resource worlds, preserving resource key,
+      canonical definition name, alias overlays, and explicit searched-space
+      identity.
+
+  - row_id: vocabulary-and-generated-syntax-target-selection
+    label: vocabulary and generated-syntax target selection
+    query_aliases:
+      - vocabulary-admission-target
+      - generated-syntax-target
+      - missing-binding-command
+      - missing-attribute-pattern
+    keywords:
+      - registry-local vocabulary target
+      - generated syntax searched space
+      - binding command and attribute pattern lookup
+    projection_shape: vocabulary-bearing-target-and-searched-space
+    summary: >
+      Vocabulary-bearing declaration-side target and searched-space law for
+      admitted command, pattern, alias, and generated-syntax lookup, keeping
+      registry-local and emitted naming truth inside declaration-world
+      authority rather than parser-only residue.

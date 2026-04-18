@@ -1,0 +1,27 @@
+schema_version: v0alpha1
+title: Declaration World Consultation Bases
+excerpt_status: local-port
+
+lookup_regimes:
+  - lookup_regime_id: generic-di-ancestor-walk
+    summary: Generic DI lookup walks ancestor containers until root.
+  - lookup_regime_id: resource-current-plus-root
+    summary: >
+      Resource visibility checks the current container first and then root,
+      skipping intermediate ancestors.
+  - lookup_regime_id: own-only-resource
+    summary: >
+      Helper-scoped own-container visibility constrains consultation to the
+      current world only.
+  - lookup_regime_id: registry-local-only
+    summary: >
+      Compiler-root or explicit registry consultation stays local to the owning
+      registry world instead of widening through resource lookup.
+  - lookup_regime_id: owner-bounded-local
+    summary: >
+      Consultation is bounded to one owner-local template or child declaration
+      world.
+  - lookup_regime_id: analyzed-module-selection
+    summary: >
+      Consultation happens over an analyzed export world and its
+      transform-selected members before later active registration.
