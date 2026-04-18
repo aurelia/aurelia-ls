@@ -261,3 +261,23 @@ decision trail in order.
   `query.route.witness` and `query.audit.package`, and it makes the next
   primitive step clearer: framework-world and registration evidence rather
   than more general-purpose answer wrappers.
+
+## 2026-04-18 - Route/audit compatibility answers converged on shared inspection helpers
+
+- `route-witness` now exposes shared file/type route-target inspection helpers,
+  and both the compatibility answer surface plus the direct
+  `query.file.route` / `query.type.route` primitives spend those helpers
+  instead of maintaining parallel host-local package/file/type route logic.
+- `audit` now exposes a shared package-audit target inspection helper, and
+  both the compatibility answer surface plus the direct
+  `query.package.audit-signals` primitive spend the same package-resolution,
+  regime, structural-surface, reachability, and shared-signal adjudication
+  path.
+- Host-runtime coverage now explicitly pins that the shared signal codes seen
+  by `query.package.audit-signals` also appear in `query.audit.package`, and
+  that `query.route.witness` returns the same witness set as the matching
+  `query.file.route` primitive for the same focus.
+- This does not finish the compatibility cleanup, but it reduces truth-owner
+  duplication and leaves `query.navigate` as the most obvious remaining broad
+  compatibility shell to decompose before moving deeper into framework-world
+  primitives.

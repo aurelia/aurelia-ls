@@ -7,7 +7,7 @@ import {
 } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 
-import { createAuditAnswer } from '../audit.js';
+import { createAuditAnswer, inspectPackageAudit } from '../audit.js';
 import type { AnswerDocument } from '../answer-document.js';
 import type { AnswerRef } from '../answer-ref.js';
 import {
@@ -35,10 +35,9 @@ import {
   createPresentationPolicyInput,
   resolveInquiryPolicy,
 } from '../inquiry-policy.js';
-import {
-  collectSharedPackageAuditSignals,
-  type PackageAuditSignal,
-  type PackageAuditSignalSubject,
+import type {
+  PackageAuditSignal,
+  PackageAuditSignalSubject,
 } from '../package-audit-evaluator.js';
 import type {
   FocusKind,
@@ -50,7 +49,11 @@ import type {
 import { resolvePresentationReadMode } from '../inquiry-model.js';
 import { createNavigationEpisode } from '../navigation.js';
 import { createLegacyProjectionWorkspaceAuthority } from '../authority/workspace-authority.js';
-import { createRouteWitnessAnswer } from '../route-witness.js';
+import {
+  createRouteWitnessAnswer,
+  inspectFileRouteWitness,
+  inspectTypeRouteWitness,
+} from '../route-witness.js';
 import type { ProgramReuseOptions } from '../program-reuse-options.js';
 import {
   generateDepsAnalysisFromRuntime,
@@ -674,13 +677,6 @@ export class SnapshotHostRuntime {
     const state = this.#sessions.get(args.sessionId);
     const hostedAnalysis = ensureFreshHostedAnalysisContext(state, args.refreshIfNeeded);
     const authority = createLegacyProjectionWorkspaceAuthority(hostedAnalysis.analysis);
-    const packageOutcome = authority.resolvePackage(
-      {
-        kind: args.locatorKind ?? 'package-name',
-        value: args.locator,
-      },
-      args.spendThreshold,
-    );
     const policy = resolveInquiryPolicy(
       createPresentationPolicyInput(
         {
@@ -695,27 +691,14 @@ export class SnapshotHostRuntime {
         readMode: 'summary-card',
       },
     );
-    const packageSurface = packageOutcome.kind === 'claim'
-      ? authority.getStructuralPackageSurface(packageOutcome.value.package_dir)
-      : null;
-    const reachability = packageOutcome.kind === 'claim'
-      ? authority.getPackageReachability(packageOutcome.value.package_dir, policy.ordering)
-      : null;
-    const signals = packageOutcome.kind === 'claim' && packageSurface && reachability
-      ? collectSharedPackageAuditSignals({
-        analysis: hostedAnalysis.analysis,
-        pkg: packageOutcome.value,
-        packageFiles: packageSurface.files,
-        uncoveredFiles: packageSurface.uncoveredFiles,
-        unresolvedImports: packageSurface.unresolvedImports,
-        declarationsByFile: packageSurface.declarationsByFile,
-        dependencySurface: authority.getDependencySurface(),
-        reachability,
-        policy,
-      }).map(serializePackageAuditSignal)
-      : null;
+    const inspection = inspectPackageAudit(authority, args.locator, {
+      policy,
+      locatorKind: args.locatorKind,
+      spendThreshold: args.spendThreshold,
+    });
+    const signals = inspection.sharedSignals?.map(serializePackageAuditSignal) ?? null;
     const result: InspectPackageAuditSignalsQueryResult = {
-      packageOutcome,
+      packageOutcome: inspection.packageOutcome,
       signals,
       warnings: hostedAnalysis.warnings,
     };
@@ -733,24 +716,11 @@ export class SnapshotHostRuntime {
     const state = this.#sessions.get(args.sessionId);
     const hostedAnalysis = ensureFreshHostedAnalysisContext(state, args.refreshIfNeeded);
     const authority = createLegacyProjectionWorkspaceAuthority(hostedAnalysis.analysis);
-    const inspection = authority.inspectFocusedFile({
-      kind: 'file-path',
-      value: args.filePath,
-    });
-    const pkg = inspection.matchedFilePath
-      ? authority.resolveOwningPackage(inspection.matchedFilePath)
-      : null;
-    const witnesses = inspection.matchedFilePath && pkg
-      ? authority.getPackageRouteWitnesses(
-        pkg.package_dir,
-        inspection.matchedFilePath,
-        DEFAULT_INQUIRY_ORDERING,
-      )
-      : null;
+    const routeInspection = inspectFileRouteWitness(authority, args.filePath);
     const result: InspectFileRouteQueryResult = {
-      inspection,
-      package: pkg,
-      witnesses,
+      inspection: routeInspection.inspection,
+      package: routeInspection.pkg,
+      witnesses: routeInspection.witnesses,
       warnings: hostedAnalysis.warnings,
     };
 
@@ -767,35 +737,12 @@ export class SnapshotHostRuntime {
     const state = this.#sessions.get(args.sessionId);
     const hostedAnalysis = ensureFreshHostedAnalysisContext(state, args.refreshIfNeeded);
     const authority = createLegacyProjectionWorkspaceAuthority(hostedAnalysis.analysis);
-    const typeOutcome = authority.resolveTypeDeclaration(
-      {
-        kind: 'type-name',
-        value: args.locator,
-      },
-      args.spendThreshold,
-    );
-    const pkg = typeOutcome.kind === 'claim'
-      ? authority.resolveOwningPackage(typeOutcome.value.file)
-      : null;
-    const regimeContext = typeOutcome.kind === 'claim'
-      ? authority.inspectFocusedAnalyzability({
-        focusLabel: typeOutcome.value.name,
-        pathPrefixes: [typeOutcome.value.file],
-        queryHints: [args.locator, typeOutcome.value.name, typeOutcome.value.file],
-      })
-      : null;
-    const witnesses = typeOutcome.kind === 'claim' && pkg
-      ? authority.getPackageRouteWitnesses(
-        pkg.package_dir,
-        typeOutcome.value.file,
-        DEFAULT_INQUIRY_ORDERING,
-      )
-      : null;
+    const routeInspection = inspectTypeRouteWitness(authority, args.locator, DEFAULT_INQUIRY_ORDERING);
     const result: InspectTypeRouteQueryResult = {
-      typeOutcome,
-      package: pkg,
-      regimeContext,
-      witnesses,
+      typeOutcome: routeInspection.typeOutcome,
+      package: routeInspection.pkg,
+      regimeContext: routeInspection.regimeContext,
+      witnesses: routeInspection.witnesses,
       warnings: hostedAnalysis.warnings,
     };
 

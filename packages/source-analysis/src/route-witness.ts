@@ -35,6 +35,7 @@ import {
   createPresentationPolicyInput,
   resolveInquiryPolicy,
   type InquiryPolicy,
+  DEFAULT_INQUIRY_ORDERING,
 } from './inquiry-policy.js';
 import type {
   ClosureBasis,
@@ -71,6 +72,21 @@ export type RouteWitnessValue = AnswerCard<RouteWitnessRef> & {
   readonly witnesses: readonly PackageRouteWitness[];
 };
 
+export interface FileRouteWitnessInspection {
+  readonly normalizedFileQuery: string;
+  readonly inspection: ReturnType<WorkspaceAuthority['inspectFocusedFile']>;
+  readonly pkg: PackageExportsSummary | null;
+  readonly witnesses: readonly PackageRouteWitness[] | null;
+}
+
+export interface TypeRouteWitnessInspection {
+  readonly normalizedTypeQuery: string;
+  readonly typeOutcome: ReturnType<WorkspaceAuthority['resolveTypeDeclaration']>;
+  readonly pkg: PackageExportsSummary | null;
+  readonly regimeContext: FocusedAnalyzabilityContext | null;
+  readonly witnesses: readonly PackageRouteWitness[] | null;
+}
+
 export function createCurrentRouteWitnessAnswer(
   query: Inquiry,
   target?: string,
@@ -101,13 +117,76 @@ export function createRouteWitnessAnswer(
   }
 }
 
+export function inspectFileRouteWitness(
+  authorityInput: WorkspaceAuthority | AnalysisViews | LoadedCurrentSnapshotSet,
+  fileQuery: string,
+  ordering = DEFAULT_INQUIRY_ORDERING,
+): FileRouteWitnessInspection {
+  const authority = coerceWorkspaceAuthority(authorityInput);
+  const inspection = authority.inspectFocusedFile(locator('file-path', fileQuery, 'file'));
+  const pkg = inspection.matchedFilePath
+    ? authority.resolveOwningPackage(inspection.matchedFilePath)
+    : null;
+  const witnesses = inspection.matchedFilePath && pkg
+    ? authority.getPackageRouteWitnesses(
+      pkg.package_dir,
+      inspection.matchedFilePath,
+      ordering,
+    )
+    : null;
+
+  return {
+    normalizedFileQuery: inspection.normalizedQuery,
+    inspection,
+    pkg,
+    witnesses,
+  };
+}
+
+export function inspectTypeRouteWitness(
+  authorityInput: WorkspaceAuthority | AnalysisViews | LoadedCurrentSnapshotSet,
+  typeQuery: string,
+  ordering = DEFAULT_INQUIRY_ORDERING,
+): TypeRouteWitnessInspection {
+  const authority = coerceWorkspaceAuthority(authorityInput);
+  const normalizedTypeQuery = trimTrailingFocusPunctuation(typeQuery);
+  const typeOutcome = authority.resolveTypeDeclaration(locator('type-name', normalizedTypeQuery, 'type'));
+  const pkg = typeOutcome.kind === 'claim'
+    ? authority.resolveOwningPackage(typeOutcome.value.file)
+    : null;
+  const regimeContext = typeOutcome.kind === 'claim'
+    ? authority.inspectFocusedAnalyzability({
+      focusLabel: typeOutcome.value.name,
+      pathPrefixes: [typeOutcome.value.file],
+      queryHints: [normalizedTypeQuery, typeOutcome.value.name, typeOutcome.value.file],
+    })
+    : null;
+  const witnesses = typeOutcome.kind === 'claim' && pkg
+    ? authority.getPackageRouteWitnesses(
+      pkg.package_dir,
+      typeOutcome.value.file,
+      ordering,
+    )
+    : null;
+
+  return {
+    normalizedTypeQuery,
+    typeOutcome,
+    pkg,
+    regimeContext,
+    witnesses,
+  };
+}
+
 function buildFileRouteWitnessAnswer(
   query: Inquiry,
   authority: WorkspaceAuthority,
   fileQuery: string,
 ): InquiryAnswer<RouteWitnessValue> {
   const analysis = authority.analysis;
-  const fileInspection = authority.inspectFocusedFile(locator('file-path', fileQuery, 'file'));
+  const policy = policyForRouteWitness(query, 'file');
+  const routeInspection = inspectFileRouteWitness(authority, fileQuery, policy.ordering);
+  const fileInspection = routeInspection.inspection;
   if (fileInspection.matches.length === 0) {
     if (fileInspection.requestedRegimeContext.directlyExcludedFrontier) {
       return createOpenBoundaryAnswer(
@@ -167,7 +246,7 @@ function buildFileRouteWitnessAnswer(
     );
   }
 
-  const pkg = authority.resolveOwningPackage(filePath);
+  const pkg = routeInspection.pkg;
   if (!pkg) {
     return createOpenBoundaryAnswer(
       query,
@@ -179,12 +258,7 @@ function buildFileRouteWitnessAnswer(
     );
   }
 
-  const policy = policyForRouteWitness(query, 'file');
-  const witnesses = authority.getPackageRouteWitnesses(
-    pkg.package_dir,
-    filePath,
-    policy.ordering,
-  );
+  const witnesses = routeInspection.witnesses;
   if (!witnesses) {
     return createOpenBoundaryAnswer(
       query,
@@ -215,9 +289,11 @@ function buildTypeRouteWitnessAnswer(
   authority: WorkspaceAuthority,
   typeQuery: string,
 ): InquiryAnswer<RouteWitnessValue> {
-  const normalizedTypeQuery = trimTrailingFocusPunctuation(typeQuery);
   const analysis = authority.analysis;
-  const typeResolution = authority.resolveTypeDeclaration(locator('type-name', normalizedTypeQuery, 'type'));
+  const policy = policyForRouteWitness(query, 'type');
+  const routeInspection = inspectTypeRouteWitness(authority, typeQuery, policy.ordering);
+  const normalizedTypeQuery = routeInspection.normalizedTypeQuery;
+  const typeResolution = routeInspection.typeOutcome;
   if (typeResolution.kind === 'no-claim') {
     return createMissAnswer(
       query,
@@ -239,7 +315,7 @@ function buildTypeRouteWitnessAnswer(
   }
 
   const declaration = typeResolution.value;
-  const pkg = authority.resolveOwningPackage(declaration.file);
+  const pkg = routeInspection.pkg;
   if (!pkg) {
     return createOpenBoundaryAnswer(
       query,
@@ -251,17 +327,8 @@ function buildTypeRouteWitnessAnswer(
     );
   }
 
-  const policy = policyForRouteWitness(query, 'type');
-  const regimeContext = authority.inspectFocusedAnalyzability({
-    focusLabel: declaration.name,
-    pathPrefixes: [declaration.file],
-    queryHints: [normalizedTypeQuery, declaration.name, declaration.file],
-  });
-  const witnesses = authority.getPackageRouteWitnesses(
-    pkg.package_dir,
-    declaration.file,
-    policy.ordering,
-  );
+  const regimeContext = routeInspection.regimeContext!;
+  const witnesses = routeInspection.witnesses;
   if (!witnesses) {
     return createOpenBoundaryAnswer(
       query,

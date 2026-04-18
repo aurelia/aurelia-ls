@@ -190,6 +190,18 @@ describe('SnapshotHostRuntime', () => {
     expect(audit.result.answer.outcome.value?.findings.some((finding) =>
       finding.code === 'exercise-only-files',
     )).toBe(false);
+    const auditSignals = runtime.execute({
+      command: 'query.package.audit-signals',
+      args: {
+        sessionId,
+        locator: '@fixture/source-analysis-audit',
+      },
+    });
+    expect(auditSignals.status).toBe('ok');
+    const sharedSignalCodes = new Set((auditSignals.result.signals ?? []).map((signal) => signal.code));
+    expect([...sharedSignalCodes].every((code) =>
+      audit.result.answer.outcome.value?.findings.some((finding) => finding.code === code),
+    )).toBe(true);
 
     const routeWitness = runtime.execute({
       command: 'query.route.witness',
@@ -209,6 +221,15 @@ describe('SnapshotHostRuntime', () => {
       'src/index.ts',
       'src/live.ts',
     ]);
+    const fileRoute = runtime.execute({
+      command: 'query.file.route',
+      args: {
+        sessionId,
+        filePath: 'src/live.ts',
+      },
+    });
+    expect(fileRoute.status).toBe('ok');
+    expect(routeWitness.result.answer.outcome.value?.witnesses).toEqual(fileRoute.result.witnesses);
 
     const renderedAudit = runtime.execute({
       command: 'query.audit.package',

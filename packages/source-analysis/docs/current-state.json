@@ -79,6 +79,8 @@
         "src/public/host.ts",
         "src/cli.ts",
         "src/cli-hosted.ts",
+        "src/audit.ts",
+        "src/route-witness.ts",
         "src/authority/workspace-authority.ts",
         "src/export-trace-runtime-surface.ts",
         "src/package-audit-evaluator.ts",

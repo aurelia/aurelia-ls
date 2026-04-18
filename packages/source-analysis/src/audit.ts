@@ -119,6 +119,17 @@ export type AuditValue = AnswerCard<AuditRef> & {
   readonly findings: readonly AuditFinding[];
 };
 
+export interface PackageAuditInspection {
+  readonly normalizedPackageQuery: string;
+  readonly requestedRegimeContext: FocusedAnalyzabilityContext;
+  readonly packageOutcome: ReturnType<WorkspaceAuthority['resolvePackage']>;
+  readonly pkg: PackageExportsSummary | null;
+  readonly regimeContext: FocusedAnalyzabilityContext | null;
+  readonly packageSurface: NonNullable<ReturnType<WorkspaceAuthority['getStructuralPackageSurface']>> | null;
+  readonly reachability: PackageReachability | null;
+  readonly sharedSignals: readonly PackageAuditSignal[] | null;
+}
+
 interface PackageAuditContext {
   readonly analysis: AnalysisViews;
   readonly analysisFreshness: WorldFrame['freshness'];
@@ -161,6 +172,75 @@ export function createAuditAnswer(
   }
 }
 
+export function inspectPackageAudit(
+  authorityInput: WorkspaceAuthority | AnalysisViews | LoadedCurrentSnapshotSet,
+  packageQuery: string,
+  options: {
+    readonly policy: InquiryPolicy;
+    readonly locatorKind?: 'package-name' | 'package-dir';
+    readonly spendThreshold?: Parameters<WorkspaceAuthority['resolvePackage']>[1];
+  },
+): PackageAuditInspection {
+  const authority = coerceWorkspaceAuthority(authorityInput);
+  const normalizedPackageQuery = options.locatorKind === 'package-dir'
+    ? packageQuery
+    : trimTrailingFocusPunctuation(packageQuery);
+  const requestedRegimeContext = authority.inspectFocusedAnalyzability({
+    focusLabel: normalizedPackageQuery,
+    queryHints: [normalizedPackageQuery],
+  });
+  const packageOutcome = authority.resolvePackage(
+    locator(options.locatorKind ?? 'package-name', normalizedPackageQuery, 'package'),
+    options.spendThreshold,
+  );
+
+  if (packageOutcome.kind !== 'claim') {
+    return {
+      normalizedPackageQuery,
+      requestedRegimeContext,
+      packageOutcome,
+      pkg: null,
+      regimeContext: null,
+      packageSurface: null,
+      reachability: null,
+      sharedSignals: null,
+    };
+  }
+
+  const pkg = packageOutcome.value;
+  const regimeContext = authority.inspectFocusedAnalyzability({
+    focusLabel: pkg.package_name,
+    pathPrefixes: [pkg.package_dir],
+    queryHints: [pkg.package_name, pkg.package_dir, normalizedPackageQuery],
+  });
+  const packageSurface = authority.getStructuralPackageSurface(pkg.package_dir);
+  const reachability = authority.getPackageReachability(pkg.package_dir, options.policy.ordering);
+  const sharedSignals = packageSurface && reachability
+    ? collectSharedPackageAuditSignals({
+      analysis: authority.analysis,
+      pkg,
+      packageFiles: packageSurface.files,
+      uncoveredFiles: packageSurface.uncoveredFiles,
+      unresolvedImports: packageSurface.unresolvedImports,
+      declarationsByFile: packageSurface.declarationsByFile,
+      dependencySurface: authority.getDependencySurface(),
+      reachability,
+      policy: options.policy,
+    })
+    : null;
+
+  return {
+    normalizedPackageQuery,
+    requestedRegimeContext,
+    packageOutcome,
+    pkg,
+    regimeContext,
+    packageSurface,
+    reachability,
+    sharedSignals,
+  };
+}
+
 function buildPackageAuditAnswer(
   query: Inquiry,
   authority: WorkspaceAuthority,
@@ -171,53 +251,44 @@ function buildPackageAuditAnswer(
   // live here as audit-local self-pressure checks. Revisit that seam once a
   // broader answer/runtime coordinator exists.
   const analysis = authority.analysis;
-  const normalizedPackageQuery = trimTrailingFocusPunctuation(packageQuery);
-  const requestedRegimeContext = authority.inspectFocusedAnalyzability({
-    focusLabel: normalizedPackageQuery,
-    queryHints: [normalizedPackageQuery],
-  });
-  const packageResolution = authority.resolvePackage(locator('package-name', normalizedPackageQuery, 'package'));
-  if (packageResolution.kind === 'no-claim') {
-    if (requestedRegimeContext.directlyExcludedFrontier) {
-      return createExcludedFrontierAnswer(
-        query,
-        analysis,
-        normalizedPackageQuery,
-        requestedRegimeContext,
-      );
-    }
-    return createMissAnswer(
-      query,
-      analysis,
-      `No package matches "${normalizedPackageQuery}".`,
-      { kind: 'package', value: normalizedPackageQuery },
-      [],
-    );
-  }
-
-  if (packageResolution.kind === 'ambiguity') {
-    return createAmbiguousAnswer(
-      query,
-      analysis,
-      `Package query "${normalizedPackageQuery}" is ambiguous.`,
-      { kind: 'package', value: normalizedPackageQuery },
-      packageResolution.ambiguity.candidates.map((pkg) => packageRef(pkg)),
-    );
-  }
-
-  const pkg = packageResolution.value;
   const policy = resolveInquiryPolicy(createPresentationPolicyInput(query, defaultReadMode(query.questionRoute)), {
     focusKind: 'package',
     inquiryEpisode: 'inventory-and-audit-sweep',
     readMode: defaultReadMode(query.questionRoute),
   });
-  const regimeContext = authority.inspectFocusedAnalyzability({
-    focusLabel: pkg.package_name,
-    pathPrefixes: [pkg.package_dir],
-    queryHints: [pkg.package_name, pkg.package_dir, normalizedPackageQuery],
-  });
-  const packageSurface = authority.getStructuralPackageSurface(pkg.package_dir);
-  const reachability = authority.getPackageReachability(pkg.package_dir, policy.ordering);
+  const inspection = inspectPackageAudit(authority, packageQuery, { policy });
+  if (inspection.packageOutcome.kind === 'no-claim') {
+    if (inspection.requestedRegimeContext.directlyExcludedFrontier) {
+      return createExcludedFrontierAnswer(
+        query,
+        analysis,
+        inspection.normalizedPackageQuery,
+        inspection.requestedRegimeContext,
+      );
+    }
+    return createMissAnswer(
+      query,
+      analysis,
+      `No package matches "${inspection.normalizedPackageQuery}".`,
+      { kind: 'package', value: inspection.normalizedPackageQuery },
+      [],
+    );
+  }
+
+  if (inspection.packageOutcome.kind === 'ambiguity') {
+    return createAmbiguousAnswer(
+      query,
+      analysis,
+      `Package query "${inspection.normalizedPackageQuery}" is ambiguous.`,
+      { kind: 'package', value: inspection.normalizedPackageQuery },
+      inspection.packageOutcome.ambiguity.candidates.map((pkg) => packageRef(pkg)),
+    );
+  }
+
+  const pkg = inspection.pkg!;
+  const regimeContext = inspection.regimeContext!;
+  const packageSurface = inspection.packageSurface;
+  const reachability = inspection.reachability;
   if (!packageSurface || !reachability) {
     return createStructuralPackageBoundaryAnswer(
       query,
@@ -237,7 +308,7 @@ function buildPackageAuditAnswer(
     reachability,
     authority.getDependencySurface(),
   );
-  const findings = collectPackageAuditFindings(context);
+  const findings = collectPackageAuditFindings(context, inspection.sharedSignals ?? undefined);
 
   const blindspotCount = findings.filter((finding) => finding.kind === 'blindspot').length;
   const dormantCount = findings.filter((finding) => finding.kind === 'under-integrated-file').length;
@@ -357,13 +428,14 @@ function createPackageAuditContext(
 
 function collectPackageAuditFindings(
   context: PackageAuditContext,
+  sharedSignals = collectSharedPackageAuditSignals(toPackageAuditEvaluatorContext(context)),
 ): readonly AuditFinding[] {
   // Keep route/reachability/blindspot findings behind the shared package audit
   // evaluator seam. Coordination and presentation fragmentation stay local here
   // because they are still audit-shaped judgments about this package's own
   // self-pressure rather than shared program meaning.
   const signals = [
-    ...collectSharedPackageAuditSignals(toPackageAuditEvaluatorContext(context)),
+    ...sharedSignals,
     collectAnswerCoordinationFragmentationSignal(context),
     collectPresentationFragmentationSignal(context),
   ].filter((signal): signal is PackageAuditSignal => Boolean(signal));

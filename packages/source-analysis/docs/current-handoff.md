@@ -142,6 +142,14 @@ question routing, family ranking, or conversational ingress.
   and type-bounded route evidence, and wired the hosted CLI `inspect` surface
   onto those explicit carriers instead of requiring package-audit or
   route-witness answers to reach the substrate.
+- Moved `route-witness` file/type inspection onto explicit shared helpers so
+  the compatibility answer and the direct `query.file.route` /
+  `query.type.route` primitives now spend the same lower-level route-target
+  inspection path instead of maintaining parallel host-local logic.
+- Moved package-audit package/surface/reachability/shared-signal inspection
+  onto an explicit shared helper so the compatibility answer and direct
+  `query.package.audit-signals` primitive now spend the same package-audit
+  target adjudication path.
 - Removed the public `./inquiry` subpath and deleted the now-dead capability /
   inquiry ingress, catalog, and ingress-recognition modules instead of
   preserving them as dormant compatibility baggage.
@@ -171,6 +179,10 @@ question routing, family ranking, or conversational ingress.
   evidence are now directly machine-queryable too, but `query.navigate`,
   `query.route.witness`, and `query.audit.package` still expose broad
   answer-local coordination that should keep shrinking.
+- `query.route.witness` and `query.audit.package` now reuse the same lower-
+  level inspection helpers as the direct primitives, but they still remain
+  answer-bearing compatibility surfaces rather than fully decomposed machine
+  carriers.
 - `claim-lattice.ts` is promising, but it is not yet clearly the persistent
   authority runtime consulted by all live query surfaces.
 - `inquiry-model.ts` still overloads routes, read modes, focus kinds,
@@ -182,6 +194,9 @@ question routing, family ranking, or conversational ingress.
   to converge behind shared helpers.
 - `audit` still owns coordination and presentation fragmentation checks as
   package-self-pressure heuristics rather than shared semantic evaluators.
+- `query.navigate` is now the broadest remaining compatibility shell and the
+  likeliest next target for decomposition after the route/audit inspection
+  convergence.
 - `WorldFrame` is now split internally into `WorldTargeting` and
   `ExecutionPosture`, and answer/wire adapters now spend those slices
   internally, but the public query and wire carriers still flatten them for
@@ -209,6 +224,7 @@ question routing, family ranking, or conversational ingress.
 - `src/focused-file-query.ts`
 - `src/package-audit-evaluator.ts`
 - `src/route-witness.ts`
+- `src/audit.ts`
 - `src/inquiry-policy.ts`
 - `src/inquiry-wire.ts`
 - `src/answer-envelope.ts`
