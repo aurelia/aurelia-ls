@@ -246,6 +246,7 @@ These are the points where operator judgement should usually decide direction:
 When resuming after compaction:
 
 1. Re-read the README and seed docs.
+   Start with `docs/working-map.md` and follow it before choosing a slice.
 2. Re-read this roadmap.
 3. Use self-analysis to see which pressure points still show up in the package itself.
 4. Pick the highest-leverage slice that reduces split-brain or raises the analyzability ceiling.

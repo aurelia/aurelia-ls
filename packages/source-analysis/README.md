@@ -23,10 +23,19 @@ More specifically, it should:
 
 The package is still becoming what it wants to be. Near term, it focuses on raising the analyzability ceiling over real codebases while keeping a clean boundary between the framework-agnostic core and the framework-aware layer above it. Aurelia-aware semantics should land soon, but on top of better shared primitives rather than as early contamination of the core.
 
+# Working map
+
+The governing notes are meant to be read directly, not restated here.
+
+Before non-trivial work, start with [docs/working-map.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/working-map.md).
+
 # Seed docs
 
 These are short guidance notes, not a frozen design:
 
+- [docs/working-map.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/working-map.md)
+- [docs/governing-axes.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/governing-axes.md)
+- [docs/shared-semantic-authority.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/shared-semantic-authority.md)
 - [docs/strategy.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/strategy.md)
 - [docs/architecture-layers.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/architecture-layers.md)
 - [docs/roadmap.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/roadmap.md)
