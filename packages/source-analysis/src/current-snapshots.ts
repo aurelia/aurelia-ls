@@ -57,6 +57,10 @@ export function loadCurrentSnapshots(
   repoPath?: string,
   profilePath?: string,
 ): LoadedCurrentSnapshotSet {
+  // TODO: This loader still hardcodes the three historical projection kinds as
+  // if they were the natural public shape of the system. Replace it with a
+  // projection/materialization registry over shared authority so "load current
+  // answers" does not require naming deps/typerefs/exports explicitly.
   const profile = resolveAnalysisProfile({ repoPath, target, profilePath });
   const support = inspectProfileSnapshotSupport(PATHS, profile, waitMs);
   const deps = tryLoadSnapshot<DepsOutput>(profile, 'deps', waitMs);
@@ -83,6 +87,9 @@ export function tryLoadCurrentSnapshots(
   repoPath?: string,
   profilePath?: string,
 ): CurrentSnapshotSet {
+  // TODO: Keep this as a compatibility shim only. New consumers should prefer
+  // loading named shared surfaces or evaluators rather than a fixed triple of
+  // legacy snapshots.
   const profile = resolveAnalysisProfile({ repoPath, target, profilePath });
   const support = inspectProfileSnapshotSupport(PATHS, profile, waitMs);
   const deps = tryLoadSnapshot<DepsOutput>(profile, 'deps', waitMs);

@@ -153,6 +153,10 @@ function buildPackageAuditAnswer(
   analysis: AnalysisViews,
   packageQuery: string,
 ): InquiryAnswer<AuditValue> {
+  // TODO: Package audit still begins by stitching package lookup, posture, and
+  // later findings out of an AnalysisViews bundle. Pull these inputs behind
+  // shared package/evaluator surfaces so audit spends one authority instead of
+  // re-deriving meaning from legacy projection carriers.
   const normalizedPackageQuery = trimTrailingFocusPunctuation(packageQuery);
   const posture = inspectAnalyzabilityPostureFromAnalysisViews(analysis);
   const requestedRegimeContext = inspectFocusedAnalyzabilityContext(posture, {

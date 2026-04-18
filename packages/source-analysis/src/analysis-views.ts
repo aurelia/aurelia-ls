@@ -18,6 +18,10 @@ export type AnalysisViewSourceId =
 // contracts directly. If analysis-views.ts -> deps stays the top cycle seam,
 // extract a neutral shared payload contract so this carrier stops inheriting
 // projection-owned type identity.
+// TODO: Treat deps/typerefs/exports here as legacy compatibility projections,
+// not as the durable semantic axes of the package. The long-term replacement is
+// a higher-order shared authority/runtime that can answer dependency, type, and
+// export questions without those three ad-hoc tools remaining first-class peers.
 export interface AnalysisViews {
   readonly source: AnalysisViewSourceId;
   readonly root: string;

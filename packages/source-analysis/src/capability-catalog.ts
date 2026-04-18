@@ -588,6 +588,11 @@ const DEFAULT_CAPABILITIES: readonly CapabilityDefinition[] = [
     relatedCommands: ['session.invalidate', 'materializeSnapshots'],
     commonConfusions: [],
   }),
+  // TODO: These deps/typerefs/exports commands are compatibility shims for the
+  // original three ad-hoc tools. Do not grow new projection-shaped command
+  // families here. New capability work should land in shared authority/evaluator
+  // surfaces first and only materialize outward when a stable projection is
+  // genuinely needed.
   queryCapability({
     id: 'query.deps.summary',
     command: 'query.deps.summary',
@@ -1032,6 +1037,10 @@ function limitMatches(
 function createCapabilityMatchRules(
   definition: CapabilityDefinition,
 ): readonly IngressRuleSpec<CapabilityMatchReasonKind>[] {
+  // TODO: Keep this matcher strictly at the ingress edge. As typed locators,
+  // candidate sets, and adjudication surfaces land, ambiguity should be pushed
+  // down into shared authority rather than absorbed by more noun/verb/alias
+  // matching and ranking rules here.
   const focusCaptureKinds = captureKindsForFocusKinds(definition.focusKinds);
   return [
     createExactRule(

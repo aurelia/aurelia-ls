@@ -166,6 +166,10 @@ function buildFileRouteWitnessAnswer(
   }
 
   const policy = policyForRouteWitness(query, 'file');
+  // TODO: Route witnesses still spend reachability assembled from the legacy
+  // analysis view carrier. Introduce a named route/reachability authority so
+  // "why is this alive?" closes through shared evaluators instead of depending
+  // on deps/typerefs/exports remaining visible architectural peers.
   const reachability = createPackageReachability(analysis, pkg, {
     ordering: policy.ordering,
   });
@@ -335,6 +339,9 @@ function createHitRouteWitnessAnswer(
       },
       {
         kind: 'freshness',
+        // TODO: This freshness explanation still names deps/typerefs/exports as
+        // the grounding surfaces. Rephrase it around shared route/reachability
+        // authority once those projections stop being the user-visible center.
         summary: query.worldFrame?.freshness === 'live'
           ? `The route witnesses are grounded in live deps, typerefs, and exports analysis views refreshed at ${analysis.deps.generated_at}, ${analysis.typeRefs.generated_at}, and ${analysis.exports.generated_at}.`
           : `The route witnesses are grounded in materialized analysis views generated at ${analysis.deps.generated_at}, ${analysis.typeRefs.generated_at}, and ${analysis.exports.generated_at}.`,

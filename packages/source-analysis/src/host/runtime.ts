@@ -195,6 +195,10 @@ export class SnapshotHostRuntime {
   #dispatch<TCommand extends HostCommandName>(
     invocation: HostCommandInvocation<TCommand>,
   ): CommandOutcome {
+    // TODO: This switch still exposes the historical projection-shaped command
+    // surface as the center of gravity. Move toward dispatching shared
+    // authority operations/evaluators here and keep query.deps/query.typerefs/
+    // query.exports as compatibility shims rather than the native product shape.
     switch (invocation.command) {
       case 'describe.profile': return this.#describeProfile(invocation.args as DescribeProfileArgs);
       case 'describe.inquiries': return this.#describeInquiries(invocation.args as DescribeInquiriesArgs);

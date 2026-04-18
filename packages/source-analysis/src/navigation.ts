@@ -149,6 +149,10 @@ export function createNavigationEpisode(
   query: Inquiry,
   snapshotsInput: AnalysisViews | LoadedCurrentSnapshotSet,
 ): NavigationEpisode {
+  // TODO: Navigation still starts from an AnalysisViews carrier and then builds
+  // answer-local substrate/claim objects on demand. Pull this behind a named
+  // shared navigation authority so query surfaces consult one runtime instead
+  // of reconstructing truth from projection bundles.
   const snapshots = coerceAnalysisViews(snapshotsInput);
   const builder = new EpisodeBuilder(query, snapshots);
   switch (query.focusRef.kind) {
@@ -1239,6 +1243,10 @@ function buildFileEpisode(
 
   const outboundEdges = dependencySurface.edgesBySourceFile.get(filePath) ?? [];
   const inboundEdges = dependencySurface.edgesByTargetFile.get(filePath) ?? [];
+  // TODO: These direct reads from typeRefs/exports keep the legacy projections
+  // alive as first-class architecture. Replace them with declaration/export
+  // surfaces derived from shared authority and materialize projection tables
+  // only when a caller explicitly asks for those historical payloads.
   const declarations = builder.snapshots.typeRefs.declarations.filter((decl) => decl.file === filePath);
   const exportRecords = builder.snapshots.exports.exports.filter((record) => record.declaration_file === filePath);
 

@@ -303,6 +303,10 @@ export class InquiryCatalog {
 }
 
 export function createDefaultInquiryCatalog(): InquiryCatalog {
+  // TODO: These inquiry families are conversational ingress affordances, not
+  // the real semantic decomposition of the product. Once the shared authority
+  // exposes typed query intents and narrowing axes, generate more of this layer
+  // from those contracts instead of freezing more hand-authored family labels.
   return new InquiryCatalog([
     new InquiryFamilyDescriptor({
       id: 'capability-guidance',
@@ -502,6 +506,10 @@ function limitMatches(
 function createInquiryMatchRules(
   definition: InquiryFamilyDefinition,
 ): readonly IngressRuleSpec<InquiryMatchReasonKind>[] {
+  // TODO: This ranking layer should choose among ingress affordances only. It
+  // should not become the place where semantic ambiguity is "solved" as the
+  // package grows; typed locator narrowing and authority-side no-claim outcomes
+  // need to take over that burden.
   const focusCaptureKinds = captureKindsForFocusKinds(definition.focusKinds);
   return [
     createExactRule(
