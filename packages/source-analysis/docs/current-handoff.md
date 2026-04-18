@@ -27,15 +27,22 @@ question routing, family ranking, or conversational ingress.
    not as frozen framework contract.
 6. Use that grounding plus the current packet set to derive workbook scenarios
    and invariants before freezing export-facing Aurelia request/response shapes.
-7. Keep treating the historical `deps` / `typerefs` / `exports` query scripts
+7. For the near-term operational Aurelia slice, use
+   [docs/aurelia/framework-export-integration-plan.md](./aurelia/framework-export-integration-plan.md)
+   as the concrete plan for classifying the full Aurelia framework export
+   surface.
+8. Prefer a thin export-classification authority over a richer protocol if
+   that trade keeps the first framework-wide integration slice honest and
+   complete.
+9. Keep treating the historical `deps` / `typerefs` / `exports` query scripts
    as retirement candidates rather than architecture to preserve.
-8. Finish moving current-query boot paths onto the live query kernel in
+10. Finish moving current-query boot paths onto the live query kernel in
    `src/live-query/`; `deps` is live by default now, `exports` and `typerefs`
    still need the same reset.
-9. Keep useful command intent, but keep shrinking the giant query-local
+11. Keep useful command intent, but keep shrinking the giant query-local
    indexes/renderers into thin adapters over shared live runtime/evaluator
    surfaces.
-10. Only after the legacy triple no longer dominates current-query work should
+12. Only after the legacy triple no longer dominates current-query work should
    framework-world and registration evidence become the next major primitive
    family.
 
@@ -157,6 +164,11 @@ question routing, family ranking, or conversational ingress.
   protocol and fixture derivation; it should pressure-test the kernel and
   guide fixture choice before it hardens into more public framework-facing
   surfaces.
+- Added
+  [docs/aurelia/framework-export-integration-plan.md](./aurelia/framework-export-integration-plan.md)
+  to capture the near-term operational plan for pointing `source-analysis` at
+  the Aurelia framework repo and classifying the full export surface with a
+  deliberately thin answer contract.
 - Added a repo-owned protocol derivation packet set under
   [../fixtures/protocol-derivation/README.md](../fixtures/protocol-derivation/README.md)
   with concrete export-lens fixtures, scenario packets, and mutation-backed

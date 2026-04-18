@@ -42,6 +42,10 @@ The main recurring pressures right now are:
 - the new Aurelia export-lens grounding is promising, but it is still
   work-in-progress derivation material and needs fixture pressure before it
   should harden into public framework-facing ontology
+- the near-term Aurelia integration target is now clearer than the public
+  protocol target: thin, truthful classification across the full framework
+  export surface is more valuable right now than a rich protocol over only a
+  partial subset
 - the repo-owned fixture matrix now exists, but the next value is in
   deriving invariants and answer-shape pressure from it, not just adding more
   fixtures
@@ -187,11 +191,17 @@ Next:
 - add Aurelia semantic surfaces as a new layer that spends shared substrate/evaluator primitives
 - use the local Aurelia Atlas ports and export semantic surface ledger as
   derivation aids, not as already-settled framework contract
+- use [docs/aurelia/framework-export-integration-plan.md](./aurelia/framework-export-integration-plan.md)
+  as the near-term operational plan for the first framework-wide integration
+  slice
 - use the repo-owned packet set under `fixtures/protocol-derivation/` as the
   current derivation substrate
 - derive workbook exercises through one authority path per fixture;
   Aurelia semantics should auto-detect when present instead of being modeled as
   separate TypeScript and Aurelia passes
+- prefer a thin export-classification authority that can cover the full
+  Aurelia framework surface before widening the public protocol around richer
+  answer features like continuations or current-world activity
 - pressure export identity, registry-like exports,
   recognized/admissible/current-world distinctions, DI/resource key-space
   splits, and retreat/no-claim/open pressure before freezing more public

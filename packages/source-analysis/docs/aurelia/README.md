@@ -33,6 +33,15 @@ They exist to help current protocol and fixture derivation stay grounded while
 we pressure-test export-addressable Aurelia semantics before hardening more
 public framework-facing surfaces.
 
+For the near-term operational integration target against the Aurelia framework
+repo itself, also use:
+
+- [framework-export-integration-plan.md](./framework-export-integration-plan.md)
+
+That note intentionally prefers a thinner export-classification authority over
+prematurely fleshing out the full protocol across only a small subset of
+resources.
+
 ## Reading Order
 
 1. [framework-owner-ingress.md](./framework-owner-ingress.md)
@@ -43,9 +52,10 @@ public framework-facing surfaces.
 6. [proof-basis.md](./proof-basis.md)
 7. [semantic-stack.md](./semantic-stack.md)
 8. [export-semantic-surface-ledger.yaml](./export-semantic-surface-ledger.yaml)
-9. [atlas/README.md](./atlas/README.md)
-10. [ai-capability-surface-map.md](./ai-capability-surface-map.md)
-11. [ai-capability-catalog.md](./ai-capability-catalog.md)
+9. [framework-export-integration-plan.md](./framework-export-integration-plan.md)
+10. [atlas/README.md](./atlas/README.md)
+11. [ai-capability-surface-map.md](./ai-capability-surface-map.md)
+12. [ai-capability-catalog.md](./ai-capability-catalog.md)
 
 ## Local Rules
 

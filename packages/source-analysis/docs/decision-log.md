@@ -237,6 +237,18 @@ decision trail in order.
 - The next value is in filling derivations and invariants from the packet set,
   not in expanding the packet count indefinitely.
 
+## 2026-04-18 - Aurelia framework export integration should start with a thin slice
+
+- The near-term operational Aurelia target is to point `source-analysis` at
+  the Aurelia framework repo and classify the full export surface honestly.
+- For that first slice, broader framework coverage is more important than a
+  richer public protocol surface.
+- Continuations, current-world activity, and other richer answer-law features
+  may be deferred if doing so allows the first framework-wide export
+  classification pass to stay thin, deterministic, and complete.
+- The concrete planning note for that slice is
+  [docs/aurelia/framework-export-integration-plan.md](./aurelia/framework-export-integration-plan.md).
+
 ## 2026-04-18 - Primary hosted NL shell removed and replaced with direct primitives
 
 - The hosted runtime no longer dispatches `ask.question`, `plan.question`,

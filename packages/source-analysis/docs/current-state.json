@@ -107,6 +107,7 @@
         "docs/protocol-read-algebra.md",
         "docs/protocol-derivation-workbook.md",
         "docs/aurelia/README.md",
+        "docs/aurelia/framework-export-integration-plan.md",
         "docs/aurelia/export-semantic-surface-ledger.yaml",
         "docs/aurelia/atlas/README.md",
         "fixtures/protocol-derivation/README.md",
