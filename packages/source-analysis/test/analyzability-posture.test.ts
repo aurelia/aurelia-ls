@@ -75,29 +75,25 @@ describe('analyzability posture', () => {
     expect(posture.excludedFrontiers[0]?.boundaryReferences[0]?.target).toBe('packages/excluded/src/hidden.ts');
   });
 
-  it('routes regime questions through analyzability posture and preserves the open-boundary outcome', () => {
+  it('surfaces excluded-frontier posture directly through describe.profile', () => {
     const repoPath = createExcludedFrontierFixtureRepo();
     const runtime = createSnapshotHostRuntime();
 
-    const asked = runtime.execute({
-      command: 'ask.question',
+    const described = runtime.execute({
+      command: 'describe.profile',
       args: {
-        question: 'What boundaries are open because parts of the repo are excluded from analysis?',
         repoPath,
       },
     });
 
-    expect(asked.status).toBe('ok');
-    expect(asked.result.answer.outcome.tag).toBe('open-boundary');
-    expect(asked.result.answer.outcome.value?.inquiry?.id).toBe('analyzability-posture');
-    expect(asked.result.answer.outcome.value?.execution?.command).toBe('describe.profile');
-    expect(asked.result.answer.outcome.trust.kind).toBe('grounded');
-    expect(asked.result.answer.outcome.issues.some((issue) =>
-      issue.code.includes('excluded-frontier'),
+    expect(described.status).toBe('ok');
+    expect(described.result.posture.boundaryState.id).toBe('named-open-fronts');
+    expect(described.result.posture.openFronts.some((front) =>
+      front.title.toLowerCase().includes('excluded'),
     )).toBe(true);
-    expect(asked.result.execution?.steps.map((step) => step.command)).toEqual([
-      'describe.profile',
-    ]);
+    expect(described.result.posture.summaryLines.some((line) =>
+      line.toLowerCase().includes('excluded'),
+    )).toBe(true);
   });
 
   it('classifies focused paths separately from repo-level posture', () => {

@@ -5,6 +5,9 @@ import type {
   HostCommandName,
   HostRenderedView,
 } from './host/types.js';
+import type { SpendThreshold } from './authority/contracts.js';
+import type { QuestionRoute, ReadMode } from './inquiry-model.js';
+import type { ConsumerKind } from './inquiry-policy.js';
 import type { SnapshotKind } from './snapshots.js';
 import {
   ensureHostServiceRunning,
@@ -12,11 +15,16 @@ import {
   inspectHostServiceStatus,
   stopHostService,
 } from './host/service-client.js';
-import type { InquiryFamilyId } from './inquiry-catalog.js';
-import type { ConsumerKind } from './inquiry-policy.js';
-import type { FocusKind, ReadMode } from './inquiry-model.js';
 
-const HOSTED_CLI_MODES = ['describe', 'plan', 'ask', 'session', 'host'] as const;
+const HOSTED_CLI_MODES = [
+  'describe',
+  'session',
+  'query',
+  'resolve',
+  'lookup',
+  'inspect',
+  'host',
+] as const;
 
 type HostedCliMode =
   typeof HOSTED_CLI_MODES[number];
@@ -29,15 +37,16 @@ interface ParsedCommonArgs {
   readonly sessionId?: string;
   readonly readMode?: ReadMode;
   readonly consumer?: ConsumerKind;
-  readonly focusKind?: FocusKind;
   readonly focusValue?: string;
-  readonly familyId?: InquiryFamilyId;
-  readonly includeExamples?: boolean;
-  readonly topK?: number;
-  readonly question?: string;
   readonly warmPrograms?: boolean;
   readonly force?: boolean;
   readonly kinds?: readonly SnapshotKind[];
+  readonly files?: readonly string[];
+  readonly outDir?: string;
+  readonly scope?: 'files' | 'project';
+  readonly locatorKind?: 'package-name' | 'package-dir';
+  readonly spendThreshold?: SpendThreshold;
+  readonly questionRoute?: QuestionRoute;
 }
 
 export function isHostedCliMode(
@@ -62,7 +71,7 @@ export async function runHostedCli(
 
   const common = parseCommonArgs(args);
   const invocation = buildInvocation(mode as Exclude<HostedCliMode, 'host'>, args, common);
-  const envelope = await executeInvocation(mode, invocation as HostCommandInvocation<HostCommandName>);
+  const envelope = await executeInvocation(invocation);
 
   if (common.json) {
     process.stdout.write(`${JSON.stringify(envelope, null, 2)}\n`);
@@ -80,7 +89,6 @@ export async function runHostedCli(
 }
 
 async function executeInvocation(
-  mode: Exclude<HostedCliMode, 'host'>,
   invocation: HostCommandInvocation<HostCommandName>,
 ): Promise<HostCommandEnvelope<unknown>> {
   await ensureHostServiceRunning();
@@ -95,12 +103,16 @@ function buildInvocation(
   switch (mode) {
     case 'describe':
       return buildDescribeInvocation(remainingArgs, common);
-    case 'plan':
-      return buildPlanInvocation(remainingArgs, common);
-    case 'ask':
-      return buildAskInvocation(remainingArgs, common);
     case 'session':
       return buildSessionInvocation(remainingArgs, common);
+    case 'query':
+      return buildQueryInvocation(remainingArgs, common);
+    case 'resolve':
+      return buildResolveInvocation(remainingArgs, common);
+    case 'lookup':
+      return buildLookupInvocation(remainingArgs, common);
+    case 'inspect':
+      return buildInspectInvocation(remainingArgs, common);
     default:
       return assertNever(mode);
   }
@@ -111,124 +123,16 @@ function buildDescribeInvocation(
   common: ParsedCommonArgs,
 ): HostCommandInvocation<HostCommandName> {
   const topic = remainingArgs[0];
-  if (!topic) {
-    throw new Error('Usage: pnpm source-analysis describe <profile|inquiries|capabilities> [question]');
-  }
-
-  const question = common.question ?? (remainingArgs.slice(1).join(' ').trim() || undefined);
-  switch (topic) {
-    case 'profile':
-      return {
-        command: 'describe.profile',
-        args: {
-          repoPath: common.repoPath,
-          target: common.target,
-          profilePath: common.profilePath,
-        },
-      };
-    case 'inquiries':
-      return {
-        command: 'describe.inquiries',
-        args: {
-          question,
-          focusKind: common.focusKind,
-          includeExamples: common.includeExamples,
-          topK: common.topK,
-          readMode: common.readMode,
-          consumer: common.consumer,
-          renderStyle: common.json ? 'json-document' : 'plain-text',
-        },
-      };
-    case 'capabilities':
-      return {
-        command: 'describe.capabilities',
-        args: {
-          question,
-          focusKind: common.focusKind,
-          includeExamples: common.includeExamples,
-          topK: common.topK,
-          readMode: common.readMode,
-          consumer: common.consumer,
-          renderStyle: common.json ? 'json-document' : 'plain-text',
-        },
-      };
-    default:
-      throw new Error(`Unknown describe topic: ${topic}`);
-  }
-}
-
-function buildPlanInvocation(
-  remainingArgs: readonly string[],
-  common: ParsedCommonArgs,
-): HostCommandInvocation<HostCommandName> {
-  const topic = remainingArgs[0];
-  const question = common.question ?? (remainingArgs.slice(1).join(' ').trim() || undefined);
-  if (!topic || !question) {
-    throw new Error('Usage: pnpm source-analysis plan <inquiry|question> <question>');
-  }
-
-  switch (topic) {
-    case 'inquiry':
-      return {
-        command: 'plan.inquiry',
-        args: {
-          question,
-          sessionId: common.sessionId,
-          repoPath: common.repoPath,
-          target: common.target,
-          profilePath: common.profilePath,
-          focusKind: common.focusKind,
-          focusValue: common.focusValue,
-          familyId: common.familyId,
-          readMode: common.readMode,
-          consumer: common.consumer,
-          renderStyle: common.json ? 'json-document' : 'plain-text',
-        },
-      };
-    case 'question':
-      return {
-        command: 'plan.question',
-        args: {
-          question,
-          sessionId: common.sessionId,
-          repoPath: common.repoPath,
-          target: common.target,
-          profilePath: common.profilePath,
-          focusKind: common.focusKind,
-          focusValue: common.focusValue,
-          readMode: common.readMode,
-          consumer: common.consumer,
-          renderStyle: common.json ? 'json-document' : 'plain-text',
-        },
-      };
-    default:
-      throw new Error(`Unknown plan topic: ${topic}`);
-  }
-}
-
-function buildAskInvocation(
-  remainingArgs: readonly string[],
-  common: ParsedCommonArgs,
-): HostCommandInvocation<'ask.question'> {
-  const question = common.question ?? (remainingArgs.join(' ').trim() || undefined);
-  if (!question) {
-    throw new Error('Usage: pnpm source-analysis ask <question>');
+  if (topic !== 'profile') {
+    throw new Error('Usage: pnpm source-analysis describe profile [--repo <path>] [--json]');
   }
 
   return {
-    command: 'ask.question',
+    command: 'describe.profile',
     args: {
-      question,
-      sessionId: common.sessionId,
       repoPath: common.repoPath,
       target: common.target,
       profilePath: common.profilePath,
-      focusKind: common.focusKind,
-      focusValue: common.focusValue,
-      familyId: common.familyId,
-      readMode: common.readMode,
-      consumer: common.consumer,
-      renderStyle: common.json ? 'json-document' : 'plain-text',
     },
   };
 }
@@ -239,7 +143,7 @@ function buildSessionInvocation(
 ): HostCommandInvocation<HostCommandName> {
   const topic = remainingArgs[0];
   if (!topic) {
-    throw new Error('Usage: pnpm source-analysis session <open|status|close|refresh>');
+    throw new Error('Usage: pnpm source-analysis session <open|status|close|refresh|invalidate|materialize>');
   }
 
   switch (topic) {
@@ -261,53 +165,228 @@ function buildSessionInvocation(
           sessionId: common.sessionId,
         },
       };
-    case 'close': {
-      const sessionId = requireSessionId(common.sessionId, 'session close');
+    case 'close':
       return {
         command: 'session.close',
-        args: { sessionId },
+        args: {
+          sessionId: requireSessionId(common.sessionId, 'session close'),
+        },
       };
-    }
-    case 'refresh': {
-      const sessionId = requireSessionId(common.sessionId, 'session refresh');
+    case 'refresh':
       return {
         command: 'session.refresh',
         args: {
-          sessionId,
+          sessionId: requireSessionId(common.sessionId, 'session refresh'),
           ...(common.kinds && common.kinds.length > 0 ? { kinds: common.kinds } : {}),
           ...(common.force ? { force: true } : {}),
         },
       };
-    }
+    case 'invalidate':
+      return {
+        command: 'session.invalidate',
+        args: {
+          sessionId: requireSessionId(common.sessionId, 'session invalidate'),
+          ...(common.files && common.files.length > 0 ? { files: common.files } : {}),
+          ...(common.scope ? { scope: common.scope } : {}),
+        },
+      };
+    case 'materialize':
+      return {
+        command: 'materializeSnapshots',
+        args: {
+          sessionId: requireSessionId(common.sessionId, 'session materialize'),
+          ...(common.kinds && common.kinds.length > 0 ? { kinds: common.kinds } : {}),
+          ...(common.outDir ? { outDir: common.outDir } : {}),
+          ...(common.force ? { refreshIfNeeded: true } : {}),
+        },
+      };
     default:
       throw new Error(`Unknown session topic: ${topic}`);
   }
+}
+
+function buildQueryInvocation(
+  remainingArgs: readonly string[],
+  common: ParsedCommonArgs,
+): HostCommandInvocation<HostCommandName> {
+  const topic = remainingArgs[0];
+  if (!topic) {
+    throw new Error('Usage: pnpm source-analysis query <audit-package|route-witness|navigate>');
+  }
+
+  switch (topic) {
+    case 'audit-package': {
+      const packageName = remainingArgs[1];
+      if (!packageName) {
+        throw new Error('Usage: pnpm source-analysis query audit-package <package-name> --session-id <id>');
+      }
+      return {
+        command: 'query.audit.package',
+        args: {
+          sessionId: requireSessionId(common.sessionId, 'query audit-package'),
+          packageName,
+          readMode: common.readMode,
+          consumer: common.consumer,
+          renderStyle: common.json ? 'json-document' : 'plain-text',
+        },
+      };
+    }
+    case 'route-witness': {
+      const focusKind = remainingArgs[1];
+      const focusValue = remainingArgs.slice(2).join(' ').trim();
+      if ((focusKind !== 'file' && focusKind !== 'type') || !focusValue) {
+        throw new Error('Usage: pnpm source-analysis query route-witness <file|type> <focus> --session-id <id>');
+      }
+      return {
+        command: 'query.route.witness',
+        args: {
+          sessionId: requireSessionId(common.sessionId, 'query route-witness'),
+          focusKind,
+          focusValue,
+          readMode: common.readMode,
+          consumer: common.consumer,
+          renderStyle: common.json ? 'json-document' : 'plain-text',
+        },
+      };
+    }
+    case 'navigate': {
+      const focusKind = remainingArgs[1];
+      const focusValue = remainingArgs.slice(2).join(' ').trim();
+      if (
+        (focusKind !== 'package'
+          && focusKind !== 'file'
+          && focusKind !== 'symbol'
+          && focusKind !== 'type'
+          && focusKind !== 'export')
+        || !focusValue
+      ) {
+        throw new Error('Usage: pnpm source-analysis query navigate <package|file|symbol|type|export> <focus> --session-id <id>');
+      }
+      return {
+        command: 'query.navigate',
+        args: {
+          sessionId: requireSessionId(common.sessionId, 'query navigate'),
+          focusKind,
+          focusValue,
+          ...(common.questionRoute ? { questionRoute: common.questionRoute } : {}),
+          readMode: common.readMode,
+          consumer: common.consumer,
+          renderStyle: common.json ? 'json-document' : 'plain-text',
+        },
+      };
+    }
+    default:
+      throw new Error(`Unknown query topic: ${topic}`);
+  }
+}
+
+function buildResolveInvocation(
+  remainingArgs: readonly string[],
+  common: ParsedCommonArgs,
+): HostCommandInvocation<HostCommandName> {
+  const topic = remainingArgs[0];
+  const locator = remainingArgs.slice(1).join(' ').trim();
+  if (!topic || !locator) {
+    throw new Error('Usage: pnpm source-analysis resolve <package|type|export> <locator> --session-id <id>');
+  }
+
+  switch (topic) {
+    case 'package':
+      return {
+        command: 'query.package.resolve',
+        args: {
+          sessionId: requireSessionId(common.sessionId, 'resolve package'),
+          locator,
+          ...(common.locatorKind ? { locatorKind: common.locatorKind } : {}),
+          ...(common.spendThreshold ? { spendThreshold: common.spendThreshold } : {}),
+          ...(common.force ? { refreshIfNeeded: true } : {}),
+        },
+      };
+    case 'type':
+      return {
+        command: 'query.type.resolve',
+        args: {
+          sessionId: requireSessionId(common.sessionId, 'resolve type'),
+          locator,
+          ...(common.spendThreshold ? { spendThreshold: common.spendThreshold } : {}),
+          ...(common.force ? { refreshIfNeeded: true } : {}),
+        },
+      };
+    case 'export':
+      return {
+        command: 'query.export.resolve',
+        args: {
+          sessionId: requireSessionId(common.sessionId, 'resolve export'),
+          locator,
+          ...(common.spendThreshold ? { spendThreshold: common.spendThreshold } : {}),
+          ...(common.force ? { refreshIfNeeded: true } : {}),
+        },
+      };
+    default:
+      throw new Error(`Unknown resolve topic: ${topic}`);
+  }
+}
+
+function buildLookupInvocation(
+  remainingArgs: readonly string[],
+  common: ParsedCommonArgs,
+): HostCommandInvocation<HostCommandName> {
+  const topic = remainingArgs[0];
+  const locator = remainingArgs.slice(1).join(' ').trim();
+  if (topic !== 'symbol' || !locator) {
+    throw new Error('Usage: pnpm source-analysis lookup symbol <locator> --session-id <id>');
+  }
+
+  return {
+    command: 'query.symbol.lookup',
+    args: {
+      sessionId: requireSessionId(common.sessionId, 'lookup symbol'),
+      locator,
+      ...(common.force ? { refreshIfNeeded: true } : {}),
+    },
+  };
+}
+
+function buildInspectInvocation(
+  remainingArgs: readonly string[],
+  common: ParsedCommonArgs,
+): HostCommandInvocation<HostCommandName> {
+  const topic = remainingArgs[0];
+  const filePath = remainingArgs.slice(1).join(' ').trim();
+  if (topic !== 'file' || !filePath) {
+    throw new Error('Usage: pnpm source-analysis inspect file <path> --session-id <id>');
+  }
+
+  return {
+    command: 'query.file.inspect',
+    args: {
+      sessionId: requireSessionId(common.sessionId, 'inspect file'),
+      filePath,
+      ...(common.force ? { refreshIfNeeded: true } : {}),
+    },
+  };
 }
 
 function parseCommonArgs(
   args: string[],
 ): ParsedCommonArgs {
   const json = takeBooleanFlag(args, '--json');
-  const includeExamples = takeBooleanFlag(args, '--include-examples');
   const repoPath = takeOption(args, '--repo');
   const target = takeOption(args, '--target');
   const profilePath = takeOption(args, '--profile-path');
   const sessionId = takeOption(args, '--session-id');
   const readMode = takeOption(args, '--read-mode') as ReadMode | undefined;
   const consumer = takeOption(args, '--consumer') as ConsumerKind | undefined;
-  const focusKind = takeOption(args, '--focus-kind') as FocusKind | undefined;
   const focusValue = takeOption(args, '--focus-value');
-  const familyId = takeOption(args, '--family-id') as InquiryFamilyId | undefined;
-  const topKRaw = takeOption(args, '--top-k');
-  const questionFromFlag = takeOption(args, '--question');
   const warmPrograms = !takeBooleanFlag(args, '--cold');
   const force = takeBooleanFlag(args, '--force');
   const kinds = takeRepeatableKinds(args, '--kind');
-  const topK = topKRaw ? Number(topKRaw) : undefined;
-
-  if (topKRaw && !Number.isFinite(topK)) {
-    throw new Error(`Invalid --top-k value: ${topKRaw}`);
-  }
+  const files = takeRepeatableOption(args, '--file');
+  const outDir = takeOption(args, '--out-dir');
+  const scope = takeOption(args, '--scope') as 'files' | 'project' | undefined;
+  const locatorKind = takeOption(args, '--locator-kind') as 'package-name' | 'package-dir' | undefined;
+  const spendThreshold = takeOption(args, '--spend-threshold') as SpendThreshold | undefined;
+  const questionRoute = takeOption(args, '--question-route') as QuestionRoute | undefined;
 
   return {
     json,
@@ -317,15 +396,16 @@ function parseCommonArgs(
     ...(sessionId ? { sessionId } : {}),
     ...(readMode ? { readMode } : {}),
     ...(consumer ? { consumer } : {}),
-    ...(focusKind ? { focusKind } : {}),
     ...(focusValue ? { focusValue } : {}),
-    ...(familyId ? { familyId } : {}),
-    ...(includeExamples ? { includeExamples: true } : {}),
-    ...(typeof topK === 'number' ? { topK } : {}),
-    ...(questionFromFlag ? { question: questionFromFlag } : {}),
     ...(warmPrograms ? { warmPrograms: true } : { warmPrograms: false }),
     ...(force ? { force: true } : {}),
     ...(kinds.length > 0 ? { kinds } : {}),
+    ...(files.length > 0 ? { files } : {}),
+    ...(outDir ? { outDir } : {}),
+    ...(scope ? { scope } : {}),
+    ...(locatorKind ? { locatorKind } : {}),
+    ...(spendThreshold ? { spendThreshold } : {}),
+    ...(questionRoute ? { questionRoute } : {}),
   };
 }
 
@@ -514,46 +594,38 @@ async function runHostManagementCli(
   args: readonly string[],
 ): Promise<number> {
   const rawArgs = [...args];
-  const common = parseCommonArgs(rawArgs);
+  const json = rawArgs.includes('--json');
+  if (json) {
+    rawArgs.splice(rawArgs.indexOf('--json'), 1);
+  }
   const topic = rawArgs[0] ?? 'status';
 
   switch (topic) {
     case 'start': {
       const status = await ensureHostServiceRunning();
-      renderHostStatus(status, common.json);
+      process.stdout.write(`${json ? JSON.stringify(status, null, 2) : renderHostStatus(status)}\n`);
       return status.running ? 0 : 1;
     }
     case 'status': {
       const status = await inspectHostServiceStatus();
-      renderHostStatus(status, common.json);
+      process.stdout.write(`${json ? JSON.stringify(status, null, 2) : renderHostStatus(status)}\n`);
       return status.running ? 0 : 1;
     }
     case 'stop': {
       const status = await stopHostService();
-      renderHostStatus(status, common.json);
-      return status.stopped || !status.running ? 0 : 1;
+      process.stdout.write(`${json ? JSON.stringify(status, null, 2) : renderHostStatus(status)}\n`);
+      return status.stopped ? 0 : 1;
     }
     default:
-      throw new Error('Usage: pnpm source-analysis host <start|status|stop> [--json]');
+      throw new Error(`Unknown host topic: ${topic}`);
   }
 }
 
 function renderHostStatus(
   status: Awaited<ReturnType<typeof inspectHostServiceStatus>>,
-  json: boolean,
-): void {
-  if (json) {
-    process.stdout.write(`${JSON.stringify(status, null, 2)}\n`);
-    return;
+): string {
+  if (!status.running) {
+    return `Host service is not running (${status.endpoint}).`;
   }
-
-  const lines = [
-    `Running:      ${status.running ? 'yes' : 'no'}`,
-    `Endpoint:     ${status.endpoint}`,
-    ...(typeof status.pid === 'number' ? [`PID:          ${status.pid}`] : []),
-    ...(typeof status.sessionCount === 'number' ? [`Sessions:     ${status.sessionCount}`] : []),
-    ...(status.started ? ['Started:      yes'] : []),
-    ...(status.stopped ? ['Stopped:      yes'] : []),
-  ];
-  process.stdout.write(`${lines.join('\n')}\n`);
+  return `Host service running at ${status.endpoint} (pid ${status.pid ?? 'unknown'}, sessions ${status.sessionCount ?? 0}).`;
 }

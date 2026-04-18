@@ -408,151 +408,86 @@ describe('SnapshotHostRuntime', () => {
     )).toBe(true);
   });
 
-  it('describes, plans, and repairs capability ingress through the hosted runtime', () => {
+  it('resolves package, type, export, symbol, and file through direct primitive host commands', () => {
     const repoPath = createAuditFixtureRepo();
     const runtime = createSnapshotHostRuntime();
-
-    const describe = runtime.execute({
-      command: 'describe.capabilities',
-      args: {
-        question: 'Why is src/live.ts alive?',
-        renderStyle: 'plain-text',
-      },
-    });
-
-    expect(describe.status).toBe('ok');
-    expect(describe.result.answer.outcome.value?.capabilities[0]?.command).toBe('query.route.witness');
-    expect(describe.result.rendered?.style).toBe('plain-text');
 
     const opened = runtime.execute({
       command: 'session.open',
       args: {
         repoPath,
-        target: 'fixture-ingress',
+        target: 'fixture-primitives',
       },
     });
 
     const sessionId = opened.result.sessionId;
-    const plan = runtime.execute({
-      command: 'plan.question',
-      args: {
-        question: 'Audit @fixture/source-analysis-audit for tech debt.',
-        sessionId,
-        renderStyle: 'json-document',
-      },
-    });
 
-    expect(plan.status).toBe('ok');
-    expect(plan.result.answer.outcome.value?.status).toBe('ready');
-    expect(plan.result.answer.outcome.value?.invocation).toEqual({
-      command: 'query.audit.package',
+    const pkg = runtime.execute({
+      command: 'query.package.resolve',
       args: {
         sessionId,
-        packageName: '@fixture/source-analysis-audit',
+        locator: '@fixture/source-analysis-audit',
       },
     });
-    expect(plan.result.rendered?.style).toBe('json-document');
+    expect(pkg.status).toBe('ok');
+    expect(pkg.result.outcome.kind).toBe('claim');
+    if (pkg.result.outcome.kind !== 'claim') {
+      throw new Error('Expected package resolution to produce a claim.');
+    }
+    expect(pkg.result.outcome.value?.package_name).toBe('@fixture/source-analysis-audit');
 
-    const repair = runtime.execute({
-      command: 'repair.command',
-      args: {
-        command: 'query.audit.pkg',
-        question: 'Audit @fixture/source-analysis-audit for tech debt.',
-        args: {
-          sessionId,
-          packageName: '@fixture/source-analysis-audit',
-        },
-      },
-    });
-
-    expect(repair.status).toBe('ok');
-    expect(repair.result.answer.outcome.value?.status).toBe('repaired');
-    expect(repair.result.answer.outcome.value?.invocation).toEqual({
-      command: 'query.audit.package',
+    const typeDecl = runtime.execute({
+      command: 'query.type.resolve',
       args: {
         sessionId,
-        packageName: '@fixture/source-analysis-audit',
+        locator: 'LiveShape',
       },
     });
+    expect(typeDecl.status).toBe('ok');
+    expect(typeDecl.result.outcome.kind).toBe('claim');
+    if (typeDecl.result.outcome.kind !== 'claim') {
+      throw new Error('Expected type resolution to produce a claim.');
+    }
+    expect(typeDecl.result.outcome.value?.name).toBe('LiveShape');
+
+    const exported = runtime.execute({
+      command: 'query.export.resolve',
+      args: {
+        sessionId,
+        locator: 'auditReady',
+      },
+    });
+    expect(exported.status).toBe('ok');
+    expect(exported.result.outcome.kind).toBe('claim');
+    if (exported.result.outcome.kind !== 'claim') {
+      throw new Error('Expected export resolution to produce a claim.');
+    }
+    expect(exported.result.outcome.value?.exported_name).toBe('auditReady');
+
+    const symbol = runtime.execute({
+      command: 'query.symbol.lookup',
+      args: {
+        sessionId,
+        locator: 'auditReady',
+      },
+    });
+    expect(symbol.status).toBe('ok');
+    expect(symbol.result.lookup.tag).toBe('hit');
+    expect(symbol.result.lookup.matches[0]?.declaration.attributes.name).toBe('auditReady');
+
+    const file = runtime.execute({
+      command: 'query.file.inspect',
+      args: {
+        sessionId,
+        filePath: 'src/live.ts',
+      },
+    });
+    expect(file.status).toBe('ok');
+    expect(file.result.inspection.matchedFilePath).toBe('src/live.ts');
+    expect(file.result.inspection.matches).toContain('src/live.ts');
   });
 
-  it('describes inquiry families, plans them, and answers questions end-to-end through the hosted runtime', () => {
-    const repoPath = createAuditFixtureRepo();
-    const runtime = createSnapshotHostRuntime();
-
-    const describe = runtime.execute({
-      command: 'describe.inquiries',
-      args: {
-        question: 'I want to understand the repo before editing it.',
-        renderStyle: 'plain-text',
-      },
-    });
-
-    expect(describe.status).toBe('ok');
-    expect(describe.result.answer.outcome.value?.inquiries[0]?.id).toBe('workspace-orientation');
-    expect(describe.result.answer.outcome.value?.diagnostics.uncoveredCommands).toEqual([]);
-    expect(describe.result.rendered?.style).toBe('plain-text');
-
-    const plan = runtime.execute({
-      command: 'plan.inquiry',
-      args: {
-        question: 'Audit @fixture/source-analysis-audit for tech debt.',
-        repoPath,
-        target: 'fixture-inquiry',
-        renderStyle: 'json-document',
-      },
-    });
-
-    expect(plan.status).toBe('ok');
-    expect(plan.result.answer.outcome.value?.status).toBe('ready');
-    expect(plan.result.answer.outcome.value?.inquiry?.id).toBe('package-audit');
-    expect(plan.result.answer.outcome.value?.steps.map((step) => step.command)).toEqual([
-      'session.open',
-      'query.audit.package',
-    ]);
-    expect(plan.result.rendered?.style).toBe('json-document');
-
-    const askedAudit = runtime.execute({
-      command: 'ask.question',
-      args: {
-        question: 'Audit @fixture/source-analysis-audit for tech debt.',
-        repoPath,
-        target: 'fixture-inquiry',
-      },
-    });
-
-    expect(askedAudit.status).toBe('ok');
-    expect(askedAudit.result.answer.outcome.value?.status).toBe('answered');
-    expect(askedAudit.result.answer.outcome.value?.inquiry?.id).toBe('package-audit');
-    expect(askedAudit.result.execution?.ephemeralSession).toBe(false);
-    expect(askedAudit.result.execution?.steps.map((step) => step.command)).toEqual([
-      'session.open',
-      'query.audit.package',
-    ]);
-    expect(askedAudit.result.execution?.steps.every((step) => step.status === 'executed')).toBe(true);
-    expect(askedAudit.result.answer.outcome.value?.execution?.command).toBe('query.audit.package');
-
-    const askedOrientation = runtime.execute({
-      command: 'ask.question',
-      args: {
-        question: 'Orient me to @fixture/source-analysis-audit before I edit it.',
-        repoPath,
-        target: 'fixture-inquiry',
-        renderStyle: 'plain-text',
-      },
-    });
-
-    expect(askedOrientation.status).toBe('ok');
-    expect(askedOrientation.result.answer.outcome.value?.status).toBe('answered');
-    expect(askedOrientation.result.answer.outcome.value?.inquiry?.id).toBe('workspace-orientation');
-    expect(askedOrientation.result.execution?.steps.map((step) => step.command)).toEqual([
-      'query.navigate',
-    ]);
-    expect(askedOrientation.result.answer.outcome.value?.execution?.command).toBe('query.navigate');
-    expect(askedOrientation.result.rendered?.style).toBe('plain-text');
-  });
-
-  it('normalizes payload read-mode requests at the host boundary for presentation answers', () => {
+  it('keeps answer-bearing query surfaces available alongside the direct primitives', () => {
     const repoPath = createAuditFixtureRepo();
     const runtime = createSnapshotHostRuntime();
 
@@ -578,103 +513,24 @@ describe('SnapshotHostRuntime', () => {
     expect(audit.result.answer.query.readMode).toBe('summary-card');
     expect(audit.result.answer.slots.read_mode).toBe('summary-card');
 
-    const plan = runtime.execute({
-      command: 'plan.inquiry',
+    const navigate = runtime.execute({
+      command: 'query.navigate',
       args: {
-        question: 'Audit @fixture/source-analysis-audit for tech debt.',
-        repoPath,
-        target: 'fixture-host-read-mode',
+        sessionId,
+        focusKind: 'package',
+        focusValue: '@fixture/source-analysis-audit',
         readMode: 'snapshot',
+        renderStyle: 'plain-text',
       },
     });
 
-    expect(plan.status).toBe('ok');
-    expect(plan.result.answer.query.readMode).toBe('focus-card');
-    expect(plan.result.answer.slots.read_mode).toBe('focus-card');
+    expect(navigate.status).toBe('ok');
+    expect(navigate.result.answer.query.readMode).toBe('focus-card');
+    expect(navigate.result.answer.slots.read_mode).toBe('focus-card');
+    expect(navigate.result.rendered?.style).toBe('plain-text');
   });
 
-  it('opens and keeps a live ambient session for ask.question flows', () => {
-    const runtime = createSnapshotHostRuntime();
-    const opened = runtime.execute({
-      command: 'session.open',
-      args: {
-        repoPath: process.cwd(),
-      },
-    });
-    runtime.execute({
-      command: 'materializeSnapshots',
-      args: {
-        sessionId: opened.result.sessionId,
-      },
-    });
-
-    const asked = runtime.execute({
-      command: 'ask.question',
-      args: {
-        question: 'Audit @aurelia-ls/source-analysis for tech debt.',
-        repoPath: process.cwd(),
-      },
-    });
-
-    expect(asked.status).toBe('ok');
-    expect(asked.result.answer.outcome.value?.status).toBe('answered');
-    expect(asked.result.answer.outcome.value?.execution?.command).toBe('query.audit.package');
-    expect(asked.result.answer.query.worldFrame?.freshness).toBe('live');
-    expect(asked.result.execution?.ephemeralSession).toBe(false);
-    expect(asked.result.execution?.usedSessionId).toBe(opened.result.sessionId);
-    expect(asked.result.execution?.steps.some((step) => step.command === 'query.audit.package')).toBe(true);
-  });
-
-  it('reuses an ambient live session in session-first mode for repeated ask.question flows', () => {
-    const repoPath = createAuditFixtureRepo();
-    const runtime = createSnapshotHostRuntime();
-
-    const firstAsk = runtime.execute({
-      command: 'ask.question',
-      args: {
-        question: 'Audit @fixture/source-analysis-audit for tech debt.',
-        repoPath,
-        target: 'fixture-live',
-      },
-    });
-
-    expect(firstAsk.status).toBe('ok');
-    expect(firstAsk.result.answer.query.worldFrame?.freshness).toBe('live');
-    expect(firstAsk.result.execution?.ephemeralSession).toBe(false);
-    expect(firstAsk.result.execution?.usedSessionId).toBeTruthy();
-    expect(firstAsk.result.execution?.steps.map((step) => step.command)).toEqual([
-      'session.open',
-      'query.audit.package',
-    ]);
-
-    const firstSessionId = firstAsk.result.execution?.usedSessionId;
-
-    const secondAsk = runtime.execute({
-      command: 'ask.question',
-      args: {
-        question: 'Why is src/live.ts alive?',
-        repoPath,
-        target: 'fixture-live',
-      },
-    });
-
-    expect(secondAsk.status).toBe('ok');
-    expect(secondAsk.result.answer.query.worldFrame?.freshness).toBe('live');
-    expect(secondAsk.result.execution?.ephemeralSession).toBe(false);
-    expect(secondAsk.result.execution?.usedSessionId).toBe(firstSessionId);
-    expect(secondAsk.result.execution?.steps.some((step) =>
-      step.command === 'session.open' && step.status === 'executed',
-    )).toBe(false);
-
-    const status = runtime.execute({
-      command: 'session.status',
-      args: {},
-    });
-    expect(status.result.sessions).toHaveLength(1);
-    expect(status.result.sessions[0]?.sessionId).toBe(firstSessionId);
-  });
-
-  it('uses repo-local live sessions for non-cwd repos', () => {
+  it('uses repo-local sessions for primitive resolution and materialization', () => {
     const repoPath = createAuditFixtureRepo();
     const runtime = createSnapshotHostRuntime();
 
@@ -697,23 +553,20 @@ describe('SnapshotHostRuntime', () => {
     expect(materialized.result.outDir).toBe(join(repoPath, '.source-analysis', 'snapshots'));
     expect(existsSync(join(repoPath, '.source-analysis', 'snapshots', 'fixture-current-deps.json'))).toBe(true);
 
-    const asked = runtime.execute({
-      command: 'ask.question',
+    const resolved = runtime.execute({
+      command: 'query.package.resolve',
       args: {
-        question: 'Audit @fixture/source-analysis-audit for tech debt.',
-        repoPath,
-        target: 'fixture-current',
+        sessionId,
+        locator: '@fixture/source-analysis-audit',
       },
     });
 
-    expect(asked.status).toBe('ok');
-    expect(asked.result.execution?.ephemeralSession).toBe(false);
-    expect(asked.result.answer.query.worldFrame?.freshness).toBe('live');
-    expect(asked.result.execution?.usedSessionId).toBe(sessionId);
-    expect(asked.result.execution?.steps.some((step) => step.command === 'query.audit.package')).toBe(true);
+    expect(resolved.status).toBe('ok');
+    expect(resolved.result.outcome.kind).toBe('claim');
+    expect(resolved.meta.sessionId).toBe(sessionId);
   });
 
-  it('uses explicit profile-path targeting for live inquiry execution', () => {
+  it('uses explicit profile-path targeting for primitive hosted queries', () => {
     const repoPath = createExplicitProfileAuditFixtureRepo();
     const runtime = createSnapshotHostRuntime();
 
@@ -726,28 +579,23 @@ describe('SnapshotHostRuntime', () => {
     });
 
     const sessionId = opened.result.sessionId;
-    runtime.execute({
-      command: 'materializeSnapshots',
+    const resolved = runtime.execute({
+      command: 'query.package.resolve',
       args: {
         sessionId,
+        locator: '@fixture/source-analysis-explicit',
       },
     });
 
-    const asked = runtime.execute({
-      command: 'ask.question',
-      args: {
-        question: 'Audit @fixture/source-analysis-explicit for tech debt.',
-        repoPath,
-        profilePath: 'profiles/framework-core.json',
-      },
-    });
+    expect(resolved.status).toBe('ok');
+    expect(resolved.result.outcome.kind).toBe('claim');
+    expect(resolved.meta.sessionId).toBe(sessionId);
 
-    expect(asked.status).toBe('ok');
-    expect(asked.result.answer.query.worldFrame?.profilePath).toBe('profiles/framework-core.json');
-    expect(asked.result.answer.query.worldFrame?.freshness).toBe('live');
-    expect(asked.result.execution?.ephemeralSession).toBe(false);
-    expect(asked.result.execution?.usedSessionId).toBe(sessionId);
-    expect(asked.result.execution?.steps.some((step) => step.command === 'query.audit.package')).toBe(true);
+    const status = runtime.execute({
+      command: 'session.status',
+      args: { sessionId },
+    });
+    expect(status.result.sessions[0]?.profilePath?.replace(/\\/g, '/').endsWith('profiles/framework-core.json')).toBe(true);
   });
 
   it('derives session targeting and package discovery from a repo profile', () => {

@@ -38,11 +38,6 @@ import {
   selectQuestionRoute,
   worldTargetingFromFrame,
 } from '../src/inquiry-model.js';
-import { asFocusKind, supportsRecognizedFocus } from '../src/ingress-hints.js';
-import {
-  captureKindsForFocusKinds,
-  isIngressRecognizableFocusKind,
-} from '../src/ingress-recognizers.js';
 
 describe('Source-analysis inquiry ontology', () => {
   it('splits inquiry focus, route, read, and provenance kinds into explicit families', () => {
@@ -156,43 +151,5 @@ describe('Source-analysis inquiry ontology', () => {
     ]);
     expect(resolvePresentationReadMode('snapshot', 'focus-card')).toBe('focus-card');
     expect(resolvePresentationReadMode('supporting-evidence', 'focus-card')).toBe('supporting-evidence');
-  });
-
-  it('keeps ingress-recognizable focus kinds as an explicit subset', () => {
-    expect(asFocusKind('claim')).toBe('claim');
-    expect(isIngressRecognizableFocusKind('package')).toBe(true);
-    expect(isIngressRecognizableFocusKind('symbol')).toBe(true);
-    expect(isIngressRecognizableFocusKind('claim')).toBe(false);
-    expect(isIngressRecognizableFocusKind('session')).toBe(false);
-
-    expect(captureKindsForFocusKinds(['package', 'claim', 'session', 'file', 'symbol'])).toEqual([
-      'package-name',
-      'file-path',
-      'symbol-name',
-    ]);
-
-    expect(supportsRecognizedFocus('package', [{
-      kind: 'package-name',
-      value: '@aurelia-ls/source-analysis',
-      source: 'question',
-      recognizerId: 'package-name',
-      detail: 'package capture',
-    }])).toBe(true);
-
-    expect(supportsRecognizedFocus('claim', [{
-      kind: 'package-name',
-      value: '@aurelia-ls/source-analysis',
-      source: 'question',
-      recognizerId: 'package-name',
-      detail: 'package capture',
-    }])).toBe(false);
-
-    expect(supportsRecognizedFocus('symbol', [{
-      kind: 'symbol-name',
-      value: 'createAnalysisViews',
-      source: 'question',
-      recognizerId: 'symbol-name',
-      detail: 'symbol capture',
-    }])).toBe(true);
   });
 });

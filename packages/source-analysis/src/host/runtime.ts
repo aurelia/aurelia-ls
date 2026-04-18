@@ -19,7 +19,6 @@ import { createHostedWorldFrame } from '../analysis-surface.js';
 import { resolveAnalysisProfile } from '../analysis-profile.js';
 import {
   inspectAnalyzabilityPosture,
-  summarizeAnalyzabilityPosture,
 } from '../analyzability-posture.js';
 import {
   createSnapshotPaths,
@@ -30,9 +29,6 @@ import {
   SNAPSHOT_KINDS,
   type SnapshotKind,
 } from '../snapshots.js';
-import { CapabilityIngress } from '../capability-ingress.js';
-import type { InquiryExecutionSummary } from '../inquiry-ingress.js';
-import { InquiryIngress } from '../inquiry-ingress.js';
 import type { ConsumerKind } from '../inquiry-policy.js';
 import {
   createPresentationPolicyInput,
@@ -77,24 +73,20 @@ import {
   HOST_SCHEMA_VERSION,
   type MaterializeSnapshotsArgs,
   type MaterializeSnapshotsResult,
-  type AskQuestionArgs,
-  type AskQuestionExecution,
-  type AskQuestionExecutionStep,
-  type AskQuestionResult,
-  type DescribeInquiriesArgs,
-  type DescribeInquiriesResult,
-  type DescribeCapabilitiesArgs,
-  type DescribeCapabilitiesResult,
   type DescribeProfileArgs,
   type DescribeProfileResult,
-  type PlanInquiryArgs,
-  type PlanInquiryResult,
-  type PlanQuestionArgs,
-  type PlanQuestionResult,
-  type RepairCommandArgs,
-  type RepairCommandResult,
   type AuditPackageQueryArgs,
   type AuditPackageQueryResult,
+  type ResolvePackageQueryArgs,
+  type ResolvePackageQueryResult,
+  type ResolveTypeQueryArgs,
+  type ResolveTypeQueryResult,
+  type ResolveExportQueryArgs,
+  type ResolveExportQueryResult,
+  type LookupSymbolDeclarationArgs,
+  type LookupSymbolDeclarationResult,
+  type InspectFileQueryArgs,
+  type InspectFileQueryResult,
   type NavigateQueryArgs,
   type NavigateQueryResult,
   type RouteWitnessQueryArgs,
@@ -136,15 +128,6 @@ interface CommandOutcome {
   readonly errors?: readonly HostError[];
 }
 
-interface InquiryExecutionOutcome {
-  readonly usedSessionId?: string;
-  readonly invalidation: HostInvalidationMeta;
-  readonly cache: HostCacheMeta;
-  readonly refreshedKinds: readonly SnapshotKind[];
-  readonly freshness: 'live' | 'snapshot';
-  readonly execution: AskQuestionExecution;
-}
-
 export interface SnapshotHostRuntimeOptions {
   readonly executionMode?: 'session-first';
 }
@@ -155,8 +138,6 @@ const SOURCE_FILE_PATTERN = /(\.d\.ts|\.tsx|\.ts|\.mts|\.cts)$/i;
 
 export class SnapshotHostRuntime {
   readonly #sessions = new HostSessionManager();
-  readonly #ingress = new CapabilityIngress();
-  readonly #publicIngress = new InquiryIngress();
 
   constructor(
     _options: SnapshotHostRuntimeOptions = {},
@@ -212,12 +193,6 @@ export class SnapshotHostRuntime {
     // query.exports as compatibility shims rather than the native product shape.
     switch (invocation.command) {
       case 'describe.profile': return this.#describeProfile(invocation.args as DescribeProfileArgs);
-      case 'describe.inquiries': return this.#describeInquiries(invocation.args as DescribeInquiriesArgs);
-      case 'describe.capabilities': return this.#describeCapabilities(invocation.args as DescribeCapabilitiesArgs);
-      case 'plan.inquiry': return this.#planInquiry(invocation.args as PlanInquiryArgs);
-      case 'plan.question': return this.#planQuestion(invocation.args as PlanQuestionArgs);
-      case 'ask.question': return this.#askQuestion(invocation.args as AskQuestionArgs);
-      case 'repair.command': return this.#repairCommand(invocation.args as RepairCommandArgs);
       case 'session.open': return this.#sessionOpen(invocation.args as SessionOpenArgs);
       case 'session.close': return this.#sessionClose(invocation.args as SessionCloseArgs);
       case 'session.status': return this.#sessionStatus(invocation.args as SessionStatusArgs);
@@ -232,32 +207,14 @@ export class SnapshotHostRuntime {
       case 'query.audit.package': return this.#queryAuditPackage(invocation.args as AuditPackageQueryArgs);
       case 'query.route.witness': return this.#queryRouteWitness(invocation.args as RouteWitnessQueryArgs);
       case 'query.navigate': return this.#queryNavigate(invocation.args as NavigateQueryArgs);
+      case 'query.package.resolve': return this.#queryResolvePackage(invocation.args as ResolvePackageQueryArgs);
+      case 'query.type.resolve': return this.#queryResolveType(invocation.args as ResolveTypeQueryArgs);
+      case 'query.export.resolve': return this.#queryResolveExport(invocation.args as ResolveExportQueryArgs);
+      case 'query.symbol.lookup': return this.#queryLookupSymbol(invocation.args as LookupSymbolDeclarationArgs);
+      case 'query.file.inspect': return this.#queryInspectFile(invocation.args as InspectFileQueryArgs);
       case 'materializeSnapshots': return this.#materializeSnapshots(invocation.args as MaterializeSnapshotsArgs);
       default: return assertNever(invocation.command);
     }
-  }
-
-  #describeInquiries(args: DescribeInquiriesArgs): CommandOutcome {
-    const readMode = presentationReadMode(args.readMode, 'summary-card');
-    const answer = this.#publicIngress.createDiscoveryAnswer({
-      question: args.question,
-      focusKind: args.focusKind,
-      familyId: args.familyId,
-      includeExamples: args.includeExamples,
-      topK: args.topK,
-      readMode,
-      consumer: args.consumer,
-      worldFrame: createHostedWorldFrame(),
-    });
-    const rendered = buildRenderedView(answer, args.consumer, args.renderStyle);
-    const result: DescribeInquiriesResult = {
-      answer,
-      ...(rendered ? { rendered } : {}),
-    };
-    return {
-      result,
-      invalidation: emptyInvalidationMeta(),
-    };
   }
 
   #describeProfile(args: DescribeProfileArgs): CommandOutcome {
@@ -279,186 +236,6 @@ export class SnapshotHostRuntime {
     return {
       result,
       invalidation: emptyInvalidationMeta(),
-    };
-  }
-
-  #describeCapabilities(args: DescribeCapabilitiesArgs): CommandOutcome {
-    const readMode = presentationReadMode(args.readMode, 'summary-card');
-    const answer = this.#ingress.createDiscoveryAnswer({
-      question: args.question,
-      focusKind: args.focusKind,
-      includeExamples: args.includeExamples,
-      topK: args.topK,
-      readMode,
-      consumer: args.consumer,
-      worldFrame: createHostedWorldFrame(),
-    });
-    const rendered = buildRenderedView(answer, args.consumer, args.renderStyle);
-    const result: DescribeCapabilitiesResult = {
-      answer,
-      ...(rendered ? { rendered } : {}),
-    };
-    return {
-      result,
-      invalidation: emptyInvalidationMeta(),
-    };
-  }
-
-  #planQuestion(args: PlanQuestionArgs): CommandOutcome {
-    const sessionState = args.sessionId ? this.#tryGetSession(args.sessionId) : undefined;
-    const repoPath = args.repoPath ?? sessionState?.repoPath;
-    const target = args.target ?? sessionState?.target;
-    const profilePath = args.profilePath ?? sessionState?.profilePath ?? undefined;
-    const readMode = presentationReadMode(args.readMode, 'focus-card');
-    const answer = this.#ingress.createPlanAnswer({
-      question: args.question,
-      sessionId: args.sessionId,
-      repoPath,
-      target,
-      profilePath,
-      focusKind: args.focusKind,
-      focusValue: args.focusValue,
-      readMode,
-      consumer: args.consumer,
-      worldFrame: createRuntimeWorldFrame({ repoPath, target, profilePath }),
-    });
-    const rendered = buildRenderedView(answer, args.consumer, args.renderStyle);
-    const result: PlanQuestionResult = {
-      answer,
-      ...(rendered ? { rendered } : {}),
-    };
-    return {
-      result,
-      sessionId: sessionState?.sessionId,
-      invalidation: sessionState ? buildInvalidationMeta(sessionState) : emptyInvalidationMeta(),
-      cache: sessionState
-        ? { hit: hasCachedSnapshots(sessionState), tier: hasCachedSnapshots(sessionState) ? 'warm' : 'cold' }
-        : DEFAULT_CACHE,
-    };
-  }
-
-  #planInquiry(args: PlanInquiryArgs): CommandOutcome {
-    const sessionState = args.sessionId ? this.#tryGetSession(args.sessionId) : undefined;
-    const repoPath = args.repoPath ?? sessionState?.repoPath ?? process.cwd();
-    const target = args.target ?? sessionState?.target;
-    const profilePath = args.profilePath ?? sessionState?.profilePath ?? undefined;
-    const readMode = presentationReadMode(args.readMode, 'focus-card');
-    const answer = this.#publicIngress.createPlanAnswer({
-      question: args.question,
-      sessionId: args.sessionId,
-      repoPath,
-      target,
-      profilePath,
-      focusKind: args.focusKind,
-      focusValue: args.focusValue,
-      familyId: args.familyId,
-      readMode,
-      consumer: args.consumer,
-      worldFrame: createRuntimeWorldFrame({ repoPath, target, profilePath }),
-    });
-    const rendered = buildRenderedView(answer, args.consumer, args.renderStyle);
-    const result: PlanInquiryResult = {
-      answer,
-      ...(rendered ? { rendered } : {}),
-    };
-    return {
-      result,
-      sessionId: sessionState?.sessionId,
-      invalidation: sessionState ? buildInvalidationMeta(sessionState) : emptyInvalidationMeta(),
-      cache: sessionState
-        ? { hit: hasCachedSnapshots(sessionState), tier: hasCachedSnapshots(sessionState) ? 'warm' : 'cold' }
-        : DEFAULT_CACHE,
-    };
-  }
-
-  #repairCommand(args: RepairCommandArgs): CommandOutcome {
-    const readMode = presentationReadMode(args.readMode, 'focus-card');
-    const answer = this.#ingress.createRepairAnswer({
-      command: args.command,
-      args: args.args,
-      question: args.question,
-      readMode,
-      consumer: args.consumer,
-      worldFrame: createHostedWorldFrame(),
-    });
-    const rendered = buildRenderedView(answer, args.consumer, args.renderStyle);
-    const result: RepairCommandResult = {
-      answer,
-      ...(rendered ? { rendered } : {}),
-    };
-    return {
-      result,
-      invalidation: emptyInvalidationMeta(),
-    };
-  }
-
-  #askQuestion(args: AskQuestionArgs): CommandOutcome {
-    const explicitSession = args.sessionId ? this.#tryGetSession(args.sessionId) : undefined;
-    const ambientSession = !args.sessionId
-      ? this.#sessions.findMatching({
-        repoPath: args.repoPath ?? process.cwd(),
-        target: args.target,
-        profilePath: args.profilePath,
-      })
-      : undefined;
-    const existingSession = explicitSession ?? ambientSession;
-    const repoPath = args.repoPath ?? existingSession?.repoPath ?? process.cwd();
-    const target = args.target ?? existingSession?.target;
-    const profilePath = args.profilePath ?? existingSession?.profilePath ?? undefined;
-    const readMode = presentationReadMode(args.readMode, 'focus-card');
-    const plan = this.#publicIngress.plan({
-      question: args.question,
-      sessionId: existingSession?.sessionId ?? args.sessionId,
-      repoPath,
-      target,
-      profilePath,
-      focusKind: args.focusKind,
-      focusValue: args.focusValue,
-      familyId: args.familyId,
-    });
-
-    const executed = plan.status === 'ready' && plan.primaryStep
-      ? this.#executeInquiryPlan(plan, {
-        existingSession,
-        repoPath,
-        target,
-        profilePath,
-      })
-      : undefined;
-    const answer = this.#publicIngress.createAskAnswer({
-      question: args.question,
-      sessionId: executed?.usedSessionId ?? args.sessionId,
-      repoPath,
-      target,
-      profilePath,
-      focusKind: args.focusKind,
-      focusValue: args.focusValue,
-      familyId: args.familyId,
-      readMode,
-      consumer: args.consumer,
-      worldFrame: createRuntimeWorldFrame({
-        repoPath,
-        target,
-        profilePath,
-        freshness: executed?.freshness ?? 'live',
-      }),
-      plan,
-      execution: executed ? summarizeInquiryExecution(executed) : undefined,
-    });
-    const rendered = buildRenderedView(answer, args.consumer, args.renderStyle);
-    const result: AskQuestionResult = {
-      answer,
-      ...(rendered ? { rendered } : {}),
-      ...(executed ? { execution: executed.execution } : {}),
-    };
-    return {
-      result,
-      sessionId: executed?.usedSessionId ?? existingSession?.sessionId,
-      invalidation: executed?.invalidation ?? (existingSession ? buildInvalidationMeta(existingSession) : emptyInvalidationMeta()),
-      cache: executed?.cache ?? (existingSession
-        ? { hit: hasCachedSnapshots(existingSession), tier: hasCachedSnapshots(existingSession) ? 'warm' : 'cold' }
-        : DEFAULT_CACHE),
-      refreshedKinds: executed?.refreshedKinds ?? [],
     };
   }
 
@@ -597,7 +374,7 @@ export class SnapshotHostRuntime {
 
   #queryAuditPackage(args: AuditPackageQueryArgs): CommandOutcome {
     const state = this.#sessions.get(args.sessionId);
-    const hostedInquiry = ensureFreshHostedInquiryContext(state, args.refreshIfNeeded);
+    const hostedAnalysis = ensureFreshHostedAnalysisContext(state, args.refreshIfNeeded);
     const readMode = presentationReadMode(args.readMode, 'summary-card');
     const answer = createAuditAnswer(
       {
@@ -610,27 +387,27 @@ export class SnapshotHostRuntime {
           target: state.target,
         }),
       },
-      hostedInquiry.analysis,
+      hostedAnalysis.analysis,
     );
     const rendered = buildRenderedView(answer, args.consumer, args.renderStyle);
     const result: AuditPackageQueryResult = {
       answer,
       ...(rendered ? { rendered } : {}),
-      warnings: hostedInquiry.warnings,
+      warnings: hostedAnalysis.warnings,
     };
 
     return {
       result,
       sessionId: state.sessionId,
-      refreshedKinds: hostedInquiry.refreshedKinds,
+      refreshedKinds: hostedAnalysis.refreshedKinds,
       invalidation: buildInvalidationMeta(state),
-      cache: hostedInquiry.cache,
+      cache: hostedAnalysis.cache,
     };
   }
 
   #queryRouteWitness(args: RouteWitnessQueryArgs): CommandOutcome {
     const state = this.#sessions.get(args.sessionId);
-    const hostedInquiry = ensureFreshHostedInquiryContext(state, args.refreshIfNeeded);
+    const hostedAnalysis = ensureFreshHostedAnalysisContext(state, args.refreshIfNeeded);
     const readMode = presentationReadMode(args.readMode, 'focus-card');
     const answer = createRouteWitnessAnswer(
       {
@@ -646,28 +423,28 @@ export class SnapshotHostRuntime {
           target: state.target,
         }),
       },
-      hostedInquiry.analysis,
+      hostedAnalysis.analysis,
     );
     const rendered = buildRenderedView(answer, args.consumer, args.renderStyle);
     const result: RouteWitnessQueryResult = {
       answer,
       ...(rendered ? { rendered } : {}),
-      warnings: hostedInquiry.warnings,
+      warnings: hostedAnalysis.warnings,
     };
 
     return {
       result,
       sessionId: state.sessionId,
-      refreshedKinds: hostedInquiry.refreshedKinds,
+      refreshedKinds: hostedAnalysis.refreshedKinds,
       invalidation: buildInvalidationMeta(state),
-      cache: hostedInquiry.cache,
+      cache: hostedAnalysis.cache,
     };
   }
 
   #queryNavigate(args: NavigateQueryArgs): CommandOutcome {
     const state = this.#sessions.get(args.sessionId);
-    const hostedInquiry = ensureFreshHostedInquiryContext(state, args.refreshIfNeeded);
-    const authority = createLegacyProjectionWorkspaceAuthority(hostedInquiry.analysis);
+    const hostedAnalysis = ensureFreshHostedAnalysisContext(state, args.refreshIfNeeded);
+    const authority = createLegacyProjectionWorkspaceAuthority(hostedAnalysis.analysis);
     const readMode = presentationReadMode(args.readMode, 'focus-card');
     const episode = createNavigationEpisode(
       {
@@ -689,15 +466,129 @@ export class SnapshotHostRuntime {
     const result: NavigateQueryResult = {
       answer: episode.answer,
       ...(rendered ? { rendered } : {}),
-      warnings: hostedInquiry.warnings,
+      warnings: hostedAnalysis.warnings,
     };
 
     return {
       result,
       sessionId: state.sessionId,
-      refreshedKinds: hostedInquiry.refreshedKinds,
+      refreshedKinds: hostedAnalysis.refreshedKinds,
       invalidation: buildInvalidationMeta(state),
-      cache: hostedInquiry.cache,
+      cache: hostedAnalysis.cache,
+    };
+  }
+
+  #queryResolvePackage(args: ResolvePackageQueryArgs): CommandOutcome {
+    const state = this.#sessions.get(args.sessionId);
+    const hostedAnalysis = ensureFreshHostedAnalysisContext(state, args.refreshIfNeeded);
+    const authority = createLegacyProjectionWorkspaceAuthority(hostedAnalysis.analysis);
+    const result: ResolvePackageQueryResult = {
+      outcome: authority.resolvePackage(
+        {
+          kind: args.locatorKind ?? 'package-name',
+          value: args.locator,
+        },
+        args.spendThreshold,
+      ),
+      warnings: hostedAnalysis.warnings,
+    };
+
+    return {
+      result,
+      sessionId: state.sessionId,
+      refreshedKinds: hostedAnalysis.refreshedKinds,
+      invalidation: buildInvalidationMeta(state),
+      cache: hostedAnalysis.cache,
+    };
+  }
+
+  #queryResolveType(args: ResolveTypeQueryArgs): CommandOutcome {
+    const state = this.#sessions.get(args.sessionId);
+    const hostedAnalysis = ensureFreshHostedAnalysisContext(state, args.refreshIfNeeded);
+    const authority = createLegacyProjectionWorkspaceAuthority(hostedAnalysis.analysis);
+    const result: ResolveTypeQueryResult = {
+      outcome: authority.resolveTypeDeclaration(
+        {
+          kind: 'type-name',
+          value: args.locator,
+        },
+        args.spendThreshold,
+      ),
+      warnings: hostedAnalysis.warnings,
+    };
+
+    return {
+      result,
+      sessionId: state.sessionId,
+      refreshedKinds: hostedAnalysis.refreshedKinds,
+      invalidation: buildInvalidationMeta(state),
+      cache: hostedAnalysis.cache,
+    };
+  }
+
+  #queryResolveExport(args: ResolveExportQueryArgs): CommandOutcome {
+    const state = this.#sessions.get(args.sessionId);
+    const hostedAnalysis = ensureFreshHostedAnalysisContext(state, args.refreshIfNeeded);
+    const authority = createLegacyProjectionWorkspaceAuthority(hostedAnalysis.analysis);
+    const result: ResolveExportQueryResult = {
+      outcome: authority.resolveExport(
+        {
+          kind: 'export-name',
+          value: args.locator,
+        },
+        args.spendThreshold,
+      ),
+      warnings: hostedAnalysis.warnings,
+    };
+
+    return {
+      result,
+      sessionId: state.sessionId,
+      refreshedKinds: hostedAnalysis.refreshedKinds,
+      invalidation: buildInvalidationMeta(state),
+      cache: hostedAnalysis.cache,
+    };
+  }
+
+  #queryLookupSymbol(args: LookupSymbolDeclarationArgs): CommandOutcome {
+    const state = this.#sessions.get(args.sessionId);
+    const hostedAnalysis = ensureFreshHostedAnalysisContext(state, args.refreshIfNeeded);
+    const authority = createLegacyProjectionWorkspaceAuthority(hostedAnalysis.analysis);
+    const result: LookupSymbolDeclarationResult = {
+      lookup: authority.lookupSymbolDeclaration({
+        kind: 'symbol-name',
+        value: args.locator,
+      }),
+      warnings: hostedAnalysis.warnings,
+    };
+
+    return {
+      result,
+      sessionId: state.sessionId,
+      refreshedKinds: hostedAnalysis.refreshedKinds,
+      invalidation: buildInvalidationMeta(state),
+      cache: hostedAnalysis.cache,
+    };
+  }
+
+  #queryInspectFile(args: InspectFileQueryArgs): CommandOutcome {
+    const state = this.#sessions.get(args.sessionId);
+    const hostedAnalysis = ensureFreshHostedAnalysisContext(state, args.refreshIfNeeded);
+    const authority = createLegacyProjectionWorkspaceAuthority(hostedAnalysis.analysis);
+    const result: InspectFileQueryResult = {
+      inspection: authority.inspectFocusedFile({
+        kind: 'file-path',
+        value: args.filePath,
+      }),
+      warnings: hostedAnalysis.warnings,
+    };
+
+    return {
+      result,
+      sessionId: state.sessionId,
+      refreshedKinds: hostedAnalysis.refreshedKinds,
+      invalidation: buildInvalidationMeta(state),
+      cache: hostedAnalysis.cache,
     };
   }
 
@@ -742,111 +633,6 @@ export class SnapshotHostRuntime {
     };
   }
 
-  #executeInquiryPlan(
-    plan: { readonly steps: readonly { readonly command: string; readonly args: Record<string, unknown>; }[] },
-    context: {
-      readonly existingSession?: HostSessionState;
-      readonly repoPath: string;
-      readonly target?: string;
-      readonly profilePath?: string;
-    },
-  ): InquiryExecutionOutcome {
-    const steps: AskQuestionExecutionStep[] = [];
-    let sessionState = context.existingSession;
-    let openedEphemeralSession = false;
-    let primaryEnvelope: HostCommandEnvelope<unknown> | undefined;
-    let cache: HostCacheMeta = context.existingSession
-      ? { hit: hasCachedSnapshots(context.existingSession), tier: hasCachedSnapshots(context.existingSession) ? 'warm' : 'cold' }
-      : DEFAULT_CACHE;
-    let invalidation = context.existingSession ? buildInvalidationMeta(context.existingSession) : emptyInvalidationMeta();
-    let refreshedKinds: readonly SnapshotKind[] = [];
-
-    try {
-      for (const step of plan.steps) {
-        if (step.command === 'session.open') {
-          if (sessionState) {
-            steps.push({
-              command: step.command,
-              args: step.args,
-              status: 'skipped',
-              detail: `Reusing the existing session "${sessionState.sessionId}".`,
-            });
-            continue;
-          }
-
-          const openOutcome = this.#sessionOpen({
-            repoPath: asStepString(step.args.repoPath) ?? context.repoPath,
-            ...(asStepString(step.args.target) ? { target: asStepString(step.args.target) } : {}),
-            ...(asStepString(step.args.profilePath) ? { profilePath: asStepString(step.args.profilePath) } : context.profilePath ? { profilePath: context.profilePath } : {}),
-          });
-          const openResult = openOutcome.result as SessionOpenResult;
-          sessionState = this.#sessions.get(openResult.sessionId);
-          openedEphemeralSession = false;
-          cache = openOutcome.cache ?? DEFAULT_CACHE;
-          invalidation = openOutcome.invalidation ?? buildInvalidationMeta(sessionState);
-          refreshedKinds = openOutcome.refreshedKinds ?? [];
-          steps.push({
-            command: step.command,
-            args: step.args,
-            status: 'executed',
-            detail: `Opened live ambient session "${openResult.sessionId}".`,
-          });
-          continue;
-        }
-
-        const resolvedArgs = resolveInquiryStepArgs(step.args, sessionState?.sessionId);
-        if (resolvedArgs === null) {
-          steps.push({
-            command: step.command,
-            args: step.args,
-            status: 'failed',
-            detail: 'The inquiry plan still requires a session before this step can execute.',
-          });
-          break;
-        }
-
-        const envelope = this.execute({
-          command: step.command as HostCommandName,
-          args: resolvedArgs as HostCommandArgsMap[HostCommandName],
-        });
-        primaryEnvelope ??= envelope as HostCommandEnvelope<unknown>;
-        cache = envelope.meta.cache;
-        invalidation = envelope.meta.invalidation;
-        refreshedKinds = envelope.meta.refreshedKinds;
-        steps.push({
-          command: step.command,
-          args: resolvedArgs,
-          status: envelope.status === 'ok' && envelope.errors.length === 0 ? 'executed' : 'failed',
-          ...(envelope.errors[0] ? { detail: envelope.errors[0].message } : {}),
-        });
-        if (envelope.status !== 'ok' || envelope.errors.length > 0) {
-          break;
-        }
-        if (envelope.meta.sessionId) {
-          sessionState = this.#tryGetSession(envelope.meta.sessionId) ?? sessionState;
-        }
-      }
-    } finally {
-      if (openedEphemeralSession && sessionState) {
-        this.#sessionClose({ sessionId: sessionState.sessionId });
-      }
-    }
-
-    return {
-      usedSessionId: sessionState?.sessionId,
-      invalidation,
-      cache,
-      refreshedKinds,
-      freshness: 'live',
-      execution: {
-        usedSessionId: sessionState?.sessionId,
-        ephemeralSession: openedEphemeralSession,
-        steps,
-        ...(primaryEnvelope ? { primaryEnvelope } : {}),
-      },
-    };
-  }
-
   #tryGetSession(sessionId: string): HostSessionState | undefined {
     try {
       return this.#sessions.get(sessionId);
@@ -860,38 +646,6 @@ export function createSnapshotHostRuntime(
   options: SnapshotHostRuntimeOptions = {},
 ): SnapshotHostRuntime {
   return new SnapshotHostRuntime(options);
-}
-
-function summarizeInquiryExecution(
-  executed: InquiryExecutionOutcome,
-): InquiryExecutionSummary {
-  const primaryEnvelope = executed.execution.primaryEnvelope;
-  if (!primaryEnvelope) {
-    return {
-      status: 'skipped',
-      ephemeralSession: executed.execution.ephemeralSession,
-      ...(executed.usedSessionId ? { sessionId: executed.usedSessionId } : {}),
-      facts: [],
-      lines: [],
-    };
-  }
-
-  const summarizedOutcome = summarizePrimaryOutcome(primaryEnvelope);
-
-  return {
-    status: primaryEnvelope.status === 'ok' && primaryEnvelope.errors.length === 0 ? 'executed' : 'failed',
-    command: primaryEnvelope.command,
-    ...(executed.usedSessionId ? { sessionId: executed.usedSessionId } : {}),
-    ephemeralSession: executed.execution.ephemeralSession,
-    facts: summarizePrimaryFacts(primaryEnvelope),
-    lines: summarizePrimaryLines(primaryEnvelope),
-    ...(summarizedOutcome?.outcomeTag ? { outcomeTag: summarizedOutcome.outcomeTag } : {}),
-    ...(summarizedOutcome?.trust ? { trust: summarizedOutcome.trust } : {}),
-    ...(summarizedOutcome?.closureBasis ? { closureBasis: summarizedOutcome.closureBasis } : {}),
-    ...(summarizedOutcome?.issues ? { issues: summarizedOutcome.issues } : {}),
-    ...(summarizedOutcome?.continuations ? { continuations: summarizedOutcome.continuations } : {}),
-    ...(summarizedOutcome?.provenance ? { provenance: summarizedOutcome.provenance } : {}),
-  };
 }
 
 function buildRenderedView<TResult extends { document?: AnswerDocument<AnswerRef> }>(
@@ -946,223 +700,7 @@ function policyFocusKindForRenderedAnswer(
     : focusKind;
 }
 
-function summarizePrimaryFacts(
-  envelope: HostCommandEnvelope<unknown>,
-): readonly { readonly label: string; readonly value: string }[] {
-  const result = envelope.result as Record<string, unknown> | null;
-  switch (envelope.command) {
-    case 'describe.profile': {
-      const summary = summarizeAnalyzabilityPosture(
-        (result as unknown as DescribeProfileResult).posture,
-        createRuntimeWorldFrame({
-          repoPath: (result as unknown as DescribeProfileResult).profile.repoPath,
-          target: (result as unknown as DescribeProfileResult).profile.snapshotTarget,
-          profilePath: (result as unknown as DescribeProfileResult).profile.profilePath ?? undefined,
-        }),
-      );
-      return summary.facts;
-    }
-    case 'query.deps.summary': {
-      const summary = (result as unknown as SessionSummaryQueryResult<'deps'>).summary;
-      return [
-        { label: 'files analyzed', value: `${summary.files_analyzed}` },
-        { label: 'uncovered files', value: `${summary.uncovered_files}` },
-        { label: 'unresolved imports', value: `${summary.unresolved}` },
-      ];
-    }
-    case 'query.typerefs.summary': {
-      const summary = (result as unknown as SessionSummaryQueryResult<'typerefs'>).summary;
-      return [
-        { label: 'declarations', value: `${summary.type_declarations}` },
-        { label: 'references', value: `${summary.type_references}` },
-      ];
-    }
-    case 'query.exports.summary': {
-      const summary = (result as unknown as SessionSummaryQueryResult<'exports'>).summary;
-      return [
-        { label: 'packages', value: `${summary.packages_analyzed}` },
-        { label: 'exports', value: `${summary.exports ?? 'unknown'}` },
-      ];
-    }
-    case 'session.status': {
-      const sessions = (result as unknown as SessionStatusResult).sessions;
-      return [
-        { label: 'sessions', value: `${sessions.length}` },
-        { label: 'warm sessions', value: `${sessions.filter((session) => session.cachedKinds.length > 0).length}` },
-      ];
-    }
-    case 'session.refresh': {
-      const refresh = result as unknown as SessionRefreshResult;
-      return [
-        { label: 'refreshed kinds', value: refresh.refreshedKinds.join(', ') || 'none' },
-        { label: 'dirty kinds', value: refresh.dirtyKinds.join(', ') || 'none' },
-      ];
-    }
-    case 'materializeSnapshots': {
-      const materialized = result as unknown as MaterializeSnapshotsResult;
-      return [
-        { label: 'out dir', value: materialized.outDir },
-        { label: 'files written', value: `${Object.keys(materialized.files).length}` },
-      ];
-    }
-    default: {
-      const answer = (result as { answer?: { outcome?: { value?: { summaryLines?: readonly string[] } } } }).answer;
-      if (answer?.outcome?.value) {
-        const value = answer.outcome.value as { title?: string; primaryRef?: { label?: string; value?: string } };
-        return [
-          ...(value.title ? [{ label: 'answer title', value: value.title }] : []),
-          ...(value.primaryRef?.value ? [{ label: 'primary ref', value: value.primaryRef.value }] : []),
-        ];
-      }
-      return [];
-    }
-  }
-}
-
-function summarizePrimaryLines(
-  envelope: HostCommandEnvelope<unknown>,
-): readonly string[] {
-  const result = envelope.result as Record<string, unknown> | null;
-  switch (envelope.command) {
-    case 'describe.profile': {
-      const summary = summarizeAnalyzabilityPosture(
-        (result as unknown as DescribeProfileResult).posture,
-        createRuntimeWorldFrame({
-          repoPath: (result as unknown as DescribeProfileResult).profile.repoPath,
-          target: (result as unknown as DescribeProfileResult).profile.snapshotTarget,
-          profilePath: (result as unknown as DescribeProfileResult).profile.profilePath ?? undefined,
-        }),
-      );
-      return summary.lines;
-    }
-    case 'query.deps.summary': {
-      const summary = (result as unknown as SessionSummaryQueryResult<'deps'>).summary;
-      return [
-        `Dependency posture covers ${summary.files_analyzed} files with ${summary.uncovered_files} uncovered files and ${summary.unresolved} unresolved imports.`,
-      ];
-    }
-    case 'query.typerefs.summary':
-    case 'query.exports.summary':
-    case 'query.audit.package':
-    case 'query.route.witness':
-    case 'query.navigate':
-    case 'describe.capabilities':
-    case 'describe.inquiries':
-    case 'plan.question':
-    case 'plan.inquiry':
-    case 'repair.command': {
-      const answer = (result as { answer?: { outcome?: { value?: { summaryLines?: readonly string[] } } } }).answer;
-      return answer?.outcome?.value?.summaryLines?.slice(0, 4) ?? [];
-    }
-    case 'session.status': {
-      const sessions = (result as unknown as SessionStatusResult).sessions;
-      return [
-        `Session status currently tracks ${sessions.length} hosted session${sessions.length === 1 ? '' : 's'}.`,
-      ];
-    }
-    case 'session.refresh': {
-      const refresh = result as unknown as SessionRefreshResult;
-      return [
-        refresh.refreshedKinds.length > 0
-          ? `Refreshed ${refresh.refreshedKinds.join(', ')}.`
-          : 'No dirty kinds required refresh.',
-      ];
-    }
-    case 'materializeSnapshots': {
-      const materialized = result as unknown as MaterializeSnapshotsResult;
-      return [
-        `Materialized ${Object.keys(materialized.files).length} snapshot file${Object.keys(materialized.files).length === 1 ? '' : 's'} to ${materialized.outDir}.`,
-      ];
-    }
-    default:
-      return [];
-  }
-}
-
-function summarizePrimaryOutcome(
-  envelope: HostCommandEnvelope<unknown>,
-): {
-  readonly outcomeTag?: InquiryExecutionSummary['outcomeTag'];
-  readonly trust?: InquiryExecutionSummary['trust'];
-  readonly closureBasis?: InquiryExecutionSummary['closureBasis'];
-  readonly issues?: InquiryExecutionSummary['issues'];
-  readonly continuations?: InquiryExecutionSummary['continuations'];
-  readonly provenance?: InquiryExecutionSummary['provenance'];
-} | null {
-  const result = envelope.result as Record<string, unknown> | null;
-  const answer = result && typeof result === 'object' && !Array.isArray(result)
-    ? (result.answer as {
-      readonly outcome?: InquiryExecutionSummary & {
-        readonly tag?: InquiryExecutionSummary['outcomeTag'];
-        readonly trust?: InquiryExecutionSummary['trust'];
-        readonly issues?: InquiryExecutionSummary['issues'];
-        readonly continuations?: InquiryExecutionSummary['continuations'];
-        readonly closureBasis?: InquiryExecutionSummary['closureBasis'];
-      };
-      readonly slots?: {
-        readonly closure_basis?: InquiryExecutionSummary['closureBasis'];
-        readonly provenance?: InquiryExecutionSummary['provenance'];
-      };
-    } | undefined)
-    : undefined;
-
-  if (answer?.outcome) {
-    return {
-      ...(answer.outcome.tag ? { outcomeTag: answer.outcome.tag } : {}),
-      ...(answer.outcome.trust ? { trust: answer.outcome.trust } : {}),
-      ...(answer.slots?.closure_basis ? { closureBasis: answer.slots.closure_basis } : {}),
-      ...(answer.outcome.issues ? { issues: answer.outcome.issues } : {}),
-      ...(answer.outcome.continuations ? { continuations: answer.outcome.continuations } : {}),
-      ...(answer.slots?.provenance ? { provenance: answer.slots.provenance } : {}),
-    };
-  }
-
-  if (envelope.command === 'describe.profile') {
-    const describe = result as unknown as DescribeProfileResult;
-    const summary = summarizeAnalyzabilityPosture(
-      describe.posture,
-      createRuntimeWorldFrame({
-        repoPath: describe.profile.repoPath,
-        target: describe.profile.snapshotTarget,
-        profilePath: describe.profile.profilePath ?? undefined,
-      }),
-    );
-    return {
-      outcomeTag: summary.tag,
-      trust: summary.trust,
-      closureBasis: summary.closureBasis,
-      issues: summary.issues,
-      continuations: summary.continuations,
-      provenance: summary.provenance,
-    };
-  }
-
-  return null;
-}
-
-function resolveInquiryStepArgs(
-  args: Record<string, unknown>,
-  sessionId: string | undefined,
-): Record<string, unknown> | null {
-  const resolved: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(args)) {
-    if (value === '$session.open') {
-      if (!sessionId) {
-        return null;
-      }
-      resolved[key] = sessionId;
-      continue;
-    }
-    resolved[key] = value;
-  }
-  return resolved;
-}
-
-function asStepString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.length > 0 ? value : undefined;
-}
-
-function ensureFreshHostedInquiryContext(
+function ensureFreshHostedAnalysisContext(
   state: HostSessionState,
   refreshIfNeeded = true,
 ): {

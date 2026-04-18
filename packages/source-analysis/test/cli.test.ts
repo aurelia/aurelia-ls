@@ -86,50 +86,7 @@ describe('source-analysis hosted CLI', () => {
     expect(parsed.result.snapshotSupport.missingKinds).toEqual(['deps', 'typerefs', 'exports']);
   });
 
-  it('answers questions end-to-end through the top-level ask command', async () => {
-    const repoPath = createAuditFixtureRepo();
-    const raw = await runCliAsync([
-      'ask',
-      'Audit @fixture/source-analysis-audit for tech debt.',
-      '--repo',
-      repoPath,
-      '--target',
-      'fixture-cli',
-      '--json',
-    ]);
-    const parsed = JSON.parse(raw) as {
-      readonly command: string;
-      readonly result: {
-        readonly answer: {
-          readonly outcome: {
-            readonly value?: {
-              readonly status?: string;
-              readonly inquiry?: {
-                readonly id?: string;
-              };
-            };
-          };
-        };
-        readonly execution?: {
-          readonly steps: ReadonlyArray<{
-            readonly command: string;
-            readonly status: string;
-          }>;
-        };
-      };
-    };
-
-    expect(parsed.command).toBe('ask.question');
-    expect(parsed.result.answer.outcome.value?.status).toBe('answered');
-    expect(parsed.result.answer.outcome.value?.inquiry?.id).toBe('package-audit');
-    expect(parsed.result.execution?.steps.map((step) => step.command)).toEqual([
-      'session.open',
-      'query.audit.package',
-    ]);
-    expect(parsed.result.execution?.steps.every((step) => step.status === 'executed')).toBe(true);
-  });
-
-  it('reuses an opened hosted session across separate CLI invocations', async () => {
+  it('resolves package, type, export, symbol, and file through the hosted CLI', async () => {
     const repoPath = createAuditFixtureRepo();
     const openRaw = await runCliAsync([
       'session',
@@ -147,31 +104,167 @@ describe('source-analysis hosted CLI', () => {
       };
     };
 
-    const askRaw = await runCliAsync([
-      'ask',
-      'Audit @fixture/source-analysis-audit for tech debt.',
+    const pkgRaw = await runCliAsync([
+      'resolve',
+      'package',
+      '@fixture/source-analysis-audit',
       '--session-id',
       opened.result.sessionId,
       '--json',
     ]);
-    const asked = JSON.parse(askRaw) as {
+    const pkg = JSON.parse(pkgRaw) as {
+      readonly command: string;
       readonly result: {
-        readonly execution?: {
-          readonly usedSessionId?: string;
-          readonly ephemeralSession: boolean;
-          readonly steps: ReadonlyArray<{
-            readonly command: string;
-            readonly status: string;
+        readonly outcome: {
+          readonly kind: string;
+          readonly value?: {
+            readonly package_name?: string;
+          };
+        };
+      };
+    };
+
+    expect(pkg.command).toBe('query.package.resolve');
+    expect(pkg.result.outcome.kind).toBe('claim');
+    expect(pkg.result.outcome.value?.package_name).toBe('@fixture/source-analysis-audit');
+
+    const typeRaw = await runCliAsync([
+      'resolve',
+      'type',
+      'LiveShape',
+      '--session-id',
+      opened.result.sessionId,
+      '--json',
+    ]);
+    const typeDecl = JSON.parse(typeRaw) as {
+      readonly command: string;
+      readonly result: {
+        readonly outcome: {
+          readonly kind: string;
+          readonly value?: {
+            readonly name?: string;
+          };
+        };
+      };
+    };
+
+    expect(typeDecl.command).toBe('query.type.resolve');
+    expect(typeDecl.result.outcome.kind).toBe('claim');
+    expect(typeDecl.result.outcome.value?.name).toBe('LiveShape');
+
+    const exportRaw = await runCliAsync([
+      'resolve',
+      'export',
+      'auditReady',
+      '--session-id',
+      opened.result.sessionId,
+      '--json',
+    ]);
+    const exported = JSON.parse(exportRaw) as {
+      readonly command: string;
+      readonly result: {
+        readonly outcome: {
+          readonly kind: string;
+          readonly value?: {
+            readonly exported_name?: string;
+          };
+        };
+      };
+    };
+
+    expect(exported.command).toBe('query.export.resolve');
+    expect(exported.result.outcome.kind).toBe('claim');
+    expect(exported.result.outcome.value?.exported_name).toBe('auditReady');
+
+    const symbolRaw = await runCliAsync([
+      'lookup',
+      'symbol',
+      'auditReady',
+      '--session-id',
+      opened.result.sessionId,
+      '--json',
+    ]);
+    const symbol = JSON.parse(symbolRaw) as {
+      readonly command: string;
+      readonly result: {
+        readonly lookup: {
+          readonly tag: string;
+          readonly matches: ReadonlyArray<{
+            readonly declaration: {
+              readonly attributes: {
+                readonly name: string;
+              };
+            };
           }>;
         };
       };
     };
 
-    expect(asked.result.execution?.usedSessionId).toBe(opened.result.sessionId);
-    expect(asked.result.execution?.ephemeralSession).toBe(false);
-    expect(asked.result.execution?.steps.map((step) => step.command)).toEqual([
-      'query.audit.package',
+    expect(symbol.command).toBe('query.symbol.lookup');
+    expect(symbol.result.lookup.tag).toBe('hit');
+    expect(symbol.result.lookup.matches[0]?.declaration.attributes.name).toBe('auditReady');
+
+    const fileRaw = await runCliAsync([
+      'inspect',
+      'file',
+      'src/live.ts',
+      '--session-id',
+      opened.result.sessionId,
+      '--json',
     ]);
+    const file = JSON.parse(fileRaw) as {
+      readonly command: string;
+      readonly result: {
+        readonly inspection: {
+          readonly matchedFilePath: string | null;
+          readonly matches: readonly string[];
+        };
+      };
+    };
+
+    expect(file.command).toBe('query.file.inspect');
+    expect(file.result.inspection.matchedFilePath).toBe('src/live.ts');
+    expect(file.result.inspection.matches).toContain('src/live.ts');
+  });
+
+  it('reuses an opened hosted session across separate primitive CLI invocations', async () => {
+    const repoPath = createAuditFixtureRepo();
+    const openRaw = await runCliAsync([
+      'session',
+      'open',
+      '--repo',
+      repoPath,
+      '--target',
+      'fixture-cli-session',
+      '--json',
+    ]);
+    const opened = JSON.parse(openRaw) as {
+      readonly result: {
+        readonly sessionId: string;
+      };
+    };
+
+    const resolveRaw = await runCliAsync([
+      'resolve',
+      'package',
+      '@fixture/source-analysis-audit',
+      '--session-id',
+      opened.result.sessionId,
+      '--json',
+    ]);
+    const resolved = JSON.parse(resolveRaw) as {
+      readonly meta: {
+        readonly sessionId?: string;
+      };
+      readonly result: {
+        readonly outcome: {
+          readonly kind: string;
+        };
+      };
+    };
+
+    expect(resolved.meta.sessionId).toBe(opened.result.sessionId);
+    expect(resolved.result.outcome.kind).toBe('claim');
 
     const statusRaw = await runCliAsync(['session', 'status', '--json']);
     const status = JSON.parse(statusRaw) as {
@@ -185,11 +278,11 @@ describe('source-analysis hosted CLI', () => {
     expect(status.result.sessions.some((session) => session.sessionId === opened.result.sessionId)).toBe(true);
   });
 
-  it('routes analyzability questions through profile posture instead of workspace orientation', async () => {
+  it('surfaces analyzability posture directly through describe profile', async () => {
     const repoPath = createExcludedFrontierFixtureRepo();
     const raw = await runCliAsync([
-      'ask',
-      'What boundaries are open because parts of the repo are excluded from analysis?',
+      'describe',
+      'profile',
       '--repo',
       repoPath,
       '--json',
@@ -197,35 +290,48 @@ describe('source-analysis hosted CLI', () => {
     const parsed = JSON.parse(raw) as {
       readonly command: string;
       readonly result: {
-        readonly answer: {
-          readonly outcome: {
-            readonly tag: string;
-            readonly value?: {
-              readonly inquiry?: {
-                readonly id?: string;
-              };
-              readonly execution?: {
-                readonly command?: string;
-              };
-            };
+        readonly posture: {
+          readonly boundaryState: {
+            readonly id: string;
           };
+          readonly openFronts: ReadonlyArray<{
+            readonly title: string;
+          }>;
         };
       };
     };
 
-    expect(parsed.command).toBe('ask.question');
-    expect(parsed.result.answer.outcome.tag).toBe('open-boundary');
-    expect(parsed.result.answer.outcome.value?.inquiry?.id).toBe('analyzability-posture');
-    expect(parsed.result.answer.outcome.value?.execution?.command).toBe('describe.profile');
+    expect(parsed.command).toBe('describe.profile');
+    expect(parsed.result.posture.boundaryState.id).toBe('named-open-fronts');
+    expect(parsed.result.posture.openFronts.some((front) =>
+      front.title.toLowerCase().includes('excluded'),
+    )).toBe(true);
   });
 
-  it('treats excluded package focuses as explicit boundaries instead of silent misses', async () => {
+  it('treats excluded package focuses as explicit boundaries in direct navigate queries', async () => {
     const repoPath = createExcludedFrontierFixtureRepo();
-    const raw = await runCliAsync([
-      'ask',
-      'Orient me to @fixture/excluded.',
+    const openRaw = await runCliAsync([
+      'session',
+      'open',
       '--repo',
       repoPath,
+      '--target',
+      'fixture-cli-excluded',
+      '--json',
+    ]);
+    const opened = JSON.parse(openRaw) as {
+      readonly result: {
+        readonly sessionId: string;
+      };
+    };
+
+    const raw = await runCliAsync([
+      'query',
+      'navigate',
+      'package',
+      '@fixture/excluded',
+      '--session-id',
+      opened.result.sessionId,
       '--json',
     ]);
     const parsed = JSON.parse(raw) as {
@@ -233,14 +339,6 @@ describe('source-analysis hosted CLI', () => {
         readonly answer: {
           readonly outcome: {
             readonly tag: string;
-            readonly value?: {
-              readonly inquiry?: {
-                readonly id?: string;
-              };
-              readonly execution?: {
-                readonly command?: string;
-              };
-            };
             readonly summary: string;
             readonly issues: ReadonlyArray<{
               readonly code: string;
@@ -251,19 +349,32 @@ describe('source-analysis hosted CLI', () => {
     };
 
     expect(parsed.result.answer.outcome.tag).toBe('open-boundary');
-    expect(parsed.result.answer.outcome.value?.inquiry?.id).toBe('workspace-orientation');
-    expect(parsed.result.answer.outcome.value?.execution?.command).toBe('query.navigate');
-    expect(parsed.result.answer.outcome.summary).toContain('query.navigate');
     expect(parsed.result.answer.outcome.issues.some((issue) => issue.code.includes('focus-excluded'))).toBe(true);
   });
 
-  it('spends excluded-frontier seams inside package-audit answers', async () => {
+  it('spends excluded-frontier seams inside direct package-audit CLI queries', async () => {
     const repoPath = createExcludedFrontierFixtureRepo();
-    const raw = await runCliAsync([
-      'ask',
-      'Audit @fixture/app for tech debt.',
+    const openRaw = await runCliAsync([
+      'session',
+      'open',
       '--repo',
       repoPath,
+      '--target',
+      'fixture-cli-audit',
+      '--json',
+    ]);
+    const opened = JSON.parse(openRaw) as {
+      readonly result: {
+        readonly sessionId: string;
+      };
+    };
+
+    const raw = await runCliAsync([
+      'query',
+      'audit-package',
+      '@fixture/app',
+      '--session-id',
+      opened.result.sessionId,
       '--json',
     ]);
     const parsed = JSON.parse(raw) as {
@@ -271,11 +382,6 @@ describe('source-analysis hosted CLI', () => {
         readonly answer: {
           readonly outcome: {
             readonly tag: string;
-            readonly value?: {
-              readonly execution?: {
-                readonly command?: string;
-              };
-            };
             readonly issues: ReadonlyArray<{
               readonly code: string;
               readonly message: string;
@@ -286,19 +392,17 @@ describe('source-analysis hosted CLI', () => {
     };
 
     expect(parsed.result.answer.outcome.tag).toBe('open-boundary');
-    expect(parsed.result.answer.outcome.value?.execution?.command).toBe('query.audit.package');
     expect(parsed.result.answer.outcome.issues.some((issue) =>
       issue.code === 'focus-excluded-boundary-seams'
       && issue.message.includes('touches 1 observed seam'),
     )).toBe(true);
   });
 
-  it('keeps explicit repo and profile targeting visible in plan.question flows', async () => {
+  it('keeps explicit repo and profile targeting visible in direct session flows', async () => {
     const repoPath = createExplicitProfileFixtureRepo();
-    const raw = await runCliAsync([
-      'plan',
-      'question',
-      `Open a source-analysis session for ${repoPath}.`,
+    const openRaw = await runCliAsync([
+      'session',
+      'open',
       '--repo',
       repoPath,
       '--target',
@@ -307,35 +411,37 @@ describe('source-analysis hosted CLI', () => {
       'profiles/framework-core.json',
       '--json',
     ]);
-    const parsed = JSON.parse(raw) as {
+    const opened = JSON.parse(openRaw) as {
       readonly command: string;
       readonly result: {
-        readonly answer: {
-          readonly query: {
-            readonly worldFrame?: {
-              readonly repoPath?: string;
-              readonly target?: string;
-              readonly profilePath?: string;
-            };
-          };
-          readonly outcome: {
-            readonly value?: {
-              readonly status?: string;
-              readonly capability?: {
-                readonly command?: string;
-              };
-            };
-          };
-        };
+        readonly sessionId: string;
+        readonly target: string;
+        readonly profilePath: string | null;
       };
     };
 
-    expect(parsed.command).toBe('plan.question');
-    expect(parsed.result.answer.query.worldFrame?.repoPath).toBe(repoPath);
-    expect(parsed.result.answer.query.worldFrame?.target).toBe('fixture-explicit-target');
-    expect(parsed.result.answer.query.worldFrame?.profilePath).toBe('profiles/framework-core.json');
-    expect(parsed.result.answer.outcome.value?.status).toBe('ready');
-    expect(parsed.result.answer.outcome.value?.capability?.command).toBe('session.open');
+    expect(opened.command).toBe('session.open');
+    expect(opened.result.target).toBe('fixture-explicit-target');
+    expect(opened.result.profilePath?.replace(/\\/g, '/').endsWith('profiles/framework-core.json')).toBe(true);
+
+    const statusRaw = await runCliAsync([
+      'session',
+      'status',
+      '--session-id',
+      opened.result.sessionId,
+      '--json',
+    ]);
+    const status = JSON.parse(statusRaw) as {
+      readonly result: {
+        readonly sessions: ReadonlyArray<{
+          readonly sessionId: string;
+          readonly profilePath: string | null;
+        }>;
+      };
+    };
+
+    expect(status.result.sessions[0]?.sessionId).toBe(opened.result.sessionId);
+    expect(status.result.sessions[0]?.profilePath?.replace(/\\/g, '/').endsWith('profiles/framework-core.json')).toBe(true);
   });
 });
 
@@ -345,7 +451,7 @@ async function runCliAsync(
   const result = await execFileAsync(
     process.execPath,
     [
-      join(process.cwd(), 'packages', 'source-analysis', 'out', 'cli.js'),
+      join(process.cwd(), 'out', 'cli.js'),
       ...args,
     ],
     {

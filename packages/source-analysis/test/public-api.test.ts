@@ -9,7 +9,6 @@ import {
   HOST_RENDER_STYLES,
   SnapshotHostRuntime,
 } from '../out/public/host.js';
-import { createInquiryIngress } from '../out/public/inquiry.js';
 import {
   inspectAnalyzabilityPosture,
   inspectProfileSnapshotSupport,
@@ -33,17 +32,9 @@ describe('Source-analysis public API surface', () => {
     expect(typeof loadCurrentSnapshots).toBe('function');
   });
 
-  it('exposes named subpaths for host, inquiry, profile, and structural surfaces', () => {
+  it('exposes named subpaths for host, profile, and structural surfaces', () => {
     expect(HOST_RENDER_STYLES).toContain('plain-text');
     expect(STRUCTURAL_PATH_EVALUATOR_IDS).toContain('file-path-deterministic-ceiling');
-
-    const inquiry = createInquiryIngress();
-    const answer = inquiry.createDiscoveryAnswer({
-      question: 'Audit @aurelia-ls/source-analysis for tech debt.',
-    });
-
-    expect(answer.outcome.tag).toBe('hit');
-    expect(answer.outcome.value?.inquiries[0]?.id).toBe('package-audit');
 
     const profile = resolveAnalysisProfile({ repoPath: process.cwd() });
     expect(profile.repoPath.replace(/\\/g, '/')).toBe(process.cwd().replace(/\\/g, '/').replace(/\/+$/g, ''));
@@ -68,7 +59,7 @@ describe('Source-analysis public API surface', () => {
     );
     expect(Array.isArray(posture.summaryLines)).toBe(true);
 
-    const partitionRef = resolvePartitionRef(profile, 'source-area', 'packages/source-analysis/src/host/runtime.ts');
-    expect(partitionRef?.partitionId).toBe('packages/source-analysis/src/host');
+    const partitionRef = resolvePartitionRef(profile, 'source-area', 'src/host/runtime.ts');
+    expect(partitionRef?.partitionId).toBe('src/host');
   });
 });

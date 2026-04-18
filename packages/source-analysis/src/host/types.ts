@@ -1,6 +1,5 @@
 import type {
   InquiryAnswer,
-  FocusKind,
   QuestionRoute,
   ReadMode,
 } from '../inquiry-model.js';
@@ -10,21 +9,16 @@ import type { AnswerRef } from '../answer-ref.js';
 import type { ConsumerKind } from '../inquiry-policy.js';
 import type { RenderedPlainText } from '../answer-renderer.js';
 import type {
-  CapabilityDiscoveryValue,
-  CapabilityPlanValue,
-  CapabilityRepairValue,
-} from '../capability-ingress.js';
-import type {
-  InquiryAskValue,
-  InquiryDiscoveryValue,
-  InquiryPlanValue,
-} from '../inquiry-ingress.js';
-import type { InquiryFamilyId } from '../inquiry-catalog.js';
+  AuthorityOutcome,
+  SpendThreshold,
+} from '../authority/contracts.js';
 import type { DepsOutput } from '../deps/schema.js';
-import type { ExportsOutput } from '../exports/schema.js';
+import type { ExportsOutput, PackageExportRecord, PackageExportsSummary } from '../exports/schema.js';
+import type { FocusedFileQueryInspection } from '../focused-file-query.js';
 import type { NavigationValue } from '../navigation.js';
 import type { RouteWitnessValue } from '../route-witness.js';
-import type { TypeRefsOutput } from '../typerefs/schema.js';
+import type { StructuralDeclarationLookup } from '../structural-declaration-surface.js';
+import type { TypeDecl, TypeRefsOutput } from '../typerefs/schema.js';
 import type { SnapshotKind } from '../snapshots.js';
 import type { AnalysisProfile } from '../analysis-profile.js';
 import type { ProfileSnapshotSupport } from '../profile-support.js';
@@ -203,63 +197,60 @@ export interface NavigateQueryArgs extends SessionRenderQueryArgs {
   readonly questionRoute?: QuestionRoute;
 }
 
-export interface DescribeCapabilitiesArgs extends HostRenderOptions {
-  readonly question?: string;
-  readonly focusKind?: FocusKind;
-  readonly includeExamples?: boolean;
-  readonly topK?: number;
-}
-
 export interface DescribeProfileArgs {
   readonly repoPath?: string;
   readonly target?: string;
   readonly profilePath?: string;
 }
 
-export interface DescribeInquiriesArgs extends HostRenderOptions {
-  readonly question?: string;
-  readonly focusKind?: FocusKind;
-  readonly familyId?: InquiryFamilyId;
-  readonly includeExamples?: boolean;
-  readonly topK?: number;
+export interface PrimitiveQueryArgs extends SessionQueryArgs {
+  readonly spendThreshold?: SpendThreshold;
 }
 
-export interface PlanQuestionArgs extends HostRenderOptions {
-  readonly question: string;
-  readonly sessionId?: string;
-  readonly repoPath?: string;
-  readonly target?: string;
-  readonly profilePath?: string;
-  readonly focusKind?: FocusKind;
-  readonly focusValue?: string;
+export interface ResolvePackageQueryArgs extends PrimitiveQueryArgs {
+  readonly locator: string;
+  readonly locatorKind?: 'package-name' | 'package-dir';
 }
 
-export interface PlanInquiryArgs extends HostRenderOptions {
-  readonly question: string;
-  readonly sessionId?: string;
-  readonly repoPath?: string;
-  readonly target?: string;
-  readonly profilePath?: string;
-  readonly focusKind?: FocusKind;
-  readonly focusValue?: string;
-  readonly familyId?: InquiryFamilyId;
+export interface ResolveTypeQueryArgs extends PrimitiveQueryArgs {
+  readonly locator: string;
 }
 
-export interface AskQuestionArgs extends HostRenderOptions {
-  readonly question: string;
-  readonly sessionId?: string;
-  readonly repoPath?: string;
-  readonly target?: string;
-  readonly profilePath?: string;
-  readonly focusKind?: FocusKind;
-  readonly focusValue?: string;
-  readonly familyId?: InquiryFamilyId;
+export interface ResolveExportQueryArgs extends PrimitiveQueryArgs {
+  readonly locator: string;
 }
 
-export interface RepairCommandArgs extends HostRenderOptions {
-  readonly command?: string;
-  readonly args?: Record<string, unknown>;
-  readonly question?: string;
+export interface LookupSymbolDeclarationArgs extends SessionQueryArgs {
+  readonly locator: string;
+}
+
+export interface InspectFileQueryArgs extends SessionQueryArgs {
+  readonly filePath: string;
+}
+
+export interface ResolvePackageQueryResult {
+  readonly outcome: AuthorityOutcome<PackageExportsSummary, PackageExportsSummary>;
+  readonly warnings: readonly string[];
+}
+
+export interface ResolveTypeQueryResult {
+  readonly outcome: AuthorityOutcome<TypeDecl, TypeDecl>;
+  readonly warnings: readonly string[];
+}
+
+export interface ResolveExportQueryResult {
+  readonly outcome: AuthorityOutcome<PackageExportRecord, PackageExportRecord>;
+  readonly warnings: readonly string[];
+}
+
+export interface LookupSymbolDeclarationResult {
+  readonly lookup: StructuralDeclarationLookup;
+  readonly warnings: readonly string[];
+}
+
+export interface InspectFileQueryResult {
+  readonly inspection: FocusedFileQueryInspection;
+  readonly warnings: readonly string[];
 }
 
 export interface SessionSummaryQueryResult<TKind extends SnapshotKind> {
@@ -293,55 +284,10 @@ export interface NavigateQueryResult {
   readonly warnings: readonly string[];
 }
 
-export interface DescribeCapabilitiesResult {
-  readonly answer: InquiryAnswer<CapabilityDiscoveryValue>;
-  readonly rendered?: HostRenderedView;
-}
-
 export interface DescribeProfileResult {
   readonly profile: AnalysisProfile;
   readonly snapshotSupport: ProfileSnapshotSupport;
   readonly posture: AnalyzabilityPosture;
-}
-
-export interface DescribeInquiriesResult {
-  readonly answer: InquiryAnswer<InquiryDiscoveryValue>;
-  readonly rendered?: HostRenderedView;
-}
-
-export interface PlanQuestionResult {
-  readonly answer: InquiryAnswer<CapabilityPlanValue>;
-  readonly rendered?: HostRenderedView;
-}
-
-export interface PlanInquiryResult {
-  readonly answer: InquiryAnswer<InquiryPlanValue>;
-  readonly rendered?: HostRenderedView;
-}
-
-export interface RepairCommandResult {
-  readonly answer: InquiryAnswer<CapabilityRepairValue>;
-  readonly rendered?: HostRenderedView;
-}
-
-export interface AskQuestionExecutionStep {
-  readonly command: string;
-  readonly args: Record<string, unknown>;
-  readonly status: 'executed' | 'skipped' | 'failed';
-  readonly detail?: string;
-}
-
-export interface AskQuestionExecution {
-  readonly usedSessionId?: string;
-  readonly ephemeralSession: boolean;
-  readonly steps: readonly AskQuestionExecutionStep[];
-  readonly primaryEnvelope?: HostCommandEnvelope<unknown>;
-}
-
-export interface AskQuestionResult {
-  readonly answer: InquiryAnswer<InquiryAskValue>;
-  readonly rendered?: HostRenderedView;
-  readonly execution?: AskQuestionExecution;
 }
 
 export interface MaterializeSnapshotsArgs {
@@ -359,12 +305,6 @@ export interface MaterializeSnapshotsResult {
 
 export interface HostCommandArgsMap {
   'describe.profile': DescribeProfileArgs;
-  'describe.inquiries': DescribeInquiriesArgs;
-  'describe.capabilities': DescribeCapabilitiesArgs;
-  'plan.inquiry': PlanInquiryArgs;
-  'plan.question': PlanQuestionArgs;
-  'ask.question': AskQuestionArgs;
-  'repair.command': RepairCommandArgs;
   'session.open': SessionOpenArgs;
   'session.close': SessionCloseArgs;
   'session.status': SessionStatusArgs;
@@ -379,17 +319,16 @@ export interface HostCommandArgsMap {
   'query.audit.package': AuditPackageQueryArgs;
   'query.route.witness': RouteWitnessQueryArgs;
   'query.navigate': NavigateQueryArgs;
+  'query.package.resolve': ResolvePackageQueryArgs;
+  'query.type.resolve': ResolveTypeQueryArgs;
+  'query.export.resolve': ResolveExportQueryArgs;
+  'query.symbol.lookup': LookupSymbolDeclarationArgs;
+  'query.file.inspect': InspectFileQueryArgs;
   'materializeSnapshots': MaterializeSnapshotsArgs;
 }
 
 export interface HostCommandResultMap {
   'describe.profile': DescribeProfileResult;
-  'describe.inquiries': DescribeInquiriesResult;
-  'describe.capabilities': DescribeCapabilitiesResult;
-  'plan.inquiry': PlanInquiryResult;
-  'plan.question': PlanQuestionResult;
-  'ask.question': AskQuestionResult;
-  'repair.command': RepairCommandResult;
   'session.open': SessionOpenResult;
   'session.close': SessionCloseResult;
   'session.status': SessionStatusResult;
@@ -404,6 +343,11 @@ export interface HostCommandResultMap {
   'query.audit.package': AuditPackageQueryResult;
   'query.route.witness': RouteWitnessQueryResult;
   'query.navigate': NavigateQueryResult;
+  'query.package.resolve': ResolvePackageQueryResult;
+  'query.type.resolve': ResolveTypeQueryResult;
+  'query.export.resolve': ResolveExportQueryResult;
+  'query.symbol.lookup': LookupSymbolDeclarationResult;
+  'query.file.inspect': InspectFileQueryResult;
   'materializeSnapshots': MaterializeSnapshotsResult;
 }
 

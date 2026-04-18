@@ -208,3 +208,22 @@ decision trail in order.
 - The package is not considered directionally back on track until those
   natural-language and heuristic paths are gone from the primary API and
   replaced by typed semantic primitives.
+
+## 2026-04-18 - Primary hosted NL shell removed and replaced with direct primitives
+
+- The hosted runtime no longer dispatches `ask.question`, `plan.question`,
+  `plan.inquiry`, `describe.capabilities`, `describe.inquiries`, or
+  `repair.command`.
+- The primary machine-facing host now exposes direct authority-backed
+  primitives for package/type/export resolution plus symbol lookup and focused
+  file inspection.
+- The hosted CLI now mirrors those direct primitives (`resolve`, `lookup`,
+  `inspect`, and direct `query` topics) instead of translating prose
+  questions.
+- The public `./inquiry` subpath is gone, and the dead capability/inquiry
+  ingress, catalog, and ingress-recognition modules were deleted instead of
+  being kept as dormant compatibility baggage.
+- Structured answer-bearing surfaces such as `query.navigate`,
+  `query.route.witness`, and `query.audit.package` remain temporarily, but
+  they are now explicit compatibility queries sitting beside the new primitive
+  path rather than defining the package center of gravity.

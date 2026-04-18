@@ -21,10 +21,6 @@
       "import": "./out/public/host.js",
       "types": "./out/public/host.d.ts"
     },
-    "./inquiry": {
-      "import": "./out/public/inquiry.js",
-      "types": "./out/public/inquiry.d.ts"
-    },
     "./profile": {
       "import": "./out/public/profile.js",
       "types": "./out/public/profile.d.ts"

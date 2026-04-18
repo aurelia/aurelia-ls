@@ -10,20 +10,19 @@ question routing, family ranking, or conversational ingress.
 
 ## Exact next slice
 
-1. Remove the primary hosted command paths that exist only to interpret
-   natural-language intent or repair command shapes:
-   `ask.question`, `plan.question`, `describe.capabilities`,
-   `describe.inquiries`, and `repair.command`.
-2. Remove capability/inquiry family ranking, noun/verb/alias/confusion
-   matching, and other heuristic command-selection surfaces from the primary
-   machine-facing path.
-3. Replace those paths with typed primitive operations and selectors that let a
-   machine consumer directly ask semantic questions about declarations,
-   references, exports, world construction, registration evidence, and closure
-   posture without routing through a conversational shell.
-4. Preserve the structured answer algebra, result kinds, governing-anchor
-   refs, provenance, closure basis, and continuation basis while demoting or
-   deleting the conversational adapter layer around them.
+1. Keep shrinking the remaining compatibility query surfaces
+   (`query.navigate`, `query.route.witness`, `query.audit.package`) into
+   narrower direct primitives rather than letting them regrow into new
+   multiplexing shells.
+2. Add the next missing primitive families: export-route tracing,
+   package-reachability/package-surface inspection, and framework-oriented
+   world/registration evidence queries.
+3. Keep structured answer algebra available where it helps, but make sure the
+   machine-facing contract does not require presentation-first answer builders
+   or prose-oriented discovery layers to reach semantic work.
+4. Narrow the remaining broad compatibility carriers (`ReadMode`,
+   `WorldFrame`, legacy snapshot-query shims) so the host speaks more explicit
+   typed selectors and posture slices end to end.
 
 ## Recently landed
 
@@ -129,6 +128,16 @@ question routing, family ranking, or conversational ingress.
 - Added `docs/machine-legible-api-reset.md` and redirected the active campaign
   state around removing the current natural-language/heuristic API shell in
   favor of typed semantic primitives.
+- Removed the primary hosted natural-language command shell:
+  `ask.question`, `plan.question`, `plan.inquiry`, `describe.capabilities`,
+  `describe.inquiries`, and `repair.command` no longer exist on the active
+  host dispatch surface.
+- Added direct hosted primitives for package/type/export resolution plus
+  symbol lookup and focused file inspection, and rewired the hosted CLI around
+  direct `resolve`, `lookup`, `inspect`, and explicit `query` topics.
+- Removed the public `./inquiry` subpath and deleted the now-dead capability /
+  inquiry ingress, catalog, and ingress-recognition modules instead of
+  preserving them as dormant compatibility baggage.
 
 ## Constraints
 
@@ -147,9 +156,9 @@ question routing, family ranking, or conversational ingress.
 
 - `AnalysisViews` still carries the historical projection triple and remains a
   major continuity seam.
-- The hosted/public API still routes too much semantic work through
-  conversational ingress, capability discovery, and family ranking instead of
-  typed primitives.
+- The hosted/public API no longer depends on the conversational ingress shell,
+  but several answer-bearing compatibility queries still aggregate too much
+  semantic work behind broad labels.
 - `claim-lattice.ts` is promising, but it is not yet clearly the persistent
   authority runtime consulted by all live query surfaces.
 - `inquiry-model.ts` still overloads routes, read modes, focus kinds,
@@ -165,15 +174,12 @@ question routing, family ranking, or conversational ingress.
   `ExecutionPosture`, and answer/wire adapters now spend those slices
   internally, but the public query and wire carriers still flatten them for
   compatibility.
-- Capability and inquiry catalogs now hold explicit `ReadModeFamilies`
-  internally, but their public discovery/read surfaces still flatten back to
-  `readModes` for compatibility.
-- `resolveInquiryPolicy` is now presentation-only and ingress option types are
-  narrowed, but `Inquiry.readMode`, host render/query arg types, CLI parsing,
-  and public host compatibility exports still carry the broad `ReadMode` union.
-- The `snapshot-maintenance` inquiry family now has explicit planner intents,
-  but the catalog/discovery layer still exposes one compatibility family that
-  mixes session-maintenance and payload/materialization concerns.
+- `resolveInquiryPolicy` is now presentation-only, but host render/query arg
+  types, CLI parsing, and some compatibility query surfaces still carry the
+  broad `ReadMode` union.
+- Snapshot/materialization/session maintenance are now directly reachable, but
+  the remaining compatibility read surfaces still flatten multiple concerns
+  into a single host vocabulary.
 
 ## Likely files for the next pass
 
@@ -181,22 +187,25 @@ question routing, family ranking, or conversational ingress.
 - `src/host/runtime.ts`
 - `src/host/types.ts`
 - `src/public/host.ts`
-- `src/public/inquiry.ts`
+- `src/cli.ts`
 - `src/cli-hosted.ts`
+- `src/authority/workspace-authority.ts`
+- `src/export-trace-runtime-surface.ts`
+- `src/reachability.ts`
+- `src/structural-declaration-surface.ts`
+- `src/focused-file-query.ts`
 - `src/inquiry-policy.ts`
 - `src/inquiry-wire.ts`
 - `src/answer-envelope.ts`
 - `src/outcome-algebra.ts`
-- `src/inquiry-catalog.ts`
-- `src/capability-catalog.ts`
-- `src/inquiry-ingress.ts`
-- `src/capability-ingress.ts`
 - `src/analysis-surface.ts`
 - `test/inquiry-model.test.ts`
 - `test/answer-renderer.test.ts`
 - `test/inquiry-wire.test.ts`
 - `test/host-runtime.test.ts`
-- `test/inquiry-ingress.test.ts`
+- `test/cli.test.ts`
+- `test/public-api.test.ts`
+- `test/audit.test.ts`
 
 ## Verification reminders
 
@@ -205,9 +214,10 @@ question routing, family ranking, or conversational ingress.
 - Re-run `pnpm --filter @aurelia-ls/source-analysis build:tests`.
 - Re-run `node ./out-test/test/inquiry-model.test.js`.
 - Re-run `node ./out-test/test/answer-renderer.test.js`.
-- Re-run `node ./out-test/test/inquiry-ingress.test.js`.
 - Re-run `node ./out-test/test/inquiry-wire.test.js`.
 - Re-run `node ./out-test/test/host-runtime.test.js`.
+- Re-run `node ./out-test/test/cli.test.js`.
+- Re-run `node ./out-test/test/public-api.test.js`.
 - Re-run `node ./out-test/test/workspace-authority.test.js`.
 - Re-run `node ./out-test/test/navigation.test.js`.
 - Re-run `node ./out-test/test/route-witness.test.js`.
