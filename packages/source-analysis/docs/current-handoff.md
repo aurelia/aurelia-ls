@@ -4,20 +4,21 @@ Last updated: 2026-04-18
 
 ## Current objective
 
-Deepen the `query.navigate` vertical slice so more of its remaining file,
-symbol, analyzability, and neighborhood logic spends shared authority or
-evaluator surfaces instead of direct legacy projection stitching.
+Start moving `route-witness` and then `audit` onto the same shared authority
+and evaluator seams that now carry the primary `query.navigate` resolution
+paths.
 
 ## Exact next slice
 
-1. Keep `query.navigate` moving inward by replacing more direct
-   `builder.snapshots` reads with authority-backed surfaces, especially around
-   symbol/file localization and package/file neighborhood assembly.
-2. Decide which remaining navigation helpers should become authority methods
-   versus shared evaluator surfaces so the adapter does not turn into a second
-   hidden center of gravity.
-3. Once the navigation slice is cleaner, use the same contracts to start moving
-   `route-witness` and then `audit` off raw legacy projection carriers.
+1. Pull `route-witness` reachability construction and witness retrieval behind a
+   named shared route/reachability authority instead of letting the query
+   surface assemble those internals directly from `AnalysisViews`.
+2. Pull `audit` package-surface, dependency-surface, and reachability setup
+   behind the same authority/evaluator seams so finding collection starts from
+   shared semantic inputs rather than a fresh local join.
+3. Decide whether snapshot provenance/world-frame assembly should remain query-
+   local or graduate into a thinner shared helper now that navigation,
+   route-witness, and audit all depend on the same metadata contract.
 
 ## Recently landed
 
@@ -31,8 +32,17 @@ evaluator surfaces instead of direct legacy projection stitching.
 - Routed the host-side `query.navigate` path through the new navigation
   authority and moved package/type/export resolution plus some neighborhood
   reads onto authority methods.
+- Moved package analyzability classification, file localization, symbol
+  localization, and structural owning-package lookup behind authority-backed
+  evaluator seams so the primary navigation routes no longer resolve directly
+  against raw `AnalysisViews`.
+- Moved the primary `route-witness` file/type localization and analyzability
+  entry paths onto the same authority seam used by navigation.
+- Moved the `audit` package lookup and regime-classification entry path onto
+  authority-backed adjudication while leaving deeper finding assembly for the
+  next pass.
 - Added direct tests for the navigation authority adapter and kept the existing
-  live navigation suite green.
+  live navigation, route-witness, and audit suites green.
 
 ## Constraints
 
@@ -55,18 +65,26 @@ evaluator surfaces instead of direct legacy projection stitching.
   provenance kinds, and execution posture.
 - `route-witness` and `audit` still describe freshness in terms of the legacy
   projections rather than a named shared route/reachability authority.
-- `query.navigate` now enters through authority contracts, but much of its file
-  and symbol logic still reaches through transitional `analysis` access instead
-  of fully authority-owned surfaces.
+- `query.navigate` still uses raw snapshot metadata for provenance, snapshot
+  nodes, export-route freshness notes, and default world-frame assembly even
+  though its primary resolution path now spends authority-backed seams.
+- `route-witness` still constructs reachability and route witnesses directly
+  from `AnalysisViews` even though its focus localization and regime
+  classification now spend authority-backed seams.
+- `audit` still constructs package surfaces, dependency surfaces, reachability,
+  and findings directly from raw analysis carriers after the initial package
+  adjudication step.
 
 ## Likely files for the next pass
 
+- `src/route-witness.ts`
+- `src/audit.ts`
+- `src/reachability.ts`
+- `src/structural-source-file-surface.ts`
 - `src/authority/navigation-authority.ts`
-- `src/navigation.ts`
-- `src/analysis-views.ts`
+- `src/analyzability-posture.ts`
 - `src/focused-file-query.ts`
 - `src/structural-declaration-surface.ts`
-- `src/analyzability-posture.ts`
 
 ## Verification reminders
 

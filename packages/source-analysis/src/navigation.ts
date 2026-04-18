@@ -14,10 +14,8 @@ import {
 import type { LoadedCurrentSnapshotSet } from './snapshot-contract.js';
 import type { TypeDecl } from './typerefs/schema.js';
 import {
-  inspectAnalyzabilityPostureFromAnalysisViews,
-  inspectFocusedAnalyzabilityContext,
+  type FocusedAnalyzabilityContext,
 } from './analyzability-posture.js';
-import { inspectFocusedFileQuery } from './focused-file-query.js';
 import type { FocusedStructuralPathContext } from './focused-structural-path.js';
 import type { AnswerCard } from './answer-card.js';
 import type { AnswerRef } from './answer-ref.js';
@@ -67,9 +65,7 @@ import type {
 } from './substrate.js';
 import {
   describeMissingStructuralDeclarationSurface,
-  lookupStructuralDeclarations,
 } from './structural-declaration-surface.js';
-import { resolveStructuralOwningPackage } from './structural-source-file-surface.js';
 import { SUBSTRATE_SCHEMA_VERSION } from './substrate.js';
 import type { DeclarationClaim } from './structural-claim-graph.js';
 import {
@@ -445,8 +441,7 @@ function buildPackageEpisode(
   packageQuery: string,
 ): NavigationEpisode {
   const normalizedPackageQuery = trimTrailingFocusPunctuation(packageQuery);
-  const posture = inspectAnalyzabilityPostureFromAnalysisViews(builder.snapshots);
-  const requestedRegimeContext = inspectFocusedAnalyzabilityContext(posture, {
+  const requestedRegimeContext = builder.authority.inspectFocusedAnalyzability({
     focusLabel: normalizedPackageQuery,
     queryHints: [normalizedPackageQuery],
   });
@@ -548,7 +543,7 @@ function buildPackageEpisode(
   }
   builder.addClaimEdge({ kind: 'supports', from: packageClaimId, to: routeClaimId });
 
-  const regimeContext = inspectFocusedAnalyzabilityContext(posture, {
+  const regimeContext = builder.authority.inspectFocusedAnalyzability({
     focusLabel: pkg.package_name,
     pathPrefixes: [pkg.package_dir],
     queryHints: [pkg.package_name, pkg.package_dir, normalizedPackageQuery],
@@ -660,7 +655,7 @@ function buildTypeEpisode(
   const decl = typeResolution.value;
   const typerefsSnapshotId = builder.addSnapshotNode('typerefs');
   const exportsSnapshotId = builder.addSnapshotNode('exports');
-  const pkg = resolveStructuralOwningPackage(builder.snapshots, decl.file) ?? undefined;
+  const pkg = builder.authority.resolveOwningPackage(decl.file) ?? undefined;
 
   const fileNodeId = builder.addFileNode(decl.file);
   const declNodeId = builder.addDeclarationNode(decl);
@@ -788,7 +783,7 @@ function buildSymbolEpisode(
   builder: EpisodeBuilder,
   symbolQuery: string,
 ): NavigationEpisode {
-  const lookup = lookupStructuralDeclarations(builder.snapshots, symbolQuery);
+  const lookup = builder.authority.lookupSymbolDeclaration(locator('symbol-name', symbolQuery, 'symbol'));
   if (lookup.tag === 'open-boundary') {
     const policy = policyForNavigation(builder, 'symbol');
     return builder.finish(createAnswer(
@@ -1163,7 +1158,7 @@ function buildFileEpisode(
   builder: EpisodeBuilder,
   fileQuery: string,
 ): NavigationEpisode {
-  const fileInspection = inspectFocusedFileQuery(builder.snapshots, fileQuery);
+  const fileInspection = builder.authority.inspectFocusedFile(locator('file-path', fileQuery, 'file'));
   if (fileInspection.matches.length === 0) {
     if (fileInspection.requestedRegimeContext.directlyExcludedFrontier) {
       return builder.finish(createOpenBoundaryAnswer(
@@ -1205,7 +1200,7 @@ function buildFileEpisode(
 
   const filePath = fileInspection.matchedFilePath!;
   if (requiresSourceCatalogBoundary(fileInspection.structuralPathContext)) {
-    const pkg = resolveStructuralOwningPackage(builder.snapshots, filePath) ?? undefined;
+    const pkg = builder.authority.resolveOwningPackage(filePath) ?? undefined;
     return builder.finish(createOpenBoundaryAnswer(
       builder,
       describeStructuralSourceBoundary(filePath, fileInspection.structuralPathContext),
@@ -1221,7 +1216,7 @@ function buildFileEpisode(
   const exportsSnapshotId = builder.addSnapshotNode('exports');
   const dependencySurface = builder.authority.getDependencySurface();
   const fileNodeId = builder.addFileNode(filePath);
-  const pkg = resolveStructuralOwningPackage(builder.snapshots, filePath) ?? undefined;
+  const pkg = builder.authority.resolveOwningPackage(filePath) ?? undefined;
   const packageNodeId = pkg ? builder.addPackageNode(pkg) : undefined;
   if (packageNodeId) {
     builder.addEdge({ id: `contains:${packageNodeId}->${fileNodeId}`, kind: 'contains', from: packageNodeId, to: fileNodeId });
@@ -1479,7 +1474,7 @@ function createOpenBoundaryAnswer(
   message: string,
   focusRef: FocusRef,
   relatedRefs: readonly NavigationRef[],
-  regimeContext: ReturnType<typeof inspectFocusedAnalyzabilityContext>,
+  regimeContext: FocusedAnalyzabilityContext,
   structuralPathContext: FocusedStructuralPathContext | null = null,
 ): InquiryAnswer<NavigationValue> {
   const policy = policyForNavigation(builder, focusRef.kind);

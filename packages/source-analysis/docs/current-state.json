@@ -4,7 +4,7 @@
   "campaignDoc": "docs/authority-first-campaign.md",
   "resumeProtocol": "docs/resume-protocol.md",
   "updatedAt": "2026-04-18",
-  "currentStepId": "navigate-vertical-slice",
+  "currentStepId": "route-and-audit-migration",
   "steps": [
     {
       "id": "continuity-scaffolding",
@@ -32,7 +32,7 @@
     {
       "id": "navigate-vertical-slice",
       "title": "Move query.navigate onto shared authority contracts",
-      "status": "in_progress",
+      "status": "done",
       "goal": "Keep moving navigation logic off direct legacy projection stitching and onto shared authority and evaluator surfaces.",
       "files": [
         "src/authority/navigation-authority.ts",
@@ -50,7 +50,21 @@
     {
       "id": "route-and-audit-migration",
       "title": "Move route-witness and audit onto shared authority and evaluators",
-      "status": "pending"
+      "status": "in_progress",
+      "goal": "Move route-witness and then audit off raw legacy projection carriers so they spend the same shared authority and evaluator seams already used by query.navigate.",
+      "files": [
+        "src/route-witness.ts",
+        "src/audit.ts",
+        "src/authority/navigation-authority.ts",
+        "src/analyzability-posture.ts",
+        "src/focused-file-query.ts",
+        "src/structural-declaration-surface.ts"
+      ],
+      "exitCriteria": [
+        "route-witness primary route and freshness classification paths no longer assemble truth directly from analysis.deps, analysis.typeRefs, and analysis.exports.",
+        "audit reuses the same shared authority or evaluator seams for localization, boundary classification, and route evidence instead of ad hoc query-local joins.",
+        "The work does not promote deps, typerefs, or exports back into first-class architectural peers."
+      ]
     },
     {
       "id": "inquiry-ontology-split",

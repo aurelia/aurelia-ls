@@ -2,6 +2,7 @@ import { describe, expect, it } from './test-harness.js';
 
 import { loadCurrentSnapshots } from '../src/current-snapshots.js';
 import { createLegacyProjectionNavigationAuthority } from '../src/authority/navigation-authority.js';
+import { loadCurrentLiveAnalysisViews } from './live-analysis-views.js';
 
 function loadSnapshotsForAuthority() {
   try {
@@ -41,5 +42,37 @@ describe('Source-analysis navigation authority', () => {
     }
     expect(outcome.noClaim.kind).toBe('not-found');
   });
-});
 
+  it('classifies focused analyzability through the shared evaluator seam', () => {
+    const authority = createLegacyProjectionNavigationAuthority(loadSnapshotsForAuthority());
+    const context = authority.inspectFocusedAnalyzability({
+      focusLabel: '@aurelia-ls/source-analysis',
+      queryHints: ['@aurelia-ls/source-analysis'],
+    });
+
+    expect(context.classification.focusLabel).toBe('@aurelia-ls/source-analysis');
+    expect(context.facts.length > 0).toBe(true);
+  });
+
+  it('localizes live symbol declarations through the authority seam', () => {
+    const authority = createLegacyProjectionNavigationAuthority(loadCurrentLiveAnalysisViews());
+    const lookup = authority.lookupSymbolDeclaration({
+      kind: 'symbol-name',
+      value: 'createAnalysisViews',
+    });
+
+    expect(lookup.tag).toBe('hit');
+    expect(lookup.matches[0]?.declaration.attributes.filePath).toBe('packages/source-analysis/src/analysis-views.ts');
+  });
+
+  it('inspects focused file queries through the authority seam', () => {
+    const authority = createLegacyProjectionNavigationAuthority(loadCurrentLiveAnalysisViews());
+    const inspection = authority.inspectFocusedFile({
+      kind: 'file-path',
+      value: 'packages/source-analysis/src/host/runtime.ts',
+    });
+
+    expect(inspection.matches.length).toBe(1);
+    expect(inspection.matchedFilePath).toBe('packages/source-analysis/src/host/runtime.ts');
+  });
+});

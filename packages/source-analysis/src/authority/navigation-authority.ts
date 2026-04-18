@@ -1,13 +1,28 @@
 import type { AnalysisViews } from '../analysis-views.js';
+import {
+  inspectAnalyzabilityPostureFromAnalysisViews,
+  inspectFocusedAnalyzabilityContext,
+  type AnalyzabilityPosture,
+  type FocusedAnalyzabilityContext,
+} from '../analyzability-posture.js';
 import { loadDependencySurface, type DependencySurface } from '../dependency-surface.js';
 import type { CouplingMatrix } from '../deps/schema.js';
 import { resolveExportRoute, type ResolvedExportRoute } from '../export-trace-runtime-surface.js';
 import type { PackageExportRecord, PackageExportsSummary } from '../exports/schema.js';
 import { trimTrailingFocusPunctuation } from '../focus-normalization.js';
 import {
+  inspectFocusedFileQuery,
+  type FocusedFileQueryInspection,
+} from '../focused-file-query.js';
+import {
   coerceAnalysisViews,
 } from '../snapshot-analysis-views.js';
 import type { LoadedCurrentSnapshotSet } from '../snapshot-contract.js';
+import {
+  lookupStructuralDeclarations,
+  type StructuralDeclarationLookup,
+} from '../structural-declaration-surface.js';
+import { resolveStructuralOwningPackage } from '../structural-source-file-surface.js';
 import type { TypeDecl } from '../typerefs/schema.js';
 import type {
   AuthorityEvidence,
@@ -16,11 +31,26 @@ import type {
   SpendThreshold,
 } from './contracts.js';
 
+export interface NavigationAnalyzabilityFocus {
+  readonly focusLabel: string;
+  readonly pathPrefixes?: readonly string[];
+  readonly queryHints?: readonly string[];
+}
+
 export interface NavigationAuthority {
   readonly kind: 'legacy-projection-adapter';
   readonly analysis: AnalysisViews;
   readonly evidence: readonly AuthorityEvidence[];
   getDependencySurface(): DependencySurface;
+  inspectFocusedAnalyzability(
+    focus: NavigationAnalyzabilityFocus,
+  ): FocusedAnalyzabilityContext;
+  inspectFocusedFile(
+    locator: Locator,
+  ): FocusedFileQueryInspection;
+  lookupSymbolDeclaration(
+    locator: Locator,
+  ): StructuralDeclarationLookup;
   resolvePackage(
     locator: Locator,
     spendThreshold?: SpendThreshold,
@@ -43,6 +73,9 @@ export interface NavigationAuthority {
   getPackageByDir(
     packageDir: string,
   ): PackageExportsSummary | undefined;
+  resolveOwningPackage(
+    filePath: string,
+  ): PackageExportsSummary | null;
   getFileDeclarations(
     filePath: string,
   ): readonly TypeDecl[];
@@ -68,6 +101,7 @@ export function createLegacyProjectionNavigationAuthority(
 ): NavigationAuthority {
   const analysis = coerceAnalysisViews(input);
   let dependencySurface: DependencySurface | undefined;
+  let analyzabilityPosture: AnalyzabilityPosture | undefined;
   let workspacePackageEntrypointsByName: ReadonlyMap<string, string> | undefined;
 
   const sharedProjectionEvidence: readonly AuthorityEvidence[] = [
@@ -86,6 +120,22 @@ export function createLegacyProjectionNavigationAuthority(
     getDependencySurface(): DependencySurface {
       dependencySurface ??= loadDependencySurface(analysis);
       return dependencySurface;
+    },
+    inspectFocusedAnalyzability(
+      focus: NavigationAnalyzabilityFocus,
+    ): FocusedAnalyzabilityContext {
+      analyzabilityPosture ??= inspectAnalyzabilityPostureFromAnalysisViews(analysis);
+      return inspectFocusedAnalyzabilityContext(analyzabilityPosture, focus);
+    },
+    inspectFocusedFile(
+      locator: Locator,
+    ): FocusedFileQueryInspection {
+      return inspectFocusedFileQuery(analysis, locator.value);
+    },
+    lookupSymbolDeclaration(
+      locator: Locator,
+    ): StructuralDeclarationLookup {
+      return lookupStructuralDeclarations(analysis, locator.value);
     },
     resolvePackage(
       locator: Locator,
@@ -252,6 +302,11 @@ export function createLegacyProjectionNavigationAuthority(
     ): PackageExportsSummary | undefined {
       return analysis.exports.packages.find((candidate) => candidate.package_dir === packageDir);
     },
+    resolveOwningPackage(
+      filePath: string,
+    ): PackageExportsSummary | null {
+      return resolveStructuralOwningPackage(analysis, filePath);
+    },
     getFileDeclarations(
       filePath: string,
     ): readonly TypeDecl[] {
@@ -389,4 +444,3 @@ function noClaim(
     }],
   };
 }
-

@@ -12,7 +12,6 @@ import {
   type DependencySurface,
 } from './dependency-surface.js';
 import {
-  coerceAnalysisViews,
   loadCurrentAnalysisViews,
 } from './snapshot-analysis-views.js';
 import type { LoadedCurrentSnapshotSet } from './snapshot-contract.js';
@@ -20,8 +19,7 @@ import type { PackageExportRecord, PackageExportsSummary } from './exports/schem
 import { collectPartitionBindingCycles } from './partition-coupling.js';
 import type { TypeDecl } from './typerefs/schema.js';
 import {
-  inspectAnalyzabilityPostureFromAnalysisViews,
-  inspectFocusedAnalyzabilityContext,
+  type FocusedAnalyzabilityContext,
 } from './analyzability-posture.js';
 import type { AnswerCard } from './answer-card.js';
 import type { AnswerRef } from './answer-ref.js';
@@ -76,6 +74,12 @@ import {
 } from './structural-source-file-surface.js';
 import type { PackageCoordinationSurface } from './coordination-surface.js';
 import { createPackageCoordinationSurface } from './coordination-surface.js';
+import {
+  coerceNavigationAuthority,
+  createLegacyProjectionNavigationAuthority,
+  type NavigationAuthority,
+} from './authority/navigation-authority.js';
+import type { Locator } from './authority/contracts.js';
 
 export const AUDIT_FINDING_KINDS = [
   'blindspot',
@@ -127,22 +131,22 @@ export function createCurrentAuditAnswer(
 ): InquiryAnswer<AuditValue> {
   return createAuditAnswer(
     query,
-    loadCurrentAnalysisViews(target, waitMs),
+    createLegacyProjectionNavigationAuthority(loadCurrentAnalysisViews(target, waitMs)),
   );
 }
 
 export function createAuditAnswer(
   query: Inquiry,
-  analysisInput: AnalysisViews | LoadedCurrentSnapshotSet,
+  authorityInput: NavigationAuthority | AnalysisViews | LoadedCurrentSnapshotSet,
 ): InquiryAnswer<AuditValue> {
-  const analysis = coerceAnalysisViews(analysisInput);
+  const authority = coerceNavigationAuthority(authorityInput);
   switch (query.focusRef.kind) {
     case 'package':
-      return buildPackageAuditAnswer(query, analysis, query.focusRef.value);
+      return buildPackageAuditAnswer(query, authority, query.focusRef.value);
     default:
       return createUnsupportedAnswer(
         query,
-        analysis,
+        authority.analysis,
         `Audit for focus kind "${query.focusRef.kind}" is not implemented yet.`,
       );
   }
@@ -150,21 +154,22 @@ export function createAuditAnswer(
 
 function buildPackageAuditAnswer(
   query: Inquiry,
-  analysis: AnalysisViews,
+  authority: NavigationAuthority,
   packageQuery: string,
 ): InquiryAnswer<AuditValue> {
-  // TODO: Package audit still begins by stitching package lookup, posture, and
-  // later findings out of an AnalysisViews bundle. Pull these inputs behind
-  // shared package/evaluator surfaces so audit spends one authority instead of
-  // re-deriving meaning from legacy projection carriers.
+  // TODO: Package audit now enters through authority-backed package lookup and
+  // regime classification, but the later finding assembly still spends raw
+  // AnalysisViews/reachability/package-surface joins. Keep pulling those
+  // internals behind shared package/evaluator surfaces so audit consults one
+  // authority instead of re-deriving meaning from legacy carriers.
+  const analysis = authority.analysis;
   const normalizedPackageQuery = trimTrailingFocusPunctuation(packageQuery);
-  const posture = inspectAnalyzabilityPostureFromAnalysisViews(analysis);
-  const requestedRegimeContext = inspectFocusedAnalyzabilityContext(posture, {
+  const requestedRegimeContext = authority.inspectFocusedAnalyzability({
     focusLabel: normalizedPackageQuery,
     queryHints: [normalizedPackageQuery],
   });
-  const pkgMatches = resolvePackages(analysis, normalizedPackageQuery);
-  if (pkgMatches.length === 0) {
+  const packageResolution = authority.resolvePackage(locator('package-name', normalizedPackageQuery, 'package'));
+  if (packageResolution.kind === 'no-claim') {
     if (requestedRegimeContext.directlyExcludedFrontier) {
       return createExcludedFrontierAnswer(
         query,
@@ -182,21 +187,26 @@ function buildPackageAuditAnswer(
     );
   }
 
-  if (pkgMatches.length > 1) {
+  if (packageResolution.kind === 'ambiguity') {
     return createAmbiguousAnswer(
       query,
       analysis,
       `Package query "${normalizedPackageQuery}" is ambiguous.`,
       { kind: 'package', value: normalizedPackageQuery },
-      pkgMatches.map((pkg) => packageRef(pkg)),
+      packageResolution.ambiguity.candidates.map((pkg) => packageRef(pkg)),
     );
   }
 
-  const pkg = pkgMatches[0]!;
+  const pkg = packageResolution.value;
   const policy = resolveInquiryPolicy(query, {
     focusKind: 'package',
     inquiryEpisode: 'inventory-and-audit-sweep',
     readMode: defaultReadMode(query.questionRoute),
+  });
+  const regimeContext = authority.inspectFocusedAnalyzability({
+    focusLabel: pkg.package_name,
+    pathPrefixes: [pkg.package_dir],
+    queryHints: [pkg.package_name, pkg.package_dir, normalizedPackageQuery],
   });
   const packageSurface = collectStructuralPackageFileSurface(analysis, pkg);
   if (!packageSurface) {
@@ -205,7 +215,7 @@ function buildPackageAuditAnswer(
       analysis,
       pkg,
       describeMissingStructuralPackageSurface(),
-      regimeContextForPackage(posture, pkg, normalizedPackageQuery),
+      regimeContext,
     );
   }
   const context = createPackageAuditContext(
@@ -217,7 +227,6 @@ function buildPackageAuditAnswer(
     packageSurface,
   );
   const findings = collectPackageAuditFindings(context);
-  const regimeContext = regimeContextForPackage(posture, pkg, normalizedPackageQuery);
 
   const blindspotCount = findings.filter((finding) => finding.kind === 'blindspot').length;
   const dormantCount = findings.filter((finding) => finding.kind === 'under-integrated-file').length;
@@ -337,18 +346,6 @@ function createPackageAuditContext(
     coordinationSurface,
     policy,
   };
-}
-
-function regimeContextForPackage(
-  posture: ReturnType<typeof inspectAnalyzabilityPostureFromAnalysisViews>,
-  pkg: PackageExportsSummary,
-  normalizedPackageQuery: string,
-): ReturnType<typeof inspectFocusedAnalyzabilityContext> {
-  return inspectFocusedAnalyzabilityContext(posture, {
-    focusLabel: pkg.package_name,
-    pathPrefixes: [pkg.package_dir],
-    queryHints: [pkg.package_name, pkg.package_dir, normalizedPackageQuery],
-  });
 }
 
 function collectPackageAuditFindings(
@@ -1087,7 +1084,7 @@ function createExcludedFrontierAnswer(
   query: Inquiry,
   analysis: AnalysisViews,
   packageQuery: string,
-  regimeContext: ReturnType<typeof inspectFocusedAnalyzabilityContext>,
+  regimeContext: FocusedAnalyzabilityContext,
 ): InquiryAnswer<AuditValue> {
   const policy = resolveInquiryPolicy(query, {
     focusKind: 'package',
@@ -1144,7 +1141,7 @@ function createStructuralPackageBoundaryAnswer(
   analysis: AnalysisViews,
   pkg: PackageExportsSummary,
   message: string,
-  regimeContext: ReturnType<typeof inspectFocusedAnalyzabilityContext>,
+  regimeContext: FocusedAnalyzabilityContext,
 ): InquiryAnswer<AuditValue> {
   const policy = resolveInquiryPolicy(query, {
     focusKind: 'package',
@@ -1319,29 +1316,6 @@ function createUnsupportedAnswer(
   );
 }
 
-function resolvePackages(
-  analysis: AnalysisViews,
-  query: string,
-): readonly PackageExportsSummary[] {
-  const normalized = trimTrailingFocusPunctuation(query).toLowerCase();
-  const exact = analysis.exports.packages.filter((pkg) =>
-    pkg.package_name.toLowerCase() === normalized
-    || pkg.package_dir.toLowerCase() === normalized,
-  );
-  if (exact.length > 0) return exact;
-
-  const shortMatches = analysis.exports.packages.filter((pkg) =>
-    pkg.package_name.split('/').at(-1)?.toLowerCase() === normalized
-    || pkg.package_dir.split('/').at(-1)?.toLowerCase() === normalized,
-  );
-  if (shortMatches.length > 0) return shortMatches;
-
-  return analysis.exports.packages.filter((pkg) =>
-    pkg.package_name.toLowerCase().includes(normalized)
-    || pkg.package_dir.toLowerCase().includes(normalized),
-  );
-}
-
 function packageRef(pkg: PackageExportsSummary): AuditRef {
   return createPackageSummaryAnswerRef(pkg);
 }
@@ -1416,6 +1390,18 @@ function pluralize(count: number): string {
 
 function basename(filePath: string): string {
   return filePath.split('/').at(-1) ?? filePath;
+}
+
+function locator(
+  kind: Locator['kind'],
+  value: string,
+  label?: string,
+): Locator {
+  return {
+    kind,
+    value,
+    ...(label ? { label } : {}),
+  };
 }
 
 function resolveAuditRepoPath(repoPath?: string): string {

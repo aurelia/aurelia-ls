@@ -27,3 +27,25 @@ decision trail in order.
   become a second hidden architecture center.
 - The next slice should deepen the navigation vertical slice before moving on to
   `route-witness` or `audit`.
+
+## 2026-04-18 - Navigation now spends authority-backed evaluator seams
+
+- `query.navigate` now spends authority-backed seams for focused analyzability,
+  file localization, symbol localization, and structural owning-package
+  resolution.
+- Those new authority methods should remain thin delegations into shared
+  evaluator modules such as `analyzability-posture`, `focused-file-query`,
+  `structural-declaration-surface`, and `structural-source-file-surface`; do
+  not clone their logic into multiple query surfaces.
+- The next migration target is `route-witness`, followed by `audit`, using the
+  same evaluator-backed seams rather than new legacy-projection joins.
+
+## 2026-04-18 - Route-witness and audit now enter through the shared authority seam
+
+- `route-witness` file/type localization and regime classification now spend
+  the same authority-backed seam as navigation.
+- `audit` package adjudication and regime classification now spend that same
+  authority seam before finding collection begins.
+- The next pressure point is no longer entry-path ambiguity. It is the deeper
+  route/reachability and package-surface construction that still happens
+  directly against `AnalysisViews`.

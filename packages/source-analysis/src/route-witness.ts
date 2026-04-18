@@ -23,10 +23,8 @@ import type { LoadedCurrentSnapshotSet } from './snapshot-contract.js';
 import { createAnswerDocument } from './answer-document.js';
 import { createAnswerEnvelope } from './answer-envelope.js';
 import {
-  inspectAnalyzabilityPostureFromAnalysisViews,
-  inspectFocusedAnalyzabilityContext,
+  type FocusedAnalyzabilityContext,
 } from './analyzability-posture.js';
-import { inspectFocusedFileQuery } from './focused-file-query.js';
 import type { FocusedStructuralPathContext } from './focused-structural-path.js';
 import { trimTrailingFocusPunctuation } from './focus-normalization.js';
 import { resolveInquiryPolicy, type InquiryPolicy } from './inquiry-policy.js';
@@ -50,7 +48,12 @@ import {
   getPackageRouteWitnesses,
 } from './reachability.js';
 import type { TypeDecl } from './typerefs/schema.js';
-import { resolveStructuralOwningPackage } from './structural-source-file-surface.js';
+import {
+  coerceNavigationAuthority,
+  createLegacyProjectionNavigationAuthority,
+  type NavigationAuthority,
+} from './authority/navigation-authority.js';
+import type { Locator } from './authority/contracts.js';
 
 export type RouteWitnessRef = AnswerRef;
 
@@ -65,24 +68,24 @@ export function createCurrentRouteWitnessAnswer(
 ): InquiryAnswer<RouteWitnessValue> {
   return createRouteWitnessAnswer(
     query,
-    loadCurrentAnalysisViews(target, waitMs),
+    createLegacyProjectionNavigationAuthority(loadCurrentAnalysisViews(target, waitMs)),
   );
 }
 
 export function createRouteWitnessAnswer(
   query: Inquiry,
-  analysisInput: AnalysisViews | LoadedCurrentSnapshotSet,
+  authorityInput: NavigationAuthority | AnalysisViews | LoadedCurrentSnapshotSet,
 ): InquiryAnswer<RouteWitnessValue> {
-  const analysis = coerceAnalysisViews(analysisInput);
+  const authority = coerceNavigationAuthority(authorityInput);
   switch (query.focusRef.kind) {
     case 'file':
-      return buildFileRouteWitnessAnswer(query, analysis, query.focusRef.value);
+      return buildFileRouteWitnessAnswer(query, authority, query.focusRef.value);
     case 'type':
-      return buildTypeRouteWitnessAnswer(query, analysis, query.focusRef.value);
+      return buildTypeRouteWitnessAnswer(query, authority, query.focusRef.value);
     default:
       return createUnsupportedAnswer(
         query,
-        analysis,
+        authority.analysis,
         `Route witnesses for focus kind "${query.focusRef.kind}" are not implemented yet.`,
       );
   }
@@ -90,10 +93,11 @@ export function createRouteWitnessAnswer(
 
 function buildFileRouteWitnessAnswer(
   query: Inquiry,
-  analysis: AnalysisViews,
+  authority: NavigationAuthority,
   fileQuery: string,
 ): InquiryAnswer<RouteWitnessValue> {
-  const fileInspection = inspectFocusedFileQuery(analysis, fileQuery);
+  const analysis = authority.analysis;
+  const fileInspection = authority.inspectFocusedFile(locator('file-path', fileQuery, 'file'));
   if (fileInspection.matches.length === 0) {
     if (fileInspection.requestedRegimeContext.directlyExcludedFrontier) {
       return createOpenBoundaryAnswer(
@@ -140,7 +144,7 @@ function buildFileRouteWitnessAnswer(
 
   const filePath = fileInspection.matchedFilePath!;
   if (requiresSourceCatalogBoundary(fileInspection.structuralPathContext)) {
-    const pkg = resolveStructuralOwningPackage(analysis, filePath);
+    const pkg = authority.resolveOwningPackage(filePath);
     return createOpenBoundaryAnswer(
       query,
       analysis,
@@ -153,7 +157,7 @@ function buildFileRouteWitnessAnswer(
     );
   }
 
-  const pkg = resolveStructuralOwningPackage(analysis, filePath);
+  const pkg = authority.resolveOwningPackage(filePath);
   if (!pkg) {
     return createOpenBoundaryAnswer(
       query,
@@ -189,13 +193,13 @@ function buildFileRouteWitnessAnswer(
 
 function buildTypeRouteWitnessAnswer(
   query: Inquiry,
-  analysis: AnalysisViews,
+  authority: NavigationAuthority,
   typeQuery: string,
 ): InquiryAnswer<RouteWitnessValue> {
   const normalizedTypeQuery = trimTrailingFocusPunctuation(typeQuery);
-  const posture = inspectAnalyzabilityPostureFromAnalysisViews(analysis);
-  const declarationMatches = resolveTypeDeclarations(analysis, normalizedTypeQuery);
-  if (declarationMatches.length === 0) {
+  const analysis = authority.analysis;
+  const typeResolution = authority.resolveTypeDeclaration(locator('type-name', normalizedTypeQuery, 'type'));
+  if (typeResolution.kind === 'no-claim') {
     return createMissAnswer(
       query,
       analysis,
@@ -205,18 +209,18 @@ function buildTypeRouteWitnessAnswer(
     );
   }
 
-  if (declarationMatches.length > 1) {
+  if (typeResolution.kind === 'ambiguity') {
     return createAmbiguousAnswer(
       query,
       analysis,
       `Type query "${normalizedTypeQuery}" matches multiple declarations.`,
       { kind: 'type', value: normalizedTypeQuery },
-      declarationMatches.slice(0, 8).map((declaration) => typeRef(declaration)),
+      typeResolution.ambiguity.candidates.slice(0, 8).map((declaration) => typeRef(declaration)),
     );
   }
 
-  const declaration = declarationMatches[0]!;
-  const pkg = resolveStructuralOwningPackage(analysis, declaration.file);
+  const declaration = typeResolution.value;
+  const pkg = authority.resolveOwningPackage(declaration.file);
   if (!pkg) {
     return createOpenBoundaryAnswer(
       query,
@@ -233,7 +237,7 @@ function buildTypeRouteWitnessAnswer(
     ordering: policy.ordering,
   });
   const witnesses = getPackageRouteWitnesses(reachability, declaration.file);
-  const regimeContext = inspectFocusedAnalyzabilityContext(posture, {
+  const regimeContext = authority.inspectFocusedAnalyzability({
     focusLabel: declaration.name,
     pathPrefixes: [declaration.file],
     queryHints: [normalizedTypeQuery, declaration.name, declaration.file],
@@ -259,7 +263,7 @@ function createHitRouteWitnessAnswer(
   primaryRef: RouteWitnessRef,
   witnesses: readonly PackageRouteWitness[],
   extraRelatedRefs: readonly RouteWitnessRef[],
-  regimeContext: ReturnType<typeof inspectFocusedAnalyzabilityContext>,
+  regimeContext: FocusedAnalyzabilityContext,
   structuralPathContext: FocusedStructuralPathContext | null,
 ): InquiryAnswer<RouteWitnessValue> {
   const bestWitness = witnesses[0];
@@ -536,7 +540,7 @@ function createOpenBoundaryAnswer(
   message: string,
   relatedRefs: readonly RouteWitnessRef[],
   continuations: readonly Continuation[],
-  regimeContext?: ReturnType<typeof inspectFocusedAnalyzabilityContext>,
+  regimeContext?: FocusedAnalyzabilityContext,
   structuralPathContext: FocusedStructuralPathContext | null = null,
 ): InquiryAnswer<RouteWitnessValue> {
   const policy = policyForRouteWitness(query, focusRef.kind);
@@ -647,24 +651,6 @@ function createUnsupportedAnswer(
     }],
     [],
     [],
-  );
-}
-
-function resolveTypeDeclarations(
-  analysis: AnalysisViews,
-  query: string,
-): readonly TypeDecl[] {
-  const normalized = trimTrailingFocusPunctuation(query);
-  const exact = analysis.typeRefs.declarations.filter((declaration) => declaration.name === normalized);
-  if (exact.length > 0) return exact;
-
-  const exactCaseInsensitive = analysis.typeRefs.declarations.filter((declaration) =>
-    declaration.name.toLowerCase() === normalized.toLowerCase(),
-  );
-  if (exactCaseInsensitive.length > 0) return exactCaseInsensitive;
-
-  return analysis.typeRefs.declarations.filter((declaration) =>
-    declaration.name.toLowerCase().includes(normalized.toLowerCase()),
   );
 }
 
@@ -808,6 +794,18 @@ function pluralize(count: number): string {
 
 function basename(filePath: string): string {
   return filePath.split('/').at(-1) ?? filePath;
+}
+
+function locator(
+  kind: Locator['kind'],
+  value: string,
+  label?: string,
+): Locator {
+  return {
+    kind,
+    value,
+    ...(label ? { label } : {}),
+  };
 }
 
 function requiresSourceCatalogBoundary(
