@@ -14,12 +14,12 @@ carrying one overloaded label space.
    and wire payloads so cognitive inquiry moves (`search` / `join` / `route` /
    `inventory`) stop sharing one label slot with maintenance/control moves
    (`refresh` / `diff` / `materialize`) after the catalog split.
-2. Push `WorldFrame` flattening outward toward compatibility-only boundaries by
-   letting more answer/wire/runtime surfaces spend `WorldTargeting` and
-   `ExecutionPosture` directly.
+2. Keep pushing route selection and world-frame flattening outward from the
+   compatibility boundary itself so the public query and outcome carriers stop
+   being the next place that route/world family information gets collapsed.
 3. Decide how payload/materialization mode should escape the remaining broad
-   `ReadMode` union without prematurely freezing a public materialization
-   contract.
+   `ReadMode` union in capability/inquiry catalogs, ingress options, and host
+   entrypoints without prematurely freezing a public materialization contract.
 
 ## Recently landed
 
@@ -77,6 +77,18 @@ carrying one overloaded label space.
   frame construction, and navigation/audit/route-witness freshness reads onto
   those new targeting/posture helpers while keeping the flattened `WorldFrame`
   wire shape intact.
+- Added shared `QuestionRouteSelection` helpers so internal route targets can
+  carry cognitive versus maintenance family information without immediately
+  collapsing back to the flattened `QuestionRoute` union.
+- Moved continuation targets onto typed route selections while preserving the
+  flattened `targetQuestionRoute` field as a compatibility carrier on the
+  public outcome surface.
+- Added split answer/wire adapters in `inquiry-wire.ts` so continuation bases
+  and delta reread floors can spend `QuestionRouteSelection`,
+  `WorldTargeting`, and `ExecutionPosture` internally before flattening at the
+  wire payload boundary.
+- Moved `answer-envelope.ts` onto those split wire adapters and added a direct
+  `inquiry-wire` test that pins the compatibility payload shape.
 
 ## Constraints
 
@@ -98,8 +110,8 @@ carrying one overloaded label space.
 - `inquiry-model.ts` still overloads routes, read modes, focus kinds,
   provenance kinds, and execution posture.
 - `resolveInquiryPolicy` still carries the broad `QuestionRoute` union because
-  continuation/delta/wire carriers still flatten the route families back into
-  one label space after the catalog split.
+  the public query/policy boundary still flattens route families back into one
+  label space after the newer continuation and wire adapters were narrowed.
 - `route-witness` and `audit` still describe freshness in terms of the legacy
   projections rather than a named shared route/reachability authority.
 - `query.navigate`, `route-witness`, and `audit` still describe freshness in
@@ -108,8 +120,12 @@ carrying one overloaded label space.
 - `audit` still owns coordination and presentation fragmentation checks as
   package-self-pressure heuristics rather than shared semantic evaluators.
 - `WorldFrame` is now split internally into `WorldTargeting` and
-  `ExecutionPosture`, but the flattened carrier still travels through answer
-  and wire payloads for compatibility.
+  `ExecutionPosture`, and answer/wire adapters now spend those slices
+  internally, but the public query and wire carriers still flatten them for
+  compatibility.
+- `ReadMode` still remains broad in capability/inquiry catalogs, ingress
+  options, and host entrypoints even though render policy and answer envelopes
+  now speak presentation mode only.
 
 ## Likely files for the next pass
 
@@ -124,12 +140,15 @@ carrying one overloaded label space.
 - `src/capability-ingress.ts`
 - `src/host/runtime.ts`
 - `src/analysis-surface.ts`
+- `test/inquiry-wire.test.ts`
 
 ## Verification reminders
 
 - Run `pnpm preflight` before non-trivial work.
 - Re-run `pnpm --filter @aurelia-ls/source-analysis build`.
 - Re-run `pnpm --filter @aurelia-ls/source-analysis build:tests`.
+- Re-run `node ./out-test/test/inquiry-model.test.js`.
+- Re-run `node ./out-test/test/inquiry-wire.test.js`.
 - Re-run `node ./out-test/test/workspace-authority.test.js`.
 - Re-run `node ./out-test/test/navigation.test.js`.
 - Re-run `node ./out-test/test/route-witness.test.js`.

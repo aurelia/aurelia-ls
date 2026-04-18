@@ -29,6 +29,10 @@ import {
   isPolicyFocusKind,
   isPresentationReadMode,
   isSubjectFocusKind,
+  questionRouteFromSelection,
+  selectCognitiveQuestionRoute,
+  selectMaintenanceQuestionRoute,
+  selectQuestionRoute,
   worldTargetingFromFrame,
 } from '../src/inquiry-model.js';
 import { asFocusKind, supportsRecognizedFocus } from '../src/ingress-hints.js';
@@ -117,6 +121,19 @@ describe('Source-analysis inquiry ontology', () => {
       partiality: 'complete',
       freshness: 'live',
     });
+    expect(selectCognitiveQuestionRoute('join')).toEqual({
+      family: 'cognitive',
+      route: 'join',
+    });
+    expect(selectMaintenanceQuestionRoute('refresh')).toEqual({
+      family: 'maintenance',
+      route: 'refresh',
+    });
+    expect(selectQuestionRoute('inventory')).toEqual({
+      family: 'cognitive',
+      route: 'inventory',
+    });
+    expect(questionRouteFromSelection(selectQuestionRoute('diff'))).toBe('diff');
   });
 
   it('keeps ingress-recognizable focus kinds as an explicit subset', () => {

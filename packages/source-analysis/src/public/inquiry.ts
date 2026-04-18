@@ -44,6 +44,7 @@ export type {
 } from '../inquiry-catalog.js';
 export type {
   CarrierProvenanceEntryKind,
+  CognitiveQuestionRouteSelection,
   CognitiveQuestionRoute,
   ControlFocusKind,
   ExecutionPosture,
@@ -62,11 +63,13 @@ export type {
   InquiryEpisode,
   PartialityMode,
   MaintenanceQuestionRoute,
+  MaintenanceQuestionRouteSelection,
   PayloadReadMode,
   PolicyFocusKind,
   PresentationReadMode,
   ProvenanceEntryKind,
   QuestionRouteFamilies,
+  QuestionRouteSelection,
   Inquiry,
   InquirySlotId,
   QuestionRoute,
@@ -117,5 +120,9 @@ export {
   isPolicyFocusKind,
   isPresentationReadMode,
   isSubjectFocusKind,
+  questionRouteFromSelection,
+  selectCognitiveQuestionRoute,
+  selectMaintenanceQuestionRoute,
+  selectQuestionRoute,
   worldTargetingFromFrame,
 } from '../inquiry-model.js';

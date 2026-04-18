@@ -2,6 +2,8 @@ import type {
   ClaimHomeId,
   ClaimId,
 } from './claim-lattice.js';
+import type { QuestionRouteSelection, QuestionRoute } from './inquiry-model.js';
+import { selectQuestionRoute } from './inquiry-model.js';
 import type { SubstrateNodeId } from './substrate.js';
 
 export const OUTCOME_SCHEMA_VERSION = 'v0alpha1' as const;
@@ -99,7 +101,8 @@ export interface Continuation {
   readonly label: string;
   readonly description?: string;
   readonly targetFocusRef?: string;
-  readonly targetQuestionRoute?: string;
+  readonly targetQuestionRoute?: QuestionRoute;
+  readonly targetQuestionRouteSelection?: QuestionRouteSelection;
 }
 
 export interface Outcome<TResult = unknown> {
@@ -111,4 +114,19 @@ export interface Outcome<TResult = unknown> {
   readonly closureBasis: readonly ClosureBasis[];
   readonly issues: readonly Issue[];
   readonly continuations: readonly Continuation[];
+}
+
+export function continuationTargetRoute(
+  route: QuestionRoute,
+): Pick<Continuation, 'targetQuestionRoute' | 'targetQuestionRouteSelection'> {
+  return {
+    targetQuestionRoute: route,
+    targetQuestionRouteSelection: selectQuestionRoute(route),
+  };
+}
+
+export function resolveContinuationTargetQuestionRoute(
+  continuation: Pick<Continuation, 'targetQuestionRoute' | 'targetQuestionRouteSelection'>,
+): QuestionRoute | undefined {
+  return continuation.targetQuestionRouteSelection?.route ?? continuation.targetQuestionRoute;
 }

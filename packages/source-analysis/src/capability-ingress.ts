@@ -34,6 +34,9 @@ import type {
   Issue,
   TrustProfile,
 } from './outcome-algebra.js';
+import {
+  continuationTargetRoute,
+} from './outcome-algebra.js';
 import type {
   InquiryAnswer,
   InquiryCarrierProvenanceEntry,
@@ -287,7 +290,7 @@ export class CapabilityIngress {
         kind: 'reroute',
         label: `Plan ${capability.command}`,
         description: `Use the planner to turn your question into ${capability.command}.`,
-        targetQuestionRoute: 'route',
+        ...continuationTargetRoute('route'),
       })),
       provenance: capabilityProvenance(),
     });
@@ -627,7 +630,7 @@ export class CapabilityIngress {
         kind: 'reroute',
         label: 'Describe capabilities',
         description: 'Inspect the capability catalog and provide a stronger focus hint.',
-        targetQuestionRoute: 'search',
+        ...continuationTargetRoute('search'),
       }],
       provenance: capabilityProvenance(),
     });
@@ -689,7 +692,7 @@ export class CapabilityIngress {
         kind: 'narrow',
         label: `Narrow toward ${capability.command}`,
         description: capability.whenToUse,
-        targetQuestionRoute: 'route',
+        ...continuationTargetRoute('route'),
       })),
       provenance: capabilityProvenance(),
     });
@@ -760,7 +763,7 @@ export class CapabilityIngress {
         kind: 'reroute',
         label: 'Describe capabilities',
         description: 'Inspect the capability catalog before trying another command shape.',
-        targetQuestionRoute: 'search',
+        ...continuationTargetRoute('search'),
       }],
       provenance: capabilityProvenance(),
     });
@@ -1146,7 +1149,7 @@ function planContinuations(
       kind: 'narrow',
       label: `Provide ${missingInputs.join(', ')}`,
       description: `The command ${command} needs ${missingInputs.join(', ')} before it can execute honestly.`,
-      targetQuestionRoute: 'route',
+      ...continuationTargetRoute('route'),
     }];
   }
 
@@ -1154,7 +1157,7 @@ function planContinuations(
     kind: 'reroute',
     label: `Run ${command}`,
     description: `Execute the canonical invocation for ${command}.`,
-    targetQuestionRoute: 'route',
+    ...continuationTargetRoute('route'),
   }];
 }
 

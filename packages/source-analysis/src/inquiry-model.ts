@@ -32,9 +32,10 @@ export const QUESTION_ROUTES = [
 ] as const;
 // TODO: This currently mixes cognitive inquiry moves (search/join/route/inventory)
 // with control-plane or maintenance operations (materialize/refresh/diff).
-// Catalog definitions now spend explicit route families, but the outer query,
-// continuation, and delta carriers still flatten them back into QuestionRoute.
-// Keep shrinking those broad carriers before execution planning grows further.
+// Catalogs and the newer continuation/delta adapters now carry explicit route
+// families internally, but the outer query and wire-compatible payloads still
+// flatten them back into QuestionRoute. Keep shrinking those compatibility
+// carriers before execution planning grows further.
 
 export const PRESENTATION_READ_MODES = [
   'focus-card',
@@ -156,6 +157,20 @@ export interface QuestionRouteFamilies {
   readonly maintenance?: readonly MaintenanceQuestionRoute[];
 }
 
+export interface CognitiveQuestionRouteSelection {
+  readonly family: 'cognitive';
+  readonly route: CognitiveQuestionRoute;
+}
+
+export interface MaintenanceQuestionRouteSelection {
+  readonly family: 'maintenance';
+  readonly route: MaintenanceQuestionRoute;
+}
+
+export type QuestionRouteSelection =
+  | CognitiveQuestionRouteSelection
+  | MaintenanceQuestionRouteSelection;
+
 export type PresentationReadMode =
   typeof PRESENTATION_READ_MODES[number];
 
@@ -234,8 +249,9 @@ export interface WorldFrame {
 }
 // TODO: WorldFrame remains the wire-compatible flattened carrier, but shared
 // helpers now expose WorldTargeting and ExecutionPosture as the honest internal
-// slices. Keep pushing high-fanout consumers onto those slices until the
-// flattened carrier becomes compatibility-only.
+// slices, and answer/wire adapters now spend those slices before flattening.
+// Keep pushing high-fanout consumers onto those slices until the flattened
+// carrier becomes compatibility-only.
 
 export interface ContinuationBasis<
   TFocusKind extends FocusKind = FocusKind,
@@ -385,6 +401,38 @@ export function createQuestionRouteFamilies(
     cognitive: families.cognitive ?? [],
     maintenance: families.maintenance ?? [],
   };
+}
+
+export function selectCognitiveQuestionRoute(
+  route: CognitiveQuestionRoute,
+): CognitiveQuestionRouteSelection {
+  return {
+    family: 'cognitive',
+    route,
+  };
+}
+
+export function selectMaintenanceQuestionRoute(
+  route: MaintenanceQuestionRoute,
+): MaintenanceQuestionRouteSelection {
+  return {
+    family: 'maintenance',
+    route,
+  };
+}
+
+export function selectQuestionRoute(
+  route: QuestionRoute,
+): QuestionRouteSelection {
+  return isCognitiveQuestionRoute(route)
+    ? selectCognitiveQuestionRoute(route)
+    : selectMaintenanceQuestionRoute(route);
+}
+
+export function questionRouteFromSelection(
+  selection: QuestionRouteSelection | undefined,
+): QuestionRoute | undefined {
+  return selection?.route;
 }
 
 export function worldTargetingFromFrame(

@@ -41,6 +41,10 @@ import type {
   Issue,
   TrustProfile,
 } from './outcome-algebra.js';
+import {
+  continuationTargetRoute,
+  resolveContinuationTargetQuestionRoute,
+} from './outcome-algebra.js';
 import type {
   InquiryAnswer,
   FocusKind,
@@ -404,7 +408,7 @@ export class InquiryIngress {
         kind: 'reroute',
         label: `Plan ${inquiry.id}`,
         description: `Turn your question into an inquiry plan for ${inquiry.id}.`,
-        targetQuestionRoute: 'route',
+        ...continuationTargetRoute('route'),
       })),
       provenance: inquiryProvenance(),
     });
@@ -1192,7 +1196,7 @@ function inquiryContinuations(
       kind: 'narrow',
       label: `Provide ${plan.missingInputs.join(', ')}`,
       description: `The inquiry ${plan.inquiry?.id ?? 'family'} still needs ${plan.missingInputs.join(', ')} before it can execute honestly.`,
-      targetQuestionRoute: 'route',
+      ...continuationTargetRoute('route'),
     }];
   }
 
@@ -1201,7 +1205,7 @@ function inquiryContinuations(
       kind: 'reroute',
       label: `Run ${plan.primaryStep.command}`,
       description: `Execute the primary host command for ${plan.inquiry?.id ?? 'the selected inquiry family'}.`,
-      targetQuestionRoute: 'route',
+      ...continuationTargetRoute('route'),
     }];
   }
 
@@ -1233,7 +1237,7 @@ function dedupeContinuations(
     const key = [
       continuation.kind,
       continuation.label,
-      continuation.targetQuestionRoute ?? '',
+      resolveContinuationTargetQuestionRoute(continuation) ?? '',
       continuation.targetFocusRef ?? '',
     ].join('\0');
     if (seen.has(key)) {

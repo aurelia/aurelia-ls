@@ -17,8 +17,14 @@ import type {
   PresentationReadMode,
   WorldFrame,
 } from './inquiry-model.js';
-import { INQUIRY_MODEL_SCHEMA_VERSION } from './inquiry-model.js';
 import {
+  INQUIRY_MODEL_SCHEMA_VERSION,
+  executionPostureFromFrame,
+  selectQuestionRoute,
+  worldTargetingFromFrame,
+} from './inquiry-model.js';
+import {
+  type WireContinuationBasisSource,
   toWireContinuationBasis,
   toWireDeltaDescriptor,
 } from './inquiry-wire.js';
@@ -52,6 +58,14 @@ export function createAnswerEnvelope<
     worldFrame: options.worldFrame,
     governingAnchorRefs: options.value.relatedRefs.map((ref) => ref.value).slice(0, 4),
   };
+  const wireContinuationBasis: WireContinuationBasisSource = {
+    focusRef: options.focusRef,
+    questionRoute: selectQuestionRoute(options.query.questionRoute),
+    readMode: options.readMode,
+    worldTargeting: worldTargetingFromFrame(options.worldFrame),
+    executionPosture: executionPostureFromFrame(options.worldFrame),
+    governingAnchorRefs: continuationBasis.governingAnchorRefs,
+  };
 
   const outcome: Outcome<TResult> = {
     schemaVersion: OUTCOME_SCHEMA_VERSION,
@@ -83,7 +97,7 @@ export function createAnswerEnvelope<
       outcome,
       closure_basis: options.closureBasis,
       provenance: options.provenance,
-      continuation_basis: toWireContinuationBasis(continuationBasis),
+      continuation_basis: toWireContinuationBasis(wireContinuationBasis),
       delta: toWireDeltaDescriptor({
         kind: 'none',
         count: 0,

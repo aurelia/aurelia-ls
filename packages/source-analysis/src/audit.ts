@@ -68,6 +68,10 @@ import type {
   TrustKind,
   TrustProfile,
 } from './outcome-algebra.js';
+import {
+  continuationTargetRoute,
+  resolveContinuationTargetQuestionRoute,
+} from './outcome-algebra.js';
 import type {
   InquiryAnswer,
   InquiryEvidenceProvenanceEntry,
@@ -1080,7 +1084,7 @@ function continuation(
     kind: targetQuestionRoute === 'route' ? 'reroute' : 'inspect-support',
     label,
     description: detail,
-    targetQuestionRoute,
+    ...continuationTargetRoute(targetQuestionRoute),
     targetFocusRef,
   };
 }
@@ -1196,7 +1200,7 @@ function dedupeContinuations(
   const seen = new Set<string>();
   const deduped: Continuation[] = [];
   for (const continuation of continuations) {
-    const key = `${continuation.targetQuestionRoute ?? ''}\0${continuation.targetFocusRef ?? ''}`;
+    const key = `${resolveContinuationTargetQuestionRoute(continuation) ?? ''}\0${continuation.targetFocusRef ?? ''}`;
     if (seen.has(key)) continue;
     seen.add(key);
     deduped.push(continuation);

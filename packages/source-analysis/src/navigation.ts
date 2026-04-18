@@ -56,6 +56,7 @@ import type {
   Issue,
   TrustProfile,
 } from './outcome-algebra.js';
+import { continuationTargetRoute } from './outcome-algebra.js';
 import type {
   InquiryAnswer,
   InquiryEvidenceProvenanceEntry,
@@ -1711,7 +1712,7 @@ function continuation(
     kind: targetQuestionRoute === 'route' ? 'reroute' : 'inspect-support',
     label,
     description: detail,
-    targetQuestionRoute,
+    ...continuationTargetRoute(targetQuestionRoute),
     targetFocusRef,
   };
 }

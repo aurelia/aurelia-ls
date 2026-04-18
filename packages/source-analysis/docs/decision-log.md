@@ -110,3 +110,17 @@ decision trail in order.
 - The remaining ontology pressure is now in the still-broad outer carriers:
   continuation routing, delta reread floors, and the flattened `WorldFrame`
   that still travels through answer/wire payloads for compatibility.
+
+## 2026-04-18 - Continuation and wire adapters now spend split route and world slices
+
+- Shared `QuestionRouteSelection` helpers now carry cognitive versus
+  maintenance route family information for concrete route targets.
+- Continuations now preserve typed route selections internally while still
+  exposing the flattened `targetQuestionRoute` field as a compatibility
+  carrier on the outcome surface.
+- `inquiry-wire.ts` now accepts split continuation-basis and delta sources so
+  `answer-envelope.ts` can flatten `QuestionRouteSelection`,
+  `WorldTargeting`, and `ExecutionPosture` only at the wire payload boundary.
+- The remaining ontology pressure is now centered on the broad public query and
+  policy carriers (`QuestionRoute`, `WorldFrame`, and `ReadMode`) rather than
+  on the newer continuation/delta/wire adapters.

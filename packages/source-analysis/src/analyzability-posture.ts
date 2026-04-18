@@ -12,6 +12,10 @@ import type {
   OutcomeTag,
   TrustProfile,
 } from './outcome-algebra.js';
+import {
+  continuationTargetRoute,
+  resolveContinuationTargetQuestionRoute,
+} from './outcome-algebra.js';
 import { inspectProfileSnapshotSupport, isUsableSnapshotArtifact, type ProfileSnapshotSupport, type SnapshotArtifactSupport, type SnapshotRegimeStatus, type SnapshotSupportStatus } from './profile-support.js';
 import { createRepoSession } from './repo-session.js';
 import type { SnapshotPaths } from './snapshot-config.js';
@@ -375,7 +379,7 @@ export function inspectFocusedAnalyzabilityContext(
       description: primaryFrontier.boundaryReferences[0]
         ? `${primaryFrontier.boundaryReferences[0].source}:${primaryFrontier.boundaryReferences[0].line} reaches into ${primaryFrontier.prefix}.`
         : `${primaryFrontier.prefix} remains outside the included regime under the current profile.`,
-      targetQuestionRoute: 'join',
+      ...continuationTargetRoute('join'),
       targetFocusRef: primaryFrontier.prefix,
     }]
     : [];
@@ -452,7 +456,7 @@ export function summarizeAnalyzabilityPosture(
       description: posture.snapshotSupport.snapshots.find((snapshot) =>
         snapshot.status !== 'available' || snapshot.regimeStatus !== 'aligned',
       )?.issues[0] ?? 'Refresh the current snapshots so regime posture can close more honestly.',
-      targetQuestionRoute: 'refresh',
+      ...continuationTargetRoute('refresh'),
     });
   }
 
@@ -463,7 +467,7 @@ export function summarizeAnalyzabilityPosture(
       description: posture.frontierEvidenceSource === 'live-scan'
         ? 'Refresh aligned snapshots so excluded-frontier evidence can travel through the snapshot contract instead of a live fallback scan.'
         : 'Refresh aligned snapshots so excluded-frontier evidence is carried by the snapshot contract instead of profile-law fallback only.',
-      targetQuestionRoute: 'refresh',
+      ...continuationTargetRoute('refresh'),
     });
   }
 
@@ -475,7 +479,7 @@ export function summarizeAnalyzabilityPosture(
       description: frontier.boundaryReferences[0]
         ? `${frontier.boundaryReferences[0].source}:${frontier.boundaryReferences[0].line} reaches into ${frontier.prefix}.`
         : `Inspect the named open frontier ${frontier.prefix}.`,
-      targetQuestionRoute: 'join',
+      ...continuationTargetRoute('join'),
       targetFocusRef: frontier.prefix,
     });
   }
@@ -1079,7 +1083,7 @@ function dedupeContinuations(
     const key = [
       continuation.kind,
       continuation.label,
-      continuation.targetQuestionRoute ?? '',
+      resolveContinuationTargetQuestionRoute(continuation) ?? '',
       continuation.targetFocusRef ?? '',
     ].join('\0');
     if (seen.has(key)) {
