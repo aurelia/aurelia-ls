@@ -498,6 +498,19 @@ describe('SnapshotHostRuntime', () => {
     expect(packageSurface.result.surface?.uncoveredFiles).toContain('test/index.test.ts');
     expect(packageSurface.result.surface?.fileEntries.find((entry) => entry.filePath === 'src/live.ts')?.declarations[0]?.name).toBe('LiveShape');
 
+    const packageContext = runtime.execute<'query.package.context'>({
+      command: 'query.package.context',
+      args: {
+        sessionId,
+        locator: '@fixture/source-analysis-audit',
+      },
+    });
+    expect(packageContext.status).toBe('ok');
+    expect(packageContext.result.context.packageOutcome.kind).toBe('claim');
+    expect(packageContext.result.context.pkg?.package_name).toBe('@fixture/source-analysis-audit');
+    expect(packageContext.result.context.regimeContext?.focusLabel).toBe('@fixture/source-analysis-audit');
+    expect(packageContext.result.context.valueExports?.some((record) => record.exported_name === 'auditReady')).toBe(true);
+
     const packageReachability = runtime.execute<'query.package.reachability'>({
       command: 'query.package.reachability',
       args: {
@@ -551,6 +564,20 @@ describe('SnapshotHostRuntime', () => {
     expect(fileRoute.result.witnesses?.[0]?.rootKind).toBe('public-api');
     expect(fileRoute.result.witnesses?.[0]?.files).toEqual(['src/index.ts', 'src/live.ts']);
 
+    const fileContext = runtime.execute<'query.file.context'>({
+      command: 'query.file.context',
+      args: {
+        sessionId,
+        filePath: 'src/live.ts',
+      },
+    });
+    expect(fileContext.status).toBe('ok');
+    expect(fileContext.result.context.inspection.matchedFilePath).toBe('src/live.ts');
+    expect(fileContext.result.context.pkg?.package_name).toBe('@fixture/source-analysis-audit');
+    expect(fileContext.result.context.inboundEdges?.some((edge) => edge.source === 'src/index.ts')).toBe(true);
+    expect(fileContext.result.context.declarations?.[0]?.name).toBe('LiveShape');
+    expect(fileContext.result.context.exportRecords?.[0]?.exported_name).toBe('LiveShape');
+
     const typeRoute = runtime.execute<'query.type.route'>({
       command: 'query.type.route',
       args: {
@@ -567,6 +594,23 @@ describe('SnapshotHostRuntime', () => {
     expect(typeRoute.result.package?.package_name).toBe('@fixture/source-analysis-audit');
     expect(typeRoute.result.regimeContext?.focusLabel).toBe('LiveShape');
     expect(typeRoute.result.witnesses?.[0]?.rootKind).toBe('public-api');
+
+    const typeContext = runtime.execute<'query.type.context'>({
+      command: 'query.type.context',
+      args: {
+        sessionId,
+        locator: 'LiveShape',
+      },
+    });
+    expect(typeContext.status).toBe('ok');
+    expect(typeContext.result.context.typeOutcome.kind).toBe('claim');
+    if (typeContext.result.context.typeOutcome.kind !== 'claim') {
+      throw new Error('Expected type context query to resolve a declaration.');
+    }
+    expect(typeContext.result.context.typeOutcome.value.file).toBe('src/live.ts');
+    expect(typeContext.result.context.pkg?.package_name).toBe('@fixture/source-analysis-audit');
+    expect(typeContext.result.context.matchingExport?.exported_name).toBe('LiveShape');
+    expect(typeContext.result.context.uniqueRefs).toEqual([]);
 
     const symbol = runtime.execute({
       command: 'query.symbol.lookup',

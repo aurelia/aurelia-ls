@@ -16,7 +16,12 @@ import type { DepsOutput } from '../deps/schema.js';
 import type { ExportsOutput, PackageExportRecord, PackageExportsSummary } from '../exports/schema.js';
 import type { ResolvedExportRoute } from '../export-trace-runtime-surface.js';
 import type { FocusedFileQueryInspection } from '../focused-file-query.js';
-import type { NavigationValue } from '../navigation.js';
+import type {
+  FileNavigationContext,
+  NavigationValue,
+  PackageNavigationContext,
+  TypeNavigationContext,
+} from '../navigation.js';
 import type {
   PackageFileReachability,
   PackageReachability,
@@ -239,6 +244,11 @@ export interface InspectPackageSurfaceQueryArgs extends PrimitiveQueryArgs {
   readonly locatorKind?: 'package-name' | 'package-dir';
 }
 
+export interface InspectPackageContextQueryArgs extends PrimitiveQueryArgs {
+  readonly locator: string;
+  readonly locatorKind?: 'package-name' | 'package-dir';
+}
+
 export interface InspectPackageReachabilityQueryArgs extends PrimitiveQueryArgs {
   readonly locator: string;
   readonly locatorKind?: 'package-name' | 'package-dir';
@@ -259,7 +269,15 @@ export interface InspectFileRouteQueryArgs extends SessionQueryArgs {
   readonly filePath: string;
 }
 
+export interface InspectFileContextQueryArgs extends SessionQueryArgs {
+  readonly filePath: string;
+}
+
 export interface InspectTypeRouteQueryArgs extends PrimitiveQueryArgs {
+  readonly locator: string;
+}
+
+export interface InspectTypeContextQueryArgs extends PrimitiveQueryArgs {
   readonly locator: string;
 }
 
@@ -302,6 +320,11 @@ export interface HostStructuralPackageSurface {
 export interface InspectPackageSurfaceQueryResult {
   readonly packageOutcome: AuthorityOutcome<PackageExportsSummary, PackageExportsSummary>;
   readonly surface: HostStructuralPackageSurface | null;
+  readonly warnings: readonly string[];
+}
+
+export interface InspectPackageContextQueryResult {
+  readonly context: PackageNavigationContext;
   readonly warnings: readonly string[];
 }
 
@@ -370,11 +393,21 @@ export interface InspectFileRouteQueryResult {
   readonly warnings: readonly string[];
 }
 
+export interface InspectFileContextQueryResult {
+  readonly context: FileNavigationContext;
+  readonly warnings: readonly string[];
+}
+
 export interface InspectTypeRouteQueryResult {
   readonly typeOutcome: AuthorityOutcome<TypeDecl, TypeDecl>;
   readonly package: PackageExportsSummary | null;
   readonly regimeContext: FocusedAnalyzabilityContext | null;
   readonly witnesses: readonly PackageRouteWitness[] | null;
+  readonly warnings: readonly string[];
+}
+
+export interface InspectTypeContextQueryResult {
+  readonly context: TypeNavigationContext;
   readonly warnings: readonly string[];
 }
 
@@ -458,11 +491,14 @@ export interface HostCommandArgsMap {
   'query.type.resolve': ResolveTypeQueryArgs;
   'query.export.resolve': ResolveExportQueryArgs;
   'query.package.surface': InspectPackageSurfaceQueryArgs;
+  'query.package.context': InspectPackageContextQueryArgs;
   'query.package.reachability': InspectPackageReachabilityQueryArgs;
   'query.export.trace': TraceExportQueryArgs;
   'query.package.audit-signals': InspectPackageAuditSignalsQueryArgs;
   'query.file.route': InspectFileRouteQueryArgs;
+  'query.file.context': InspectFileContextQueryArgs;
   'query.type.route': InspectTypeRouteQueryArgs;
+  'query.type.context': InspectTypeContextQueryArgs;
   'query.symbol.lookup': LookupSymbolDeclarationArgs;
   'query.file.inspect': InspectFileQueryArgs;
   'materializeSnapshots': MaterializeSnapshotsArgs;
@@ -488,11 +524,14 @@ export interface HostCommandResultMap {
   'query.type.resolve': ResolveTypeQueryResult;
   'query.export.resolve': ResolveExportQueryResult;
   'query.package.surface': InspectPackageSurfaceQueryResult;
+  'query.package.context': InspectPackageContextQueryResult;
   'query.package.reachability': InspectPackageReachabilityQueryResult;
   'query.export.trace': TraceExportQueryResult;
   'query.package.audit-signals': InspectPackageAuditSignalsQueryResult;
   'query.file.route': InspectFileRouteQueryResult;
+  'query.file.context': InspectFileContextQueryResult;
   'query.type.route': InspectTypeRouteQueryResult;
+  'query.type.context': InspectTypeContextQueryResult;
   'query.symbol.lookup': LookupSymbolDeclarationResult;
   'query.file.inspect': InspectFileQueryResult;
   'materializeSnapshots': MaterializeSnapshotsResult;

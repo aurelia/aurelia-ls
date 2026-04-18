@@ -383,6 +383,22 @@ function buildInspectInvocation(
         },
       };
     }
+    case 'package-context': {
+      const locator = remainingArgs.slice(1).join(' ').trim();
+      if (!locator) {
+        throw new Error('Usage: pnpm source-analysis inspect package-context <locator> --session-id <id>');
+      }
+      return {
+        command: 'query.package.context',
+        args: {
+          sessionId: requireSessionId(common.sessionId, 'inspect package-context'),
+          locator,
+          ...(common.locatorKind ? { locatorKind: common.locatorKind } : {}),
+          ...(common.spendThreshold ? { spendThreshold: common.spendThreshold } : {}),
+          ...(common.force ? { refreshIfNeeded: true } : {}),
+        },
+      };
+    }
     case 'package-reachability': {
       const locator = remainingArgs.slice(1).join(' ').trim();
       if (!locator) {
@@ -447,6 +463,20 @@ function buildInspectInvocation(
         },
       };
     }
+    case 'file-context': {
+      const filePath = remainingArgs.slice(1).join(' ').trim();
+      if (!filePath) {
+        throw new Error('Usage: pnpm source-analysis inspect file-context <path> --session-id <id>');
+      }
+      return {
+        command: 'query.file.context',
+        args: {
+          sessionId: requireSessionId(common.sessionId, 'inspect file-context'),
+          filePath,
+          ...(common.force ? { refreshIfNeeded: true } : {}),
+        },
+      };
+    }
     case 'type-route': {
       const locator = remainingArgs.slice(1).join(' ').trim();
       if (!locator) {
@@ -462,8 +492,23 @@ function buildInspectInvocation(
         },
       };
     }
+    case 'type-context': {
+      const locator = remainingArgs.slice(1).join(' ').trim();
+      if (!locator) {
+        throw new Error('Usage: pnpm source-analysis inspect type-context <locator> --session-id <id>');
+      }
+      return {
+        command: 'query.type.context',
+        args: {
+          sessionId: requireSessionId(common.sessionId, 'inspect type-context'),
+          locator,
+          ...(common.spendThreshold ? { spendThreshold: common.spendThreshold } : {}),
+          ...(common.force ? { refreshIfNeeded: true } : {}),
+        },
+      };
+    }
     default:
-      throw new Error('Usage: pnpm source-analysis inspect <file|package-surface|package-reachability|package-audit-signals|export-trace|file-route|type-route> ... --session-id <id>');
+      throw new Error('Usage: pnpm source-analysis inspect <file|package-context|package-surface|package-reachability|package-audit-signals|export-trace|file-route|file-context|type-route|type-context> ... --session-id <id>');
   }
 }
 

@@ -11,6 +11,8 @@ import {
   getAnalysisSnapshotMetadata,
   type AnalysisMetadataKind,
 } from './analysis-metadata-support.js';
+import type { CouplingMatrix, OutputEdge } from './deps/schema.js';
+import type { ResolvedExportRoute } from './export-trace-runtime-surface.js';
 import type { PackageExportRecord, PackageExportsSummary } from './exports/schema.js';
 import {
   loadCurrentAnalysisViews,
@@ -87,7 +89,7 @@ import {
   createLegacyProjectionWorkspaceAuthority,
   type WorkspaceAuthority,
 } from './authority/workspace-authority.js';
-import type { Locator } from './authority/contracts.js';
+import type { Locator, SpendThreshold } from './authority/contracts.js';
 
 export type NavigationRef = AnswerRef;
 
@@ -97,6 +99,41 @@ export interface NavigationEpisode {
   readonly substrate: SubstrateGraph;
   readonly lattice: ClaimLattice;
   readonly answer: InquiryAnswer<NavigationValue>;
+}
+
+export interface PackageNavigationContext {
+  readonly normalizedPackageQuery: string;
+  readonly requestedRegimeContext: FocusedAnalyzabilityContext;
+  readonly packageOutcome: ReturnType<WorkspaceAuthority['resolvePackage']>;
+  readonly pkg: PackageExportsSummary | null;
+  readonly regimeContext: FocusedAnalyzabilityContext | null;
+  readonly couplingMatrix: CouplingMatrix | null;
+  readonly valueExports: readonly PackageExportRecord[] | null;
+}
+
+export interface TypeNavigationContext {
+  readonly normalizedTypeQuery: string;
+  readonly typeOutcome: ReturnType<WorkspaceAuthority['resolveTypeDeclaration']>;
+  readonly pkg: PackageExportsSummary | null;
+  readonly uniqueRefs: readonly TypeDecl['refs'][number][] | null;
+  readonly matchingExport: PackageExportRecord | null;
+}
+
+export interface ExportNavigationContext {
+  readonly normalizedExportQuery: string;
+  readonly exportOutcome: ReturnType<WorkspaceAuthority['resolveExport']>;
+  readonly pkg: PackageExportsSummary | null;
+  readonly route: ResolvedExportRoute | null;
+  readonly declarationType: TypeDecl | null;
+}
+
+export interface FileNavigationContext {
+  readonly inspection: ReturnType<WorkspaceAuthority['inspectFocusedFile']>;
+  readonly pkg: PackageExportsSummary | null;
+  readonly outboundEdges: readonly OutputEdge[] | null;
+  readonly inboundEdges: readonly OutputEdge[] | null;
+  readonly declarations: readonly TypeDecl[] | null;
+  readonly exportRecords: readonly PackageExportRecord[] | null;
 }
 
 const NAVIGATION_HOME_IDS = {
@@ -188,6 +225,144 @@ export function createNavigationEpisode(
         ),
       );
   }
+}
+
+export function inspectPackageNavigationContext(
+  authorityInput: WorkspaceAuthority | AnalysisViews | LoadedCurrentSnapshotSet,
+  packageQuery: string,
+  options: {
+    readonly locatorKind?: 'package-name' | 'package-dir';
+    readonly spendThreshold?: SpendThreshold;
+  } = {},
+): PackageNavigationContext {
+  const authority = coerceWorkspaceAuthority(authorityInput);
+  const normalizedPackageQuery = trimTrailingFocusPunctuation(packageQuery);
+  const requestedRegimeContext = authority.inspectFocusedAnalyzability({
+    focusLabel: normalizedPackageQuery,
+    queryHints: [normalizedPackageQuery],
+  });
+  const packageOutcome = authority.resolvePackage(
+    locator(options.locatorKind ?? 'package-name', normalizedPackageQuery, 'package'),
+    options.spendThreshold,
+  );
+
+  if (packageOutcome.kind !== 'claim') {
+    return {
+      normalizedPackageQuery,
+      requestedRegimeContext,
+      packageOutcome,
+      pkg: null,
+      regimeContext: null,
+      couplingMatrix: null,
+      valueExports: null,
+    };
+  }
+
+  const pkg = packageOutcome.value;
+  return {
+    normalizedPackageQuery,
+    requestedRegimeContext,
+    packageOutcome,
+    pkg,
+    regimeContext: authority.inspectFocusedAnalyzability({
+      focusLabel: pkg.package_name,
+      pathPrefixes: [pkg.package_dir],
+      queryHints: [pkg.package_name, pkg.package_dir, normalizedPackageQuery],
+    }),
+    couplingMatrix: authority.getPackageCouplingMatrix(pkg.package_dir) ?? null,
+    valueExports: authority.getPackageValueExports(pkg.package_dir, 5),
+  };
+}
+
+export function inspectTypeNavigationContext(
+  authorityInput: WorkspaceAuthority | AnalysisViews | LoadedCurrentSnapshotSet,
+  typeQuery: string,
+  spendThreshold?: SpendThreshold,
+): TypeNavigationContext {
+  const authority = coerceWorkspaceAuthority(authorityInput);
+  const normalizedTypeQuery = trimTrailingFocusPunctuation(typeQuery);
+  const typeOutcome = authority.resolveTypeDeclaration(
+    locator('type-name', normalizedTypeQuery, 'type'),
+    spendThreshold,
+  );
+
+  if (typeOutcome.kind !== 'claim') {
+    return {
+      normalizedTypeQuery,
+      typeOutcome,
+      pkg: null,
+      uniqueRefs: null,
+      matchingExport: null,
+    };
+  }
+
+  const decl = typeOutcome.value;
+  return {
+    normalizedTypeQuery,
+    typeOutcome,
+    pkg: authority.resolveOwningPackage(decl.file) ?? null,
+    uniqueRefs: uniqueTypeRefs(decl.refs),
+    matchingExport: authority.getFileExportRecords(decl.file).find((record) =>
+      record.declaration_name === decl.name,
+    ) ?? null,
+  };
+}
+
+export function inspectExportNavigationContext(
+  authorityInput: WorkspaceAuthority | AnalysisViews | LoadedCurrentSnapshotSet,
+  exportQuery: string,
+  spendThreshold?: SpendThreshold,
+): ExportNavigationContext {
+  const authority = coerceWorkspaceAuthority(authorityInput);
+  const normalizedExportQuery = trimTrailingFocusPunctuation(exportQuery);
+  const exportOutcome = authority.resolveExport(
+    locator('export-name', normalizedExportQuery, 'export'),
+    spendThreshold,
+  );
+
+  if (exportOutcome.kind !== 'claim') {
+    return {
+      normalizedExportQuery,
+      exportOutcome,
+      pkg: null,
+      route: null,
+      declarationType: null,
+    };
+  }
+
+  const record = exportOutcome.value;
+  const route = authority.resolveExportRoute(record);
+  const pkg = authority.getPackageByDir(record.package_dir) ?? null;
+  const declarationType = route?.declarationFile
+    ? authority.getTypeDeclarationByFileAndName(route.declarationFile, route.declarationName) ?? null
+    : null;
+
+  return {
+    normalizedExportQuery,
+    exportOutcome,
+    pkg,
+    route,
+    declarationType,
+  };
+}
+
+export function inspectFileNavigationContext(
+  authorityInput: WorkspaceAuthority | AnalysisViews | LoadedCurrentSnapshotSet,
+  fileQuery: string,
+): FileNavigationContext {
+  const authority = coerceWorkspaceAuthority(authorityInput);
+  const inspection = authority.inspectFocusedFile(locator('file-path', fileQuery, 'file'));
+  const filePath = inspection.matchedFilePath;
+  const dependencySurface = filePath ? authority.getDependencySurface() : null;
+
+  return {
+    inspection,
+    pkg: filePath ? authority.resolveOwningPackage(filePath) ?? null : null,
+    outboundEdges: filePath ? (dependencySurface?.edgesBySourceFile.get(filePath) ?? []) : null,
+    inboundEdges: filePath ? (dependencySurface?.edgesByTargetFile.get(filePath) ?? []) : null,
+    declarations: filePath ? authority.getFileDeclarations(filePath) : null,
+    exportRecords: filePath ? authority.getFileExportRecords(filePath) : null,
+  };
 }
 
 class EpisodeBuilder {
@@ -449,12 +624,10 @@ function buildPackageEpisode(
   builder: EpisodeBuilder,
   packageQuery: string,
 ): NavigationEpisode {
-  const normalizedPackageQuery = trimTrailingFocusPunctuation(packageQuery);
-  const requestedRegimeContext = builder.authority.inspectFocusedAnalyzability({
-    focusLabel: normalizedPackageQuery,
-    queryHints: [normalizedPackageQuery],
-  });
-  const packageResolution = builder.authority.resolvePackage(locator('package-name', normalizedPackageQuery, 'package'));
+  const packageContext = inspectPackageNavigationContext(builder.authority, packageQuery);
+  const normalizedPackageQuery = packageContext.normalizedPackageQuery;
+  const requestedRegimeContext = packageContext.requestedRegimeContext;
+  const packageResolution = packageContext.packageOutcome;
   if (packageResolution.kind === 'no-claim') {
     if (requestedRegimeContext.directlyExcludedFrontier) {
       return builder.finish(createOpenBoundaryAnswer(
@@ -481,7 +654,7 @@ function buildPackageEpisode(
     ));
   }
 
-  const pkg = packageResolution.value;
+  const pkg = packageContext.pkg!;
   const depsSnapshotId = builder.addSnapshotNode('deps');
   const exportsSnapshotId = builder.addSnapshotNode('exports');
   const packageNodeId = builder.addPackageNode(pkg);
@@ -489,8 +662,8 @@ function buildPackageEpisode(
   builder.addEdge({ id: `contains:${packageNodeId}->${entrypointNodeId}`, kind: 'contains', from: packageNodeId, to: entrypointNodeId });
   builder.addEdge({ id: `materializes:${exportsSnapshotId}->${packageNodeId}`, kind: 'materializes', from: exportsSnapshotId, to: packageNodeId });
 
-  const matrix = builder.authority.getPackageCouplingMatrix(pkg.package_dir);
-  const keyExports = builder.authority.getPackageValueExports(pkg.package_dir, 5);
+  const matrix = packageContext.couplingMatrix;
+  const keyExports = packageContext.valueExports ?? [];
 
   const exportNodeIds = keyExports.map((record) => {
     const exportNodeId = builder.addExportNode(record);
@@ -552,11 +725,7 @@ function buildPackageEpisode(
   }
   builder.addClaimEdge({ kind: 'supports', from: packageClaimId, to: routeClaimId });
 
-  const regimeContext = builder.authority.inspectFocusedAnalyzability({
-    focusLabel: pkg.package_name,
-    pathPrefixes: [pkg.package_dir],
-    queryHints: [pkg.package_name, pkg.package_dir, normalizedPackageQuery],
-  });
+  const regimeContext = packageContext.regimeContext!;
 
   const summaryLines = [
     `Entrypoint ${pkg.analysis_entrypoint} publishes ${pkg.value_export_count} value exports and ${pkg.type_only_export_count} type-only exports.`,
@@ -642,7 +811,8 @@ function buildTypeEpisode(
   builder: EpisodeBuilder,
   typeQuery: string,
 ): NavigationEpisode {
-  const typeResolution = builder.authority.resolveTypeDeclaration(locator('type-name', trimTrailingFocusPunctuation(typeQuery), 'type'));
+  const typeContext = inspectTypeNavigationContext(builder.authority, typeQuery);
+  const typeResolution = typeContext.typeOutcome;
   if (typeResolution.kind === 'no-claim') {
     return builder.finish(createMissAnswer(
       builder,
@@ -663,7 +833,7 @@ function buildTypeEpisode(
   const decl = typeResolution.value;
   const typerefsSnapshotId = builder.addSnapshotNode('typerefs');
   const exportsSnapshotId = builder.addSnapshotNode('exports');
-  const pkg = builder.authority.resolveOwningPackage(decl.file) ?? undefined;
+  const pkg = typeContext.pkg ?? undefined;
 
   const fileNodeId = builder.addFileNode(decl.file);
   const declNodeId = builder.addDeclarationNode(decl);
@@ -675,7 +845,7 @@ function buildTypeEpisode(
     builder.addEdge({ id: `contains:${packageNodeId}->${fileNodeId}`, kind: 'contains', from: packageNodeId, to: fileNodeId });
   }
 
-  const uniqueRefs = uniqueTypeRefs(decl.refs);
+  const uniqueRefs = typeContext.uniqueRefs ?? [];
   const referencedTypeNodeIds = uniqueRefs.slice(0, 6).map((ref) => {
     const nodeId = builder.addTypeRefObservation(decl, ref.target, ref.target_file, ref.kind, ref.context);
     builder.addEdge({ id: `materializes:${typerefsSnapshotId}->${nodeId}`, kind: 'materializes', from: typerefsSnapshotId, to: nodeId });
@@ -683,9 +853,7 @@ function buildTypeEpisode(
     return nodeId;
   });
 
-  const matchingExport = builder.authority.getFileExportRecords(decl.file).find((record) =>
-    record.declaration_name === decl.name,
-  );
+  const matchingExport = typeContext.matchingExport ?? undefined;
   const exportNodeId = matchingExport ? builder.addExportNode(matchingExport) : undefined;
   if (exportNodeId) {
     builder.addEdge({ id: `materializes:${exportsSnapshotId}->${exportNodeId}`, kind: 'materializes', from: exportsSnapshotId, to: exportNodeId });
@@ -1008,7 +1176,8 @@ function buildExportEpisode(
   builder: EpisodeBuilder,
   exportQuery: string,
 ): NavigationEpisode {
-  const exportResolution = builder.authority.resolveExport(locator('export-name', trimTrailingFocusPunctuation(exportQuery), 'export'));
+  const exportContext = inspectExportNavigationContext(builder.authority, exportQuery);
+  const exportResolution = exportContext.exportOutcome;
   if (exportResolution.kind === 'no-claim') {
     return builder.finish(createMissAnswer(
       builder,
@@ -1027,8 +1196,8 @@ function buildExportEpisode(
   }
 
   const record = exportResolution.value;
-  const route = builder.authority.resolveExportRoute(record)!;
-  const pkg = builder.authority.getPackageByDir(record.package_dir)!;
+  const route = exportContext.route!;
+  const pkg = exportContext.pkg!;
   const exportsSnapshotId = builder.addSnapshotNode('exports');
   const packageNodeId = builder.addPackageNode(pkg);
   const exportNodeId = builder.addExportNode(record);
@@ -1064,9 +1233,7 @@ function buildExportEpisode(
   });
   builder.addClaimEdge({ kind: 'routes-through', from: exportClaimId, to: routeClaimId });
 
-  const declarationType = route.declarationFile
-    ? builder.authority.getTypeDeclarationByFileAndName(route.declarationFile, route.declarationName)
-    : undefined;
+  const declarationType = exportContext.declarationType ?? undefined;
   const usedSnapshotFallback = route.source === 'snapshot-fallback';
   const liveFallbackIssue = usedSnapshotFallback && builder.snapshots.source === 'hosted-analysis'
     ? [{
@@ -1166,7 +1333,8 @@ function buildFileEpisode(
   builder: EpisodeBuilder,
   fileQuery: string,
 ): NavigationEpisode {
-  const fileInspection = builder.authority.inspectFocusedFile(locator('file-path', fileQuery, 'file'));
+  const fileContext = inspectFileNavigationContext(builder.authority, fileQuery);
+  const fileInspection = fileContext.inspection;
   if (fileInspection.matches.length === 0) {
     if (fileInspection.requestedRegimeContext.directlyExcludedFrontier) {
       return builder.finish(createOpenBoundaryAnswer(
@@ -1222,22 +1390,21 @@ function buildFileEpisode(
   const depsSnapshotId = builder.addSnapshotNode('deps');
   const typerefsSnapshotId = builder.addSnapshotNode('typerefs');
   const exportsSnapshotId = builder.addSnapshotNode('exports');
-  const dependencySurface = builder.authority.getDependencySurface();
   const fileNodeId = builder.addFileNode(filePath);
-  const pkg = builder.authority.resolveOwningPackage(filePath) ?? undefined;
+  const pkg = fileContext.pkg ?? undefined;
   const packageNodeId = pkg ? builder.addPackageNode(pkg) : undefined;
   if (packageNodeId) {
     builder.addEdge({ id: `contains:${packageNodeId}->${fileNodeId}`, kind: 'contains', from: packageNodeId, to: fileNodeId });
   }
 
-  const outboundEdges = dependencySurface.edgesBySourceFile.get(filePath) ?? [];
-  const inboundEdges = dependencySurface.edgesByTargetFile.get(filePath) ?? [];
+  const outboundEdges = fileContext.outboundEdges ?? [];
+  const inboundEdges = fileContext.inboundEdges ?? [];
   // TODO: These direct reads from typeRefs/exports keep the legacy projections
   // alive as first-class architecture. Replace them with declaration/export
   // surfaces derived from shared authority and materialize projection tables
   // only when a caller explicitly asks for those historical payloads.
-  const declarations = builder.authority.getFileDeclarations(filePath);
-  const exportRecords = builder.authority.getFileExportRecords(filePath);
+  const declarations = fileContext.declarations ?? [];
+  const exportRecords = fileContext.exportRecords ?? [];
 
   const importNodeIds = outboundEdges.slice(0, 6).map((edge) => {
     const nodeId = builder.addImportObservation(edge.source, edge.target, edge.bindings, edge.type_only, edge.line);

@@ -281,3 +281,23 @@ decision trail in order.
   duplication and leaves `query.navigate` as the most obvious remaining broad
   compatibility shell to decompose before moving deeper into framework-world
   primitives.
+
+## 2026-04-18 - Package/file/type context primitives promoted and navigation converged on them
+
+- The hosted runtime now exposes direct machine-facing context carriers for
+  package, file, and type navigation facts through `query.package.context`,
+  `query.file.context`, and `query.type.context`.
+- `navigation.ts` now exports shared package/type/file inspection helpers, and
+  `query.navigate` spends those same helpers for its package, file, and type
+  answer branches instead of re-deriving that truth through answer-local host
+  logic.
+- The export branch also now spends a shared export-navigation inspection
+  helper, and the direct `query.export.trace` host primitive reuses that
+  helper when the global export resolution already closes on the same package.
+- The hosted CLI `inspect` surface now exposes `package-context`,
+  `file-context`, and `type-context`, so callers can ask for those raw facts
+  without entering the broad `query.navigate` answer shell.
+- This leaves `query.navigate` thinner and more honestly compatibility-shaped:
+  symbol localization still closes through `query.symbol.lookup`, export
+  routing already has a direct trace primitive, and the broad shell is losing
+  reasons to exist as a truth owner.

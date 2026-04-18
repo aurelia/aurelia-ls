@@ -15,7 +15,7 @@ question routing, family ranking, or conversational ingress.
    wrappers over the direct primitives rather than letting them regrow into
    new multiplexing shells.
 2. Add the next missing primitive families after the new
-   export-trace/package-surface/package-reachability/file-route/type-route/audit-signals
+   export-trace/package-context/package-surface/package-reachability/file-context/file-route/type-context/type-route/audit-signals
    slice, especially framework-oriented world/registration evidence queries.
 3. Keep structured answer algebra available where it helps, but make sure the
    machine-facing contract does not require presentation-first answer builders
@@ -142,6 +142,11 @@ question routing, family ranking, or conversational ingress.
   and type-bounded route evidence, and wired the hosted CLI `inspect` surface
   onto those explicit carriers instead of requiring package-audit or
   route-witness answers to reach the substrate.
+- Added direct hosted primitives for package context, file context, and type
+  context, and exposed shared navigation inspection helpers so those direct
+  carriers plus `query.navigate` now spend the same lower-level
+  package/file/type adjudication paths instead of maintaining separate host-
+  local truth assembly.
 - Moved `route-witness` file/type inspection onto explicit shared helpers so
   the compatibility answer and the direct `query.file.route` /
   `query.type.route` primitives now spend the same lower-level route-target
@@ -175,10 +180,15 @@ question routing, family ranking, or conversational ingress.
   but several answer-bearing compatibility queries still aggregate too much
   semantic work behind broad labels.
 - Package surface, package reachability, and export tracing are now directly
+  machine-queryable, package/file/type context is now directly
   machine-queryable, and shared package audit signals plus file/type route
   evidence are now directly machine-queryable too, but `query.navigate`,
   `query.route.witness`, and `query.audit.package` still expose broad
   answer-local coordination that should keep shrinking.
+- `query.navigate` now shares package/file/type inspection helpers with the
+  direct context primitives and shares export adjudication with the direct
+  export-trace path, but it still remains an answer-bearing compatibility
+  surface instead of a thin optional presentation layer.
 - `query.route.witness` and `query.audit.package` now reuse the same lower-
   level inspection helpers as the direct primitives, but they still remain
   answer-bearing compatibility surfaces rather than fully decomposed machine
@@ -195,8 +205,8 @@ question routing, family ranking, or conversational ingress.
 - `audit` still owns coordination and presentation fragmentation checks as
   package-self-pressure heuristics rather than shared semantic evaluators.
 - `query.navigate` is now the broadest remaining compatibility shell and the
-  likeliest next target for decomposition after the route/audit inspection
-  convergence.
+  likeliest next target for further decomposition now that its package/file/
+  type branches share direct context helpers.
 - `WorldFrame` is now split internally into `WorldTargeting` and
   `ExecutionPosture`, and answer/wire adapters now spend those slices
   internally, but the public query and wire carriers still flatten them for
@@ -216,6 +226,7 @@ question routing, family ranking, or conversational ingress.
 - `src/public/host.ts`
 - `src/cli.ts`
 - `src/cli-hosted.ts`
+- `src/navigation.ts`
 - `src/authority/workspace-authority.ts`
 - `src/export-trace-runtime-surface.ts`
 - `src/reachability.ts`

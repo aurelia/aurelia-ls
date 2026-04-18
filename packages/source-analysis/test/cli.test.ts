@@ -209,6 +209,40 @@ describe('source-analysis hosted CLI', () => {
     expect(surface.result.surface?.uncoveredFiles).toContain('test/index.test.ts');
     expect(surface.result.surface?.fileEntries.find((entry) => entry.filePath === 'src/live.ts')?.declarations[0]?.name).toBe('LiveShape');
 
+    const packageContextRaw = await runCliAsync([
+      'inspect',
+      'package-context',
+      '@fixture/source-analysis-audit',
+      '--session-id',
+      opened.result.sessionId,
+      '--json',
+    ]);
+    const packageContext = JSON.parse(packageContextRaw) as {
+      readonly command: string;
+      readonly result: {
+        readonly context: {
+          readonly packageOutcome: {
+            readonly kind: string;
+          };
+          readonly pkg: null | {
+            readonly package_name: string;
+          };
+          readonly regimeContext: null | {
+            readonly focusLabel: string;
+          };
+          readonly valueExports: null | ReadonlyArray<{
+            readonly exported_name: string;
+          }>;
+        };
+      };
+    };
+
+    expect(packageContext.command).toBe('query.package.context');
+    expect(packageContext.result.context.packageOutcome.kind).toBe('claim');
+    expect(packageContext.result.context.pkg?.package_name).toBe('@fixture/source-analysis-audit');
+    expect(packageContext.result.context.regimeContext?.focusLabel).toBe('@fixture/source-analysis-audit');
+    expect(packageContext.result.context.valueExports?.some((record) => record.exported_name === 'auditReady')).toBe(true);
+
     const reachabilityRaw = await runCliAsync([
       'inspect',
       'package-reachability',
@@ -322,6 +356,44 @@ describe('source-analysis hosted CLI', () => {
     expect(fileRoute.result.witnesses?.[0]?.rootKind).toBe('public-api');
     expect(fileRoute.result.witnesses?.[0]?.files).toEqual(['src/index.ts', 'src/live.ts']);
 
+    const fileContextRaw = await runCliAsync([
+      'inspect',
+      'file-context',
+      'src/live.ts',
+      '--session-id',
+      opened.result.sessionId,
+      '--json',
+    ]);
+    const fileContext = JSON.parse(fileContextRaw) as {
+      readonly command: string;
+      readonly result: {
+        readonly context: {
+          readonly inspection: {
+            readonly matchedFilePath: string | null;
+          };
+          readonly pkg: null | {
+            readonly package_name: string;
+          };
+          readonly inboundEdges: null | ReadonlyArray<{
+            readonly source: string;
+          }>;
+          readonly declarations: null | ReadonlyArray<{
+            readonly name: string;
+          }>;
+          readonly exportRecords: null | ReadonlyArray<{
+            readonly exported_name: string;
+          }>;
+        };
+      };
+    };
+
+    expect(fileContext.command).toBe('query.file.context');
+    expect(fileContext.result.context.inspection.matchedFilePath).toBe('src/live.ts');
+    expect(fileContext.result.context.pkg?.package_name).toBe('@fixture/source-analysis-audit');
+    expect(fileContext.result.context.inboundEdges?.some((edge) => edge.source === 'src/index.ts')).toBe(true);
+    expect(fileContext.result.context.declarations?.[0]?.name).toBe('LiveShape');
+    expect(fileContext.result.context.exportRecords?.[0]?.exported_name).toBe('LiveShape');
+
     const typeRouteRaw = await runCliAsync([
       'inspect',
       'type-route',
@@ -357,6 +429,42 @@ describe('source-analysis hosted CLI', () => {
     expect(typeRoute.result.package?.package_name).toBe('@fixture/source-analysis-audit');
     expect(typeRoute.result.regimeContext?.focusLabel).toBe('LiveShape');
     expect(typeRoute.result.witnesses?.[0]?.rootKind).toBe('public-api');
+
+    const typeContextRaw = await runCliAsync([
+      'inspect',
+      'type-context',
+      'LiveShape',
+      '--session-id',
+      opened.result.sessionId,
+      '--json',
+    ]);
+    const typeContext = JSON.parse(typeContextRaw) as {
+      readonly command: string;
+      readonly result: {
+        readonly context: {
+          readonly typeOutcome: {
+            readonly kind: string;
+            readonly value?: {
+              readonly file?: string;
+            };
+          };
+          readonly pkg: null | {
+            readonly package_name: string;
+          };
+          readonly matchingExport: null | {
+            readonly exported_name: string;
+          };
+          readonly uniqueRefs: null | readonly unknown[];
+        };
+      };
+    };
+
+    expect(typeContext.command).toBe('query.type.context');
+    expect(typeContext.result.context.typeOutcome.kind).toBe('claim');
+    expect(typeContext.result.context.typeOutcome.value?.file).toBe('src/live.ts');
+    expect(typeContext.result.context.pkg?.package_name).toBe('@fixture/source-analysis-audit');
+    expect(typeContext.result.context.matchingExport?.exported_name).toBe('LiveShape');
+    expect(typeContext.result.context.uniqueRefs).toEqual([]);
 
     const symbolRaw = await runCliAsync([
       'lookup',

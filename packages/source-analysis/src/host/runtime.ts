@@ -47,7 +47,13 @@ import type {
   ReadMode,
 } from '../inquiry-model.js';
 import { resolvePresentationReadMode } from '../inquiry-model.js';
-import { createNavigationEpisode } from '../navigation.js';
+import {
+  createNavigationEpisode,
+  inspectExportNavigationContext,
+  inspectFileNavigationContext,
+  inspectPackageNavigationContext,
+  inspectTypeNavigationContext,
+} from '../navigation.js';
 import { createLegacyProjectionWorkspaceAuthority } from '../authority/workspace-authority.js';
 import {
   createRouteWitnessAnswer,
@@ -94,6 +100,8 @@ import {
   type ResolveExportQueryResult,
   type InspectPackageSurfaceQueryArgs,
   type InspectPackageSurfaceQueryResult,
+  type InspectPackageContextQueryArgs,
+  type InspectPackageContextQueryResult,
   type InspectPackageReachabilityQueryArgs,
   type InspectPackageReachabilityQueryResult,
   type TraceExportQueryArgs,
@@ -102,8 +110,12 @@ import {
   type InspectPackageAuditSignalsQueryResult,
   type InspectFileRouteQueryArgs,
   type InspectFileRouteQueryResult,
+  type InspectFileContextQueryArgs,
+  type InspectFileContextQueryResult,
   type InspectTypeRouteQueryArgs,
   type InspectTypeRouteQueryResult,
+  type InspectTypeContextQueryArgs,
+  type InspectTypeContextQueryResult,
   type HostPackageAuditSignal,
   type HostPackageAuditSignalSubject,
   type HostStructuralPackageSurface,
@@ -236,11 +248,14 @@ export class SnapshotHostRuntime {
       case 'query.type.resolve': return this.#queryResolveType(invocation.args as ResolveTypeQueryArgs);
       case 'query.export.resolve': return this.#queryResolveExport(invocation.args as ResolveExportQueryArgs);
       case 'query.package.surface': return this.#queryInspectPackageSurface(invocation.args as InspectPackageSurfaceQueryArgs);
+      case 'query.package.context': return this.#queryInspectPackageContext(invocation.args as InspectPackageContextQueryArgs);
       case 'query.package.reachability': return this.#queryInspectPackageReachability(invocation.args as InspectPackageReachabilityQueryArgs);
       case 'query.export.trace': return this.#queryTraceExport(invocation.args as TraceExportQueryArgs);
       case 'query.package.audit-signals': return this.#queryInspectPackageAuditSignals(invocation.args as InspectPackageAuditSignalsQueryArgs);
       case 'query.file.route': return this.#queryInspectFileRoute(invocation.args as InspectFileRouteQueryArgs);
+      case 'query.file.context': return this.#queryInspectFileContext(invocation.args as InspectFileContextQueryArgs);
       case 'query.type.route': return this.#queryInspectTypeRoute(invocation.args as InspectTypeRouteQueryArgs);
+      case 'query.type.context': return this.#queryInspectTypeContext(invocation.args as InspectTypeContextQueryArgs);
       case 'query.symbol.lookup': return this.#queryLookupSymbol(invocation.args as LookupSymbolDeclarationArgs);
       case 'query.file.inspect': return this.#queryInspectFile(invocation.args as InspectFileQueryArgs);
       case 'materializeSnapshots': return this.#materializeSnapshots(invocation.args as MaterializeSnapshotsArgs);
@@ -609,6 +624,27 @@ export class SnapshotHostRuntime {
     };
   }
 
+  #queryInspectPackageContext(args: InspectPackageContextQueryArgs): CommandOutcome {
+    const state = this.#sessions.get(args.sessionId);
+    const hostedAnalysis = ensureFreshHostedAnalysisContext(state, args.refreshIfNeeded);
+    const authority = createLegacyProjectionWorkspaceAuthority(hostedAnalysis.analysis);
+    const result: InspectPackageContextQueryResult = {
+      context: inspectPackageNavigationContext(authority, args.locator, {
+        locatorKind: args.locatorKind,
+        spendThreshold: args.spendThreshold,
+      }),
+      warnings: hostedAnalysis.warnings,
+    };
+
+    return {
+      result,
+      sessionId: state.sessionId,
+      refreshedKinds: hostedAnalysis.refreshedKinds,
+      invalidation: buildInvalidationMeta(state),
+      cache: hostedAnalysis.cache,
+    };
+  }
+
   #queryInspectPackageReachability(args: InspectPackageReachabilityQueryArgs): CommandOutcome {
     const state = this.#sessions.get(args.sessionId);
     const hostedAnalysis = ensureFreshHostedAnalysisContext(state, args.refreshIfNeeded);
@@ -648,18 +684,31 @@ export class SnapshotHostRuntime {
       },
       args.spendThreshold,
     );
-    const exportOutcome = packageOutcome.kind === 'claim'
-      ? authority.resolvePackageExport(
-        packageOutcome.value.package_dir,
+    const exportContext = packageOutcome.kind === 'claim'
+      ? inspectExportNavigationContext(
+        authority,
         args.exportedName,
         args.spendThreshold,
       )
       : null;
+    const exportOutcome = packageOutcome.kind === 'claim' && exportContext?.exportOutcome.kind === 'claim'
+      && exportContext.exportOutcome.value.package_dir === packageOutcome.value.package_dir
+      ? exportContext.exportOutcome
+      : packageOutcome.kind === 'claim'
+        ? authority.resolvePackageExport(
+          packageOutcome.value.package_dir,
+          args.exportedName,
+          args.spendThreshold,
+        )
+        : null;
     const result: TraceExportQueryResult = {
       packageOutcome,
       exportOutcome,
       route: exportOutcome?.kind === 'claim'
-        ? authority.resolveExportRoute(exportOutcome.value)
+        ? exportContext?.exportOutcome.kind === 'claim'
+          && exportContext.exportOutcome.value.package_dir === exportOutcome.value.package_dir
+          ? exportContext.route
+          : authority.resolveExportRoute(exportOutcome.value)
         : null,
       warnings: hostedAnalysis.warnings,
     };
@@ -733,6 +782,24 @@ export class SnapshotHostRuntime {
     };
   }
 
+  #queryInspectFileContext(args: InspectFileContextQueryArgs): CommandOutcome {
+    const state = this.#sessions.get(args.sessionId);
+    const hostedAnalysis = ensureFreshHostedAnalysisContext(state, args.refreshIfNeeded);
+    const authority = createLegacyProjectionWorkspaceAuthority(hostedAnalysis.analysis);
+    const result: InspectFileContextQueryResult = {
+      context: inspectFileNavigationContext(authority, args.filePath),
+      warnings: hostedAnalysis.warnings,
+    };
+
+    return {
+      result,
+      sessionId: state.sessionId,
+      refreshedKinds: hostedAnalysis.refreshedKinds,
+      invalidation: buildInvalidationMeta(state),
+      cache: hostedAnalysis.cache,
+    };
+  }
+
   #queryInspectTypeRoute(args: InspectTypeRouteQueryArgs): CommandOutcome {
     const state = this.#sessions.get(args.sessionId);
     const hostedAnalysis = ensureFreshHostedAnalysisContext(state, args.refreshIfNeeded);
@@ -743,6 +810,28 @@ export class SnapshotHostRuntime {
       package: routeInspection.pkg,
       regimeContext: routeInspection.regimeContext,
       witnesses: routeInspection.witnesses,
+      warnings: hostedAnalysis.warnings,
+    };
+
+    return {
+      result,
+      sessionId: state.sessionId,
+      refreshedKinds: hostedAnalysis.refreshedKinds,
+      invalidation: buildInvalidationMeta(state),
+      cache: hostedAnalysis.cache,
+    };
+  }
+
+  #queryInspectTypeContext(args: InspectTypeContextQueryArgs): CommandOutcome {
+    const state = this.#sessions.get(args.sessionId);
+    const hostedAnalysis = ensureFreshHostedAnalysisContext(state, args.refreshIfNeeded);
+    const authority = createLegacyProjectionWorkspaceAuthority(hostedAnalysis.analysis);
+    const result: InspectTypeContextQueryResult = {
+      context: inspectTypeNavigationContext(
+        authority,
+        args.locator,
+        args.spendThreshold,
+      ),
       warnings: hostedAnalysis.warnings,
     };
 
