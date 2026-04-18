@@ -2,7 +2,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from './test-harness.js';
 
 import { resolveAnalysisProfile } from '../out/analysis-profile.js';
 import {
@@ -198,12 +198,14 @@ function createDepsOutput(repoPath: string): DepsOutput {
     generated_at: new Date(0).toISOString(),
     source_commit: 'fixture',
     analyzer_commit: 'fixture',
+    profile: fixtureProfile(),
+    frontiers: fixtureFrontiers(),
+    tsconfigs: [],
     summary: {
       files_analyzed: 3,
       internal_edges: 2,
       external_imports: 0,
       unresolved: 0,
-      cycles: 0,
       uncovered_files: 0,
     },
     edges: [
@@ -235,6 +237,26 @@ function createDepsOutput(repoPath: string): DepsOutput {
       no_outbound: [],
     },
     coupling_matrices: [],
-    tsconfigs: [],
   };
+}
+
+function fixtureProfile() {
+  return {
+    profileId: 'fixture-profile',
+    profilePath: null,
+    target: 'fixture-target',
+    excludedRepoRelativePrefixes: [],
+    packageDiscoveryRoots: [],
+    includeRepoRootPackage: true,
+    pathMappings: [],
+    exercisePatterns: [],
+    partitionSchemes: [],
+  } as const;
+}
+
+function fixtureFrontiers() {
+  return {
+    excluded_frontiers: [],
+    warnings: [],
+  } as const;
 }

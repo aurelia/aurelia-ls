@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from './test-harness.js';
 
 import { createRouteWitnessAnswer } from '../src/route-witness.js';
 import { loadCurrentLiveAnalysisViews } from './live-analysis-views.js';

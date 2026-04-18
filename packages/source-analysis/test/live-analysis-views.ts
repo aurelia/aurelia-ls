@@ -20,8 +20,23 @@ import {
   generateTypeRefsAnalysisFromRuntime,
 } from '../src/typerefs/analyze.js';
 
+let cachedAnalysis: AnalysisViews | null = null;
+let cachedFingerprint: string | null = null;
+
 export function loadCurrentLiveAnalysisViews(): AnalysisViews {
   const snapshots = loadCurrentSnapshots();
+  const fingerprint = [
+    snapshots.deps.root,
+    snapshots.deps.generated_at,
+    snapshots.typeRefs.generated_at,
+    snapshots.exports.generated_at,
+    snapshots.deps.source_commit,
+    snapshots.typeRefs.source_commit,
+    snapshots.exports.source_commit,
+  ].join('\0');
+  if (cachedAnalysis && cachedFingerprint === fingerprint) {
+    return cachedAnalysis;
+  }
   const session = createRepoSession({
     repoPath: snapshots.deps.root,
     target: snapshots.deps.profile.target,
@@ -46,7 +61,7 @@ export function loadCurrentLiveAnalysisViews(): AnalysisViews {
     structuralRuntime,
   ).output;
 
-  return createAnalysisViews({
+  cachedAnalysis = createAnalysisViews({
     source: 'hosted-analysis',
     deps,
     typeRefs,
@@ -57,4 +72,11 @@ export function loadCurrentLiveAnalysisViews(): AnalysisViews {
     repoSourceFiles: session.listRepoSourceFiles(),
     ...(snapshots.support ? { support: snapshots.support } : {}),
   });
+  cachedFingerprint = fingerprint;
+  return cachedAnalysis;
+}
+
+export function resetCurrentLiveAnalysisViewsCache(): void {
+  cachedAnalysis = null;
+  cachedFingerprint = null;
 }

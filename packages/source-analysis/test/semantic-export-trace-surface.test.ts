@@ -1,5 +1,5 @@
 import * as ts from 'typescript';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from './test-harness.js';
 
 import {
   traceModuleExport,

@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 
 const args = process.argv.slice(2);
+const sourceAnalysisExclude = "packages/source-analysis/test/**";
 const require = createRequire(import.meta.url);
 const vitestPkg = require.resolve("vitest/package.json");
 const vitestCli = path.join(path.dirname(vitestPkg), "vitest.mjs");
@@ -16,7 +17,12 @@ if (!/\b--max-old-space-size=\d+\b/.test(nodeOptions)) {
   env.NODE_OPTIONS = `${nodeOptions} --max-old-space-size=2048`.trim();
 }
 
-const result = spawnSync(process.execPath, [vitestCli, "run", "--maxWorkers=2", ...args], {
+const vitestArgs = ["run", "--maxWorkers=2", ...args];
+if (!args.includes("--exclude")) {
+  vitestArgs.push("--exclude", sourceAnalysisExclude);
+}
+
+const result = spawnSync(process.execPath, [vitestCli, ...vitestArgs], {
   stdio: "inherit",
   env,
 });

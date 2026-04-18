@@ -2,7 +2,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from './test-harness.js';
 
 import { createAnalysisViews } from '../src/analysis-views.js';
 import { generateDepsAnalysisFromRuntime } from '../src/deps/analyze.js';

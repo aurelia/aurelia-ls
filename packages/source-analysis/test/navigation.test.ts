@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from './test-harness.js';
 
 import { loadCurrentSnapshots } from '../src/current-snapshots.js';
 import { createNavigationEpisode } from '../src/navigation.js';

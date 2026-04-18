@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from './test-harness.js';
 
 import { createAuditAnswer } from '../src/audit.js';
 import {
