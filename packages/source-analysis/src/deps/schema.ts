@@ -39,7 +39,7 @@ import type {
  *
  * Start with calibration — know what the graph can and cannot see:
  *
- *   stale                       Check if JSON needs regeneration
+ *   stale                       Explain live mode or check a materialized snapshot for staleness
  *   blindspots                  Unresolved imports, uncovered files, barrel stats
  *
  * Then discover what's queryable:

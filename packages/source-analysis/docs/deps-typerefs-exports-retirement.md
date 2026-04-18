@@ -49,9 +49,18 @@ That kernel should be the one place that knows how to:
 - materialize current deps / typerefs / exports outputs
 - produce current analysis views for higher-level consumers
 
+## Current Migration State
+
+- `deps` now boots from the live query kernel by default and keeps `--file`
+  only as explicit materialized/offline inspection mode.
+- `typerefs` and `exports` still need the same treatment.
+- The large query-local renderers and indexes are still technical debt even
+  after the loader path moves to live current-state.
+
 ## TODOs
 
-- Rewrite `src/deps/query.ts` as a thin adapter over `src/live-query/`.
+- Keep shrinking `src/deps/query.ts` now that it no longer depends on
+  snapshot-path resolution by default.
 - Rewrite `src/typerefs/query.ts` as a thin adapter over `src/live-query/`.
 - Rewrite `src/exports/query.ts` as a thin adapter over `src/live-query/`.
 - Remove snapshot-path resolution as the default boot path for current queries.

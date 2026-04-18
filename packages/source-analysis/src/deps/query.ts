@@ -1,18 +1,23 @@
 /**
- * Query tool for dependency graph JSON. See schema.ts for the schema.
+ * Query tool for dependency graph analysis.
  *
- * Usage: pnpm source-analysis deps <command> [args] [--file path/to/deps.json]
+ * By default this command analyzes the current workspace live.
+ * Use --file to inspect a materialized deps JSON artifact explicitly.
  */
 
 // TODO: Retire this snapshot-first compatibility script in favor of thin
 // adapters over `src/live-query/`. The command surface is useful; the current
 // loader/index/UI architecture is not.
+// TODO: After deps/typerefs/exports all share the live kernel, extract the
+// reusable seam/cone/package evaluators out of these giant scripts and delete
+// the duplicated query-local indexing/render layers.
 
 import { execSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
-import { createRefreshCommand, createSnapshotPaths, resolveSnapshotTarget } from '../snapshot-config.js';
-import { loadJsonSnapshot, resolveCurrentSnapshotPath } from '../snapshots.js';
+import { createRefreshCommand, resolveSnapshotTarget } from '../snapshot-config.js';
+import { createLiveQueryKernel } from '../live-query/runtime.js';
+import { loadJsonSnapshot } from '../snapshots.js';
 import type { DepsOutput } from './schema.js';
 
 // ── Argument parsing ────────────────────────────────────────────────────
@@ -56,13 +61,11 @@ const command = filteredArgs[0];
 const commandArgs = filteredArgs.slice(1);
 const lockWaitMsRaw = process.env.ANALYZER_LOCK_WAIT_MS;
 const lockWaitMs = lockWaitMsRaw ? Number(lockWaitMsRaw) : 5000;
-const PATHS = createSnapshotPaths(import.meta.url);
 const selection = resolveSnapshotTarget({
   target: targetArg,
   repoPath: repoArg,
   profilePath: profilePathArg,
 });
-const target = selection.target;
 const refreshCommand = createRefreshCommand('deps', selection);
 
 if (!Number.isFinite(lockWaitMs) || lockWaitMs < 0) {
@@ -72,45 +75,53 @@ if (!Number.isFinite(lockWaitMs) || lockWaitMs < 0) {
   process.exit(1);
 }
 
-function resolveDefaultDepsJsonPath(): string {
-  return resolveCurrentSnapshotPath(PATHS, {
-    target,
-    kind: 'deps',
-    waitMs: lockWaitMs,
-    refreshCommand,
-    repoPath: selection.repoPath,
-  });
+interface DepsQueryInput {
+  readonly data: DepsOutput;
+  readonly sourceKind: 'live-workspace' | 'materialized-snapshot';
+  readonly sourceLabel: string;
 }
 
 function loadDepsJson(path: string): DepsOutput {
   return loadJsonSnapshot<DepsOutput>(path, lockWaitMs);
 }
 
-let data: DepsOutput;
-if (jsonPath) {
-  try {
-    data = loadDepsJson(jsonPath);
-  } catch (err) {
-    process.stderr.write(`Error reading ${jsonPath}: ${(err as Error).message}\n`);
-    process.exit(1);
-  }
-} else {
-  try {
-    jsonPath = resolveDefaultDepsJsonPath();
-    data = loadDepsJson(jsonPath);
-  } catch (err) {
-    const msg = (err as Error).message;
-    if (msg.startsWith("LOCK_TIMEOUT:") || msg.startsWith("CURRENT_SNAPSHOT_UNAVAILABLE:")) {
-      process.stderr.write(`${msg}\n`);
-    } else {
-      process.stderr.write(
-        `Error reading ${jsonPath ?? "<unset>"}: ${msg}\n` +
-          "Stop and escalate to user; do not fallback to stale dated snapshots.\n",
-      );
+function loadDepsInput(): DepsQueryInput {
+  if (jsonPath) {
+    try {
+      return {
+        data: loadDepsJson(jsonPath),
+        sourceKind: 'materialized-snapshot',
+        sourceLabel: jsonPath,
+      };
+    } catch (err) {
+      process.stderr.write(`Error reading ${jsonPath}: ${(err as Error).message}\n`);
+      process.exit(1);
     }
+  }
+
+  try {
+    const kernel = createLiveQueryKernel({
+      repoPath: repoArg,
+      target: targetArg,
+      profilePath: profilePathArg,
+    });
+    return {
+      data: kernel.loadOutputs().deps,
+      sourceKind: 'live-workspace',
+      sourceLabel: kernel.session.repoPath,
+    };
+  } catch (err) {
+    process.stderr.write(
+      `Error analyzing live deps for ${selection.repoPath ?? process.cwd()}: ${(err as Error).message}\n`,
+    );
     process.exit(1);
   }
 }
+
+const loaded = loadDepsInput();
+const data = loaded.data;
+const querySourceKind = loaded.sourceKind;
+const querySourceLabel = loaded.sourceLabel;
 
 // ── Path resolution ─────────────────────────────────────────────────────
 
@@ -180,7 +191,8 @@ function gitHead(cwd: string): string {
 function printSummary(): void {
   const s = data.summary;
   const lines = [
-    `Source:           ${jsonPath}`,
+    `Query mode:       ${querySourceKind === 'live-workspace' ? 'live workspace' : 'materialized snapshot'}`,
+    `Source:           ${querySourceLabel}`,
     `Generated:        ${data.generated_at}`,
     `Source commit:     ${data.source_commit ?? "not recorded"}`,
     `Analyzer commit:  ${data.analyzer_commit ?? "not recorded"}`,
@@ -692,11 +704,21 @@ function gitBlobHash(filePath: string): string {
 }
 
 function printStale(): void {
+  if (querySourceKind === 'live-workspace') {
+    console.log('LIVE: deps query is analyzing the current workspace directly.');
+    console.log(`  repo:    ${querySourceLabel}`);
+    console.log(`  target:  ${data.profile.target}`);
+    console.log('  snapshot staleness does not apply unless you pass --file.');
+    return;
+  }
+
   const sourceCommit = data.source_commit;
   const analyzerCommit = data.analyzer_commit;
 
   if (!sourceCommit || !analyzerCommit) {
-    console.log(`STALE: provenance fields missing — regenerate with \`${refreshCommand}\`.`);
+    console.log('STALE: materialized deps JSON is missing provenance fields.');
+    console.log(`  rerun:    ${refreshCommand}`);
+    console.log('  or use:   pnpm source-analysis deps <command> ... without --file');
     process.exitCode = 1;
     return;
   }
@@ -711,17 +733,19 @@ function printStale(): void {
   const analyzerMatch = currentAnalyzer === analyzerCommit;
 
   if (sourceMatch && analyzerMatch) {
-    console.log(`FRESH: deps JSON matches both source target (${target}) and analyzer.`);
+    console.log(`FRESH: materialized deps JSON matches both source target (${data.profile.target}) and analyzer.`);
     console.log(`  source:   ${sourceCommit.slice(0, 10)}`);
     console.log(`  analyzer: ${analyzerCommit.slice(0, 10)}`);
   } else {
-    console.log(`STALE: regenerate with \`${refreshCommand}\`.`);
+    console.log('STALE: materialized deps JSON is out of date.');
     if (!sourceMatch) {
       console.log(`  source repo moved: ${sourceCommit.slice(0, 10)} -> ${currentSource.slice(0, 10)}`);
     }
     if (!analyzerMatch) {
       console.log(`  analyzer changed:  ${analyzerCommit.slice(0, 10)} -> ${currentAnalyzer.slice(0, 10)}`);
     }
+    console.log(`  rerun:             ${refreshCommand}`);
+    console.log('  or use:            pnpm source-analysis deps <command> ... without --file');
     process.exitCode = 1;
   }
 }
@@ -1194,10 +1218,10 @@ function printTestCoverage(): void {
 
 // ── Dispatch ────────────────────────────────────────────────────────────
 
-const USAGE = `Usage: pnpm source-analysis deps <command> [args] [--target <name>] [--repo <path>] [--profile-path <path>] [--file path.json]
+const USAGE = `Usage: pnpm source-analysis deps <command> [args] [--repo <path>] [--target <name>] [--profile-path <path>] [--file path.json]
 
 Calibration (start here):
-  stale                         Check if JSON needs regeneration
+  stale                         Explain live mode or check a materialized snapshot for staleness
   blindspots                    Unresolved imports, uncovered files, barrel stats
 
 Discovery:
@@ -1225,11 +1249,10 @@ Flags (for seam/bindings):
   --type-only                   Show only type-level imports
   --value-only                  Show only value-level imports
 
-Use --target <name> to override the snapshot target; otherwise it is derived from the active profile or repo path.
-Use --repo <path> to derive or override the current snapshot target from a repo path.
-Use --profile-path <path> to select a non-default profile file relative to the repo root.
-Defaults to .source-analysis/snapshots/<target>-deps.json under the analyzed repo.
-If current is locked/missing/unreadable, query stops and must be escalated.`;
+Use --repo <path> to analyze another checkout; otherwise the current working directory is analyzed.
+Use --target <name> and --profile-path <path> to shape the live repo session/profile selection.
+By default, deps queries analyze the current workspace live.
+Use --file <path.json> only for explicit materialized/offline inspection.`;
 
 switch (command) {
   case "summary":

@@ -74,6 +74,7 @@
       "status": "in_progress",
       "goal": "Remove the current conversational ingress shell from the primary package API and replace it with typed semantic primitives that expose one truth core through durable answer algebra, result kinds, governing-anchor refs, provenance, closure basis, and continuation basis.",
       "files": [
+        "README.md",
         "src/host/runtime.ts",
         "src/host/types.ts",
         "src/public/host.ts",
@@ -86,6 +87,7 @@
         "src/route-witness.ts",
         "src/authority/workspace-authority.ts",
         "src/deps/query.ts",
+        "src/deps/schema.ts",
         "src/typerefs/query.ts",
         "src/exports/query.ts",
         "src/export-trace-runtime-surface.ts",
@@ -100,6 +102,7 @@
         "src/analysis-surface.ts",
         "docs/machine-legible-api-reset.md",
         "docs/deps-typerefs-exports-retirement.md",
+        "test/deps-query.test.ts",
         "test/host-runtime.test.ts",
         "test/cli.test.ts",
         "test/live-query-runtime.test.ts",

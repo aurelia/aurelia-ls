@@ -10,14 +10,17 @@ question routing, family ranking, or conversational ingress.
 
 ## Exact next slice
 
-1. Treat the historical `deps` / `typerefs` / `exports` query scripts as
-   retirement candidates rather than architecture to preserve.
-2. Move current-query boot paths onto the live query kernel in
-   `src/live-query/` instead of materialized snapshot resolution.
-3. Keep useful command intent, but rebuild the commands as thin adapters over
-   shared live runtime/evaluator surfaces.
-4. Only after that reset is visibly underway should framework-world and
-   registration evidence become the next major primitive family.
+1. Keep treating the historical `deps` / `typerefs` / `exports` query scripts
+   as retirement candidates rather than architecture to preserve.
+2. Finish moving current-query boot paths onto the live query kernel in
+   `src/live-query/`; `deps` is live by default now, `exports` and `typerefs`
+   still need the same reset.
+3. Keep useful command intent, but keep shrinking the giant query-local
+   indexes/renderers into thin adapters over shared live runtime/evaluator
+   surfaces.
+4. Only after the legacy triple no longer dominates current-query work should
+   framework-world and registration evidence become the next major primitive
+   family.
 
 ## Recently landed
 
@@ -148,6 +151,12 @@ question routing, family ranking, or conversational ingress.
   snapshot boot path.
 - Added a repo-owned retirement note for the old `deps` / `typerefs` /
   `exports` split-brain surface and linked it from the main package docs.
+- Rebased `src/deps/query.ts` onto the live query kernel by default so
+  current `pnpm source-analysis deps ...` calls no longer require snapshot
+  materialization unless `--file` is passed explicitly.
+- Added `test/deps-query.test.ts` to pin that the top-level deps CLI works
+  against a repo with no `.source-analysis/snapshots/` directory and that
+  `stale` explains live mode instead of demanding refresh.
 - Moved `route-witness` file/type inspection onto explicit shared helpers so
   the compatibility answer and the direct `query.file.route` /
   `query.type.route` primitives now spend the same lower-level route-target
@@ -177,9 +186,11 @@ question routing, family ranking, or conversational ingress.
 
 - `AnalysisViews` still carries the historical projection triple and remains a
   major continuity seam.
-- The old `deps` / `typerefs` / `exports` query scripts still boot from
-  snapshot resolution and still own large local index/render layers, even
-  though a new live kernel now exists under `src/live-query/`.
+- `src/exports/query.ts` and `src/typerefs/query.ts` still boot from snapshot
+  resolution even though a live kernel now exists under `src/live-query/`.
+- `src/deps/query.ts` now loads live current state by default, but it still
+  owns a large local index/render layer that should keep shrinking toward a
+  thin adapter.
 - The hosted/public API no longer depends on the conversational ingress shell,
   but several answer-bearing compatibility queries still aggregate too much
   semantic work behind broad labels.
@@ -241,6 +252,7 @@ question routing, family ranking, or conversational ingress.
 - `src/deps/query.ts`
 - `src/typerefs/query.ts`
 - `src/exports/query.ts`
+- `test/deps-query.test.ts`
 - `src/export-trace-runtime-surface.ts`
 - `src/reachability.ts`
 - `src/structural-source-file-surface.ts`

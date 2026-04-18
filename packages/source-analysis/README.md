@@ -34,6 +34,8 @@ For machine-facing API work, read [docs/machine-legible-api-reset.md](C:/project
 For the current reset of the historical `deps` / `typerefs` / `exports`
 surface, read [docs/deps-typerefs-exports-retirement.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/deps-typerefs-exports-retirement.md)
 before investing in snapshot-first query paths.
+`deps` already queries live current state by default; `typerefs` and
+`exports` are still being migrated off the old snapshot-first boot path.
 
 For framework-aware work, read [docs/aurelia/README.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/aurelia/README.md) before designing Aurelia-specific surfaces.
 

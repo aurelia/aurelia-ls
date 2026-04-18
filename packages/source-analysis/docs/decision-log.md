@@ -315,3 +315,18 @@ decision trail in order.
 - A repo-owned reset note now records the stronger direction:
   snapshot materialization may remain as an optional artifact, but it should
   not remain the default substrate for current queries.
+
+## 2026-04-18 - Deps query now defaults to live current-state analysis
+
+- `src/deps/query.ts` no longer resolves the current snapshot path by default.
+  It now boots from `src/live-query/` unless `--file` is passed explicitly.
+- `--file` remains the explicit materialized/offline inspection mode for deps;
+  refresh/materialization is no longer a hidden prerequisite for current deps
+  questions.
+- `stale` now explains live mode when the caller is querying current state
+  directly instead of pretending a missing snapshot is the default failure
+  mode.
+- This is intentionally only the first query-script reset. `src/exports/query.ts`
+  and `src/typerefs/query.ts` still need the same migration, and the giant
+  query-local evaluators/renderers remain active debt even after the loader
+  path moves.
