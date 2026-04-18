@@ -4,8 +4,8 @@ This is the canonical campaign document for long-running autonomous work on
 `packages/source-analysis`.
 
 If stale chat memory, a half-finished branch, or local notes disagree with this
-file plus [current-handoff.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/current-handoff.md)
-and [current-state.json](C:/projects/aurelia-ls2/packages/source-analysis/docs/current-state.json),
+file plus [current-handoff.md](./current-handoff.md)
+and [current-state.json](./current-state.json),
 the repo files win.
 
 ## Product Direction
@@ -35,6 +35,8 @@ The target layering remains:
   product behavior.
 - Aurelia-aware meaning must land on top of shared primitives, not by
   contaminating the framework-agnostic core.
+- If a fixture is Aurelia-shaped, Aurelia semantics should auto-detect during
+  protocol derivation rather than being modeled as a separate pass.
 - Long-running continuity must live in repo files, not in chat memory.
 
 ## Anti-Goals
@@ -82,14 +84,14 @@ The target layering remains:
 
 ## Session Rules
 
-- Resume by following [resume-protocol.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/resume-protocol.md)
+- Resume by following [resume-protocol.md](./resume-protocol.md)
   exactly.
 - Continue only the first `in_progress` step in
-  [current-state.json](C:/projects/aurelia-ls2/packages/source-analysis/docs/current-state.json)
+  [current-state.json](./current-state.json)
   unless the operator explicitly changes direction.
 - Update `current-handoff.md` and `current-state.json` before ending a session.
 - Append operator decisions and architecture-forcing choices to
-  [decision-log.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/decision-log.md).
+  [decision-log.md](./decision-log.md).
 - Leave the codebase with enough durable breadcrumbs that a future pass can
   continue without reconstructing intent from chat.
 

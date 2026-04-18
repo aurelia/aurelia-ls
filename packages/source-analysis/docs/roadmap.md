@@ -42,6 +42,9 @@ The main recurring pressures right now are:
 - the new Aurelia export-lens grounding is promising, but it is still
   work-in-progress derivation material and needs fixture pressure before it
   should harden into public framework-facing ontology
+- the repo-owned fixture matrix now exists, but the next value is in
+  deriving invariants and answer-shape pressure from it, not just adding more
+  fixtures
 - self-analysis still shows a 6-directory SCC across `src`, `deps`, `exports`, `host`, `public`, and `typerefs`
 - `FocusKind` remains a type hub, which is a good smell for ontology gravity leaking too widely
 - the architecture still carries too much visible identity from `deps`, `typerefs`, and `exports` as if they were durable peers rather than transitional projections
@@ -184,9 +187,15 @@ Next:
 - add Aurelia semantic surfaces as a new layer that spends shared substrate/evaluator primitives
 - use the local Aurelia Atlas ports and export semantic surface ledger as
   derivation aids, not as already-settled framework contract
-- derive a small fixture matrix that pressures export identity, registry-like
-  exports, recognized/admissible/current-world distinctions, and DI/resource
-  key-space splits before freezing more public Aurelia request/response shapes
+- use the repo-owned packet set under `fixtures/protocol-derivation/` as the
+  current derivation substrate
+- derive workbook exercises through one authority path per fixture;
+  Aurelia semantics should auto-detect when present instead of being modeled as
+  separate TypeScript and Aurelia passes
+- pressure export identity, registry-like exports,
+  recognized/admissible/current-world distinctions, DI/resource key-space
+  splits, and retreat/no-claim/open pressure before freezing more public
+  Aurelia request/response shapes
 
 Exit condition:
 
@@ -248,9 +257,11 @@ These are the points where operator judgement should usually decide direction:
 - [x] Make package audit surface package-internal source-area cycle pressure honestly
 - [ ] Decide whether `AnalysisViews` should remain a raw projection bundle or gain a narrower shared payload contract
 - [ ] Define the landing contract for Aurelia semantic adapters
-- [ ] Pressure-test the export semantic surface ledger against a small
-  repo-owned fixture matrix before promoting its categories into broader
-  framework-facing protocol surfaces
+- [x] Create a small repo-owned protocol-derivation fixture matrix for
+  export-lens and current-world pressure
+- [ ] Fill workbook derivations and invariants from that fixture matrix before
+  promoting export semantic categories into broader framework-facing protocol
+  surfaces
 
 ## How To Use This Roadmap
 

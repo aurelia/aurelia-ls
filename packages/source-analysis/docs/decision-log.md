@@ -213,7 +213,7 @@ decision trail in order.
 
 - The protocol work now derives outward from a narrow read/adjudicate kernel
   instead of trying to freeze one broad cross-surface protocol up front.
-- The new center is [src/protocol-read-kernel.ts](C:/projects/aurelia-ls2/packages/source-analysis/src/protocol-read-kernel.ts),
+- The new center is [src/protocol-read-kernel.ts](../src/protocol-read-kernel.ts),
   which keeps request, adjudication, and result separate while treating typed
   continuations as part of the answer law.
 - The earlier broader `protocol-kernel.ts` sketch was removed rather than kept
@@ -222,6 +222,20 @@ decision trail in order.
   law first, then derive more specific features and adapters from that kernel.
 - Session control, materialization, authoring, and other neighboring action
   laws remain intentionally outside this kernel for now.
+
+## 2026-04-18 - Protocol derivation now starts from repo-owned fixtures and one authority path
+
+- The repo-owned packet set under
+  [../fixtures/protocol-derivation/README.md](../fixtures/protocol-derivation/README.md)
+  is now the primary derivation substrate for protocol pressure tests.
+- If a fixture is Aurelia-shaped, Aurelia semantics should auto-detect and be
+  spent by one authority path. The main workbook should not model derivation as
+  separate TypeScript and Aurelia passes.
+- If a derivation needs to show what the framework layer added, it should do so
+  through auto-detected semantic layers, consulted world, basis, provenance,
+  and continuations rather than a second pass.
+- The next value is in filling derivations and invariants from the packet set,
+  not in expanding the packet count indefinitely.
 
 ## 2026-04-18 - Primary hosted NL shell removed and replaced with direct primitives
 

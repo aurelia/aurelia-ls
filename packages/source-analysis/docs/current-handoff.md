@@ -12,24 +12,30 @@ question routing, family ranking, or conversational ingress.
 
 1. Treat [src/protocol-read-kernel.ts](../src/protocol-read-kernel.ts)
    as the current derivation-first center for machine-facing protocol work.
-2. Flesh out concepts, invariants, and authority-law boundaries from that
-   kernel before freezing more specific feature surfaces.
-3. Treat the new Aurelia export-lens grounding under
+2. Treat the repo-owned packet set under
+   [../fixtures/protocol-derivation/README.md](../fixtures/protocol-derivation/README.md)
+   as the current derivation substrate for protocol pressure tests.
+3. Keep workbook derivation single-path and fixture-driven:
+   if a fixture is Aurelia-shaped, Aurelia semantics should auto-detect rather
+   than being modeled as a separate TypeScript pass and Aurelia pass.
+4. Flesh out concepts, invariants, and authority-law boundaries from the
+   kernel and packet set before freezing more specific feature surfaces.
+5. Treat the new Aurelia export-lens grounding under
    [docs/aurelia/export-semantic-surface-ledger.yaml](./aurelia/export-semantic-surface-ledger.yaml)
    and [docs/aurelia/atlas/README.md](./aurelia/atlas/README.md)
    as active derivation aids for fixture planning and protocol pressure tests,
    not as frozen framework contract.
-4. Use that grounding to derive a small fixture matrix before re-deriving more
-   workbook scenarios or freezing export-facing Aurelia request/response shapes.
-5. Keep treating the historical `deps` / `typerefs` / `exports` query scripts
+6. Use that grounding plus the current packet set to derive workbook scenarios
+   and invariants before freezing export-facing Aurelia request/response shapes.
+7. Keep treating the historical `deps` / `typerefs` / `exports` query scripts
    as retirement candidates rather than architecture to preserve.
-6. Finish moving current-query boot paths onto the live query kernel in
+8. Finish moving current-query boot paths onto the live query kernel in
    `src/live-query/`; `deps` is live by default now, `exports` and `typerefs`
    still need the same reset.
-7. Keep useful command intent, but keep shrinking the giant query-local
+9. Keep useful command intent, but keep shrinking the giant query-local
    indexes/renderers into thin adapters over shared live runtime/evaluator
    surfaces.
-8. Only after the legacy triple no longer dominates current-query work should
+10. Only after the legacy triple no longer dominates current-query work should
    framework-world and registration evidence become the next major primitive
    family.
 
@@ -151,6 +157,13 @@ question routing, family ranking, or conversational ingress.
   protocol and fixture derivation; it should pressure-test the kernel and
   guide fixture choice before it hardens into more public framework-facing
   surfaces.
+- Added a repo-owned protocol derivation packet set under
+  [../fixtures/protocol-derivation/README.md](../fixtures/protocol-derivation/README.md)
+  with concrete export-lens fixtures, scenario packets, and mutation-backed
+  states for `open`, `withdrawn`, and world-role `no-claim` pressure.
+- The derivation workbook now treats Aurelia semantics as auto-detected from
+  the fixture when present; protocol derivation should no longer be modeled as
+  separate TypeScript and Aurelia passes in the main workbook.
 - Added `docs/machine-legible-api-reset.md` and redirected the active campaign
   state around removing the current natural-language/heuristic API shell in
   favor of typed semantic primitives.
@@ -243,6 +256,9 @@ question routing, family ranking, or conversational ingress.
 - The new Aurelia export semantic surface ledger is useful grounding, but it is
   still provisional and needs fixture pressure before it should steer public
   framework-facing request or response names.
+- The repo-owned fixture matrix now exists, but the next real value comes from
+  filling derivations and invariants from those packets rather than expanding
+  packet count indefinitely.
 - `route-witness` and `audit` still describe freshness in terms of the legacy
   projections rather than a named shared route/reachability authority.
 - `query.navigate`, `route-witness`, and `audit` still describe freshness in
@@ -300,6 +316,10 @@ question routing, family ranking, or conversational ingress.
 - `docs/aurelia/README.md`
 - `docs/aurelia/export-semantic-surface-ledger.yaml`
 - `docs/aurelia/atlas/README.md`
+- `docs/protocol-derivation-workbook.md`
+- `fixtures/protocol-derivation/README.md`
+- `fixtures/protocol-derivation/manifest.yaml`
+- `fixtures/protocol-derivation/schema.yaml`
 - `test/inquiry-model.test.ts`
 - `test/answer-renderer.test.ts`
 - `test/inquiry-wire.test.ts`

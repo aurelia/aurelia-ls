@@ -38,8 +38,8 @@ The replacement direction is a live query kernel over the current workspace.
 
 Current seed:
 
-- [src/live-query/contracts.ts](C:/projects/aurelia-ls2/packages/source-analysis/src/live-query/contracts.ts)
-- [src/live-query/runtime.ts](C:/projects/aurelia-ls2/packages/source-analysis/src/live-query/runtime.ts)
+- [src/live-query/contracts.ts](../src/live-query/contracts.ts)
+- [src/live-query/runtime.ts](../src/live-query/runtime.ts)
 
 That kernel should be the one place that knows how to:
 

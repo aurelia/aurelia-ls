@@ -1,7 +1,7 @@
 # Protocol Read Algebra
 
 This note proposes the safest first operational layer to derive from
-[`src/protocol-read-kernel.ts`](C:/projects/aurelia-ls2/packages/source-analysis/src/protocol-read-kernel.ts).
+[`src/protocol-read-kernel.ts`](../src/protocol-read-kernel.ts).
 
 It does not try to freeze feature vocabularies early.
 It tries to freeze:
@@ -55,9 +55,9 @@ Everything else should derive outward from that.
 
 This note now has a first concrete convergence target:
 
-- [`src/protocol-read-kernel.ts`](C:/projects/aurelia-ls2/packages/source-analysis/src/protocol-read-kernel.ts)
+- [`src/protocol-read-kernel.ts`](../src/protocol-read-kernel.ts)
   now carries stronger typed selector shapes for the highest-value schemes
-- [`src/protocol-read-capabilities.ts`](C:/projects/aurelia-ls2/packages/source-analysis/src/protocol-read-capabilities.ts)
+- [`src/protocol-read-capabilities.ts`](../src/protocol-read-capabilities.ts)
   provides the sibling discovery contract for read-kernel support
 
 That convergence surfaced a useful rule:
@@ -603,7 +603,7 @@ They make initialization and capability negotiation explicit instead of forcing
 every client to infer support from errors.
 
 The first concrete sibling for this repo is now
-[`src/protocol-read-capabilities.ts`](C:/projects/aurelia-ls2/packages/source-analysis/src/protocol-read-capabilities.ts).
+[`src/protocol-read-capabilities.ts`](../src/protocol-read-capabilities.ts).
 It keeps discovery separate from semantic answers while giving clients a typed
 way to ask:
 

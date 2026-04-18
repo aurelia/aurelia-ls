@@ -14,6 +14,10 @@ Use this note when resuming work or choosing the next slice.
 8. If the work touches the machine-facing API, read [machine-legible-api-reset.md](./machine-legible-api-reset.md).
 9. If the work is framework-aware, read [aurelia/README.md](./aurelia/README.md).
 10. If the work is framework-aware and currently in spec or fixture derivation mode, also read [aurelia/export-semantic-surface-ledger.yaml](./aurelia/export-semantic-surface-ledger.yaml) and [aurelia/atlas/README.md](./aurelia/atlas/README.md).
+11. If the work is in protocol or fixture derivation mode, also read
+    [protocol-derivation-workbook.md](./protocol-derivation-workbook.md),
+    [../fixtures/protocol-derivation/README.md](../fixtures/protocol-derivation/README.md),
+    and [../fixtures/protocol-derivation/manifest.yaml](../fixtures/protocol-derivation/manifest.yaml).
 
 ## When Working On X, Read Y
 
@@ -23,6 +27,7 @@ Use this note when resuming work or choosing the next slice.
 | Changing what counts as truth, claim, no-claim, withdrawal, or consumer-safe action | [shared-semantic-authority.md](./shared-semantic-authority.md) | [provenance-and-steering.md](./provenance-and-steering.md), [analyzability.md](./analyzability.md) |
 | Moving logic between core layers, projections, or adapters | [architecture-layers.md](./architecture-layers.md) | [governing-axes.md](./governing-axes.md), [shared-semantic-authority.md](./shared-semantic-authority.md), [roadmap.md](./roadmap.md) |
 | Resetting the machine-facing API away from natural-language routing and toward typed primitives | [machine-legible-api-reset.md](./machine-legible-api-reset.md) | [authority-first-campaign.md](./authority-first-campaign.md), [shared-semantic-authority.md](./shared-semantic-authority.md), [roadmap.md](./roadmap.md) |
+| Doing protocol derivation or fixture pressure tests | [protocol-derivation-workbook.md](./protocol-derivation-workbook.md) | [protocol-read-algebra.md](./protocol-read-algebra.md), [../fixtures/protocol-derivation/README.md](../fixtures/protocol-derivation/README.md), [../fixtures/protocol-derivation/manifest.yaml](../fixtures/protocol-derivation/manifest.yaml), [aurelia/export-semantic-surface-ledger.yaml](./aurelia/export-semantic-surface-ledger.yaml) |
 | Extending the semantic kernel or evaluator ceiling | [semantic-analysis.md](./semantic-analysis.md) | [analyzability.md](./analyzability.md), [shared-semantic-authority.md](./shared-semantic-authority.md), [roadmap.md](./roadmap.md) |
 | Starting framework-aware Aurelia work, framework API registry work, or build-time DI modeling | [aurelia/README.md](./aurelia/README.md) | [aurelia/framework-owner-ingress.md](./aurelia/framework-owner-ingress.md), [aurelia/compile-time-di-container-state.md](./aurelia/compile-time-di-container-state.md), [aurelia/export-semantic-surface-ledger.yaml](./aurelia/export-semantic-surface-ledger.yaml), [aurelia/atlas/README.md](./aurelia/atlas/README.md), [shared-semantic-authority.md](./shared-semantic-authority.md) |
 | Improving the AI-facing read surface, guidance, continuations, or self-usefulness | [self-pressure-test.md](./self-pressure-test.md) | [governing-axes.md](./governing-axes.md), [shared-semantic-authority.md](./shared-semantic-authority.md), [strategy.md](./strategy.md) |

@@ -4,15 +4,21 @@ Use this whenever work resumes after compaction, context loss, or a new session.
 
 ## Required Read Order
 
-1. [README.md](C:/projects/aurelia-ls2/packages/source-analysis/README.md)
-2. [working-map.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/working-map.md)
-3. [authority-first-campaign.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/authority-first-campaign.md)
-4. [current-handoff.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/current-handoff.md)
-5. [decision-log.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/decision-log.md)
-6. [current-state.json](C:/projects/aurelia-ls2/packages/source-analysis/docs/current-state.json)
+1. [README.md](../README.md)
+2. [working-map.md](./working-map.md)
+3. [authority-first-campaign.md](./authority-first-campaign.md)
+4. [current-handoff.md](./current-handoff.md)
+5. [decision-log.md](./decision-log.md)
+6. [current-state.json](./current-state.json)
 7. Run `pnpm preflight`
-8. Re-read [roadmap.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/roadmap.md)
+8. Re-read [roadmap.md](./roadmap.md)
    only after the current handoff and state are loaded
+
+If the current slice is protocol or fixture derivation, also read:
+
+- [protocol-derivation-workbook.md](./protocol-derivation-workbook.md)
+- [../fixtures/protocol-derivation/README.md](../fixtures/protocol-derivation/README.md)
+- [../fixtures/protocol-derivation/manifest.yaml](../fixtures/protocol-derivation/manifest.yaml)
 
 ## Execution Rules
 
@@ -42,4 +48,3 @@ Stop and realign before continuing if:
 - the next move would introduce a new projection-shaped surface instead of a
   shared authority primitive
 - the worktree contains conflicting unrelated edits in the same files
-

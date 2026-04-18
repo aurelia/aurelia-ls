@@ -98,7 +98,7 @@ Those commands may remain useful, but the snapshot-first loader and giant
 query-local truth ownership are now considered retirement targets rather than
 architecture to preserve.
 
-See [deps-typerefs-exports-retirement.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/deps-typerefs-exports-retirement.md).
+See [deps-typerefs-exports-retirement.md](./deps-typerefs-exports-retirement.md).
 
 ## Design law
 

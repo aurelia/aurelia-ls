@@ -2,7 +2,7 @@
 
 Use this note when adding a consumer, claim family, cache, projection, invalidation rule, or public contract.
 
-Paired with [governing-axes.md](C:/projects/aurelia-ls2/packages/source-analysis/docs/governing-axes.md):
+Paired with [governing-axes.md](./governing-axes.md):
 
 - `governing-axes` keeps capability classification honest
 - this note keeps the product center honest
