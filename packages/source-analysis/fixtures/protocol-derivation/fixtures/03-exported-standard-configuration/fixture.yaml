@@ -1,0 +1,35 @@
+schema_version: v0alpha1
+packet_kind: fixture
+fixture_id: exported-standard-configuration
+title: Exported StandardConfiguration Surface
+intent: >
+  Pressure registry-like and configuration-shaped export meaning using a
+  built-in Aurelia configuration surface that materially shapes the consulted
+  world.
+frameworks_expected:
+  - typescript
+  - aurelia
+feature_tags:
+  - export-lens
+  - registry-like-export
+  - configuration
+  - consulted-world
+workspace_root: ./src
+source_files:
+  - src/app-config.ts
+  - src/app-root.ts
+  - src/app-root.html
+  - src/main.ts
+known_subjects:
+  - subject_id: app-config-export
+    label: AppConfig export
+    source: src/app-config.ts
+    kind_hint: configuration-registry
+known_world_contributors:
+  - contributor_id: standard-configuration
+    summary: StandardConfiguration contributes built-in resources and vocabulary.
+query_seeds:
+  - query_id: what-kind-of-export-is-appconfig
+    human_question: What kind of thing is the `AppConfig` export?
+  - query_id: how-does-appconfig-shape-the-consulted-world
+    human_question: How does `AppConfig` shape the consulted Aurelia world?

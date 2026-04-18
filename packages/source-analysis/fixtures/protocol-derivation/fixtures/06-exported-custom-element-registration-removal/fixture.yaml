@@ -1,0 +1,62 @@
+schema_version: v0alpha1
+packet_kind: fixture
+fixture_id: exported-custom-element-registration-removal
+title: Exported Custom Element With Registration Removal
+intent: >
+  Pressure retreat and withdrawal behavior when an exported custom element keeps
+  the same declaration identity but loses a previously valid current-world
+  registration contribution.
+frameworks_expected:
+  - typescript
+  - aurelia
+feature_tags:
+  - export-lens
+  - resource-definition
+  - custom-element
+  - mutation
+  - retreat
+workspace_root: ./src
+source_files:
+  - src/status-badge.ts
+  - src/status-badge.html
+  - src/index.ts
+  - src/app-root.ts
+  - src/app-root.html
+known_subjects:
+  - subject_id: status-badge-export
+    label: StatusBadge export
+    source: src/index.ts
+    kind_hint: custom-element
+  - subject_id: status-badge-class
+    label: StatusBadge class declaration
+    source: src/status-badge.ts
+    kind_hint: custom-element
+known_world_contributors:
+  - contributor_id: app-root-dependencies
+    summary: AppRoot contributes StatusBadge into the local Aurelia world.
+  - contributor_id: app-root-template
+    summary: AppRoot template actually spends the status-badge tag.
+mutations:
+  - mutation_id: remove-status-badge-from-app-root
+    summary: >
+      Remove StatusBadge from AppRoot dependencies while keeping the export
+      surface and template usage otherwise stable.
+    file_replacements:
+      - path: src/app-root.ts
+        content: |
+          import { customElement } from '@aurelia/runtime-html';
+          import template from './app-root.html';
+
+          @customElement({ name: 'app-root', template })
+          export class AppRoot {
+            public state = 'Stable';
+          }
+    semantic_effects:
+      - StatusBadge export should still resolve to the same custom element declaration.
+      - Current-world activity contributed by AppRoot should retreat.
+      - Template tag-name usage should lose its prior custom-element claim.
+query_seeds:
+  - query_id: what-does-statusbadge-export-point-to-after-removal
+    human_question: What does the `StatusBadge` export point to after root registration is removed?
+  - query_id: is-statusbadge-still-current-world-active-after-removal
+    human_question: Is the `StatusBadge` export still current-world active after root registration is removed?

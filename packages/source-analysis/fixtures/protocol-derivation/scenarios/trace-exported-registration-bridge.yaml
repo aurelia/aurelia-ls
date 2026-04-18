@@ -1,0 +1,26 @@
+schema_version: v0alpha1
+packet_kind: scenario
+scenario_id: trace-exported-registration-bridge
+fixture_id: exported-interface-key-and-registration
+title: Trace Exported Registration Bridge
+human_question: What does the `LoggerRegistration` export do?
+selector_seed:
+  kind: export-locator
+  value: src/index.ts#LoggerRegistration
+operation: trace
+aspect: registration-path
+expected_shape:
+  dominant_outcomes:
+    - hit
+    - open
+  basis_kinds:
+    - claim
+    - boundary
+  continuation_kinds:
+    - evaluate-lookup-regime
+    - inspect-kind
+    - trace-consumer-policy
+  identity_expectation: registry-like identity may remain provisional
+  anchor_expectation: emit declaration anchor
+notes:
+  - this is intentionally a bridge scenario rather than a pure identity scenario

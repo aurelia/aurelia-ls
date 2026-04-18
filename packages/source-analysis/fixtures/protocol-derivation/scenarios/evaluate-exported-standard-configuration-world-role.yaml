@@ -1,0 +1,25 @@
+schema_version: v0alpha1
+packet_kind: scenario
+scenario_id: evaluate-exported-standard-configuration-world-role
+fixture_id: exported-standard-configuration
+title: Evaluate Exported Configuration World Role
+human_question: How does `AppConfig` shape the consulted Aurelia world?
+selector_seed:
+  kind: export-locator
+  value: src/app-config.ts#AppConfig
+operation: evaluate
+aspect: consulted-world
+expected_shape:
+  dominant_outcomes:
+    - hit
+    - qualified
+  basis_kinds:
+    - claim
+    - boundary
+  continuation_kinds:
+    - trace-admission
+    - evaluate-world-status
+  identity_expectation: semantic identity may remain secondary to world-role explanation
+  anchor_expectation: anchor optional
+notes:
+  - useful pressure on configuration and registry archetypes

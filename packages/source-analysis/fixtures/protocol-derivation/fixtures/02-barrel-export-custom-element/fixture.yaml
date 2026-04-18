@@ -1,0 +1,38 @@
+schema_version: v0alpha1
+packet_kind: fixture
+fixture_id: barrel-export-custom-element
+title: Barrel Re-Exported Custom Element
+intent: >
+  Pressure export topology by separating declaration, component barrel, and
+  top-level barrel while keeping the Aurelia resource identity otherwise simple.
+frameworks_expected:
+  - typescript
+  - aurelia
+feature_tags:
+  - export-lens
+  - resource-definition
+  - custom-element
+  - barrel-export
+  - re-export
+workspace_root: ./src
+source_files:
+  - src/components/info-box.ts
+  - src/components/info-box.html
+  - src/components/index.ts
+  - src/index.ts
+  - src/app-root.ts
+  - src/app-root.html
+known_subjects:
+  - subject_id: top-level-infobox-export
+    label: top-level InfoBox re-export
+    source: src/index.ts
+    kind_hint: custom-element
+  - subject_id: components-barrel-export
+    label: component barrel re-export
+    source: src/components/index.ts
+    kind_hint: custom-element
+query_seeds:
+  - query_id: what-does-top-level-infobox-export-point-to
+    human_question: What does the top-level `InfoBox` export point to?
+  - query_id: how-does-the-barrel-export-reach-the-custom-element
+    human_question: How does the barrel export reach the custom element declaration?

@@ -1,0 +1,26 @@
+schema_version: v0alpha1
+packet_kind: scenario
+scenario_id: evaluate-exported-custom-element-no-current-world-claim
+fixture_id: exported-custom-element-no-current-world-claim
+title: Evaluate Exported Custom Element With No Current-World Claim
+human_question: Is the `GhostPanel` export current-world active in `AppRoot`?
+selector_seed:
+  kind: export-locator
+  value: src/index.ts#GhostPanel
+operation: evaluate
+aspect: current-world-status
+expected_shape:
+  dominant_outcomes:
+    - no-claim
+  basis_kinds:
+    - substrate
+    - claim
+  continuation_kinds:
+    - trace-missing-registration-path
+    - inspect-export-kind
+    - narrow-template-usage
+  identity_expectation: export identity should still close at project scope
+  anchor_expectation: emit declaration anchor
+notes:
+  - this scenario should stay closed rather than drifting into open-boundary language
+  - the template tag usage should not be enough to create a current-world claim by itself

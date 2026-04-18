@@ -1,0 +1,35 @@
+schema_version: v0alpha1
+packet_kind: fixture
+fixture_id: exported-interface-key-and-registration
+title: Exported Interface Key And Registration
+intent: >
+  Pressure generic DI key-space, interface-symbol identity, and registry-like
+  registration exports in a way that is immediately useful to Aurelia core
+  work.
+frameworks_expected:
+  - typescript
+  - aurelia
+feature_tags:
+  - export-lens
+  - compile-time-di
+  - interface-symbol-key
+  - registration-bridge
+workspace_root: ./src
+source_files:
+  - src/logger.ts
+  - src/index.ts
+  - src/app-root.ts
+known_subjects:
+  - subject_id: ilogger-export
+    label: ILogger export
+    source: src/index.ts
+    kind_hint: interface-symbol-key
+  - subject_id: logger-registration-export
+    label: LoggerRegistration export
+    source: src/index.ts
+    kind_hint: registry-like-export
+query_seeds:
+  - query_id: what-kind-of-export-is-ilogger
+    human_question: What kind of thing is the `ILogger` export?
+  - query_id: what-does-loggerregistration-do
+    human_question: What does the `LoggerRegistration` export do?

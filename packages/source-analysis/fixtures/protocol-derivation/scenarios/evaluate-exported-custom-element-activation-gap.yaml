@@ -1,0 +1,27 @@
+schema_version: v0alpha1
+packet_kind: scenario
+scenario_id: evaluate-exported-custom-element-activation-gap
+fixture_id: exported-custom-element-activation-gap
+title: Evaluate Exported Custom Element Activation Gap
+human_question: Is the `LazyPanel` export actually current-world active?
+selector_seed:
+  kind: export-locator
+  value: src/index.ts#LazyPanel
+operation: evaluate
+aspect: current-world-status
+expected_shape:
+  dominant_outcomes:
+    - open
+  basis_kinds:
+    - substrate
+    - claim
+    - boundary
+  continuation_kinds:
+    - trace-missing-activation-dependency
+    - inspect-iloadstate-export
+    - evaluate-registration-path
+  identity_expectation: export identity should still close at project scope
+  anchor_expectation: emit declaration anchor
+notes:
+  - identity closure should remain stronger than current-world activity closure
+  - the missing ILoadState registration should dominate the open-boundary explanation

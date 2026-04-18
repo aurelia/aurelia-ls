@@ -1,0 +1,43 @@
+schema_version: v0alpha1
+packet_kind: fixture
+fixture_id: exported-custom-element-no-current-world-claim
+title: Exported Custom Element With No Current-World Claim
+intent: >
+  Pressure the difference between a valid exported custom element declaration
+  and an honest current-world no-claim outcome when no Aurelia registration
+  path admits that export into the consuming template world.
+frameworks_expected:
+  - typescript
+  - aurelia
+feature_tags:
+  - export-lens
+  - resource-definition
+  - custom-element
+  - no-claim
+  - unregistered-world
+workspace_root: ./src
+source_files:
+  - src/ghost-panel.ts
+  - src/ghost-panel.html
+  - src/index.ts
+  - src/app-root.ts
+  - src/app-root.html
+known_subjects:
+  - subject_id: ghost-panel-export
+    label: GhostPanel export
+    source: src/index.ts
+    kind_hint: custom-element
+  - subject_id: ghost-panel-class
+    label: GhostPanel class declaration
+    source: src/ghost-panel.ts
+    kind_hint: custom-element
+known_world_contributors:
+  - contributor_id: app-root-template
+    summary: AppRoot template spends the ghost-panel tag without contributing a registration path.
+query_seeds:
+  - query_id: what-does-ghostpanel-export-point-to
+    human_question: What does the `GhostPanel` export point to?
+  - query_id: is-ghostpanel-current-world-active
+    human_question: Is the `GhostPanel` export current-world active in `AppRoot`?
+  - query_id: why-does-ghostpanel-have-no-current-world-claim
+    human_question: Why doesn't `GhostPanel` have a current-world claim here?

@@ -1,0 +1,25 @@
+schema_version: v0alpha1
+packet_kind: scenario
+scenario_id: resolve-exported-custom-element-after-registration-removal
+fixture_id: exported-custom-element-registration-removal
+title: Resolve Exported Custom Element After Registration Removal
+human_question: What does the `StatusBadge` export point to after root registration is removed?
+fixture_state: after:remove-status-badge-from-app-root
+selector_seed:
+  kind: export-locator
+  value: src/index.ts#StatusBadge
+operation: resolve
+expected_shape:
+  dominant_outcomes:
+    - hit
+  basis_kinds:
+    - substrate
+    - claim
+  continuation_kinds:
+    - evaluate-current-world-status
+    - trace-registration-loss
+    - inspect-declaration-anchor
+  identity_expectation: export identity should stay stable across the mutation
+  anchor_expectation: emit declaration anchor and reread hint
+notes:
+  - export identity should remain closed even though one world contribution has been removed
