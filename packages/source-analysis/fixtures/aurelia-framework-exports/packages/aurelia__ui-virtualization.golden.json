@@ -1,0 +1,288 @@
+{
+  "schemaVersion": "v0alpha1",
+  "packageName": "@aurelia/ui-virtualization",
+  "packageDir": "packages/ui-virtualization",
+  "analysisBasis": "source",
+  "analysisEntrypoint": "packages/ui-virtualization/src/index.ts",
+  "summary": {
+    "exportCount": 15,
+    "typeOnlyExportCount": 8,
+    "valueExportCount": 7,
+    "mergedExportCount": 3
+  },
+  "exports": [
+    {
+      "exportedName": "CollectionStrategyLocator",
+      "originalName": "CollectionStrategyLocator",
+      "declarationName": "CollectionStrategyLocator",
+      "declarationFile": "packages/ui-virtualization/src/collection-strategy.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "DefaultDomRenderer",
+      "originalName": "DefaultDomRenderer",
+      "declarationName": "DefaultDomRenderer",
+      "declarationFile": "packages/ui-virtualization/src/virtual-repeat-dom-renderer.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "DefaultVirtualizationConfiguration",
+      "originalName": "DefaultVirtualizationConfiguration",
+      "declarationName": "DefaultVirtualizationConfiguration",
+      "declarationFile": "packages/ui-virtualization/src/configuration.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ICollectionStrategy",
+      "originalName": "ICollectionStrategy",
+      "declarationName": "ICollectionStrategy",
+      "declarationFile": "packages/ui-virtualization/src/interfaces.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ICollectionStrategyLocator",
+      "originalName": "ICollectionStrategyLocator",
+      "declarationName": "ICollectionStrategyLocator",
+      "declarationFile": "packages/ui-virtualization/src/interfaces.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ICollectionStrategySubscriber",
+      "originalName": "ICollectionStrategySubscriber",
+      "declarationName": "ICollectionStrategySubscriber",
+      "declarationFile": "packages/ui-virtualization/src/interfaces.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IDomRenderer",
+      "originalName": "IDomRenderer",
+      "declarationName": "IDomRenderer",
+      "declarationFile": "packages/ui-virtualization/src/interfaces.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IVirtualRepeatDom",
+      "originalName": "IVirtualRepeatDom",
+      "declarationName": "IVirtualRepeatDom",
+      "declarationFile": "packages/ui-virtualization/src/interfaces.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IVirtualRepeater",
+      "originalName": "IVirtualRepeater",
+      "declarationName": "IVirtualRepeater",
+      "declarationFile": "packages/ui-virtualization/src/interfaces.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IVirtualRepeatEventCallbacks",
+      "originalName": "IVirtualRepeatEventCallbacks",
+      "declarationName": "IVirtualRepeatEventCallbacks",
+      "declarationFile": "packages/ui-virtualization/src/interfaces.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IVirtualRepeatNearBottomEvent",
+      "originalName": "IVirtualRepeatNearBottomEvent",
+      "declarationName": "IVirtualRepeatNearBottomEvent",
+      "declarationFile": "packages/ui-virtualization/src/interfaces.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IVirtualRepeatNearTopEvent",
+      "originalName": "IVirtualRepeatNearTopEvent",
+      "declarationName": "IVirtualRepeatNearTopEvent",
+      "declarationFile": "packages/ui-virtualization/src/interfaces.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "VIRTUAL_REPEAT_NEAR_BOTTOM",
+      "originalName": "VIRTUAL_REPEAT_NEAR_BOTTOM",
+      "declarationName": "VIRTUAL_REPEAT_NEAR_BOTTOM",
+      "declarationFile": "packages/ui-virtualization/src/interfaces.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "VIRTUAL_REPEAT_NEAR_TOP",
+      "originalName": "VIRTUAL_REPEAT_NEAR_TOP",
+      "declarationName": "VIRTUAL_REPEAT_NEAR_TOP",
+      "declarationFile": "packages/ui-virtualization/src/interfaces.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "VirtualRepeat",
+      "originalName": "VirtualRepeat",
+      "declarationName": "VirtualRepeat",
+      "declarationFile": "packages/ui-virtualization/src/virtual-repeat.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "class",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    }
+  ]
+}

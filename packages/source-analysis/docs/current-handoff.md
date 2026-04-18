@@ -169,6 +169,11 @@ question routing, family ranking, or conversational ingress.
   to capture the near-term operational plan for pointing `source-analysis` at
   the Aurelia framework repo and classifying the full export surface with a
   deliberately thin answer contract.
+- Added a first repo-owned Aurelia framework export golden harness under
+  [../fixtures/aurelia-framework-exports/README.md](../fixtures/aurelia-framework-exports/README.md)
+  plus a generator script and focused Node test so the package can now
+  normalize and deep-compare the full export surface of the in-repo `aurelia`
+  submodule package-by-package.
 - Added a repo-owned protocol derivation packet set under
   [../fixtures/protocol-derivation/README.md](../fixtures/protocol-derivation/README.md)
   with concrete export-lens fixtures, scenario packets, and mutation-backed

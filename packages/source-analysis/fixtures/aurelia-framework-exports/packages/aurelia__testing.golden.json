@@ -1,0 +1,1009 @@
+{
+  "schemaVersion": "v0alpha1",
+  "packageName": "@aurelia/testing",
+  "packageDir": "packages/testing",
+  "analysisBasis": "source",
+  "analysisEntrypoint": "packages/testing/src/index.ts",
+  "summary": {
+    "exportCount": 55,
+    "typeOnlyExportCount": 4,
+    "valueExportCount": 51,
+    "mergedExportCount": 4
+  },
+  "exports": [
+    {
+      "exportedName": "_",
+      "originalName": "_",
+      "declarationName": "_",
+      "declarationFile": "packages/testing/src/string-manipulation.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "assert",
+      "originalName": "assert",
+      "declarationName": "assert",
+      "declarationFile": "packages/testing/src/assert.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "fallback"
+      ]
+    },
+    {
+      "exportedName": "Call",
+      "originalName": "Call",
+      "declarationName": "Call",
+      "declarationFile": "packages/testing/src/tracing.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "CallCollection",
+      "originalName": "CallCollection",
+      "declarationName": "CallCollection",
+      "declarationFile": "packages/testing/src/tracing.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ChangeSet",
+      "originalName": "ChangeSet",
+      "declarationName": "ChangeSet",
+      "declarationFile": "packages/testing/src/mocks.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "CollectionChangeSet",
+      "originalName": "CollectionChangeSet",
+      "declarationName": "CollectionChangeSet",
+      "declarationFile": "packages/testing/src/mocks.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createContainer",
+      "originalName": "createContainer",
+      "declarationName": "createContainer",
+      "declarationFile": "packages/testing/src/test-context.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createFixture",
+      "originalName": "createFixture",
+      "declarationName": "createFixture",
+      "declarationFile": "packages/testing/src/startup.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "function",
+        "unknown"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createObserverLocator",
+      "originalName": "createObserverLocator",
+      "declarationName": "createObserverLocator",
+      "declarationFile": "packages/testing/src/test-builder.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createScopeForTest",
+      "originalName": "createScopeForTest",
+      "declarationName": "createScopeForTest",
+      "declarationFile": "packages/testing/src/test-builder.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createSink",
+      "originalName": "createSink",
+      "declarationName": "createSink",
+      "declarationFile": "packages/testing/src/logger-sinks.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createSpy",
+      "originalName": "createSpy",
+      "declarationName": "createSpy",
+      "declarationFile": "packages/testing/src/util.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "CSS_PROPERTIES",
+      "originalName": "CSS_PROPERTIES",
+      "declarationName": "CSS_PROPERTIES",
+      "declarationFile": "packages/testing/src/data.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "eachCartesianJoin",
+      "originalName": "eachCartesianJoin",
+      "declarationName": "eachCartesianJoin",
+      "declarationFile": "packages/testing/src/each-cartesian-join.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "eachCartesianJoinAsync",
+      "originalName": "eachCartesianJoinAsync",
+      "declarationName": "eachCartesianJoinAsync",
+      "declarationFile": "packages/testing/src/each-cartesian-join.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "eachCartesianJoinFactory",
+      "originalName": "eachCartesianJoinFactory",
+      "declarationName": "eachCartesianJoinFactory",
+      "declarationFile": "packages/testing/src/each-cartesian-join.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ensureTaskQueuesEmpty",
+      "originalName": "ensureTaskQueuesEmpty",
+      "declarationName": "ensureTaskQueuesEmpty",
+      "declarationFile": "packages/testing/src/scheduler.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "fail",
+      "originalName": "fail",
+      "declarationName": "fail",
+      "declarationFile": "packages/testing/src/assert.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "generateCartesianProduct",
+      "originalName": "generateCartesianProduct",
+      "declarationName": "generateCartesianProduct",
+      "declarationFile": "packages/testing/src/each-cartesian-join.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "getVisibleText",
+      "originalName": "getVisibleText",
+      "declarationName": "getVisibleText",
+      "declarationFile": "packages/testing/src/specialized-assertions.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "globalAttributeNames",
+      "originalName": "globalAttributeNames",
+      "declarationName": "globalAttributeNames",
+      "declarationFile": "packages/testing/src/data.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "h",
+      "originalName": "h",
+      "declarationName": "h",
+      "declarationFile": "packages/testing/src/h.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "hJsx",
+      "originalName": "hJsx",
+      "declarationName": "hJsx",
+      "declarationFile": "packages/testing/src/h.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "unknown"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "htmlStringify",
+      "originalName": "htmlStringify",
+      "declarationName": "htmlStringify",
+      "declarationFile": "packages/testing/src/string-manipulation.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IFixture",
+      "originalName": "IFixture",
+      "declarationName": "IFixture",
+      "declarationFile": "packages/testing/src/startup.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "inspect",
+      "originalName": "inspect",
+      "declarationName": "inspect",
+      "declarationFile": "packages/testing/src/inspect.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "instructionTypeName",
+      "originalName": "instructionTypeName",
+      "declarationName": "instructionTypeName",
+      "declarationFile": "packages/testing/src/specialized-assertions.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ISpy",
+      "originalName": "ISpy",
+      "declarationName": "ISpy",
+      "declarationFile": "packages/testing/src/util.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "jsonStringify",
+      "originalName": "jsonStringify",
+      "declarationName": "jsonStringify",
+      "declarationFile": "packages/testing/src/string-manipulation.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "MockBinding",
+      "originalName": "MockBinding",
+      "declarationName": "MockBinding",
+      "declarationFile": "packages/testing/src/mocks.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "MockBindingBehavior",
+      "originalName": "MockBindingBehavior",
+      "declarationName": "MockBindingBehavior",
+      "declarationFile": "packages/testing/src/mocks.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "MockBrowserHistoryLocation",
+      "originalName": "MockBrowserHistoryLocation",
+      "declarationName": "MockBrowserHistoryLocation",
+      "declarationFile": "packages/testing/src/mocks.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "MockContext",
+      "originalName": "MockContext",
+      "declarationName": "MockContext",
+      "declarationFile": "packages/testing/src/mocks.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "MockPropertySubscriber",
+      "originalName": "MockPropertySubscriber",
+      "declarationName": "MockPropertySubscriber",
+      "declarationFile": "packages/testing/src/mocks.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "MockServiceLocator",
+      "originalName": "MockServiceLocator",
+      "declarationName": "MockServiceLocator",
+      "declarationFile": "packages/testing/src/mocks.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "class",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "MockSignaler",
+      "originalName": "MockSignaler",
+      "declarationName": "MockSignaler",
+      "declarationFile": "packages/testing/src/mocks.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "class",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "MockTracingExpression",
+      "originalName": "MockTracingExpression",
+      "declarationName": "MockTracingExpression",
+      "declarationFile": "packages/testing/src/mocks.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "MockValueConverter",
+      "originalName": "MockValueConverter",
+      "declarationName": "MockValueConverter",
+      "declarationFile": "packages/testing/src/mocks.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "onFixtureCreated",
+      "originalName": "onFixtureCreated",
+      "declarationName": "onFixtureCreated",
+      "declarationFile": "packages/testing/src/startup.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "padLeft",
+      "originalName": "padLeft",
+      "declarationName": "padLeft",
+      "declarationFile": "packages/testing/src/string-manipulation.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "padRight",
+      "originalName": "padRight",
+      "declarationName": "padRight",
+      "declarationFile": "packages/testing/src/string-manipulation.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "PLATFORM",
+      "originalName": "PLATFORM",
+      "declarationName": "PLATFORM",
+      "declarationFile": "packages/testing/src/test-context.ts",
+      "faceKind": "variable",
+      "faceKinds": [
+        "variable"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "PLATFORMRegistration",
+      "originalName": "PLATFORMRegistration",
+      "declarationName": "PLATFORMRegistration",
+      "declarationFile": "packages/testing/src/test-context.ts",
+      "faceKind": "variable",
+      "faceKinds": [
+        "variable"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ProxyChangeSet",
+      "originalName": "ProxyChangeSet",
+      "declarationName": "ProxyChangeSet",
+      "declarationFile": "packages/testing/src/mocks.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "PSEUDO_ELEMENTS",
+      "originalName": "PSEUDO_ELEMENTS",
+      "declarationName": "PSEUDO_ELEMENTS",
+      "declarationFile": "packages/testing/src/data.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "recordCalls",
+      "originalName": "recordCalls",
+      "declarationName": "recordCalls",
+      "declarationFile": "packages/testing/src/tracing.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "setPlatform",
+      "originalName": "setPlatform",
+      "declarationName": "setPlatform",
+      "declarationFile": "packages/testing/src/test-context.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "SpySubscriber",
+      "originalName": "SpySubscriber",
+      "declarationName": "SpySubscriber",
+      "declarationFile": "packages/testing/src/mocks.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "stopRecordingCalls",
+      "originalName": "stopRecordingCalls",
+      "declarationName": "stopRecordingCalls",
+      "declarationFile": "packages/testing/src/tracing.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "stringify",
+      "originalName": "stringify",
+      "declarationName": "stringify",
+      "declarationFile": "packages/testing/src/string-manipulation.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "TestContext",
+      "originalName": "TestContext",
+      "declarationName": "TestContext",
+      "declarationFile": "packages/testing/src/test-context.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "trace",
+      "originalName": "trace",
+      "declarationName": "trace",
+      "declarationFile": "packages/testing/src/tracing.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "trimFull",
+      "originalName": "trimFull",
+      "declarationName": "trimFull",
+      "declarationFile": "packages/testing/src/util.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "verifyBindingInstructionsEqual",
+      "originalName": "verifyBindingInstructionsEqual",
+      "declarationName": "verifyBindingInstructionsEqual",
+      "declarationFile": "packages/testing/src/specialized-assertions.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "verifyEqual",
+      "originalName": "verifyEqual",
+      "declarationName": "verifyEqual",
+      "declarationFile": "packages/testing/src/specialized-assertions.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    }
+  ]
+}

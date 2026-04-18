@@ -1,0 +1,395 @@
+{
+  "schemaVersion": "v0alpha1",
+  "packageName": "@aurelia/compat-v1",
+  "packageDir": "packages/compat-v1",
+  "analysisBasis": "source",
+  "analysisEntrypoint": "packages/compat-v1/src/index.ts",
+  "summary": {
+    "exportCount": 21,
+    "typeOnlyExportCount": 3,
+    "valueExportCount": 18,
+    "mergedExportCount": 3
+  },
+  "exports": [
+    {
+      "exportedName": "BindingEngine",
+      "originalName": "BindingEngine",
+      "declarationName": "BindingEngine",
+      "declarationFile": "packages/compat-v1/src/compat-binding-engine.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "CallBinding",
+      "originalName": "CallBinding",
+      "declarationName": "CallBinding",
+      "declarationFile": "packages/compat-v1/src/compat-call.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "class",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "CallBindingCommand",
+      "originalName": "CallBindingCommand",
+      "declarationName": "CallBindingCommand",
+      "declarationFile": "packages/compat-v1/src/compat-call.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "CallBindingInstruction",
+      "originalName": "CallBindingInstruction",
+      "declarationName": "CallBindingInstruction",
+      "declarationFile": "packages/compat-v1/src/compat-call.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "CallBindingRenderer",
+      "originalName": "CallBindingRenderer",
+      "declarationName": "CallBindingRenderer",
+      "declarationFile": "packages/compat-v1/src/compat-call.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "callSyntax",
+      "originalName": "callSyntax",
+      "declarationName": "callSyntax",
+      "declarationFile": "packages/compat-v1/src/compat-call.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "compatRegistration",
+      "originalName": "compatRegistration",
+      "declarationName": "compatRegistration",
+      "declarationFile": "packages/compat-v1/src/index.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "computedFrom",
+      "originalName": "computedFrom",
+      "declarationName": "computedFrom",
+      "declarationFile": "packages/compat-v1/src/compat-computed-from.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "DelegateBindingCommand",
+      "originalName": "DelegateBindingCommand",
+      "declarationName": "DelegateBindingCommand",
+      "declarationFile": "packages/compat-v1/src/compat-event.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "DelegateBindingInstruction",
+      "originalName": "DelegateBindingInstruction",
+      "declarationName": "DelegateBindingInstruction",
+      "declarationFile": "packages/compat-v1/src/compat-event.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "DelegateListenerBinding",
+      "originalName": "DelegateListenerBinding",
+      "declarationName": "DelegateListenerBinding",
+      "declarationFile": "packages/compat-v1/src/compat-event.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "class",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "DelegateListenerOptions",
+      "originalName": "DelegateListenerOptions",
+      "declarationName": "DelegateListenerOptions",
+      "declarationFile": "packages/compat-v1/src/compat-event.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "delegateSyntax",
+      "originalName": "delegateSyntax",
+      "declarationName": "delegateSyntax",
+      "declarationFile": "packages/compat-v1/src/compat-event.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "disableComposeCompat",
+      "originalName": "disableComposeCompat",
+      "declarationName": "disableComposeCompat",
+      "declarationFile": "packages/compat-v1/src/compat-au-compose.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "enableComposeCompat",
+      "originalName": "enableComposeCompat",
+      "declarationName": "enableComposeCompat",
+      "declarationFile": "packages/compat-v1/src/compat-au-compose.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "EventDelegator",
+      "originalName": "EventDelegator",
+      "declarationName": "EventDelegator",
+      "declarationFile": "packages/compat-v1/src/compat-event.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "eventPreventDefaultBehavior",
+      "originalName": "eventPreventDefaultBehavior",
+      "declarationName": "eventPreventDefaultBehavior",
+      "declarationFile": "packages/compat-v1/src/compat-event.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IEventDelegator",
+      "originalName": "IEventDelegator",
+      "declarationName": "IEventDelegator",
+      "declarationFile": "packages/compat-v1/src/compat-event.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "inlineView",
+      "originalName": "inlineView",
+      "declarationName": "inlineView",
+      "declarationFile": "packages/compat-v1/src/compat-custom-element.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ListenerBindingRenderer",
+      "originalName": "ListenerBindingRenderer",
+      "declarationName": "ListenerBindingRenderer",
+      "declarationFile": "packages/compat-v1/src/compat-event.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "noView",
+      "originalName": "noView",
+      "declarationName": "noView",
+      "declarationFile": "packages/compat-v1/src/compat-custom-element.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "v0alpha1",
+  "packageName": "@aurelia/addons",
+  "packageDir": "packages/addons",
+  "analysisBasis": "source",
+  "analysisEntrypoint": "packages/addons/src/index.ts",
+  "summary": {
+    "exportCount": 1,
+    "typeOnlyExportCount": 0,
+    "valueExportCount": 1,
+    "mergedExportCount": 0
+  },
+  "exports": [
+    {
+      "exportedName": "AddonsConfiguration",
+      "originalName": "AddonsConfiguration",
+      "declarationName": "AddonsConfiguration",
+      "declarationFile": "packages/addons/src/index.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "local-declaration"
+      ]
+    }
+  ]
+}

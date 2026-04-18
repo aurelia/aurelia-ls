@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "v0alpha1",
+  "packageName": "@aurelia/platform",
+  "packageDir": "packages/platform",
+  "analysisBasis": "source",
+  "analysisEntrypoint": "packages/platform/src/index.ts",
+  "summary": {
+    "exportCount": 1,
+    "typeOnlyExportCount": 0,
+    "valueExportCount": 1,
+    "mergedExportCount": 0
+  },
+  "exports": [
+    {
+      "exportedName": "Platform",
+      "originalName": "Platform",
+      "declarationName": "Platform",
+      "declarationFile": "packages/platform/src/index.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "local-declaration"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1952 @@
+{
+  "schemaVersion": "v0alpha1",
+  "packageName": "@aurelia/template-compiler",
+  "packageDir": "packages/template-compiler",
+  "analysisBasis": "source",
+  "analysisEntrypoint": "packages/template-compiler/src/index.ts",
+  "summary": {
+    "exportCount": 107,
+    "typeOnlyExportCount": 50,
+    "valueExportCount": 57,
+    "mergedExportCount": 11
+  },
+  "exports": [
+    {
+      "exportedName": "AtPrefixedTriggerAttributePattern",
+      "originalName": "AtPrefixedTriggerAttributePattern",
+      "declarationName": "AtPrefixedTriggerAttributePattern",
+      "declarationFile": "packages/template-compiler/src/attribute-pattern.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "AttrBindingCommand",
+      "originalName": "AttrBindingCommand",
+      "declarationName": "AttrBindingCommand",
+      "declarationFile": "packages/template-compiler/src/binding-command.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "AttributeBindingInstruction",
+      "originalName": "AttributeBindingInstruction",
+      "declarationName": "AttributeBindingInstruction",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "AttributeParser",
+      "originalName": "AttributeParser",
+      "declarationName": "AttributeParser",
+      "declarationFile": "packages/template-compiler/src/attribute-pattern.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "attributePattern",
+      "originalName": "attributePattern",
+      "declarationName": "attributePattern",
+      "declarationFile": "packages/template-compiler/src/attribute-pattern.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "AttributePattern",
+      "originalName": "AttributePattern",
+      "declarationName": "AttributePattern",
+      "declarationFile": "packages/template-compiler/src/attribute-pattern.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "AttributePatternDefinition",
+      "originalName": "AttributePatternDefinition",
+      "declarationName": "AttributePatternDefinition",
+      "declarationFile": "packages/template-compiler/src/attribute-pattern.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "AttributePatternKind",
+      "originalName": "AttributePatternKind",
+      "declarationName": "AttributePatternKind",
+      "declarationFile": "packages/template-compiler/src/attribute-pattern.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "AttrSyntax",
+      "originalName": "AttrSyntax",
+      "declarationName": "AttrSyntax",
+      "declarationFile": "packages/template-compiler/src/attribute-pattern.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "bindingCommand",
+      "originalName": "bindingCommand",
+      "declarationName": "bindingCommand",
+      "declarationFile": "packages/template-compiler/src/binding-command.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "BindingCommand",
+      "originalName": "BindingCommand",
+      "declarationName": "BindingCommand",
+      "declarationFile": "packages/template-compiler/src/binding-command.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "BindingCommandDecorator",
+      "originalName": "BindingCommandDecorator",
+      "declarationName": "BindingCommandDecorator",
+      "declarationFile": "packages/template-compiler/src/binding-command.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "BindingCommandDefinition",
+      "originalName": "BindingCommandDefinition",
+      "declarationName": "BindingCommandDefinition",
+      "declarationFile": "packages/template-compiler/src/binding-command.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "BindingCommandInstance",
+      "originalName": "BindingCommandInstance",
+      "declarationName": "BindingCommandInstance",
+      "declarationFile": "packages/template-compiler/src/binding-command.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "BindingCommandKind",
+      "originalName": "BindingCommandKind",
+      "declarationName": "BindingCommandKind",
+      "declarationFile": "packages/template-compiler/src/binding-command.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "BindingCommandStaticAuDefinition",
+      "originalName": "BindingCommandStaticAuDefinition",
+      "declarationName": "BindingCommandStaticAuDefinition",
+      "declarationFile": "packages/template-compiler/src/binding-command.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "BindingCommandType",
+      "originalName": "BindingCommandType",
+      "declarationName": "BindingCommandType",
+      "declarationFile": "packages/template-compiler/src/binding-command.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "BindingMode",
+      "originalName": "BindingMode",
+      "declarationName": "BindingMode",
+      "declarationFile": "packages/template-compiler/src/binding-mode.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "type-alias"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "CaptureBindingCommand",
+      "originalName": "CaptureBindingCommand",
+      "declarationName": "CaptureBindingCommand",
+      "declarationFile": "packages/template-compiler/src/binding-command.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ClassBindingCommand",
+      "originalName": "ClassBindingCommand",
+      "declarationName": "ClassBindingCommand",
+      "declarationFile": "packages/template-compiler/src/binding-command.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ColonPrefixedBindAttributePattern",
+      "originalName": "ColonPrefixedBindAttributePattern",
+      "declarationName": "ColonPrefixedBindAttributePattern",
+      "declarationFile": "packages/template-compiler/src/attribute-pattern.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "DefaultBindingCommand",
+      "originalName": "DefaultBindingCommand",
+      "declarationName": "DefaultBindingCommand",
+      "declarationFile": "packages/template-compiler/src/binding-command.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "DotSeparatedAttributePattern",
+      "originalName": "DotSeparatedAttributePattern",
+      "declarationName": "DotSeparatedAttributePattern",
+      "declarationFile": "packages/template-compiler/src/attribute-pattern.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "EventAttributePattern",
+      "originalName": "EventAttributePattern",
+      "declarationName": "EventAttributePattern",
+      "declarationFile": "packages/template-compiler/src/attribute-pattern.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ForBindingCommand",
+      "originalName": "ForBindingCommand",
+      "declarationName": "ForBindingCommand",
+      "declarationFile": "packages/template-compiler/src/binding-command.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "FromViewBindingCommand",
+      "originalName": "FromViewBindingCommand",
+      "declarationName": "FromViewBindingCommand",
+      "declarationFile": "packages/template-compiler/src/binding-command.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "generateElementName",
+      "originalName": "generateElementName",
+      "declarationName": "generateElementName",
+      "declarationFile": "packages/template-compiler/src/template-compiler.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "HydrateAttributeInstruction",
+      "originalName": "HydrateAttributeInstruction",
+      "declarationName": "HydrateAttributeInstruction",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "HydrateElementInstruction",
+      "originalName": "HydrateElementInstruction",
+      "declarationName": "HydrateElementInstruction",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "HydrateLetElementInstruction",
+      "originalName": "HydrateLetElementInstruction",
+      "declarationName": "HydrateLetElementInstruction",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "HydrateTemplateController",
+      "originalName": "HydrateTemplateController",
+      "declarationName": "HydrateTemplateController",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IAttributeBindablesInfo",
+      "originalName": "IAttributeBindablesInfo",
+      "declarationName": "IAttributeBindablesInfo",
+      "declarationFile": "packages/template-compiler/src/template-compiler.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IAttributeComponentDefinition",
+      "originalName": "IAttributeComponentDefinition",
+      "declarationName": "IAttributeComponentDefinition",
+      "declarationFile": "packages/template-compiler/src/interfaces-template-compiler.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IAttributeParser",
+      "originalName": "IAttributeParser",
+      "declarationName": "IAttributeParser",
+      "declarationFile": "packages/template-compiler/src/attribute-pattern.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IAttributePattern",
+      "originalName": "IAttributePattern",
+      "declarationName": "IAttributePattern",
+      "declarationFile": "packages/template-compiler/src/attribute-pattern.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IAttrMapper",
+      "originalName": "IAttrMapper",
+      "declarationName": "IAttrMapper",
+      "declarationFile": "packages/template-compiler/src/attribute-mapper.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IBindableCommandInfo",
+      "originalName": "IBindableCommandInfo",
+      "declarationName": "IBindableCommandInfo",
+      "declarationFile": "packages/template-compiler/src/binding-command.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IBindingCommandResolver",
+      "originalName": "IBindingCommandResolver",
+      "declarationName": "IBindingCommandResolver",
+      "declarationFile": "packages/template-compiler/src/template-compiler.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ICommandBuildInfo",
+      "originalName": "ICommandBuildInfo",
+      "declarationName": "ICommandBuildInfo",
+      "declarationFile": "packages/template-compiler/src/binding-command.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ICompiledElementComponentDefinition",
+      "originalName": "ICompiledElementComponentDefinition",
+      "declarationName": "ICompiledElementComponentDefinition",
+      "declarationFile": "packages/template-compiler/src/interfaces-template-compiler.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IComponentBindablePropDefinition",
+      "originalName": "IComponentBindablePropDefinition",
+      "declarationName": "IComponentBindablePropDefinition",
+      "declarationFile": "packages/template-compiler/src/interfaces-template-compiler.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IDomPlatform",
+      "originalName": "IDomPlatform",
+      "declarationName": "IDomPlatform",
+      "declarationFile": "packages/template-compiler/src/interfaces-template-compiler.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IElementBindablesInfo",
+      "originalName": "IElementBindablesInfo",
+      "declarationName": "IElementBindablesInfo",
+      "declarationFile": "packages/template-compiler/src/template-compiler.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IElementComponentDefinition",
+      "originalName": "IElementComponentDefinition",
+      "declarationName": "IElementComponentDefinition",
+      "declarationFile": "packages/template-compiler/src/interfaces-template-compiler.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IInstruction",
+      "originalName": "IInstruction",
+      "declarationName": "IInstruction",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "Instruction",
+      "originalName": "Instruction",
+      "declarationName": "Instruction",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "InterpolationInstruction",
+      "originalName": "InterpolationInstruction",
+      "declarationName": "InterpolationInstruction",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "Interpretation",
+      "originalName": "Interpretation",
+      "declarationName": "Interpretation",
+      "declarationFile": "packages/template-compiler/src/attribute-pattern.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IPlainAttrCommandInfo",
+      "originalName": "IPlainAttrCommandInfo",
+      "declarationName": "IPlainAttrCommandInfo",
+      "declarationFile": "packages/template-compiler/src/binding-command.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IResourceResolver",
+      "originalName": "IResourceResolver",
+      "declarationName": "IResourceResolver",
+      "declarationFile": "packages/template-compiler/src/template-compiler.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "isInstruction",
+      "originalName": "isInstruction",
+      "declarationName": "isInstruction",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IsTwoWayPredicate",
+      "originalName": "IsTwoWayPredicate",
+      "declarationName": "IsTwoWayPredicate",
+      "declarationFile": "packages/template-compiler/src/attribute-mapper.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ISyntaxInterpreter",
+      "originalName": "ISyntaxInterpreter",
+      "declarationName": "ISyntaxInterpreter",
+      "declarationFile": "packages/template-compiler/src/attribute-pattern.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "itAttributeBinding",
+      "originalName": "itAttributeBinding",
+      "declarationName": "itAttributeBinding",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ITemplateCompiler",
+      "originalName": "ITemplateCompiler",
+      "declarationName": "ITemplateCompiler",
+      "declarationFile": "packages/template-compiler/src/interfaces-template-compiler.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ITemplateCompilerHooks",
+      "originalName": "ITemplateCompilerHooks",
+      "declarationName": "ITemplateCompilerHooks",
+      "declarationFile": "packages/template-compiler/src/template-compiler.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ITemplateElementFactory",
+      "originalName": "ITemplateElementFactory",
+      "declarationName": "ITemplateElementFactory",
+      "declarationFile": "packages/template-compiler/src/template-element-factory.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IteratorBindingInstruction",
+      "originalName": "IteratorBindingInstruction",
+      "declarationName": "IteratorBindingInstruction",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "itHydrateAttribute",
+      "originalName": "itHydrateAttribute",
+      "declarationName": "itHydrateAttribute",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "itHydrateElement",
+      "originalName": "itHydrateElement",
+      "declarationName": "itHydrateElement",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "itHydrateLetElement",
+      "originalName": "itHydrateLetElement",
+      "declarationName": "itHydrateLetElement",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "itHydrateTemplateController",
+      "originalName": "itHydrateTemplateController",
+      "declarationName": "itHydrateTemplateController",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "itInterpolation",
+      "originalName": "itInterpolation",
+      "declarationName": "itInterpolation",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "itIteratorBinding",
+      "originalName": "itIteratorBinding",
+      "declarationName": "itIteratorBinding",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "itLetBinding",
+      "originalName": "itLetBinding",
+      "declarationName": "itLetBinding",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "itListenerBinding",
+      "originalName": "itListenerBinding",
+      "declarationName": "itListenerBinding",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "itMultiAttr",
+      "originalName": "itMultiAttr",
+      "declarationName": "itMultiAttr",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "itPropertyBinding",
+      "originalName": "itPropertyBinding",
+      "declarationName": "itPropertyBinding",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "itRefBinding",
+      "originalName": "itRefBinding",
+      "declarationName": "itRefBinding",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "itSetAttribute",
+      "originalName": "itSetAttribute",
+      "declarationName": "itSetAttribute",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "itSetClassAttribute",
+      "originalName": "itSetClassAttribute",
+      "declarationName": "itSetClassAttribute",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "itSetProperty",
+      "originalName": "itSetProperty",
+      "declarationName": "itSetProperty",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "itSetStyleAttribute",
+      "originalName": "itSetStyleAttribute",
+      "declarationName": "itSetStyleAttribute",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "itSpreadElementProp",
+      "originalName": "itSpreadElementProp",
+      "declarationName": "itSpreadElementProp",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "itSpreadTransferedBinding",
+      "originalName": "itSpreadTransferedBinding",
+      "declarationName": "itSpreadTransferedBinding",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "itSpreadValueBinding",
+      "originalName": "itSpreadValueBinding",
+      "declarationName": "itSpreadValueBinding",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "itStylePropertyBinding",
+      "originalName": "itStylePropertyBinding",
+      "declarationName": "itStylePropertyBinding",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "itTextBinding",
+      "originalName": "itTextBinding",
+      "declarationName": "itTextBinding",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "LetBindingInstruction",
+      "originalName": "LetBindingInstruction",
+      "declarationName": "LetBindingInstruction",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ListenerBindingInstruction",
+      "originalName": "ListenerBindingInstruction",
+      "declarationName": "ListenerBindingInstruction",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "MultiAttrInstruction",
+      "originalName": "MultiAttrInstruction",
+      "declarationName": "MultiAttrInstruction",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "OneTimeBindingCommand",
+      "originalName": "OneTimeBindingCommand",
+      "declarationName": "OneTimeBindingCommand",
+      "declarationFile": "packages/template-compiler/src/binding-command.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "PartialBindingCommandDefinition",
+      "originalName": "PartialBindingCommandDefinition",
+      "declarationName": "PartialBindingCommandDefinition",
+      "declarationFile": "packages/template-compiler/src/binding-command.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ProcessContentHook",
+      "originalName": "ProcessContentHook",
+      "declarationName": "ProcessContentHook",
+      "declarationFile": "packages/template-compiler/src/interfaces-template-compiler.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "PropertyBindingInstruction",
+      "originalName": "PropertyBindingInstruction",
+      "declarationName": "PropertyBindingInstruction",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "RefAttributePattern",
+      "originalName": "RefAttributePattern",
+      "declarationName": "RefAttributePattern",
+      "declarationFile": "packages/template-compiler/src/attribute-pattern.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "RefBindingCommand",
+      "originalName": "RefBindingCommand",
+      "declarationName": "RefBindingCommand",
+      "declarationFile": "packages/template-compiler/src/binding-command.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "RefBindingInstruction",
+      "originalName": "RefBindingInstruction",
+      "declarationName": "RefBindingInstruction",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "SetAttributeInstruction",
+      "originalName": "SetAttributeInstruction",
+      "declarationName": "SetAttributeInstruction",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "SetClassAttributeInstruction",
+      "originalName": "SetClassAttributeInstruction",
+      "declarationName": "SetClassAttributeInstruction",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "SetPropertyInstruction",
+      "originalName": "SetPropertyInstruction",
+      "declarationName": "SetPropertyInstruction",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "SetStyleAttributeInstruction",
+      "originalName": "SetStyleAttributeInstruction",
+      "declarationName": "SetStyleAttributeInstruction",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "SpreadElementPropBindingInstruction",
+      "originalName": "SpreadElementPropBindingInstruction",
+      "declarationName": "SpreadElementPropBindingInstruction",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "SpreadTransferedBindingInstruction",
+      "originalName": "SpreadTransferedBindingInstruction",
+      "declarationName": "SpreadTransferedBindingInstruction",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "SpreadValueBindingCommand",
+      "originalName": "SpreadValueBindingCommand",
+      "declarationName": "SpreadValueBindingCommand",
+      "declarationFile": "packages/template-compiler/src/binding-command.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "SpreadValueBindingInstruction",
+      "originalName": "SpreadValueBindingInstruction",
+      "declarationName": "SpreadValueBindingInstruction",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "StringBindingMode",
+      "originalName": "StringBindingMode",
+      "declarationName": "StringBindingMode",
+      "declarationFile": "packages/template-compiler/src/interfaces-template-compiler.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "StyleBindingCommand",
+      "originalName": "StyleBindingCommand",
+      "declarationName": "StyleBindingCommand",
+      "declarationFile": "packages/template-compiler/src/binding-command.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "StylePropertyBindingInstruction",
+      "originalName": "StylePropertyBindingInstruction",
+      "declarationName": "StylePropertyBindingInstruction",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "SyntaxInterpreter",
+      "originalName": "SyntaxInterpreter",
+      "declarationName": "SyntaxInterpreter",
+      "declarationFile": "packages/template-compiler/src/attribute-pattern.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "TemplateCompiler",
+      "originalName": "TemplateCompiler",
+      "declarationName": "TemplateCompiler",
+      "declarationFile": "packages/template-compiler/src/template-compiler.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "templateCompilerHooks",
+      "originalName": "templateCompilerHooks",
+      "declarationName": "templateCompilerHooks",
+      "declarationFile": "packages/template-compiler/src/template-compiler.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "TemplateCompilerHooks",
+      "originalName": "TemplateCompilerHooks",
+      "declarationName": "TemplateCompilerHooks",
+      "declarationFile": "packages/template-compiler/src/template-compiler.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "TextBindingInstruction",
+      "originalName": "TextBindingInstruction",
+      "declarationName": "TextBindingInstruction",
+      "declarationFile": "packages/template-compiler/src/instructions.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ToViewBindingCommand",
+      "originalName": "ToViewBindingCommand",
+      "declarationName": "ToViewBindingCommand",
+      "declarationFile": "packages/template-compiler/src/binding-command.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "TriggerBindingCommand",
+      "originalName": "TriggerBindingCommand",
+      "declarationName": "TriggerBindingCommand",
+      "declarationFile": "packages/template-compiler/src/binding-command.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "TwoWayBindingCommand",
+      "originalName": "TwoWayBindingCommand",
+      "declarationName": "TwoWayBindingCommand",
+      "declarationFile": "packages/template-compiler/src/binding-command.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    }
+  ]
+}

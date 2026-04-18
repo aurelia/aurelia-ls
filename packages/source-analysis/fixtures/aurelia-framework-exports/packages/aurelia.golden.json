@@ -1,0 +1,3147 @@
+{
+  "schemaVersion": "v0alpha1",
+  "packageName": "aurelia",
+  "packageDir": "packages/aurelia",
+  "analysisBasis": "source",
+  "analysisEntrypoint": "packages/aurelia/src/index.ts",
+  "summary": {
+    "exportCount": 163,
+    "typeOnlyExportCount": 60,
+    "valueExportCount": 103,
+    "mergedExportCount": 38
+  },
+  "exports": [
+    {
+      "exportedName": "alias",
+      "originalName": "alias",
+      "declarationName": "alias",
+      "declarationFile": "packages/runtime-html/src/utilities-di.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "all",
+      "originalName": "all",
+      "declarationName": "all",
+      "declarationFile": "packages/kernel/src/di.resolvers.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "allResources",
+      "originalName": "allResources",
+      "declarationName": "allResources",
+      "declarationFile": "packages/kernel/src/di.resolvers.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "AppTask",
+      "originalName": "AppTask",
+      "declarationName": "AppTask",
+      "declarationFile": "packages/runtime-html/src/app-task.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ArrayLikeHandler",
+      "originalName": "ArrayLikeHandler",
+      "declarationName": "ArrayLikeHandler",
+      "declarationFile": "packages/runtime-html/src/resources/template-controllers/repeat.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "astTrack",
+      "originalName": "astTrack",
+      "declarationName": "astTrack",
+      "declarationFile": "packages/runtime/src/ast-track-decorator.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "attributePattern",
+      "originalName": "attributePattern",
+      "declarationName": "attributePattern",
+      "declarationFile": "packages/template-compiler/src/attribute-pattern.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "AttributePattern",
+      "originalName": "AttributePattern",
+      "declarationName": "AttributePattern",
+      "declarationFile": "packages/template-compiler/src/attribute-pattern.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "Aurelia",
+      "originalName": "Aurelia",
+      "declarationName": "Aurelia",
+      "declarationFile": "packages/aurelia/src/index.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "AuSlotsInfo",
+      "originalName": "AuSlotsInfo",
+      "declarationName": "AuSlotsInfo",
+      "declarationFile": "packages/runtime-html/src/templating/controller.projection.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "batch",
+      "originalName": "batch",
+      "declarationName": "batch",
+      "declarationFile": "packages/runtime/src/subscriber-batch.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "bindable",
+      "originalName": "bindable",
+      "declarationName": "bindable",
+      "declarationFile": "packages/runtime-html/src/bindable.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "Bindable",
+      "originalName": "Bindable",
+      "declarationName": "Bindable",
+      "declarationFile": "packages/runtime-html/src/bindable.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "bindingBehavior",
+      "originalName": "bindingBehavior",
+      "declarationName": "bindingBehavior",
+      "declarationFile": "packages/runtime-html/src/resources/binding-behavior.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "BindingBehavior",
+      "originalName": "BindingBehavior",
+      "declarationName": "BindingBehavior",
+      "declarationFile": "packages/runtime-html/src/resources/binding-behavior.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "BindingBehaviorInstance",
+      "originalName": "BindingBehaviorInstance",
+      "declarationName": "BindingBehaviorInstance",
+      "declarationFile": "packages/runtime-html/src/resources/binding-behavior.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "bindingCommand",
+      "originalName": "bindingCommand",
+      "declarationName": "bindingCommand",
+      "declarationFile": "packages/template-compiler/src/binding-command.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "BindingCommand",
+      "originalName": "BindingCommand",
+      "declarationName": "BindingCommand",
+      "declarationFile": "packages/template-compiler/src/binding-command.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "BindingCommandInstance",
+      "originalName": "BindingCommandInstance",
+      "declarationName": "BindingCommandInstance",
+      "declarationFile": "packages/template-compiler/src/binding-command.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "BindingCommandStaticAuDefinition",
+      "originalName": "BindingCommandStaticAuDefinition",
+      "declarationName": "BindingCommandStaticAuDefinition",
+      "declarationFile": "packages/template-compiler/src/binding-command.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "BindingMode",
+      "originalName": "BindingMode",
+      "declarationName": "BindingMode",
+      "declarationFile": "packages/template-compiler/src/binding-mode.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "type-alias"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "bound",
+      "originalName": "bound",
+      "declarationName": "bound",
+      "declarationFile": "packages/kernel/src/functions.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "camelCase",
+      "originalName": "camelCase",
+      "declarationName": "camelCase",
+      "declarationFile": "packages/kernel/src/functions.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "capture",
+      "originalName": "capture",
+      "declarationName": "capture",
+      "declarationFile": "packages/runtime-html/src/resources/custom-element.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "children",
+      "originalName": "children",
+      "declarationName": "children",
+      "declarationFile": "packages/runtime-html/src/templating/children.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "function",
+        "namespace"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ChildrenBinding",
+      "originalName": "ChildrenBinding",
+      "declarationName": "ChildrenBinding",
+      "declarationFile": "packages/runtime-html/src/templating/children.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "class",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "Class",
+      "originalName": "Class",
+      "declarationName": "Class",
+      "declarationFile": "packages/kernel/src/interfaces.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "coercer",
+      "originalName": "coercer",
+      "declarationName": "coercer",
+      "declarationFile": "packages/runtime-html/src/bindable.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "CollectionKind",
+      "originalName": "CollectionKind",
+      "declarationName": "CollectionKind",
+      "declarationFile": "packages/runtime/src/interfaces.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ColorOptions",
+      "originalName": "ColorOptions",
+      "declarationName": "ColorOptions",
+      "declarationFile": "packages/kernel/src/logger.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "computed",
+      "originalName": "computed",
+      "declarationName": "computed",
+      "declarationFile": "packages/runtime/src/computed-decorators.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ComputedGetterFn",
+      "originalName": "ComputedGetterFn",
+      "declarationName": "ComputedGetterFn",
+      "declarationFile": "packages/runtime/src/computed-observer.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ComputedObserver",
+      "originalName": "ComputedObserver",
+      "declarationName": "ComputedObserver",
+      "declarationFile": "packages/runtime/src/computed-observer.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "class",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ConsoleSink",
+      "originalName": "ConsoleSink",
+      "declarationName": "ConsoleSink",
+      "declarationFile": "packages/kernel/src/logger.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "Constructable",
+      "originalName": "Constructable",
+      "declarationName": "Constructable",
+      "declarationFile": "packages/kernel/src/interfaces.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ConstructableClass",
+      "originalName": "ConstructableClass",
+      "declarationName": "ConstructableClass",
+      "declarationFile": "packages/kernel/src/interfaces.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "containerless",
+      "originalName": "containerless",
+      "declarationName": "containerless",
+      "declarationFile": "packages/runtime-html/src/resources/custom-element.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "Controller",
+      "originalName": "Controller",
+      "declarationName": "Controller",
+      "declarationFile": "packages/runtime-html/src/templating/controller.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "cssModules",
+      "originalName": "cssModules",
+      "declarationName": "cssModules",
+      "declarationFile": "packages/runtime-html/src/templating/styles.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "customAttribute",
+      "originalName": "customAttribute",
+      "declarationName": "customAttribute",
+      "declarationFile": "packages/runtime-html/src/resources/custom-attribute.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "CustomAttribute",
+      "originalName": "CustomAttribute",
+      "declarationName": "CustomAttribute",
+      "declarationFile": "packages/runtime-html/src/resources/custom-attribute.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "customElement",
+      "originalName": "customElement",
+      "declarationName": "customElement",
+      "declarationFile": "packages/runtime-html/src/resources/custom-element.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "CustomElement",
+      "originalName": "CustomElement",
+      "declarationName": "CustomElement",
+      "declarationFile": "packages/runtime-html/src/resources/custom-element.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "CustomExpression",
+      "originalName": "CustomExpression",
+      "declarationName": "CustomExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "default",
+      "originalName": "default",
+      "declarationName": "Aurelia",
+      "declarationFile": "packages/aurelia/src/index.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "fallback"
+      ]
+    },
+    {
+      "exportedName": "DI",
+      "originalName": "DI",
+      "declarationName": "DI",
+      "declarationFile": "packages/kernel/src/di.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "emptyArray",
+      "originalName": "emptyArray",
+      "declarationName": "emptyArray",
+      "declarationFile": "packages/kernel/src/platform.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "emptyObject",
+      "originalName": "emptyObject",
+      "declarationName": "emptyObject",
+      "declarationFile": "packages/kernel/src/platform.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "EventAggregator",
+      "originalName": "EventAggregator",
+      "declarationName": "EventAggregator",
+      "declarationFile": "packages/kernel/src/eventaggregator.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "factory",
+      "originalName": "factory",
+      "declarationName": "factory",
+      "declarationFile": "packages/kernel/src/di.resolvers.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "FlushQueue",
+      "originalName": "FlushQueue",
+      "declarationName": "FlushQueue",
+      "declarationFile": "packages/runtime-html/src/binding/binding-utils.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "getRecurringTasks",
+      "originalName": "getRecurringTasks",
+      "declarationName": "getRecurringTasks",
+      "declarationFile": "packages/runtime/src/queue.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "hydrateSSRDefinition",
+      "originalName": "hydrateSSRDefinition",
+      "declarationName": "hydrateSSRDefinition",
+      "declarationFile": "packages/runtime-html/src/templating/ssr.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IAppRoot",
+      "originalName": "IAppRoot",
+      "declarationName": "IAppRoot",
+      "declarationFile": "packages/runtime-html/src/app-root.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IAttributeParser",
+      "originalName": "IAttributeParser",
+      "declarationName": "IAttributeParser",
+      "declarationFile": "packages/template-compiler/src/attribute-pattern.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IAttributePattern",
+      "originalName": "IAttributePattern",
+      "declarationName": "IAttributePattern",
+      "declarationFile": "packages/template-compiler/src/attribute-pattern.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IAttrMapper",
+      "originalName": "IAttrMapper",
+      "declarationName": "IAttrMapper",
+      "declarationFile": "packages/template-compiler/src/attribute-mapper.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IAurelia",
+      "originalName": "IAurelia",
+      "declarationName": "IAurelia",
+      "declarationFile": "packages/runtime-html/src/aurelia.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IAuSlot",
+      "originalName": "IAuSlot",
+      "declarationName": "IAuSlot",
+      "declarationFile": "packages/runtime-html/src/templating/controller.projection.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IAuSlotsInfo",
+      "originalName": "IAuSlotsInfo",
+      "declarationName": "IAuSlotsInfo",
+      "declarationFile": "packages/runtime-html/src/templating/controller.projection.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IAuSlotWatcher",
+      "originalName": "IAuSlotWatcher",
+      "declarationName": "IAuSlotWatcher",
+      "declarationFile": "packages/runtime-html/src/templating/controller.projection.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IContainer",
+      "originalName": "IContainer",
+      "declarationName": "IContainer",
+      "declarationFile": "packages/kernel/src/di.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IController",
+      "originalName": "IController",
+      "declarationName": "IController",
+      "declarationFile": "packages/runtime-html/src/templating/controller.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ICustomAttributeViewModel",
+      "originalName": "ICustomAttributeViewModel",
+      "declarationName": "ICustomAttributeViewModel",
+      "declarationFile": "packages/runtime-html/src/templating/controller.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ICustomElementViewModel",
+      "originalName": "ICustomElementViewModel",
+      "declarationName": "ICustomElementViewModel",
+      "declarationFile": "packages/runtime-html/src/templating/controller.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IDisposable",
+      "originalName": "IDisposable",
+      "declarationName": "IDisposable",
+      "declarationFile": "packages/kernel/src/interfaces.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IEffect",
+      "originalName": "IEffect",
+      "declarationName": "IEffect",
+      "declarationFile": "packages/runtime/src/observation.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IEnhancementConfig",
+      "originalName": "IEnhancementConfig",
+      "declarationName": "IEnhancementConfig",
+      "declarationFile": "packages/runtime-html/src/aurelia.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IEventAggregator",
+      "originalName": "IEventAggregator",
+      "declarationName": "IEventAggregator",
+      "declarationFile": "packages/kernel/src/eventaggregator.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IEventModifier",
+      "originalName": "IEventModifier",
+      "declarationName": "IEventModifier",
+      "declarationFile": "packages/runtime-html/src/binding/listener-binding.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IEventTarget",
+      "originalName": "IEventTarget",
+      "declarationName": "IEventTarget",
+      "declarationFile": "packages/runtime-html/src/dom.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IExpressionParser",
+      "originalName": "IExpressionParser",
+      "declarationName": "IExpressionParser",
+      "declarationFile": "packages/expression-parser/src/expression-parser.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IFactory",
+      "originalName": "IFactory",
+      "declarationName": "IFactory",
+      "declarationFile": "packages/kernel/src/di.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IFlushable",
+      "originalName": "IFlushable",
+      "declarationName": "IFlushable",
+      "declarationFile": "packages/runtime-html/src/binding/binding-utils.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IFlushQueue",
+      "originalName": "IFlushQueue",
+      "declarationName": "IFlushQueue",
+      "declarationFile": "packages/runtime-html/src/binding/binding-utils.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ignore",
+      "originalName": "ignore",
+      "declarationName": "ignore",
+      "declarationFile": "packages/kernel/src/di.resolvers.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IHistory",
+      "originalName": "IHistory",
+      "declarationName": "IHistory",
+      "declarationFile": "packages/runtime-html/src/dom.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IHydratedDefinition",
+      "originalName": "IHydratedDefinition",
+      "declarationName": "IHydratedDefinition",
+      "declarationFile": "packages/runtime-html/src/templating/ssr.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IHydratedParentController",
+      "originalName": "IHydratedParentController",
+      "declarationName": "IHydratedParentController",
+      "declarationFile": "packages/runtime-html/src/templating/controller.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IIndexable",
+      "originalName": "IIndexable",
+      "declarationName": "IIndexable",
+      "declarationFile": "packages/kernel/src/interfaces.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IKeyMapping",
+      "originalName": "IKeyMapping",
+      "declarationName": "IKeyMapping",
+      "declarationFile": "packages/runtime-html/src/binding/listener-binding.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ILifecycleHooks",
+      "originalName": "ILifecycleHooks",
+      "declarationName": "ILifecycleHooks",
+      "declarationFile": "packages/runtime-html/src/templating/lifecycle-hooks.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ILogger",
+      "originalName": "ILogger",
+      "declarationName": "ILogger",
+      "declarationFile": "packages/kernel/src/logger.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IModifiedEventHandler",
+      "originalName": "IModifiedEventHandler",
+      "declarationName": "IModifiedEventHandler",
+      "declarationFile": "packages/runtime-html/src/binding/listener-binding.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IModifiedEventHandlerCreator",
+      "originalName": "IModifiedEventHandlerCreator",
+      "declarationName": "IModifiedEventHandlerCreator",
+      "declarationFile": "packages/runtime-html/src/binding/listener-binding.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IndexMap",
+      "originalName": "IndexMap",
+      "declarationName": "IndexMap",
+      "declarationFile": "packages/runtime/src/interfaces.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "inject",
+      "originalName": "inject",
+      "declarationName": "inject",
+      "declarationFile": "packages/kernel/src/di.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "INode",
+      "originalName": "INode",
+      "declarationName": "INode",
+      "declarationFile": "packages/runtime-html/src/dom.node.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "InstanceProvider",
+      "originalName": "InstanceProvider",
+      "declarationName": "InstanceProvider",
+      "declarationFile": "packages/kernel/src/di.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IObservation",
+      "originalName": "IObservation",
+      "declarationName": "IObservation",
+      "declarationFile": "packages/runtime/src/observation.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IObserverLocator",
+      "originalName": "IObserverLocator",
+      "declarationName": "IObserverLocator",
+      "declarationFile": "packages/runtime/src/observer-locator.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IPlatform",
+      "originalName": "IPlatform",
+      "declarationName": "IPlatform",
+      "declarationFile": "packages/runtime-html/src/platform.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "local-export",
+        "import-alias",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IRegistration",
+      "originalName": "IRegistration",
+      "declarationName": "IRegistration",
+      "declarationFile": "packages/kernel/src/di.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IRegistry",
+      "originalName": "IRegistry",
+      "declarationName": "IRegistry",
+      "declarationFile": "packages/kernel/src/di.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IRenderLocation",
+      "originalName": "IRenderLocation",
+      "declarationName": "IRenderLocation",
+      "declarationFile": "packages/runtime-html/src/dom.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "type-alias"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IRepeatableHandler",
+      "originalName": "IRepeatableHandler",
+      "declarationName": "IRepeatableHandler",
+      "declarationFile": "packages/runtime-html/src/resources/template-controllers/repeat.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IRepeatableHandlerResolver",
+      "originalName": "IRepeatableHandlerResolver",
+      "declarationName": "IRepeatableHandlerResolver",
+      "declarationFile": "packages/runtime-html/src/resources/template-controllers/repeat.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IResolver",
+      "originalName": "IResolver",
+      "declarationName": "IResolver",
+      "declarationFile": "packages/kernel/src/di.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "isArrayIndex",
+      "originalName": "isArrayIndex",
+      "declarationName": "isArrayIndex",
+      "declarationFile": "packages/kernel/src/functions.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IServiceLocator",
+      "originalName": "IServiceLocator",
+      "declarationName": "IServiceLocator",
+      "declarationFile": "packages/kernel/src/di.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IShadowDOMConfiguration",
+      "originalName": "IShadowDOMConfiguration",
+      "declarationName": "IShadowDOMConfiguration",
+      "declarationFile": "packages/runtime-html/src/templating/styles.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ISignaler",
+      "originalName": "ISignaler",
+      "declarationName": "ISignaler",
+      "declarationFile": "packages/runtime-html/src/signaler.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ISinglePageAppConfig",
+      "originalName": "ISinglePageAppConfig",
+      "declarationName": "ISinglePageAppConfig",
+      "declarationFile": "packages/runtime-html/src/aurelia.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ISSRDefinition",
+      "originalName": "ISSRDefinition",
+      "declarationName": "ISSRDefinition",
+      "declarationFile": "packages/runtime-html/src/templating/ssr.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "isTaskQueueEmpty",
+      "originalName": "isTaskQueueEmpty",
+      "declarationName": "isTaskQueueEmpty",
+      "declarationFile": "packages/runtime/src/queue.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ITemplateCompiler",
+      "originalName": "ITemplateCompiler",
+      "declarationName": "ITemplateCompiler",
+      "declarationFile": "packages/template-compiler/src/interfaces-template-compiler.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ITemplateCompilerHooks",
+      "originalName": "ITemplateCompilerHooks",
+      "declarationName": "ITemplateCompilerHooks",
+      "declarationFile": "packages/template-compiler/src/template-compiler.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ITemplateElementFactory",
+      "originalName": "ITemplateElementFactory",
+      "declarationName": "ITemplateElementFactory",
+      "declarationFile": "packages/template-compiler/src/template-element-factory.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IViewFactory",
+      "originalName": "IViewFactory",
+      "declarationName": "IViewFactory",
+      "declarationFile": "packages/runtime-html/src/templating/view.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IWindow",
+      "originalName": "IWindow",
+      "declarationName": "IWindow",
+      "declarationFile": "packages/runtime-html/src/dom.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "kebabCase",
+      "originalName": "kebabCase",
+      "declarationName": "kebabCase",
+      "declarationFile": "packages/kernel/src/functions.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "Key",
+      "originalName": "Key",
+      "declarationName": "Key",
+      "declarationFile": "packages/kernel/src/di.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "lazy",
+      "originalName": "lazy",
+      "declarationName": "lazy",
+      "declarationFile": "packages/kernel/src/di.resolvers.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "LifecycleHook",
+      "originalName": "LifecycleHook",
+      "declarationName": "LifecycleHook",
+      "declarationFile": "packages/runtime-html/src/templating/lifecycle-hooks.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "lifecycleHooks",
+      "originalName": "lifecycleHooks",
+      "declarationName": "lifecycleHooks",
+      "declarationFile": "packages/runtime-html/src/templating/lifecycle-hooks.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "LifecycleHooks",
+      "originalName": "LifecycleHooks",
+      "declarationName": "LifecycleHooks",
+      "declarationFile": "packages/runtime-html/src/templating/lifecycle-hooks.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "LoggerConfiguration",
+      "originalName": "LoggerConfiguration",
+      "declarationName": "LoggerConfiguration",
+      "declarationFile": "packages/kernel/src/logger.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "LogLevel",
+      "originalName": "LogLevel",
+      "declarationName": "LogLevel",
+      "declarationFile": "packages/kernel/src/logger.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "type-alias"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "newInstanceForScope",
+      "originalName": "newInstanceForScope",
+      "declarationName": "newInstanceForScope",
+      "declarationFile": "packages/kernel/src/di.resolvers.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "newInstanceOf",
+      "originalName": "newInstanceOf",
+      "declarationName": "newInstanceOf",
+      "declarationFile": "packages/kernel/src/di.resolvers.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "NodeObserverLocator",
+      "originalName": "NodeObserverLocator",
+      "declarationName": "NodeObserverLocator",
+      "declarationFile": "packages/runtime-html/src/observation/observer-locator.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "noop",
+      "originalName": "noop",
+      "declarationName": "noop",
+      "declarationFile": "packages/kernel/src/platform.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "observable",
+      "originalName": "observable",
+      "declarationName": "observable",
+      "declarationFile": "packages/runtime/src/observable.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "optional",
+      "originalName": "optional",
+      "declarationName": "optional",
+      "declarationFile": "packages/kernel/src/di.resolvers.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "PartialBindableDefinition",
+      "originalName": "PartialBindableDefinition",
+      "declarationName": "PartialBindableDefinition",
+      "declarationFile": "packages/runtime-html/src/bindable.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "PartialChildrenDefinition",
+      "originalName": "PartialChildrenDefinition",
+      "declarationName": "PartialChildrenDefinition",
+      "declarationFile": "packages/runtime-html/src/templating/children.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "pascalCase",
+      "originalName": "pascalCase",
+      "declarationName": "pascalCase",
+      "declarationFile": "packages/kernel/src/functions.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "PLATFORM",
+      "originalName": "PLATFORM",
+      "declarationName": "PLATFORM",
+      "declarationFile": "packages/aurelia/src/index.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "processContent",
+      "originalName": "processContent",
+      "declarationName": "processContent",
+      "declarationFile": "packages/runtime-html/src/resources/custom-element.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "queueAsyncTask",
+      "originalName": "queueAsyncTask",
+      "declarationName": "queueAsyncTask",
+      "declarationFile": "packages/runtime/src/queue.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "queueRecurringTask",
+      "originalName": "queueRecurringTask",
+      "declarationName": "queueRecurringTask",
+      "declarationFile": "packages/runtime/src/queue.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "queueTask",
+      "originalName": "queueTask",
+      "declarationName": "queueTask",
+      "declarationFile": "packages/runtime/src/queue.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "RecurringTask",
+      "originalName": "RecurringTask",
+      "declarationName": "RecurringTask",
+      "declarationFile": "packages/runtime/src/queue.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "refs",
+      "originalName": "refs",
+      "declarationName": "refs",
+      "declarationFile": "packages/runtime-html/src/dom.node.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "registerAliases",
+      "originalName": "registerAliases",
+      "declarationName": "registerAliases",
+      "declarationFile": "packages/runtime-html/src/utilities-di.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "Registration",
+      "originalName": "Registration",
+      "declarationName": "Registration",
+      "declarationFile": "packages/kernel/src/di.registration.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "renderer",
+      "originalName": "renderer",
+      "declarationName": "renderer",
+      "declarationFile": "packages/runtime-html/src/renderer.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "resolve",
+      "originalName": "resolve",
+      "declarationName": "resolve",
+      "declarationFile": "packages/kernel/src/di.container.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "Resolved",
+      "originalName": "Resolved",
+      "declarationName": "Resolved",
+      "declarationFile": "packages/kernel/src/di.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "resource",
+      "originalName": "resource",
+      "declarationName": "resource",
+      "declarationFile": "packages/kernel/src/di.resolvers.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "runTasks",
+      "originalName": "runTasks",
+      "declarationName": "runTasks",
+      "declarationFile": "packages/runtime/src/queue.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "RuntimeTemplateCompilerImplementation",
+      "originalName": "RuntimeTemplateCompilerImplementation",
+      "declarationName": "RuntimeTemplateCompilerImplementation",
+      "declarationFile": "packages/runtime-html/src/compiler/template-compiler.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "Scope",
+      "originalName": "Scope",
+      "declarationName": "Scope",
+      "declarationFile": "packages/runtime/src/scope.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "shadowCSS",
+      "originalName": "shadowCSS",
+      "declarationName": "shadowCSS",
+      "declarationFile": "packages/runtime-html/src/templating/styles.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ShortHandBindingSyntax",
+      "originalName": "ShortHandBindingSyntax",
+      "declarationName": "ShortHandBindingSyntax",
+      "declarationFile": "packages/runtime-html/src/configuration.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "singleton",
+      "originalName": "singleton",
+      "declarationName": "singleton",
+      "declarationFile": "packages/kernel/src/di.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "slotted",
+      "originalName": "slotted",
+      "declarationName": "slotted",
+      "declarationFile": "packages/runtime-html/src/templating/controller.projection.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "StyleConfiguration",
+      "originalName": "StyleConfiguration",
+      "declarationName": "StyleConfiguration",
+      "declarationFile": "packages/runtime-html/src/templating/styles.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "subscriberCollection",
+      "originalName": "subscriberCollection",
+      "declarationName": "subscriberCollection",
+      "declarationFile": "packages/runtime/src/subscriber-collection.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "Task",
+      "originalName": "Task",
+      "declarationName": "Task",
+      "declarationFile": "packages/runtime/src/queue.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "TaskAbortError",
+      "originalName": "TaskAbortError",
+      "declarationName": "TaskAbortError",
+      "declarationFile": "packages/runtime/src/queue.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "TaskStatus",
+      "originalName": "TaskStatus",
+      "declarationName": "TaskStatus",
+      "declarationFile": "packages/runtime/src/queue.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "templateCompilerHooks",
+      "originalName": "templateCompilerHooks",
+      "declarationName": "templateCompilerHooks",
+      "declarationFile": "packages/template-compiler/src/template-compiler.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "TemplateCompilerHooks",
+      "originalName": "TemplateCompilerHooks",
+      "declarationName": "TemplateCompilerHooks",
+      "declarationFile": "packages/template-compiler/src/template-compiler.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "templateController",
+      "originalName": "templateController",
+      "declarationName": "templateController",
+      "declarationFile": "packages/runtime-html/src/resources/custom-attribute.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "toArray",
+      "originalName": "toArray",
+      "declarationName": "toArray",
+      "declarationFile": "packages/kernel/src/functions.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "transient",
+      "originalName": "transient",
+      "declarationName": "transient",
+      "declarationFile": "packages/kernel/src/di.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "useShadowDOM",
+      "originalName": "useShadowDOM",
+      "declarationName": "useShadowDOM",
+      "declarationFile": "packages/runtime-html/src/resources/custom-element.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "valueConverter",
+      "originalName": "valueConverter",
+      "declarationName": "valueConverter",
+      "declarationFile": "packages/runtime-html/src/resources/value-converter.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ValueConverter",
+      "originalName": "ValueConverter",
+      "declarationName": "ValueConverter",
+      "declarationFile": "packages/runtime-html/src/resources/value-converter.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ValueConverterInstance",
+      "originalName": "ValueConverterInstance",
+      "declarationName": "ValueConverterInstance",
+      "declarationFile": "packages/runtime-html/src/resources/value-converter.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ViewFactory",
+      "originalName": "ViewFactory",
+      "declarationName": "ViewFactory",
+      "declarationFile": "packages/runtime-html/src/templating/view.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "watch",
+      "originalName": "watch",
+      "declarationName": "watch",
+      "declarationFile": "packages/runtime-html/src/watch.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "named-reexport",
+        "local-declaration"
+      ]
+    }
+  ]
+}

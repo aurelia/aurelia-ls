@@ -1,0 +1,49 @@
+{
+  "schemaVersion": "v0alpha1",
+  "packageName": "@aurelia/metadata",
+  "packageDir": "packages/metadata",
+  "analysisBasis": "source",
+  "analysisEntrypoint": "packages/metadata/src/index.ts",
+  "summary": {
+    "exportCount": 2,
+    "typeOnlyExportCount": 0,
+    "valueExportCount": 2,
+    "mergedExportCount": 0
+  },
+  "exports": [
+    {
+      "exportedName": "initializeTC39Metadata",
+      "originalName": "initializeTC39Metadata",
+      "declarationName": "initializeTC39Metadata",
+      "declarationFile": "packages/metadata/src/index.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "Metadata",
+      "originalName": "Metadata",
+      "declarationName": "Metadata",
+      "declarationFile": "packages/metadata/src/index.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "local-declaration"
+      ]
+    }
+  ]
+}

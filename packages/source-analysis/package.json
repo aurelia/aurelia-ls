@@ -33,9 +33,11 @@
   "scripts": {
     "build": "node ./scripts/build.mjs",
     "build:tests": "node ./scripts/build-tests.mjs",
+    "generate:aurelia-framework-goldens": "node ./scripts/generate-aurelia-framework-goldens.mjs",
     "preflight": "node ./scripts/preflight.mjs",
     "test": "node ./scripts/build.mjs && node ./scripts/build-tests.mjs && node ./scripts/run-node-tests.mjs",
     "test:node": "node ./scripts/run-node-tests.mjs",
+    "test:node:aurelia-framework-exports": "node ./scripts/run-node-tests.mjs test/aurelia-framework-exports.test.ts",
     "test:node:cov": "node ./scripts/run-node-tests.mjs --coverage"
   },
   "peerDependencies": {

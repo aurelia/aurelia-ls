@@ -1,0 +1,142 @@
+{
+  "schemaVersion": "v0alpha1",
+  "packageName": "@aurelia/validation-i18n",
+  "packageDir": "packages/validation-i18n",
+  "analysisBasis": "source",
+  "analysisEntrypoint": "packages/validation-i18n/src/index.ts",
+  "summary": {
+    "exportCount": 7,
+    "typeOnlyExportCount": 3,
+    "valueExportCount": 4,
+    "mergedExportCount": 1
+  },
+  "exports": [
+    {
+      "exportedName": "I18nKeyConfiguration",
+      "originalName": "I18nKeyConfiguration",
+      "declarationName": "I18nKeyConfiguration",
+      "declarationFile": "packages/validation-i18n/src/localization.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "star-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "LocalizedValidationController",
+      "originalName": "LocalizedValidationController",
+      "declarationName": "LocalizedValidationController",
+      "declarationFile": "packages/validation-i18n/src/localization.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "star-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "LocalizedValidationControllerFactory",
+      "originalName": "LocalizedValidationControllerFactory",
+      "declarationName": "LocalizedValidationControllerFactory",
+      "declarationFile": "packages/validation-i18n/src/localization.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "star-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "LocalizedValidationMessageProvider",
+      "originalName": "LocalizedValidationMessageProvider",
+      "declarationName": "LocalizedValidationMessageProvider",
+      "declarationFile": "packages/validation-i18n/src/localization.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "star-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ValidationConfigurationProvider",
+      "originalName": "ValidationConfigurationProvider",
+      "declarationName": "ValidationConfigurationProvider",
+      "declarationFile": "packages/validation-i18n/src/configuration.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "star-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ValidationI18nConfiguration",
+      "originalName": "ValidationI18nConfiguration",
+      "declarationName": "ValidationI18nConfiguration",
+      "declarationFile": "packages/validation-i18n/src/configuration.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "star-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ValidationI18nCustomizationOptions",
+      "originalName": "ValidationI18nCustomizationOptions",
+      "declarationName": "ValidationI18nCustomizationOptions",
+      "declarationFile": "packages/validation-i18n/src/localization.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "star-reexport",
+        "local-declaration"
+      ]
+    }
+  ]
+}

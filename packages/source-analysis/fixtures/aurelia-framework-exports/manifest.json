@@ -1,0 +1,128 @@
+{
+  "schemaVersion": "v0alpha1",
+  "suiteId": "aurelia-framework-exports",
+  "packageCount": 24,
+  "exportCount": 1285,
+  "packages": [
+    {
+      "packageName": "@aurelia/addons",
+      "file": "aurelia__addons.golden.json",
+      "exportCount": 1
+    },
+    {
+      "packageName": "@aurelia/compat-v1",
+      "file": "aurelia__compat-v1.golden.json",
+      "exportCount": 21
+    },
+    {
+      "packageName": "@aurelia/dialog",
+      "file": "aurelia__dialog.golden.json",
+      "exportCount": 36
+    },
+    {
+      "packageName": "@aurelia/expression-parser",
+      "file": "aurelia__expression-parser.golden.json",
+      "exportCount": 93
+    },
+    {
+      "packageName": "@aurelia/fetch-client",
+      "file": "aurelia__fetch-client.golden.json",
+      "exportCount": 23
+    },
+    {
+      "packageName": "@aurelia/i18n",
+      "file": "aurelia__i18n.golden.json",
+      "exportCount": 33
+    },
+    {
+      "packageName": "@aurelia/kernel",
+      "file": "aurelia__kernel.golden.json",
+      "exportCount": 122
+    },
+    {
+      "packageName": "@aurelia/metadata",
+      "file": "aurelia__metadata.golden.json",
+      "exportCount": 2
+    },
+    {
+      "packageName": "@aurelia/platform",
+      "file": "aurelia__platform.golden.json",
+      "exportCount": 1
+    },
+    {
+      "packageName": "@aurelia/platform-browser",
+      "file": "aurelia__platform-browser.golden.json",
+      "exportCount": 1
+    },
+    {
+      "packageName": "@aurelia/route-recognizer",
+      "file": "aurelia__route-recognizer.golden.json",
+      "exportCount": 7
+    },
+    {
+      "packageName": "@aurelia/router",
+      "file": "aurelia__router.golden.json",
+      "exportCount": 83
+    },
+    {
+      "packageName": "@aurelia/runtime",
+      "file": "aurelia__runtime.golden.json",
+      "exportCount": 84
+    },
+    {
+      "packageName": "@aurelia/runtime-html",
+      "file": "aurelia__runtime-html.golden.json",
+      "exportCount": 266
+    },
+    {
+      "packageName": "@aurelia/state",
+      "file": "aurelia__state.golden.json",
+      "exportCount": 29
+    },
+    {
+      "packageName": "@aurelia/store-v1",
+      "file": "aurelia__store-v1.golden.json",
+      "exportCount": 43
+    },
+    {
+      "packageName": "@aurelia/template-compiler",
+      "file": "aurelia__template-compiler.golden.json",
+      "exportCount": 107
+    },
+    {
+      "packageName": "@aurelia/testing",
+      "file": "aurelia__testing.golden.json",
+      "exportCount": 55
+    },
+    {
+      "packageName": "@aurelia/ui-virtualization",
+      "file": "aurelia__ui-virtualization.golden.json",
+      "exportCount": 15
+    },
+    {
+      "packageName": "@aurelia/validation",
+      "file": "aurelia__validation.golden.json",
+      "exportCount": 65
+    },
+    {
+      "packageName": "@aurelia/validation-html",
+      "file": "aurelia__validation-html.golden.json",
+      "exportCount": 25
+    },
+    {
+      "packageName": "@aurelia/validation-i18n",
+      "file": "aurelia__validation-i18n.golden.json",
+      "exportCount": 7
+    },
+    {
+      "packageName": "@aurelia/web-components",
+      "file": "aurelia__web-components.golden.json",
+      "exportCount": 3
+    },
+    {
+      "packageName": "aurelia",
+      "file": "aurelia.golden.json",
+      "exportCount": 163
+    }
+  ]
+}

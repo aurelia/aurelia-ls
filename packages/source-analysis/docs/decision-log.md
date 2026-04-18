@@ -249,6 +249,18 @@ decision trail in order.
 - The concrete planning note for that slice is
   [docs/aurelia/framework-export-integration-plan.md](./aurelia/framework-export-integration-plan.md).
 
+## 2026-04-18 - Aurelia framework export pressure now has a thin golden harness
+
+- The first broad-coverage framework integration harness is now package-level
+  export goldens over the in-repo `aurelia` submodule, not a large generated
+  TypeScript spec file.
+- The current golden row shape is intentionally tiny and TypeScript/export
+  centered. It does not yet try to freeze richer protocol concepts like
+  continuation law or current-world activity.
+- Generator and comparison should now evolve from this rule:
+  keep coverage broad, keep the row shape small, and only expand the model
+  when the current golden surface stops being enough to steer the next slice.
+
 ## 2026-04-18 - Primary hosted NL shell removed and replaced with direct primitives
 
 - The hosted runtime no longer dispatches `ask.question`, `plan.question`,

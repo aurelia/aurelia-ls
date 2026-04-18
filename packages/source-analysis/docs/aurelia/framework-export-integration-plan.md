@@ -50,6 +50,28 @@ out of scope unless they become unavoidable:
 The first useful surface is a truthful export-classification authority, not a
 fully polished protocol.
 
+## Current Landed Harness
+
+The repo now has a first thin golden harness for this slice:
+
+- [fixtures/aurelia-framework-exports/README.md](../../fixtures/aurelia-framework-exports/README.md)
+- [manifest.json](../../fixtures/aurelia-framework-exports/manifest.json)
+- [generate-aurelia-framework-goldens.mjs](../../scripts/generate-aurelia-framework-goldens.mjs)
+- [aurelia-framework-exports.test.ts](../../test/aurelia-framework-exports.test.ts)
+
+That harness currently uses a deliberately tiny row shape:
+
+- exported name
+- original name
+- declaration name and file
+- face kind and face kinds
+- type/value posture
+- namespace export flag
+- export-chain kind summary
+
+This is intentionally below the protocol/kernel ambition described elsewhere.
+It exists to create broad framework pressure first.
+
 ## First Operational Surface
 
 The first operational target should be a batch export-classification command or

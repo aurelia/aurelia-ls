@@ -1,0 +1,70 @@
+{
+  "schemaVersion": "v0alpha1",
+  "packageName": "@aurelia/web-components",
+  "packageDir": "packages/web-components",
+  "analysisBasis": "source",
+  "analysisEntrypoint": "packages/web-components/src/index.ts",
+  "summary": {
+    "exportCount": 3,
+    "typeOnlyExportCount": 1,
+    "valueExportCount": 2,
+    "mergedExportCount": 1
+  },
+  "exports": [
+    {
+      "exportedName": "IWcElementRegistry",
+      "originalName": "IWcElementRegistry",
+      "declarationName": "IWcElementRegistry",
+      "declarationFile": "packages/web-components/src/web-components.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "WcCustomElementRegistry",
+      "originalName": "WcCustomElementRegistry",
+      "declarationName": "WcCustomElementRegistry",
+      "declarationFile": "packages/web-components/src/web-components.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "WebComponentViewModelClass",
+      "originalName": "WebComponentViewModelClass",
+      "declarationName": "WebComponentViewModelClass",
+      "declarationFile": "packages/web-components/src/web-components.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    }
+  ]
+}

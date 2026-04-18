@@ -1,0 +1,1538 @@
+{
+  "schemaVersion": "v0alpha1",
+  "packageName": "@aurelia/runtime",
+  "packageDir": "packages/runtime",
+  "analysisBasis": "source",
+  "analysisEntrypoint": "packages/runtime/src/index.ts",
+  "summary": {
+    "exportCount": 84,
+    "typeOnlyExportCount": 44,
+    "valueExportCount": 40,
+    "mergedExportCount": 11
+  },
+  "exports": [
+    {
+      "exportedName": "AccessorOrObserver",
+      "originalName": "AccessorOrObserver",
+      "declarationName": "AccessorOrObserver",
+      "declarationFile": "packages/runtime/src/interfaces.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "AccessorType",
+      "originalName": "AccessorType",
+      "declarationName": "AccessorType",
+      "declarationFile": "packages/runtime/src/interfaces.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "type-alias"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ArrayIndexObserver",
+      "originalName": "ArrayIndexObserver",
+      "declarationName": "ArrayIndexObserver",
+      "declarationFile": "packages/runtime/src/array-observer.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ArrayObserver",
+      "originalName": "ArrayObserver",
+      "declarationName": "ArrayObserver",
+      "declarationFile": "packages/runtime/src/array-observer.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "astAssign",
+      "originalName": "astAssign",
+      "declarationName": "astAssign",
+      "declarationFile": "packages/runtime/src/ast.eval.ts",
+      "faceKind": "unknown",
+      "faceKinds": [
+        "unknown"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "fallback"
+      ]
+    },
+    {
+      "exportedName": "astBind",
+      "originalName": "astBind",
+      "declarationName": "astBind",
+      "declarationFile": "packages/runtime/src/ast.eval.ts",
+      "faceKind": "unknown",
+      "faceKinds": [
+        "unknown"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "fallback"
+      ]
+    },
+    {
+      "exportedName": "astEvaluate",
+      "originalName": "astEvaluate",
+      "declarationName": "astEvaluate",
+      "declarationFile": "packages/runtime/src/ast.eval.ts",
+      "faceKind": "unknown",
+      "faceKinds": [
+        "unknown"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "fallback"
+      ]
+    },
+    {
+      "exportedName": "astTrack",
+      "originalName": "astTrack",
+      "declarationName": "astTrack",
+      "declarationFile": "packages/runtime/src/ast-track-decorator.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "astUnbind",
+      "originalName": "astUnbind",
+      "declarationName": "astUnbind",
+      "declarationFile": "packages/runtime/src/ast.eval.ts",
+      "faceKind": "unknown",
+      "faceKinds": [
+        "unknown"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "fallback"
+      ]
+    },
+    {
+      "exportedName": "batch",
+      "originalName": "batch",
+      "declarationName": "batch",
+      "declarationFile": "packages/runtime/src/subscriber-batch.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "BindingContext",
+      "originalName": "BindingContext",
+      "declarationName": "BindingContext",
+      "declarationFile": "packages/runtime/src/scope.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "cloneIndexMap",
+      "originalName": "cloneIndexMap",
+      "declarationName": "cloneIndexMap",
+      "declarationFile": "packages/runtime/src/interfaces.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "Collection",
+      "originalName": "Collection",
+      "declarationName": "Collection",
+      "declarationFile": "packages/runtime/src/interfaces.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "CollectionKind",
+      "originalName": "CollectionKind",
+      "declarationName": "CollectionKind",
+      "declarationFile": "packages/runtime/src/interfaces.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "CollectionLengthObserver",
+      "originalName": "CollectionLengthObserver",
+      "declarationName": "CollectionLengthObserver",
+      "declarationFile": "packages/runtime/src/collection-length-observer.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "class",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "CollectionObserver",
+      "originalName": "CollectionObserver",
+      "declarationName": "CollectionObserver",
+      "declarationFile": "packages/runtime/src/interfaces.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "CollectionSizeObserver",
+      "originalName": "CollectionSizeObserver",
+      "declarationName": "CollectionSizeObserver",
+      "declarationFile": "packages/runtime/src/collection-length-observer.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "class",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "computed",
+      "originalName": "computed",
+      "declarationName": "computed",
+      "declarationFile": "packages/runtime/src/computed-decorators.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ComputedGetterFn",
+      "originalName": "ComputedGetterFn",
+      "declarationName": "ComputedGetterFn",
+      "declarationFile": "packages/runtime/src/computed-observer.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ComputedObserver",
+      "originalName": "ComputedObserver",
+      "declarationName": "ComputedObserver",
+      "declarationFile": "packages/runtime/src/computed-observer.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "class",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "connectable",
+      "originalName": "connectable",
+      "declarationName": "connectable",
+      "declarationFile": "packages/runtime/src/connectable.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ConnectableSwitcher",
+      "originalName": "ConnectableSwitcher",
+      "declarationName": "ConnectableSwitcher",
+      "declarationFile": "packages/runtime/src/connectable-switcher.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "copyIndexMap",
+      "originalName": "copyIndexMap",
+      "declarationName": "copyIndexMap",
+      "declarationFile": "packages/runtime/src/interfaces.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createIndexMap",
+      "originalName": "createIndexMap",
+      "declarationName": "createIndexMap",
+      "declarationFile": "packages/runtime/src/interfaces.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "DirtyChecker",
+      "originalName": "DirtyChecker",
+      "declarationName": "DirtyChecker",
+      "declarationFile": "packages/runtime/src/dirty-checker.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "DirtyCheckProperty",
+      "originalName": "DirtyCheckProperty",
+      "declarationName": "DirtyCheckProperty",
+      "declarationFile": "packages/runtime/src/dirty-checker.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "class",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "DirtyCheckSettings",
+      "originalName": "DirtyCheckSettings",
+      "declarationName": "DirtyCheckSettings",
+      "declarationFile": "packages/runtime/src/dirty-checker.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "EffectRunFunc",
+      "originalName": "EffectRunFunc",
+      "declarationName": "EffectRunFunc",
+      "declarationFile": "packages/runtime/src/observation.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "getCollectionObserver",
+      "originalName": "getCollectionObserver",
+      "declarationName": "getCollectionObserver",
+      "declarationFile": "packages/runtime/src/observer-locator.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "getObserverLookup",
+      "originalName": "getObserverLookup",
+      "declarationName": "getObserverLookup",
+      "declarationFile": "packages/runtime/src/observation-utils.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "getRecurringTasks",
+      "originalName": "getRecurringTasks",
+      "declarationName": "getRecurringTasks",
+      "declarationFile": "packages/runtime/src/queue.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IAccessor",
+      "originalName": "IAccessor",
+      "declarationName": "IAccessor",
+      "declarationFile": "packages/runtime/src/interfaces.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IAstEvaluator",
+      "originalName": "IAstEvaluator",
+      "declarationName": "IAstEvaluator",
+      "declarationFile": "packages/runtime/src/ast.eval.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IBindingContext",
+      "originalName": "IBindingContext",
+      "declarationName": "IBindingContext",
+      "declarationFile": "packages/runtime/src/scope.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ICoercionConfiguration",
+      "originalName": "ICoercionConfiguration",
+      "declarationName": "ICoercionConfiguration",
+      "declarationFile": "packages/runtime/src/interfaces.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ICollectionChangeTracker",
+      "originalName": "ICollectionChangeTracker",
+      "declarationName": "ICollectionChangeTracker",
+      "declarationFile": "packages/runtime/src/interfaces.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ICollectionObserver",
+      "originalName": "ICollectionObserver",
+      "declarationName": "ICollectionObserver",
+      "declarationFile": "packages/runtime/src/interfaces.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ICollectionSubscribable",
+      "originalName": "ICollectionSubscribable",
+      "declarationName": "ICollectionSubscribable",
+      "declarationFile": "packages/runtime/src/interfaces.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ICollectionSubscriber",
+      "originalName": "ICollectionSubscriber",
+      "declarationName": "ICollectionSubscriber",
+      "declarationFile": "packages/runtime/src/interfaces.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ICollectionSubscriberCollection",
+      "originalName": "ICollectionSubscriberCollection",
+      "declarationName": "ICollectionSubscriberCollection",
+      "declarationFile": "packages/runtime/src/interfaces.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IConnectable",
+      "originalName": "IConnectable",
+      "declarationName": "IConnectable",
+      "declarationFile": "packages/runtime/src/interfaces.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IDirtyChecker",
+      "originalName": "IDirtyChecker",
+      "declarationName": "IDirtyChecker",
+      "declarationFile": "packages/runtime/src/dirty-checker.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IEffect",
+      "originalName": "IEffect",
+      "declarationName": "IEffect",
+      "declarationFile": "packages/runtime/src/observation.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IndexMap",
+      "originalName": "IndexMap",
+      "declarationName": "IndexMap",
+      "declarationFile": "packages/runtime/src/interfaces.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "INodeObserverLocator",
+      "originalName": "INodeObserverLocator",
+      "declarationName": "INodeObserverLocator",
+      "declarationFile": "packages/runtime/src/observer-locator.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "InterceptorFunc",
+      "originalName": "InterceptorFunc",
+      "declarationName": "InterceptorFunc",
+      "declarationFile": "packages/runtime/src/interfaces.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IObjectObservationAdapter",
+      "originalName": "IObjectObservationAdapter",
+      "declarationName": "IObjectObservationAdapter",
+      "declarationFile": "packages/runtime/src/observer-locator.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IObservable",
+      "originalName": "IObservable",
+      "declarationName": "IObservable",
+      "declarationFile": "packages/runtime/src/interfaces.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IObservableDefinition",
+      "originalName": "IObservableDefinition",
+      "declarationName": "IObservableDefinition",
+      "declarationFile": "packages/runtime/src/observable.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IObservation",
+      "originalName": "IObservation",
+      "declarationName": "IObservation",
+      "declarationFile": "packages/runtime/src/observation.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IObserver",
+      "originalName": "IObserver",
+      "declarationName": "IObserver",
+      "declarationFile": "packages/runtime/src/interfaces.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IObserverLocator",
+      "originalName": "IObserverLocator",
+      "declarationName": "IObserverLocator",
+      "declarationFile": "packages/runtime/src/observer-locator.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IObserverLocatorBasedConnectable",
+      "originalName": "IObserverLocatorBasedConnectable",
+      "declarationName": "IObserverLocatorBasedConnectable",
+      "declarationFile": "packages/runtime/src/connectable.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IObserverRecord",
+      "originalName": "IObserverRecord",
+      "declarationName": "IObserverRecord",
+      "declarationFile": "packages/runtime/src/connectable.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IOverrideContext",
+      "originalName": "IOverrideContext",
+      "declarationName": "IOverrideContext",
+      "declarationFile": "packages/runtime/src/scope.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "isIndexMap",
+      "originalName": "isIndexMap",
+      "declarationName": "isIndexMap",
+      "declarationFile": "packages/runtime/src/interfaces.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "isTaskQueueEmpty",
+      "originalName": "isTaskQueueEmpty",
+      "declarationName": "isTaskQueueEmpty",
+      "declarationFile": "packages/runtime/src/queue.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ISubscribable",
+      "originalName": "ISubscribable",
+      "declarationName": "ISubscribable",
+      "declarationFile": "packages/runtime/src/interfaces.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ISubscriber",
+      "originalName": "ISubscriber",
+      "declarationName": "ISubscriber",
+      "declarationFile": "packages/runtime/src/interfaces.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ISubscriberCollection",
+      "originalName": "ISubscriberCollection",
+      "declarationName": "ISubscriberCollection",
+      "declarationFile": "packages/runtime/src/interfaces.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ISubscriberRecord",
+      "originalName": "ISubscriberRecord",
+      "declarationName": "ISubscriberRecord",
+      "declarationFile": "packages/runtime/src/interfaces.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "MapObserver",
+      "originalName": "MapObserver",
+      "declarationName": "MapObserver",
+      "declarationFile": "packages/runtime/src/map-observer.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "mixinNoopAstEvaluator",
+      "originalName": "mixinNoopAstEvaluator",
+      "declarationName": "mixinNoopAstEvaluator",
+      "declarationFile": "packages/runtime/src/ast.utilities.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "nowrap",
+      "originalName": "nowrap",
+      "declarationName": "nowrap",
+      "declarationFile": "packages/runtime/src/proxy-decorators.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "observable",
+      "originalName": "observable",
+      "declarationName": "observable",
+      "declarationFile": "packages/runtime/src/observable.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ObservableGetter",
+      "originalName": "ObservableGetter",
+      "declarationName": "ObservableGetter",
+      "declarationFile": "packages/runtime/src/observer-locator.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "Observation",
+      "originalName": "Observation",
+      "declarationName": "Observation",
+      "declarationFile": "packages/runtime/src/observation.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ObserverLocator",
+      "originalName": "ObserverLocator",
+      "declarationName": "ObserverLocator",
+      "declarationFile": "packages/runtime/src/observer-locator.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "PrimitiveObserver",
+      "originalName": "PrimitiveObserver",
+      "declarationName": "PrimitiveObserver",
+      "declarationFile": "packages/runtime/src/primitive-observer.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "PropertyAccessor",
+      "originalName": "PropertyAccessor",
+      "declarationName": "PropertyAccessor",
+      "declarationFile": "packages/runtime/src/property-accessor.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ProxyObservable",
+      "originalName": "ProxyObservable",
+      "declarationName": "ProxyObservable",
+      "declarationFile": "packages/runtime/src/proxy-observation.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "queueAsyncTask",
+      "originalName": "queueAsyncTask",
+      "declarationName": "queueAsyncTask",
+      "declarationFile": "packages/runtime/src/queue.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "queueRecurringTask",
+      "originalName": "queueRecurringTask",
+      "declarationName": "queueRecurringTask",
+      "declarationFile": "packages/runtime/src/queue.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "queueTask",
+      "originalName": "queueTask",
+      "declarationName": "queueTask",
+      "declarationFile": "packages/runtime/src/queue.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "RecurringTask",
+      "originalName": "RecurringTask",
+      "declarationName": "RecurringTask",
+      "declarationFile": "packages/runtime/src/queue.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "runTasks",
+      "originalName": "runTasks",
+      "declarationName": "runTasks",
+      "declarationFile": "packages/runtime/src/queue.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "Scope",
+      "originalName": "Scope",
+      "declarationName": "Scope",
+      "declarationFile": "packages/runtime/src/scope.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "SetObserver",
+      "originalName": "SetObserver",
+      "declarationName": "SetObserver",
+      "declarationFile": "packages/runtime/src/set-observer.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "SetterObserver",
+      "originalName": "SetterObserver",
+      "declarationName": "SetterObserver",
+      "declarationFile": "packages/runtime/src/setter-observer.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "class",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "subscriberCollection",
+      "originalName": "subscriberCollection",
+      "declarationName": "subscriberCollection",
+      "declarationFile": "packages/runtime/src/subscriber-collection.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "Task",
+      "originalName": "Task",
+      "declarationName": "Task",
+      "declarationFile": "packages/runtime/src/queue.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "TaskAbortError",
+      "originalName": "TaskAbortError",
+      "declarationName": "TaskAbortError",
+      "declarationFile": "packages/runtime/src/queue.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "tasksSettled",
+      "originalName": "tasksSettled",
+      "declarationName": "tasksSettled",
+      "declarationFile": "packages/runtime/src/queue.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "TaskStatus",
+      "originalName": "TaskStatus",
+      "declarationName": "TaskStatus",
+      "declarationFile": "packages/runtime/src/queue.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    }
+  ]
+}

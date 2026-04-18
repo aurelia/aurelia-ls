@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "v0alpha1",
+  "packageName": "@aurelia/platform-browser",
+  "packageDir": "packages/platform-browser",
+  "analysisBasis": "source",
+  "analysisEntrypoint": "packages/platform-browser/src/index.ts",
+  "summary": {
+    "exportCount": 1,
+    "typeOnlyExportCount": 0,
+    "valueExportCount": 1,
+    "mergedExportCount": 0
+  },
+  "exports": [
+    {
+      "exportedName": "BrowserPlatform",
+      "originalName": "BrowserPlatform",
+      "declarationName": "BrowserPlatform",
+      "declarationFile": "packages/platform-browser/src/index.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "local-declaration"
+      ]
+    }
+  ]
+}

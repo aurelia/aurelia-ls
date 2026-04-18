@@ -1,0 +1,1690 @@
+{
+  "schemaVersion": "v0alpha1",
+  "packageName": "@aurelia/expression-parser",
+  "packageDir": "packages/expression-parser",
+  "analysisBasis": "source",
+  "analysisEntrypoint": "packages/expression-parser/src/index.ts",
+  "summary": {
+    "exportCount": 93,
+    "typeOnlyExportCount": 52,
+    "valueExportCount": 41,
+    "mergedExportCount": 1
+  },
+  "exports": [
+    {
+      "exportedName": "AccessBoundary",
+      "originalName": "AccessBoundary",
+      "declarationName": "AccessBoundary",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "AccessBoundaryExpression",
+      "originalName": "AccessBoundaryExpression",
+      "declarationName": "AccessBoundaryExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "AccessGlobalExpression",
+      "originalName": "AccessGlobalExpression",
+      "declarationName": "AccessGlobalExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "AccessKeyedExpression",
+      "originalName": "AccessKeyedExpression",
+      "declarationName": "AccessKeyedExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "AccessMemberExpression",
+      "originalName": "AccessMemberExpression",
+      "declarationName": "AccessMemberExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "AccessScopeExpression",
+      "originalName": "AccessScopeExpression",
+      "declarationName": "AccessScopeExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "AccessThisExpression",
+      "originalName": "AccessThisExpression",
+      "declarationName": "AccessThisExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "AnyBindingExpression",
+      "originalName": "AnyBindingExpression",
+      "declarationName": "AnyBindingExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ArrayBindingPattern",
+      "originalName": "ArrayBindingPattern",
+      "declarationName": "ArrayBindingPattern",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ArrayLiteral",
+      "originalName": "ArrayLiteral",
+      "declarationName": "ArrayLiteral",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ArrayLiteralExpression",
+      "originalName": "ArrayLiteralExpression",
+      "declarationName": "ArrayLiteralExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ArrowFunction",
+      "originalName": "ArrowFunction",
+      "declarationName": "ArrowFunction",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "AssignExpression",
+      "originalName": "AssignExpression",
+      "declarationName": "AssignExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "AssignmentOperator",
+      "originalName": "AssignmentOperator",
+      "declarationName": "AssignmentOperator",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "astVisit",
+      "originalName": "astVisit",
+      "declarationName": "astVisit",
+      "declarationFile": "packages/expression-parser/src/ast.visitor.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "BinaryExpression",
+      "originalName": "BinaryExpression",
+      "declarationName": "BinaryExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "BinaryOperator",
+      "originalName": "BinaryOperator",
+      "declarationName": "BinaryOperator",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "BindingBehaviorExpression",
+      "originalName": "BindingBehaviorExpression",
+      "declarationName": "BindingBehaviorExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "BindingIdentifier",
+      "originalName": "BindingIdentifier",
+      "declarationName": "BindingIdentifier",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "BindingIdentifierOrPattern",
+      "originalName": "BindingIdentifierOrPattern",
+      "declarationName": "BindingIdentifierOrPattern",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "CallFunctionExpression",
+      "originalName": "CallFunctionExpression",
+      "declarationName": "CallFunctionExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "CallGlobalExpression",
+      "originalName": "CallGlobalExpression",
+      "declarationName": "CallGlobalExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "CallMemberExpression",
+      "originalName": "CallMemberExpression",
+      "declarationName": "CallMemberExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "CallScopeExpression",
+      "originalName": "CallScopeExpression",
+      "declarationName": "CallScopeExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ConditionalExpression",
+      "originalName": "ConditionalExpression",
+      "declarationName": "ConditionalExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createAccessBoundaryExpression",
+      "originalName": "createAccessBoundaryExpression",
+      "declarationName": "createAccessBoundaryExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createAccessGlobalExpression",
+      "originalName": "createAccessGlobalExpression",
+      "declarationName": "createAccessGlobalExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createAccessKeyedExpression",
+      "originalName": "createAccessKeyedExpression",
+      "declarationName": "createAccessKeyedExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createAccessMemberExpression",
+      "originalName": "createAccessMemberExpression",
+      "declarationName": "createAccessMemberExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createAccessScopeExpression",
+      "originalName": "createAccessScopeExpression",
+      "declarationName": "createAccessScopeExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createAccessThisExpression",
+      "originalName": "createAccessThisExpression",
+      "declarationName": "createAccessThisExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createArrayBindingPattern",
+      "originalName": "createArrayBindingPattern",
+      "declarationName": "createArrayBindingPattern",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createArrayLiteralExpression",
+      "originalName": "createArrayLiteralExpression",
+      "declarationName": "createArrayLiteralExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createArrowFunction",
+      "originalName": "createArrowFunction",
+      "declarationName": "createArrowFunction",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createAssignExpression",
+      "originalName": "createAssignExpression",
+      "declarationName": "createAssignExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createBinaryExpression",
+      "originalName": "createBinaryExpression",
+      "declarationName": "createBinaryExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createBindingBehaviorExpression",
+      "originalName": "createBindingBehaviorExpression",
+      "declarationName": "createBindingBehaviorExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createBindingIdentifier",
+      "originalName": "createBindingIdentifier",
+      "declarationName": "createBindingIdentifier",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createCallFunctionExpression",
+      "originalName": "createCallFunctionExpression",
+      "declarationName": "createCallFunctionExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createCallGlobalExpression",
+      "originalName": "createCallGlobalExpression",
+      "declarationName": "createCallGlobalExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createCallMemberExpression",
+      "originalName": "createCallMemberExpression",
+      "declarationName": "createCallMemberExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createCallScopeExpression",
+      "originalName": "createCallScopeExpression",
+      "declarationName": "createCallScopeExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createConditionalExpression",
+      "originalName": "createConditionalExpression",
+      "declarationName": "createConditionalExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createDestructuringAssignmentExpression",
+      "originalName": "createDestructuringAssignmentExpression",
+      "declarationName": "createDestructuringAssignmentExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createDestructuringAssignmentRestExpression",
+      "originalName": "createDestructuringAssignmentRestExpression",
+      "declarationName": "createDestructuringAssignmentRestExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createDestructuringAssignmentSingleExpression",
+      "originalName": "createDestructuringAssignmentSingleExpression",
+      "declarationName": "createDestructuringAssignmentSingleExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createForOfStatement",
+      "originalName": "createForOfStatement",
+      "declarationName": "createForOfStatement",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createInterpolation",
+      "originalName": "createInterpolation",
+      "declarationName": "createInterpolation",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createNewExpression",
+      "originalName": "createNewExpression",
+      "declarationName": "createNewExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createObjectBindingPattern",
+      "originalName": "createObjectBindingPattern",
+      "declarationName": "createObjectBindingPattern",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createObjectLiteralExpression",
+      "originalName": "createObjectLiteralExpression",
+      "declarationName": "createObjectLiteralExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createPrimitiveLiteralExpression",
+      "originalName": "createPrimitiveLiteralExpression",
+      "declarationName": "createPrimitiveLiteralExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createTaggedTemplateExpression",
+      "originalName": "createTaggedTemplateExpression",
+      "declarationName": "createTaggedTemplateExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createTemplateExpression",
+      "originalName": "createTemplateExpression",
+      "declarationName": "createTemplateExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createUnaryExpression",
+      "originalName": "createUnaryExpression",
+      "declarationName": "createUnaryExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "createValueConverterExpression",
+      "originalName": "createValueConverterExpression",
+      "declarationName": "createValueConverterExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "CustomExpression",
+      "originalName": "CustomExpression",
+      "declarationName": "CustomExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "DestructuringAssignmentExpression",
+      "originalName": "DestructuringAssignmentExpression",
+      "declarationName": "DestructuringAssignmentExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "DestructuringAssignmentRestExpression",
+      "originalName": "DestructuringAssignmentRestExpression",
+      "declarationName": "DestructuringAssignmentRestExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "DestructuringAssignmentSingleExpression",
+      "originalName": "DestructuringAssignmentSingleExpression",
+      "declarationName": "DestructuringAssignmentSingleExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ExpressionKind",
+      "originalName": "ExpressionKind",
+      "declarationName": "ExpressionKind",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ExpressionParser",
+      "originalName": "ExpressionParser",
+      "declarationName": "ExpressionParser",
+      "declarationFile": "packages/expression-parser/src/expression-parser.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ExpressionType",
+      "originalName": "ExpressionType",
+      "declarationName": "ExpressionType",
+      "declarationFile": "packages/expression-parser/src/expression-parser.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ForOfStatement",
+      "originalName": "ForOfStatement",
+      "declarationName": "ForOfStatement",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IExpressionParser",
+      "originalName": "IExpressionParser",
+      "declarationName": "IExpressionParser",
+      "declarationFile": "packages/expression-parser/src/expression-parser.ts",
+      "faceKind": "merged",
+      "faceKinds": [
+        "const",
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "Interpolation",
+      "originalName": "Interpolation",
+      "declarationName": "Interpolation",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IsAssign",
+      "originalName": "IsAssign",
+      "declarationName": "IsAssign",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IsAssignable",
+      "originalName": "IsAssignable",
+      "declarationName": "IsAssignable",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IsBinary",
+      "originalName": "IsBinary",
+      "declarationName": "IsBinary",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IsBindingBehavior",
+      "originalName": "IsBindingBehavior",
+      "declarationName": "IsBindingBehavior",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IsConditional",
+      "originalName": "IsConditional",
+      "declarationName": "IsConditional",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IsExpression",
+      "originalName": "IsExpression",
+      "declarationName": "IsExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IsExpressionOrStatement",
+      "originalName": "IsExpressionOrStatement",
+      "declarationName": "IsExpressionOrStatement",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IsLeftHandSide",
+      "originalName": "IsLeftHandSide",
+      "declarationName": "IsLeftHandSide",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IsLiteral",
+      "originalName": "IsLiteral",
+      "declarationName": "IsLiteral",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IsPrimary",
+      "originalName": "IsPrimary",
+      "declarationName": "IsPrimary",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IsUnary",
+      "originalName": "IsUnary",
+      "declarationName": "IsUnary",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IsValueConverter",
+      "originalName": "IsValueConverter",
+      "declarationName": "IsValueConverter",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "IVisitor",
+      "originalName": "IVisitor",
+      "declarationName": "IVisitor",
+      "declarationFile": "packages/expression-parser/src/ast.visitor.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "NewExpression",
+      "originalName": "NewExpression",
+      "declarationName": "NewExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ObjectBindingPattern",
+      "originalName": "ObjectBindingPattern",
+      "declarationName": "ObjectBindingPattern",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ObjectLiteral",
+      "originalName": "ObjectLiteral",
+      "declarationName": "ObjectLiteral",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ObjectLiteralExpression",
+      "originalName": "ObjectLiteralExpression",
+      "declarationName": "ObjectLiteralExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "parseExpression",
+      "originalName": "parseExpression",
+      "declarationName": "parseExpression",
+      "declarationFile": "packages/expression-parser/src/expression-parser.ts",
+      "faceKind": "function",
+      "faceKinds": [
+        "function"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "PrimitiveLiteral",
+      "originalName": "PrimitiveLiteral",
+      "declarationName": "PrimitiveLiteral",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "PrimitiveLiteralExpression",
+      "originalName": "PrimitiveLiteralExpression",
+      "declarationName": "PrimitiveLiteralExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "TaggedTemplateExpression",
+      "originalName": "TaggedTemplateExpression",
+      "declarationName": "TaggedTemplateExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "Template",
+      "originalName": "Template",
+      "declarationName": "Template",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "const",
+      "faceKinds": [
+        "const"
+      ],
+      "typeOnly": false,
+      "typeExported": false,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "TemplateExpression",
+      "originalName": "TemplateExpression",
+      "declarationName": "TemplateExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "UnaryExpression",
+      "originalName": "UnaryExpression",
+      "declarationName": "UnaryExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "UnaryOperator",
+      "originalName": "UnaryOperator",
+      "declarationName": "UnaryOperator",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "type-alias",
+      "faceKinds": [
+        "type-alias"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "Unparser",
+      "originalName": "Unparser",
+      "declarationName": "Unparser",
+      "declarationFile": "packages/expression-parser/src/ast.visitor.ts",
+      "faceKind": "class",
+      "faceKinds": [
+        "class"
+      ],
+      "typeOnly": false,
+      "typeExported": true,
+      "valueExported": true,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    },
+    {
+      "exportedName": "ValueConverterExpression",
+      "originalName": "ValueConverterExpression",
+      "declarationName": "ValueConverterExpression",
+      "declarationFile": "packages/expression-parser/src/ast.ts",
+      "faceKind": "interface",
+      "faceKinds": [
+        "interface"
+      ],
+      "typeOnly": true,
+      "typeExported": true,
+      "valueExported": false,
+      "namespaceExport": false,
+      "chainKinds": [
+        "named-reexport",
+        "local-declaration"
+      ]
+    }
+  ]
+}
