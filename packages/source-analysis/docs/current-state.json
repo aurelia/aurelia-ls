@@ -86,6 +86,7 @@
         "src/audit.ts",
         "src/route-witness.ts",
         "src/authority/workspace-authority.ts",
+        "src/protocol-read-kernel.ts",
         "src/deps/query.ts",
         "src/deps/schema.ts",
         "src/typerefs/query.ts",

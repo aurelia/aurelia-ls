@@ -209,6 +209,20 @@ decision trail in order.
   natural-language and heuristic paths are gone from the primary API and
   replaced by typed semantic primitives.
 
+## 2026-04-18 - Read/adjudicate protocol kernel adopted as the derivation-first center
+
+- The protocol work now derives outward from a narrow read/adjudicate kernel
+  instead of trying to freeze one broad cross-surface protocol up front.
+- The new center is [src/protocol-read-kernel.ts](C:/projects/aurelia-ls2/packages/source-analysis/src/protocol-read-kernel.ts),
+  which keeps request, adjudication, and result separate while treating typed
+  continuations as part of the answer law.
+- The earlier broader `protocol-kernel.ts` sketch was removed rather than kept
+  as a competing center of gravity.
+- Near-term protocol work should flesh out concepts, invariants, and authority
+  law first, then derive more specific features and adapters from that kernel.
+- Session control, materialization, authoring, and other neighboring action
+  laws remain intentionally outside this kernel for now.
+
 ## 2026-04-18 - Primary hosted NL shell removed and replaced with direct primitives
 
 - The hosted runtime no longer dispatches `ask.question`, `plan.question`,

@@ -10,20 +10,31 @@ question routing, family ranking, or conversational ingress.
 
 ## Exact next slice
 
-1. Keep treating the historical `deps` / `typerefs` / `exports` query scripts
+1. Treat [src/protocol-read-kernel.ts](C:/projects/aurelia-ls2/packages/source-analysis/src/protocol-read-kernel.ts)
+   as the current derivation-first center for machine-facing protocol work.
+2. Flesh out concepts, invariants, and authority-law boundaries from that
+   kernel before freezing more specific feature surfaces.
+3. Keep treating the historical `deps` / `typerefs` / `exports` query scripts
    as retirement candidates rather than architecture to preserve.
-2. Finish moving current-query boot paths onto the live query kernel in
+4. Finish moving current-query boot paths onto the live query kernel in
    `src/live-query/`; `deps` is live by default now, `exports` and `typerefs`
    still need the same reset.
-3. Keep useful command intent, but keep shrinking the giant query-local
+5. Keep useful command intent, but keep shrinking the giant query-local
    indexes/renderers into thin adapters over shared live runtime/evaluator
    surfaces.
-4. Only after the legacy triple no longer dominates current-query work should
+6. Only after the legacy triple no longer dominates current-query work should
    framework-world and registration evidence become the next major primitive
    family.
 
 ## Recently landed
 
+- Added a standalone read/adjudicate protocol kernel in
+  [src/protocol-read-kernel.ts](C:/projects/aurelia-ls2/packages/source-analysis/src/protocol-read-kernel.ts)
+  and dropped the broader `protocol-kernel.ts` sketch instead of keeping two
+  competing protocol centers.
+- Recorded the decision to work derivation-first from that narrow kernel
+  toward more specific features, with protocol concepts and invariants taking
+  priority over adapter or command-surface expansion.
 - Added high-signal `// TODO` markers calling out legacy projection pressure,
   ingress-ranking pressure, and answer-local truth assembly seams.
 - Established repo-owned continuity files and a preflight command so future
