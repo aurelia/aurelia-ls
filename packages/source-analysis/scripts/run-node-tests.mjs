@@ -1,5 +1,5 @@
 import { readdirSync, statSync } from 'node:fs';
-import path, { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
@@ -20,9 +20,9 @@ env.AURELIA_RESOLUTION_STRIP_SOURCED_NODES ??= '1';
 env.AURELIA_HARNESS_TRIM ??= '1';
 
 const nodeOptions = env.NODE_OPTIONS ?? '';
-if (!/\b--max-old-space-size=\d+\b/.test(nodeOptions)) {
-  env.NODE_OPTIONS = `${nodeOptions} --max-old-space-size=2048`.trim();
-}
+const heapArg = /\b--max-old-space-size=\d+\b/.test(nodeOptions)
+  ? null
+  : '--max-old-space-size=4096';
 
 const files = filters.length > 0
   ? filters.map(resolveFilterToBuiltTest)
@@ -34,6 +34,7 @@ if (files.length === 0) {
 }
 
 const result = spawnSync(process.execPath, [
+  ...(heapArg ? [heapArg] : []),
   '--test',
   '--test-isolation=none',
   '--test-concurrency=1',

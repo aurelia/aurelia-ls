@@ -876,7 +876,7 @@ function buildInvocation(
           detail: `Using the provided sessionId "${options.sessionId}".`,
         });
       }
-      if (!hints.focusKind || !['package', 'file', 'type', 'export'].includes(hints.focusKind)) {
+      if (!hints.focusKind || !['package', 'file', 'symbol', 'type', 'export'].includes(hints.focusKind)) {
         missingInputs.push('focusKind');
       } else {
         args.focusKind = hints.focusKind;
@@ -890,7 +890,7 @@ function buildInvocation(
           detail: `Using "${hints.focusValue}" as the navigation focus.`,
         });
       }
-      args.questionRoute = hints.focusKind === 'package' ? 'join' : 'route';
+      args.questionRoute = hints.focusKind === 'export' ? 'route' : 'join';
       return finalizeInvocation(descriptor.command, args, reasons, missingInputs);
     case 'kind-summary':
     case 'kind-snapshot':

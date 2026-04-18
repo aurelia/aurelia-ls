@@ -34,6 +34,10 @@ export function deriveFocusHints(
   explicitFocusValue?: string,
   recognizers: IngressRecognizerRegistry = DEFAULT_INGRESS_RECOGNIZER_REGISTRY,
 ): IngressFocusHints {
+  // TODO: Ingress still collapses multi-target declaration questions onto one
+  // inferred focus. Once the answer layer can carry multiple focused targets
+  // honestly, retain more than one recognized symbol/type capture instead of
+  // choosing the first compatible focus family.
   const recognition = recognizers.createRecognition(question);
   const reasons: IngressHintDetail[] = [];
 
@@ -103,6 +107,20 @@ export function deriveFocusHints(
     return {
       focusKind: 'type',
       focusValue: typeCapture.value,
+      recognition,
+      reasons,
+    };
+  }
+
+  const symbolCapture = recognizers.findFirst(recognition, 'symbol-name');
+  if (symbolCapture) {
+    reasons.push({
+      kind: 'focus-inference',
+      detail: symbolCapture.detail,
+    });
+    return {
+      focusKind: 'symbol',
+      focusValue: symbolCapture.value,
       recognition,
       reasons,
     };

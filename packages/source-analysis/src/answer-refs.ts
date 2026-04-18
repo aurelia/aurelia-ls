@@ -52,6 +52,13 @@ export function createTypeAnswerRef(
   return createAnswerRef('type', typeName, typeName, detail);
 }
 
+export function createSymbolAnswerRef(
+  symbolName: string,
+  detail?: string,
+): AnswerRef & { readonly kind: 'symbol' } {
+  return createAnswerRef('symbol', symbolName, symbolName, detail);
+}
+
 export function createTypeDeclarationAnswerRef(
   declaration: TypeDecl,
 ): AnswerRef & { readonly kind: 'type' } {

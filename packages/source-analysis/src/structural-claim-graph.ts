@@ -292,6 +292,8 @@ export interface StructuralClaimGraphIndex {
   readonly importBindingsByFileAndLocalName: ReadonlyMap<string, ReadonlyMap<string, ImportBindingClaim>>;
   readonly resolutionByImportId: ReadonlyMap<StructuralClaimId, ResolutionClaim>;
   readonly exportObservationsBySourceFilePath: ReadonlyMap<string, readonly ExportObservationClaim[]>;
+  readonly declarationsByName: ReadonlyMap<string, readonly DeclarationClaim[]>;
+  readonly declarationsByLowerName: ReadonlyMap<string, readonly DeclarationClaim[]>;
   readonly declarationsByFilePath: ReadonlyMap<string, readonly DeclarationClaim[]>;
   readonly membersByDeclarationId: ReadonlyMap<StructuralClaimId, readonly MemberClaim[]>;
   readonly typeReferencesByDeclarationId: ReadonlyMap<StructuralClaimId, readonly TypeReferenceClaim[]>;
@@ -598,6 +600,8 @@ export function indexStructuralClaimGraph(
   const importBindingsByFileAndLocalName = new Map<string, Map<string, ImportBindingClaim>>();
   const resolutionByImportId = new Map<StructuralClaimId, ResolutionClaim>();
   const exportObservationsBySourceFilePath = new Map<string, ExportObservationClaim[]>();
+  const declarationsByName = new Map<string, DeclarationClaim[]>();
+  const declarationsByLowerName = new Map<string, DeclarationClaim[]>();
   const declarationsByFilePath = new Map<string, DeclarationClaim[]>();
   const membersByDeclarationId = new Map<StructuralClaimId, MemberClaim[]>();
   const typeReferencesByDeclarationId = new Map<StructuralClaimId, TypeReferenceClaim[]>();
@@ -664,6 +668,15 @@ export function indexStructuralClaimGraph(
       }
       case 'declaration': {
         declarations.push(claim);
+        const byName = declarationsByName.get(claim.attributes.name) ?? [];
+        byName.push(claim);
+        declarationsByName.set(claim.attributes.name, byName);
+
+        const lowerName = claim.attributes.name.toLowerCase();
+        const byLowerName = declarationsByLowerName.get(lowerName) ?? [];
+        byLowerName.push(claim);
+        declarationsByLowerName.set(lowerName, byLowerName);
+
         const current = declarationsByFilePath.get(claim.attributes.filePath) ?? [];
         current.push(claim);
         declarationsByFilePath.set(claim.attributes.filePath, current);
@@ -698,6 +711,18 @@ export function indexStructuralClaimGraph(
   for (const current of exportObservationsBySourceFilePath.values()) {
     current.sort((left, right) => left.attributes.line - right.attributes.line);
   }
+  for (const current of declarationsByName.values()) {
+    current.sort((left, right) =>
+      left.attributes.filePath.localeCompare(right.attributes.filePath)
+      || left.attributes.line - right.attributes.line,
+    );
+  }
+  for (const current of declarationsByLowerName.values()) {
+    current.sort((left, right) =>
+      left.attributes.filePath.localeCompare(right.attributes.filePath)
+      || left.attributes.line - right.attributes.line,
+    );
+  }
   for (const current of declarationsByFilePath.values()) {
     current.sort((left, right) => left.attributes.line - right.attributes.line);
   }
@@ -727,6 +752,8 @@ export function indexStructuralClaimGraph(
     importBindingsByFileAndLocalName,
     resolutionByImportId,
     exportObservationsBySourceFilePath,
+    declarationsByName,
+    declarationsByLowerName,
     declarationsByFilePath,
     membersByDeclarationId,
     typeReferencesByDeclarationId,

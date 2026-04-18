@@ -352,19 +352,20 @@ export function createDefaultInquiryCatalog(): InquiryCatalog {
     new InquiryFamilyDescriptor({
       id: 'workspace-orientation',
       label: 'Workspace orientation',
-      summary: 'Orient an AI to a package, file, type, export, or repo before editing.',
-      whenToUse: 'Use this when you need a starting point, neighborhood view, or quick structural posture before making changes.',
-      focusKinds: ['repo', 'package', 'file', 'type', 'export'],
+      summary: 'Orient an AI to a package, file, symbol, type, export, or repo before editing.',
+      whenToUse: 'Use this when you need a starting point, declaration location, neighborhood view, or quick structural posture before making changes.',
+      focusKinds: ['repo', 'package', 'file', 'symbol', 'type', 'export'],
       inquiryEpisodes: ['orient-and-localize', 'bounded-closure-explanation'],
       questionRoutes: ['search', 'join', 'inventory', 'route'],
       readModes: ['summary-card', 'focus-card', 'supporting-evidence'],
       aliases: ['where do i start', 'understand the workspace', 'orient me', 'overview before editing'],
-      nouns: ['workspace', 'repo', 'package', 'file', 'type', 'export', 'overview', 'orientation'],
-      verbs: ['understand', 'orient', 'inspect', 'start', 'explore'],
+      nouns: ['workspace', 'repo', 'package', 'file', 'symbol', 'type', 'export', 'overview', 'orientation', 'declaration', 'definition', 'implementation'],
+      verbs: ['understand', 'orient', 'inspect', 'start', 'explore', 'find', 'locate', 'defined', 'declared', 'implemented'],
       primaryCommands: ['query.navigate', 'query.deps.summary'],
       supportingCommands: ['query.exports.summary', 'query.typerefs.summary', 'session.open', 'session.status'],
       examples: [
         inquiryExample('Package overview', 'Orient me to @aurelia-ls/source-analysis before I edit it.', 'query.navigate'),
+        inquiryExample('Declaration location', 'Where is createAnalysisViews implemented?', 'query.navigate'),
         inquiryExample('Repo posture', 'I want to understand the repo before editing it.', 'query.deps.summary'),
       ],
       commonConfusions: [{
@@ -421,6 +422,11 @@ export function createDefaultInquiryCatalog(): InquiryCatalog {
         detail: 'If you want a package-wide red-flag sweep instead of one witness chain, use package-audit.',
         terms: ['tech debt', 'audit package'],
         steer: 'package-audit',
+      }, {
+        label: 'Implementation location versus route witness',
+        detail: 'If the question is asking where a declaration lives or is implemented, workspace-orientation is a better fit than a route witness.',
+        terms: ['implemented', 'implementation', 'defined', 'definition', 'declared', 'declaration'],
+        steer: 'workspace-orientation',
       }],
     }),
     new InquiryFamilyDescriptor({

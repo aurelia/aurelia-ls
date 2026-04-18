@@ -66,6 +66,26 @@ describe('InquiryIngress', () => {
     });
   });
 
+  it('plans symbol-oriented workspace navigation for implementation-location questions', () => {
+    const ingress = createInquiryIngress();
+
+    const answer = ingress.createPlanAnswer({
+      question: 'Where is createAnalysisViews implemented?',
+      repoPath: 'C:/projects/aurelia-ls2',
+    });
+
+    expect(answer.outcome.tag).toBe('hit');
+    expect(answer.outcome.value?.status).toBe('ready');
+    expect(answer.outcome.value?.inquiry?.id).toBe('workspace-orientation');
+    expect(answer.outcome.value?.primaryStep?.command).toBe('query.navigate');
+    expect(answer.outcome.value?.primaryStep?.args).toEqual({
+      sessionId: '$session.open',
+      focusKind: 'symbol',
+      focusValue: 'createAnalysisViews',
+      questionRoute: 'join',
+    });
+  });
+
   it('plans package audit for source-area cycle seam questions without asking for another narrowing move', () => {
     const ingress = createInquiryIngress();
 

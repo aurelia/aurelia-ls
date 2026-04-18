@@ -10,6 +10,7 @@ export const INGRESS_CAPTURE_KINDS = [
   'file-path',
   'export-name',
   'type-name',
+  'symbol-name',
   'repo-path',
 ] as const;
 
@@ -21,6 +22,7 @@ export const INGRESS_RECOGNIZABLE_FOCUS_KINDS = [
   'file',
   'export',
   'type',
+  'symbol',
   'repo',
 ] as const;
 
@@ -127,6 +129,12 @@ export function createDefaultIngressRecognizerRegistry(): IngressRecognizerRegis
       describe: (value) => `Recognized type name "${value}" from the question.`,
     },
     {
+      id: 'symbol-name',
+      kind: 'symbol-name',
+      recognize: extractSymbolNames,
+      describe: (value) => `Recognized symbol name "${value}" from the question.`,
+    },
+    {
       id: 'repo-path',
       kind: 'repo-path',
       recognize: extractRepoPaths,
@@ -156,6 +164,7 @@ export function captureKindsForFocusKind(
     case 'file': return ['file-path'];
     case 'export': return ['export-name'];
     case 'type': return ['type-name'];
+    case 'symbol': return ['symbol-name'];
     case 'repo': return ['repo-path'];
     default: return assertNever(focusKind);
   }
@@ -225,6 +234,28 @@ export function extractExportNames(question: string): readonly string[] {
 
   const camelMatches = extractStandaloneIdentifierMatches(question)
     .filter((match) => /[A-Z]/.test(match.slice(1)));
+  return camelMatches.length === 1 ? camelMatches : [];
+}
+
+export function extractSymbolNames(question: string): readonly string[] {
+  const direct = [
+    ...captureGroupMatches(question, /\b(?:function|symbol|const|variable|member)\s+`?([A-Za-z_][A-Za-z0-9_]*)`?/gi),
+    ...captureGroupMatches(question, /\b(?:where\s+is|where\s+does|find|locate|show|open|inspect|trace)\s+`?([A-Za-z_][A-Za-z0-9_]*)`?\s+(?:implemented|defined|declared)\b/gi),
+    ...captureGroupMatches(question, /`([a-z_][A-Za-z0-9_]*[A-Z][A-Za-z0-9_]*)`/g),
+  ].map((match) => trimTrailingFocusPunctuation(match));
+  if (direct.length > 0) {
+    return uniqueStrings(direct);
+  }
+
+  if (!/\b(?:implemented|implementation|defined|definition|declared|declaration|function|symbol|const|variable|member)\b/i.test(question)) {
+    return [];
+  }
+
+  const camelMatches = extractStandaloneIdentifierMatches(question)
+    .filter((match) =>
+      /^[a-z_]/.test(match)
+      && /[A-Z]/.test(match.slice(1)),
+    );
   return camelMatches.length === 1 ? camelMatches : [];
 }
 

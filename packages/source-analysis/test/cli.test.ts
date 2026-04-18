@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { promisify } from 'node:util';
 
-import { afterEach, beforeEach, describe, expect, it } from './test-harness.js';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from './test-harness.js';
 import {
   startHostServiceServer,
   type HostServiceServer,
@@ -15,7 +15,7 @@ let hostServer: HostServiceServer | undefined;
 let previousHostEndpoint = process.env.SOURCE_ANALYSIS_HOST_ENDPOINT;
 const execFileAsync = promisify(execFile);
 
-beforeEach(async () => {
+beforeAll(async () => {
   previousHostEndpoint = process.env.SOURCE_ANALYSIS_HOST_ENDPOINT;
   hostServer = await startHostServiceServer({
     endpoint: createTestHostEndpoint(),
@@ -25,6 +25,17 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  closeAllHostSessions();
+
+  while (tempDirs.length > 0) {
+    const dir = tempDirs.pop();
+    if (dir) {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+afterAll(async () => {
   if (hostServer) {
     await hostServer.close();
     hostServer = undefined;
@@ -33,13 +44,6 @@ afterEach(async () => {
     delete process.env.SOURCE_ANALYSIS_HOST_ENDPOINT;
   } else {
     process.env.SOURCE_ANALYSIS_HOST_ENDPOINT = previousHostEndpoint;
-  }
-
-  while (tempDirs.length > 0) {
-    const dir = tempDirs.pop();
-    if (dir) {
-      rmSync(dir, { recursive: true, force: true });
-    }
   }
 });
 
@@ -351,6 +355,19 @@ async function runCliAsync(
     },
   );
   return result.stdout;
+}
+
+function closeAllHostSessions(): void {
+  const sessions = hostServer?.runtime.execute({
+    command: 'session.status',
+    args: {},
+  }).result.sessions ?? [];
+  for (const session of sessions) {
+    hostServer?.runtime.execute({
+      command: 'session.close',
+      args: { sessionId: session.sessionId },
+    });
+  }
 }
 
 function createTestHostEndpoint(): string {

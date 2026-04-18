@@ -60,12 +60,14 @@ describe('Source-analysis inquiry ontology', () => {
   it('keeps ingress-recognizable focus kinds as an explicit subset', () => {
     expect(asFocusKind('claim')).toBe('claim');
     expect(isIngressRecognizableFocusKind('package')).toBe(true);
+    expect(isIngressRecognizableFocusKind('symbol')).toBe(true);
     expect(isIngressRecognizableFocusKind('claim')).toBe(false);
     expect(isIngressRecognizableFocusKind('session')).toBe(false);
 
-    expect(captureKindsForFocusKinds(['package', 'claim', 'session', 'file'])).toEqual([
+    expect(captureKindsForFocusKinds(['package', 'claim', 'session', 'file', 'symbol'])).toEqual([
       'package-name',
       'file-path',
+      'symbol-name',
     ]);
 
     expect(supportsRecognizedFocus('package', [{
@@ -83,5 +85,13 @@ describe('Source-analysis inquiry ontology', () => {
       recognizerId: 'package-name',
       detail: 'package capture',
     }])).toBe(false);
+
+    expect(supportsRecognizedFocus('symbol', [{
+      kind: 'symbol-name',
+      value: 'createAnalysisViews',
+      source: 'question',
+      recognizerId: 'symbol-name',
+      detail: 'symbol capture',
+    }])).toBe(true);
   });
 });

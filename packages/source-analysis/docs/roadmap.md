@@ -55,6 +55,7 @@ Done so far:
 - file identity and package ownership moved onto the structural source-file surface
 - blindspot files became explicit structural blindspots instead of snapshot-derived pseudo-truth
 - dependency reasoning for reachability and file navigation now goes through a shared dependency surface
+- internal declaration-localization questions can now spend a live structural declaration surface instead of forcing raw source reads for symbol implementation lookup
 
 Next:
 
@@ -108,6 +109,7 @@ Next:
 - separate presentation read modes from payload/materialization modes at more call sites
 - keep answer rendering and answer-reference surfaces separate from broader inquiry/session policy carriers
 - keep shrinking APIs that accept the broad `FocusKind` union when they only honestly support a narrower family
+- keep narrowing capability focus contracts so broad snapshot readers do not compete with declaration-localization or other focused inquiry paths
 - separate request targeting from observed execution posture inside `WorldFrame` or its successor types
 - separate evidence provenance from carrier provenance in answer-layer payloads
 
@@ -230,6 +232,8 @@ These are the points where operator judgement should usually decide direction:
 - [x] Extract answer refs into a shared model instead of keeping them folded into `answer-card.ts`
 - [x] Split snapshot loading away from neutral `AnalysisViews` composition
 - [x] Move typerefs export-member fallback onto shared export contract and inspection helpers
+- [x] Let live inquiry localize internal symbol declarations through a shared structural declaration surface
+- [x] Narrow query capability focus contracts so declaration-location questions route to `query.navigate`
 - [ ] Push inquiry policy and ingress onto narrower ontology families
 - [ ] Make `deps` / `typerefs` / `exports` feel like projections rather than architectural peers
 - [x] Reduce the 6-directory SCC in a measurable way

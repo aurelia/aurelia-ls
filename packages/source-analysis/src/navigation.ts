@@ -32,6 +32,7 @@ import {
   createExportRecordAnswerRef,
   createFileAnswerRef,
   createPackageSummaryAnswerRef,
+  createSymbolAnswerRef,
   createTypeAnswerRef,
   createTypeDeclarationAnswerRef,
 } from './answer-refs.js';
@@ -67,8 +68,13 @@ import type {
   SubstrateGraph,
   SubstrateNode,
 } from './substrate.js';
+import {
+  describeMissingStructuralDeclarationSurface,
+  lookupStructuralDeclarations,
+} from './structural-declaration-surface.js';
 import { resolveStructuralOwningPackage } from './structural-source-file-surface.js';
 import { SUBSTRATE_SCHEMA_VERSION } from './substrate.js';
+import type { DeclarationClaim } from './structural-claim-graph.js';
 
 export type NavigationRef = AnswerRef;
 
@@ -83,6 +89,7 @@ export interface NavigationEpisode {
 const NAVIGATION_HOME_IDS = {
   packageOverview: 'navigation/package-overview',
   fileNeighborhood: 'navigation/file-neighborhood',
+  symbolNeighborhood: 'navigation/symbol-neighborhood',
   typeNeighborhood: 'navigation/type-neighborhood',
   exportRoute: 'navigation/export-route',
   dependency: 'navigation/dependency',
@@ -99,6 +106,11 @@ const NAVIGATION_HOMES: readonly ClaimHome[] = [
     id: NAVIGATION_HOME_IDS.fileNeighborhood,
     kind: 'observation',
     label: 'Workspace file neighborhood',
+  },
+  {
+    id: NAVIGATION_HOME_IDS.symbolNeighborhood,
+    kind: 'observation',
+    label: 'Workspace symbol neighborhood',
   },
   {
     id: NAVIGATION_HOME_IDS.typeNeighborhood,
@@ -148,6 +160,8 @@ export function createNavigationEpisode(
       return buildExportEpisode(builder, query.focusRef.value);
     case 'file':
       return buildFileEpisode(builder, query.focusRef.value);
+    case 'symbol':
+      return buildSymbolEpisode(builder, query.focusRef.value);
     default:
       return builder.finish(
         createUnsupportedAnswer(
@@ -277,6 +291,27 @@ class EpisodeBuilder {
     });
   }
 
+  addStructuralDeclarationNode(
+    decl: DeclarationClaim,
+    typeRefCount = 0,
+  ): string {
+    return this.addNode({
+      id: `decl:${decl.attributes.filePath}:${decl.attributes.name}:${decl.attributes.line}`,
+      kind: 'declaration-observation',
+      label: decl.attributes.name,
+      repoRelativePath: decl.attributes.filePath,
+      location: {
+        repoRelativePath: decl.attributes.filePath,
+        start: { line: decl.attributes.line, column: 1 },
+      },
+      attributes: {
+        declarationKind: decl.attributes.declarationKind,
+        exported: decl.attributes.exported,
+        refCount: typeRefCount,
+      },
+    });
+  }
+
   addExportNode(record: PackageExportRecord): string {
     return this.addNode({
       id: `export:${record.package_dir}:${record.exported_name}`,
@@ -328,6 +363,27 @@ class EpisodeBuilder {
       kind: 'type-reference-observation',
       label: `${decl.name} -> ${targetName}`,
       repoRelativePath: decl.file,
+      attributes: {
+        targetName,
+        targetFile,
+        refKind: kind,
+        context,
+      },
+    });
+  }
+
+  addDeclarationTypeRefObservation(
+    declaration: DeclarationClaim,
+    targetName: string,
+    targetFile: string,
+    kind: string,
+    context?: string,
+  ): string {
+    return this.addNode({
+      id: `type-ref:${declaration.id}:${targetFile}:${targetName}:${kind}:${context ?? ''}`,
+      kind: 'type-reference-observation',
+      label: `${declaration.attributes.name} -> ${targetName}`,
+      repoRelativePath: declaration.attributes.filePath,
       attributes: {
         targetName,
         targetFile,
@@ -716,6 +772,223 @@ function buildTypeEpisode(
         ? [createAnalysisProvenanceEntry('exports', builder.snapshots.exports.generated_at, builder.snapshots.exports.source_commit, builder.query.worldFrame?.freshness)]
         : []),
       claimProvenanceEntry(`${decl.name} type neighborhood`, typeClaimId),
+    ],
+  ));
+}
+
+function buildSymbolEpisode(
+  builder: EpisodeBuilder,
+  symbolQuery: string,
+): NavigationEpisode {
+  const lookup = lookupStructuralDeclarations(builder.snapshots, symbolQuery);
+  if (lookup.tag === 'open-boundary') {
+    const policy = policyForNavigation(builder, 'symbol');
+    return builder.finish(createAnswer(
+      builder,
+      policy,
+      { kind: 'symbol', value: symbolQuery, label: symbolQuery },
+      'open-boundary',
+      createStructuredAnswerCard({
+        title: 'Workspace symbol boundary',
+        primaryRef: createSymbolAnswerRef(symbolQuery),
+        relatedRefs: [],
+        document: createNavigationDocument([
+          lookup.message ?? describeMissingStructuralDeclarationSurface(),
+        ], []),
+        policy,
+      }),
+      {
+        kind: 'frontier',
+        summary: 'The current analysis does not carry the live structural declaration surface needed for symbol-localization questions.',
+      },
+      [{
+        kind: 'route',
+        summary: 'Non-type symbol localization currently closes only through live structural declaration claims.',
+      }],
+      [{
+        code: 'navigation-missing-structural-declarations',
+        message: lookup.message ?? describeMissingStructuralDeclarationSurface(),
+        severity: 'warning',
+        origin: 'boundary',
+      }],
+      [],
+      [],
+    ));
+  }
+
+  if (lookup.matches.length === 0) {
+    return builder.finish(createMissAnswer(
+      builder,
+      `No declaration matches "${symbolQuery}".`,
+      { kind: 'symbol', value: symbolQuery },
+      [],
+    ));
+  }
+  if (lookup.matches.length > 1) {
+    return builder.finish(createAmbiguousAnswer(
+      builder,
+      `Symbol query "${symbolQuery}" matches multiple declarations.`,
+      { kind: 'symbol', value: symbolQuery },
+      lookup.matches.slice(0, 8).map((match) =>
+        createSymbolAnswerRef(
+          match.declaration.attributes.name,
+          `${match.declaration.attributes.filePath}:${match.declaration.attributes.line}`,
+        ),
+      ),
+    ));
+  }
+
+  const match = lookup.matches[0]!;
+  const decl = match.declaration;
+  const fileNodeId = builder.addFileNode(decl.attributes.filePath);
+  const declNodeId = builder.addStructuralDeclarationNode(decl, match.typeReferences.length);
+  builder.addEdge({ id: `declares:${fileNodeId}->${declNodeId}`, kind: 'declares', from: fileNodeId, to: declNodeId });
+
+  const packageNodeId = match.owningPackage ? builder.addPackageNode(match.owningPackage) : undefined;
+  if (packageNodeId) {
+    builder.addEdge({ id: `contains:${packageNodeId}->${fileNodeId}`, kind: 'contains', from: packageNodeId, to: fileNodeId });
+  }
+
+  const referencedTypeNodeIds = match.typeReferences.slice(0, 6).map((reference) => {
+    const nodeId = builder.addDeclarationTypeRefObservation(
+      decl,
+      reference.attributes.targetName,
+      reference.attributes.targetFile,
+      reference.attributes.refKind,
+      reference.attributes.context ?? undefined,
+    );
+    builder.addEdge({ id: `references:${declNodeId}->${nodeId}`, kind: 'references-type', from: declNodeId, to: nodeId });
+    return nodeId;
+  });
+
+  const exportsSnapshotId = match.publicExports.length > 0
+    ? builder.addSnapshotNode('exports')
+    : undefined;
+  const exportNodeIds = match.publicExports.slice(0, 4).map((record) => {
+    const nodeId = builder.addExportNode(record);
+    if (exportsSnapshotId) {
+      builder.addEdge({ id: `materializes:${exportsSnapshotId}->${nodeId}`, kind: 'materializes', from: exportsSnapshotId, to: nodeId });
+    }
+    builder.addEdge({ id: `exports:${fileNodeId}->${nodeId}`, kind: 'exports', from: fileNodeId, to: nodeId });
+    return nodeId;
+  });
+
+  const symbolClaimId = builder.addClaim({
+    id: `claim:symbol:${decl.attributes.filePath}:${decl.attributes.name}:${decl.attributes.line}`,
+    homeId: NAVIGATION_HOME_IDS.symbolNeighborhood,
+    kind: 'derived',
+    subjectRef: `${decl.attributes.name}@${decl.attributes.filePath}`,
+    label: `${decl.attributes.name} symbol neighborhood`,
+    support: {
+      substrateNodeIds: [fileNodeId, declNodeId, ...referencedTypeNodeIds, ...exportNodeIds],
+    },
+  });
+  const routeClaimId = builder.addClaim({
+    id: `claim:symbol:${decl.attributes.filePath}:${decl.attributes.name}:${decl.attributes.line}:route`,
+    homeId: NAVIGATION_HOME_IDS.route,
+    kind: 'route',
+    subjectRef: `${decl.attributes.name} symbol route`,
+    label: `${decl.attributes.name} symbol route`,
+    support: {
+      upstreamClaimIds: [symbolClaimId],
+    },
+  });
+  builder.addClaimEdge({ kind: 'supports', from: symbolClaimId, to: routeClaimId });
+
+  const sourceExported = match.exportObservations.length > 0 || decl.attributes.exported;
+  const summaryLines = [
+    `${decl.attributes.declarationKind} ${decl.attributes.name} is declared in ${decl.attributes.filePath}:${decl.attributes.line}.`,
+    match.publicExports.length > 0
+      ? `It reaches the public surface as ${match.publicExports.slice(0, 3).map((record) => record.exported_name).join(', ')}.`
+      : sourceExported
+        ? 'It is exported from its source file, but no package-level public export record currently closes on it.'
+        : 'It is not currently part of the package-level public export surface.',
+    match.typeReferences.length > 0
+      ? `The live structural declaration surface records ${match.typeReferences.length} direct type reference${pluralize(match.typeReferences.length)}, including ${match.typeReferences.slice(0, 4).map((reference) => reference.attributes.targetName).join(', ')}.`
+      : 'The live structural declaration surface does not record any direct project type references for this declaration.',
+    ...(match.members.length > 0
+      ? [`It also carries ${match.members.length} tracked member${pluralize(match.members.length)} in the live structural declaration surface.`]
+      : []),
+  ];
+
+  const policy = policyForNavigation(builder, 'symbol');
+  const relatedRefs = [
+    createFileAnswerRef(decl.attributes.filePath, 'declaration file'),
+    ...(match.owningPackage ? [packageRef(match.owningPackage)] : []),
+    ...match.publicExports.slice(0, 3).map((record) => exportRef(record)),
+    ...match.typeReferences.slice(0, 3).map((reference) =>
+      createTypeAnswerRef(reference.attributes.targetName, reference.attributes.targetFile),
+    ),
+  ];
+
+  return builder.finish(createAnswer(
+    builder,
+    policy,
+    { kind: 'symbol', value: decl.attributes.name, label: decl.attributes.name },
+    'hit',
+    createStructuredAnswerCard({
+      title: `${decl.attributes.name} symbol neighborhood`,
+      primaryRef: createSymbolAnswerRef(
+        decl.attributes.name,
+        `${decl.attributes.filePath}:${decl.attributes.line}`,
+      ),
+      relatedRefs,
+      document: createNavigationDocument(summaryLines, relatedRefs, [
+        { label: 'declaration kind', value: decl.attributes.declarationKind },
+        { label: 'exported from source', value: sourceExported ? 'yes' : 'no' },
+        { label: 'public exports', value: String(match.publicExports.length) },
+        { label: 'type refs', value: String(match.typeReferences.length) },
+        { label: 'members', value: String(match.members.length) },
+      ]),
+      policy,
+    }),
+    {
+      kind: 'grounded',
+      summary: 'This symbol neighborhood is grounded in the live structural declaration surface for the current workspace.',
+    },
+    [
+      {
+        kind: 'claim',
+        summary: 'The answer closes on one symbol-neighborhood claim and one route claim.',
+        claimIds: [symbolClaimId, routeClaimId],
+        claimHomeIds: [NAVIGATION_HOME_IDS.symbolNeighborhood, NAVIGATION_HOME_IDS.route],
+      },
+      {
+        kind: 'substrate',
+        summary: match.publicExports.length > 0
+          ? 'The neighborhood is backed by live structural declaration claims plus the matching package export observations.'
+          : 'The neighborhood is backed by live structural declaration claims and direct type-reference observations.',
+        substrateNodeIds: [fileNodeId, declNodeId, ...referencedTypeNodeIds, ...exportNodeIds],
+      },
+      {
+        kind: 'route',
+        summary: 'This answer intentionally localizes a declaration target so the caller can inspect the owning implementation file before editing.',
+      },
+    ],
+    [],
+    [
+      continuation('join', 'Open the declaration file', decl.attributes.filePath, 'declaration file'),
+      ...(isTypeLikeDeclarationKind(decl)
+        ? [continuation('join', 'Inspect the type neighborhood', decl.attributes.name, 'type declaration')]
+        : []),
+      ...match.publicExports.slice(0, 2).map((record) =>
+        continuation('route', `Follow public export ${record.exported_name}`, record.exported_name, 'public export'),
+      ),
+      ...match.typeReferences.slice(0, 2).map((reference) =>
+        continuation('join', `Inspect ${reference.attributes.targetName}`, reference.attributes.targetName, 'referenced type'),
+      ),
+      ...(match.owningPackage ? [continuation('join', 'Inspect the owning package', match.owningPackage.package_name, 'owning package')] : []),
+    ],
+    [
+      {
+        kind: 'host',
+        label: 'live structural declaration surface',
+        detail: 'Checker-adjacent declaration, member, and type-reference claims from the structural claim graph.',
+      },
+      ...(match.publicExports.length > 0
+        ? [createAnalysisProvenanceEntry('exports', builder.snapshots.exports.generated_at, builder.snapshots.exports.source_commit, builder.query.worldFrame?.freshness)]
+        : []),
+      claimProvenanceEntry(`${decl.attributes.name} symbol neighborhood`, symbolClaimId),
     ],
   ));
 }
@@ -1294,7 +1567,7 @@ function createUnsupportedAnswer(
     },
     [{
       kind: 'route',
-      summary: 'The live navigator currently supports package, file, type, and export focuses.',
+      summary: 'The live navigator currently supports package, file, symbol, type, and export focuses.',
     }],
     [{
       code: 'navigation-unsupported',
@@ -1452,6 +1725,27 @@ function defaultReadMode(
 
 function basename(filePath: string): string {
   return filePath.split('/').at(-1) ?? filePath;
+}
+
+function isTypeLikeDeclarationKind(
+  declaration: DeclarationClaim,
+): boolean {
+  switch (declaration.attributes.declarationKind) {
+    case 'class':
+    case 'enum':
+    case 'interface':
+    case 'namespace':
+    case 'type':
+      return true;
+    default:
+      return false;
+  }
+}
+
+function pluralize(
+  count: number,
+): string {
+  return count === 1 ? '' : 's';
 }
 
 function requiresSourceCatalogBoundary(

@@ -746,7 +746,7 @@ function buildWorkspaceOrientationSteps(
   }
 
   let queryStep: InquiryPlanStep;
-  if (hints.focusKind && (hints.focusKind === 'package' || hints.focusKind === 'file' || hints.focusKind === 'type' || hints.focusKind === 'export') && hints.focusValue) {
+  if (hints.focusKind && (hints.focusKind === 'package' || hints.focusKind === 'file' || hints.focusKind === 'symbol' || hints.focusKind === 'type' || hints.focusKind === 'export') && hints.focusValue) {
     queryStep = {
       label: 'Navigate the focused target',
       summary: `Build a structured neighborhood view for ${hints.focusKind}:${hints.focusValue}.`,

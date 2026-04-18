@@ -198,7 +198,7 @@ export interface RouteWitnessQueryArgs extends SessionRenderQueryArgs {
 }
 
 export interface NavigateQueryArgs extends SessionRenderQueryArgs {
-  readonly focusKind: 'package' | 'file' | 'type' | 'export';
+  readonly focusKind: 'package' | 'file' | 'symbol' | 'type' | 'export';
   readonly focusValue: string;
   readonly questionRoute?: QuestionRoute;
 }

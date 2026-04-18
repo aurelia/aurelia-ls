@@ -73,6 +73,23 @@ describe('SnapshotHostRuntime', () => {
     });
     expect(exportsSummary.result.summary.exports).toBeGreaterThan(0);
 
+    const navigateSymbol = runtime.execute({
+      command: 'query.navigate',
+      args: {
+        sessionId,
+        focusKind: 'symbol',
+        focusValue: 'createExample',
+      },
+    });
+    expect(navigateSymbol.status).toBe('ok');
+    expect(navigateSymbol.result.answer.outcome.tag).toBe('hit');
+    expect(navigateSymbol.result.answer.outcome.value?.summaryLines.some((line) =>
+      line.includes('src/index.ts:'),
+    )).toBe(true);
+    expect(navigateSymbol.result.answer.outcome.value?.relatedRefs.some((ref) =>
+      ref.kind === 'file' && ref.value === 'src/index.ts',
+    )).toBe(true);
+
     writeFileSync(
       join(repoPath, 'src', 'types.ts'),
       [
@@ -792,6 +809,7 @@ function createFixtureRepo(): string {
     join(repoPath, 'src', 'index.ts'),
     [
       "export type { Example } from './types.js';",
+      "export function createExample(): import('./types.js').Example { return { value: 'ok' }; }",
       'export const answer = 42;',
       '',
     ].join('\n'),

@@ -739,18 +739,18 @@ const DEFAULT_CAPABILITIES: readonly CapabilityDefinition[] = [
     id: 'query.navigate',
     command: 'query.navigate',
     plannerKind: 'navigate',
-    label: 'Navigate a package, file, type, or export',
-    summary: 'Return a structured navigation episode that orients the caller to a focused workspace target.',
-    whenToUse: 'Use this when you need a grounded starting point, neighborhood view, or export route before editing.',
-    aliases: ['navigate workspace', 'orient me', 'package overview', 'type neighborhood', 'file neighborhood'],
-    nouns: ['navigate', 'orientation', 'package', 'file', 'type', 'export', 'overview', 'neighborhood'],
-    verbs: ['navigate', 'orient', 'inspect', 'show', 'explore'],
+    label: 'Navigate a package, file, symbol, type, or export',
+    summary: 'Return a structured navigation episode that orients the caller to a focused workspace target or declaration.',
+    whenToUse: 'Use this when you need a grounded starting point, declaration location, neighborhood view, or export route before editing.',
+    aliases: ['navigate workspace', 'orient me', 'package overview', 'type neighborhood', 'file neighborhood', 'symbol declaration'],
+    nouns: ['navigate', 'orientation', 'package', 'file', 'symbol', 'type', 'export', 'overview', 'neighborhood', 'declaration', 'definition', 'implementation'],
+    verbs: ['navigate', 'orient', 'inspect', 'show', 'explore', 'find', 'locate', 'defined', 'declared', 'implemented'],
     questionRoutes: ['join', 'route', 'search'],
-    focusKinds: ['package', 'file', 'type', 'export'],
+    focusKinds: ['package', 'file', 'symbol', 'type', 'export'],
     requiredArgs: [
       requiredArg('sessionId', 'Hosted session id with snapshots to query.'),
-      requiredArg('focusKind', 'The workspace focus kind.', ['package', 'file', 'type', 'export']),
-      requiredArg('focusValue', 'Package name, repo-relative file path, type name, or export name to navigate.'),
+      requiredArg('focusKind', 'The workspace focus kind.', ['package', 'file', 'symbol', 'type', 'export']),
+      requiredArg('focusValue', 'Package name, repo-relative file path, symbol name, type name, or export name to navigate.'),
     ],
     optionalArgs: [
       optionalArg('questionRoute', 'Optional route emphasis.', ['search', 'join', 'route']),
@@ -788,6 +788,7 @@ const DEFAULT_CAPABILITIES: readonly CapabilityDefinition[] = [
     nouns: ['package', 'audit', 'debt', 'dead', 'red', 'flags', 'coverage', 'integration', 'cycle', 'layer', 'seam', 'coupling', 'architecture'],
     verbs: ['audit', 'inspect', 'find', 'surface', 'explain', 'trace'],
     questionRoutes: ['inventory'],
+    focusKinds: ['package'],
     requiredArgs: [
       requiredArg('sessionId', 'Hosted session id with snapshots to query.'),
       requiredArg('packageName', 'Package name to audit, such as @aurelia-ls/source-analysis.'),
@@ -833,6 +834,7 @@ const DEFAULT_CAPABILITIES: readonly CapabilityDefinition[] = [
     nouns: ['route', 'witness', 'alive', 'reachable', 'proof', 'file', 'type'],
     verbs: ['explain', 'prove', 'show', 'trace'],
     questionRoutes: ['route'],
+    focusKinds: ['file', 'type'],
     requiredArgs: [
       requiredArg('sessionId', 'Hosted session id with snapshots to query.'),
       requiredArg('focusKind', 'Whether the focus is a file or a type.', ['file', 'type']),
@@ -940,7 +942,7 @@ function queryCapability(
 ): CapabilityDefinition {
   return {
     family: 'query',
-    focusKinds: definition.focusKinds ?? ['repo', 'package', 'file', 'type', 'export'],
+    focusKinds: definition.focusKinds ?? ['repo'],
     readModes: definition.readModes ?? ['summary-card', 'focus-card', 'supporting-evidence'],
     ...definition,
   };

@@ -96,6 +96,25 @@ describe('Source-analysis live navigation', () => {
     expect(episode.answer.outcome.continuations.some((step) => step.targetFocusRef === 'packages/source-analysis/src/host/runtime.ts')).toBe(true);
   });
 
+  it('locates internal symbol declarations through the live structural declaration surface', () => {
+    const analysis = loadCurrentLiveAnalysisViews();
+    const episode = createNavigationEpisode({
+      focusRef: { kind: 'symbol', value: 'createAnalysisViews' },
+      questionRoute: 'join',
+    }, analysis);
+
+    expect(episode.answer.outcome.tag).toBe('hit');
+    expect(episode.answer.outcome.value?.summaryLines.some((line) =>
+      line.includes('packages/source-analysis/src/analysis-views.ts:46'),
+    )).toBe(true);
+    expect(episode.answer.outcome.value?.relatedRefs.some((ref) =>
+      ref.kind === 'file' && ref.value === 'packages/source-analysis/src/analysis-views.ts',
+    )).toBe(true);
+    expect(episode.answer.outcome.continuations.some((step) =>
+      step.targetFocusRef === 'packages/source-analysis/src/analysis-views.ts',
+    )).toBe(true);
+  });
+
   it('uses the live structural dependency surface for file neighborhoods when deps snapshot edges are stale', () => {
     const analysis = loadCurrentLiveAnalysisViews();
     const episode = createNavigationEpisode({

@@ -41,6 +41,27 @@ describe('CapabilityIngress', () => {
     });
   });
 
+  it('plans declaration-localization questions through query.navigate instead of broad snapshot readers', () => {
+    const ingress = createCapabilityIngress();
+
+    const answer = ingress.createPlanAnswer({
+      question: 'Where is createAnalysisViews implemented?',
+      sessionId: 'sa-1',
+    });
+
+    expect(answer.outcome.tag).toBe('hit');
+    expect(answer.outcome.value?.status).toBe('ready');
+    expect(answer.outcome.value?.invocation).toEqual({
+      command: 'query.navigate',
+      args: {
+        sessionId: 'sa-1',
+        focusKind: 'symbol',
+        focusValue: 'createAnalysisViews',
+        questionRoute: 'join',
+      },
+    });
+  });
+
   it('repairs wrong command labels toward the declared catalog command', () => {
     const ingress = createCapabilityIngress();
 
