@@ -8,30 +8,17 @@ import {
   inspectProfileSnapshotSupport,
   inspectSnapshotArtifactSupport,
   isUsableSnapshotArtifact,
-  type ProfileSnapshotSupport,
 } from './profile-support.js';
 import { loadJsonSnapshot, type SnapshotKind } from './snapshots.js';
 import type { DepsOutput } from './deps/schema.js';
 import type { ExportsOutput } from './exports/schema.js';
+import type {
+  CurrentSnapshotSet,
+  LoadedCurrentSnapshotSet,
+} from './snapshot-contract.js';
 import type { TypeRefsOutput } from './typerefs/schema.js';
 
 const PATHS = createSnapshotPaths(import.meta.url);
-
-export interface CurrentSnapshotSet {
-  deps: DepsOutput | null;
-  typeRefs: TypeRefsOutput | null;
-  exports: ExportsOutput | null;
-  support?: ProfileSnapshotSupport;
-  warnings: string[];
-}
-
-export interface LoadedCurrentSnapshotSet {
-  deps: DepsOutput;
-  typeRefs: TypeRefsOutput;
-  exports: ExportsOutput;
-  support?: ProfileSnapshotSupport;
-  warnings: string[];
-}
 
 function tryLoadSnapshot<T>(
   resolvedProfile: ReturnType<typeof resolveAnalysisProfile>,

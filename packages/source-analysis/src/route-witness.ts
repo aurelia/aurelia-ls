@@ -1,13 +1,10 @@
 import {
-  coerceAnalysisViews,
-  loadCurrentAnalysisViews,
   type AnalysisViews,
 } from './analysis-views.js';
 import {
   createAnalysisProvenanceEntry,
   defaultWorldFrameForAnalysis,
 } from './analysis-surface.js';
-import type { LoadedCurrentSnapshotSet } from './current-snapshots.js';
 import type { PackageExportsSummary } from './exports/schema.js';
 import type { AnswerCard } from './answer-card.js';
 import type { AnswerRef } from './answer-ref.js';
@@ -18,6 +15,11 @@ import {
   createPackageSummaryAnswerRef,
   createTypeDeclarationAnswerRef,
 } from './answer-refs.js';
+import {
+  coerceAnalysisViews,
+  loadCurrentAnalysisViews,
+} from './snapshot-analysis-views.js';
+import type { LoadedCurrentSnapshotSet } from './snapshot-contract.js';
 import { createAnswerDocument } from './answer-document.js';
 import { createAnswerEnvelope } from './answer-envelope.js';
 import {

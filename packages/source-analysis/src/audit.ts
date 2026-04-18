@@ -1,6 +1,4 @@
 import {
-  coerceAnalysisViews,
-  loadCurrentAnalysisViews,
   type AnalysisViews,
 } from './analysis-views.js';
 import {
@@ -9,11 +7,15 @@ import {
   describeAnalysisSurface,
   describeAnalysisSurfaceEvidence,
 } from './analysis-surface.js';
-import type { LoadedCurrentSnapshotSet } from './current-snapshots.js';
 import {
   loadDependencySurface,
   type DependencySurface,
 } from './dependency-surface.js';
+import {
+  coerceAnalysisViews,
+  loadCurrentAnalysisViews,
+} from './snapshot-analysis-views.js';
+import type { LoadedCurrentSnapshotSet } from './snapshot-contract.js';
 import type { PackageExportRecord, PackageExportsSummary } from './exports/schema.js';
 import { collectPartitionBindingCycles } from './partition-coupling.js';
 import type { TypeDecl } from './typerefs/schema.js';

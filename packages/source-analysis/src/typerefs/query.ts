@@ -8,8 +8,8 @@ import { execSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
 import { createRefreshCommand, createSnapshotPaths, resolveSnapshotTarget } from '../snapshot-config.js';
-import { formatInspectionMembers, inspectExportRecord } from '../exports/inspect.js';
-import type { ExportsOutput } from '../exports/schema.js';
+import { formatInspectionMembers, inspectExportRecord } from '../export-inspection.js';
+import type { ExportsOutput } from '../exports-contract.js';
 import { loadJsonSnapshot, resolveCurrentSnapshotPath, type SnapshotOptions } from '../snapshots.js';
 import type { TypeRefsOutput, TypeDecl } from './schema.js';
 

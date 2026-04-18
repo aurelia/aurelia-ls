@@ -106,6 +106,71 @@ describe('Source-analysis subsystem coupling helpers', () => {
     expect(documentToRef).toBeDefined();
     expect(refToCard).toBeUndefined();
   });
+
+  it('keeps analysis views neutral from snapshot loading', () => {
+    const analysis = loadCurrentLiveAnalysisViews();
+    const viewsToCurrentSnapshots = analysis.deps.edges.find((edge) =>
+      edge.source === 'packages/source-analysis/src/analysis-views.ts'
+      && edge.target === 'packages/source-analysis/src/current-snapshots.ts',
+    );
+    const viewsToSnapshotContract = analysis.deps.edges.find((edge) =>
+      edge.source === 'packages/source-analysis/src/analysis-views.ts'
+      && edge.target === 'packages/source-analysis/src/snapshot-contract.ts',
+    );
+    const snapshotAdapterToViews = analysis.deps.edges.find((edge) =>
+      edge.source === 'packages/source-analysis/src/snapshot-analysis-views.ts'
+      && edge.target === 'packages/source-analysis/src/analysis-views.ts',
+    );
+    const snapshotAdapterToCurrentSnapshots = analysis.deps.edges.find((edge) =>
+      edge.source === 'packages/source-analysis/src/snapshot-analysis-views.ts'
+      && edge.target === 'packages/source-analysis/src/current-snapshots.ts',
+    );
+
+    expect(viewsToCurrentSnapshots).toBeUndefined();
+    expect(viewsToSnapshotContract).toBeUndefined();
+    expect(snapshotAdapterToViews).toBeDefined();
+    expect(snapshotAdapterToCurrentSnapshots).toBeDefined();
+  });
+
+  it('keeps snapshot contract types separate from the current snapshot loader', () => {
+    const analysis = loadCurrentLiveAnalysisViews();
+    const currentSnapshotsToContract = analysis.deps.edges.find((edge) =>
+      edge.source === 'packages/source-analysis/src/current-snapshots.ts'
+      && edge.target === 'packages/source-analysis/src/snapshot-contract.ts',
+    );
+    const contractToCurrentSnapshots = analysis.deps.edges.find((edge) =>
+      edge.source === 'packages/source-analysis/src/snapshot-contract.ts'
+      && edge.target === 'packages/source-analysis/src/current-snapshots.ts',
+    );
+
+    expect(currentSnapshotsToContract).toBeDefined();
+    expect(contractToCurrentSnapshots).toBeUndefined();
+  });
+
+  it('keeps typerefs query on shared export helpers instead of the exports projection files', () => {
+    const analysis = loadCurrentLiveAnalysisViews();
+    const queryToExportsInspect = analysis.deps.edges.find((edge) =>
+      edge.source === 'packages/source-analysis/src/typerefs/query.ts'
+      && edge.target === 'packages/source-analysis/src/exports/inspect.ts',
+    );
+    const queryToExportsSchema = analysis.deps.edges.find((edge) =>
+      edge.source === 'packages/source-analysis/src/typerefs/query.ts'
+      && edge.target === 'packages/source-analysis/src/exports/schema.ts',
+    );
+    const queryToExportInspection = analysis.deps.edges.find((edge) =>
+      edge.source === 'packages/source-analysis/src/typerefs/query.ts'
+      && edge.target === 'packages/source-analysis/src/export-inspection.ts',
+    );
+    const queryToExportsContract = analysis.deps.edges.find((edge) =>
+      edge.source === 'packages/source-analysis/src/typerefs/query.ts'
+      && edge.target === 'packages/source-analysis/src/exports-contract.ts',
+    );
+
+    expect(queryToExportsInspect).toBeUndefined();
+    expect(queryToExportsSchema).toBeUndefined();
+    expect(queryToExportInspection).toBeDefined();
+    expect(queryToExportsContract).toBeDefined();
+  });
 });
 
 function createSubsystemFixtureRepo(): string {

@@ -4,7 +4,7 @@ export type { TypeRefsOutput } from '../typerefs/schema.js';
 export type {
   CurrentSnapshotSet,
   LoadedCurrentSnapshotSet,
-} from '../current-snapshots.js';
+} from '../snapshot-contract.js';
 export {
   loadCurrentSnapshots,
   tryLoadCurrentSnapshots,

@@ -1,6 +1,4 @@
 import {
-  coerceAnalysisViews,
-  loadCurrentAnalysisViews,
   type AnalysisViews,
 } from './analysis-views.js';
 import { loadDependencySurface } from './dependency-surface.js';
@@ -10,9 +8,13 @@ import {
   describeAnalysisSurface,
   describeAnalysisSurfaceEvidence,
 } from './analysis-surface.js';
-import type { LoadedCurrentSnapshotSet } from './current-snapshots.js';
 import { resolveExportRoute } from './export-trace-runtime-surface.js';
 import type { PackageExportRecord, PackageExportsSummary } from './exports/schema.js';
+import {
+  coerceAnalysisViews,
+  loadCurrentAnalysisViews,
+} from './snapshot-analysis-views.js';
+import type { LoadedCurrentSnapshotSet } from './snapshot-contract.js';
 import type { TypeDecl } from './typerefs/schema.js';
 import {
   inspectAnalyzabilityPostureFromAnalysisViews,

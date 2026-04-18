@@ -3,7 +3,6 @@ import { join } from 'node:path';
 import { collectSnapshotFrontierEvidence } from './frontier-evidence.js';
 import type { AnalysisProfile } from './analysis-profile.js';
 import type { AnalysisViews } from './analysis-views.js';
-import type { LoadedCurrentSnapshotSet } from './current-snapshots.js';
 import type { WorldFrame, InquiryProvenanceEntry } from './inquiry-model.js';
 import type {
   ClosureBasis,
@@ -30,6 +29,8 @@ import {
   type ProductOperationalAnalyzabilityTier,
   type ProductOperationalAnalyzabilityTierId,
 } from './operational-analyzability.js';
+import { createAnalysisViewsFromSnapshots } from './snapshot-analysis-views.js';
+import type { LoadedCurrentSnapshotSet } from './snapshot-contract.js';
 
 export {
   PRODUCT_OPERATIONAL_ANALYZABILITY_TIER_IDS,
@@ -236,14 +237,9 @@ export function inspectAnalyzabilityPosture(
 export function inspectAnalyzabilityPostureFromSnapshots(
   snapshots: LoadedCurrentSnapshotSet,
 ): AnalyzabilityPosture {
-  return inspectAnalyzabilityPostureFromAnalysisViews({
-    source: 'snapshot-contract',
-    root: snapshots.deps.root,
-    deps: snapshots.deps,
-    typeRefs: snapshots.typeRefs,
-    exports: snapshots.exports,
-    ...(snapshots.support ? { support: snapshots.support } : {}),
-  });
+  return inspectAnalyzabilityPostureFromAnalysisViews(
+    createAnalysisViewsFromSnapshots(snapshots),
+  );
 }
 
 export function inspectAnalyzabilityPostureFromAnalysisViews(
@@ -952,19 +948,6 @@ function selectAnalysisProfile(
   analysis: AnalysisViews,
 ): SnapshotProfileProvenance {
   return analysis.deps.profile;
-}
-
-function createSyntheticSnapshotSupport(
-  snapshots: LoadedCurrentSnapshotSet,
-): ProfileSnapshotSupport {
-  return createSyntheticSnapshotSupportFromAnalysisViews({
-    source: 'snapshot-contract',
-    root: snapshots.deps.root,
-    deps: snapshots.deps,
-    typeRefs: snapshots.typeRefs,
-    exports: snapshots.exports,
-    ...(snapshots.support ? { support: snapshots.support } : {}),
-  });
 }
 
 function createSyntheticSnapshotSupportFromAnalysisViews(

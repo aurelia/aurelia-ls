@@ -61,6 +61,7 @@ Next:
 - move more package-level and route-level reasoning off direct `deps`/`exports`/`typerefs` field reads and onto named shared surfaces
 - reduce ad hoc joins inside `audit`, `navigation`, and `route-witness`
 - keep replacing “query logic over historical projection tables” with “query logic over shared substrate/evaluator APIs”
+- keep shrinking `AnalysisViews` as a passive bundle of raw projection-owned payload types when a narrower shared contract would be more honest
 - keep making the package feel like one intelligent system with projections, not three historical tools plus glue
 
 Exit condition:
@@ -227,10 +228,13 @@ These are the points where operator judgement should usually decide direction:
 - [x] Route live export navigation through the shared export trace surface
 - [x] Extract answer rendering into its own policy surface instead of spending `InquiryPolicy` directly
 - [x] Extract answer refs into a shared model instead of keeping them folded into `answer-card.ts`
+- [x] Split snapshot loading away from neutral `AnalysisViews` composition
+- [x] Move typerefs export-member fallback onto shared export contract and inspection helpers
 - [ ] Push inquiry policy and ingress onto narrower ontology families
 - [ ] Make `deps` / `typerefs` / `exports` feel like projections rather than architectural peers
 - [x] Reduce the 6-directory SCC in a measurable way
 - [x] Make package audit surface package-internal source-area cycle pressure honestly
+- [ ] Decide whether `AnalysisViews` should remain a raw projection bundle or gain a narrower shared payload contract
 - [ ] Define the landing contract for Aurelia semantic adapters
 
 ## How To Use This Roadmap

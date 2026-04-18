@@ -1,5 +1,3 @@
-import type { LoadedCurrentSnapshotSet } from './current-snapshots.js';
-import { loadCurrentSnapshots } from './current-snapshots.js';
 import type { DepsOutput } from './deps/schema.js';
 import type { ExportsOutput } from './exports/schema.js';
 import type { ProfileSnapshotSupport } from './profile-support.js';
@@ -16,6 +14,10 @@ export const ANALYSIS_VIEW_SOURCE_IDS = [
 export type AnalysisViewSourceId =
   typeof ANALYSIS_VIEW_SOURCE_IDS[number];
 
+// TODO: AnalysisViews still speaks the historical deps/typerefs/exports output
+// contracts directly. If analysis-views.ts -> deps stays the top cycle seam,
+// extract a neutral shared payload contract so this carrier stops inheriting
+// projection-owned type identity.
 export interface AnalysisViews {
   readonly source: AnalysisViewSourceId;
   readonly root: string;
@@ -41,17 +43,6 @@ export interface AnalysisViewsOptions {
   readonly repoSourceFiles?: readonly string[];
 }
 
-export function loadCurrentAnalysisViews(
-  target?: string,
-  waitMs = 0,
-): AnalysisViews {
-  // TODO: analysis-views.ts still reaches into current-snapshots.ts to acquire
-  // snapshot contracts before composing neutral AnalysisViews. Split snapshot
-  // loading from view composition so the next root-file seam
-  // (analysis-views.ts -> current-snapshots.ts) can collapse cleanly.
-  return createAnalysisViewsFromSnapshots(loadCurrentSnapshots(target, waitMs));
-}
-
 export function createAnalysisViews(
   options: AnalysisViewsOptions,
 ): AnalysisViews {
@@ -67,30 +58,4 @@ export function createAnalysisViews(
     ...(options.sourceFileScan ? { sourceFileScan: options.sourceFileScan } : {}),
     ...(options.repoSourceFiles ? { repoSourceFiles: options.repoSourceFiles } : {}),
   };
-}
-
-export function createAnalysisViewsFromSnapshots(
-  snapshots: LoadedCurrentSnapshotSet,
-): AnalysisViews {
-  return createAnalysisViews({
-    source: 'snapshot-contract',
-    deps: snapshots.deps,
-    typeRefs: snapshots.typeRefs,
-    exports: snapshots.exports,
-    ...(snapshots.support ? { support: snapshots.support } : {}),
-  });
-}
-
-export function coerceAnalysisViews(
-  views: AnalysisViews | LoadedCurrentSnapshotSet,
-): AnalysisViews {
-  return isAnalysisViews(views)
-    ? views
-    : createAnalysisViewsFromSnapshots(views);
-}
-
-function isAnalysisViews(
-  value: AnalysisViews | LoadedCurrentSnapshotSet,
-): value is AnalysisViews {
-  return 'source' in value && 'root' in value;
 }
