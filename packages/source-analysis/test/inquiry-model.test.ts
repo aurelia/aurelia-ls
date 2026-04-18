@@ -10,14 +10,19 @@ import {
   FOCUS_KINDS,
   MAINTENANCE_QUESTION_ROUTES,
   PAYLOAD_READ_MODES,
+  POLICY_FOCUS_KINDS,
   PRESENTATION_READ_MODES,
   QUESTION_ROUTES,
   READ_MODES,
   SUBJECT_FOCUS_KINDS,
+  isCarrierProvenanceEntryKind,
   isControlFocusKind,
+  isEvidenceProvenanceEntryKind,
   isEvidenceFocusKind,
   isMaintenanceQuestionRoute,
   isPayloadReadMode,
+  isPolicyFocusKind,
+  isPresentationReadMode,
   isSubjectFocusKind,
 } from '../src/inquiry-model.js';
 import { asFocusKind, supportsRecognizedFocus } from '../src/ingress-hints.js';
@@ -31,6 +36,10 @@ describe('Source-analysis inquiry ontology', () => {
     expect(FOCUS_KINDS).toEqual([
       ...SUBJECT_FOCUS_KINDS,
       ...EVIDENCE_FOCUS_KINDS,
+      ...CONTROL_FOCUS_KINDS,
+    ]);
+    expect(POLICY_FOCUS_KINDS).toEqual([
+      ...SUBJECT_FOCUS_KINDS,
       ...CONTROL_FOCUS_KINDS,
     ]);
     expect(QUESTION_ROUTES).toEqual([
@@ -53,8 +62,13 @@ describe('Source-analysis inquiry ontology', () => {
     expect(isSubjectFocusKind('package')).toBe(true);
     expect(isEvidenceFocusKind('claim')).toBe(true);
     expect(isControlFocusKind('session')).toBe(true);
+    expect(isPolicyFocusKind('package')).toBe(true);
+    expect(isPolicyFocusKind('claim')).toBe(false);
     expect(isMaintenanceQuestionRoute('refresh')).toBe(true);
+    expect(isPresentationReadMode('focus-card')).toBe(true);
     expect(isPayloadReadMode('snapshot')).toBe(true);
+    expect(isEvidenceProvenanceEntryKind('route')).toBe(true);
+    expect(isCarrierProvenanceEntryKind('snapshot')).toBe(true);
   });
 
   it('keeps ingress-recognizable focus kinds as an explicit subset', () => {

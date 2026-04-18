@@ -78,7 +78,12 @@
         "src/inquiry-policy.ts",
         "src/inquiry-catalog.ts",
         "src/capability-catalog.ts",
+        "src/inquiry-ingress.ts",
+        "src/capability-ingress.ts",
         "src/host/runtime.ts",
+        "src/analysis-surface.ts",
+        "src/analysis-metadata-support.ts",
+        "src/answer-render-policy.ts",
         "src/answer-envelope.ts",
         "src/answer-card.ts"
       ],

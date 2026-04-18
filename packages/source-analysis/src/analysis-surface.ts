@@ -1,6 +1,6 @@
 import type { AnalysisViews } from './analysis-views.js';
 import type {
-  InquiryProvenanceEntry,
+  InquiryCarrierProvenanceEntry,
   WorldFrame,
 } from './inquiry-model.js';
 
@@ -54,7 +54,7 @@ export function createAnalysisProvenanceEntry(
   generatedAt: string,
   sourceCommit: string,
   freshness: WorldFrame['freshness'],
-): InquiryProvenanceEntry {
+): InquiryCarrierProvenanceEntry {
   if (freshness === 'live') {
     return {
       kind: 'host',

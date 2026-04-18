@@ -1,5 +1,6 @@
 import type {
   FocusKind,
+  PolicyFocusKind,
   QuestionRoute,
   ReadMode,
 } from './inquiry-model.js';
@@ -101,7 +102,7 @@ export interface CapabilityDefinition {
   readonly label: string;
   readonly summary: string;
   readonly whenToUse: string;
-  readonly focusKinds: readonly FocusKind[];
+  readonly focusKinds: readonly PolicyFocusKind[];
   readonly questionRoutes: readonly QuestionRoute[];
   readonly readModes: readonly ReadMode[];
   readonly aliases: readonly string[];
@@ -122,7 +123,7 @@ export interface CapabilityView {
   readonly label: string;
   readonly summary: string;
   readonly whenToUse: string;
-  readonly focusKinds: readonly FocusKind[];
+  readonly focusKinds: readonly PolicyFocusKind[];
   readonly questionRoutes: readonly QuestionRoute[];
   readonly readModes: readonly ReadMode[];
   readonly aliases: readonly string[];
@@ -187,7 +188,7 @@ export class CapabilityDescriptor {
     return this.#definition.family;
   }
 
-  get focusKinds(): readonly FocusKind[] {
+  get focusKinds(): readonly PolicyFocusKind[] {
     return this.#definition.focusKinds;
   }
 
@@ -901,7 +902,7 @@ const DEFAULT_CAPABILITIES: readonly CapabilityDefinition[] = [
 
 function ingressCapability(
   definition: Omit<CapabilityDefinition, 'family' | 'focusKinds' | 'readModes'> & {
-    readonly focusKinds?: readonly FocusKind[];
+    readonly focusKinds?: readonly PolicyFocusKind[];
     readonly readModes?: readonly ReadMode[];
   },
 ): CapabilityDefinition {
@@ -926,7 +927,7 @@ function sessionCapability(
 
 function regimeCapability(
   definition: Omit<CapabilityDefinition, 'family' | 'focusKinds' | 'readModes'> & {
-    readonly focusKinds?: readonly FocusKind[];
+    readonly focusKinds?: readonly PolicyFocusKind[];
     readonly readModes?: readonly ReadMode[];
   },
 ): CapabilityDefinition {
@@ -940,7 +941,7 @@ function regimeCapability(
 
 function queryCapability(
   definition: Omit<CapabilityDefinition, 'family' | 'focusKinds' | 'readModes' | 'examples'> & {
-    readonly focusKinds?: readonly FocusKind[];
+    readonly focusKinds?: readonly PolicyFocusKind[];
     readonly readModes?: readonly ReadMode[];
     readonly examples: readonly CapabilityExample[];
   },

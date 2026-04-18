@@ -1,6 +1,6 @@
 import type { AnalysisViews } from './analysis-views.js';
 import { createAnalysisProvenanceEntry } from './analysis-surface.js';
-import type { WorldFrame, InquiryProvenanceEntry } from './inquiry-model.js';
+import type { WorldFrame, InquiryCarrierProvenanceEntry } from './inquiry-model.js';
 
 export const ANALYSIS_METADATA_KINDS = [
   'deps',
@@ -39,7 +39,7 @@ export function createAnalysisProvenanceEntriesForKinds(
   analysis: AnalysisViews,
   kinds: readonly AnalysisMetadataKind[],
   freshness: WorldFrame['freshness'],
-): readonly InquiryProvenanceEntry[] {
+): readonly InquiryCarrierProvenanceEntry[] {
   return kinds.map((kind) => {
     const metadata = getAnalysisSnapshotMetadata(analysis, kind);
     return createAnalysisProvenanceEntry(

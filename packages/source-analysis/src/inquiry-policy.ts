@@ -1,12 +1,13 @@
 import type { IssueSeverity, TrustKind } from './outcome-algebra.js';
 import type {
-  FocusKind,
   InquiryEpisode,
   Inquiry,
+  PolicyFocusKind,
   QuestionRoute,
+  PresentationReadMode,
   ReadMode,
 } from './inquiry-model.js';
-import { isPayloadReadMode } from './inquiry-model.js';
+import { isPresentationReadMode } from './inquiry-model.js';
 import type {
   PackageRouteClass,
   PackageRouteKind,
@@ -70,10 +71,10 @@ export interface InquiryLimits {
 }
 
 export interface InquiryPolicy extends AnswerRenderPolicy {
-  readonly focusKind: FocusKind;
+  readonly focusKind: PolicyFocusKind;
   readonly inquiryEpisode: InquiryEpisode;
   readonly questionRoute: QuestionRoute;
-  readonly readMode: ReadMode;
+  readonly readMode: PresentationReadMode;
   readonly consumer: ConsumerKind;
   readonly limits: InquiryLimits;
   readonly ordering: InquiryOrdering;
@@ -89,9 +90,9 @@ export interface InquiryOrdering extends AnswerRenderOrdering {
 }
 
 export interface ResolveInquiryPolicyDefaults {
-  readonly focusKind: FocusKind;
+  readonly focusKind: PolicyFocusKind;
   readonly inquiryEpisode: InquiryEpisode;
-  readonly readMode: ReadMode;
+  readonly readMode: PresentationReadMode;
   readonly consumer?: ConsumerKind;
 }
 
@@ -116,9 +117,9 @@ export function resolveInquiryPolicy(
   query: Inquiry,
   defaults: ResolveInquiryPolicyDefaults,
 ): InquiryPolicy {
-  const readMode = query.readMode ?? defaults.readMode;
+  const readMode = resolvePresentationReadMode(query.readMode, defaults.readMode);
   const inquiryEpisode = query.inquiryEpisode ?? defaults.inquiryEpisode;
-  const consumer = defaults.consumer ?? (isPayloadReadMode(readMode) ? 'machine' : 'human');
+  const consumer = defaults.consumer ?? 'human';
   const renderPolicy = resolveAnswerRenderPolicy(readMode, inquiryEpisode);
 
   return {
@@ -137,16 +138,14 @@ export function resolveInquiryPolicy(
 }
 
 function continuationCountForPolicy(
-  readMode: ReadMode,
+  readMode: PresentationReadMode,
   inquiryEpisode: InquiryEpisode,
 ): number {
   const base = readMode === 'summary-card'
     ? 5
     : readMode === 'supporting-evidence'
       ? 6
-      : isPayloadReadMode(readMode)
-        ? 6
-        : 6;
+      : 6;
 
   return inquiryEpisode === 'bounded-closure-explanation'
     ? Math.max(base, 6)
@@ -154,7 +153,7 @@ function continuationCountForPolicy(
 }
 
 function auditMetricOrdersForPolicy(
-  readMode: ReadMode,
+  readMode: PresentationReadMode,
   inquiryEpisode: InquiryEpisode,
 ): AuditMetricOrders {
   if (readMode === 'supporting-evidence' || inquiryEpisode === 'delta-and-reread-floor') {
@@ -166,4 +165,17 @@ function auditMetricOrdersForPolicy(
   }
 
   return BASE_AUDIT_METRIC_ORDERS;
+}
+
+function resolvePresentationReadMode(
+  readMode: ReadMode | undefined,
+  fallback: PresentationReadMode,
+): PresentationReadMode {
+  // TODO: Structured answer surfaces now normalize payload/materialization
+  // modes back onto presentation modes. Once payload-mode queries have a
+  // first-class higher-order materialization surface, stop coercing here and
+  // return an explicit no-claim or reroute instead.
+  return readMode && isPresentationReadMode(readMode)
+    ? readMode
+    : fallback;
 }

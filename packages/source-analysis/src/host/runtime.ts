@@ -35,7 +35,8 @@ import type { InquiryExecutionSummary } from '../inquiry-ingress.js';
 import { InquiryIngress } from '../inquiry-ingress.js';
 import type { ConsumerKind } from '../inquiry-policy.js';
 import { resolveInquiryPolicy } from '../inquiry-policy.js';
-import type { FocusKind } from '../inquiry-model.js';
+import type { FocusKind, PolicyFocusKind, PresentationReadMode, ReadMode } from '../inquiry-model.js';
+import { isPresentationReadMode } from '../inquiry-model.js';
 import { createNavigationEpisode } from '../navigation.js';
 import { createLegacyProjectionWorkspaceAuthority } from '../authority/workspace-authority.js';
 import { createRouteWitnessAnswer } from '../route-witness.js';
@@ -898,9 +899,9 @@ function buildRenderedView<TResult extends { document?: AnswerDocument<AnswerRef
   }
 
   const policy = resolveInquiryPolicy(answer.query as Parameters<typeof resolveInquiryPolicy>[0], {
-    focusKind: answer.query.focusRef.kind,
+    focusKind: policyFocusKindForRenderedAnswer(answer.query.focusRef.kind),
     inquiryEpisode: (answer.query.inquiryEpisode ?? 'orient-and-localize') as Parameters<typeof resolveInquiryPolicy>[1]['inquiryEpisode'],
-    readMode: (answer.query.readMode ?? 'focus-card') as Parameters<typeof resolveInquiryPolicy>[1]['readMode'],
+    readMode: presentationReadModeOrDefault(answer.query.readMode, 'focus-card'),
     ...(consumer ? { consumer } : {}),
   });
 
@@ -915,6 +916,23 @@ function buildRenderedView<TResult extends { document?: AnswerDocument<AnswerRef
     style: 'json-document',
     document: renderAnswerDocumentToJson(document, policy),
   };
+}
+
+function policyFocusKindForRenderedAnswer(
+  focusKind: FocusKind,
+): PolicyFocusKind {
+  return focusKind === 'claim'
+    ? 'inquiry'
+    : focusKind;
+}
+
+function presentationReadModeOrDefault(
+  value: string | undefined,
+  fallback: PresentationReadMode,
+): PresentationReadMode {
+  return typeof value === 'string' && isPresentationReadMode(value as ReadMode)
+    ? value as PresentationReadMode
+    : fallback;
 }
 
 function summarizePrimaryFacts(

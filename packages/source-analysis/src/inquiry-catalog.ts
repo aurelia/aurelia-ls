@@ -1,6 +1,7 @@
 import type {
   FocusKind,
   InquiryEpisode,
+  PolicyFocusKind,
   QuestionRoute,
   ReadMode,
 } from './inquiry-model.js';
@@ -70,7 +71,7 @@ export interface InquiryFamilyDefinition {
   readonly label: string;
   readonly summary: string;
   readonly whenToUse: string;
-  readonly focusKinds: readonly FocusKind[];
+  readonly focusKinds: readonly PolicyFocusKind[];
   readonly inquiryEpisodes: readonly InquiryEpisode[];
   readonly questionRoutes: readonly QuestionRoute[];
   readonly readModes: readonly ReadMode[];
@@ -88,7 +89,7 @@ export interface InquiryFamilyView {
   readonly label: string;
   readonly summary: string;
   readonly whenToUse: string;
-  readonly focusKinds: readonly FocusKind[];
+  readonly focusKinds: readonly PolicyFocusKind[];
   readonly inquiryEpisodes: readonly InquiryEpisode[];
   readonly questionRoutes: readonly QuestionRoute[];
   readonly readModes: readonly ReadMode[];

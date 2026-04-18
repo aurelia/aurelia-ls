@@ -1,6 +1,5 @@
 import type { AnswerBlockImportance } from './answer-document.js';
-import type { InquiryEpisode, ReadMode } from './inquiry-model.js';
-import { isPayloadReadMode } from './inquiry-model.js';
+import type { InquiryEpisode, PresentationReadMode } from './inquiry-model.js';
 
 export interface AnswerRenderOrdering {
   readonly blockImportance: readonly AnswerBlockImportance[];
@@ -63,20 +62,8 @@ const SUPPORTING_EVIDENCE_LIMITS: AnswerRenderLimits = {
   factCount: 8,
 };
 
-const SNAPSHOT_LIMITS: AnswerRenderLimits = {
-  summaryLineCount: 4,
-  relatedRefCount: 14,
-  blockCount: 10,
-  listItemCount: 12,
-  findingCount: 12,
-  findingEvidenceCount: 8,
-  witnessCount: 8,
-  refListCount: 12,
-  factCount: 12,
-};
-
 export function resolveAnswerRenderPolicy(
-  readMode: ReadMode,
+  readMode: PresentationReadMode,
   inquiryEpisode: InquiryEpisode,
 ): AnswerRenderPolicy {
   return {
@@ -86,16 +73,14 @@ export function resolveAnswerRenderPolicy(
 }
 
 function limitsForRenderPolicy(
-  readMode: ReadMode,
+  readMode: PresentationReadMode,
   inquiryEpisode: InquiryEpisode,
 ): AnswerRenderLimits {
   const base = readMode === 'summary-card'
     ? SUMMARY_CARD_LIMITS
     : readMode === 'supporting-evidence'
       ? SUPPORTING_EVIDENCE_LIMITS
-      : isPayloadReadMode(readMode)
-        ? SNAPSHOT_LIMITS
-        : FOCUS_CARD_LIMITS;
+      : FOCUS_CARD_LIMITS;
 
   if (inquiryEpisode === 'inventory-and-audit-sweep') {
     return {

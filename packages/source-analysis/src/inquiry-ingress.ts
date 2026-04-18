@@ -46,10 +46,12 @@ import type {
   FocusKind,
   FocusRef,
   Inquiry,
+  InquiryCarrierProvenanceEntry,
   InquiryProvenanceEntry,
   ReadMode,
   WorldFrame,
 } from './inquiry-model.js';
+import { isPresentationReadMode } from './inquiry-model.js';
 
 export const INQUIRY_PLAN_STATUSES = [
   'ready',
@@ -305,7 +307,9 @@ export class InquiryIngress {
       ? matches.map((match) => match.inquiry)
       : this.#inquiries.list(options.includeExamples).slice(0, options.topK ?? 6);
     const diagnostics = this.diagnose();
-    const readMode = options.readMode ?? 'summary-card';
+    const readMode = options.readMode && isPresentationReadMode(options.readMode)
+      ? options.readMode
+      : 'summary-card';
     const worldFrame = options.worldFrame ?? createHostedWorldFrame();
     const query: Inquiry = {
       inquiryEpisode: 'orient-and-localize',
@@ -410,7 +414,9 @@ export class InquiryIngress {
     options: InquiryPlanOptions,
   ): InquiryAnswer<InquiryPlanValue> {
     const plan = this.plan(options);
-    const readMode = options.readMode ?? 'focus-card';
+    const readMode = options.readMode && isPresentationReadMode(options.readMode)
+      ? options.readMode
+      : 'focus-card';
     const worldFrame = options.worldFrame ?? createHostedWorldFrame({
       repoPath: options.repoPath,
       target: options.target,
@@ -503,7 +509,9 @@ export class InquiryIngress {
   createAskAnswer(
     options: InquiryAskOptions,
   ): InquiryAnswer<InquiryAskValue> {
-    const readMode = options.readMode ?? 'focus-card';
+    const readMode = options.readMode && isPresentationReadMode(options.readMode)
+      ? options.readMode
+      : 'focus-card';
     const worldFrame = options.worldFrame ?? createHostedWorldFrame({
       repoPath: options.repoPath,
       target: options.target,
@@ -1142,7 +1150,7 @@ function frontierTrust(summary: string): TrustProfile {
   return { kind: 'frontier', summary };
 }
 
-function inquiryProvenance() {
+function inquiryProvenance(): readonly InquiryCarrierProvenanceEntry[] {
   return [({
     kind: 'host' as const,
     label: 'Declared inquiry-family ingress catalog',

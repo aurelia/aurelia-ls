@@ -91,6 +91,10 @@ export const FOCUS_KINDS = [
   ...EVIDENCE_FOCUS_KINDS,
   ...CONTROL_FOCUS_KINDS,
 ] as const;
+export const POLICY_FOCUS_KINDS = [
+  ...SUBJECT_FOCUS_KINDS,
+  ...CONTROL_FOCUS_KINDS,
+] as const;
 // TODO: This union currently mixes at least three semantic categories:
 // concrete code/world subjects (package/file/type/export), evidence/model
 // objects (claim), and control-plane/API anchors (session/capability/inquiry).
@@ -171,6 +175,9 @@ export type ControlFocusKind =
 export type FocusKind =
   typeof FOCUS_KINDS[number];
 
+export type PolicyFocusKind =
+  typeof POLICY_FOCUS_KINDS[number];
+
 export type RegimeAnchor =
   typeof REGIME_ANCHORS[number];
 
@@ -192,8 +199,10 @@ export type ProvenanceEntryKind =
 export type InquiryProvenanceEntryKind =
   ProvenanceEntryKind;
 
-export interface FocusRef {
-  readonly kind: FocusKind;
+export interface FocusRef<
+  TKind extends FocusKind = FocusKind,
+> {
+  readonly kind: TKind;
   readonly value: string;
   readonly label?: string;
 }
@@ -211,10 +220,12 @@ export interface WorldFrame {
 // host gains richer session and write semantics, split request targeting from
 // observed execution frame so answers stop carrying one overloaded bundle.
 
-export interface ContinuationBasis {
-  readonly focusRef?: FocusRef;
+export interface ContinuationBasis<
+  TFocusKind extends FocusKind = FocusKind,
+> {
+  readonly focusRef?: FocusRef<TFocusKind>;
   readonly questionRoute?: QuestionRoute;
-  readonly readMode?: ReadMode;
+  readonly readMode?: PresentationReadMode;
   readonly worldFrame?: WorldFrame;
   readonly governingAnchorRefs?: readonly string[];
 }
@@ -226,21 +237,34 @@ export interface DeltaDescriptor {
   readonly rereadFloor?: QuestionRoute;
 }
 
-export interface InquiryProvenanceEntry {
-  readonly kind: ProvenanceEntryKind;
+export interface InquiryEvidenceProvenanceEntry {
+  readonly kind: EvidenceProvenanceEntryKind;
   readonly label: string;
   readonly ref?: string;
   readonly detail?: string;
 }
 
-export interface Inquiry {
+export interface InquiryCarrierProvenanceEntry {
+  readonly kind: CarrierProvenanceEntryKind;
+  readonly label: string;
+  readonly ref?: string;
+  readonly detail?: string;
+}
+
+export type InquiryProvenanceEntry =
+  | InquiryEvidenceProvenanceEntry
+  | InquiryCarrierProvenanceEntry;
+
+export interface Inquiry<
+  TFocusKind extends FocusKind = FocusKind,
+> {
   readonly inquiryEpisode?: InquiryEpisode;
-  readonly focusRef: FocusRef;
+  readonly focusRef: FocusRef<TFocusKind>;
   readonly questionRoute: QuestionRoute;
   readonly readMode?: ReadMode;
   readonly worldFrame?: WorldFrame;
   readonly requestedSlotIds?: readonly InquirySlotId[];
-  readonly continuationBasis?: ContinuationBasis;
+  readonly continuationBasis?: ContinuationBasis<TFocusKind>;
 }
 
 export interface InquiryAnswer<TResult = unknown> {
@@ -251,16 +275,26 @@ export interface InquiryAnswer<TResult = unknown> {
 }
 
 const FOCUS_KIND_SET = new Set<string>(FOCUS_KINDS);
+const POLICY_FOCUS_KIND_SET = new Set<string>(POLICY_FOCUS_KINDS);
 const SUBJECT_FOCUS_KIND_SET = new Set<string>(SUBJECT_FOCUS_KINDS);
 const EVIDENCE_FOCUS_KIND_SET = new Set<string>(EVIDENCE_FOCUS_KINDS);
 const CONTROL_FOCUS_KIND_SET = new Set<string>(CONTROL_FOCUS_KINDS);
 const MAINTENANCE_QUESTION_ROUTE_SET = new Set<string>(MAINTENANCE_QUESTION_ROUTES);
+const PRESENTATION_READ_MODE_SET = new Set<string>(PRESENTATION_READ_MODES);
 const PAYLOAD_READ_MODE_SET = new Set<string>(PAYLOAD_READ_MODES);
+const EVIDENCE_PROVENANCE_ENTRY_KIND_SET = new Set<string>(EVIDENCE_PROVENANCE_ENTRY_KINDS);
+const CARRIER_PROVENANCE_ENTRY_KIND_SET = new Set<string>(CARRIER_PROVENANCE_ENTRY_KINDS);
 
 export function isFocusKind(
   value: unknown,
 ): value is FocusKind {
   return typeof value === 'string' && FOCUS_KIND_SET.has(value);
+}
+
+export function isPolicyFocusKind(
+  value: FocusKind,
+): value is PolicyFocusKind {
+  return POLICY_FOCUS_KIND_SET.has(value);
 }
 
 export function isSubjectFocusKind(
@@ -287,8 +321,26 @@ export function isMaintenanceQuestionRoute(
   return MAINTENANCE_QUESTION_ROUTE_SET.has(value);
 }
 
+export function isPresentationReadMode(
+  value: ReadMode,
+): value is PresentationReadMode {
+  return PRESENTATION_READ_MODE_SET.has(value);
+}
+
 export function isPayloadReadMode(
   value: ReadMode,
 ): value is PayloadReadMode {
   return PAYLOAD_READ_MODE_SET.has(value);
+}
+
+export function isEvidenceProvenanceEntryKind(
+  value: ProvenanceEntryKind,
+): value is EvidenceProvenanceEntryKind {
+  return EVIDENCE_PROVENANCE_ENTRY_KIND_SET.has(value);
+}
+
+export function isCarrierProvenanceEntryKind(
+  value: ProvenanceEntryKind,
+): value is CarrierProvenanceEntryKind {
+  return CARRIER_PROVENANCE_ENTRY_KIND_SET.has(value);
 }

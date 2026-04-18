@@ -76,3 +76,22 @@ decision trail in order.
 - The next campaign step is the inquiry-ontology split, with pressure centered
   on `inquiry-model.ts` and the broad unions consumed by policy, catalogs, and
   answer envelopes.
+
+## 2026-04-18 - Inquiry ontology split started through policy and provenance seams
+
+- Structured answer policy now spends presentation read modes only; payload
+  mode is no longer treated as a peer of answer presentation inside render
+  policy or structured answer envelopes.
+- Policy and catalog focus contracts now spend `PolicyFocusKind` instead of the
+  full `FocusKind` union, leaving evidence-only focus kinds out of that
+  high-fanout internal seam.
+- Inquiry provenance entries now split explicitly into carrier (`snapshot` /
+  `host`) and evidence (`substrate` / `claim` / `route`) families, and the
+  shared analysis metadata helpers now return carrier provenance directly.
+- Capability and inquiry ingress answers now normalize payload-mode requests
+  back onto presentation policy for structured answers, with a local TODO to
+  replace that coercion with a first-class higher-order materialization surface
+  later.
+- The remaining ontology pressure is now centered on route-family planning and
+  `WorldFrame` posture/targeting overload, not on presentation-mode or
+  provenance family confusion.

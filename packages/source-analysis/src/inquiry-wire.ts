@@ -7,8 +7,8 @@ import type {
   DeltaDescriptor,
   Inquiry,
   InquiryProvenanceEntry,
+  PresentationReadMode,
   QuestionRoute,
-  ReadMode,
   WorldFrame,
   FocusRef,
 } from './inquiry-model.js';
@@ -16,7 +16,7 @@ import type {
 export interface WireContinuationBasis {
   readonly focus_ref?: FocusRef;
   readonly question_route?: QuestionRoute;
-  readonly read_mode?: ReadMode;
+  readonly read_mode?: PresentationReadMode;
   readonly world_frame?: WorldFrame;
   readonly governing_anchor_refs?: readonly string[];
 }
@@ -31,7 +31,7 @@ export interface WireDeltaDescriptor {
 export interface InquiryAnswerSlots<TResult = unknown> {
   readonly focus_ref?: FocusRef;
   readonly question_route?: QuestionRoute;
-  readonly read_mode?: ReadMode;
+  readonly read_mode?: PresentationReadMode;
   readonly world_frame?: WorldFrame;
   readonly outcome?: Outcome<TResult>;
   readonly closure_basis?: readonly ClosureBasis[];

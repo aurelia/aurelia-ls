@@ -10,13 +10,15 @@ carrying one overloaded label space.
 
 ## Exact next slice
 
-1. Inventory the overloaded families currently collapsed into
-   `src/inquiry-model.ts`, especially route, read mode, provenance, focus, and
-   world-frame posture.
-2. Introduce narrower internal family types for the highest-pressure seams
-   first, likely policy/input routing and answer-envelope provenance.
-3. Migrate one or two high-fanout consumers off the broad unions without
-   freezing premature public names.
+1. Split route-family usage in planner/runtime code so cognitive inquiry moves
+   (`search` / `join` / `route` / `inventory`) stop sharing one label space
+   with maintenance/control moves (`refresh` / `diff` / `materialize`).
+2. Separate request targeting from observed execution posture inside
+   `WorldFrame` or a successor type so repo/target/profile selection stops
+   traveling in the same bundle as regime/freshness/partiality.
+3. Migrate one or two more high-fanout consumers, likely host runtime
+   rendering/execution summaries plus inquiry/capability planning helpers, onto
+   those narrower families without freezing premature public names.
 
 ## Recently landed
 
@@ -55,6 +57,15 @@ carrying one overloaded label space.
   triplet directly.
 - Finished the `route-and-audit-migration` step and advanced the campaign to
   the inquiry-ontology split.
+- Narrowed structured-answer policy onto presentation read modes and
+  policy-focus kinds so render policy no longer treats payload/materialization
+  mode as a peer of answer presentation.
+- Split inquiry provenance payloads into explicit carrier (`snapshot` / `host`)
+  versus evidence (`substrate` / `claim` / `route`) entry families and moved
+  shared metadata helpers onto the carrier side.
+- Moved capability/inquiry ingress and the main structured answer builders onto
+  the narrowed policy/provenance seams while keeping the outer query model
+  broad enough to avoid freezing premature public names.
 
 ## Constraints
 
@@ -75,6 +86,9 @@ carrying one overloaded label space.
   authority runtime consulted by all live query surfaces.
 - `inquiry-model.ts` still overloads routes, read modes, focus kinds,
   provenance kinds, and execution posture.
+- `resolveInquiryPolicy` still carries the broad `QuestionRoute` union because
+  route-family planning/execution has not yet split cognitive inquiry moves
+  from maintenance/control moves.
 - `route-witness` and `audit` still describe freshness in terms of the legacy
   projections rather than a named shared route/reachability authority.
 - `query.navigate`, `route-witness`, and `audit` still describe freshness in
@@ -82,9 +96,10 @@ carrying one overloaded label space.
   to converge behind shared helpers.
 - `audit` still owns coordination and presentation fragmentation checks as
   package-self-pressure heuristics rather than shared semantic evaluators.
-- Default world-frame assembly still lives separately in navigation,
-  route-witness, and audit even after snapshot metadata packaging started to
-  converge.
+- `WorldFrame` still blends request targeting inputs with observed execution
+  posture, and default world-frame assembly still lives separately in
+  navigation, route-witness, and audit even after snapshot metadata packaging
+  started to converge.
 
 ## Likely files for the next pass
 
@@ -94,9 +109,11 @@ carrying one overloaded label space.
 - `src/inquiry-policy.ts`
 - `src/inquiry-catalog.ts`
 - `src/capability-catalog.ts`
+- `src/inquiry-ingress.ts`
+- `src/capability-ingress.ts`
 - `src/host/runtime.ts`
+- `src/analysis-surface.ts`
 - `src/answer-envelope.ts`
-- `src/answer-card.ts`
 
 ## Verification reminders
 

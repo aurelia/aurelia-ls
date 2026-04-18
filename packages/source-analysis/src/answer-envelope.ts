@@ -14,7 +14,7 @@ import type {
   FocusRef,
   InquiryEpisode,
   Inquiry,
-  ReadMode,
+  PresentationReadMode,
   WorldFrame,
 } from './inquiry-model.js';
 import { INQUIRY_MODEL_SCHEMA_VERSION } from './inquiry-model.js';
@@ -29,7 +29,7 @@ export interface CreateAnswerEnvelopeOptions<
   readonly query: Inquiry;
   readonly focusRef: FocusRef;
   readonly inquiryEpisode: InquiryEpisode;
-  readonly readMode: ReadMode;
+  readonly readMode: PresentationReadMode;
   readonly worldFrame: WorldFrame;
   readonly tag: Outcome<TResult>['tag'];
   readonly value: TResult;

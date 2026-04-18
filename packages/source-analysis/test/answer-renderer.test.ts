@@ -78,4 +78,19 @@ describe('Source-analysis structured answer rendering', () => {
     }
     expect(witnessBlock.witnesses[0]?.summary).toContain('manifest-bin/qualified');
   });
+
+  it('keeps structured answer policy on presentation modes when a payload mode is requested', () => {
+    const policy = resolveInquiryPolicy({
+      focusRef: { kind: 'package', value: '@aurelia-ls/source-analysis' },
+      questionRoute: 'inventory',
+      readMode: 'snapshot',
+    }, {
+      focusKind: 'package',
+      inquiryEpisode: 'inventory-and-audit-sweep',
+      readMode: 'summary-card',
+    });
+
+    expect(policy.readMode).toBe('summary-card');
+    expect(policy.consumer).toBe('human');
+  });
 });

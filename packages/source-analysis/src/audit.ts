@@ -66,10 +66,12 @@ import type {
 } from './outcome-algebra.js';
 import type {
   InquiryAnswer,
+  InquiryEvidenceProvenanceEntry,
   InquiryProvenanceEntry,
   FocusRef,
   Inquiry,
-  ReadMode,
+  PolicyFocusKind,
+  PresentationReadMode,
   WorldFrame,
 } from './inquiry-model.js';
 import type { PackageReachability } from './reachability.js';
@@ -685,14 +687,14 @@ function provenanceForPackageAudit(
       context.analysisFreshness,
     ),
     ...(findings.length > 0
-      ? [{
+      ? [({
         kind: 'route' as const,
         label: `${context.pkg.package_name} package audit`,
         ref: context.pkg.package_name,
         detail: `findings=${findings.length}`,
-      }]
+      } satisfies InquiryEvidenceProvenanceEntry)]
       : []),
-    {
+    ({
       kind: 'route',
       label: 'package reachability roots',
       ref: context.pkg.package_name,
@@ -700,7 +702,7 @@ function provenanceForPackageAudit(
         .map((root) => `${root.kind}:${basename(root.filePath)}`)
         .slice(0, 8)
         .join(', '),
-    },
+    } satisfies InquiryEvidenceProvenanceEntry),
   ];
 }
 
@@ -754,7 +756,7 @@ function createMissAnswer(
   relatedRefs: readonly AuditRef[],
 ): InquiryAnswer<AuditValue> {
   const policy = resolveInquiryPolicy(query, {
-    focusKind: focusRef.kind,
+    focusKind: policyFocusKindForAnswerFocus(focusRef.kind),
     inquiryEpisode: 'inventory-and-audit-sweep',
     readMode: defaultReadMode(query.questionRoute),
   });
@@ -935,7 +937,7 @@ function createAmbiguousAnswer(
   relatedRefs: readonly AuditRef[],
 ): InquiryAnswer<AuditValue> {
   const policy = resolveInquiryPolicy(query, {
-    focusKind: focusRef.kind,
+    focusKind: policyFocusKindForAnswerFocus(focusRef.kind),
     inquiryEpisode: 'inventory-and-audit-sweep',
     readMode: defaultReadMode(query.questionRoute),
   });
@@ -997,7 +999,7 @@ function createUnsupportedAnswer(
   message: string,
 ): InquiryAnswer<AuditValue> {
   const policy = resolveInquiryPolicy(query, {
-    focusKind: query.focusRef.kind,
+    focusKind: policyFocusKindForAnswerFocus(query.focusRef.kind),
     inquiryEpisode: 'inventory-and-audit-sweep',
     readMode: defaultReadMode(query.questionRoute),
   });
@@ -1060,7 +1062,7 @@ function typeRef(declaration: TypeDecl): AuditRef {
 
 function defaultReadMode(
   questionRoute: Inquiry['questionRoute'],
-): ReadMode {
+): PresentationReadMode {
   return questionRoute === 'inventory' ? 'summary-card' : 'focus-card';
 }
 
@@ -1077,6 +1079,14 @@ function continuation(
     targetQuestionRoute,
     targetFocusRef,
   };
+}
+
+function policyFocusKindForAnswerFocus(
+  focusKind: FocusRef['kind'],
+): PolicyFocusKind {
+  return focusKind === 'claim'
+    ? 'inquiry'
+    : focusKind;
 }
 
 function mergeTrustProfiles(

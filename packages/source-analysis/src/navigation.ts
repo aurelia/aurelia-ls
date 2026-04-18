@@ -54,11 +54,13 @@ import type {
 } from './outcome-algebra.js';
 import type {
   InquiryAnswer,
+  InquiryEvidenceProvenanceEntry,
   InquiryProvenanceEntry,
   FocusKind,
   FocusRef,
   Inquiry,
-  ReadMode,
+  PolicyFocusKind,
+  PresentationReadMode,
   WorldFrame,
 } from './inquiry-model.js';
 import type {
@@ -1592,7 +1594,7 @@ function policyForNavigation(
   focusKind: FocusKind,
 ): InquiryPolicy {
   return resolveInquiryPolicy(builder.query, {
-    focusKind,
+    focusKind: policyFocusKindForAnswerFocus(focusKind),
     inquiryEpisode: 'orient-and-localize',
     readMode: defaultReadMode(focusKind, builder.query.questionRoute),
   });
@@ -1629,7 +1631,7 @@ function createNavigationDocument(
 function defaultReadMode(
   focusKind: FocusKind,
   questionRoute: Inquiry['questionRoute'],
-): ReadMode {
+): PresentationReadMode {
   if (questionRoute === 'route') return 'focus-card';
   if (focusKind === 'package') return 'summary-card';
   if (focusKind === 'file') return 'supporting-evidence';
@@ -1709,12 +1711,20 @@ function continuation(
   };
 }
 
-function claimProvenanceEntry(label: string, claimId: string): InquiryProvenanceEntry {
+function claimProvenanceEntry(label: string, claimId: string): InquiryEvidenceProvenanceEntry {
   return {
     kind: 'claim',
     label,
     ref: claimId,
   };
+}
+
+function policyFocusKindForAnswerFocus(
+  focusKind: FocusKind,
+): PolicyFocusKind {
+  return focusKind === 'claim'
+    ? 'inquiry'
+    : focusKind;
 }
 
 function mergeTrustProfiles(

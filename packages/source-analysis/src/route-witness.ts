@@ -39,10 +39,12 @@ import type {
 } from './outcome-algebra.js';
 import type {
   InquiryAnswer,
+  InquiryEvidenceProvenanceEntry,
   InquiryProvenanceEntry,
+  PolicyFocusKind,
   FocusRef,
   Inquiry,
-  ReadMode,
+  PresentationReadMode,
   WorldFrame,
 } from './inquiry-model.js';
 import type { PackageRouteWitness } from './reachability.js';
@@ -392,12 +394,12 @@ function createHitRouteWitnessAnswer(
         ['deps', 'typerefs', 'exports'],
         query.worldFrame?.freshness,
       ),
-      {
+      ({
         kind: 'route',
         label: `${primaryRef.label} route witness`,
         ref: primaryRef.value,
         detail: renderWitnessChain(bestWitness),
-      },
+      } satisfies InquiryEvidenceProvenanceEntry),
       ...regimeContext.provenance,
       ...(structuralPathContext?.provenance ?? []),
     ],
@@ -691,7 +693,7 @@ function policyForRouteWitness(
   focusKind: FocusRef['kind'],
 ): InquiryPolicy {
   return resolveInquiryPolicy(query, {
-    focusKind,
+    focusKind: policyFocusKindForAnswerFocus(focusKind),
     inquiryEpisode: 'bounded-closure-explanation',
     readMode: defaultReadMode(),
   });
@@ -742,7 +744,7 @@ function createRouteWitnessDocument(
   ]);
 }
 
-function defaultReadMode(): ReadMode {
+function defaultReadMode(): PresentationReadMode {
   return 'focus-card';
 }
 
@@ -759,6 +761,14 @@ function continuation(
     targetQuestionRoute,
     targetFocusRef,
   };
+}
+
+function policyFocusKindForAnswerFocus(
+  focusKind: FocusRef['kind'],
+): PolicyFocusKind {
+  return focusKind === 'claim'
+    ? 'inquiry'
+    : focusKind;
 }
 
 function mergeTrustProfiles(
