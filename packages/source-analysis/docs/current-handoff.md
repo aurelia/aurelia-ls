@@ -119,6 +119,14 @@ carrying one overloaded label space.
 - Added direct coverage for the new snapshot-maintenance intent split and for
   host-side normalization of `readMode: 'snapshot'` back onto presentation
   answers.
+- Added a local `docs/aurelia/` grounding set so future framework-aware work in
+  this package can start from a repo-owned owner-ingress/compile-time-DI
+  direction instead of relying on Atlas or older compiler-local semantics
+  during implementation.
+- Expanded that local grounding set with declaration-world, resource-family,
+  and current-world construction notes so compiler-facing Aurelia work can
+  start from a repo-owned world-formation model instead of reconstructing one
+  from Atlas on every pass.
 
 ## Constraints
 

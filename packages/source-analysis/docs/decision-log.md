@@ -156,3 +156,40 @@ decision trail in order.
   discovery labels themselves: `Inquiry.readMode`, `HostRenderOptions`,
   CLI `--read-mode`, and whether `snapshot-maintenance` should remain a
   compatibility family or split into narrower discovery-facing labels.
+
+## 2026-04-18 - Local Aurelia grounding docs established
+
+- `packages/source-analysis` now owns a local distilled Aurelia grounding set
+  under `docs/aurelia/` instead of relying on Atlas or legacy compiler-local
+  semantics alone to preserve direction.
+- Framework owner-surface ingress remains identity-focused. It owns exact
+  owner/package/export/member/face grounding and its honest closure classes,
+  not DI consequence, admissibility closure, or corridor-local meaning.
+- Compile-time DI is modeled locally as a qualified container-state carrier
+  above owner grounding and below evaluator/product routing, with stable axes
+  such as world anchor, key family, resolver strategy, stage, transition,
+  qualification, analyzability, witness, and completeness posture.
+- Registration-world constructors are first-class static-analysis burden above
+  kernel primitives. They should be modeled as real framework truth rather
+  than convenience wrappers or opaque side channels.
+- Future framework-aware work in this package should preserve separate proof
+  classes for positive grounding, wrong-surface or wrong-member admissibility
+  sentinels, unresolved cases, and honest open/runtime-only outcomes.
+
+## 2026-04-18 - Local declaration-world and current-world construction grounding added
+
+- The local Aurelia grounding set now explicitly includes declaration-world,
+  resource-family, and current-world construction notes instead of treating the
+  framework burden as only owner-ingress plus compile-time DI.
+- The package should model the Aurelia resource world as a constructed
+  declaration world with distinct `recognized`, `admissible`, and
+  `current-world active` states.
+- Resource families, carrier families, ontology roles, registration paths,
+  consultation roles, lookup regimes, and timing profiles are now treated as
+  first-class local grounding vocabulary for compiler work.
+- Current-world construction should stay question-bounded and boundary-aware:
+  build the smallest honest searched world, widen only on evidence, and keep
+  boundary pressure explicit instead of bluffing dependency-graph closure.
+- Runtime-world formation remains a later neighboring slice. Framework-aware
+  compiler work in this package should not collapse declaration-world
+  construction into runtime-world semantics prematurely.
