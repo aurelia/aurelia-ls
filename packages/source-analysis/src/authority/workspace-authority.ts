@@ -74,6 +74,11 @@ export interface WorkspaceAuthority {
     locator: Locator,
     spendThreshold?: SpendThreshold,
   ): AuthorityOutcome<PackageExportRecord, PackageExportRecord>;
+  resolvePackageExport(
+    packageDir: string,
+    exportedName: string,
+    spendThreshold?: SpendThreshold,
+  ): AuthorityOutcome<PackageExportRecord, PackageExportRecord>;
   getPackageCouplingMatrix(
     packageDir: string,
   ): CouplingMatrix | undefined;
@@ -307,6 +312,57 @@ export function createLegacyProjectionWorkspaceAuthority(
       }
 
       return noClaim(locator, spendThreshold, 'not-found', 'No package export closed on the requested locator.');
+    },
+    resolvePackageExport(
+      packageDir: string,
+      exportedName: string,
+      spendThreshold = 'admissible-claim',
+    ): AuthorityOutcome<PackageExportRecord, PackageExportRecord> {
+      const locator: Locator = {
+        kind: 'export-name',
+        value: exportedName,
+        label: `${packageDir}:${exportedName}`,
+      };
+      const normalized = trimTrailingFocusPunctuation(exportedName);
+      const packageRecords = analysis.exports.exports.filter((record) => record.package_dir === packageDir);
+      const exact = packageRecords.filter((record) => record.exported_name === normalized);
+      if (exact.length === 1) {
+        return claim(locator, spendThreshold, exact[0]!, 'projection', 'package-local export exact match');
+      }
+      if (exact.length > 1) {
+        return ambiguity(locator, spendThreshold, exact, 'Multiple package-local exports share this exact exported name.', [{
+          kind: 'file',
+          label: 'declaration file',
+        }]);
+      }
+
+      const exactCaseInsensitive = packageRecords.filter((record) =>
+        record.exported_name.toLowerCase() === normalized.toLowerCase(),
+      );
+      if (exactCaseInsensitive.length === 1) {
+        return claim(locator, spendThreshold, exactCaseInsensitive[0]!, 'projection', 'package-local export case-insensitive match');
+      }
+      if (exactCaseInsensitive.length > 1) {
+        return ambiguity(locator, spendThreshold, exactCaseInsensitive, 'Multiple package-local exports share this case-insensitive exported name.', [{
+          kind: 'file',
+          label: 'declaration file',
+        }]);
+      }
+
+      const containsMatches = packageRecords.filter((record) =>
+        record.exported_name.toLowerCase().includes(normalized.toLowerCase()),
+      );
+      if (containsMatches.length === 1) {
+        return claim(locator, spendThreshold, containsMatches[0]!, 'projection', 'package-local export substring match');
+      }
+      if (containsMatches.length > 1) {
+        return ambiguity(locator, spendThreshold, containsMatches, 'Multiple package-local exports contain the requested locator text.', [{
+          kind: 'file',
+          label: 'declaration file',
+        }]);
+      }
+
+      return noClaim(locator, spendThreshold, 'not-found', `No package-local export closed on "${exportedName}" inside ${packageDir}.`);
     },
     getPackageCouplingMatrix(
       packageDir: string,

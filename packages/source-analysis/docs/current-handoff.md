@@ -14,9 +14,10 @@ question routing, family ranking, or conversational ingress.
    (`query.navigate`, `query.route.witness`, `query.audit.package`) into
    narrower direct primitives rather than letting them regrow into new
    multiplexing shells.
-2. Add the next missing primitive families: export-route tracing,
-   package-reachability/package-surface inspection, and framework-oriented
-   world/registration evidence queries.
+2. Add the next missing primitive families after the new
+   export-trace/package-surface/package-reachability slice, especially
+   framework-oriented world/registration evidence queries and narrower
+   package/file route evidence carriers.
 3. Keep structured answer algebra available where it helps, but make sure the
    machine-facing contract does not require presentation-first answer builders
    or prose-oriented discovery layers to reach semantic work.
@@ -135,6 +136,9 @@ question routing, family ranking, or conversational ingress.
 - Added direct hosted primitives for package/type/export resolution plus
   symbol lookup and focused file inspection, and rewired the hosted CLI around
   direct `resolve`, `lookup`, `inspect`, and explicit `query` topics.
+- Added direct hosted primitives for structural package-surface inspection,
+  package reachability inspection, and package-bounded export tracing, and
+  wired the hosted CLI `inspect` surface onto those explicit carriers.
 - Removed the public `./inquiry` subpath and deleted the now-dead capability /
   inquiry ingress, catalog, and ingress-recognition modules instead of
   preserving them as dormant compatibility baggage.
@@ -159,6 +163,10 @@ question routing, family ranking, or conversational ingress.
 - The hosted/public API no longer depends on the conversational ingress shell,
   but several answer-bearing compatibility queries still aggregate too much
   semantic work behind broad labels.
+- Package surface, package reachability, and export tracing are now directly
+  machine-queryable, but `query.navigate`, `query.route.witness`, and
+  `query.audit.package` still expose broad answer-local coordination that
+  should keep shrinking.
 - `claim-lattice.ts` is promising, but it is not yet clearly the persistent
   authority runtime consulted by all live query surfaces.
 - `inquiry-model.ts` still overloads routes, read modes, focus kinds,
@@ -192,8 +200,10 @@ question routing, family ranking, or conversational ingress.
 - `src/authority/workspace-authority.ts`
 - `src/export-trace-runtime-surface.ts`
 - `src/reachability.ts`
+- `src/structural-source-file-surface.ts`
 - `src/structural-declaration-surface.ts`
 - `src/focused-file-query.ts`
+- `src/package-audit-evaluator.ts`
 - `src/inquiry-policy.ts`
 - `src/inquiry-wire.ts`
 - `src/answer-envelope.ts`

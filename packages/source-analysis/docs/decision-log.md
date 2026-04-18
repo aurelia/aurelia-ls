@@ -227,3 +227,19 @@ decision trail in order.
   `query.route.witness`, and `query.audit.package` remain temporarily, but
   they are now explicit compatibility queries sitting beside the new primitive
   path rather than defining the package center of gravity.
+
+## 2026-04-18 - Package surface, reachability, and export-trace primitives promoted
+
+- The hosted runtime now exposes direct machine-facing primitives for
+  structural package-surface inspection, package reachability inspection, and
+  package-bounded export tracing.
+- The workspace authority grew a package-local export adjudication path so
+  export tracing no longer needs to start from the broad global
+  `query.export.resolve` ambiguity set when the caller already knows the
+  package boundary.
+- The hosted CLI `inspect` surface now maps directly onto these new carriers:
+  `package-surface`, `package-reachability`, and `export-trace`.
+- This slice intentionally keeps `query.navigate`, `query.route.witness`, and
+  `query.audit.package` alive as compatibility answers, but it narrows their
+  monopoly over package/file route semantics by making the lower-level
+  substrates directly queryable.

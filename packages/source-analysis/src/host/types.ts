@@ -14,9 +14,17 @@ import type {
 } from '../authority/contracts.js';
 import type { DepsOutput } from '../deps/schema.js';
 import type { ExportsOutput, PackageExportRecord, PackageExportsSummary } from '../exports/schema.js';
+import type { ResolvedExportRoute } from '../export-trace-runtime-surface.js';
 import type { FocusedFileQueryInspection } from '../focused-file-query.js';
 import type { NavigationValue } from '../navigation.js';
+import type {
+  PackageFileReachability,
+  PackageReachability,
+  PackageRoot,
+  PackageRouteEdge,
+} from '../reachability.js';
 import type { RouteWitnessValue } from '../route-witness.js';
+import type { StructuralPackageFileSurface } from '../structural-source-file-surface.js';
 import type { StructuralDeclarationLookup } from '../structural-declaration-surface.js';
 import type { TypeDecl, TypeRefsOutput } from '../typerefs/schema.js';
 import type { SnapshotKind } from '../snapshots.js';
@@ -220,6 +228,22 @@ export interface ResolveExportQueryArgs extends PrimitiveQueryArgs {
   readonly locator: string;
 }
 
+export interface InspectPackageSurfaceQueryArgs extends PrimitiveQueryArgs {
+  readonly locator: string;
+  readonly locatorKind?: 'package-name' | 'package-dir';
+}
+
+export interface InspectPackageReachabilityQueryArgs extends PrimitiveQueryArgs {
+  readonly locator: string;
+  readonly locatorKind?: 'package-name' | 'package-dir';
+}
+
+export interface TraceExportQueryArgs extends PrimitiveQueryArgs {
+  readonly packageLocator: string;
+  readonly packageLocatorKind?: 'package-name' | 'package-dir';
+  readonly exportedName: string;
+}
+
 export interface LookupSymbolDeclarationArgs extends SessionQueryArgs {
   readonly locator: string;
 }
@@ -240,6 +264,48 @@ export interface ResolveTypeQueryResult {
 
 export interface ResolveExportQueryResult {
   readonly outcome: AuthorityOutcome<PackageExportRecord, PackageExportRecord>;
+  readonly warnings: readonly string[];
+}
+
+export interface HostStructuralPackageFileEntry {
+  readonly filePath: string;
+  readonly declarations: readonly TypeDecl[];
+  readonly exportRecords: readonly PackageExportRecord[];
+}
+
+export interface HostStructuralPackageSurface {
+  readonly files: readonly string[];
+  readonly uncoveredFiles: readonly string[];
+  readonly unresolvedImports: StructuralPackageFileSurface['unresolvedImports'];
+  readonly fileEntries: readonly HostStructuralPackageFileEntry[];
+}
+
+export interface InspectPackageSurfaceQueryResult {
+  readonly packageOutcome: AuthorityOutcome<PackageExportsSummary, PackageExportsSummary>;
+  readonly surface: HostStructuralPackageSurface | null;
+  readonly warnings: readonly string[];
+}
+
+export interface HostPackageReachability {
+  readonly pkg: PackageReachability['pkg'];
+  readonly files: readonly PackageFileReachability[];
+  readonly roots: readonly PackageRoot[];
+  readonly routeEdges: readonly PackageRouteEdge[];
+  readonly publicSurfaceFiles: readonly string[];
+  readonly candidateEntryFiles: readonly string[];
+  readonly exerciseFiles: readonly string[];
+}
+
+export interface InspectPackageReachabilityQueryResult {
+  readonly packageOutcome: AuthorityOutcome<PackageExportsSummary, PackageExportsSummary>;
+  readonly reachability: HostPackageReachability | null;
+  readonly warnings: readonly string[];
+}
+
+export interface TraceExportQueryResult {
+  readonly packageOutcome: AuthorityOutcome<PackageExportsSummary, PackageExportsSummary>;
+  readonly exportOutcome: AuthorityOutcome<PackageExportRecord, PackageExportRecord> | null;
+  readonly route: ResolvedExportRoute | null;
   readonly warnings: readonly string[];
 }
 
@@ -322,6 +388,9 @@ export interface HostCommandArgsMap {
   'query.package.resolve': ResolvePackageQueryArgs;
   'query.type.resolve': ResolveTypeQueryArgs;
   'query.export.resolve': ResolveExportQueryArgs;
+  'query.package.surface': InspectPackageSurfaceQueryArgs;
+  'query.package.reachability': InspectPackageReachabilityQueryArgs;
+  'query.export.trace': TraceExportQueryArgs;
   'query.symbol.lookup': LookupSymbolDeclarationArgs;
   'query.file.inspect': InspectFileQueryArgs;
   'materializeSnapshots': MaterializeSnapshotsArgs;
@@ -346,6 +415,9 @@ export interface HostCommandResultMap {
   'query.package.resolve': ResolvePackageQueryResult;
   'query.type.resolve': ResolveTypeQueryResult;
   'query.export.resolve': ResolveExportQueryResult;
+  'query.package.surface': InspectPackageSurfaceQueryResult;
+  'query.package.reachability': InspectPackageReachabilityQueryResult;
+  'query.export.trace': TraceExportQueryResult;
   'query.symbol.lookup': LookupSymbolDeclarationResult;
   'query.file.inspect': InspectFileQueryResult;
   'materializeSnapshots': MaterializeSnapshotsResult;

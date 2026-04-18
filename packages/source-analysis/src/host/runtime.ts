@@ -83,6 +83,14 @@ import {
   type ResolveTypeQueryResult,
   type ResolveExportQueryArgs,
   type ResolveExportQueryResult,
+  type InspectPackageSurfaceQueryArgs,
+  type InspectPackageSurfaceQueryResult,
+  type InspectPackageReachabilityQueryArgs,
+  type InspectPackageReachabilityQueryResult,
+  type TraceExportQueryArgs,
+  type TraceExportQueryResult,
+  type HostStructuralPackageSurface,
+  type HostPackageReachability,
   type LookupSymbolDeclarationArgs,
   type LookupSymbolDeclarationResult,
   type InspectFileQueryArgs,
@@ -210,6 +218,9 @@ export class SnapshotHostRuntime {
       case 'query.package.resolve': return this.#queryResolvePackage(invocation.args as ResolvePackageQueryArgs);
       case 'query.type.resolve': return this.#queryResolveType(invocation.args as ResolveTypeQueryArgs);
       case 'query.export.resolve': return this.#queryResolveExport(invocation.args as ResolveExportQueryArgs);
+      case 'query.package.surface': return this.#queryInspectPackageSurface(invocation.args as InspectPackageSurfaceQueryArgs);
+      case 'query.package.reachability': return this.#queryInspectPackageReachability(invocation.args as InspectPackageReachabilityQueryArgs);
+      case 'query.export.trace': return this.#queryTraceExport(invocation.args as TraceExportQueryArgs);
       case 'query.symbol.lookup': return this.#queryLookupSymbol(invocation.args as LookupSymbolDeclarationArgs);
       case 'query.file.inspect': return this.#queryInspectFile(invocation.args as InspectFileQueryArgs);
       case 'materializeSnapshots': return this.#materializeSnapshots(invocation.args as MaterializeSnapshotsArgs);
@@ -538,6 +549,98 @@ export class SnapshotHostRuntime {
         },
         args.spendThreshold,
       ),
+      warnings: hostedAnalysis.warnings,
+    };
+
+    return {
+      result,
+      sessionId: state.sessionId,
+      refreshedKinds: hostedAnalysis.refreshedKinds,
+      invalidation: buildInvalidationMeta(state),
+      cache: hostedAnalysis.cache,
+    };
+  }
+
+  #queryInspectPackageSurface(args: InspectPackageSurfaceQueryArgs): CommandOutcome {
+    const state = this.#sessions.get(args.sessionId);
+    const hostedAnalysis = ensureFreshHostedAnalysisContext(state, args.refreshIfNeeded);
+    const authority = createLegacyProjectionWorkspaceAuthority(hostedAnalysis.analysis);
+    const packageOutcome = authority.resolvePackage(
+      {
+        kind: args.locatorKind ?? 'package-name',
+        value: args.locator,
+      },
+      args.spendThreshold,
+    );
+    const result: InspectPackageSurfaceQueryResult = {
+      packageOutcome,
+      surface: packageOutcome.kind === 'claim'
+        ? serializePackageSurface(authority.getStructuralPackageSurface(packageOutcome.value.package_dir))
+        : null,
+      warnings: hostedAnalysis.warnings,
+    };
+
+    return {
+      result,
+      sessionId: state.sessionId,
+      refreshedKinds: hostedAnalysis.refreshedKinds,
+      invalidation: buildInvalidationMeta(state),
+      cache: hostedAnalysis.cache,
+    };
+  }
+
+  #queryInspectPackageReachability(args: InspectPackageReachabilityQueryArgs): CommandOutcome {
+    const state = this.#sessions.get(args.sessionId);
+    const hostedAnalysis = ensureFreshHostedAnalysisContext(state, args.refreshIfNeeded);
+    const authority = createLegacyProjectionWorkspaceAuthority(hostedAnalysis.analysis);
+    const packageOutcome = authority.resolvePackage(
+      {
+        kind: args.locatorKind ?? 'package-name',
+        value: args.locator,
+      },
+      args.spendThreshold,
+    );
+    const result: InspectPackageReachabilityQueryResult = {
+      packageOutcome,
+      reachability: packageOutcome.kind === 'claim'
+        ? serializePackageReachability(authority.getPackageReachability(packageOutcome.value.package_dir))
+        : null,
+      warnings: hostedAnalysis.warnings,
+    };
+
+    return {
+      result,
+      sessionId: state.sessionId,
+      refreshedKinds: hostedAnalysis.refreshedKinds,
+      invalidation: buildInvalidationMeta(state),
+      cache: hostedAnalysis.cache,
+    };
+  }
+
+  #queryTraceExport(args: TraceExportQueryArgs): CommandOutcome {
+    const state = this.#sessions.get(args.sessionId);
+    const hostedAnalysis = ensureFreshHostedAnalysisContext(state, args.refreshIfNeeded);
+    const authority = createLegacyProjectionWorkspaceAuthority(hostedAnalysis.analysis);
+    const packageOutcome = authority.resolvePackage(
+      {
+        kind: args.packageLocatorKind ?? 'package-name',
+        value: args.packageLocator,
+      },
+      args.spendThreshold,
+    );
+    const exportOutcome = packageOutcome.kind === 'claim'
+      ? authority.resolvePackageExport(
+        packageOutcome.value.package_dir,
+        args.exportedName,
+        args.spendThreshold,
+      )
+      : null;
+    const result: TraceExportQueryResult = {
+      packageOutcome,
+      exportOutcome,
+      route: exportOutcome?.kind === 'claim'
+        ? authority.resolveExportRoute(exportOutcome.value)
+        : null,
       warnings: hostedAnalysis.warnings,
     };
 
@@ -1094,6 +1197,47 @@ function writeSnapshotJson(path: string, snapshot: unknown): void {
       }
     }
   }
+}
+
+function serializePackageSurface(
+  surface: ReturnType<ReturnType<typeof createLegacyProjectionWorkspaceAuthority>['getStructuralPackageSurface']>,
+): HostStructuralPackageSurface | null {
+  if (!surface) {
+    return null;
+  }
+
+  const fileEntries = [...surface.files]
+    .sort((left, right) => left.localeCompare(right))
+    .map((filePath) => ({
+      filePath,
+      declarations: [...(surface.declarationsByFile.get(filePath) ?? [])],
+      exportRecords: [...(surface.exportRecordsByFile.get(filePath) ?? [])],
+    }));
+
+  return {
+    files: [...surface.files],
+    uncoveredFiles: [...surface.uncoveredFiles],
+    unresolvedImports: [...surface.unresolvedImports],
+    fileEntries,
+  };
+}
+
+function serializePackageReachability(
+  reachability: ReturnType<ReturnType<typeof createLegacyProjectionWorkspaceAuthority>['getPackageReachability']>,
+): HostPackageReachability | null {
+  if (!reachability) {
+    return null;
+  }
+
+  return {
+    pkg: reachability.pkg,
+    files: [...reachability.files],
+    roots: [...reachability.roots],
+    routeEdges: [...reachability.routeEdges],
+    publicSurfaceFiles: [...reachability.publicSurfaceFiles],
+    candidateEntryFiles: [...reachability.candidateEntryFiles],
+    exerciseFiles: [...reachability.exerciseFiles],
+  };
 }
 
 function extractSessionId(

@@ -86,7 +86,7 @@ describe('source-analysis hosted CLI', () => {
     expect(parsed.result.snapshotSupport.missingKinds).toEqual(['deps', 'typerefs', 'exports']);
   });
 
-  it('resolves package, type, export, symbol, and file through the hosted CLI', async () => {
+  it('resolves package, type, export, symbol, file, package-surface, reachability, and export-trace through the hosted CLI', async () => {
     const repoPath = createAuditFixtureRepo();
     const openRaw = await runCliAsync([
       'session',
@@ -175,6 +175,96 @@ describe('source-analysis hosted CLI', () => {
     expect(exported.command).toBe('query.export.resolve');
     expect(exported.result.outcome.kind).toBe('claim');
     expect(exported.result.outcome.value?.exported_name).toBe('auditReady');
+
+    const surfaceRaw = await runCliAsync([
+      'inspect',
+      'package-surface',
+      '@fixture/source-analysis-audit',
+      '--session-id',
+      opened.result.sessionId,
+      '--json',
+    ]);
+    const surface = JSON.parse(surfaceRaw) as {
+      readonly command: string;
+      readonly result: {
+        readonly packageOutcome: {
+          readonly kind: string;
+        };
+        readonly surface: null | {
+          readonly files: readonly string[];
+          readonly uncoveredFiles: readonly string[];
+          readonly fileEntries: ReadonlyArray<{
+            readonly filePath: string;
+            readonly declarations: ReadonlyArray<{
+              readonly name: string;
+            }>;
+          }>;
+        };
+      };
+    };
+
+    expect(surface.command).toBe('query.package.surface');
+    expect(surface.result.packageOutcome.kind).toBe('claim');
+    expect(surface.result.surface?.files).toContain('src/index.ts');
+    expect(surface.result.surface?.uncoveredFiles).toContain('test/index.test.ts');
+    expect(surface.result.surface?.fileEntries.find((entry) => entry.filePath === 'src/live.ts')?.declarations[0]?.name).toBe('LiveShape');
+
+    const reachabilityRaw = await runCliAsync([
+      'inspect',
+      'package-reachability',
+      '@fixture/source-analysis-audit',
+      '--session-id',
+      opened.result.sessionId,
+      '--json',
+    ]);
+    const reachability = JSON.parse(reachabilityRaw) as {
+      readonly command: string;
+      readonly result: {
+        readonly packageOutcome: {
+          readonly kind: string;
+        };
+        readonly reachability: null | {
+          readonly publicSurfaceFiles: readonly string[];
+          readonly candidateEntryFiles: readonly string[];
+        };
+      };
+    };
+
+    expect(reachability.command).toBe('query.package.reachability');
+    expect(reachability.result.packageOutcome.kind).toBe('claim');
+    expect(reachability.result.reachability?.publicSurfaceFiles).toContain('src/index.ts');
+    expect(reachability.result.reachability?.candidateEntryFiles).toContain('src/tool.ts');
+
+    const traceRaw = await runCliAsync([
+      'inspect',
+      'export-trace',
+      '@fixture/source-analysis-audit',
+      'auditReady',
+      '--session-id',
+      opened.result.sessionId,
+      '--json',
+    ]);
+    const trace = JSON.parse(traceRaw) as {
+      readonly command: string;
+      readonly result: {
+        readonly packageOutcome: {
+          readonly kind: string;
+        };
+        readonly exportOutcome: null | {
+          readonly kind: string;
+        };
+        readonly route: null | {
+          readonly declarationFile: string | null;
+          readonly declarationName: string;
+        };
+      };
+    };
+
+    expect(trace.command).toBe('query.export.trace');
+    expect(trace.result.packageOutcome.kind).toBe('claim');
+    expect(trace.result.exportOutcome?.kind).toBe('claim');
+    expect(trace.result.route?.declarationFile).toBe('src/index.ts');
+    expect(trace.result.route?.declarationName).toBe('auditReady');
 
     const symbolRaw = await runCliAsync([
       'lookup',

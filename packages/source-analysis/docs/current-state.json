@@ -82,13 +82,16 @@
         "src/authority/workspace-authority.ts",
         "src/export-trace-runtime-surface.ts",
         "src/reachability.ts",
+        "src/structural-source-file-surface.ts",
         "src/structural-declaration-surface.ts",
         "src/focused-file-query.ts",
         "src/inquiry-model.ts",
         "src/inquiry-wire.ts",
         "src/outcome-algebra.ts",
         "src/analysis-surface.ts",
-        "docs/machine-legible-api-reset.md"
+        "docs/machine-legible-api-reset.md",
+        "test/host-runtime.test.ts",
+        "test/cli.test.ts"
       ],
       "exitCriteria": [
         "The primary machine-facing API no longer requires natural-language question strings to reach semantic work.",

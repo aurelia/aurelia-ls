@@ -352,19 +352,74 @@ function buildInspectInvocation(
   common: ParsedCommonArgs,
 ): HostCommandInvocation<HostCommandName> {
   const topic = remainingArgs[0];
-  const filePath = remainingArgs.slice(1).join(' ').trim();
-  if (topic !== 'file' || !filePath) {
-    throw new Error('Usage: pnpm source-analysis inspect file <path> --session-id <id>');
+  switch (topic) {
+    case 'file': {
+      const filePath = remainingArgs.slice(1).join(' ').trim();
+      if (!filePath) {
+        throw new Error('Usage: pnpm source-analysis inspect file <path> --session-id <id>');
+      }
+      return {
+        command: 'query.file.inspect',
+        args: {
+          sessionId: requireSessionId(common.sessionId, 'inspect file'),
+          filePath,
+          ...(common.force ? { refreshIfNeeded: true } : {}),
+        },
+      };
+    }
+    case 'package-surface': {
+      const locator = remainingArgs.slice(1).join(' ').trim();
+      if (!locator) {
+        throw new Error('Usage: pnpm source-analysis inspect package-surface <locator> --session-id <id>');
+      }
+      return {
+        command: 'query.package.surface',
+        args: {
+          sessionId: requireSessionId(common.sessionId, 'inspect package-surface'),
+          locator,
+          ...(common.locatorKind ? { locatorKind: common.locatorKind } : {}),
+          ...(common.spendThreshold ? { spendThreshold: common.spendThreshold } : {}),
+          ...(common.force ? { refreshIfNeeded: true } : {}),
+        },
+      };
+    }
+    case 'package-reachability': {
+      const locator = remainingArgs.slice(1).join(' ').trim();
+      if (!locator) {
+        throw new Error('Usage: pnpm source-analysis inspect package-reachability <locator> --session-id <id>');
+      }
+      return {
+        command: 'query.package.reachability',
+        args: {
+          sessionId: requireSessionId(common.sessionId, 'inspect package-reachability'),
+          locator,
+          ...(common.locatorKind ? { locatorKind: common.locatorKind } : {}),
+          ...(common.spendThreshold ? { spendThreshold: common.spendThreshold } : {}),
+          ...(common.force ? { refreshIfNeeded: true } : {}),
+        },
+      };
+    }
+    case 'export-trace': {
+      const packageLocator = remainingArgs[1];
+      const exportedName = remainingArgs[2];
+      if (!packageLocator || !exportedName) {
+        throw new Error('Usage: pnpm source-analysis inspect export-trace <package-locator> <exported-name> --session-id <id>');
+      }
+      return {
+        command: 'query.export.trace',
+        args: {
+          sessionId: requireSessionId(common.sessionId, 'inspect export-trace'),
+          packageLocator,
+          exportedName,
+          ...(common.locatorKind ? { packageLocatorKind: common.locatorKind } : {}),
+          ...(common.spendThreshold ? { spendThreshold: common.spendThreshold } : {}),
+          ...(common.force ? { refreshIfNeeded: true } : {}),
+        },
+      };
+    }
+    default:
+      throw new Error('Usage: pnpm source-analysis inspect <file|package-surface|package-reachability|export-trace> ... --session-id <id>');
   }
-
-  return {
-    command: 'query.file.inspect',
-    args: {
-      sessionId: requireSessionId(common.sessionId, 'inspect file'),
-      filePath,
-      ...(common.force ? { refreshIfNeeded: true } : {}),
-    },
-  };
 }
 
 function parseCommonArgs(

@@ -408,7 +408,7 @@ describe('SnapshotHostRuntime', () => {
     )).toBe(true);
   });
 
-  it('resolves package, type, export, symbol, and file through direct primitive host commands', () => {
+  it('resolves package, type, export, symbol, file, package-surface, reachability, and export-trace through direct primitive host commands', () => {
     const repoPath = createAuditFixtureRepo();
     const runtime = createSnapshotHostRuntime();
 
@@ -463,6 +463,46 @@ describe('SnapshotHostRuntime', () => {
       throw new Error('Expected export resolution to produce a claim.');
     }
     expect(exported.result.outcome.value?.exported_name).toBe('auditReady');
+
+    const packageSurface = runtime.execute<'query.package.surface'>({
+      command: 'query.package.surface',
+      args: {
+        sessionId,
+        locator: '@fixture/source-analysis-audit',
+      },
+    });
+    expect(packageSurface.status).toBe('ok');
+    expect(packageSurface.result.packageOutcome.kind).toBe('claim');
+    expect(packageSurface.result.surface?.files).toContain('src/index.ts');
+    expect(packageSurface.result.surface?.uncoveredFiles).toContain('test/index.test.ts');
+    expect(packageSurface.result.surface?.fileEntries.find((entry) => entry.filePath === 'src/live.ts')?.declarations[0]?.name).toBe('LiveShape');
+
+    const packageReachability = runtime.execute<'query.package.reachability'>({
+      command: 'query.package.reachability',
+      args: {
+        sessionId,
+        locator: '@fixture/source-analysis-audit',
+      },
+    });
+    expect(packageReachability.status).toBe('ok');
+    expect(packageReachability.result.packageOutcome.kind).toBe('claim');
+    expect(packageReachability.result.reachability?.roots.some((root) => root.kind === 'manifest-bin' && root.filePath === 'src/cli.ts')).toBe(true);
+    expect(packageReachability.result.reachability?.candidateEntryFiles).toContain('src/tool.ts');
+    expect(packageReachability.result.reachability?.files.find((file) => file.filePath === 'src/live.ts')?.routeWitnesses[0]?.rootKind).toBe('public-api');
+
+    const exportTrace = runtime.execute<'query.export.trace'>({
+      command: 'query.export.trace',
+      args: {
+        sessionId,
+        packageLocator: '@fixture/source-analysis-audit',
+        exportedName: 'auditReady',
+      },
+    });
+    expect(exportTrace.status).toBe('ok');
+    expect(exportTrace.result.packageOutcome.kind).toBe('claim');
+    expect(exportTrace.result.exportOutcome?.kind).toBe('claim');
+    expect(exportTrace.result.route?.declarationFile).toBe('src/index.ts');
+    expect(exportTrace.result.route?.declarationName).toBe('auditReady');
 
     const symbol = runtime.execute({
       command: 'query.symbol.lookup',
