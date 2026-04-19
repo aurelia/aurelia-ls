@@ -6,9 +6,12 @@ import {
   DI_INTERFACE_SCHEMA_VERSION,
 } from './di-interface-contract.js';
 import {
-  collectAureliaDiInterfaceExports,
-  type CollectAureliaDiInterfaceExportsOptions,
+  collectDiInterfaceExports,
+  type CollectDiInterfaceExportsOptions,
 } from './di-interface-discovery.js';
+import {
+  getRegistrationPrimaryExpression,
+} from './registration-shape.js';
 
 export const DI_INTERFACE_LENS_ID = 'di-interfaces' as const;
 
@@ -53,10 +56,10 @@ export interface GoldenSuite {
   readonly records: readonly GoldenRecord[];
 }
 
-export function collectAureliaDiInterfaceGoldens(
-  options: CollectAureliaDiInterfaceExportsOptions,
+export function collectDiInterfaceGoldens(
+  options: CollectDiInterfaceExportsOptions,
 ): GoldenSuite {
-  const records = collectAureliaDiInterfaceExports(options)
+  const records = collectDiInterfaceExports(options)
     .slice()
     .sort(compareRows)
     .map(normalizeRow);
@@ -122,7 +125,9 @@ function normalizeRow(
     exportAliasPath: [...row.surface.exportAliasPath],
     factoryAliasPath: [...row.surface.factoryAliasPath],
     registrationKind: row.registration?.kind ?? null,
-    registrationExpression: row.registration?.expressionText ?? null,
+    registrationExpression: row.registration == null
+      ? null
+      : getRegistrationPrimaryExpression(row.registration),
   };
 }
 

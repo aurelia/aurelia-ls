@@ -13,22 +13,31 @@ export const REGISTRATION_KINDS = [
 export type RegistrationKind =
   typeof REGISTRATION_KINDS[number];
 
+export const REGISTRATION_TARGET_MODES = [
+  'implicit-interface-self',
+  'explicit-first-arg',
+  'unknown',
+] as const;
+
+export type RegistrationTargetMode =
+  typeof REGISTRATION_TARGET_MODES[number];
+
 export interface Registration {
   readonly kind: RegistrationKind;
-  readonly expressionText: string | null;
+  readonly targetMode: RegistrationTargetMode;
+  readonly args: readonly string[];
 }
-
-export interface PackageRef {
-  readonly name: string;
-  readonly dir: string;
-  readonly analysisEntrypoint: string;
-}
-
-export interface SymbolLocation {
-  readonly name: string | null;
-  readonly file: string | null;
-  readonly line: number | null;
-}
+export type {
+  PackageRef,
+  SymbolLocation,
+} from './surface-types.js';
+import type {
+  PackageRef,
+  SymbolLocation,
+} from './surface-types.js';
+import type {
+  ApiDetection,
+} from './api-detection-contract.js';
 
 export interface InterfaceSurface {
   readonly name: string | null;
@@ -41,5 +50,6 @@ export interface InterfaceRecord {
   readonly package: PackageRef;
   readonly export: SymbolLocation;
   readonly surface: InterfaceSurface;
+  readonly api: ApiDetection;
   readonly registration: Registration | null;
 }

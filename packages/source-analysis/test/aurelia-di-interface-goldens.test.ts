@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path';
 import { describe, expect, it } from './test-harness.js';
 
 import {
-  collectAureliaDiInterfaceGoldens,
+  collectDiInterfaceGoldens,
 } from '../src/aurelia/index.js';
 import {
   resolveAureliaFrameworkRepoPath,
@@ -31,7 +31,7 @@ if (!repoPath) {
   });
 } else {
   const expectedGolden = readJson(goldenPath);
-  const actualSuite = collectAureliaDiInterfaceGoldens({ repoPath });
+  const actualSuite = collectDiInterfaceGoldens({ repoPath });
 
   describe('Aurelia DI interface goldens', () => {
     it('matches the expected golden suite', () => {

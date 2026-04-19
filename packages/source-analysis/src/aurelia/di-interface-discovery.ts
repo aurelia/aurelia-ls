@@ -1,55 +1,71 @@
-import { resolve } from 'node:path';
-
 import * as ts from 'typescript';
-
-import { createLiveQueryKernel } from '../live-query/runtime.js';
-import {
-  isAureliaFrameworkPackageName,
-} from '../aurelia-framework-goldens.js';
 import type { PackageExportsSummary } from '../exports-contract.js';
 import type {
   InterfaceRecord,
   Registration,
-  RegistrationKind,
   SymbolLocation,
 } from './di-interface-contract.js';
+import {
+  detectApiCall,
+} from './api-detection.js';
+import type {
+  ApiDetection,
+} from './api-detection-contract.js';
+import {
+  extractBuilderRegistration,
+} from './registration-shape.js';
+import {
+  createLensContext,
+  type LensContext,
+} from './lens-context.js';
+import {
+  createPackageProgram,
+  getModuleSymbol,
+  getSourceFile,
+  identifierText,
+  lineOfNode,
+  symbolForExpression,
+  toForwardSlash,
+  toRepoRelative,
+  unwrapExpression,
+} from './ts-analysis-utils.js';
 
-export interface CollectAureliaDiInterfaceExportsOptions {
+export interface CollectDiInterfaceExportsOptions {
   readonly repoPath: string;
   readonly packageNames?: readonly string[] | null;
 }
+
+type Session =
+  ReturnType<typeof createLensContext>['session'];
 
 interface InterfaceOrigin {
   readonly declaredAt: SymbolLocation | null;
   readonly name: string | null;
   readonly exportAliasPath: readonly string[];
   readonly factoryAliasPath: readonly string[];
+  readonly api: ApiDetection;
   readonly registration: Registration | null;
 }
 
 interface CreateInterfaceCallInfo {
   readonly factoryAliasPath: readonly string[];
   readonly name: string | null;
+  readonly api: ApiDetection;
   readonly registration: Registration | null;
 }
 
-export function collectAureliaDiInterfaceExports(
-  options: CollectAureliaDiInterfaceExportsOptions,
+export function collectDiInterfaceExports(
+  options: CollectDiInterfaceExportsOptions,
 ): readonly InterfaceRecord[] {
-  const repoPath = resolve(options.repoPath);
-  const kernel = createLiveQueryKernel({ repoPath });
-  const session = kernel.session;
-  const outputs = kernel.loadOutputs();
-  const explicitPackages = options.packageNames
-    ? new Set(options.packageNames)
-    : null;
+  return collectDiInterfaceExportsFromContext(
+    createLensContext(options),
+  );
+}
 
-  const selectedPackages = outputs.exports.packages
-    .filter((pkg) => explicitPackages
-      ? explicitPackages.has(pkg.package_name)
-      : isAureliaFrameworkPackageName(pkg.package_name))
-    .sort((left, right) => left.package_name.localeCompare(right.package_name));
-
+export function collectDiInterfaceExportsFromContext(
+  context: LensContext,
+): readonly InterfaceRecord[] {
+  const { repoPath, session, selectedPackages } = context;
   const records: InterfaceRecord[] = [];
   for (const pkg of selectedPackages) {
     const program = createPackageProgram(session, repoPath, pkg);
@@ -84,62 +100,8 @@ export function collectAureliaDiInterfaceExports(
   return records.sort(compareRecords);
 }
 
-function createPackageProgram(
-  session: ReturnType<typeof createLiveQueryKernel>['session'],
-  repoPath: string,
-  pkg: PackageExportsSummary,
-): ts.Program {
-  const entrypointAbs = resolve(repoPath, pkg.analysis_entrypoint);
-  const tsconfigPath = session.resolveNearestTsconfig(pkg.package_dir);
-  if (!tsconfigPath) {
-    return createFallbackProgram(entrypointAbs);
-  }
-
-  const loaded = session.tryLoadTsconfig(tsconfigPath);
-  if (!loaded.snapshot) {
-    return createFallbackProgram(entrypointAbs);
-  }
-
-  return session.getProgram(loaded.snapshot.absPath, 'analysis', {
-    cache: true,
-  }) ?? createFallbackProgram(entrypointAbs);
-}
-
-function createFallbackProgram(
-  entrypointAbs: string,
-): ts.Program {
-  return ts.createProgram(
-    [entrypointAbs],
-    {
-      allowJs: false,
-      checkJs: false,
-      module: ts.ModuleKind.NodeNext,
-      moduleResolution: ts.ModuleResolutionKind.NodeNext,
-      noEmit: true,
-      skipLibCheck: true,
-      target: ts.ScriptTarget.ES2022,
-    },
-  );
-}
-
-function getSourceFile(
-  program: ts.Program,
-  repoPath: string,
-  relPath: string,
-): ts.SourceFile | null {
-  return program.getSourceFile(resolve(repoPath, relPath)) ?? null;
-}
-
-function getModuleSymbol(
-  checker: ts.TypeChecker,
-  sourceFile: ts.SourceFile,
-): ts.Symbol | null {
-  const direct = (sourceFile as ts.SourceFile & { symbol?: ts.Symbol }).symbol;
-  return direct ?? checker.getSymbolAtLocation(sourceFile) ?? null;
-}
-
 function classifyInterfaceExport(
-  session: ReturnType<typeof createLiveQueryKernel>['session'],
+  session: Session,
   checker: ts.TypeChecker,
   pkg: PackageExportsSummary,
   exportSymbol: ts.Symbol,
@@ -190,6 +152,7 @@ function classifyInterfaceExport(
       exportAliasPath: origin.exportAliasPath,
       factoryAliasPath: origin.factoryAliasPath,
     },
+    api: normalizeApiDetection(session, origin.api),
     registration: origin.registration,
   };
 }
@@ -220,7 +183,6 @@ function resolveInterfaceOrigin(
     const callInfo = resolveCreateInterfaceCallInfo(
       checker,
       unwrapped,
-      visitedSymbols,
     );
     if (callInfo) {
       return {
@@ -228,6 +190,7 @@ function resolveInterfaceOrigin(
         name: callInfo.name,
         exportAliasPath: [],
         factoryAliasPath: callInfo.factoryAliasPath,
+        api: callInfo.api,
         registration: callInfo.registration,
       };
     }
@@ -286,6 +249,7 @@ function resolveInterfaceSymbolOrigin(
         ...directOrigin.exportAliasPath,
       ],
       factoryAliasPath: directOrigin.factoryAliasPath,
+      api: directOrigin.api,
       registration: directOrigin.registration,
     };
   }
@@ -296,14 +260,9 @@ function resolveInterfaceSymbolOrigin(
 function resolveCreateInterfaceCallInfo(
   checker: ts.TypeChecker,
   callExpression: ts.CallExpression,
-  visitedSymbols: Set<ts.Symbol>,
 ): CreateInterfaceCallInfo | null {
-  const aliasPath = resolveCreateInterfaceFactoryAliasPath(
-    checker,
-    callExpression.expression,
-    visitedSymbols,
-  );
-  if (!aliasPath) {
+  const api = detectApiCall(checker, callExpression);
+  if (!api || api.apiId !== 'di.createInterface') {
     return null;
   }
 
@@ -313,264 +272,11 @@ function resolveCreateInterfaceCallInfo(
     : '(anonymous)';
 
   return {
-    factoryAliasPath: aliasPath,
+    factoryAliasPath: api.aliasPath,
     name,
-    registration: extractRegistration(callExpression),
+    api,
+    registration: extractBuilderRegistration(callExpression),
   };
-}
-
-function resolveCreateInterfaceFactoryAliasPath(
-  checker: ts.TypeChecker,
-  expression: ts.Expression,
-  visitedSymbols: Set<ts.Symbol>,
-): readonly string[] | null {
-  const unwrapped = unwrapExpression(expression);
-  if (isDirectDiCreateInterfaceAccess(checker, unwrapped)) {
-    return [];
-  }
-
-  if (!ts.isIdentifier(unwrapped)) {
-    return null;
-  }
-
-  const symbol = checker.getSymbolAtLocation(unwrapped);
-  if (!symbol) {
-    return null;
-  }
-
-  const target = (symbol.flags & ts.SymbolFlags.Alias) !== 0
-    ? checker.getAliasedSymbol(symbol)
-    : symbol;
-  if (isKernelCreateInterfaceSymbol(target)) {
-    return [];
-  }
-
-  const aliasPath = resolveCreateInterfaceFactorySymbolAliasPath(
-    checker,
-    symbol,
-    visitedSymbols,
-  );
-  if (!aliasPath) {
-    return null;
-  }
-
-  return [unwrapped.text, ...aliasPath];
-}
-
-function resolveCreateInterfaceFactorySymbolAliasPath(
-  checker: ts.TypeChecker,
-  symbol: ts.Symbol,
-  visitedSymbols: Set<ts.Symbol>,
-): readonly string[] | null {
-  const target = (symbol.flags & ts.SymbolFlags.Alias) !== 0
-    ? checker.getAliasedSymbol(symbol)
-    : symbol;
-  if (isKernelCreateInterfaceSymbol(target)) {
-    return [];
-  }
-  if (visitedSymbols.has(target)) {
-    return null;
-  }
-  visitedSymbols.add(target);
-
-  for (const declaration of target.declarations ?? []) {
-    if (!ts.isVariableDeclaration(declaration) || !declaration.initializer) {
-      continue;
-    }
-
-    const nestedAliasPath = resolveCreateInterfaceFactoryAliasPath(
-      checker,
-      declaration.initializer,
-      visitedSymbols,
-    );
-    if (nestedAliasPath) {
-      return nestedAliasPath;
-    }
-  }
-
-  return null;
-}
-
-function isKernelCreateInterfaceSymbol(
-  symbol: ts.Symbol,
-): boolean {
-  if (symbol.getName() !== 'createInterface') {
-    return false;
-  }
-
-  return (symbol.declarations ?? []).some((declaration) =>
-    ts.isVariableDeclaration(declaration)
-    && toForwardSlash(declaration.getSourceFile().fileName).endsWith('/packages/kernel/src/di.ts'));
-}
-
-function isDirectDiCreateInterfaceAccess(
-  checker: ts.TypeChecker,
-  expression: ts.Expression,
-): boolean {
-  const unwrapped = unwrapExpression(expression);
-  if (!ts.isPropertyAccessExpression(unwrapped)) {
-    return false;
-  }
-
-  if (unwrapped.name.text !== 'createInterface') {
-    return false;
-  }
-
-  const owner = unwrapExpression(unwrapped.expression);
-  if (!ts.isIdentifier(owner) || owner.text !== 'DI') {
-    return false;
-  }
-
-  const ownerSymbol = checker.getSymbolAtLocation(owner);
-  if (!ownerSymbol) {
-    return false;
-  }
-
-  return (ownerSymbol.flags & ts.SymbolFlags.Alias) === 0
-    ? ownerSymbol.getName() === 'DI'
-    : checker.getAliasedSymbol(ownerSymbol).getName() === 'DI';
-}
-
-function extractRegistration(
-  callExpression: ts.CallExpression,
-): Registration | null {
-  const builderExpression = findBuilderExpression(callExpression);
-  if (!builderExpression) {
-    return null;
-  }
-
-  const returned = unwrapExpression(builderExpression);
-  if (!ts.isCallExpression(returned)) {
-    return {
-      kind: 'unknown',
-      expressionText: returned.getText(returned.getSourceFile()),
-    };
-  }
-
-  const callee = unwrapExpression(returned.expression);
-  if (!ts.isPropertyAccessExpression(callee)) {
-    return {
-      kind: 'unknown',
-      expressionText: returned.getText(returned.getSourceFile()),
-    };
-  }
-
-  return {
-    kind: toRegistrationKind(callee.name.text),
-    expressionText: returned.arguments[0]
-      ? returned.arguments[0].getText(returned.getSourceFile())
-      : null,
-  };
-}
-
-function findBuilderExpression(
-  callExpression: ts.CallExpression,
-): ts.Expression | null {
-  const builderArgument = callExpression.arguments.find((arg) =>
-    ts.isArrowFunction(arg) || ts.isFunctionExpression(arg));
-  if (!builderArgument) {
-    return null;
-  }
-
-  if (ts.isArrowFunction(builderArgument)) {
-    if (ts.isBlock(builderArgument.body)) {
-      return firstReturnedExpression(builderArgument.body);
-    }
-    return builderArgument.body;
-  }
-
-  return firstReturnedExpression(builderArgument.body);
-}
-
-function firstReturnedExpression(
-  block: ts.Block,
-): ts.Expression | null {
-  for (const statement of block.statements) {
-    if (ts.isReturnStatement(statement) && statement.expression) {
-      return statement.expression;
-    }
-  }
-  return null;
-}
-
-function toRegistrationKind(
-  value: string,
-): RegistrationKind {
-  switch (value) {
-    case 'instance':
-    case 'singleton':
-    case 'transient':
-    case 'callback':
-    case 'cachedCallback':
-    case 'aliasTo':
-      return value;
-    default:
-      return 'unknown';
-  }
-}
-
-function symbolForExpression(
-  checker: ts.TypeChecker,
-  expression: ts.Expression,
-): ts.Symbol | null {
-  if (ts.isIdentifier(expression)) {
-    return checker.getSymbolAtLocation(expression) ?? null;
-  }
-  if (ts.isPropertyAccessExpression(expression)) {
-    return checker.getSymbolAtLocation(expression.name)
-      ?? checker.getSymbolAtLocation(expression)
-      ?? null;
-  }
-  return null;
-}
-
-function unwrapExpression(
-  expression: ts.Expression,
-): ts.Expression {
-  let current = expression;
-  while (true) {
-    if (ts.isParenthesizedExpression(current)) {
-      current = current.expression;
-      continue;
-    }
-    if (ts.isAsExpression(current) || ts.isTypeAssertionExpression(current)) {
-      current = current.expression;
-      continue;
-    }
-    if (ts.isNonNullExpression(current)) {
-      current = current.expression;
-      continue;
-    }
-    return current;
-  }
-}
-
-function identifierText(
-  name: ts.BindingName,
-): string | null {
-  return ts.isIdentifier(name) ? name.text : null;
-}
-
-function lineOfNode(
-  sourceFile: ts.SourceFile,
-  node: ts.Node,
-): number {
-  return sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line + 1;
-}
-
-function toRepoRelative(
-  session: ReturnType<typeof createLiveQueryKernel>['session'],
-  absPath: string,
-): string {
-  const normalizedAbsPath = resolve(absPath.replace(/\//g, '\\'));
-  const relPath = session.toRepoRelative(normalizedAbsPath);
-  return relPath.startsWith('..') ? toForwardSlash(normalizedAbsPath) : relPath;
-}
-
-function toForwardSlash(
-  value: string,
-): string {
-  return value.replace(/\\/g, '/');
 }
 
 function compareRecords(
@@ -581,4 +287,19 @@ function compareRecords(
     || (left.export.name ?? '').localeCompare(right.export.name ?? '')
     || (left.export.file ?? '').localeCompare(right.export.file ?? '')
     || (left.surface.declaredAt?.file ?? '').localeCompare(right.surface.declaredAt?.file ?? '');
+}
+
+function normalizeApiDetection(
+  session: Session,
+  api: ApiDetection,
+): ApiDetection {
+  return {
+    ...api,
+    resolvedAt: api.resolvedAt == null || api.resolvedAt.file == null
+      ? api.resolvedAt
+      : {
+        ...api.resolvedAt,
+        file: toRepoRelative(session, api.resolvedAt.file),
+      },
+  };
 }

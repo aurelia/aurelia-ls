@@ -1,7 +1,8 @@
 import { describe, expect, it } from './test-harness.js';
 
 import {
-  collectAureliaDiInterfaceExports,
+  collectDiInterfaceExports,
+  getRegistrationPrimaryExpression,
 } from '../src/aurelia/index.js';
 import {
   resolveAureliaFrameworkRepoPath,
@@ -14,7 +15,7 @@ if (!repoPath) {
     it('skips when the Aurelia framework repo is unavailable', { skip: true }, () => {});
   });
 } else {
-  const records = collectAureliaDiInterfaceExports({ repoPath });
+  const records = collectDiInterfaceExports({ repoPath });
   const findRecord = (
     packageName: string,
     exportedName: string,
@@ -49,7 +50,7 @@ if (!repoPath) {
       const windowRecord = findRecord('@aurelia/runtime-html', 'IWindow');
 
       expect(logger?.registration?.kind).toBe('singleton');
-      expect(logger?.registration?.expressionText).toBe('DefaultLogger');
+      expect(logger?.registration && getRegistrationPrimaryExpression(logger.registration)).toBe('DefaultLogger');
       expect(windowRecord?.registration?.kind).toBe('callback');
     });
 

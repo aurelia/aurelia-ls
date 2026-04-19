@@ -42,7 +42,10 @@ question routing, family ranking, or conversational ingress.
 11. Keep useful command intent, but keep shrinking the giant query-local
    indexes/renderers into thin adapters over shared live runtime/evaluator
    surfaces.
-12. Only after the legacy triple no longer dominates current-query work should
+12. When adding new focused lenses, keep canonical records plain, keep
+    derivation explicit, and use repo-owned lens charters before widening the
+    evaluator ceiling or projection shape.
+13. Only after the legacy triple no longer dominates current-query work should
    framework-world and registration evidence become the next major primitive
    family.
 
@@ -174,6 +177,11 @@ question routing, family ranking, or conversational ingress.
   plus a generator script and focused Node test so the package can now
   normalize and deep-compare the full export surface of the in-repo `aurelia`
   submodule package-by-package.
+- Added repo-owned modeling laws in
+  [modeling-laws.md](./modeling-laws.md) and an Aurelia lens charter in
+  [aurelia/di-and-registration-lens-charter.md](./aurelia/di-and-registration-lens-charter.md)
+  so current and future Aurelia lenses have an explicit rule set for canonical
+  records, evaluators, projections, cost ceilings, and focused golden layout.
 - Added a repo-owned protocol derivation packet set under
   [../fixtures/protocol-derivation/README.md](../fixtures/protocol-derivation/README.md)
   with concrete export-lens fixtures, scenario packets, and mutation-backed

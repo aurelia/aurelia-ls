@@ -382,3 +382,20 @@ decision trail in order.
   and `src/typerefs/query.ts` still need the same migration, and the giant
   query-local evaluators/renderers remain active debt even after the loader
   path moves.
+
+## 2026-04-19 - Modeling laws and Aurelia lens charters now govern focused semantic slices
+
+- Canonical records should stay plain data; derived facts should live in
+  explicit evaluators or projections instead of hidden getters or constructor
+  work.
+- No canonical field should survive if it is mechanically derivable from other
+  canonical fields in the same record without answering a distinct semantic
+  burden.
+- Focused lenses should now be chartered explicitly before they widen scope:
+  subject, burden, canonical carrier, evaluator ceiling, load-bearing coverage,
+  cost rules, and golden layout should be written down first.
+- The first concrete operationalization of that rule is the Aurelia
+  DI-interface and registration-effect charter under
+  [docs/aurelia/di-and-registration-lens-charter.md](./aurelia/di-and-registration-lens-charter.md).
+- Shared Aurelia lenses should reuse one live analysis context when possible
+  instead of reopening the same repo/session/outputs in parallel.
