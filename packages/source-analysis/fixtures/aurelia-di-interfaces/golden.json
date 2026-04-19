@@ -1,0 +1,1547 @@
+{
+  "schemaVersion": "v0alpha2",
+  "lensId": "di-interfaces",
+  "summary": {
+    "packageCount": 16,
+    "interfaceCount": 93,
+    "aliasedCount": 2,
+    "factoryAliasCount": 53,
+    "registrationCount": 40
+  },
+  "packages": [
+    {
+      "packageName": "@aurelia/compat-v1",
+      "interfaceCount": 1,
+      "aliasedCount": 0,
+      "factoryAliasCount": 0,
+      "registrationCount": 1
+    },
+    {
+      "packageName": "@aurelia/dialog",
+      "interfaceCount": 4,
+      "aliasedCount": 0,
+      "factoryAliasCount": 4,
+      "registrationCount": 0
+    },
+    {
+      "packageName": "@aurelia/expression-parser",
+      "interfaceCount": 1,
+      "aliasedCount": 0,
+      "factoryAliasCount": 0,
+      "registrationCount": 0
+    },
+    {
+      "packageName": "@aurelia/fetch-client",
+      "interfaceCount": 4,
+      "aliasedCount": 0,
+      "factoryAliasCount": 0,
+      "registrationCount": 4
+    },
+    {
+      "packageName": "@aurelia/i18n",
+      "interfaceCount": 3,
+      "aliasedCount": 0,
+      "factoryAliasCount": 0,
+      "registrationCount": 0
+    },
+    {
+      "packageName": "@aurelia/kernel",
+      "interfaceCount": 9,
+      "aliasedCount": 1,
+      "factoryAliasCount": 0,
+      "registrationCount": 5
+    },
+    {
+      "packageName": "@aurelia/router",
+      "interfaceCount": 9,
+      "aliasedCount": 1,
+      "factoryAliasCount": 0,
+      "registrationCount": 6
+    },
+    {
+      "packageName": "@aurelia/runtime",
+      "interfaceCount": 5,
+      "aliasedCount": 0,
+      "factoryAliasCount": 4,
+      "registrationCount": 3
+    },
+    {
+      "packageName": "@aurelia/runtime-html",
+      "interfaceCount": 31,
+      "aliasedCount": 0,
+      "factoryAliasCount": 31,
+      "registrationCount": 15
+    },
+    {
+      "packageName": "@aurelia/state",
+      "interfaceCount": 4,
+      "aliasedCount": 0,
+      "factoryAliasCount": 4,
+      "registrationCount": 0
+    },
+    {
+      "packageName": "@aurelia/template-compiler",
+      "interfaceCount": 10,
+      "aliasedCount": 0,
+      "factoryAliasCount": 10,
+      "registrationCount": 4
+    },
+    {
+      "packageName": "@aurelia/ui-virtualization",
+      "interfaceCount": 2,
+      "aliasedCount": 0,
+      "factoryAliasCount": 0,
+      "registrationCount": 0
+    },
+    {
+      "packageName": "@aurelia/validation",
+      "interfaceCount": 5,
+      "aliasedCount": 0,
+      "factoryAliasCount": 0,
+      "registrationCount": 0
+    },
+    {
+      "packageName": "@aurelia/validation-html",
+      "interfaceCount": 3,
+      "aliasedCount": 0,
+      "factoryAliasCount": 0,
+      "registrationCount": 1
+    },
+    {
+      "packageName": "@aurelia/validation-i18n",
+      "interfaceCount": 1,
+      "aliasedCount": 0,
+      "factoryAliasCount": 0,
+      "registrationCount": 0
+    },
+    {
+      "packageName": "@aurelia/web-components",
+      "interfaceCount": 1,
+      "aliasedCount": 0,
+      "factoryAliasCount": 0,
+      "registrationCount": 1
+    }
+  ],
+  "records": [
+    {
+      "packageName": "@aurelia/compat-v1",
+      "exportedName": "IEventDelegator",
+      "exportedAt": {
+        "file": "packages/compat-v1/src/compat-event.ts",
+        "line": 325
+      },
+      "interfaceName": "IEventDelegator",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": "cachedCallback",
+      "registrationExpression": "(handler) => {\n  const instance = handler.invoke(EventDelegator);\n  handler.register(AppTask.deactivating(() => instance.dispose()));\n  return instance;\n}"
+    },
+    {
+      "packageName": "@aurelia/dialog",
+      "exportedName": "IDialogController",
+      "exportedAt": {
+        "file": "packages/dialog/src/dialog-interfaces.ts",
+        "line": 74
+      },
+      "interfaceName": "IDialogController",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/dialog",
+      "exportedName": "IDialogDom",
+      "exportedAt": {
+        "file": "packages/dialog/src/dialog-interfaces.ts",
+        "line": 98
+      },
+      "interfaceName": "IDialogDom",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/dialog",
+      "exportedName": "IDialogDomRenderer",
+      "exportedAt": {
+        "file": "packages/dialog/src/dialog-interfaces.ts",
+        "line": 90
+      },
+      "interfaceName": "IDialogDomRenderer",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/dialog",
+      "exportedName": "IDialogGlobalSettings",
+      "exportedAt": {
+        "file": "packages/dialog/src/dialog-interfaces.ts",
+        "line": 186
+      },
+      "interfaceName": "IDialogGlobalSettings",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/expression-parser",
+      "exportedName": "IExpressionParser",
+      "exportedAt": {
+        "file": "packages/expression-parser/src/expression-parser.ts",
+        "line": 79
+      },
+      "interfaceName": "IExpressionParser",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/fetch-client",
+      "exportedName": "ICacheService",
+      "exportedAt": {
+        "file": "packages/fetch-client/src/interceptors/cache-interceptor/cach-service.ts",
+        "line": 13
+      },
+      "interfaceName": "(anonymous)",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": "singleton",
+      "registrationExpression": "CacheService"
+    },
+    {
+      "packageName": "@aurelia/fetch-client",
+      "exportedName": "ICacheStorage",
+      "exportedAt": {
+        "file": "packages/fetch-client/src/interceptors/cache-interceptor/storage.ts",
+        "line": 14
+      },
+      "interfaceName": "(anonymous)",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": "singleton",
+      "registrationExpression": "MemoryStorage"
+    },
+    {
+      "packageName": "@aurelia/fetch-client",
+      "exportedName": "IFetchFn",
+      "exportedAt": {
+        "file": "packages/fetch-client/src/http-client.ts",
+        "line": 13
+      },
+      "interfaceName": "fetch",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": "instance",
+      "registrationExpression": "fetch"
+    },
+    {
+      "packageName": "@aurelia/fetch-client",
+      "exportedName": "IHttpClient",
+      "exportedAt": {
+        "file": "packages/fetch-client/src/http-client.ts",
+        "line": 20
+      },
+      "interfaceName": "IHttpClient",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": "aliasTo",
+      "registrationExpression": "HttpClient"
+    },
+    {
+      "packageName": "@aurelia/i18n",
+      "exportedName": "I18N",
+      "exportedAt": {
+        "file": "packages/i18n/src/i18n.ts",
+        "line": 105
+      },
+      "interfaceName": "I18N",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/i18n",
+      "exportedName": "I18nInitOptions",
+      "exportedAt": {
+        "file": "packages/i18n/src/i18n-configuration-options.ts",
+        "line": 7
+      },
+      "interfaceName": "I18nInitOptions",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/i18n",
+      "exportedName": "II18nextWrapper",
+      "exportedAt": {
+        "file": "packages/i18n/src/i18next-wrapper.ts",
+        "line": 5
+      },
+      "interfaceName": "II18nextWrapper",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/kernel",
+      "exportedName": "IContainer",
+      "exportedAt": {
+        "file": "packages/kernel/src/di.ts",
+        "line": 441
+      },
+      "interfaceName": "IContainer",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/kernel",
+      "exportedName": "IEventAggregator",
+      "exportedAt": {
+        "file": "packages/kernel/src/eventaggregator.ts",
+        "line": 22
+      },
+      "interfaceName": "IEventAggregator",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": "singleton",
+      "registrationExpression": "EventAggregator"
+    },
+    {
+      "packageName": "@aurelia/kernel",
+      "exportedName": "ILogConfig",
+      "exportedAt": {
+        "file": "packages/kernel/src/logger.ts",
+        "line": 166
+      },
+      "interfaceName": "ILogConfig",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": "instance",
+      "registrationExpression": "new LogConfig('no-colors', warn)"
+    },
+    {
+      "packageName": "@aurelia/kernel",
+      "exportedName": "ILogEventFactory",
+      "exportedAt": {
+        "file": "packages/kernel/src/logger.ts",
+        "line": 168
+      },
+      "interfaceName": "ILogEventFactory",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": "singleton",
+      "registrationExpression": "DefaultLogEventFactory"
+    },
+    {
+      "packageName": "@aurelia/kernel",
+      "exportedName": "ILogger",
+      "exportedAt": {
+        "file": "packages/kernel/src/logger.ts",
+        "line": 169
+      },
+      "interfaceName": "ILogger",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": "singleton",
+      "registrationExpression": "DefaultLogger"
+    },
+    {
+      "packageName": "@aurelia/kernel",
+      "exportedName": "IModuleLoader",
+      "exportedAt": {
+        "file": "packages/kernel/src/module-loader.ts",
+        "line": 16
+      },
+      "interfaceName": "(anonymous)",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": "singleton",
+      "registrationExpression": "ModuleLoader"
+    },
+    {
+      "packageName": "@aurelia/kernel",
+      "exportedName": "IPlatform",
+      "exportedAt": {
+        "file": "packages/kernel/src/platform.ts",
+        "line": 13
+      },
+      "interfaceName": "IPlatform",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/kernel",
+      "exportedName": "IServiceLocator",
+      "exportedAt": {
+        "file": "packages/kernel/src/di.ts",
+        "line": 442
+      },
+      "interfaceName": "IContainer",
+      "interfaceDeclaredAt": {
+        "name": "IContainer",
+        "file": "packages/kernel/src/di.ts",
+        "line": 441
+      },
+      "exportAliasPath": [
+        "IContainer"
+      ],
+      "factoryAliasPath": [],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/kernel",
+      "exportedName": "ISink",
+      "exportedAt": {
+        "file": "packages/kernel/src/logger.ts",
+        "line": 167
+      },
+      "interfaceName": "ISink",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/router",
+      "exportedName": "IContextRouter",
+      "exportedAt": {
+        "file": "packages/router/src/context-router.ts",
+        "line": 9
+      },
+      "interfaceName": "IContextRouter",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/router",
+      "exportedName": "ICurrentRoute",
+      "exportedAt": {
+        "file": "packages/router/src/current-route.ts",
+        "line": 10
+      },
+      "interfaceName": "ICurrentRoute",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": "singleton",
+      "registrationExpression": "CurrentRoute"
+    },
+    {
+      "packageName": "@aurelia/router",
+      "exportedName": "ILocationManager",
+      "exportedAt": {
+        "file": "packages/router/src/location-manager.ts",
+        "line": 12
+      },
+      "interfaceName": "ILocationManager",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": "singleton",
+      "registrationExpression": "BrowserLocationManager"
+    },
+    {
+      "packageName": "@aurelia/router",
+      "exportedName": "IRouteContext",
+      "exportedAt": {
+        "file": "packages/router/src/route-context.ts",
+        "line": 71
+      },
+      "interfaceName": "IRouteContext",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/router",
+      "exportedName": "IRouter",
+      "exportedAt": {
+        "file": "packages/router/src/router.ts",
+        "line": 109
+      },
+      "interfaceName": "IRouter",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": "singleton",
+      "registrationExpression": "Router"
+    },
+    {
+      "packageName": "@aurelia/router",
+      "exportedName": "IRouterEvents",
+      "exportedAt": {
+        "file": "packages/router/src/router-events.ts",
+        "line": 40
+      },
+      "interfaceName": "IRouterEvents",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": "singleton",
+      "registrationExpression": "RouterEvents"
+    },
+    {
+      "packageName": "@aurelia/router",
+      "exportedName": "IRouterOptions",
+      "exportedAt": {
+        "file": "packages/router/src/options.ts",
+        "line": 17
+      },
+      "interfaceName": "RouterOptions",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/router",
+      "exportedName": "IStateManager",
+      "exportedAt": {
+        "file": "packages/router/src/state-manager.ts",
+        "line": 56
+      },
+      "interfaceName": "IStateManager",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": "singleton",
+      "registrationExpression": "ScrollStateManager"
+    },
+    {
+      "packageName": "@aurelia/router",
+      "exportedName": "RouterRegistration",
+      "exportedAt": {
+        "file": "packages/router/src/configuration.ts",
+        "line": 13
+      },
+      "interfaceName": "IRouter",
+      "interfaceDeclaredAt": {
+        "name": "IRouter",
+        "file": "packages/router/src/router.ts",
+        "line": 109
+      },
+      "exportAliasPath": [
+        "IRouter"
+      ],
+      "factoryAliasPath": [],
+      "registrationKind": "singleton",
+      "registrationExpression": "Router"
+    },
+    {
+      "packageName": "@aurelia/runtime",
+      "exportedName": "ICoercionConfiguration",
+      "exportedAt": {
+        "file": "packages/runtime/src/interfaces.ts",
+        "line": 6
+      },
+      "interfaceName": "ICoercionConfiguration",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/runtime",
+      "exportedName": "IDirtyChecker",
+      "exportedAt": {
+        "file": "packages/runtime/src/dirty-checker.ts",
+        "line": 11
+      },
+      "interfaceName": "IDirtyChecker",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "rtCreateInterface"
+      ],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/runtime",
+      "exportedName": "INodeObserverLocator",
+      "exportedAt": {
+        "file": "packages/runtime/src/observer-locator.ts",
+        "line": 42
+      },
+      "interfaceName": "INodeObserverLocator",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "rtCreateInterface"
+      ],
+      "registrationKind": "cachedCallback",
+      "registrationExpression": "handler => {\n  if (__DEV__) {\n    handler.getAll(ILogger).forEach(logger => {\n      logger.error('Using default INodeObserverLocator implementation. Will not be able to observe nodes (HTML etc...).');\n    });\n  }\n  return new DefaultNodeObserverLocator();\n}"
+    },
+    {
+      "packageName": "@aurelia/runtime",
+      "exportedName": "IObservation",
+      "exportedAt": {
+        "file": "packages/runtime/src/observation.ts",
+        "line": 38
+      },
+      "interfaceName": "IObservation",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "rtCreateInterface"
+      ],
+      "registrationKind": "singleton",
+      "registrationExpression": "Observation"
+    },
+    {
+      "packageName": "@aurelia/runtime",
+      "exportedName": "IObserverLocator",
+      "exportedAt": {
+        "file": "packages/runtime/src/observer-locator.ts",
+        "line": 35
+      },
+      "interfaceName": "IObserverLocator",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "rtCreateInterface"
+      ],
+      "registrationKind": "singleton",
+      "registrationExpression": "ObserverLocator"
+    },
+    {
+      "packageName": "@aurelia/runtime-html",
+      "exportedName": "IAppRoot",
+      "exportedAt": {
+        "file": "packages/runtime-html/src/app-root.ts",
+        "line": 66
+      },
+      "interfaceName": "IAppRoot",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/runtime-html",
+      "exportedName": "IAppTask",
+      "exportedAt": {
+        "file": "packages/runtime-html/src/app-task.ts",
+        "line": 14
+      },
+      "interfaceName": "IAppTask",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/runtime-html",
+      "exportedName": "IAurelia",
+      "exportedAt": {
+        "file": "packages/runtime-html/src/aurelia.ts",
+        "line": 15
+      },
+      "interfaceName": "IAurelia",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/runtime-html",
+      "exportedName": "IAuSlotsInfo",
+      "exportedAt": {
+        "file": "packages/runtime-html/src/templating/controller.projection.ts",
+        "line": 39
+      },
+      "interfaceName": "IAuSlotsInfo",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/runtime-html",
+      "exportedName": "IAuSlotWatcher",
+      "exportedAt": {
+        "file": "packages/runtime-html/src/templating/controller.projection.ts",
+        "line": 73
+      },
+      "interfaceName": "IAuSlotWatcher",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/runtime-html",
+      "exportedName": "IController",
+      "exportedAt": {
+        "file": "packages/runtime-html/src/templating/controller.ts",
+        "line": 1850
+      },
+      "interfaceName": "IController",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/runtime-html",
+      "exportedName": "IEventModifier",
+      "exportedAt": {
+        "file": "packages/runtime-html/src/binding/listener-binding.ts",
+        "line": 305
+      },
+      "interfaceName": "IEventModifierHandler",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": "instance",
+      "registrationExpression": "{\n  getHandler: () => {\n    if (__DEV__) {\n      // eslint-disable-next-line no-console\n      console.warn('No event modifier handler registered');\n    }\n    /* istanbul ignore next */\n    return null;\n  }\n}"
+    },
+    {
+      "packageName": "@aurelia/runtime-html",
+      "exportedName": "IEventTarget",
+      "exportedAt": {
+        "file": "packages/runtime-html/src/dom.ts",
+        "line": 10
+      },
+      "interfaceName": "IEventTarget",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": "cachedCallback",
+      "registrationExpression": "handler => {\n  if (handler.has(IAppRoot, true)) {\n    return handler.get(IAppRoot).host;\n  }\n  return handler.get(IPlatform).document;\n}"
+    },
+    {
+      "packageName": "@aurelia/runtime-html",
+      "exportedName": "IFlushQueue",
+      "exportedAt": {
+        "file": "packages/runtime-html/src/binding/binding-utils.ts",
+        "line": 226
+      },
+      "interfaceName": "IFlushQueue",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": "singleton",
+      "registrationExpression": "FlushQueue"
+    },
+    {
+      "packageName": "@aurelia/runtime-html",
+      "exportedName": "IHistory",
+      "exportedAt": {
+        "file": "packages/runtime-html/src/dom.ts",
+        "line": 701
+      },
+      "interfaceName": "IHistory",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": "callback",
+      "registrationExpression": "handler => handler.get(IWindow).history"
+    },
+    {
+      "packageName": "@aurelia/runtime-html",
+      "exportedName": "IHydrationContext",
+      "exportedAt": {
+        "file": "packages/runtime-html/src/templating/controller.ts",
+        "line": 1852
+      },
+      "interfaceName": "IHydrationContext",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/runtime-html",
+      "exportedName": "IKeyMapping",
+      "exportedAt": {
+        "file": "packages/runtime-html/src/binding/listener-binding.ts",
+        "line": 150
+      },
+      "interfaceName": "IKeyMapping",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": "instance",
+      "registrationExpression": "{\n  meta: objectFreeze(['ctrl', 'alt', 'shift', 'meta']) as string[],\n  keys: {\n    escape: 'Escape',\n    enter: 'Enter',\n    space: 'Space',\n    tab: 'tab',\n    // by default, maps the key a-z and A-Z to their respective keycodes\n    ...Array.from({ length: 25 }).reduce((acc: Record<string, string>, _, idx) => {\n      // map keycode of upper case character from A-Z\n      let char = String.fromCharCode(idx + 65);\n      acc[idx + 65] = char;\n\n      // map keycode and character code of lower case character from a-z\n      char = String.fromCharCode(idx + 97);\n      acc[idx + 97] = acc[char] = char;\n      return acc;\n    }, {})\n  },\n}"
+    },
+    {
+      "packageName": "@aurelia/runtime-html",
+      "exportedName": "ILifecycleHooks",
+      "exportedAt": {
+        "file": "packages/runtime-html/src/templating/lifecycle-hooks.ts",
+        "line": 12
+      },
+      "interfaceName": "ILifecycleHooks",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/runtime-html",
+      "exportedName": "IListenerBindingOptions",
+      "exportedAt": {
+        "file": "packages/runtime-html/src/renderer.ts",
+        "line": 606
+      },
+      "interfaceName": "IListenerBindingOptions",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": "singleton",
+      "registrationExpression": "class {\n  /** @internal */\n  private readonly p = resolve(IPlatform);\n  public prevent = false;\n\n  public onError = (event: Event, error: unknown) => {\n    const errorEvent = new this.p.CustomEvent('au-event-error', { cancelable: true, detail: { event, error } });\n    this.p.window.dispatchEvent(errorEvent);\n    if (errorEvent.defaultPrevented) {\n      return;\n    }\n    throw error;\n  };\n}"
+    },
+    {
+      "packageName": "@aurelia/runtime-html",
+      "exportedName": "ILocation",
+      "exportedAt": {
+        "file": "packages/runtime-html/src/dom.ts",
+        "line": 698
+      },
+      "interfaceName": "ILocation",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": "callback",
+      "registrationExpression": "handler => handler.get(IWindow).location"
+    },
+    {
+      "packageName": "@aurelia/runtime-html",
+      "exportedName": "IModifiedEventHandlerCreator",
+      "exportedAt": {
+        "file": "packages/runtime-html/src/binding/listener-binding.ts",
+        "line": 144
+      },
+      "interfaceName": "IEventModifier",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/runtime-html",
+      "exportedName": "INode",
+      "exportedAt": {
+        "file": "packages/runtime-html/src/dom.node.ts",
+        "line": 53
+      },
+      "interfaceName": "INode",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/runtime-html",
+      "exportedName": "IRenderer",
+      "exportedAt": {
+        "file": "packages/runtime-html/src/renderer.ts",
+        "line": 112
+      },
+      "interfaceName": "IRenderer",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/runtime-html",
+      "exportedName": "IRendering",
+      "exportedAt": {
+        "file": "packages/runtime-html/src/templating/rendering.ts",
+        "line": 18
+      },
+      "interfaceName": "IRendering",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": "singleton",
+      "registrationExpression": "Rendering"
+    },
+    {
+      "packageName": "@aurelia/runtime-html",
+      "exportedName": "IRenderLocation",
+      "exportedAt": {
+        "file": "packages/runtime-html/src/dom.ts",
+        "line": 21
+      },
+      "interfaceName": "IRenderLocation",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/runtime-html",
+      "exportedName": "IRepeatableHandler",
+      "exportedAt": {
+        "file": "packages/runtime-html/src/resources/template-controllers/repeat.ts",
+        "line": 854
+      },
+      "interfaceName": "IRepeatableHandler",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/runtime-html",
+      "exportedName": "IRepeatableHandlerResolver",
+      "exportedAt": {
+        "file": "packages/runtime-html/src/resources/template-controllers/repeat.ts",
+        "line": 785
+      },
+      "interfaceName": "IRepeatableHandlerResolver",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": "singleton",
+      "registrationExpression": "RepeatableHandlerResolver"
+    },
+    {
+      "packageName": "@aurelia/runtime-html",
+      "exportedName": "ISanitizer",
+      "exportedAt": {
+        "file": "packages/runtime-html/src/resources/value-converters/sanitize.ts",
+        "line": 15
+      },
+      "interfaceName": "ISanitizer",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": "singleton",
+      "registrationExpression": "class {\n  public sanitize(): string {\n    throw createMappedError(ErrorNames.method_not_implemented, 'sanitize');\n  }\n}"
+    },
+    {
+      "packageName": "@aurelia/runtime-html",
+      "exportedName": "IShadowDOMGlobalStyles",
+      "exportedAt": {
+        "file": "packages/runtime-html/src/templating/styles.ts",
+        "line": 145
+      },
+      "interfaceName": "IShadowDOMGlobalStyles",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": "instance",
+      "registrationExpression": "{ applyTo: noop }"
+    },
+    {
+      "packageName": "@aurelia/runtime-html",
+      "exportedName": "IShadowDOMStyleFactory",
+      "exportedAt": {
+        "file": "packages/runtime-html/src/templating/styles.ts",
+        "line": 97
+      },
+      "interfaceName": "IShadowDOMStyleFactory",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": "cachedCallback",
+      "registrationExpression": "handler => {\n  if (AdoptedStyleSheetsStyles.supported(handler.get(IPlatform))) {\n    return handler.get(AdoptedStyleSheetsStylesFactory);\n  }\n  return handler.get(StyleElementStylesFactory);\n}"
+    },
+    {
+      "packageName": "@aurelia/runtime-html",
+      "exportedName": "IShadowDOMStyles",
+      "exportedAt": {
+        "file": "packages/runtime-html/src/templating/styles.ts",
+        "line": 144
+      },
+      "interfaceName": "IShadowDOMStyles",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/runtime-html",
+      "exportedName": "ISignaler",
+      "exportedAt": {
+        "file": "packages/runtime-html/src/signaler.ts",
+        "line": 6
+      },
+      "interfaceName": "ISignaler",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": "singleton",
+      "registrationExpression": "Signaler"
+    },
+    {
+      "packageName": "@aurelia/runtime-html",
+      "exportedName": "ISSRContext",
+      "exportedAt": {
+        "file": "packages/runtime-html/src/templating/ssr.ts",
+        "line": 104
+      },
+      "interfaceName": "ISSRContext",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/runtime-html",
+      "exportedName": "ISVGAnalyzer",
+      "exportedAt": {
+        "file": "packages/runtime-html/src/observation/svg-analyzer.ts",
+        "line": 9
+      },
+      "interfaceName": "ISVGAnalyzer",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": "singleton",
+      "registrationExpression": "NoopSVGAnalyzer"
+    },
+    {
+      "packageName": "@aurelia/runtime-html",
+      "exportedName": "IViewFactory",
+      "exportedAt": {
+        "file": "packages/runtime-html/src/templating/view.ts",
+        "line": 40
+      },
+      "interfaceName": "IViewFactory",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/runtime-html",
+      "exportedName": "IWindow",
+      "exportedAt": {
+        "file": "packages/runtime-html/src/dom.ts",
+        "line": 695
+      },
+      "interfaceName": "IWindow",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": "callback",
+      "registrationExpression": "handler => handler.get(IPlatform).window"
+    },
+    {
+      "packageName": "@aurelia/state",
+      "exportedName": "IActionHandler",
+      "exportedAt": {
+        "file": "packages/state/src/interfaces.ts",
+        "line": 6
+      },
+      "interfaceName": "IActionHandler",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/state",
+      "exportedName": "IState",
+      "exportedAt": {
+        "file": "packages/state/src/interfaces.ts",
+        "line": 50
+      },
+      "interfaceName": "IState",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/state",
+      "exportedName": "IStore",
+      "exportedAt": {
+        "file": "packages/state/src/interfaces.ts",
+        "line": 18
+      },
+      "interfaceName": "IStore",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/state",
+      "exportedName": "IStoreRegistry",
+      "exportedAt": {
+        "file": "packages/state/src/interfaces.ts",
+        "line": 52
+      },
+      "interfaceName": "IStoreRegistry",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "createInterface"
+      ],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/template-compiler",
+      "exportedName": "IAttributeParser",
+      "exportedAt": {
+        "file": "packages/template-compiler/src/attribute-pattern.ts",
+        "line": 222
+      },
+      "interfaceName": "IAttributeParser",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "tcCreateInterface"
+      ],
+      "registrationKind": "singleton",
+      "registrationExpression": "AttributeParser"
+    },
+    {
+      "packageName": "@aurelia/template-compiler",
+      "exportedName": "IAttributePattern",
+      "exportedAt": {
+        "file": "packages/template-compiler/src/attribute-pattern.ts",
+        "line": 23
+      },
+      "interfaceName": "IAttributePattern",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "tcCreateInterface"
+      ],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/template-compiler",
+      "exportedName": "IAttrMapper",
+      "exportedAt": {
+        "file": "packages/template-compiler/src/attribute-mapper.ts",
+        "line": 6
+      },
+      "interfaceName": "IAttrMapper",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "tcCreateInterface"
+      ],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/template-compiler",
+      "exportedName": "IBindingCommandResolver",
+      "exportedAt": {
+        "file": "packages/template-compiler/src/template-compiler.ts",
+        "line": 1666
+      },
+      "interfaceName": "IBindingCommandResolver",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "tcCreateInterface"
+      ],
+      "registrationKind": "singleton",
+      "registrationExpression": "DefaultBindingCommandResolver"
+    },
+    {
+      "packageName": "@aurelia/template-compiler",
+      "exportedName": "IInstruction",
+      "exportedAt": {
+        "file": "packages/template-compiler/src/instructions.ts",
+        "line": 64
+      },
+      "interfaceName": "Instruction",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "tcCreateInterface"
+      ],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/template-compiler",
+      "exportedName": "IResourceResolver",
+      "exportedAt": {
+        "file": "packages/template-compiler/src/template-compiler.ts",
+        "line": 1661
+      },
+      "interfaceName": "IResourceResolver",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "tcCreateInterface"
+      ],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/template-compiler",
+      "exportedName": "ISyntaxInterpreter",
+      "exportedAt": {
+        "file": "packages/template-compiler/src/attribute-pattern.ts",
+        "line": 171
+      },
+      "interfaceName": "ISyntaxInterpreter",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "tcCreateInterface"
+      ],
+      "registrationKind": "singleton",
+      "registrationExpression": "SyntaxInterpreter"
+    },
+    {
+      "packageName": "@aurelia/template-compiler",
+      "exportedName": "ITemplateCompiler",
+      "exportedAt": {
+        "file": "packages/template-compiler/src/interfaces-template-compiler.ts",
+        "line": 74
+      },
+      "interfaceName": "ITemplateCompiler",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "tcCreateInterface"
+      ],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/template-compiler",
+      "exportedName": "ITemplateCompilerHooks",
+      "exportedAt": {
+        "file": "packages/template-compiler/src/template-compiler.ts",
+        "line": 1714
+      },
+      "interfaceName": "ITemplateCompilerHooks",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "tcCreateInterface"
+      ],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/template-compiler",
+      "exportedName": "ITemplateElementFactory",
+      "exportedAt": {
+        "file": "packages/template-compiler/src/template-element-factory.ts",
+        "line": 14
+      },
+      "interfaceName": "ITemplateElementFactory",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [
+        "tcCreateInterface"
+      ],
+      "registrationKind": "singleton",
+      "registrationExpression": "TemplateElementFactory"
+    },
+    {
+      "packageName": "@aurelia/ui-virtualization",
+      "exportedName": "ICollectionStrategyLocator",
+      "exportedAt": {
+        "file": "packages/ui-virtualization/src/interfaces.ts",
+        "line": 39
+      },
+      "interfaceName": "ICollectionStrategyLocator",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/ui-virtualization",
+      "exportedName": "IDomRenderer",
+      "exportedAt": {
+        "file": "packages/ui-virtualization/src/interfaces.ts",
+        "line": 21
+      },
+      "interfaceName": "IDomRenderer",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/validation",
+      "exportedName": "ICustomMessages",
+      "exportedAt": {
+        "file": "packages/validation/src/rule-provider.ts",
+        "line": 53
+      },
+      "interfaceName": "ICustomMessages",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/validation",
+      "exportedName": "IValidationExpressionHydrator",
+      "exportedAt": {
+        "file": "packages/validation/src/rule-interfaces.ts",
+        "line": 91
+      },
+      "interfaceName": "IValidationExpressionHydrator",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/validation",
+      "exportedName": "IValidationMessageProvider",
+      "exportedAt": {
+        "file": "packages/validation/src/rules.ts",
+        "line": 44
+      },
+      "interfaceName": "IValidationMessageProvider",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/validation",
+      "exportedName": "IValidationRules",
+      "exportedAt": {
+        "file": "packages/validation/src/rule-provider.ts",
+        "line": 521
+      },
+      "interfaceName": "IValidationRules",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/validation",
+      "exportedName": "IValidator",
+      "exportedAt": {
+        "file": "packages/validation/src/validator.ts",
+        "line": 26
+      },
+      "interfaceName": "IValidator",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/validation-html",
+      "exportedName": "IDefaultTrigger",
+      "exportedAt": {
+        "file": "packages/validation-html/src/validate-binding-behavior.ts",
+        "line": 63
+      },
+      "interfaceName": "IDefaultTrigger",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/validation-html",
+      "exportedName": "IValidationController",
+      "exportedAt": {
+        "file": "packages/validation-html/src/validation-controller.ts",
+        "line": 297
+      },
+      "interfaceName": "IValidationController",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/validation-html",
+      "exportedName": "IValidationResultPresenterService",
+      "exportedAt": {
+        "file": "packages/validation-html/src/subscribers/validation-result-presenter-service.ts",
+        "line": 10
+      },
+      "interfaceName": "IValidationResultPresenterService",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": "transient",
+      "registrationExpression": "ValidationResultPresenterService"
+    },
+    {
+      "packageName": "@aurelia/validation-i18n",
+      "exportedName": "I18nKeyConfiguration",
+      "exportedAt": {
+        "file": "packages/validation-i18n/src/localization.ts",
+        "line": 16
+      },
+      "interfaceName": "I18nKeyConfiguration",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": null,
+      "registrationExpression": null
+    },
+    {
+      "packageName": "@aurelia/web-components",
+      "exportedName": "IWcElementRegistry",
+      "exportedAt": {
+        "file": "packages/web-components/src/web-components.ts",
+        "line": 25
+      },
+      "interfaceName": "(anonymous)",
+      "interfaceDeclaredAt": null,
+      "exportAliasPath": [],
+      "factoryAliasPath": [],
+      "registrationKind": "singleton",
+      "registrationExpression": "WcCustomElementRegistry"
+    }
+  ]
+}
