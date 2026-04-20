@@ -22,6 +22,22 @@ export {
   type ResourceReferenceRefKind,
   type TemplateNodeRefKind,
 } from './refs.js';
+export {
+  DEPENDENCY_SITE_KINDS,
+  DEPENDENCY_ASSOCIATION_SOURCE_KINDS,
+  INTERFACE_KEY_DEFAULT_REGISTRATION_KINDS,
+  LOOKUP_MODIFIER_KINDS,
+  DependencyAssociation,
+  DependencyAssociationSource,
+  DependencySite,
+  InterfaceKey,
+  InterfaceKeyDefaultRegistration,
+  LookupModifier,
+  type DependencyAssociationSourceKind,
+  type DependencySiteKind,
+  type InterfaceKeyDefaultRegistrationKind,
+  type LookupModifierKind,
+} from './di/index.js';
 
 export {
   Container,
@@ -33,23 +49,100 @@ export {
 export { AppRoot, type AppRootConfig } from './app-root.js';
 export { Aurelia, type AureliaAppConfig } from './aurelia.js';
 export { Registration } from './registration.js';
+export {
+  ANALYZABILITY_BAND_KINDS,
+  LOOKUP_REGIME_KINDS,
+  MATERIALIZATION_TIMING_KINDS,
+  OPEN_RESIDUAL_KINDS,
+  REGISTRATION_INTAKE_KINDS,
+  REGISTRATION_PAYLOAD_KINDS,
+  REGISTRATION_PRODUCTION_KINDS,
+  REGISTRATION_STAGE_KINDS,
+  REGISTRATION_STRATEGY_KINDS,
+  REGISTRATION_TRANSITION_CLASS_KINDS,
+  RESOURCE_LOOKUP_REGIME_KINDS,
+  ContainerStateEntry,
+  LookupRequest,
+  RegistrationIntake,
+  RegistrationPayload,
+  RegistrationProduction,
+  RegistrationTransition,
+  ResourceLookupRegime,
+  type AnalyzabilityBandKind,
+  type LookupRequestRegimeKind,
+  type LookupRegimeKind,
+  type MaterializationTimingKind,
+  type OpenResidualKind,
+  type RegistrationIntakeKind,
+  type RegistrationPayloadKind,
+  type RegistrationProductionKind,
+  type RegistrationStageKind,
+  type RegistrationStrategyKind,
+  type RegistrationTransitionClassKind,
+  type ResourceLookupRegimeKind,
+} from './registrations/index.js';
 export { ResourceResolver } from './resource-resolver.js';
 export { Resolver } from './resolver.js';
 export { TemplateCompiler } from './template-compiler.js';
-export {
-  EVALUATION_BOUNDARY_KINDS,
-  VALUE_VIEW_KINDS,
-  EvaluationBoundary,
-  TypeScriptEvaluator,
-  ValueView,
-  type EvaluationBoundaryKind,
-  type ValueViewKind,
-} from './typescript-evaluator.js';
 export {
   DeclarationWorld,
   type DeclarationExport,
   type DeclarationWorldState,
 } from './declaration-world.js';
+export {
+  EXPORT_CLASSIFICATION_KINDS,
+  Export,
+  ExportClassification,
+  ExportScanner,
+  Exports,
+  ExportSurface,
+  EXPORT_VALUE_CHECK_KINDS,
+  EXPORT_VALUE_SURFACE_KINDS,
+  ExportValueSurface,
+  type ExportClassificationKind,
+  type ExportValueCheckKind,
+  type ExportValueSurfaceKind,
+  type ExportScannerOptions,
+  type ExportScannerState,
+  type ExportsState,
+} from './exports/index.js';
+export {
+  RESOURCE_DEFINITION_KINDS,
+  RESOURCE_CARRIER_KINDS,
+  RESOURCE_RECOGNITION_PATH_KINDS,
+  RESOURCE_RECOGNITION_STATUSES,
+  DEFINITION_CONTRIBUTION_STATUSES,
+  DEFINITION_FIELD_KINDS,
+  AttributePatternDefinition,
+  BindingBehaviorDefinition,
+  BindingCommandDefinition,
+  CustomAttributeDefinition,
+  CustomElementDefinition,
+  DefinitionCarrier,
+  DefinitionCarrierCollector,
+  DefinitionFieldContribution,
+  ResourceCandidate,
+  ResourceCarrier,
+  ResourceRecognitionPath,
+  ResourceRecognizer,
+  Resources,
+  TemplateControllerDefinition,
+  ValueConverterDefinition,
+  type DefinitionContributionStatus,
+  type DefinitionCarrierCollectorOptions,
+  type DefinitionCarrierCollectorState,
+  type DefinitionFieldKind,
+  type ResourceCarrierKind,
+  type ResourceDefinition,
+  type ResourceDefinitionKind,
+  type ResourceDefinitionState,
+  type ResourceDefinitionType,
+  type ResourceRecognitionPathKind,
+  type ResourceRecognitionStatus,
+  type ResourceRecognizerOptions,
+  type ResourceRecognizerState,
+  type ResourcesState,
+} from './resources/index.js';
 export { Framework, type FrameworkOptions } from './framework.js';
 export { Project, type ProjectOptions } from './project.js';
 export { Workspace, type WorkspaceOptions } from './workspace.js';

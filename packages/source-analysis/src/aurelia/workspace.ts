@@ -8,7 +8,6 @@ import { Aurelia } from './aurelia.js';
 import { Container } from './container.js';
 import { Framework, type FrameworkOptions } from './framework.js';
 import { Project, type ProjectOptions } from './project.js';
-import { TypeScriptEvaluator } from './typescript-evaluator.js';
 
 export interface WorkspaceOptions {
   readonly program?: ProgramRef;
@@ -22,7 +21,6 @@ export class Workspace {
   private frameworkValue: Framework | null = null;
   private readonly projects = new Map<string, Project>();
   private readonly programRef: ProgramRef;
-  private evaluatorValue: TypeScriptEvaluator | null = null;
   readonly rootDir: string;
 
   constructor(
@@ -52,11 +50,6 @@ export class Workspace {
 
   program(): ProgramRef {
     return this.programRef;
-  }
-
-  typeScriptEvaluator(): TypeScriptEvaluator {
-    this.evaluatorValue ??= new TypeScriptEvaluator(this);
-    return this.evaluatorValue;
   }
 
   setFramework(
