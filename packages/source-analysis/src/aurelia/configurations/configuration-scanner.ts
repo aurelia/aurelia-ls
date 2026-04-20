@@ -8,6 +8,7 @@ import { BundleArray } from './bundle-array.js';
 import {
   BundleSpread,
   HelperCall,
+  RegisterArgument,
   RegistryFactoryMethod,
   RegistryMethod,
   RegistryObject,
@@ -183,6 +184,7 @@ export class ConfigurationScanner {
           createNodeRef(file, property),
           true,
           analysis.bundleSpreads,
+          analysis.directRegisterArguments,
           analysis.helperCalls,
           returned == null
             ? 'Returns a registry-like value through AppTask or another known registry-producing call.'
@@ -242,6 +244,7 @@ export class ConfigurationScanner {
         'register',
         createNodeRef(file, property),
         analysis.bundleSpreads,
+        analysis.directRegisterArguments,
         analysis.helperCalls,
         'Recovered from an object-literal register(container) surface.',
       );
@@ -304,9 +307,11 @@ function analyzeFunctionImplementation(
   implementation: FunctionImplementation,
 ): {
   readonly bundleSpreads: readonly BundleSpread[];
+  readonly directRegisterArguments: readonly RegisterArgument[];
   readonly helperCalls: readonly HelperCall[];
 } {
   const bundleSpreads = new Map<string, BundleSpread>();
+  const directRegisterArguments = new Map<string, RegisterArgument>();
   const helperCalls = new Map<string, HelperCall>();
 
   const visit = (node: ts.Node): void => {
@@ -326,6 +331,29 @@ function analyzeFunctionImplementation(
             callName,
           ),
         );
+
+        if (isRegisterInvocation(callName)) {
+          for (const argument of node.arguments) {
+            if (ts.isSpreadElement(argument) || ts.isCallExpression(argument)) {
+              continue;
+            }
+
+            const referenceName = summarizeExpression(argument);
+            if (!isRegistrableReferenceExpression(argument) || referenceName.length === 0) {
+              continue;
+            }
+
+            const argKey = `${argument.getStart()}:${referenceName}`;
+            directRegisterArguments.set(
+              argKey,
+              new RegisterArgument(
+                `${file.id}:register-argument:${referenceName}:${argument.getStart()}`,
+                createNodeRef(file, argument),
+                referenceName,
+              ),
+            );
+          }
+        }
       }
     } else if (ts.isSpreadElement(node) && isCallArgumentSpread(node)) {
       const name = summarizeExpression(node.expression);
@@ -349,6 +377,7 @@ function analyzeFunctionImplementation(
 
   return {
     bundleSpreads: [...bundleSpreads.values()],
+    directRegisterArguments: [...directRegisterArguments.values()],
     helperCalls: [...helperCalls.values()],
   };
 }
@@ -663,4 +692,10 @@ function isCallArgumentSpread(
 ): boolean {
   return ts.isCallExpression(node.parent)
     || ts.isNewExpression(node.parent);
+}
+
+function isRegisterInvocation(
+  callName: string,
+): boolean {
+  return callName === 'register' || callName.endsWith('.register');
 }

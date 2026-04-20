@@ -390,6 +390,46 @@ describe('Aurelia clean-room runtime model', () => {
     expect(logger).toHaveLength(0);
     expect(state).toHaveLength(0);
   });
+
+  it('materializes a concrete contribution slice for StandardConfiguration', () => {
+    const fixture = createConfigurationFixture();
+    const framework = new Framework(fixture.rootDir, {
+      rootDir: fixture.rootDir,
+      exports: fixture.exports,
+      resourceSeeds: fixture.resourceSeeds,
+    });
+
+    const contribution = framework.configurationContributions().findByExportName('StandardConfiguration')[0];
+    expect(contribution).toBeDefined();
+    if (contribution == null) {
+      throw new Error('Expected StandardConfiguration contribution to exist.');
+    }
+    const subjectByName = new Map(
+      contribution.admittedSubjects.map((current) => [current.referenceName, current]),
+    );
+
+    expect(contribution.directRegisterArguments.map((current) => current.referenceName)).toEqual([
+      'ExpressionParser',
+    ]);
+    expect(contribution.bundleExpansions.map((current) => current.bundle?.sourceExport.name ?? null)).toEqual([
+      'DefaultComponents',
+      'DefaultResources',
+      'DefaultBindingSyntax',
+      'DefaultBindingLanguage',
+      'DefaultRenderers',
+    ]);
+    expect(contribution.directProductions.some((current) => current.apiIngress.api?.id === 'registration.instance')).toBe(true);
+    expect(subjectByName.get('ExpressionParser')?.kind).toBe('service');
+    expect(subjectByName.get('RuntimeTemplateCompilerImplementation')?.kind).toBe('registry');
+    expect(subjectByName.get('DebounceBindingBehavior')?.kind).toBe('template-resource');
+    expect(subjectByName.get('DebounceBindingBehavior')?.resourceKind).toBe('binding-behavior');
+    expect(subjectByName.get('DotSeparatedAttributePattern')?.kind).toBe('compiler-resource');
+    expect(subjectByName.get('DotSeparatedAttributePattern')?.resourceKind).toBe('attribute-pattern');
+    expect(subjectByName.get('DefaultBindingCommand')?.kind).toBe('compiler-resource');
+    expect(subjectByName.get('DefaultBindingCommand')?.resourceKind).toBe('binding-command');
+    expect(subjectByName.get('PropertyBindingRenderer')?.kind).toBe('renderer');
+    expect(contribution.openSeams.some((current) => current.includes('Returned registry interiors'))).toBe(true);
+  });
 });
 
 function createProgramHandle(): ProgramRef {
@@ -554,6 +594,7 @@ function createResourceDefinitions(
 
 function createConfigurationFixture(): {
   readonly exports: readonly DeclarationExport[];
+  readonly resourceSeeds: readonly ResourceDefinition[];
   readonly rootDir: string;
 } {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aurelia-clean-room-config-'));
@@ -575,22 +616,27 @@ import { singletonRegistration, instanceRegistration } from './utilities-di';
 
 declare const noop: unknown;
 declare const IContainer: unknown;
-declare const ExpressionParser: unknown;
 declare function toLookup<T>(value: T): T;
 declare function configure(...args: unknown[]): unknown;
-declare const RuntimeTemplateCompilerImplementation: unknown;
-declare const DirtyChecker: unknown;
-declare const NodeObserverLocator: unknown;
-declare const DebounceBindingBehavior: unknown;
-declare const OneTimeBindingBehavior: unknown;
-declare const ToViewBindingBehavior: unknown;
-declare const DotSeparatedAttributePattern: unknown;
-declare const EventAttributePattern: unknown;
-declare const DefaultBindingCommand: unknown;
-declare const ForBindingCommand: unknown;
-declare const PropertyBindingRenderer: unknown;
-declare const IteratorBindingRenderer: unknown;
 declare const DialogService: unknown;
+
+export const ExpressionParser = class ExpressionParser {};
+export const RuntimeTemplateCompilerImplementation = {
+  register(container: unknown) {
+    return container;
+  },
+};
+export const DirtyChecker = class DirtyChecker {};
+export const NodeObserverLocator = class NodeObserverLocator {};
+export const DebounceBindingBehavior = class DebounceBindingBehavior {};
+export const OneTimeBindingBehavior = class OneTimeBindingBehavior {};
+export const ToViewBindingBehavior = class ToViewBindingBehavior {};
+export const DotSeparatedAttributePattern = class DotSeparatedAttributePattern {};
+export const EventAttributePattern = class EventAttributePattern {};
+export const DefaultBindingCommand = class DefaultBindingCommand {};
+export const ForBindingCommand = class ForBindingCommand {};
+export const PropertyBindingRenderer = class PropertyBindingRenderer {};
+export const IteratorBindingRenderer = class IteratorBindingRenderer {};
 export const DefaultComponents = [
   RuntimeTemplateCompilerImplementation,
   DirtyChecker,
@@ -774,6 +820,7 @@ export const StateDefaultConfiguration = {
 
   return {
     exports,
+    resourceSeeds: createConfigurationFixtureResources(exports),
     rootDir,
   };
 }
@@ -782,4 +829,69 @@ function hasExportModifier(
   statement: ts.VariableStatement,
 ): boolean {
   return statement.modifiers?.some((current) => current.kind === ts.SyntaxKind.ExportKeyword) ?? false;
+}
+
+function createConfigurationFixtureResources(
+  exports: readonly DeclarationExport[],
+): readonly ResourceDefinition[] {
+  const byName = new Map(exports.map((current) => [current.name, current]));
+  const debounce = byName.get('DebounceBindingBehavior');
+  const oneTime = byName.get('OneTimeBindingBehavior');
+  const toView = byName.get('ToViewBindingBehavior');
+  const dotSeparated = byName.get('DotSeparatedAttributePattern');
+  const eventPattern = byName.get('EventAttributePattern');
+  const defaultCommand = byName.get('DefaultBindingCommand');
+  const forCommand = byName.get('ForBindingCommand');
+
+  return [
+    new BindingBehaviorDefinition(
+      'resource:bb:debounce',
+      debounce!.symbol!,
+      createKeyHandle(debounce!.symbol!, 'au:resource:binding-behavior:debounce', 'resource'),
+      'debounce',
+      [],
+    ),
+    new BindingBehaviorDefinition(
+      'resource:bb:one-time',
+      oneTime!.symbol!,
+      createKeyHandle(oneTime!.symbol!, 'au:resource:binding-behavior:oneTime', 'resource'),
+      'oneTime',
+      [],
+    ),
+    new BindingBehaviorDefinition(
+      'resource:bb:to-view',
+      toView!.symbol!,
+      createKeyHandle(toView!.symbol!, 'au:resource:binding-behavior:toView', 'resource'),
+      'toView',
+      [],
+    ),
+    new AttributePatternDefinition(
+      'resource:ap:dot-separated',
+      dotSeparated!.symbol!,
+      createKeyHandle(dotSeparated!.symbol!, 'au:resource:attribute-pattern:dot-separated', 'resource'),
+      'PART.PART',
+      ['.'],
+    ),
+    new AttributePatternDefinition(
+      'resource:ap:event',
+      eventPattern!.symbol!,
+      createKeyHandle(eventPattern!.symbol!, 'au:resource:attribute-pattern:event', 'resource'),
+      'PART.trigger:PART',
+      ['.', ':'],
+    ),
+    new BindingCommandDefinition(
+      'resource:bc:default',
+      defaultCommand!.symbol!,
+      createKeyHandle(defaultCommand!.symbol!, 'au:resource:binding-command:default', 'resource'),
+      'bind',
+      [],
+    ),
+    new BindingCommandDefinition(
+      'resource:bc:for',
+      forCommand!.symbol!,
+      createKeyHandle(forCommand!.symbol!, 'au:resource:binding-command:for', 'resource'),
+      'for',
+      [],
+    ),
+  ];
 }

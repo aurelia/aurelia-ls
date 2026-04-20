@@ -95,7 +95,13 @@ export {
 } from './declaration-world.js';
 export {
   BundleArray,
+  BundleExpansion,
+  BundleExpansionScanner,
+  BundleMember,
   BundleSpread,
+  ConfigurationContribution,
+  ConfigurationContributions,
+  ConfigurationContributionScanner,
   Configurations,
   ConfigurationScanner,
   HelperCall,
@@ -104,6 +110,12 @@ export {
   RegistryFactoryMethod,
   RegistryMethod,
   RegistryObject,
+  RegisterArgument,
+  type BundleExpansionScannerOptions,
+  type BundleExpansionScannerState,
+  type ConfigurationContributionScannerOptions,
+  type ConfigurationContributionScannerState,
+  type ConfigurationContributionsState,
   type ConfigurationScannerOptions,
   type ConfigurationScannerState,
   type ConfigurationSubject,
@@ -128,6 +140,14 @@ export {
   type FrameworkApiIngressStatusKind,
   type FrameworkApiRouteStepKind,
 } from './framework-api/index.js';
+export {
+  REGISTRABLE_SUBJECT_KINDS,
+  RegistrableSubject,
+  RegistrableSubjectScanner,
+  type RegistrableSubjectKind,
+  type RegistrableSubjectScannerOptions,
+  type RegistrableSubjectScannerState,
+} from './registrables/index.js';
 export {
   EXPORT_CLASSIFICATION_KINDS,
   Export,

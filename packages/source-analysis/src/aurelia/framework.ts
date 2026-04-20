@@ -1,5 +1,7 @@
 import { DeclarationWorld, type DeclarationExport } from './declaration-world.js';
 import {
+  ConfigurationContributions,
+  ConfigurationContributionScanner,
   Configurations,
   ConfigurationScanner,
 } from './configurations/index.js';
@@ -24,6 +26,7 @@ export interface FrameworkOptions {
 // It owns package-level discovery and a declaration world over the framework
 // surface, without pretending to answer runtime or current-world questions yet.
 export class Framework {
+  private readonly configurationContributionsValue: ConfigurationContributions;
   private readonly configurationsValue: Configurations;
   private readonly declarationWorldValue: DeclarationWorld;
   private readonly exportsValue: Exports;
@@ -60,6 +63,14 @@ export class Framework {
         resourceSeeds: options.resourceSeeds,
       }),
     );
+    this.configurationContributionsValue = new ConfigurationContributions(
+      'framework',
+      new ConfigurationContributionScanner({
+        configurations: this.configurationsValue,
+        exports: this.exportsValue,
+        resources: this.resourcesValue,
+      }),
+    );
   }
 
   declarationWorld(): DeclarationWorld {
@@ -84,6 +95,14 @@ export class Framework {
 
   readConfigurations() {
     return this.configurationsValue.readAll();
+  }
+
+  configurationContributions(): ConfigurationContributions {
+    return this.configurationContributionsValue;
+  }
+
+  readConfigurationContributions() {
+    return this.configurationContributionsValue.readAll();
   }
 
   resources(): Resources {

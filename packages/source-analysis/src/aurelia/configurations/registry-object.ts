@@ -40,12 +40,25 @@ export class HelperCall {
   ) {}
 }
 
+export class RegisterArgument {
+  constructor(
+    readonly id: string,
+    readonly source: SourceNodeRef,
+    // TODO: this remains a syntax witness for a direct register(...) argument.
+    // A later reference-ingress seam should replace the raw name with a closed
+    // symbol/import provenance result where possible.
+    readonly referenceName: string,
+    readonly note: string | null = null,
+  ) {}
+}
+
 export class RegistryMethod {
   constructor(
     readonly id: string,
     readonly name: string,
     readonly source: SourceNodeRef,
     readonly bundleSpreads: readonly BundleSpread[] = [],
+    readonly directRegisterArguments: readonly RegisterArgument[] = [],
     readonly helperCalls: readonly HelperCall[] = [],
     readonly note: string | null = null,
   ) {}
@@ -62,6 +75,7 @@ export class RegistryFactoryMethod {
     // body needs a later seam instead of being flattened into this method.
     readonly returnsRegistry: boolean,
     readonly bundleSpreads: readonly BundleSpread[] = [],
+    readonly directRegisterArguments: readonly RegisterArgument[] = [],
     readonly helperCalls: readonly HelperCall[] = [],
     readonly note: string | null = null,
   ) {}
