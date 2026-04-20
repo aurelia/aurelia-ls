@@ -1,4 +1,5 @@
 import type { Exports } from '../exports/index.js';
+import { CustomElementMaterializer } from './custom-element-materializer.js';
 import { DefinitionCarrierCollector } from './definition-carrier-collector.js';
 import type { DefinitionCarrier } from './definition-carrier.js';
 import { ResourceRecognizer } from './resource-recognizer.js';
@@ -10,6 +11,7 @@ export interface ResourceScannerOptions {
   readonly resourceSeeds?: readonly ResourceDefinition[];
   readonly recognizer?: ResourceRecognizer;
   readonly definitionCarrierCollector?: DefinitionCarrierCollector;
+  readonly customElementMaterializer?: CustomElementMaterializer;
 }
 
 export interface ResourceScannerState {
@@ -26,6 +28,7 @@ export class ResourceScanner {
   private readonly exportsValue: Exports;
   private readonly recognizerValue: ResourceRecognizer;
   private readonly definitionCarrierCollectorValue: DefinitionCarrierCollector;
+  private readonly customElementMaterializerValue: CustomElementMaterializer;
   private readonly resourceSeedsValue: readonly ResourceDefinition[];
 
   constructor(
@@ -38,6 +41,8 @@ export class ResourceScanner {
       ?? new DefinitionCarrierCollector({
         recognizer: this.recognizerValue,
       });
+    this.customElementMaterializerValue = options.customElementMaterializer
+      ?? new CustomElementMaterializer();
     this.resourceSeedsValue = [...(options.resourceSeeds ?? [])];
   }
 
@@ -58,7 +63,11 @@ export class ResourceScanner {
     // This is where decorator/static-$au/metadata/convention precedence will
     // eventually need to land. The current seed-only return is still a
     // scaffolding floor, not the real materialization story.
-    return [...this.resourceSeedsValue];
+    return this.resourceSeedsValue.map((resource) =>
+      resource.kind === 'custom-element'
+        ? this.customElementMaterializerValue.materialize(resource)
+        : resource,
+    );
   }
 
   inspectState(): ResourceScannerState {

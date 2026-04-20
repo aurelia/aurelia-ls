@@ -1,6 +1,13 @@
 import fs from 'node:fs';
 import ts from 'typescript';
 
+import {
+  findNodeBySpan,
+  guessScriptKind,
+  hasStaticModifier,
+  readCallCalleeText,
+  readPropertyName,
+} from '../analysis/index.js';
 import type { Configurations } from '../configurations/index.js';
 import type { Export, Exports } from '../exports/index.js';
 import type { Resources } from '../resources/index.js';
@@ -336,7 +343,7 @@ function classifyVariableDeclaration(
   }
 
     if (ts.isCallExpression(initializer)) {
-      const calleeText = readCalleeText(initializer.expression);
+      const calleeText = readCallCalleeText(initializer.expression);
       if (calleeText === 'renderer' && initializer.arguments.some(ts.isClassExpression)) {
         return {
           carrier: 'renderer',
@@ -442,7 +449,7 @@ function hasAttributePatternRegistrableMetadata(
       }
       if (
         ts.isCallExpression(property.initializer)
-        && readCalleeText(property.initializer.expression) === 'AttributePattern.create'
+        && readCallCalleeText(property.initializer.expression) === 'AttributePattern.create'
       ) {
         return true;
       }
@@ -465,69 +472,6 @@ function hasRegisterMethod(
     }
     return false;
   });
-}
-
-function readPropertyName(
-  name: ts.PropertyName,
-): string | null {
-  return ts.isIdentifier(name) || ts.isStringLiteral(name)
-    ? name.text
-    : null;
-}
-
-function readCalleeText(
-  expression: ts.Expression,
-): string | null {
-  if (ts.isIdentifier(expression)) {
-    return expression.text;
-  }
-
-  if (ts.isPropertyAccessExpression(expression)) {
-    const left = readCalleeText(expression.expression);
-    return left == null ? expression.name.text : `${left}.${expression.name.text}`;
-  }
-
-  return null;
-}
-
-function hasStaticModifier(
-  node: ts.Node,
-): boolean {
-  return ts.canHaveModifiers(node)
-    ? (ts.getModifiers(node)?.some((current) => current.kind === ts.SyntaxKind.StaticKeyword) ?? false)
-    : false;
-}
-
-function findNodeBySpan(
-  sourceFile: ts.SourceFile,
-  start: number,
-  end: number,
-): ts.Node | null {
-  let best: ts.Node | null = null;
-
-  const visit = (node: ts.Node) => {
-    const nodeStart = node.getStart(sourceFile);
-    if (nodeStart === start && node.end === end) {
-      best = node;
-      return;
-    }
-    if (start >= nodeStart && end <= node.end) {
-      ts.forEachChild(node, visit);
-    }
-  };
-
-  visit(sourceFile);
-  return best;
-}
-
-function guessScriptKind(
-  filePath: string,
-): ts.ScriptKind {
-  return filePath.endsWith('.tsx')
-    ? ts.ScriptKind.TSX
-    : filePath.endsWith('.js') || filePath.endsWith('.mjs')
-      ? ts.ScriptKind.JS
-      : ts.ScriptKind.TS;
 }
 
 function isResourceDefinitionKind(

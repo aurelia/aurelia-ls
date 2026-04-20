@@ -16,7 +16,12 @@ import {
   ContainerWorldRef,
   ContainerStateEntry,
   CustomAttributeDefinition,
+  CustomElementBindableSurface,
   CustomElementDefinition,
+  CustomElementDependencyContribution,
+  CustomElementIdentity,
+  CustomElementPolicy,
+  CustomElementTemplateSource,
   DependencyAssociation,
   DependencyAssociationSource,
   DependencySite,
@@ -465,6 +470,85 @@ describe('Aurelia clean-room runtime model', () => {
     expect(hookCapabilities).toHaveLength(1);
     expect(hookCapabilities[0]?.hookName).toBe('CompilingHook');
   });
+
+  it('decomposes custom element support bundles without pretending instructions are declaration ingress', () => {
+    const fixture = createCustomElementFixture();
+    const framework = new Framework(fixture.rootDir, {
+      rootDir: fixture.rootDir,
+      exports: fixture.exports,
+      resourceSeeds: fixture.resourceSeeds,
+    });
+
+    const byName = new Map(
+      framework.resources().readCustomElements().map((current) => [current.name, current]),
+    );
+    const fancy = byName.get('fancy-card');
+    const precompiled = byName.get('precompiled-card');
+    const decorated = byName.get('decorated-card');
+    const layeredDeps = byName.get('layered-deps-card');
+
+    expect(fancy).toBeDefined();
+    expect(precompiled).toBeDefined();
+    expect(decorated).toBeDefined();
+    expect(layeredDeps).toBeDefined();
+    if (fancy == null || precompiled == null || decorated == null || layeredDeps == null) {
+      throw new Error('Expected custom element fixtures to materialize.');
+    }
+    const fancyTitleBindable = fancy.bindableSurface.entries.find((current) => current.name === 'title');
+    const decoratedTitleBindable = decorated.bindableSurface.entries.find((current) => current.name === 'title');
+
+    expect(fancy.identity.provenance.map((current) => `${current.field}:${current.mode}`)).toEqual([
+      'name:selected',
+      'aliases:merged',
+    ]);
+    expect(fancy.aliases).toEqual(['f-card', 'legacy-card']);
+    expect(fancy.bindableSurface.entries.map((current) => current.name)).toEqual(['title', 'count']);
+    expect(fancyTitleBindable?.attribute).toBe('card-title');
+    expect(fancyTitleBindable?.callback).toBe('titleUpdated');
+    expect(fancyTitleBindable?.mode).toBe('twoWay');
+    expect(fancyTitleBindable?.nullable).toBe(false);
+    expect(fancyTitleBindable?.witness?.field).toBe('name');
+    expect(fancyTitleBindable?.witness?.carrier).toBe('static-au-property');
+    expect(fancyTitleBindable?.readProvenance('mode')?.selected?.carrier).toBe('static-au-property');
+    expect(fancy.bindableSurface.readProvenance()?.mode).toBe('merged');
+    expect(fancy.dependencies.entries.map((current) => current.referenceName)).toEqual(['DepOne', 'DepTwo']);
+    expect(fancy.dependencies.entries[0]?.witness.field).toBe('dependencies');
+    expect(fancy.dependencies.readProvenance()?.mode).toBe('merged');
+    expect(fancy.policy.captureKind).toBe('boolean');
+    expect(fancy.policy.containerless).toBe(true);
+    expect(fancy.policy.shadowMode).toBe('open');
+    expect(fancy.policy.readProvenance('capture')?.selected?.carrier).toBe('static-au-property');
+    expect(fancy.templateSource.kind).toBe('inline-string');
+    expect(fancy.templateSource.provenance?.field).toBe('template');
+
+    expect(precompiled.policy.processContentKind).toBe('string-key');
+    expect(precompiled.policy.readProvenance('process-content')?.selected?.carrier).toBe('static-au-property');
+    expect(precompiled.templateSource.kind).toBe('none');
+
+    expect(decorated.name).toBe('decorated-card');
+    expect(decorated.identity.readProvenance('name')?.selected?.carrier).toBe('annotation-decorator');
+    expect(decorated.policy.containerless).toBe(true);
+    expect(decorated.policy.readProvenance('containerless')?.selected?.carrier).toBe('annotation-decorator');
+    expect(decorated.policy.shadowMode).toBe('open');
+    expect(decorated.policy.readProvenance('shadow-options')?.selected?.carrier).toBe('annotation-decorator');
+    expect(decorated.bindableSurface.entries.map((current) => current.name)).toContain('title');
+    expect(decoratedTitleBindable?.attribute).toBe('static-title');
+    expect(decoratedTitleBindable?.mode).toBe('oneTime');
+    expect(decoratedTitleBindable?.witness?.carrier).toBe('bindable-decorator');
+    expect(decoratedTitleBindable?.readProvenance('attribute')?.mode).toBe('selected');
+    expect(decoratedTitleBindable?.readProvenance('attribute')?.selected?.carrier).toBe('static-own-property');
+    expect(decoratedTitleBindable?.readProvenance('attribute')?.contributors.map((current) => current.carrier).sort()).toEqual([
+      'bindable-decorator',
+      'static-own-property',
+    ]);
+    expect(decorated.policy.processContentKind).toBe('function-hook');
+    expect(decorated.policy.readProvenance('process-content')?.selected?.carrier).toBe('annotation-decorator');
+    expect(decorated.templateSource.provenance?.selected?.carrier).toBe('annotation-decorator');
+
+    expect(layeredDeps.dependencies.sources[0]?.kind).toBe('merged-array');
+    expect(layeredDeps.dependencies.entries.map((current) => current.referenceName)).toEqual(['sharedDeps', 'moreDeps']);
+    expect(layeredDeps.dependencies.entries[0]?.linkSeedKind).toBe('identifier-name');
+  });
 });
 
 function createProgramHandle(): ProgramRef {
@@ -575,10 +659,15 @@ function createResourceDefinitions(
     new CustomElementDefinition(
       'resource:ce:foo',
       elementSymbol,
-      createKeyHandle(elementSymbol, 'au:resource:custom-element:foo', 'resource'),
-      'foo',
-      ['foo-element'],
-      ['value'],
+      new CustomElementIdentity(
+        'foo',
+        ['foo-element'],
+        createKeyHandle(elementSymbol, 'au:resource:custom-element:foo', 'resource'),
+      ),
+      new CustomElementPolicy(),
+      new CustomElementBindableSurface(),
+      new CustomElementDependencyContribution(),
+      new CustomElementTemplateSource('open', null),
     ),
     new CustomAttributeDefinition(
       'resource:ca:bar',
@@ -887,6 +976,176 @@ export const StateDefaultConfiguration = {
     exports,
     resourceSeeds: createConfigurationFixtureResources(exports),
     rootDir,
+  };
+}
+
+function createCustomElementFixture(): {
+  readonly exports: readonly DeclarationExport[];
+  readonly resourceSeeds: readonly ResourceDefinition[];
+  readonly rootDir: string;
+} {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aurelia-clean-room-ce-'));
+  const filePath = path.join(rootDir, 'custom-element-fixture.ts');
+  const sourceText = `
+declare const noop: unknown;
+declare function customElement(definition: unknown): ClassDecorator;
+declare function useShadowDOM(options?: unknown): ClassDecorator;
+declare function containerless(target: unknown, context?: unknown): void;
+declare function bindable(config?: unknown): any;
+declare function processContent(hook?: unknown): any;
+
+export class DepOne {}
+export class DepTwo {}
+const sharedDeps = [DepOne];
+const moreDeps = [DepTwo];
+
+export class FancyCard {
+  static aliases = ['legacy-card'];
+  static $au = {
+    type: 'custom-element',
+    name: 'fancy-card',
+    aliases: ['f-card'],
+    bindables: [{ name: 'title', attribute: 'card-title', callback: 'titleUpdated', mode: 'twoWay', nullable: false }, 'count'],
+    dependencies: [DepOne, DepTwo],
+    capture: true,
+    containerless: true,
+    shadowOptions: { mode: 'open' },
+    template: '<div>\${title}</div>',
+  };
+}
+
+export class PrecompiledCard {
+  static $au = {
+    type: 'custom-element',
+    name: 'precompiled-card',
+    processContent: 'transformContent',
+    instructions: [[noop]],
+  };
+}
+
+export class LayeredDepsCard {
+  static $au = {
+    type: 'custom-element',
+    name: 'layered-deps-card',
+  };
+
+  static dependencies = [...sharedDeps, ...moreDeps];
+}
+
+@customElement({ name: 'decorated-card', aliases: ['d-card'], template: '<div></div>' })
+@useShadowDOM()
+@containerless
+export class DecoratedCard {
+  static bindables = {
+    title: {
+      attribute: 'static-title',
+      mode: 'oneTime',
+    },
+  };
+
+  @bindable({ mode: 'twoWay', attribute: 'decorated-title' })
+  title = '';
+
+  @processContent()
+  compileTemplate() {}
+}
+`;
+  fs.writeFileSync(filePath, sourceText, 'utf8');
+
+  const program = new ProgramRef(
+    'program:custom-element-fixture',
+    rootDir,
+    null,
+  );
+  const file = new SourceFileRef(
+    `file:${filePath}`,
+    program,
+    filePath,
+  );
+  const sourceFile = ts.createSourceFile(
+    filePath,
+    sourceText,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+
+  const exports: DeclarationExport[] = [];
+  for (const statement of sourceFile.statements) {
+    if (!hasExportModifier(statement) || !ts.isClassDeclaration(statement) || statement.name == null) {
+      continue;
+    }
+
+    const declarationRef = new SourceNodeRef(
+      `node:${statement.name.text}:${statement.getStart()}-${statement.end}`,
+      file,
+      'ClassDeclaration',
+      new SourceSpan(statement.getStart(), statement.end),
+    );
+    const symbolRef = new SymbolRef(
+      `symbol:${statement.name.text}`,
+      file,
+      statement.name.text,
+      [statement.name.text],
+      declarationRef,
+    );
+    exports.push({
+      name: statement.name.text,
+      symbol: symbolRef,
+      sourceFile: file,
+    });
+  }
+
+  const byName = new Map(exports.map((current) => [current.name, current]));
+  const fancy = byName.get('FancyCard');
+  const precompiled = byName.get('PrecompiledCard');
+  const layeredDeps = byName.get('LayeredDepsCard');
+  const decorated = byName.get('DecoratedCard');
+  if (fancy == null || precompiled == null || layeredDeps == null || decorated == null) {
+    throw new Error('Expected CE fixture exports to exist.');
+  }
+
+  return {
+    exports,
+    rootDir,
+    resourceSeeds: [
+      new CustomElementDefinition(
+        'resource:ce:fancy-card',
+        fancy.symbol!,
+        new CustomElementIdentity(
+          'fancy-card',
+          [],
+          createKeyHandle(fancy.symbol!, 'au:resource:custom-element:fancy-card', 'resource'),
+        ),
+      ),
+      new CustomElementDefinition(
+        'resource:ce:precompiled-card',
+        precompiled.symbol!,
+        new CustomElementIdentity(
+          'precompiled-card',
+          [],
+          createKeyHandle(precompiled.symbol!, 'au:resource:custom-element:precompiled-card', 'resource'),
+        ),
+      ),
+      new CustomElementDefinition(
+        'resource:ce:layered-deps-card',
+        layeredDeps.symbol!,
+        new CustomElementIdentity(
+          'layered-deps-card',
+          [],
+          createKeyHandle(layeredDeps.symbol!, 'au:resource:custom-element:layered-deps-card', 'resource'),
+        ),
+      ),
+      new CustomElementDefinition(
+        'resource:ce:decorated-card',
+        decorated.symbol!,
+        new CustomElementIdentity(
+          'decorated-card',
+          [],
+          createKeyHandle(decorated.symbol!, 'au:resource:custom-element:decorated-card', 'resource'),
+        ),
+      ),
+    ],
   };
 }
 
