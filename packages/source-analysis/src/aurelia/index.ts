@@ -124,6 +124,27 @@ export {
   type RegistryObjectOriginKind,
 } from './configurations/index.js';
 export {
+  ADMISSION_POLICY_KINDS,
+  ADMITTED_SUBJECT_CARRIER_KINDS,
+  AdmittedSubject,
+  SubjectAdmissionScanner,
+  type AdmittedSubjectCarrierKind,
+  type AdmissionPolicyKind,
+  type SubjectAdmissionScannerOptions,
+  type SubjectAdmissionScannerState,
+} from './admissions/index.js';
+export {
+  COMPILER_CAPABILITY_KINDS,
+  AttributePatternCapability,
+  BindingCommandCapability,
+  CompilerCapabilityScanner,
+  TemplateCompilerHookCapability,
+  type CompilerCapability,
+  type CompilerCapabilityKind,
+  type CompilerCapabilityScannerOptions,
+  type CompilerCapabilityScannerState,
+} from './compiler/index.js';
+export {
   FRAMEWORK_API_FAMILY_KINDS,
   FRAMEWORK_API_INGRESS_STATUS_KINDS,
   FRAMEWORK_API_ROUTE_STEP_KINDS,
@@ -140,14 +161,6 @@ export {
   type FrameworkApiIngressStatusKind,
   type FrameworkApiRouteStepKind,
 } from './framework-api/index.js';
-export {
-  REGISTRABLE_SUBJECT_KINDS,
-  RegistrableSubject,
-  RegistrableSubjectScanner,
-  type RegistrableSubjectKind,
-  type RegistrableSubjectScannerOptions,
-  type RegistrableSubjectScannerState,
-} from './registrables/index.js';
 export {
   EXPORT_CLASSIFICATION_KINDS,
   Export,

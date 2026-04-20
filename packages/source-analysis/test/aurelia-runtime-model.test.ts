@@ -419,16 +419,51 @@ describe('Aurelia clean-room runtime model', () => {
       'DefaultRenderers',
     ]);
     expect(contribution.directProductions.some((current) => current.apiIngress.api?.id === 'registration.instance')).toBe(true);
-    expect(subjectByName.get('ExpressionParser')?.kind).toBe('service');
-    expect(subjectByName.get('RuntimeTemplateCompilerImplementation')?.kind).toBe('registry');
-    expect(subjectByName.get('DebounceBindingBehavior')?.kind).toBe('template-resource');
-    expect(subjectByName.get('DebounceBindingBehavior')?.resourceKind).toBe('binding-behavior');
-    expect(subjectByName.get('DotSeparatedAttributePattern')?.kind).toBe('compiler-resource');
-    expect(subjectByName.get('DotSeparatedAttributePattern')?.resourceKind).toBe('attribute-pattern');
-    expect(subjectByName.get('DefaultBindingCommand')?.kind).toBe('compiler-resource');
-    expect(subjectByName.get('DefaultBindingCommand')?.resourceKind).toBe('binding-command');
-    expect(subjectByName.get('PropertyBindingRenderer')?.kind).toBe('renderer');
+    expect(subjectByName.get('ExpressionParser')?.carrier).toBe('service');
+    expect(subjectByName.get('ExpressionParser')?.policy).toBe('service-container');
+    expect(subjectByName.get('RuntimeTemplateCompilerImplementation')?.carrier).toBe('registry');
+    expect(subjectByName.get('RuntimeTemplateCompilerImplementation')?.policy).toBe('registry-registration');
+    expect(subjectByName.get('DebounceBindingBehavior')?.carrier).toBe('resource-definition');
+    expect(subjectByName.get('DebounceBindingBehavior')?.policy).toBe('template-local-or-root');
+    expect(subjectByName.get('DebounceBindingBehavior')?.declarationKind).toBe('binding-behavior');
+    expect(subjectByName.get('DotSeparatedAttributePattern')?.carrier).toBe('registrable-metadata-registry');
+    expect(subjectByName.get('DotSeparatedAttributePattern')?.policy).toBe('compiler-root-only');
+    expect(subjectByName.get('DotSeparatedAttributePattern')?.declarationKind).toBe('attribute-pattern');
+    expect(subjectByName.get('DefaultBindingCommand')?.carrier).toBe('resource-definition');
+    expect(subjectByName.get('DefaultBindingCommand')?.policy).toBe('compiler-root-only');
+    expect(subjectByName.get('DefaultBindingCommand')?.declarationKind).toBe('binding-command');
+    expect(subjectByName.get('PropertyBindingRenderer')?.carrier).toBe('renderer');
+    expect(subjectByName.get('PropertyBindingRenderer')?.policy).toBe('instruction-renderer');
+    const bindingCommandCapabilities = contribution.compilerCapabilities
+      .filter((current) => current.kind === 'binding-command')
+      .map((current) => current.name)
+      .sort();
+    const attributePatternCapabilities = contribution.compilerCapabilities
+      .filter((current) => current.kind === 'attribute-pattern')
+      .map((current) => current.pattern)
+      .sort();
+    expect(bindingCommandCapabilities).toEqual(['bind', 'for']);
+    expect(attributePatternCapabilities).toEqual(['PART.PART', 'PART.trigger:PART']);
     expect(contribution.openSeams.some((current) => current.includes('Returned registry interiors'))).toBe(true);
+  });
+
+  it('surfaces template compiler hooks shallowly from direct registry call witnesses', () => {
+    const fixture = createConfigurationFixture();
+    const framework = new Framework(fixture.rootDir, {
+      rootDir: fixture.rootDir,
+      exports: fixture.exports,
+      resourceSeeds: fixture.resourceSeeds,
+    });
+
+    const contribution = framework.configurationContributions().findByExportName('CompilerConfiguration')[0];
+    expect(contribution).toBeDefined();
+    if (contribution == null) {
+      throw new Error('Expected CompilerConfiguration contribution to exist.');
+    }
+
+    const hookCapabilities = contribution.compilerCapabilities.filter((current) => current.kind === 'template-compiler-hook');
+    expect(hookCapabilities).toHaveLength(1);
+    expect(hookCapabilities[0]?.hookName).toBe('CompilingHook');
   });
 });
 
@@ -618,25 +653,27 @@ declare const noop: unknown;
 declare const IContainer: unknown;
 declare function toLookup<T>(value: T): T;
 declare function configure(...args: unknown[]): unknown;
+declare function renderer<T>(value: T): T;
+declare const TemplateCompilerHooks: { define(value: unknown): unknown };
 declare const DialogService: unknown;
 
-export const ExpressionParser = class ExpressionParser {};
+export class ExpressionParser {}
 export const RuntimeTemplateCompilerImplementation = {
   register(container: unknown) {
     return container;
   },
 };
-export const DirtyChecker = class DirtyChecker {};
-export const NodeObserverLocator = class NodeObserverLocator {};
-export const DebounceBindingBehavior = class DebounceBindingBehavior {};
-export const OneTimeBindingBehavior = class OneTimeBindingBehavior {};
-export const ToViewBindingBehavior = class ToViewBindingBehavior {};
-export const DotSeparatedAttributePattern = class DotSeparatedAttributePattern {};
-export const EventAttributePattern = class EventAttributePattern {};
-export const DefaultBindingCommand = class DefaultBindingCommand {};
-export const ForBindingCommand = class ForBindingCommand {};
-export const PropertyBindingRenderer = class PropertyBindingRenderer {};
-export const IteratorBindingRenderer = class IteratorBindingRenderer {};
+export class DirtyChecker {}
+export class NodeObserverLocator {}
+export class DebounceBindingBehavior {}
+export class OneTimeBindingBehavior {}
+export class ToViewBindingBehavior {}
+export class DotSeparatedAttributePattern {}
+export class EventAttributePattern {}
+export class DefaultBindingCommand {}
+export class ForBindingCommand {}
+export const PropertyBindingRenderer = renderer(class PropertyBindingRenderer {});
+export const IteratorBindingRenderer = renderer(class IteratorBindingRenderer {});
 export const DefaultComponents = [
   RuntimeTemplateCompilerImplementation,
   DirtyChecker,
@@ -729,6 +766,14 @@ export const LoggerConfiguration = toLookup({
   },
 });
 
+export const CompilerConfiguration = {
+  register(container: { register(...args: unknown[]): unknown }) {
+    return container.register(
+      TemplateCompilerHooks.define(class CompilingHook {}),
+    );
+  },
+};
+
 function createDialogConfiguration(cb: unknown) {
   return {
     register: (ctn: { register(...args: unknown[]): unknown }) => ctn.register(
@@ -784,34 +829,54 @@ export const StateDefaultConfiguration = {
 
   const exports: DeclarationExport[] = [];
   for (const statement of sourceFile.statements) {
-    if (!ts.isVariableStatement(statement)) {
-      continue;
-    }
-
     if (!hasExportModifier(statement)) {
       continue;
     }
 
-    for (const declaration of statement.declarationList.declarations) {
-      if (!ts.isIdentifier(declaration.name)) {
-        continue;
-      }
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (!ts.isIdentifier(declaration.name)) {
+          continue;
+        }
 
+        const declarationRef = new SourceNodeRef(
+          `node:${declaration.name.text}:${declaration.getStart()}-${declaration.end}`,
+          file,
+          'VariableDeclaration',
+          new SourceSpan(declaration.getStart(), declaration.end),
+        );
+        const symbolRef = new SymbolRef(
+          `symbol:${declaration.name.text}`,
+          file,
+          declaration.name.text,
+          [declaration.name.text],
+          declarationRef,
+        );
+        exports.push({
+          name: declaration.name.text,
+          symbol: symbolRef,
+          sourceFile: file,
+        });
+      }
+      continue;
+    }
+
+    if (ts.isClassDeclaration(statement) && statement.name != null) {
       const declarationRef = new SourceNodeRef(
-        `node:${declaration.name.text}:${declaration.getStart()}-${declaration.end}`,
+        `node:${statement.name.text}:${statement.getStart()}-${statement.end}`,
         file,
-        'VariableDeclaration',
-        new SourceSpan(declaration.getStart(), declaration.end),
+        'ClassDeclaration',
+        new SourceSpan(statement.getStart(), statement.end),
       );
       const symbolRef = new SymbolRef(
-        `symbol:${declaration.name.text}`,
+        `symbol:${statement.name.text}`,
         file,
-        declaration.name.text,
-        [declaration.name.text],
+        statement.name.text,
+        [statement.name.text],
         declarationRef,
       );
       exports.push({
-        name: declaration.name.text,
+        name: statement.name.text,
         symbol: symbolRef,
         sourceFile: file,
       });
@@ -826,9 +891,12 @@ export const StateDefaultConfiguration = {
 }
 
 function hasExportModifier(
-  statement: ts.VariableStatement,
+  statement: ts.Node,
 ): boolean {
-  return statement.modifiers?.some((current) => current.kind === ts.SyntaxKind.ExportKeyword) ?? false;
+  const modifiers = ts.canHaveModifiers(statement)
+    ? ts.getModifiers(statement)
+    : void 0;
+  return modifiers?.some((current: ts.ModifierLike) => current.kind === ts.SyntaxKind.ExportKeyword) ?? false;
 }
 
 function createConfigurationFixtureResources(
