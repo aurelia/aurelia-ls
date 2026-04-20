@@ -33,7 +33,9 @@
   "scripts": {
     "build": "node ./scripts/build.mjs",
     "build:tests": "node ./scripts/build-tests.mjs",
+    "generate:aurelia-configuration-goldens": "node ./scripts/generate-aurelia-configuration-goldens.mjs",
     "generate:aurelia-framework-goldens": "node ./scripts/generate-aurelia-framework-goldens.mjs",
+    "generate:aurelia-registration-production-goldens": "node ./scripts/generate-aurelia-registration-production-goldens.mjs",
     "preflight": "node ./scripts/preflight.mjs",
     "test": "node ./scripts/build.mjs && node ./scripts/build-tests.mjs && node ./scripts/run-node-tests.mjs",
     "test:node:aurelia-runtime-model": "node ./scripts/run-node-tests.mjs out-test/test/aurelia-runtime-model.test.js",

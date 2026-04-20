@@ -1,0 +1,620 @@
+{
+  "schemaVersion": "v0alpha1",
+  "suiteId": "aurelia-configurations",
+  "summary": {
+    "packageCount": 24,
+    "bundleArrayCount": 8,
+    "registryObjectCount": 22,
+    "factoryMethodCount": 13
+  },
+  "bundleArrays": [
+    {
+      "kind": "bundle-array",
+      "packageName": "@aurelia/router",
+      "exportName": "DefaultComponents",
+      "declarationFile": "packages/router/src/configuration.ts",
+      "elementCount": 1,
+      "elementNames": [
+        "RouterRegistration"
+      ]
+    },
+    {
+      "kind": "bundle-array",
+      "packageName": "@aurelia/router",
+      "exportName": "DefaultResources",
+      "declarationFile": "packages/router/src/configuration.ts",
+      "elementCount": 3,
+      "elementNames": [
+        "ViewportCustomElement",
+        "LoadCustomAttribute",
+        "HrefCustomAttribute"
+      ]
+    },
+    {
+      "kind": "bundle-array",
+      "packageName": "@aurelia/runtime-html",
+      "exportName": "DefaultBindingLanguage",
+      "declarationFile": "packages/runtime-html/src/configuration.ts",
+      "elementCount": 13,
+      "elementNames": [
+        "DefaultBindingCommand",
+        "OneTimeBindingCommand",
+        "FromViewBindingCommand",
+        "ToViewBindingCommand",
+        "TwoWayBindingCommand",
+        "ForBindingCommand",
+        "RefBindingCommand",
+        "TriggerBindingCommand",
+        "CaptureBindingCommand",
+        "ClassBindingCommand",
+        "StyleBindingCommand",
+        "AttrBindingCommand",
+        "SpreadValueBindingCommand"
+      ]
+    },
+    {
+      "kind": "bundle-array",
+      "packageName": "@aurelia/runtime-html",
+      "exportName": "DefaultBindingSyntax",
+      "declarationFile": "packages/runtime-html/src/configuration.ts",
+      "elementCount": 4,
+      "elementNames": [
+        "RefAttributePattern",
+        "DotSeparatedAttributePattern",
+        "EventAttributePattern",
+        "EventModifierRegistration"
+      ]
+    },
+    {
+      "kind": "bundle-array",
+      "packageName": "@aurelia/runtime-html",
+      "exportName": "DefaultComponents",
+      "declarationFile": "packages/runtime-html/src/configuration.ts",
+      "elementCount": 3,
+      "elementNames": [
+        "RuntimeTemplateCompilerImplementation",
+        "DirtyChecker",
+        "NodeObserverLocator"
+      ]
+    },
+    {
+      "kind": "bundle-array",
+      "packageName": "@aurelia/runtime-html",
+      "exportName": "DefaultRenderers",
+      "declarationFile": "packages/runtime-html/src/configuration.ts",
+      "elementCount": 18,
+      "elementNames": [
+        "PropertyBindingRenderer",
+        "IteratorBindingRenderer",
+        "RefBindingRenderer",
+        "InterpolationBindingRenderer",
+        "SetPropertyRenderer",
+        "CustomElementRenderer",
+        "CustomAttributeRenderer",
+        "TemplateControllerRenderer",
+        "LetElementRenderer",
+        "ListenerBindingRenderer",
+        "AttributeBindingRenderer",
+        "SetAttributeRenderer",
+        "SetClassAttributeRenderer",
+        "SetStyleAttributeRenderer",
+        "StylePropertyBindingRenderer",
+        "TextBindingRenderer",
+        "SpreadRenderer",
+        "SpreadValueRenderer"
+      ]
+    },
+    {
+      "kind": "bundle-array",
+      "packageName": "@aurelia/runtime-html",
+      "exportName": "DefaultResources",
+      "declarationFile": "packages/runtime-html/src/configuration.ts",
+      "elementCount": 30,
+      "elementNames": [
+        "DebounceBindingBehavior",
+        "OneTimeBindingBehavior",
+        "ToViewBindingBehavior",
+        "FromViewBindingBehavior",
+        "SignalBindingBehavior",
+        "ThrottleBindingBehavior",
+        "TwoWayBindingBehavior",
+        "SanitizeValueConverter",
+        "If",
+        "Else",
+        "Repeat",
+        "With",
+        "Switch",
+        "Case",
+        "DefaultCase",
+        "PromiseTemplateController",
+        "PendingTemplateController",
+        "FulfilledTemplateController",
+        "RejectedTemplateController",
+        "PromiseAttributePattern",
+        "FulfilledAttributePattern",
+        "RejectedAttributePattern",
+        "AttrBindingBehavior",
+        "SelfBindingBehavior",
+        "UpdateTriggerBindingBehavior",
+        "AuCompose",
+        "Portal",
+        "Focus",
+        "Show",
+        "AuSlot"
+      ]
+    },
+    {
+      "kind": "bundle-array",
+      "packageName": "@aurelia/runtime-html",
+      "exportName": "ShortHandBindingSyntax",
+      "declarationFile": "packages/runtime-html/src/configuration.ts",
+      "elementCount": 2,
+      "elementNames": [
+        "AtPrefixedTriggerAttributePattern",
+        "ColonPrefixedBindAttributePattern"
+      ]
+    }
+  ],
+  "registryObjects": [
+    {
+      "kind": "registry-object",
+      "packageName": "@aurelia/addons",
+      "exportName": "AddonsConfiguration",
+      "declarationFile": "packages/addons/src/index.ts",
+      "originKind": "object-literal",
+      "registerMethod": {
+        "bundleSpreads": [],
+        "helperCalls": []
+      },
+      "factoryMethods": []
+    },
+    {
+      "kind": "registry-object",
+      "packageName": "@aurelia/compat-v1",
+      "exportName": "callSyntax",
+      "declarationFile": "packages/compat-v1/src/compat-call.ts",
+      "originKind": "object-literal",
+      "registerMethod": {
+        "bundleSpreads": [],
+        "helperCalls": [
+          "callRegisteredContainer.has",
+          "callRegisteredContainer.add",
+          "container.register"
+        ]
+      },
+      "factoryMethods": []
+    },
+    {
+      "kind": "registry-object",
+      "packageName": "@aurelia/compat-v1",
+      "exportName": "delegateSyntax",
+      "declarationFile": "packages/compat-v1/src/compat-event.ts",
+      "originKind": "object-literal",
+      "registerMethod": {
+        "bundleSpreads": [],
+        "helperCalls": [
+          "delegateRegisteredContainer.has",
+          "delegateRegisteredContainer.add",
+          "container.register"
+        ]
+      },
+      "factoryMethods": []
+    },
+    {
+      "kind": "registry-object",
+      "packageName": "@aurelia/compat-v1",
+      "exportName": "eventPreventDefaultBehavior",
+      "declarationFile": "packages/compat-v1/src/compat-event.ts",
+      "originKind": "object-literal",
+      "registerMethod": {
+        "bundleSpreads": [],
+        "helperCalls": [
+          "preventDefaultRegisteredContainer.has",
+          "preventDefaultRegisteredContainer.add",
+          "container.get"
+        ]
+      },
+      "factoryMethods": []
+    },
+    {
+      "kind": "registry-object",
+      "packageName": "@aurelia/compat-v1",
+      "exportName": "compatRegistration",
+      "declarationFile": "packages/compat-v1/src/index.ts",
+      "originKind": "object-literal",
+      "registerMethod": {
+        "bundleSpreads": [],
+        "helperCalls": [
+          "defineAstMethods",
+          "defineBindingMethods",
+          "enableComposeCompat",
+          "container.register"
+        ]
+      },
+      "factoryMethods": []
+    },
+    {
+      "kind": "registry-object",
+      "packageName": "@aurelia/dialog",
+      "exportName": "DialogConfigurationClassic",
+      "declarationFile": "packages/dialog/src/dialog-configuration.ts",
+      "originKind": "factory-return",
+      "registerMethod": {
+        "bundleSpreads": [],
+        "helperCalls": [
+          "ctn.register",
+          "singletonRegistration",
+          "AppTask.creating",
+          "instanceRegistration"
+        ]
+      },
+      "factoryMethods": [
+        {
+          "name": "customize",
+          "role": "configuration-customizer",
+          "returnsRegistry": true,
+          "bundleSpreads": [],
+          "helperCalls": [
+            "createDialogConfiguration"
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "registry-object",
+      "packageName": "@aurelia/dialog",
+      "exportName": "DialogConfigurationStandard",
+      "declarationFile": "packages/dialog/src/dialog-configuration.ts",
+      "originKind": "factory-return",
+      "registerMethod": {
+        "bundleSpreads": [],
+        "helperCalls": [
+          "ctn.register",
+          "singletonRegistration",
+          "AppTask.creating",
+          "instanceRegistration"
+        ]
+      },
+      "factoryMethods": [
+        {
+          "name": "customize",
+          "role": "configuration-customizer",
+          "returnsRegistry": true,
+          "bundleSpreads": [],
+          "helperCalls": [
+            "createDialogConfiguration"
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "registry-object",
+      "packageName": "@aurelia/i18n",
+      "exportName": "I18nConfiguration",
+      "declarationFile": "packages/i18n/src/configuration.ts",
+      "originKind": "factory-return",
+      "registerMethod": {
+        "bundleSpreads": [
+          "dateFormat",
+          "numberFormat",
+          "relativeTimeFormat"
+        ],
+        "helperCalls": [
+          "Object.create",
+          "optionsProvider",
+          "container.register",
+          "coreComponents"
+        ]
+      },
+      "factoryMethods": [
+        {
+          "name": "customize",
+          "role": "configuration-customizer",
+          "returnsRegistry": true,
+          "bundleSpreads": [],
+          "helperCalls": [
+            "createI18nConfiguration"
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "registry-object",
+      "packageName": "@aurelia/kernel",
+      "exportName": "LoggerConfiguration",
+      "declarationFile": "packages/kernel/src/logger.ts",
+      "originKind": "wrapped-object-literal",
+      "registerMethod": null,
+      "factoryMethods": [
+        {
+          "name": "create",
+          "role": "registry-factory",
+          "returnsRegistry": true,
+          "bundleSpreads": [],
+          "helperCalls": [
+            "toLookup"
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "registry-object",
+      "packageName": "@aurelia/router",
+      "exportName": "RouterConfiguration",
+      "declarationFile": "packages/router/src/configuration.ts",
+      "originKind": "object-literal",
+      "registerMethod": {
+        "bundleSpreads": [],
+        "helperCalls": [
+          "configure"
+        ]
+      },
+      "factoryMethods": [
+        {
+          "name": "customize",
+          "role": "configuration-customizer",
+          "returnsRegistry": true,
+          "bundleSpreads": [],
+          "helperCalls": []
+        }
+      ]
+    },
+    {
+      "kind": "registry-object",
+      "packageName": "@aurelia/runtime-html",
+      "exportName": "EventModifierRegistration",
+      "declarationFile": "packages/runtime-html/src/binding/listener-binding.ts",
+      "originKind": "object-literal",
+      "registerMethod": {
+        "bundleSpreads": [],
+        "helperCalls": [
+          "c.register"
+        ]
+      },
+      "factoryMethods": []
+    },
+    {
+      "kind": "registry-object",
+      "packageName": "@aurelia/runtime-html",
+      "exportName": "RuntimeTemplateCompilerImplementation",
+      "declarationFile": "packages/runtime-html/src/compiler/template-compiler.ts",
+      "originKind": "object-literal",
+      "registerMethod": {
+        "bundleSpreads": [],
+        "helperCalls": [
+          "container.register"
+        ]
+      },
+      "factoryMethods": []
+    },
+    {
+      "kind": "registry-object",
+      "packageName": "@aurelia/runtime-html",
+      "exportName": "StandardConfiguration",
+      "declarationFile": "packages/runtime-html/src/configuration.ts",
+      "originKind": "factory-return",
+      "registerMethod": {
+        "bundleSpreads": [
+          "DefaultComponents",
+          "DefaultResources",
+          "DefaultBindingSyntax",
+          "DefaultBindingLanguage",
+          "DefaultRenderers"
+        ],
+        "helperCalls": [
+          "optionsProvider",
+          "container.register",
+          "instanceRegistration"
+        ]
+      },
+      "factoryMethods": [
+        {
+          "name": "customize",
+          "role": "configuration-customizer",
+          "returnsRegistry": true,
+          "bundleSpreads": [],
+          "helperCalls": [
+            "createConfiguration"
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "registry-object",
+      "packageName": "@aurelia/runtime-html",
+      "exportName": "StyleConfiguration",
+      "declarationFile": "packages/runtime-html/src/templating/styles.ts",
+      "originKind": "object-literal",
+      "registerMethod": null,
+      "factoryMethods": [
+        {
+          "name": "shadowDOM",
+          "role": "registry-factory",
+          "returnsRegistry": true,
+          "bundleSpreads": [],
+          "helperCalls": [
+            "AppTask.creating"
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "registry-object",
+      "packageName": "@aurelia/state",
+      "exportName": "StateDefaultConfiguration",
+      "declarationFile": "packages/state/src/configuration.ts",
+      "originKind": "object-literal",
+      "registerMethod": null,
+      "factoryMethods": [
+        {
+          "name": "init",
+          "role": "registry-factory",
+          "returnsRegistry": true,
+          "bundleSpreads": [],
+          "helperCalls": [
+            "createStoreRegistration"
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "registry-object",
+      "packageName": "@aurelia/store-v1",
+      "exportName": "StoreConfiguration",
+      "declarationFile": "packages/store-v1/src/index.ts",
+      "originKind": "object-literal",
+      "registerMethod": {
+        "bundleSpreads": [],
+        "helperCalls": [
+          "Reflect.get",
+          "Reflect.get",
+          "container.get",
+          "container.get",
+          "isStateHistory",
+          "Registration.instance(Store, new Store(initState, logger, window, options)).register",
+          "Registration.instance"
+        ]
+      },
+      "factoryMethods": []
+    },
+    {
+      "kind": "registry-object",
+      "packageName": "@aurelia/template-compiler",
+      "exportName": "AttributePattern",
+      "declarationFile": "packages/template-compiler/src/attribute-pattern.ts",
+      "originKind": "wrapped-object-literal",
+      "registerMethod": null,
+      "factoryMethods": [
+        {
+          "name": "create",
+          "role": "registry-factory",
+          "returnsRegistry": true,
+          "bundleSpreads": [],
+          "helperCalls": []
+        }
+      ]
+    },
+    {
+      "kind": "registry-object",
+      "packageName": "@aurelia/template-compiler",
+      "exportName": "TemplateCompilerHooks",
+      "declarationFile": "packages/template-compiler/src/template-compiler.ts",
+      "originKind": "wrapped-object-literal",
+      "registerMethod": null,
+      "factoryMethods": [
+        {
+          "name": "define",
+          "role": "registry-factory",
+          "returnsRegistry": true,
+          "bundleSpreads": [],
+          "helperCalls": []
+        }
+      ]
+    },
+    {
+      "kind": "registry-object",
+      "packageName": "@aurelia/ui-virtualization",
+      "exportName": "DefaultVirtualizationConfiguration",
+      "declarationFile": "packages/ui-virtualization/src/configuration.ts",
+      "originKind": "object-literal",
+      "registerMethod": {
+        "bundleSpreads": [],
+        "helperCalls": [
+          "container.register"
+        ]
+      },
+      "factoryMethods": []
+    },
+    {
+      "kind": "registry-object",
+      "packageName": "@aurelia/validation-html",
+      "exportName": "ValidationHtmlConfiguration",
+      "declarationFile": "packages/validation-html/src/configuration.ts",
+      "originKind": "factory-return",
+      "registerMethod": {
+        "bundleSpreads": [],
+        "helperCalls": [
+          "getDefaultValidationHtmlConfiguration",
+          "optionsProvider",
+          "container.registerFactory",
+          "container.register",
+          "ValidationConfiguration.customize",
+          "Registration.instance",
+          "container.register",
+          "container.register",
+          "CustomElement.define"
+        ]
+      },
+      "factoryMethods": [
+        {
+          "name": "customize",
+          "role": "configuration-customizer",
+          "returnsRegistry": true,
+          "bundleSpreads": [],
+          "helperCalls": [
+            "createConfiguration"
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "registry-object",
+      "packageName": "@aurelia/validation-i18n",
+      "exportName": "ValidationI18nConfiguration",
+      "declarationFile": "packages/validation-i18n/src/configuration.ts",
+      "originKind": "factory-return",
+      "registerMethod": {
+        "bundleSpreads": [],
+        "helperCalls": [
+          "getDefaultValidationHtmlConfiguration",
+          "optionsProvider",
+          "container.register",
+          "ValidationHtmlConfiguration.customize",
+          "Registration.callback"
+        ]
+      },
+      "factoryMethods": [
+        {
+          "name": "customize",
+          "role": "configuration-customizer",
+          "returnsRegistry": true,
+          "bundleSpreads": [],
+          "helperCalls": [
+            "createConfiguration"
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "registry-object",
+      "packageName": "@aurelia/validation",
+      "exportName": "ValidationConfiguration",
+      "declarationFile": "packages/validation/src/configuration.ts",
+      "originKind": "factory-return",
+      "registerMethod": {
+        "bundleSpreads": [],
+        "helperCalls": [
+          "getDefaultValidationConfiguration",
+          "optionsProvider",
+          "container.register",
+          "Registration.instance",
+          "Registration.singleton",
+          "Registration.singleton",
+          "Registration.singleton",
+          "Registration.transient"
+        ]
+      },
+      "factoryMethods": [
+        {
+          "name": "customize",
+          "role": "configuration-customizer",
+          "returnsRegistry": true,
+          "bundleSpreads": [],
+          "helperCalls": [
+            "createConfiguration"
+          ]
+        }
+      ]
+    }
+  ]
+}

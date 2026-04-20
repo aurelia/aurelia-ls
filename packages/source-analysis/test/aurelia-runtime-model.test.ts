@@ -1,3 +1,8 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import ts from 'typescript';
+
 import { describe, expect, it } from './test-harness.js';
 
 import {
@@ -7,6 +12,7 @@ import {
   AppRoot,
   BindingBehaviorDefinition,
   BindingCommandDefinition,
+  ConfigurationRegistrationScanner,
   ContainerWorldRef,
   ContainerStateEntry,
   CustomAttributeDefinition,
@@ -21,6 +27,8 @@ import {
   KeyRef,
   LookupModifier,
   LookupRequest,
+  REGISTRY_FACTORY_METHOD_ROLE_KINDS,
+  REGISTRY_OBJECT_ORIGIN_KINDS,
   MATERIALIZATION_TIMING_KINDS,
   LOOKUP_REGIME_KINDS,
   OPEN_RESIDUAL_KINDS,
@@ -289,6 +297,99 @@ describe('Aurelia clean-room runtime model', () => {
     expect(lookup.modifiers).toContain('optional');
     expect(lookup.resourceRegime?.kind).toBe('optional-resource');
   });
+
+  it('classifies bundle arrays and registry configuration exports from syntax-only variable surfaces', () => {
+    const fixture = createConfigurationFixture();
+    const framework = new Framework(fixture.rootDir, {
+      rootDir: fixture.rootDir,
+      exports: fixture.exports,
+    });
+
+    const bundles = framework.configurations().readBundleArrays();
+    const registries = framework.configurations().readRegistryObjects();
+
+    expect(REGISTRY_OBJECT_ORIGIN_KINDS).toContain('factory-return');
+    expect(REGISTRY_FACTORY_METHOD_ROLE_KINDS).toContain('configuration-customizer');
+    expect(bundles.map((current) => current.sourceExport.name)).toEqual([
+      'DefaultComponents',
+      'DefaultResources',
+      'DefaultBindingSyntax',
+      'DefaultBindingLanguage',
+      'DefaultRenderers',
+      'DialogRegistrations',
+    ]);
+    expect(bundles.find((current) => current.sourceExport.name === 'DefaultResources')?.elementNames).toEqual([
+      'DebounceBindingBehavior',
+      'OneTimeBindingBehavior',
+      'ToViewBindingBehavior',
+    ]);
+    expect(bundles.find((current) => current.sourceExport.name === 'globalAttributeNames')).toBeUndefined();
+
+    const standard = registries.find((current) => current.sourceExport.name === 'StandardConfiguration');
+    const router = registries.find((current) => current.sourceExport.name === 'RouterConfiguration');
+    const style = registries.find((current) => current.sourceExport.name === 'StyleConfiguration');
+    const logger = registries.find((current) => current.sourceExport.name === 'LoggerConfiguration');
+    const dialog = registries.find((current) => current.sourceExport.name === 'DialogConfigurationStandard');
+
+    expect(standard?.originKind).toBe('factory-return');
+    expect(standard?.registerMethod?.bundleSpreads.map((current) => current.referenceName)).toEqual([
+      'DefaultComponents',
+      'DefaultResources',
+      'DefaultBindingSyntax',
+      'DefaultBindingLanguage',
+      'DefaultRenderers',
+    ]);
+    expect(standard?.factoryMethods.find((current) => current.name === 'customize')?.role).toBe('configuration-customizer');
+
+    expect(router?.originKind).toBe('object-literal');
+    expect(router?.registerMethod?.helperCalls.map((current) => current.calleeName)).toContain('configure');
+    expect(router?.factoryMethods.find((current) => current.name === 'customize')?.returnsRegistry).toBe(true);
+
+    expect(style?.registerMethod).toBeNull();
+    expect(style?.factoryMethods.find((current) => current.name === 'shadowDOM')?.returnsRegistry).toBe(true);
+    expect(style?.factoryMethods.find((current) => current.name === 'shadowDOM')?.helperCalls.map((current) => current.calleeName)).toContain('AppTask.creating');
+
+    expect(logger?.originKind).toBe('wrapped-object-literal');
+    expect(logger?.factoryMethods.find((current) => current.name === 'create')?.returnsRegistry).toBe(true);
+
+    expect(dialog?.originKind).toBe('factory-return');
+    expect(dialog?.registerMethod?.helperCalls.map((current) => current.calleeName)).toEqual([
+      'ctn.register',
+      'singletonRegistration',
+      'AppTask.creating',
+      'instanceRegistration',
+    ]);
+  });
+
+  it('translates direct configuration helper calls into first registration productions', () => {
+    const fixture = createConfigurationFixture();
+    const framework = new Framework(fixture.rootDir, {
+      rootDir: fixture.rootDir,
+      exports: fixture.exports,
+    });
+    const scanner = new ConfigurationRegistrationScanner({
+      configurations: framework.configurations(),
+    });
+
+    const productions = scanner.scanAll();
+    const standard = productions.filter((current) => current.ownerConfiguration.sourceExport.name === 'StandardConfiguration');
+    const style = productions.filter((current) => current.ownerConfiguration.sourceExport.name === 'StyleConfiguration');
+    const dialog = productions.filter((current) => current.ownerConfiguration.sourceExport.name === 'DialogConfigurationStandard');
+    const logger = productions.filter((current) => current.ownerConfiguration.sourceExport.name === 'LoggerConfiguration');
+    const state = productions.filter((current) => current.ownerConfiguration.sourceExport.name === 'StateDefaultConfiguration');
+
+    expect(standard.some((current) => current.production.kind === 'instance')).toBe(true);
+    expect(standard.some((current) => current.apiIngress.api?.id === 'registration.instance')).toBe(true);
+    expect(style.some((current) => current.production.kind === 'lifecycle-slot-task')).toBe(true);
+    expect(style.some((current) => current.apiIngress.api?.id === 'app-task.creating')).toBe(true);
+    expect(style.some((current) => current.production.kind === 'instance')).toBe(false);
+    expect(dialog.some((current) => current.production.kind === 'lifecycle-slot-task')).toBe(true);
+    expect(dialog.some((current) => current.production.kind === 'instance')).toBe(true);
+    expect(dialog.some((current) => current.production.kind === 'singleton')).toBe(true);
+    expect(dialog.some((current) => current.apiIngress.api?.id === 'registration.singleton')).toBe(true);
+    expect(logger).toHaveLength(0);
+    expect(state).toHaveLength(0);
+  });
 });
 
 function createProgramHandle(): ProgramRef {
@@ -449,4 +550,236 @@ function createResourceDefinitions(
       ['trigger'],
     ),
   ];
+}
+
+function createConfigurationFixture(): {
+  readonly exports: readonly DeclarationExport[];
+  readonly rootDir: string;
+} {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aurelia-clean-room-config-'));
+  const filePath = path.join(rootDir, 'configuration-fixture.ts');
+  const utilitiesPath = path.join(rootDir, 'utilities-di.ts');
+  fs.writeFileSync(
+    utilitiesPath,
+    `
+import { Registration } from '@aurelia/kernel';
+
+export const singletonRegistration = Registration.singleton;
+export const instanceRegistration = Registration.instance;
+`,
+    'utf8',
+  );
+  const sourceText = `
+import { AppTask } from '@aurelia/runtime-html';
+import { singletonRegistration, instanceRegistration } from './utilities-di';
+
+declare const noop: unknown;
+declare const IContainer: unknown;
+declare const ExpressionParser: unknown;
+declare function toLookup<T>(value: T): T;
+declare function configure(...args: unknown[]): unknown;
+declare const RuntimeTemplateCompilerImplementation: unknown;
+declare const DirtyChecker: unknown;
+declare const NodeObserverLocator: unknown;
+declare const DebounceBindingBehavior: unknown;
+declare const OneTimeBindingBehavior: unknown;
+declare const ToViewBindingBehavior: unknown;
+declare const DotSeparatedAttributePattern: unknown;
+declare const EventAttributePattern: unknown;
+declare const DefaultBindingCommand: unknown;
+declare const ForBindingCommand: unknown;
+declare const PropertyBindingRenderer: unknown;
+declare const IteratorBindingRenderer: unknown;
+declare const DialogService: unknown;
+export const DefaultComponents = [
+  RuntimeTemplateCompilerImplementation,
+  DirtyChecker,
+  NodeObserverLocator,
+];
+
+export const DefaultResources = [
+  DebounceBindingBehavior,
+  OneTimeBindingBehavior,
+  ToViewBindingBehavior,
+];
+
+export const DefaultBindingSyntax = [
+  DotSeparatedAttributePattern,
+  EventAttributePattern,
+];
+
+export const DefaultBindingLanguage = [
+  DefaultBindingCommand,
+  ForBindingCommand,
+];
+
+export const DefaultRenderers = [
+  PropertyBindingRenderer,
+  IteratorBindingRenderer,
+];
+
+export const DialogRegistrations = [
+  DialogService,
+];
+
+export const globalAttributeNames = [
+  'class',
+  'style',
+];
+
+function createConfiguration(optionsProvider: unknown) {
+  return {
+    optionsProvider,
+        register(container: { register(...args: unknown[]): unknown }) {
+          return container.register(
+            ExpressionParser,
+            instanceRegistration('ICoercionConfiguration', {}),
+            ...DefaultComponents,
+            ...DefaultResources,
+            ...DefaultBindingSyntax,
+        ...DefaultBindingLanguage,
+        ...DefaultRenderers,
+      );
+    },
+    customize(cb?: unknown) {
+      return createConfiguration(cb ?? optionsProvider);
+    },
+  };
+}
+
+export const StandardConfiguration = createConfiguration(noop);
+
+export const RouterConfiguration = {
+  register(container: unknown) {
+    return configure(container);
+  },
+  customize(options?: unknown) {
+    return {
+      register(container: unknown) {
+        return configure(container, options);
+      },
+    };
+  },
+};
+
+export const StyleConfiguration = {
+  shadowDOM(config: unknown) {
+    return AppTask.creating(IContainer, container => {
+      return config ?? container;
+    });
+  },
+};
+
+export const LoggerConfiguration = toLookup({
+  create() {
+        return toLookup({
+          register(container: { register(...args: unknown[]): unknown }) {
+            return container.register(
+              instanceRegistration('ILogConfig', { level: 'warn' }),
+              singletonRegistration('ISink', class Sink {}),
+            );
+          },
+        });
+  },
+});
+
+function createDialogConfiguration(cb: unknown) {
+  return {
+    register: (ctn: { register(...args: unknown[]): unknown }) => ctn.register(
+      singletonRegistration('IDialogGlobalSettings', class Settings {}),
+      AppTask.creating(() => cb),
+      instanceRegistration('IDialogChildSettings', new Map()),
+    ),
+    customize(nextCb?: unknown) {
+      return createDialogConfiguration(nextCb ?? cb);
+    },
+  };
+}
+
+export const DialogConfigurationStandard = createDialogConfiguration(noop);
+
+export const StateDefaultConfiguration = {
+  init() {
+    const createStoreRegistration = () => {
+      return AppTask.creating(IContainer, c => {
+        return c.register(
+          instanceRegistration('Store', {}),
+        );
+      });
+    };
+
+    return {
+      register(c: { register(...args: unknown[]): unknown }) {
+        return c.register(createStoreRegistration());
+      },
+    };
+  },
+};
+`;
+  fs.writeFileSync(filePath, sourceText, 'utf8');
+
+  const program = new ProgramRef(
+    'program:configuration-fixture',
+    rootDir,
+    null,
+  );
+  const file = new SourceFileRef(
+    `file:${filePath}`,
+    program,
+    filePath,
+  );
+  const sourceFile = ts.createSourceFile(
+    filePath,
+    sourceText,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+
+  const exports: DeclarationExport[] = [];
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) {
+      continue;
+    }
+
+    if (!hasExportModifier(statement)) {
+      continue;
+    }
+
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name)) {
+        continue;
+      }
+
+      const declarationRef = new SourceNodeRef(
+        `node:${declaration.name.text}:${declaration.getStart()}-${declaration.end}`,
+        file,
+        'VariableDeclaration',
+        new SourceSpan(declaration.getStart(), declaration.end),
+      );
+      const symbolRef = new SymbolRef(
+        `symbol:${declaration.name.text}`,
+        file,
+        declaration.name.text,
+        [declaration.name.text],
+        declarationRef,
+      );
+      exports.push({
+        name: declaration.name.text,
+        symbol: symbolRef,
+        sourceFile: file,
+      });
+    }
+  }
+
+  return {
+    exports,
+    rootDir,
+  };
+}
+
+function hasExportModifier(
+  statement: ts.VariableStatement,
+): boolean {
+  return statement.modifiers?.some((current) => current.kind === ts.SyntaxKind.ExportKeyword) ?? false;
 }

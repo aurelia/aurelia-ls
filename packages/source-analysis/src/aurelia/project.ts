@@ -2,6 +2,10 @@ import { DeclarationWorld, type DeclarationExport } from './declaration-world.js
 import type { AppRoot } from './app-root.js';
 import type { Aurelia } from './aurelia.js';
 import {
+  Configurations,
+  ConfigurationScanner,
+} from './configurations/index.js';
+import {
   Exports,
   ExportScanner,
 } from './exports/index.js';
@@ -24,6 +28,7 @@ export interface ProjectOptions {
 // graphs, app-root discovery, and local template ownership without forcing
 // those concerns into the lower-level world/runtime classes.
 export class Project {
+  private readonly configurationsValue: Configurations;
   private readonly declarationWorldValue: DeclarationWorld;
   private readonly exportsValue: Exports;
   private readonly resourcesValue: Resources;
@@ -49,6 +54,12 @@ export class Project {
         declarationWorld: this.declarationWorldValue,
       }),
     );
+    this.configurationsValue = new Configurations(
+      `project:${name}`,
+      new ConfigurationScanner({
+        exports: this.exportsValue,
+      }),
+    );
     this.resourcesValue = new Resources(
       `project:${name}`,
       new ResourceScanner({
@@ -70,6 +81,14 @@ export class Project {
 
   readExports() {
     return this.exportsValue.readAll();
+  }
+
+  configurations(): Configurations {
+    return this.configurationsValue;
+  }
+
+  readConfigurations() {
+    return this.configurationsValue.readAll();
   }
 
   resources(): Resources {

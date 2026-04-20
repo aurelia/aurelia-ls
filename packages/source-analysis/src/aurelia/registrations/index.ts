@@ -36,6 +36,12 @@ export {
   type ResourceLookupRegimeKind,
 } from './resource-lookup-regime.js';
 export { ContainerStateEntry } from './container-state-entry.js';
+export { ConfigurationRegistrationProduction } from './configuration-registration-production.js';
+export {
+  ConfigurationRegistrationScanner,
+  type ConfigurationRegistrationScannerOptions,
+  type ConfigurationRegistrationScannerState,
+} from './configuration-registration-scanner.js';
 export {
   LookupRequest,
   type LookupRequestRegimeKind,
