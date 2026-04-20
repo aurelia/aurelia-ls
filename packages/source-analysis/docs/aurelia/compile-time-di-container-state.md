@@ -56,6 +56,29 @@ At minimum the carrier should preserve these first-class axes:
 - topology/runtime qualification hook
 - extension/interoperability qualification hook
 
+The current Atlas-aligned minimum vocabulary under those axes is:
+
+- key families:
+  - `property-key`
+  - `object-key`
+  - `constructable-key`
+  - `interface-symbol-key`
+  - `resolver-key`
+  - `resource-key`
+- base resolver strategies:
+  - `instance`
+  - `singleton`
+  - `transient`
+  - `callback`
+  - `alias`
+  - `array-aggregation`
+
+Important constraint:
+
+- `cachedCallback` should not be treated as a separate base resolver strategy
+- it is callback strategy plus memoization posture layered over the callback
+  payload
+
 Later consumers may narrow spend by regime. They must not strengthen truth by
 flattening or silently upgrading these axes.
 
@@ -86,6 +109,18 @@ The current minimum transition vocabulary should distinguish:
 - `generated-syntax-or-settings-emission`: emits syntax, aliases, renderers,
   or settings-world artifacts as registration-side consequence
 
+For thin producer-side lenses in this repo, it is acceptable to start with a
+smaller transition subset such as:
+
+- `default-interface-registration`
+- `direct-registration`
+- `registry-emitter`
+- `aggregate-intake`
+- `lifecycle-slot-registry`
+
+as long as later widening keeps those labels mappable onto the broader
+transition-class burden instead of freezing them as the final vocabulary.
+
 ## Boundary Law
 
 Keep these neighboring slices distinct:
@@ -109,6 +144,11 @@ This carrier must not become:
 
 - Registration-side framework analysis should model state transitions, not just
   symbol matches.
+- Producer-side lenses should privilege key family, base resolver strategy,
+  transition class, and honest residual openness over API-detection trivia.
+- Interface-key recovery and registration-transition recovery are related but
+  distinct burdens; they should not be forced into one canonical record unless
+  a later slice proves that the combined carrier answers one cleaner burden.
 - DI linkage work should preserve analyzability band and honest-open residuals
   as part of the carrier, while leaving consumer-facing tier classification to
   higher layers.

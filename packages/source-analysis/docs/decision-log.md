@@ -399,3 +399,22 @@ decision trail in order.
   [docs/aurelia/di-and-registration-lens-charter.md](./aurelia/di-and-registration-lens-charter.md).
 - Shared Aurelia lenses should reuse one live analysis context when possible
   instead of reopening the same repo/session/outputs in parallel.
+
+## 2026-04-19 - DI producer work now splits interface-key recovery from registration-transition recovery
+
+- The original combined DI/registration charter was good enough to start the
+  slice, but it blurred two distinct burdens: recovering interface-symbol
+  keys and recovering compile-time registration transitions.
+- The local Aurelia grounding set now records those as separate focused
+  charters:
+  - [docs/aurelia/di-interface-key-lens-charter.md](./aurelia/di-interface-key-lens-charter.md)
+  - [docs/aurelia/registration-transition-lens-charter.md](./aurelia/registration-transition-lens-charter.md)
+- The registration lens should now bias toward Atlas-shaped compile-time DI
+  consequence:
+  - key family
+  - base resolver strategy
+  - transition class
+  - residual openness
+- API-detection trivia, raw source snippets, and mixed locality buckets remain
+  useful as provisional proof or projection material, but they should not keep
+  pretending to be the semantic burden of the canonical carrier.

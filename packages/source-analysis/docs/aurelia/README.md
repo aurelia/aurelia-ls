@@ -37,7 +37,8 @@ For the near-term operational integration target against the Aurelia framework
 repo itself, also use:
 
 - [framework-export-integration-plan.md](./framework-export-integration-plan.md)
-- [di-and-registration-lens-charter.md](./di-and-registration-lens-charter.md)
+- [di-interface-key-lens-charter.md](./di-interface-key-lens-charter.md)
+- [registration-transition-lens-charter.md](./registration-transition-lens-charter.md)
 
 That note intentionally prefers a thinner export-classification authority over
 prematurely fleshing out the full protocol across only a small subset of
@@ -54,17 +55,20 @@ resources.
 7. [semantic-stack.md](./semantic-stack.md)
 8. [export-semantic-surface-ledger.yaml](./export-semantic-surface-ledger.yaml)
 9. [framework-export-integration-plan.md](./framework-export-integration-plan.md)
-10. [di-and-registration-lens-charter.md](./di-and-registration-lens-charter.md)
-11. [lens-charter-template.md](./lens-charter-template.md)
-12. [atlas/README.md](./atlas/README.md)
-13. [ai-capability-surface-map.md](./ai-capability-surface-map.md)
-14. [ai-capability-catalog.md](./ai-capability-catalog.md)
+10. [di-interface-key-lens-charter.md](./di-interface-key-lens-charter.md)
+11. [registration-transition-lens-charter.md](./registration-transition-lens-charter.md)
+12. [lens-charter-template.md](./lens-charter-template.md)
+13. [atlas/README.md](./atlas/README.md)
+14. [ai-capability-surface-map.md](./ai-capability-surface-map.md)
+15. [ai-capability-catalog.md](./ai-capability-catalog.md)
 
 ## Local Rules
 
 - Keep framework ingress identity-focused.
 - Keep canonical records plain data and keep derivation explicit.
 - Keep qualified DI consequence separate from owner-surface grounding.
+- Keep interface-key and registration-transition burdens separate unless a
+  later slice can justify recombining them.
 - Treat registration-world constructors as real framework truth, not just
   convenience wrappers.
 - Keep grounding, admissibility, and corridor-local meaning separate.

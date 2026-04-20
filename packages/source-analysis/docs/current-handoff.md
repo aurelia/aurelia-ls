@@ -182,6 +182,16 @@ question routing, family ranking, or conversational ingress.
   [aurelia/di-and-registration-lens-charter.md](./aurelia/di-and-registration-lens-charter.md)
   so current and future Aurelia lenses have an explicit rule set for canonical
   records, evaluators, projections, cost ceilings, and focused golden layout.
+- The initial combined DI/registration charter has now been split into
+  [aurelia/di-interface-key-lens-charter.md](./aurelia/di-interface-key-lens-charter.md)
+  and
+  [aurelia/registration-transition-lens-charter.md](./aurelia/registration-transition-lens-charter.md)
+  so producer-side interface-key recovery and producer-side registration
+  transition recovery stop pretending to be one burden.
+- The registration lens is now being steered against Atlas-shaped
+  compile-time DI consequence: key family, base resolver strategy, transition
+  class, and honest residual openness matter more than raw API detection or
+  source-expression extraction.
 - Added a repo-owned protocol derivation packet set under
   [../fixtures/protocol-derivation/README.md](../fixtures/protocol-derivation/README.md)
   with concrete export-lens fixtures, scenario packets, and mutation-backed

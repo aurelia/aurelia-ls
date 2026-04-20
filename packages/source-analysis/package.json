@@ -33,12 +33,10 @@
   "scripts": {
     "build": "node ./scripts/build.mjs",
     "build:tests": "node ./scripts/build-tests.mjs",
-    "generate:aurelia-di-interface-goldens": "node ./scripts/generate-aurelia-di-interface-goldens.mjs",
     "generate:aurelia-framework-goldens": "node ./scripts/generate-aurelia-framework-goldens.mjs",
     "preflight": "node ./scripts/preflight.mjs",
     "test": "node ./scripts/build.mjs && node ./scripts/build-tests.mjs && node ./scripts/run-node-tests.mjs",
-    "test:node:aurelia-di-interface-goldens": "node ./scripts/run-node-tests.mjs out-test/test/aurelia-di-interface-goldens.test.js",
-    "test:node:aurelia-registration-effects": "node ./scripts/run-node-tests.mjs out-test/test/aurelia-registration-effect-discovery.test.js",
+    "test:node:aurelia-runtime-model": "node ./scripts/run-node-tests.mjs out-test/test/aurelia-runtime-model.test.js",
     "test:node": "node ./scripts/run-node-tests.mjs",
     "test:node:aurelia-framework-exports": "node ./scripts/run-node-tests.mjs test/aurelia-framework-exports.test.ts",
     "test:node:cov": "node ./scripts/run-node-tests.mjs --coverage"
