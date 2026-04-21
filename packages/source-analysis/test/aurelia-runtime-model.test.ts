@@ -1866,6 +1866,82 @@ describe('Aurelia clean-room runtime model', () => {
     expect(ifTc.policy.readProvenance('container-strategy')?.selected?.carrier).toBe('static-au-property');
   });
 
+  it('materializes declaration-local lifecycle hook surfaces for CE, CA, and TC resources', () => {
+    const fixture = createLifecycleResourceFixture();
+    const framework = new Framework(fixture.rootDir, {
+      rootDir: fixture.rootDir,
+      exports: fixture.exports,
+      resourceSeeds: fixture.resourceSeeds,
+    });
+
+    const ce = framework.resources().readCustomElements().find((current) => current.name === 'lifecycle-card');
+    const ca = framework.resources().readCustomAttributes().find((current) => current.name === 'focus');
+    const tc = framework.resources().readTemplateControllers().find((current) => current.name === 'guard');
+
+    expect(ce).toBeDefined();
+    expect(ca).toBeDefined();
+    expect(tc).toBeDefined();
+    if (ce == null || ca == null || tc == null) {
+      throw new Error('Expected lifecycle fixture resources to materialize.');
+    }
+
+    expect(ce.lifecycleHooks.has('define')).toBe(true);
+    expect(ce.lifecycleHooks.has('hydrating')).toBe(true);
+    expect(ce.lifecycleHooks.has('hydrated')).toBe(true);
+    expect(ce.lifecycleHooks.has('created')).toBe(true);
+    expect(ce.lifecycleHooks.has('binding')).toBe(true);
+    expect(ce.lifecycleHooks.has('attaching')).toBe(true);
+    expect(ce.lifecycleHooks.has('dispose')).toBe(true);
+    expect(ce.lifecycleHooks.readProvenance('define')?.selected?.carrier).toBe('instance-method');
+
+    expect(ca.lifecycleHooks.has('created')).toBe(true);
+    expect(ca.lifecycleHooks.has('binding')).toBe(true);
+    expect(ca.lifecycleHooks.has('unbinding')).toBe(true);
+    expect(ca.lifecycleHooks.has('dispose')).toBe(true);
+    expect(ca.lifecycleHooks.has('link')).toBe(true);
+    expect(ca.lifecycleHooks.readProvenance('link')?.selected?.carrier).toBe('instance-method');
+
+    expect(tc.lifecycleHooks.has('link')).toBe(true);
+    expect(tc.lifecycleHooks.has('attaching')).toBe(true);
+    expect(tc.lifecycleHooks.has('accept')).toBe(true);
+    expect(tc.lifecycleHooks.readProvenance('attaching')?.selected?.carrier).toBe('instance-method');
+  });
+
+  it('materializes value-converter and binding-behavior support bundles from declaration source', () => {
+    const fixture = createBehavioralResourceFixture();
+    const framework = new Framework(fixture.rootDir, {
+      rootDir: fixture.rootDir,
+      exports: fixture.exports,
+      resourceSeeds: fixture.resourceSeeds,
+    });
+
+    const converter = framework.resources().readValueConverters().find((current) => current.name === 'relativeTime');
+    const behavior = framework.resources().readBindingBehaviors().find((current) => current.name === 'debounce');
+
+    expect(converter).toBeDefined();
+    expect(behavior).toBeDefined();
+    if (converter == null || behavior == null) {
+      throw new Error('Expected value-converter and binding-behavior fixtures to materialize.');
+    }
+
+    expect(converter.aliases).toEqual(['rt']);
+    expect(converter.behavior.signals).toEqual(['clock-tick', 'locale-changed']);
+    expect(converter.behavior.withContext).toBe(true);
+    expect(converter.behavior.declaresToView).toBe(true);
+    expect(converter.behavior.declaresFromView).toBe(true);
+    expect(converter.identity.readProvenance('name')?.selected?.carrier).toBe('static-au-property');
+    expect(converter.behavior.readProvenance('signals')?.selected?.carrier).toBe('instance-property');
+    expect(converter.behavior.readProvenance('to-view')?.selected?.carrier).toBe('instance-method');
+
+    expect(behavior.aliases).toEqual(['debounced']);
+    expect(behavior.execution.instanceKind).toBe('factory');
+    expect(behavior.execution.declaresBind).toBe(true);
+    expect(behavior.execution.declaresUnbind).toBe(true);
+    expect(behavior.identity.readProvenance('name')?.selected?.carrier).toBe('static-au-property');
+    expect(behavior.execution.readProvenance('instance-kind')?.selected?.carrier).toBe('instance-property');
+    expect(behavior.execution.readProvenance('bind')?.selected?.carrier).toBe('instance-method');
+  });
+
   it('shows capture and bindable pressure on a capturing custom-element receiver', () => {
     const configFixture = createConfigurationFixture();
     const configFramework = new Framework(configFixture.rootDir, {
@@ -2762,6 +2838,259 @@ export class DecoratedCard {
           'decorated-card',
           [],
           createKeyHandle(decorated.symbol!, 'au:resource:custom-element:decorated-card', 'resource'),
+        ),
+      ),
+    ],
+  };
+}
+
+function createBehavioralResourceFixture(): {
+  readonly exports: readonly DeclarationExport[];
+  readonly resourceSeeds: readonly ResourceDefinition[];
+  readonly rootDir: string;
+} {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aurelia-clean-room-behavioral-resources-'));
+  const filePath = path.join(rootDir, 'behavioral-resource-fixture.ts');
+  const sourceText = `
+export class RelativeTimeValueConverter {
+  static $au = {
+    type: 'value-converter',
+    name: 'relativeTime',
+    aliases: ['rt'],
+  };
+
+  public readonly signals = ['clock-tick', 'locale-changed'];
+  public readonly withContext = true;
+
+  public toView(value: unknown) {
+    return value;
+  }
+
+  public fromView(value: unknown) {
+    return value;
+  }
+}
+
+export class DebounceBindingBehavior {
+  static $au = {
+    type: 'binding-behavior',
+    name: 'debounce',
+    aliases: ['debounced'],
+  };
+
+  public readonly type = 'factory';
+
+  public bind(_scope: unknown, _binding: unknown, _delay?: number) {}
+
+  public unbind(_scope: unknown, _binding: unknown) {}
+}
+`;
+  fs.writeFileSync(filePath, sourceText, 'utf8');
+
+  const program = new ProgramRef(
+    'program:behavioral-resource-fixture',
+    rootDir,
+    null,
+  );
+  const file = new SourceFileRef(
+    `file:${filePath}`,
+    program,
+    filePath,
+  );
+  const sourceFile = ts.createSourceFile(
+    filePath,
+    sourceText,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+
+  const exports: DeclarationExport[] = [];
+  for (const statement of sourceFile.statements) {
+    if (!hasExportModifier(statement) || !ts.isClassDeclaration(statement) || statement.name == null) {
+      continue;
+    }
+
+    const declarationRef = new SourceNodeRef(
+      `node:${statement.name.text}:${statement.getStart()}-${statement.end}`,
+      file,
+      'ClassDeclaration',
+      new SourceSpan(statement.getStart(), statement.end),
+    );
+    const symbolRef = new SymbolRef(
+      `symbol:${statement.name.text}`,
+      file,
+      statement.name.text,
+      [statement.name.text],
+      declarationRef,
+    );
+    exports.push({
+      name: statement.name.text,
+      symbol: symbolRef,
+      sourceFile: file,
+    });
+  }
+
+  const byName = new Map(exports.map((current) => [current.name, current]));
+  const converter = byName.get('RelativeTimeValueConverter');
+  const behavior = byName.get('DebounceBindingBehavior');
+  if (converter == null || behavior == null) {
+    throw new Error('Expected behavioral resource fixture exports to exist.');
+  }
+
+  return {
+    exports,
+    rootDir,
+    resourceSeeds: [
+      new ValueConverterDefinition(
+        'resource:vc:relative-time',
+        converter.symbol!,
+        createKeyHandle(converter.symbol!, 'au:resource:value-converter:relativeTime', 'resource'),
+        'relativeTime',
+        [],
+      ),
+      new BindingBehaviorDefinition(
+        'resource:bb:debounce',
+        behavior.symbol!,
+        createKeyHandle(behavior.symbol!, 'au:resource:binding-behavior:debounce', 'resource'),
+        'debounce',
+        [],
+      ),
+    ],
+  };
+}
+
+function createLifecycleResourceFixture(): {
+  readonly exports: readonly DeclarationExport[];
+  readonly resourceSeeds: readonly ResourceDefinition[];
+  readonly rootDir: string;
+} {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aurelia-clean-room-lifecycle-resources-'));
+  const filePath = path.join(rootDir, 'lifecycle-resource-fixture.ts');
+  const sourceText = `
+export class LifecycleCard {
+  static $au = {
+    type: 'custom-element',
+    name: 'lifecycle-card',
+  };
+
+  define() {}
+  hydrating() {}
+  hydrated() {}
+  created() {}
+  binding() {}
+  attaching() {}
+  dispose() {}
+}
+
+export class FocusAttribute {
+  static $au = {
+    type: 'custom-attribute',
+    name: 'focus',
+  };
+
+  created() {}
+  binding() {}
+  unbinding() {}
+  dispose() {}
+  link() {}
+}
+
+export class GuardController {
+  static $au = {
+    type: 'custom-attribute',
+    name: 'guard',
+    isTemplateController: true,
+  };
+
+  link() {}
+  attaching() {}
+  accept() {}
+}
+`;
+  fs.writeFileSync(filePath, sourceText, 'utf8');
+
+  const program = new ProgramRef(
+    'program:lifecycle-resource-fixture',
+    rootDir,
+    null,
+  );
+  const file = new SourceFileRef(
+    `file:${filePath}`,
+    program,
+    filePath,
+  );
+  const sourceFile = ts.createSourceFile(
+    filePath,
+    sourceText,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+
+  const exports: DeclarationExport[] = [];
+  for (const statement of sourceFile.statements) {
+    if (!hasExportModifier(statement) || !ts.isClassDeclaration(statement) || statement.name == null) {
+      continue;
+    }
+
+    const declarationRef = new SourceNodeRef(
+      `node:${statement.name.text}:${statement.getStart()}-${statement.end}`,
+      file,
+      'ClassDeclaration',
+      new SourceSpan(statement.getStart(), statement.end),
+    );
+    const symbolRef = new SymbolRef(
+      `symbol:${statement.name.text}`,
+      file,
+      statement.name.text,
+      [statement.name.text],
+      declarationRef,
+    );
+    exports.push({
+      name: statement.name.text,
+      symbol: symbolRef,
+      sourceFile: file,
+    });
+  }
+
+  const byName = new Map(exports.map((current) => [current.name, current]));
+  const ce = byName.get('LifecycleCard');
+  const ca = byName.get('FocusAttribute');
+  const tc = byName.get('GuardController');
+  if (ce == null || ca == null || tc == null) {
+    throw new Error('Expected lifecycle resource fixture exports to exist.');
+  }
+
+  return {
+    exports,
+    rootDir,
+    resourceSeeds: [
+      new CustomElementDefinition(
+        'resource:ce:lifecycle-card',
+        ce.symbol!,
+        new CustomElementIdentity(
+          'lifecycle-card',
+          [],
+          createKeyHandle(ce.symbol!, 'au:resource:custom-element:lifecycle-card', 'resource'),
+        ),
+      ),
+      new CustomAttributeDefinition(
+        'resource:ca:focus',
+        ca.symbol!,
+        new CustomAttributeIdentity(
+          'focus',
+          [],
+          createKeyHandle(ca.symbol!, 'au:resource:custom-attribute:focus', 'resource'),
+        ),
+      ),
+      new TemplateControllerDefinition(
+        'resource:tc:guard',
+        tc.symbol!,
+        new CustomAttributeIdentity(
+          'guard',
+          [],
+          createKeyHandle(tc.symbol!, 'au:resource:template-controller:guard', 'resource'),
         ),
       ),
     ],

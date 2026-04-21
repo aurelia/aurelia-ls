@@ -38,6 +38,12 @@ import {
   type CustomElementSupportFieldKind,
   type CustomElementProcessContentKind,
 } from './custom-element-support.js';
+import {
+  CustomElementLifecycleHooks,
+  CustomElementLifecycleHookProvenance,
+  CustomElementLifecycleHookWitness,
+  type CustomElementLifecycleHookKind,
+} from './custom-element-lifecycle-support.js';
 
 export interface CustomElementMaterializerState {
   readonly parsedFileCount: number;
@@ -68,6 +74,7 @@ export class CustomElementMaterializer {
       mergeBindableSurface(definition.bindableSurface, surface.bindableSurface),
       mergeDependencyContribution(definition.dependencyContribution, surface.dependencyContribution),
       mergeTemplateSource(definition.templateSource, surface.templateSource),
+      mergeLifecycleHooks(definition.lifecycleHooks, surface.lifecycleHooks),
     );
   }
 
@@ -141,6 +148,7 @@ interface CustomElementSurface {
   readonly bindableSurface: CustomElementBindableSurface;
   readonly dependencyContribution: CustomElementDependencyContribution;
   readonly templateSource: CustomElementTemplateSource;
+  readonly lifecycleHooks: CustomElementLifecycleHooks;
 }
 
 interface FieldContributor {
@@ -244,6 +252,7 @@ function readCustomElementSurface(
         : null,
     ),
     templateSource: readTemplateSource(templateContributors),
+    lifecycleHooks: readLifecycleHooks(declarationNode, file, sourceFile),
   };
 }
 
@@ -335,6 +344,28 @@ function mergeTemplateSource(
   return existing.kind === 'open'
     ? derived
     : existing;
+}
+
+function mergeLifecycleHooks(
+  existing: CustomElementLifecycleHooks,
+  derived: CustomElementLifecycleHooks,
+): CustomElementLifecycleHooks {
+  return new CustomElementLifecycleHooks(
+    existing.defineSource ?? derived.defineSource,
+    existing.hydratingSource ?? derived.hydratingSource,
+    existing.hydratedSource ?? derived.hydratedSource,
+    existing.createdSource ?? derived.createdSource,
+    existing.bindingSource ?? derived.bindingSource,
+    existing.boundSource ?? derived.boundSource,
+    existing.attachingSource ?? derived.attachingSource,
+    existing.attachedSource ?? derived.attachedSource,
+    existing.detachingSource ?? derived.detachingSource,
+    existing.unbindingSource ?? derived.unbindingSource,
+    existing.disposeSource ?? derived.disposeSource,
+    existing.acceptSource ?? derived.acceptSource,
+    mergeUniqueLifecycleProvenances(existing.provenance, derived.provenance),
+    existing.note ?? derived.note,
+  );
 }
 
 function readStaticAuDefinition(
@@ -1139,6 +1170,147 @@ function readTemplateSource(
     buildFieldProvenance('template', contributors),
     'Template source is reference-shaped and needs deeper value recovery to close further.',
   );
+}
+
+function readLifecycleHooks(
+  declarationNode: ts.ClassLikeDeclarationBase,
+  file: SourceFileRef,
+  sourceFile: ts.SourceFile,
+): CustomElementLifecycleHooks {
+  const defineMethod = findInstanceMethod(declarationNode, 'define');
+  const hydratingMethod = findInstanceMethod(declarationNode, 'hydrating');
+  const hydratedMethod = findInstanceMethod(declarationNode, 'hydrated');
+  const createdMethod = findInstanceMethod(declarationNode, 'created');
+  const bindingMethod = findInstanceMethod(declarationNode, 'binding');
+  const boundMethod = findInstanceMethod(declarationNode, 'bound');
+  const attachingMethod = findInstanceMethod(declarationNode, 'attaching');
+  const attachedMethod = findInstanceMethod(declarationNode, 'attached');
+  const detachingMethod = findInstanceMethod(declarationNode, 'detaching');
+  const unbindingMethod = findInstanceMethod(declarationNode, 'unbinding');
+  const disposeMethod = findInstanceMethod(declarationNode, 'dispose');
+  const acceptMethod = findInstanceMethod(declarationNode, 'accept');
+
+  return new CustomElementLifecycleHooks(
+    defineMethod == null ? null : toNodeRef(defineMethod, file, sourceFile),
+    hydratingMethod == null ? null : toNodeRef(hydratingMethod, file, sourceFile),
+    hydratedMethod == null ? null : toNodeRef(hydratedMethod, file, sourceFile),
+    createdMethod == null ? null : toNodeRef(createdMethod, file, sourceFile),
+    bindingMethod == null ? null : toNodeRef(bindingMethod, file, sourceFile),
+    boundMethod == null ? null : toNodeRef(boundMethod, file, sourceFile),
+    attachingMethod == null ? null : toNodeRef(attachingMethod, file, sourceFile),
+    attachedMethod == null ? null : toNodeRef(attachedMethod, file, sourceFile),
+    detachingMethod == null ? null : toNodeRef(detachingMethod, file, sourceFile),
+    unbindingMethod == null ? null : toNodeRef(unbindingMethod, file, sourceFile),
+    disposeMethod == null ? null : toNodeRef(disposeMethod, file, sourceFile),
+    acceptMethod == null ? null : toNodeRef(acceptMethod, file, sourceFile),
+    compactLifecycleProvenances([
+      buildLifecycleHookProvenance('define', defineMethod, file, sourceFile),
+      buildLifecycleHookProvenance('hydrating', hydratingMethod, file, sourceFile),
+      buildLifecycleHookProvenance('hydrated', hydratedMethod, file, sourceFile),
+      buildLifecycleHookProvenance('created', createdMethod, file, sourceFile),
+      buildLifecycleHookProvenance('binding', bindingMethod, file, sourceFile),
+      buildLifecycleHookProvenance('bound', boundMethod, file, sourceFile),
+      buildLifecycleHookProvenance('attaching', attachingMethod, file, sourceFile),
+      buildLifecycleHookProvenance('attached', attachedMethod, file, sourceFile),
+      buildLifecycleHookProvenance('detaching', detachingMethod, file, sourceFile),
+      buildLifecycleHookProvenance('unbinding', unbindingMethod, file, sourceFile),
+      buildLifecycleHookProvenance('dispose', disposeMethod, file, sourceFile),
+      buildLifecycleHookProvenance('accept', acceptMethod, file, sourceFile),
+    ]),
+    'Custom-element declaration-local lifecycle hook witnesses over compile and activation hook names.',
+  );
+}
+
+function findInstanceMethod(
+  declarationNode: ts.ClassLikeDeclarationBase,
+  name: string,
+): ts.MethodDeclaration | null {
+  for (const member of declarationNode.members) {
+    if (astHasStaticModifier(member) || !ts.isMethodDeclaration(member)) {
+      continue;
+    }
+    if (astReadPropertyName(member.name) === name) {
+      return member;
+    }
+  }
+  return null;
+}
+
+function buildLifecycleHookProvenance(
+  hook: CustomElementLifecycleHookKind,
+  method: ts.MethodDeclaration | null,
+  file: SourceFileRef,
+  sourceFile: ts.SourceFile,
+): CustomElementLifecycleHookProvenance | null {
+  if (method == null) {
+    return null;
+  }
+
+  const witness = new CustomElementLifecycleHookWitness(
+    hook,
+    'instance-method',
+    toNodeRef(method, file, sourceFile),
+  );
+  return new CustomElementLifecycleHookProvenance(
+    hook,
+    'selected',
+    witness,
+    [witness],
+  );
+}
+
+function compactLifecycleProvenances(
+  values: readonly (CustomElementLifecycleHookProvenance | null)[],
+): readonly CustomElementLifecycleHookProvenance[] {
+  return values.filter((value): value is CustomElementLifecycleHookProvenance => value != null);
+}
+
+function mergeUniqueLifecycleProvenances(
+  ...values: readonly (readonly CustomElementLifecycleHookProvenance[])[]
+): readonly CustomElementLifecycleHookProvenance[] {
+  const byHook = new Map<CustomElementLifecycleHookKind, CustomElementLifecycleHookProvenance>();
+
+  for (const list of values) {
+    for (const value of list) {
+      const existing = byHook.get(value.hook);
+      if (existing == null) {
+        byHook.set(value.hook, value);
+        continue;
+      }
+      byHook.set(
+        value.hook,
+        new CustomElementLifecycleHookProvenance(
+          value.hook,
+          value.mode,
+          value.selected ?? existing.selected,
+          mergeUniqueLifecycleWitnesses(existing.contributors, value.contributors),
+          existing.note ?? value.note,
+        ),
+      );
+    }
+  }
+
+  return [...byHook.values()];
+}
+
+function mergeUniqueLifecycleWitnesses(
+  ...values: readonly (readonly CustomElementLifecycleHookWitness[])[]
+): readonly CustomElementLifecycleHookWitness[] {
+  const seen = new Set<string>();
+  const merged: CustomElementLifecycleHookWitness[] = [];
+
+  for (const list of values) {
+    for (const value of list) {
+      const key = `${value.hook}:${value.carrier}:${value.source?.id ?? '<none>'}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      merged.push(value);
+    }
+  }
+
+  return merged;
 }
 
 function readReferenceName(

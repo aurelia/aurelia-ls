@@ -9,6 +9,7 @@ import {
   CustomAttributeIdentity,
   CustomAttributePolicy,
 } from './custom-attribute-support.js';
+import { CustomAttributeLifecycleHooks } from './custom-attribute-lifecycle-support.js';
 
 export class CustomAttributeDefinition implements ResourceDefinitionState<'custom-attribute'> {
   readonly kind = 'custom-attribute' as const;
@@ -21,6 +22,7 @@ export class CustomAttributeDefinition implements ResourceDefinitionState<'custo
     readonly policy: CustomAttributePolicy = new CustomAttributePolicy(),
     readonly dependencyContribution: CustomAttributeDependencyContribution = new CustomAttributeDependencyContribution(),
     readonly defaultBindingMode: string | null = null,
+    readonly lifecycleHooks: CustomAttributeLifecycleHooks = new CustomAttributeLifecycleHooks(),
   ) {}
 
   get key(): KeyRef | null {

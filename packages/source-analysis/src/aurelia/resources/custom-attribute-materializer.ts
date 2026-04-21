@@ -35,6 +35,12 @@ import {
   type CustomAttributeSupportCarrierKind,
   type CustomAttributeSupportFieldKind,
 } from './custom-attribute-support.js';
+import {
+  CustomAttributeLifecycleHooks,
+  CustomAttributeLifecycleHookProvenance,
+  CustomAttributeLifecycleHookWitness,
+  type CustomAttributeLifecycleHookKind,
+} from './custom-attribute-lifecycle-support.js';
 import { TemplateControllerDefinition } from './template-controller-definition.js';
 
 export interface CustomAttributeMaterializerState {
@@ -46,6 +52,7 @@ interface CustomAttributeSurface {
   readonly bindableSurface: CustomAttributeBindableSurface;
   readonly policy: CustomAttributePolicy;
   readonly dependencyContribution: CustomAttributeDependencyContribution;
+  readonly lifecycleHooks: CustomAttributeLifecycleHooks;
 }
 
 interface FieldContributor {
@@ -86,6 +93,7 @@ export class CustomAttributeMaterializer {
         mergePolicy(definition.policy, surface.policy),
         mergeDependencyContribution(definition.dependencyContribution, surface.dependencyContribution),
         definition.defaultBindingMode,
+        mergeLifecycleHooks(definition.lifecycleHooks, surface.lifecycleHooks),
       );
     }
 
@@ -96,6 +104,7 @@ export class CustomAttributeMaterializer {
       mergeBindableSurface(definition.bindableSurface, surface.bindableSurface),
       mergePolicy(definition.policy, surface.policy),
       mergeDependencyContribution(definition.dependencyContribution, surface.dependencyContribution),
+      mergeLifecycleHooks(definition.lifecycleHooks, surface.lifecycleHooks),
     );
   }
 
@@ -240,6 +249,7 @@ function readCustomAttributeSurface(
         ? 'Dependencies stayed open unless the CA/TC surface declares them explicitly.'
         : 'Dependencies are carried structurally here, but their downstream CA/TC-specific consequence is still provisional beyond the runtime container-register step.',
     ),
+    lifecycleHooks: readLifecycleHooks(declarationNode, file, sourceFile),
   };
 }
 
@@ -603,6 +613,49 @@ function readBindableFieldMap(
   };
 }
 
+function readLifecycleHooks(
+  declarationNode: ts.ClassLikeDeclarationBase,
+  file: SourceFileRef,
+  sourceFile: ts.SourceFile,
+): CustomAttributeLifecycleHooks {
+  const createdMethod = findInstanceMethod(declarationNode, 'created');
+  const linkMethod = findInstanceMethod(declarationNode, 'link');
+  const bindingMethod = findInstanceMethod(declarationNode, 'binding');
+  const boundMethod = findInstanceMethod(declarationNode, 'bound');
+  const attachingMethod = findInstanceMethod(declarationNode, 'attaching');
+  const attachedMethod = findInstanceMethod(declarationNode, 'attached');
+  const detachingMethod = findInstanceMethod(declarationNode, 'detaching');
+  const unbindingMethod = findInstanceMethod(declarationNode, 'unbinding');
+  const disposeMethod = findInstanceMethod(declarationNode, 'dispose');
+  const acceptMethod = findInstanceMethod(declarationNode, 'accept');
+
+  return new CustomAttributeLifecycleHooks(
+    createdMethod == null ? null : toNodeRef(createdMethod, file, sourceFile),
+    linkMethod == null ? null : toNodeRef(linkMethod, file, sourceFile),
+    bindingMethod == null ? null : toNodeRef(bindingMethod, file, sourceFile),
+    boundMethod == null ? null : toNodeRef(boundMethod, file, sourceFile),
+    attachingMethod == null ? null : toNodeRef(attachingMethod, file, sourceFile),
+    attachedMethod == null ? null : toNodeRef(attachedMethod, file, sourceFile),
+    detachingMethod == null ? null : toNodeRef(detachingMethod, file, sourceFile),
+    unbindingMethod == null ? null : toNodeRef(unbindingMethod, file, sourceFile),
+    disposeMethod == null ? null : toNodeRef(disposeMethod, file, sourceFile),
+    acceptMethod == null ? null : toNodeRef(acceptMethod, file, sourceFile),
+    compactLifecycleProvenances([
+      buildLifecycleHookProvenance('created', createdMethod, file, sourceFile),
+      buildLifecycleHookProvenance('link', linkMethod, file, sourceFile),
+      buildLifecycleHookProvenance('binding', bindingMethod, file, sourceFile),
+      buildLifecycleHookProvenance('bound', boundMethod, file, sourceFile),
+      buildLifecycleHookProvenance('attaching', attachingMethod, file, sourceFile),
+      buildLifecycleHookProvenance('attached', attachedMethod, file, sourceFile),
+      buildLifecycleHookProvenance('detaching', detachingMethod, file, sourceFile),
+      buildLifecycleHookProvenance('unbinding', unbindingMethod, file, sourceFile),
+      buildLifecycleHookProvenance('dispose', disposeMethod, file, sourceFile),
+      buildLifecycleHookProvenance('accept', acceptMethod, file, sourceFile),
+    ]),
+    'Custom-attribute/template-controller declaration-local lifecycle/link hook witnesses.',
+  );
+}
+
 function readDependencyEntries(
   contributors: readonly FieldContributor[],
 ): readonly CustomAttributeDependencyEntry[] {
@@ -660,6 +713,44 @@ function readDependencyEntries(
   }
 
   return entries;
+}
+
+function findInstanceMethod(
+  declarationNode: ts.ClassLikeDeclarationBase,
+  name: string,
+): ts.MethodDeclaration | null {
+  for (const member of declarationNode.members) {
+    if (hasStaticModifier(member) || !ts.isMethodDeclaration(member)) {
+      continue;
+    }
+    if (readPropertyName(member.name) === name) {
+      return member;
+    }
+  }
+  return null;
+}
+
+function buildLifecycleHookProvenance(
+  hook: CustomAttributeLifecycleHookKind,
+  method: ts.MethodDeclaration | null,
+  file: SourceFileRef,
+  sourceFile: ts.SourceFile,
+): CustomAttributeLifecycleHookProvenance | null {
+  if (method == null) {
+    return null;
+  }
+
+  const witness = new CustomAttributeLifecycleHookWitness(
+    hook,
+    'instance-method',
+    toNodeRef(method, file, sourceFile),
+  );
+  return new CustomAttributeLifecycleHookProvenance(
+    hook,
+    'selected',
+    witness,
+    [witness],
+  );
 }
 
 function buildFieldProvenance(
@@ -940,10 +1031,36 @@ function mergeDependencyContribution(
   );
 }
 
+function mergeLifecycleHooks(
+  existing: CustomAttributeLifecycleHooks,
+  surface: CustomAttributeLifecycleHooks,
+): CustomAttributeLifecycleHooks {
+  return new CustomAttributeLifecycleHooks(
+    existing.createdSource ?? surface.createdSource,
+    existing.linkSource ?? surface.linkSource,
+    existing.bindingSource ?? surface.bindingSource,
+    existing.boundSource ?? surface.boundSource,
+    existing.attachingSource ?? surface.attachingSource,
+    existing.attachedSource ?? surface.attachedSource,
+    existing.detachingSource ?? surface.detachingSource,
+    existing.unbindingSource ?? surface.unbindingSource,
+    existing.disposeSource ?? surface.disposeSource,
+    existing.acceptSource ?? surface.acceptSource,
+    mergeUniqueLifecycleProvenances(existing.provenance, surface.provenance),
+    existing.note ?? surface.note,
+  );
+}
+
 function compactFieldProvenances(
   values: readonly (CustomAttributeFieldProvenance | null)[],
 ): readonly CustomAttributeFieldProvenance[] {
   return values.filter((value): value is CustomAttributeFieldProvenance => value != null);
+}
+
+function compactLifecycleProvenances(
+  values: readonly (CustomAttributeLifecycleHookProvenance | null)[],
+): readonly CustomAttributeLifecycleHookProvenance[] {
+  return values.filter((value): value is CustomAttributeLifecycleHookProvenance => value != null);
 }
 
 function compactBindableProvenances(
@@ -978,6 +1095,32 @@ function mergeUniqueFieldProvenances(
   return [...byField.values()];
 }
 
+function mergeUniqueLifecycleProvenances(
+  ...values: readonly (readonly CustomAttributeLifecycleHookProvenance[])[]
+): readonly CustomAttributeLifecycleHookProvenance[] {
+  const byHook = new Map<CustomAttributeLifecycleHookKind, CustomAttributeLifecycleHookProvenance>();
+  for (const list of values) {
+    for (const value of list) {
+      const existing = byHook.get(value.hook);
+      if (existing == null) {
+        byHook.set(value.hook, value);
+        continue;
+      }
+      byHook.set(
+        value.hook,
+        new CustomAttributeLifecycleHookProvenance(
+          value.hook,
+          value.mode,
+          value.selected ?? existing.selected,
+          mergeUniqueLifecycleWitnesses(existing.contributors, value.contributors),
+          existing.note ?? value.note,
+        ),
+      );
+    }
+  }
+  return [...byHook.values()];
+}
+
 function mergeUniqueFieldWitnesses(
   ...values: readonly (readonly CustomAttributeFieldWitness[])[]
 ): readonly CustomAttributeFieldWitness[] {
@@ -1004,6 +1147,24 @@ function mergeUniqueBindableWitnesses(
   for (const list of values) {
     for (const value of list) {
       const key = `${value.field}:${value.carrier}:${value.source?.id ?? '<none>'}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      merged.push(value);
+    }
+  }
+  return merged;
+}
+
+function mergeUniqueLifecycleWitnesses(
+  ...values: readonly (readonly CustomAttributeLifecycleHookWitness[])[]
+): readonly CustomAttributeLifecycleHookWitness[] {
+  const seen = new Set<string>();
+  const merged: CustomAttributeLifecycleHookWitness[] = [];
+  for (const list of values) {
+    for (const value of list) {
+      const key = `${value.hook}:${value.carrier}:${value.source?.id ?? '<none>'}`;
       if (seen.has(key)) {
         continue;
       }

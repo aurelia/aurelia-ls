@@ -1,4 +1,5 @@
 import type { Exports } from '../exports/index.js';
+import { BindingBehaviorMaterializer } from './binding-behavior-materializer.js';
 import { BindingCommandMaterializer } from './binding-command-materializer.js';
 import { CustomAttributeMaterializer } from './custom-attribute-materializer.js';
 import { CustomElementMaterializer } from './custom-element-materializer.js';
@@ -7,6 +8,7 @@ import type { DefinitionCarrier } from './definition-carrier.js';
 import { ResourceRecognizer } from './resource-recognizer.js';
 import type { ResourceCandidate } from './resource-candidate.js';
 import type { ResourceDefinition } from './resources.js';
+import { ValueConverterMaterializer } from './value-converter-materializer.js';
 
 export interface ResourceScannerOptions {
   readonly exports: Exports;
@@ -16,6 +18,8 @@ export interface ResourceScannerOptions {
   readonly customElementMaterializer?: CustomElementMaterializer;
   readonly customAttributeMaterializer?: CustomAttributeMaterializer;
   readonly bindingCommandMaterializer?: BindingCommandMaterializer;
+  readonly valueConverterMaterializer?: ValueConverterMaterializer;
+  readonly bindingBehaviorMaterializer?: BindingBehaviorMaterializer;
 }
 
 export interface ResourceScannerState {
@@ -35,6 +39,8 @@ export class ResourceScanner {
   private readonly customElementMaterializerValue: CustomElementMaterializer;
   private readonly customAttributeMaterializerValue: CustomAttributeMaterializer;
   private readonly bindingCommandMaterializerValue: BindingCommandMaterializer;
+  private readonly valueConverterMaterializerValue: ValueConverterMaterializer;
+  private readonly bindingBehaviorMaterializerValue: BindingBehaviorMaterializer;
   private readonly resourceSeedsValue: readonly ResourceDefinition[];
 
   constructor(
@@ -53,6 +59,10 @@ export class ResourceScanner {
       ?? new CustomAttributeMaterializer();
     this.bindingCommandMaterializerValue = options.bindingCommandMaterializer
       ?? new BindingCommandMaterializer();
+    this.valueConverterMaterializerValue = options.valueConverterMaterializer
+      ?? new ValueConverterMaterializer();
+    this.bindingBehaviorMaterializerValue = options.bindingBehaviorMaterializer
+      ?? new BindingBehaviorMaterializer();
     this.resourceSeedsValue = [...(options.resourceSeeds ?? [])];
   }
 
@@ -80,6 +90,10 @@ export class ResourceScanner {
           ? this.customAttributeMaterializerValue.materialize(resource)
         : resource.kind === 'binding-command'
           ? this.bindingCommandMaterializerValue.materialize(resource)
+        : resource.kind === 'value-converter'
+          ? this.valueConverterMaterializerValue.materialize(resource)
+        : resource.kind === 'binding-behavior'
+          ? this.bindingBehaviorMaterializerValue.materialize(resource)
           : resource,
     );
   }

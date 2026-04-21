@@ -10,6 +10,7 @@ import {
   CustomElementPolicy,
   CustomElementTemplateSource,
 } from './custom-element-support.js';
+import { CustomElementLifecycleHooks } from './custom-element-lifecycle-support.js';
 
 export class CustomElementDefinition implements ResourceDefinitionState<'custom-element'> {
   readonly kind = 'custom-element' as const;
@@ -28,6 +29,7 @@ export class CustomElementDefinition implements ResourceDefinitionState<'custom-
       null,
       'Template source has not been materialized yet.',
     ),
+    readonly lifecycleHooks: CustomElementLifecycleHooks = new CustomElementLifecycleHooks(),
   ) {}
 
   get key(): KeyRef | null {

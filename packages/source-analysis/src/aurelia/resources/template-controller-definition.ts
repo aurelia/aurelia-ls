@@ -9,6 +9,7 @@ import {
   CustomAttributeIdentity,
   CustomAttributePolicy,
 } from './custom-attribute-support.js';
+import { CustomAttributeLifecycleHooks } from './custom-attribute-lifecycle-support.js';
 
 // Template controllers are custom-attribute carrier truth plus later
 // structural semantics. This row keeps the shared CA support bundle intact so
@@ -30,6 +31,7 @@ export class TemplateControllerDefinition implements ResourceDefinitionState<'te
       'Template-controller definition defaults to template-controller posture unless a materializer refines it.',
     ),
     readonly dependencyContribution: CustomAttributeDependencyContribution = new CustomAttributeDependencyContribution(),
+    readonly lifecycleHooks: CustomAttributeLifecycleHooks = new CustomAttributeLifecycleHooks(),
   ) {}
 
   get key(): KeyRef | null {

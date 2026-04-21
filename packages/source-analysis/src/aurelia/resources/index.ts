@@ -23,6 +23,15 @@ export {
   type CustomAttributeSupportFieldKind,
 } from './custom-attribute-support.js';
 export {
+  CUSTOM_ATTRIBUTE_LIFECYCLE_CARRIER_KINDS,
+  CUSTOM_ATTRIBUTE_LIFECYCLE_HOOK_KINDS,
+  CustomAttributeLifecycleHooks,
+  CustomAttributeLifecycleHookProvenance,
+  CustomAttributeLifecycleHookWitness,
+  type CustomAttributeLifecycleCarrierKind,
+  type CustomAttributeLifecycleHookKind,
+} from './custom-attribute-lifecycle-support.js';
+export {
   CustomAttributeMaterializer,
   type CustomAttributeMaterializerState,
 } from './custom-attribute-materializer.js';
@@ -58,6 +67,15 @@ export {
   type CustomElementSupportFieldKind,
   type CustomElementTemplateSourceKind,
 } from './custom-element-support.js';
+export {
+  CUSTOM_ELEMENT_LIFECYCLE_CARRIER_KINDS,
+  CUSTOM_ELEMENT_LIFECYCLE_HOOK_KINDS,
+  CustomElementLifecycleHooks,
+  CustomElementLifecycleHookProvenance,
+  CustomElementLifecycleHookWitness,
+  type CustomElementLifecycleCarrierKind,
+  type CustomElementLifecycleHookKind,
+} from './custom-element-lifecycle-support.js';
 export {
   CustomElementMaterializer,
   type CustomElementMaterializerState,
@@ -103,6 +121,34 @@ export { CustomAttributeDefinition } from './custom-attribute-definition.js';
 export { TemplateControllerDefinition } from './template-controller-definition.js';
 export { ValueConverterDefinition } from './value-converter-definition.js';
 export { BindingBehaviorDefinition } from './binding-behavior-definition.js';
+export {
+  VALUE_CONVERTER_SUPPORT_CARRIER_KINDS,
+  VALUE_CONVERTER_SUPPORT_FIELD_KINDS,
+  ValueConverterBehavior,
+  ValueConverterFieldProvenance,
+  ValueConverterFieldWitness,
+  ValueConverterIdentity,
+  type ValueConverterSupportCarrierKind,
+  type ValueConverterSupportFieldKind,
+} from './value-converter-support.js';
+export {
+  ValueConverterMaterializer,
+  type ValueConverterMaterializerState,
+} from './value-converter-materializer.js';
+export {
+  BINDING_BEHAVIOR_SUPPORT_CARRIER_KINDS,
+  BINDING_BEHAVIOR_SUPPORT_FIELD_KINDS,
+  BindingBehaviorExecutionSurface,
+  BindingBehaviorFieldProvenance,
+  BindingBehaviorFieldWitness,
+  BindingBehaviorIdentity,
+  type BindingBehaviorSupportCarrierKind,
+  type BindingBehaviorSupportFieldKind,
+} from './binding-behavior-support.js';
+export {
+  BindingBehaviorMaterializer,
+  type BindingBehaviorMaterializerState,
+} from './binding-behavior-materializer.js';
 export { BindingCommandDefinition } from './binding-command-definition.js';
 export {
   BINDING_COMMAND_EMISSION_SHAPE_KINDS,
