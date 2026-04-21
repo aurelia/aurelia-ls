@@ -6,6 +6,10 @@ import {
   ConfigurationScanner,
 } from './configurations/index.js';
 import {
+  TypeScriptWorldConstructions,
+  TypeScriptWorldConstructionScanner,
+} from './world-construction/index.js';
+import {
   Exports,
   ExportScanner,
 } from './exports/index.js';
@@ -32,6 +36,7 @@ export class Framework {
   private readonly exportsValue: Exports;
   private readonly packageNamesValue: readonly string[];
   private readonly resourcesValue: Resources;
+  private readonly worldConstructionsValue: TypeScriptWorldConstructions;
   readonly rootDir: string;
 
   constructor(
@@ -71,6 +76,14 @@ export class Framework {
         resources: this.resourcesValue,
       }),
     );
+    this.worldConstructionsValue = new TypeScriptWorldConstructions(
+      'framework',
+      new TypeScriptWorldConstructionScanner({
+        ownerLabel: 'framework',
+        configurationContributions: this.configurationContributionsValue,
+        resources: this.resourcesValue,
+      }),
+    );
   }
 
   declarationWorld(): DeclarationWorld {
@@ -103,6 +116,14 @@ export class Framework {
 
   readConfigurationContributions() {
     return this.configurationContributionsValue.readAll();
+  }
+
+  worldConstructions(): TypeScriptWorldConstructions {
+    return this.worldConstructionsValue;
+  }
+
+  readWorldConstructions() {
+    return this.worldConstructionsValue.readAll();
   }
 
   resources(): Resources {

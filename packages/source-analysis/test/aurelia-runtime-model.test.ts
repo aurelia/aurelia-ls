@@ -12,6 +12,8 @@ import {
   AppRoot,
   BindingBehaviorDefinition,
   BindingCommandDefinition,
+  CompilerAuthoredAttribute,
+  CompilerConsultedWorld,
   ConfigurationRegistrationScanner,
   CONTAINER_STATE_OPEN_SEAM_KINDS,
   CONTAINER_STATE_PROVENANCE_MODES,
@@ -61,7 +63,6 @@ import {
   RegistrationProduction,
   RegistrationResolverBasis,
   RegistrationTransition,
-  ResourceResolver,
   ResourceReferenceRef,
   ResourceLookupRegime,
   Resolver,
@@ -80,6 +81,7 @@ import {
   TemplateControllerDefinition,
   TemplateNodeRef,
   TemplateRef,
+  TypeScriptWorldConstruction,
   ValueConverterDefinition,
   Workspace,
   type DeclarationExport,
@@ -121,9 +123,25 @@ describe('Aurelia clean-room runtime model', () => {
       host: source,
       component: symbol,
     });
-    const compiler = new TemplateCompiler(root!.handle, new ResourceResolver());
+    const compilerWorld = new CompilerConsultedWorld(
+      `compiler-world:${root!.handle.id}`,
+      root!.handle,
+      [
+        new CustomElementDefinition(
+          'resource:ce:foo',
+          symbol,
+          new CustomElementIdentity(
+            'foo',
+            [],
+            resourceKey,
+          ),
+        ),
+      ],
+    );
+    const compiler = new TemplateCompiler(compilerWorld);
     const compiled = compiler.compile(template);
-    const resolvedResource = compiler.resourceResolver.resolve(
+    const context = compiler.createCompilationContext();
+    const resolvedResource = compiler.world.resourceResolver.resolveReference(
       new ResourceReferenceRef(
         'resource-ref:foo',
         new TemplateNodeRef(
@@ -137,15 +155,13 @@ describe('Aurelia clean-room runtime model', () => {
         resourceKey,
         'foo',
       ),
-      root!.container,
     );
-    const resolvedResources = resolvedResource?.all() ?? [];
 
     expect(root).toBeInstanceOf(AppRoot);
     expect(aurelia).toBeInstanceOf(Aurelia);
     expect(compiled.template).toEqual(template);
-    expect(resolvedResource).toBeInstanceOf(Resolver);
-    expect(resolvedResources.map((current) => current.ref)).toEqual([registration]);
+    expect(context.findElement('foo')?.name).toBe('foo');
+    expect(resolvedResource?.key?.id).toBe(resourceKey.id);
   });
 
   it('exposes workspace, framework, project, and declaration-world ownership surfaces', () => {
@@ -728,6 +744,9 @@ describe('Aurelia clean-room runtime model', () => {
       'DebounceBindingBehavior',
       'OneTimeBindingBehavior',
       'ToViewBindingBehavior',
+      'AuCompose',
+      'Show',
+      'If',
     ]);
     expect(bundles.find((current) => current.sourceExport.name === 'globalAttributeNames')).toBeUndefined();
 
@@ -848,9 +867,65 @@ describe('Aurelia clean-room runtime model', () => {
       .filter((current) => current.kind === 'attribute-pattern')
       .map((current) => current.pattern)
       .sort();
-    expect(bindingCommandCapabilities).toEqual(['bind', 'for']);
+    expect(bindingCommandCapabilities).toEqual(['bind', 'for', 'trigger']);
     expect(attributePatternCapabilities).toEqual(['PART.PART', 'PART.trigger:PART']);
     expect(contribution.openSeams.some((current) => current.includes('Returned registry interiors'))).toBe(true);
+  });
+
+  it('constructs a consulted TypeScript world from StandardConfiguration contributions', () => {
+    const fixture = createConfigurationFixture();
+    const framework = new Framework(fixture.rootDir, {
+      rootDir: fixture.rootDir,
+      exports: fixture.exports,
+      resourceSeeds: fixture.resourceSeeds,
+    });
+
+    const world = framework.worldConstructions().findByConfigurationExportName('StandardConfiguration')[0];
+    expect(world).toBeInstanceOf(TypeScriptWorldConstruction);
+    if (world == null) {
+      throw new Error('Expected StandardConfiguration world construction to exist.');
+    }
+
+    expect(world.findResourceDefinition('binding-behavior', 'debounce')?.kind).toBe('binding-behavior');
+    expect(world.findResourceDefinition('binding-command', 'bind')?.kind).toBe('binding-command');
+    expect(world.compilerWorld.resourceResolver.findElement('au-compose')?.name).toBe('au-compose');
+    expect(world.compilerWorld.resourceResolver.findAttribute('show')?.kind).toBe('custom-attribute');
+    expect(world.compilerWorld.resourceResolver.findAttribute('if')?.kind).toBe('template-controller');
+    expect(world.compilerWorld.bindingCommands.get('bind')?.name).toBe('bind');
+    const bindSyntax = world.compilerWorld.attributeParser.parse('value.bind', 'message');
+    const triggerSyntax = world.compilerWorld.attributeParser.parse('click.trigger:delegate', 'doThing');
+    const fallbackSyntax = world.compilerWorld.attributeParser.parse('plain-attr', 'value');
+    const showAdmission = world.compilerWorld.resourceResolver.readAdmission(
+      world.compilerWorld.resourceResolver.findAttribute('show')!,
+    );
+    expect(bindSyntax.status).toBe('selected');
+    expect(bindSyntax.syntax?.command).toBe('bind');
+    expect(bindSyntax.syntax?.provenance?.kind).toBe('pattern-handler-return');
+    expect(bindSyntax.candidates).toHaveLength(1);
+    expect(bindSyntax.candidates[0]?.match?.definition.pattern).toBe('PART.PART');
+    expect(bindSyntax.candidates[0]?.match?.admission?.ownerContributions[0]?.configuration.sourceExport.name).toBe('StandardConfiguration');
+    expect(bindSyntax.candidates[0]?.match?.admission?.admittedSubjects[0]?.referenceName).toBe('DotSeparatedAttributePattern');
+    expect(triggerSyntax.status).toBe('selected');
+    expect(triggerSyntax.syntax?.command).toBe('trigger');
+    expect(triggerSyntax.syntax?.parts).toEqual(['click', 'trigger', 'delegate']);
+    expect(fallbackSyntax.status).toBe('fallback');
+    expect(fallbackSyntax.syntax?.target).toBe('plain-attr');
+    expect(fallbackSyntax.syntax?.provenance?.kind).toBe('fallback-no-pattern');
+    expect(showAdmission?.ownerContributions[0]?.configuration.sourceExport.name).toBe('StandardConfiguration');
+    expect(showAdmission?.admittedSubjects[0]?.referenceName).toBe('Show');
+    expect(world.compilerWorld.services.has('ExpressionParser')).toBe(true);
+    expect(world.readCompilerCapabilitiesByKind('binding-command').map((current) => current.name)).toEqual([
+      'bind',
+      'for',
+      'trigger',
+    ]);
+    expect(world.containerStateEntries.some((current) => current.key.debugName === 'ExpressionParser')).toBe(true);
+    expect(world.containerStateEntries.find((current) => current.key.debugName === 'ExpressionParser')?.slots[0]?.kind).toBe('constructable-activation');
+    expect(world.compilerWorld.inspectState().resourceCount).toBeGreaterThan(0);
+    expect(world.openSeams.some((current) => current.kind === 'production-state-open')).toBe(true);
+    expect(world.openSeams.some((current) => current.kind === 'resource-registration-state-open')).toBe(true);
+    expect(world.openSeams.some((current) => current.kind === 'world-placement-open')).toBe(true);
+    expect(framework.worldConstructions().inspectState().allCached).toBe(true);
   });
 
   it('surfaces template compiler hooks shallowly from direct registry call witnesses', () => {
@@ -870,6 +945,144 @@ describe('Aurelia clean-room runtime model', () => {
     const hookCapabilities = contribution.compilerCapabilities.filter((current) => current.kind === 'template-compiler-hook');
     expect(hookCapabilities).toHaveLength(1);
     expect(hookCapabilities[0]?.hookName).toBe('CompilingHook');
+
+    const world = framework.worldConstructions().findByConfigurationExportName('CompilerConfiguration')[0];
+    expect(world?.compilerWorld.templateCompilerHooks.findAll().map((current) => current.hookName)).toEqual([
+      'CompilingHook',
+    ]);
+  });
+
+  it('creates a compiler-shaped compilation context from a consulted world', () => {
+    const fixture = createConfigurationFixture();
+    const framework = new Framework(fixture.rootDir, {
+      rootDir: fixture.rootDir,
+      exports: fixture.exports,
+      resourceSeeds: fixture.resourceSeeds,
+    });
+
+    const world = framework.worldConstructions().findByConfigurationExportName('StandardConfiguration')[0];
+    expect(world).toBeDefined();
+    if (world == null) {
+      throw new Error('Expected StandardConfiguration world construction to exist.');
+    }
+
+    const compiler = new TemplateCompiler(world.compilerWorld);
+    const context = compiler.createCompilationContext();
+    const child = context.createChild();
+
+    expect(context.findElement('au-compose')?.name).toBe('au-compose');
+    expect(context.findAttribute('show')?.kind).toBe('custom-attribute');
+    expect(context.findTemplateController('if')?.kind).toBe('template-controller');
+    expect(context.getCommand('for')?.name).toBe('for');
+    const parsed = context.parseAttribute('value.bind', 'message');
+    expect(parsed.status).toBe('selected');
+    expect(parsed.syntax?.target).toBe('value');
+    expect(parsed.candidates[0]?.match?.definition.pattern).toBe('PART.PART');
+    expect(context.readTemplateCompilerHooks()).toEqual([]);
+    expect(context.hasService('ExpressionParser')).toBe(true);
+    expect(child.world).toBe(world.compilerWorld);
+    expect(child.root).toBe(context);
+  });
+
+  it('routes authored attributes through the first JIT-shaped classification lanes', () => {
+    const fixture = createConfigurationFixture();
+    const framework = new Framework(fixture.rootDir, {
+      rootDir: fixture.rootDir,
+      exports: fixture.exports,
+      resourceSeeds: fixture.resourceSeeds,
+    });
+
+    const world = framework.worldConstructions().findByConfigurationExportName('StandardConfiguration')[0];
+    expect(world).toBeDefined();
+    if (world == null) {
+      throw new Error('Expected StandardConfiguration world construction to exist.');
+    }
+
+    const compiler = new TemplateCompiler(world.compilerWorld);
+    const classification = compiler.classifyElementAttributes('div', [
+      new CompilerAuthoredAttribute('authored:containerless', 'containerless', ''),
+      new CompilerAuthoredAttribute('authored:spread', '...$attrs', ''),
+      new CompilerAuthoredAttribute('authored:show', 'show.bind', 'isVisible'),
+      new CompilerAuthoredAttribute('authored:if', 'if.bind', 'ready'),
+      new CompilerAuthoredAttribute('authored:click', 'click.trigger:delegate', 'doThing'),
+    ]);
+
+    expect(classification.receiverElement).toBeNull();
+    expect(classification.hasContainerless).toBe(true);
+    expect(classification.captured).toEqual([]);
+    expect(classification.items.map((current) => current.lane)).toEqual([
+      'special-attribute',
+      'spread-transferred-bindings',
+      'custom-attribute',
+      'template-controller',
+      'plain-attribute',
+    ]);
+    expect(classification.items[2]?.attributeResource?.kind).toBe('custom-attribute');
+    expect(classification.items[3]?.attributeResource?.kind).toBe('template-controller');
+    expect(classification.items[4]?.bindingCommand?.name).toBe('trigger');
+    expect(classification.items[2]?.provenance?.attributeResourceAdmission?.admittedSubjects[0]?.referenceName).toBe('Show');
+    expect(classification.items[3]?.provenance?.attributeResourceAdmission?.admittedSubjects[0]?.referenceName).toBe('If');
+    expect(classification.items[4]?.provenance?.bindingCommandAdmission?.admittedSubjects[0]?.referenceName).toBe('TriggerBindingCommand');
+    expect(classification.items[2]?.openSeams.map((current) => current.kind)).toContain('custom-attribute-bindables-open');
+    expect(classification.items[3]?.openSeams.map((current) => current.kind)).toContain('template-controller-lowering-open');
+    expect(classification.items[4]?.openSeams.map((current) => current.kind)).toContain('binding-command-lowering-open');
+  });
+
+  it('shows capture and bindable pressure on a capturing custom-element receiver', () => {
+    const configFixture = createConfigurationFixture();
+    const configFramework = new Framework(configFixture.rootDir, {
+      rootDir: configFixture.rootDir,
+      exports: configFixture.exports,
+      resourceSeeds: configFixture.resourceSeeds,
+    });
+    const standardWorld = configFramework.worldConstructions().findByConfigurationExportName('StandardConfiguration')[0];
+    expect(standardWorld).toBeDefined();
+    if (standardWorld == null) {
+      throw new Error('Expected StandardConfiguration world construction to exist.');
+    }
+
+    const customElementFixture = createCustomElementFixture();
+    const customElementFramework = new Framework(customElementFixture.rootDir, {
+      rootDir: customElementFixture.rootDir,
+      exports: customElementFixture.exports,
+      resourceSeeds: customElementFixture.resourceSeeds,
+    });
+    const fancyCard = customElementFramework.resources().readCustomElements().find((current) => current.name === 'fancy-card');
+    expect(fancyCard).toBeDefined();
+    if (fancyCard == null) {
+      throw new Error('Expected FancyCard custom element to exist.');
+    }
+
+    const compilerWorld = new CompilerConsultedWorld(
+      `compiler-world:${standardWorld.world.id}:fancy-card`,
+      standardWorld.world,
+      [...standardWorld.visibleResources, fancyCard],
+      standardWorld.compilerWorld.resourceResolver.readAdmissions(),
+      standardWorld.compilerCapabilities,
+      standardWorld.containerStateEntries,
+      standardWorld.containerStateOpenSeams,
+      standardWorld.compilerWorld.openSeams,
+    );
+    const compiler = new TemplateCompiler(compilerWorld);
+    const classification = compiler.classifyElementAttributes('fancy-card', [
+      new CompilerAuthoredAttribute('authored:title', 'title.bind', 'cardTitle'),
+      new CompilerAuthoredAttribute('authored:show', 'show.bind', 'isVisible'),
+      new CompilerAuthoredAttribute('authored:if', 'if.bind', 'ready'),
+    ]);
+
+    expect(classification.receiverElement?.name).toBe('fancy-card');
+    expect(classification.receiverElementAdmission).toBeNull();
+    expect(classification.captured.map((current) => current.authored.rawName)).toEqual(['show.bind']);
+    expect(classification.items.map((current) => current.lane)).toEqual([
+      'custom-element-bindable',
+      'captured-attribute',
+      'template-controller',
+    ]);
+    expect(classification.items[0]?.customElementBindable?.name).toBe('title');
+    expect(classification.items[0]?.provenance?.receiverElementAdmission).toBeNull();
+    expect(classification.items[1]?.attributeResource?.name).toBe('show');
+    expect(classification.items[1]?.provenance?.attributeResourceAdmission?.ownerContributions[0]?.configuration.sourceExport.name).toBe('StandardConfiguration');
+    expect(classification.items[2]?.attributeResource?.kind).toBe('template-controller');
   });
 
   it('decomposes custom element support bundles without pretending instructions are declaration ingress', () => {
@@ -1146,6 +1359,15 @@ declare function configure(...args: unknown[]): unknown;
 declare function renderer<T>(value: T): T;
 declare const TemplateCompilerHooks: { define(value: unknown): unknown };
 declare const DialogService: unknown;
+declare class AttrSyntax {
+  constructor(
+    rawName: string,
+    rawValue: string,
+    target: string,
+    command: string | null,
+    parts?: readonly string[] | null,
+  );
+}
 
 export class ExpressionParser {}
 export const RuntimeTemplateCompilerImplementation = {
@@ -1158,10 +1380,26 @@ export class NodeObserverLocator {}
 export class DebounceBindingBehavior {}
 export class OneTimeBindingBehavior {}
 export class ToViewBindingBehavior {}
-export class DotSeparatedAttributePattern {}
-export class EventAttributePattern {}
+export class AuCompose {}
+export class Show {}
+export class If {}
+export class DotSeparatedAttributePattern {
+  public 'PART.PART'(rawName: string, rawValue: string, parts: readonly string[]) {
+    return new AttrSyntax(rawName, rawValue, parts[0], parts[1]);
+  }
+
+  public 'PART.PART.PART'(rawName: string, rawValue: string, parts: readonly string[]) {
+    return new AttrSyntax(rawName, rawValue, \`\${parts[0]}.\${parts[1]}\`, parts[2]);
+  }
+}
+export class EventAttributePattern {
+  public 'PART.trigger:PART'(rawName: string, rawValue: string, parts: readonly string[]) {
+    return new AttrSyntax(rawName, rawValue, parts[0], 'trigger', parts);
+  }
+}
 export class DefaultBindingCommand {}
 export class ForBindingCommand {}
+export class TriggerBindingCommand {}
 export const PropertyBindingRenderer = renderer(class PropertyBindingRenderer {});
 export const IteratorBindingRenderer = renderer(class IteratorBindingRenderer {});
 export const DefaultComponents = [
@@ -1174,6 +1412,9 @@ export const DefaultResources = [
   DebounceBindingBehavior,
   OneTimeBindingBehavior,
   ToViewBindingBehavior,
+  AuCompose,
+  Show,
+  If,
 ];
 
 export const DefaultBindingSyntax = [
@@ -1184,6 +1425,7 @@ export const DefaultBindingSyntax = [
 export const DefaultBindingLanguage = [
   DefaultBindingCommand,
   ForBindingCommand,
+  TriggerBindingCommand,
 ];
 
 export const DefaultRenderers = [
@@ -1695,12 +1937,41 @@ function createConfigurationFixtureResources(
   const debounce = byName.get('DebounceBindingBehavior');
   const oneTime = byName.get('OneTimeBindingBehavior');
   const toView = byName.get('ToViewBindingBehavior');
+  const auCompose = byName.get('AuCompose');
+  const show = byName.get('Show');
+  const ifTc = byName.get('If');
   const dotSeparated = byName.get('DotSeparatedAttributePattern');
   const eventPattern = byName.get('EventAttributePattern');
   const defaultCommand = byName.get('DefaultBindingCommand');
   const forCommand = byName.get('ForBindingCommand');
+  const triggerCommand = byName.get('TriggerBindingCommand');
 
   return [
+    new CustomElementDefinition(
+      'resource:ce:au-compose',
+      auCompose!.symbol!,
+      new CustomElementIdentity(
+        'au-compose',
+        [],
+        createKeyHandle(auCompose!.symbol!, 'au:resource:custom-element:au-compose', 'resource'),
+      ),
+    ),
+    new CustomAttributeDefinition(
+      'resource:ca:show',
+      show!.symbol!,
+      createKeyHandle(show!.symbol!, 'au:resource:custom-attribute:show', 'resource'),
+      'show',
+      [],
+      null,
+      false,
+    ),
+    new TemplateControllerDefinition(
+      'resource:tc:if',
+      ifTc!.symbol!,
+      createKeyHandle(ifTc!.symbol!, 'au:resource:template-controller:if', 'resource'),
+      'if',
+      [],
+    ),
     new BindingBehaviorDefinition(
       'resource:bb:debounce',
       debounce!.symbol!,
@@ -1748,6 +2019,13 @@ function createConfigurationFixtureResources(
       forCommand!.symbol!,
       createKeyHandle(forCommand!.symbol!, 'au:resource:binding-command:for', 'resource'),
       'for',
+      [],
+    ),
+    new BindingCommandDefinition(
+      'resource:bc:trigger',
+      triggerCommand!.symbol!,
+      createKeyHandle(triggerCommand!.symbol!, 'au:resource:binding-command:trigger', 'resource'),
+      'trigger',
       [],
     ),
   ];

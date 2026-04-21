@@ -8,6 +8,10 @@ import {
   ConfigurationScanner,
 } from './configurations/index.js';
 import {
+  TypeScriptWorldConstructions,
+  TypeScriptWorldConstructionScanner,
+} from './world-construction/index.js';
+import {
   Exports,
   ExportScanner,
 } from './exports/index.js';
@@ -35,6 +39,7 @@ export class Project {
   private readonly declarationWorldValue: DeclarationWorld;
   private readonly exportsValue: Exports;
   private readonly resourcesValue: Resources;
+  private readonly worldConstructionsValue: TypeScriptWorldConstructions;
   private aureliaValue: Aurelia | null;
   private appRootValue: AppRoot | null;
   readonly rootDir: string;
@@ -78,6 +83,14 @@ export class Project {
         resources: this.resourcesValue,
       }),
     );
+    this.worldConstructionsValue = new TypeScriptWorldConstructions(
+      `project:${name}`,
+      new TypeScriptWorldConstructionScanner({
+        ownerLabel: `project:${name}`,
+        configurationContributions: this.configurationContributionsValue,
+        resources: this.resourcesValue,
+      }),
+    );
     this.aureliaValue = options.aurelia ?? null;
     this.appRootValue = options.appRoot ?? null;
   }
@@ -108,6 +121,14 @@ export class Project {
 
   readConfigurationContributions() {
     return this.configurationContributionsValue.readAll();
+  }
+
+  worldConstructions(): TypeScriptWorldConstructions {
+    return this.worldConstructionsValue;
+  }
+
+  readWorldConstructions() {
+    return this.worldConstructionsValue.readAll();
   }
 
   resources(): Resources {
