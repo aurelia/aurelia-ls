@@ -4,6 +4,10 @@ import type {
   CompilerCapabilityKind,
   CompilerConsultedWorld,
 } from '../compiler/index.js';
+import type {
+  InstructionRenderer,
+  Rendering,
+} from '../rendering/index.js';
 import type { ResourceDefinition, ResourceDefinitionKind } from '../resources/index.js';
 import type { ResourceReferenceRef, ContainerWorldRef } from '../refs.js';
 import type { ContainerStateEntry, ContainerStateOpenSeam } from '../registrations/index.js';
@@ -40,9 +44,14 @@ export class TypeScriptWorldConstruction {
     readonly containerStateEntries: readonly ContainerStateEntry[] = [],
     readonly containerStateOpenSeams: readonly ContainerStateOpenSeam[] = [],
     readonly visibleResources: readonly ResourceDefinition[] = [],
+    readonly visibleRenderers: readonly InstructionRenderer[] = [],
     readonly compilerCapabilities: readonly CompilerCapability[] = [],
     readonly openSeams: readonly TypeScriptWorldConstructionOpenSeam[] = [],
   ) {}
+
+  get rendering(): Rendering {
+    return this.compilerWorld.rendering;
+  }
 
   readVisibleResourcesByKind<TKind extends ResourceDefinitionKind>(
     kind: TKind,

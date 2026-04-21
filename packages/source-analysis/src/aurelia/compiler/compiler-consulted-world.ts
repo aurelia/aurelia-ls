@@ -8,13 +8,22 @@ import type {
   TemplateControllerDefinition,
 } from '../resources/index.js';
 import type { ContainerStateEntry, ContainerStateOpenSeam } from '../registrations/index.js';
-import type {
+import {
   ContainerWorldRef,
+} from '../refs.js';
+import type {
   KeyRef,
   ResourceReferenceRef,
+  SourceNodeRef,
+  SymbolRef,
 } from '../refs.js';
 import type { AdmittedSubject } from '../admissions/index.js';
 import type { ConfigurationContribution } from '../configurations/index.js';
+import {
+  Rendering,
+  type InstructionRenderer,
+  type RenderingOpenSeam,
+} from '../rendering/index.js';
 import type {
   CompilerCapability,
   TemplateCompilerHookCapability,
@@ -40,6 +49,7 @@ export const COMPILER_WORLD_OPEN_SEAM_KINDS = [
   'service-access-open',
   'attribute-pattern-handler-open',
   'owner-local-branch-open',
+  'resource-map-topology-open',
 ] as const;
 
 export type CompilerWorldOpenSeamKind =
@@ -603,6 +613,7 @@ export class CompilerServiceLocator {
 export interface CompilerConsultedWorldState {
   readonly worldId: string;
   readonly resourceCount: number;
+  readonly rendererCount: number;
   readonly bindingCommandCount: number;
   readonly attributePatternCount: number;
   readonly hookCount: number;
@@ -617,17 +628,32 @@ export class CompilerConsultedWorld {
   readonly templateCompilerHooks: CompilerTemplateCompilerHooks;
   readonly services: CompilerServiceLocator;
   readonly valueParser: CompilerValueParser;
+  readonly rendering: Rendering;
+  readonly resources: readonly ResourceDefinition[];
+  readonly renderers: readonly InstructionRenderer[];
+  readonly resourceAdmissions: readonly CompilerResourceAdmissionProvenance[];
+  readonly compilerCapabilities: readonly CompilerCapability[];
+  readonly serviceEntries: readonly ContainerStateEntry[];
+  readonly serviceOpenSeams: readonly ContainerStateOpenSeam[];
 
   constructor(
     readonly id: string,
     readonly world: ContainerWorldRef,
     resources: readonly ResourceDefinition[] = [],
+    renderers: readonly InstructionRenderer[] = [],
     resourceAdmissions: readonly CompilerResourceAdmissionProvenance[] = [],
     compilerCapabilities: readonly CompilerCapability[] = [],
     serviceEntries: readonly ContainerStateEntry[] = [],
     serviceOpenSeams: readonly ContainerStateOpenSeam[] = [],
+    renderingOpenSeams: readonly RenderingOpenSeam[] = [],
     readonly openSeams: readonly CompilerWorldOpenSeam[] = [],
   ) {
+    this.resources = resources;
+    this.renderers = renderers;
+    this.resourceAdmissions = resourceAdmissions;
+    this.compilerCapabilities = compilerCapabilities;
+    this.serviceEntries = serviceEntries;
+    this.serviceOpenSeams = serviceOpenSeams;
     // TODO: owner-local compiler branches for local custom elements/bindables
     // should fork this consulted world explicitly rather than mutating it
     // in-place. The first cut here stays root-world only.
@@ -647,17 +673,49 @@ export class CompilerConsultedWorld {
     );
     this.services = new CompilerServiceLocator(serviceEntries, serviceOpenSeams);
     this.valueParser = new CompilerValueParser();
+    this.rendering = new Rendering(renderers, renderingOpenSeams);
+  }
+
+  createChild(
+    options: {
+      readonly suffix: string;
+      readonly owner: SymbolRef | SourceNodeRef | null;
+      readonly note?: string | null;
+      readonly openSeams?: readonly CompilerWorldOpenSeam[];
+    },
+  ): CompilerConsultedWorld {
+    const childWorld = new ContainerWorldRef(
+      `${this.world.id}/${options.suffix}`,
+      options.owner,
+      this.world.id,
+    );
+    const childOpenSeams = options.openSeams == null
+      ? this.openSeams
+      : [...this.openSeams, ...options.openSeams];
+    return new CompilerConsultedWorld(
+      `${this.id}/${options.suffix}`,
+      childWorld,
+      this.resources,
+      this.renderers,
+      this.resourceAdmissions,
+      this.compilerCapabilities,
+      this.serviceEntries,
+      this.serviceOpenSeams,
+      this.rendering.openSeams,
+      childOpenSeams,
+    );
   }
 
   inspectState(): CompilerConsultedWorldState {
     return {
       worldId: this.world.id,
-      resourceCount: this.resourceResolver.resources.length,
+      resourceCount: this.resources.length,
+      rendererCount: this.renderers.length,
       bindingCommandCount: this.bindingCommands.readAll().length,
       attributePatternCount: this.attributeParser.readAll().length,
       hookCount: this.templateCompilerHooks.findAll().length,
-      serviceEntryCount: this.services.readAll().length,
-      openSeamCount: this.openSeams.length + this.services.openSeams.length,
+      serviceEntryCount: this.serviceEntries.length,
+      openSeamCount: this.openSeams.length + this.serviceOpenSeams.length,
     };
   }
 }

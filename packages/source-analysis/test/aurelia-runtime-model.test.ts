@@ -14,9 +14,11 @@ import {
   AppRoot,
   AuthoredElementNode,
   AuthoredTextNode,
+  AttributeController,
   BindingBehaviorDefinition,
   BindingCommandDefinition,
   CompilerAuthoredAttribute,
+  CompilerChildWorldFormation,
   CompilerConsultedWorld,
   ConfigurationRegistrationScanner,
   CONTAINER_STATE_OPEN_SEAM_KINDS,
@@ -32,11 +34,15 @@ import {
   ContainerStateProvenance,
   ContainerStateQualification,
   ContainerStateSlot,
+  CustomAttributePreparation,
+  CustomAttributeRenderer,
   CustomAttributeDefinition,
   CustomAttributeBindableEntry,
   CustomAttributeBindableSurface,
   CustomAttributeIdentity,
   CustomAttributePolicy,
+  CustomElementPreparation,
+  CustomElementRenderer,
   CustomElementBindableSurface,
   CustomElementDefinition,
   CustomElementDependencyContribution,
@@ -51,6 +57,7 @@ import {
   DependencyRequest,
   DEPENDENCY_RESOLVED_SUBJECT_KINDS,
   DependencySite,
+  ElementController,
   Export,
   Framework,
   InterfaceKey,
@@ -62,6 +69,7 @@ import {
   REGISTRY_OBJECT_ORIGIN_KINDS,
   MATERIALIZATION_TIMING_KINDS,
   LOOKUP_REGIME_KINDS,
+  PassiveInstructionRenderer,
   OPEN_RESIDUAL_KINDS,
   ProgramRef,
   Registration,
@@ -71,6 +79,7 @@ import {
   RegistrationProduction,
   RegistrationResolverBasis,
   RegistrationTransition,
+  Rendering,
   ResourceReferenceRef,
   ResourceLookupRegime,
   Resolver,
@@ -86,11 +95,14 @@ import {
   SourceSpan,
   SymbolRef,
   TemplateCompiler,
+  TemplateControllerRenderer,
+  TemplateControllerPreparation,
   TemplateControllerDefinition,
   TemplateNodeRef,
   TemplateRef,
   TypeScriptWorldConstruction,
   ValueConverterDefinition,
+  ViewFactory,
   Workspace,
   type DeclarationExport,
   type ResourceDefinition,
@@ -996,6 +1008,166 @@ describe('Aurelia clean-room runtime model', () => {
     expect(child.root).toBe(context);
   });
 
+  it('materializes a runtime-shaped rendering surface with builtin renderer instances', () => {
+    const fixture = createConfigurationFixture();
+    const framework = new Framework(fixture.rootDir, {
+      rootDir: fixture.rootDir,
+      exports: fixture.exports,
+      resourceSeeds: fixture.resourceSeeds,
+    });
+
+    const world = framework.worldConstructions().findByConfigurationExportName('StandardConfiguration')[0];
+    expect(world).toBeDefined();
+    if (world == null) {
+      throw new Error('Expected StandardConfiguration world construction to exist.');
+    }
+
+    expect(world.rendering).toBeInstanceOf(Rendering);
+    const renderers = world.rendering.readAll();
+    expect(renderers.length).toBeGreaterThanOrEqual(10);
+    expect(renderers.every((current) =>
+      typeof current.referenceName === 'string'
+      && current.admission != null,
+    )).toBe(true);
+
+    const tc = world.rendering.findByInstructionKind('hydrate-template-controller');
+    const ce = world.rendering.findByInstructionKind('hydrate-element');
+    const ca = world.rendering.findByInstructionKind('hydrate-attribute');
+    const listener = world.rendering.findByInstructionKind('listener-binding');
+    const spread = world.rendering.findByInstructionKind('spread-value-binding');
+
+    expect(tc).toBeInstanceOf(TemplateControllerRenderer);
+    expect(tc?.referenceName).toBe('TemplateControllerRenderer');
+    expect(tc?.admission.ownerContribution.configuration.sourceExport.name).toBe('StandardConfiguration');
+
+    expect(ce).toBeInstanceOf(CustomElementRenderer);
+    expect(ce?.referenceName).toBe('CustomElementRenderer');
+    expect(ca).toBeInstanceOf(CustomAttributeRenderer);
+    expect(ca?.referenceName).toBe('CustomAttributeRenderer');
+    expect(listener).toBeInstanceOf(PassiveInstructionRenderer);
+    expect(listener?.referenceName).toBe('ListenerBindingRenderer');
+    expect(spread).toBeInstanceOf(PassiveInstructionRenderer);
+    expect(spread?.referenceName).toBe('SpreadValueRenderer');
+
+    expect(world.compilerWorld.inspectState().rendererCount).toBe(renderers.length);
+    expect(world.rendering.openSeams.map((current) => current.kind)).toContain('resource-renderer-preparation-open');
+  });
+
+  it('prepares custom-attribute renderer contexts over lowered custom-attribute uses', () => {
+    const fixture = createConfigurationFixture();
+    const framework = new Framework(fixture.rootDir, {
+      rootDir: fixture.rootDir,
+      exports: fixture.exports,
+      resourceSeeds: fixture.resourceSeeds,
+    });
+
+    const world = framework.worldConstructions().findByConfigurationExportName('StandardConfiguration')[0];
+    expect(world).toBeDefined();
+    if (world == null) {
+      throw new Error('Expected StandardConfiguration world construction to exist.');
+    }
+
+    const compiler = new TemplateCompiler(world.compilerWorld);
+    const program = createProgramHandle();
+    const file = createFileHandle(program);
+    const ownerNode = createNodeHandle(file, 'ClassDeclaration', 10, 40);
+    const owner = createSymbolHandle(file, ownerNode, 'ShowHost');
+    const template = createTemplateHandle(file, owner);
+    const compiled = compiler.compileAuthoredTemplate(
+      template,
+      '<div show.bind="isVisible"></div>',
+    );
+    const root = compiled.rootNodes[0];
+    expect(root).toBeInstanceOf(CompiledElementNode);
+    if (!(root instanceof CompiledElementNode)) {
+      throw new Error('Expected root compiled node to be an element compilation.');
+    }
+
+    const parentController = compiler.createElementController(null, null, root);
+    const preparations = compiler.prepareCustomAttributes(parentController, root);
+    expect(preparations).toHaveLength(1);
+    const preparation = preparations[0];
+    expect(preparation).toBeInstanceOf(CustomAttributePreparation);
+    expect(preparation?.resource.name).toBe('show');
+    expect(preparation?.controller).toBeInstanceOf(AttributeController);
+    expect(preparation?.controller.parent).toBe(parentController);
+    expect(preparation?.controller.world.world.parentId).toBe(parentController.world.world.id);
+    expect(preparation?.invocation.worldFormation.requestedMode).toBe('child-world');
+    expect(preparation?.invocation.openSeams.map((current) => current.kind)).toContain('published-di-surface-open');
+    expect(preparation?.lowering.assignments[0]?.bindingCommandName).toBe('bind');
+    expect(preparation?.openSeams.map((current) => current.kind)).toContain('prop-render-open');
+  });
+
+  it('prepares custom-element renderer contexts over element receivers', () => {
+    const configFixture = createConfigurationFixture();
+    const configFramework = new Framework(configFixture.rootDir, {
+      rootDir: configFixture.rootDir,
+      exports: configFixture.exports,
+      resourceSeeds: configFixture.resourceSeeds,
+    });
+    const standardWorld = configFramework.worldConstructions().findByConfigurationExportName('StandardConfiguration')[0];
+    expect(standardWorld).toBeDefined();
+    if (standardWorld == null) {
+      throw new Error('Expected StandardConfiguration world construction to exist.');
+    }
+
+    const customElementFixture = createCustomElementFixture();
+    const customElementFramework = new Framework(customElementFixture.rootDir, {
+      rootDir: customElementFixture.rootDir,
+      exports: customElementFixture.exports,
+      resourceSeeds: customElementFixture.resourceSeeds,
+    });
+    const fancyCard = customElementFramework.resources().readCustomElements().find((current) => current.name === 'fancy-card');
+    expect(fancyCard).toBeDefined();
+    if (fancyCard == null) {
+      throw new Error('Expected FancyCard custom element to exist.');
+    }
+
+    const compilerWorld = new CompilerConsultedWorld(
+      `compiler-world:${standardWorld.world.id}:fancy-card-prep`,
+      standardWorld.world,
+      [...standardWorld.visibleResources, fancyCard],
+      standardWorld.compilerWorld.renderers,
+      standardWorld.compilerWorld.resourceResolver.readAdmissions(),
+      standardWorld.compilerCapabilities,
+      standardWorld.containerStateEntries,
+      standardWorld.containerStateOpenSeams,
+      standardWorld.compilerWorld.rendering.openSeams,
+      standardWorld.compilerWorld.openSeams,
+    );
+    const compiler = new TemplateCompiler(compilerWorld);
+    const program = createProgramHandle();
+    const file = createFileHandle(program);
+    const ownerNode = createNodeHandle(file, 'ClassDeclaration', 10, 40);
+    const owner = createSymbolHandle(file, ownerNode, 'CardHost');
+    const template = createTemplateHandle(file, owner);
+    const compiled = compiler.compileAuthoredTemplate(
+      template,
+      '<fancy-card title.bind="cardTitle"></fancy-card>',
+    );
+    const root = compiled.rootNodes[0];
+    expect(root).toBeInstanceOf(CompiledElementNode);
+    if (!(root instanceof CompiledElementNode)) {
+      throw new Error('Expected root compiled node to be an element compilation.');
+    }
+
+    const parentController = compiler.createElementController(null, null, root);
+    const preparation = compiler.prepareCustomElement(parentController, root);
+    expect(preparation).toBeInstanceOf(CustomElementPreparation);
+    if (!(preparation instanceof CustomElementPreparation)) {
+      throw new Error('Expected custom-element preparation to be created.');
+    }
+
+    expect(preparation.resource.name).toBe('fancy-card');
+    expect(preparation.controller).toBeInstanceOf(ElementController);
+    expect(preparation.controller.parent).toBe(parentController);
+    expect(preparation.controller.world.world.parentId).toBe(parentController.world.world.id);
+    expect(preparation.invocation.worldFormation.requestedMode).toBe('child-world');
+    expect(preparation.renderLocation).not.toBeNull();
+    expect(preparation.invocation.openSeams.map((current) => current.kind)).toContain('projection-slots-open');
+    expect(preparation.openSeams.map((current) => current.kind)).toContain('projection-open');
+  });
+
   it('materializes compiler-facing CA/TC bindables info with explicit and synthesized primary bindables', () => {
     const fixture = createConfigurationFixture();
     const framework = new Framework(fixture.rootDir, {
@@ -1029,10 +1201,12 @@ describe('Aurelia clean-room runtime model', () => {
       `${world.compilerWorld.id}:bindables-info`,
       world.compilerWorld.world,
       [...world.visibleResources, tooltip],
+      world.compilerWorld.renderers,
       world.compilerWorld.resourceResolver.readAdmissions(),
       world.compilerCapabilities,
       world.containerStateEntries,
       world.containerStateOpenSeams,
+      world.compilerWorld.rendering.openSeams,
       world.compilerWorld.openSeams,
     );
     const compiler = new TemplateCompiler(compilerWorld);
@@ -1177,10 +1351,12 @@ describe('Aurelia clean-room runtime model', () => {
       `${world.compilerWorld.id}:template-controllers`,
       world.compilerWorld.world,
       [...world.visibleResources, unless],
+      world.compilerWorld.renderers,
       world.compilerWorld.resourceResolver.readAdmissions(),
       world.compilerCapabilities,
       world.containerStateEntries,
       world.containerStateOpenSeams,
+      world.compilerWorld.rendering.openSeams,
       world.compilerWorld.openSeams,
     );
     const compiler = new TemplateCompiler(compilerWorld);
@@ -1229,6 +1405,174 @@ describe('Aurelia clean-room runtime model', () => {
 
     expect(compiledText.interpolationDetected).toBe(true);
     expect(compiledText.openSeams.map((current) => current.kind)).toContain('text-interpolation-open');
+  });
+
+  it('prepares generic template-controller runtime preparation through controller child worlds and view factories', () => {
+    const fixture = createConfigurationFixture();
+    const framework = new Framework(fixture.rootDir, {
+      rootDir: fixture.rootDir,
+      exports: fixture.exports,
+      resourceSeeds: fixture.resourceSeeds,
+    });
+
+    const world = framework.worldConstructions().findByConfigurationExportName('StandardConfiguration')[0];
+    expect(world).toBeDefined();
+    if (world == null) {
+      throw new Error('Expected StandardConfiguration world construction to exist.');
+    }
+
+    const program = createProgramHandle();
+    const file = createFileHandle(program);
+    const unlessNode = createNodeHandle(file, 'ClassDeclaration', 500, 540);
+    const unlessSymbol = createSymbolHandle(file, unlessNode, 'Unless');
+    const unless = new TemplateControllerDefinition(
+      'resource:tc:unless',
+      unlessSymbol,
+      new CustomAttributeIdentity(
+        'unless',
+        [],
+        createKeyHandle(unlessSymbol, 'au:resource:template-controller:unless', 'resource'),
+      ),
+      new CustomAttributeBindableSurface([
+        new CustomAttributeBindableEntry('value', 'value'),
+      ]),
+      new CustomAttributePolicy(
+        'value',
+        null,
+        'reuse',
+        true,
+      ),
+    );
+    const compilerWorld = new CompilerConsultedWorld(
+      `${world.compilerWorld.id}:unless`,
+      world.compilerWorld.world,
+      [...world.visibleResources, unless],
+      world.compilerWorld.renderers,
+      world.compilerWorld.resourceResolver.readAdmissions(),
+      world.compilerCapabilities,
+      world.containerStateEntries,
+      world.containerStateOpenSeams,
+      world.compilerWorld.rendering.openSeams,
+      world.compilerWorld.openSeams,
+    );
+    const ownerNode = createNodeHandle(file, 'ClassDeclaration', 10, 40);
+    const owner = createSymbolHandle(file, ownerNode, 'HostElement');
+    const template = createTemplateHandle(file, owner);
+    const compiler = new TemplateCompiler(compilerWorld);
+    const compiled = compiler.compileAuthoredTemplate(
+      template,
+      '<div if.bind="ready" unless.bind="busy"></div>',
+    );
+    const root = compiled.rootNodes[0];
+    expect(root).toBeInstanceOf(CompiledElementNode);
+    if (!(root instanceof CompiledElementNode)) {
+      throw new Error('Expected root compiled node to be an element compilation.');
+    }
+
+    const parentController = compiler.createElementController(null, null, root);
+    expect(parentController).toBeInstanceOf(ElementController);
+
+    const preparation = compiler.prepareTemplateController(parentController, root);
+    expect(preparation).toBeInstanceOf(TemplateControllerPreparation);
+    if (!(preparation instanceof TemplateControllerPreparation)) {
+      throw new Error('Expected template-controller preparation to be created.');
+    }
+
+    expect(preparation.resource.name).toBe('if');
+    expect(preparation.profile.profileKind).toBe('builtin');
+    expect(preparation.controller).toBeInstanceOf(AttributeController);
+    expect(preparation.controller.parent).toBe(parentController);
+    expect(preparation.controller.world.world.parentId).toBe(parentController.world.world.id);
+    expect(preparation.controller.worldFormation).toBeInstanceOf(CompilerChildWorldFormation);
+    expect(preparation.controller.worldFormation?.requestedMode).toBe('child-world');
+    expect(preparation.invocation.worldFormation.requestedMode).toBe('child-world');
+    expect(preparation.viewFactory).toBeInstanceOf(ViewFactory);
+    expect(preparation.viewFactory.definition.nestedInstructions[0]?.resource.name).toBe('unless');
+    expect(preparation.viewFactory.worldFormation?.requestedMode).toBe('reuse-parent-world');
+    expect(preparation.viewFactory.world).toBe(parentController.world);
+    expect(preparation.renderLocation.hostElement).toBe(root);
+    expect(preparation.openSeams.map((current) => current.kind)).toContain('view-realization-deferred');
+    expect(preparation.invocation.openSeams.map((current) => current.kind)).toContain('published-di-surface-open');
+  });
+
+  it('requests a fresh inherited-resource view world for template controllers with containerStrategy=new', () => {
+    const fixture = createConfigurationFixture();
+    const framework = new Framework(fixture.rootDir, {
+      rootDir: fixture.rootDir,
+      exports: fixture.exports,
+      resourceSeeds: fixture.resourceSeeds,
+    });
+
+    const world = framework.worldConstructions().findByConfigurationExportName('StandardConfiguration')[0];
+    expect(world).toBeDefined();
+    if (world == null) {
+      throw new Error('Expected StandardConfiguration world construction to exist.');
+    }
+
+    const program = createProgramHandle();
+    const file = createFileHandle(program);
+    const tcNode = createNodeHandle(file, 'ClassDeclaration', 600, 660);
+    const tcSymbol = createSymbolHandle(file, tcNode, 'PortalLike');
+    const portalLike = new TemplateControllerDefinition(
+      'resource:tc:portal-like',
+      tcSymbol,
+      new CustomAttributeIdentity(
+        'portal-like',
+        [],
+        createKeyHandle(tcSymbol, 'au:resource:template-controller:portal-like', 'resource'),
+      ),
+      new CustomAttributeBindableSurface([
+        new CustomAttributeBindableEntry('value', 'value'),
+      ]),
+      new CustomAttributePolicy(
+        'value',
+        null,
+        'new',
+        true,
+      ),
+    );
+    const compilerWorld = new CompilerConsultedWorld(
+      `${world.compilerWorld.id}:portal-like`,
+      world.compilerWorld.world,
+      [...world.visibleResources, portalLike],
+      world.compilerWorld.renderers,
+      world.compilerWorld.resourceResolver.readAdmissions(),
+      world.compilerCapabilities,
+      world.containerStateEntries,
+      world.containerStateOpenSeams,
+      world.compilerWorld.rendering.openSeams,
+      world.compilerWorld.openSeams,
+    );
+    const compiler = new TemplateCompiler(compilerWorld);
+    const ownerNode = createNodeHandle(file, 'ClassDeclaration', 10, 40);
+    const owner = createSymbolHandle(file, ownerNode, 'PortalHost');
+    const template = createTemplateHandle(file, owner);
+    const compiled = compiler.compileAuthoredTemplate(
+      template,
+      '<div portal-like.bind=\"target\"></div>',
+    );
+    const root = compiled.rootNodes[0];
+    expect(root).toBeInstanceOf(CompiledElementNode);
+    if (!(root instanceof CompiledElementNode)) {
+      throw new Error('Expected root compiled node to be an element compilation.');
+    }
+
+    const parentController = compiler.createElementController(null, null, root);
+    const preparation = compiler.prepareTemplateController(parentController, root);
+    expect(preparation).toBeInstanceOf(TemplateControllerPreparation);
+    if (!(preparation instanceof TemplateControllerPreparation)) {
+      throw new Error('Expected template-controller preparation to be created.');
+    }
+
+    expect(preparation.resource.name).toBe('portal-like');
+    expect(preparation.profile.profileKind).toBe('custom');
+    expect(preparation.openSeams.map((current) => current.kind)).toContain('linked-branch-profile-open');
+    expect(preparation.viewFactory.worldFormation?.requestedMode).toBe('child-world-inherit-parent-resources');
+    expect(preparation.viewFactory.world.world.id).not.toBe(parentController.world.world.id);
+    expect(preparation.viewFactory.world.world.parentId).toBe(parentController.world.world.id);
+    expect(preparation.viewFactory.world.openSeams.map((current) => current.kind)).toContain('resource-map-topology-open');
+    expect(preparation.controller.world.world.parentId).toBe(parentController.world.world.id);
+    expect(preparation.controller.worldFormation?.openSeams.map((current) => current.kind)).toContain('dependency-registration-open');
   });
 
   it('routes authored attributes through the first JIT-shaped classification lanes', () => {
@@ -1384,10 +1728,12 @@ describe('Aurelia clean-room runtime model', () => {
       `compiler-world:${standardWorld.world.id}:fancy-card`,
       standardWorld.world,
       [...standardWorld.visibleResources, fancyCard],
+      standardWorld.compilerWorld.renderers,
       standardWorld.compilerWorld.resourceResolver.readAdmissions(),
       standardWorld.compilerCapabilities,
       standardWorld.containerStateEntries,
       standardWorld.containerStateOpenSeams,
+      standardWorld.compilerWorld.rendering.openSeams,
       standardWorld.compilerWorld.openSeams,
     );
     const compiler = new TemplateCompiler(compilerWorld);
@@ -1831,8 +2177,24 @@ export class TriggerBindingCommand {
     };
   }
 }
+export const SetPropertyRenderer = renderer(class SetPropertyRenderer {});
+export const CustomElementRenderer = renderer(class CustomElementRenderer {});
+export const CustomAttributeRenderer = renderer(class CustomAttributeRenderer {});
+export const TemplateControllerRenderer = renderer(class TemplateControllerRenderer {});
+export const LetElementRenderer = renderer(class LetElementRenderer {});
+export const RefBindingRenderer = renderer(class RefBindingRenderer {});
+export const InterpolationBindingRenderer = renderer(class InterpolationBindingRenderer {});
 export const PropertyBindingRenderer = renderer(class PropertyBindingRenderer {});
 export const IteratorBindingRenderer = renderer(class IteratorBindingRenderer {});
+export const TextBindingRenderer = renderer(class TextBindingRenderer {});
+export const ListenerBindingRenderer = renderer(class ListenerBindingRenderer {});
+export const SetAttributeRenderer = renderer(class SetAttributeRenderer {});
+export const SetClassAttributeRenderer = renderer(class SetClassAttributeRenderer {});
+export const SetStyleAttributeRenderer = renderer(class SetStyleAttributeRenderer {});
+export const StylePropertyBindingRenderer = renderer(class StylePropertyBindingRenderer {});
+export const AttributeBindingRenderer = renderer(class AttributeBindingRenderer {});
+export const SpreadRenderer = renderer(class SpreadRenderer {});
+export const SpreadValueRenderer = renderer(class SpreadValueRenderer {});
 export const DefaultComponents = [
   RuntimeTemplateCompilerImplementation,
   DirtyChecker,
@@ -1860,8 +2222,24 @@ export const DefaultBindingLanguage = [
 ];
 
 export const DefaultRenderers = [
+  SetPropertyRenderer,
+  CustomElementRenderer,
+  CustomAttributeRenderer,
+  TemplateControllerRenderer,
+  LetElementRenderer,
+  RefBindingRenderer,
+  InterpolationBindingRenderer,
   PropertyBindingRenderer,
   IteratorBindingRenderer,
+  TextBindingRenderer,
+  ListenerBindingRenderer,
+  SetAttributeRenderer,
+  SetClassAttributeRenderer,
+  SetStyleAttributeRenderer,
+  StylePropertyBindingRenderer,
+  AttributeBindingRenderer,
+  SpreadRenderer,
+  SpreadValueRenderer,
 ];
 
 export const DialogRegistrations = [

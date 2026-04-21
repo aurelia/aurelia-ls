@@ -92,9 +92,8 @@ export class CompilerCustomAttributeBindingLowerer {
   // NOTE: runtime does not lower CA/TC bindables straight from raw definition
   // support. It goes through ResourceResolver.bindables(def), which computes a
   // bindables-info intermediate and may synthesize a primary bindable from
-  // defaultProperty. This clean-room slice is intentionally stricter for now:
-  // it stays open instead of silently synthesizing when that intermediate is
-  // not yet modeled with provenance.
+  // defaultProperty. The clean-room mirrors that shape, but keeps the
+  // authored-vs-synthesized split explicit instead of silently collapsing it.
   lowerFromClassification(
     classification: CompilerAttributeClassification,
     options: {

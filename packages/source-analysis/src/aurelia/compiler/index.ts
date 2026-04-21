@@ -40,6 +40,37 @@ export {
 } from './authored-template.js';
 export { AuthoredTemplateParser } from './authored-template-parser.js';
 export {
+  ATTRIBUTE_INVOCATION_CONTEXT_OPEN_SEAM_KINDS,
+  AttributeInvocationContext,
+  AttributeInvocationContextOpenSeam,
+  type AttributeInvocationContextOpenSeamKind,
+} from './attribute-invocation-context.js';
+export {
+  ELEMENT_INVOCATION_CONTEXT_OPEN_SEAM_KINDS,
+  ElementInvocationContext,
+  ElementInvocationContextOpenSeam,
+  type ElementInvocationContextOpenSeamKind,
+} from './element-invocation-context.js';
+export {
+  COMPILER_CHILD_WORLD_REQUEST_MODE_KINDS,
+  COMPILER_CHILD_WORLD_FORMATION_OPEN_SEAM_KINDS,
+  CompilerChildWorldBuilder,
+  CompilerChildWorldFormation,
+  CompilerChildWorldFormationOpenSeam,
+  type CompilerChildWorldFormationOpenSeamKind,
+  type CompilerChildWorldRequestModeKind,
+} from './child-world-formation.js';
+export {
+  CONTROLLER_KINDS,
+  AttributeController,
+  Controller,
+  ElementController,
+  RenderLocation,
+  SyntheticView,
+  type ControllerKind,
+} from './controller.js';
+export type { Controller as ControllerShape } from './controller.js';
+export {
   COMPILER_ATTRIBUTE_BINDABLE_INFO_ORIGIN_KINDS,
   COMPILER_ATTRIBUTE_PRIMARY_BINDABLE_MODE_KINDS,
   COMPILER_ATTRIBUTE_BINDABLES_INFO_OPEN_SEAM_KINDS,
@@ -120,6 +151,44 @@ export {
 export { CompilationContext } from './compilation-context.js';
 export { TemplateCompilationEngine } from './template-compilation-engine.js';
 export {
+  TEMPLATE_CONTROLLER_PREPARATION_OPEN_SEAM_KINDS,
+  TemplateControllerPreparation,
+  TemplateControllerPreparationOpenSeam,
+  TemplateControllerRenderer,
+  type TemplateControllerPreparationOpenSeamKind,
+} from './template-controller-renderer.js';
+export {
+  BUILTIN_TEMPLATE_CONTROLLER_FAMILY_KINDS,
+  TEMPLATE_CONTROLLER_LINKAGE_KINDS,
+  TEMPLATE_CONTROLLER_PROFILE_KINDS,
+  TEMPLATE_CONTROLLER_SCOPE_EFFECT_KINDS,
+  TEMPLATE_CONTROLLER_TRIGGER_SURFACE_KINDS,
+  TEMPLATE_CONTROLLER_VIEW_REALIZATION_POLICY_KINDS,
+  BuiltinTemplateControllerProfile,
+  CustomTemplateControllerProfile,
+  TemplateControllerProfileResolver,
+  type BuiltinTemplateControllerFamilyKind,
+  type TemplateControllerLinkageKind,
+  type TemplateControllerProfileKind,
+  type TemplateControllerScopeEffectKind,
+  type TemplateControllerTriggerSurfaceKind,
+  type TemplateControllerViewRealizationPolicyKind,
+} from './template-controller-profile.js';
+export type { TemplateControllerProfile } from './template-controller-profile.js';
+export {
   TemplateControllerStructuralLowerer,
   type TemplateControllerStructuralParticipant,
 } from './template-controller-structural-lowering.js';
+export { ViewFactory } from './view-factory.js';
+export {
+  CustomAttributePreparation,
+  CustomAttributePreparationOpenSeam,
+  CustomAttributeRenderer,
+  CustomElementPreparation,
+  CustomElementPreparationOpenSeam,
+  CustomElementRenderer,
+  Rendering,
+  type CustomAttributePreparationOpenSeamKind,
+  type CustomElementPreparationOpenSeamKind,
+} from '../rendering/index.js';
+export type { InstructionRenderer } from '../rendering/index.js';

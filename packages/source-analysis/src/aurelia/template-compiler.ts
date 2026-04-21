@@ -6,10 +6,17 @@ import type { CompilerConsultedWorld } from './compiler/index.js';
 import {
   AuthoredTemplate,
   AuthoredTemplateParser,
+  Controller,
+  type CompiledElementNode,
   CompiledTemplate,
   CompilationContext,
+  type CustomAttributePreparation,
+  type CustomElementPreparation,
+  ElementController,
+  TemplateControllerPreparation,
   TemplateCompilationEngine,
 } from './compiler/index.js';
+import type { CustomElementDefinition } from './resources/index.js';
 import type {
   CompilerAuthoredAttribute,
   CompilerElementAttributeClassification,
@@ -69,5 +76,44 @@ export class TemplateCompiler {
       template,
       this.world.world,
     );
+  }
+
+  createElementController(
+    definition: CustomElementDefinition | null = null,
+    parent: Controller | null = null,
+    hostElement: CompiledElementNode | null = null,
+  ): ElementController {
+    return Controller.$el(this.world, definition, parent, hostElement);
+  }
+
+  prepareCustomElement(
+    parentController: Controller,
+    hostElement: CompiledElementNode,
+  ): CustomElementPreparation | null {
+    return this.world.rendering.prepareCustomElement(parentController, hostElement);
+  }
+
+  prepareCustomAttributes(
+    parentController: Controller,
+    hostElement: CompiledElementNode,
+  ): readonly CustomAttributePreparation[] {
+    return this.world.rendering.prepareCustomAttributes(parentController, hostElement);
+  }
+
+  prepareTemplateController(
+    parentController: Controller,
+    hostElement: CompiledElementNode,
+  ): TemplateControllerPreparation | null {
+    return this.world.rendering.prepareTemplateController(parentController, hostElement);
+  }
+
+  // NOTE: kept as a temporary alias while the generic TC path is renamed from
+  // "hydration" to the more honest "preparation" terminology. The generic
+  // compiler/runtime bridge does not create synthetic views yet.
+  prepareTemplateControllerHydration(
+    parentController: Controller,
+    hostElement: CompiledElementNode,
+  ): TemplateControllerPreparation | null {
+    return this.prepareTemplateController(parentController, hostElement);
   }
 }

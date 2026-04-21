@@ -9,6 +9,14 @@ import {
   CompilerResourceAdmissionProvenance,
   CompilerWorldOpenSeam,
 } from '../compiler/index.js';
+import {
+  createInstructionRenderer,
+  type InstructionRenderer,
+  InstructionRendererAdmissionProvenance,
+  CustomAttributeRenderer,
+  CustomElementRenderer,
+  RenderingOpenSeam,
+} from '../rendering/index.js';
 import type { ResourceDefinition, Resources } from '../resources/index.js';
 import {
   ContainerStateCandidate,
@@ -83,17 +91,21 @@ export class TypeScriptWorldConstructionScanner {
     ];
 
     const visibleResources = readVisibleResources(contribution, this.resourcesValue.readAll(), openSeams);
+    const visibleRenderers = readVisibleRenderers(contribution);
     const resourceAdmissions = readVisibleResourceAdmissions(contribution, visibleResources);
+    const renderingOpenSeams = readRenderingOpenSeams(visibleRenderers);
     const candidates = readContainerStateCandidates(contribution, world, openSeams);
     const containerState = this.containerStateMaterializer.materialize(candidates);
     const compilerWorld = new CompilerConsultedWorld(
       `compiler-world:${this.ownerLabelValue}:${contribution.configuration.sourceExport.name}:${index}`,
       world,
       visibleResources,
+      visibleRenderers,
       resourceAdmissions,
       contribution.compilerCapabilities,
       containerState.entries,
       containerState.openSeams,
+      renderingOpenSeams,
       materializeCompilerOpenSeams(openSeams, contribution.configuration.sourceExport.name),
     );
 
@@ -105,6 +117,7 @@ export class TypeScriptWorldConstructionScanner {
       containerState.entries,
       containerState.openSeams,
       visibleResources,
+      visibleRenderers,
       contribution.compilerCapabilities,
       dedupeOpenSeams(openSeams),
     );
@@ -131,6 +144,64 @@ function readVisibleResourceAdmissions(
         : 'Visible resource provenance closes through the contributing admitted subject(s) and owning configuration contribution.',
     ));
   }
+  return result;
+}
+
+function readVisibleRenderers(
+  contribution: ConfigurationContribution,
+): readonly InstructionRenderer[] {
+  const result: InstructionRenderer[] = [];
+  const seen = new Set<string>();
+
+  for (const subject of contribution.admittedSubjects) {
+    if (subject.carrier !== 'renderer') {
+      continue;
+    }
+
+    const referenceName = subject.referenceName;
+    if (seen.has(referenceName)) {
+      continue;
+    }
+    seen.add(referenceName);
+
+    result.push(createInstructionRenderer(
+      referenceName,
+      new InstructionRendererAdmissionProvenance(
+        contribution,
+        subject,
+        'Visible instruction renderer closes through the contributing admitted subject and owning configuration contribution.',
+      ),
+    ));
+  }
+
+  return result;
+}
+
+function readRenderingOpenSeams(
+  renderers: readonly InstructionRenderer[],
+): readonly RenderingOpenSeam[] {
+  const result: RenderingOpenSeam[] = [];
+
+  for (const current of renderers) {
+    if (current.instructionKind == null) {
+      result.push(new RenderingOpenSeam(
+        'custom-renderer-profile-open',
+        current.referenceName,
+        `Instruction renderer ${current.referenceName} remained on the custom profile path; later custom renderer overlays can attach richer instruction-consumption semantics.`,
+      ));
+      continue;
+    }
+
+    if (current instanceof CustomElementRenderer
+      || current instanceof CustomAttributeRenderer) {
+      result.push(new RenderingOpenSeam(
+        'resource-renderer-preparation-open',
+        current.referenceName,
+        `Resource renderer ${current.referenceName} is visible, but only the template-controller renderer currently has a dedicated preparation slice. Custom-element/custom-attribute renderer preparation still belongs to later work.`,
+      ));
+    }
+  }
+
   return result;
 }
 
@@ -293,7 +364,7 @@ function readContainerStateCandidates(
           new TypeScriptWorldConstructionOpenSeam(
             'renderer-state-open',
             subject.referenceName,
-            `Renderer subject ${subject.referenceName} remains outside keyed DI state for now; renderer semantics are still a later hydration/runtime seam.`,
+            `Renderer subject ${subject.referenceName} now closes through the consulted rendering surface, but it still remains outside keyed DI/container-state consequence for now.`,
           ),
         );
         break;
