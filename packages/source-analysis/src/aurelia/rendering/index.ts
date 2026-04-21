@@ -13,6 +13,14 @@ export {
   type CustomElementPreparationOpenSeamKind,
 } from './custom-element-renderer.js';
 export {
+  CURRENT_TARGET_PREPARATION_MODE_KINDS,
+  CURRENT_TARGET_PREPARATION_OPEN_SEAM_KINDS,
+  CurrentTargetPreparation,
+  CurrentTargetPreparationOpenSeam,
+  type CurrentTargetPreparationModeKind,
+  type CurrentTargetPreparationOpenSeamKind,
+} from './current-target-preparation.js';
+export {
   BUILTIN_INSTRUCTION_RENDERER_KINDS,
   createInstructionRenderer,
   type BuiltinInstructionRendererKind,

@@ -1115,6 +1115,8 @@ function readTemplateSource(
   if (expression == null || expression.kind === ts.SyntaxKind.NullKeyword) {
     return new CustomElementTemplateSource(
       'none',
+      null,
+      null,
       buildFieldProvenance('template', contributors, 'presence-only'),
       'No declaration-side template source is present on this custom element surface.',
     );
@@ -1123,6 +1125,8 @@ function readTemplateSource(
   if (ts.isStringLiteral(expression) || ts.isNoSubstitutionTemplateLiteral(expression)) {
     return new CustomElementTemplateSource(
       'inline-string',
+      expression.text,
+      null,
       buildFieldProvenance('template', contributors),
       'Inline template text is present and would still require compilation unless precompiled instructions also exist.',
     );
@@ -1130,6 +1134,8 @@ function readTemplateSource(
 
   return new CustomElementTemplateSource(
     'expression-reference',
+    null,
+    readReferenceName(expression),
     buildFieldProvenance('template', contributors),
     'Template source is reference-shaped and needs deeper value recovery to close further.',
   );

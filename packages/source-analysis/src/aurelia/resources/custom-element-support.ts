@@ -259,6 +259,8 @@ export class CustomElementDependencyContribution {
 export class CustomElementTemplateSource {
   constructor(
     readonly kind: CustomElementTemplateSourceKind,
+    readonly inlineText: string | null = null,
+    readonly referenceName: string | null = null,
     readonly provenance: CustomElementFieldProvenance | null = null,
     readonly note: string | null = null,
   ) {}

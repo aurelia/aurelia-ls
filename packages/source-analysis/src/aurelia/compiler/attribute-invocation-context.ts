@@ -5,7 +5,10 @@ import type {
 import type { CompilerConsultedWorld } from './compiler-consulted-world.js';
 import type { CompilerChildWorldFormation } from './child-world-formation.js';
 import type { Controller, RenderLocation } from './controller.js';
-import type { CompilerHydrateTemplateControllerInstruction } from './compiled-template.js';
+import type {
+  PreparedHydrateAttributeInstruction,
+  PreparedHydrateTemplateControllerInstruction,
+} from './prepared-resource-hydration.js';
 import type { ViewFactory } from './view-factory.js';
 
 export const ATTRIBUTE_INVOCATION_CONTEXT_OPEN_SEAM_KINDS = [
@@ -29,7 +32,7 @@ export class AttributeInvocationContext {
     readonly parentController: Controller,
     readonly world: CompilerConsultedWorld,
     readonly worldFormation: CompilerChildWorldFormation,
-    readonly instruction: CompilerHydrateTemplateControllerInstruction | null = null,
+    readonly instruction: PreparedHydrateAttributeInstruction | PreparedHydrateTemplateControllerInstruction | null = null,
     readonly renderLocation: RenderLocation | null = null,
     readonly viewFactory: ViewFactory | null = null,
     readonly openSeams: readonly AttributeInvocationContextOpenSeam[] = [],

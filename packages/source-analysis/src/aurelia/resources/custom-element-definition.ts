@@ -24,6 +24,8 @@ export class CustomElementDefinition implements ResourceDefinitionState<'custom-
     readonly templateSource: CustomElementTemplateSource = new CustomElementTemplateSource(
       'open',
       null,
+      null,
+      null,
       'Template source has not been materialized yet.',
     ),
   ) {}

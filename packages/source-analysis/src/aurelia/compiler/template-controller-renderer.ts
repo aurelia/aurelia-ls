@@ -10,6 +10,7 @@ import {
   TemplateControllerProfileResolver,
 } from './template-controller-profile.js';
 import type { TemplateControllerProfile } from './template-controller-profile.js';
+import { PreparedHydrateTemplateControllerInstruction } from './prepared-resource-hydration.js';
 import type { InstructionRenderer } from '../rendering/instruction-renderer.js';
 import type { InstructionRendererAdmissionProvenance } from '../rendering/renderer-admission.js';
 import { ViewFactory } from './view-factory.js';
@@ -63,43 +64,58 @@ export class TemplateControllerRenderer implements InstructionRenderer {
     if (lowering == null) {
       return null;
     }
+    return this.prepareTemplateControllerFromInstruction(
+      parentController,
+      new PreparedHydrateTemplateControllerInstruction(
+        hostElement,
+        lowering.outermostInstruction,
+        'Prepared hydrate-template-controller instruction derived from template-controller structural lowering.',
+      ),
+    );
+  }
 
-    const instruction = lowering.outermostInstruction;
+  prepareTemplateControllerFromInstruction(
+    parentController: Controller,
+    instruction: PreparedHydrateTemplateControllerInstruction,
+  ): TemplateControllerPreparation | null {
+    const hostElement = instruction.hostElement;
+    const loweredInstruction = instruction.loweredInstruction;
+
     // NOTE: runtime spends only the outermost TC instruction at the current
     // element. Inner TCs live inside the nested anonymous definition and only
     // become current later when a built-in family actually prepares or realizes
     // synthetic views through the prepared view-factory.
     const renderLocation = new RenderLocation(
-      `render-location:${hostElement.authored.id}:${instruction.resource.id}`,
+      `render-location:${hostElement.authored.id}:${loweredInstruction.resource.id}`,
       hostElement,
       'Template-controller render anchor carried separately from the CA controller, matching runtime’s render-location split.',
     );
     const controllerWorldFormation = this.childWorldBuilder.create(parentController.world, {
-      suffix: `attr:${sanitizeName(instruction.resource.name)}`,
-      owner: instruction.resource.type,
+      suffix: `attr:${sanitizeName(loweredInstruction.resource.name)}`,
+      owner: loweredInstruction.resource.type,
       mode: 'child-world',
       includeDependencyOpenSeam: true,
       note: 'invokeAttribute-like child world for the template-controller custom-attribute controller.',
     });
     const viewWorldFormation = this.childWorldBuilder.create(parentController.world, {
-      suffix: `view:${sanitizeName(instruction.resource.name)}`,
-      owner: instruction.resource.type,
-      mode: instruction.resource.containerStrategy === 'new'
+      suffix: `view:${sanitizeName(loweredInstruction.resource.name)}`,
+      owner: loweredInstruction.resource.type,
+      mode: loweredInstruction.resource.containerStrategy === 'new'
         ? 'child-world-inherit-parent-resources'
         : 'reuse-parent-world',
-      note: instruction.resource.containerStrategy === 'new'
+      note: loweredInstruction.resource.containerStrategy === 'new'
         ? 'View-factory world mirrors runtime containerStrategy=new by requesting a fresh child world that inherits parent resources.'
         : 'View-factory world mirrors runtime containerStrategy=reuse by reusing the parent consulted world.',
     });
     const viewFactory = new ViewFactory(
-      `view-factory:${instruction.resource.id}:${viewWorldFormation.resultWorld.world.id}`,
+      `view-factory:${loweredInstruction.resource.id}:${viewWorldFormation.resultWorld.world.id}`,
       viewWorldFormation.resultWorld,
-      instruction.definition,
+      loweredInstruction.definition,
       viewWorldFormation,
       'Prepared TC view-factory shell over the nested anonymous definition produced during compile-time structural lowering. The factory is available to later runtime-like behavior, but ordinary compiler preparation does not create synthetic views yet.',
     );
     const invocation = new AttributeInvocationContext(
-      instruction.resource,
+      loweredInstruction.resource,
       parentController,
       controllerWorldFormation.resultWorld,
       controllerWorldFormation,
@@ -121,17 +137,17 @@ export class TemplateControllerRenderer implements InstructionRenderer {
     // TODO: runtime invokeAttribute(...) also registers IController,
     // IInstruction, IRenderLocation, and IViewFactory into the attribute child
     // container. The clean-room keeps the invocation contract explicit first;
-    // the finer DI publication layer should land later rather than being
-    // over-compressed here.
+    // the finer DI publication/state layer should land later rather than being
+    // summarized as a detached shim here.
     const controller = Controller.$attr(
       controllerWorldFormation.resultWorld,
-      instruction.resource,
+      loweredInstruction.resource,
       parentController,
       viewFactory,
       renderLocation,
       controllerWorldFormation,
     );
-    const profile = this.profileResolver.resolve(instruction.resource);
+    const profile = this.profileResolver.resolve(loweredInstruction.resource);
     const openSeams: TemplateControllerPreparationOpenSeam[] = [
       new TemplateControllerPreparationOpenSeam(
         'attribute-dependencies-open',
@@ -152,7 +168,7 @@ export class TemplateControllerRenderer implements InstructionRenderer {
 
     return new TemplateControllerPreparation(
       hostElement,
-      instruction.resource,
+      loweredInstruction.resource,
       profile,
       controller,
       renderLocation,

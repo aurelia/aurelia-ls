@@ -7,6 +7,7 @@ import { AttributeController, Controller } from '../compiler/controller.js';
 import type { CompiledElementNode } from '../compiler/compiled-template.js';
 import { CompilerChildWorldBuilder } from '../compiler/child-world-formation.js';
 import type { CompilerAttributeBindingLowering } from '../compiler/custom-attribute-binding-lowering.js';
+import { PreparedHydrateAttributeInstruction } from '../compiler/prepared-resource-hydration.js';
 import type { InstructionRenderer } from './instruction-renderer.js';
 import type { InstructionRendererAdmissionProvenance } from './renderer-admission.js';
 
@@ -51,19 +52,36 @@ export class CustomAttributeRenderer implements InstructionRenderer {
     parentController: Controller,
     hostElement: CompiledElementNode,
   ): readonly CustomAttributePreparation[] {
-    return hostElement.structuralCarrier.customAttributeBindings
-      .filter((current): current is CompilerAttributeBindingLowering & { resource: CustomAttributeDefinition } => current.resource.kind === 'custom-attribute')
-      .map((current, index) => this.prepareOne(parentController, hostElement, current, index))
+    return this.prepareCustomAttributesFromInstructions(
+      parentController,
+      hostElement.structuralCarrier.customAttributeBindings
+        .filter((current): current is CompilerAttributeBindingLowering & { resource: CustomAttributeDefinition } => current.resource.kind === 'custom-attribute')
+        .map((current) => new PreparedHydrateAttributeInstruction(
+          hostElement,
+          current.resource,
+          current,
+          'Prepared hydrate-attribute instruction derived from the current compiled-element carrier.',
+        )),
+    );
+  }
+
+  prepareCustomAttributesFromInstructions(
+    parentController: Controller,
+    instructions: readonly PreparedHydrateAttributeInstruction[],
+  ): readonly CustomAttributePreparation[] {
+    return instructions
+      .map((current, index) => this.prepareOne(parentController, current, index))
       .filter((current): current is CustomAttributePreparation => current != null);
   }
 
   private prepareOne(
     parentController: Controller,
-    hostElement: CompiledElementNode,
-    lowering: CompilerAttributeBindingLowering & { resource: CustomAttributeDefinition },
+    instruction: PreparedHydrateAttributeInstruction,
     index: number,
   ): CustomAttributePreparation | null {
-    const resource = lowering.resource;
+    const hostElement = instruction.hostElement;
+    const resource = instruction.resource;
+    const lowering = instruction.lowering;
     const worldFormation = this.childWorldBuilder.create(parentController.world, {
       suffix: `attr:${sanitizeName(resource.name)}:${index}`,
       owner: resource.type,
@@ -76,7 +94,7 @@ export class CustomAttributeRenderer implements InstructionRenderer {
       parentController,
       worldFormation.resultWorld,
       worldFormation,
-      null,
+      instruction,
       null,
       null,
       [
@@ -91,6 +109,10 @@ export class CustomAttributeRenderer implements InstructionRenderer {
       ],
       'Tooling-time invokeAttribute-like context over the CA controller child world.',
     );
+    // TODO: runtime invokeAttribute(...) registers instance providers for the
+    // current controller, instruction, location, and view-factory into the CA
+    // child container. Represent that only when the DI layer can model those
+    // temporally scoped instance publications, not as a detached shim.
     const controller = Controller.$attr(
       worldFormation.resultWorld,
       resource,

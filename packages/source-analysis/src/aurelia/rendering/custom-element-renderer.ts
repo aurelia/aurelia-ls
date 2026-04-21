@@ -10,6 +10,7 @@ import {
 } from '../compiler/controller.js';
 import type { CompiledElementNode } from '../compiler/compiled-template.js';
 import { CompilerChildWorldBuilder } from '../compiler/child-world-formation.js';
+import { PreparedHydrateElementInstruction } from '../compiler/prepared-resource-hydration.js';
 import type { InstructionRenderer } from './instruction-renderer.js';
 import type { InstructionRendererAdmissionProvenance } from './renderer-admission.js';
 
@@ -58,6 +59,22 @@ export class CustomElementRenderer implements InstructionRenderer {
     if (resource == null) {
       return null;
     }
+    return this.prepareCustomElementFromInstruction(
+      parentController,
+      new PreparedHydrateElementInstruction(
+        hostElement,
+        resource,
+        'Prepared hydrate-element instruction derived from the current compiled-element carrier.',
+      ),
+    );
+  }
+
+  prepareCustomElementFromInstruction(
+    parentController: Controller,
+    instruction: PreparedHydrateElementInstruction,
+  ): CustomElementPreparation | null {
+    const hostElement = instruction.hostElement;
+    const resource = instruction.resource;
 
     const renderLocation = resource.policy.containerless === true
       ? new RenderLocation(
@@ -78,6 +95,7 @@ export class CustomElementRenderer implements InstructionRenderer {
       parentController,
       worldFormation.resultWorld,
       worldFormation,
+      instruction,
       renderLocation,
       [
         new ElementInvocationContextOpenSeam(
@@ -95,6 +113,11 @@ export class CustomElementRenderer implements InstructionRenderer {
       ],
       'Tooling-time createElementContainer-like context over the CE child world.',
     );
+    // TODO: runtime createElementContainer(...) registers instance providers for
+    // IController, IInstruction, IRenderLocation, IViewFactory, and optional
+    // slot info into the child container. Do not summarize that as a fake
+    // publication object; land it only when the compile-time DI layer can
+    // represent those temporally scoped instance publications honestly.
     const controller = Controller.$el(
       worldFormation.resultWorld,
       resource,

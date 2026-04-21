@@ -20,6 +20,8 @@ import {
   CompilerAuthoredAttribute,
   CompilerChildWorldFormation,
   CompilerConsultedWorld,
+  ControllerOwnedTemplateBranch,
+  CurrentTargetPreparation,
   ConfigurationRegistrationScanner,
   CONTAINER_STATE_OPEN_SEAM_KINDS,
   CONTAINER_STATE_PROVENANCE_MODES,
@@ -71,6 +73,7 @@ import {
   LOOKUP_REGIME_KINDS,
   PassiveInstructionRenderer,
   OPEN_RESIDUAL_KINDS,
+  PreparedResourceHydrationBundle,
   ProgramRef,
   Registration,
   RegistrationRef,
@@ -1168,6 +1171,170 @@ describe('Aurelia clean-room runtime model', () => {
     expect(preparation.openSeams.map((current) => current.kind)).toContain('projection-open');
   });
 
+  it('prepares one runtime-shaped current target and exposes a CE internal-template branch when no TC owns the element', () => {
+    const configFixture = createConfigurationFixture();
+    const configFramework = new Framework(configFixture.rootDir, {
+      rootDir: configFixture.rootDir,
+      exports: configFixture.exports,
+      resourceSeeds: configFixture.resourceSeeds,
+    });
+    const standardWorld = configFramework.worldConstructions().findByConfigurationExportName('StandardConfiguration')[0];
+    expect(standardWorld).toBeDefined();
+    if (standardWorld == null) {
+      throw new Error('Expected StandardConfiguration world construction to exist.');
+    }
+
+    const customElementFixture = createCustomElementFixture();
+    const customElementFramework = new Framework(customElementFixture.rootDir, {
+      rootDir: customElementFixture.rootDir,
+      exports: customElementFixture.exports,
+      resourceSeeds: customElementFixture.resourceSeeds,
+    });
+    const fancyCard = customElementFramework.resources().readCustomElements().find((current) => current.name === 'fancy-card');
+    expect(fancyCard).toBeDefined();
+    if (fancyCard == null) {
+      throw new Error('Expected FancyCard custom element to exist.');
+    }
+
+    const compilerWorld = new CompilerConsultedWorld(
+      `compiler-world:${standardWorld.world.id}:fancy-card-aggregate`,
+      standardWorld.world,
+      [...standardWorld.visibleResources, fancyCard],
+      standardWorld.compilerWorld.renderers,
+      standardWorld.compilerWorld.resourceResolver.readAdmissions(),
+      standardWorld.compilerCapabilities,
+      standardWorld.containerStateEntries,
+      standardWorld.containerStateOpenSeams,
+      standardWorld.compilerWorld.rendering.openSeams,
+      standardWorld.compilerWorld.openSeams,
+    );
+    const compiler = new TemplateCompiler(compilerWorld);
+    const program = createProgramHandle();
+    const file = createFileHandle(program);
+    const ownerNode = createNodeHandle(file, 'ClassDeclaration', 10, 40);
+    const owner = createSymbolHandle(file, ownerNode, 'CardAggregateHost');
+    const template = createTemplateHandle(file, owner);
+    const compiled = compiler.compileAuthoredTemplate(
+      template,
+      '<fancy-card title.bind="cardTitle"></fancy-card>',
+    );
+    const root = compiled.rootNodes[0];
+    expect(root).toBeInstanceOf(CompiledElementNode);
+    if (!(root instanceof CompiledElementNode)) {
+      throw new Error('Expected root compiled node to be an element compilation.');
+    }
+
+    const parentController = compiler.createElementController(null, null, root);
+    const bundle = compiler.prepareInstructionBundle(root);
+    expect(bundle).toBeInstanceOf(PreparedResourceHydrationBundle);
+    expect(bundle.mode).toBe('resource-row');
+    expect(bundle.elementInstruction?.resource.name).toBe('fancy-card');
+    expect(bundle.attributeInstructions).toEqual([]);
+    const preparation = compiler.prepareCurrentTarget(parentController, root);
+    expect(preparation).toBeInstanceOf(CurrentTargetPreparation);
+    expect(preparation.mode).toBe('resource-current-target');
+    expect(preparation.instructionBundle.mode).toBe(bundle.mode);
+    expect(preparation.instructionBundle.elementInstruction?.resource.name).toBe('fancy-card');
+    expect(preparation.customElement).toBeInstanceOf(CustomElementPreparation);
+    expect(preparation.templateController).toBeNull();
+    expect(preparation.customAttributes).toEqual([]);
+    expect(preparation.templateBranches).toHaveLength(1);
+
+    const branch = preparation.templateBranches[0];
+    expect(branch).toBeInstanceOf(ControllerOwnedTemplateBranch);
+    expect(branch?.kind).toBe('custom-element-internal-template');
+    expect(branch?.ownerResource.name).toBe('fancy-card');
+    expect(branch?.realizationPolicy).toBe('immediate-controller-hydration');
+    expect(branch?.templateSource?.kind).toBe('inline-string');
+    expect(branch?.rawTemplateText).toBe('<div>${title}</div>');
+    expect(branch?.templateRef?.file.path).toContain('custom-element-fixture.ts');
+    expect(branch?.openSeams).toEqual([]);
+  });
+
+  it('uses template-controller current-target preparation and defers CE/CA work into the recursive TC branch', () => {
+    const configFixture = createConfigurationFixture();
+    const configFramework = new Framework(configFixture.rootDir, {
+      rootDir: configFixture.rootDir,
+      exports: configFixture.exports,
+      resourceSeeds: configFixture.resourceSeeds,
+    });
+    const standardWorld = configFramework.worldConstructions().findByConfigurationExportName('StandardConfiguration')[0];
+    expect(standardWorld).toBeDefined();
+    if (standardWorld == null) {
+      throw new Error('Expected StandardConfiguration world construction to exist.');
+    }
+
+    const customElementFixture = createCustomElementFixture();
+    const customElementFramework = new Framework(customElementFixture.rootDir, {
+      rootDir: customElementFixture.rootDir,
+      exports: customElementFixture.exports,
+      resourceSeeds: customElementFixture.resourceSeeds,
+    });
+    const decoratedCard = customElementFramework.resources().readCustomElements().find((current) => current.name === 'decorated-card');
+    expect(decoratedCard).toBeDefined();
+    if (decoratedCard == null) {
+      throw new Error('Expected DecoratedCard custom element to exist.');
+    }
+
+    const compilerWorld = new CompilerConsultedWorld(
+      `compiler-world:${standardWorld.world.id}:tc-current-target`,
+      standardWorld.world,
+      [...standardWorld.visibleResources, decoratedCard],
+      standardWorld.compilerWorld.renderers,
+      standardWorld.compilerWorld.resourceResolver.readAdmissions(),
+      standardWorld.compilerCapabilities,
+      standardWorld.containerStateEntries,
+      standardWorld.containerStateOpenSeams,
+      standardWorld.compilerWorld.rendering.openSeams,
+      standardWorld.compilerWorld.openSeams,
+    );
+    const compiler = new TemplateCompiler(compilerWorld);
+    const program = createProgramHandle();
+    const file = createFileHandle(program);
+    const ownerNode = createNodeHandle(file, 'ClassDeclaration', 10, 40);
+    const owner = createSymbolHandle(file, ownerNode, 'TemplateControllerAggregateHost');
+    const template = createTemplateHandle(file, owner);
+    const compiled = compiler.compileAuthoredTemplate(
+      template,
+      '<decorated-card if.bind="ready" show.bind="isVisible"></decorated-card>',
+    );
+    const root = compiled.rootNodes[0];
+    expect(root).toBeInstanceOf(CompiledElementNode);
+    if (!(root instanceof CompiledElementNode)) {
+      throw new Error('Expected root compiled node to be an element compilation.');
+    }
+
+    const parentController = compiler.createElementController(null, null, root);
+    const bundle = compiler.prepareInstructionBundle(root);
+    expect(bundle).toBeInstanceOf(PreparedResourceHydrationBundle);
+    expect(bundle.mode).toBe('template-controller-row');
+    expect(bundle.templateControllerInstruction?.resource.name).toBe('if');
+    expect(bundle.attributeInstructions).toEqual([]);
+    expect(bundle.elementInstruction).toBeNull();
+    const preparation = compiler.prepareCurrentTarget(parentController, root);
+    expect(preparation.mode).toBe('template-controller-current-target');
+    expect(preparation.instructionBundle.mode).toBe(bundle.mode);
+    expect(preparation.instructionBundle.templateControllerInstruction?.resource.name).toBe('if');
+    expect(preparation.templateController).toBeInstanceOf(TemplateControllerPreparation);
+    expect(preparation.customElement).toBeNull();
+    expect(preparation.customAttributes).toEqual([]);
+    expect(preparation.openSeams.map((current) => current.kind)).toContain('nested-resource-preparation-deferred');
+    expect(preparation.templateBranches).toHaveLength(1);
+
+    const branch = preparation.templateBranches[0];
+    expect(branch).toBeInstanceOf(ControllerOwnedTemplateBranch);
+    expect(branch?.kind).toBe('template-controller-view');
+    expect(branch?.ownerResource.name).toBe('if');
+    expect(branch?.realizationPolicy).toBe('deferred-view-factory-realization');
+    expect(branch?.hasAnonymousDefinition()).toBe(true);
+    expect(branch?.anonymousDefinition?.structuralCarrier?.classification.receiverElement?.name).toBe('decorated-card');
+    expect(branch?.anonymousDefinition?.structuralCarrier?.classification.items.map((current) => current.lane)).toEqual([
+      'template-controller',
+      'custom-attribute',
+    ]);
+    expect(branch?.anonymousDefinition?.structuralCarrier?.classification.items[1]?.authored.rawName).toBe('show.bind');
+  });
+
   it('materializes compiler-facing CA/TC bindables info with explicit and synthesized primary bindables', () => {
     const fixture = createConfigurationFixture();
     const framework = new Framework(fixture.rootDir, {
@@ -1954,7 +2121,7 @@ function createResourceDefinitions(
       new CustomElementPolicy(),
       new CustomElementBindableSurface(),
       new CustomElementDependencyContribution(),
-      new CustomElementTemplateSource('open', null),
+      new CustomElementTemplateSource('open'),
     ),
     new CustomAttributeDefinition(
       'resource:ca:bar',

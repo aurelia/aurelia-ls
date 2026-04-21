@@ -13,6 +13,8 @@ import {
   type CustomAttributePreparation,
   type CustomElementPreparation,
   ElementController,
+  CurrentTargetPreparation,
+  PreparedResourceHydrationBundle,
   TemplateControllerPreparation,
   TemplateCompilationEngine,
 } from './compiler/index.js';
@@ -107,13 +109,16 @@ export class TemplateCompiler {
     return this.world.rendering.prepareTemplateController(parentController, hostElement);
   }
 
-  // NOTE: kept as a temporary alias while the generic TC path is renamed from
-  // "hydration" to the more honest "preparation" terminology. The generic
-  // compiler/runtime bridge does not create synthetic views yet.
-  prepareTemplateControllerHydration(
+  prepareInstructionBundle(
+    hostElement: CompiledElementNode,
+  ): PreparedResourceHydrationBundle {
+    return this.world.rendering.prepareInstructionBundle(hostElement);
+  }
+
+  prepareCurrentTarget(
     parentController: Controller,
     hostElement: CompiledElementNode,
-  ): TemplateControllerPreparation | null {
-    return this.prepareTemplateController(parentController, hostElement);
+  ): CurrentTargetPreparation {
+    return this.world.rendering.prepareCurrentTarget(parentController, hostElement);
   }
 }

@@ -61,6 +61,16 @@ export {
   type CompilerChildWorldRequestModeKind,
 } from './child-world-formation.js';
 export {
+  CONTROLLER_OWNED_TEMPLATE_BRANCH_KINDS,
+  CONTROLLER_OWNED_TEMPLATE_BRANCH_OPEN_SEAM_KINDS,
+  CONTROLLER_TEMPLATE_REALIZATION_POLICY_KINDS,
+  ControllerOwnedTemplateBranch,
+  ControllerOwnedTemplateBranchOpenSeam,
+  type ControllerOwnedTemplateBranchKind,
+  type ControllerOwnedTemplateBranchOpenSeamKind,
+  type ControllerTemplateRealizationPolicyKind,
+} from './controller-owned-template-branch.js';
+export {
   CONTROLLER_KINDS,
   AttributeController,
   Controller,
@@ -124,6 +134,19 @@ export {
   type CompilerValueParseStatusKind,
 } from './compiler-value-parser.js';
 export {
+  PREPARED_RESOURCE_HYDRATION_BUNDLE_MODE_KINDS,
+  PREPARED_RESOURCE_HYDRATION_BUNDLE_OPEN_SEAM_KINDS,
+  PREPARED_RESOURCE_HYDRATION_INSTRUCTION_KINDS,
+  PreparedHydrateAttributeInstruction,
+  PreparedHydrateElementInstruction,
+  PreparedHydrateTemplateControllerInstruction,
+  PreparedResourceHydrationBundle,
+  PreparedResourceHydrationBundleOpenSeam,
+  type PreparedResourceHydrationBundleModeKind,
+  type PreparedResourceHydrationBundleOpenSeamKind,
+  type PreparedResourceHydrationInstructionKind,
+} from './prepared-resource-hydration.js';
+export {
   COMPILER_WORLD_OPEN_SEAM_KINDS,
   COMPILER_ATTRIBUTE_PARSE_CANDIDATE_STATUS_KINDS,
   COMPILER_ATTRIBUTE_PARSE_RESULT_STATUS_KINDS,
@@ -180,6 +203,14 @@ export {
   type TemplateControllerStructuralParticipant,
 } from './template-controller-structural-lowering.js';
 export { ViewFactory } from './view-factory.js';
+export {
+  CURRENT_TARGET_PREPARATION_MODE_KINDS,
+  CURRENT_TARGET_PREPARATION_OPEN_SEAM_KINDS,
+  CurrentTargetPreparation,
+  CurrentTargetPreparationOpenSeam,
+  type CurrentTargetPreparationModeKind,
+  type CurrentTargetPreparationOpenSeamKind,
+} from '../rendering/index.js';
 export {
   CustomAttributePreparation,
   CustomAttributePreparationOpenSeam,
