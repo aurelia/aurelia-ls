@@ -20,6 +20,12 @@ import type {
   TemplateCompilerHookCapability,
 } from './compiler-capability.js';
 import {
+  CompilerAttributeBindableInfoEntry,
+  CompilerAttributeBindablesInfo,
+  CompilerAttributeBindablesInfoOpenSeam,
+  CompilerAttributePrimaryBindableProvenance,
+} from './custom-attribute-bindables-info.js';
+import {
   CompilerAttributeSyntax,
   CompilerAttributeSyntaxProvenance,
 } from './compiler-attribute-syntax.js';
@@ -118,6 +124,7 @@ export class CompilerAttributeParseResult {
 export class CompilerResourceResolver {
   private readonly byKind = new Map<ResourceDefinitionKind, readonly ResourceDefinition[]>();
   private readonly admissionsById = new Map<string, CompilerResourceAdmissionProvenance>();
+  private readonly attributeBindablesInfoById = new Map<string, CompilerAttributeBindablesInfo>();
 
   constructor(
     readonly world: ContainerWorldRef,
@@ -234,6 +241,102 @@ export class CompilerResourceResolver {
     definition: ResourceDefinition,
   ): CompilerResourceAdmissionProvenance | null {
     return this.admissionsById.get(definition.id) ?? null;
+  }
+
+  // NOTE: runtime compiler lowers CA/TC bindables through ResourceResolver.bindables(def),
+  // not directly from raw definition support. The clean-room keeps that as an
+  // explicit intermediate so authored vs synthesized primary bindables can be
+  // traced instead of silently collapsed away.
+  bindables(
+    definition: CustomAttributeDefinition | TemplateControllerDefinition,
+  ): CompilerAttributeBindablesInfo {
+    const cached = this.attributeBindablesInfoById.get(definition.id);
+    if (cached != null) {
+      return cached;
+    }
+
+    const defaultPropertyName = definition.defaultProperty ?? 'value';
+    const defaultPropertyProvenance = definition.policy.readProvenance('default-property');
+    const openSeams: CompilerAttributeBindablesInfoOpenSeam[] = [];
+    const entries: CompilerAttributeBindableInfoEntry[] = [];
+
+    for (const current of definition.bindableSurface.entries) {
+      const resolvedName = current.name ?? current.attribute;
+      if (resolvedName == null) {
+        openSeams.push(new CompilerAttributeBindablesInfoOpenSeam(
+          'authored-bindable-name-open',
+          `Bindable entry on ${definition.name ?? '(anonymous attribute resource)'} did not close a usable name or attribute.`,
+        ));
+        continue;
+      }
+
+      const resolvedAttribute = current.attribute ?? current.name ?? resolvedName;
+      entries.push(new CompilerAttributeBindableInfoEntry(
+        resolvedName,
+        resolvedAttribute,
+        'authored-entry',
+        current,
+        current.attribute == null && current.name != null
+          ? 'Attribute name fell back to the bindable name because no explicit attribute alias was authored.'
+          : null,
+      ));
+    }
+
+    let primary = entries.find((current) =>
+      current.name === defaultPropertyName || current.attribute === defaultPropertyName,
+    ) ?? null;
+    let primaryProvenance: CompilerAttributePrimaryBindableProvenance;
+
+    if (primary != null) {
+      primaryProvenance = new CompilerAttributePrimaryBindableProvenance(
+        'selected-authored',
+        primary,
+        defaultPropertyName,
+        defaultPropertyProvenance,
+        'Primary bindable closed from an authored bindable entry selected against runtime default-property law.',
+      );
+    } else if (defaultPropertyName != null) {
+      primary = new CompilerAttributeBindableInfoEntry(
+        defaultPropertyName,
+        defaultPropertyName,
+        'synthesized-default-property',
+        null,
+        definition.defaultProperty == null
+          ? 'Primary bindable was synthesized from runtime default defaultProperty = "value" because the support bundle did not close one explicitly.'
+          : 'Primary bindable was synthesized from explicit defaultProperty because no authored bindable entry matched it.',
+      );
+      entries.push(primary);
+      primaryProvenance = new CompilerAttributePrimaryBindableProvenance(
+        'synthesized-default-property',
+        primary,
+        defaultPropertyName,
+        defaultPropertyProvenance,
+        'Primary bindable was synthesized to mirror runtime ResourceResolver.bindables(def) behavior while keeping the synthesis explicit for tooling.',
+      );
+    } else {
+      openSeams.push(new CompilerAttributeBindablesInfoOpenSeam(
+        'default-property-selection-open',
+        'Neither explicit nor runtime-default defaultProperty closed to a usable primary bindable name.',
+      ));
+      primaryProvenance = new CompilerAttributePrimaryBindableProvenance(
+        'open',
+        null,
+        null,
+        defaultPropertyProvenance,
+        'Primary bindable stayed open because default-property selection did not close.',
+      );
+    }
+
+    const info = new CompilerAttributeBindablesInfo(
+      definition,
+      entries,
+      primary,
+      primaryProvenance,
+      openSeams,
+      'Compiler-facing CA/TC bindables info over authored support plus explicit runtime-parity synthesis for primary/default-property resolution.',
+    );
+    this.attributeBindablesInfoById.set(definition.id, info);
+    return info;
   }
 
   readAdmissions(): readonly CompilerResourceAdmissionProvenance[] {

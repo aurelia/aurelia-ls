@@ -137,16 +137,20 @@ export class CompiledTemplateRef {
 }
 
 export const TEMPLATE_NODE_REF_KINDS = [
+  'fragment',
   'element',
   'attribute',
-  'binding',
   'text',
-  'let',
   'unknown',
 ] as const;
 
 export type TemplateNodeRefKind =
   typeof TEMPLATE_NODE_REF_KINDS[number];
+
+// NOTE: this enum is intentionally about template-node *shape*, not later
+// compiler/runtime semantics. Things like binding expressions or the special
+// <let> element belong to later classification/lowering layers rather than to
+// the generic template-node ref kind itself.
 
 export class TemplateNodeRef {
   readonly kind = 'template-node' as const;

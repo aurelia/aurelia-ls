@@ -7,9 +7,13 @@ import { describe, expect, it } from './test-harness.js';
 
 import {
   ANALYZABILITY_BAND_KINDS,
+  CompiledElementNode,
+  CompiledTextNode,
   AttributePatternDefinition,
   Aurelia,
   AppRoot,
+  AuthoredElementNode,
+  AuthoredTextNode,
   BindingBehaviorDefinition,
   BindingCommandDefinition,
   CompilerAuthoredAttribute,
@@ -29,7 +33,10 @@ import {
   ContainerStateQualification,
   ContainerStateSlot,
   CustomAttributeDefinition,
+  CustomAttributeBindableEntry,
+  CustomAttributeBindableSurface,
   CustomAttributeIdentity,
+  CustomAttributePolicy,
   CustomElementBindableSurface,
   CustomElementDefinition,
   CustomElementDependencyContribution,
@@ -987,6 +994,241 @@ describe('Aurelia clean-room runtime model', () => {
     expect(context.hasService('ExpressionParser')).toBe(true);
     expect(child.world).toBe(world.compilerWorld);
     expect(child.root).toBe(context);
+  });
+
+  it('materializes compiler-facing CA/TC bindables info with explicit and synthesized primary bindables', () => {
+    const fixture = createConfigurationFixture();
+    const framework = new Framework(fixture.rootDir, {
+      rootDir: fixture.rootDir,
+      exports: fixture.exports,
+      resourceSeeds: fixture.resourceSeeds,
+    });
+
+    const world = framework.worldConstructions().findByConfigurationExportName('StandardConfiguration')[0];
+    expect(world).toBeDefined();
+    if (world == null) {
+      throw new Error('Expected StandardConfiguration world construction to exist.');
+    }
+
+    const program = createProgramHandle();
+    const file = createFileHandle(program);
+    const tooltipNode = createNodeHandle(file, 'ClassDeclaration', 560, 600);
+    const tooltipSymbol = createSymbolHandle(file, tooltipNode, 'Tooltip');
+    const tooltip = new CustomAttributeDefinition(
+      'resource:ca:tooltip',
+      tooltipSymbol,
+      new CustomAttributeIdentity(
+        'tooltip',
+        [],
+        createKeyHandle(tooltipSymbol, 'au:resource:custom-attribute:tooltip', 'resource'),
+      ),
+      new CustomAttributeBindableSurface(),
+      new CustomAttributePolicy(),
+    );
+    const compilerWorld = new CompilerConsultedWorld(
+      `${world.compilerWorld.id}:bindables-info`,
+      world.compilerWorld.world,
+      [...world.visibleResources, tooltip],
+      world.compilerWorld.resourceResolver.readAdmissions(),
+      world.compilerCapabilities,
+      world.containerStateEntries,
+      world.containerStateOpenSeams,
+      world.compilerWorld.openSeams,
+    );
+    const compiler = new TemplateCompiler(compilerWorld);
+    const context = compiler.createCompilationContext();
+
+    const show = context.findAttribute('show');
+    expect(show).toBeDefined();
+    if (show == null || show.kind !== 'custom-attribute') {
+      throw new Error('Expected show custom attribute to exist.');
+    }
+
+    const showBindables = context.readAttributeBindablesInfo(show);
+    expect(showBindables.primary?.name).toBe('value');
+    expect(showBindables.primary?.origin).toBe('authored-entry');
+    expect(showBindables.primaryProvenance?.mode).toBe('selected-authored');
+    expect(showBindables.readByAttr('show-delay')?.name).toBe('delay');
+
+    const tooltipDef = context.findAttribute('tooltip');
+    expect(tooltipDef).toBeDefined();
+    if (tooltipDef == null || tooltipDef.kind !== 'custom-attribute') {
+      throw new Error('Expected tooltip custom attribute to exist.');
+    }
+
+    const tooltipBindables = context.readAttributeBindablesInfo(tooltipDef);
+    expect(tooltipBindables.primary?.name).toBe('value');
+    expect(tooltipBindables.primary?.attribute).toBe('value');
+    expect(tooltipBindables.primary?.origin).toBe('synthesized-default-property');
+    expect(tooltipBindables.primaryProvenance?.mode).toBe('synthesized-default-property');
+    expect(tooltipBindables.primaryProvenance?.defaultPropertyName).toBe('value');
+    expect(tooltipBindables.readByAttr('value')?.origin).toBe('synthesized-default-property');
+    expect(tooltipBindables.openSeams).toEqual([]);
+
+    const ownerNode = createNodeHandle(file, 'ClassDeclaration', 10, 40);
+    const owner = createSymbolHandle(file, ownerNode, 'TooltipHost');
+    const template = createTemplateHandle(file, owner);
+    const compiled = compiler.compileAuthoredTemplate(
+      template,
+      '<div tooltip="hello"></div>',
+    );
+    const root = compiled.rootNodes[0];
+    expect(root).toBeInstanceOf(CompiledElementNode);
+    if (!(root instanceof CompiledElementNode)) {
+      throw new Error('Expected tooltip host compilation to produce an element node.');
+    }
+
+    const lowering = root.structuralCarrier.customAttributeBindings[0];
+    expect(lowering?.assignments[0]?.bindable.origin).toBe('synthesized-default-property');
+    expect(lowering?.assignments[0]?.bindable.name).toBe('value');
+  });
+
+  it('parses authored templates into a tolerant provenance-bearing tree', () => {
+    const fixture = createConfigurationFixture();
+    const framework = new Framework(fixture.rootDir, {
+      rootDir: fixture.rootDir,
+      exports: fixture.exports,
+      resourceSeeds: fixture.resourceSeeds,
+    });
+
+    const world = framework.worldConstructions().findByConfigurationExportName('StandardConfiguration')[0];
+    expect(world).toBeDefined();
+    if (world == null) {
+      throw new Error('Expected StandardConfiguration world construction to exist.');
+    }
+
+    const compiler = new TemplateCompiler(world.compilerWorld);
+    const program = createProgramHandle();
+    const file = createFileHandle(program);
+    const ownerNode = createNodeHandle(file, 'ClassDeclaration', 10, 40);
+    const owner = createSymbolHandle(file, ownerNode, 'FooElement');
+    const template = createTemplateHandle(file, owner);
+    const authored = compiler.parseAuthoredTemplate(
+      template,
+      '<div if.bind="ready"><span>${message}</span></div>',
+    );
+
+    expect(authored.openSeams).toEqual([]);
+    expect(authored.root.children).toHaveLength(1);
+    expect(authored.root.provenance.ref?.nodeKind).toBe('fragment');
+    const div = authored.root.children[0];
+    expect(div).toBeInstanceOf(AuthoredElementNode);
+    if (!(div instanceof AuthoredElementNode)) {
+      throw new Error('Expected root child to be an authored element node.');
+    }
+
+    expect(div.tagName).toBe('div');
+    expect(div.attributes.map((current) => current.rawName)).toEqual(['if.bind']);
+    expect(div.attributes[0]?.provenance.ref?.nodeKind).toBe('attribute');
+    const span = div.children[0];
+    expect(span).toBeInstanceOf(AuthoredElementNode);
+    if (!(span instanceof AuthoredElementNode)) {
+      throw new Error('Expected span child to be an authored element node.');
+    }
+
+    expect(span.tagName).toBe('span');
+    const text = span.children[0];
+    expect(text).toBeInstanceOf(AuthoredTextNode);
+    if (!(text instanceof AuthoredTextNode)) {
+      throw new Error('Expected span child to be an authored text node.');
+    }
+
+    expect(text.value).toBe('${message}');
+    expect(text.provenance.ref?.nodeKind).toBe('text');
+  });
+
+  it('lowers template controllers through generic inside-out structural carriers over authored templates', () => {
+    const fixture = createConfigurationFixture();
+    const framework = new Framework(fixture.rootDir, {
+      rootDir: fixture.rootDir,
+      exports: fixture.exports,
+      resourceSeeds: fixture.resourceSeeds,
+    });
+
+    const world = framework.worldConstructions().findByConfigurationExportName('StandardConfiguration')[0];
+    expect(world).toBeDefined();
+    if (world == null) {
+      throw new Error('Expected StandardConfiguration world construction to exist.');
+    }
+
+    const program = createProgramHandle();
+    const file = createFileHandle(program);
+    const unlessNode = createNodeHandle(file, 'ClassDeclaration', 500, 540);
+    const unlessSymbol = createSymbolHandle(file, unlessNode, 'Unless');
+    const unless = new TemplateControllerDefinition(
+      'resource:tc:unless',
+      unlessSymbol,
+      new CustomAttributeIdentity(
+        'unless',
+        [],
+        createKeyHandle(unlessSymbol, 'au:resource:template-controller:unless', 'resource'),
+      ),
+      new CustomAttributeBindableSurface([
+        new CustomAttributeBindableEntry('value', 'value'),
+      ]),
+      new CustomAttributePolicy(
+        'value',
+        null,
+        'reuse',
+        true,
+      ),
+    );
+    const compilerWorld = new CompilerConsultedWorld(
+      `${world.compilerWorld.id}:template-controllers`,
+      world.compilerWorld.world,
+      [...world.visibleResources, unless],
+      world.compilerWorld.resourceResolver.readAdmissions(),
+      world.compilerCapabilities,
+      world.containerStateEntries,
+      world.containerStateOpenSeams,
+      world.compilerWorld.openSeams,
+    );
+    const compiler = new TemplateCompiler(compilerWorld);
+    const ownerNode = createNodeHandle(file, 'ClassDeclaration', 10, 40);
+    const owner = createSymbolHandle(file, ownerNode, 'FooElement');
+    const template = createTemplateHandle(file, owner);
+    const compiled = compiler.compileAuthoredTemplate(
+      template,
+      '<div if.bind="ready" unless.bind="busy"><span>${message}</span></div>',
+    );
+
+    const root = compiled.rootNodes[0];
+    expect(root).toBeInstanceOf(CompiledElementNode);
+    if (!(root instanceof CompiledElementNode)) {
+      throw new Error('Expected root compiled node to be an element compilation.');
+    }
+
+    expect(root.templateControllerLowering).not.toBeNull();
+    expect(root.templateControllerLowering?.sourceOrderedInstructions.map((current) => current.resource.name)).toEqual([
+      'if',
+      'unless',
+    ]);
+    expect(root.templateControllerLowering?.outermostInstruction.resource.name).toBe('if');
+    expect(root.templateControllerLowering?.outermostInstruction.props[0]?.bindable.name).toBe('value');
+    expect(root.templateControllerLowering?.outermostInstruction.props[0]?.bindingCommandName).toBe('bind');
+    expect(root.templateControllerLowering?.outermostInstruction.definition.templateKind).toBe('marker-only-wrapper');
+    expect(root.templateControllerLowering?.outermostInstruction.definition.nestedInstructions[0]?.resource.name).toBe('unless');
+    expect(root.templateControllerLowering?.innermostDefinition.templateKind).toBe('wrapped-authored-element');
+    expect(root.templateControllerLowering?.innermostDefinition.structuralCarrier?.authored.tagName).toBe('div');
+    expect(root.structuralCarrier.classification.items.map((current) => current.lane)).toEqual([
+      'template-controller',
+      'template-controller',
+    ]);
+    expect(root.openSeams.map((current) => current.kind)).toContain('element-direct-lowering-open');
+    const compiledSpan = root.structuralCarrier.childCompilations[0];
+    expect(compiledSpan).toBeInstanceOf(CompiledElementNode);
+    if (!(compiledSpan instanceof CompiledElementNode)) {
+      throw new Error('Expected compiled child to be an element compilation.');
+    }
+
+    const compiledText = compiledSpan.structuralCarrier.childCompilations[0];
+    expect(compiledText).toBeInstanceOf(CompiledTextNode);
+    if (!(compiledText instanceof CompiledTextNode)) {
+      throw new Error('Expected compiled span child to be a text compilation.');
+    }
+
+    expect(compiledText.interpolationDetected).toBe(true);
+    expect(compiledText.openSeams.map((current) => current.kind)).toContain('text-interpolation-open');
   });
 
   it('routes authored attributes through the first JIT-shaped classification lanes', () => {

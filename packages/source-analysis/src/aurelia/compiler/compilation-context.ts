@@ -10,6 +10,7 @@ import type {
   CompilerResourceAdmissionProvenance,
 } from './compiler-consulted-world.js';
 import type { TemplateCompilerHookCapability } from './compiler-capability.js';
+import type { CompilerAttributeBindablesInfo } from './custom-attribute-bindables-info.js';
 import type { CompilerValueParseResult } from './compiler-value-parser.js';
 import {
   CompilerAttributeClassifier,
@@ -53,6 +54,12 @@ export class CompilationContext {
     name: string,
   ): TemplateControllerDefinition | null {
     return this.world.resourceResolver.findTemplateController(name);
+  }
+
+  readAttributeBindablesInfo(
+    definition: CustomAttributeDefinition | TemplateControllerDefinition,
+  ): CompilerAttributeBindablesInfo {
+    return this.world.resourceResolver.bindables(definition);
   }
 
   getCommand(
