@@ -1,6 +1,6 @@
 import type { KeyRef } from '../refs.js';
 import type { LookupModifierKind } from '../di/index.js';
-import type { LookupRegimeKind } from './registration-transition.js';
+import type { LookupRegimeKind } from './container-state-qualification.js';
 import type { ResourceLookupRegime } from './resource-lookup-regime.js';
 
 export type LookupRequestRegimeKind =

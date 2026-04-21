@@ -13,8 +13,19 @@ import {
   BindingBehaviorDefinition,
   BindingCommandDefinition,
   ConfigurationRegistrationScanner,
+  CONTAINER_STATE_OPEN_SEAM_KINDS,
+  CONTAINER_STATE_PROVENANCE_MODES,
+  CONTAINER_STATE_SLOT_KINDS,
+  CONTAINER_STATE_TOPOLOGY_HOOK_KINDS,
+  CURRENT_WORLD_SENSITIVITY_KINDS,
+  ContainerStateCandidate,
+  ContainerStateClosureBasis,
+  ContainerStateMaterializer,
   ContainerWorldRef,
   ContainerStateEntry,
+  ContainerStateProvenance,
+  ContainerStateQualification,
+  ContainerStateSlot,
   CustomAttributeDefinition,
   CustomElementBindableSurface,
   CustomElementDefinition,
@@ -23,7 +34,12 @@ import {
   CustomElementPolicy,
   CustomElementTemplateSource,
   DependencyAssociation,
+  DependencyAssociationMaterializer,
+  DependencyAssociationProvenance,
   DependencyAssociationSource,
+  DependencyContributor,
+  DependencyRequest,
+  DEPENDENCY_RESOLVED_SUBJECT_KINDS,
   DependencySite,
   Export,
   Framework,
@@ -43,6 +59,7 @@ import {
   RegistrationIntake,
   RegistrationPayload,
   RegistrationProduction,
+  RegistrationResolverBasis,
   RegistrationTransition,
   ResourceResolver,
   ResourceReferenceRef,
@@ -198,6 +215,26 @@ describe('Aurelia clean-room runtime model', () => {
       ),
     );
 
+    const dependencyRequest = new DependencyRequest(
+      'helper-wrapped',
+      declaration,
+      'identifier-name',
+      'ILogger',
+      [
+        new LookupModifier('optional'),
+      ],
+      null,
+      'Dependency request wrapped in optional(...) helper sugar.',
+    );
+    const dependencyContributor = new DependencyContributor(
+      new DependencyAssociationSource(
+        'annotation-paramtypes',
+        'Constructor dependency associated through Aurelia annotation metadata.',
+      ),
+      dependencyRequest,
+      declaration,
+      'Selected contributor for the constructor slot.',
+    );
     const dependencyAssociation = new DependencyAssociation(
       'dependency:ctor:ILogger',
       new DependencySite(
@@ -206,14 +243,14 @@ describe('Aurelia clean-room runtime model', () => {
         declaration,
         'parameter[0]',
       ),
-      new DependencyAssociationSource(
-        'annotation-paramtypes',
-        'Constructor dependency associated through Aurelia annotation metadata.',
-      ),
+      dependencyRequest,
       key,
-      [
-        new LookupModifier('optional'),
-      ],
+      new DependencyAssociationProvenance(
+        'selected',
+        dependencyContributor,
+        [dependencyContributor],
+        'Single explicit contributor on this constructor dependency slot.',
+      ),
       'Constructor dependency associated through DI metadata or inject arrays.',
     );
 
@@ -249,23 +286,53 @@ describe('Aurelia clean-room runtime model', () => {
     const transition = new RegistrationTransition(
       'transition:key-addition:ILogger',
       intake,
-      world,
-      key,
-      'singleton',
+      production,
       'explicit-iregistry-register',
       'key-space-addition',
-      'eager',
-      'direct',
-      'closed',
-      [],
       'Transition from produced registration into container-state consequence.',
+    );
+    const resolverBasis = new RegistrationResolverBasis(
+      'singleton',
+      'Resolver/value-form basis for this keyed state.',
+    );
+    const qualification = new ContainerStateQualification(
+      'direct',
+      'eager',
+      'lookup-regime-sensitive',
+      'none',
+      'Lookup/topology qualification remains explicit and separate from lineage.',
+    );
+    const closureBasis = new ContainerStateClosureBasis(
+      'statically-closable',
+      [],
+      'Subject-owned analyzability band carried separately from downstream spend tiers.',
     );
 
     const entry = new ContainerStateEntry(
       'entry:ILogger',
       world,
       key,
-      [transition],
+      qualification,
+      closureBasis,
+      [
+        new ContainerStateSlot(
+          'slot:ILogger',
+          'constructable-activation',
+          transition,
+          resolverBasis,
+          payload,
+          owner,
+          null,
+          null,
+          'Entry carries one constructable-backed activation slot.',
+        ),
+      ],
+      new ContainerStateProvenance(
+        'selected',
+        transition,
+        [transition],
+        'Single explicit transition on this key.',
+      ),
       'Stable container-state entry over the transition set.',
     );
 
@@ -281,7 +348,12 @@ describe('Aurelia clean-room runtime model', () => {
       true,
     );
 
-    expect(ANALYZABILITY_BAND_KINDS).toContain('closed');
+    expect(ANALYZABILITY_BAND_KINDS).toContain('statically-closable');
+    expect(CONTAINER_STATE_OPEN_SEAM_KINDS).toContain('policy-generated-state-open');
+    expect(CONTAINER_STATE_PROVENANCE_MODES).toContain('aggregated');
+    expect(CONTAINER_STATE_SLOT_KINDS).toContain('alias-forward');
+    expect(CONTAINER_STATE_TOPOLOGY_HOOK_KINDS).toContain('parent-resource-inheritance');
+    expect(CURRENT_WORLD_SENSITIVITY_KINDS).toContain('lookup-regime-sensitive');
     expect(LOOKUP_REGIME_KINDS).toContain('resource');
     expect(MATERIALIZATION_TIMING_KINDS).toContain('deferred-to-slot');
     expect(OPEN_RESIDUAL_KINDS).toContain('callback-body-opaque');
@@ -294,13 +366,342 @@ describe('Aurelia clean-room runtime model', () => {
     expect(RESOURCE_LOOKUP_REGIME_KINDS).toContain('all-resources');
     expect(interfaceKey.defaultRegistration?.kind).toBe('singleton');
     expect(interfaceKey.defaultRegistration?.source).toBe(declaration);
-    expect(dependencyAssociation.source.kind).toBe('annotation-paramtypes');
+    expect(dependencyAssociation.source?.kind).toBe('annotation-paramtypes');
     expect(dependencyAssociation.lookupModifiers[0]?.kind).toBe('optional');
     expect(production.payload).toBe(payload);
     expect(intake.productions[0]).toBe(production);
+    expect(entry.slots[0]?.transition).toBe(transition);
+    expect(entry.slots[0]?.resolverBasis).toBe(resolverBasis);
+    expect(entry.qualification).toBe(qualification);
+    expect(entry.closureBasis).toBe(closureBasis);
     expect(entry.transitions[0]).toBe(transition);
     expect(lookup.modifiers).toContain('optional');
     expect(lookup.resourceRegime?.kind).toBe('optional-resource');
+  });
+
+  it('materializes ordinary DI associations from source-explicit constructor and field surfaces', () => {
+    const fixture = createDependencyFixture();
+    const byName = new Map(fixture.exports.map((current) => [current.name, current]));
+    const materializer = new DependencyAssociationMaterializer();
+
+    const staticInjected = materializer.materialize(byName.get('StaticInjectedService')!.symbol!);
+    const decorated = materializer.materialize(byName.get('DecoratedInjectedService')!.symbol!);
+    const fieldInjected = materializer.materialize(byName.get('FieldInjectedService')!.symbol!);
+    const resolved = materializer.materialize(byName.get('ResolveBackedService')!.symbol!);
+    const overlaid = materializer.materialize(byName.get('OverlaidMetadataService')!.symbol!);
+    const typedOnly = materializer.materialize(byName.get('TypedOnlyService')!.symbol!);
+    const inherited = materializer.materialize(byName.get('InheritedService')!.symbol!);
+
+    expect(staticInjected.associations.map((current) => `${current.site.location}:${current.request.candidateName}:${current.lookupModifiers[0]?.kind ?? 'none'}`)).toEqual([
+      'parameter[0]:IPlatform:none',
+      'parameter[1]:ILogger:optional',
+      'parameter[2]:ConsoleSink:new-instance-of',
+    ]);
+    expect(staticInjected.associations.every((current) => current.source?.kind === 'static-inject')).toBe(true);
+
+    expect(decorated.associations.map((current) => `${current.site.kind}:${current.site.location}:${current.request.candidateName}:${current.lookupModifiers[0]?.kind ?? 'none'}`)).toEqual([
+      'constructor-parameter:parameter[0]:ILogger:optional',
+      'constructor-parameter:parameter[1]:ISink:all',
+      'resolve-call:parameter[0]:ILogger:optional',
+      'resolve-call:parameter[1]:ISink:all',
+    ]);
+    expect(decorated.associations[0]?.provenance?.mode).toBe('selected');
+    expect(decorated.associations[0]?.source?.kind).toBe('annotation-paramtypes');
+    expect(decorated.associations[2]?.source?.kind).toBe('resolve-call');
+
+    expect(fieldInjected.associations.map((current) => `${current.site.location}:${current.request.candidateName}:${current.lookupModifiers[0]?.kind ?? 'none'}`)).toEqual([
+      'field:loggerFactory:ILogger:lazy',
+    ]);
+    expect(fieldInjected.associations[0]?.site.kind).toBe('instance-field');
+    expect(fieldInjected.associations[0]?.source?.kind).toBe('annotation-paramtypes');
+
+    expect(overlaid.associations.map((current) => `${current.site.kind}:${current.site.location}:${current.request.candidateName}:${current.lookupModifiers[0]?.kind ?? 'none'}`)).toEqual([
+      'constructor-parameter:parameter[0]:IPlatform:none',
+    ]);
+    expect(overlaid.associations[0]?.provenance?.mode).toBe('overlay');
+    expect(overlaid.associations[0]?.source?.kind).toBe('static-inject');
+    expect(overlaid.associations[0]?.provenance?.contributors.map((current) => current.source.kind).sort()).toEqual([
+      'annotation-paramtypes',
+      'static-inject',
+    ]);
+
+    expect(resolved.associations.map((current) => `${current.site.location}:${current.request.candidateName}:${current.lookupModifiers[0]?.kind ?? 'none'}:${current.request.resourceLookupRegime?.kind ?? 'generic'}`)).toEqual([
+      'field:currentLogger:ILogger:optional:generic',
+      'field:renderLocal:IRenderer:none:resource',
+      'field:tag:log-tag:none:generic',
+      'field:tuple[0]:ILogger:none:generic',
+      'field:tuple[1]:ISink:all:generic',
+      'field:tuple[2]:ConsoleSink:new-instance-for-scope:generic',
+      'parameter[0]:IPlatform:none:generic',
+      'parameter[1]:ILogger:optional:generic',
+    ]);
+    expect(resolved.associations.every((current) => current.source?.kind === 'resolve-call')).toBe(true);
+
+    expect(typedOnly.associations).toHaveLength(0);
+    expect(typedOnly.openSeams.some((current) => current.kind === 'design-paramtypes-open')).toBe(true);
+    expect(inherited.openSeams.some((current) => current.kind === 'prototype-fallback-open')).toBe(true);
+    expect(materializer.inspectState().parsedFileCount).toBeGreaterThan(0);
+    expect(DEPENDENCY_RESOLVED_SUBJECT_KINDS).toContain('interface-symbol');
+    expect(staticInjected.associations[0]?.resolvedSubject?.kind).toBe('interface-symbol');
+    expect(staticInjected.associations[0]?.resolvedSubject?.interfaceKey?.friendlyName).toBe('IPlatform');
+    expect(staticInjected.associations[1]?.resolvedSubject?.kind).toBe('interface-symbol');
+    expect(staticInjected.associations[2]?.resolvedSubject?.kind).toBe('constructable');
+    expect(decorated.associations[1]?.resolvedSubject?.interfaceKey?.defaultRegistration?.kind).toBe('cached-callback');
+    expect(resolved.associations.find((current) => current.site.location === 'field:renderLocal')?.resolvedSubject?.kind).toBe('interface-symbol');
+    expect(resolved.associations.find((current) => current.site.location === 'field:tag')?.resolvedSubject?.kind).toBe('property');
+  });
+
+  it('materializes keyed container-state entries into slots with DI-backed constructable activation', () => {
+    const fixture = createDependencyFixture();
+    const byName = new Map(fixture.exports.map((current) => [current.name, current]));
+    const staticInjected = byName.get('StaticInjectedService')?.symbol;
+    const overlaid = byName.get('OverlaidMetadataService')?.symbol;
+    if (staticInjected == null || overlaid == null || staticInjected.declaration == null || overlaid.declaration == null) {
+      throw new Error('Expected dependency fixture class exports to exist.');
+    }
+
+    const world = new ContainerWorldRef('world:di-root', staticInjected, null);
+    const serviceKey = createKeyHandle(staticInjected, 'StaticInjectedService', 'constructable');
+    const aliasKey = createKeyHandle(staticInjected, 'StaticInjectedAlias', 'property');
+    const tagKey = createKeyHandle(staticInjected, 'log-tag', 'property');
+
+    const singletonPayload = new RegistrationPayload(
+      'constructable-type',
+      staticInjected.declaration,
+      staticInjected,
+      null,
+      'Singleton activation over a constructable class.',
+    );
+    const singletonProduction = new RegistrationProduction(
+      'production:static-injected-singleton',
+      'singleton',
+      staticInjected,
+      staticInjected.declaration,
+      world,
+      serviceKey,
+      singletonPayload,
+      'Explicit singleton registration for the DI-backed class.',
+    );
+    const singletonIntake = new RegistrationIntake(
+      'intake:static-injected-singleton',
+      'direct-register-call',
+      staticInjected.declaration,
+      staticInjected,
+      world,
+      [singletonProduction],
+      'Direct container.register(...) intake for the singleton constructable.',
+    );
+    const singletonTransition = new RegistrationTransition(
+      'transition:static-injected-singleton',
+      singletonIntake,
+      singletonProduction,
+      'explicit-iregistry-register',
+      'key-space-addition',
+      'Singleton constructable activation enters keyed container state.',
+    );
+    const singletonCandidate = new ContainerStateCandidate(
+      'candidate:static-injected-singleton',
+      world,
+      serviceKey,
+      singletonTransition,
+      new RegistrationResolverBasis('singleton'),
+      new ContainerStateQualification(
+        'direct',
+        'eager',
+        'lookup-regime-sensitive',
+        'none',
+      ),
+      new ContainerStateClosureBasis(
+        'statically-closable',
+        [],
+      ),
+      'Qualified state candidate for the singleton constructable.',
+    );
+
+    const aliasPayload = new RegistrationPayload(
+      'alias-target',
+      staticInjected.declaration,
+      null,
+      serviceKey,
+      'Alias forwards to the constructable key.',
+    );
+    const aliasProduction = new RegistrationProduction(
+      'production:static-injected-alias',
+      'alias',
+      staticInjected,
+      staticInjected.declaration,
+      world,
+      aliasKey,
+      aliasPayload,
+      'Alias production over the same constructable activation.',
+    );
+    const aliasTransition = new RegistrationTransition(
+      'transition:static-injected-alias',
+      new RegistrationIntake(
+        'intake:static-injected-alias',
+        'direct-register-call',
+        staticInjected.declaration,
+        staticInjected,
+        world,
+        [aliasProduction],
+        'Direct intake for alias forwarding.',
+      ),
+      aliasProduction,
+      'explicit-iregistry-register',
+      'alias-linkage',
+      'Alias linkage enters keyed state separately from the base constructable key.',
+    );
+    const aliasCandidate = new ContainerStateCandidate(
+      'candidate:static-injected-alias',
+      world,
+      aliasKey,
+      aliasTransition,
+      new RegistrationResolverBasis('alias'),
+      new ContainerStateQualification(
+        'direct',
+        'eager',
+        'lookup-regime-sensitive',
+        'none',
+      ),
+      new ContainerStateClosureBasis(
+        'statically-closable',
+        [],
+      ),
+      'Qualified state candidate for alias forwarding.',
+    );
+
+    const firstTagProduction = new RegistrationProduction(
+      'production:first-log-tag',
+      'instance',
+      overlaid,
+      overlaid.declaration,
+      world,
+      tagKey,
+      new RegistrationPayload(
+        'instance-value',
+        overlaid.declaration,
+        null,
+        null,
+        'First tag instance value.',
+      ),
+      'First log-tag instance production.',
+    );
+    const secondTagProduction = new RegistrationProduction(
+      'production:second-log-tag',
+      'instance',
+      staticInjected,
+      staticInjected.declaration,
+      world,
+      tagKey,
+      new RegistrationPayload(
+        'instance-value',
+        staticInjected.declaration,
+        null,
+        null,
+        'Second tag instance value.',
+      ),
+      'Second log-tag instance production.',
+    );
+    const firstTagTransition = new RegistrationTransition(
+      'transition:first-log-tag',
+      new RegistrationIntake(
+        'intake:first-log-tag',
+        'direct-register-call',
+        overlaid.declaration,
+        overlaid,
+        world,
+        [firstTagProduction],
+        'First explicit instance intake on the same property key.',
+      ),
+      firstTagProduction,
+      'explicit-iregistry-register',
+      'key-space-addition',
+      'First instance slot for log-tag.',
+    );
+    const secondTagCandidate = new ContainerStateQualification(
+      'direct',
+      'eager',
+      'lookup-regime-sensitive',
+      'none',
+    );
+    const firstTagCandidate = new ContainerStateCandidate(
+      'candidate:first-log-tag',
+      world,
+      tagKey,
+      firstTagTransition,
+      new RegistrationResolverBasis('instance'),
+      secondTagCandidate,
+      new ContainerStateClosureBasis(
+        'statically-closable',
+        [],
+      ),
+      'First explicit instance candidate on the same property key.',
+    );
+    const secondTagTransition = new RegistrationTransition(
+      'transition:second-log-tag',
+      new RegistrationIntake(
+        'intake:second-log-tag',
+        'direct-register-call',
+        staticInjected.declaration,
+        staticInjected,
+        world,
+        [secondTagProduction],
+        'Second explicit instance intake on the same property key.',
+      ),
+      secondTagProduction,
+      'explicit-iregistry-register',
+      'key-space-addition',
+      'Second instance slot for log-tag.',
+    );
+    const secondTagStateCandidate = new ContainerStateCandidate(
+      'candidate:second-log-tag',
+      world,
+      tagKey,
+      secondTagTransition,
+      new RegistrationResolverBasis('instance'),
+      secondTagCandidate,
+      new ContainerStateClosureBasis(
+        'statically-closable',
+        [],
+      ),
+      'Second explicit instance candidate on the same property key.',
+    );
+
+    const materializer = new ContainerStateMaterializer();
+    const materialization = materializer.materialize([
+      singletonCandidate,
+      aliasCandidate,
+      firstTagCandidate,
+      secondTagStateCandidate,
+    ]);
+
+    const serviceEntry = materialization.entries.find((current) => current.key.id === serviceKey.id);
+    const aliasEntry = materialization.entries.find((current) => current.key.id === aliasKey.id);
+    const tagEntry = materialization.entries.find((current) => current.key.id === tagKey.id);
+
+    expect(serviceEntry?.slots[0]?.kind).toBe('constructable-activation');
+    expect(serviceEntry?.qualification?.lookupRegime).toBe('direct');
+    expect(serviceEntry?.closureBasis?.analyzabilityBand).toBe('statically-closable');
+    expect(serviceEntry?.slots[0]?.dependencyMaterialization?.associations.map((current) => `${current.site.location}:${current.request.candidateName}`)).toEqual([
+      'parameter[0]:IPlatform',
+      'parameter[1]:ILogger',
+      'parameter[2]:ConsoleSink',
+    ]);
+    expect(serviceEntry?.provenance?.mode).toBe('selected');
+    expect(serviceEntry?.transitions).toEqual([singletonTransition]);
+
+    expect(aliasEntry?.slots[0]?.kind).toBe('alias-forward');
+    expect(aliasEntry?.slots[0]?.targetKey).toEqual(serviceKey);
+
+    expect(tagEntry?.slots.map((current) => current.kind)).toEqual([
+      'instance-value',
+      'instance-value',
+    ]);
+    expect(tagEntry?.provenance?.mode).toBe('aggregated');
+    expect(tagEntry?.provenance?.selectedTransition).toBe(secondTagTransition);
+
+    expect(materialization.openSeams.some((current) => current.kind === 'policy-generated-state-open')).toBe(true);
+    expect(materializer.inspectState().dependencyMaterializerState.parsedFileCount).toBeGreaterThan(0);
   });
 
   it('classifies bundle arrays and registry configuration exports from syntax-only variable surfaces', () => {
@@ -1156,6 +1557,135 @@ function hasExportModifier(
     ? ts.getModifiers(statement)
     : void 0;
   return modifiers?.some((current: ts.ModifierLike) => current.kind === ts.SyntaxKind.ExportKeyword) ?? false;
+}
+
+function createDependencyFixture(): {
+  readonly exports: readonly DeclarationExport[];
+  readonly rootDir: string;
+} {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aurelia-clean-room-di-'));
+  const filePath = path.join(rootDir, 'dependency-fixture.ts');
+  const sourceText = `
+declare const DI: {
+  createInterface<T>(name?: string, configure?: (builder: {
+    instance(value: unknown): unknown;
+    singleton(value: unknown): unknown;
+    transient(value: unknown): unknown;
+    callback(value: unknown): unknown;
+    cachedCallback(value: unknown): unknown;
+    aliasTo(value: unknown): unknown;
+  }) => unknown): unknown;
+};
+declare function inject(...deps: unknown[]): any;
+declare function optional<T>(value: T): T;
+declare function lazy<T>(value: T): T;
+declare function all<T>(value: T): T;
+declare function resource<T>(value: T): T;
+declare function newInstanceOf<T>(value: T): T;
+declare function newInstanceForScope<T>(value: T): T;
+declare function resolve<T>(...keys: unknown[]): T;
+
+export const IPlatform = DI.createInterface<object>('IPlatform');
+export const ILogger = DI.createInterface<object>('ILogger');
+export const ISink = DI.createInterface<object>('ISink', builder => builder.cachedCallback(ConsoleSink));
+export const IRenderer = DI.createInterface<object>('IRenderer');
+
+export class ConsoleSink {}
+
+export class StaticInjectedService {
+  static inject = [IPlatform, optional(ILogger), newInstanceOf(ConsoleSink)];
+}
+
+@inject(optional(ILogger), all(ISink))
+export class DecoratedInjectedService {
+  constructor(
+    logger = resolve(optional(ILogger)),
+    sinks = resolve(all(ISink)),
+  ) {}
+}
+
+export class FieldInjectedService {
+  @inject(lazy(ILogger))
+  loggerFactory: unknown;
+}
+
+export class ResolveBackedService {
+  currentLogger = resolve(optional(ILogger));
+  renderLocal = resolve(resource(IRenderer));
+  tuple = resolve(ILogger, all(ISink), newInstanceForScope(ConsoleSink));
+  tag = resolve('log-tag');
+
+  constructor(
+    platform = resolve(IPlatform),
+    logger = resolve(optional(ILogger)),
+  ) {}
+}
+
+@inject(optional(ILogger))
+export class OverlaidMetadataService {
+  static inject = [IPlatform];
+}
+
+export class TypedOnlyService {
+  constructor(readonly sink: ConsoleSink) {}
+}
+
+export class BaseInjectedService {
+  static inject = [IPlatform];
+}
+
+export class InheritedService extends BaseInjectedService {}
+`;
+  fs.writeFileSync(filePath, sourceText, 'utf8');
+
+  const program = new ProgramRef(
+    'program:dependency-fixture',
+    rootDir,
+    null,
+  );
+  const file = new SourceFileRef(
+    `file:${filePath}`,
+    program,
+    filePath,
+  );
+  const sourceFile = ts.createSourceFile(
+    filePath,
+    sourceText,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+
+  const exports: DeclarationExport[] = [];
+  for (const statement of sourceFile.statements) {
+    if (!hasExportModifier(statement) || !ts.isClassDeclaration(statement) || statement.name == null) {
+      continue;
+    }
+
+    const declarationRef = new SourceNodeRef(
+      `node:${statement.name.text}:${statement.getStart()}-${statement.end}`,
+      file,
+      'ClassDeclaration',
+      new SourceSpan(statement.getStart(), statement.end),
+    );
+    const symbolRef = new SymbolRef(
+      `symbol:${statement.name.text}`,
+      file,
+      statement.name.text,
+      [statement.name.text],
+      declarationRef,
+    );
+    exports.push({
+      name: statement.name.text,
+      symbol: symbolRef,
+      sourceFile: file,
+    });
+  }
+
+  return {
+    exports,
+    rootDir,
+  };
 }
 
 function createConfigurationFixtureResources(

@@ -10,13 +10,41 @@ export {
   type DependencyAssociationSourceKind,
 } from './dependency-association-source.js';
 export {
+  DEPENDENCY_REQUEST_KINDS,
+  DependencyRequest,
+  type DependencyRequestKind,
+} from './dependency-request.js';
+export {
   LOOKUP_MODIFIER_KINDS,
   LookupModifier,
   type LookupModifierKind,
 } from './lookup-modifier.js';
+export {
+  DEPENDENCY_PROVENANCE_MODES,
+  DependencyAssociationProvenance,
+  DependencyContributor,
+  DependencyMaterialization,
+  type DependencyProvenanceMode,
+} from './dependency-provenance.js';
+export {
+  DEPENDENCY_OPEN_SEAM_KINDS,
+  DependencyOpenSeam,
+  type DependencyOpenSeamKind,
+} from './dependency-open-seam.js';
+export {
+  DEPENDENCY_RESOLVED_SUBJECT_KINDS,
+  DependencyResolution,
+  DependencyResolvedSubject,
+  type DependencyResolvedSubjectKind,
+} from './dependency-resolution.js';
 export {
   DEPENDENCY_SITE_KINDS,
   DependencyAssociation,
   DependencySite,
   type DependencySiteKind,
 } from './dependency-association.js';
+export {
+  DependencyAssociationMaterializer,
+  type DependencyAssociationMaterializerState,
+} from './dependency-association-materializer.js';
+export { DependencySubjectResolver } from './dependency-subject-resolver.js';

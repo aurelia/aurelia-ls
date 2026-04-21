@@ -2,8 +2,11 @@ export const DEPENDENCY_ASSOCIATION_SOURCE_KINDS = [
   'static-inject',
   'design-paramtypes',
   'annotation-paramtypes',
+  // Resource/support-bundle child-world contribution, not ordinary constructor
+  // DI. It stays in the shared vocabulary so later resource-side work can land
+  // without inventing a second source-kind family.
   'definition-dependencies',
-  'field-resolve',
+  'resolve-call',
 ] as const;
 
 export type DependencyAssociationSourceKind =
