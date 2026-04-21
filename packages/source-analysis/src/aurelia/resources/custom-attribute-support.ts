@@ -26,29 +26,6 @@ export const CUSTOM_ATTRIBUTE_SUPPORT_CARRIER_KINDS = [
 export type CustomAttributeSupportCarrierKind =
   typeof CUSTOM_ATTRIBUTE_SUPPORT_CARRIER_KINDS[number];
 
-export const CUSTOM_ATTRIBUTE_BINDABLE_FIELD_KINDS = [
-  'name',
-  'attribute',
-  'callback',
-  'mode',
-  'set',
-  'type',
-  'nullable',
-] as const;
-
-export type CustomAttributeBindableFieldKind =
-  typeof CUSTOM_ATTRIBUTE_BINDABLE_FIELD_KINDS[number];
-
-export const CUSTOM_ATTRIBUTE_BINDABLE_INTERCEPTOR_KINDS = [
-  'default-noop',
-  'explicit-set',
-  'type-coercer',
-  'open',
-] as const;
-
-export type CustomAttributeBindableInterceptorKind =
-  typeof CUSTOM_ATTRIBUTE_BINDABLE_INTERCEPTOR_KINDS[number];
-
 export const CUSTOM_ATTRIBUTE_DEPENDENCY_SOURCE_KINDS = [
   'literal-array',
   'merged-array',
@@ -79,31 +56,12 @@ export class CustomAttributeFieldWitness {
   ) {}
 }
 
-export class CustomAttributeBindableFieldWitness {
-  constructor(
-    readonly field: CustomAttributeBindableFieldKind,
-    readonly carrier: CustomAttributeSupportCarrierKind,
-    readonly source: SourceNodeRef | null,
-    readonly note: string | null = null,
-  ) {}
-}
-
 export class CustomAttributeFieldProvenance {
   constructor(
     readonly field: CustomAttributeSupportFieldKind,
     readonly mode: 'selected' | 'merged' | 'presence-only',
     readonly selected: CustomAttributeFieldWitness | null,
     readonly contributors: readonly CustomAttributeFieldWitness[] = [],
-    readonly note: string | null = null,
-  ) {}
-}
-
-export class CustomAttributeBindableFieldProvenance {
-  constructor(
-    readonly field: CustomAttributeBindableFieldKind,
-    readonly mode: 'selected' | 'presence-only',
-    readonly selected: CustomAttributeBindableFieldWitness | null,
-    readonly contributors: readonly CustomAttributeBindableFieldWitness[] = [],
     readonly note: string | null = null,
   ) {}
 }
@@ -121,42 +79,6 @@ export class CustomAttributeIdentity {
     field: CustomAttributeSupportFieldKind,
   ): CustomAttributeFieldProvenance | null {
     return this.provenance.find((current) => current.field === field) ?? null;
-  }
-}
-
-export class CustomAttributeBindableEntry {
-  constructor(
-    readonly name: string | null,
-    readonly attribute: string | null = null,
-    readonly callback: string | null = null,
-    readonly mode: string | number | null = null,
-    readonly interceptorKind: CustomAttributeBindableInterceptorKind = 'open',
-    readonly typeReferenceName: string | null = null,
-    readonly nullable: boolean | null = null,
-    readonly provenance: readonly CustomAttributeBindableFieldProvenance[] = [],
-    readonly note: string | null = null,
-  ) {}
-
-  get witness(): CustomAttributeBindableFieldWitness | null {
-    return this.readProvenance('name')?.selected ?? null;
-  }
-
-  readProvenance(
-    field: CustomAttributeBindableFieldKind,
-  ): CustomAttributeBindableFieldProvenance | null {
-    return this.provenance.find((current) => current.field === field) ?? null;
-  }
-}
-
-export class CustomAttributeBindableSurface {
-  constructor(
-    readonly entries: readonly CustomAttributeBindableEntry[] = [],
-    readonly provenance: readonly CustomAttributeFieldProvenance[] = [],
-    readonly note: string | null = null,
-  ) {}
-
-  readProvenance(): CustomAttributeFieldProvenance | null {
-    return this.provenance.find((current) => current.field === 'bindables') ?? null;
   }
 }
 

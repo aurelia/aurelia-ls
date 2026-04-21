@@ -39,13 +39,12 @@ import {
   CustomAttributePreparation,
   CustomAttributeRenderer,
   CustomAttributeDefinition,
-  CustomAttributeBindableEntry,
-  CustomAttributeBindableSurface,
+  BindableEntry,
+  BindableSurface,
   CustomAttributeIdentity,
   CustomAttributePolicy,
   CustomElementPreparation,
   CustomElementRenderer,
-  CustomElementBindableSurface,
   CustomElementDefinition,
   CustomElementDependencyContribution,
   CustomElementIdentity,
@@ -1361,7 +1360,7 @@ describe('Aurelia clean-room runtime model', () => {
         [],
         createKeyHandle(tooltipSymbol, 'au:resource:custom-attribute:tooltip', 'resource'),
       ),
-      new CustomAttributeBindableSurface(),
+      new BindableSurface(),
       new CustomAttributePolicy(),
     );
     const compilerWorld = new CompilerConsultedWorld(
@@ -1504,8 +1503,8 @@ describe('Aurelia clean-room runtime model', () => {
         [],
         createKeyHandle(unlessSymbol, 'au:resource:template-controller:unless', 'resource'),
       ),
-      new CustomAttributeBindableSurface([
-        new CustomAttributeBindableEntry('value', 'value'),
+      new BindableSurface([], [
+        new BindableEntry('value', 'value'),
       ]),
       new CustomAttributePolicy(
         'value',
@@ -1600,8 +1599,8 @@ describe('Aurelia clean-room runtime model', () => {
         [],
         createKeyHandle(unlessSymbol, 'au:resource:template-controller:unless', 'resource'),
       ),
-      new CustomAttributeBindableSurface([
-        new CustomAttributeBindableEntry('value', 'value'),
+      new BindableSurface([], [
+        new BindableEntry('value', 'value'),
       ]),
       new CustomAttributePolicy(
         'value',
@@ -1688,8 +1687,8 @@ describe('Aurelia clean-room runtime model', () => {
         [],
         createKeyHandle(tcSymbol, 'au:resource:template-controller:portal-like', 'resource'),
       ),
-      new CustomAttributeBindableSurface([
-        new CustomAttributeBindableEntry('value', 'value'),
+      new BindableSurface([], [
+        new BindableEntry('value', 'value'),
       ]),
       new CustomAttributePolicy(
         'value',
@@ -1907,6 +1906,55 @@ describe('Aurelia clean-room runtime model', () => {
     expect(tc.lifecycleHooks.readProvenance('attaching')?.selected?.carrier).toBe('instance-method');
   });
 
+  it('materializes declaration-local watch surfaces for CE, CA, and TC resources', () => {
+    const fixture = createWatchResourceFixture();
+    const framework = new Framework(fixture.rootDir, {
+      rootDir: fixture.rootDir,
+      exports: fixture.exports,
+      resourceSeeds: fixture.resourceSeeds,
+    });
+
+    const ce = framework.resources().readCustomElements().find((current) => current.name === 'watched-card');
+    const ca = framework.resources().readCustomAttributes().find((current) => current.name === 'observed');
+    const tc = framework.resources().readTemplateControllers().find((current) => current.name === 'guard');
+
+    expect(ce).toBeDefined();
+    expect(ca).toBeDefined();
+    expect(tc).toBeDefined();
+    if (ce == null || ca == null || tc == null) {
+      throw new Error('Expected watch fixture resources to materialize.');
+    }
+
+    expect(ce.watchSurface.declarations).toHaveLength(2);
+    const ceClassWatch = ce.watchSurface.declarations.find((current) => current.origin === 'class-decorator');
+    const ceMethodWatch = ce.watchSurface.declarations.find((current) => current.callback.kind === 'decorated-method');
+    expect(ceClassWatch?.expression.kind).toBe('string-expression');
+    expect(ceClassWatch?.expression.text).toBe('items.length');
+    expect(ceClassWatch?.callback.kind).toBe('named-method');
+    expect(ceClassWatch?.callback.name).toBe('itemsChanged');
+    expect(ceClassWatch?.callback.source).not.toBeNull();
+    expect(ceClassWatch?.flush).toBe('sync');
+    expect(ceMethodWatch?.expression.kind).toBe('dependency-collector');
+    expect(ceMethodWatch?.expression.dependencyPath).toEqual(['isOpen']);
+    expect(ceMethodWatch?.callback.name).toBe('handleOpen');
+    expect(ceMethodWatch?.flush).toBe('async');
+
+    expect(ca.watchSurface.declarations).toHaveLength(1);
+    const caWatch = ca.watchSurface.declarations[0];
+    expect(caWatch?.expression.kind).toBe('dependency-collector');
+    expect(caWatch?.expression.dependencyPath).toEqual(['value']);
+    expect(caWatch?.callback.kind).toBe('inline-callback');
+    expect(caWatch?.flush).toBe('async');
+
+    expect(tc.watchSurface.declarations).toHaveLength(1);
+    const tcWatch = tc.watchSurface.declarations[0];
+    expect(tcWatch?.origin).toBe('class-decorator');
+    expect(tcWatch?.expression.kind).toBe('string-expression');
+    expect(tcWatch?.expression.text).toBe('when');
+    expect(tcWatch?.callback.kind).toBe('named-method');
+    expect(tcWatch?.callback.name).toBe('whenChanged');
+  });
+
   it('materializes value-converter and binding-behavior support bundles from declaration source', () => {
     const fixture = createBehavioralResourceFixture();
     const framework = new Framework(fixture.rootDir, {
@@ -2064,12 +2112,15 @@ describe('Aurelia clean-room runtime model', () => {
     expect(decorated.bindableSurface.entries.map((current) => current.name)).toContain('title');
     expect(decoratedTitleBindable?.attribute).toBe('static-title');
     expect(decoratedTitleBindable?.mode).toBe('oneTime');
-    expect(decoratedTitleBindable?.witness?.carrier).toBe('bindable-decorator');
+    expect(decoratedTitleBindable?.witness?.carrier).toBe('static-own-property');
     expect(decoratedTitleBindable?.readProvenance('attribute')?.mode).toBe('selected');
     expect(decoratedTitleBindable?.readProvenance('attribute')?.selected?.carrier).toBe('static-own-property');
-    expect(decoratedTitleBindable?.readProvenance('attribute')?.contributors.map((current) => current.carrier).sort()).toEqual([
-      'bindable-decorator',
+    expect(decoratedTitleBindable?.readProvenance('attribute')?.contributors.map((current) => current.carrier)).toEqual([
       'static-own-property',
+    ]);
+    expect(decoratedTitleBindable?.resolution?.selected?.witness?.carrier).toBe('static-own-property');
+    expect(decoratedTitleBindable?.resolution?.shadowed.map((current) => current.witness?.carrier)).toEqual([
+      'bindable-decorator',
     ]);
     expect(decorated.policy.processContentKind).toBe('function-hook');
     expect(decorated.policy.readProvenance('process-content')?.selected?.carrier).toBe('annotation-decorator');
@@ -2195,7 +2246,7 @@ function createResourceDefinitions(
         createKeyHandle(elementSymbol, 'au:resource:custom-element:foo', 'resource'),
       ),
       new CustomElementPolicy(),
-      new CustomElementBindableSurface(),
+      new BindableSurface(),
       new CustomElementDependencyContribution(),
       new CustomElementTemplateSource('open'),
     ),
@@ -3082,6 +3133,139 @@ export class GuardController {
           'focus',
           [],
           createKeyHandle(ca.symbol!, 'au:resource:custom-attribute:focus', 'resource'),
+        ),
+      ),
+      new TemplateControllerDefinition(
+        'resource:tc:guard',
+        tc.symbol!,
+        new CustomAttributeIdentity(
+          'guard',
+          [],
+          createKeyHandle(tc.symbol!, 'au:resource:template-controller:guard', 'resource'),
+        ),
+      ),
+    ],
+  };
+}
+
+function createWatchResourceFixture(): {
+  readonly exports: readonly DeclarationExport[];
+  readonly resourceSeeds: readonly ResourceDefinition[];
+  readonly rootDir: string;
+} {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aurelia-clean-room-watch-resources-'));
+  const filePath = path.join(rootDir, 'watch-resource-fixture.ts');
+  const sourceText = `
+declare function watch(...args: unknown[]): unknown;
+
+@watch('items.length', 'itemsChanged', { flush: 'sync' })
+export class WatchedCard {
+  static $au = {
+    type: 'custom-element',
+    name: 'watched-card',
+  };
+
+  public itemsChanged() {}
+
+  @watch(vm => vm.isOpen)
+  public handleOpen() {}
+}
+
+@watch(vm => vm.value, (_next, _prev, vm) => vm.valueChanged())
+export class ObservedAttribute {
+  static $au = {
+    type: 'custom-attribute',
+    name: 'observed',
+  };
+
+  public valueChanged() {}
+}
+
+@watch('when', 'whenChanged')
+export class GuardController {
+  static $au = {
+    type: 'custom-attribute',
+    name: 'guard',
+    isTemplateController: true,
+  };
+
+  public whenChanged() {}
+}
+`;
+  fs.writeFileSync(filePath, sourceText, 'utf8');
+
+  const program = new ProgramRef(
+    'program:watch-resource-fixture',
+    rootDir,
+    null,
+  );
+  const file = new SourceFileRef(
+    `file:${filePath}`,
+    program,
+    filePath,
+  );
+  const sourceFile = ts.createSourceFile(
+    filePath,
+    sourceText,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+
+  const exports: DeclarationExport[] = [];
+  for (const statement of sourceFile.statements) {
+    if (!hasExportModifier(statement) || !ts.isClassDeclaration(statement) || statement.name == null) {
+      continue;
+    }
+
+    const declarationRef = new SourceNodeRef(
+      `node:${statement.name.text}:${statement.getStart()}-${statement.end}`,
+      file,
+      'ClassDeclaration',
+      new SourceSpan(statement.getStart(), statement.end),
+    );
+    const symbolRef = new SymbolRef(
+      `symbol:${statement.name.text}`,
+      file,
+      statement.name.text,
+      [statement.name.text],
+      declarationRef,
+    );
+    exports.push({
+      name: statement.name.text,
+      symbol: symbolRef,
+      sourceFile: file,
+    });
+  }
+
+  const byName = new Map(exports.map((current) => [current.name, current]));
+  const ce = byName.get('WatchedCard');
+  const ca = byName.get('ObservedAttribute');
+  const tc = byName.get('GuardController');
+  if (ce == null || ca == null || tc == null) {
+    throw new Error('Expected watch resource fixture exports to exist.');
+  }
+
+  return {
+    exports,
+    rootDir,
+    resourceSeeds: [
+      new CustomElementDefinition(
+        'resource:ce:watched-card',
+        ce.symbol!,
+        new CustomElementIdentity(
+          'watched-card',
+          [],
+          createKeyHandle(ce.symbol!, 'au:resource:custom-element:watched-card', 'resource'),
+        ),
+      ),
+      new CustomAttributeDefinition(
+        'resource:ca:observed',
+        ca.symbol!,
+        new CustomAttributeIdentity(
+          'observed',
+          [],
+          createKeyHandle(ca.symbol!, 'au:resource:custom-attribute:observed', 'resource'),
         ),
       ),
       new TemplateControllerDefinition(

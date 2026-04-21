@@ -16,20 +16,24 @@ import {
   SourceSpan,
   type SourceFileRef,
 } from '../refs.js';
+import {
+  BindableSurface,
+  type BindableCarrierKind,
+} from './bindable-support.js';
+import {
+  createBindableResolutionInput,
+  mergeBindableSurface as mergeSharedBindableSurface,
+  readBindableSurfaceFromInputs,
+  type BindableContributorSeed,
+} from './bindable-materialization.js';
 import { CustomAttributeDefinition } from './custom-attribute-definition.js';
 import {
-  CustomAttributeBindableEntry,
-  CustomAttributeBindableFieldProvenance,
-  CustomAttributeBindableFieldWitness,
-  CustomAttributeBindableSurface,
   CustomAttributeDependencyContribution,
   CustomAttributeDependencyEntry,
   CustomAttributeFieldProvenance,
   CustomAttributeFieldWitness,
   CustomAttributeIdentity,
   CustomAttributePolicy,
-  type CustomAttributeBindableFieldKind,
-  type CustomAttributeBindableInterceptorKind,
   type CustomAttributeDependencyLinkSeedKind,
   type CustomAttributeDependencySourceKind,
   type CustomAttributeSupportCarrierKind,
@@ -42,6 +46,11 @@ import {
   type CustomAttributeLifecycleHookKind,
 } from './custom-attribute-lifecycle-support.js';
 import { TemplateControllerDefinition } from './template-controller-definition.js';
+import {
+  mergeWatchSurface,
+  readWatchSurface,
+} from './watch-materialization.js';
+import { WatchSurface } from './watch-support.js';
 
 export interface CustomAttributeMaterializerState {
   readonly parsedFileCount: number;
@@ -49,21 +58,16 @@ export interface CustomAttributeMaterializerState {
 
 interface CustomAttributeSurface {
   readonly identity: CustomAttributeIdentity;
-  readonly bindableSurface: CustomAttributeBindableSurface;
+  readonly bindableSurface: BindableSurface;
   readonly policy: CustomAttributePolicy;
   readonly dependencyContribution: CustomAttributeDependencyContribution;
+  readonly watchSurface: WatchSurface;
   readonly lifecycleHooks: CustomAttributeLifecycleHooks;
 }
 
 interface FieldContributor {
   readonly expression: ts.Expression | null;
   readonly contribution: CustomAttributeFieldWitness;
-}
-
-interface BindableContributor {
-  readonly bindableName: string | null;
-  readonly fields: Partial<Record<CustomAttributeBindableFieldKind, ts.Expression | null>>;
-  readonly contribution: CustomAttributeBindableFieldWitness;
 }
 
 export class CustomAttributeMaterializer {
@@ -93,6 +97,7 @@ export class CustomAttributeMaterializer {
         mergePolicy(definition.policy, surface.policy),
         mergeDependencyContribution(definition.dependencyContribution, surface.dependencyContribution),
         definition.defaultBindingMode,
+        mergeWatchSurface(definition.watchSurface, surface.watchSurface),
         mergeLifecycleHooks(definition.lifecycleHooks, surface.lifecycleHooks),
       );
     }
@@ -104,6 +109,7 @@ export class CustomAttributeMaterializer {
       mergeBindableSurface(definition.bindableSurface, surface.bindableSurface),
       mergePolicy(definition.policy, surface.policy),
       mergeDependencyContribution(definition.dependencyContribution, surface.dependencyContribution),
+      mergeWatchSurface(definition.watchSurface, surface.watchSurface),
       mergeLifecycleHooks(definition.lifecycleHooks, surface.lifecycleHooks),
     );
   }
@@ -218,14 +224,11 @@ function readCustomAttributeSurface(
         ? 'Custom-attribute identity is not explicitly declared on the class surface.'
         : null,
     ),
-    bindableSurface: new CustomAttributeBindableSurface(
-      readBindableEntries(bindablesContributors),
-      compactFieldProvenances([
-        buildFieldProvenance('bindables', bindablesContributors),
-      ]),
-      bindablesContributors.length === 0
-        ? 'Bindable support-bundle materialization is still open unless the CA/TC surface declares bindables explicitly.'
-        : null,
+    bindableSurface: readBindableSurfaceFromInputs(
+      createBindableResolutionInputs(bindablesContributors),
+      declarationNode,
+      file,
+      sourceFile,
     ),
     policy: new CustomAttributePolicy(
       readStringLiteralValue(selectExpression(defaultPropertyContributors)),
@@ -249,6 +252,7 @@ function readCustomAttributeSurface(
         ? 'Dependencies stayed open unless the CA/TC surface declares them explicitly.'
         : 'Dependencies are carried structurally here, but their downstream CA/TC-specific consequence is still provisional beyond the runtime container-register step.',
     ),
+    watchSurface: readWatchSurface(declarationNode, file, sourceFile),
     lifecycleHooks: readLifecycleHooks(declarationNode, file, sourceFile),
   };
 }
@@ -431,186 +435,59 @@ function mapFieldToStaticOwnPropertyName(
   }
 }
 
-function readBindableEntries(
+function toBindableContributorSeeds(
   contributors: readonly FieldContributor[],
-): readonly CustomAttributeBindableEntry[] {
-  const rawContributors = contributors.flatMap(extractBindableContributors);
-  const bindableNamesBySource = new Map<string, string>();
-
-  for (const contributor of rawContributors) {
-    const sourceId = contributor.contribution.source?.id;
-    if (sourceId == null || contributor.bindableName == null) {
-      continue;
-    }
-    bindableNamesBySource.set(sourceId, bindableNamesBySource.get(sourceId) ?? contributor.bindableName);
-  }
-
-  const byName = new Map<string, BindableContributor[]>();
-  for (const contributor of rawContributors) {
-    const bindableName = contributor.bindableName
-      ?? (contributor.contribution.source == null
-        ? null
-        : bindableNamesBySource.get(contributor.contribution.source.id) ?? null);
-    if (bindableName == null) {
-      continue;
-    }
-    const current = byName.get(bindableName) ?? [];
-    current.push(contributor);
-    byName.set(bindableName, current);
-  }
-
-  const entries: CustomAttributeBindableEntry[] = [];
-  for (const [bindableName, bindableContributors] of byName) {
-    const nameContributors = bindableContributors.filter((current) => current.fields.name != null);
-    const attributeContributors = bindableContributors.filter((current) => current.fields.attribute != null);
-    const callbackContributors = bindableContributors.filter((current) => current.fields.callback != null);
-    const modeContributors = bindableContributors.filter((current) => current.fields.mode != null);
-    const setContributors = bindableContributors.filter((current) => current.fields.set != null);
-    const typeContributors = bindableContributors.filter((current) => current.fields.type != null);
-    const nullableContributors = bindableContributors.filter((current) => current.fields.nullable != null);
-
-    entries.push(
-      new CustomAttributeBindableEntry(
-        bindableName,
-        readBindableStringValue(selectBindableExpression(attributeContributors, 'attribute')) ?? toKebabCase(bindableName),
-        readBindableStringValue(selectBindableExpression(callbackContributors, 'callback')) ?? `${bindableName}Changed`,
-        readBindableModeValue(selectBindableExpression(modeContributors, 'mode')) ?? 'toView',
-        readBindableInterceptorKind(setContributors, typeContributors),
-        readBindableTypeReferenceName(selectBindableExpression(typeContributors, 'type')),
-        readBooleanValue(selectBindableExpression(nullableContributors, 'nullable')),
-        compactBindableProvenances([
-          buildBindableFieldProvenance('name', nameContributors),
-          buildBindableFieldProvenance('attribute', attributeContributors),
-          buildBindableFieldProvenance('callback', callbackContributors),
-          buildBindableFieldProvenance('mode', modeContributors),
-          buildBindableFieldProvenance('set', setContributors),
-          buildBindableFieldProvenance('type', typeContributors),
-          buildBindableFieldProvenance('nullable', nullableContributors),
-        ]),
-        'Bindable mini-definition recovered from custom-attribute/template-controller support carriers.',
-      ),
-    );
-  }
-
-  return entries;
+): readonly BindableContributorSeed[] {
+  return contributors.map((current) => ({
+    expression: current.expression == null ? null : unwrapExpression(current.expression),
+    carrier: toBindableCarrier(current.contribution.carrier),
+    source: current.contribution.source,
+    note: current.contribution.note,
+  }));
 }
 
-function extractBindableContributors(
-  contributor: FieldContributor,
-): readonly BindableContributor[] {
-  const expression = contributor.expression == null ? null : unwrapExpression(contributor.expression);
-  if (expression == null) {
-    return [];
-  }
-
-  if (isStringLike(expression)) {
-    return [{
-      bindableName: expression.text,
-      fields: { name: ts.factory.createStringLiteral(expression.text) },
-      contribution: toBindableWitness(contributor.contribution),
-    }];
-  }
-
-  if (ts.isArrayLiteralExpression(expression)) {
-    const items: BindableContributor[] = [];
-    for (const element of expression.elements) {
-      if (isStringLike(element)) {
-        items.push({
-          bindableName: element.text,
-          fields: { name: ts.factory.createStringLiteral(element.text) },
-          contribution: toBindableWitness(contributor.contribution),
-        });
-        continue;
-      }
-
-      if (ts.isObjectLiteralExpression(element)) {
-        const bindableName = readBindableStringValue(readObjectLiteralPropertyInitializer(element, 'name'));
-        items.push({
-          bindableName,
-          fields: readBindableFieldMap(element),
-          contribution: toBindableWitness(contributor.contribution),
-        });
-      }
-    }
-    return items;
-  }
-
-  if (ts.isObjectLiteralExpression(expression)) {
-    const explicitName = readBindableStringValue(readObjectLiteralPropertyInitializer(expression, 'name'));
-    if (contributor.contribution.carrier === 'bindable-decorator') {
-      return [{
-        bindableName: null,
-        fields: readBindableFieldMap(expression),
-        contribution: toBindableWitness(contributor.contribution),
-      }];
-    }
-
-    if (explicitName != null) {
-      return [{
-        bindableName: explicitName,
-        fields: readBindableFieldMap(expression),
-        contribution: toBindableWitness(contributor.contribution),
-      }];
-    }
-
-    const items: BindableContributor[] = [];
-    for (const property of expression.properties) {
-      if (!ts.isPropertyAssignment(property)) {
-        continue;
-      }
-      const bindableName = readPropertyName(property.name);
-      if (bindableName == null) {
-        continue;
-      }
-      const initializer = unwrapExpression(property.initializer);
-      if (initializer.kind === ts.SyntaxKind.TrueKeyword) {
-        items.push({
-          bindableName,
-          fields: { name: ts.factory.createStringLiteral(bindableName) },
-          contribution: toBindableWitness(contributor.contribution),
-        });
-        continue;
-      }
-      if (isStringLike(initializer)) {
-        items.push({
-          bindableName,
-          fields: {
-            name: ts.factory.createStringLiteral(bindableName),
-            attribute: initializer,
-          },
-          contribution: toBindableWitness(contributor.contribution),
-        });
-        continue;
-      }
-      if (ts.isObjectLiteralExpression(initializer)) {
-        items.push({
-          bindableName,
-          fields: {
-            name: ts.factory.createStringLiteral(bindableName),
-            ...readBindableFieldMap(initializer),
-          },
-          contribution: toBindableWitness(contributor.contribution),
-        });
-      }
-    }
-    return items;
-  }
-
-  return [];
+function createBindableResolutionInputs(
+  contributors: readonly FieldContributor[],
+): readonly ReturnType<typeof createBindableResolutionInput>[] {
+  // TODO: runtime CA/TC bindables also fold inherited metadata and later
+  // definition-object bindables. The current clean-room closes the
+  // declaration-local ordering first: local @bindable metadata,
+  // annotated/static-au bindables, then static own bindables.
+  return [
+    createBindableResolutionInput(
+      'local-bindable-decorator-metadata',
+      toBindableContributorSeeds(contributors.filter((current) => current.contribution.carrier === 'bindable-decorator')),
+    ),
+    createBindableResolutionInput(
+      'annotated-bindables',
+      toBindableContributorSeeds(contributors.filter((current) =>
+        current.contribution.carrier === 'annotation-decorator' || current.contribution.carrier === 'static-au-property',
+      )),
+    ),
+    createBindableResolutionInput(
+      'static-own-bindables',
+      toBindableContributorSeeds(contributors.filter((current) => current.contribution.carrier === 'static-own-property')),
+    ),
+  ].filter((current) => current.entries.length > 0);
 }
 
-function readBindableFieldMap(
-  objectLiteral: ts.ObjectLiteralExpression,
-): Partial<Record<CustomAttributeBindableFieldKind, ts.Expression | null>> {
-  return {
-    name: readObjectLiteralPropertyInitializer(objectLiteral, 'name'),
-    attribute: readObjectLiteralPropertyInitializer(objectLiteral, 'attribute'),
-    callback: readObjectLiteralPropertyInitializer(objectLiteral, 'callback'),
-    mode: readObjectLiteralPropertyInitializer(objectLiteral, 'mode'),
-    set: readObjectLiteralPropertyInitializer(objectLiteral, 'set'),
-    type: readObjectLiteralPropertyInitializer(objectLiteral, 'type'),
-    nullable: readObjectLiteralPropertyInitializer(objectLiteral, 'nullable'),
-  };
+function toBindableCarrier(
+  carrier: CustomAttributeSupportCarrierKind,
+): BindableCarrierKind {
+  switch (carrier) {
+    case 'bindable-decorator':
+      return 'bindable-decorator';
+    case 'static-au-property':
+      return 'static-au-property';
+    case 'static-own-property':
+      return 'static-own-property';
+    case 'default':
+      return 'default';
+    case 'annotation-decorator':
+    case 'open':
+    default:
+      return 'open';
+  }
 }
 
 function readLifecycleHooks(
@@ -772,22 +649,6 @@ function buildFieldProvenance(
   );
 }
 
-function buildBindableFieldProvenance(
-  field: CustomAttributeBindableFieldKind,
-  contributors: readonly BindableContributor[],
-): CustomAttributeBindableFieldProvenance | null {
-  if (contributors.length === 0) {
-    return null;
-  }
-  const selected = selectBindableContributor(contributors);
-  return new CustomAttributeBindableFieldProvenance(
-    field,
-    'selected',
-    selected?.contribution ?? null,
-    mergeUniqueBindableWitnesses(contributors.map((current) => current.contribution)),
-  );
-}
-
 function selectContributor(
   contributors: readonly FieldContributor[],
 ): FieldContributor | null {
@@ -796,25 +657,10 @@ function selectContributor(
   )[0] ?? null;
 }
 
-function selectBindableContributor(
-  contributors: readonly BindableContributor[],
-): BindableContributor | null {
-  return [...contributors].sort((left, right) =>
-    compareBindableCarrierPrecedence(left.contribution.carrier, right.contribution.carrier),
-  )[0] ?? null;
-}
-
 function selectExpression(
   contributors: readonly FieldContributor[],
 ): ts.Expression | null {
   return selectContributor(contributors)?.expression ?? null;
-}
-
-function selectBindableExpression(
-  contributors: readonly BindableContributor[],
-  field: CustomAttributeBindableFieldKind,
-): ts.Expression | null {
-  return selectBindableContributor(contributors)?.fields[field] ?? null;
 }
 
 function compareCarrierPrecedence(
@@ -843,32 +689,6 @@ function carrierPrecedence(
   }
 }
 
-function compareBindableCarrierPrecedence(
-  left: CustomAttributeSupportCarrierKind,
-  right: CustomAttributeSupportCarrierKind,
-): number {
-  return bindableCarrierPrecedence(left) - bindableCarrierPrecedence(right);
-}
-
-function bindableCarrierPrecedence(
-  carrier: CustomAttributeSupportCarrierKind,
-): number {
-  switch (carrier) {
-    case 'static-au-property':
-      return 0;
-    case 'static-own-property':
-      return 1;
-    case 'bindable-decorator':
-      return 2;
-    case 'annotation-decorator':
-      return 3;
-    case 'default':
-      return 4;
-    case 'open':
-      return 5;
-  }
-}
-
 function readBooleanValue(
   expression: ts.Expression | null,
 ): boolean | null {
@@ -887,68 +707,6 @@ function readContainerStrategy(
   return value === 'reuse' || value === 'new'
     ? value
     : null;
-}
-
-function readBindableStringValue(
-  expression: ts.Expression | null,
-): string | null {
-  return readStringLiteralValue(expression);
-}
-
-function readBindableModeValue(
-  expression: ts.Expression | null,
-): string | number | null {
-  const current = expression == null ? null : unwrapExpression(expression);
-  if (current == null) {
-    return null;
-  }
-
-  if (isStringLike(current)) {
-    return current.text;
-  }
-
-  if (ts.isIdentifier(current)) {
-    return current.text;
-  }
-
-  if (ts.isPropertyAccessExpression(current)) {
-    return current.name.text;
-  }
-
-  if (ts.isNumericLiteral(current)) {
-    return Number(current.text);
-  }
-
-  return null;
-}
-
-function readBindableTypeReferenceName(
-  expression: ts.Expression | null,
-): string | null {
-  const current = expression == null ? null : unwrapExpression(expression);
-  if (current == null) {
-    return null;
-  }
-  return ts.isIdentifier(current)
-    ? current.text
-    : ts.isPropertyAccessExpression(current)
-      ? current.name.text
-      : null;
-}
-
-function readBindableInterceptorKind(
-  setContributors: readonly BindableContributor[],
-  typeContributors: readonly BindableContributor[],
-): CustomAttributeBindableInterceptorKind {
-  const hasSet = setContributors.length > 0;
-  const hasType = typeContributors.length > 0;
-  if (hasSet) {
-    return 'explicit-set';
-  }
-  if (hasType) {
-    return 'type-coercer';
-  }
-  return 'default-noop';
 }
 
 function readDecoratorCalleeText(
@@ -996,14 +754,10 @@ function mergeIdentity(
 }
 
 function mergeBindableSurface(
-  existing: CustomAttributeBindableSurface,
-  surface: CustomAttributeBindableSurface,
-): CustomAttributeBindableSurface {
-  return new CustomAttributeBindableSurface(
-    surface.entries.length > 0 ? surface.entries : existing.entries,
-    mergeUniqueFieldProvenances(existing.provenance, surface.provenance),
-    existing.note ?? surface.note,
-  );
+  existing: BindableSurface,
+  surface: BindableSurface,
+): BindableSurface {
+  return mergeSharedBindableSurface(existing, surface);
 }
 
 function mergePolicy(
@@ -1063,12 +817,6 @@ function compactLifecycleProvenances(
   return values.filter((value): value is CustomAttributeLifecycleHookProvenance => value != null);
 }
 
-function compactBindableProvenances(
-  values: readonly (CustomAttributeBindableFieldProvenance | null)[],
-): readonly CustomAttributeBindableFieldProvenance[] {
-  return values.filter((value): value is CustomAttributeBindableFieldProvenance => value != null);
-}
-
 function mergeUniqueFieldProvenances(
   ...values: readonly (readonly CustomAttributeFieldProvenance[])[]
 ): readonly CustomAttributeFieldProvenance[] {
@@ -1126,24 +874,6 @@ function mergeUniqueFieldWitnesses(
 ): readonly CustomAttributeFieldWitness[] {
   const seen = new Set<string>();
   const merged: CustomAttributeFieldWitness[] = [];
-  for (const list of values) {
-    for (const value of list) {
-      const key = `${value.field}:${value.carrier}:${value.source?.id ?? '<none>'}`;
-      if (seen.has(key)) {
-        continue;
-      }
-      seen.add(key);
-      merged.push(value);
-    }
-  }
-  return merged;
-}
-
-function mergeUniqueBindableWitnesses(
-  ...values: readonly (readonly CustomAttributeBindableFieldWitness[])[]
-): readonly CustomAttributeBindableFieldWitness[] {
-  const seen = new Set<string>();
-  const merged: CustomAttributeBindableFieldWitness[] = [];
   for (const list of values) {
     for (const value of list) {
       const key = `${value.field}:${value.carrier}:${value.source?.id ?? '<none>'}`;
@@ -1223,17 +953,6 @@ function createFieldWitness(
   );
 }
 
-function toBindableWitness(
-  witness: CustomAttributeFieldWitness,
-): CustomAttributeBindableFieldWitness {
-  return new CustomAttributeBindableFieldWitness(
-    'name',
-    witness.carrier,
-    witness.source,
-    witness.note,
-  );
-}
-
 function toNodeRef(
   node: ts.Node,
   file: SourceFileRef,
@@ -1251,10 +970,4 @@ function isStringLike(
   expression: ts.Expression,
 ): expression is ts.StringLiteral | ts.NoSubstitutionTemplateLiteral {
   return ts.isStringLiteral(expression) || ts.isNoSubstitutionTemplateLiteral(expression);
-}
-
-function toKebabCase(
-  value: string,
-): string {
-  return value.replace(/([A-Z])/g, (_, current: string) => `-${current.toLowerCase()}`);
 }

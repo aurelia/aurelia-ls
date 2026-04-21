@@ -1,5 +1,5 @@
 import type {
-  CustomAttributeBindableEntry,
+  BindableEntry,
   CustomAttributeDefinition,
   CustomAttributeFieldProvenance,
   TemplateControllerDefinition,
@@ -42,7 +42,7 @@ export class CompilerAttributeBindableInfoEntry {
     readonly name: string,
     readonly attribute: string,
     readonly origin: CompilerAttributeBindableInfoOriginKind,
-    readonly sourceBindable: CustomAttributeBindableEntry | null = null,
+    readonly sourceBindable: BindableEntry | null = null,
     readonly note: string | null = null,
   ) {}
 }

@@ -3,13 +3,14 @@ import type {
   ResourceDefinitionState,
   ResourceDefinitionType,
 } from './contracts.js';
+import { BindableSurface } from './bindable-support.js';
 import {
-  CustomAttributeBindableSurface,
   CustomAttributeDependencyContribution,
   CustomAttributeIdentity,
   CustomAttributePolicy,
 } from './custom-attribute-support.js';
 import { CustomAttributeLifecycleHooks } from './custom-attribute-lifecycle-support.js';
+import { WatchSurface } from './watch-support.js';
 
 // Template controllers are custom-attribute carrier truth plus later
 // structural semantics. This row keeps the shared CA support bundle intact so
@@ -21,7 +22,7 @@ export class TemplateControllerDefinition implements ResourceDefinitionState<'te
     readonly id: string,
     readonly type: ResourceDefinitionType,
     readonly identity: CustomAttributeIdentity,
-    readonly bindableSurface: CustomAttributeBindableSurface = new CustomAttributeBindableSurface(),
+    readonly bindableSurface: BindableSurface = new BindableSurface(),
     readonly policy: CustomAttributePolicy = new CustomAttributePolicy(
       null,
       null,
@@ -31,6 +32,7 @@ export class TemplateControllerDefinition implements ResourceDefinitionState<'te
       'Template-controller definition defaults to template-controller posture unless a materializer refines it.',
     ),
     readonly dependencyContribution: CustomAttributeDependencyContribution = new CustomAttributeDependencyContribution(),
+    readonly watchSurface: WatchSurface = new WatchSurface(),
     readonly lifecycleHooks: CustomAttributeLifecycleHooks = new CustomAttributeLifecycleHooks(),
   ) {}
 

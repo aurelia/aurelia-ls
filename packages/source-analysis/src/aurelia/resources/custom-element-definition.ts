@@ -3,14 +3,15 @@ import type {
   ResourceDefinitionState,
   ResourceDefinitionType,
 } from './contracts.js';
+import { BindableSurface } from './bindable-support.js';
 import {
-  CustomElementBindableSurface,
   CustomElementDependencyContribution,
   CustomElementIdentity,
   CustomElementPolicy,
   CustomElementTemplateSource,
 } from './custom-element-support.js';
 import { CustomElementLifecycleHooks } from './custom-element-lifecycle-support.js';
+import { WatchSurface } from './watch-support.js';
 
 export class CustomElementDefinition implements ResourceDefinitionState<'custom-element'> {
   readonly kind = 'custom-element' as const;
@@ -20,7 +21,7 @@ export class CustomElementDefinition implements ResourceDefinitionState<'custom-
     readonly type: ResourceDefinitionType,
     readonly identity: CustomElementIdentity,
     readonly policy: CustomElementPolicy = new CustomElementPolicy(),
-    readonly bindableSurface: CustomElementBindableSurface = new CustomElementBindableSurface(),
+    readonly bindableSurface: BindableSurface = new BindableSurface(),
     readonly dependencyContribution: CustomElementDependencyContribution = new CustomElementDependencyContribution(),
     readonly templateSource: CustomElementTemplateSource = new CustomElementTemplateSource(
       'open',
@@ -29,6 +30,7 @@ export class CustomElementDefinition implements ResourceDefinitionState<'custom-
       null,
       'Template source has not been materialized yet.',
     ),
+    readonly watchSurface: WatchSurface = new WatchSurface(),
     readonly lifecycleHooks: CustomElementLifecycleHooks = new CustomElementLifecycleHooks(),
   ) {}
 

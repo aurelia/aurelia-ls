@@ -1,4 +1,5 @@
 import type {
+  BindableEntry,
   BindingCommandDefinition,
   CustomAttributeDefinition,
   CustomElementDefinition,
@@ -10,7 +11,6 @@ import type {
   CompilerAttributeParseResult,
   CompilerResourceAdmissionProvenance,
 } from './compiler-consulted-world.js';
-import type { CustomElementBindableEntry } from '../resources/index.js';
 
 export const COMPILER_ATTRIBUTE_CLASSIFICATION_LANE_KINDS = [
   'special-attribute',
@@ -75,7 +75,7 @@ export class CompilerAttributeClassification {
     readonly lane: CompilerAttributeClassificationLaneKind,
     readonly parse: CompilerAttributeParseResult | null,
     readonly bindingCommand: BindingCommandDefinition | null = null,
-    readonly customElementBindable: CustomElementBindableEntry | null = null,
+    readonly customElementBindable: BindableEntry | null = null,
     readonly attributeResource: CustomAttributeDefinition | TemplateControllerDefinition | null = null,
     readonly provenance: CompilerAttributeClassificationProvenance | null = null,
     readonly openSeams: readonly CompilerAttributeClassificationOpenSeam[] = [],
@@ -397,7 +397,7 @@ function classifyCapture(
   authored: CompilerAuthoredAttribute,
   parse: CompilerAttributeParseResult,
   receiverElement: CustomElementDefinition | null,
-  matchedBindable: CustomElementBindableEntry | null,
+  matchedBindable: BindableEntry | null,
   attributeResource: CustomAttributeDefinition | TemplateControllerDefinition | null,
   bindingCommandOwnsAttribute: boolean | null,
   provenance: CompilerAttributeClassificationProvenance,
@@ -472,7 +472,7 @@ function classifyCapture(
 function findCustomElementBindable(
   receiverElement: CustomElementDefinition,
   target: string,
-): CustomElementBindableEntry | null {
+): BindableEntry | null {
   return receiverElement.bindableSurface.entries.find((current) =>
     current.attribute === target || current.name === target,
   ) ?? null;

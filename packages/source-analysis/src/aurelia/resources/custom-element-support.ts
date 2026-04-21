@@ -59,29 +59,6 @@ export const CUSTOM_ELEMENT_TEMPLATE_SOURCE_KINDS = [
 export type CustomElementTemplateSourceKind =
   typeof CUSTOM_ELEMENT_TEMPLATE_SOURCE_KINDS[number];
 
-export const CUSTOM_ELEMENT_BINDABLE_FIELD_KINDS = [
-  'name',
-  'attribute',
-  'callback',
-  'mode',
-  'set',
-  'type',
-  'nullable',
-] as const;
-
-export type CustomElementBindableFieldKind =
-  typeof CUSTOM_ELEMENT_BINDABLE_FIELD_KINDS[number];
-
-export const CUSTOM_ELEMENT_BINDABLE_INTERCEPTOR_KINDS = [
-  'default-noop',
-  'explicit-set',
-  'type-coercer',
-  'open',
-] as const;
-
-export type CustomElementBindableInterceptorKind =
-  typeof CUSTOM_ELEMENT_BINDABLE_INTERCEPTOR_KINDS[number];
-
 export const CUSTOM_ELEMENT_DEPENDENCY_SOURCE_KINDS = [
   'literal-array',
   'merged-array',
@@ -114,15 +91,6 @@ export class CustomElementFieldWitness {
   ) {}
 }
 
-export class CustomElementBindableFieldWitness {
-  constructor(
-    readonly field: CustomElementBindableFieldKind,
-    readonly carrier: CustomElementSupportCarrierKind,
-    readonly source: SourceNodeRef | null,
-    readonly note: string | null = null,
-  ) {}
-}
-
 // Provenance is field-level and names both the selected contributor and the
 // full contributor set so later layers can explain or reopen the selection.
 export class CustomElementFieldProvenance {
@@ -131,16 +99,6 @@ export class CustomElementFieldProvenance {
     readonly mode: 'selected' | 'merged' | 'presence-only',
     readonly selected: CustomElementFieldWitness | null,
     readonly contributors: readonly CustomElementFieldWitness[] = [],
-    readonly note: string | null = null,
-  ) {}
-}
-
-export class CustomElementBindableFieldProvenance {
-  constructor(
-    readonly field: CustomElementBindableFieldKind,
-    readonly mode: 'selected' | 'presence-only',
-    readonly selected: CustomElementBindableFieldWitness | null,
-    readonly contributors: readonly CustomElementBindableFieldWitness[] = [],
     readonly note: string | null = null,
   ) {}
 }
@@ -178,44 +136,6 @@ export class CustomElementPolicy {
     field: CustomElementSupportFieldKind,
   ): CustomElementFieldProvenance | null {
     return this.provenance.find((current) => current.field === field) ?? null;
-  }
-}
-
-// Bindables have their own later convergence algebra. This surface only keeps
-// the CE-owned ingress into that world.
-export class CustomElementBindableEntry {
-  constructor(
-    readonly name: string | null,
-    readonly attribute: string | null = null,
-    readonly callback: string | null = null,
-    readonly mode: string | number | null = null,
-    readonly interceptorKind: CustomElementBindableInterceptorKind = 'open',
-    readonly typeReferenceName: string | null = null,
-    readonly nullable: boolean | null = null,
-    readonly provenance: readonly CustomElementBindableFieldProvenance[] = [],
-    readonly note: string | null = null,
-  ) {}
-
-  get witness(): CustomElementBindableFieldWitness | null {
-    return this.readProvenance('name')?.selected ?? null;
-  }
-
-  readProvenance(
-    field: CustomElementBindableFieldKind,
-  ): CustomElementBindableFieldProvenance | null {
-    return this.provenance.find((current) => current.field === field) ?? null;
-  }
-}
-
-export class CustomElementBindableSurface {
-  constructor(
-    readonly entries: readonly CustomElementBindableEntry[] = [],
-    readonly provenance: readonly CustomElementFieldProvenance[] = [],
-    readonly note: string | null = null,
-  ) {}
-
-  readProvenance(): CustomElementFieldProvenance | null {
-    return this.provenance.find((current) => current.field === 'bindables') ?? null;
   }
 }
 
