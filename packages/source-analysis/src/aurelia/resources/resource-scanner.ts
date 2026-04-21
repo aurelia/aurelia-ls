@@ -1,5 +1,6 @@
 import type { Exports } from '../exports/index.js';
 import { BindingCommandMaterializer } from './binding-command-materializer.js';
+import { CustomAttributeMaterializer } from './custom-attribute-materializer.js';
 import { CustomElementMaterializer } from './custom-element-materializer.js';
 import { DefinitionCarrierCollector } from './definition-carrier-collector.js';
 import type { DefinitionCarrier } from './definition-carrier.js';
@@ -13,6 +14,7 @@ export interface ResourceScannerOptions {
   readonly recognizer?: ResourceRecognizer;
   readonly definitionCarrierCollector?: DefinitionCarrierCollector;
   readonly customElementMaterializer?: CustomElementMaterializer;
+  readonly customAttributeMaterializer?: CustomAttributeMaterializer;
   readonly bindingCommandMaterializer?: BindingCommandMaterializer;
 }
 
@@ -31,6 +33,7 @@ export class ResourceScanner {
   private readonly recognizerValue: ResourceRecognizer;
   private readonly definitionCarrierCollectorValue: DefinitionCarrierCollector;
   private readonly customElementMaterializerValue: CustomElementMaterializer;
+  private readonly customAttributeMaterializerValue: CustomAttributeMaterializer;
   private readonly bindingCommandMaterializerValue: BindingCommandMaterializer;
   private readonly resourceSeedsValue: readonly ResourceDefinition[];
 
@@ -46,6 +49,8 @@ export class ResourceScanner {
       });
     this.customElementMaterializerValue = options.customElementMaterializer
       ?? new CustomElementMaterializer();
+    this.customAttributeMaterializerValue = options.customAttributeMaterializer
+      ?? new CustomAttributeMaterializer();
     this.bindingCommandMaterializerValue = options.bindingCommandMaterializer
       ?? new BindingCommandMaterializer();
     this.resourceSeedsValue = [...(options.resourceSeeds ?? [])];
@@ -71,6 +76,8 @@ export class ResourceScanner {
     return this.resourceSeedsValue.map((resource) =>
       resource.kind === 'custom-element'
         ? this.customElementMaterializerValue.materialize(resource)
+        : resource.kind === 'custom-attribute' || resource.kind === 'template-controller'
+          ? this.customAttributeMaterializerValue.materialize(resource)
         : resource.kind === 'binding-command'
           ? this.bindingCommandMaterializerValue.materialize(resource)
           : resource,

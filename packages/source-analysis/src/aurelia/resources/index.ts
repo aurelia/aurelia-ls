@@ -1,4 +1,32 @@
 export {
+  CUSTOM_ATTRIBUTE_BINDABLE_FIELD_KINDS,
+  CUSTOM_ATTRIBUTE_BINDABLE_INTERCEPTOR_KINDS,
+  CUSTOM_ATTRIBUTE_DEPENDENCY_LINK_SEED_KINDS,
+  CUSTOM_ATTRIBUTE_DEPENDENCY_SOURCE_KINDS,
+  CUSTOM_ATTRIBUTE_SUPPORT_CARRIER_KINDS,
+  CUSTOM_ATTRIBUTE_SUPPORT_FIELD_KINDS,
+  CustomAttributeBindableEntry,
+  CustomAttributeBindableFieldProvenance,
+  CustomAttributeBindableFieldWitness,
+  CustomAttributeBindableSurface,
+  CustomAttributeDependencyContribution,
+  CustomAttributeDependencyEntry,
+  CustomAttributeFieldProvenance,
+  CustomAttributeFieldWitness,
+  CustomAttributeIdentity,
+  CustomAttributePolicy,
+  type CustomAttributeBindableFieldKind,
+  type CustomAttributeBindableInterceptorKind,
+  type CustomAttributeDependencyLinkSeedKind,
+  type CustomAttributeDependencySourceKind,
+  type CustomAttributeSupportCarrierKind,
+  type CustomAttributeSupportFieldKind,
+} from './custom-attribute-support.js';
+export {
+  CustomAttributeMaterializer,
+  type CustomAttributeMaterializerState,
+} from './custom-attribute-materializer.js';
+export {
   CUSTOM_ELEMENT_BINDABLE_FIELD_KINDS,
   CUSTOM_ELEMENT_BINDABLE_INTERCEPTOR_KINDS,
   CUSTOM_ELEMENT_CAPTURE_KINDS,

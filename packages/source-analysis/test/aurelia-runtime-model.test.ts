@@ -29,6 +29,7 @@ import {
   ContainerStateQualification,
   ContainerStateSlot,
   CustomAttributeDefinition,
+  CustomAttributeIdentity,
   CustomElementBindableSurface,
   CustomElementDefinition,
   CustomElementDependencyContribution,
@@ -1079,6 +1080,39 @@ describe('Aurelia clean-room runtime model', () => {
     expect(trigger.buildBasis.valueHandling.parserEntrySeed).toBe('etIsFunction');
   });
 
+  it('materializes custom-attribute and template-controller support bundles from declaration source', () => {
+    const fixture = createConfigurationFixture();
+    const framework = new Framework(fixture.rootDir, {
+      rootDir: fixture.rootDir,
+      exports: fixture.exports,
+      resourceSeeds: fixture.resourceSeeds,
+    });
+
+    const show = framework.resources().readCustomAttributes().find((current) => current.name === 'show');
+    const ifTc = framework.resources().readTemplateControllers().find((current) => current.name === 'if');
+
+    expect(show).toBeDefined();
+    expect(ifTc).toBeDefined();
+    if (show == null || ifTc == null) {
+      throw new Error('Expected custom attribute and template controller fixtures to materialize.');
+    }
+
+    const showValue = show.bindableSurface.entries.find((current) => current.name === 'value');
+    expect(show.defaultProperty).toBe('value');
+    expect(show.noMultiBindings).toBe(false);
+    expect(show.bindableSurface.entries.map((current) => current.name)).toEqual(['value', 'delay']);
+    expect(showValue?.mode).toBe('toView');
+    expect(show.bindableSurface.readProvenance()?.mode).toBe('merged');
+    expect(show.policy.readProvenance('default-property')?.selected?.carrier).toBe('static-au-property');
+
+    expect(ifTc.policy.isTemplateController).toBe(true);
+    expect(ifTc.defaultProperty).toBe('value');
+    expect(ifTc.containerStrategy).toBe('reuse');
+    expect(ifTc.bindableSurface.entries.map((current) => current.name)).toEqual(['value']);
+    expect(ifTc.policy.readProvenance('is-template-controller')?.selected?.carrier).toBe('static-au-property');
+    expect(ifTc.policy.readProvenance('container-strategy')?.selected?.carrier).toBe('static-au-property');
+  });
+
   it('shows capture and bindable pressure on a capturing custom-element receiver', () => {
     const configFixture = createConfigurationFixture();
     const configFramework = new Framework(configFixture.rootDir, {
@@ -1337,18 +1371,24 @@ function createResourceDefinitions(
     new CustomAttributeDefinition(
       'resource:ca:bar',
       attributeSymbol,
-      createKeyHandle(attributeSymbol, 'au:resource:custom-attribute:bar', 'resource'),
-      'bar',
-      ['bar-attribute'],
+      new CustomAttributeIdentity(
+        'bar',
+        ['bar-attribute'],
+        createKeyHandle(attributeSymbol, 'au:resource:custom-attribute:bar', 'resource'),
+      ),
+      undefined,
+      undefined,
+      undefined,
       'toView',
-      false,
     ),
     new TemplateControllerDefinition(
       'resource:tc:if',
       controllerSymbol,
-      createKeyHandle(controllerSymbol, 'au:resource:template-controller:if', 'resource'),
-      'if',
-      [],
+      new CustomAttributeIdentity(
+        'if',
+        [],
+        createKeyHandle(controllerSymbol, 'au:resource:template-controller:if', 'resource'),
+      ),
     ),
     new ValueConverterDefinition(
       'resource:vc:date-format',
@@ -1444,8 +1484,30 @@ export class DebounceBindingBehavior {}
 export class OneTimeBindingBehavior {}
 export class ToViewBindingBehavior {}
 export class AuCompose {}
-export class Show {}
-export class If {}
+export class Show {
+  static $au = {
+    type: 'custom-attribute',
+    name: 'show',
+    defaultProperty: 'value',
+    noMultiBindings: false,
+    bindables: {
+      value: { mode: 'toView' },
+      delay: { attribute: 'show-delay' },
+    },
+  };
+}
+export class If {
+  static $au = {
+    type: 'custom-attribute',
+    name: 'if',
+    isTemplateController: true,
+    defaultProperty: 'value',
+    containerStrategy: 'reuse',
+    bindables: {
+      value: { mode: 'toView' },
+    },
+  };
+}
 export class DotSeparatedAttributePattern {
   public 'PART.PART'(rawName: string, rawValue: string, parts: readonly string[]) {
     return new AttrSyntax(rawName, rawValue, parts[0], parts[1]);
@@ -2086,18 +2148,20 @@ function createConfigurationFixtureResources(
     new CustomAttributeDefinition(
       'resource:ca:show',
       show!.symbol!,
-      createKeyHandle(show!.symbol!, 'au:resource:custom-attribute:show', 'resource'),
-      'show',
-      [],
-      null,
-      false,
+      new CustomAttributeIdentity(
+        'show',
+        [],
+        createKeyHandle(show!.symbol!, 'au:resource:custom-attribute:show', 'resource'),
+      ),
     ),
     new TemplateControllerDefinition(
       'resource:tc:if',
       ifTc!.symbol!,
-      createKeyHandle(ifTc!.symbol!, 'au:resource:template-controller:if', 'resource'),
-      'if',
-      [],
+      new CustomAttributeIdentity(
+        'if',
+        [],
+        createKeyHandle(ifTc!.symbol!, 'au:resource:template-controller:if', 'resource'),
+      ),
     ),
     new BindingBehaviorDefinition(
       'resource:bb:debounce',
