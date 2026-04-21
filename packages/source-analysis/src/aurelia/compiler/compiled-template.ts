@@ -10,6 +10,7 @@ import type {
   CompilerAttributeBindingLowering,
 } from './custom-attribute-binding-lowering.js';
 import type { CompilerResourceAdmissionProvenance } from './compiler-consulted-world.js';
+import type { TemplateNodeRef } from '../refs.js';
 
 export const COMPILED_TEMPLATE_OPEN_SEAM_KINDS = [
   'text-interpolation-open',
@@ -46,9 +47,37 @@ export class CompilerElementStructuralCarrier {
     readonly authored: AuthoredElementNode,
     readonly classification: CompilerElementAttributeClassification,
     readonly customAttributeBindings: readonly CompilerAttributeBindingLowering[] = [],
+    readonly projectionExtraction: CompilerProjectionExtraction | null = null,
     readonly childCompilations: readonly CompiledTemplateNode[] = [],
     readonly note: string | null = null,
   ) {}
+}
+
+export class CompilerProjectionSlot {
+  constructor(
+    readonly slotName: string,
+    readonly targetSource: TemplateNodeRef | null,
+    readonly targetElementSource: TemplateNodeRef | null,
+    readonly targetNodes: readonly CompiledTemplateNode[] = [],
+    readonly note: string | null = null,
+  ) {}
+}
+
+export class CompilerProjectionExtraction {
+  constructor(
+    readonly projectedSlots: readonly CompilerProjectionSlot[] = [],
+    readonly note: string | null = null,
+  ) {}
+
+  readProjectedSlotNames(): readonly string[] {
+    return this.projectedSlots.map((current) => current.slotName);
+  }
+
+  findSlot(
+    slotName: string,
+  ): CompilerProjectionSlot | null {
+    return this.projectedSlots.find((current) => current.slotName === slotName) ?? null;
+  }
 }
 
 export class CompilerAnonymousElementDefinition {

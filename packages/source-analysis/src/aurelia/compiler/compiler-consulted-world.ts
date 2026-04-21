@@ -680,6 +680,8 @@ export class CompilerConsultedWorld {
     options: {
       readonly suffix: string;
       readonly owner: SymbolRef | SourceNodeRef | null;
+      readonly resources?: readonly ResourceDefinition[];
+      readonly resourceAdmissions?: readonly CompilerResourceAdmissionProvenance[];
       readonly note?: string | null;
       readonly openSeams?: readonly CompilerWorldOpenSeam[];
     },
@@ -695,9 +697,9 @@ export class CompilerConsultedWorld {
     return new CompilerConsultedWorld(
       `${this.id}/${options.suffix}`,
       childWorld,
-      this.resources,
+      options.resources ?? this.resources,
       this.renderers,
-      this.resourceAdmissions,
+      options.resourceAdmissions ?? this.resourceAdmissions,
       this.compilerCapabilities,
       this.serviceEntries,
       this.serviceOpenSeams,

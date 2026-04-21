@@ -33,7 +33,7 @@ export class TemplateControllerStructuralLowerer {
       ),
       new CompiledTemplateOpenSeam(
         'projection-extraction-open',
-        'Projection ownership stays open here. Runtime attaches projections to the innermost hydrated element instruction, but this clean-room slice has not lowered direct element instructions yet.',
+        'Projection grouping can now live on the element structural carrier, but runtime still attaches projections to the innermost hydrate-element instruction and coordinates marker placement there. That direct instruction ownership remains a later slice.',
       ),
     ];
 

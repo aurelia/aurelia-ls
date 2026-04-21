@@ -147,6 +147,7 @@ export class Rendering {
       : new PreparedHydrateElementInstruction(
         hostElement,
         hostElement.structuralCarrier.classification.receiverElement,
+        hostElement.structuralCarrier.projectionExtraction,
         'Current-target prepared hydrate-element instruction over the compiled element receiver.',
       );
     const attributeInstructions = hostElement.structuralCarrier.customAttributeBindings

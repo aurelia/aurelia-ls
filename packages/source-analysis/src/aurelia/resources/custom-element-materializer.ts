@@ -29,6 +29,9 @@ import {
   readSlottedSurface,
 } from './slotted-materialization.js';
 import {
+  readCustomElementSlotTopology,
+} from './custom-element-slot-topology-materialization.js';
+import {
   createBindableResolutionInput,
   mergeBindableSurface as mergeSharedBindableSurface,
   readBindableSurfaceFromInputs,
@@ -51,6 +54,7 @@ import {
   type CustomElementSupportFieldKind,
   type CustomElementProcessContentKind,
 } from './custom-element-support.js';
+import { CustomElementSlotTopology } from './custom-element-slot-topology-support.js';
 import {
   CustomElementLifecycleHooks,
   CustomElementLifecycleHookProvenance,
@@ -97,6 +101,7 @@ export class CustomElementMaterializer {
       mergeLifecycleHooks(definition.lifecycleHooks, surface.lifecycleHooks),
       mergeChildrenSurface(definition.childrenSurface, surface.childrenSurface),
       mergeSlottedSurface(definition.slottedSurface, surface.slottedSurface),
+      mergeSlotTopology(definition.slotTopology, surface.slotTopology),
     );
   }
 
@@ -170,6 +175,7 @@ interface CustomElementSurface {
   readonly bindableSurface: BindableSurface;
   readonly dependencyContribution: CustomElementDependencyContribution;
   readonly templateSource: CustomElementTemplateSource;
+  readonly slotTopology: CustomElementSlotTopology;
   readonly watchSurface: WatchSurface;
   readonly lifecycleHooks: CustomElementLifecycleHooks;
   readonly childrenSurface: ChildrenSurface;
@@ -217,8 +223,21 @@ function readCustomElementSurface(
   const captureContributors = readFieldContributors('capture', declarationNode, auDefinition, file, sourceFile);
   const containerlessContributors = readFieldContributors('containerless', declarationNode, auDefinition, file, sourceFile);
   const shadowOptionsContributors = readFieldContributors('shadow-options', declarationNode, auDefinition, file, sourceFile);
+  const hasSlotsContributors = readFieldContributors('has-slots', declarationNode, auDefinition, file, sourceFile);
   const processContentContributors = readFieldContributors('process-content', declarationNode, auDefinition, file, sourceFile);
   const templateContributors = readFieldContributors('template', declarationNode, auDefinition, file, sourceFile);
+  const templateSource = readTemplateSource(templateContributors);
+  const hasSlotsProvenance = buildFieldProvenance('has-slots', hasSlotsContributors);
+  const processContentKind = readProcessContentKind(selectExpression(processContentContributors));
+  const slotTopology = readCustomElementSlotTopology(
+    readDeclarationOwnerId(declarationNode, file, sourceFile),
+    readDeclarationOwnerNode(declarationNode, file, sourceFile),
+    file,
+    templateSource,
+    hasSlotsProvenance,
+    readBooleanValue(selectExpression(hasSlotsContributors)),
+    processContentKind !== 'open',
+  );
 
   return {
     identity: new CustomElementIdentity(
@@ -237,7 +256,7 @@ function readCustomElementSurface(
       readCaptureKind(selectExpression(captureContributors)),
       readBooleanValue(selectExpression(containerlessContributors)),
       readShadowMode(selectExpression(shadowOptionsContributors)),
-      readProcessContentKind(selectExpression(processContentContributors)),
+      processContentKind,
       compactProvenances([
         buildFieldProvenance('capture', captureContributors),
         buildFieldProvenance('containerless', containerlessContributors),
@@ -247,6 +266,7 @@ function readCustomElementSurface(
       captureContributors.length === 0
         && containerlessContributors.length === 0
         && shadowOptionsContributors.length === 0
+        && hasSlotsContributors.length === 0
         && processContentContributors.length === 0
         ? 'Custom element policy fields are still open on this declaration surface.'
         : null,
@@ -267,7 +287,8 @@ function readCustomElementSurface(
         ? 'Child-world dependency contribution is still open unless the CE surface declares dependencies explicitly.'
         : null,
     ),
-    templateSource: readTemplateSource(templateContributors),
+    templateSource,
+    slotTopology,
     watchSurface: readWatchSurface(declarationNode, file, sourceFile),
     lifecycleHooks: readLifecycleHooks(declarationNode, file, sourceFile),
     childrenSurface: readChildrenSurface(declarationNode, file, sourceFile),
@@ -351,6 +372,16 @@ function mergeTemplateSource(
   return existing.kind === 'open'
     ? derived
     : existing;
+}
+
+function mergeSlotTopology(
+  existing: CustomElementSlotTopology,
+  derived: CustomElementSlotTopology,
+): CustomElementSlotTopology {
+  if (existing.hasSlots != null || existing.slots.length > 0) {
+    return existing;
+  }
+  return derived;
 }
 
 function mergeLifecycleHooks(
@@ -561,6 +592,8 @@ function mapFieldToPropertyName(
   switch (field) {
     case 'shadow-options':
       return 'shadowOptions';
+    case 'has-slots':
+      return 'hasSlots';
     case 'process-content':
       return 'processContent';
     default:
@@ -680,11 +713,16 @@ function readProcessContentKind(
   if (ts.isStringLiteral(expression) || ts.isNoSubstitutionTemplateLiteral(expression)) {
     return 'string-key';
   }
-  if (ts.isIdentifier(expression) || ts.isFunctionExpression(expression) || ts.isArrowFunction(expression)) {
+  if (
+    ts.isIdentifier(expression)
+    || ts.isFunctionExpression(expression)
+    || ts.isArrowFunction(expression)
+    || ts.isPropertyAccessExpression(expression)
+  ) {
+    if (ts.isPropertyAccessExpression(expression) && expression.expression.getText() === 'Symbol') {
+      return 'symbol-key';
+    }
     return 'function-hook';
-  }
-  if (ts.isPropertyAccessExpression(expression) && expression.expression.getText() === 'Symbol') {
-    return 'symbol-key';
   }
   return 'open';
 }
@@ -1066,6 +1104,22 @@ function toNodeRef(
     ts.SyntaxKind[node.kind],
     new SourceSpan(node.getStart(sourceFile), node.end),
   );
+}
+
+function readDeclarationOwnerNode(
+  declarationNode: ts.ClassLikeDeclarationBase,
+  file: SourceFileRef,
+  sourceFile: ts.SourceFile,
+): SourceNodeRef {
+  return toNodeRef(declarationNode, file, sourceFile);
+}
+
+function readDeclarationOwnerId(
+  declarationNode: ts.ClassLikeDeclarationBase,
+  file: SourceFileRef,
+  sourceFile: ts.SourceFile,
+): string {
+  return readDeclarationOwnerNode(declarationNode, file, sourceFile).id;
 }
 
 function mergeUniqueStrings(

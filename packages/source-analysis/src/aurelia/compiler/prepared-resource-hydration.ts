@@ -5,6 +5,7 @@ import type {
 } from '../resources/index.js';
 import type {
   CompiledElementNode,
+  CompilerProjectionExtraction,
   CompilerHydrateTemplateControllerInstruction,
 } from './compiled-template.js';
 import type { CompilerAttributeBindingLowering } from './custom-attribute-binding-lowering.js';
@@ -24,6 +25,7 @@ export class PreparedHydrateElementInstruction {
   constructor(
     readonly hostElement: CompiledElementNode,
     readonly resource: CustomElementDefinition,
+    readonly projections: CompilerProjectionExtraction | null = null,
     readonly note: string | null = null,
   ) {}
 }

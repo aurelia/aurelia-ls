@@ -3,15 +3,18 @@ import {
   CompilerAttributeClassification,
   CompilerAuthoredAttribute,
 } from './attribute-classification.js';
-import type {
+import {
   AuthoredElementNode,
-  AuthoredTemplate,
-  AuthoredTemplateNode,
-  AuthoredTextNode,
+  type AuthoredTemplate,
+  type AuthoredTemplateNode,
+  type AuthoredTemplateAttribute,
+  type AuthoredTextNode,
 } from './authored-template.js';
 import { CompilationContext } from './compilation-context.js';
 import {
   CompiledElementNode,
+  CompilerProjectionExtraction,
+  CompilerProjectionSlot,
   CompiledTemplate,
   CompiledTemplateOpenSeam,
   CompiledTextNode,
@@ -23,6 +26,7 @@ import {
   TemplateControllerStructuralLowerer,
   type TemplateControllerStructuralParticipant,
 } from './template-controller-structural-lowering.js';
+import type { CustomElementDefinition } from '../resources/index.js';
 
 export class TemplateCompilationEngine {
   private readonly customAttributeBindingLowerer: CompilerCustomAttributeBindingLowerer;
@@ -102,11 +106,13 @@ export class TemplateCompilationEngine {
       ),
     );
     const classification = context.classifyElementAttributes(receiverName, authoredAttributes);
+    const receiverElement = classification.receiverElement;
+    const projectionExtractionResult = this.extractProjectionCompilation(element, receiverElement, context);
     // TODO: child compilation currently stays on the same consulted world.
     // Local-template owner branches and other world-widening behavior should
     // eventually create real child compilation contexts instead of sharing the
     // parent one blindly.
-    const childCompilations = element.children
+    const childCompilations = projectionExtractionResult.retainedChildren
       .map((current) => this.compileNode(current, context))
       .filter((current): current is CompiledTemplateNode => current != null);
     const customAttributeLowerings = classification.items
@@ -122,6 +128,7 @@ export class TemplateCompilationEngine {
       element,
       classification,
       customAttributeLowerings,
+      projectionExtractionResult.extraction,
       childCompilations,
       'Element-level structural carrier over authored template syntax, classification, and stage-7 CA lowering.',
     );
@@ -144,6 +151,8 @@ export class TemplateCompilationEngine {
       ));
     }
 
+    openSeams.push(...projectionExtractionResult.openSeams);
+
     if (templateControllerLowering != null) {
       openSeams.push(...templateControllerLowering.openSeams);
     }
@@ -157,6 +166,165 @@ export class TemplateCompilationEngine {
         ? 'Element compiled without template-controller structural wrapping.'
         : 'Element compiled with generic inside-out template-controller structural wrapping.',
     );
+  }
+
+  private extractProjectionCompilation(
+    element: AuthoredElementNode,
+    receiverElement: CustomElementDefinition | null,
+    context: CompilationContext,
+  ): {
+    readonly retainedChildren: readonly AuthoredTemplateNode[];
+    readonly extraction: CompilerProjectionExtraction | null;
+    readonly openSeams: readonly CompiledTemplateOpenSeam[];
+  } {
+    if (receiverElement == null) {
+      return {
+        retainedChildren: element.children,
+        extraction: null,
+        openSeams: [],
+      };
+    }
+
+    if (receiverElement.name === 'au-slot') {
+      return this.extractAuSlotFallbackCompilation(element, context);
+    }
+
+    const processContentProvenance = receiverElement.policy.readProvenance('process-content');
+    if (processContentProvenance?.selected != null) {
+      return {
+        retainedChildren: element.children,
+        extraction: null,
+        openSeams: [
+          new CompiledTemplateOpenSeam(
+            'process-content-open',
+            'Projection extraction stayed open because this custom element declares processContent. Runtime lets processContent mutate the host content before projection grouping, and that mutation is not interpreted in the current clean-room slice.',
+          ),
+        ],
+      };
+    }
+
+    const retainedChildren: AuthoredTemplateNode[] = [];
+    const grouped = new Map<string, {
+      targetSource: typeof element.attributes[number]['provenance']['ref'] | null;
+      targetElementSource: typeof element.provenance.ref | null;
+      nodes: AuthoredTemplateNode[];
+    }>();
+    // NOTE: runtime template compilation projects all authored child content of
+    // non-shadow custom elements into slot definitions, even when no explicit
+    // [au-slot] attribute is present. Explicit [au-slot] only changes the
+    // target slot; it is not the only trigger for projection extraction.
+    const projectsImplicitDefaultSlot = receiverElement.policy.shadowMode == null;
+
+    for (const child of element.children) {
+      const slotAttribute = child instanceof AuthoredElementNode
+        ? child.attributes.find((current) => current.rawName === 'au-slot') ?? null
+        : null;
+      const projectsToSlot = slotAttribute != null || projectsImplicitDefaultSlot;
+
+      if (!projectsToSlot) {
+        retainedChildren.push(child);
+        continue;
+      }
+
+      const slotName = slotAttribute == null || slotAttribute.rawValue.length === 0
+        ? 'default'
+        : slotAttribute.rawValue;
+      const projectedNodes = materializeProjectedNodes(child, slotAttribute);
+      if (projectedNodes.length === 0) {
+        continue;
+      }
+      const bucket = grouped.get(slotName) ?? {
+        targetSource: slotAttribute?.provenance.ref ?? child.provenance.ref,
+        targetElementSource: child.provenance.ref,
+        nodes: [],
+      };
+      bucket.nodes.push(...projectedNodes);
+      grouped.set(slotName, bucket);
+    }
+
+    if (grouped.size === 0) {
+      return {
+        retainedChildren,
+        extraction: null,
+        openSeams: [],
+      };
+    }
+
+    const projectedSlots = [...grouped.entries()].map(([slotName, bucket]) =>
+      new CompilerProjectionSlot(
+        slotName,
+        bucket.targetSource,
+        bucket.targetElementSource,
+        bucket.nodes
+          .map((current) => this.compileNode(current, context))
+          .filter((current): current is CompiledTemplateNode => current != null),
+        slotName === 'default' && projectsImplicitDefaultSlot
+          ? `Projection content targeting slot ${slotName} was extracted from authored custom-element children, including implicit default-slot content without explicit [au-slot].`
+          : `Projection content targeting slot ${slotName} was extracted from authored children carrying [au-slot].`,
+      ),
+    );
+
+    return {
+      retainedChildren,
+      extraction: new CompilerProjectionExtraction(
+        projectedSlots,
+        projectsImplicitDefaultSlot
+          ? 'Projection extraction grouped authored custom-element content by slot name before ordinary child compilation, including implicit default-slot projection for non-shadow custom elements.'
+          : 'Projection extraction grouped authored [au-slot] children by slot name before ordinary child compilation.',
+      ),
+      openSeams: [],
+    };
+  }
+
+  private extractAuSlotFallbackCompilation(
+    element: AuthoredElementNode,
+    context: CompilationContext,
+  ): {
+    readonly retainedChildren: readonly AuthoredTemplateNode[];
+    readonly extraction: CompilerProjectionExtraction | null;
+    readonly openSeams: readonly CompiledTemplateOpenSeam[];
+  } {
+    const fallbackNodes: AuthoredTemplateNode[] = [];
+    const openSeams: CompiledTemplateOpenSeam[] = [];
+
+    for (const child of element.children) {
+      if (child instanceof AuthoredElementNode && child.attributes.some((current) => current.rawName === 'au-slot')) {
+        openSeams.push(new CompiledTemplateOpenSeam(
+          'process-content-open',
+          'Builtin AuSlot processContent removes child nodes that themselves carry [au-slot]. The clean-room omits those nodes from fallback compilation, but it does not yet model the full processContent hook surface generically.',
+        ));
+        continue;
+      }
+
+      fallbackNodes.push(...materializeProjectedNodes(child, null));
+    }
+
+    if (fallbackNodes.length === 0) {
+      return {
+        retainedChildren: [],
+        extraction: null,
+        openSeams,
+      };
+    }
+
+    return {
+      retainedChildren: [],
+      extraction: new CompilerProjectionExtraction(
+        [
+          new CompilerProjectionSlot(
+            'default',
+            element.provenance.ref,
+            element.provenance.ref,
+            fallbackNodes
+              .map((current) => this.compileNode(current, context))
+              .filter((current): current is CompiledTemplateNode => current != null),
+            'Builtin AuSlot fallback content was separated from ordinary child compilation and prepared as the default projection slot.',
+          ),
+        ],
+        'Builtin AuSlot fallback content was prepared through the same projection carrier used for external [au-slot] projection grouping.',
+      ),
+      openSeams,
+    };
   }
 
   private lowerTemplateControllerParticipant(
@@ -174,6 +342,47 @@ export class TemplateCompilationEngine {
       bindingLowering,
     };
   }
+}
+
+function stripProjectionAttribute(
+  node: AuthoredElementNode,
+): AuthoredElementNode {
+  return new AuthoredElementNode(
+    node.id,
+    node.tagName,
+    node.provenance,
+    node.attributes.filter((current) => current.rawName !== 'au-slot'),
+    node.children,
+    node.selfClosing,
+    node.note == null
+      ? 'Projection-target element compiled without its authored [au-slot] attribute because runtime removes that attribute during projection extraction.'
+      : `${node.note} Projection-target element compiled without its authored [au-slot] attribute because runtime removes that attribute during projection extraction.`,
+  );
+}
+
+function materializeProjectedNodes(
+  node: AuthoredTemplateNode,
+  projectionAttribute: AuthoredTemplateAttribute | null,
+): readonly AuthoredTemplateNode[] {
+  if (node.kind === 'text') {
+    return node.value.trim().length === 0
+      ? []
+      : [node];
+  }
+
+  if (!(node instanceof AuthoredElementNode)) {
+    return [node];
+  }
+
+  const projectedElement = projectionAttribute == null
+    ? node
+    : stripProjectionAttribute(node);
+
+  if (projectedElement.tagName !== 'template' || projectedElement.attributes.length > 0) {
+    return [projectedElement];
+  }
+
+  return projectedElement.children;
 }
 
 function readEffectiveElementName(

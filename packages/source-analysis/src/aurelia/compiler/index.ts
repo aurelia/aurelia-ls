@@ -1,4 +1,7 @@
 export {
+  AuSlotsInfo,
+} from './au-slots-info.js';
+export {
   COMPILER_CAPABILITY_KINDS,
   AttributePatternCapability,
   BindingCommandCapability,
@@ -115,6 +118,8 @@ export {
   COMPILER_ANONYMOUS_ELEMENT_TEMPLATE_KINDS,
   COMPILED_TEMPLATE_OPEN_SEAM_KINDS,
   CompiledElementNode,
+  CompilerProjectionExtraction,
+  CompilerProjectionSlot,
   CompiledTemplate,
   CompiledTemplateOpenSeam,
   CompiledTextNode,
@@ -206,8 +211,12 @@ export { ViewFactory } from './view-factory.js';
 export {
   CURRENT_TARGET_PREPARATION_MODE_KINDS,
   CURRENT_TARGET_PREPARATION_OPEN_SEAM_KINDS,
+  AU_SLOT_PREPARATION_OPEN_SEAM_KINDS,
+  AuSlotPreparation,
+  AuSlotPreparationOpenSeam,
   CurrentTargetPreparation,
   CurrentTargetPreparationOpenSeam,
+  type AuSlotPreparationOpenSeamKind,
   type CurrentTargetPreparationModeKind,
   type CurrentTargetPreparationOpenSeamKind,
 } from '../rendering/index.js';

@@ -7,6 +7,7 @@ export const CUSTOM_ELEMENT_SUPPORT_FIELD_KINDS = [
   'capture',
   'containerless',
   'shadow-options',
+  'has-slots',
   'process-content',
   'bindables',
   'dependencies',

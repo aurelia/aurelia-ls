@@ -52,6 +52,12 @@ export {
   type CustomElementTemplateSourceKind,
 } from './custom-element-support.js';
 export {
+  CUSTOM_ELEMENT_SLOT_TARGET_KINDS,
+  CustomElementDeclaredSlot,
+  CustomElementSlotTopology,
+  type CustomElementSlotTargetKind,
+} from './custom-element-slot-topology-support.js';
+export {
   BINDABLE_CALLBACK_TARGET_KINDS,
   BINDABLE_CARRIER_KINDS,
   BINDABLE_FIELD_KINDS,

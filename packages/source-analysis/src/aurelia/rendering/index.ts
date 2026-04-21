@@ -1,4 +1,13 @@
 export {
+  AU_SLOT_CONTENT_SELECTION_KINDS,
+  AU_SLOT_PREPARATION_OPEN_SEAM_KINDS,
+  AuSlotContentSelection,
+  AuSlotPreparation,
+  AuSlotPreparationOpenSeam,
+  type AuSlotContentSelectionKind,
+  type AuSlotPreparationOpenSeamKind,
+} from './au-slot-preparation.js';
+export {
   CUSTOM_ATTRIBUTE_PREPARATION_OPEN_SEAM_KINDS,
   CustomAttributePreparation,
   CustomAttributePreparationOpenSeam,

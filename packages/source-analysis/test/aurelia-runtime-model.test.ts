@@ -7,6 +7,8 @@ import { describe, expect, it } from './test-harness.js';
 
 import {
   ANALYZABILITY_BAND_KINDS,
+  AuSlotPreparation,
+  AuSlotsInfo,
   CompiledElementNode,
   CompiledTextNode,
   AttributePatternDefinition,
@@ -767,6 +769,7 @@ describe('Aurelia clean-room runtime model', () => {
       'OneTimeBindingBehavior',
       'ToViewBindingBehavior',
       'AuCompose',
+      'AuSlot',
       'Show',
       'If',
     ]);
@@ -911,6 +914,7 @@ describe('Aurelia clean-room runtime model', () => {
     expect(world.findResourceDefinition('binding-behavior', 'debounce')?.kind).toBe('binding-behavior');
     expect(world.findResourceDefinition('binding-command', 'bind')?.kind).toBe('binding-command');
     expect(world.compilerWorld.resourceResolver.findElement('au-compose')?.name).toBe('au-compose');
+    expect(world.compilerWorld.resourceResolver.findElement('au-slot')?.name).toBe('au-slot');
     expect(world.compilerWorld.resourceResolver.findAttribute('show')?.kind).toBe('custom-attribute');
     expect(world.compilerWorld.resourceResolver.findAttribute('if')?.kind).toBe('template-controller');
     expect(world.compilerWorld.bindingCommands.get('bind')?.name).toBe('bind');
@@ -993,6 +997,7 @@ describe('Aurelia clean-room runtime model', () => {
     const child = context.createChild();
 
     expect(context.findElement('au-compose')?.name).toBe('au-compose');
+    expect(context.findElement('au-slot')?.name).toBe('au-slot');
     expect(context.findAttribute('show')?.kind).toBe('custom-attribute');
     expect(context.findTemplateController('if')?.kind).toBe('template-controller');
     expect(context.getCommand('for')?.name).toBe('for');
@@ -2062,6 +2067,11 @@ describe('Aurelia clean-room runtime model', () => {
       throw new Error('Expected @slotted fixture custom element to materialize.');
     }
 
+    expect(ce.slotTopology.hasSlots).toBe(true);
+    expect(ce.slotTopology.readSlotNames()).toEqual(['default', 'sidebar']);
+    expect(ce.slotTopology.findSlot('default')?.hasFallbackContent).toBe(false);
+    expect(ce.slotTopology.findSlot('sidebar')?.kind).toBe('named-slot');
+
     expect(ce.slottedSurface.declarations).toHaveLength(4);
     const content = ce.slottedSurface.readByPropertyName('content')[0];
     const rows = ce.slottedSurface.readByPropertyName('rows')[0];
@@ -2142,6 +2152,297 @@ describe('Aurelia clean-room runtime model', () => {
     }
 
     expect(preparation.openSeams.map((current) => current.kind)).toContain('slotted-watcher-open');
+  });
+
+  it('keeps authored slot declarations but leaves runtime-shaped hasSlots open when processContent can rewrite template content', () => {
+    const fixture = createProcessContentSlotFixture();
+    const framework = new Framework(fixture.rootDir, {
+      rootDir: fixture.rootDir,
+      exports: fixture.exports,
+      resourceSeeds: fixture.resourceSeeds,
+    });
+
+    const ce = framework.resources().readCustomElements().find((current) => current.name === 'processed-panel');
+    expect(ce).toBeDefined();
+    if (ce == null) {
+      throw new Error('Expected processContent slot fixture custom element to materialize.');
+    }
+
+    expect(ce.slotTopology.hasSlots).toBeNull();
+    expect(ce.slotTopology.readSlotNames()).toEqual(['outer']);
+    expect(ce.slotTopology.findSlot('inner')).toBeNull();
+    expect(ce.slotTopology.note).toContain('runtime-equivalent hasSlots remains open');
+  });
+
+  it('extracts custom-element projection content into slot carriers before ordinary child compilation', () => {
+    const fixture = createSlottedResourceFixture();
+    const framework = new Framework(fixture.rootDir, {
+      rootDir: fixture.rootDir,
+      exports: fixture.exports,
+      resourceSeeds: fixture.resourceSeeds,
+    });
+    const ce = framework.resources().readCustomElements().find((current) => current.name === 'content-panel');
+    expect(ce).toBeDefined();
+    if (ce == null) {
+      throw new Error('Expected projection fixture custom element to materialize.');
+    }
+
+    const configFixture = createConfigurationFixture();
+    const configFramework = new Framework(configFixture.rootDir, {
+      rootDir: configFixture.rootDir,
+      exports: configFixture.exports,
+      resourceSeeds: configFixture.resourceSeeds,
+    });
+    const standardWorld = configFramework.worldConstructions().findByConfigurationExportName('StandardConfiguration')[0];
+    expect(standardWorld).toBeDefined();
+    if (standardWorld == null) {
+      throw new Error('Expected StandardConfiguration world construction to exist.');
+    }
+
+    const compilerWorld = new CompilerConsultedWorld(
+      `compiler-world:${standardWorld.world.id}:projection-panel`,
+      standardWorld.world,
+      [...standardWorld.visibleResources, ce],
+      standardWorld.compilerWorld.renderers,
+      standardWorld.compilerWorld.resourceResolver.readAdmissions(),
+      standardWorld.compilerCapabilities,
+      standardWorld.containerStateEntries,
+      standardWorld.containerStateOpenSeams,
+      standardWorld.compilerWorld.rendering.openSeams,
+      standardWorld.compilerWorld.openSeams,
+    );
+    const compiler = new TemplateCompiler(compilerWorld);
+    const program = createProgramHandle();
+    const file = createFileHandle(program);
+    const ownerNode = createNodeHandle(file, 'ClassDeclaration', 10, 40);
+    const owner = createSymbolHandle(file, ownerNode, 'ProjectionHost');
+    const template = createTemplateHandle(file, owner);
+    const compiled = compiler.compileAuthoredTemplate(
+      template,
+      '<content-panel><div au-slot="sidebar">Aside</div><p>Body</p></content-panel>',
+    );
+
+    const root = compiled.rootNodes[0];
+    expect(root).toBeInstanceOf(CompiledElementNode);
+    if (!(root instanceof CompiledElementNode)) {
+      throw new Error('Expected root compiled node to be an element compilation.');
+    }
+
+    const extraction = root.structuralCarrier.projectionExtraction;
+    expect(extraction).not.toBeNull();
+    expect(extraction?.readProjectedSlotNames()).toEqual(['sidebar', 'default']);
+    expect(extraction?.findSlot('sidebar')?.targetNodes).toHaveLength(1);
+    expect(extraction?.findSlot('default')?.targetNodes).toHaveLength(1);
+    expect((extraction?.findSlot('default')?.targetNodes[0] as CompiledElementNode | undefined)?.authored.tagName).toBe('p');
+    expect(root.structuralCarrier.childCompilations).toHaveLength(0);
+
+    const bundle = compiler.prepareInstructionBundle(root);
+    expect(bundle.elementInstruction?.projections?.readProjectedSlotNames()).toEqual(['sidebar', 'default']);
+
+    const parentController = compiler.createElementController(null, null, root);
+    const preparation = compiler.prepareCustomElement(parentController, root);
+    expect(preparation).toBeInstanceOf(CustomElementPreparation);
+    if (!(preparation instanceof CustomElementPreparation)) {
+      throw new Error('Expected custom-element preparation to be created.');
+    }
+
+    expect(preparation.invocation.auSlotsInfo).toBeInstanceOf(AuSlotsInfo);
+    expect(preparation.invocation.auSlotsInfo?.projectedSlots).toEqual(['sidebar', 'default']);
+    expect(preparation.invocation.openSeams.map((current) => current.kind)).toContain('projection-slots-open');
+  });
+
+  it('unwraps plain template projection content and ignores whitespace-only default-slot text', () => {
+    const fixture = createSlottedResourceFixture();
+    const framework = new Framework(fixture.rootDir, {
+      rootDir: fixture.rootDir,
+      exports: fixture.exports,
+      resourceSeeds: fixture.resourceSeeds,
+    });
+    const ce = framework.resources().readCustomElements().find((current) => current.name === 'content-panel');
+    expect(ce).toBeDefined();
+    if (ce == null) {
+      throw new Error('Expected projection fixture custom element to materialize.');
+    }
+
+    const configFixture = createConfigurationFixture();
+    const configFramework = new Framework(configFixture.rootDir, {
+      rootDir: configFixture.rootDir,
+      exports: configFixture.exports,
+      resourceSeeds: configFixture.resourceSeeds,
+    });
+    const standardWorld = configFramework.worldConstructions().findByConfigurationExportName('StandardConfiguration')[0];
+    expect(standardWorld).toBeDefined();
+    if (standardWorld == null) {
+      throw new Error('Expected StandardConfiguration world construction to exist.');
+    }
+
+    const compilerWorld = new CompilerConsultedWorld(
+      `compiler-world:${standardWorld.world.id}:projection-template`,
+      standardWorld.world,
+      [...standardWorld.visibleResources, ce],
+      standardWorld.compilerWorld.renderers,
+      standardWorld.compilerWorld.resourceResolver.readAdmissions(),
+      standardWorld.compilerCapabilities,
+      standardWorld.containerStateEntries,
+      standardWorld.containerStateOpenSeams,
+      standardWorld.compilerWorld.rendering.openSeams,
+      standardWorld.compilerWorld.openSeams,
+    );
+    const compiler = new TemplateCompiler(compilerWorld);
+    const program = createProgramHandle();
+    const file = createFileHandle(program);
+    const ownerNode = createNodeHandle(file, 'ClassDeclaration', 10, 40);
+    const owner = createSymbolHandle(file, ownerNode, 'ProjectionTemplateHost');
+    const template = createTemplateHandle(file, owner);
+    const compiled = compiler.compileAuthoredTemplate(
+      template,
+      '<content-panel>  <template><span>Fallback</span></template>  </content-panel>',
+    );
+
+    const root = compiled.rootNodes[0];
+    expect(root).toBeInstanceOf(CompiledElementNode);
+    if (!(root instanceof CompiledElementNode)) {
+      throw new Error('Expected root compiled node to be an element compilation.');
+    }
+
+    const extraction = root.structuralCarrier.projectionExtraction;
+    expect(extraction?.readProjectedSlotNames()).toEqual(['default']);
+    expect(root.structuralCarrier.childCompilations).toHaveLength(0);
+    expect(extraction?.findSlot('default')?.targetNodes).toHaveLength(1);
+    expect((extraction?.findSlot('default')?.targetNodes[0] as CompiledElementNode | undefined)?.authored.tagName).toBe('span');
+  });
+
+  it('prepares builtin au-slot fallback content without pretending parent projection selection is closed', () => {
+    const configFixture = createConfigurationFixture();
+    const configFramework = new Framework(configFixture.rootDir, {
+      rootDir: configFixture.rootDir,
+      exports: configFixture.exports,
+      resourceSeeds: configFixture.resourceSeeds,
+    });
+    const standardWorld = configFramework.worldConstructions().findByConfigurationExportName('StandardConfiguration')[0];
+    expect(standardWorld).toBeDefined();
+    if (standardWorld == null) {
+      throw new Error('Expected StandardConfiguration world construction to exist.');
+    }
+
+    const compiler = new TemplateCompiler(standardWorld.compilerWorld);
+    const program = createProgramHandle();
+    const file = createFileHandle(program);
+    const ownerNode = createNodeHandle(file, 'ClassDeclaration', 10, 40);
+    const owner = createSymbolHandle(file, ownerNode, 'AuSlotHost');
+    const template = createTemplateHandle(file, owner);
+    const compiled = compiler.compileAuthoredTemplate(
+      template,
+      '<au-slot name="sidebar"><span>Fallback</span><div au-slot="nested">Ignored</div></au-slot>',
+    );
+
+    const root = compiled.rootNodes[0];
+    expect(root).toBeInstanceOf(CompiledElementNode);
+    if (!(root instanceof CompiledElementNode)) {
+      throw new Error('Expected root compiled node to be an element compilation.');
+    }
+
+    expect(root.structuralCarrier.classification.receiverElement?.name).toBe('au-slot');
+    expect(root.structuralCarrier.childCompilations).toHaveLength(0);
+    expect(root.structuralCarrier.projectionExtraction?.readProjectedSlotNames()).toEqual(['default']);
+    expect(root.structuralCarrier.projectionExtraction?.findSlot('default')?.targetNodes).toHaveLength(1);
+    expect(root.openSeams.map((current) => current.kind)).toContain('process-content-open');
+
+    const parentController = compiler.createElementController(null, null, root);
+    const preparation = compiler.prepareCustomElement(parentController, root);
+    expect(preparation).toBeInstanceOf(CustomElementPreparation);
+    if (!(preparation instanceof CustomElementPreparation)) {
+      throw new Error('Expected custom-element preparation to be created.');
+    }
+
+    expect(preparation.auSlot).toBeInstanceOf(AuSlotPreparation);
+    expect(preparation.auSlot?.slotName).toBe('sidebar');
+    expect(preparation.auSlot?.selection.kind).toBe('fallback');
+    expect(preparation.auSlot?.selection.fallbackProjection?.slotName).toBe('default');
+    expect(preparation.auSlot?.viewFactory.definition.body).toHaveLength(1);
+    expect(preparation.auSlot?.openSeams.map((current) => current.kind)).toContain('slot-watcher-runtime-open');
+  });
+
+  it('selects parent-projected content for builtin au-slot when the owning element closes a matching slot', () => {
+    const fixture = createSlottedResourceFixture();
+    const framework = new Framework(fixture.rootDir, {
+      rootDir: fixture.rootDir,
+      exports: fixture.exports,
+      resourceSeeds: fixture.resourceSeeds,
+    });
+    const ce = framework.resources().readCustomElements().find((current) => current.name === 'content-panel');
+    expect(ce).toBeDefined();
+    if (ce == null) {
+      throw new Error('Expected projection fixture custom element to materialize.');
+    }
+
+    const configFixture = createConfigurationFixture();
+    const configFramework = new Framework(configFixture.rootDir, {
+      rootDir: configFixture.rootDir,
+      exports: configFixture.exports,
+      resourceSeeds: configFixture.resourceSeeds,
+    });
+    const standardWorld = configFramework.worldConstructions().findByConfigurationExportName('StandardConfiguration')[0];
+    expect(standardWorld).toBeDefined();
+    if (standardWorld == null) {
+      throw new Error('Expected StandardConfiguration world construction to exist.');
+    }
+
+    const compilerWorld = new CompilerConsultedWorld(
+      `compiler-world:${standardWorld.world.id}:projection-sidebar`,
+      standardWorld.world,
+      [...standardWorld.visibleResources, ce],
+      standardWorld.compilerWorld.renderers,
+      standardWorld.compilerWorld.resourceResolver.readAdmissions(),
+      standardWorld.compilerCapabilities,
+      standardWorld.containerStateEntries,
+      standardWorld.containerStateOpenSeams,
+      standardWorld.compilerWorld.rendering.openSeams,
+      standardWorld.compilerWorld.openSeams,
+    );
+    const compiler = new TemplateCompiler(compilerWorld);
+    const program = createProgramHandle();
+    const file = createFileHandle(program);
+    const ownerNode = createNodeHandle(file, 'ClassDeclaration', 10, 40);
+    const owner = createSymbolHandle(file, ownerNode, 'ContentPanelHost');
+    const template = createTemplateHandle(file, owner);
+    const hostCompiled = compiler.compileAuthoredTemplate(
+      template,
+      '<content-panel><div au-slot="sidebar">Aside</div></content-panel>',
+    );
+    const hostRoot = hostCompiled.rootNodes[0];
+    expect(hostRoot).toBeInstanceOf(CompiledElementNode);
+    if (!(hostRoot instanceof CompiledElementNode)) {
+      throw new Error('Expected host root compiled node to be an element compilation.');
+    }
+
+    const owningController = compiler.createElementController(ce, null, hostRoot);
+    const internalTemplate = compiler.compileAuthoredTemplate(
+      createTemplateHandle(file, createSymbolHandle(file, ownerNode, 'ContentPanelInternal')),
+      ce.templateSource.inlineText ?? '',
+    );
+    const sidebarAuSlot = internalTemplate.rootNodes.find((current) =>
+      current instanceof CompiledElementNode
+      && current.structuralCarrier.classification.receiverElement?.name === 'au-slot'
+      && current.authored.attributes.some((attribute) => attribute.rawName === 'name' && attribute.rawValue === 'sidebar'),
+    );
+    expect(sidebarAuSlot).toBeInstanceOf(CompiledElementNode);
+    if (!(sidebarAuSlot instanceof CompiledElementNode)) {
+      throw new Error('Expected sidebar au-slot compilation to exist.');
+    }
+
+    const preparation = compiler.prepareCustomElement(owningController, sidebarAuSlot);
+    expect(preparation).toBeInstanceOf(CustomElementPreparation);
+    if (!(preparation instanceof CustomElementPreparation)) {
+      throw new Error('Expected custom-element preparation to be created.');
+    }
+
+    expect(preparation.auSlot).toBeInstanceOf(AuSlotPreparation);
+    expect(preparation.auSlot?.selection.kind).toBe('projected');
+    expect(preparation.auSlot?.selection.parentProjection?.slotName).toBe('sidebar');
+    expect(preparation.auSlot?.viewFactory.definition.body).toHaveLength(1);
+    expect(preparation.auSlot?.worldFormation.requestedMode).toBe('child-world-use-projection-owner-resources');
+    expect(preparation.auSlot?.openSeams.map((current) => current.kind)).not.toContain('parent-projection-source-open');
   });
 
   it('materializes value-converter and binding-behavior support bundles from declaration source', () => {
@@ -2555,6 +2856,16 @@ export class DebounceBindingBehavior {}
 export class OneTimeBindingBehavior {}
 export class ToViewBindingBehavior {}
 export class AuCompose {}
+export class AuSlot {
+  static $au = {
+    type: 'custom-element',
+    name: 'au-slot',
+    template: null,
+    containerless: true,
+    processContent: 'processSlotContent',
+    bindables: ['expose', 'slotchange'],
+  };
+}
 export class Show {
   static $au = {
     type: 'custom-attribute',
@@ -2689,6 +3000,7 @@ export const DefaultResources = [
   OneTimeBindingBehavior,
   ToViewBindingBehavior,
   AuCompose,
+  AuSlot,
   Show,
   If,
 ];
@@ -3682,6 +3994,94 @@ export class ContentPanel {
   };
 }
 
+function createProcessContentSlotFixture(): {
+  readonly exports: readonly DeclarationExport[];
+  readonly resourceSeeds: readonly ResourceDefinition[];
+  readonly rootDir: string;
+} {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aurelia-clean-room-process-content-slot-'));
+  const filePath = path.join(rootDir, 'process-content-slot-fixture.ts');
+  const sourceText = `
+export class ProcessedPanel {
+  static $au = {
+    type: 'custom-element',
+    name: 'processed-panel',
+    template: '<template as-custom-element="inner-panel"><au-slot name="inner"></au-slot></template><au-slot name="outer"></au-slot>',
+    processContent: ProcessedPanel.rewriteContent,
+  };
+
+  static rewriteContent() {}
+}
+`;
+  fs.writeFileSync(filePath, sourceText, 'utf8');
+
+  const program = new ProgramRef(
+    'program:process-content-slot-fixture',
+    rootDir,
+    null,
+  );
+  const file = new SourceFileRef(
+    `file:${filePath}`,
+    program,
+    filePath,
+  );
+  const sourceFile = ts.createSourceFile(
+    filePath,
+    sourceText,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+
+  const exports: DeclarationExport[] = [];
+  for (const statement of sourceFile.statements) {
+    if (!hasExportModifier(statement) || !ts.isClassDeclaration(statement) || statement.name == null) {
+      continue;
+    }
+
+    const declarationRef = new SourceNodeRef(
+      `node:${statement.name.text}:${statement.getStart()}-${statement.end}`,
+      file,
+      'ClassDeclaration',
+      new SourceSpan(statement.getStart(), statement.end),
+    );
+    const symbolRef = new SymbolRef(
+      `symbol:${statement.name.text}`,
+      file,
+      statement.name.text,
+      [statement.name.text],
+      declarationRef,
+    );
+    exports.push({
+      name: statement.name.text,
+      symbol: symbolRef,
+      sourceFile: file,
+    });
+  }
+
+  const byName = new Map(exports.map((current) => [current.name, current]));
+  const ce = byName.get('ProcessedPanel');
+  if (ce == null) {
+    throw new Error('Expected processContent slot fixture export to exist.');
+  }
+
+  return {
+    exports,
+    rootDir,
+    resourceSeeds: [
+      new CustomElementDefinition(
+        'resource:ce:processed-panel',
+        ce.symbol!,
+        new CustomElementIdentity(
+          'processed-panel',
+          [],
+          createKeyHandle(ce.symbol!, 'au:resource:custom-element:processed-panel', 'resource'),
+        ),
+      ),
+    ],
+  };
+}
+
 function hasExportModifier(
   statement: ts.Node,
 ): boolean {
@@ -3828,6 +4228,7 @@ function createConfigurationFixtureResources(
   const oneTime = byName.get('OneTimeBindingBehavior');
   const toView = byName.get('ToViewBindingBehavior');
   const auCompose = byName.get('AuCompose');
+  const auSlot = byName.get('AuSlot');
   const show = byName.get('Show');
   const ifTc = byName.get('If');
   const dotSeparated = byName.get('DotSeparatedAttributePattern');
@@ -3844,6 +4245,15 @@ function createConfigurationFixtureResources(
         'au-compose',
         [],
         createKeyHandle(auCompose!.symbol!, 'au:resource:custom-element:au-compose', 'resource'),
+      ),
+    ),
+    new CustomElementDefinition(
+      'resource:ce:au-slot',
+      auSlot!.symbol!,
+      new CustomElementIdentity(
+        'au-slot',
+        [],
+        createKeyHandle(auSlot!.symbol!, 'au:resource:custom-element:au-slot', 'resource'),
       ),
     ),
     new CustomAttributeDefinition(

@@ -1,4 +1,5 @@
 import type { CustomElementDefinition } from '../resources/index.js';
+import type { AuSlotsInfo } from './au-slots-info.js';
 import type { CompilerConsultedWorld } from './compiler-consulted-world.js';
 import type { CompilerChildWorldFormation } from './child-world-formation.js';
 import type { Controller, RenderLocation } from './controller.js';
@@ -27,6 +28,7 @@ export class ElementInvocationContext {
     readonly world: CompilerConsultedWorld,
     readonly worldFormation: CompilerChildWorldFormation,
     readonly instruction: PreparedHydrateElementInstruction,
+    readonly auSlotsInfo: AuSlotsInfo | null = null,
     readonly renderLocation: RenderLocation | null = null,
     readonly openSeams: readonly ElementInvocationContextOpenSeam[] = [],
     readonly note: string | null = null,
