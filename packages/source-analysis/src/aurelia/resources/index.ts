@@ -69,6 +69,21 @@ export {
   type BindableInterceptorKind,
 } from './bindable-support.js';
 export {
+  CHILDREN_CALLBACK_TARGET_KINDS,
+  CHILDREN_DECLARATION_ORIGIN_KINDS,
+  CHILDREN_QUERY_KINDS,
+  CHILDREN_TRANSFORM_KINDS,
+  ChildrenCallbackTarget,
+  ChildrenDeclaration,
+  ChildrenQueryPlan,
+  ChildrenSurface,
+  ChildrenTransformPlan,
+  type ChildrenCallbackTargetKind,
+  type ChildrenDeclarationOriginKind,
+  type ChildrenQueryKind,
+  type ChildrenTransformKind,
+} from './children-support.js';
+export {
   CUSTOM_ELEMENT_LIFECYCLE_CARRIER_KINDS,
   CUSTOM_ELEMENT_LIFECYCLE_HOOK_KINDS,
   CustomElementLifecycleHooks,

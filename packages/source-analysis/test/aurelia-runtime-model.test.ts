@@ -1955,6 +1955,99 @@ describe('Aurelia clean-room runtime model', () => {
     expect(tcWatch?.callback.name).toBe('whenChanged');
   });
 
+  it('materializes declaration-local @children surfaces for custom elements and keeps hydrating spend explicit', () => {
+    const fixture = createChildrenResourceFixture();
+    const framework = new Framework(fixture.rootDir, {
+      rootDir: fixture.rootDir,
+      exports: fixture.exports,
+      resourceSeeds: fixture.resourceSeeds,
+    });
+
+    const ce = framework.resources().readCustomElements().find((current) => current.name === 'query-card');
+    expect(ce).toBeDefined();
+    if (ce == null) {
+      throw new Error('Expected @children fixture custom element to materialize.');
+    }
+
+    expect(ce.childrenSurface.declarations).toHaveLength(4);
+    const items = ce.childrenSurface.readByPropertyName('items')[0];
+    const rows = ce.childrenSurface.readByPropertyName('rows')[0];
+    const sections = ce.childrenSurface.readByPropertyName('sections')[0];
+    const invalid = ce.childrenSurface.readByPropertyName('invalidNodes')[0];
+
+    expect(items?.query.kind).toBe('default-elements');
+    expect(items?.query.selectorText).toBe('*');
+    expect(items?.callback.kind).toBe('default-name');
+    expect(items?.callback.name).toBe('itemsChanged');
+    expect(items?.callback.source).not.toBeNull();
+    expect(items?.filter.kind).toBe('none');
+    expect(items?.map.kind).toBe('none');
+
+    expect(rows?.query.kind).toBe('selector-string');
+    expect(rows?.query.selectorText).toBe('li');
+    expect(rows?.callback.kind).toBe('default-name');
+    expect(rows?.callback.name).toBe('rowsChanged');
+
+    expect(sections?.query.kind).toBe('all-nodes');
+    expect(sections?.callback.kind).toBe('named-method');
+    expect(sections?.callback.name).toBe('sectionsChanged');
+    expect(sections?.callback.source).not.toBeNull();
+    expect(sections?.filter.kind).toBe('inline-function');
+    expect(sections?.map.kind).toBe('inline-function');
+
+    expect(invalid?.query.kind).toBe('selector-string');
+    expect(invalid?.query.note).toContain('rejects queries');
+
+    const configFixture = createConfigurationFixture();
+    const configFramework = new Framework(configFixture.rootDir, {
+      rootDir: configFixture.rootDir,
+      exports: configFixture.exports,
+      resourceSeeds: configFixture.resourceSeeds,
+    });
+    const standardWorld = configFramework.worldConstructions().findByConfigurationExportName('StandardConfiguration')[0];
+    expect(standardWorld).toBeDefined();
+    if (standardWorld == null) {
+      throw new Error('Expected StandardConfiguration world construction to exist.');
+    }
+
+    const compilerWorld = new CompilerConsultedWorld(
+      `compiler-world:${standardWorld.world.id}:children-card`,
+      standardWorld.world,
+      [...standardWorld.visibleResources, ce],
+      standardWorld.compilerWorld.renderers,
+      standardWorld.compilerWorld.resourceResolver.readAdmissions(),
+      standardWorld.compilerCapabilities,
+      standardWorld.containerStateEntries,
+      standardWorld.containerStateOpenSeams,
+      standardWorld.compilerWorld.rendering.openSeams,
+      standardWorld.compilerWorld.openSeams,
+    );
+    const compiler = new TemplateCompiler(compilerWorld);
+    const program = createProgramHandle();
+    const file = createFileHandle(program);
+    const ownerNode = createNodeHandle(file, 'ClassDeclaration', 10, 40);
+    const owner = createSymbolHandle(file, ownerNode, 'ChildrenHost');
+    const template = createTemplateHandle(file, owner);
+    const compiled = compiler.compileAuthoredTemplate(
+      template,
+      '<query-card></query-card>',
+    );
+    const root = compiled.rootNodes[0];
+    expect(root).toBeInstanceOf(CompiledElementNode);
+    if (!(root instanceof CompiledElementNode)) {
+      throw new Error('Expected root compiled node to be an element compilation.');
+    }
+
+    const parentController = compiler.createElementController(null, null, root);
+    const preparation = compiler.prepareCustomElement(parentController, root);
+    expect(preparation).toBeInstanceOf(CustomElementPreparation);
+    if (!(preparation instanceof CustomElementPreparation)) {
+      throw new Error('Expected custom-element preparation to be created.');
+    }
+
+    expect(preparation.openSeams.map((current) => current.kind)).toContain('children-binding-open');
+  });
+
   it('materializes value-converter and binding-behavior support bundles from declaration source', () => {
     const fixture = createBehavioralResourceFixture();
     const framework = new Framework(fixture.rootDir, {
@@ -3275,6 +3368,112 @@ export class GuardController {
           'guard',
           [],
           createKeyHandle(tc.symbol!, 'au:resource:template-controller:guard', 'resource'),
+        ),
+      ),
+    ],
+  };
+}
+
+function createChildrenResourceFixture(): {
+  readonly exports: readonly DeclarationExport[];
+  readonly resourceSeeds: readonly ResourceDefinition[];
+  readonly rootDir: string;
+} {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aurelia-clean-room-children-resources-'));
+  const filePath = path.join(rootDir, 'children-resource-fixture.ts');
+  const sourceText = `
+declare function children(...args: unknown[]): unknown;
+
+export class QueryCard {
+  static $au = {
+    type: 'custom-element',
+    name: 'query-card',
+  };
+
+  public itemsChanged() {}
+  public sectionsChanged() {}
+
+  @children
+  public items: unknown[] = [];
+
+  @children('li')
+  public rows: unknown[] = [];
+
+  @children({
+    query: '$all',
+    callback: 'sectionsChanged',
+    filter: (_node, vm) => vm !== null,
+    map: node => node.nodeName,
+  })
+  public sections: unknown[] = [];
+
+  @children({ query: 'section > *' })
+  public invalidNodes: unknown[] = [];
+}
+`;
+  fs.writeFileSync(filePath, sourceText, 'utf8');
+
+  const program = new ProgramRef(
+    'program:children-resource-fixture',
+    rootDir,
+    null,
+  );
+  const file = new SourceFileRef(
+    `file:${filePath}`,
+    program,
+    filePath,
+  );
+  const sourceFile = ts.createSourceFile(
+    filePath,
+    sourceText,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+
+  const exports: DeclarationExport[] = [];
+  for (const statement of sourceFile.statements) {
+    if (!hasExportModifier(statement) || !ts.isClassDeclaration(statement) || statement.name == null) {
+      continue;
+    }
+
+    const declarationRef = new SourceNodeRef(
+      `node:${statement.name.text}:${statement.getStart()}-${statement.end}`,
+      file,
+      'ClassDeclaration',
+      new SourceSpan(statement.getStart(), statement.end),
+    );
+    const symbolRef = new SymbolRef(
+      `symbol:${statement.name.text}`,
+      file,
+      statement.name.text,
+      [statement.name.text],
+      declarationRef,
+    );
+    exports.push({
+      name: statement.name.text,
+      symbol: symbolRef,
+      sourceFile: file,
+    });
+  }
+
+  const byName = new Map(exports.map((current) => [current.name, current]));
+  const ce = byName.get('QueryCard');
+  if (ce == null) {
+    throw new Error('Expected @children fixture export to exist.');
+  }
+
+  return {
+    exports,
+    rootDir,
+    resourceSeeds: [
+      new CustomElementDefinition(
+        'resource:ce:query-card',
+        ce.symbol!,
+        new CustomElementIdentity(
+          'query-card',
+          [],
+          createKeyHandle(ce.symbol!, 'au:resource:custom-element:query-card', 'resource'),
         ),
       ),
     ],

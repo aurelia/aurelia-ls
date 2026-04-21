@@ -4,6 +4,7 @@ import type {
   ResourceDefinitionType,
 } from './contracts.js';
 import { BindableSurface } from './bindable-support.js';
+import { ChildrenSurface } from './children-support.js';
 import {
   CustomElementDependencyContribution,
   CustomElementIdentity,
@@ -32,6 +33,7 @@ export class CustomElementDefinition implements ResourceDefinitionState<'custom-
     ),
     readonly watchSurface: WatchSurface = new WatchSurface(),
     readonly lifecycleHooks: CustomElementLifecycleHooks = new CustomElementLifecycleHooks(),
+    readonly childrenSurface: ChildrenSurface = new ChildrenSurface(),
   ) {}
 
   get key(): KeyRef | null {

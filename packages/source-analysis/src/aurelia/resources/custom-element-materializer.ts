@@ -20,6 +20,11 @@ import {
   type BindableCarrierKind,
 } from './bindable-support.js';
 import {
+  mergeChildrenSurface,
+  readChildrenSurface,
+} from './children-materialization.js';
+import { ChildrenSurface } from './children-support.js';
+import {
   createBindableResolutionInput,
   mergeBindableSurface as mergeSharedBindableSurface,
   readBindableSurfaceFromInputs,
@@ -85,6 +90,7 @@ export class CustomElementMaterializer {
       mergeTemplateSource(definition.templateSource, surface.templateSource),
       mergeWatchSurface(definition.watchSurface, surface.watchSurface),
       mergeLifecycleHooks(definition.lifecycleHooks, surface.lifecycleHooks),
+      mergeChildrenSurface(definition.childrenSurface, surface.childrenSurface),
     );
   }
 
@@ -160,6 +166,7 @@ interface CustomElementSurface {
   readonly templateSource: CustomElementTemplateSource;
   readonly watchSurface: WatchSurface;
   readonly lifecycleHooks: CustomElementLifecycleHooks;
+  readonly childrenSurface: ChildrenSurface;
 }
 
 interface FieldContributor {
@@ -256,6 +263,7 @@ function readCustomElementSurface(
     templateSource: readTemplateSource(templateContributors),
     watchSurface: readWatchSurface(declarationNode, file, sourceFile),
     lifecycleHooks: readLifecycleHooks(declarationNode, file, sourceFile),
+    childrenSurface: readChildrenSurface(declarationNode, file, sourceFile),
   };
 }
 

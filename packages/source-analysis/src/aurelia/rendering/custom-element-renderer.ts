@@ -16,6 +16,7 @@ import type { InstructionRendererAdmissionProvenance } from './renderer-admissio
 
 export const CUSTOM_ELEMENT_PREPARATION_OPEN_SEAM_KINDS = [
   'element-dependencies-open',
+  'children-binding-open',
   'projection-open',
 ] as const;
 
@@ -125,6 +126,24 @@ export class CustomElementRenderer implements InstructionRenderer {
       hostElement,
       worldFormation,
     );
+    const openSeams: CustomElementPreparationOpenSeam[] = [
+      new CustomElementPreparationOpenSeam(
+        'element-dependencies-open',
+        'Custom-element definition.dependencies are preserved on the support surface, but their later registration-subject consequence inside the CE child world is still provisional.',
+      ),
+      ...(resource.childrenSurface.declarations.length > 0
+        ? [
+          new CustomElementPreparationOpenSeam(
+            'children-binding-open',
+            'Children declarations are preserved on the CE support surface, but runtime hydrating would still need to install readonly getter/getObserver plumbing and ChildrenBinding instances. That observation spend is intentionally left to a later controller/runtime slice.',
+          ),
+        ]
+        : []),
+      new CustomElementPreparationOpenSeam(
+        'projection-open',
+        'Projection ownership, slot publication, and later child-controller linkage still belong to a later renderer preparation slice.',
+      ),
+    ];
 
     return new CustomElementPreparation(
       hostElement,
@@ -132,16 +151,7 @@ export class CustomElementRenderer implements InstructionRenderer {
       controller,
       invocation,
       renderLocation,
-      [
-        new CustomElementPreparationOpenSeam(
-          'element-dependencies-open',
-          'Custom-element definition.dependencies are preserved on the support surface, but their later registration-subject consequence inside the CE child world is still provisional.',
-        ),
-        new CustomElementPreparationOpenSeam(
-          'projection-open',
-          'Projection ownership, slot publication, and later child-controller linkage still belong to a later renderer preparation slice.',
-        ),
-      ],
+      openSeams,
       'Generic CustomElementRenderer-like preparation over a compiled element receiver.',
     );
   }
