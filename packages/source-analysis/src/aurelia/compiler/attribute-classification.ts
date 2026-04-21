@@ -99,8 +99,8 @@ export class CompilerElementAttributeClassification {
 // classifier. It routes authored attributes into the same broad semantic lanes
 // while leaving lowering/instruction emission as later work.
 //
-// TODO: stage 4 command-owned attributes still needs real binding-command
-// ownership semantics (`ignoreAttr`) rather than an open seam.
+// TODO: stage 4 now spends declaration-side `ignoreAttr`, but full command-
+// owned lowering still needs a dedicated lowering/value-parse seam.
 // TODO: stage 7 custom-attribute bindable/default-property semantics still need
 // their own materialization layer before routing can become fully precise.
 // TODO: stage 8 plain-attribute routing still needs expression/interpolation
@@ -215,6 +215,7 @@ export class CompilerAttributeClassifier {
     const bindingCommand = syntax.command == null
       ? null
       : this.context.getCommand(syntax.command);
+    const bindingCommandOwnsAttribute = bindingCommand?.buildBasis.ignoreAttr ?? null;
     const bindingCommandAdmission = bindingCommand == null
       ? null
       : this.context.readBindingCommandAdmission(bindingCommand);
@@ -234,12 +235,12 @@ export class CompilerAttributeClassifier {
       attributeResourceAdmission,
       'Classification provenance keeps receiver, command, and hydrated resource admission separate from syntax-handler provenance.',
     );
-    const commandOwnershipSeams = bindingCommand == null
-      ? []
-      : [new CompilerAttributeClassificationOpenSeam(
+    const commandOwnershipSeams = bindingCommand != null && bindingCommandOwnsAttribute == null
+      ? [new CompilerAttributeClassificationOpenSeam(
         'binding-command-ownership-open',
-        'Binding-command ownership semantics are not modeled yet, so stage 4 currently assumes the command does not fully take over classification.',
-      )];
+        'Binding-command ownership stayed open because ignoreAttr did not close from the current build basis.',
+      )]
+      : [];
 
     const captureResult = classifyCapture(
       authored,
@@ -247,6 +248,7 @@ export class CompilerAttributeClassifier {
       receiverElement,
       matchedBindable,
       attributeResource,
+      bindingCommandOwnsAttribute,
       provenance,
       commandOwnershipSeams,
     );
@@ -265,6 +267,25 @@ export class CompilerAttributeClassifier {
         provenance,
         commandOwnershipSeams,
         'Closed at stage 3 as spread transferred bindings.',
+      );
+    }
+
+    if (bindingCommand != null && bindingCommandOwnsAttribute === true) {
+      return new CompilerAttributeClassification(
+        authored,
+        'command-owned-attribute',
+        parse,
+        bindingCommand,
+        null,
+        null,
+        provenance,
+        [
+          new CompilerAttributeClassificationOpenSeam(
+            'binding-command-lowering-open',
+            'Command-owned attribute lowering is not implemented yet.',
+          ),
+        ],
+        'Closed at stage 4 as a command-owned attribute from binding-command build basis.',
       );
     }
 
@@ -378,6 +399,7 @@ function classifyCapture(
   receiverElement: CustomElementDefinition | null,
   matchedBindable: CustomElementBindableEntry | null,
   attributeResource: CustomAttributeDefinition | TemplateControllerDefinition | null,
+  bindingCommandOwnsAttribute: boolean | null,
   provenance: CompilerAttributeClassificationProvenance,
   commandOwnershipSeams: readonly CompilerAttributeClassificationOpenSeam[],
 ): CompilerAttributeClassification | null {
@@ -415,6 +437,20 @@ function classifyCapture(
     && target !== 'slot'
     && (spreadIndex === -1 || (spreadIndex === 0 && target === '...$attrs'));
   const isTemplateController = attributeResource?.kind === 'template-controller';
+
+  if (bindingCommandOwnsAttribute === true && canCapture) {
+    return new CompilerAttributeClassification(
+      authored,
+      'captured-attribute',
+      parse,
+      null,
+      null,
+      null,
+      provenance,
+      commandOwnershipSeams,
+      'Closed at stage 2 as a captured attribute over a capturing custom-element receiver before command-owned lowering.',
+    );
+  }
 
   if (canCapture && matchedBindable == null && !isTemplateController) {
     return new CompilerAttributeClassification(

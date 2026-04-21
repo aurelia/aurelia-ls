@@ -27,6 +27,7 @@ import {
   CompilerAttributeHandlerMaterializer,
   type CompilerAttributeHandlerResult,
 } from './compiler-attribute-handler-materializer.js';
+import { CompilerValueParser } from './compiler-value-parser.js';
 
 export const COMPILER_WORLD_OPEN_SEAM_KINDS = [
   'resource-resolution-open',
@@ -512,6 +513,7 @@ export class CompilerConsultedWorld {
   readonly attributeParser: CompilerAttributeParser;
   readonly templateCompilerHooks: CompilerTemplateCompilerHooks;
   readonly services: CompilerServiceLocator;
+  readonly valueParser: CompilerValueParser;
 
   constructor(
     readonly id: string,
@@ -541,6 +543,7 @@ export class CompilerConsultedWorld {
       ),
     );
     this.services = new CompilerServiceLocator(serviceEntries, serviceOpenSeams);
+    this.valueParser = new CompilerValueParser();
   }
 
   inspectState(): CompilerConsultedWorldState {

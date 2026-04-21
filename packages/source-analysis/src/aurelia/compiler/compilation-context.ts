@@ -10,6 +10,7 @@ import type {
   CompilerResourceAdmissionProvenance,
 } from './compiler-consulted-world.js';
 import type { TemplateCompilerHookCapability } from './compiler-capability.js';
+import type { CompilerValueParseResult } from './compiler-value-parser.js';
 import {
   CompilerAttributeClassifier,
   CompilerAuthoredAttribute,
@@ -87,6 +88,13 @@ export class CompilationContext {
     definition: BindingCommandDefinition,
   ): CompilerResourceAdmissionProvenance | null {
     return this.world.bindingCommands.readAdmission(definition);
+  }
+
+  planBindingCommandValueParse(
+    definition: BindingCommandDefinition,
+    rawValue: string,
+  ): CompilerValueParseResult {
+    return this.world.valueParser.planForBindingCommand(definition, rawValue);
   }
 
   classifyElementAttributes(

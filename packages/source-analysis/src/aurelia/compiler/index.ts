@@ -31,6 +31,13 @@ export {
   type CompilerAttributeHandlerStatusKind,
 } from './compiler-attribute-handler-materializer.js';
 export {
+  COMPILER_VALUE_PARSE_STATUS_KINDS,
+  CompilerValueParseRequest,
+  CompilerValueParseResult,
+  CompilerValueParser,
+  type CompilerValueParseStatusKind,
+} from './compiler-value-parser.js';
+export {
   COMPILER_WORLD_OPEN_SEAM_KINDS,
   COMPILER_ATTRIBUTE_PARSE_CANDIDATE_STATUS_KINDS,
   COMPILER_ATTRIBUTE_PARSE_RESULT_STATUS_KINDS,

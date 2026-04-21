@@ -974,6 +974,10 @@ describe('Aurelia clean-room runtime model', () => {
     expect(context.findAttribute('show')?.kind).toBe('custom-attribute');
     expect(context.findTemplateController('if')?.kind).toBe('template-controller');
     expect(context.getCommand('for')?.name).toBe('for');
+    expect(context.getCommand('bind')?.buildBasis.valueHandling.kind).toBe('compile-parse');
+    expect(context.getCommand('bind')?.buildBasis.valueHandling.parserEntrySeed).toBe('etIsProperty');
+    expect(context.getCommand('trigger')?.buildBasis.ignoreAttr).toBe(true);
+    expect(context.planBindingCommandValueParse(context.getCommand('for')!, 'item of items').status).toBe('planned');
     const parsed = context.parseAttribute('value.bind', 'message');
     expect(parsed.status).toBe('selected');
     expect(parsed.syntax?.target).toBe('value');
@@ -1015,7 +1019,7 @@ describe('Aurelia clean-room runtime model', () => {
       'spread-transferred-bindings',
       'custom-attribute',
       'template-controller',
-      'plain-attribute',
+      'command-owned-attribute',
     ]);
     expect(classification.items[2]?.attributeResource?.kind).toBe('custom-attribute');
     expect(classification.items[3]?.attributeResource?.kind).toBe('template-controller');
@@ -1026,6 +1030,53 @@ describe('Aurelia clean-room runtime model', () => {
     expect(classification.items[2]?.openSeams.map((current) => current.kind)).toContain('custom-attribute-bindables-open');
     expect(classification.items[3]?.openSeams.map((current) => current.kind)).toContain('template-controller-lowering-open');
     expect(classification.items[4]?.openSeams.map((current) => current.kind)).toContain('binding-command-lowering-open');
+  });
+
+  it('materializes binding-command build basis from declaration source', () => {
+    const fixture = createConfigurationFixture();
+    const framework = new Framework(fixture.rootDir, {
+      rootDir: fixture.rootDir,
+      exports: fixture.exports,
+      resourceSeeds: fixture.resourceSeeds,
+    });
+
+    const byName = new Map(
+      framework.resources().readBindingCommands().map((current) => [
+        current.type.kind === 'symbol'
+          ? current.type.name ?? current.name ?? '<unknown>'
+          : current.name ?? '<unknown>',
+        current,
+      ]),
+    );
+    const bind = byName.get('DefaultBindingCommand');
+    const forCommand = byName.get('ForBindingCommand');
+    const trigger = byName.get('TriggerBindingCommand');
+
+    expect(bind).toBeDefined();
+    expect(forCommand).toBeDefined();
+    expect(trigger).toBeDefined();
+    if (bind == null || forCommand == null || trigger == null) {
+      throw new Error('Expected binding command fixtures to materialize.');
+    }
+
+    expect(bind.buildBasis.ignoreAttr).toBe(false);
+    expect(bind.buildBasis.emission.shape).toBe('object-literal-return');
+    expect(bind.buildBasis.emission.instructionIdentitySeed).toBe('itPropertyBinding');
+    expect(bind.buildBasis.valueHandling.kind).toBe('compile-parse');
+    expect(bind.buildBasis.valueHandling.parserEntrySeed).toBe('etIsProperty');
+    expect(bind.buildBasis.readProvenance('ignore-attr')?.selected?.carrier).toBe('ignore-attr-getter');
+
+    expect(forCommand.buildBasis.ignoreAttr).toBe(false);
+    expect(forCommand.buildBasis.emission.shape).toBe('object-literal-return');
+    expect(forCommand.buildBasis.emission.instructionIdentitySeed).toBe('itIteratorBinding');
+    expect(forCommand.buildBasis.valueHandling.kind).toBe('compile-parse');
+    expect(forCommand.buildBasis.valueHandling.parserEntrySeed).toBe('IsIterator');
+
+    expect(trigger.buildBasis.ignoreAttr).toBe(true);
+    expect(trigger.buildBasis.emission.shape).toBe('object-literal-return');
+    expect(trigger.buildBasis.emission.instructionIdentitySeed).toBe('itListenerBinding');
+    expect(trigger.buildBasis.valueHandling.kind).toBe('compile-parse');
+    expect(trigger.buildBasis.valueHandling.parserEntrySeed).toBe('etIsFunction');
   });
 
   it('shows capture and bindable pressure on a capturing custom-element receiver', () => {
@@ -1359,6 +1410,18 @@ declare function configure(...args: unknown[]): unknown;
 declare function renderer<T>(value: T): T;
 declare const TemplateCompilerHooks: { define(value: unknown): unknown };
 declare const DialogService: unknown;
+declare const InternalBindingMode: {
+  oneTime: unknown;
+  toView: unknown;
+  fromView: unknown;
+  twoWay: unknown;
+};
+declare const etIsProperty: unknown;
+declare const etIsFunction: unknown;
+declare const itPropertyBinding: unknown;
+declare const itIteratorBinding: unknown;
+declare const itListenerBinding: unknown;
+declare function camelCase(value: string): string;
 declare class AttrSyntax {
   constructor(
     rawName: string,
@@ -1397,9 +1460,73 @@ export class EventAttributePattern {
     return new AttrSyntax(rawName, rawValue, parts[0], 'trigger', parts);
   }
 }
-export class DefaultBindingCommand {}
-export class ForBindingCommand {}
-export class TriggerBindingCommand {}
+export class DefaultBindingCommand {
+  public static readonly $au = {
+    type: 'binding-command',
+    name: 'bind',
+  };
+
+  public get ignoreAttr() { return false; }
+
+  public build(info: { attr: { rawValue: string; target: string }; bindable: { mode?: unknown; name: string } | null; node: unknown }, exprParser: { parse(value: string, entry: unknown): unknown }, attrMapper: { isTwoWay(node: unknown, target: string): boolean; map(node: unknown, target: string): string | null }) {
+    const attr = info.attr;
+    const bindable = info.bindable;
+    let value = attr.rawValue;
+    let target = attr.target;
+    let mode;
+    value = value === '' ? camelCase(target) : value;
+    if (bindable == null) {
+      mode = attrMapper.isTwoWay(info.node, target) ? InternalBindingMode.twoWay : InternalBindingMode.toView;
+      target = attrMapper.map(info.node, target) ?? camelCase(target);
+    } else {
+      mode = bindable.mode === 0 || bindable.mode == null ? InternalBindingMode.toView : bindable.mode;
+      target = bindable.name;
+    }
+    return {
+      type: itPropertyBinding,
+      from: exprParser.parse(value, etIsProperty),
+      to: target,
+      mode,
+    };
+  }
+}
+export class ForBindingCommand {
+  public static readonly $au = {
+    type: 'binding-command',
+    name: 'for',
+  };
+
+  public get ignoreAttr() { return false; }
+
+  public build(info: { attr: { rawValue: string; target: string }; bindable: { name: string } | null }, exprParser: { parse(value: string, entry: unknown): unknown }) {
+    const target = info.bindable == null
+      ? camelCase(info.attr.target)
+      : info.bindable.name;
+
+    return {
+      type: itIteratorBinding,
+      from: exprParser.parse(info.attr.rawValue, 'IsIterator'),
+      to: target,
+    };
+  }
+}
+export class TriggerBindingCommand {
+  public static readonly $au = {
+    type: 'binding-command',
+    name: 'trigger',
+  };
+
+  public get ignoreAttr() { return true; }
+
+  public build(info: { attr: { rawValue: string; target: string; parts?: readonly string[] | null } }, exprParser: { parse(value: string, entry: unknown): unknown }) {
+    return {
+      type: itListenerBinding,
+      from: exprParser.parse(info.attr.rawValue, etIsFunction),
+      to: info.attr.target,
+      modifier: info.attr.parts?.[2] ?? null,
+    };
+  }
+}
 export const PropertyBindingRenderer = renderer(class PropertyBindingRenderer {});
 export const IteratorBindingRenderer = renderer(class IteratorBindingRenderer {});
 export const DefaultComponents = [

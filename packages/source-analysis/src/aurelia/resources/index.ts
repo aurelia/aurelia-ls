@@ -76,6 +76,26 @@ export { TemplateControllerDefinition } from './template-controller-definition.j
 export { ValueConverterDefinition } from './value-converter-definition.js';
 export { BindingBehaviorDefinition } from './binding-behavior-definition.js';
 export { BindingCommandDefinition } from './binding-command-definition.js';
+export {
+  BINDING_COMMAND_EMISSION_SHAPE_KINDS,
+  BINDING_COMMAND_SUPPORT_CARRIER_KINDS,
+  BINDING_COMMAND_SUPPORT_FIELD_KINDS,
+  BINDING_COMMAND_VALUE_HANDLING_KINDS,
+  BindingCommandBuildBasis,
+  BindingCommandInstructionEmission,
+  BindingCommandValueHandling,
+  BindingCommandFieldProvenance,
+  BindingCommandFieldWitness,
+  BindingCommandIdentity,
+  type BindingCommandEmissionShapeKind,
+  type BindingCommandSupportCarrierKind,
+  type BindingCommandSupportFieldKind,
+  type BindingCommandValueHandlingKind,
+} from './binding-command-support.js';
+export {
+  BindingCommandMaterializer,
+  type BindingCommandMaterializerState,
+} from './binding-command-materializer.js';
 export { AttributePatternDefinition } from './attribute-pattern-definition.js';
 export {
   ResourceScanner,
