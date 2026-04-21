@@ -12,6 +12,7 @@ import {
   CustomElementTemplateSource,
 } from './custom-element-support.js';
 import { CustomElementLifecycleHooks } from './custom-element-lifecycle-support.js';
+import { SlottedSurface } from './slotted-support.js';
 import { WatchSurface } from './watch-support.js';
 
 export class CustomElementDefinition implements ResourceDefinitionState<'custom-element'> {
@@ -34,6 +35,7 @@ export class CustomElementDefinition implements ResourceDefinitionState<'custom-
     readonly watchSurface: WatchSurface = new WatchSurface(),
     readonly lifecycleHooks: CustomElementLifecycleHooks = new CustomElementLifecycleHooks(),
     readonly childrenSurface: ChildrenSurface = new ChildrenSurface(),
+    readonly slottedSurface: SlottedSurface = new SlottedSurface(),
   ) {}
 
   get key(): KeyRef | null {

@@ -25,6 +25,10 @@ import {
 } from './children-materialization.js';
 import { ChildrenSurface } from './children-support.js';
 import {
+  mergeSlottedSurface,
+  readSlottedSurface,
+} from './slotted-materialization.js';
+import {
   createBindableResolutionInput,
   mergeBindableSurface as mergeSharedBindableSurface,
   readBindableSurfaceFromInputs,
@@ -53,6 +57,7 @@ import {
   CustomElementLifecycleHookWitness,
   type CustomElementLifecycleHookKind,
 } from './custom-element-lifecycle-support.js';
+import { SlottedSurface } from './slotted-support.js';
 import {
   mergeWatchSurface,
   readWatchSurface,
@@ -91,6 +96,7 @@ export class CustomElementMaterializer {
       mergeWatchSurface(definition.watchSurface, surface.watchSurface),
       mergeLifecycleHooks(definition.lifecycleHooks, surface.lifecycleHooks),
       mergeChildrenSurface(definition.childrenSurface, surface.childrenSurface),
+      mergeSlottedSurface(definition.slottedSurface, surface.slottedSurface),
     );
   }
 
@@ -167,6 +173,7 @@ interface CustomElementSurface {
   readonly watchSurface: WatchSurface;
   readonly lifecycleHooks: CustomElementLifecycleHooks;
   readonly childrenSurface: ChildrenSurface;
+  readonly slottedSurface: SlottedSurface;
 }
 
 interface FieldContributor {
@@ -264,6 +271,7 @@ function readCustomElementSurface(
     watchSurface: readWatchSurface(declarationNode, file, sourceFile),
     lifecycleHooks: readLifecycleHooks(declarationNode, file, sourceFile),
     childrenSurface: readChildrenSurface(declarationNode, file, sourceFile),
+    slottedSurface: readSlottedSurface(declarationNode, file, sourceFile),
   };
 }
 

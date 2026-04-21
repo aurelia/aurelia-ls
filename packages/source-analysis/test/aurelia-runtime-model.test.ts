@@ -2048,6 +2048,102 @@ describe('Aurelia clean-room runtime model', () => {
     expect(preparation.openSeams.map((current) => current.kind)).toContain('children-binding-open');
   });
 
+  it('materializes declaration-local @slotted surfaces for custom elements and keeps watcher spend explicit', () => {
+    const fixture = createSlottedResourceFixture();
+    const framework = new Framework(fixture.rootDir, {
+      rootDir: fixture.rootDir,
+      exports: fixture.exports,
+      resourceSeeds: fixture.resourceSeeds,
+    });
+
+    const ce = framework.resources().readCustomElements().find((current) => current.name === 'content-panel');
+    expect(ce).toBeDefined();
+    if (ce == null) {
+      throw new Error('Expected @slotted fixture custom element to materialize.');
+    }
+
+    expect(ce.slottedSurface.declarations).toHaveLength(4);
+    const content = ce.slottedSurface.readByPropertyName('content')[0];
+    const rows = ce.slottedSurface.readByPropertyName('rows')[0];
+    const allPanels = ce.slottedSurface.readByPropertyName('allPanels')[0];
+    const sidebarNodes = ce.slottedSurface.readByPropertyName('sidebarNodes')[0];
+
+    expect(content?.query.kind).toBe('default-elements');
+    expect(content?.query.selectorText).toBe('*');
+    expect(content?.slotTarget.kind).toBe('default-slot');
+    expect(content?.slotTarget.name).toBe('default');
+    expect(content?.callback.kind).toBe('default-name');
+    expect(content?.callback.name).toBe('contentChanged');
+    expect(content?.callback.source).not.toBeNull();
+
+    expect(rows?.query.kind).toBe('selector-string');
+    expect(rows?.query.selectorText).toBe('li');
+    expect(rows?.slotTarget.kind).toBe('default-slot');
+    expect(rows?.callback.kind).toBe('default-name');
+    expect(rows?.callback.name).toBe('rowsChanged');
+
+    expect(allPanels?.query.kind).toBe('selector-string');
+    expect(allPanels?.query.selectorText).toBe('section');
+    expect(allPanels?.slotTarget.kind).toBe('all-slots');
+    expect(allPanels?.slotTarget.name).toBe('*');
+
+    expect(sidebarNodes?.query.kind).toBe('all-nodes');
+    expect(sidebarNodes?.slotTarget.kind).toBe('named-slot');
+    expect(sidebarNodes?.slotTarget.name).toBe('sidebar');
+    expect(sidebarNodes?.callback.kind).toBe('named-method');
+    expect(sidebarNodes?.callback.name).toBe('sidebarChanged');
+    expect(sidebarNodes?.callback.source).not.toBeNull();
+
+    const configFixture = createConfigurationFixture();
+    const configFramework = new Framework(configFixture.rootDir, {
+      rootDir: configFixture.rootDir,
+      exports: configFixture.exports,
+      resourceSeeds: configFixture.resourceSeeds,
+    });
+    const standardWorld = configFramework.worldConstructions().findByConfigurationExportName('StandardConfiguration')[0];
+    expect(standardWorld).toBeDefined();
+    if (standardWorld == null) {
+      throw new Error('Expected StandardConfiguration world construction to exist.');
+    }
+
+    const compilerWorld = new CompilerConsultedWorld(
+      `compiler-world:${standardWorld.world.id}:content-panel`,
+      standardWorld.world,
+      [...standardWorld.visibleResources, ce],
+      standardWorld.compilerWorld.renderers,
+      standardWorld.compilerWorld.resourceResolver.readAdmissions(),
+      standardWorld.compilerCapabilities,
+      standardWorld.containerStateEntries,
+      standardWorld.containerStateOpenSeams,
+      standardWorld.compilerWorld.rendering.openSeams,
+      standardWorld.compilerWorld.openSeams,
+    );
+    const compiler = new TemplateCompiler(compilerWorld);
+    const program = createProgramHandle();
+    const file = createFileHandle(program);
+    const ownerNode = createNodeHandle(file, 'ClassDeclaration', 10, 40);
+    const owner = createSymbolHandle(file, ownerNode, 'SlottedHost');
+    const template = createTemplateHandle(file, owner);
+    const compiled = compiler.compileAuthoredTemplate(
+      template,
+      '<content-panel></content-panel>',
+    );
+    const root = compiled.rootNodes[0];
+    expect(root).toBeInstanceOf(CompiledElementNode);
+    if (!(root instanceof CompiledElementNode)) {
+      throw new Error('Expected root compiled node to be an element compilation.');
+    }
+
+    const parentController = compiler.createElementController(null, null, root);
+    const preparation = compiler.prepareCustomElement(parentController, root);
+    expect(preparation).toBeInstanceOf(CustomElementPreparation);
+    if (!(preparation instanceof CustomElementPreparation)) {
+      throw new Error('Expected custom-element preparation to be created.');
+    }
+
+    expect(preparation.openSeams.map((current) => current.kind)).toContain('slotted-watcher-open');
+  });
+
   it('materializes value-converter and binding-behavior support bundles from declaration source', () => {
     const fixture = createBehavioralResourceFixture();
     const framework = new Framework(fixture.rootDir, {
@@ -3474,6 +3570,112 @@ export class QueryCard {
           'query-card',
           [],
           createKeyHandle(ce.symbol!, 'au:resource:custom-element:query-card', 'resource'),
+        ),
+      ),
+    ],
+  };
+}
+
+function createSlottedResourceFixture(): {
+  readonly exports: readonly DeclarationExport[];
+  readonly resourceSeeds: readonly ResourceDefinition[];
+  readonly rootDir: string;
+} {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aurelia-clean-room-slotted-resources-'));
+  const filePath = path.join(rootDir, 'slotted-resource-fixture.ts');
+  const sourceText = `
+declare function slotted(...args: unknown[]): unknown;
+
+export class ContentPanel {
+  static $au = {
+    type: 'custom-element',
+    name: 'content-panel',
+    template: '<au-slot></au-slot><au-slot name="sidebar"></au-slot>',
+  };
+
+  public contentChanged() {}
+  public sidebarChanged() {}
+
+  @slotted()
+  public content: unknown[] = [];
+
+  @slotted('li')
+  public rows: unknown[] = [];
+
+  @slotted('section', '*')
+  public allPanels: unknown[] = [];
+
+  @slotted({
+    query: '$all',
+    slotName: 'sidebar',
+    callback: 'sidebarChanged',
+  })
+  public sidebarNodes: unknown[] = [];
+}
+`;
+  fs.writeFileSync(filePath, sourceText, 'utf8');
+
+  const program = new ProgramRef(
+    'program:slotted-resource-fixture',
+    rootDir,
+    null,
+  );
+  const file = new SourceFileRef(
+    `file:${filePath}`,
+    program,
+    filePath,
+  );
+  const sourceFile = ts.createSourceFile(
+    filePath,
+    sourceText,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+
+  const exports: DeclarationExport[] = [];
+  for (const statement of sourceFile.statements) {
+    if (!hasExportModifier(statement) || !ts.isClassDeclaration(statement) || statement.name == null) {
+      continue;
+    }
+
+    const declarationRef = new SourceNodeRef(
+      `node:${statement.name.text}:${statement.getStart()}-${statement.end}`,
+      file,
+      'ClassDeclaration',
+      new SourceSpan(statement.getStart(), statement.end),
+    );
+    const symbolRef = new SymbolRef(
+      `symbol:${statement.name.text}`,
+      file,
+      statement.name.text,
+      [statement.name.text],
+      declarationRef,
+    );
+    exports.push({
+      name: statement.name.text,
+      symbol: symbolRef,
+      sourceFile: file,
+    });
+  }
+
+  const byName = new Map(exports.map((current) => [current.name, current]));
+  const ce = byName.get('ContentPanel');
+  if (ce == null) {
+    throw new Error('Expected @slotted fixture export to exist.');
+  }
+
+  return {
+    exports,
+    rootDir,
+    resourceSeeds: [
+      new CustomElementDefinition(
+        'resource:ce:content-panel',
+        ce.symbol!,
+        new CustomElementIdentity(
+          'content-panel',
+          [],
+          createKeyHandle(ce.symbol!, 'au:resource:custom-element:content-panel', 'resource'),
         ),
       ),
     ],

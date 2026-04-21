@@ -17,6 +17,7 @@ import type { InstructionRendererAdmissionProvenance } from './renderer-admissio
 export const CUSTOM_ELEMENT_PREPARATION_OPEN_SEAM_KINDS = [
   'element-dependencies-open',
   'children-binding-open',
+  'slotted-watcher-open',
   'projection-open',
 ] as const;
 
@@ -139,9 +140,17 @@ export class CustomElementRenderer implements InstructionRenderer {
           ),
         ]
         : []),
+      ...(resource.slottedSurface.declarations.length > 0
+        ? [
+          new CustomElementPreparationOpenSeam(
+            'slotted-watcher-open',
+            'Slotted declarations are preserved on the CE support surface, but runtime hydrating would still need to install readonly getter/getObserver plumbing, register IAuSlotWatcher into the CE child container, and controller.addBinding(...) later. That watcher spend is intentionally left to a later projection/controller slice.',
+          ),
+        ]
+        : []),
       new CustomElementPreparationOpenSeam(
         'projection-open',
-        'Projection ownership, slot publication, and later child-controller linkage still belong to a later renderer preparation slice.',
+        'Projection ownership, slot publication, <au-slot> topology, and later child-controller linkage still belong to a later renderer preparation slice.',
       ),
     ];
 

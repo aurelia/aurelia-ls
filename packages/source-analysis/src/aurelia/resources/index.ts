@@ -84,6 +84,21 @@ export {
   type ChildrenTransformKind,
 } from './children-support.js';
 export {
+  SLOTTED_CALLBACK_TARGET_KINDS,
+  SLOTTED_DECLARATION_ORIGIN_KINDS,
+  SLOTTED_QUERY_KINDS,
+  SLOTTED_SLOT_TARGET_KINDS,
+  SlottedCallbackTarget,
+  SlottedDeclaration,
+  SlottedQueryPlan,
+  SlottedSlotTarget,
+  SlottedSurface,
+  type SlottedCallbackTargetKind,
+  type SlottedDeclarationOriginKind,
+  type SlottedQueryKind,
+  type SlottedSlotTargetKind,
+} from './slotted-support.js';
+export {
   CUSTOM_ELEMENT_LIFECYCLE_CARRIER_KINDS,
   CUSTOM_ELEMENT_LIFECYCLE_HOOK_KINDS,
   CustomElementLifecycleHooks,
