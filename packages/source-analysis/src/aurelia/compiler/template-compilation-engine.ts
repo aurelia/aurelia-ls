@@ -74,6 +74,10 @@ export class TemplateCompilationEngine {
   private compileText(
     node: AuthoredTextNode,
   ): CompiledTextNode {
+    // TODO: text interpolation should eventually route through a compiler-owned
+    // value-routing layer that publishes parser requests over text-node sites.
+    // Keep "text interpolation" distinct from attribute interpolation above the
+    // parser even though both reuse the parser's interpolation family.
     const interpolationDetected = node.value.includes('${');
     return new CompiledTextNode(
       node,

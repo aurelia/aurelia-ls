@@ -339,6 +339,10 @@ function splitMultiBindings(
   readonly rawName: string;
   readonly rawValue: string;
 }[] {
+  // TODO: multi-binding splitting stays compiler-owned. The parser should see
+  // one segment value at a time after this split, not the full semicolon-
+  // separated authored string. Keep command/interpolation routing above the
+  // parser so segment provenance remains attached to the original attribute.
   const entries: {
     rawName: string;
     rawValue: string;
