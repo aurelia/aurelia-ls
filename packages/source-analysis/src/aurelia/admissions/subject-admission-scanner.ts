@@ -81,6 +81,11 @@ export class SubjectAdmissionScanner {
       );
     }
 
+    const defineCallAdmission = readDefineCallAdmission(id, source, referenceName, resolvedExport);
+    if (defineCallAdmission != null) {
+      return defineCallAdmission;
+    }
+
     const existingResource = this.resourcesValue.readAll().find((current) =>
       getResourceTypeName(current) === referenceName,
     ) ?? null;
@@ -270,6 +275,36 @@ function fromExistingResource(
   }
 }
 
+function readDefineCallAdmission(
+  id: string,
+  source: import('../refs.js').SourceNodeRef,
+  referenceName: string,
+  resolvedExport: Export,
+): AdmittedSubject | null {
+  const defineCall = resolvedExport.readValueSurface().defineCall;
+  if (defineCall == null) {
+    return null;
+  }
+
+  const declarationKind = defineCall.resourceKind;
+  const policy = declarationKind === 'binding-command'
+    ? 'compiler-root-only'
+    : 'template-local-or-root';
+
+  return new AdmittedSubject(
+    id,
+    source,
+    referenceName,
+    'resource-definition',
+    policy,
+    resolvedExport,
+    declarationKind,
+    declarationKind === 'template-controller'
+      ? `Closed ${referenceName} through exported CustomAttribute.define(...) value-shape recovery whose definition object admitted template-controller shape.`
+      : `Closed ${referenceName} through exported ${declarationKind} define-call value-shape recovery.`,
+  );
+}
+
 function getResourceTypeName(
   resource: import('../resources/index.js').ResourceDefinition,
 ): string | null {
@@ -342,28 +377,19 @@ function classifyVariableDeclaration(
     };
   }
 
-    if (ts.isCallExpression(initializer)) {
-      const calleeText = readCallCalleeText(initializer.expression);
-      if (calleeText === 'renderer' && initializer.arguments.some(ts.isClassExpression)) {
-        return {
-          carrier: 'renderer',
-          policy: 'instruction-renderer',
-          declarationKind: null,
-          // TODO: route renderer(...) through framework-API ingress once the
-          // clean room has a better declaration-side wrapper recovery seam.
-          // For now this only closes the shallow renderer family, not any of
-          // the downstream instruction/hydration semantics that renderers
-          // ultimately govern.
-          note: 'Closed from renderer(...) wrapper over a class implementation.',
-        };
-      }
-
-    if (calleeText === 'BindingCommand.define') {
+  if (ts.isCallExpression(initializer)) {
+    const calleeText = readCallCalleeText(initializer.expression);
+    if (calleeText === 'renderer' && initializer.arguments.some(ts.isClassExpression)) {
       return {
-        carrier: 'resource-definition',
-        policy: 'compiler-root-only',
-        declarationKind: 'binding-command',
-        note: 'Closed from BindingCommand.define(...) declaration wrapper.',
+        carrier: 'renderer',
+        policy: 'instruction-renderer',
+        declarationKind: null,
+        // TODO: route renderer(...) through framework-API ingress once the
+        // clean room has a better declaration-side wrapper recovery seam.
+        // For now this only closes the shallow renderer family, not any of
+        // the downstream instruction/hydration semantics that renderers
+        // ultimately govern.
+        note: 'Closed from renderer(...) wrapper over a class implementation.',
       };
     }
 

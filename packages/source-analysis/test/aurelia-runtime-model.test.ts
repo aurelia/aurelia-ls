@@ -344,6 +344,63 @@ describe('Aurelia clean-room runtime model', () => {
     expect(trigger.name).toBe('trigger');
   });
 
+  it('converges exported define-call resources into admitted subjects and consulted world visibility', () => {
+    const fixture = createDefineCallResourceFixture();
+    const project = new Project(fixture.rootDir, 'define-call-world', {
+      rootDir: fixture.rootDir,
+      exports: fixture.exports,
+      resourceSeeds: fixture.resourceSeeds,
+    });
+
+    const contribution = project.configurationContributions().findByExportName('DefineCallConfiguration')[0];
+    expect(contribution).toBeDefined();
+    if (contribution == null) {
+      throw new Error('Expected DefineCallConfiguration contribution to exist.');
+    }
+
+    expect(contribution.admittedSubjects.every((current) => current.carrier !== 'open')).toBe(true);
+
+    const admittedByReference = new Map(
+      contribution.admittedSubjects.map((current) => [current.referenceName, current]),
+    );
+    expect(admittedByReference.get('InlinePanel')?.carrier).toBe('resource-definition');
+    expect(admittedByReference.get('InlinePanel')?.declarationKind).toBe('custom-element');
+    expect(admittedByReference.get('Tooltip')?.declarationKind).toBe('custom-attribute');
+    expect(admittedByReference.get('Guard')?.declarationKind).toBe('template-controller');
+    expect(admittedByReference.get('RelativeTime')?.declarationKind).toBe('value-converter');
+    expect(admittedByReference.get('Debounce')?.declarationKind).toBe('binding-behavior');
+    expect(admittedByReference.get('Trigger')?.declarationKind).toBe('binding-command');
+
+    const world = project.worldConstructions().findByConfigurationExportName('DefineCallConfiguration')[0];
+    expect(world).toBeDefined();
+    if (world == null) {
+      throw new Error('Expected DefineCallConfiguration world construction to exist.');
+    }
+
+    expect(world.openSeams.some((current) => current.kind === 'resource-definition-match-open')).toBe(false);
+
+    const inlinePanel = world.compilerWorld.resourceResolver.findElement('inline-panel');
+    const tooltip = world.compilerWorld.resourceResolver.findAttribute('tooltip');
+    const guard = world.compilerWorld.resourceResolver.findTemplateController('guard');
+    const relativeTime = world.compilerWorld.resourceResolver.findResourceDefinition('value-converter', 'relativeTime');
+    const debounce = world.compilerWorld.resourceResolver.findResourceDefinition('binding-behavior', 'debounce');
+    const trigger = world.compilerWorld.bindingCommands.get('trigger');
+
+    expect(inlinePanel?.type.kind).toBe('source-node');
+    expect(tooltip?.type.kind).toBe('source-node');
+    expect(guard?.kind).toBe('template-controller');
+    expect(relativeTime?.kind).toBe('value-converter');
+    expect(debounce?.kind).toBe('binding-behavior');
+    expect(trigger?.name).toBe('trigger');
+
+    expect(world.compilerWorld.resourceResolver.readAdmission(inlinePanel!)?.admittedSubjects[0]?.referenceName).toBe('InlinePanel');
+    expect(world.compilerWorld.resourceResolver.readAdmission(tooltip!)?.admittedSubjects[0]?.referenceName).toBe('Tooltip');
+    expect(world.compilerWorld.resourceResolver.readAdmission(guard!)?.admittedSubjects[0]?.referenceName).toBe('Guard');
+    expect(world.compilerWorld.resourceResolver.readAdmission(relativeTime!)?.admittedSubjects[0]?.referenceName).toBe('RelativeTime');
+    expect(world.compilerWorld.resourceResolver.readAdmission(debounce!)?.admittedSubjects[0]?.referenceName).toBe('Debounce');
+    expect(world.compilerWorld.bindingCommands.readAdmission(trigger!)?.admittedSubjects[0]?.referenceName).toBe('Trigger');
+  });
+
   it('closes Vite conventions activation from verified config-body plugin usage', () => {
     const fixture = createActiveViteToolingFixture();
     const tooling = new ToolingEnvironmentScanner({
@@ -3643,6 +3700,12 @@ export const Trigger = BindingCommand.define('trigger', class TriggerBindingComm
   get ignoreAttr() { return true; }
   build() { return { type: 'listener-binding' }; }
 });
+
+export const DefineCallConfiguration = {
+  register(container) {
+    container.register(InlinePanel, Tooltip, Guard, RelativeTime, Debounce, Trigger);
+  },
+};
 `;
   fs.writeFileSync(filePath, sourceText, 'utf8');
 

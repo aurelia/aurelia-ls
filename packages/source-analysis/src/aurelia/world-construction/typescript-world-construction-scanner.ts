@@ -1,6 +1,8 @@
 import {
   ContainerWorldRef,
   KeyRef,
+  type SourceNodeRef,
+  type SymbolRef,
 } from '../refs.js';
 import type { AdmittedSubject } from '../admissions/index.js';
 import type { ConfigurationContribution, ConfigurationContributions } from '../configurations/index.js';
@@ -131,9 +133,7 @@ function readVisibleResourceAdmissions(
   const result: CompilerResourceAdmissionProvenance[] = [];
   for (const current of resources) {
     const contributors = contribution.admittedSubjects.filter((subject) =>
-      subject.resolvedExport?.symbol?.id != null
-      && current.type.kind === 'symbol'
-      && current.type.id === subject.resolvedExport.symbol!.id,
+      matchesAdmittedResourceDefinition(subject, current),
     );
     result.push(new CompilerResourceAdmissionProvenance(
       current,
@@ -197,7 +197,7 @@ function readRenderingOpenSeams(
       result.push(new RenderingOpenSeam(
         'resource-renderer-preparation-open',
         current.referenceName,
-        `Resource renderer ${current.referenceName} is visible, but only the template-controller renderer currently has a dedicated preparation slice. Custom-element/custom-attribute renderer preparation still belongs to later work.`,
+        `Resource renderer ${current.referenceName} is visible and does have a dedicated preparation slice. What remains open here is its temporary DI publication and child-container consequence, not renderer preparation itself.`,
       ));
     }
   }
@@ -254,9 +254,10 @@ function readVisibleResources(
   resources: readonly ResourceDefinition[],
   openSeams: TypeScriptWorldConstructionOpenSeam[],
 ): readonly ResourceDefinition[] {
-  // TODO: this first cut only closes resource visibility through exact export
-  // symbol identity. Cross-file aliasing, definition-object materialization,
-  // and local-template synthesis need a later owner-surface/definition bridge.
+  // NOTE: resource visibility now bridges admitted exports onto resource owner
+  // surfaces, so exported define-call results can converge with source-node-
+  // owned resource definitions. Cross-file aliasing, non-exported define
+  // results, and local-template synthesis still need a later bridge.
   const matches: ResourceDefinition[] = [];
   const seen = new Set<string>();
 
@@ -293,14 +294,65 @@ function matchResourceDefinitions(
   subject: AdmittedSubject,
   resources: readonly ResourceDefinition[],
 ): readonly ResourceDefinition[] {
-  const exportSymbolId = subject.resolvedExport?.symbol?.id ?? null;
-  if (exportSymbolId == null) {
+  const ownerSurfaces = readAdmittedResourceOwnerSurfaces(subject);
+  if (ownerSurfaces.length === 0) {
     return [];
   }
 
   return resources.filter((current) =>
-    current.type.kind === 'symbol' && current.type.id === exportSymbolId,
+    matchesAdmittedResourceDefinition(subject, current),
   );
+}
+
+function matchesAdmittedResourceDefinition(
+  subject: AdmittedSubject,
+  definition: ResourceDefinition,
+): boolean {
+  if (
+    subject.carrier !== 'resource-definition'
+    && subject.carrier !== 'registrable-metadata-registry'
+  ) {
+    return false;
+  }
+
+  if (
+    subject.declarationKind != null
+    && definition.kind !== subject.declarationKind
+  ) {
+    return false;
+  }
+
+  const ownerSurfaces = readAdmittedResourceOwnerSurfaces(subject);
+  return ownerSurfaces.some((current) => sameOwnerSurface(current, definition.type));
+}
+
+function readAdmittedResourceOwnerSurfaces(
+  subject: AdmittedSubject,
+): readonly (SymbolRef | SourceNodeRef)[] {
+  const result: (SymbolRef | SourceNodeRef)[] = [];
+  const resolvedExport = subject.resolvedExport;
+  const exportedSymbol = resolvedExport?.symbol ?? null;
+  const defineTypeSource = resolvedExport?.readValueSurface().defineCall?.typeArgument.source ?? null;
+
+  if (exportedSymbol != null) {
+    result.push(exportedSymbol);
+  }
+
+  if (
+    defineTypeSource != null
+    && !result.some((current) => sameOwnerSurface(current, defineTypeSource))
+  ) {
+    result.push(defineTypeSource);
+  }
+
+  return result;
+}
+
+function sameOwnerSurface(
+  left: SymbolRef | SourceNodeRef,
+  right: SymbolRef | SourceNodeRef,
+): boolean {
+  return left.kind === right.kind && left.id === right.id;
 }
 
 function readContainerStateCandidates(
