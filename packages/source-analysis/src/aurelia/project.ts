@@ -20,12 +20,17 @@ import {
   Resources,
   type ResourceDefinition,
 } from './resources/index.js';
+import {
+  ToolingEnvironment,
+  ToolingEnvironmentScanner,
+} from './tooling/index.js';
 
 export interface ProjectOptions {
   readonly rootDir: string;
   readonly name?: string;
   readonly exports?: readonly DeclarationExport[];
   readonly resourceSeeds?: readonly ResourceDefinition[];
+  readonly tooling?: ToolingEnvironment | null;
   readonly aurelia?: Aurelia | null;
   readonly appRoot?: AppRoot | null;
 }
@@ -39,6 +44,7 @@ export class Project {
   private readonly declarationWorldValue: DeclarationWorld;
   private readonly exportsValue: Exports;
   private readonly resourcesValue: Resources;
+  private readonly toolingValue: ToolingEnvironment;
   private readonly worldConstructionsValue: TypeScriptWorldConstructions;
   private aureliaValue: Aurelia | null;
   private appRootValue: AppRoot | null;
@@ -62,6 +68,10 @@ export class Project {
         declarationWorld: this.declarationWorldValue,
       }),
     );
+    this.toolingValue = options.tooling
+      ?? new ToolingEnvironmentScanner({
+        rootDir,
+      }).scan();
     this.configurationsValue = new Configurations(
       `project:${name}`,
       new ConfigurationScanner({
@@ -73,6 +83,7 @@ export class Project {
       new ResourceScanner({
         exports: this.exportsValue,
         resourceSeeds: options.resourceSeeds,
+        conventionsActive: this.toolingValue.conventions.isActive(),
       }),
     );
     this.configurationContributionsValue = new ConfigurationContributions(
@@ -137,6 +148,10 @@ export class Project {
 
   readResources(): readonly ResourceDefinition[] {
     return this.resourcesValue.readAll();
+  }
+
+  tooling(): ToolingEnvironment {
+    return this.toolingValue;
   }
 
   appRoot(): AppRoot | null {

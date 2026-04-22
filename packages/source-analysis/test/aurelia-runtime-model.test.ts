@@ -75,6 +75,7 @@ import {
   PassiveInstructionRenderer,
   OPEN_RESIDUAL_KINDS,
   PreparedResourceHydrationBundle,
+  Project,
   ProgramRef,
   Registration,
   RegistrationRef,
@@ -104,6 +105,7 @@ import {
   TemplateControllerDefinition,
   TemplateNodeRef,
   TemplateRef,
+  ToolingEnvironmentScanner,
   TypeScriptWorldConstruction,
   ValueConverterDefinition,
   ViewFactory,
@@ -232,6 +234,111 @@ describe('Aurelia clean-room runtime model', () => {
     expect(project.resources().readValueConverters()).toHaveLength(1);
     expect(project.appRoot()).toBeDefined();
     expect(project.aurelia()).toBe(aurelia);
+  });
+
+  it('converges export-backed resource ingress before seeded special cases', () => {
+    const fixture = createConfigurationFixture();
+    const framework = new Framework('runtime-html-fixture', {
+      rootDir: fixture.rootDir,
+      packageNames: ['@aurelia/runtime-html', '@aurelia/template-compiler'],
+      exports: fixture.exports,
+      resourceSeeds: fixture.resourceSeeds,
+    });
+
+    const candidateKinds = framework.resources().readCandidates().map((current) => current.possibleKinds[0]);
+    expect(candidateKinds).toContain('custom-element');
+    expect(candidateKinds).toContain('custom-attribute');
+    expect(candidateKinds).toContain('template-controller');
+    expect(candidateKinds).toContain('binding-command');
+    expect(candidateKinds).toContain('binding-behavior');
+
+    const customElements = framework.resources().readCustomElements().map((current) => current.name);
+    const customAttributes = framework.resources().readCustomAttributes().map((current) => current.name);
+    const templateControllers = framework.resources().readTemplateControllers().map((current) => current.name);
+    const bindingBehaviors = framework.resources().readBindingBehaviors().map((current) => current.name);
+    const bindingCommands = framework.resources().readBindingCommands().map((current) => current.name);
+    const attributePatterns = framework.resources().readAttributePatterns().map((current) => current.pattern);
+
+    expect(customElements).toContain('au-compose');
+    expect(customElements).toContain('au-slot');
+    expect(customAttributes).toContain('show');
+    expect(templateControllers).toContain('if');
+    expect(bindingBehaviors).toContain('debounce');
+    expect(bindingBehaviors).toContain('oneTime');
+    expect(bindingBehaviors).toContain('toView');
+    expect(bindingCommands).toContain('bind');
+    expect(bindingCommands).toContain('for');
+    expect(bindingCommands).toContain('trigger');
+    expect(attributePatterns).toContain('PART.PART');
+    expect(attributePatterns).toContain('PART.trigger:PART');
+  });
+
+  it('closes Vite conventions activation from verified config-body plugin usage', () => {
+    const fixture = createActiveViteToolingFixture();
+    const tooling = new ToolingEnvironmentScanner({
+      rootDir: fixture.rootDir,
+    }).scan();
+
+    expect(tooling.buildTool.kind).toBe('vite');
+    expect(tooling.buildTool.status).toBe('active');
+    expect(tooling.conventions.driver).toBe('vite-plugin');
+    expect(tooling.conventions.status).toBe('active');
+  });
+
+  it('keeps conventions open when the Vite plugin package is present but direct usage is not proven', () => {
+    const fixture = createOpenViteToolingFixture();
+    const tooling = new ToolingEnvironmentScanner({
+      rootDir: fixture.rootDir,
+    }).scan();
+
+    expect(tooling.buildTool.kind).toBe('vite');
+    expect(tooling.conventions.driver).toBe('vite-plugin');
+    expect(tooling.conventions.status).toBe('open');
+  });
+
+  it('derives convention-assisted resource ingress from verified tooling law and respects explicit disablement', () => {
+    const activeFixture = createConventionOnlyResourceFixture({
+      mode: 'vite-active',
+    });
+    const inactiveFixture = createConventionOnlyResourceFixture({
+      mode: 'vite-inactive',
+    });
+    const webpackFixture = createConventionOnlyResourceFixture({
+      mode: 'webpack-active',
+    });
+    const activeProject = new Project(activeFixture.rootDir, 'active-conventions', {
+      rootDir: activeFixture.rootDir,
+      exports: activeFixture.exports,
+    });
+    const inactiveProject = new Project(inactiveFixture.rootDir, 'inactive-conventions', {
+      rootDir: inactiveFixture.rootDir,
+      exports: inactiveFixture.exports,
+    });
+    const webpackProject = new Project(webpackFixture.rootDir, 'webpack-conventions', {
+      rootDir: webpackFixture.rootDir,
+      exports: webpackFixture.exports,
+    });
+
+    expect(activeProject.tooling().conventions.isActive()).toBe(true);
+    expect(inactiveProject.tooling().conventions.status).toBe('inactive');
+    expect(webpackProject.tooling().conventions.isActive()).toBe(true);
+
+    expect(activeProject.resources().readCustomElements().map((current) => current.name)).toContain('fancy-card');
+    expect(activeProject.resources().readCustomAttributes().map((current) => current.name)).toContain('tooltip');
+    expect(activeProject.resources().readTemplateControllers().map((current) => current.name)).toContain('guard');
+    expect(activeProject.resources().readBindingCommands().map((current) => current.name)).toContain('trigger');
+    expect(activeProject.resources().readValueConverters().map((current) => current.name)).toContain('relativeTime');
+    expect(activeProject.resources().readAttributePatterns()).toHaveLength(0);
+
+    expect(inactiveProject.resources().readCustomElements()).toHaveLength(0);
+    expect(inactiveProject.resources().readCustomAttributes()).toHaveLength(0);
+    expect(inactiveProject.resources().readTemplateControllers()).toHaveLength(0);
+    expect(inactiveProject.resources().readBindingCommands()).toHaveLength(0);
+    expect(inactiveProject.resources().readValueConverters()).toHaveLength(0);
+    expect(inactiveProject.resources().readAttributePatterns()).toHaveLength(0);
+
+    expect(webpackProject.resources().readCustomElements().map((current) => current.name)).toContain('fancy-card');
+    expect(webpackProject.resources().readCustomAttributes().map((current) => current.name)).toContain('tooltip');
   });
 
   it('models DI and registration as layered clean-room primitives instead of one runtime-compressed object', () => {
@@ -2852,10 +2959,32 @@ export const RuntimeTemplateCompilerImplementation = {
 };
 export class DirtyChecker {}
 export class NodeObserverLocator {}
-export class DebounceBindingBehavior {}
-export class OneTimeBindingBehavior {}
-export class ToViewBindingBehavior {}
-export class AuCompose {}
+export class DebounceBindingBehavior {
+  static $au = {
+    type: 'binding-behavior',
+    name: 'debounce',
+  };
+}
+export class OneTimeBindingBehavior {
+  static $au = {
+    type: 'binding-behavior',
+    name: 'oneTime',
+  };
+}
+export class ToViewBindingBehavior {
+  static $au = {
+    type: 'binding-behavior',
+    name: 'toView',
+  };
+}
+export class AuCompose {
+  static $au = {
+    type: 'custom-element',
+    name: 'au-compose',
+    capture: true,
+    containerless: true,
+  };
+}
 export class AuSlot {
   static $au = {
     type: 'custom-element',
@@ -3355,44 +3484,7 @@ export class DecoratedCard {
   return {
     exports,
     rootDir,
-    resourceSeeds: [
-      new CustomElementDefinition(
-        'resource:ce:fancy-card',
-        fancy.symbol!,
-        new CustomElementIdentity(
-          'fancy-card',
-          [],
-          createKeyHandle(fancy.symbol!, 'au:resource:custom-element:fancy-card', 'resource'),
-        ),
-      ),
-      new CustomElementDefinition(
-        'resource:ce:precompiled-card',
-        precompiled.symbol!,
-        new CustomElementIdentity(
-          'precompiled-card',
-          [],
-          createKeyHandle(precompiled.symbol!, 'au:resource:custom-element:precompiled-card', 'resource'),
-        ),
-      ),
-      new CustomElementDefinition(
-        'resource:ce:layered-deps-card',
-        layeredDeps.symbol!,
-        new CustomElementIdentity(
-          'layered-deps-card',
-          [],
-          createKeyHandle(layeredDeps.symbol!, 'au:resource:custom-element:layered-deps-card', 'resource'),
-        ),
-      ),
-      new CustomElementDefinition(
-        'resource:ce:decorated-card',
-        decorated.symbol!,
-        new CustomElementIdentity(
-          'decorated-card',
-          [],
-          createKeyHandle(decorated.symbol!, 'au:resource:custom-element:decorated-card', 'resource'),
-        ),
-      ),
-    ],
+    resourceSeeds: [],
   };
 }
 
@@ -3493,22 +3585,7 @@ export class DebounceBindingBehavior {
   return {
     exports,
     rootDir,
-    resourceSeeds: [
-      new ValueConverterDefinition(
-        'resource:vc:relative-time',
-        converter.symbol!,
-        createKeyHandle(converter.symbol!, 'au:resource:value-converter:relativeTime', 'resource'),
-        'relativeTime',
-        [],
-      ),
-      new BindingBehaviorDefinition(
-        'resource:bb:debounce',
-        behavior.symbol!,
-        createKeyHandle(behavior.symbol!, 'au:resource:binding-behavior:debounce', 'resource'),
-        'debounce',
-        [],
-      ),
-    ],
+    resourceSeeds: [],
   };
 }
 
@@ -3617,35 +3694,7 @@ export class GuardController {
   return {
     exports,
     rootDir,
-    resourceSeeds: [
-      new CustomElementDefinition(
-        'resource:ce:lifecycle-card',
-        ce.symbol!,
-        new CustomElementIdentity(
-          'lifecycle-card',
-          [],
-          createKeyHandle(ce.symbol!, 'au:resource:custom-element:lifecycle-card', 'resource'),
-        ),
-      ),
-      new CustomAttributeDefinition(
-        'resource:ca:focus',
-        ca.symbol!,
-        new CustomAttributeIdentity(
-          'focus',
-          [],
-          createKeyHandle(ca.symbol!, 'au:resource:custom-attribute:focus', 'resource'),
-        ),
-      ),
-      new TemplateControllerDefinition(
-        'resource:tc:guard',
-        tc.symbol!,
-        new CustomAttributeIdentity(
-          'guard',
-          [],
-          createKeyHandle(tc.symbol!, 'au:resource:template-controller:guard', 'resource'),
-        ),
-      ),
-    ],
+    resourceSeeds: [],
   };
 }
 
@@ -3750,35 +3799,7 @@ export class GuardController {
   return {
     exports,
     rootDir,
-    resourceSeeds: [
-      new CustomElementDefinition(
-        'resource:ce:watched-card',
-        ce.symbol!,
-        new CustomElementIdentity(
-          'watched-card',
-          [],
-          createKeyHandle(ce.symbol!, 'au:resource:custom-element:watched-card', 'resource'),
-        ),
-      ),
-      new CustomAttributeDefinition(
-        'resource:ca:observed',
-        ca.symbol!,
-        new CustomAttributeIdentity(
-          'observed',
-          [],
-          createKeyHandle(ca.symbol!, 'au:resource:custom-attribute:observed', 'resource'),
-        ),
-      ),
-      new TemplateControllerDefinition(
-        'resource:tc:guard',
-        tc.symbol!,
-        new CustomAttributeIdentity(
-          'guard',
-          [],
-          createKeyHandle(tc.symbol!, 'au:resource:template-controller:guard', 'resource'),
-        ),
-      ),
-    ],
+    resourceSeeds: [],
   };
 }
 
@@ -3874,17 +3895,7 @@ export class QueryCard {
   return {
     exports,
     rootDir,
-    resourceSeeds: [
-      new CustomElementDefinition(
-        'resource:ce:query-card',
-        ce.symbol!,
-        new CustomElementIdentity(
-          'query-card',
-          [],
-          createKeyHandle(ce.symbol!, 'au:resource:custom-element:query-card', 'resource'),
-        ),
-      ),
-    ],
+    resourceSeeds: [],
   };
 }
 
@@ -3980,17 +3991,7 @@ export class ContentPanel {
   return {
     exports,
     rootDir,
-    resourceSeeds: [
-      new CustomElementDefinition(
-        'resource:ce:content-panel',
-        ce.symbol!,
-        new CustomElementIdentity(
-          'content-panel',
-          [],
-          createKeyHandle(ce.symbol!, 'au:resource:custom-element:content-panel', 'resource'),
-        ),
-      ),
-    ],
+    resourceSeeds: [],
   };
 }
 
@@ -4068,18 +4069,230 @@ export class ProcessedPanel {
   return {
     exports,
     rootDir,
-    resourceSeeds: [
-      new CustomElementDefinition(
-        'resource:ce:processed-panel',
-        ce.symbol!,
-        new CustomElementIdentity(
-          'processed-panel',
-          [],
-          createKeyHandle(ce.symbol!, 'au:resource:custom-element:processed-panel', 'resource'),
-        ),
-      ),
-    ],
+    resourceSeeds: [],
   };
+}
+
+function createActiveViteToolingFixture(): {
+  readonly rootDir: string;
+} {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aurelia-clean-room-tooling-vite-active-'));
+  fs.writeFileSync(
+    path.join(rootDir, 'package.json'),
+    JSON.stringify({
+      name: 'tooling-detection-fixture',
+      private: true,
+      devDependencies: {
+        vite: '^6.0.0',
+        '@aurelia/vite-plugin': '^2.0.0',
+      },
+    }, null, 2),
+    'utf8',
+  );
+  fs.writeFileSync(
+    path.join(rootDir, 'vite.config.ts'),
+    `
+import { defineConfig } from 'vite';
+import aurelia from '@aurelia/vite-plugin';
+
+export default defineConfig({
+  plugins: [
+    aurelia(),
+  ],
+});
+`,
+    'utf8',
+  );
+
+  return { rootDir };
+}
+
+function createOpenViteToolingFixture(): {
+  readonly rootDir: string;
+} {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aurelia-clean-room-tooling-vite-open-'));
+  fs.writeFileSync(
+    path.join(rootDir, 'package.json'),
+    JSON.stringify({
+      name: 'tooling-open-fixture',
+      private: true,
+      devDependencies: {
+        vite: '^6.0.0',
+        '@aurelia/vite-plugin': '^2.0.0',
+      },
+    }, null, 2),
+    'utf8',
+  );
+  fs.writeFileSync(
+    path.join(rootDir, 'vite.config.ts'),
+    `
+import { defineConfig } from 'vite';
+import aurelia from '@aurelia/vite-plugin';
+
+export default defineConfig({
+  plugins: [],
+});
+
+void aurelia;
+`,
+    'utf8',
+  );
+
+  return { rootDir };
+}
+
+function createConventionOnlyResourceFixture(
+  options: {
+    readonly mode: 'vite-active' | 'vite-inactive' | 'webpack-active';
+  },
+): {
+  readonly exports: readonly DeclarationExport[];
+  readonly rootDir: string;
+} {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), `aurelia-clean-room-convention-only-resources-${options.mode}-`));
+  const filePath = path.join(rootDir, 'convention-only-resource-fixture.ts');
+  const sourceText = `
+export class FancyCardCustomElement {}
+export class TooltipCustomAttribute {}
+export class GuardTemplateController {}
+export class RelativeTimeValueConverter {}
+export class TriggerBindingCommand {}
+export class EventAttributePattern {}
+`;
+  fs.writeFileSync(filePath, sourceText, 'utf8');
+  writeConventionToolingFixture(rootDir, options.mode);
+
+  const program = new ProgramRef(
+    'program:convention-only-resource-fixture',
+    rootDir,
+    null,
+  );
+  const file = new SourceFileRef(
+    `file:${filePath}`,
+    program,
+    filePath,
+  );
+  const sourceFile = ts.createSourceFile(
+    filePath,
+    sourceText,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+
+  const exports: DeclarationExport[] = [];
+  for (const statement of sourceFile.statements) {
+    if (!hasExportModifier(statement) || !ts.isClassDeclaration(statement) || statement.name == null) {
+      continue;
+    }
+
+    const declarationRef = new SourceNodeRef(
+      `node:${statement.name.text}:${statement.getStart()}-${statement.end}`,
+      file,
+      'ClassDeclaration',
+      new SourceSpan(statement.getStart(), statement.end),
+    );
+    const symbolRef = new SymbolRef(
+      `symbol:${statement.name.text}`,
+      file,
+      statement.name.text,
+      [statement.name.text],
+      declarationRef,
+    );
+    exports.push({
+      name: statement.name.text,
+      symbol: symbolRef,
+      sourceFile: file,
+    });
+  }
+
+  return {
+    exports,
+    rootDir,
+  };
+}
+
+function writeConventionToolingFixture(
+  rootDir: string,
+  mode: 'vite-active' | 'vite-inactive' | 'webpack-active',
+): void {
+  if (mode === 'vite-active' || mode === 'vite-inactive') {
+    fs.writeFileSync(
+      path.join(rootDir, 'package.json'),
+      JSON.stringify({
+        name: `convention-${mode}`,
+        private: true,
+        devDependencies: {
+          vite: '^6.0.0',
+          '@aurelia/vite-plugin': '^2.0.0',
+        },
+      }, null, 2),
+      'utf8',
+    );
+    fs.writeFileSync(
+      path.join(rootDir, 'vite.config.ts'),
+      mode === 'vite-active'
+        ? `
+import { defineConfig } from 'vite';
+import aurelia from '@aurelia/vite-plugin';
+
+export default defineConfig({
+  plugins: [
+    aurelia(),
+  ],
+});
+`
+        : `
+import { defineConfig } from 'vite';
+import aurelia from '@aurelia/vite-plugin';
+
+export default defineConfig({
+  plugins: [
+    aurelia({ enableConventions: false }),
+  ],
+});
+`,
+      'utf8',
+    );
+    return;
+  }
+
+  fs.writeFileSync(
+    path.join(rootDir, 'package.json'),
+    JSON.stringify({
+      name: 'convention-webpack-active',
+      private: true,
+      devDependencies: {
+        webpack: '^5.0.0',
+        '@aurelia/webpack-loader': '^2.0.0',
+      },
+    }, null, 2),
+    'utf8',
+  );
+  fs.writeFileSync(
+    path.join(rootDir, 'webpack.config.js'),
+    `
+module.exports = function () {
+  return {
+    module: {
+      rules: [
+        { test: /\\.ts$/i, use: ['ts-loader', '@aurelia/webpack-loader'] },
+        {
+          test: /\\.html$/i,
+          use: {
+            loader: '@aurelia/webpack-loader',
+            options: {
+              experimentalTemplateTypeCheck: true,
+            },
+          },
+        },
+      ],
+    },
+  };
+};
+`,
+    'utf8',
+  );
 }
 
 function hasExportModifier(
@@ -4224,77 +4437,10 @@ function createConfigurationFixtureResources(
   exports: readonly DeclarationExport[],
 ): readonly ResourceDefinition[] {
   const byName = new Map(exports.map((current) => [current.name, current]));
-  const debounce = byName.get('DebounceBindingBehavior');
-  const oneTime = byName.get('OneTimeBindingBehavior');
-  const toView = byName.get('ToViewBindingBehavior');
-  const auCompose = byName.get('AuCompose');
-  const auSlot = byName.get('AuSlot');
-  const show = byName.get('Show');
-  const ifTc = byName.get('If');
   const dotSeparated = byName.get('DotSeparatedAttributePattern');
   const eventPattern = byName.get('EventAttributePattern');
-  const defaultCommand = byName.get('DefaultBindingCommand');
-  const forCommand = byName.get('ForBindingCommand');
-  const triggerCommand = byName.get('TriggerBindingCommand');
 
   return [
-    new CustomElementDefinition(
-      'resource:ce:au-compose',
-      auCompose!.symbol!,
-      new CustomElementIdentity(
-        'au-compose',
-        [],
-        createKeyHandle(auCompose!.symbol!, 'au:resource:custom-element:au-compose', 'resource'),
-      ),
-    ),
-    new CustomElementDefinition(
-      'resource:ce:au-slot',
-      auSlot!.symbol!,
-      new CustomElementIdentity(
-        'au-slot',
-        [],
-        createKeyHandle(auSlot!.symbol!, 'au:resource:custom-element:au-slot', 'resource'),
-      ),
-    ),
-    new CustomAttributeDefinition(
-      'resource:ca:show',
-      show!.symbol!,
-      new CustomAttributeIdentity(
-        'show',
-        [],
-        createKeyHandle(show!.symbol!, 'au:resource:custom-attribute:show', 'resource'),
-      ),
-    ),
-    new TemplateControllerDefinition(
-      'resource:tc:if',
-      ifTc!.symbol!,
-      new CustomAttributeIdentity(
-        'if',
-        [],
-        createKeyHandle(ifTc!.symbol!, 'au:resource:template-controller:if', 'resource'),
-      ),
-    ),
-    new BindingBehaviorDefinition(
-      'resource:bb:debounce',
-      debounce!.symbol!,
-      createKeyHandle(debounce!.symbol!, 'au:resource:binding-behavior:debounce', 'resource'),
-      'debounce',
-      [],
-    ),
-    new BindingBehaviorDefinition(
-      'resource:bb:one-time',
-      oneTime!.symbol!,
-      createKeyHandle(oneTime!.symbol!, 'au:resource:binding-behavior:oneTime', 'resource'),
-      'oneTime',
-      [],
-    ),
-    new BindingBehaviorDefinition(
-      'resource:bb:to-view',
-      toView!.symbol!,
-      createKeyHandle(toView!.symbol!, 'au:resource:binding-behavior:toView', 'resource'),
-      'toView',
-      [],
-    ),
     new AttributePatternDefinition(
       'resource:ap:dot-separated',
       dotSeparated!.symbol!,
@@ -4308,27 +4454,6 @@ function createConfigurationFixtureResources(
       createKeyHandle(eventPattern!.symbol!, 'au:resource:attribute-pattern:event', 'resource'),
       'PART.trigger:PART',
       ['.', ':'],
-    ),
-    new BindingCommandDefinition(
-      'resource:bc:default',
-      defaultCommand!.symbol!,
-      createKeyHandle(defaultCommand!.symbol!, 'au:resource:binding-command:default', 'resource'),
-      'bind',
-      [],
-    ),
-    new BindingCommandDefinition(
-      'resource:bc:for',
-      forCommand!.symbol!,
-      createKeyHandle(forCommand!.symbol!, 'au:resource:binding-command:for', 'resource'),
-      'for',
-      [],
-    ),
-    new BindingCommandDefinition(
-      'resource:bc:trigger',
-      triggerCommand!.symbol!,
-      createKeyHandle(triggerCommand!.symbol!, 'au:resource:binding-command:trigger', 'resource'),
-      'trigger',
-      [],
     ),
   ];
 }

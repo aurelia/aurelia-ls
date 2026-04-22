@@ -595,3 +595,20 @@ export {
 export { Framework, type FrameworkOptions } from './framework.js';
 export { Project, type ProjectOptions } from './project.js';
 export { Workspace, type WorkspaceOptions } from './workspace.js';
+export {
+  TOOLING_ACTIVATION_STATUS_KINDS,
+  BUILD_TOOL_KINDS,
+  AURELIA_CONVENTIONS_DRIVER_KINDS,
+  TOOLING_EVIDENCE_CARRIER_KINDS,
+  ToolingEvidence,
+  BuildToolActivation,
+  AureliaConventionsActivation,
+  ToolingEnvironment,
+  ToolingEnvironmentScanner,
+  type ToolingActivationStatusKind,
+  type BuildToolKind,
+  type AureliaConventionsDriverKind,
+  type ToolingEvidenceCarrierKind,
+  type ToolingEnvironmentScannerOptions,
+  type ToolingEnvironmentScannerState,
+} from './tooling/index.js';

@@ -27,8 +27,12 @@ export function guessScriptKind(
 ): ts.ScriptKind {
   return filePath.endsWith('.tsx')
     ? ts.ScriptKind.TSX
-    : filePath.endsWith('.js') || filePath.endsWith('.mjs')
+    : filePath.endsWith('.jsx')
+      ? ts.ScriptKind.JSX
+      : filePath.endsWith('.js') || filePath.endsWith('.mjs') || filePath.endsWith('.cjs')
       ? ts.ScriptKind.JS
+      : filePath.endsWith('.cts') || filePath.endsWith('.mts') || filePath.endsWith('.ts')
+        ? ts.ScriptKind.TS
       : ts.ScriptKind.TS;
 }
 
