@@ -3,6 +3,9 @@ import type { RegistrationPayload } from './registration-payload.js';
 
 export const REGISTRATION_PRODUCTION_KINDS = [
   'instance',
+  'instance-provider',
+  'null-provider',
+  'throwing-provider',
   'singleton',
   'transient',
   'callback',

@@ -1,5 +1,7 @@
 export const REGISTRATION_STRATEGY_KINDS = [
   'instance',
+  'null-provider',
+  'throwing',
   'singleton',
   'transient',
   'callback',

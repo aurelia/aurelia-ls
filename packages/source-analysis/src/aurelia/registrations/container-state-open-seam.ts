@@ -1,6 +1,7 @@
 import type { SourceNodeRef } from '../refs.js';
 
 export const CONTAINER_STATE_OPEN_SEAM_KINDS = [
+  'missing-source',
   'missing-world',
   'missing-key',
   'missing-resolver-basis',
@@ -8,6 +9,9 @@ export const CONTAINER_STATE_OPEN_SEAM_KINDS = [
   'missing-closure-basis',
   'missing-payload',
   'unsupported-payload',
+  'reference-resolution-open',
+  'unsupported-subject',
+  'resource-registration-open',
   'dependency-materialization-open',
   'policy-generated-state-open',
 ] as const;

@@ -6,6 +6,10 @@ import {
   ConfigurationScanner,
 } from './configurations/index.js';
 import {
+  AppTaskScanner,
+  type AppTaskContribution,
+} from './app-task.js';
+import {
   TypeScriptWorldConstructions,
   TypeScriptWorldConstructionScanner,
 } from './world-construction/index.js';
@@ -35,6 +39,7 @@ export class Framework {
   private readonly declarationWorldValue: DeclarationWorld;
   private readonly exportsValue: Exports;
   private readonly packageNamesValue: readonly string[];
+  private readonly appTasksValue: readonly AppTaskContribution[];
   private readonly resourcesValue: Resources;
   private readonly worldConstructionsValue: TypeScriptWorldConstructions;
   readonly rootDir: string;
@@ -76,6 +81,9 @@ export class Framework {
         resources: this.resourcesValue,
       }),
     );
+    this.appTasksValue = new AppTaskScanner({
+      contributions: this.configurationContributionsValue.readAll(),
+    }).scanAll();
     this.worldConstructionsValue = new TypeScriptWorldConstructions(
       'framework',
       new TypeScriptWorldConstructionScanner({
@@ -116,6 +124,10 @@ export class Framework {
 
   readConfigurationContributions() {
     return this.configurationContributionsValue.readAll();
+  }
+
+  readAppTasks(): readonly AppTaskContribution[] {
+    return [...this.appTasksValue];
   }
 
   worldConstructions(): TypeScriptWorldConstructions {

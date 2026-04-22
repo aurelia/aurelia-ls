@@ -82,7 +82,7 @@ export class CompilerChildWorldBuilder {
     if (options.includeDependencyOpenSeam === true) {
       openSeams.push(new CompilerChildWorldFormationOpenSeam(
         'dependency-registration-open',
-        'Definition.dependencies are known to register into some controller-owned child worlds at runtime, but their later registration-subject consequence is still provisional in the clean-room model.',
+        'Definition.dependencies now spend the bounded direct-register constructable subset into controller-local keyed overlay state, but child-world resource visibility and richer registry-object consequence still remain explicit seams here.',
       ));
     }
 

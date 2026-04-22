@@ -1,10 +1,17 @@
 import ts from 'typescript';
 
 import {
+  findExportedBinding,
+  findForwardedExport,
+  findImportedBinding,
+  findTopLevelBinding,
+  isRelativeModuleSpecifier,
   readCallCalleeText,
   readPropertyName,
+  readParsedSourceFile,
   readReferenceSeed,
   readStringLiteralValue,
+  resolveImportedSourceFile,
   unwrapExpression,
 } from '../analysis/index.js';
 import {
@@ -16,18 +23,46 @@ import {
 } from '../refs.js';
 import { DependencyResolution, DependencyResolvedSubject } from './dependency-resolution.js';
 import { DependencyRequest } from './dependency-request.js';
-import { InterfaceKey, InterfaceKeyDefaultRegistration } from './interface-key.js';
+import {
+  findKnownImportedInterfaceKey,
+  InterfaceKey,
+  InterfaceKeyDefaultRegistration,
+} from './interface-key.js';
 
 export class DependencySubjectResolver {
+  private readonly parsedFiles = new Map<string, ts.SourceFile | null>();
+
   resolveInSourceFile(
     request: DependencyRequest,
     file: SourceFileRef,
     sourceFile: ts.SourceFile,
   ): DependencyResolution {
+    return this.resolveRequestInSourceFile(request, file, sourceFile, 0);
+  }
+
+  private resolveRequestInSourceFile(
+    request: DependencyRequest,
+    file: SourceFileRef,
+    sourceFile: ts.SourceFile,
+    depth: number,
+  ): DependencyResolution {
+    if (depth > 8) {
+      return new DependencyResolution(
+        new DependencyResolvedSubject(
+          'open',
+          null,
+          request.source,
+          null,
+          'Dependency request exceeded the current bounded import-following ceiling.',
+        ),
+      );
+    }
+
     // TODO: widen this through exports/import alias recovery once the ordinary
-    // DI subject basis needs cross-file closure. This first pass is purposely
-    // same-file and source-literal rather than pretending to solve general
-    // symbol flow.
+    // DI subject basis needs richer package-export closure. This pass now
+    // follows bounded same-file and relative-import aliasing plus known
+    // framework package interface exports, but it does not yet solve general
+    // package export or tsconfig-path symbol flow.
     if (request.candidateName == null) {
       return new DependencyResolution(
         new DependencyResolvedSubject(
@@ -38,6 +73,14 @@ export class DependencySubjectResolver {
           'Dependency request did not yield a stable candidate name under the current bounded reader.',
         ),
       );
+    }
+
+    const importBinding = findImportedBinding(sourceFile, request.candidateName);
+    if (importBinding != null) {
+      const imported = this.resolveImportedBinding(request, file, importBinding, depth + 1);
+      if (imported != null) {
+        return imported;
+      }
     }
 
     if (request.seedKind === 'string-key') {
@@ -120,6 +163,173 @@ export class DependencySubjectResolver {
         request.source,
         null,
         `Dependency request ${request.candidateName} matched a declaration shape that this first subject-resolution pass does not yet interpret.`,
+      ),
+    );
+  }
+
+  private resolveImportedBinding(
+    request: DependencyRequest,
+    file: SourceFileRef,
+    binding: {
+      readonly moduleSpecifier: string;
+      readonly exportName: string;
+    },
+    depth: number,
+  ): DependencyResolution | null {
+    if (isRelativeModuleSpecifier(binding.moduleSpecifier)) {
+      const importedFile = resolveImportedSourceFile(file, binding.moduleSpecifier);
+      if (importedFile == null) {
+        return null;
+      }
+
+      const importedSourceFile = readParsedSourceFile(this.parsedFiles, importedFile);
+      if (importedSourceFile == null) {
+        return null;
+      }
+
+      return this.resolveExportedBinding(
+        request,
+        importedFile,
+        importedSourceFile,
+        binding.exportName,
+        depth,
+      );
+    }
+
+    const knownInterface = findKnownImportedInterfaceKey(binding.moduleSpecifier, binding.exportName);
+    if (knownInterface != null) {
+      return new DependencyResolution(
+        new DependencyResolvedSubject(
+          'interface-symbol',
+          knownInterface.key,
+          knownInterface.owner,
+          knownInterface,
+          `Dependency request closed to known imported interface key ${binding.moduleSpecifier}:${binding.exportName}.`,
+        ),
+      );
+    }
+
+    return new DependencyResolution(
+      new DependencyResolvedSubject(
+        'open',
+        null,
+        request.source,
+        null,
+        `Dependency request ${binding.exportName} is imported from ${binding.moduleSpecifier}, but package-export interface-key closure is still open for that path.`,
+      ),
+    );
+  }
+
+  private resolveExportedBinding(
+    request: DependencyRequest,
+    file: SourceFileRef,
+    sourceFile: ts.SourceFile,
+    exportName: string,
+    depth: number,
+  ): DependencyResolution {
+    const declaration = findExportedBinding(sourceFile, exportName);
+    if (declaration != null) {
+      return this.resolveDeclarationLike(request, file, sourceFile, declaration, exportName, depth);
+    }
+
+    const forwarded = findForwardedExport(sourceFile, exportName);
+    if (forwarded != null) {
+      return this.resolveImportedBinding(request, file, forwarded, depth + 1) ?? new DependencyResolution(
+        new DependencyResolvedSubject(
+          'open',
+          null,
+          request.source,
+          null,
+          `Dependency request ${exportName} followed a forwarded export, but the forwarded path stayed open.`,
+        ),
+      );
+    }
+
+    return new DependencyResolution(
+      new DependencyResolvedSubject(
+        'open',
+        null,
+        request.source,
+        null,
+        `Dependency request ${exportName} followed a relative import, but the exported binding did not close in the imported file.`,
+      ),
+    );
+  }
+
+  private resolveDeclarationLike(
+    request: DependencyRequest,
+    file: SourceFileRef,
+    sourceFile: ts.SourceFile,
+    declaration: ts.Declaration,
+    fallbackName: string,
+    depth: number,
+  ): DependencyResolution {
+    if (ts.isClassDeclaration(declaration) || ts.isClassExpression(declaration)) {
+      return resolveConstructableDeclaration(request, file, sourceFile, declaration, fallbackName);
+    }
+
+    if (ts.isVariableDeclaration(declaration)) {
+      const initializer = declaration.initializer;
+      if (initializer == null) {
+        return new DependencyResolution(
+          new DependencyResolvedSubject(
+            'open',
+            null,
+            request.source,
+            null,
+            `Dependency request ${fallbackName} matched a declaration without an initializer, so key identity is still open.`,
+          ),
+        );
+      }
+
+      const current = unwrapExpression(initializer);
+      if (ts.isClassExpression(current)) {
+        return resolveConstructableDeclaration(request, file, sourceFile, current, fallbackName, declaration);
+      }
+
+      if (ts.isCallExpression(current)) {
+        const interfaceKey = readInterfaceKey(current, declaration, file, sourceFile);
+        if (interfaceKey != null) {
+          return new DependencyResolution(
+            new DependencyResolvedSubject(
+              'interface-symbol',
+              interfaceKey.key,
+              interfaceKey.owner,
+              interfaceKey,
+              'Dependency request closed to a DI.createInterface-style interface key.',
+            ),
+          );
+        }
+      }
+
+      if (ts.isIdentifier(current)) {
+        const importedBinding = findImportedBinding(sourceFile, current.text);
+        if (importedBinding != null) {
+          return this.resolveImportedBinding(request, file, importedBinding, depth + 1) ?? new DependencyResolution(
+            new DependencyResolvedSubject(
+              'open',
+              null,
+              request.source,
+              null,
+              `Dependency request ${current.text} aliases an imported key, but that imported path stayed open.`,
+            ),
+          );
+        }
+
+        const aliased = findTopLevelBinding(sourceFile, current.text);
+        if (aliased != null) {
+          return this.resolveDeclarationLike(request, file, sourceFile, aliased, current.text, depth + 1);
+        }
+      }
+    }
+
+    return new DependencyResolution(
+      new DependencyResolvedSubject(
+        'open',
+        null,
+        request.source,
+        null,
+        `Dependency request ${fallbackName} matched a declaration shape that this bounded subject-resolution pass does not yet interpret.`,
       ),
     );
   }
@@ -304,21 +514,11 @@ function findTopLevelDeclarationByName(
   sourceFile: ts.SourceFile,
   name: string,
 ): ts.ClassDeclaration | ts.ClassExpression | ts.VariableDeclaration | null {
-  for (const statement of sourceFile.statements) {
-    if (ts.isClassDeclaration(statement) && statement.name?.text === name) {
-      return statement;
-    }
-
-    if (ts.isVariableStatement(statement)) {
-      for (const declaration of statement.declarationList.declarations) {
-        if (ts.isIdentifier(declaration.name) && declaration.name.text === name) {
-          return declaration;
-        }
-      }
-    }
-  }
-
-  return null;
+  const declaration = findTopLevelBinding(sourceFile, name);
+  return declaration != null
+    && (ts.isClassDeclaration(declaration) || ts.isClassExpression(declaration) || ts.isVariableDeclaration(declaration))
+    ? declaration
+    : null;
 }
 
 function createNodeRef(

@@ -9,11 +9,22 @@ import {
   ElementController,
   RenderLocation,
 } from '../compiler/controller.js';
+import { HydrationContext } from '../compiler/hydration-context.js';
+import { ControllerLocalStateMaterializer } from '../compiler/controller-local-state.js';
+import {
+  HydrationConstructionContractMaterializer,
+} from '../compiler/hydration-construction.js';
+import {
+  HydrationPublication,
+  HydrationPublicationContract,
+  HydrationPublicationStateMaterializer,
+} from '../compiler/hydration-publication.js';
 import {
   CompilerAnonymousElementDefinition,
   type CompilerProjectionSlot,
   type CompiledElementNode,
 } from '../compiler/compiled-template.js';
+import { LookupScopeAssemblyBuilder } from '../compiler/lookup-scope-assembly.js';
 import { CompilerChildWorldBuilder } from '../compiler/child-world-formation.js';
 import { PreparedHydrateElementInstruction } from '../compiler/prepared-resource-hydration.js';
 import {
@@ -30,6 +41,8 @@ export const CUSTOM_ELEMENT_PREPARATION_OPEN_SEAM_KINDS = [
   'children-binding-open',
   'slotted-watcher-open',
   'projection-open',
+  'construction-dependencies-open',
+  'construction-lookup-regime-open',
 ] as const;
 
 export type CustomElementPreparationOpenSeamKind =
@@ -48,6 +61,12 @@ export class CustomElementPreparation {
     readonly resource: CustomElementDefinition,
     readonly controller: ElementController,
     readonly invocation: ElementInvocationContext,
+    readonly hydrationContext: HydrationContext,
+    readonly hydrationPublication: HydrationPublicationContract,
+    readonly hydrationPublishedContainerState: readonly import('../registrations/index.js').ContainerStateEntry[] = [],
+    readonly hydrationPublishedContainerStateOpenSeams: readonly import('../registrations/index.js').ContainerStateOpenSeam[] = [],
+    readonly controllerLocalContainerState: readonly import('../registrations/index.js').ContainerStateEntry[] = [],
+    readonly controllerLocalContainerStateOpenSeams: readonly import('../registrations/index.js').ContainerStateOpenSeam[] = [],
     readonly auSlot: AuSlotPreparation | null = null,
     readonly renderLocation: RenderLocation | null = null,
     readonly openSeams: readonly CustomElementPreparationOpenSeam[] = [],
@@ -57,6 +76,10 @@ export class CustomElementPreparation {
 
 export class CustomElementRenderer implements InstructionRenderer {
   private readonly childWorldBuilder = new CompilerChildWorldBuilder();
+  private readonly constructionContractMaterializer = new HydrationConstructionContractMaterializer();
+  private readonly publicationStateMaterializer = new HydrationPublicationStateMaterializer();
+  private readonly controllerLocalStateMaterializer = new ControllerLocalStateMaterializer();
+  private readonly lookupScopeBuilder = new LookupScopeAssemblyBuilder();
   readonly referenceName = 'CustomElementRenderer';
   readonly instructionKind = 'hydrate-element' as const;
 
@@ -96,6 +119,10 @@ export class CustomElementRenderer implements InstructionRenderer {
         instruction.projections.readProjectedSlotNames(),
         'Projected slot names prepared from compile-time projection extraction.',
       );
+    const publishedAuSlotsInfo = auSlotsInfo ?? new AuSlotsInfo(
+      [],
+      'Runtime createElementContainer(...) still publishes IAuSlotsInfo when no projections close, but the provider resolves an empty AuSlotsInfo by default.',
+    );
 
     const renderLocation = resource.policy.containerless === true
       ? new RenderLocation(
@@ -104,6 +131,7 @@ export class CustomElementRenderer implements InstructionRenderer {
         'Containerless custom element render anchor prepared separately from the CE controller, matching runtime’s render-location split.',
       )
       : null;
+    const boundarySource = readHydrationBoundarySource(hostElement);
     const worldFormation = this.childWorldBuilder.create(parentController.world, {
       suffix: `el:${sanitizeName(resource.name)}`,
       owner: resource.type,
@@ -111,6 +139,57 @@ export class CustomElementRenderer implements InstructionRenderer {
       includeDependencyOpenSeam: true,
       note: 'createElementContainer-like child world for a custom-element renderer path.',
     });
+    const publicationContract = new HydrationPublicationContract(
+      'create-element-container',
+      [
+        new HydrationPublication(
+          'IController',
+          'value',
+          parentController,
+          'createElementContainer(...) publishes the current rendering controller into the CE child container.',
+          boundarySource,
+        ),
+        new HydrationPublication(
+          'IInstruction',
+          'value',
+          instruction,
+          'createElementContainer(...) publishes the hydrate-element instruction into the CE child container.',
+          boundarySource,
+        ),
+        new HydrationPublication(
+          'IRenderLocation',
+          renderLocation == null ? 'nullable' : 'value',
+          renderLocation,
+          renderLocation == null
+            ? 'Runtime createElementContainer(...) always registers IRenderLocation, but containerless=false resolves it to null.'
+            : 'Runtime createElementContainer(...) publishes the containerless render location into the CE child container.',
+          boundarySource,
+        ),
+        new HydrationPublication(
+          'IViewFactory',
+          'throwing',
+          null,
+          'Runtime createElementContainer(...) always registers IViewFactory, but the default CE path uses a provider that throws if resolved.',
+          boundarySource,
+        ),
+        new HydrationPublication(
+          'IAuSlotsInfo',
+          auSlotsInfo == null ? 'empty-default' : 'value',
+          publishedAuSlotsInfo,
+          auSlotsInfo == null
+            ? 'Runtime createElementContainer(...) publishes an empty AuSlotsInfo when no projections close.'
+            : 'Runtime createElementContainer(...) publishes projected slot names into the CE child container.',
+          boundarySource,
+        ),
+      ],
+      'Runtime-shaped publication contract over createElementContainer(...).',
+    );
+    const publicationState = this.publicationStateMaterializer.materialize(
+      resource.type,
+      worldFormation.resultWorld.world,
+      boundarySource,
+      publicationContract,
+    );
     const invocation = new ElementInvocationContext(
       resource,
       parentController,
@@ -119,10 +198,13 @@ export class CustomElementRenderer implements InstructionRenderer {
       instruction,
       auSlotsInfo,
       renderLocation,
+      publicationContract,
+      publicationState.entries,
+      publicationState.openSeams,
       [
         new ElementInvocationContextOpenSeam(
           'published-di-surface-open',
-          'createElementContainer(...) publishes IController, IInstruction, IRenderLocation, IViewFactory, and optional slot info into a child container. The clean-room now carries a runtime-shaped AuSlotsInfo value when projected slots close, but it does not yet materialize those DI entries as a separate container-state slice.',
+          'createElementContainer(...) publication now closes as both a runtime-shaped publication contract and a keyed child-container overlay. Later lookup-time behavior is now surfaced separately as construction lookup requirements, but the actual container-lookup evaluator still belongs to a later slice.',
         ),
         new ElementInvocationContextOpenSeam(
           'projection-slots-open',
@@ -132,16 +214,15 @@ export class CustomElementRenderer implements InstructionRenderer {
         ),
         new ElementInvocationContextOpenSeam(
           'element-dependencies-open',
-          'definition.dependencies are known to register into this custom-element child world at runtime, but the later registration-subject consequence is still provisional in the clean-room model.',
+          'definition.dependencies now spend the bounded direct-register constructable subset into controller-local keyed overlay state. Resource-key visibility and richer registry-object consequence still remain open at the child-world layer.',
         ),
       ],
       'Tooling-time createElementContainer-like context over the CE child world.',
     );
-    // TODO: runtime createElementContainer(...) registers instance providers for
-    // IController, IInstruction, IRenderLocation, IViewFactory, and optional
-    // slot info into the child container. Do not summarize that as a fake
-    // publication object; land it only when the compile-time DI layer can
-    // represent those temporally scoped instance publications honestly.
+    // TODO: child-container publication now closes as keyed overlay state for
+    // instance/null/throwing/default providers. The remaining later slice is
+    // lookup-time behavior layered above that state, such as
+    // fromHydrationContext(key) => hydrationContext.controller.container.get(own(key)).
     const controller = Controller.$el(
       worldFormation.resultWorld,
       resource,
@@ -149,14 +230,80 @@ export class CustomElementRenderer implements InstructionRenderer {
       hostElement,
       worldFormation,
     );
+    const hydrationContext = new HydrationContext(
+      `hydration-context:${controller.id}`,
+      controller,
+      instruction,
+      readParentHydrationContext(parentController),
+      'Runtime-shaped CE hydration context over the current element controller and hydrate-element instruction.',
+    );
+    const hydrationPublication = new HydrationPublicationContract(
+      'controller-hydration-context',
+      [
+        new HydrationPublication(
+          'IHydrationContext',
+          'value',
+          hydrationContext,
+          'Controller.$el(...) publishes a custom-element-owned hydration context into the CE container for later internal-template consumers.',
+          boundarySource,
+        ),
+      ],
+      'Runtime-shaped CE hydration-context publication contract.',
+    );
+    const hydrationPublicationState = this.publicationStateMaterializer.materialize(
+      resource.type,
+      worldFormation.resultWorld.world,
+      boundarySource,
+      hydrationPublication,
+    );
+    const controllerLocalState = this.controllerLocalStateMaterializer.materializeDefinitionTypeInstance(
+      resource.type,
+      worldFormation.resultWorld.world,
+      boundarySource,
+      'custom-element controller',
+    );
+    const dependencyLocalState = this.controllerLocalStateMaterializer.materializeDefinitionDependencies(
+      resource.dependencies,
+      worldFormation.resultWorld.resources,
+      worldFormation.resultWorld.world,
+      boundarySource,
+      'custom-element controller',
+    );
+    const lookupScope = this.lookupScopeBuilder.attachControllerScope(
+      controller,
+      [
+        ...publicationState.entries,
+        ...hydrationPublicationState.entries,
+        ...controllerLocalState.entries,
+        ...dependencyLocalState.entries,
+      ],
+      {
+        note: 'Lookup scope over the custom-element child container overlay, including renderer publication, controller-owned definition.Type state, bounded definition.dependencies consequence, and hydration-context publication.',
+      },
+    );
+    invocation.lookupScope = lookupScope;
+    const constructionContract = this.constructionContractMaterializer.materialize(resource.type);
+    const constructionOpenSeams = readUnsatisfiedRequirements(
+      constructionContract.requirements,
+      [publicationContract, hydrationPublication],
+    );
+    const constructionLookupOpenSeams = readLookupRequirementSeams(
+      constructionContract.lookupRequirements,
+    );
     const auSlot = resource.name === 'au-slot'
       ? this.prepareAuSlot(parentController, hostElement, instruction, resource)
       : null;
     const openSeams: CustomElementPreparationOpenSeam[] = [
-      new CustomElementPreparationOpenSeam(
-        'element-dependencies-open',
-        'Custom-element definition.dependencies are preserved on the support surface, but their later registration-subject consequence inside the CE child world is still provisional.',
-      ),
+      ...(resource.dependencies.entries.length > 0 || dependencyLocalState.openSeams.length > 0
+        ? [
+          new CustomElementPreparationOpenSeam(
+            'element-dependencies-open',
+            dependencyLocalState.entries.length > 0
+              ? 'Custom-element definition.dependencies now spend the bounded direct-register constructable subset into controller-local keyed overlay state. Resource-key visibility, richer registry objects, and hidden/non-visible resource registrations still remain explicit later seams.'
+              : 'Custom-element definition.dependencies are preserved on the support surface, but their direct-register consequence did not yet close under the current bounded subject-resolution pass.',
+          ),
+        ]
+        : []),
       ...(resource.childrenSurface.declarations.length > 0
         ? [
           new CustomElementPreparationOpenSeam(
@@ -179,6 +326,14 @@ export class CustomElementRenderer implements InstructionRenderer {
           ? 'Projection ownership, slot publication, <au-slot> topology, and later child-controller linkage still belong to a later renderer preparation slice.'
           : 'Compile-time projection grouping closed the projected slot names for this host element and the invocation now carries AuSlotsInfo, but runtime slot publication, <au-slot> topology spend, and later child-controller linkage still belong to a later slice.',
       ),
+      ...constructionOpenSeams.map((current) => new CustomElementPreparationOpenSeam(
+        'construction-dependencies-open',
+        current,
+      )),
+      ...constructionLookupOpenSeams.map((current) => new CustomElementPreparationOpenSeam(
+        'construction-lookup-regime-open',
+        current,
+      )),
     ];
 
     return new CustomElementPreparation(
@@ -186,6 +341,18 @@ export class CustomElementRenderer implements InstructionRenderer {
       resource,
       controller,
       invocation,
+      hydrationContext,
+      hydrationPublication,
+      hydrationPublicationState.entries,
+      hydrationPublicationState.openSeams,
+      [
+        ...controllerLocalState.entries,
+        ...dependencyLocalState.entries,
+      ],
+      [
+        ...controllerLocalState.openSeams,
+        ...dependencyLocalState.openSeams,
+      ],
       auSlot,
       renderLocation,
       openSeams,
@@ -320,4 +487,64 @@ function sanitizeName(
   name: string | null,
 ): string {
   return (name ?? 'anonymous').replaceAll(':', '_');
+}
+
+function readParentHydrationContext(
+  controller: Controller | null,
+): HydrationContext | null {
+  if (controller == null) {
+    return null;
+  }
+
+  if (controller instanceof ElementController) {
+    return new HydrationContext(
+      `hydration-context:ancestor:${controller.id}`,
+      controller,
+      null,
+      readParentHydrationContext(controller.parent),
+      'Ancestor hydration context reconstructed from the existing element-controller chain. Ancestor hydrate-element instructions are not threaded yet.',
+    );
+  }
+
+  return readParentHydrationContext(controller.parent);
+}
+
+function readHydrationBoundarySource(
+  hostElement: CompiledElementNode,
+) {
+  return hostElement.authored.provenance.ref?.source ?? null;
+}
+
+function readUnsatisfiedRequirements(
+  requirements: readonly import('../compiler/hydration-construction.js').HydrationConstructionRequirement[],
+  contracts: readonly HydrationPublicationContract[],
+): readonly string[] {
+  const notes: string[] = [];
+  for (const requirement of requirements) {
+    const publication = contracts
+      .map((current) => requirement.key == null
+        ? current.find(requirement.token)
+        : current.findByKey(requirement.key))
+      .find((current) => current != null) ?? null;
+
+    if (publication == null) {
+      notes.push(`Resource constructor/field dependency ${requirement.token} is not published by the current CE preparation boundary.`);
+      continue;
+    }
+
+    if (publication.availability === 'throwing') {
+      notes.push(`Resource constructor/field dependency ${requirement.token} would hit a throwing provider under the current CE preparation boundary.`);
+    }
+  }
+  return notes;
+}
+
+function readLookupRequirementSeams(
+  requirements: readonly import('../compiler/hydration-construction.js').HydrationLookupRequirement[],
+): readonly string[] {
+  return requirements.map((current) =>
+    current.key == null
+      ? 'Resource constructor/field dependency uses fromHydrationContext(...), but the inner lookup key did not close under the current DI reader.'
+      : `Resource constructor/field dependency ${current.key.debugName ?? current.key.id} uses fromHydrationContext(...), so later lookup-time routing still needs to resolve own(key) against the nearest hydration-context controller container.`,
+  );
 }

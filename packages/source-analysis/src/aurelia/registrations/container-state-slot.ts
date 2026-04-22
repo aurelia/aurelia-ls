@@ -6,6 +6,8 @@ import type { RegistrationResolverBasis } from './registration-resolver-basis.js
 
 export const CONTAINER_STATE_SLOT_KINDS = [
   'instance-value',
+  'null-provider',
+  'throwing-provider',
   'constructable-activation',
   'callback-activation',
   'alias-forward',

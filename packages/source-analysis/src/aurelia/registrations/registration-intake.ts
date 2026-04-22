@@ -4,6 +4,7 @@ import type { RegistrationProduction } from './registration-production.js';
 export const REGISTRATION_INTAKE_KINDS = [
   'direct-register-call',
   'iregistry-register',
+  'container-boundary-publication',
   'resource-definition-register',
   'registrable-metadata-register',
   'static-au-register',

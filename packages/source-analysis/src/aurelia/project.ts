@@ -2,6 +2,10 @@ import { DeclarationWorld, type DeclarationExport } from './declaration-world.js
 import type { AppRoot } from './app-root.js';
 import type { Aurelia } from './aurelia.js';
 import {
+  AppTaskScanner,
+  type AppTaskContribution,
+} from './app-task.js';
+import {
   ConfigurationContributions,
   ConfigurationContributionScanner,
   Configurations,
@@ -43,6 +47,7 @@ export class Project {
   private readonly configurationsValue: Configurations;
   private readonly declarationWorldValue: DeclarationWorld;
   private readonly exportsValue: Exports;
+  private readonly appTasksValue: readonly AppTaskContribution[];
   private readonly resourcesValue: Resources;
   private readonly toolingValue: ToolingEnvironment;
   private readonly worldConstructionsValue: TypeScriptWorldConstructions;
@@ -94,6 +99,9 @@ export class Project {
         resources: this.resourcesValue,
       }),
     );
+    this.appTasksValue = new AppTaskScanner({
+      contributions: this.configurationContributionsValue.readAll(),
+    }).scanAll();
     this.worldConstructionsValue = new TypeScriptWorldConstructions(
       `project:${name}`,
       new TypeScriptWorldConstructionScanner({
@@ -132,6 +140,10 @@ export class Project {
 
   readConfigurationContributions() {
     return this.configurationContributionsValue.readAll();
+  }
+
+  readAppTasks(): readonly AppTaskContribution[] {
+    return [...this.appTasksValue];
   }
 
   worldConstructions(): TypeScriptWorldConstructions {

@@ -3,6 +3,7 @@ import type {
   CustomElementDefinition,
   TemplateControllerDefinition,
 } from '../resources/index.js';
+import type { ContainerStateLookupScope } from '../registrations/index.js';
 import type { CompiledElementNode, CompilerAnonymousElementDefinition } from './compiled-template.js';
 import type { CompilerConsultedWorld } from './compiler-consulted-world.js';
 import type { CompilerChildWorldFormation } from './child-world-formation.js';
@@ -31,11 +32,13 @@ export interface Controller {
   readonly world: CompilerConsultedWorld;
   readonly parent: Controller | null;
   readonly worldFormation: CompilerChildWorldFormation | null;
+  lookupScope: ContainerStateLookupScope | null;
   readonly note: string | null;
 }
 
 export class ElementController implements Controller {
   readonly controllerKind = 'custom-element' as const;
+  lookupScope: ContainerStateLookupScope | null;
 
   constructor(
     readonly id: string,
@@ -45,11 +48,15 @@ export class ElementController implements Controller {
     readonly hostElement: CompiledElementNode | null = null,
     readonly worldFormation: CompilerChildWorldFormation | null = null,
     readonly note: string | null = null,
-  ) {}
+    lookupScope: ContainerStateLookupScope | null = null,
+  ) {
+    this.lookupScope = lookupScope;
+  }
 }
 
 export class AttributeController implements Controller {
   readonly controllerKind = 'custom-attribute' as const;
+  lookupScope: ContainerStateLookupScope | null;
 
   constructor(
     readonly id: string,
@@ -60,11 +67,15 @@ export class AttributeController implements Controller {
     readonly renderLocation: RenderLocation | null = null,
     readonly worldFormation: CompilerChildWorldFormation | null = null,
     readonly note: string | null = null,
-  ) {}
+    lookupScope: ContainerStateLookupScope | null = null,
+  ) {
+    this.lookupScope = lookupScope;
+  }
 }
 
 export class SyntheticView implements Controller {
   readonly controllerKind = 'synthetic-view' as const;
+  lookupScope: ContainerStateLookupScope | null;
 
   constructor(
     readonly id: string,
@@ -74,7 +85,10 @@ export class SyntheticView implements Controller {
     readonly parent: Controller | null = null,
     readonly worldFormation: CompilerChildWorldFormation | null = null,
     readonly note: string | null = null,
-  ) {}
+    lookupScope: ContainerStateLookupScope | null = null,
+  ) {
+    this.lookupScope = lookupScope;
+  }
 }
 
 export const Controller = {

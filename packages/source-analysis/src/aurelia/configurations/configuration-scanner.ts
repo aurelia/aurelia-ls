@@ -3,12 +3,21 @@ import path from 'node:path';
 import ts from 'typescript';
 
 import type { Export, Exports } from '../exports/index.js';
-import { SourceNodeRef, SourceSpan, type SourceFileRef } from '../refs.js';
+import type { SourceFileRef } from '../refs.js';
 import { BundleArray } from './bundle-array.js';
 import {
-  BundleSpread,
-  HelperCall,
-  RegisterArgument,
+  analyzeFunctionImplementation,
+  createNodeRef,
+  findNodeBySpan,
+  findReturnedRegistryObject,
+  findReturnedRegistryObjectForFunction,
+  hasReturnedAppTask,
+  isRegistrableReferenceExpression,
+  readCallName,
+  readFunctionImplementation,
+  summarizeExpression,
+} from './configuration-function-analysis.js';
+import {
   RegistryFactoryMethod,
   RegistryMethod,
   RegistryObject,
@@ -28,10 +37,6 @@ export interface ConfigurationScannerState {
 type ConfigurationSubject =
   | BundleArray
   | RegistryObject;
-
-type FunctionImplementation =
-  | ts.Block
-  | ts.Expression;
 
 type RegistryObjectOrigin = {
   readonly helperName: string | null;
@@ -302,261 +307,6 @@ export class ConfigurationScanner {
   }
 }
 
-function analyzeFunctionImplementation(
-  file: SourceFileRef,
-  implementation: FunctionImplementation,
-): {
-  readonly bundleSpreads: readonly BundleSpread[];
-  readonly directRegisterArguments: readonly RegisterArgument[];
-  readonly helperCalls: readonly HelperCall[];
-} {
-  const bundleSpreads = new Map<string, BundleSpread>();
-  const directRegisterArguments = new Map<string, RegisterArgument>();
-  const helperCalls = new Map<string, HelperCall>();
-
-  const visit = (node: ts.Node): void => {
-    if (node !== implementation && isFunctionBoundary(node)) {
-      return;
-    }
-
-    if (ts.isCallExpression(node)) {
-      const callName = readCallName(node.expression);
-      if (callName != null) {
-        const key = `${node.getStart()}:${callName}`;
-        helperCalls.set(
-          key,
-          new HelperCall(
-            `${file.id}:helper-call:${callName}:${node.getStart()}`,
-            createNodeRef(file, node),
-            callName,
-          ),
-        );
-
-        if (isRegisterInvocation(callName)) {
-          for (const argument of node.arguments) {
-            if (ts.isSpreadElement(argument) || ts.isCallExpression(argument)) {
-              continue;
-            }
-
-            const referenceName = summarizeExpression(argument);
-            if (!isRegistrableReferenceExpression(argument) || referenceName.length === 0) {
-              continue;
-            }
-
-            const argKey = `${argument.getStart()}:${referenceName}`;
-            directRegisterArguments.set(
-              argKey,
-              new RegisterArgument(
-                `${file.id}:register-argument:${referenceName}:${argument.getStart()}`,
-                createNodeRef(file, argument),
-                referenceName,
-              ),
-            );
-          }
-        }
-      }
-    } else if (ts.isSpreadElement(node) && isCallArgumentSpread(node)) {
-      const name = summarizeExpression(node.expression);
-      if (name.length > 0) {
-        const key = `${node.getStart()}:${name}`;
-        bundleSpreads.set(
-          key,
-          new BundleSpread(
-            `${file.id}:bundle-spread:${name}:${node.getStart()}`,
-            createNodeRef(file, node),
-            name,
-          ),
-        );
-      }
-    }
-
-    ts.forEachChild(node, visit);
-  };
-
-  visit(implementation);
-
-  return {
-    bundleSpreads: [...bundleSpreads.values()],
-    directRegisterArguments: [...directRegisterArguments.values()],
-    helperCalls: [...helperCalls.values()],
-  };
-}
-
-function createNodeRef(
-  file: SourceFileRef,
-  node: ts.Node,
-): SourceNodeRef {
-  return new SourceNodeRef(
-    `${file.id}:${ts.SyntaxKind[node.kind]}:${node.pos}-${node.end}`,
-    file,
-    ts.SyntaxKind[node.kind],
-    new SourceSpan(node.getStart(), node.end),
-  );
-}
-
-function findNodeBySpan<T extends ts.Node>(
-  root: ts.Node,
-  start: number,
-  end: number,
-  guard: (node: ts.Node) => node is T,
-): T | null {
-  let match: T | null = null;
-
-  const visit = (node: ts.Node): void => {
-    if (match != null) {
-      return;
-    }
-
-    if (guard(node) && node.getStart() === start && node.end === end) {
-      match = node;
-      return;
-    }
-
-    ts.forEachChild(node, visit);
-  };
-
-  visit(root);
-  return match;
-}
-
-function findReturnedRegistryObject(
-  implementation: FunctionImplementation,
-  sourceFile: ts.SourceFile,
-): ts.ObjectLiteralExpression | null {
-  if (!ts.isBlock(implementation)) {
-    return unwrapRegistryObjectExpression(implementation, sourceFile);
-  }
-
-  let match: ts.ObjectLiteralExpression | null = null;
-
-  const visit = (node: ts.Node): void => {
-    if (match != null) {
-      return;
-    }
-
-    if (node !== implementation && isFunctionBoundary(node)) {
-      return;
-    }
-
-    if (ts.isReturnStatement(node) && node.expression != null) {
-      match = unwrapRegistryObjectExpression(node.expression, sourceFile);
-      if (match != null) {
-        return;
-      }
-    }
-
-    ts.forEachChild(node, visit);
-  };
-
-  visit(implementation);
-  return match;
-}
-
-function findReturnedRegistryObjectForFunction(
-  sourceFile: ts.SourceFile,
-  name: string,
-): ts.ObjectLiteralExpression | null {
-  for (const statement of sourceFile.statements) {
-    if (!ts.isFunctionDeclaration(statement) || statement.name?.text !== name || statement.body == null) {
-      continue;
-    }
-
-    return findReturnedRegistryObject(statement.body, sourceFile);
-  }
-
-  for (const statement of sourceFile.statements) {
-    if (!ts.isVariableStatement(statement)) {
-      continue;
-    }
-
-    for (const declaration of statement.declarationList.declarations) {
-      if (!ts.isIdentifier(declaration.name) || declaration.name.text !== name || declaration.initializer == null) {
-        continue;
-      }
-
-      if (ts.isArrowFunction(declaration.initializer) || ts.isFunctionExpression(declaration.initializer)) {
-        return findReturnedRegistryObject(declaration.initializer.body, sourceFile);
-      }
-    }
-  }
-
-  return null;
-}
-
-function hasReturnedAppTask(
-  implementation: FunctionImplementation,
-): boolean {
-  if (!ts.isBlock(implementation)) {
-    return isAppTaskExpression(implementation);
-  }
-
-  let found = false;
-
-  const visit = (node: ts.Node): void => {
-    if (found) {
-      return;
-    }
-
-    if (node !== implementation && isFunctionBoundary(node)) {
-      return;
-    }
-
-    if (
-      ts.isReturnStatement(node)
-      && node.expression != null
-      && isAppTaskExpression(node.expression)
-    ) {
-      found = true;
-      return;
-    }
-
-    ts.forEachChild(node, visit);
-  };
-
-  visit(implementation);
-  return found;
-}
-
-function readCallName(
-  expression: ts.LeftHandSideExpression,
-): string | null {
-  if (ts.isIdentifier(expression)) {
-    return expression.text;
-  }
-
-  if (ts.isPropertyAccessExpression(expression)) {
-    return `${readCallName(expression.expression) ?? expression.expression.getText()}.${expression.name.text}`;
-  }
-
-  return null;
-}
-
-function readFunctionImplementation(
-  property:
-    | ts.MethodDeclaration
-    | ts.PropertyAssignment
-    | ts.GetAccessorDeclaration
-    | ts.SetAccessorDeclaration
-    | ts.ShorthandPropertyAssignment
-    | ts.SpreadAssignment,
-): FunctionImplementation | null {
-  if (ts.isMethodDeclaration(property) || ts.isGetAccessorDeclaration(property) || ts.isSetAccessorDeclaration(property)) {
-    return property.body ?? null;
-  }
-
-  if (ts.isPropertyAssignment(property)) {
-    if (ts.isArrowFunction(property.initializer)) {
-      return property.initializer.body;
-    }
-
-    if (ts.isFunctionExpression(property.initializer)) {
-      return property.initializer.body ?? null;
-    }
-  }
-
-  return null;
-}
-
 function readPropertyName(
   name: ts.PropertyName | undefined,
 ): string | null {
@@ -571,61 +321,6 @@ function readPropertyName(
   return null;
 }
 
-function summarizeExpression(
-  expression: ts.Expression,
-): string {
-  if (
-    ts.isAsExpression(expression)
-    || ts.isTypeAssertionExpression(expression)
-    || ts.isParenthesizedExpression(expression)
-    || ts.isNonNullExpression(expression)
-  ) {
-    return summarizeExpression(expression.expression);
-  }
-
-  if (ts.isIdentifier(expression)) {
-    return expression.text;
-  }
-
-  if (ts.isPropertyAccessExpression(expression)) {
-    return expression.getText();
-  }
-
-  if (ts.isClassExpression(expression) && expression.name != null) {
-    return expression.name.text;
-  }
-
-  if (ts.isStringLiteral(expression) || ts.isNumericLiteral(expression)) {
-    return expression.text;
-  }
-
-  return expression.kind === ts.SyntaxKind.NullKeyword
-    ? 'null'
-    : ts.SyntaxKind[expression.kind];
-}
-
-function unwrapRegistryObjectExpression(
-  expression: ts.Expression,
-  sourceFile: ts.SourceFile,
-): ts.ObjectLiteralExpression | null {
-  if (ts.isObjectLiteralExpression(expression)) {
-    return expression;
-  }
-
-  if (ts.isCallExpression(expression)) {
-    const wrapped = unwrapWrappedObjectLiteral(expression);
-    if (wrapped != null) {
-      return wrapped;
-    }
-
-    if (ts.isIdentifier(expression.expression)) {
-      return findReturnedRegistryObjectForFunction(sourceFile, expression.expression.text);
-    }
-  }
-
-  return null;
-}
-
 function unwrapWrappedObjectLiteral(
   expression: ts.CallExpression,
 ): ts.ObjectLiteralExpression | null {
@@ -633,27 +328,6 @@ function unwrapWrappedObjectLiteral(
   return firstArg != null && ts.isObjectLiteralExpression(firstArg)
     ? firstArg
     : null;
-}
-
-function isAppTaskExpression(
-  expression: ts.Expression,
-): boolean {
-  return ts.isCallExpression(expression)
-    && ts.isPropertyAccessExpression(expression.expression)
-    && ts.isIdentifier(expression.expression.expression)
-    && expression.expression.expression.text === 'AppTask';
-}
-
-function isFunctionBoundary(
-  node: ts.Node,
-): boolean {
-  return ts.isFunctionDeclaration(node)
-    || ts.isFunctionExpression(node)
-    || ts.isArrowFunction(node)
-    || ts.isMethodDeclaration(node)
-    || ts.isConstructorDeclaration(node)
-    || ts.isGetAccessorDeclaration(node)
-    || ts.isSetAccessorDeclaration(node);
 }
 
 function isRegistryBundleArray(
@@ -668,34 +342,4 @@ function isRegistryBundleArray(
   // shapes, that needs a deeper initializer/value recovery layer instead of
   // broadening this with ad-hoc syntax guesses.
   return array.elements.every((element) => isRegistrableReferenceExpression(element));
-}
-
-function isRegistrableReferenceExpression(
-  expression: ts.Expression,
-): boolean {
-  if (
-    ts.isAsExpression(expression)
-    || ts.isTypeAssertionExpression(expression)
-    || ts.isParenthesizedExpression(expression)
-    || ts.isNonNullExpression(expression)
-  ) {
-    return isRegistrableReferenceExpression(expression.expression);
-  }
-
-  return ts.isIdentifier(expression)
-    || ts.isPropertyAccessExpression(expression)
-    || (ts.isClassExpression(expression) && expression.name != null);
-}
-
-function isCallArgumentSpread(
-  node: ts.SpreadElement,
-): boolean {
-  return ts.isCallExpression(node.parent)
-    || ts.isNewExpression(node.parent);
-}
-
-function isRegisterInvocation(
-  callName: string,
-): boolean {
-  return callName === 'register' || callName.endsWith('.register');
 }

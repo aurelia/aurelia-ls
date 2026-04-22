@@ -13,3 +13,16 @@ export {
   type BoundedReferenceSeed,
   type BoundedReferenceSeedKind,
 } from './ts-ast-helpers.js';
+export {
+  findExportedBinding,
+  findForwardedExport,
+  findImportedBinding,
+  findTopLevelBinding,
+  hasExportModifier,
+  isRelativeModuleSpecifier,
+  normalizeSourceFilePath,
+  readParsedSourceFile,
+  resolveImportedSourceFile,
+  type ForwardedExport,
+  type ImportedBinding,
+} from './source-module-linking.js';

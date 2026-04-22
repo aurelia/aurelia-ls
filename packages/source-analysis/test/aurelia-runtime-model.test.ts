@@ -7,12 +7,14 @@ import { describe, expect, it } from './test-harness.js';
 
 import {
   ANALYZABILITY_BAND_KINDS,
+  APP_TASK_SLOT_KINDS,
   AuSlotPreparation,
   AuSlotsInfo,
   CompiledElementNode,
   CompiledTextNode,
   AttributePatternDefinition,
   Aurelia,
+  AppTaskScanner,
   AppRoot,
   AuthoredElementNode,
   AuthoredTextNode,
@@ -26,6 +28,8 @@ import {
   CurrentTargetPreparation,
   ConfigurationRegistrationScanner,
   CONTAINER_STATE_OPEN_SEAM_KINDS,
+  CONTAINER_STATE_LOOKUP_OPEN_SEAM_KINDS,
+  CONTAINER_STATE_LOOKUP_STATUS_KINDS,
   CONTAINER_STATE_PROVENANCE_MODES,
   CONTAINER_STATE_SLOT_KINDS,
   CONTAINER_STATE_TOPOLOGY_HOOK_KINDS,
@@ -35,9 +39,12 @@ import {
   ContainerStateMaterializer,
   ContainerWorldRef,
   ContainerStateEntry,
+  ContainerStateLookupEvaluator,
+  ContainerStateLookupScope,
   ContainerStateProvenance,
   ContainerStateQualification,
   ContainerStateSlot,
+  Container,
   CustomAttributePreparation,
   CustomAttributeRenderer,
   CustomAttributeDefinition,
@@ -63,10 +70,13 @@ import {
   ElementController,
   Export,
   Framework,
+  HydrationConstructionContractMaterializer,
+  HydrationLookupRequirement,
   InterfaceKey,
   InterfaceKeyDefaultRegistration,
   KeyRef,
   LookupModifier,
+  LookupScopeAssemblyBuilder,
   LookupRequest,
   REGISTRY_FACTORY_METHOD_ROLE_KINDS,
   REGISTRY_OBJECT_ORIGIN_KINDS,
@@ -134,6 +144,143 @@ describe('Aurelia clean-room runtime model', () => {
     expect(resolver?.latest()?.ref).toEqual(registration);
   });
 
+  it('evaluates materialized container-state lookup over direct, resource, and hydration-context-own routes', () => {
+    const program = createProgramHandle();
+    const file = createFileHandle(program);
+    const source = createNodeHandle(file, 'ClassDeclaration', 10, 40);
+    const owner = createSymbolHandle(file, source, 'LookupHost');
+    const serviceKey = createKeyHandle(owner, 'ILogger', 'interface-symbol');
+    const resourceKey = createKeyHandle(owner, 'au:resource:custom-element:panel', 'resource');
+    const cssKey = createKeyHandle(owner, 'ICssClassMapping', 'interface-symbol');
+    const rootWorld = new ContainerWorldRef('world:root', owner, null);
+    const childWorld = new ContainerWorldRef('world:child', owner, rootWorld.id);
+
+    const rootServiceEntry = createContainerStateEntry(
+      'entry:root:logger',
+      rootWorld,
+      serviceKey,
+      owner,
+      source,
+      'instance-value',
+      'direct',
+      'Root service entry.',
+    );
+    const childServiceEntry = createContainerStateEntry(
+      'entry:child:logger',
+      childWorld,
+      serviceKey,
+      owner,
+      createNodeHandle(file, 'ClassDeclaration', 50, 80),
+      'alias-forward',
+      'direct',
+      'Child service entry shadows the root entry.',
+    );
+    const rootResourceEntry = createContainerStateEntry(
+      'entry:root:panel',
+      rootWorld,
+      resourceKey,
+      owner,
+      createNodeHandle(file, 'ClassDeclaration', 90, 120),
+      'constructable-activation',
+      'resource',
+      'Root resource entry.',
+    );
+    const childCssEntry = createContainerStateEntry(
+      'entry:child:css',
+      childWorld,
+      cssKey,
+      owner,
+      createNodeHandle(file, 'ClassDeclaration', 130, 170),
+      'instance-value',
+      'own',
+      'Child CSS mapping entry for hydration-context own lookup.',
+    );
+
+    const rootScope = new ContainerStateLookupScope(
+      'scope:root',
+      rootWorld,
+      [rootServiceEntry, rootResourceEntry],
+      null,
+      'Root keyed container-state scope.',
+    );
+    const childScope = rootScope.createChild(
+      'scope:child',
+      childWorld,
+      [childServiceEntry, childCssEntry],
+      'Child keyed container-state scope.',
+    );
+    const evaluator = new ContainerStateLookupEvaluator();
+
+    const direct = evaluator.lookup(
+      childScope,
+      new LookupRequest('lookup:logger:direct', serviceKey, 'direct', [], null, true),
+    );
+    expect(direct.status).toBe('hit');
+    expect(direct.selectedEntries[0]?.id).toBe(childServiceEntry.id);
+    expect(direct.selectedSlots[0]?.kind).toBe('alias-forward');
+
+    const compilerWorld = new CompilerConsultedWorld(
+      'compiler-world:lookup',
+      rootWorld,
+      [],
+      [],
+      [],
+      [],
+      [rootServiceEntry],
+      [],
+    );
+    const serviceLookup = compilerWorld.services.lookup(
+      new LookupRequest('lookup:compiler-services', serviceKey, 'direct', [], null, true),
+    );
+    expect(serviceLookup.status).toBe('hit');
+    expect(serviceLookup.selectedEntries[0]?.id).toBe(rootServiceEntry.id);
+
+    const directAll = evaluator.lookup(
+      childScope,
+      new LookupRequest('lookup:logger:all', serviceKey, 'direct', ['all'], null, true),
+    );
+    expect(directAll.status).toBe('hit');
+    expect(directAll.selectedEntries.map((current) => current.id)).toEqual([
+      childServiceEntry.id,
+      rootServiceEntry.id,
+    ]);
+
+    const ownMiss = evaluator.lookup(
+      rootScope.createChild('scope:empty-child', childWorld, [], 'Empty child scope.'),
+      new LookupRequest('lookup:logger:own', serviceKey, 'own', [], null, false),
+    );
+    expect(ownMiss.status).toBe('miss');
+
+    const resource = evaluator.lookup(
+      childScope,
+      new LookupRequest(
+        'lookup:panel:resource',
+        resourceKey,
+        'direct',
+        [],
+        new ResourceLookupRegime('resource'),
+        false,
+      ),
+    );
+    expect(resource.status).toBe('hit');
+    expect(resource.selectedEntries[0]?.id).toBe(rootResourceEntry.id);
+
+    const hydrationRoute = evaluator.lookupHydrationRequirement(
+      childScope,
+      new HydrationLookupRequirement(
+        'hydration-context-own',
+        cssKey,
+        createHydrationRouteDependency(owner, source, cssKey),
+        'CSS class mapping must route through the hydration-context controller container.',
+      ),
+    );
+    expect(CONTAINER_STATE_LOOKUP_STATUS_KINDS).toContain('hit');
+    expect(CONTAINER_STATE_LOOKUP_OPEN_SEAM_KINDS).toContain('hydration-route-key-open');
+    expect(hydrationRoute.status).toBe('hit');
+    expect(hydrationRoute.selectedEntries[0]?.id).toBe(childCssEntry.id);
+    expect(hydrationRoute.selectedSlots[0]?.kind).toBe('instance-value');
+  });
+
   it('uses Aurelia and AppRoot as the root taxonomy above the container', () => {
     const workspace = new Workspace('repo', { program: createProgramHandle() });
     const aurelia = workspace.createAurelia();
@@ -188,6 +335,197 @@ describe('Aurelia clean-room runtime model', () => {
     expect(compiled.template).toEqual(template);
     expect(context.findElement('foo')?.name).toBe('foo');
     expect(resolvedResource?.key?.id).toBe(resourceKey.id);
+  });
+
+  it('reads AppTask contributions from configuration productions and groups them into fixed AppRoot stages', () => {
+    const fixture = createConfigurationFixture();
+    const framework = new Framework(fixture.rootDir, {
+      rootDir: fixture.rootDir,
+      exports: fixture.exports,
+      resourceSeeds: fixture.resourceSeeds,
+    });
+    const tasks = framework.readAppTasks();
+    const workspace = new Workspace('repo', { program: createProgramHandle() });
+    const aurelia = workspace.createAurelia();
+    const file = createFileHandle(workspace.program());
+    const source = createNodeHandle(file, 'ClassDeclaration', 10, 60);
+    const symbol = createSymbolHandle(file, source, 'AppRootHost');
+    const root = aurelia.app({
+      host: source,
+      component: symbol,
+      appTasks: tasks,
+    });
+
+    expect(APP_TASK_SLOT_KINDS).toEqual([
+      'creating',
+      'hydrating',
+      'hydrated',
+      'activating',
+      'activated',
+      'deactivating',
+      'deactivated',
+    ]);
+    expect(tasks.map((current) => `${current.slot}:${current.contribution.configuration.sourceExport.name}`)).toEqual([
+      'creating:StyleConfiguration',
+      'creating:DialogConfigurationStandard',
+    ]);
+    const style = tasks.find((current) => current.contribution.configuration.sourceExport.name === 'StyleConfiguration');
+    const dialog = tasks.find((current) => current.contribution.configuration.sourceExport.name === 'DialogConfigurationStandard');
+    expect(style?.keyRequest?.referenceText).toBe('IContainer');
+    expect(style?.callback?.kind).toBe('inline-function');
+    expect(style?.callback?.helperCalls).toHaveLength(0);
+    expect(style?.callback?.productions).toHaveLength(0);
+    expect(dialog?.keyRequest).toBeNull();
+    expect(dialog?.callback?.kind).toBe('inline-function');
+    expect(dialog?.callback?.productions).toHaveLength(0);
+    expect(root.stages.map((current) => current.slot)).toEqual(APP_TASK_SLOT_KINDS);
+    expect(root.stages.find((current) => current.slot === 'creating')?.tasks.map((current) => current.contribution.configuration.sourceExport.name)).toEqual([
+      'StyleConfiguration',
+      'DialogConfigurationStandard',
+    ]);
+    expect(root.stages.every((current) => current.note?.includes(current.slot) ?? false)).toBe(true);
+  });
+
+  it('recovers same-file AppTask callback bodies and their nested canonical registration productions', () => {
+    const fixture = createAppTaskCallbackFixture();
+    const framework = new Framework(fixture.rootDir, {
+      rootDir: fixture.rootDir,
+      exports: fixture.exports,
+      resourceSeeds: fixture.resourceSeeds,
+    });
+
+    const tasks = framework.readAppTasks();
+    expect(tasks.map((current) => `${current.slot}:${current.contribution.configuration.sourceExport.name}`)).toEqual([
+      'creating:CallbackConfiguration',
+      'hydrated:CallbackConfiguration',
+      'activating:CallbackConfiguration',
+    ]);
+
+    const creating = tasks.find((current) => current.slot === 'creating');
+    const hydrated = tasks.find((current) => current.slot === 'hydrated');
+    const activating = tasks.find((current) => current.slot === 'activating');
+
+    expect(creating?.callback?.kind).toBe('same-file-function');
+    expect(creating?.callback?.referenceName).toBe('installStore');
+    expect(creating?.callback?.productions.map((current) => current.apiIngress.api?.id)).toContain('registration.instance');
+
+    expect(hydrated?.callback?.kind).toBe('same-file-binding');
+    expect(hydrated?.callback?.referenceName).toBe('installAlias');
+    expect(hydrated?.callback?.productions.map((current) => current.apiIngress.api?.id)).toContain('registration.alias');
+
+    expect(activating?.callback?.kind).toBe('same-file-method');
+    expect(activating?.callback?.referenceName).toBe('TaskCallbacks.activate');
+    expect(activating?.callback?.productions.map((current) => current.apiIngress.api?.id)).toContain('registration.singleton');
+    expect(activating?.callback?.directRegisterArguments.map((current) => current.referenceName)).toContain('DirectStageService');
+
+    const workspace = new Workspace('repo', { program: createProgramHandle() });
+    const aurelia = workspace.createAurelia();
+    const file = createFileHandle(workspace.program());
+    const source = createNodeHandle(file, 'ClassDeclaration', 10, 60);
+    const symbol = createSymbolHandle(file, source, 'AppRootHost');
+    const root = aurelia.app({
+      host: source,
+      component: symbol,
+      appTasks: tasks,
+    });
+    const creatingStage = root.stages.find((current) => current.slot === 'creating');
+    const hydratedStage = root.stages.find((current) => current.slot === 'hydrated');
+    const activatingStage = root.stages.find((current) => current.slot === 'activating');
+
+    expect(creatingStage?.callbackProductions.map((current) => current.apiIngress.api?.id)).toEqual([
+      'registration.instance',
+    ]);
+    expect(creatingStage?.containerStateEntries.find((current) => current.key.debugName === 'Store')?.slots[0]?.kind).toBe('instance-value');
+    expect(creatingStage?.containerStateEntries.find((current) => current.key.debugName === 'Store')?.qualification?.materializationTiming).toBe('deferred-to-slot');
+
+    expect(hydratedStage?.callbackProductions.map((current) => current.apiIngress.api?.id)).toEqual([
+      'registration.alias',
+    ]);
+    expect(hydratedStage?.containerStateEntries.find((current) => current.key.debugName === 'IStore')?.slots[0]?.kind).toBe('alias-forward');
+    expect(hydratedStage?.containerStateEntries.find((current) => current.key.debugName === 'IStore')?.slots[0]?.targetKey?.debugName).toBe('Store');
+
+    expect(activatingStage?.callbackProductions.map((current) => current.apiIngress.api?.id)).toEqual([
+      'registration.singleton',
+    ]);
+    expect(activatingStage?.containerStateEntries.find((current) => current.key.debugName === 'ILogSink')?.slots[0]?.kind).toBe('constructable-activation');
+    expect(activatingStage?.containerStateEntries.find((current) => current.key.debugName === 'DirectStageService')?.slots[0]?.kind).toBe('constructable-activation');
+  });
+
+  it('assembles cumulative AppRoot lookup scopes across runtime task slots', () => {
+    const fixture = createAppTaskCallbackFixture();
+    const framework = new Framework(fixture.rootDir, {
+      rootDir: fixture.rootDir,
+      exports: fixture.exports,
+      resourceSeeds: fixture.resourceSeeds,
+    });
+
+    const tasks = framework.readAppTasks();
+    const workspace = new Workspace('repo', { program: createProgramHandle() });
+    const aurelia = workspace.createAurelia();
+    const file = createFileHandle(workspace.program());
+    const source = createNodeHandle(file, 'ClassDeclaration', 10, 60);
+    const symbol = createSymbolHandle(file, source, 'AppRootScopeHost');
+    const root = aurelia.app({
+      host: source,
+      component: symbol,
+      appTasks: tasks,
+    });
+    const builder = new LookupScopeAssemblyBuilder();
+    const evaluator = new ContainerStateLookupEvaluator();
+    const creatingScope = builder.createAppRootScope(root, { slot: 'creating' });
+    const activatingScope = builder.createAppRootScope(root, { slot: 'activating' });
+    const storeKey = root.findStage('creating')?.containerStateEntries.find((current) => current.key.debugName === 'Store')?.key ?? null;
+    const storeAliasKey = root.findStage('hydrated')?.containerStateEntries.find((current) => current.key.debugName === 'IStore')?.key ?? null;
+    const logSinkKey = root.findStage('activating')?.containerStateEntries.find((current) => current.key.debugName === 'ILogSink')?.key ?? null;
+    const directStageServiceKey = root.findStage('activating')?.containerStateEntries.find((current) => current.key.debugName === 'DirectStageService')?.key ?? null;
+
+    expect(root.readCumulativeContainerStateEntries('creating').map((current) => current.key.debugName)).toEqual([
+      'Store',
+    ]);
+    expect(root.readCumulativeContainerStateEntries('activating').map((current) => current.key.debugName)).toEqual([
+      'Store',
+      'IStore',
+      'ILogSink',
+      'DirectStageService',
+    ]);
+    expect(storeKey).not.toBeNull();
+    expect(storeAliasKey).not.toBeNull();
+    expect(logSinkKey).not.toBeNull();
+    expect(directStageServiceKey).not.toBeNull();
+    if (storeKey == null || storeAliasKey == null || logSinkKey == null || directStageServiceKey == null) {
+      throw new Error('Expected AppRoot scope keys to exist.');
+    }
+
+    expect(
+      evaluator.lookup(
+        creatingScope,
+        new LookupRequest('lookup:app-root:store', storeKey, 'direct', [], null, true),
+      ).selectedEntries[0]?.key.debugName,
+    ).toBe('Store');
+    expect(
+      evaluator.lookup(
+        creatingScope,
+        new LookupRequest('lookup:app-root:store-alias:early', storeAliasKey, 'direct', [], null, true),
+      ).status,
+    ).toBe('miss');
+    expect(
+      evaluator.lookup(
+        activatingScope,
+        new LookupRequest('lookup:app-root:store-alias:late', storeAliasKey, 'direct', [], null, true),
+      ).selectedSlots[0]?.kind,
+    ).toBe('alias-forward');
+    expect(
+      evaluator.lookup(
+        activatingScope,
+        new LookupRequest('lookup:app-root:log-sink', logSinkKey, 'direct', [], null, true),
+      ).selectedSlots[0]?.kind,
+    ).toBe('constructable-activation');
+    expect(
+      evaluator.lookup(
+        activatingScope,
+        new LookupRequest('lookup:app-root:direct-stage-service', directStageServiceKey, 'direct', [], null, true),
+      ).selectedSlots[0]?.kind,
+    ).toBe('constructable-activation');
   });
 
   it('exposes workspace, framework, project, and declaration-world ownership surfaces', () => {
@@ -1574,6 +1912,342 @@ describe('Aurelia clean-room runtime model', () => {
     expect(branch?.anonymousDefinition?.structuralCarrier?.classification.items[1]?.authored.rawName).toBe('show.bind');
   });
 
+  it('derives hydration-sensitive construction requirements from generic DI and matches them against CE/CA/TC publication contracts', () => {
+    const configFixture = createConfigurationFixture();
+    const configFramework = new Framework(configFixture.rootDir, {
+      rootDir: configFixture.rootDir,
+      exports: configFixture.exports,
+      resourceSeeds: configFixture.resourceSeeds,
+    });
+    const standardWorld = configFramework.worldConstructions().findByConfigurationExportName('StandardConfiguration')[0];
+    expect(standardWorld).toBeDefined();
+    if (standardWorld == null) {
+      throw new Error('Expected StandardConfiguration world construction to exist.');
+    }
+
+    const hydrationFixture = createHydrationResourceFixture();
+    const hydrationFramework = new Framework(hydrationFixture.rootDir, {
+      rootDir: hydrationFixture.rootDir,
+      exports: hydrationFixture.exports,
+    });
+    const hydratedElement = hydrationFramework.resources().readCustomElements().find((current) => current.name === 'hydrated-element');
+    const hydrationLookupElement = hydrationFramework.resources().readCustomElements().find((current) => current.name === 'hydration-lookup-element');
+    const invalidElement = hydrationFramework.resources().readCustomElements().find((current) => current.name === 'invalid-element');
+    const hydratedAttribute = hydrationFramework.resources().readCustomAttributes().find((current) => current.name === 'hydrated-attr');
+    const hydratedTemplateController = hydrationFramework.resources().readTemplateControllers().find((current) => current.name === 'hydrated-tc');
+
+    expect(hydratedElement).toBeDefined();
+    expect(hydrationLookupElement).toBeDefined();
+    expect(invalidElement).toBeDefined();
+    expect(hydratedAttribute).toBeDefined();
+    expect(hydratedTemplateController).toBeDefined();
+    if (hydratedElement == null || hydrationLookupElement == null || invalidElement == null || hydratedAttribute == null || hydratedTemplateController == null) {
+      throw new Error('Expected hydration fixture resources to exist.');
+    }
+
+    const compilerWorld = new CompilerConsultedWorld(
+      `compiler-world:${standardWorld.world.id}:hydration-contracts`,
+      standardWorld.world,
+      [
+        ...standardWorld.visibleResources,
+        hydratedElement,
+        hydrationLookupElement,
+        invalidElement,
+        hydratedAttribute,
+        hydratedTemplateController,
+      ],
+      standardWorld.compilerWorld.renderers,
+      standardWorld.compilerWorld.resourceResolver.readAdmissions(),
+      standardWorld.compilerCapabilities,
+      standardWorld.containerStateEntries,
+      standardWorld.containerStateOpenSeams,
+      standardWorld.compilerWorld.rendering.openSeams,
+      standardWorld.compilerWorld.openSeams,
+    );
+    const compiler = new TemplateCompiler(compilerWorld);
+    const requirementMaterializer = new HydrationConstructionContractMaterializer();
+
+    expect(requirementMaterializer.materialize(hydratedElement.type).requirements.map((current) => current.token).sort()).toEqual([
+      'IAuSlotsInfo',
+      'IController',
+      'IHydrationContext',
+      'IInstruction',
+      'IRenderLocation',
+    ]);
+    expect(requirementMaterializer.materialize(hydratedElement.type).requirements.every((current) => current.key != null)).toBe(true);
+    expect(requirementMaterializer.materialize(hydrationLookupElement.type).requirements).toEqual([]);
+    expect(requirementMaterializer.materialize(hydrationLookupElement.type).lookupRequirements.map((current) => current.route)).toEqual([
+      'hydration-context-own',
+    ]);
+    expect(requirementMaterializer.materialize(hydrationLookupElement.type).lookupRequirements[0]?.key?.debugName).toBe('ICssClassMapping');
+    expect(requirementMaterializer.materialize(invalidElement.type).requirements.map((current) => current.token)).toEqual([
+      'IViewFactory',
+    ]);
+    expect(requirementMaterializer.materialize(invalidElement.type).requirements[0]?.key?.debugName).toBe('IViewFactory');
+    expect(requirementMaterializer.materialize(hydratedAttribute.type).requirements.map((current) => current.token).sort()).toEqual([
+      'IController',
+      'IInstruction',
+      'IRenderLocation',
+    ]);
+    expect(requirementMaterializer.materialize(hydratedAttribute.type).requirements.every((current) => current.key != null)).toBe(true);
+    expect(requirementMaterializer.materialize(hydratedTemplateController.type).requirements.map((current) => current.token).sort()).toEqual([
+      'IController',
+      'IInstruction',
+      'IRenderLocation',
+      'IViewFactory',
+    ]);
+    expect(requirementMaterializer.materialize(hydratedTemplateController.type).requirements.every((current) => current.key != null)).toBe(true);
+
+    const program = createProgramHandle();
+    const file = createFileHandle(program);
+    const ownerNode = createNodeHandle(file, 'ClassDeclaration', 10, 40);
+    const owner = createSymbolHandle(file, ownerNode, 'HydrationContractsHost');
+    const template = createTemplateHandle(file, owner);
+
+    const ceCompiled = compiler.compileAuthoredTemplate(
+      template,
+      '<hydrated-element></hydrated-element>',
+    );
+    const ceRoot = ceCompiled.rootNodes[0];
+    expect(ceRoot).toBeInstanceOf(CompiledElementNode);
+    if (!(ceRoot instanceof CompiledElementNode)) {
+      throw new Error('Expected hydrated-element compilation to produce a compiled element.');
+    }
+    const cePreparation = compiler.prepareCurrentTarget(
+      compiler.createElementController(null, null, ceRoot),
+      ceRoot,
+    ).customElement;
+    expect(cePreparation).toBeInstanceOf(CustomElementPreparation);
+    expect(cePreparation?.invocation.publicationContract?.find('IViewFactory')?.availability).toBe('throwing');
+    expect(cePreparation?.invocation.publicationContract?.find('IAuSlotsInfo')?.availability).toBe('empty-default');
+    expect(cePreparation?.hydrationPublication.find('IHydrationContext')?.availability).toBe('value');
+    expect(cePreparation?.invocation.publishedContainerState.find((current) => current.key.debugName === 'IController')?.slots[0]?.kind).toBe('instance-value');
+    expect(cePreparation?.invocation.publishedContainerState.find((current) => current.key.debugName === 'IRenderLocation')?.slots[0]?.kind).toBe('null-provider');
+    expect(cePreparation?.invocation.publishedContainerState.find((current) => current.key.debugName === 'IViewFactory')?.slots[0]?.kind).toBe('throwing-provider');
+    expect(cePreparation?.hydrationPublishedContainerState.find((current) => current.key.debugName === 'IHydrationContext')?.slots[0]?.kind).toBe('instance-value');
+    expect(cePreparation?.controllerLocalContainerState[0]?.slots[0]?.kind).toBe('instance-value');
+    expect(cePreparation?.controllerLocalContainerState[0]?.key.owner.id).toBe(hydratedElement.type.id);
+    expect(cePreparation?.controllerLocalContainerState.find((current) => current.key.debugName === 'ElementDependencyService')?.slots[0]?.kind).toBe('constructable-activation');
+    expect(cePreparation?.openSeams.map((current) => current.kind)).not.toContain('construction-dependencies-open');
+    expect(cePreparation?.openSeams.map((current) => current.kind)).not.toContain('construction-lookup-regime-open');
+
+    const lookupCompiled = compiler.compileAuthoredTemplate(
+      template,
+      '<hydration-lookup-element></hydration-lookup-element>',
+    );
+    const lookupRoot = lookupCompiled.rootNodes[0];
+    expect(lookupRoot).toBeInstanceOf(CompiledElementNode);
+    if (!(lookupRoot instanceof CompiledElementNode)) {
+      throw new Error('Expected hydration-lookup-element compilation to produce a compiled element.');
+    }
+    const lookupPreparation = compiler.prepareCurrentTarget(
+      compiler.createElementController(null, null, lookupRoot),
+      lookupRoot,
+    ).customElement;
+    expect(lookupPreparation?.openSeams.map((current) => current.kind)).toContain('construction-lookup-regime-open');
+
+    const invalidCompiled = compiler.compileAuthoredTemplate(
+      template,
+      '<invalid-element></invalid-element>',
+    );
+    const invalidRoot = invalidCompiled.rootNodes[0];
+    expect(invalidRoot).toBeInstanceOf(CompiledElementNode);
+    if (!(invalidRoot instanceof CompiledElementNode)) {
+      throw new Error('Expected invalid-element compilation to produce a compiled element.');
+    }
+    const invalidPreparation = compiler.prepareCurrentTarget(
+      compiler.createElementController(null, null, invalidRoot),
+      invalidRoot,
+    ).customElement;
+    expect(invalidPreparation?.openSeams.map((current) => current.kind)).toContain('construction-dependencies-open');
+
+    const caCompiled = compiler.compileAuthoredTemplate(
+      template,
+      '<div hydrated-attr.bind="value"></div>',
+    );
+    const caRoot = caCompiled.rootNodes[0];
+    expect(caRoot).toBeInstanceOf(CompiledElementNode);
+    if (!(caRoot instanceof CompiledElementNode)) {
+      throw new Error('Expected hydrated-attr compilation to produce a compiled element.');
+    }
+    const caPreparation = compiler.prepareCurrentTarget(
+      compiler.createElementController(null, null, caRoot),
+      caRoot,
+    ).customAttributes[0];
+    expect(caPreparation).toBeInstanceOf(CustomAttributePreparation);
+    expect(caPreparation?.invocation.publicationContract?.find('IViewFactory')?.availability).toBe('throwing');
+    expect(caPreparation?.invocation.publicationContract?.find('IRenderLocation')?.availability).toBe('nullable');
+    expect(caPreparation?.invocation.publishedContainerState.find((current) => current.key.debugName === 'IViewFactory')?.slots[0]?.kind).toBe('throwing-provider');
+    expect(caPreparation?.invocation.publishedContainerState.find((current) => current.key.debugName === 'IRenderLocation')?.slots[0]?.kind).toBe('null-provider');
+    expect(caPreparation?.controllerLocalContainerState[0]?.slots[0]?.kind).toBe('instance-value');
+    expect(caPreparation?.controllerLocalContainerState[0]?.key.owner.id).toBe(hydratedAttribute.type.id);
+    expect(caPreparation?.controllerLocalContainerState.find((current) => current.key.debugName === 'AttributeDependencyService')?.slots[0]?.kind).toBe('constructable-activation');
+    expect(caPreparation?.openSeams.map((current) => current.kind)).not.toContain('construction-dependencies-open');
+
+    const tcCompiled = compiler.compileAuthoredTemplate(
+      template,
+      '<div hydrated-tc.bind="value"></div>',
+    );
+    const tcRoot = tcCompiled.rootNodes[0];
+    expect(tcRoot).toBeInstanceOf(CompiledElementNode);
+    if (!(tcRoot instanceof CompiledElementNode)) {
+      throw new Error('Expected hydrated-tc compilation to produce a compiled element.');
+    }
+    const tcPreparation = compiler.prepareCurrentTarget(
+      compiler.createElementController(null, null, tcRoot),
+      tcRoot,
+    ).templateController;
+    expect(tcPreparation).toBeInstanceOf(TemplateControllerPreparation);
+    expect(tcPreparation?.invocation.publicationContract?.find('IViewFactory')?.availability).toBe('value');
+    expect(tcPreparation?.invocation.publishedContainerState.find((current) => current.key.debugName === 'IViewFactory')?.slots[0]?.kind).toBe('instance-value');
+    expect(tcPreparation?.controllerLocalContainerState[0]?.slots[0]?.kind).toBe('instance-value');
+    expect(tcPreparation?.controllerLocalContainerState[0]?.key.owner.id).toBe(hydratedTemplateController.type.id);
+    expect(tcPreparation?.controllerLocalContainerState.find((current) => current.key.debugName === 'TemplateControllerDependencyService')?.slots[0]?.kind).toBe('constructable-activation');
+    expect(tcPreparation?.openSeams.map((current) => current.kind)).not.toContain('construction-dependencies-open');
+  });
+
+  it('assembles controller lookup scopes over AppRoot stage state and child hydration publication overlays', () => {
+    const configFixture = createConfigurationFixture();
+    const configFramework = new Framework(configFixture.rootDir, {
+      rootDir: configFixture.rootDir,
+      exports: configFixture.exports,
+      resourceSeeds: configFixture.resourceSeeds,
+    });
+    const standardWorld = configFramework.worldConstructions().findByConfigurationExportName('StandardConfiguration')[0];
+    expect(standardWorld).toBeDefined();
+    if (standardWorld == null) {
+      throw new Error('Expected StandardConfiguration world construction to exist.');
+    }
+
+    const hydrationFixture = createHydrationResourceFixture();
+    const hydrationFramework = new Framework(hydrationFixture.rootDir, {
+      rootDir: hydrationFixture.rootDir,
+      exports: hydrationFixture.exports,
+    });
+    const hydratedElement = hydrationFramework.resources().readCustomElements().find((current) => current.name === 'hydrated-element');
+    expect(hydratedElement).toBeDefined();
+    if (hydratedElement == null) {
+      throw new Error('Expected hydrated-element to exist.');
+    }
+
+    const compilerWorld = new CompilerConsultedWorld(
+      `compiler-world:${standardWorld.world.id}:hydration-scope`,
+      standardWorld.world,
+      [
+        ...standardWorld.visibleResources,
+        hydratedElement,
+      ],
+      standardWorld.compilerWorld.renderers,
+      standardWorld.compilerWorld.resourceResolver.readAdmissions(),
+      standardWorld.compilerCapabilities,
+      standardWorld.containerStateEntries,
+      standardWorld.containerStateOpenSeams,
+      standardWorld.compilerWorld.rendering.openSeams,
+      standardWorld.compilerWorld.openSeams,
+    );
+    const compiler = new TemplateCompiler(compilerWorld);
+
+    const taskFixture = createAppTaskCallbackFixture();
+    const taskFramework = new Framework(taskFixture.rootDir, {
+      rootDir: taskFixture.rootDir,
+      exports: taskFixture.exports,
+      resourceSeeds: taskFixture.resourceSeeds,
+    });
+    const taskRootHostProgram = createProgramHandle();
+    const taskRootHostFile = createFileHandle(taskRootHostProgram);
+    const taskRootHostNode = createNodeHandle(taskRootHostFile, 'ClassDeclaration', 10, 40);
+    const taskRootHostSymbol = createSymbolHandle(taskRootHostFile, taskRootHostNode, 'HydrationScopeAppRoot');
+    const appRoot = new AppRoot(
+      {
+        host: taskRootHostNode,
+        component: taskRootHostSymbol,
+        appTasks: taskFramework.readAppTasks(),
+      },
+      new Container(compilerWorld.world),
+      compilerWorld.world,
+    );
+    const lookupBuilder = new LookupScopeAssemblyBuilder();
+    const evaluator = new ContainerStateLookupEvaluator();
+    const serviceScope = lookupBuilder.createWorldServiceScope(compilerWorld);
+    const appRootScope = lookupBuilder.createAppRootScope(appRoot, {
+      slot: 'creating',
+      parent: serviceScope,
+    });
+    const storeKey = appRoot.findStage('creating')?.containerStateEntries.find((current) => current.key.debugName === 'Store')?.key ?? null;
+    expect(storeKey).not.toBeNull();
+    if (storeKey == null) {
+      throw new Error('Expected Store key from AppRoot creating stage.');
+    }
+
+    const program = createProgramHandle();
+    const file = createFileHandle(program);
+    const ownerNode = createNodeHandle(file, 'ClassDeclaration', 10, 40);
+    const owner = createSymbolHandle(file, ownerNode, 'HydrationScopeHost');
+    const template = createTemplateHandle(file, owner);
+    const compiled = compiler.compileAuthoredTemplate(
+      template,
+      '<hydrated-element></hydrated-element>',
+    );
+    const ceRoot = compiled.rootNodes[0];
+    expect(ceRoot).toBeInstanceOf(CompiledElementNode);
+    if (!(ceRoot instanceof CompiledElementNode)) {
+      throw new Error('Expected hydrated-element compilation to produce a compiled element.');
+    }
+
+    const parentController = compiler.createElementController(null, null, ceRoot);
+    parentController.lookupScope = appRootScope;
+    const preparation = compiler.prepareCurrentTarget(parentController, ceRoot).customElement;
+    expect(preparation).toBeInstanceOf(CustomElementPreparation);
+    expect(preparation?.controller.lookupScope).toBeDefined();
+    expect(preparation?.invocation.lookupScope).toBe(preparation?.controller.lookupScope ?? null);
+    if (preparation == null || preparation.controller.lookupScope == null) {
+      throw new Error('Expected custom-element preparation lookup scope to exist.');
+    }
+
+    const hydrationContextKey = preparation.hydrationPublishedContainerState.find((current) => current.key.debugName === 'IHydrationContext')?.key ?? null;
+    const controllerKey = preparation.invocation.publishedContainerState.find((current) => current.key.debugName === 'IController')?.key ?? null;
+    const typeKey = preparation.controllerLocalContainerState[0]?.key ?? null;
+    const dependencyServiceKey = preparation.controllerLocalContainerState.find((current) => current.key.debugName === 'ElementDependencyService')?.key ?? null;
+    expect(hydrationContextKey).not.toBeNull();
+    expect(controllerKey).not.toBeNull();
+    expect(typeKey).not.toBeNull();
+    expect(dependencyServiceKey).not.toBeNull();
+    if (hydrationContextKey == null || controllerKey == null || typeKey == null || dependencyServiceKey == null) {
+      throw new Error('Expected local hydration publication keys to exist.');
+    }
+
+    expect(
+      evaluator.lookup(
+        preparation.controller.lookupScope,
+        new LookupRequest('lookup:ce-scope:store', storeKey, 'direct', [], null, true),
+      ).selectedEntries[0]?.key.debugName,
+    ).toBe('Store');
+    expect(
+      evaluator.lookup(
+        preparation.controller.lookupScope,
+        new LookupRequest('lookup:ce-scope:controller', controllerKey, 'direct', [], null, true),
+      ).selectedEntries[0]?.world.id,
+    ).toBe(preparation.controller.world.world.id);
+    expect(
+      evaluator.lookup(
+        preparation.controller.lookupScope,
+        new LookupRequest('lookup:ce-scope:hydration-context', hydrationContextKey, 'direct', [], null, true),
+      ).selectedEntries[0]?.key.debugName,
+    ).toBe('IHydrationContext');
+    expect(
+      evaluator.lookup(
+        preparation.controller.lookupScope,
+        new LookupRequest('lookup:ce-scope:type', typeKey, 'direct', [], null, true),
+      ).selectedEntries[0]?.key.owner.id,
+    ).toBe(preparation.resource.type.id);
+    expect(
+      evaluator.lookup(
+        preparation.controller.lookupScope,
+        new LookupRequest('lookup:ce-scope:dependency-service', dependencyServiceKey, 'direct', [], null, true),
+      ).selectedSlots[0]?.kind,
+    ).toBe('constructable-activation');
+  });
+
   it('materializes compiler-facing CA/TC bindables info with explicit and synthesized primary bindables', () => {
     const fixture = createConfigurationFixture();
     const framework = new Framework(fixture.rootDir, {
@@ -2929,6 +3603,128 @@ function createRegistrationHandle(
   );
 }
 
+function createContainerStateEntry(
+  id: string,
+  world: ContainerWorldRef,
+  key: KeyRef,
+  owner: SymbolRef,
+  source: SourceNodeRef,
+  slotKind: ContainerStateSlot['kind'],
+  lookupRegime: ContainerStateQualification['lookupRegime'],
+  note: string,
+): ContainerStateEntry {
+  const production = new RegistrationProduction(
+    `production:${id}`,
+    slotKind === 'alias-forward' ? 'alias' : 'instance',
+    owner,
+    source,
+    world,
+    key,
+    null,
+    note,
+  );
+  const intake = new RegistrationIntake(
+    `intake:${id}`,
+    'deferred-parameterized-register',
+    source,
+    owner,
+    world,
+    [production],
+    note,
+  );
+  const transition = new RegistrationTransition(
+    `transition:${id}`,
+    intake,
+    production,
+    null,
+    'key-space-addition',
+    note,
+  );
+  const resolverBasis = new RegistrationResolverBasis(
+    slotKind === 'alias-forward' ? 'alias' : 'instance',
+    note,
+  );
+  return new ContainerStateEntry(
+    id,
+    world,
+    key,
+    new ContainerStateQualification(
+      lookupRegime,
+      'runtime-gated',
+      'lookup-regime-sensitive',
+      'none',
+      note,
+    ),
+    new ContainerStateClosureBasis(
+      'statically-closable',
+      [],
+      note,
+    ),
+    [
+      new ContainerStateSlot(
+        `slot:${id}`,
+        slotKind,
+        transition,
+        resolverBasis,
+        null,
+        owner,
+        key,
+        null,
+        note,
+      ),
+    ],
+    new ContainerStateProvenance(
+      'selected',
+      transition,
+      [transition],
+      note,
+    ),
+    note,
+  );
+}
+
+function createHydrationRouteDependency(
+  owner: SymbolRef,
+  source: SourceNodeRef,
+  key: KeyRef,
+): DependencyAssociation {
+  const request = new DependencyRequest(
+    'helper-wrapped',
+    source,
+    'identifier-name',
+    key.debugName,
+    [new LookupModifier('from-hydration-context')],
+    null,
+    'Hydration-routed dependency request used in lookup-evaluator coverage.',
+  );
+  return new DependencyAssociation(
+    `dependency:${key.id}:hydration-route`,
+    new DependencySite(
+      'resolve-call',
+      owner,
+      source,
+      'field:classMapping',
+    ),
+    request,
+    key,
+    new DependencyAssociationProvenance(
+      'selected',
+      new DependencyContributor(
+        new DependencyAssociationSource(
+          'resolve-call',
+          'Recovered from a resolve(fromHydrationContext(...)) call.',
+        ),
+        request,
+        source,
+      ),
+      [],
+      'Single selected hydration-routed dependency contributor.',
+    ),
+    'Hydration-routed dependency association used in lookup-evaluator coverage.',
+    null,
+  );
+}
+
 function createTemplateHandle(
   file: SourceFileRef,
   owner: SymbolRef,
@@ -3483,6 +4279,111 @@ export const StateDefaultConfiguration = {
   };
 }
 
+function createAppTaskCallbackFixture(): {
+  readonly exports: readonly DeclarationExport[];
+  readonly resourceSeeds: readonly ResourceDefinition[];
+  readonly rootDir: string;
+} {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aurelia-clean-room-app-task-callback-'));
+  const filePath = path.join(rootDir, 'app-task-callback-fixture.ts');
+  const sourceText = `
+import { AppTask } from '@aurelia/runtime-html';
+import { Registration } from '@aurelia/kernel';
+
+declare const IContainer: unknown;
+
+function installStore(container: { register(...args: unknown[]): unknown }) {
+  return container.register(
+    Registration.instance('Store', {}),
+  );
+}
+
+const installAlias = (container: { register(...args: unknown[]): unknown }) => {
+  return container.register(
+    Registration.aliasTo('Store', 'IStore'),
+  );
+};
+
+class DirectStageService {}
+
+class TaskCallbacks {
+  static activate(container: { register(...args: unknown[]): unknown }) {
+    return container.register(
+      DirectStageService,
+      Registration.singleton('ILogSink', class Sink {}),
+    );
+  }
+}
+
+export const CallbackConfiguration = {
+  register(container: { register(...args: unknown[]): unknown }) {
+    return container.register(
+      AppTask.creating(IContainer, installStore),
+      AppTask.hydrated(IContainer, installAlias),
+      AppTask.activating(IContainer, TaskCallbacks.activate),
+    );
+  },
+};
+`;
+  fs.writeFileSync(filePath, sourceText, 'utf8');
+
+  const program = new ProgramRef(
+    'program:app-task-callback-fixture',
+    rootDir,
+    null,
+  );
+  const file = new SourceFileRef(
+    `file:${filePath}`,
+    program,
+    filePath,
+  );
+  const sourceFile = ts.createSourceFile(
+    filePath,
+    sourceText,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+
+  const exports: DeclarationExport[] = [];
+  for (const statement of sourceFile.statements) {
+    if (!hasExportModifier(statement) || !ts.isVariableStatement(statement)) {
+      continue;
+    }
+
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name)) {
+        continue;
+      }
+
+      const declarationRef = new SourceNodeRef(
+        `node:${declaration.name.text}:${declaration.getStart()}-${declaration.end}`,
+        file,
+        'VariableDeclaration',
+        new SourceSpan(declaration.getStart(), declaration.end),
+      );
+      const symbolRef = new SymbolRef(
+        `symbol:${declaration.name.text}`,
+        file,
+        declaration.name.text,
+        [declaration.name.text],
+        declarationRef,
+      );
+      exports.push({
+        name: declaration.name.text,
+        symbol: symbolRef,
+        sourceFile: file,
+      });
+    }
+  }
+
+  return {
+    exports,
+    resourceSeeds: [],
+    rootDir,
+  };
+}
+
 function createCustomElementFixture(): {
   readonly exports: readonly DeclarationExport[];
   readonly resourceSeeds: readonly ResourceDefinition[];
@@ -3787,6 +4688,145 @@ export const DefineCallConfiguration = {
     exports,
     rootDir,
     resourceSeeds: [],
+  };
+}
+
+function createHydrationResourceFixture(): {
+  readonly exports: readonly DeclarationExport[];
+  readonly rootDir: string;
+} {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aurelia-clean-room-hydration-resources-'));
+  const filePath = path.join(rootDir, 'hydration-resource-fixture.ts');
+  const sourceText = `
+declare function resolve<T>(...keys: unknown[]): T;
+declare const CustomElement: { define(...args: unknown[]): unknown };
+declare const CustomAttribute: { define(...args: unknown[]): unknown };
+declare const DI: { createInterface(...args: unknown[]): unknown };
+declare function fromHydrationContext<T>(key: T): T;
+import { IAuSlotsInfo, IController, IHydrationContext, IRenderLocation, IViewFactory } from '@aurelia/runtime-html';
+import { IInstruction } from '@aurelia/template-compiler';
+
+const ICssClassMapping = DI.createInterface('ICssClassMapping');
+
+class ElementDependencyService {}
+class AttributeDependencyService {}
+class TemplateControllerDependencyService {}
+
+class HydratedElement {
+  controller = resolve(IController);
+  instruction = resolve(IInstruction);
+  location = resolve(IRenderLocation);
+  slots = resolve(IAuSlotsInfo);
+  context = resolve(IHydrationContext);
+}
+
+class HydrationLookupElement {
+  classMapping = resolve(fromHydrationContext(ICssClassMapping));
+}
+
+class InvalidElement {
+  factory = resolve(IViewFactory);
+}
+
+class HydratedAttribute {
+  controller = resolve(IController);
+  instruction = resolve(IInstruction);
+  location = resolve(IRenderLocation);
+}
+
+class HydratedTemplateController {
+  controller = resolve(IController);
+  instruction = resolve(IInstruction);
+  location = resolve(IRenderLocation);
+  factory = resolve(IViewFactory);
+}
+
+export const HydratedElementDef = CustomElement.define({
+  name: 'hydrated-element',
+  dependencies: [ElementDependencyService],
+  template: '',
+}, HydratedElement);
+
+export const HydrationLookupElementDef = CustomElement.define({
+  name: 'hydration-lookup-element',
+  template: '',
+}, HydrationLookupElement);
+
+export const InvalidElementDef = CustomElement.define({
+  name: 'invalid-element',
+  template: '',
+}, InvalidElement);
+
+export const HydratedAttributeDef = CustomAttribute.define({
+  name: 'hydrated-attr',
+  bindables: ['value'],
+  dependencies: [AttributeDependencyService],
+}, HydratedAttribute);
+
+export const HydratedTemplateControllerDef = CustomAttribute.define({
+  name: 'hydrated-tc',
+  isTemplateController: true,
+  bindables: ['value'],
+  dependencies: [TemplateControllerDependencyService],
+}, HydratedTemplateController);
+`;
+  fs.writeFileSync(filePath, sourceText, 'utf8');
+
+  const program = new ProgramRef(
+    'program:hydration-resource-fixture',
+    rootDir,
+    null,
+  );
+  const file = new SourceFileRef(
+    `file:${filePath}`,
+    program,
+    filePath,
+  );
+  const sourceFile = ts.createSourceFile(
+    filePath,
+    sourceText,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+
+  const exports: DeclarationExport[] = [];
+  for (const statement of sourceFile.statements) {
+    if (!hasExportModifier(statement)) {
+      continue;
+    }
+
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (!ts.isIdentifier(declaration.name)) {
+          continue;
+        }
+
+        const declarationRef = new SourceNodeRef(
+          `node:${declaration.name.text}:${declaration.getStart()}-${declaration.end}`,
+          file,
+          'VariableDeclaration',
+          new SourceSpan(declaration.getStart(), declaration.end),
+        );
+        const symbolRef = new SymbolRef(
+          `symbol:${declaration.name.text}`,
+          file,
+          declaration.name.text,
+          [declaration.name.text],
+          declarationRef,
+        );
+        exports.push({
+          name: declaration.name.text,
+          symbol: symbolRef,
+          sourceFile: file,
+        });
+      }
+    }
+  }
+
+  return {
+    exports,
+    rootDir,
   };
 }
 

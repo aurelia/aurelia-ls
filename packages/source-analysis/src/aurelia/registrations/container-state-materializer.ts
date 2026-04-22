@@ -225,9 +225,9 @@ function materializeSlot(
     );
   }
 
-  switch (resolverBasis.strategy) {
-    case 'instance':
-      return new ContainerStateSlot(
+    switch (resolverBasis.strategy) {
+      case 'instance':
+        return new ContainerStateSlot(
         `container-state-slot:${entryIndex}:${slotIndex}`,
         'instance-value',
         transition,
@@ -236,10 +236,34 @@ function materializeSlot(
         payloadOwner,
         payload?.targetKey ?? null,
         null,
-        'Instance strategy closes as an already-materialized value slot.',
-      );
-    case 'singleton':
-    case 'transient': {
+          'Instance strategy closes as an already-materialized value slot.',
+        );
+      case 'null-provider':
+        return new ContainerStateSlot(
+          `container-state-slot:${entryIndex}:${slotIndex}`,
+          'null-provider',
+          transition,
+          resolverBasis,
+          payload,
+          payloadOwner,
+          payload?.targetKey ?? null,
+          null,
+          'Provider strategy closes as a keyed resolver that intentionally yields null.',
+        );
+      case 'throwing':
+        return new ContainerStateSlot(
+          `container-state-slot:${entryIndex}:${slotIndex}`,
+          'throwing-provider',
+          transition,
+          resolverBasis,
+          payload,
+          payloadOwner,
+          payload?.targetKey ?? null,
+          null,
+          'Provider strategy closes as a keyed resolver that throws when resolved.',
+        );
+      case 'singleton':
+      case 'transient': {
       if (payload?.kind !== 'constructable-type' || payload.type == null) {
         openSeams.push(
           new ContainerStateOpenSeam(

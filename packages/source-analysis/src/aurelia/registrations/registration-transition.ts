@@ -18,6 +18,7 @@ export const REGISTRATION_TRANSITION_CLASS_KINDS = [
   'multi-registration-aggregation',
   'builder-history-accumulation',
   'lifecycle-slot-attachment',
+  'child-container-publication',
   'child-world-fork',
   'generated-syntax-or-settings-emission',
 ] as const;

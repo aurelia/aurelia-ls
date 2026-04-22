@@ -1,4 +1,6 @@
 export {
+  createImportedInterfaceKey,
+  findKnownImportedInterfaceKey,
   INTERFACE_KEY_DEFAULT_REGISTRATION_KINDS,
   InterfaceKey,
   InterfaceKeyDefaultRegistration,

@@ -66,11 +66,26 @@ export {
 } from './container-state-open-seam.js';
 export { ContainerStateEntry } from './container-state-entry.js';
 export {
+  CONTAINER_STATE_LOOKUP_OPEN_SEAM_KINDS,
+  CONTAINER_STATE_LOOKUP_STATUS_KINDS,
+  ContainerStateLookupEvaluator,
+  ContainerStateLookupOpenSeam,
+  ContainerStateLookupResult,
+  ContainerStateLookupScope,
+  type ContainerStateLookupOpenSeamKind,
+  type ContainerStateLookupStatusKind,
+} from './container-state-lookup.js';
+export {
   ContainerStateMaterializer,
   type ContainerStateMaterialization,
   type ContainerStateMaterializerOptions,
   type ContainerStateMaterializerState,
 } from './container-state-materializer.js';
+export {
+  DirectRegisterReferenceMaterializer,
+  type DirectRegisterReferenceInput,
+  type DirectRegisterReferenceMaterializationOptions,
+} from './direct-register-reference-materializer.js';
 export { ConfigurationRegistrationProduction } from './configuration-registration-production.js';
 export {
   ConfigurationRegistrationScanner,

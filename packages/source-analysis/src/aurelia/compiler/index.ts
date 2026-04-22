@@ -48,6 +48,26 @@ export {
   AttributeInvocationContextOpenSeam,
   type AttributeInvocationContextOpenSeamKind,
 } from './attribute-invocation-context.js';
+export { HydrationContext } from './hydration-context.js';
+export {
+  HYDRATION_LOOKUP_ROUTE_KINDS,
+  HydrationConstructionContract,
+  HydrationConstructionContractMaterializer,
+  HydrationLookupRequirement,
+  HydrationConstructionRequirement,
+  type HydrationLookupRouteKind,
+} from './hydration-construction.js';
+export {
+  HYDRATION_PUBLICATION_AVAILABILITY_KINDS,
+  HYDRATION_PUBLICATION_BOUNDARY_KINDS,
+  HYDRATION_PUBLICATION_TOKEN_KINDS,
+  HydrationPublication,
+  HydrationPublicationContract,
+  HydrationPublicationStateMaterializer,
+  type HydrationPublicationAvailabilityKind,
+  type HydrationPublicationBoundaryKind,
+  type HydrationPublicationTokenKind,
+} from './hydration-publication.js';
 export {
   ELEMENT_INVOCATION_CONTEXT_OPEN_SEAM_KINDS,
   ElementInvocationContext,
@@ -63,6 +83,8 @@ export {
   type CompilerChildWorldFormationOpenSeamKind,
   type CompilerChildWorldRequestModeKind,
 } from './child-world-formation.js';
+export { LookupScopeAssemblyBuilder } from './lookup-scope-assembly.js';
+export { ControllerLocalStateMaterializer } from './controller-local-state.js';
 export {
   CONTROLLER_OWNED_TEMPLATE_BRANCH_KINDS,
   CONTROLLER_OWNED_TEMPLATE_BRANCH_OPEN_SEAM_KINDS,

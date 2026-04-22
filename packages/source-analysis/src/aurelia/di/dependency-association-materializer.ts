@@ -684,6 +684,11 @@ function readLookupModifier(
       return new LookupModifier('factory');
     case 'own':
       return new LookupModifier('own');
+    case 'fromHydrationContext':
+      return new LookupModifier(
+        'from-hydration-context',
+        'Dependency lookup is routed through the nearest hydration-context controller container and then resolved with own(key) semantics.',
+      );
     case 'newInstanceOf':
       return new LookupModifier('new-instance-of');
     case 'newInstanceForScope':

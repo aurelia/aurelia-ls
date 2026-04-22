@@ -7,7 +7,16 @@ import type {
   ResourceDefinitionKind,
   TemplateControllerDefinition,
 } from '../resources/index.js';
-import type { ContainerStateEntry, ContainerStateOpenSeam } from '../registrations/index.js';
+import type {
+  ContainerStateEntry,
+  ContainerStateLookupResult,
+  ContainerStateOpenSeam,
+  LookupRequest,
+} from '../registrations/index.js';
+import {
+  ContainerStateLookupEvaluator,
+  ContainerStateLookupScope,
+} from '../registrations/index.js';
 import {
   ContainerWorldRef,
 } from '../refs.js';
@@ -574,8 +583,11 @@ export class CompilerTemplateCompilerHooks {
 export class CompilerServiceLocator {
   private readonly byDebugName = new Map<string, ContainerStateEntry>();
   private readonly byKeyId = new Map<string, ContainerStateEntry>();
+  private readonly lookupEvaluator = new ContainerStateLookupEvaluator();
+  private readonly lookupScope: ContainerStateLookupScope;
 
   constructor(
+    readonly world: ContainerWorldRef | null,
     readonly entries: readonly ContainerStateEntry[],
     readonly openSeams: readonly ContainerStateOpenSeam[] = [],
   ) {
@@ -585,6 +597,13 @@ export class CompilerServiceLocator {
       }
       this.byKeyId.set(current.key.id, current);
     }
+    this.lookupScope = new ContainerStateLookupScope(
+      `compiler-services:${world?.id ?? 'anonymous'}`,
+      world,
+      entries,
+      null,
+      'Compiler service lookup scope over the consulted world keyed service entries.',
+    );
   }
 
   readAll(): readonly ContainerStateEntry[] {
@@ -607,6 +626,15 @@ export class CompilerServiceLocator {
     key: KeyRef,
   ): ContainerStateEntry | null {
     return this.byKeyId.get(key.id) ?? null;
+  }
+
+  lookup(
+    request: LookupRequest,
+  ): ContainerStateLookupResult {
+    // TODO: this first service lookup path only sees the consulted-world service
+    // entries themselves. It does not yet thread child-container publication
+    // overlays or hydration-context-routed scope chains into one lookup tree.
+    return this.lookupEvaluator.lookup(this.lookupScope, request);
   }
 }
 
@@ -671,7 +699,7 @@ export class CompilerConsultedWorld {
         (current): current is TemplateCompilerHookCapability => current.kind === 'template-compiler-hook',
       ),
     );
-    this.services = new CompilerServiceLocator(serviceEntries, serviceOpenSeams);
+    this.services = new CompilerServiceLocator(world, serviceEntries, serviceOpenSeams);
     this.valueParser = new CompilerValueParser();
     this.rendering = new Rendering(renderers, renderingOpenSeams);
   }

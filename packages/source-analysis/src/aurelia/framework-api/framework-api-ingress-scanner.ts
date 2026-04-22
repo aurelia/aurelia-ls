@@ -1,8 +1,16 @@
-import fs from 'node:fs';
-import path from 'node:path';
-
 import ts from 'typescript';
 
+import {
+  findExportedBinding,
+  findForwardedExport,
+  findImportedBinding,
+  findTopLevelBinding,
+  hasExportModifier,
+  isRelativeModuleSpecifier,
+  normalizeSourceFilePath,
+  readParsedSourceFile,
+  resolveImportedSourceFile,
+} from '../analysis/index.js';
 import type { HelperCall } from '../configurations/index.js';
 import { SourceFileRef, SourceNodeRef, SourceSpan } from '../refs.js';
 import type { FrameworkApiCatalog } from './framework-api-catalog.js';
@@ -279,7 +287,7 @@ export class FrameworkApiIngressScanner {
         };
       }
 
-      const declaredInFile = normalizeFilePath(file);
+      const declaredInFile = normalizeSourceFilePath(file);
       const directDeclaredApi = this.catalogValue.findByDeclaredPath(
         declaredInFile,
         expression.text,
@@ -365,7 +373,7 @@ export class FrameworkApiIngressScanner {
 
     const exportDeclaration = findExportedBinding(sourceFile, exportName);
     if (exportDeclaration != null) {
-      const declaredInFile = normalizeFilePath(importedFile);
+      const declaredInFile = normalizeSourceFilePath(importedFile);
       const directDeclaredApi = this.catalogValue.findByDeclaredPath(
         declaredInFile,
         exportName,
@@ -446,212 +454,15 @@ export class FrameworkApiIngressScanner {
   private readParsedSourceFile(
     file: SourceFileRef,
   ): ts.SourceFile | null {
-    const resolvedPath = path.isAbsolute(file.path)
-      ? file.path
-      : path.join(file.program.repoRoot, file.path);
-    const normalized = resolvedPath.replace(/\\/g, '/');
-    const cached = this.parsedFiles.get(normalized);
-    if (cached !== undefined) {
-      return cached;
-    }
-
-    if (!fs.existsSync(resolvedPath)) {
-      this.parsedFiles.set(normalized, null);
-      return null;
-    }
-
-    const text = fs.readFileSync(resolvedPath, 'utf8');
-    const sourceFile = ts.createSourceFile(
-      resolvedPath,
-      text,
-      ts.ScriptTarget.Latest,
-      true,
-      ts.ScriptKind.TS,
-    );
-    this.parsedFiles.set(normalized, sourceFile);
-    return sourceFile;
+    return readParsedSourceFile(this.parsedFiles, file);
   }
 
   private resolveImportedSourceFile(
     from: SourceFileRef,
     moduleSpecifier: string,
   ): SourceFileRef | null {
-    const fromPath = path.isAbsolute(from.path)
-      ? from.path
-      : path.join(from.program.repoRoot, from.path);
-    const candidateBase = path.resolve(path.dirname(fromPath), moduleSpecifier);
-    const candidates = [
-      candidateBase,
-      `${candidateBase}.ts`,
-      `${candidateBase}.tsx`,
-      path.join(candidateBase, 'index.ts'),
-      path.join(candidateBase, 'index.tsx'),
-    ];
-
-    for (const current of candidates) {
-      if (!fs.existsSync(current)) {
-        continue;
-      }
-
-      const normalized = path.isAbsolute(current)
-        ? path.relative(from.program.repoRoot, current).replace(/\\/g, '/')
-        : current.replace(/\\/g, '/');
-      return new SourceFileRef(
-        `file:${normalized}`,
-        from.program,
-        normalized,
-      );
-    }
-
-    return null;
+    return resolveImportedSourceFile(from, moduleSpecifier);
   }
-}
-
-function findImportedBinding(
-  sourceFile: ts.SourceFile,
-  localName: string,
-): {
-  readonly moduleSpecifier: string;
-  readonly exportName: string;
-} | null {
-  for (const statement of sourceFile.statements) {
-    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
-      continue;
-    }
-
-    const clause = statement.importClause;
-    if (clause == null) {
-      continue;
-    }
-
-    if (clause.name?.text === localName) {
-      return {
-        moduleSpecifier: statement.moduleSpecifier.text,
-        exportName: 'default',
-      };
-    }
-
-    const bindings = clause.namedBindings;
-    if (bindings != null && ts.isNamedImports(bindings)) {
-      for (const element of bindings.elements) {
-        const boundName = element.name.text;
-        if (boundName !== localName) {
-          continue;
-        }
-
-        return {
-          moduleSpecifier: statement.moduleSpecifier.text,
-          exportName: element.propertyName?.text ?? element.name.text,
-        };
-      }
-    }
-  }
-
-  return null;
-}
-
-function findTopLevelBinding(
-  sourceFile: ts.SourceFile,
-  name: string,
-): ts.Declaration | null {
-  for (const statement of sourceFile.statements) {
-    if (ts.isVariableStatement(statement)) {
-      for (const declaration of statement.declarationList.declarations) {
-        if (ts.isIdentifier(declaration.name) && declaration.name.text === name) {
-          return declaration;
-        }
-      }
-      continue;
-    }
-
-    if (
-      (ts.isFunctionDeclaration(statement)
-        || ts.isClassDeclaration(statement)
-        || ts.isEnumDeclaration(statement)
-        || ts.isInterfaceDeclaration(statement)
-        || ts.isTypeAliasDeclaration(statement))
-      && statement.name?.text === name
-    ) {
-      return statement;
-    }
-  }
-
-  return null;
-}
-
-function findExportedBinding(
-  sourceFile: ts.SourceFile,
-  exportName: string,
-): ts.Declaration | null {
-  for (const statement of sourceFile.statements) {
-    if (!hasExportModifier(statement)) {
-      continue;
-    }
-
-    if (ts.isVariableStatement(statement)) {
-      for (const declaration of statement.declarationList.declarations) {
-        if (ts.isIdentifier(declaration.name) && declaration.name.text === exportName) {
-          return declaration;
-        }
-      }
-      continue;
-    }
-
-    if (
-      (ts.isFunctionDeclaration(statement)
-        || ts.isClassDeclaration(statement)
-        || ts.isEnumDeclaration(statement)
-        || ts.isInterfaceDeclaration(statement)
-        || ts.isTypeAliasDeclaration(statement))
-      && statement.name?.text === exportName
-    ) {
-      return statement;
-    }
-  }
-
-  return null;
-}
-
-function findForwardedExport(
-  sourceFile: ts.SourceFile,
-  exportName: string,
-): {
-  readonly moduleSpecifier: string;
-  readonly exportName: string;
-} | null {
-  for (const statement of sourceFile.statements) {
-    if (
-      !ts.isExportDeclaration(statement)
-      || statement.exportClause == null
-      || !ts.isNamedExports(statement.exportClause)
-      || statement.moduleSpecifier == null
-      || !ts.isStringLiteral(statement.moduleSpecifier)
-    ) {
-      continue;
-    }
-
-    for (const element of statement.exportClause.elements) {
-      if (element.name.text !== exportName) {
-        continue;
-      }
-
-      return {
-        moduleSpecifier: statement.moduleSpecifier.text,
-        exportName: element.propertyName?.text ?? element.name.text,
-      };
-    }
-  }
-
-  return null;
-}
-
-function hasExportModifier(
-  node: ts.Node,
-): boolean {
-  const modifiers = ts.canHaveModifiers(node)
-    ? ts.getModifiers(node)
-    : undefined;
-  return modifiers?.some((current) => current.kind === ts.SyntaxKind.ExportKeyword) ?? false;
 }
 
 function findNodeBySpan<T extends ts.Node>(
@@ -689,18 +500,6 @@ function createNodeRef(
     ts.SyntaxKind[node.kind],
     new SourceSpan(node.getStart(), node.end),
   );
-}
-
-function isRelativeModuleSpecifier(
-  moduleSpecifier: string,
-): boolean {
-  return moduleSpecifier.startsWith('./') || moduleSpecifier.startsWith('../');
-}
-
-function normalizeFilePath(
-  file: SourceFileRef,
-): string {
-  return file.path.replace(/\\/g, '/');
 }
 
 function formatMemberPath(

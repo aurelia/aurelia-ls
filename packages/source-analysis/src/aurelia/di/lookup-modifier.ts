@@ -4,6 +4,7 @@ export const LOOKUP_MODIFIER_KINDS = [
   'optional',
   'factory',
   'own',
+  'from-hydration-context',
   'new-instance-of',
   'new-instance-for-scope',
 ] as const;

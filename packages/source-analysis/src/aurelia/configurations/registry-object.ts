@@ -1,5 +1,15 @@
 import type { Export } from '../exports/index.js';
 import type { SourceNodeRef } from '../refs.js';
+import {
+  BundleSpread,
+  HelperCall,
+  RegisterArgument,
+} from './configuration-function-analysis.js';
+export {
+  BundleSpread,
+  HelperCall,
+  RegisterArgument,
+} from './configuration-function-analysis.js';
 
 export const REGISTRY_OBJECT_ORIGIN_KINDS = [
   'object-literal',
@@ -17,40 +27,6 @@ export const REGISTRY_FACTORY_METHOD_ROLE_KINDS = [
 
 export type RegistryFactoryMethodRoleKind =
   typeof REGISTRY_FACTORY_METHOD_ROLE_KINDS[number];
-
-export class BundleSpread {
-  constructor(
-    readonly id: string,
-    readonly source: SourceNodeRef,
-    // TODO: this is a closed syntactic reference name, not a semantic bundle
-    // identity. Real bundle expansion needs a later export/value lookup seam.
-    readonly referenceName: string,
-    readonly note: string | null = null,
-  ) {}
-}
-
-export class HelperCall {
-  constructor(
-    readonly id: string,
-    readonly source: SourceNodeRef,
-    // TODO: this is a syntax witness for a direct call expression seen in the
-    // current method body. It is not yet a semantic call-role classification.
-    readonly calleeName: string,
-    readonly note: string | null = null,
-  ) {}
-}
-
-export class RegisterArgument {
-  constructor(
-    readonly id: string,
-    readonly source: SourceNodeRef,
-    // TODO: this remains a syntax witness for a direct register(...) argument.
-    // A later reference-ingress seam should replace the raw name with a closed
-    // symbol/import provenance result where possible.
-    readonly referenceName: string,
-    readonly note: string | null = null,
-  ) {}
-}
 
 export class RegistryMethod {
   constructor(

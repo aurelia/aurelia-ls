@@ -79,6 +79,9 @@ export class ConfigurationRegistrationScanner {
     // - expand bundle spreads into their member registrations
     // - descend into nested callbacks / returned registry closures
     // - recover keys or payloads from the producer arguments
+    // - flatten AppTask callback productions into the top-level direct
+    //   production list (that stage-specific consequence now lives on the
+    //   AppTask scanner instead so timing does not get erased)
     //
     // The framework API ingress seam below only closes aliases/import routes to
     // canonical Aurelia APIs. It does not yet model richer helper semantics.
