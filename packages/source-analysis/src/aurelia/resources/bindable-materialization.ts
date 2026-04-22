@@ -109,17 +109,46 @@ export function mergeBindableSurface(
   existing: BindableSurface,
   derived: BindableSurface,
 ): BindableSurface {
+  // NOTE: callers pass `existing` as the already-seeded resource surface and
+  // `derived` as the declaration-local class surface. Runtime CE/CA/TC
+  // creation applies class/type bindables before later definition-object
+  // bindables, so merged input order here is intentionally derived-first and
+  // existing-last.
   const inputs = [
-    ...existing.inputs,
     ...derived.inputs,
-    ...surfaceAsSeedInputs(existing),
+    ...existing.inputs,
     ...surfaceAsSeedInputs(derived),
+    ...surfaceAsSeedInputs(existing),
   ];
+
+  const selectedByName = new Map<string, BindableEntry>();
+  for (const entry of [...derived.entries, ...existing.entries]) {
+    if (entry.name == null) {
+      continue;
+    }
+    selectedByName.set(entry.name, entry);
+  }
+
+  const mergedEntries = [...selectedByName.values()];
+  const allWitnesses = mergeUniqueSurfaceWitnesses([
+    ...(derived.provenance?.contributors ?? []),
+    ...(existing.provenance?.contributors ?? []),
+  ]);
+
   return new BindableSurface(
     inputs,
-    derived.entries.length > 0 ? derived.entries : existing.entries,
-    derived.provenance ?? existing.provenance,
-    existing.note ?? derived.note,
+    mergedEntries.length > 0 ? mergedEntries : [...derived.entries, ...existing.entries],
+    inputs.length === 0
+      ? existing.provenance ?? derived.provenance
+      : new BindableSurfaceProvenance(
+        inputs.filter((input) => input.entries.length > 0).length > 1 || mergedEntries.length > 1 ? 'merged' : 'selected',
+        null,
+        allWitnesses,
+        'Bindable surface merged across previously materialized runtime-shaped inputs while preserving whole-entry overwrite order.',
+      ),
+    inputs.length === 0
+      ? existing.note ?? derived.note
+      : 'Bindable surface merged from previously materialized runtime-shaped inputs.',
   );
 }
 

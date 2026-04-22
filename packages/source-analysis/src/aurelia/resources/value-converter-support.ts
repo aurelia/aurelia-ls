@@ -14,6 +14,7 @@ export type ValueConverterSupportFieldKind =
 
 export const VALUE_CONVERTER_SUPPORT_CARRIER_KINDS = [
   'annotation-decorator',
+  'definition-object',
   'static-au-property',
   'static-own-property',
   'instance-property',

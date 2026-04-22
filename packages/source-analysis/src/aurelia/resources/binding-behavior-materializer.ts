@@ -427,20 +427,22 @@ function carrierPrecedence(
   carrier: BindingBehaviorSupportCarrierKind,
 ): number {
   switch (carrier) {
-    case 'annotation-decorator':
+    case 'definition-object':
       return 0;
-    case 'static-au-property':
+    case 'annotation-decorator':
       return 1;
-    case 'static-own-property':
+    case 'static-au-property':
       return 2;
-    case 'instance-property':
+    case 'static-own-property':
       return 3;
-    case 'instance-method':
+    case 'instance-property':
       return 4;
-    case 'default':
+    case 'instance-method':
       return 5;
-    case 'open':
+    case 'default':
       return 6;
+    case 'open':
+      return 7;
   }
 }
 

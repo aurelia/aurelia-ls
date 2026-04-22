@@ -210,10 +210,9 @@ function readCustomElementSurface(
   file: SourceFileRef,
   sourceFile: ts.SourceFile,
 ): CustomElementSurface {
-  // TODO: explicit CustomElement.define({...}, Type) definition-object paths
-  // still need their own carrier seam. This pass now includes decorator
-  // metadata plus class-carrier surfaces, but not external definition-object
-  // arguments or runtime metadata execution.
+  // NOTE: imperative CustomElement.define(...) definition-object ingress is now
+  // seeded upstream in ResourceScanner. This pass still only deepens the class
+  // carrier itself; it does not re-read external definition objects here.
   const auDefinition = readStaticAuDefinition(declarationNode);
 
   const nameContributors = readFieldContributors('name', declarationNode, auDefinition, file, sourceFile);
@@ -767,6 +766,8 @@ function toBindableCarrier(
   carrier: CustomElementSupportCarrierKind,
 ): BindableCarrierKind {
   switch (carrier) {
+    case 'definition-object':
+      return 'definition-object';
     case 'bindable-decorator':
       return 'bindable-decorator';
     case 'static-au-property':
@@ -1241,18 +1242,20 @@ function carrierPrecedence(
   carrier: CustomElementSupportCarrierKind,
 ): number {
   switch (carrier) {
-    case 'annotation-decorator':
+    case 'definition-object':
       return 0;
-    case 'bindable-decorator':
+    case 'annotation-decorator':
       return 1;
-    case 'static-au-property':
+    case 'bindable-decorator':
       return 2;
-    case 'static-own-property':
+    case 'static-au-property':
       return 3;
-    case 'default':
+    case 'static-own-property':
       return 4;
-    case 'open':
+    case 'default':
       return 5;
+    case 'open':
+      return 6;
   }
 }
 

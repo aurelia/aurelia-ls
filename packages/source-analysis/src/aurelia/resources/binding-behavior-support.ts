@@ -13,6 +13,7 @@ export type BindingBehaviorSupportFieldKind =
 
 export const BINDING_BEHAVIOR_SUPPORT_CARRIER_KINDS = [
   'annotation-decorator',
+  'definition-object',
   'static-au-property',
   'static-own-property',
   'instance-property',

@@ -273,6 +273,77 @@ describe('Aurelia clean-room runtime model', () => {
     expect(attributePatterns).toContain('PART.trigger:PART');
   });
 
+  it('recognizes exported define-call resource ingress and converges it with class-backed materialization', () => {
+    const fixture = createDefineCallResourceFixture();
+    const framework = new Framework('define-call-fixture', {
+      rootDir: fixture.rootDir,
+      exports: fixture.exports,
+      resourceSeeds: fixture.resourceSeeds,
+    });
+
+    const inlinePanelExport = framework.exports().find('InlinePanel')[0];
+    expect(inlinePanelExport).toBeDefined();
+    if (inlinePanelExport == null) {
+      throw new Error('Expected InlinePanel export to exist.');
+    }
+
+    const inlinePanelSurface = inlinePanelExport.readValueSurface();
+    expect(inlinePanelSurface.kind).toBe('variable-declaration');
+    expect(inlinePanelSurface.requiredChecks).toContain('define-call');
+    expect(inlinePanelSurface.resolvedShapeKind).toBe('resource-define-call');
+    expect(inlinePanelSurface.defineCall?.resourceKind).toBe('custom-element');
+    expect(inlinePanelSurface.defineCall?.typeArgument.kind).toBe('inline-class');
+
+    const generatedPanelExport = framework.exports().find('GeneratedPanel')[0];
+    expect(generatedPanelExport).toBeDefined();
+    if (generatedPanelExport == null) {
+      throw new Error('Expected GeneratedPanel export to exist.');
+    }
+    expect(generatedPanelExport.readValueSurface().defineCall?.typeArgument.kind).toBe('generated-type');
+
+    const inlinePanel = framework.resources().readCustomElements().find((current) => current.name === 'inline-panel');
+    const tooltip = framework.resources().readCustomAttributes().find((current) => current.name === 'tooltip');
+    const guard = framework.resources().readTemplateControllers().find((current) => current.name === 'guard');
+    const generatedPanel = framework.resources().readCustomElements().find((current) => current.name === 'generated-panel');
+    const relativeTime = framework.resources().readValueConverters().find((current) => current.name === 'relativeTime');
+    const debounce = framework.resources().readBindingBehaviors().find((current) => current.name === 'debounce');
+    const trigger = framework.resources().readBindingCommands().find((current) => current.name === 'trigger');
+
+    expect(inlinePanel).toBeDefined();
+    expect(tooltip).toBeDefined();
+    expect(guard).toBeDefined();
+    expect(generatedPanel).toBeDefined();
+    expect(relativeTime).toBeDefined();
+    expect(debounce).toBeDefined();
+    expect(trigger).toBeDefined();
+
+    if (inlinePanel == null || tooltip == null || guard == null || generatedPanel == null || relativeTime == null || debounce == null || trigger == null) {
+      throw new Error('Expected define-call resources to be materialized.');
+    }
+
+    expect(inlinePanel.aliases).toContain('panel-x');
+    expect(inlinePanel.policy.containerless).toBe(true);
+    expect(inlinePanel.templateSource.kind).toBe('inline-string');
+    const inlineTitleBindable = inlinePanel.bindableSurface.entries.find((current) => current.name === 'title');
+    const inlineSubtitleBindable = inlinePanel.bindableSurface.entries.find((current) => current.name === 'subtitle');
+    expect(inlineTitleBindable?.callbackTarget.kind).toBe('resolved-instance-method');
+    expect(inlineTitleBindable?.callbackTarget.name).toBe('titleChanged');
+    expect(inlineSubtitleBindable?.callbackTarget.kind).toBe('resolved-instance-method');
+    expect(inlineSubtitleBindable?.callbackTarget.name).toBe('subtitleChanged');
+
+    expect(tooltip.defaultProperty).toBe('message');
+    expect(tooltip.noMultiBindings).toBe(true);
+    expect(tooltip.bindableSurface.entries[0]?.callbackTarget.kind).toBe('resolved-instance-method');
+    expect(tooltip.type.kind).toBe('source-node');
+
+    expect(guard.containerStrategy).toBe('new');
+    expect(guard.policy.isTemplateController).toBe(true);
+    expect(generatedPanel.type.kind).toBe('symbol');
+    expect(relativeTime.aliases).toContain('rt');
+    expect(debounce.aliases).toContain('debounced');
+    expect(trigger.name).toBe('trigger');
+  });
+
   it('closes Vite conventions activation from verified config-body plugin usage', () => {
     const fixture = createActiveViteToolingFixture();
     const tooling = new ToolingEnvironmentScanner({
@@ -3479,6 +3550,174 @@ export class DecoratedCard {
   const decorated = byName.get('DecoratedCard');
   if (fancy == null || precompiled == null || layeredDeps == null || decorated == null) {
     throw new Error('Expected CE fixture exports to exist.');
+  }
+
+  return {
+    exports,
+    rootDir,
+    resourceSeeds: [],
+  };
+}
+
+function createDefineCallResourceFixture(): {
+  readonly exports: readonly DeclarationExport[];
+  readonly resourceSeeds: readonly ResourceDefinition[];
+  readonly rootDir: string;
+} {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aurelia-clean-room-define-call-resources-'));
+  const filePath = path.join(rootDir, 'define-call-resource-fixture.ts');
+  const sourceText = `
+declare const CustomElement: { define(...args: unknown[]): unknown };
+declare const CustomAttribute: { define(...args: unknown[]): unknown };
+declare const ValueConverter: { define(...args: unknown[]): unknown };
+declare const BindingBehavior: { define(...args: unknown[]): unknown };
+declare const BindingCommand: { define(...args: unknown[]): unknown };
+
+export class DepOne {}
+
+export const InlinePanel = CustomElement.define({
+  name: 'inline-panel',
+  aliases: ['panel-x'],
+  template: '<div></div>',
+  bindables: {
+    title: {
+      attribute: 'panel-title',
+      callback: 'titleChanged',
+    },
+  },
+  dependencies: [DepOne],
+  containerless: true,
+}, class InlinePanel {
+  static bindables = {
+    subtitle: {
+      callback: 'subtitleChanged',
+    },
+    title: {
+      callback: 'legacyTitleChanged',
+    },
+  };
+
+  titleChanged() {}
+  subtitleChanged() {}
+  legacyTitleChanged() {}
+});
+
+class TooltipType {
+  messageChanged() {}
+}
+
+export const Tooltip = CustomAttribute.define({
+  name: 'tooltip',
+  aliases: ['tip'],
+  defaultProperty: 'message',
+  bindables: ['message'],
+  noMultiBindings: true,
+}, TooltipType);
+
+export const Guard = CustomAttribute.define({
+  name: 'guard',
+  isTemplateController: true,
+  bindables: ['value'],
+  containerStrategy: 'new',
+}, class GuardType {});
+
+export const GeneratedPanel = CustomElement.define({
+  name: 'generated-panel',
+  template: '<div></div>',
+  bindables: ['value'],
+}, null);
+
+export const RelativeTime = ValueConverter.define({
+  name: 'relativeTime',
+  aliases: ['rt'],
+}, class RelativeTimeValueConverter {
+  toView(value: unknown) { return value; }
+});
+
+export const Debounce = BindingBehavior.define({
+  name: 'debounce',
+  aliases: ['debounced'],
+}, class DebounceBindingBehavior {});
+
+export const Trigger = BindingCommand.define('trigger', class TriggerBindingCommand {
+  get ignoreAttr() { return true; }
+  build() { return { type: 'listener-binding' }; }
+});
+`;
+  fs.writeFileSync(filePath, sourceText, 'utf8');
+
+  const program = new ProgramRef(
+    'program:define-call-resource-fixture',
+    rootDir,
+    null,
+  );
+  const file = new SourceFileRef(
+    `file:${filePath}`,
+    program,
+    filePath,
+  );
+  const sourceFile = ts.createSourceFile(
+    filePath,
+    sourceText,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+
+  const exports: DeclarationExport[] = [];
+  for (const statement of sourceFile.statements) {
+    if (!hasExportModifier(statement)) {
+      continue;
+    }
+
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (!ts.isIdentifier(declaration.name)) {
+          continue;
+        }
+
+        const declarationRef = new SourceNodeRef(
+          `node:${declaration.name.text}:${declaration.getStart()}-${declaration.end}`,
+          file,
+          'VariableDeclaration',
+          new SourceSpan(declaration.getStart(), declaration.end),
+        );
+        const symbolRef = new SymbolRef(
+          `symbol:${declaration.name.text}`,
+          file,
+          declaration.name.text,
+          [declaration.name.text],
+          declarationRef,
+        );
+        exports.push({
+          name: declaration.name.text,
+          symbol: symbolRef,
+          sourceFile: file,
+        });
+      }
+      continue;
+    }
+
+    if (ts.isClassDeclaration(statement) && statement.name != null) {
+      const declarationRef = new SourceNodeRef(
+        `node:${statement.name.text}:${statement.getStart()}-${statement.end}`,
+        file,
+        'ClassDeclaration',
+        new SourceSpan(statement.getStart(), statement.end),
+      );
+      const symbolRef = new SymbolRef(
+        `symbol:${statement.name.text}`,
+        file,
+        statement.name.text,
+        [statement.name.text],
+        declarationRef,
+      );
+      exports.push({
+        name: statement.name.text,
+        symbol: symbolRef,
+        sourceFile: file,
+      });
+    }
   }
 
   return {

@@ -17,6 +17,7 @@ export type CustomAttributeSupportFieldKind =
 export const CUSTOM_ATTRIBUTE_SUPPORT_CARRIER_KINDS = [
   'annotation-decorator',
   'bindable-decorator',
+  'definition-object',
   'static-au-property',
   'static-own-property',
   'default',

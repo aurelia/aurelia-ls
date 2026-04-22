@@ -68,6 +68,30 @@ function contributionsFor(
           'Decorator carriers may also contribute aliases.',
         ),
       ];
+    case 'definition-object':
+      return [
+        new DefinitionFieldContribution(
+          'name',
+          'open',
+          'define-call',
+          null,
+          'Imperative define-call object carriers may contribute canonical naming.',
+        ),
+        new DefinitionFieldContribution(
+          'aliases',
+          'open',
+          'define-call',
+          null,
+          'Imperative define-call object carriers may also contribute aliases.',
+        ),
+        new DefinitionFieldContribution(
+          'bindables',
+          'open',
+          'define-call',
+          null,
+          'Imperative define-call object carriers may contribute bindables and related policy.',
+        ),
+      ];
     case 'static-au':
       return [
         new DefinitionFieldContribution(

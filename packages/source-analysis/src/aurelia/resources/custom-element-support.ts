@@ -20,6 +20,7 @@ export type CustomElementSupportFieldKind =
 export const CUSTOM_ELEMENT_SUPPORT_CARRIER_KINDS = [
   'annotation-decorator',
   'bindable-decorator',
+  'definition-object',
   'static-au-property',
   'static-own-property',
   'default',

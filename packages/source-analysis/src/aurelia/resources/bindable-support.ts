@@ -15,6 +15,7 @@ export type BindableFieldKind =
 
 export const BINDABLE_CARRIER_KINDS = [
   'bindable-decorator',
+  'definition-object',
   'static-au-property',
   'static-own-property',
   'default',

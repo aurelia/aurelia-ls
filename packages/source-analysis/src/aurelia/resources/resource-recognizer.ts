@@ -68,21 +68,23 @@ export class ResourceRecognizer {
     current: Export,
   ): readonly ResourceCandidate[] {
     const surface = current.readValueSurface();
-    if (surface.kind !== 'class-declaration') {
-      return [];
-    }
-
-    const carrier = this.readParsedClassCarrier(current);
-    if (carrier == null) {
-      return [];
-    }
+    const classCarrier = surface.kind === 'class-declaration' || surface.resolvedShapeKind === 'class-expression'
+      ? this.readParsedClassCarrier(current)
+      : null;
 
     const evidence = [
-      ...readDecoratorEvidence(carrier.classNode),
-      ...readStaticAuEvidence(carrier.classNode),
-      ...(this.conventionsActiveValue
-        ? readConventionEvidence(current.name)
-        : []),
+      ...(classCarrier == null
+        ? []
+        : [
+          ...readDecoratorEvidence(classCarrier.classNode),
+          ...readStaticAuEvidence(classCarrier.classNode),
+          ...(this.conventionsActiveValue
+            ? readConventionEvidence(current.name)
+            : []),
+        ]),
+      ...(surface.defineCall == null
+        ? []
+        : readDefineCallEvidence(surface.defineCall, current.name)),
     ];
 
     if (evidence.length === 0) {
@@ -268,6 +270,20 @@ function readConventionEvidence(
     pathKind: 'convention',
     carrierKind: 'convention',
     note: `Export name ${exportName} matched ${matched.kind} convention via the ${matched.suffix} suffix. This path is only meaningful when a build-tool conventions layer is known to be active.`,
+  }];
+}
+
+function readDefineCallEvidence(
+  defineCall: NonNullable<ReturnType<Export['readValueSurface']>['defineCall']>,
+  exportName: string,
+): readonly RecognitionEvidence[] {
+  return [{
+    kind: defineCall.resourceKind,
+    pathKind: 'define-call',
+    carrierKind: 'definition-object',
+    note: defineCall.resourceKind === 'template-controller'
+      ? `Export value ${exportName} closed template-controller candidacy through an imperative define-call result whose definition object admitted template-controller shape.`
+      : `Export value ${exportName} closed ${defineCall.resourceKind} candidacy through an imperative define-call result.`,
   }];
 }
 

@@ -475,6 +475,8 @@ function toBindableCarrier(
   carrier: CustomAttributeSupportCarrierKind,
 ): BindableCarrierKind {
   switch (carrier) {
+    case 'definition-object':
+      return 'definition-object';
     case 'bindable-decorator':
       return 'bindable-decorator';
     case 'static-au-property':
@@ -674,18 +676,20 @@ function carrierPrecedence(
   carrier: CustomAttributeSupportCarrierKind,
 ): number {
   switch (carrier) {
-    case 'annotation-decorator':
+    case 'definition-object':
       return 0;
-    case 'bindable-decorator':
+    case 'annotation-decorator':
       return 1;
-    case 'static-au-property':
+    case 'bindable-decorator':
       return 2;
-    case 'static-own-property':
+    case 'static-au-property':
       return 3;
-    case 'default':
+    case 'static-own-property':
       return 4;
-    case 'open':
+    case 'default':
       return 5;
+    case 'open':
+      return 6;
   }
 }
 

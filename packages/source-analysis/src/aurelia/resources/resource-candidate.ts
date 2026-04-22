@@ -3,6 +3,7 @@ import type { ResourceDefinitionKind } from './contracts.js';
 
 export const RESOURCE_RECOGNITION_PATH_KINDS = [
   'decorator',
+  'define-call',
   'static-$au',
   'registrable-metadata',
   'register-method',
@@ -23,6 +24,7 @@ export type ResourceRecognitionStatus =
 
 export const RESOURCE_CARRIER_KINDS = [
   'decorator',
+  'definition-object',
   'static-au',
   'registrable-metadata',
   'configuration-emission',

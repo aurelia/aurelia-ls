@@ -14,6 +14,7 @@ export type BindingCommandSupportFieldKind =
 
 export const BINDING_COMMAND_SUPPORT_CARRIER_KINDS = [
   'annotation-decorator',
+  'definition-object',
   'static-au-property',
   'ignore-attr-getter',
   'build-method',
