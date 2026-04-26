@@ -1,3 +1,5 @@
+import { EvidenceSource, EvidenceWitness } from '../provenance/index.js';
+
 export const TOOLING_ACTIVATION_STATUS_KINDS = [
   'active',
   'inactive',
@@ -43,11 +45,20 @@ export type ToolingEvidenceCarrierKind =
   typeof TOOLING_EVIDENCE_CARRIER_KINDS[number];
 
 export class ToolingEvidence {
+  readonly witness: EvidenceWitness<'tooling-environment', ToolingEvidenceCarrierKind>;
+
   constructor(
     readonly carrier: ToolingEvidenceCarrierKind,
     readonly location: string | null = null,
     readonly note: string | null = null,
-  ) {}
+  ) {
+    this.witness = new EvidenceWitness(
+      'tooling-environment',
+      carrier,
+      location == null ? EvidenceSource.open(note) : EvidenceSource.externalLocation(location, note),
+      note,
+    );
+  }
 }
 
 export class BuildToolActivation {

@@ -17,6 +17,7 @@ import {
   RegistrationPayload,
   RegistrationProduction,
 } from './registrations/index.js';
+import { OpenSeamEvidence } from './provenance/index.js';
 import { KeyRef, type SourceNodeRef, type SourceFileRef } from './refs.js';
 
 export const APP_TASK_SLOT_KINDS = [
@@ -68,11 +69,15 @@ export type AppTaskOpenSeamKind =
   typeof APP_TASK_OPEN_SEAM_KINDS[number];
 
 export class AppTaskOpenSeam {
+  readonly evidence: OpenSeamEvidence<AppTaskOpenSeamKind>;
+
   constructor(
     readonly kind: AppTaskOpenSeamKind,
     readonly source: SourceNodeRef | null,
     readonly note: string,
-  ) {}
+  ) {
+    this.evidence = OpenSeamEvidence.fromSourceNode(kind, source, null, note);
+  }
 }
 
 export class AppTaskKeyRequest {

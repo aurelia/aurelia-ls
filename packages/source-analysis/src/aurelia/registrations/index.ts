@@ -61,8 +61,10 @@ export {
   type ContainerStateSlotKind,
 } from './container-state-slot.js';
 export {
+  CONTAINER_STATE_PROVENANCE_FIELD_KINDS,
   CONTAINER_STATE_PROVENANCE_MODES,
   ContainerStateProvenance,
+  type ContainerStateProvenanceFieldKind,
   type ContainerStateProvenanceMode,
 } from './container-state-provenance.js';
 export {

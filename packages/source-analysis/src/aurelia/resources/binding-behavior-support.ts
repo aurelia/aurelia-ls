@@ -1,3 +1,4 @@
+import { EvidenceSource, EvidenceWitness, ProvenanceSet } from '../provenance/index.js';
 import type { KeyRef, SourceNodeRef } from '../refs.js';
 
 export const BINDING_BEHAVIOR_SUPPORT_FIELD_KINDS = [
@@ -25,23 +26,43 @@ export const BINDING_BEHAVIOR_SUPPORT_CARRIER_KINDS = [
 export type BindingBehaviorSupportCarrierKind =
   typeof BINDING_BEHAVIOR_SUPPORT_CARRIER_KINDS[number];
 
+export type BindingBehaviorFieldProvenanceMode =
+  'selected' | 'merged' | 'presence-only';
+
 export class BindingBehaviorFieldWitness {
+  readonly evidence: EvidenceWitness<BindingBehaviorSupportFieldKind, BindingBehaviorSupportCarrierKind>;
+
   constructor(
     readonly field: BindingBehaviorSupportFieldKind,
     readonly carrier: BindingBehaviorSupportCarrierKind,
     readonly source: SourceNodeRef | null,
     readonly note: string | null = null,
-  ) {}
+  ) {
+    this.evidence = new EvidenceWitness(
+      field,
+      carrier,
+      source == null ? EvidenceSource.open(note) : EvidenceSource.sourceNode(source, note),
+      note,
+    );
+  }
 }
 
 export class BindingBehaviorFieldProvenance {
+  readonly provenanceSet: ProvenanceSet<
+    BindingBehaviorSupportFieldKind,
+    BindingBehaviorFieldProvenanceMode,
+    BindingBehaviorFieldWitness
+  >;
+
   constructor(
     readonly field: BindingBehaviorSupportFieldKind,
-    readonly mode: 'selected' | 'merged' | 'presence-only',
+    readonly mode: BindingBehaviorFieldProvenanceMode,
     readonly selected: BindingBehaviorFieldWitness | null,
     readonly contributors: readonly BindingBehaviorFieldWitness[] = [],
     readonly note: string | null = null,
-  ) {}
+  ) {
+    this.provenanceSet = new ProvenanceSet(field, mode, selected, contributors, note);
+  }
 }
 
 export class BindingBehaviorIdentity {

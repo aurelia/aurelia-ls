@@ -36,10 +36,12 @@ export {
   type LookupModifierKind,
 } from './lookup-modifier.js';
 export {
+  DEPENDENCY_PROVENANCE_FIELD_KINDS,
   DEPENDENCY_PROVENANCE_MODES,
   DependencyAssociationProvenance,
   DependencyContributor,
   DependencyMaterialization,
+  type DependencyProvenanceFieldKind,
   type DependencyProvenanceMode,
 } from './dependency-provenance.js';
 export {

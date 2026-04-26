@@ -1,3 +1,4 @@
+import { EvidenceSource, EvidenceWitness, ProvenanceSet } from '../provenance/index.js';
 import type { KeyRef, SourceNodeRef } from '../refs.js';
 
 export const CUSTOM_ELEMENT_SUPPORT_FIELD_KINDS = [
@@ -82,27 +83,47 @@ export const CUSTOM_ELEMENT_DEPENDENCY_LINK_SEED_KINDS = [
 export type CustomElementDependencyLinkSeedKind =
   typeof CUSTOM_ELEMENT_DEPENDENCY_LINK_SEED_KINDS[number];
 
+export type CustomElementFieldProvenanceMode =
+  'selected' | 'merged' | 'presence-only';
+
 // This is the support-bundle contribution layer. A single field can have more
 // than one contributor, so these are not "the answer" by themselves.
 export class CustomElementFieldWitness {
+  readonly evidence: EvidenceWitness<CustomElementSupportFieldKind, CustomElementSupportCarrierKind>;
+
   constructor(
     readonly field: CustomElementSupportFieldKind,
     readonly carrier: CustomElementSupportCarrierKind,
     readonly source: SourceNodeRef | null,
     readonly note: string | null = null,
-  ) {}
+  ) {
+    this.evidence = new EvidenceWitness(
+      field,
+      carrier,
+      source == null ? EvidenceSource.open(note) : EvidenceSource.sourceNode(source, note),
+      note,
+    );
+  }
 }
 
 // Provenance is field-level and names both the selected contributor and the
 // full contributor set so later layers can explain or reopen the selection.
 export class CustomElementFieldProvenance {
+  readonly provenanceSet: ProvenanceSet<
+    CustomElementSupportFieldKind,
+    CustomElementFieldProvenanceMode,
+    CustomElementFieldWitness
+  >;
+
   constructor(
     readonly field: CustomElementSupportFieldKind,
-    readonly mode: 'selected' | 'merged' | 'presence-only',
+    readonly mode: CustomElementFieldProvenanceMode,
     readonly selected: CustomElementFieldWitness | null,
     readonly contributors: readonly CustomElementFieldWitness[] = [],
     readonly note: string | null = null,
-  ) {}
+  ) {
+    this.provenanceSet = new ProvenanceSet(field, mode, selected, contributors, note);
+  }
 }
 
 // Identity is the earliest safe CE row: canonical naming and key space.

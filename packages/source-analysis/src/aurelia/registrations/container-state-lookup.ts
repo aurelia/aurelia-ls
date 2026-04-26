@@ -1,4 +1,5 @@
 import { auLink } from '../au-link.js';
+import { OpenSeamEvidence } from '../provenance/index.js';
 import type { ContainerWorldRef, KeyRef, SourceNodeRef } from '../refs.js';
 import { type LookupModifierKind } from '../di/index.js';
 import { ContainerStateEntry } from './container-state-entry.js';
@@ -24,11 +25,15 @@ export type ContainerStateLookupOpenSeamKind =
   typeof CONTAINER_STATE_LOOKUP_OPEN_SEAM_KINDS[number];
 
 export class ContainerStateLookupOpenSeam {
+  readonly evidence: OpenSeamEvidence<ContainerStateLookupOpenSeamKind>;
+
   constructor(
     readonly kind: ContainerStateLookupOpenSeamKind,
     readonly source: SourceNodeRef | null,
     readonly note: string,
-  ) {}
+  ) {
+    this.evidence = OpenSeamEvidence.fromSourceNode(kind, source, null, note);
+  }
 }
 
 export class ContainerStateLookupScope {

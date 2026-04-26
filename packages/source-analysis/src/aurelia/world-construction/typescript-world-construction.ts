@@ -1,4 +1,5 @@
 import type { ConfigurationContribution } from '../configurations/index.js';
+import { OpenSeamEvidence } from '../provenance/index.js';
 import type { ResourceDefinition, ResourceDefinitionKind } from '../resources/index.js';
 import type { ResourceReferenceRef, ContainerWorldRef } from '../refs.js';
 import type { ContainerStateEntry, ContainerStateOpenSeam } from '../registrations/index.js';
@@ -16,11 +17,15 @@ export type TypeScriptWorldConstructionOpenSeamKind =
   typeof TYPESCRIPT_WORLD_CONSTRUCTION_OPEN_SEAM_KINDS[number];
 
 export class TypeScriptWorldConstructionOpenSeam {
+  readonly evidence: OpenSeamEvidence<TypeScriptWorldConstructionOpenSeamKind>;
+
   constructor(
     readonly kind: TypeScriptWorldConstructionOpenSeamKind,
     readonly location: string | null = null,
     readonly note: string | null = null,
-  ) {}
+  ) {
+    this.evidence = new OpenSeamEvidence(kind, null, location, note);
+  }
 }
 
 export class TypeScriptWorldConstruction {

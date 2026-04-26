@@ -1,3 +1,4 @@
+import { EvidenceSource, EvidenceWitness, ProvenanceSet } from '../provenance/index.js';
 import type { KeyRef, SourceNodeRef } from '../refs.js';
 
 export const VALUE_CONVERTER_SUPPORT_FIELD_KINDS = [
@@ -26,23 +27,43 @@ export const VALUE_CONVERTER_SUPPORT_CARRIER_KINDS = [
 export type ValueConverterSupportCarrierKind =
   typeof VALUE_CONVERTER_SUPPORT_CARRIER_KINDS[number];
 
+export type ValueConverterFieldProvenanceMode =
+  'selected' | 'merged' | 'presence-only';
+
 export class ValueConverterFieldWitness {
+  readonly evidence: EvidenceWitness<ValueConverterSupportFieldKind, ValueConverterSupportCarrierKind>;
+
   constructor(
     readonly field: ValueConverterSupportFieldKind,
     readonly carrier: ValueConverterSupportCarrierKind,
     readonly source: SourceNodeRef | null,
     readonly note: string | null = null,
-  ) {}
+  ) {
+    this.evidence = new EvidenceWitness(
+      field,
+      carrier,
+      source == null ? EvidenceSource.open(note) : EvidenceSource.sourceNode(source, note),
+      note,
+    );
+  }
 }
 
 export class ValueConverterFieldProvenance {
+  readonly provenanceSet: ProvenanceSet<
+    ValueConverterSupportFieldKind,
+    ValueConverterFieldProvenanceMode,
+    ValueConverterFieldWitness
+  >;
+
   constructor(
     readonly field: ValueConverterSupportFieldKind,
-    readonly mode: 'selected' | 'merged' | 'presence-only',
+    readonly mode: ValueConverterFieldProvenanceMode,
     readonly selected: ValueConverterFieldWitness | null,
     readonly contributors: readonly ValueConverterFieldWitness[] = [],
     readonly note: string | null = null,
-  ) {}
+  ) {
+    this.provenanceSet = new ProvenanceSet(field, mode, selected, contributors, note);
+  }
 }
 
 export class ValueConverterIdentity {

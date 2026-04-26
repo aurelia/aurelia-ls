@@ -1,3 +1,4 @@
+import { EvidenceSource, EvidenceWitness, ProvenanceSet } from '../provenance/index.js';
 import type { SourceNodeRef } from '../refs.js';
 
 export const CUSTOM_ATTRIBUTE_LIFECYCLE_HOOK_KINDS = [
@@ -25,23 +26,43 @@ export const CUSTOM_ATTRIBUTE_LIFECYCLE_CARRIER_KINDS = [
 export type CustomAttributeLifecycleCarrierKind =
   typeof CUSTOM_ATTRIBUTE_LIFECYCLE_CARRIER_KINDS[number];
 
+export type CustomAttributeLifecycleHookProvenanceMode =
+  'selected' | 'presence-only';
+
 export class CustomAttributeLifecycleHookWitness {
+  readonly evidence: EvidenceWitness<CustomAttributeLifecycleHookKind, CustomAttributeLifecycleCarrierKind>;
+
   constructor(
     readonly hook: CustomAttributeLifecycleHookKind,
     readonly carrier: CustomAttributeLifecycleCarrierKind,
     readonly source: SourceNodeRef | null,
     readonly note: string | null = null,
-  ) {}
+  ) {
+    this.evidence = new EvidenceWitness(
+      hook,
+      carrier,
+      source == null ? EvidenceSource.open(note) : EvidenceSource.sourceNode(source, note),
+      note,
+    );
+  }
 }
 
 export class CustomAttributeLifecycleHookProvenance {
+  readonly provenanceSet: ProvenanceSet<
+    CustomAttributeLifecycleHookKind,
+    CustomAttributeLifecycleHookProvenanceMode,
+    CustomAttributeLifecycleHookWitness
+  >;
+
   constructor(
     readonly hook: CustomAttributeLifecycleHookKind,
-    readonly mode: 'selected' | 'presence-only',
+    readonly mode: CustomAttributeLifecycleHookProvenanceMode,
     readonly selected: CustomAttributeLifecycleHookWitness | null,
     readonly contributors: readonly CustomAttributeLifecycleHookWitness[] = [],
     readonly note: string | null = null,
-  ) {}
+  ) {
+    this.provenanceSet = new ProvenanceSet(hook, mode, selected, contributors, note);
+  }
 }
 
 // NOTE: runtime CA definitions also do not expose lifecycle/link hook

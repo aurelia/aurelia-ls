@@ -5,6 +5,13 @@ import type {
   TemplateNodeRef,
   TemplateRef,
 } from '../refs.js';
+import {
+  EvidenceSource,
+  EvidenceWitness,
+  ProvenanceSet,
+  readProvenanceSet,
+  type ProvenanceMode,
+} from '../provenance/index.js';
 
 export const TEMPLATE_DOM_PHASE_KINDS = [
   'authored',
@@ -56,13 +63,14 @@ export const TEMPLATE_DOM_PROVENANCE_MODES = [
   'generated',
   'recovered',
   'presence-only',
-] as const;
+] as const satisfies readonly ProvenanceMode[];
 
 export type TemplateDomProvenanceMode =
   typeof TEMPLATE_DOM_PROVENANCE_MODES[number];
 
 export class TemplateDomSource {
   readonly kind = 'template-dom-source' as const;
+  readonly evidenceSource: EvidenceSource;
 
   constructor(
     readonly sourceKind: TemplateDomSourceKind,
@@ -72,22 +80,45 @@ export class TemplateDomSource {
     readonly span: SourceSpan | null = null,
     readonly snippet: string | null = null,
     readonly note: string | null = null,
-  ) {}
+  ) {
+    this.evidenceSource = new EvidenceSource({
+      sourceKind,
+      file,
+      sourceNode,
+      template,
+      span,
+      snippet,
+      note,
+    });
+  }
 }
 
 export class TemplateDomWitness {
   readonly kind = 'template-dom-witness' as const;
+  readonly evidence: EvidenceWitness<TemplateDomProvenanceFieldKind, TemplateDomSourceKind>;
 
   constructor(
     readonly field: TemplateDomProvenanceFieldKind,
     readonly source: TemplateDomSource,
     readonly node: TemplateNodeRef | null = null,
     readonly note: string | null = null,
-  ) {}
+  ) {
+    this.evidence = new EvidenceWitness(
+      field,
+      source.sourceKind,
+      node == null ? source.evidenceSource : EvidenceSource.templateNode(node, note),
+      note,
+    );
+  }
 }
 
 export class TemplateDomProvenance {
   readonly kind = 'template-dom-provenance' as const;
+  readonly provenanceSet: ProvenanceSet<
+    TemplateDomProvenanceFieldKind,
+    TemplateDomProvenanceMode,
+    TemplateDomWitness
+  >;
 
   constructor(
     readonly field: TemplateDomProvenanceFieldKind,
@@ -95,12 +126,14 @@ export class TemplateDomProvenance {
     readonly selected: TemplateDomWitness | null,
     readonly contributors: readonly TemplateDomWitness[] = [],
     readonly note: string | null = null,
-  ) {}
+  ) {
+    this.provenanceSet = new ProvenanceSet(field, mode, selected, contributors, note);
+  }
 }
 
 export function readTemplateDomProvenance(
   provenance: readonly TemplateDomProvenance[],
   field: TemplateDomProvenanceFieldKind,
 ): TemplateDomProvenance | null {
-  return provenance.find((current) => current.field === field) ?? null;
+  return readProvenanceSet(provenance, field);
 }

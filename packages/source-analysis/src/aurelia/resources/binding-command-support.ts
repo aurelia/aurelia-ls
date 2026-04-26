@@ -1,3 +1,4 @@
+import { EvidenceSource, EvidenceWitness, ProvenanceSet } from '../provenance/index.js';
 import type { KeyRef, SourceNodeRef } from '../refs.js';
 
 export const BINDING_COMMAND_SUPPORT_FIELD_KINDS = [
@@ -46,23 +47,43 @@ export const BINDING_COMMAND_VALUE_HANDLING_KINDS = [
 export type BindingCommandValueHandlingKind =
   typeof BINDING_COMMAND_VALUE_HANDLING_KINDS[number];
 
+export type BindingCommandFieldProvenanceMode =
+  'selected' | 'merged' | 'presence-only';
+
 export class BindingCommandFieldWitness {
+  readonly evidence: EvidenceWitness<BindingCommandSupportFieldKind, BindingCommandSupportCarrierKind>;
+
   constructor(
     readonly field: BindingCommandSupportFieldKind,
     readonly carrier: BindingCommandSupportCarrierKind,
     readonly source: SourceNodeRef | null,
     readonly note: string | null = null,
-  ) {}
+  ) {
+    this.evidence = new EvidenceWitness(
+      field,
+      carrier,
+      source == null ? EvidenceSource.open(note) : EvidenceSource.sourceNode(source, note),
+      note,
+    );
+  }
 }
 
 export class BindingCommandFieldProvenance {
+  readonly provenanceSet: ProvenanceSet<
+    BindingCommandSupportFieldKind,
+    BindingCommandFieldProvenanceMode,
+    BindingCommandFieldWitness
+  >;
+
   constructor(
     readonly field: BindingCommandSupportFieldKind,
-    readonly mode: 'selected' | 'merged' | 'presence-only',
+    readonly mode: BindingCommandFieldProvenanceMode,
     readonly selected: BindingCommandFieldWitness | null,
     readonly contributors: readonly BindingCommandFieldWitness[] = [],
     readonly note: string | null = null,
-  ) {}
+  ) {
+    this.provenanceSet = new ProvenanceSet(field, mode, selected, contributors, note);
+  }
 }
 
 export class BindingCommandIdentity {

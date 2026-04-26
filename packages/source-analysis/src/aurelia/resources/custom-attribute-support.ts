@@ -1,3 +1,4 @@
+import { EvidenceSource, EvidenceWitness, ProvenanceSet } from '../provenance/index.js';
 import type { KeyRef, SourceNodeRef } from '../refs.js';
 
 export const CUSTOM_ATTRIBUTE_SUPPORT_FIELD_KINDS = [
@@ -48,23 +49,43 @@ export const CUSTOM_ATTRIBUTE_DEPENDENCY_LINK_SEED_KINDS = [
 export type CustomAttributeDependencyLinkSeedKind =
   typeof CUSTOM_ATTRIBUTE_DEPENDENCY_LINK_SEED_KINDS[number];
 
+export type CustomAttributeFieldProvenanceMode =
+  'selected' | 'merged' | 'presence-only';
+
 export class CustomAttributeFieldWitness {
+  readonly evidence: EvidenceWitness<CustomAttributeSupportFieldKind, CustomAttributeSupportCarrierKind>;
+
   constructor(
     readonly field: CustomAttributeSupportFieldKind,
     readonly carrier: CustomAttributeSupportCarrierKind,
     readonly source: SourceNodeRef | null,
     readonly note: string | null = null,
-  ) {}
+  ) {
+    this.evidence = new EvidenceWitness(
+      field,
+      carrier,
+      source == null ? EvidenceSource.open(note) : EvidenceSource.sourceNode(source, note),
+      note,
+    );
+  }
 }
 
 export class CustomAttributeFieldProvenance {
+  readonly provenanceSet: ProvenanceSet<
+    CustomAttributeSupportFieldKind,
+    CustomAttributeFieldProvenanceMode,
+    CustomAttributeFieldWitness
+  >;
+
   constructor(
     readonly field: CustomAttributeSupportFieldKind,
-    readonly mode: 'selected' | 'merged' | 'presence-only',
+    readonly mode: CustomAttributeFieldProvenanceMode,
     readonly selected: CustomAttributeFieldWitness | null,
     readonly contributors: readonly CustomAttributeFieldWitness[] = [],
     readonly note: string | null = null,
-  ) {}
+  ) {
+    this.provenanceSet = new ProvenanceSet(field, mode, selected, contributors, note);
+  }
 }
 
 export class CustomAttributeIdentity {

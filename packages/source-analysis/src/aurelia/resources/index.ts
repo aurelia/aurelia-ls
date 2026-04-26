@@ -11,6 +11,7 @@ export {
   CustomAttributePolicy,
   type CustomAttributeDependencyLinkSeedKind,
   type CustomAttributeDependencySourceKind,
+  type CustomAttributeFieldProvenanceMode,
   type CustomAttributeSupportCarrierKind,
   type CustomAttributeSupportFieldKind,
 } from './custom-attribute-support.js';
@@ -22,6 +23,7 @@ export {
   CustomAttributeLifecycleHookWitness,
   type CustomAttributeLifecycleCarrierKind,
   type CustomAttributeLifecycleHookKind,
+  type CustomAttributeLifecycleHookProvenanceMode,
 } from './custom-attribute-lifecycle-support.js';
 export {
   CustomAttributeMaterializer,
@@ -46,6 +48,7 @@ export {
   type CustomElementCaptureKind,
   type CustomElementDependencyLinkSeedKind,
   type CustomElementDependencySourceKind,
+  type CustomElementFieldProvenanceMode,
   type CustomElementProcessContentKind,
   type CustomElementSupportCarrierKind,
   type CustomElementSupportFieldKind,
@@ -62,17 +65,25 @@ export {
   BINDABLE_CARRIER_KINDS,
   BINDABLE_FIELD_KINDS,
   BINDABLE_INTERCEPTOR_KINDS,
+  BINDABLE_RESOLUTION_INPUT_KINDS,
   BindableCallbackTarget,
+  BindableContributionEntry,
   BindableEntry,
   BindableFieldProvenance,
   BindableFieldWitness,
+  BindableResolutionInput,
+  BindableResolutionProvenance,
   BindableSurface,
   BindableSurfaceProvenance,
   BindableSurfaceWitness,
   type BindableCallbackTargetKind,
   type BindableCarrierKind,
   type BindableFieldKind,
+  type BindableFieldProvenanceMode,
   type BindableInterceptorKind,
+  type BindableResolutionInputKind,
+  type BindableResolutionProvenanceMode,
+  type BindableSurfaceProvenanceMode,
 } from './bindable-support.js';
 export {
   CHILDREN_CALLBACK_TARGET_KINDS,
@@ -112,6 +123,7 @@ export {
   CustomElementLifecycleHookWitness,
   type CustomElementLifecycleCarrierKind,
   type CustomElementLifecycleHookKind,
+  type CustomElementLifecycleHookProvenanceMode,
 } from './custom-element-lifecycle-support.js';
 export {
   CustomElementMaterializer,
@@ -179,6 +191,7 @@ export {
   ValueConverterFieldProvenance,
   ValueConverterFieldWitness,
   ValueConverterIdentity,
+  type ValueConverterFieldProvenanceMode,
   type ValueConverterSupportCarrierKind,
   type ValueConverterSupportFieldKind,
 } from './value-converter-support.js';
@@ -193,6 +206,7 @@ export {
   BindingBehaviorFieldProvenance,
   BindingBehaviorFieldWitness,
   BindingBehaviorIdentity,
+  type BindingBehaviorFieldProvenanceMode,
   type BindingBehaviorSupportCarrierKind,
   type BindingBehaviorSupportFieldKind,
 } from './binding-behavior-support.js';
@@ -213,6 +227,7 @@ export {
   BindingCommandFieldWitness,
   BindingCommandIdentity,
   type BindingCommandEmissionShapeKind,
+  type BindingCommandFieldProvenanceMode,
   type BindingCommandSupportCarrierKind,
   type BindingCommandSupportFieldKind,
   type BindingCommandValueHandlingKind,

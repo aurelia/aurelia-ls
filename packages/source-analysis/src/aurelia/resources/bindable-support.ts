@@ -1,3 +1,4 @@
+import { EvidenceSource, EvidenceWitness, ProvenanceSet } from '../provenance/index.js';
 import type { SourceNodeRef } from '../refs.js';
 
 export const BINDABLE_FIELD_KINDS = [
@@ -57,40 +58,89 @@ export const BINDABLE_RESOLUTION_INPUT_KINDS = [
 export type BindableResolutionInputKind =
   typeof BINDABLE_RESOLUTION_INPUT_KINDS[number];
 
+export type BindableSurfaceProvenanceMode =
+  'selected' | 'merged' | 'presence-only';
+
+export type BindableFieldProvenanceMode =
+  'selected' | 'presence-only';
+
+export type BindableResolutionProvenanceMode =
+  'selected-contribution' | 'default-filled';
+
 export class BindableSurfaceWitness {
+  readonly evidence: EvidenceWitness<'bindable-surface', BindableCarrierKind>;
+
   constructor(
     readonly carrier: BindableCarrierKind,
     readonly source: SourceNodeRef | null,
     readonly note: string | null = null,
-  ) {}
+  ) {
+    this.evidence = new EvidenceWitness(
+      'bindable-surface',
+      carrier,
+      source == null ? EvidenceSource.open(note) : EvidenceSource.sourceNode(source, note),
+      note,
+    );
+  }
 }
 
 export class BindableSurfaceProvenance {
+  readonly provenanceSet: ProvenanceSet<
+    'bindable-surface',
+    BindableSurfaceProvenanceMode,
+    BindableSurfaceWitness
+  >;
+
   constructor(
-    readonly mode: 'selected' | 'merged' | 'presence-only',
+    readonly mode: BindableSurfaceProvenanceMode,
     readonly selected: BindableSurfaceWitness | null,
     readonly contributors: readonly BindableSurfaceWitness[] = [],
     readonly note: string | null = null,
-  ) {}
+  ) {
+    this.provenanceSet = new ProvenanceSet(
+      'bindable-surface',
+      mode,
+      selected,
+      contributors,
+      note,
+    );
+  }
 }
 
 export class BindableFieldWitness {
+  readonly evidence: EvidenceWitness<BindableFieldKind, BindableCarrierKind>;
+
   constructor(
     readonly field: BindableFieldKind,
     readonly carrier: BindableCarrierKind,
     readonly source: SourceNodeRef | null,
     readonly note: string | null = null,
-  ) {}
+  ) {
+    this.evidence = new EvidenceWitness(
+      field,
+      carrier,
+      source == null ? EvidenceSource.open(note) : EvidenceSource.sourceNode(source, note),
+      note,
+    );
+  }
 }
 
 export class BindableFieldProvenance {
+  readonly provenanceSet: ProvenanceSet<
+    BindableFieldKind,
+    BindableFieldProvenanceMode,
+    BindableFieldWitness
+  >;
+
   constructor(
     readonly field: BindableFieldKind,
-    readonly mode: 'selected' | 'presence-only',
+    readonly mode: BindableFieldProvenanceMode,
     readonly selected: BindableFieldWitness | null,
     readonly contributors: readonly BindableFieldWitness[] = [],
     readonly note: string | null = null,
-  ) {}
+  ) {
+    this.provenanceSet = new ProvenanceSet(field, mode, selected, contributors, note);
+  }
 }
 
 export class BindableContributionEntry {
@@ -129,12 +179,26 @@ export class BindableResolutionInput {
 }
 
 export class BindableResolutionProvenance {
+  readonly provenanceSet: ProvenanceSet<
+    'bindable-resolution',
+    BindableResolutionProvenanceMode,
+    BindableContributionEntry
+  >;
+
   constructor(
-    readonly mode: 'selected-contribution' | 'default-filled',
+    readonly mode: BindableResolutionProvenanceMode,
     readonly selected: BindableContributionEntry | null,
     readonly shadowed: readonly BindableContributionEntry[] = [],
     readonly note: string | null = null,
-  ) {}
+  ) {
+    this.provenanceSet = new ProvenanceSet(
+      'bindable-resolution',
+      mode,
+      selected,
+      selected == null ? shadowed : [selected, ...shadowed],
+      note,
+    );
+  }
 }
 
 export class BindableCallbackTarget {
