@@ -4,11 +4,6 @@ import {
   type AdmittedSubject,
   type SubjectAdmissionScannerState,
 } from '../admissions/index.js';
-import {
-  CompilerCapabilityScanner,
-  type CompilerCapability,
-  type CompilerCapabilityScannerState,
-} from '../compiler/index.js';
 import type { Exports } from '../exports/index.js';
 import type { Resources } from '../resources/index.js';
 import type { Configurations } from './configurations.js';
@@ -28,7 +23,6 @@ export interface ConfigurationContributionScannerState {
   readonly registrationScannerState: ReturnType<ConfigurationRegistrationScanner['inspectState']>;
   readonly bundleExpansionScannerState: BundleExpansionScannerState;
   readonly subjectAdmissionScannerState: SubjectAdmissionScannerState;
-  readonly compilerCapabilityScannerState: CompilerCapabilityScannerState;
 }
 
 export class ConfigurationContributionScanner {
@@ -36,7 +30,6 @@ export class ConfigurationContributionScanner {
   private readonly registrationScanner: ConfigurationRegistrationScanner;
   private readonly bundleExpansionScanner: BundleExpansionScanner;
   private readonly subjectAdmissionScanner: SubjectAdmissionScanner;
-  private readonly compilerCapabilityScanner: CompilerCapabilityScanner;
 
   constructor(
     options: ConfigurationContributionScannerOptions,
@@ -53,9 +46,6 @@ export class ConfigurationContributionScanner {
       exports: options.exports,
       resources: options.resources,
     });
-    this.compilerCapabilityScanner = new CompilerCapabilityScanner({
-      resources: options.resources,
-    });
   }
 
   scanAll(): readonly ConfigurationContribution[] {
@@ -69,7 +59,6 @@ export class ConfigurationContributionScanner {
       registrationScannerState: this.registrationScanner.inspectState(),
       bundleExpansionScannerState: this.bundleExpansionScanner.inspectState(),
       subjectAdmissionScannerState: this.subjectAdmissionScanner.inspectState(),
-      compilerCapabilityScannerState: this.compilerCapabilityScanner.inspectState(),
     };
   }
 
@@ -95,9 +84,7 @@ export class ConfigurationContributionScanner {
             member.referenceName,
           ))),
     ];
-    const compilerCapabilities = this.compilerCapabilityScanner.readCapabilitiesFor(admittedSubjects, methods);
-
-    const openSeams = collectOpenSeams(current, methods, bundleExpansions, admittedSubjects, compilerCapabilities);
+    const openSeams = collectOpenSeams(current, methods, bundleExpansions, admittedSubjects);
 
     return new ConfigurationContribution(
       `${current.id}:contribution`,
@@ -106,7 +93,6 @@ export class ConfigurationContributionScanner {
       directRegisterArguments,
       bundleExpansions,
       admittedSubjects,
-      compilerCapabilities,
       openSeams,
     );
   }
@@ -125,7 +111,6 @@ function collectOpenSeams(
   methods: readonly (RegistryMethod | RegistryFactoryMethod)[],
   bundleExpansions: readonly BundleExpansion[],
   admittedSubjects: readonly AdmittedSubject[],
-  compilerCapabilities: readonly CompilerCapability[],
 ): readonly string[] {
   const seams: string[] = [];
 
@@ -141,11 +126,8 @@ function collectOpenSeams(
     seams.push('Some direct references still do not resolve to a closed admitted subject.');
   }
 
-  if (
-    admittedSubjects.some((subject) => subject.policy === 'compiler-root-only')
-    && compilerCapabilities.length === 0
-  ) {
-    seams.push('Some compiler-root admissions are present, but compiler capabilities have not materialized yet.');
+  if (admittedSubjects.some((subject) => subject.policy === 'compiler-root-only')) {
+    seams.push('Some compiler-root admissions are present, but compiler capability materialization is intentionally offline while the compiler substrate is being rebuilt.');
   }
 
   if (current.note != null) {

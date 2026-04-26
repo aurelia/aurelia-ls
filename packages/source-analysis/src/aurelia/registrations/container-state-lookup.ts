@@ -1,5 +1,4 @@
 import type { ContainerWorldRef, KeyRef, SourceNodeRef } from '../refs.js';
-import type { HydrationLookupRequirement } from '../compiler/hydration-construction.js';
 import { type LookupModifierKind } from '../di/index.js';
 import { ContainerStateEntry } from './container-state-entry.js';
 import { LookupRequest } from './lookup-request.js';
@@ -18,7 +17,6 @@ export const CONTAINER_STATE_LOOKUP_OPEN_SEAM_KINDS = [
   'unsupported-modifier',
   'missing-key',
   'missing-scope-world',
-  'hydration-route-key-open',
 ] as const;
 
 export type ContainerStateLookupOpenSeamKind =
@@ -124,48 +122,6 @@ export class ContainerStateLookupEvaluator {
           'Lookup stayed open because the requested regime is not yet evaluated over materialized container state.',
         );
     }
-  }
-
-  lookupHydrationRequirement(
-    scope: ContainerStateLookupScope,
-    requirement: HydrationLookupRequirement,
-  ): ContainerStateLookupResult {
-    if (requirement.key == null) {
-      return new ContainerStateLookupResult(
-        'open',
-        null,
-        [],
-        [],
-        [
-          new ContainerStateLookupOpenSeam(
-            'hydration-route-key-open',
-            requirement.dependency.site.source,
-            'fromHydrationContext(...) route was recognized, but the inner key did not close under the current DI reader.',
-          ),
-        ],
-        'Hydration lookup route stayed open because the inner key identity did not close.',
-      );
-    }
-
-    const ownRequest = new LookupRequest(
-      `hydration-lookup:${requirement.route}:${requirement.key.id}`,
-      requirement.key,
-      'own',
-      [],
-      null,
-      false,
-    );
-    const result = this.lookup(scope, ownRequest);
-    return new ContainerStateLookupResult(
-      result.status,
-      ownRequest,
-      result.selectedEntries,
-      result.selectedSlots,
-      result.openSeams,
-      result.note == null
-        ? 'Hydration lookup routed through the nearest hydration-context controller container with own(key) semantics.'
-        : `Hydration lookup routed through the nearest hydration-context controller container with own(key) semantics. ${result.note}`,
-    );
   }
 
   private lookupDirect(

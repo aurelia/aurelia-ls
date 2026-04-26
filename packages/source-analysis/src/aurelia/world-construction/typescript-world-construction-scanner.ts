@@ -6,19 +6,6 @@ import {
 } from '../refs.js';
 import type { AdmittedSubject } from '../admissions/index.js';
 import type { ConfigurationContribution, ConfigurationContributions } from '../configurations/index.js';
-import {
-  CompilerConsultedWorld,
-  CompilerResourceAdmissionProvenance,
-  CompilerWorldOpenSeam,
-} from '../compiler/index.js';
-import {
-  createInstructionRenderer,
-  type InstructionRenderer,
-  InstructionRendererAdmissionProvenance,
-  CustomAttributeRenderer,
-  CustomElementRenderer,
-  RenderingOpenSeam,
-} from '../rendering/index.js';
 import type { ResourceDefinition, Resources } from '../resources/index.js';
 import {
   ContainerStateCandidate,
@@ -93,160 +80,19 @@ export class TypeScriptWorldConstructionScanner {
     ];
 
     const visibleResources = readVisibleResources(contribution, this.resourcesValue.readAll(), openSeams);
-    const visibleRenderers = readVisibleRenderers(contribution);
-    const resourceAdmissions = readVisibleResourceAdmissions(contribution, visibleResources);
-    const renderingOpenSeams = readRenderingOpenSeams(visibleRenderers);
     const candidates = readContainerStateCandidates(contribution, world, openSeams);
     const containerState = this.containerStateMaterializer.materialize(candidates);
-    const compilerWorld = new CompilerConsultedWorld(
-      `compiler-world:${this.ownerLabelValue}:${contribution.configuration.sourceExport.name}:${index}`,
-      world,
-      visibleResources,
-      visibleRenderers,
-      resourceAdmissions,
-      contribution.compilerCapabilities,
-      containerState.entries,
-      containerState.openSeams,
-      renderingOpenSeams,
-      materializeCompilerOpenSeams(openSeams, contribution.configuration.sourceExport.name),
-    );
 
     return new TypeScriptWorldConstruction(
       `typescript-world-construction:${this.ownerLabelValue}:${contribution.configuration.sourceExport.name}`,
       contribution,
       world,
-      compilerWorld,
       containerState.entries,
       containerState.openSeams,
       visibleResources,
-      visibleRenderers,
-      contribution.compilerCapabilities,
       dedupeOpenSeams(openSeams),
     );
   }
-}
-
-function readVisibleResourceAdmissions(
-  contribution: ConfigurationContribution,
-  resources: readonly ResourceDefinition[],
-): readonly CompilerResourceAdmissionProvenance[] {
-  const result: CompilerResourceAdmissionProvenance[] = [];
-  for (const current of resources) {
-    const contributors = contribution.admittedSubjects.filter((subject) =>
-      matchesAdmittedResourceDefinition(subject, current),
-    );
-    result.push(new CompilerResourceAdmissionProvenance(
-      current,
-      contributors.length === 0 ? [] : [contribution],
-      contributors,
-      contributors.length === 0
-        ? 'Visible resource did not retain a direct admitted-subject contributor under the current bounded matching rules.'
-        : 'Visible resource provenance closes through the contributing admitted subject(s) and owning configuration contribution.',
-    ));
-  }
-  return result;
-}
-
-function readVisibleRenderers(
-  contribution: ConfigurationContribution,
-): readonly InstructionRenderer[] {
-  const result: InstructionRenderer[] = [];
-  const seen = new Set<string>();
-
-  for (const subject of contribution.admittedSubjects) {
-    if (subject.carrier !== 'renderer') {
-      continue;
-    }
-
-    const referenceName = subject.referenceName;
-    if (seen.has(referenceName)) {
-      continue;
-    }
-    seen.add(referenceName);
-
-    result.push(createInstructionRenderer(
-      referenceName,
-      new InstructionRendererAdmissionProvenance(
-        contribution,
-        subject,
-        'Visible instruction renderer closes through the contributing admitted subject and owning configuration contribution.',
-      ),
-    ));
-  }
-
-  return result;
-}
-
-function readRenderingOpenSeams(
-  renderers: readonly InstructionRenderer[],
-): readonly RenderingOpenSeam[] {
-  const result: RenderingOpenSeam[] = [];
-
-  for (const current of renderers) {
-    if (current.instructionKind == null) {
-      result.push(new RenderingOpenSeam(
-        'custom-renderer-profile-open',
-        current.referenceName,
-        `Instruction renderer ${current.referenceName} remained on the custom profile path; later custom renderer overlays can attach richer instruction-consumption semantics.`,
-      ));
-      continue;
-    }
-
-    if (current instanceof CustomElementRenderer
-      || current instanceof CustomAttributeRenderer) {
-      result.push(new RenderingOpenSeam(
-        'resource-renderer-preparation-open',
-        current.referenceName,
-        `Resource renderer ${current.referenceName} is visible and does have a dedicated preparation slice. What remains open here is its temporary DI publication and child-container consequence, not renderer preparation itself.`,
-      ));
-    }
-  }
-
-  return result;
-}
-
-function materializeCompilerOpenSeams(
-  seams: readonly TypeScriptWorldConstructionOpenSeam[],
-  location: string,
-): readonly CompilerWorldOpenSeam[] {
-  const result: CompilerWorldOpenSeam[] = [];
-  for (const seam of seams) {
-    switch (seam.kind) {
-      case 'resource-definition-match-open':
-        result.push(new CompilerWorldOpenSeam(
-          'resource-resolution-open',
-          seam.location,
-          seam.note,
-        ));
-        break;
-      case 'production-state-open':
-      case 'registry-state-open':
-      case 'renderer-state-open':
-        result.push(new CompilerWorldOpenSeam(
-          'service-access-open',
-          seam.location,
-          seam.note,
-        ));
-        break;
-      case 'world-placement-open':
-        result.push(new CompilerWorldOpenSeam(
-          'owner-local-branch-open',
-          location,
-          seam.note,
-        ));
-        break;
-      case 'resource-registration-state-open':
-        result.push(new CompilerWorldOpenSeam(
-          'resource-resolution-open',
-          seam.location,
-          seam.note,
-        ));
-        break;
-      default:
-        break;
-    }
-  }
-  return result;
 }
 
 function readVisibleResources(
@@ -416,7 +262,7 @@ function readContainerStateCandidates(
           new TypeScriptWorldConstructionOpenSeam(
             'renderer-state-open',
             subject.referenceName,
-            `Renderer subject ${subject.referenceName} now closes through the consulted rendering surface, but it still remains outside keyed DI/container-state consequence for now.`,
+            `Renderer subject ${subject.referenceName} is admitted by configuration, but renderer materialization is intentionally offline while the compiler substrate is being rebuilt.`,
           ),
         );
         break;

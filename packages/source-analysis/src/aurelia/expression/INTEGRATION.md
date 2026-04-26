@@ -1,6 +1,6 @@
 # Expression Parser Integration
 
-This note tracks the current handoff from compiler-side authored values into
+This note tracks the intended handoff from compiler-side authored values into
 the expression parser.
 
 Unlike [README.md](./README.md), this file is allowed to change as caller-side
@@ -33,20 +33,9 @@ The parser now has the surfaces it needs:
 - parser-owned result algebra in `parse-result-algebra.ts`
 - parser-owned inspection helpers in `parse-result-inspection.ts`
 
-The remaining integration work is on the compiler side:
-
-- `packages/source-analysis/src/aurelia/compiler/compiler-value-parser.ts`
-  - command-owned value planning now normalizes legacy parser-entry seeds onto
-    canonical parser selection
-  - but it still only closes the binding-command-owned planning slice
-- `packages/source-analysis/src/aurelia/compiler/template-compilation-engine.ts`
-  - text nodes still only detect interpolation-like syntax
-  - they do not yet publish parser requests over text-node value sites
-- `packages/source-analysis/src/aurelia/compiler/custom-attribute-binding-lowering.ts`
-  - custom-attribute/template-controller lowering still only detects
-    interpolation candidates
-  - multi-binding splitting is closed structurally, but segment values still do
-    not publish parser requests
+The previous compiler-side integration layer has been removed. The next
+handoff should be rebuilt on top of the new template/compiler substrate rather
+than routed through the deleted compiler shims.
 
 ## Next Honest Integration Slice
 
@@ -87,12 +76,8 @@ Examples:
 
 ## Current Concrete Seams
 
-These are the local files to revisit when doing the next integration pass:
-
-- `packages/source-analysis/src/aurelia/compiler/compiler-value-parser.ts`
-- `packages/source-analysis/src/aurelia/compiler/template-compilation-engine.ts`
-- `packages/source-analysis/src/aurelia/compiler/custom-attribute-binding-lowering.ts`
-- `packages/source-analysis/src/aurelia/compiler/compilation-context.ts`
+The concrete compiler-side files do not exist yet. Revisit this note when the
+new template parser, authored template model, and lowering substrate are added.
 
 If a future integration change starts pushing template-specific routing into
 `packages/source-analysis/src/aurelia/expression/`, pause and re-check whether

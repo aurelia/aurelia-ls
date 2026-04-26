@@ -1,13 +1,4 @@
 import type { ConfigurationContribution } from '../configurations/index.js';
-import type {
-  CompilerCapability,
-  CompilerCapabilityKind,
-  CompilerConsultedWorld,
-} from '../compiler/index.js';
-import type {
-  InstructionRenderer,
-  Rendering,
-} from '../rendering/index.js';
 import type { ResourceDefinition, ResourceDefinitionKind } from '../resources/index.js';
 import type { ResourceReferenceRef, ContainerWorldRef } from '../refs.js';
 import type { ContainerStateEntry, ContainerStateOpenSeam } from '../registrations/index.js';
@@ -33,25 +24,15 @@ export class TypeScriptWorldConstructionOpenSeam {
 }
 
 export class TypeScriptWorldConstruction {
-  // This outer shell is a staging wrapper while world construction is being
-  // decompressed. Compiler-facing work should prefer `compilerWorld`; the raw
-  // arrays remain lower-level evidence surfaces.
   constructor(
     readonly id: string,
     readonly ownerContribution: ConfigurationContribution,
     readonly world: ContainerWorldRef,
-    readonly compilerWorld: CompilerConsultedWorld,
     readonly containerStateEntries: readonly ContainerStateEntry[] = [],
     readonly containerStateOpenSeams: readonly ContainerStateOpenSeam[] = [],
     readonly visibleResources: readonly ResourceDefinition[] = [],
-    readonly visibleRenderers: readonly InstructionRenderer[] = [],
-    readonly compilerCapabilities: readonly CompilerCapability[] = [],
     readonly openSeams: readonly TypeScriptWorldConstructionOpenSeam[] = [],
   ) {}
-
-  get rendering(): Rendering {
-    return this.compilerWorld.rendering;
-  }
 
   readVisibleResourcesByKind<TKind extends ResourceDefinitionKind>(
     kind: TKind,
@@ -65,20 +46,36 @@ export class TypeScriptWorldConstruction {
     kind: ResourceDefinitionKind,
     name: string,
   ): ResourceDefinition | null {
-    return this.compilerWorld.resourceResolver.findResourceDefinition(kind, name);
+    return this.visibleResources.find((current) =>
+      current.kind === kind && readResourceDefinitionNames(current).includes(name)
+    ) ?? null;
   }
 
   resolveResourceReference(
     reference: ResourceReferenceRef,
   ): ResourceDefinition | null {
-    return this.compilerWorld.resourceResolver.resolveReference(reference);
+    if (reference.resourceKind === 'unknown' || reference.name == null) {
+      return null;
+    }
+    if (reference.key != null) {
+      const keyed = this.visibleResources.find((current) => current.key?.id === reference.key?.id) ?? null;
+      if (keyed != null) {
+        return keyed;
+      }
+    }
+    return this.findResourceDefinition(reference.resourceKind, reference.name);
   }
+}
 
-  readCompilerCapabilitiesByKind<TKind extends CompilerCapabilityKind>(
-    kind: TKind,
-  ): readonly Extract<CompilerCapability, { kind: TKind }>[] {
-    return this.compilerCapabilities.filter(
-      (current): current is Extract<CompilerCapability, { kind: TKind }> => current.kind === kind,
-    );
+function readResourceDefinitionNames(
+  definition: ResourceDefinition,
+): readonly string[] {
+  const names: string[] = [];
+  if ('name' in definition && typeof definition.name === 'string') {
+    names.push(definition.name);
   }
+  if ('aliases' in definition) {
+    names.push(...definition.aliases);
+  }
+  return names;
 }

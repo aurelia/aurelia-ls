@@ -7,7 +7,6 @@ export const REF_KINDS = [
   'container-world',
   'registration',
   'template',
-  'compiled-template',
   'template-node',
   'template-location',
   'resource-reference',
@@ -126,16 +125,6 @@ export class TemplateRef {
   ) {}
 }
 
-export class CompiledTemplateRef {
-  readonly kind = 'compiled-template' as const;
-
-  constructor(
-    readonly id: string,
-    readonly template: TemplateRef,
-    readonly world: ContainerWorldRef,
-  ) {}
-}
-
 export const TEMPLATE_NODE_REF_KINDS = [
   'fragment',
   'element',
@@ -209,7 +198,6 @@ export type T_Ref =
   | ContainerWorldRef
   | RegistrationRef
   | TemplateRef
-  | CompiledTemplateRef
   | TemplateNodeRef
   | TemplateLocationRef
   | ResourceReferenceRef;

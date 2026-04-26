@@ -38,7 +38,6 @@
     "generate:aurelia-registration-production-goldens": "node ./scripts/generate-aurelia-registration-production-goldens.mjs",
     "preflight": "node ./scripts/preflight.mjs",
     "test": "node ./scripts/build.mjs && node ./scripts/build-tests.mjs && node ./scripts/run-node-tests.mjs",
-    "test:node:aurelia-runtime-model": "node ./scripts/run-node-tests.mjs out-test/test/aurelia-runtime-model.test.js",
     "test:node": "node ./scripts/run-node-tests.mjs",
     "test:node:aurelia-framework-exports": "node ./scripts/run-node-tests.mjs test/aurelia-framework-exports.test.ts",
     "test:node:cov": "node ./scripts/run-node-tests.mjs --coverage"
