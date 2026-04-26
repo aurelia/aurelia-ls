@@ -7,6 +7,9 @@ export {
   offsetSpan,
   absoluteSpan,
   ensureSpanFile,
+  type SpanLike,
+} from '../source-address.js';
+export {
   Identifier,
   BindingBehaviorExpression,
   ValueConverterExpression,

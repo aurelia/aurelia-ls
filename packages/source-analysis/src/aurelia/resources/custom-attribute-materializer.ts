@@ -11,10 +11,10 @@ import {
   readStringLiteralValue,
   unwrapExpression,
 } from '../analysis/index.js';
+import type { SourceFileRef } from '../source-address.js';
 import {
-  SourceNodeRef,
-  SourceSpan,
-  type SourceFileRef,
+  sourceNodeRefFromTsNode,
+  type SourceNodeRef,
 } from '../refs.js';
 import {
   BindableSurface,
@@ -962,12 +962,7 @@ function toNodeRef(
   file: SourceFileRef,
   sourceFile: ts.SourceFile,
 ): SourceNodeRef {
-  return new SourceNodeRef(
-    `${file.id}:${node.getStart(sourceFile)}:${node.end}`,
-    file,
-    ts.SyntaxKind[node.kind] ?? 'Unknown',
-    new SourceSpan(node.getStart(sourceFile), node.end),
-  );
+  return sourceNodeRefFromTsNode(file, node, sourceFile);
 }
 
 function isStringLike(

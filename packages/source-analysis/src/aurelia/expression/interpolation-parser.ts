@@ -1,14 +1,14 @@
 import {
   Interpolation,
+} from "./ast.js";
+import {
   absoluteSpan,
   normalizeSpan,
   sourceSpanFromBounds,
   spanFromBounds,
-} from "./ast.js";
-import type {
-  SourceSpan,
-  TextSpan,
-} from "./ast.js";
+  type SourceSpan,
+  type TextSpan,
+} from "../source-address.js";
 import {
   ClosedSubtreeRef,
   CompleteInputParseError,

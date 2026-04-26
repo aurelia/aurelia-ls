@@ -3,7 +3,7 @@ import path from 'node:path';
 import ts from 'typescript';
 
 import type { Export, Exports } from '../exports/index.js';
-import type { SourceFileRef } from '../refs.js';
+import type { SourceFileRef } from '../source-address.js';
 import { BundleArray } from './bundle-array.js';
 import {
   analyzeFunctionImplementation,

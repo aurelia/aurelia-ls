@@ -5,10 +5,10 @@ import {
   readReferenceSeed,
   unwrapExpression,
 } from '../analysis/index.js';
+import type { SourceFileRef } from '../source-address.js';
 import {
-  SourceNodeRef,
-  SourceSpan,
-  type SourceFileRef,
+  sourceNodeRefFromTsNode,
+  type SourceNodeRef,
 } from '../refs.js';
 import {
   ChildrenCallbackTarget,
@@ -401,10 +401,5 @@ function toNodeRef(
   file: SourceFileRef,
   sourceFile: ts.SourceFile,
 ): SourceNodeRef {
-  return new SourceNodeRef(
-    `node:${node.kind}:${node.getStart(sourceFile)}-${node.getEnd()}`,
-    file,
-    ts.SyntaxKind[node.kind] ?? 'Node',
-    new SourceSpan(node.getStart(sourceFile), node.getEnd()),
-  );
+  return sourceNodeRefFromTsNode(file, node, sourceFile, { endKind: 'token-end' });
 }

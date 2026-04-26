@@ -1,3 +1,12 @@
+import ts from 'typescript';
+
+import {
+  ProgramRef,
+  SourceFileRef,
+  SourceSpan,
+  sourceSpanFromBounds,
+} from './source-address.js';
+
 export const REF_KINDS = [
   'program',
   'source-file',
@@ -15,35 +24,19 @@ export const REF_KINDS = [
 export type RefKind =
   typeof REF_KINDS[number];
 
-export class SourceSpan {
-  constructor(
-    readonly start: number,
-    readonly end: number,
-  ) {}
-}
+export const SOURCE_NODE_REF_END_KINDS = [
+  'node-end',
+  'token-end',
+] as const;
 
-export class ProgramRef {
-  readonly kind = 'program' as const;
+export type SourceNodeRefEndKind =
+  typeof SOURCE_NODE_REF_END_KINDS[number];
 
-  constructor(
-    readonly id: string,
-    readonly repoRoot: string,
-    readonly tsconfigPath: string | null,
-  ) {}
-}
-
-export class SourceFileRef {
-  readonly kind = 'source-file' as const;
-
-  constructor(
-    readonly id: string,
-    readonly program: ProgramRef,
-    readonly path: string,
-  ) {}
-
-  get programId(): string {
-    return this.program.id;
-  }
+export interface SourceNodeRefFromTsNodeOptions {
+  readonly endKind?: SourceNodeRefEndKind;
+  readonly id?: string | null;
+  readonly idPrefix?: string;
+  readonly nodeKind?: string | null;
 }
 
 export class SourceNodeRef {
@@ -55,6 +48,26 @@ export class SourceNodeRef {
     readonly nodeKind: string,
     readonly span: SourceSpan,
   ) {}
+}
+
+export function sourceNodeRefFromTsNode(
+  file: SourceFileRef,
+  node: ts.Node,
+  sourceFile: ts.SourceFile = node.getSourceFile(),
+  options: SourceNodeRefFromTsNodeOptions = {},
+): SourceNodeRef {
+  const start = node.getStart(sourceFile);
+  const end = options.endKind === 'token-end'
+    ? node.getEnd()
+    : node.end;
+  const nodeKind = options.nodeKind ?? ts.SyntaxKind[node.kind] ?? 'Unknown';
+  const id = options.id ?? `${options.idPrefix ?? 'source-node'}:${file.id}:${nodeKind}:${start}-${end}`;
+  return new SourceNodeRef(
+    id,
+    file,
+    nodeKind,
+    sourceSpanFromBounds(start, end, file),
+  );
 }
 
 export class SymbolRef {

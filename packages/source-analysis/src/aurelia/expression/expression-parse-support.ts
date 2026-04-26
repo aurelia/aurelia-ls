@@ -1,13 +1,10 @@
-import type { SourceFileRef } from "../refs.js";
-
 import {
-  normalizeSpan,
   ensureSpanFile,
+  normalizeSpan,
   sourceSpanFromBounds,
-} from "./ast.js";
-import type {
-  SourceSpan,
-} from "./ast.js";
+  type SourceFileRef,
+  type SourceSpan,
+} from "../source-address.js";
 
 export interface ExpressionParseContext {
   readonly baseSpan?: SourceSpan;

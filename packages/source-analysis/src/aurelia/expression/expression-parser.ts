@@ -1,12 +1,14 @@
 import { auLink } from "../au-link.js";
 import {
   CustomExpression,
+} from "./ast.js";
+import {
   normalizeSpan,
   sourceSpanFromBounds,
-} from "./ast.js";
+  type SourceSpan,
+} from "../source-address.js";
 import type {
   ExpressionType,
-  SourceSpan,
 } from "./ast.js";
 
 import { CompletedInputParser } from "./completed-input-parser.js";

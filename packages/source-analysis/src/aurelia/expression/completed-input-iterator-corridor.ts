@@ -13,8 +13,8 @@ import type {
   BindingPattern,
   IsAssign,
   IsBindingBehavior,
-  SourceSpan,
 } from './ast.js';
+import type { SourceSpan } from '../source-address.js';
 import {
   ClosedSubtreeRef,
   ExpressionCompanionFrameKind,

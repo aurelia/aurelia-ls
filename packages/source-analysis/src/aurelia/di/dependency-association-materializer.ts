@@ -9,10 +9,10 @@ import {
   readReferenceSeed,
   unwrapExpression,
 } from '../analysis/index.js';
+import type { SourceFileRef } from '../source-address.js';
 import {
-  SourceNodeRef,
-  SourceSpan,
-  type SourceFileRef,
+  sourceNodeRefFromTsNode,
+  type SourceNodeRef,
   type SymbolRef,
 } from '../refs.js';
 import {
@@ -782,13 +782,7 @@ function createNodeRef(
   sourceFile: ts.SourceFile,
   node: ts.Node,
 ): SourceNodeRef {
-  const start = node.getStart(sourceFile);
-  return new SourceNodeRef(
-    `node:${node.kind}:${start}-${node.end}`,
-    file,
-    ts.SyntaxKind[node.kind] ?? 'Unknown',
-    new SourceSpan(start, node.end),
-  );
+  return sourceNodeRefFromTsNode(file, node, sourceFile);
 }
 
 function dedupeOpenSeams(

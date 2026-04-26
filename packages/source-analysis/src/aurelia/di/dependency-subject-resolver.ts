@@ -15,12 +15,12 @@ import {
   resolveImportedSourceFile,
   unwrapExpression,
 } from '../analysis/index.js';
+import type { SourceFileRef } from '../source-address.js';
 import {
   KeyRef,
-  SourceNodeRef,
-  SourceSpan,
   SymbolRef,
-  type SourceFileRef,
+  sourceNodeRefFromTsNode,
+  type SourceNodeRef,
 } from '../refs.js';
 import { DependencyResolution, DependencyResolvedSubject } from './dependency-resolution.js';
 import { DependencyRequest } from './dependency-request.js';
@@ -542,13 +542,7 @@ function createNodeRef(
   sourceFile: ts.SourceFile,
   node: ts.Node,
 ): SourceNodeRef {
-  const start = node.getStart(sourceFile);
-  return new SourceNodeRef(
-    `node:${node.kind}:${start}-${node.end}`,
-    file,
-    ts.SyntaxKind[node.kind] ?? 'Unknown',
-    new SourceSpan(start, node.end),
-  );
+  return sourceNodeRefFromTsNode(file, node, sourceFile);
 }
 
 function createSymbolRef(

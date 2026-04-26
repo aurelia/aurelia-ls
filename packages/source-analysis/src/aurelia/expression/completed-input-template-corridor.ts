@@ -1,6 +1,7 @@
 import { CharCode, type Token, TokenType } from './expression-scanner.js';
 import { TemplateExpression } from './ast.js';
-import type { IsAssign, SourceSpan } from './ast.js';
+import type { SourceSpan } from '../source-address.js';
+import type { IsAssign } from './ast.js';
 import {
   ClosedSubtreeRef,
   ExpressionCompanionFrameKind,

@@ -30,8 +30,11 @@ import {
   Identifier,
   PrimitiveLiteralExpression,
   UnaryExpression,
-  spanFromBounds,
 } from "./ast.js";
+import {
+  spanFromBounds,
+  type SourceSpan,
+} from "../source-address.js";
 import type {
   AssignmentOperator,
   BinaryOperator,
@@ -44,7 +47,6 @@ import type {
   IsAssignable,
   IsUnary,
   UnaryOperator,
-  SourceSpan,
 } from "./ast.js";
 import { CompletedInputCompanionBuilder } from "./completed-input-companion-builder.js";
 import { CompletedInputArrowCorridor } from "./completed-input-arrow-corridor.js";

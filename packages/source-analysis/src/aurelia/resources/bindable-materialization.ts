@@ -5,10 +5,10 @@ import {
   readReferenceSeed,
   unwrapExpression,
 } from '../analysis/index.js';
+import type { SourceFileRef } from '../source-address.js';
 import {
-  SourceNodeRef,
-  SourceSpan,
-  type SourceFileRef,
+  sourceNodeRefFromTsNode,
+  type SourceNodeRef,
 } from '../refs.js';
 import {
   BindableCallbackTarget,
@@ -656,12 +656,7 @@ function toNodeRef(
   file: SourceFileRef,
   sourceFile: ts.SourceFile,
 ): SourceNodeRef {
-  return new SourceNodeRef(
-    `${file.path}:${node.pos}-${node.end}`,
-    file,
-    ts.SyntaxKind[node.kind] ?? 'Unknown',
-    new SourceSpan(node.getStart(sourceFile), node.getEnd()),
-  );
+  return sourceNodeRefFromTsNode(file, node, sourceFile, { endKind: 'token-end' });
 }
 
 function isStringLike(

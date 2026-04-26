@@ -1,4 +1,5 @@
-import type { SourceFileRef, SourceNodeRef } from '../refs.js';
+import type { SourceFileRef } from '../source-address.js';
+import type { SourceNodeRef } from '../refs.js';
 import type {
   CustomElementFieldProvenance,
   CustomElementTemplateSource,

@@ -6,7 +6,7 @@ import type {
   ParseFailure,
 } from './parse-failure.js';
 import type { ClosedSubtreeRef, ExpressionExpectedContinuationClass, ExpressionFrontierKind, ExpressionGapDescriptor } from './parse-result-algebra.js';
-import type { SourceSpan } from './ast.js';
+import type { SourceSpan } from '../source-address.js';
 
 /**
  * Parser-local inspection helpers over retained failure state.

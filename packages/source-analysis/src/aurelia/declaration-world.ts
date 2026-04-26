@@ -1,4 +1,5 @@
-import type { SourceFileRef, SymbolRef } from './refs.js';
+import type { SourceFileRef } from './source-address.js';
+import type { SymbolRef } from './refs.js';
 
 export interface DeclarationExport {
   readonly name: string;

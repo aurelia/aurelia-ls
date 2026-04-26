@@ -5,17 +5,19 @@ import {
   ObjectBindingPattern,
   ObjectLiteralExpression,
   TemplateExpression,
+} from './ast.js';
+import {
   absoluteSpan,
   ensureSpanFile,
   normalizeSpan,
   sourceSpanFromBounds,
-} from './ast.js';
+  type SourceSpan,
+  type TextSpan,
+} from '../source-address.js';
 import type {
   BindingPattern,
   IsAssign,
   ObjectBindingPatternProperty,
-  SourceSpan,
-  TextSpan,
 } from './ast.js';
 import {
   ClosedSubtreeRef,

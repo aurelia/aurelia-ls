@@ -18,7 +18,8 @@ import {
   RegistrationProduction,
 } from './registrations/index.js';
 import { OpenSeamEvidence } from './provenance/index.js';
-import { KeyRef, type SourceNodeRef, type SourceFileRef } from './refs.js';
+import type { SourceFileRef } from './source-address.js';
+import { KeyRef, type SourceNodeRef } from './refs.js';
 
 export const APP_TASK_SLOT_KINDS = [
   'creating',

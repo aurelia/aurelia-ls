@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import ts from 'typescript';
 
-import { SourceFileRef } from '../refs.js';
+import { SourceFileRef } from '../source-address.js';
 import { guessScriptKind } from './ts-ast-helpers.js';
 
 export interface ImportedBinding {

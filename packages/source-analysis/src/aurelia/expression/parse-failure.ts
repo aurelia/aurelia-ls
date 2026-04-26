@@ -1,4 +1,4 @@
-import type { SourceSpan } from './ast.js';
+import type { SourceSpan } from '../source-address.js';
 import {
   ParseCompanionState,
   type ParseCompanionStateInit,

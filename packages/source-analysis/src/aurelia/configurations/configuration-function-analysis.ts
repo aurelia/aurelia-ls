@@ -1,7 +1,8 @@
 import ts from 'typescript';
 
 import { readReferenceSeed, type BoundedReferenceSeedKind } from '../analysis/index.js';
-import { SourceNodeRef, SourceSpan, type SourceFileRef } from '../refs.js';
+import type { SourceFileRef } from '../source-address.js';
+import { sourceNodeRefFromTsNode, type SourceNodeRef } from '../refs.js';
 
 export type FunctionImplementation =
   | ts.Block
@@ -147,12 +148,7 @@ export function createNodeRef(
   file: SourceFileRef,
   node: ts.Node,
 ): SourceNodeRef {
-  return new SourceNodeRef(
-    `${file.id}:${ts.SyntaxKind[node.kind]}:${node.getStart()}-${node.end}`,
-    file,
-    ts.SyntaxKind[node.kind],
-    new SourceSpan(node.getStart(), node.end),
-  );
+  return sourceNodeRefFromTsNode(file, node);
 }
 
 export function findNodeBySpan<T extends ts.Node>(

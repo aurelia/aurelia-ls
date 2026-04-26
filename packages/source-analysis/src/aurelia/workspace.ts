@@ -1,9 +1,9 @@
 import {
   ContainerWorldRef,
-  ProgramRef,
   type SourceNodeRef,
   type SymbolRef,
 } from './refs.js';
+import { ProgramRef } from './source-address.js';
 import { Aurelia } from './aurelia.js';
 import { Container } from './container.js';
 import { Framework, type FrameworkOptions } from './framework.js';

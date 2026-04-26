@@ -12,7 +12,8 @@ import {
   resolveImportedSourceFile,
 } from '../analysis/index.js';
 import type { HelperCall } from '../configurations/index.js';
-import { SourceFileRef, SourceNodeRef, SourceSpan } from '../refs.js';
+import type { SourceFileRef } from '../source-address.js';
+import { sourceNodeRefFromTsNode, type SourceNodeRef } from '../refs.js';
 import type { FrameworkApiCatalog } from './framework-api-catalog.js';
 import { FrameworkApiIngress, FrameworkApiRouteStep } from './framework-api-ingress.js';
 
@@ -494,12 +495,7 @@ function createNodeRef(
   file: SourceFileRef,
   node: ts.Node,
 ): SourceNodeRef {
-  return new SourceNodeRef(
-    `${file.id}:${ts.SyntaxKind[node.kind]}:${node.getStart()}-${node.end}`,
-    file,
-    ts.SyntaxKind[node.kind],
-    new SourceSpan(node.getStart(), node.end),
-  );
+  return sourceNodeRefFromTsNode(file, node);
 }
 
 function formatMemberPath(

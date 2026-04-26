@@ -10,7 +10,7 @@ import {
   unwrapExpression,
 } from '../analysis/index.js';
 import type { DeclarationWorld, DeclarationExport } from '../declaration-world.js';
-import { SourceNodeRef, SourceSpan } from '../refs.js';
+import { sourceNodeRefFromTsNode, type SourceNodeRef } from '../refs.js';
 import { ExportClassification } from './contracts.js';
 import type { Export } from './export.js';
 import {
@@ -448,13 +448,8 @@ function toNodeRef(
   node: ts.Node,
   file: NonNullable<DeclarationExport['sourceFile']>,
   sourceFile: ts.SourceFile,
-) {
-  return new SourceNodeRef(
-    `${file.id}:${node.getStart(sourceFile)}:${node.end}`,
-    file,
-    ts.SyntaxKind[node.kind] ?? 'Unknown',
-    new SourceSpan(node.getStart(sourceFile), node.end),
-  );
+): SourceNodeRef {
+  return sourceNodeRefFromTsNode(file, node, sourceFile);
 }
 
 const DEFINE_CALL_RESOURCE_KIND_BY_CALLEE = {

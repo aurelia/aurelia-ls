@@ -1,4 +1,5 @@
-import type { BindingIdentifier, SourceSpan } from './ast.js';
+import type { SourceSpan } from '../source-address.js';
+import type { BindingIdentifier } from './ast.js';
 import type { CompletedInputExpressionNode } from './parse-result-algebra.js';
 import {
   ClosedSubtreeRef,

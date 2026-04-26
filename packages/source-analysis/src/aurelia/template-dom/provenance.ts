@@ -1,10 +1,12 @@
 import type {
-  SourceFileRef,
   SourceNodeRef,
-  SourceSpan,
   TemplateNodeRef,
   TemplateRef,
 } from '../refs.js';
+import type {
+  SourceFileRef,
+  SourceSpan,
+} from '../source-address.js';
 import {
   EvidenceSource,
   EvidenceWitness,

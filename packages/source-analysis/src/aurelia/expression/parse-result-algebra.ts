@@ -7,8 +7,8 @@ import type {
   Interpolation,
   IsBindingBehavior,
   PrimitiveLiteralExpression,
-  SourceSpan,
 } from './ast.js';
+import type { SourceSpan } from '../source-address.js';
 import type { ExpressionParseContext } from './expression-parse-support.js';
 import type {
   ExpressionParseRequest,

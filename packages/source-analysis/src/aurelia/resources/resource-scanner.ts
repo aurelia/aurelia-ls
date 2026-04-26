@@ -12,7 +12,12 @@ import {
 } from '../analysis/index.js';
 import type { Exports } from '../exports/index.js';
 import type { ExportValueDefineCall } from '../exports/export-value-surface.js';
-import { KeyRef, SourceFileRef, SourceNodeRef, SourceSpan } from '../refs.js';
+import type { SourceFileRef } from '../source-address.js';
+import {
+  KeyRef,
+  sourceNodeRefFromTsNode,
+  type SourceNodeRef,
+} from '../refs.js';
 import { AttributePatternDefinition } from './attribute-pattern-definition.js';
 import { BindingBehaviorDefinition } from './binding-behavior-definition.js';
 import {
@@ -744,12 +749,7 @@ function toNodeRef(
   file: SourceFileRef,
   sourceFile: ts.SourceFile,
 ): SourceNodeRef {
-  return new SourceNodeRef(
-    `${file.id}:${node.getStart(sourceFile)}:${node.end}`,
-    file,
-    ts.SyntaxKind[node.kind] ?? 'Unknown',
-    new SourceSpan(node.getStart(sourceFile), node.end),
-  );
+  return sourceNodeRefFromTsNode(file, node, sourceFile);
 }
 
 function readObjectLiteralPropertyInitializer(

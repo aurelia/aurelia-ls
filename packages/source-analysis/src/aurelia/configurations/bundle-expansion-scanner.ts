@@ -3,7 +3,8 @@ import path from 'node:path';
 
 import ts from 'typescript';
 
-import { SourceNodeRef, SourceSpan, type SourceFileRef } from '../refs.js';
+import type { SourceFileRef } from '../source-address.js';
+import { sourceNodeRefFromTsNode, type SourceNodeRef } from '../refs.js';
 import type { Configurations } from './configurations.js';
 import type { BundleArray } from './bundle-array.js';
 import type { BundleSpread, RegistryFactoryMethod, RegistryMethod } from './registry-object.js';
@@ -156,12 +157,7 @@ function createNodeRef(
   file: SourceFileRef,
   node: ts.Node,
 ): SourceNodeRef {
-  return new SourceNodeRef(
-    `${file.id}:${ts.SyntaxKind[node.kind]}:${node.getStart()}-${node.end}`,
-    file,
-    ts.SyntaxKind[node.kind],
-    new SourceSpan(node.getStart(), node.end),
-  );
+  return sourceNodeRefFromTsNode(file, node);
 }
 
 function summarizeExpression(
