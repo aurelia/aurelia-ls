@@ -15,13 +15,22 @@ import {
   type SourceFileRef,
   type SymbolRef,
 } from '../refs.js';
-import { ResourceLookupRegime } from '../registrations/resource-lookup-regime.js';
+import {
+  AllResourcesLookupRegime,
+  OptionalResourceLookupRegime,
+  ResourceResolverLookupRegime,
+  type ResourceLookupRegime,
+} from '../registrations/resource-lookup-regime.js';
 import {
   DependencyAssociation,
   DependencySite,
   type DependencySiteKind,
 } from './dependency-association.js';
-import { DependencyAssociationSource } from './dependency-association-source.js';
+import {
+  InjectAnnotationDependencyAssociationSource,
+  ResolveCallDependencyAssociationSource,
+  StaticInjectDependencyAssociationSource,
+} from './dependency-association-source.js';
 import {
   DependencyAssociationProvenance,
   DependencyContributor,
@@ -30,7 +39,17 @@ import {
 import { DependencyOpenSeam } from './dependency-open-seam.js';
 import { DependencyRequest } from './dependency-request.js';
 import { DependencySubjectResolver } from './dependency-subject-resolver.js';
-import { LookupModifier } from './lookup-modifier.js';
+import {
+  AllLookupModifier,
+  FactoryLookupModifier,
+  FromHydrationContextLookupModifier,
+  LazyLookupModifier,
+  NewInstanceForScopeLookupModifier,
+  NewInstanceOfLookupModifier,
+  OptionalLookupModifier,
+  OwnLookupModifier,
+  type LookupModifier,
+} from './lookup-modifier.js';
 
 export interface DependencyAssociationMaterializerState {
   readonly parsedFileCount: number;
@@ -213,8 +232,7 @@ function readStaticInjectAssociations(
           `parameter[${index}]`,
         ),
         contributor: new DependencyContributor(
-          new DependencyAssociationSource(
-            'static-inject',
+          new StaticInjectDependencyAssociationSource(
             'Dependency associated through the static inject array.',
           ),
           request,
@@ -257,8 +275,7 @@ function readClassInjectAssociations(
           `parameter[${index}]`,
         ),
         contributor: new DependencyContributor(
-          new DependencyAssociationSource(
-            'annotation-paramtypes',
+          new InjectAnnotationDependencyAssociationSource(
             'Dependency associated through @inject(...) decorator metadata.',
           ),
           readDependencyRequest(argument, file, sourceFile),
@@ -311,8 +328,7 @@ function readFieldInjectAssociations(
           `field:${propertyName}`,
         ),
         contributor: new DependencyContributor(
-          new DependencyAssociationSource(
-            'annotation-paramtypes',
+          new InjectAnnotationDependencyAssociationSource(
             'Field dependency associated through @inject(...) decorator metadata.',
           ),
           readDependencyRequest(argument, file, sourceFile),
@@ -358,8 +374,7 @@ function readResolveAssociations(
               : `parameter[${index}][${requestIndex}]`,
           ),
           contributor: new DependencyContributor(
-            new DependencyAssociationSource(
-              'resolve-call',
+            new ResolveCallDependencyAssociationSource(
               'Dependency associated through constructor parameter resolve(...) fallback.',
             ),
             readDependencyRequest(requestExpression, file, sourceFile),
@@ -396,8 +411,7 @@ function readResolveAssociations(
             : `field:${propertyName}[${requestIndex}]`,
         ),
         contributor: new DependencyContributor(
-          new DependencyAssociationSource(
-            'resolve-call',
+          new ResolveCallDependencyAssociationSource(
             'Dependency associated through field initializer resolve(...) call.',
           ),
           readDependencyRequest(requestExpression, file, sourceFile),
@@ -675,24 +689,21 @@ function readLookupModifier(
 
   switch (helperName) {
     case 'all':
-      return new LookupModifier('all');
+      return new AllLookupModifier();
     case 'lazy':
-      return new LookupModifier('lazy');
+      return new LazyLookupModifier();
     case 'optional':
-      return new LookupModifier('optional');
+      return new OptionalLookupModifier();
     case 'factory':
-      return new LookupModifier('factory');
+      return new FactoryLookupModifier();
     case 'own':
-      return new LookupModifier('own');
+      return new OwnLookupModifier();
     case 'fromHydrationContext':
-      return new LookupModifier(
-        'from-hydration-context',
-        'Dependency lookup is routed through the nearest hydration-context controller container and then resolved with own(key) semantics.',
-      );
+      return new FromHydrationContextLookupModifier();
     case 'newInstanceOf':
-      return new LookupModifier('new-instance-of');
+      return new NewInstanceOfLookupModifier();
     case 'newInstanceForScope':
-      return new LookupModifier('new-instance-for-scope');
+      return new NewInstanceForScopeLookupModifier();
     default:
       return null;
   }
@@ -710,11 +721,11 @@ function readResourceLookupRegime(
 
   switch (helperName) {
     case 'resource':
-      return new ResourceLookupRegime('resource');
+      return new ResourceResolverLookupRegime();
     case 'optionalResource':
-      return new ResourceLookupRegime('optional-resource');
+      return new OptionalResourceLookupRegime();
     case 'allResources':
-      return new ResourceLookupRegime('all-resources');
+      return new AllResourcesLookupRegime();
     default:
       return null;
   }

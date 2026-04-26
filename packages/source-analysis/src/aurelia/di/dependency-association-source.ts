@@ -1,3 +1,5 @@
+import { auLink } from '../au-link.js';
+
 export const DEPENDENCY_ASSOCIATION_SOURCE_KINDS = [
   'static-inject',
   'design-paramtypes',
@@ -12,9 +14,51 @@ export const DEPENDENCY_ASSOCIATION_SOURCE_KINDS = [
 export type DependencyAssociationSourceKind =
   typeof DEPENDENCY_ASSOCIATION_SOURCE_KINDS[number];
 
-export class DependencyAssociationSource {
+export class StaticInjectDependencyAssociationSource {
+  readonly kind = 'static-inject' as const;
+
   constructor(
-    readonly kind: DependencyAssociationSourceKind,
     readonly note: string | null = null,
   ) {}
 }
+
+export class DesignParamtypesDependencyAssociationSource {
+  readonly kind = 'design-paramtypes' as const;
+
+  constructor(
+    readonly note: string | null = null,
+  ) {}
+}
+
+@auLink('kernel:inject')
+export class InjectAnnotationDependencyAssociationSource {
+  readonly kind = 'annotation-paramtypes' as const;
+
+  constructor(
+    readonly note: string | null = null,
+  ) {}
+}
+
+export class DefinitionDependenciesDependencyAssociationSource {
+  readonly kind = 'definition-dependencies' as const;
+
+  constructor(
+    readonly note: string | null = null,
+  ) {}
+}
+
+@auLink('kernel:resolve')
+export class ResolveCallDependencyAssociationSource {
+  readonly kind = 'resolve-call' as const;
+
+  constructor(
+    readonly note: string | null = null,
+  ) {}
+}
+
+export type DependencyAssociationSource =
+  | StaticInjectDependencyAssociationSource
+  | DesignParamtypesDependencyAssociationSource
+  | InjectAnnotationDependencyAssociationSource
+  | DefinitionDependenciesDependencyAssociationSource
+  | ResolveCallDependencyAssociationSource;

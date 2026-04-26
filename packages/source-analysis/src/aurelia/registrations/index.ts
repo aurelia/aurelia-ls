@@ -1,6 +1,9 @@
 export {
+  REGISTRATION_FACTORY_METHOD_KINDS,
   REGISTRATION_PRODUCTION_KINDS,
+  RegistrationFactory,
   RegistrationProduction,
+  type RegistrationFactoryMethodKind,
   type RegistrationProductionKind,
 } from './registration-production.js';
 export {
@@ -45,7 +48,10 @@ export {
 } from './container-state-qualification.js';
 export {
   RESOURCE_LOOKUP_REGIME_KINDS,
-  ResourceLookupRegime,
+  AllResourcesLookupRegime,
+  OptionalResourceLookupRegime,
+  ResourceResolverLookupRegime,
+  type ResourceLookupRegime,
   type ResourceLookupRegimeKind,
 } from './resource-lookup-regime.js';
 export { ContainerStateCandidate } from './container-state-candidate.js';

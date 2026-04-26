@@ -4,11 +4,17 @@ export {
   INTERFACE_KEY_DEFAULT_REGISTRATION_KINDS,
   InterfaceKey,
   InterfaceKeyDefaultRegistration,
+  InterfaceKeyResolverBuilder,
   type InterfaceKeyDefaultRegistrationKind,
 } from './interface-key.js';
 export {
   DEPENDENCY_ASSOCIATION_SOURCE_KINDS,
-  DependencyAssociationSource,
+  DefinitionDependenciesDependencyAssociationSource,
+  DesignParamtypesDependencyAssociationSource,
+  InjectAnnotationDependencyAssociationSource,
+  ResolveCallDependencyAssociationSource,
+  StaticInjectDependencyAssociationSource,
+  type DependencyAssociationSource,
   type DependencyAssociationSourceKind,
 } from './dependency-association-source.js';
 export {
@@ -18,7 +24,15 @@ export {
 } from './dependency-request.js';
 export {
   LOOKUP_MODIFIER_KINDS,
-  LookupModifier,
+  AllLookupModifier,
+  FactoryLookupModifier,
+  FromHydrationContextLookupModifier,
+  LazyLookupModifier,
+  NewInstanceForScopeLookupModifier,
+  NewInstanceOfLookupModifier,
+  OptionalLookupModifier,
+  OwnLookupModifier,
+  type LookupModifier,
   type LookupModifierKind,
 } from './lookup-modifier.js';
 export {

@@ -1,5 +1,6 @@
 import ts from 'typescript';
 
+import { auLink } from '../au-link.js';
 import {
   findExportedBinding,
   findForwardedExport,
@@ -27,8 +28,10 @@ import {
   findKnownImportedInterfaceKey,
   InterfaceKey,
   InterfaceKeyDefaultRegistration,
+  InterfaceKeyResolverBuilder,
 } from './interface-key.js';
 
+@auLink('kernel:DI')
 export class DependencySubjectResolver {
   private readonly parsedFiles = new Map<string, ts.SourceFile | null>();
 
@@ -393,14 +396,15 @@ function readInterfaceKey(
   );
 
   const friendlyName = readInterfaceFriendlyName(expression) ?? declaration.name.text;
-  const defaultRegistration = readInterfaceDefaultRegistration(expression, file, sourceFile);
+  const defaultRegistrationBuilder = readInterfaceDefaultRegistrationBuilder(expression, file, sourceFile);
 
   return new InterfaceKey(
     `interface-key:${declaration.name.text}`,
     owner,
     key,
     friendlyName,
-    defaultRegistration,
+    defaultRegistrationBuilder?.producedRegistration ?? null,
+    defaultRegistrationBuilder,
   );
 }
 
@@ -420,19 +424,24 @@ function readInterfaceFriendlyName(
   return null;
 }
 
-function readInterfaceDefaultRegistration(
+function readInterfaceDefaultRegistrationBuilder(
   expression: ts.CallExpression,
   file: SourceFileRef,
   sourceFile: ts.SourceFile,
-): InterfaceKeyDefaultRegistration | null {
+): InterfaceKeyResolverBuilder | null {
   const configure = expression.arguments.find(isFunctionExpressionLike);
   if (configure == null) {
     return null;
   }
 
   const bodyExpression = readReturnedExpression(configure);
+  const builderSource = createNodeRef(file, sourceFile, bodyExpression ?? configure);
   if (bodyExpression == null || !ts.isCallExpression(bodyExpression)) {
-    return null;
+    return new InterfaceKeyResolverBuilder(
+      builderSource,
+      null,
+      'Interface default-registration callback did not return a builder method call that this pass can close.',
+    );
   }
 
   const callee = readCallCalleeText(bodyExpression.expression);
@@ -440,16 +449,23 @@ function readInterfaceDefaultRegistration(
     ? null
     : readDefaultRegistrationKind(callee);
   if (kind == null) {
-    return null;
+    return new InterfaceKeyResolverBuilder(
+      builderSource,
+      null,
+      'Interface default-registration callback returned a call outside the currently recognized ResolverBuilder surface.',
+    );
   }
 
-  return new InterfaceKeyDefaultRegistration(
-    kind,
-    createNodeRef(file, sourceFile, bodyExpression),
-    null,
-    kind === 'alias'
-      ? 'Default alias registration target is not yet resolved in this first same-file interface-key reader.'
-      : null,
+  return new InterfaceKeyResolverBuilder(
+    builderSource,
+    new InterfaceKeyDefaultRegistration(
+      kind,
+      builderSource,
+      null,
+      kind === 'alias'
+        ? 'Default alias registration target is not yet resolved in this first same-file interface-key reader.'
+        : null,
+    ),
   );
 }
 

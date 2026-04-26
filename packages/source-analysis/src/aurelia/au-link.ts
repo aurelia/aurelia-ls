@@ -20,10 +20,34 @@ export type PackageId = (
  * Marker decorator - create a semantic anchor from a build-time implementation to the runtime equivalent of the Aurelia framework that it is meant to emulate.
  */
 export function auLink(id: 'kernel:Container', isNavigationRoot: true): ClassDecorator
+export function auLink(id: 'kernel:IContainer'): ClassDecorator
+export function auLink(id: 'kernel:IServiceLocator'): ClassDecorator
+export function auLink(id: 'kernel:DI'): ClassDecorator
+export function auLink(id: 'kernel:InterfaceSymbol'): ClassDecorator
+export function auLink(id: 'kernel:ResolverBuilder'): ClassDecorator
+export function auLink(id: 'kernel:Registration'): ClassDecorator
+export function auLink(id: 'kernel:IRegistration'): ClassDecorator
+export function auLink(id: 'kernel:IRegistry'): ClassDecorator
+export function auLink(id: 'kernel:Resolver'): ClassDecorator
+export function auLink(id: 'kernel:ResolverStrategy'): ClassDecorator
+
+export function auLink(id: 'kernel:inject'): ClassDecorator
+export function auLink(id: 'kernel:resolve'): ClassDecorator
+export function auLink(id: 'kernel:all'): ClassDecorator
+export function auLink(id: 'kernel:lazy'): ClassDecorator
+export function auLink(id: 'kernel:optional'): ClassDecorator
+export function auLink(id: 'kernel:factory'): ClassDecorator
+export function auLink(id: 'kernel:own'): ClassDecorator
+export function auLink(id: 'kernel:newInstanceOf'): ClassDecorator
+export function auLink(id: 'kernel:newInstanceForScope'): ClassDecorator
+export function auLink(id: 'kernel:resource'): ClassDecorator
+export function auLink(id: 'kernel:optionalResource'): ClassDecorator
+export function auLink(id: 'kernel:allResources'): ClassDecorator
 
 export function auLink(id: 'runtime-html:Aurelia', isNavigationRoot: true): ClassDecorator
 export function auLink(id: 'runtime-html:AppRoot'): ClassDecorator
 export function auLink(id: 'runtime-html:AppTask'): ClassDecorator
+export function auLink(id: 'runtime-html:fromHydrationContext'): ClassDecorator
 
 export function auLink(id: 'runtime-html:ISyntheticView'): ClassDecorator
 export function auLink(id: 'runtime-html:ICustomAttributeController'): ClassDecorator

@@ -1,3 +1,4 @@
+import { auLink } from '../au-link.js';
 import type { ContainerWorldRef, KeyRef, SourceNodeRef } from '../refs.js';
 import { type LookupModifierKind } from '../di/index.js';
 import { ContainerStateEntry } from './container-state-entry.js';
@@ -64,6 +65,7 @@ export class ContainerStateLookupResult {
   ) {}
 }
 
+@auLink('kernel:IServiceLocator')
 export class ContainerStateLookupEvaluator {
   lookup(
     scope: ContainerStateLookupScope,

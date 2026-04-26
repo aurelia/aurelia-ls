@@ -1,3 +1,4 @@
+import { auLink } from '../au-link.js';
 import type { ContainerWorldRef, SourceNodeRef, SymbolRef } from '../refs.js';
 import type { RegistrationProduction } from './registration-production.js';
 
@@ -16,6 +17,7 @@ export const REGISTRATION_INTAKE_KINDS = [
 export type RegistrationIntakeKind =
   typeof REGISTRATION_INTAKE_KINDS[number];
 
+@auLink('kernel:IRegistry')
 export class RegistrationIntake {
   constructor(
     readonly id: string,

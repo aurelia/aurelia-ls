@@ -1,3 +1,4 @@
+import { auLink } from '../au-link.js';
 import type { RegistrationIntake } from './registration-intake.js';
 import type { RegistrationProduction } from './registration-production.js';
 
@@ -29,6 +30,7 @@ export type RegistrationTransitionClassKind =
 // Transition/cascade lineage is only one section of the eventual DI/container-
 // state envelope. Lookup qualification and closure basis live in separate
 // clean-room homes so we do not compress them back into runtime-style rows.
+@auLink('kernel:IRegistration')
 export class RegistrationTransition {
   constructor(
     readonly id: string,
