@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
 
+import { auLink } from './au-link.js';
 import type { ConfigurationContribution } from './configurations/index.js';
 import {
   analyzeFunctionImplementation,
@@ -30,6 +31,16 @@ export const APP_TASK_SLOT_KINDS = [
 
 export type AppTaskSlotKind =
   typeof APP_TASK_SLOT_KINDS[number];
+
+@auLink('runtime-html:AppTask')
+export class AppTaskFactory {
+  readonly kind = 'app-task-factory' as const;
+
+  constructor(
+    readonly slots: readonly AppTaskSlotKind[] = APP_TASK_SLOT_KINDS,
+    readonly note: string | null = 'Runtime AppTask helper surface with fixed lifecycle slot methods that produce IRegistry callbacks.',
+  ) {}
+}
 
 export const APP_TASK_CALLBACK_KINDS = [
   'inline-function',

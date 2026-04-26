@@ -22,11 +22,36 @@ export interface ContainerState {
   readonly entries: readonly ContainerEntry[];
 }
 
+export const CONTAINER_CONTRACT_OPERATION_KINDS = [
+  'register',
+  'get',
+  'get-all',
+  'get-resolver',
+  'has',
+  'invoke',
+  'create-child',
+  'resource-lookup',
+] as const;
+
+export type ContainerContractOperationKind =
+  typeof CONTAINER_CONTRACT_OPERATION_KINDS[number];
+
 type MutableContainerEntry = {
   key: KeyRef;
   world: ContainerWorldRef;
   resolver: Resolver;
 };
+
+@auLink('kernel:IContainer')
+export class ContainerContract {
+  readonly kind = 'container-contract' as const;
+
+  constructor(
+    readonly operations: readonly ContainerContractOperationKind[] = CONTAINER_CONTRACT_OPERATION_KINDS,
+    readonly hasRoot: boolean = true,
+    readonly canCreateChild: boolean = true,
+  ) {}
+}
 
 @auLink('kernel:Container', true)
 export class Container {

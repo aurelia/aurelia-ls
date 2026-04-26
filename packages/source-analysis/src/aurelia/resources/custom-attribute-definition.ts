@@ -1,4 +1,5 @@
 import type { KeyRef } from '../refs.js';
+import { auLink } from '../au-link.js';
 import type {
   ResourceDefinitionState,
   ResourceDefinitionType,
@@ -12,6 +13,7 @@ import {
 import { CustomAttributeLifecycleHooks } from './custom-attribute-lifecycle-support.js';
 import { WatchSurface } from './watch-support.js';
 
+@auLink('runtime-html:CustomAttributeDefinition')
 export class CustomAttributeDefinition implements ResourceDefinitionState<'custom-attribute'> {
   readonly kind = 'custom-attribute' as const;
 

@@ -126,10 +126,12 @@ export class TemplateRef {
 }
 
 export const TEMPLATE_NODE_REF_KINDS = [
+  'document',
   'fragment',
   'element',
   'attribute',
   'text',
+  'comment',
   'unknown',
 ] as const;
 

@@ -1,4 +1,5 @@
 import type { KeyRef } from '../refs.js';
+import { auLink } from '../au-link.js';
 import type {
   ResourceDefinitionState,
   ResourceDefinitionType,
@@ -8,6 +9,7 @@ import {
   ValueConverterIdentity,
 } from './value-converter-support.js';
 
+@auLink('runtime-html:ValueConverterDefinition')
 export class ValueConverterDefinition implements ResourceDefinitionState<'value-converter'> {
   readonly kind = 'value-converter' as const;
   readonly identity: ValueConverterIdentity;

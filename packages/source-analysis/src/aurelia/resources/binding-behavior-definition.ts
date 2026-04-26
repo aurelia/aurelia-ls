@@ -1,4 +1,5 @@
 import type { KeyRef } from '../refs.js';
+import { auLink } from '../au-link.js';
 import type {
   ResourceDefinitionState,
   ResourceDefinitionType,
@@ -8,6 +9,7 @@ import {
   BindingBehaviorIdentity,
 } from './binding-behavior-support.js';
 
+@auLink('runtime-html:BindingBehaviorDefinition')
 export class BindingBehaviorDefinition implements ResourceDefinitionState<'binding-behavior'> {
   readonly kind = 'binding-behavior' as const;
   readonly identity: BindingBehaviorIdentity;

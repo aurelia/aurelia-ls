@@ -1,4 +1,5 @@
 import type { KeyRef } from '../refs.js';
+import { auLink } from '../au-link.js';
 import type {
   ResourceDefinitionState,
   ResourceDefinitionType,
@@ -16,6 +17,7 @@ import { CustomElementSlotTopology } from './custom-element-slot-topology-suppor
 import { SlottedSurface } from './slotted-support.js';
 import { WatchSurface } from './watch-support.js';
 
+@auLink('runtime-html:CustomElementDefinition')
 export class CustomElementDefinition implements ResourceDefinitionState<'custom-element'> {
   readonly kind = 'custom-element' as const;
 
