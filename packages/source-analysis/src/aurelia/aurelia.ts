@@ -6,12 +6,11 @@ import {
 } from './refs.js';
 import { AppRoot, type AppRootConfig } from './app-root.js';
 import { Container } from './container.js';
+import { auLink } from './au-link.js';
 
 export interface AureliaAppConfig extends AppRootConfig {}
 
-// This is the true runtime-shaped root: a root container plus an AppRoot
-// construction surface. It is a better clean-room mirror than the previous
-// generic World wrapper.
+@auLink('runtime-html:Aurelia', true)
 export class Aurelia {
   private rootValue: AppRoot | null = null;
   readonly container: Container;

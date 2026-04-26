@@ -1,3 +1,4 @@
+import { auLink } from './au-link.js';
 import type {
   ContainerWorldRef,
   KeyRef,
@@ -27,9 +28,7 @@ type MutableContainerEntry = {
   resolver: Resolver;
 };
 
-// Modeled after the runtime container shape, but kept deliberately shallow for
-// now: it stores materialized registration handles only. Lazy claim routing
-// can be layered on later once the underlying burdens are clearer.
+@auLink('kernel:Container', true)
 export class Container {
   readonly root: Container;
   readonly parent: Container | null;

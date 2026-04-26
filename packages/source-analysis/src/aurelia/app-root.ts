@@ -22,6 +22,7 @@ import {
   RegistrationResolverBasis,
   RegistrationTransition,
 } from './registrations/index.js';
+import { auLink } from './au-link.js';
 
 export interface AppRootConfig {
   readonly host: SourceNodeRef | null;
@@ -50,9 +51,7 @@ export class AppRootStage {
 // into concrete world/container transitions. Keep that follow-on work with the
 // AppTask scanner rather than burying it in AppRoot itself.
 
-// Mirrors the runtime-html AppRoot role more closely than the previous World
-// placeholder did: one root application/controller boundary over a concrete
-// container world.
+@auLink('runtime-html:AppRoot')
 export class AppRoot {
   readonly config: AppRootConfig;
   readonly container: Container;
