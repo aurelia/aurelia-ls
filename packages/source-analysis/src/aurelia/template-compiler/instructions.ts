@@ -1,8 +1,4 @@
-import type {
-  ForOfStatement,
-  Interpolation,
-  IsBindingBehavior,
-} from '../expression/index.js';
+import type { ForOfStatement, Interpolation, IsBindingBehavior } from '../expression/ast.js';
 import { auLink } from '../au-link.js';
 
 export const BINDING_MODES = {

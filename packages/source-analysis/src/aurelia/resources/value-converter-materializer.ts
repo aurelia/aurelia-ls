@@ -1,15 +1,6 @@
 import fs from 'node:fs';
 import ts from 'typescript';
-
-import {
-  findNodeBySpan,
-  guessScriptKind,
-  hasStaticModifier,
-  readPropertyName,
-  readStringArrayValues,
-  readStringLiteralValue,
-  unwrapExpression,
-} from '../analysis/index.js';
+import { findNodeBySpan, guessScriptKind, hasStaticModifier, readPropertyName, readStringArrayValues, readStringLiteralValue, unwrapExpression } from '../analysis/ts-ast-helpers.js';
 import type { SourceFileRef } from '../source-address.js';
 import {
   sourceNodeRefFromTsNode,

@@ -1,6 +1,5 @@
 import ts from 'typescript';
-
-import { readReferenceSeed, type BoundedReferenceSeedKind } from '../analysis/index.js';
+import { readReferenceSeed, type BoundedReferenceSeedKind } from '../analysis/ts-ast-helpers.js';
 import type { SourceFileRef } from '../source-address.js';
 import { sourceNodeRefFromTsNode, type SourceNodeRef } from '../refs.js';
 

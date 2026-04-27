@@ -1,6 +1,6 @@
 import { auLink } from '../au-link.js';
 import type { SourceNodeRef, SymbolRef, KeyRef } from '../refs.js';
-import type { DependencyMaterialization } from '../di/index.js';
+import type { DependencyMaterialization } from '../di/dependency-materialization.js';
 import type { RegistrationPayload } from './registration-payload.js';
 import type { RegistrationTransition } from './registration-transition.js';
 import type { RegistrationResolverBasis } from './registration-resolver-basis.js';

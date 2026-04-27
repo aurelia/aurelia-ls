@@ -1,4 +1,4 @@
-import { EvidenceSource, EvidenceWitness } from '../provenance/index.js';
+import { EvidenceSource, EvidenceWitness } from '../provenance/evidence.js';
 
 export const TOOLING_ACTIVATION_STATUS_KINDS = [
   'active',

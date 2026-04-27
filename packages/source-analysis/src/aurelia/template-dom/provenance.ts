@@ -7,13 +7,7 @@ import type {
   SourceFileRef,
   SourceSpan,
 } from '../source-address.js';
-import {
-  EvidenceSource,
-  EvidenceWitness,
-  ProvenanceSet,
-  readProvenanceSet,
-  type ProvenanceMode,
-} from '../provenance/index.js';
+import { EvidenceSource, EvidenceWitness, ProvenanceSet, readProvenanceSet, type ProvenanceMode } from '../provenance/evidence.js';
 
 export const TEMPLATE_DOM_PHASE_KINDS = [
   'authored',

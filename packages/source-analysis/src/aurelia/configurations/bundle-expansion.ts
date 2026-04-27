@@ -1,5 +1,6 @@
 import type { BundleArray } from './bundle-array.js';
-import type { BundleSpread, RegistryFactoryMethod, RegistryMethod } from './registry-object.js';
+import type { BundleSpread } from './configuration-function-analysis.js';
+import type { RegistryFactoryMethod, RegistryMethod } from './registry-object.js';
 import type { SourceNodeRef } from '../refs.js';
 
 export class BundleMember {

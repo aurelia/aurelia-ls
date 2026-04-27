@@ -1,4 +1,4 @@
-import { ProvenanceSet, type ProvenanceMode } from '../provenance/index.js';
+import { ProvenanceSet, type ProvenanceMode } from '../provenance/evidence.js';
 import type { RegistrationTransition } from './registration-transition.js';
 
 export const CONTAINER_STATE_PROVENANCE_MODES = [

@@ -3,7 +3,7 @@ import path from 'node:path';
 import ts from 'typescript';
 
 import { auLink } from './au-link.js';
-import type { ConfigurationContribution } from './configurations/index.js';
+import type { ConfigurationContribution } from './configurations/configuration-contribution.js';
 import {
   analyzeFunctionImplementation,
   createNodeRef,
@@ -11,13 +11,12 @@ import {
   resolveFunctionImplementation,
   summarizeExpression,
 } from './configurations/configuration-function-analysis.js';
-import { FrameworkApiCatalog, FrameworkApiIngressScanner } from './framework-api/index.js';
-import {
-  ConfigurationRegistrationProduction,
-  RegistrationPayload,
-  RegistrationProduction,
-} from './registrations/index.js';
-import { OpenSeamEvidence } from './provenance/index.js';
+import { FrameworkApiCatalog } from './framework-api/framework-api-catalog.js';
+import { FrameworkApiIngressScanner } from './framework-api/framework-api-ingress-scanner.js';
+import { ConfigurationRegistrationProduction } from './registrations/configuration-registration-production.js';
+import { RegistrationPayload } from './registrations/registration-payload.js';
+import { RegistrationProduction } from './registrations/registration-production.js';
+import { OpenSeamEvidence } from './provenance/evidence.js';
 import type { SourceFileRef } from './source-address.js';
 import { KeyRef, type SourceNodeRef } from './refs.js';
 
@@ -95,8 +94,8 @@ export class AppTaskCallbackSurface {
     readonly kind: AppTaskCallbackKind,
     readonly source: SourceNodeRef | null,
     readonly referenceName: string | null = null,
-    readonly helperCalls: readonly import('./configurations/index.js').HelperCall[] = [],
-    readonly directRegisterArguments: readonly import('./configurations/index.js').RegisterArgument[] = [],
+    readonly helperCalls: readonly import('./configurations/configuration-function-analysis.js').HelperCall[] = [],
+    readonly directRegisterArguments: readonly import('./configurations/configuration-function-analysis.js').RegisterArgument[] = [],
     readonly productions: readonly ConfigurationRegistrationProduction[] = [],
     readonly openSeams: readonly AppTaskOpenSeam[] = [],
     readonly note: string | null = null,
@@ -446,7 +445,7 @@ function materializeCallbackRegistrationProduction(
   helperIndex: number,
   file: SourceFileRef,
   sourceFile: ts.SourceFile,
-  helperCall: import('./configurations/index.js').HelperCall,
+  helperCall: import('./configurations/configuration-function-analysis.js').HelperCall,
   productionKind: RegistrationProduction['kind'],
   apiId: string,
 ): RegistrationProduction {

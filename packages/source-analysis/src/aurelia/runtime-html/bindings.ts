@@ -1,10 +1,5 @@
-import type {
-  ForOfStatement,
-  Interpolation,
-  IsBindingBehavior,
-  IsExpression,
-} from '../expression/index.js';
-import type { BindingMode } from '../template-compiler/index.js';
+import type { ForOfStatement, Interpolation, IsBindingBehavior, IsExpression } from '../expression/ast.js';
+import type { BindingMode } from '../template-compiler/instructions.js';
 import { auLink } from '../au-link.js';
 
 export const RUNTIME_BINDING_KINDS = [

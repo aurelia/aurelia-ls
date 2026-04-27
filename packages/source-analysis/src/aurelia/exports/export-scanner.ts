@@ -1,14 +1,6 @@
 import fs from 'node:fs';
 import ts from 'typescript';
-
-import {
-  findNodeBySpan,
-  guessScriptKind,
-  readCallCalleeText,
-  readPropertyName,
-  readStringLiteralValue,
-  unwrapExpression,
-} from '../analysis/index.js';
+import { findNodeBySpan, guessScriptKind, readCallCalleeText, readPropertyName, readStringLiteralValue, unwrapExpression } from '../analysis/ts-ast-helpers.js';
 import type { DeclarationWorld, DeclarationExport } from '../declaration-world.js';
 import { sourceNodeRefFromTsNode, type SourceNodeRef } from '../refs.js';
 import { ExportClassification } from './contracts.js';

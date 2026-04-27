@@ -1,15 +1,7 @@
-import type { SourceNodeRef, SymbolRef } from '../refs.js';
-import {
-  EvidenceSource,
-  EvidenceWitness,
-  MaterializationRecord,
-  ProvenanceSet,
-  type ProvenanceMode,
-} from '../provenance/index.js';
+import type { SourceNodeRef } from '../refs.js';
+import { EvidenceSource, EvidenceWitness, ProvenanceSet, type ProvenanceMode } from '../provenance/evidence.js';
 import type { DependencyAssociationSource } from './dependency-association-source.js';
-import type { DependencyOpenSeam } from './dependency-open-seam.js';
 import type { DependencyRequest } from './dependency-request.js';
-import type { DependencyAssociation } from './dependency-association.js';
 
 export const DEPENDENCY_PROVENANCE_MODES = [
   'selected',
@@ -68,21 +60,5 @@ export class DependencyAssociationProvenance {
       contributors,
       note,
     );
-  }
-}
-
-export class DependencyMaterialization {
-  readonly materialization: MaterializationRecord<
-    SymbolRef | SourceNodeRef,
-    DependencyAssociation,
-    DependencyOpenSeam
-  >;
-
-  constructor(
-    readonly owner: SymbolRef | SourceNodeRef,
-    readonly associations: readonly DependencyAssociation[] = [],
-    readonly openSeams: readonly DependencyOpenSeam[] = [],
-  ) {
-    this.materialization = new MaterializationRecord(owner, associations, openSeams);
   }
 }

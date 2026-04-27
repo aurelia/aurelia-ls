@@ -1,6 +1,6 @@
-import type { Export } from '../exports/index.js';
+import type { Export } from '../exports/export.js';
 import type { SourceNodeRef } from '../refs.js';
-import type { ResourceDefinitionKind } from '../resources/index.js';
+import type { ResourceDefinitionKind } from '../resources/contracts.js';
 
 export const ADMITTED_SUBJECT_CARRIER_KINDS = [
   'service',

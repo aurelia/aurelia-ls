@@ -1,4 +1,4 @@
-import { DependencyAssociationMaterializer } from '../di/index.js';
+import { DependencyAssociationMaterializer } from '../di/dependency-association-materializer.js';
 import { ContainerStateCandidate } from './container-state-candidate.js';
 import { ContainerStateEntry } from './container-state-entry.js';
 import { ContainerStateOpenSeam } from './container-state-open-seam.js';

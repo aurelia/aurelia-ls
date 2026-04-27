@@ -1,6 +1,7 @@
-import type { ConfigurationRegistrationProduction } from '../registrations/index.js';
-import type { AdmittedSubject } from '../admissions/index.js';
-import type { RegistryObject, RegisterArgument } from './registry-object.js';
+import type { ConfigurationRegistrationProduction } from '../registrations/configuration-registration-production.js';
+import type { AdmittedSubject } from '../admissions/admitted-subject.js';
+import type { RegisterArgument } from './configuration-function-analysis.js';
+import type { RegistryObject } from './registry-object.js';
 import type { BundleExpansion } from './bundle-expansion.js';
 
 export class ConfigurationContribution {

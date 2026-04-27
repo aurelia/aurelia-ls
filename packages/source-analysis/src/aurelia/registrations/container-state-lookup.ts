@@ -1,7 +1,7 @@
 import { auLink } from '../au-link.js';
-import { OpenSeamEvidence } from '../provenance/index.js';
+import { OpenSeamEvidence } from '../provenance/evidence.js';
 import type { ContainerWorldRef, KeyRef, SourceNodeRef } from '../refs.js';
-import { type LookupModifierKind } from '../di/index.js';
+import type { LookupModifierKind } from '../di/lookup-modifier.js';
 import { ContainerStateEntry } from './container-state-entry.js';
 import { LookupRequest } from './lookup-request.js';
 

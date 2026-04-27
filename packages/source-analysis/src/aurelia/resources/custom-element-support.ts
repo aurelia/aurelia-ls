@@ -1,4 +1,4 @@
-import { EvidenceSource, EvidenceWitness, ProvenanceSet } from '../provenance/index.js';
+import { EvidenceSource, EvidenceWitness, ProvenanceSet } from '../provenance/evidence.js';
 import type { KeyRef, SourceNodeRef } from '../refs.js';
 
 export const CUSTOM_ELEMENT_SUPPORT_FIELD_KINDS = [

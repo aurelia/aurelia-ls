@@ -1,27 +1,19 @@
 import { DeclarationWorld, type DeclarationExport } from './declaration-world.js';
-import {
-  ConfigurationContributions,
-  ConfigurationContributionScanner,
-  Configurations,
-  ConfigurationScanner,
-} from './configurations/index.js';
+import { ConfigurationContributions } from './configurations/configuration-contributions.js';
+import { ConfigurationContributionScanner } from './configurations/configuration-contribution-scanner.js';
+import { Configurations } from './configurations/configurations.js';
+import { ConfigurationScanner } from './configurations/configuration-scanner.js';
 import {
   AppTaskScanner,
   type AppTaskContribution,
 } from './app-task.js';
-import {
-  TypeScriptWorldConstructions,
-  TypeScriptWorldConstructionScanner,
-} from './world-construction/index.js';
-import {
-  Exports,
-  ExportScanner,
-} from './exports/index.js';
-import {
-  ResourceScanner,
-  Resources,
-  type ResourceDefinition,
-} from './resources/index.js';
+import { TypeScriptWorldConstructions } from './world-construction/typescript-world-constructions.js';
+import { TypeScriptWorldConstructionScanner } from './world-construction/typescript-world-construction-scanner.js';
+import { Exports } from './exports/exports.js';
+import { ExportScanner } from './exports/export-scanner.js';
+import { ResourceScanner } from './resources/resource-scanner.js';
+import type { ResourceDefinition } from './resources/resource-definition.js';
+import { Resources } from './resources/resources.js';
 
 export interface FrameworkOptions {
   readonly rootDir: string;

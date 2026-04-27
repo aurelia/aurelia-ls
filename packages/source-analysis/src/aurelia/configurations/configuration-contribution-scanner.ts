@@ -1,13 +1,12 @@
-import { ConfigurationRegistrationScanner, type ConfigurationRegistrationProduction } from '../registrations/index.js';
-import {
-  SubjectAdmissionScanner,
-  type AdmittedSubject,
-  type SubjectAdmissionScannerState,
-} from '../admissions/index.js';
-import type { Exports } from '../exports/index.js';
-import type { Resources } from '../resources/index.js';
+import { ConfigurationRegistrationScanner } from '../registrations/configuration-registration-scanner.js';
+import type { ConfigurationRegistrationProduction } from '../registrations/configuration-registration-production.js';
+import { SubjectAdmissionScanner, type SubjectAdmissionScannerState } from '../admissions/subject-admission-scanner.js';
+import type { AdmittedSubject } from '../admissions/admitted-subject.js';
+import type { Exports } from '../exports/exports.js';
+import type { Resources } from '../resources/resources.js';
 import type { Configurations } from './configurations.js';
-import type { RegistryFactoryMethod, RegistryMethod, RegistryObject, RegisterArgument } from './registry-object.js';
+import type { RegisterArgument } from './configuration-function-analysis.js';
+import type { RegistryFactoryMethod, RegistryMethod, RegistryObject } from './registry-object.js';
 import { BundleExpansionScanner, type BundleExpansionScannerState } from './bundle-expansion-scanner.js';
 import { ConfigurationContribution } from './configuration-contribution.js';
 import type { BundleExpansion } from './bundle-expansion.js';

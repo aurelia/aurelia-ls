@@ -1,17 +1,6 @@
 import ts from 'typescript';
-
-import {
-  findExportedBinding,
-  findForwardedExport,
-  findImportedBinding,
-  findTopLevelBinding,
-  hasExportModifier,
-  isRelativeModuleSpecifier,
-  normalizeSourceFilePath,
-  readParsedSourceFile,
-  resolveImportedSourceFile,
-} from '../analysis/index.js';
-import type { HelperCall } from '../configurations/index.js';
+import { findExportedBinding, findForwardedExport, findImportedBinding, findTopLevelBinding, hasExportModifier, isRelativeModuleSpecifier, normalizeSourceFilePath, readParsedSourceFile, resolveImportedSourceFile } from '../analysis/source-module-linking.js';
+import type { HelperCall } from '../configurations/configuration-function-analysis.js';
 import type { SourceFileRef } from '../source-address.js';
 import { sourceNodeRefFromTsNode, type SourceNodeRef } from '../refs.js';
 import type { FrameworkApiCatalog } from './framework-api-catalog.js';

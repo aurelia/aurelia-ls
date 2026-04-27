@@ -1,14 +1,6 @@
 import fs from 'node:fs';
 import ts from 'typescript';
-
-import {
-  findNodeBySpan,
-  guessScriptKind,
-  readCallCalleeText,
-  readPropertyName,
-  readReferenceSeed,
-  unwrapExpression,
-} from '../analysis/index.js';
+import { findNodeBySpan, guessScriptKind, readCallCalleeText, readPropertyName, readReferenceSeed, unwrapExpression } from '../analysis/ts-ast-helpers.js';
 import type { SourceFileRef } from '../source-address.js';
 import {
   sourceNodeRefFromTsNode,
@@ -34,8 +26,8 @@ import {
 import {
   DependencyAssociationProvenance,
   DependencyContributor,
-  DependencyMaterialization,
 } from './dependency-provenance.js';
+import { DependencyMaterialization } from './dependency-materialization.js';
 import { DependencyOpenSeam } from './dependency-open-seam.js';
 import { DependencyRequest } from './dependency-request.js';
 import { DependencySubjectResolver } from './dependency-subject-resolver.js';

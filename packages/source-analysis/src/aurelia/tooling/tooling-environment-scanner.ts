@@ -1,13 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
-
-import {
-  guessScriptKind,
-  readPropertyName,
-  readStringLiteralValue,
-  unwrapExpression,
-} from '../analysis/index.js';
+import { guessScriptKind, readPropertyName, readStringLiteralValue, unwrapExpression } from '../analysis/ts-ast-helpers.js';
 import {
   AureliaConventionsActivation,
   type AureliaConventionsDriverKind,

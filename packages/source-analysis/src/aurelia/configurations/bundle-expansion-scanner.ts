@@ -7,7 +7,8 @@ import type { SourceFileRef } from '../source-address.js';
 import { sourceNodeRefFromTsNode, type SourceNodeRef } from '../refs.js';
 import type { Configurations } from './configurations.js';
 import type { BundleArray } from './bundle-array.js';
-import type { BundleSpread, RegistryFactoryMethod, RegistryMethod } from './registry-object.js';
+import type { BundleSpread } from './configuration-function-analysis.js';
+import type { RegistryFactoryMethod, RegistryMethod } from './registry-object.js';
 import { BundleExpansion, BundleMember } from './bundle-expansion.js';
 
 export interface BundleExpansionScannerOptions {

@@ -1,10 +1,5 @@
 import ts from 'typescript';
-
-import {
-  readPropertyName,
-  readReferenceSeed,
-  unwrapExpression,
-} from '../analysis/index.js';
+import { readPropertyName, readReferenceSeed, unwrapExpression } from '../analysis/ts-ast-helpers.js';
 import type { SourceFileRef } from '../source-address.js';
 import {
   sourceNodeRefFromTsNode,

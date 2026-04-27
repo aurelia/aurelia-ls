@@ -1,7 +1,4 @@
-import {
-  TEMPLATE_INSTRUCTION_TYPE_CODES,
-  type TemplateInstructionTypeCode,
-} from '../template-compiler/index.js';
+import { TEMPLATE_INSTRUCTION_TYPE_CODES, type TemplateInstructionTypeCode } from '../template-compiler/instructions.js';
 import { auLink } from '../au-link.js';
 
 export const RUNTIME_RENDERER_KINDS = [

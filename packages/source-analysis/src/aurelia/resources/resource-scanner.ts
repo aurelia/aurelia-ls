@@ -1,16 +1,7 @@
 import fs from 'node:fs';
 import ts from 'typescript';
-
-import {
-  findNodeBySpan,
-  guessScriptKind,
-  readPropertyName,
-  readReferenceSeed,
-  readStringArrayValues,
-  readStringLiteralValue,
-  unwrapExpression,
-} from '../analysis/index.js';
-import type { Exports } from '../exports/index.js';
+import { findNodeBySpan, guessScriptKind, readPropertyName, readReferenceSeed, readStringArrayValues, readStringLiteralValue, unwrapExpression } from '../analysis/ts-ast-helpers.js';
+import type { Exports } from '../exports/exports.js';
 import type { ExportValueDefineCall } from '../exports/export-value-surface.js';
 import type { SourceFileRef } from '../source-address.js';
 import {
@@ -71,7 +62,7 @@ import { DefinitionCarrierCollector } from './definition-carrier-collector.js';
 import type { DefinitionCarrier } from './definition-carrier.js';
 import { ResourceRecognizer } from './resource-recognizer.js';
 import type { ResourceCandidate } from './resource-candidate.js';
-import type { ResourceDefinition } from './resources.js';
+import type { ResourceDefinition } from './resource-definition.js';
 import { TemplateControllerDefinition } from './template-controller-definition.js';
 import { ValueConverterDefinition } from './value-converter-definition.js';
 import {

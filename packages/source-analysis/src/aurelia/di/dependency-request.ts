@@ -1,4 +1,4 @@
-import type { BoundedReferenceSeedKind } from '../analysis/index.js';
+import type { BoundedReferenceSeedKind } from '../analysis/ts-ast-helpers.js';
 import type { SourceNodeRef } from '../refs.js';
 import type { ResourceLookupRegime } from '../registrations/resource-lookup-regime.js';
 import type { LookupModifier } from './lookup-modifier.js';

@@ -1,15 +1,8 @@
 import fs from 'node:fs';
 import ts from 'typescript';
-
-import {
-  findNodeBySpan,
-  guessScriptKind,
-  hasStaticModifier,
-  readCallCalleeText,
-  readPropertyName,
-  readStringLiteralValue,
-} from '../analysis/index.js';
-import type { Export, Exports } from '../exports/index.js';
+import { findNodeBySpan, guessScriptKind, hasStaticModifier, readCallCalleeText, readPropertyName, readStringLiteralValue } from '../analysis/ts-ast-helpers.js';
+import type { Export } from '../exports/export.js';
+import type { Exports } from '../exports/exports.js';
 import type { ResourceDefinitionKind } from './contracts.js';
 import {
   ResourceCandidate,

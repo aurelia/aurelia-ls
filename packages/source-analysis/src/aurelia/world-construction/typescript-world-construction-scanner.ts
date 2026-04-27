@@ -4,20 +4,20 @@ import {
   type SourceNodeRef,
   type SymbolRef,
 } from '../refs.js';
-import type { AdmittedSubject } from '../admissions/index.js';
-import type { ConfigurationContribution, ConfigurationContributions } from '../configurations/index.js';
-import type { ResourceDefinition, Resources } from '../resources/index.js';
-import {
-  ContainerStateCandidate,
-  ContainerStateClosureBasis,
-  ContainerStateMaterializer,
-  ContainerStateQualification,
-  RegistrationPayload,
-  RegistrationIntake,
-  RegistrationProduction,
-  RegistrationResolverBasis,
-  RegistrationTransition,
-} from '../registrations/index.js';
+import type { AdmittedSubject } from '../admissions/admitted-subject.js';
+import type { ConfigurationContribution } from '../configurations/configuration-contribution.js';
+import type { ConfigurationContributions } from '../configurations/configuration-contributions.js';
+import type { ResourceDefinition } from '../resources/resource-definition.js';
+import type { Resources } from '../resources/resources.js';
+import { ContainerStateCandidate } from '../registrations/container-state-candidate.js';
+import { ContainerStateClosureBasis } from '../registrations/container-state-closure-basis.js';
+import { ContainerStateMaterializer } from '../registrations/container-state-materializer.js';
+import { ContainerStateQualification } from '../registrations/container-state-qualification.js';
+import { RegistrationPayload } from '../registrations/registration-payload.js';
+import { RegistrationIntake } from '../registrations/registration-intake.js';
+import { RegistrationProduction } from '../registrations/registration-production.js';
+import { RegistrationResolverBasis } from '../registrations/registration-resolver-basis.js';
+import { RegistrationTransition } from '../registrations/registration-transition.js';
 import {
   TypeScriptWorldConstruction,
   TypeScriptWorldConstructionOpenSeam,

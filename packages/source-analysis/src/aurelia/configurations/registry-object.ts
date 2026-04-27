@@ -1,11 +1,6 @@
-import type { Export } from '../exports/index.js';
+import type { Export } from '../exports/export.js';
 import type { SourceNodeRef } from '../refs.js';
-import {
-  BundleSpread,
-  HelperCall,
-  RegisterArgument,
-} from './configuration-function-analysis.js';
-export {
+import type {
   BundleSpread,
   HelperCall,
   RegisterArgument,

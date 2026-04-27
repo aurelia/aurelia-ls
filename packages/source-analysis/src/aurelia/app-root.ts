@@ -10,18 +10,16 @@ import {
   type AppTaskContribution,
   type AppTaskSlotKind,
 } from './app-task.js';
-import {
-  ContainerStateCandidate,
-  ContainerStateClosureBasis,
-  DirectRegisterReferenceMaterializer,
-  ContainerStateEntry,
-  ContainerStateMaterializer,
-  type ContainerStateOpenSeam,
-  ContainerStateQualification,
-  RegistrationIntake,
-  RegistrationResolverBasis,
-  RegistrationTransition,
-} from './registrations/index.js';
+import { ContainerStateCandidate } from './registrations/container-state-candidate.js';
+import { ContainerStateClosureBasis } from './registrations/container-state-closure-basis.js';
+import { DirectRegisterReferenceMaterializer } from './registrations/direct-register-reference-materializer.js';
+import { ContainerStateEntry } from './registrations/container-state-entry.js';
+import { ContainerStateMaterializer } from './registrations/container-state-materializer.js';
+import type { ContainerStateOpenSeam } from './registrations/container-state-open-seam.js';
+import { ContainerStateQualification } from './registrations/container-state-qualification.js';
+import { RegistrationIntake } from './registrations/registration-intake.js';
+import { RegistrationResolverBasis } from './registrations/registration-resolver-basis.js';
+import { RegistrationTransition } from './registrations/registration-transition.js';
 import { auLink } from './au-link.js';
 
 export interface AppRootConfig {
@@ -36,8 +34,8 @@ export class AppRootStage {
   constructor(
     readonly slot: AppTaskSlotKind,
     readonly tasks: readonly AppTaskContribution[] = [],
-    readonly callbackProductions: readonly import('./registrations/index.js').ConfigurationRegistrationProduction[] = [],
-    readonly directRegisterArguments: readonly import('./configurations/index.js').RegisterArgument[] = [],
+    readonly callbackProductions: readonly import('./registrations/configuration-registration-production.js').ConfigurationRegistrationProduction[] = [],
+    readonly directRegisterArguments: readonly import('./configurations/configuration-function-analysis.js').RegisterArgument[] = [],
     readonly containerStateEntries: readonly ContainerStateEntry[] = [],
     readonly containerStateOpenSeams: readonly ContainerStateOpenSeam[] = [],
     readonly openSeams: readonly AppTaskOpenSeam[] = [],
@@ -190,7 +188,7 @@ function createStages(
 // register materializer used by controller definition.dependencies, while
 // resource-key visibility and richer registry objects remain explicit seams.
 function materializeStageCandidate(
-  production: import('./registrations/index.js').ConfigurationRegistrationProduction,
+  production: import('./registrations/configuration-registration-production.js').ConfigurationRegistrationProduction,
   slot: AppTaskSlotKind,
   world: ContainerWorldRef,
   index: number,
@@ -267,7 +265,7 @@ function materializeStageCandidate(
 }
 
 function readStageResolverBasis(
-  kind: import('./registrations/index.js').RegistrationProductionKind,
+  kind: import('./registrations/registration-production.js').RegistrationProductionKind,
   source: SourceNodeRef,
   slot: AppTaskSlotKind,
   openSeams: AppTaskOpenSeam[],

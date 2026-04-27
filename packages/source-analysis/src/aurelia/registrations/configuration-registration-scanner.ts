@@ -1,14 +1,7 @@
-import type {
-  Configurations,
-  RegistryFactoryMethod,
-  RegistryMethod,
-  RegistryObject,
-} from '../configurations/index.js';
-import {
-  FrameworkApiCatalog,
-  FrameworkApiIngressScanner,
-  type FrameworkApiIngressScannerState,
-} from '../framework-api/index.js';
+import type { Configurations } from '../configurations/configurations.js';
+import type { RegistryFactoryMethod, RegistryMethod, RegistryObject } from '../configurations/registry-object.js';
+import { FrameworkApiCatalog } from '../framework-api/framework-api-catalog.js';
+import { FrameworkApiIngressScanner, type FrameworkApiIngressScannerState } from '../framework-api/framework-api-ingress-scanner.js';
 import { RegistrationProduction } from './registration-production.js';
 import { ConfigurationRegistrationProduction } from './configuration-registration-production.js';
 

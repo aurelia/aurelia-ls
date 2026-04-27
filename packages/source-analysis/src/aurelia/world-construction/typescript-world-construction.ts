@@ -1,8 +1,10 @@
-import type { ConfigurationContribution } from '../configurations/index.js';
-import { OpenSeamEvidence } from '../provenance/index.js';
-import type { ResourceDefinition, ResourceDefinitionKind } from '../resources/index.js';
+import type { ConfigurationContribution } from '../configurations/configuration-contribution.js';
+import { OpenSeamEvidence } from '../provenance/evidence.js';
+import type { ResourceDefinition } from '../resources/resource-definition.js';
+import type { ResourceDefinitionKind } from '../resources/contracts.js';
 import type { ResourceReferenceRef, ContainerWorldRef } from '../refs.js';
-import type { ContainerStateEntry, ContainerStateOpenSeam } from '../registrations/index.js';
+import type { ContainerStateEntry } from '../registrations/container-state-entry.js';
+import type { ContainerStateOpenSeam } from '../registrations/container-state-open-seam.js';
 
 export const TYPESCRIPT_WORLD_CONSTRUCTION_OPEN_SEAM_KINDS = [
   'world-placement-open',

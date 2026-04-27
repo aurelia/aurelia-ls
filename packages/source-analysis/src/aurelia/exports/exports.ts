@@ -20,7 +20,15 @@ export class Exports {
     if (this.allValue == null) {
       const records = this.scannerValue.scanAll();
       this.allValue = records.map(
-        (record, index) => new Export(`${this.ownerLabel}:export:${record.name}:${index}`, this, record),
+        (record, index) => new Export(
+          `${this.ownerLabel}:export:${record.name}:${index}`,
+          record,
+          {
+            readSurface: (current) => this.readSurface(current),
+            readValueSurface: (current) => this.readValueSurface(current),
+            readClassification: (current) => this.readClassification(current),
+          },
+        ),
       );
     }
 

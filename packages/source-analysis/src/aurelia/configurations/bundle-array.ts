@@ -1,4 +1,4 @@
-import type { Export } from '../exports/index.js';
+import type { Export } from '../exports/export.js';
 import type { SourceNodeRef } from '../refs.js';
 
 export class BundleArray {

@@ -1,5 +1,5 @@
 import type { SourceNodeRef } from '../refs.js';
-import { OpenSeamEvidence } from '../provenance/index.js';
+import { OpenSeamEvidence } from '../provenance/evidence.js';
 
 export const CONTAINER_STATE_OPEN_SEAM_KINDS = [
   'missing-source',

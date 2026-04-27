@@ -39,9 +39,6 @@ import {
 } from "./parse-selection.js";
 import type { ExpressionParseSelection } from "./parse-selection.js";
 
-export type { ExpressionType } from "./ast.js";
-export type { ExpressionParseContext } from "./expression-parse-support.js";
-
 /**
  * Public expression parser facade.
  *

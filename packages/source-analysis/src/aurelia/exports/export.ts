@@ -1,13 +1,18 @@
 import type { DeclarationExport } from '../declaration-world.js';
 import type { ExportClassification, ExportSurface } from './contracts.js';
 import type { ExportValueSurface } from './export-value-surface.js';
-import type { Exports } from './exports.js';
+
+export interface ExportReaders {
+  readonly readSurface: (current: Export) => ExportSurface;
+  readonly readValueSurface: (current: Export) => ExportValueSurface;
+  readonly readClassification: (current: Export) => ExportClassification;
+}
 
 export class Export {
   constructor(
     readonly id: string,
-    private readonly ownerValue: Exports,
     private readonly recordValue: DeclarationExport,
+    private readonly readers: ExportReaders,
   ) {}
 
   get name(): string {
@@ -27,14 +32,14 @@ export class Export {
   }
 
   readSurface(): ExportSurface {
-    return this.ownerValue.readSurface(this);
+    return this.readers.readSurface(this);
   }
 
   readValueSurface(): ExportValueSurface {
-    return this.ownerValue.readValueSurface(this);
+    return this.readers.readValueSurface(this);
   }
 
   readClassification(): ExportClassification {
-    return this.ownerValue.readClassification(this);
+    return this.readers.readClassification(this);
   }
 }

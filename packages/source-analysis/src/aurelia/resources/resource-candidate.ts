@@ -1,4 +1,4 @@
-import type { Export } from '../exports/index.js';
+import type { Export } from '../exports/export.js';
 import type { ResourceDefinitionKind } from './contracts.js';
 
 export const RESOURCE_RECOGNITION_PATH_KINDS = [

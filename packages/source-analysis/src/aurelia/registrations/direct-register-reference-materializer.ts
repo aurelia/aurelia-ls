@@ -1,13 +1,14 @@
 import ts from 'typescript';
-
-import { readParsedSourceFile, type BoundedReferenceSeedKind } from '../analysis/index.js';
-import { DependencyRequest, DependencySubjectResolver } from '../di/index.js';
+import { readParsedSourceFile } from '../analysis/source-module-linking.js';
+import type { BoundedReferenceSeedKind } from '../analysis/ts-ast-helpers.js';
+import { DependencyRequest } from '../di/dependency-request.js';
+import { DependencySubjectResolver } from '../di/dependency-subject-resolver.js';
 import type {
   SourceNodeRef,
   SymbolRef,
   ContainerWorldRef,
 } from '../refs.js';
-import type { ResourceDefinition } from '../resources/index.js';
+import type { ResourceDefinition } from '../resources/resource-definition.js';
 import { ContainerStateCandidate } from './container-state-candidate.js';
 import { ContainerStateClosureBasis } from './container-state-closure-basis.js';
 import { type ContainerStateMaterialization, ContainerStateMaterializer } from './container-state-materializer.js';

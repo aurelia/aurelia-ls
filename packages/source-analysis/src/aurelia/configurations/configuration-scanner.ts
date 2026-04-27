@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
-
-import type { Export, Exports } from '../exports/index.js';
+import type { Export } from '../exports/export.js';
+import type { Exports } from '../exports/exports.js';
 import type { SourceFileRef } from '../source-address.js';
 import { BundleArray } from './bundle-array.js';
 import {

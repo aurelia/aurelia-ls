@@ -1,5 +1,5 @@
 import type { KeyRef } from '../refs.js';
-import type { LookupModifierKind } from '../di/index.js';
+import type { LookupModifierKind } from '../di/lookup-modifier.js';
 import type { LookupRegimeKind } from './container-state-qualification.js';
 import type { ResourceLookupRegime } from './resource-lookup-regime.js';
 

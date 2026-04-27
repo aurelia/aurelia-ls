@@ -1,16 +1,10 @@
 import fs from 'node:fs';
 import ts from 'typescript';
-
-import {
-  findNodeBySpan,
-  guessScriptKind,
-  hasStaticModifier,
-  readCallCalleeText,
-  readPropertyName,
-} from '../analysis/index.js';
-import type { Configurations } from '../configurations/index.js';
-import type { Export, Exports } from '../exports/index.js';
-import type { Resources } from '../resources/index.js';
+import { findNodeBySpan, guessScriptKind, hasStaticModifier, readCallCalleeText, readPropertyName } from '../analysis/ts-ast-helpers.js';
+import type { Configurations } from '../configurations/configurations.js';
+import type { Export } from '../exports/export.js';
+import type { Exports } from '../exports/exports.js';
+import type { Resources } from '../resources/resources.js';
 import { AdmittedSubject } from './admitted-subject.js';
 
 export interface SubjectAdmissionScannerOptions {
@@ -236,7 +230,7 @@ function fromExistingResource(
   source: import('../refs.js').SourceNodeRef,
   referenceName: string,
   resolvedExport: Export,
-  resourceKind: import('../resources/index.js').ResourceDefinitionKind,
+  resourceKind: import('../resources/contracts.js').ResourceDefinitionKind,
 ): AdmittedSubject {
   switch (resourceKind) {
     case 'attribute-pattern':
@@ -306,7 +300,7 @@ function readDefineCallAdmission(
 }
 
 function getResourceTypeName(
-  resource: import('../resources/index.js').ResourceDefinition,
+  resource: import('../resources/resource-definition.js').ResourceDefinition,
 ): string | null {
   const type = resource.type;
   if ('name' in type && typeof type.name === 'string') {
@@ -321,7 +315,7 @@ function classifyClassDeclaration(
 ): {
   readonly carrier: AdmittedSubject['carrier'];
   readonly policy: AdmittedSubject['policy'];
-  readonly declarationKind: import('../resources/index.js').ResourceDefinitionKind | null;
+  readonly declarationKind: import('../resources/contracts.js').ResourceDefinitionKind | null;
   readonly note: string;
 } | null {
   const staticAuType = readStaticAuType(declarationNode);
@@ -351,7 +345,7 @@ function classifyVariableDeclaration(
 ): {
   readonly carrier: AdmittedSubject['carrier'];
   readonly policy: AdmittedSubject['policy'];
-  readonly declarationKind: import('../resources/index.js').ResourceDefinitionKind | null;
+  readonly declarationKind: import('../resources/contracts.js').ResourceDefinitionKind | null;
   readonly note: string;
 } | null {
   const initializer = declarationNode.initializer;
@@ -417,7 +411,7 @@ function classifyVariableDeclaration(
 
 function readStaticAuType(
   declarationNode: ts.ClassDeclaration,
-): import('../resources/index.js').ResourceDefinitionKind | null {
+): import('../resources/contracts.js').ResourceDefinitionKind | null {
   for (const member of declarationNode.members) {
     if (!hasStaticModifier(member) || !ts.isPropertyDeclaration(member)) {
       continue;
@@ -502,7 +496,7 @@ function hasRegisterMethod(
 
 function isResourceDefinitionKind(
   value: string,
-): value is import('../resources/index.js').ResourceDefinitionKind {
+): value is import('../resources/contracts.js').ResourceDefinitionKind {
   return value === 'custom-element'
     || value === 'custom-attribute'
     || value === 'template-controller'

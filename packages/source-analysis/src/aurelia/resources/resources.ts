@@ -1,23 +1,15 @@
-import { AttributePatternDefinition } from './attribute-pattern-definition.js';
-import { BindingBehaviorDefinition } from './binding-behavior-definition.js';
-import { BindingCommandDefinition } from './binding-command-definition.js';
-import { CustomAttributeDefinition } from './custom-attribute-definition.js';
-import { CustomElementDefinition } from './custom-element-definition.js';
+import type { AttributePatternDefinition } from './attribute-pattern-definition.js';
+import type { BindingBehaviorDefinition } from './binding-behavior-definition.js';
+import type { BindingCommandDefinition } from './binding-command-definition.js';
+import type { CustomAttributeDefinition } from './custom-attribute-definition.js';
+import type { CustomElementDefinition } from './custom-element-definition.js';
 import type { ResourceDefinitionKind } from './contracts.js';
 import type { DefinitionCarrier } from './definition-carrier.js';
 import type { ResourceCandidate } from './resource-candidate.js';
+import type { ResourceDefinition } from './resource-definition.js';
 import { ResourceScanner } from './resource-scanner.js';
-import { TemplateControllerDefinition } from './template-controller-definition.js';
-import { ValueConverterDefinition } from './value-converter-definition.js';
-
-export type ResourceDefinition =
-  | AttributePatternDefinition
-  | BindingBehaviorDefinition
-  | BindingCommandDefinition
-  | CustomAttributeDefinition
-  | CustomElementDefinition
-  | TemplateControllerDefinition
-  | ValueConverterDefinition;
+import type { TemplateControllerDefinition } from './template-controller-definition.js';
+import type { ValueConverterDefinition } from './value-converter-definition.js';
 
 export interface ResourcesState {
   readonly ownerLabel: string;

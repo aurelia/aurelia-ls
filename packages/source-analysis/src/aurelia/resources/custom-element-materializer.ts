@@ -1,15 +1,6 @@
 import fs from 'node:fs';
 import ts from 'typescript';
-
-import {
-  findNodeBySpan as astFindNodeBySpan,
-  guessScriptKind as astGuessScriptKind,
-  hasStaticModifier as astHasStaticModifier,
-  readPropertyName as astReadPropertyName,
-  readReferenceSeed,
-  readStringArrayValues as astReadStringArrayValues,
-  readStringLiteralValue as astReadStringLiteralValue,
-} from '../analysis/index.js';
+import { findNodeBySpan as astFindNodeBySpan, guessScriptKind as astGuessScriptKind, hasStaticModifier as astHasStaticModifier, readPropertyName as astReadPropertyName, readReferenceSeed, readStringArrayValues as astReadStringArrayValues, readStringLiteralValue as astReadStringLiteralValue } from '../analysis/ts-ast-helpers.js';
 import type { SourceFileRef } from '../source-address.js';
 import {
   sourceNodeRefFromTsNode,

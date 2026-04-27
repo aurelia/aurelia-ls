@@ -1,20 +1,8 @@
 import ts from 'typescript';
 
 import { auLink } from '../au-link.js';
-import {
-  findExportedBinding,
-  findForwardedExport,
-  findImportedBinding,
-  findTopLevelBinding,
-  isRelativeModuleSpecifier,
-  readCallCalleeText,
-  readPropertyName,
-  readParsedSourceFile,
-  readReferenceSeed,
-  readStringLiteralValue,
-  resolveImportedSourceFile,
-  unwrapExpression,
-} from '../analysis/index.js';
+import { findExportedBinding, findForwardedExport, findImportedBinding, findTopLevelBinding, isRelativeModuleSpecifier, readParsedSourceFile, resolveImportedSourceFile } from '../analysis/source-module-linking.js';
+import { readCallCalleeText, readPropertyName, readReferenceSeed, readStringLiteralValue, unwrapExpression } from '../analysis/ts-ast-helpers.js';
 import type { SourceFileRef } from '../source-address.js';
 import {
   KeyRef,
