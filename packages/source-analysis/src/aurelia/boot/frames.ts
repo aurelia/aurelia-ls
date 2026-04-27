@@ -1,0 +1,82 @@
+import type { AddressHandle, EvidenceHandle, ProvenanceHandle } from '../kernel/handles.js';
+import type { KernelStore } from '../kernel/store.js';
+import type { SourceLanguage } from '../kernel/address.js';
+import type { SourceDiscoveryResult } from './source-discovery.js';
+
+/** Input source admitted during boot before Aurelia semantics are interpreted. */
+export interface BootSourceFileInput {
+  /** Absolute, workspace-relative, or project-relative path supplied by the host or discovery. */
+  readonly path: string;
+  /** Source language when the host already knows it; discovery can infer a conservative default. */
+  readonly language?: SourceLanguage;
+  /** Optional host-facing note explaining why this source was admitted. */
+  readonly note?: string | null;
+}
+
+/** Boot configuration for one project frame inside a workspace. */
+export interface BootProjectInput {
+  /** Project root directory. */
+  readonly rootDir: string;
+  /** Stable enough project key for the active store. */
+  readonly projectKey?: string;
+  /** Source files supplied by the host; omitted means local discovery. */
+  readonly sourceFiles?: readonly BootSourceFileInput[];
+}
+
+/** Boot configuration for one active analysis workspace. */
+export interface BootWorkspaceInput {
+  /** Workspace root directory. */
+  readonly rootDir: string;
+  /** Store-local key used for handle minting. */
+  readonly storeKey?: string;
+  /** Existing store to populate; omitted creates a fresh store. */
+  readonly store?: KernelStore;
+  /** Project frames to boot; omitted creates one project at the workspace root. */
+  readonly projects?: readonly BootProjectInput[];
+}
+
+/** Kernel handles produced when a source file is admitted into the active analysis world. */
+export class SourceFileAdmission {
+  constructor(
+    /** Project key that admitted the source. */
+    readonly projectKey: string,
+    /** Normalized project-relative path. */
+    readonly path: string,
+    /** Inferred or host-supplied source language. */
+    readonly language: SourceLanguage,
+    /** Source-file address handle. */
+    readonly addressHandle: AddressHandle,
+    /** Evidence handle that explains why this source is in the world. */
+    readonly evidenceHandle: EvidenceHandle,
+    /** Provenance handle for the admission record. */
+    readonly provenanceHandle: ProvenanceHandle,
+  ) {}
+}
+
+/** Booted project frame before TypeScript or Aurelia semantics are interpreted. */
+export class ProjectBootFrame {
+  constructor(
+    /** Project root directory. */
+    readonly rootDir: string,
+    /** Store-local project key. */
+    readonly projectKey: string,
+    /** Source admissions owned by this project frame. */
+    readonly sourceFiles: readonly SourceFileAdmission[],
+    /** Discovery result when boot discovered sources itself; null when the host supplied sources. */
+    readonly sourceDiscovery: SourceDiscoveryResult | null = null,
+  ) {}
+}
+
+/** Booted workspace frame and the hot kernel store it populated. */
+export class WorkspaceBootFrame {
+  constructor(
+    /** Workspace root directory. */
+    readonly rootDir: string,
+    /** Store-local workspace key. */
+    readonly workspaceKey: string,
+    /** Kernel store populated by boot. */
+    readonly store: KernelStore,
+    /** Project frames admitted into this workspace. */
+    readonly projects: readonly ProjectBootFrame[],
+  ) {}
+}

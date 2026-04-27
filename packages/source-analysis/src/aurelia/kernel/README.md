@@ -82,6 +82,10 @@ in the kernel yet.
 `handles.ts` defines branded store-local handles and `KernelHandleFactory`, the scoped minting API for normalized
 record links.
 
+`store.ts` defines the hot in-memory `KernelStore`, batch commit surface, handle expansion, and cheap navigation
+indexes. Batches are producer record-emission units, not durable transactions, vocabulary mutations, or semantic
+boundaries.
+
 `vocabulary.ts` defines the controlled vocabulary mechanism used by claims, rules, edge roles, seams, binding
 kinds, instruction kinds, and product kinds.
 

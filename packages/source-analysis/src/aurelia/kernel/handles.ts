@@ -80,12 +80,6 @@ export type KernelRecordHandle =
   | ProductHandle
   | MaterializationHandle;
 
-/** Shared handle minting context for one in-memory analysis store. */
-export interface KernelHandleFactoryOptions {
-  /** Human-readable store label for debugging and MCP continuation tokens; not a persistence authority. */
-  readonly storeKey: string;
-}
-
 function encodeHandlePart(value: string): string {
   return encodeURIComponent(value);
 }
@@ -109,11 +103,6 @@ export class KernelHandleFactory {
     /** Human-readable label for the store that owns handles minted by this factory. */
     private readonly storeKey: string,
   ) {}
-
-  /** Create a factory for one active analysis store. */
-  static create(options: KernelHandleFactoryOptions): KernelHandleFactory {
-    return new KernelHandleFactory(options.storeKey);
-  }
 
   /** Mint an address handle from a producer-local key. */
   address(local: string): AddressHandle {

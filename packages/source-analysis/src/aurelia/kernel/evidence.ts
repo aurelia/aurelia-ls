@@ -37,6 +37,8 @@ export const enum EvidenceKind {
 }
 
 export const enum EvidenceRole {
+  /** The witness admits a source, package, project, or host input into the analysis world. */
+  Admission = 'admission',
   /** The witness declares the thing, such as a class, decorator, or static definition. */
   Declaration = 'declaration',
   /** The witness uses or references the thing, such as markup using a custom element. */
