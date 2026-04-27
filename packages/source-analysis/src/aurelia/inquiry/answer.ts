@@ -48,7 +48,7 @@ export class InquiryAnswer<TValue, TQuery> {
     readonly summary: string,
     /** Basis describing what substrate the answer actually spent. */
     readonly basis: InquiryBasis,
-    /** Structured result payload for this query. */
+    /** Structured result value for this query. */
     readonly value: TValue,
     /** Evidence handles directly relevant to the answer. */
     readonly evidenceHandles: readonly EvidenceHandle[] = [],

@@ -7,6 +7,12 @@ const definedVocabularyKeys = new Set<string>();
  * Vocabulary is a fast-evolving pressure surface. Keep it controlled and centrally defined, but let real
  * producers and queries earn new entries. Do not use vocabulary keys for confidence, ranking, UI states, or
  * answer-envelope outcomes; those belong above the kernel.
+ *
+ * The single `KernelVocabularyKey` type is provisional. It currently lets claim predicates, seam kinds,
+ * derivation rule kinds, edge roles, product kinds, binding kinds, and instruction kinds share one key space
+ * while the ontology is still forming. This will need to split into usage-slot-specific key types once producers
+ * make the taxonomy concrete enough; do not treat a seam-kind key and a claim-edge predicate as interchangeable
+ * semantic contracts.
  */
 
 /** Stable code for controlled semantic vocabulary, separate from store-local record handles. */
@@ -97,6 +103,30 @@ export const KernelVocabulary = {
     Imports: defineVocabulary(KernelVocabularyNamespace.Evaluation, 'imports', 'A module or source unit imports another module, binding, or symbol.'),
     /** A module or source unit exports a declaration, value, or resource carrier. */
     Exports: defineVocabulary(KernelVocabularyNamespace.Evaluation, 'exports', 'A module or source unit exports a declaration, value, or resource carrier.'),
+    /** Static evaluation reached syntax that has a named evaluator seam rather than a guessed value. */
+    UnsupportedSyntax: defineVocabulary(
+      KernelVocabularyNamespace.Evaluation,
+      'unsupported-syntax',
+      'Static evaluation reached syntax that is intentionally not evaluated by the current substrate.',
+    ),
+    /** Static evaluation could not resolve a binding, module, or reference target. */
+    UnresolvedReference: defineVocabulary(
+      KernelVocabularyNamespace.Evaluation,
+      'unresolved-reference',
+      'Static evaluation could not resolve a binding, module, or reference target.',
+    ),
+    /** Static evaluation encountered a call, branch, loop, mutation, or import edge that should not be guessed. */
+    DynamicEvaluation: defineVocabulary(
+      KernelVocabularyNamespace.Evaluation,
+      'dynamic-evaluation',
+      'Static evaluation encountered dynamic behavior that must remain visible to producers and queries.',
+    ),
+    /** Static evaluation stopped because evaluator recursion or statement protection fired. */
+    EvaluationGuardrail: defineVocabulary(
+      KernelVocabularyNamespace.Evaluation,
+      'evaluation-guardrail',
+      'Static evaluation stopped because a local evaluator guardrail prevented runaway interpretation.',
+    ),
   },
   Resource: {
     /** Source syntax or convention declares an Aurelia resource. */

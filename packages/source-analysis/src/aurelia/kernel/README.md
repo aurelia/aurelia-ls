@@ -55,6 +55,11 @@ implemented, but it must not become a dumping ground for near-duplicate relation
 answer states. Add vocabulary when a real producer or query needs a stable classifier; split or type vocabulary
 slots when misuse becomes plausible enough to affect correctness.
 
+The current unified vocabulary key type is provisional. It intentionally keeps early motion cheap, but it already
+mixes different usage slots: claim predicates, seam kinds, derivation rule kinds, edge roles, product kinds,
+binding kinds, and instruction kinds. These are not the same semantic contract. Split the key type by usage slot
+once producer pressure reveals the taxonomy clearly enough to avoid guesswork.
+
 Do not hide uncertainty behind `null`, empty arrays, or best-effort guesses. Use explicit provenance modes,
 derivation states, materialization states, and open seams. Confidence, ranking, and user-specific belief policy
 belong in query answers or consumer projections, not in first-order kernel facts.

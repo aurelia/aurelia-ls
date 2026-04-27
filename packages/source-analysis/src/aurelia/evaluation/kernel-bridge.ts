@@ -1,0 +1,121 @@
+import type ts from 'typescript';
+import {
+  AddressStability,
+  SourceSpanAddress,
+  SourceSpanRole,
+} from '../kernel/address.js';
+import {
+  OpenSeam,
+  OpenSeamSeverity,
+} from '../kernel/derivation.js';
+import {
+  EvidenceKind,
+  EvidenceRecord,
+  EvidenceRole,
+} from '../kernel/evidence.js';
+import type { AddressHandle } from '../kernel/handles.js';
+import {
+  ProvenanceMode,
+  ProvenanceRecord,
+} from '../kernel/provenance.js';
+import {
+  KernelStoreBatch,
+  type KernelStore,
+  type KernelStoreRecord,
+} from '../kernel/store.js';
+import { KernelVocabulary } from '../kernel/vocabulary.js';
+import type { StaticModuleEvaluationResult } from './evaluator.js';
+import {
+  EvaluationOpenSeam,
+  EvaluationOpenSeamKind,
+} from './seams.js';
+
+/** Emits durable kernel records for evaluator boundary pressure. */
+export class EvaluationKernelBridge {
+  constructor(
+    /** Hot analysis store that receives evaluator boundary records. */
+    readonly store: KernelStore,
+  ) {}
+
+  /** Emit source spans, evidence, provenance, and open seams for one module evaluation result. */
+  emitOpenSeams(
+    sourceFile: ts.SourceFile,
+    sourceFileAddressHandle: AddressHandle,
+    result: StaticModuleEvaluationResult,
+  ): void {
+    const records: KernelStoreRecord[] = [];
+    result.openSeams.forEach((seam, index) => {
+      records.push(...this.recordsForOpenSeam(sourceFile, sourceFileAddressHandle, result.moduleKey, seam, index));
+    });
+    if (records.length === 0) {
+      return;
+    }
+    this.store.commit(new KernelStoreBatch(records, `evaluation-open-seams:${result.moduleKey}`));
+  }
+
+  private recordsForOpenSeam(
+    sourceFile: ts.SourceFile,
+    sourceFileAddressHandle: AddressHandle,
+    moduleKey: string,
+    seam: EvaluationOpenSeam,
+    index: number,
+  ): readonly KernelStoreRecord[] {
+    const local = `${moduleKey}:${seam.seamKind}:${seam.node.getStart(sourceFile)}:${seam.node.end}:${index}`;
+    const spanHandle = this.store.handles.address(`evaluation-span:${local}`);
+    const evidenceHandle = this.store.handles.evidence(`evaluation-open:${local}`);
+    const provenanceHandle = this.store.handles.provenance(`evaluation-open:${local}`);
+    const openSeamHandle = this.store.handles.openSeam(`evaluation-open:${local}`);
+    const span = new SourceSpanAddress(
+      spanHandle,
+      AddressStability.SourceStable,
+      sourceFileAddressHandle,
+      seam.node.getStart(sourceFile),
+      seam.node.end,
+      SourceSpanRole.Range,
+    );
+    const evidence = new EvidenceRecord(
+      evidenceHandle,
+      EvidenceKind.Open,
+      [EvidenceRole.Diagnostic],
+      seam.summary,
+      spanHandle,
+    );
+    const provenance = new ProvenanceRecord(
+      provenanceHandle,
+      ProvenanceMode.Open,
+      [evidenceHandle],
+      [],
+      `Static evaluation left an open seam: ${seam.seamKind}.`,
+    );
+    const openSeam = new OpenSeam(
+      openSeamHandle,
+      vocabularyForEvaluationSeam(seam.seamKind),
+      OpenSeamSeverity.Warning,
+      seam.summary,
+      spanHandle,
+      evidenceHandle,
+    );
+    return [span, evidence, provenance, openSeam];
+  }
+}
+
+function vocabularyForEvaluationSeam(seamKind: EvaluationOpenSeamKind) {
+  switch (seamKind) {
+    case EvaluationOpenSeamKind.UnresolvedIdentifier:
+    case EvaluationOpenSeamKind.UnresolvedModule:
+      return KernelVocabulary.Evaluation.UnresolvedReference.key;
+    case EvaluationOpenSeamKind.DynamicCall:
+    case EvaluationOpenSeamKind.DynamicBranch:
+    case EvaluationOpenSeamKind.DynamicLoop:
+    case EvaluationOpenSeamKind.DynamicMutation:
+    case EvaluationOpenSeamKind.DynamicImport:
+      return KernelVocabulary.Evaluation.DynamicEvaluation.key;
+    case EvaluationOpenSeamKind.DepthLimit:
+    case EvaluationOpenSeamKind.StatementLimit:
+      return KernelVocabulary.Evaluation.EvaluationGuardrail.key;
+    case EvaluationOpenSeamKind.UnsupportedStatement:
+    case EvaluationOpenSeamKind.UnsupportedExpression:
+    case EvaluationOpenSeamKind.UnsupportedBindingPattern:
+      return KernelVocabulary.Evaluation.UnsupportedSyntax.key;
+  }
+}
