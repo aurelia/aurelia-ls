@@ -9,13 +9,8 @@ import { ConfigurationContributions } from './configurations/configuration-contr
 import { ConfigurationContributionScanner } from './configurations/configuration-contribution-scanner.js';
 import { Configurations } from './configurations/configurations.js';
 import { ConfigurationScanner } from './configurations/configuration-scanner.js';
-import { TypeScriptWorldConstructions } from './world-construction/typescript-world-constructions.js';
-import { TypeScriptWorldConstructionScanner } from './world-construction/typescript-world-construction-scanner.js';
 import { Exports } from './exports/exports.js';
 import { ExportScanner } from './exports/export-scanner.js';
-import { ResourceScanner } from './resources/resource-scanner.js';
-import type { ResourceDefinition } from './resources/resource-definition.js';
-import { Resources } from './resources/resources.js';
 import { ToolingEnvironment } from './tooling/tooling-environment.js';
 import { ToolingEnvironmentScanner } from './tooling/tooling-environment-scanner.js';
 
@@ -23,7 +18,6 @@ export interface ProjectOptions {
   readonly rootDir: string;
   readonly name?: string;
   readonly exports?: readonly DeclarationExport[];
-  readonly resourceSeeds?: readonly ResourceDefinition[];
   readonly tooling?: ToolingEnvironment | null;
   readonly aurelia?: Aurelia | null;
   readonly appRoot?: AppRoot | null;
@@ -38,9 +32,7 @@ export class Project {
   private readonly declarationWorldValue: DeclarationWorld;
   private readonly exportsValue: Exports;
   private readonly appTasksValue: readonly AppTaskContribution[];
-  private readonly resourcesValue: Resources;
   private readonly toolingValue: ToolingEnvironment;
-  private readonly worldConstructionsValue: TypeScriptWorldConstructions;
   private aureliaValue: Aurelia | null;
   private appRootValue: AppRoot | null;
   readonly rootDir: string;
@@ -73,33 +65,15 @@ export class Project {
         exports: this.exportsValue,
       }),
     );
-    this.resourcesValue = new Resources(
-      `project:${name}`,
-      new ResourceScanner({
-        exports: this.exportsValue,
-        resourceSeeds: options.resourceSeeds,
-        conventionsActive: this.toolingValue.conventions.isActive(),
-      }),
-    );
     this.configurationContributionsValue = new ConfigurationContributions(
       `project:${name}`,
       new ConfigurationContributionScanner({
         configurations: this.configurationsValue,
-        exports: this.exportsValue,
-        resources: this.resourcesValue,
       }),
     );
     this.appTasksValue = new AppTaskScanner({
       contributions: this.configurationContributionsValue.readAll(),
     }).scanAll();
-    this.worldConstructionsValue = new TypeScriptWorldConstructions(
-      `project:${name}`,
-      new TypeScriptWorldConstructionScanner({
-        ownerLabel: `project:${name}`,
-        configurationContributions: this.configurationContributionsValue,
-        resources: this.resourcesValue,
-      }),
-    );
     this.aureliaValue = options.aurelia ?? null;
     this.appRootValue = options.appRoot ?? null;
   }
@@ -134,22 +108,6 @@ export class Project {
 
   readAppTasks(): readonly AppTaskContribution[] {
     return [...this.appTasksValue];
-  }
-
-  worldConstructions(): TypeScriptWorldConstructions {
-    return this.worldConstructionsValue;
-  }
-
-  readWorldConstructions() {
-    return this.worldConstructionsValue.readAll();
-  }
-
-  resources(): Resources {
-    return this.resourcesValue;
-  }
-
-  readResources(): readonly ResourceDefinition[] {
-    return this.resourcesValue.readAll();
   }
 
   tooling(): ToolingEnvironment {

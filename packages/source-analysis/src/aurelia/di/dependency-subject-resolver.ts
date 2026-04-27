@@ -1,8 +1,6 @@
 import ts from 'typescript';
-
-import { auLink } from '../au-link.js';
 import { findExportedBinding, findForwardedExport, findImportedBinding, findTopLevelBinding, isRelativeModuleSpecifier, readParsedSourceFile, resolveImportedSourceFile } from '../analysis/source-module-linking.js';
-import { readCallCalleeText, readPropertyName, readReferenceSeed, readStringLiteralValue, unwrapExpression } from '../analysis/ts-ast-helpers.js';
+import { readCallCalleeText, readStringLiteralValue, unwrapExpression } from '../analysis/ts-ast-helpers.js';
 import type { SourceFileRef } from '../source-address.js';
 import {
   KeyRef,
@@ -18,8 +16,6 @@ import {
   InterfaceKeyDefaultRegistration,
   InterfaceKeyResolverBuilder,
 } from './interface-key.js';
-
-@auLink('kernel:DI')
 export class DependencySubjectResolver {
   private readonly parsedFiles = new Map<string, ts.SourceFile | null>();
 
@@ -109,7 +105,7 @@ export class DependencySubjectResolver {
     }
 
     if (ts.isClassDeclaration(declaration) || ts.isClassExpression(declaration)) {
-      return resolveConstructableDeclaration(request, file, sourceFile, declaration, request.candidateName);
+      return resolveConstructableDeclaration(file, sourceFile, declaration, request.candidateName);
     }
 
     if (ts.isVariableDeclaration(declaration)) {
@@ -128,7 +124,7 @@ export class DependencySubjectResolver {
 
       const current = unwrapExpression(initializer);
       if (ts.isClassExpression(current)) {
-        return resolveConstructableDeclaration(request, file, sourceFile, current, request.candidateName, declaration);
+        return resolveConstructableDeclaration(file, sourceFile, current, request.candidateName, declaration);
       }
 
       if (ts.isCallExpression(current)) {
@@ -256,7 +252,7 @@ export class DependencySubjectResolver {
     depth: number,
   ): DependencyResolution {
     if (ts.isClassDeclaration(declaration) || ts.isClassExpression(declaration)) {
-      return resolveConstructableDeclaration(request, file, sourceFile, declaration, fallbackName);
+      return resolveConstructableDeclaration(file, sourceFile, declaration, fallbackName);
     }
 
     if (ts.isVariableDeclaration(declaration)) {
@@ -275,7 +271,7 @@ export class DependencySubjectResolver {
 
       const current = unwrapExpression(initializer);
       if (ts.isClassExpression(current)) {
-        return resolveConstructableDeclaration(request, file, sourceFile, current, fallbackName, declaration);
+        return resolveConstructableDeclaration(file, sourceFile, current, fallbackName, declaration);
       }
 
       if (ts.isCallExpression(current)) {
@@ -327,7 +323,6 @@ export class DependencySubjectResolver {
 }
 
 function resolveConstructableDeclaration(
-  request: DependencyRequest,
   file: SourceFileRef,
   sourceFile: ts.SourceFile,
   declaration: ts.ClassDeclaration | ts.ClassExpression,

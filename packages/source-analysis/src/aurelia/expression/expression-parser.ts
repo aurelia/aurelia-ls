@@ -1,4 +1,3 @@
-import { auLink } from "../au-link.js";
 import {
   CustomExpression,
 } from "./ast.js";
@@ -63,7 +62,6 @@ import type { ExpressionParseSelection } from "./parse-selection.js";
  * a dedicated selector object beside this facade instead of letting `parse(...)`
  * / `parseSelected(...)` accumulate ownership policy forever.
  */
-@auLink('expression-parser:ExpressionParser', true)
 export class ExpressionParser implements ExpressionParseResultPublisher {
   parse(expression: string, context?: ExpressionParseContext): PropertyLikeParseResult;
   parse(expression: string, expressionType: "IsIterator", context?: ExpressionParseContext): IteratorParseResult;

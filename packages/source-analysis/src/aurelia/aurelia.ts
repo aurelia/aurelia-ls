@@ -6,11 +6,8 @@ import {
 } from './refs.js';
 import { AppRoot, type AppRootConfig } from './app-root.js';
 import { Container } from './container.js';
-import { auLink } from './au-link.js';
 
 export interface AureliaAppConfig extends AppRootConfig {}
-
-@auLink('runtime-html:Aurelia', true)
 export class Aurelia {
   private rootValue: AppRoot | null = null;
   readonly container: Container;

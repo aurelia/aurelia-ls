@@ -16,6 +16,8 @@ consume evaluator results and decide which kernel claims or materialized product
 - Traverse a deliberate statement set with explicit unsupported cases for statements that can affect evaluation.
 - Preserve unresolved syntax, dynamic calls, dynamic imports, unknown references, and unsupported effects as open
   seams.
+- Provide generic expression/value readers over evaluated module environments so producers do not instantiate
+  private evaluators or duplicate object/string/target projection helpers.
 - Emit kernel records only for durable boundary facts such as source spans, evidence, provenance, and open seams.
 
 ## Non-Responsibilities
@@ -32,6 +34,10 @@ syntax is not a placeholder; it is an observed seam that later producers and que
 
 Kernel emission stays narrow. Internal values can keep TypeScript nodes, source files, and mutable maps because
 they are current-run evaluator machinery. The kernel receives normalized links and explanation records.
+
+`expression-reader.ts` is the producer-facing read surface for evaluated TypeScript expressions. It may expose
+generic object, string, array, and target reads, but it must not learn Aurelia resource, DI, template, or
+configuration vocabulary.
 
 ## Watchpoints
 

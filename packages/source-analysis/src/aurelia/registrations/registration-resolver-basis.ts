@@ -1,4 +1,3 @@
-import { auLink } from '../au-link.js';
 
 export const REGISTRATION_STRATEGY_KINDS = [
   'instance',
@@ -17,7 +16,6 @@ export type RegistrationStrategyKind =
 // Resolver/value-form basis is separate from transition lineage. The runtime
 // compresses these together for efficiency, but the clean-room model keeps the
 // base resolution strategy as its own claim home.
-@auLink('kernel:ResolverStrategy')
 export class RegistrationResolverBasis {
   constructor(
     readonly strategy: RegistrationStrategyKind | null,

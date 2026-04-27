@@ -1,4 +1,3 @@
-import { auLink } from '../au-link.js';
 
 export const DEPENDENCY_ASSOCIATION_SOURCE_KINDS = [
   'static-inject',
@@ -29,8 +28,6 @@ export class DesignParamtypesDependencyAssociationSource {
     readonly note: string | null = null,
   ) {}
 }
-
-@auLink('kernel:inject')
 export class InjectAnnotationDependencyAssociationSource {
   readonly kind = 'annotation-paramtypes' as const;
 
@@ -46,8 +43,6 @@ export class DefinitionDependenciesDependencyAssociationSource {
     readonly note: string | null = null,
   ) {}
 }
-
-@auLink('kernel:resolve')
 export class ResolveCallDependencyAssociationSource {
   readonly kind = 'resolve-call' as const;
 

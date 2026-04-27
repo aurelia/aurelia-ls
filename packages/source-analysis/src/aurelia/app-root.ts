@@ -20,7 +20,6 @@ import { ContainerStateQualification } from './registrations/container-state-qua
 import { RegistrationIntake } from './registrations/registration-intake.js';
 import { RegistrationResolverBasis } from './registrations/registration-resolver-basis.js';
 import { RegistrationTransition } from './registrations/registration-transition.js';
-import { auLink } from './au-link.js';
 
 export interface AppRootConfig {
   readonly host: SourceNodeRef | null;
@@ -48,8 +47,6 @@ export class AppRootStage {
 // live on AppTaskContribution.callback, but AppRoot still does not spend them
 // into concrete world/container transitions. Keep that follow-on work with the
 // AppTask scanner rather than burying it in AppRoot itself.
-
-@auLink('runtime-html:AppRoot')
 export class AppRoot {
   readonly config: AppRootConfig;
   readonly container: Container;

@@ -264,6 +264,7 @@ export class KernelStore {
         return;
       case 'typescript-declaration-identity':
       case 'aurelia-resource-identity':
+      case 'aurelia-attribute-pattern-identity':
       case 'di-key-identity':
       case 'registration-identity':
       case 'template-identity':

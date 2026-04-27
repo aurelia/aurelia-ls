@@ -129,13 +129,49 @@ export const KernelVocabulary = {
     ),
   },
   Resource: {
+    /** Product kind for a resource definition recognized from decorators, static metadata, define calls, or syntax factories. */
+    RecognizedDefinition: defineVocabulary(
+      KernelVocabularyNamespace.Resource,
+      'recognized-definition',
+      'A resource definition product recognized from source carriers before scope admission or template use.',
+    ),
     /** Source syntax or convention declares an Aurelia resource. */
     Declares: defineVocabulary(KernelVocabularyNamespace.Resource, 'declares', 'Source syntax or convention declares an Aurelia resource.'),
-    /** A resource is available to a template, container, or configuration scope. */
-    AvailableInScope: defineVocabulary(
+    /** A recognized resource name is an alias of another resource identity. */
+    AliasOf: defineVocabulary(
       KernelVocabularyNamespace.Resource,
-      'available-in-scope',
-      'A resource is available to a template, container, or configuration scope.',
+      'alias-of',
+      'A recognized resource name is an alias of another resource identity.',
+    ),
+    /** Resource recognition could not close a resource kind from the carrier shape. */
+    OpenKindExpression: defineVocabulary(
+      KernelVocabularyNamespace.Resource,
+      'open-kind-expression',
+      'Resource recognition could not close a resource kind from the carrier shape.',
+    ),
+    /** Resource recognition could not close a resource name from the carrier shape. */
+    OpenNameExpression: defineVocabulary(
+      KernelVocabularyNamespace.Resource,
+      'open-name-expression',
+      'Resource recognition could not close a resource name from the carrier shape.',
+    ),
+    /** Resource recognition could not close every alias from the carrier shape. */
+    OpenAliasExpression: defineVocabulary(
+      KernelVocabularyNamespace.Resource,
+      'open-alias-expression',
+      'Resource recognition could not close every alias from the carrier shape.',
+    ),
+    /** Resource recognition could not close the class, function, or object target from the carrier shape. */
+    OpenTargetExpression: defineVocabulary(
+      KernelVocabularyNamespace.Resource,
+      'open-target-expression',
+      'Resource recognition could not close the class, function, or object target from the carrier shape.',
+    ),
+    /** Syntax-resource recognition could not close every attribute pattern entry from the carrier shape. */
+    OpenPatternExpression: defineVocabulary(
+      KernelVocabularyNamespace.Resource,
+      'open-pattern-expression',
+      'Syntax-resource recognition could not close every attribute pattern entry from the carrier shape.',
     ),
   },
   Di: {

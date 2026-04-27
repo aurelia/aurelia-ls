@@ -1,4 +1,3 @@
-import { auLink } from '../au-link.js';
 
 export const LOOKUP_MODIFIER_KINDS = [
   'all',
@@ -13,8 +12,6 @@ export const LOOKUP_MODIFIER_KINDS = [
 
 export type LookupModifierKind =
   typeof LOOKUP_MODIFIER_KINDS[number];
-
-@auLink('kernel:all')
 export class AllLookupModifier {
   readonly kind = 'all' as const;
 
@@ -22,8 +19,6 @@ export class AllLookupModifier {
     readonly note: string | null = null,
   ) {}
 }
-
-@auLink('kernel:lazy')
 export class LazyLookupModifier {
   readonly kind = 'lazy' as const;
 
@@ -31,8 +26,6 @@ export class LazyLookupModifier {
     readonly note: string | null = null,
   ) {}
 }
-
-@auLink('kernel:optional')
 export class OptionalLookupModifier {
   readonly kind = 'optional' as const;
 
@@ -40,8 +33,6 @@ export class OptionalLookupModifier {
     readonly note: string | null = null,
   ) {}
 }
-
-@auLink('kernel:factory')
 export class FactoryLookupModifier {
   readonly kind = 'factory' as const;
 
@@ -49,8 +40,6 @@ export class FactoryLookupModifier {
     readonly note: string | null = null,
   ) {}
 }
-
-@auLink('kernel:own')
 export class OwnLookupModifier {
   readonly kind = 'own' as const;
 
@@ -58,8 +47,6 @@ export class OwnLookupModifier {
     readonly note: string | null = null,
   ) {}
 }
-
-@auLink('runtime-html:fromHydrationContext')
 export class FromHydrationContextLookupModifier {
   readonly kind = 'from-hydration-context' as const;
 
@@ -67,8 +54,6 @@ export class FromHydrationContextLookupModifier {
     readonly note: string | null = 'Dependency lookup is routed through the nearest hydration-context controller container and then resolved with own(key) semantics.',
   ) {}
 }
-
-@auLink('kernel:newInstanceOf')
 export class NewInstanceOfLookupModifier {
   readonly kind = 'new-instance-of' as const;
 
@@ -76,8 +61,6 @@ export class NewInstanceOfLookupModifier {
     readonly note: string | null = null,
   ) {}
 }
-
-@auLink('kernel:newInstanceForScope')
 export class NewInstanceForScopeLookupModifier {
   readonly kind = 'new-instance-for-scope' as const;
 

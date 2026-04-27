@@ -1,4 +1,3 @@
-import { auLink } from '../au-link.js';
 import { OpenSeamEvidence } from '../provenance/evidence.js';
 import type { ContainerWorldRef, KeyRef, SourceNodeRef } from '../refs.js';
 import type { LookupModifierKind } from '../di/lookup-modifier.js';
@@ -69,8 +68,6 @@ export class ContainerStateLookupResult {
     readonly note: string | null = null,
   ) {}
 }
-
-@auLink('kernel:IServiceLocator')
 export class ContainerStateLookupEvaluator {
   lookup(
     scope: ContainerStateLookupScope,

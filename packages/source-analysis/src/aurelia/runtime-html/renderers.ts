@@ -1,5 +1,4 @@
 import { TEMPLATE_INSTRUCTION_TYPE_CODES, type TemplateInstructionTypeCode } from '../template-compiler/instructions.js';
-import { auLink } from '../au-link.js';
 
 export const RUNTIME_RENDERER_KINDS = [
   'custom-element',
@@ -18,8 +17,6 @@ export const RUNTIME_RENDERER_KINDS = [
 ] as const;
 
 export type RuntimeRendererKind = typeof RUNTIME_RENDERER_KINDS[number];
-
-@auLink('runtime-html:CustomElementRenderer')
 export class CustomElementRenderer {
   readonly kind = 'custom-element' as const;
   readonly target = TEMPLATE_INSTRUCTION_TYPE_CODES.hydrateElement;
@@ -27,8 +24,6 @@ export class CustomElementRenderer {
   readonly createsBinding = false as const;
   readonly recursesIntoProps = true as const;
 }
-
-@auLink('runtime-html:CustomAttributeRenderer')
 export class CustomAttributeRenderer {
   readonly kind = 'custom-attribute' as const;
   readonly target = TEMPLATE_INSTRUCTION_TYPE_CODES.hydrateAttribute;
@@ -36,8 +31,6 @@ export class CustomAttributeRenderer {
   readonly createsBinding = false as const;
   readonly recursesIntoProps = true as const;
 }
-
-@auLink('runtime-html:TemplateControllerRenderer')
 export class TemplateControllerRenderer {
   readonly kind = 'template-controller' as const;
   readonly target = TEMPLATE_INSTRUCTION_TYPE_CODES.hydrateTemplateController;
@@ -46,8 +39,6 @@ export class TemplateControllerRenderer {
   readonly recursesIntoProps = true as const;
   readonly createsViewFactory = true as const;
 }
-
-@auLink('runtime-html:LetElementRenderer')
 export class LetElementRenderer {
   readonly kind = 'let-element' as const;
   readonly target = TEMPLATE_INSTRUCTION_TYPE_CODES.hydrateLetElement;
@@ -55,8 +46,6 @@ export class LetElementRenderer {
   readonly createsBinding = true as const;
   readonly bindingKind = 'let' as const;
 }
-
-@auLink('runtime-html:RefBindingRenderer')
 export class RefBindingRenderer {
   readonly kind = 'ref-binding' as const;
   readonly target = TEMPLATE_INSTRUCTION_TYPE_CODES.refBinding;
@@ -64,8 +53,6 @@ export class RefBindingRenderer {
   readonly createsBinding = true as const;
   readonly bindingKind = 'ref' as const;
 }
-
-@auLink('runtime-html:InterpolationBindingRenderer')
 export class InterpolationBindingRenderer {
   readonly kind = 'interpolation-binding' as const;
   readonly target = TEMPLATE_INSTRUCTION_TYPE_CODES.interpolation;
@@ -73,8 +60,6 @@ export class InterpolationBindingRenderer {
   readonly createsBinding = true as const;
   readonly bindingKind = 'interpolation' as const;
 }
-
-@auLink('runtime-html:PropertyBindingRenderer')
 export class PropertyBindingRenderer {
   readonly kind = 'property-binding' as const;
   readonly target = TEMPLATE_INSTRUCTION_TYPE_CODES.propertyBinding;
@@ -82,8 +67,6 @@ export class PropertyBindingRenderer {
   readonly createsBinding = true as const;
   readonly bindingKind = 'property' as const;
 }
-
-@auLink('runtime-html:IteratorBindingRenderer')
 export class IteratorBindingRenderer {
   readonly kind = 'iterator-binding' as const;
   readonly target = TEMPLATE_INSTRUCTION_TYPE_CODES.iteratorBinding;
@@ -91,8 +74,6 @@ export class IteratorBindingRenderer {
   readonly createsBinding = true as const;
   readonly bindingKind = 'property' as const;
 }
-
-@auLink('runtime-html:TextBindingRenderer')
 export class TextBindingRenderer {
   readonly kind = 'text-binding' as const;
   readonly target = TEMPLATE_INSTRUCTION_TYPE_CODES.textBinding;
@@ -100,8 +81,6 @@ export class TextBindingRenderer {
   readonly createsBinding = true as const;
   readonly bindingKind = 'content' as const;
 }
-
-@auLink('runtime-html:ListenerBindingRenderer')
 export class ListenerBindingRenderer {
   readonly kind = 'listener-binding' as const;
   readonly target = TEMPLATE_INSTRUCTION_TYPE_CODES.listenerBinding;
@@ -109,8 +88,6 @@ export class ListenerBindingRenderer {
   readonly createsBinding = true as const;
   readonly bindingKind = 'listener' as const;
 }
-
-@auLink('runtime-html:StylePropertyBindingRenderer')
 export class StylePropertyBindingRenderer {
   readonly kind = 'style-property-binding' as const;
   readonly target = TEMPLATE_INSTRUCTION_TYPE_CODES.stylePropertyBinding;
@@ -118,8 +95,6 @@ export class StylePropertyBindingRenderer {
   readonly createsBinding = true as const;
   readonly bindingKind = 'property' as const;
 }
-
-@auLink('runtime-html:AttributeBindingRenderer')
 export class AttributeBindingRenderer {
   readonly kind = 'attribute-binding' as const;
   readonly target = TEMPLATE_INSTRUCTION_TYPE_CODES.attributeBinding;
@@ -127,8 +102,6 @@ export class AttributeBindingRenderer {
   readonly createsBinding = true as const;
   readonly bindingKind = 'attribute' as const;
 }
-
-@auLink('runtime-html:SpreadRenderer')
 export class SpreadRenderer {
   readonly kind = 'spread' as const;
   readonly target = TEMPLATE_INSTRUCTION_TYPE_CODES.spreadTransferedBinding;

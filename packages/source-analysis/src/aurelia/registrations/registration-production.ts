@@ -1,4 +1,3 @@
-import { auLink } from '../au-link.js';
 import type { ContainerWorldRef, KeyRef, SourceNodeRef, SymbolRef } from '../refs.js';
 import type { RegistrationPayload } from './registration-payload.js';
 
@@ -34,8 +33,6 @@ export const REGISTRATION_PRODUCTION_KINDS = [
 
 export type RegistrationProductionKind =
   typeof REGISTRATION_PRODUCTION_KINDS[number];
-
-@auLink('kernel:Registration')
 export class RegistrationFactory {
   readonly kind = 'registration-factory' as const;
 

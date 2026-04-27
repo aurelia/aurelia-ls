@@ -6,6 +6,8 @@ export const enum IdentityRecordKind {
   TypeScriptDeclarationIdentity = 'typescript-declaration-identity',
   /** Names an Aurelia resource such as a custom element or value converter. */
   AureliaResourceIdentity = 'aurelia-resource-identity',
+  /** Names an Aurelia attribute-pattern syntax resource by its parser pattern and symbols. */
+  AureliaAttributePatternIdentity = 'aurelia-attribute-pattern-identity',
   /** Names a dependency injection key as understood by Aurelia. */
   DiKeyIdentity = 'di-key-identity',
   /** Names a registration of a key into a container or configuration flow. */
@@ -73,8 +75,6 @@ export const enum AureliaResourceIdentityKind {
   BindingBehavior = 'binding-behavior',
   /** A binding command such as bind, trigger, delegate, or two-way variants. */
   BindingCommand = 'binding-command',
-  /** An attribute pattern that rewrites or recognizes markup syntax. */
-  AttributePattern = 'attribute-pattern',
 }
 
 export const enum DiKeyIdentityKind {
@@ -144,6 +144,29 @@ export class AureliaResourceIdentity {
     readonly name: string | null,
     /** Optional declaration identity handle that produced or owns this resource. */
     readonly declarationHandle: IdentityHandle | null = null,
+  ) {}
+}
+
+/** Identity for an Aurelia attribute parser pattern. */
+export class AureliaAttributePatternIdentity {
+  /** String discriminator for serialized attribute-pattern identity records. */
+  readonly kind = IdentityRecordKind.AureliaAttributePatternIdentity;
+  /** Identity-domain discriminator for cheap filtering. */
+  readonly domain = IdentityDomain.AureliaResource;
+
+  constructor(
+    /** Store-local handle for this identity record. */
+    readonly handle: IdentityHandle,
+    /** Retention promise for this identity inside the active analysis store. */
+    readonly stability: IdentityStability,
+    /** Pattern string consumed by Aurelia's attribute parser. */
+    readonly pattern: string | null,
+    /** Symbol string that defines how the pattern is parsed into syntax parts. */
+    readonly symbols: string | null,
+    /** Optional declaration identity handle for the pattern handler type. */
+    readonly declarationHandle: IdentityHandle | null = null,
+    /** Optional source span for the pattern definition entry. */
+    readonly definitionAddressHandle: AddressHandle | null = null,
   ) {}
 }
 
@@ -290,6 +313,7 @@ export class GeneratedIdentity {
 export type SemanticIdentity =
   | TypeScriptDeclarationIdentity
   | AureliaResourceIdentity
+  | AureliaAttributePatternIdentity
   | DiKeyIdentity
   | RegistrationIdentity
   | TemplateIdentity

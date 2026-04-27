@@ -57,6 +57,16 @@ export class StaticModuleEvaluationResult {
   ) {}
 }
 
+/** Result of evaluating one expression against an existing module environment. */
+export class StaticExpressionEvaluationResult {
+  constructor(
+    /** Value produced by the expression evaluator. */
+    readonly value: EvaluationValue,
+    /** Open seams observed during this expression read. */
+    readonly openSeams: readonly EvaluationOpenSeam[],
+  ) {}
+}
+
 /** Conservative ECMAScript-shaped evaluator for module-level analysis. */
 export class StaticEvaluator {
   private readonly openSeams: EvaluationOpenSeam[] = [];
@@ -89,8 +99,10 @@ export class StaticEvaluator {
     expression: ts.Expression,
     environment: ModuleEnvironmentRecord,
     moduleKey: string,
-  ): EvaluationValue {
-    return this.evaluateExpression(expression, environment, moduleKey, 0);
+  ): StaticExpressionEvaluationResult {
+    const openStart = this.openSeams.length;
+    const value = this.evaluateExpression(expression, environment, moduleKey, 0);
+    return new StaticExpressionEvaluationResult(value, this.openSeams.slice(openStart));
   }
 
   private instantiateModule(

@@ -1,5 +1,4 @@
 import type { ForOfStatement, Interpolation, IsBindingBehavior } from '../expression/ast.js';
-import { auLink } from '../au-link.js';
 
 export const BINDING_MODES = {
   default: 0,
@@ -57,8 +56,6 @@ export type TemplateCompilerLetExpressionSeed =
 export type TemplateCompilerForOfSeed = string | ForOfStatement;
 export type TemplateComponentDefinitionSeed = Record<PropertyKey, unknown>;
 export type TemplateAttributeSyntaxSeed = Record<PropertyKey, unknown>;
-
-@auLink('template-compiler:InterpolationInstruction')
 export class InterpolationInstruction {
   readonly kind = 'interpolation-instruction' as const;
   readonly family = 'property-binding' as const;
@@ -69,8 +66,6 @@ export class InterpolationInstruction {
     readonly to: string,
   ) {}
 }
-
-@auLink('template-compiler:PropertyBindingInstruction')
 export class PropertyBindingInstruction {
   readonly kind = 'property-binding-instruction' as const;
   readonly family = 'property-binding' as const;
@@ -82,8 +77,6 @@ export class PropertyBindingInstruction {
     readonly mode: BindingMode,
   ) {}
 }
-
-@auLink('template-compiler:IteratorBindingInstruction')
 export class IteratorBindingInstruction {
   readonly kind = 'iterator-binding-instruction' as const;
   readonly family = 'property-binding' as const;
@@ -95,8 +88,6 @@ export class IteratorBindingInstruction {
     readonly props: readonly MultiAttrInstruction[] = [],
   ) {}
 }
-
-@auLink('template-compiler:RefBindingInstruction')
 export class RefBindingInstruction {
   readonly kind = 'ref-binding-instruction' as const;
   readonly family = 'property-binding' as const;
@@ -107,8 +98,6 @@ export class RefBindingInstruction {
     readonly to: string,
   ) {}
 }
-
-@auLink('template-compiler:SetPropertyInstruction')
 export class SetPropertyInstruction {
   readonly kind = 'set-property-instruction' as const;
   readonly family = 'property-binding' as const;
@@ -119,8 +108,6 @@ export class SetPropertyInstruction {
     readonly to: string,
   ) {}
 }
-
-@auLink('template-compiler:MultiAttrInstruction')
 export class MultiAttrInstruction {
   readonly kind = 'multi-attr-instruction' as const;
   readonly family = 'property-binding' as const;
@@ -132,8 +119,6 @@ export class MultiAttrInstruction {
     readonly command: string | null,
   ) {}
 }
-
-@auLink('template-compiler:HydrateElementInstruction')
 export class HydrateElementInstruction<
   TData extends Record<PropertyKey, unknown> = Record<PropertyKey, unknown>,
   TDefinition extends TemplateComponentDefinitionSeed = TemplateComponentDefinitionSeed,
@@ -151,8 +136,6 @@ export class HydrateElementInstruction<
     readonly data: TData = {} as TData,
   ) {}
 }
-
-@auLink('template-compiler:HydrateAttributeInstruction')
 export class HydrateAttributeInstruction<
   TDefinition extends TemplateComponentDefinitionSeed = TemplateComponentDefinitionSeed,
 > {
@@ -166,8 +149,6 @@ export class HydrateAttributeInstruction<
     readonly props: readonly TemplateInstruction[] = [],
   ) {}
 }
-
-@auLink('template-compiler:HydrateTemplateController')
 export class HydrateTemplateController<
   TDefinition extends TemplateComponentDefinitionSeed = TemplateComponentDefinitionSeed,
 > {
@@ -182,8 +163,6 @@ export class HydrateTemplateController<
     readonly props: readonly TemplateInstruction[] = [],
   ) {}
 }
-
-@auLink('template-compiler:HydrateLetElementInstruction')
 export class HydrateLetElementInstruction {
   readonly kind = 'hydrate-let-element-instruction' as const;
   readonly family = 'hydration' as const;
@@ -194,8 +173,6 @@ export class HydrateLetElementInstruction {
     readonly toBindingContext: boolean = false,
   ) {}
 }
-
-@auLink('template-compiler:LetBindingInstruction')
 export class LetBindingInstruction {
   readonly kind = 'let-binding-instruction' as const;
   readonly family = 'property-binding' as const;
@@ -206,8 +183,6 @@ export class LetBindingInstruction {
     readonly to: string,
   ) {}
 }
-
-@auLink('template-compiler:TextBindingInstruction')
 export class TextBindingInstruction {
   readonly kind = 'text-binding-instruction' as const;
   readonly family = 'dom-binding' as const;
@@ -217,8 +192,6 @@ export class TextBindingInstruction {
     readonly from: TemplateCompilerExpressionSeed,
   ) {}
 }
-
-@auLink('template-compiler:ListenerBindingInstruction')
 export class ListenerBindingInstruction {
   readonly kind = 'listener-binding-instruction' as const;
   readonly family = 'dom-binding' as const;
@@ -231,8 +204,6 @@ export class ListenerBindingInstruction {
     readonly modifier: string | null = null,
   ) {}
 }
-
-@auLink('template-compiler:StylePropertyBindingInstruction')
 export class StylePropertyBindingInstruction {
   readonly kind = 'style-property-binding-instruction' as const;
   readonly family = 'dom-binding' as const;
@@ -243,8 +214,6 @@ export class StylePropertyBindingInstruction {
     readonly to: string,
   ) {}
 }
-
-@auLink('template-compiler:SetAttributeInstruction')
 export class SetAttributeInstruction {
   readonly kind = 'set-attribute-instruction' as const;
   readonly family = 'dom-binding' as const;
@@ -255,8 +224,6 @@ export class SetAttributeInstruction {
     readonly to: string,
   ) {}
 }
-
-@auLink('template-compiler:SetClassAttributeInstruction')
 export class SetClassAttributeInstruction {
   readonly kind = 'set-class-attribute-instruction' as const;
   readonly family = 'dom-binding' as const;
@@ -266,8 +233,6 @@ export class SetClassAttributeInstruction {
     readonly value: string,
   ) {}
 }
-
-@auLink('template-compiler:SetStyleAttributeInstruction')
 export class SetStyleAttributeInstruction {
   readonly kind = 'set-style-attribute-instruction' as const;
   readonly family = 'dom-binding' as const;
@@ -277,8 +242,6 @@ export class SetStyleAttributeInstruction {
     readonly value: string,
   ) {}
 }
-
-@auLink('template-compiler:AttributeBindingInstruction')
 export class AttributeBindingInstruction {
   readonly kind = 'attribute-binding-instruction' as const;
   readonly family = 'dom-binding' as const;
@@ -290,15 +253,11 @@ export class AttributeBindingInstruction {
     readonly to: string,
   ) {}
 }
-
-@auLink('template-compiler:SpreadTransferedBindingInstruction')
 export class SpreadTransferedBindingInstruction {
   readonly kind = 'spread-transfered-binding-instruction' as const;
   readonly family = 'spread' as const;
   readonly type = TEMPLATE_INSTRUCTION_TYPE_CODES.spreadTransferedBinding;
 }
-
-@auLink('template-compiler:SpreadElementPropBindingInstruction')
 export class SpreadElementPropBindingInstruction {
   readonly kind = 'spread-element-prop-binding-instruction' as const;
   readonly family = 'spread' as const;
@@ -308,8 +267,6 @@ export class SpreadElementPropBindingInstruction {
     readonly instruction: TemplateInstruction,
   ) {}
 }
-
-@auLink('template-compiler:SpreadValueBindingInstruction')
 export class SpreadValueBindingInstruction {
   readonly kind = 'spread-value-binding-instruction' as const;
   readonly family = 'spread' as const;

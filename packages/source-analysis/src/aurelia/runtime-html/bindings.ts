@@ -1,6 +1,5 @@
 import type { ForOfStatement, Interpolation, IsBindingBehavior, IsExpression } from '../expression/ast.js';
 import type { BindingMode } from '../template-compiler/instructions.js';
-import { auLink } from '../au-link.js';
 
 export const RUNTIME_BINDING_KINDS = [
   'attribute',
@@ -26,8 +25,6 @@ export class RuntimeListenerBindingOptions {
     readonly onError: 'dispatch-au-event-error' | 'custom' | null = 'dispatch-au-event-error',
   ) {}
 }
-
-@auLink('runtime-html:AttributeBinding')
 export class AttributeBinding {
   readonly kind = 'attribute' as const;
   readonly boundFn = false as const;
@@ -41,8 +38,6 @@ export class AttributeBinding {
     readonly strict: boolean,
   ) {}
 }
-
-@auLink('runtime-html:ContentBinding')
 export class ContentBinding {
   readonly kind = 'content' as const;
   readonly boundFn = false as const;
@@ -53,8 +48,6 @@ export class ContentBinding {
     readonly strict: boolean,
   ) {}
 }
-
-@auLink('runtime-html:InterpolationBinding')
 export class InterpolationBinding {
   readonly kind = 'interpolation' as const;
   readonly boundFn = false as const;
@@ -68,8 +61,6 @@ export class InterpolationBinding {
     readonly partCount: number | null = null,
   ) {}
 }
-
-@auLink('runtime-html:LetBinding')
 export class LetBinding {
   readonly kind = 'let' as const;
   readonly boundFn = false as const;
@@ -81,8 +72,6 @@ export class LetBinding {
     readonly strict: boolean,
   ) {}
 }
-
-@auLink('runtime-html:ListenerBinding')
 export class ListenerBinding {
   readonly kind = 'listener' as const;
   readonly boundFn = true as const;
@@ -96,8 +85,6 @@ export class ListenerBinding {
     readonly strict: boolean = false,
   ) {}
 }
-
-@auLink('runtime-html:PropertyBinding')
 export class PropertyBinding {
   readonly kind = 'property' as const;
   readonly boundFn = false as const;
@@ -110,8 +97,6 @@ export class PropertyBinding {
     readonly strict: boolean,
   ) {}
 }
-
-@auLink('runtime-html:RefBinding')
 export class RefBinding {
   readonly kind = 'ref' as const;
   readonly boundFn = false as const;
@@ -122,8 +107,6 @@ export class RefBinding {
     readonly strict: boolean,
   ) {}
 }
-
-@auLink('runtime-html:SpreadBinding')
 export class SpreadBinding {
   readonly kind = 'spread' as const;
   readonly controllerSurrogate = true as const;

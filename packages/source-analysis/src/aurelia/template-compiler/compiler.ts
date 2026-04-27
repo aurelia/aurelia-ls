@@ -1,5 +1,4 @@
 import type { TemplateInstruction } from './instructions.js';
-import { auLink } from '../au-link.js';
 
 export const TEMPLATE_COMPILER_PHASE_KINDS = [
   'resource-resolution',
@@ -31,8 +30,6 @@ export class AttributeMappingRule {
     readonly propertyKey: PropertyKey,
   ) {}
 }
-
-@auLink('template-compiler:IAttrMapper')
 export class AttributeMapper {
   readonly kind = 'attribute-mapper' as const;
 
@@ -52,8 +49,6 @@ export class TemplateCompilationResult {
     readonly diagnostics: readonly object[] = [],
   ) {}
 }
-
-@auLink('template-compiler:TemplateCompiler', true)
 export class TemplateCompiler {
   readonly kind = 'template-compiler' as const;
 

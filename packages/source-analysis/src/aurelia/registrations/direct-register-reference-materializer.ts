@@ -8,7 +8,6 @@ import type {
   SymbolRef,
   ContainerWorldRef,
 } from '../refs.js';
-import type { ResourceDefinition } from '../resources/resource-definition.js';
 import { ContainerStateCandidate } from './container-state-candidate.js';
 import { ContainerStateClosureBasis } from './container-state-closure-basis.js';
 import { type ContainerStateMaterialization, ContainerStateMaterializer } from './container-state-materializer.js';
@@ -31,7 +30,6 @@ export interface DirectRegisterReferenceInput {
 export interface DirectRegisterReferenceMaterializationOptions {
   readonly owner: SymbolRef | SourceNodeRef;
   readonly world: ContainerWorldRef;
-  readonly visibleResources?: readonly ResourceDefinition[];
   readonly intakeKind: RegistrationIntakeKind;
   readonly transitionClass: RegistrationTransitionClassKind;
   readonly lookupRegime: 'direct' | 'own';
@@ -148,18 +146,6 @@ export class DirectRegisterReferenceMaterializer {
       `${options.contextLabel} spends direct register input ${input.referenceName} into keyed container state.`,
     );
 
-    const matchedResource = findVisibleResourceByType(subject.owner, options.visibleResources ?? []);
-    if (matchedResource != null) {
-      openSeams.push(
-        new ContainerStateOpenSeam(
-          'resource-registration-open',
-          input.source,
-          input.referenceName,
-          `${options.contextLabel} direct register input ${input.referenceName} appears to be a resource class. The constructable self-registration is closed here, but resource-key alias publication and visible-resource child-world consequence still belong to a later slice.`,
-        ),
-      );
-    }
-
     return [
       new ContainerStateCandidate(
         `direct-register-reference-candidate:${options.contextLabel}:${subject.key.id}:${index}`,
@@ -194,30 +180,6 @@ export class DirectRegisterReferenceMaterializer {
 // - resource-key alias publication and child-world resource visibility
 // - interface-key register(...) defaults
 // - richer IRegistry/object-bag inputs beyond direct class-backed references
-
-function findVisibleResourceByType(
-  owner: SymbolRef | SourceNodeRef,
-  resources: readonly ResourceDefinition[],
-): ResourceDefinition | null {
-  for (const current of resources) {
-    if (current.type.kind === 'symbol' && owner.kind === 'symbol' && current.type.id === owner.id) {
-      return current;
-    }
-
-    if (
-      current.type.kind === 'symbol'
-      && owner.kind === 'symbol'
-      && current.type.name != null
-      && owner.name != null
-      && current.type.name === owner.name
-      && current.type.declaration?.file.id === owner.file?.id
-    ) {
-      return current;
-    }
-  }
-
-  return null;
-}
 
 function dedupeOpenSeams(
   seams: readonly ContainerStateOpenSeam[],

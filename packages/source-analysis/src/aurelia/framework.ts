@@ -7,19 +7,13 @@ import {
   AppTaskScanner,
   type AppTaskContribution,
 } from './app-task.js';
-import { TypeScriptWorldConstructions } from './world-construction/typescript-world-constructions.js';
-import { TypeScriptWorldConstructionScanner } from './world-construction/typescript-world-construction-scanner.js';
 import { Exports } from './exports/exports.js';
 import { ExportScanner } from './exports/export-scanner.js';
-import { ResourceScanner } from './resources/resource-scanner.js';
-import type { ResourceDefinition } from './resources/resource-definition.js';
-import { Resources } from './resources/resources.js';
 
 export interface FrameworkOptions {
   readonly rootDir: string;
   readonly packageNames?: readonly string[];
   readonly exports?: readonly DeclarationExport[];
-  readonly resourceSeeds?: readonly ResourceDefinition[];
 }
 
 // Framework is the ergonomic ingress for "the Aurelia framework as a whole".
@@ -32,8 +26,6 @@ export class Framework {
   private readonly exportsValue: Exports;
   private readonly packageNamesValue: readonly string[];
   private readonly appTasksValue: readonly AppTaskContribution[];
-  private readonly resourcesValue: Resources;
-  private readonly worldConstructionsValue: TypeScriptWorldConstructions;
   readonly rootDir: string;
 
   constructor(
@@ -58,32 +50,15 @@ export class Framework {
         exports: this.exportsValue,
       }),
     );
-    this.resourcesValue = new Resources(
-      'framework',
-      new ResourceScanner({
-        exports: this.exportsValue,
-        resourceSeeds: options.resourceSeeds,
-      }),
-    );
     this.configurationContributionsValue = new ConfigurationContributions(
       'framework',
       new ConfigurationContributionScanner({
         configurations: this.configurationsValue,
-        exports: this.exportsValue,
-        resources: this.resourcesValue,
       }),
     );
     this.appTasksValue = new AppTaskScanner({
       contributions: this.configurationContributionsValue.readAll(),
     }).scanAll();
-    this.worldConstructionsValue = new TypeScriptWorldConstructions(
-      'framework',
-      new TypeScriptWorldConstructionScanner({
-        ownerLabel: 'framework',
-        configurationContributions: this.configurationContributionsValue,
-        resources: this.resourcesValue,
-      }),
-    );
   }
 
   declarationWorld(): DeclarationWorld {
@@ -120,21 +95,5 @@ export class Framework {
 
   readAppTasks(): readonly AppTaskContribution[] {
     return [...this.appTasksValue];
-  }
-
-  worldConstructions(): TypeScriptWorldConstructions {
-    return this.worldConstructionsValue;
-  }
-
-  readWorldConstructions() {
-    return this.worldConstructionsValue.readAll();
-  }
-
-  resources(): Resources {
-    return this.resourcesValue;
-  }
-
-  readResources(): readonly ResourceDefinition[] {
-    return this.resourcesValue.readAll();
   }
 }

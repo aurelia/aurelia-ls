@@ -1,4 +1,3 @@
-import { auLink } from '../au-link.js';
 
 export const RUNTIME_CONTROLLER_KINDS = [
   'synthetic-view',
@@ -23,8 +22,6 @@ export const RUNTIME_CONTROLLER_STATE_KINDS = [
 
 export type RuntimeControllerStateKind =
   typeof RUNTIME_CONTROLLER_STATE_KINDS[number];
-
-@auLink('runtime-html:ISyntheticView')
 export class SyntheticViewController {
   readonly kind = 'synthetic-view' as const;
   readonly vmKind = 'synthetic' as const;
@@ -39,8 +36,6 @@ export class SyntheticViewController {
     readonly state: RuntimeControllerStateKind = 'none',
   ) {}
 }
-
-@auLink('runtime-html:ICustomAttributeController')
 export class CustomAttributeController {
   readonly kind = 'custom-attribute' as const;
   readonly vmKind = 'customAttribute' as const;
@@ -56,8 +51,6 @@ export class CustomAttributeController {
     readonly state: RuntimeControllerStateKind = 'none',
   ) {}
 }
-
-@auLink('runtime-html:IDryCustomElementController')
 export class DryCustomElementController {
   readonly kind = 'dry-custom-element' as const;
   readonly vmKind = 'customElement' as const;
@@ -74,8 +67,6 @@ export class DryCustomElementController {
     readonly state: RuntimeControllerStateKind = 'none',
   ) {}
 }
-
-@auLink('runtime-html:IContextualCustomElementController')
 export class ContextualCustomElementController {
   readonly kind = 'contextual-custom-element' as const;
   readonly vmKind = 'customElement' as const;
@@ -92,8 +83,6 @@ export class ContextualCustomElementController {
     readonly state: RuntimeControllerStateKind = 'none',
   ) {}
 }
-
-@auLink('runtime-html:ICompiledCustomElementController')
 export class CompiledCustomElementController {
   readonly kind = 'compiled-custom-element' as const;
   readonly vmKind = 'customElement' as const;
@@ -111,8 +100,6 @@ export class CompiledCustomElementController {
     readonly state: RuntimeControllerStateKind = 'none',
   ) {}
 }
-
-@auLink('runtime-html:ICustomElementController')
 export class CustomElementController {
   readonly kind = 'custom-element' as const;
   readonly vmKind = 'customElement' as const;

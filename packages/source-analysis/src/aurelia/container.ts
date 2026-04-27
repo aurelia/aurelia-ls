@@ -1,4 +1,3 @@
-import { auLink } from './au-link.js';
 import type {
   ContainerWorldRef,
   KeyRef,
@@ -41,8 +40,6 @@ type MutableContainerEntry = {
   world: ContainerWorldRef;
   resolver: Resolver;
 };
-
-@auLink('kernel:IContainer')
 export class ContainerContract {
   readonly kind = 'container-contract' as const;
 
@@ -52,8 +49,6 @@ export class ContainerContract {
     readonly canCreateChild: boolean = true,
   ) {}
 }
-
-@auLink('kernel:Container', true)
 export class Container {
   readonly root: Container;
   readonly parent: Container | null;

@@ -1,4 +1,3 @@
-import { auLink } from '../au-link.js';
 import type { KeyRef, SourceNodeRef, SymbolRef } from '../refs.js';
 import { KeyRef as KeyRefValue, SymbolRef as SymbolRefValue } from '../refs.js';
 
@@ -22,8 +21,6 @@ export class InterfaceKeyDefaultRegistration {
     readonly note: string | null = null,
   ) {}
 }
-
-@auLink('kernel:ResolverBuilder')
 export class InterfaceKeyResolverBuilder {
   readonly kind = 'interface-key-resolver-builder' as const;
 
@@ -36,7 +33,6 @@ export class InterfaceKeyResolverBuilder {
 
 // Clean-room model for DI.createInterface-style key production. This sits
 // above raw export identity and below later registration production.
-@auLink('kernel:InterfaceSymbol')
 export class InterfaceKey {
   constructor(
     readonly id: string,

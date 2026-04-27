@@ -1,4 +1,3 @@
-import { auLink } from '../au-link.js';
 import type { SourceNodeRef, SymbolRef, KeyRef } from '../refs.js';
 import type { DependencyMaterialization } from '../di/dependency-materialization.js';
 import type { RegistrationPayload } from './registration-payload.js';
@@ -22,7 +21,6 @@ export type ContainerStateSlotKind =
 // same key. This keeps multi-registration aggregation separate from the keyed
 // entry shell and gives us a place to hang evaluation-ready basis such as
 // constructable dependency materialization.
-@auLink('kernel:Resolver')
 export class ContainerStateSlot {
   constructor(
     readonly id: string,
