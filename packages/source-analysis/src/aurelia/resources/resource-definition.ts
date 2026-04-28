@@ -1,13 +1,11 @@
-import { auLink } from '../au-link.js';
 import type {
   AttributePatternObservation,
   ResourceTargetObservation,
 } from './resource-observation.js';
-import { RecognizedResourceKind } from './resource-kind.js';
+import { ResourceDefinitionKind } from './resource-kind.js';
 
-@auLink('runtime-html:CustomElementDefinition')
-export class RecognizedCustomElementDefinition {
-  get type(): RecognizedResourceKind.CustomElement { return RecognizedResourceKind.CustomElement; }
+export class CustomElementDefinitionHeader {
+  get type(): ResourceDefinitionKind.CustomElement { return ResourceDefinitionKind.CustomElement; }
 
   constructor(
     /** Runtime target that will act as the custom element view model type. */
@@ -19,9 +17,8 @@ export class RecognizedCustomElementDefinition {
   ) {}
 }
 
-@auLink('runtime-html:CustomAttributeDefinition')
-export class RecognizedCustomAttributeDefinition {
-  get type(): RecognizedResourceKind.CustomAttribute { return RecognizedResourceKind.CustomAttribute; }
+export class CustomAttributeDefinitionHeader {
+  get type(): ResourceDefinitionKind.CustomAttribute { return ResourceDefinitionKind.CustomAttribute; }
 
   constructor(
     /** Runtime target that will act as the custom attribute view model type. */
@@ -33,8 +30,8 @@ export class RecognizedCustomAttributeDefinition {
   ) {}
 }
 
-export class RecognizedTemplateControllerDefinition {
-  get type(): RecognizedResourceKind.TemplateController { return RecognizedResourceKind.TemplateController; }
+export class TemplateControllerDefinitionHeader {
+  get type(): ResourceDefinitionKind.TemplateController { return ResourceDefinitionKind.TemplateController; }
 
   constructor(
     /** Runtime target that will act as the template controller view model type. */
@@ -46,9 +43,8 @@ export class RecognizedTemplateControllerDefinition {
   ) {}
 }
 
-@auLink('runtime-html:ValueConverterDefinition')
-export class RecognizedValueConverterDefinition {
-  get type(): RecognizedResourceKind.ValueConverter { return RecognizedResourceKind.ValueConverter; }
+export class ValueConverterDefinitionHeader {
+  get type(): ResourceDefinitionKind.ValueConverter { return ResourceDefinitionKind.ValueConverter; }
 
   constructor(
     /** Runtime target that will act as the value converter implementation type. */
@@ -60,9 +56,8 @@ export class RecognizedValueConverterDefinition {
   ) {}
 }
 
-@auLink('runtime-html:BindingBehaviorDefinition')
-export class RecognizedBindingBehaviorDefinition {
-  get type(): RecognizedResourceKind.BindingBehavior { return RecognizedResourceKind.BindingBehavior; }
+export class BindingBehaviorDefinitionHeader {
+  get type(): ResourceDefinitionKind.BindingBehavior { return ResourceDefinitionKind.BindingBehavior; }
 
   constructor(
     /** Runtime target that will act as the binding behavior implementation type. */
@@ -74,9 +69,8 @@ export class RecognizedBindingBehaviorDefinition {
   ) {}
 }
 
-@auLink('template-compiler:BindingCommandDefinition')
-export class RecognizedBindingCommandDefinition {
-  get type(): RecognizedResourceKind.BindingCommand { return RecognizedResourceKind.BindingCommand; }
+export class BindingCommandDefinitionHeader {
+  get type(): ResourceDefinitionKind.BindingCommand { return ResourceDefinitionKind.BindingCommand; }
 
   constructor(
     /** Runtime target that will act as the binding command implementation type. */
@@ -88,9 +82,8 @@ export class RecognizedBindingCommandDefinition {
   ) {}
 }
 
-@auLink('template-compiler:AttributePattern')
-export class RecognizedAttributePatternDefinition {
-  get type(): RecognizedResourceKind.AttributePattern { return RecognizedResourceKind.AttributePattern; }
+export class AttributePatternDefinitionHeader {
+  get type(): ResourceDefinitionKind.AttributePattern { return ResourceDefinitionKind.AttributePattern; }
 
   constructor(
     /** Runtime target that supplies the attribute pattern behavior. */
@@ -100,36 +93,36 @@ export class RecognizedAttributePatternDefinition {
   ) {}
 }
 
-export type RecognizedNamedResourceDefinition =
-  | RecognizedCustomElementDefinition
-  | RecognizedCustomAttributeDefinition
-  | RecognizedTemplateControllerDefinition
-  | RecognizedValueConverterDefinition
-  | RecognizedBindingBehaviorDefinition
-  | RecognizedBindingCommandDefinition;
+export type NamedResourceDefinitionHeader =
+  | CustomElementDefinitionHeader
+  | CustomAttributeDefinitionHeader
+  | TemplateControllerDefinitionHeader
+  | ValueConverterDefinitionHeader
+  | BindingBehaviorDefinitionHeader
+  | BindingCommandDefinitionHeader;
 
-export type RecognizedResourceDefinition =
-  | RecognizedNamedResourceDefinition
-  | RecognizedAttributePatternDefinition;
+export type ResourceDefinitionHeader =
+  | NamedResourceDefinitionHeader
+  | AttributePatternDefinitionHeader;
 
-export function createRecognizedNamedResourceDefinition(
-  resourceKind: RecognizedNamedResourceDefinition['type'],
+export function createNamedResourceDefinitionHeader(
+  resourceKind: NamedResourceDefinitionHeader['type'],
   target: ResourceTargetObservation | null,
   name: string | null,
   aliases: readonly string[],
-): RecognizedNamedResourceDefinition {
+): NamedResourceDefinitionHeader {
   switch (resourceKind) {
-    case RecognizedResourceKind.CustomElement:
-      return new RecognizedCustomElementDefinition(target, name, aliases);
-    case RecognizedResourceKind.CustomAttribute:
-      return new RecognizedCustomAttributeDefinition(target, name, aliases);
-    case RecognizedResourceKind.TemplateController:
-      return new RecognizedTemplateControllerDefinition(target, name, aliases);
-    case RecognizedResourceKind.ValueConverter:
-      return new RecognizedValueConverterDefinition(target, name, aliases);
-    case RecognizedResourceKind.BindingBehavior:
-      return new RecognizedBindingBehaviorDefinition(target, name, aliases);
-    case RecognizedResourceKind.BindingCommand:
-      return new RecognizedBindingCommandDefinition(target, name, aliases);
+    case ResourceDefinitionKind.CustomElement:
+      return new CustomElementDefinitionHeader(target, name, aliases);
+    case ResourceDefinitionKind.CustomAttribute:
+      return new CustomAttributeDefinitionHeader(target, name, aliases);
+    case ResourceDefinitionKind.TemplateController:
+      return new TemplateControllerDefinitionHeader(target, name, aliases);
+    case ResourceDefinitionKind.ValueConverter:
+      return new ValueConverterDefinitionHeader(target, name, aliases);
+    case ResourceDefinitionKind.BindingBehavior:
+      return new BindingBehaviorDefinitionHeader(target, name, aliases);
+    case ResourceDefinitionKind.BindingCommand:
+      return new BindingCommandDefinitionHeader(target, name, aliases);
   }
 }

@@ -1,8 +1,8 @@
 import ts from 'typescript';
-import { unwrapExpression } from '../analysis/ts-ast-helpers.js';
 import { readClassTarget } from '../evaluation/expression-reader.js';
+import { unwrapExpression } from '../evaluation/ts-syntax.js';
 import type { ResourceRecognitionContext } from './resource-recognition-context.js';
-import { createRecognizedNamedResourceDefinition } from './resource-definition.js';
+import { createNamedResourceDefinitionHeader } from './resource-definition.js';
 import {
   readDecoratorCalleeName,
   readDefineCallKind,
@@ -22,8 +22,8 @@ import {
   ResourceTargetObservation,
 } from './resource-observation.js';
 import {
-  RecognizedResourceKind,
-  type NamedRecognizedResourceKind,
+  ResourceDefinitionKind,
+  type NamedResourceDefinitionKind,
 } from './resource-kind.js';
 
 /** Combined producer for named resources that are visible by markup or expression syntax names. */
@@ -35,7 +35,7 @@ export class NamedResourceRecognitionProducer {
 
 function recognizeNamedResources(
   context: ResourceRecognitionContext,
-  resourceKind: NamedRecognizedResourceKind | null,
+  resourceKind: NamedResourceDefinitionKind | null,
 ): readonly ResourceRecognitionObservation[] {
   const observations: ResourceRecognitionObservation[] = [];
   const visit = (node: ts.Node): void => {
@@ -58,7 +58,7 @@ function recognizeNamedResources(
 function recognizeClassCarriers(
   context: ResourceRecognitionContext,
   classNode: ts.ClassLikeDeclarationBase,
-  wantedKind: NamedRecognizedResourceKind | null,
+  wantedKind: NamedResourceDefinitionKind | null,
 ): readonly ResourceRecognitionObservation[] {
   return [
     ...recognizeDecorators(context, classNode, wantedKind),
@@ -69,7 +69,7 @@ function recognizeClassCarriers(
 function recognizeDecorators(
   context: ResourceRecognitionContext,
   classNode: ts.ClassLikeDeclarationBase,
-  wantedKind: NamedRecognizedResourceKind | null,
+  wantedKind: NamedResourceDefinitionKind | null,
 ): readonly ResourceRecognitionObservation[] {
   const decorators = ts.canHaveDecorators(classNode)
     ? ts.getDecorators(classNode) ?? []
@@ -83,7 +83,7 @@ function recognizeDecorators(
       : RESOURCE_DECORATOR_KIND.get(calleeName) ?? null;
     if (
       resourceKind == null
-      || resourceKind === RecognizedResourceKind.AttributePattern
+      || resourceKind === ResourceDefinitionKind.AttributePattern
       || !matchesNamedKind(resourceKind, wantedKind)
     ) {
       continue;
@@ -112,7 +112,7 @@ function recognizeDecorators(
     }
 
     const target = readClassTarget(classNode);
-    const definition = createRecognizedNamedResourceDefinition(
+    const definition = createNamedResourceDefinitionHeader(
       resourceKind,
       new ResourceTargetObservation(target.localName, target.node, target.isDeclaration),
       name?.value ?? null,
@@ -133,7 +133,7 @@ function recognizeDecorators(
 function recognizeStaticAu(
   context: ResourceRecognitionContext,
   classNode: ts.ClassLikeDeclarationBase,
-  wantedKind: NamedRecognizedResourceKind | null,
+  wantedKind: NamedResourceDefinitionKind | null,
 ): readonly ResourceRecognitionObservation[] {
   const initializer = readStaticAuInitializer(classNode);
   if (initializer == null) {
@@ -143,10 +143,10 @@ function recognizeStaticAu(
   const kindRead = readResourceKindField(initializer, context.expressionReader);
   let resourceKind = kindRead.value;
   if (
-    resourceKind === RecognizedResourceKind.CustomAttribute
+    resourceKind === ResourceDefinitionKind.CustomAttribute
     && readTemplateControllerFlag(initializer, context.expressionReader)
   ) {
-    resourceKind = RecognizedResourceKind.TemplateController;
+    resourceKind = ResourceDefinitionKind.TemplateController;
   }
   const target = readClassTarget(classNode);
   if (resourceKind == null) {
@@ -169,7 +169,7 @@ function recognizeStaticAu(
       : [];
   }
   if (
-    resourceKind === RecognizedResourceKind.AttributePattern
+    resourceKind === ResourceDefinitionKind.AttributePattern
     || !matchesNamedKind(resourceKind, wantedKind)
   ) {
     return [];
@@ -189,7 +189,7 @@ function recognizeStaticAu(
     openSeams.push(new ResourceRecognitionOpen(ResourceOpenKind.Alias, aliases.openSummary, aliases.node));
   }
 
-  const definition = createRecognizedNamedResourceDefinition(
+  const definition = createNamedResourceDefinitionHeader(
     resourceKind,
     new ResourceTargetObservation(target.localName, target.node, target.isDeclaration),
     name.value,
@@ -209,12 +209,12 @@ function recognizeStaticAu(
 function recognizeDefineCall(
   context: ResourceRecognitionContext,
   call: ts.CallExpression,
-  wantedKind: NamedRecognizedResourceKind | null,
+  wantedKind: NamedResourceDefinitionKind | null,
 ): ResourceRecognitionObservation | null {
   const resourceKind = readDefineCallKind(call);
   if (
     resourceKind == null
-    || resourceKind === RecognizedResourceKind.AttributePattern
+    || resourceKind === ResourceDefinitionKind.AttributePattern
     || !matchesNamedKind(resourceKind, wantedKind)
   ) {
     return null;
@@ -251,7 +251,7 @@ function recognizeDefineCall(
     ));
   }
 
-  const definition = createRecognizedNamedResourceDefinition(
+  const definition = createNamedResourceDefinitionHeader(
     resourceKind,
     target == null ? null : new ResourceTargetObservation(target.localName, target.node, target.isDeclaration),
     name?.value ?? null,
@@ -267,10 +267,10 @@ function recognizeDefineCall(
 }
 
 function matchesNamedKind(
-  current: RecognizedResourceKind,
-  wanted: NamedRecognizedResourceKind | null,
-): current is NamedRecognizedResourceKind {
-  if (current === RecognizedResourceKind.AttributePattern) {
+  current: ResourceDefinitionKind,
+  wanted: NamedResourceDefinitionKind | null,
+): current is NamedResourceDefinitionKind {
+  if (current === ResourceDefinitionKind.AttributePattern) {
     return false;
   }
   return wanted == null || current === wanted;

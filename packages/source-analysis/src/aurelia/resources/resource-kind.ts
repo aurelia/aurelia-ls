@@ -1,6 +1,6 @@
 import { AureliaResourceIdentityKind } from '../kernel/identity.js';
 
-export const enum RecognizedResourceKind {
+export const enum ResourceDefinitionKind {
   CustomElement = 'custom-element',
   CustomAttribute = 'custom-attribute',
   TemplateController = 'template-controller',
@@ -10,60 +10,60 @@ export const enum RecognizedResourceKind {
   AttributePattern = 'attribute-pattern',
 }
 
-export type NamedRecognizedResourceKind =
-  | RecognizedResourceKind.CustomElement
-  | RecognizedResourceKind.CustomAttribute
-  | RecognizedResourceKind.TemplateController
-  | RecognizedResourceKind.ValueConverter
-  | RecognizedResourceKind.BindingBehavior
-  | RecognizedResourceKind.BindingCommand;
+export type NamedResourceDefinitionKind =
+  | ResourceDefinitionKind.CustomElement
+  | ResourceDefinitionKind.CustomAttribute
+  | ResourceDefinitionKind.TemplateController
+  | ResourceDefinitionKind.ValueConverter
+  | ResourceDefinitionKind.BindingBehavior
+  | ResourceDefinitionKind.BindingCommand;
 
-export type SyntaxRecognizedResourceKind =
-  | RecognizedResourceKind.BindingCommand
-  | RecognizedResourceKind.AttributePattern;
+export type SyntaxResourceDefinitionKind =
+  | ResourceDefinitionKind.BindingCommand
+  | ResourceDefinitionKind.AttributePattern;
 
 export function toAureliaResourceIdentityKind(
-  kind: NamedRecognizedResourceKind,
+  kind: NamedResourceDefinitionKind,
 ): AureliaResourceIdentityKind {
   switch (kind) {
-    case RecognizedResourceKind.CustomElement:
+    case ResourceDefinitionKind.CustomElement:
       return AureliaResourceIdentityKind.CustomElement;
-    case RecognizedResourceKind.CustomAttribute:
+    case ResourceDefinitionKind.CustomAttribute:
       return AureliaResourceIdentityKind.CustomAttribute;
-    case RecognizedResourceKind.TemplateController:
+    case ResourceDefinitionKind.TemplateController:
       return AureliaResourceIdentityKind.TemplateController;
-    case RecognizedResourceKind.ValueConverter:
+    case ResourceDefinitionKind.ValueConverter:
       return AureliaResourceIdentityKind.ValueConverter;
-    case RecognizedResourceKind.BindingBehavior:
+    case ResourceDefinitionKind.BindingBehavior:
       return AureliaResourceIdentityKind.BindingBehavior;
-    case RecognizedResourceKind.BindingCommand:
+    case ResourceDefinitionKind.BindingCommand:
       return AureliaResourceIdentityKind.BindingCommand;
   }
 }
 
 export function readResourceKindFromRuntimeTypeName(
   typeName: string,
-): RecognizedResourceKind | null {
+): ResourceDefinitionKind | null {
   switch (typeName) {
     case 'custom-element':
     case 'elementTypeName':
-      return RecognizedResourceKind.CustomElement;
+      return ResourceDefinitionKind.CustomElement;
     case 'custom-attribute':
     case 'attrTypeName':
-      return RecognizedResourceKind.CustomAttribute;
+      return ResourceDefinitionKind.CustomAttribute;
     case 'template-controller':
-      return RecognizedResourceKind.TemplateController;
+      return ResourceDefinitionKind.TemplateController;
     case 'value-converter':
     case 'converterTypeName':
-      return RecognizedResourceKind.ValueConverter;
+      return ResourceDefinitionKind.ValueConverter;
     case 'binding-behavior':
     case 'behaviorTypeName':
-      return RecognizedResourceKind.BindingBehavior;
+      return ResourceDefinitionKind.BindingBehavior;
     case 'binding-command':
     case 'bindingCommandTypeName':
-      return RecognizedResourceKind.BindingCommand;
+      return ResourceDefinitionKind.BindingCommand;
     case 'attribute-pattern':
-      return RecognizedResourceKind.AttributePattern;
+      return ResourceDefinitionKind.AttributePattern;
     default:
       return null;
   }

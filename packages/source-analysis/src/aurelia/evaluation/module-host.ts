@@ -4,12 +4,12 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
-import { guessScriptKind } from '../analysis/ts-ast-helpers.js';
 import {
   EvaluationModuleGraph,
   normalizeModuleKey,
   readEvaluationModuleRecord,
 } from './module-graph.js';
+import { guessScriptKind } from './ts-syntax.js';
 
 const MODULE_EXTENSIONS = [
   '',

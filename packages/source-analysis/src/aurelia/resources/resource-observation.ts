@@ -1,5 +1,5 @@
 import type ts from 'typescript';
-import type { RecognizedResourceDefinition } from './resource-definition.js';
+import type { ResourceDefinitionHeader } from './resource-definition.js';
 
 export const enum ResourceCarrierKind {
   /** Class decorator such as @customElement(...) or @valueConverter(...). */
@@ -72,8 +72,8 @@ export class ResourceRecognitionObservation {
     readonly sourceNode: ts.Node,
     /** Definition expression when the carrier has one separate from the call/decorator. */
     readonly definitionNode: ts.Node | null,
-    /** Recognized definition payload, or null when the carrier stayed kind-open. */
-    readonly definition: RecognizedResourceDefinition | null,
+    /** Definition header, or null when the carrier stayed kind-open. */
+    readonly definition: ResourceDefinitionHeader | null,
     /** Unresolved points that must stay visible to later consumers. */
     readonly openSeams: readonly ResourceRecognitionOpen[] = [],
   ) {}

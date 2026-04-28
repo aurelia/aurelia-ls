@@ -2,7 +2,7 @@ import ts from 'typescript';
 import {
   readReferenceName,
   unwrapExpression,
-} from '../analysis/ts-ast-helpers.js';
+} from './ts-syntax.js';
 import type { ModuleEnvironmentRecord } from './environment.js';
 import { StaticEvaluator } from './evaluator.js';
 import type { EvaluationOpenSeam } from './seams.js';

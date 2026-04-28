@@ -1,7 +1,7 @@
 import ts from 'typescript';
 import { readClassTarget } from '../evaluation/expression-reader.js';
 import type { ResourceRecognitionContext } from './resource-recognition-context.js';
-import { RecognizedAttributePatternDefinition } from './resource-definition.js';
+import { AttributePatternDefinitionHeader } from './resource-definition.js';
 import {
   readAttributePatternEntry,
   isAttributePatternCreateCall,
@@ -74,7 +74,7 @@ function recognizeAttributePatternDecorators(
       ));
     }
 
-    const definition = new RecognizedAttributePatternDefinition(
+    const definition = new AttributePatternDefinitionHeader(
       new ResourceTargetObservation(target.localName, target.node, target.isDeclaration),
       patterns,
     );
@@ -122,7 +122,7 @@ function recognizeAttributePatternCreate(
     ));
   }
 
-  const definition = new RecognizedAttributePatternDefinition(
+  const definition = new AttributePatternDefinitionHeader(
     target == null ? null : new ResourceTargetObservation(target.localName, target.node, target.isDeclaration),
     patterns?.value ?? [],
   );

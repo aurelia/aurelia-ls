@@ -8,9 +8,12 @@ export type PackageId = 'runtime-html' | 'template-compiler';
  */
 export function auLink(id: 'runtime-html:CustomElementDefinition'): ClassDecorator;
 export function auLink(id: 'runtime-html:CustomAttributeDefinition'): ClassDecorator;
+export function auLink(id: 'runtime-html:BindableDefinition'): ClassDecorator;
+export function auLink(id: 'runtime-html:WatchDefinition'): ClassDecorator;
 export function auLink(id: 'runtime-html:ValueConverterDefinition'): ClassDecorator;
 export function auLink(id: 'runtime-html:BindingBehaviorDefinition'): ClassDecorator;
 export function auLink(id: 'template-compiler:BindingCommandDefinition'): ClassDecorator;
+export function auLink(id: 'template-compiler:AttributePatternDefinition'): ClassDecorator;
 export function auLink(id: 'template-compiler:AttributePattern'): ClassDecorator;
 export function auLink(_id: `${PackageId}:${string}`): ClassDecorator {
   return function <TFunction extends Function>(_target: TFunction): void {

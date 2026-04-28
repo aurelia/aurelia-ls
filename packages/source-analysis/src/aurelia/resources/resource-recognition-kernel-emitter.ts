@@ -46,8 +46,8 @@ import {
 import { KernelVocabulary, type KernelVocabularyKey } from '../kernel/vocabulary.js';
 import type { ResourceRecognitionContext } from './resource-recognition-context.js';
 import {
-  RecognizedAttributePatternDefinition,
-  type RecognizedNamedResourceDefinition,
+  AttributePatternDefinitionHeader,
+  type NamedResourceDefinitionHeader,
 } from './resource-definition.js';
 import {
   ResourceOpenKind,
@@ -55,7 +55,7 @@ import {
   ResourceRecognitionOpen,
 } from './resource-observation.js';
 import {
-  type NamedRecognizedResourceKind,
+  type NamedResourceDefinitionKind,
   toAureliaResourceIdentityKind,
 } from './resource-kind.js';
 
@@ -137,7 +137,7 @@ export class ResourceRecognitionKernelEmitter {
     if (productHandle != null) {
       records.push(new MaterializedProduct(
         productHandle,
-        KernelVocabulary.Resource.RecognizedDefinition.key,
+        KernelVocabulary.Resource.DefinitionHeader.key,
         resourceIdentities.primaryIdentityHandle,
         sourceAddressHandle,
         provenanceHandle,
@@ -213,7 +213,7 @@ export class ResourceRecognitionKernelEmitter {
     if (definition == null) {
       return { records: [], primaryIdentityHandle: null, claimHandles: [] };
     }
-    if (definition instanceof RecognizedAttributePatternDefinition) {
+    if (definition instanceof AttributePatternDefinitionHeader) {
       return this.recordsForAttributePatternIdentities(
         context,
         definition,
@@ -294,7 +294,7 @@ export class ResourceRecognitionKernelEmitter {
 
   private recordsForAttributePatternIdentities(
     context: ResourceRecognitionContext,
-    definition: RecognizedAttributePatternDefinition,
+    definition: AttributePatternDefinitionHeader,
     local: string,
     productHandle: ProductHandle | null,
     declarationIdentityHandle: IdentityHandle | null,
@@ -350,7 +350,7 @@ export class ResourceRecognitionKernelEmitter {
 
   private recordsForAliases(
     aliases: readonly string[],
-    resourceKind: NamedRecognizedResourceKind,
+    resourceKind: NamedResourceDefinitionKind,
     local: string,
     canonicalIdentityHandle: IdentityHandle,
     declarationIdentityHandle: IdentityHandle | null,
@@ -454,7 +454,7 @@ function materializationStateForObservation(
 }
 
 function primaryResourceNames(
-  definition: RecognizedNamedResourceDefinition,
+  definition: NamedResourceDefinitionHeader,
 ): readonly (string | null)[] {
   return definition.name == null ? [] : [definition.name];
 }

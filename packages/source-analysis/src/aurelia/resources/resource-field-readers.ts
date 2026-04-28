@@ -3,7 +3,7 @@ import {
   readCallCalleeText,
   readPropertyName,
   unwrapExpression,
-} from '../analysis/ts-ast-helpers.js';
+} from '../evaluation/ts-syntax.js';
 import {
   readStaticStringArrayValue,
   readStaticStringValue,
@@ -17,26 +17,26 @@ import {
   AttributePatternObservation,
 } from './resource-observation.js';
 import {
-  RecognizedResourceKind,
+  ResourceDefinitionKind,
   readResourceKindFromRuntimeTypeName,
 } from './resource-kind.js';
 
-export const RESOURCE_DECORATOR_KIND = new Map<string, RecognizedResourceKind>([
-  ['customElement', RecognizedResourceKind.CustomElement],
-  ['customAttribute', RecognizedResourceKind.CustomAttribute],
-  ['templateController', RecognizedResourceKind.TemplateController],
-  ['valueConverter', RecognizedResourceKind.ValueConverter],
-  ['bindingBehavior', RecognizedResourceKind.BindingBehavior],
-  ['bindingCommand', RecognizedResourceKind.BindingCommand],
-  ['attributePattern', RecognizedResourceKind.AttributePattern],
+export const RESOURCE_DECORATOR_KIND = new Map<string, ResourceDefinitionKind>([
+  ['customElement', ResourceDefinitionKind.CustomElement],
+  ['customAttribute', ResourceDefinitionKind.CustomAttribute],
+  ['templateController', ResourceDefinitionKind.TemplateController],
+  ['valueConverter', ResourceDefinitionKind.ValueConverter],
+  ['bindingBehavior', ResourceDefinitionKind.BindingBehavior],
+  ['bindingCommand', ResourceDefinitionKind.BindingCommand],
+  ['attributePattern', ResourceDefinitionKind.AttributePattern],
 ]);
 
-export const RESOURCE_DEFINE_RECEIVER_KIND = new Map<string, RecognizedResourceKind>([
-  ['CustomElement', RecognizedResourceKind.CustomElement],
-  ['CustomAttribute', RecognizedResourceKind.CustomAttribute],
-  ['ValueConverter', RecognizedResourceKind.ValueConverter],
-  ['BindingBehavior', RecognizedResourceKind.BindingBehavior],
-  ['BindingCommand', RecognizedResourceKind.BindingCommand],
+export const RESOURCE_DEFINE_RECEIVER_KIND = new Map<string, ResourceDefinitionKind>([
+  ['CustomElement', ResourceDefinitionKind.CustomElement],
+  ['CustomAttribute', ResourceDefinitionKind.CustomAttribute],
+  ['ValueConverter', ResourceDefinitionKind.ValueConverter],
+  ['BindingBehavior', ResourceDefinitionKind.BindingBehavior],
+  ['BindingCommand', ResourceDefinitionKind.BindingCommand],
 ]);
 
 export class ResourceFieldRead<TValue> {
@@ -90,10 +90,10 @@ export function readEvaluatedExpressionTarget(
 export function readResourceKindField(
   expression: ts.Expression,
   reader: StaticEvaluationExpressionReader,
-): ResourceFieldRead<RecognizedResourceKind> {
+): ResourceFieldRead<ResourceDefinitionKind> {
   const value = reader.readObjectProperty(expression, 'type');
   if (value.value == null) {
-    return new ResourceFieldRead<RecognizedResourceKind>(
+    return new ResourceFieldRead<ResourceDefinitionKind>(
       null,
       value.node,
       summaryWithEvaluationSeams('Resource definition did not expose a static type field.', value.openSeams),
@@ -101,7 +101,7 @@ export function readResourceKindField(
   }
   const raw = readStaticStringValue(value.value);
   if (raw == null) {
-    return new ResourceFieldRead<RecognizedResourceKind>(
+    return new ResourceFieldRead<ResourceDefinitionKind>(
       null,
       value.node,
       summaryWithEvaluationSeams('Resource definition type field did not close to a known string.', value.openSeams),
@@ -109,7 +109,7 @@ export function readResourceKindField(
   }
   const kind = readResourceKindFromRuntimeTypeName(raw);
   return kind == null
-    ? new ResourceFieldRead<RecognizedResourceKind>(
+    ? new ResourceFieldRead<ResourceDefinitionKind>(
       null,
       value.node,
       summaryWithEvaluationSeams(`Resource definition type '${raw}' is not recognized by this producer.`, value.openSeams),
@@ -256,7 +256,7 @@ export function readAttributePatternEntry(
 
 export function readDefineCallKind(
   call: ts.CallExpression,
-): RecognizedResourceKind | null {
+): ResourceDefinitionKind | null {
   const expression = unwrapExpression(call.expression);
   if (!ts.isPropertyAccessExpression(expression) || expression.name.text !== 'define') {
     return null;

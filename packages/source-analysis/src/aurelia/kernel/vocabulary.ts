@@ -129,11 +129,23 @@ export const KernelVocabulary = {
     ),
   },
   Resource: {
-    /** Product kind for a resource definition recognized from decorators, static metadata, define calls, or syntax factories. */
-    RecognizedDefinition: defineVocabulary(
+    /** Product kind for a resource definition header recognized from source carriers. */
+    DefinitionHeader: defineVocabulary(
       KernelVocabularyNamespace.Resource,
-      'recognized-definition',
-      'A resource definition product recognized from source carriers before scope admission or template use.',
+      'definition-header',
+      'A resource definition header recognized from source carriers before metadata convergence, scope admission, or template use.',
+    ),
+    /** Product kind for source-specific resource definition field contributions before convergence. */
+    DefinitionContribution: defineVocabulary(
+      KernelVocabularyNamespace.Resource,
+      'definition-contribution',
+      'Source-specific resource definition field contributions before metadata convergence folds them into a full definition.',
+    ),
+    /** Product kind for a fully converged resource metadata definition before DI admission or template compilation. */
+    Definition: defineVocabulary(
+      KernelVocabularyNamespace.Resource,
+      'definition',
+      'A fully converged resource metadata definition before DI admission, scope visibility, or template compilation.',
     ),
     /** Source syntax or convention declares an Aurelia resource. */
     Declares: defineVocabulary(KernelVocabularyNamespace.Resource, 'declares', 'Source syntax or convention declares an Aurelia resource.'),
