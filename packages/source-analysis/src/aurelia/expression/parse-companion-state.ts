@@ -1,4 +1,4 @@
-import type { SourceSpan } from '../source-address.js';
+import type { SourceSpan } from './source-span.js';
 import {
   ClosedSubtreeRef,
   ExpressionCompanionFrameKind,

@@ -1,5 +1,7 @@
 # Inquiry Substrate
 
+See [../README.md](../README.md) for the folder-wide rebuild map and MCP co-evolution rule.
+
 Inquiry is the answer algebra above the kernel. It turns selectors and loci into answers without creating a second
 semantic store.
 

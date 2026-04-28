@@ -1,18 +1,26 @@
 # Expression Parser
 
+See [../README.md](../README.md) for the folder-wide rebuild map and MCP co-evolution rule.
+See [INTEGRATION.md](./INTEGRATION.md) for temporary template/compiler handoff notes.
+
 This directory contains the clean-room Aurelia expression parser used by
 `packages/source-analysis`.
 
-The parser is intentionally more polished than the current compiler-side
-handoff around it. That is by design. The parser should become a stable,
-high-confidence substrate that the compiler and later tooling can route into,
-rather than a place where template-specific routing rules keep leaking in.
+The parser is intentionally more polished than the current template/compiler
+handoff around it. That is by design. The parser should remain a stable,
+high-confidence substrate that later template, compiler, and tooling layers can
+route into, rather than a place where template-specific routing rules leak in.
 
 This document is meant to be durable. Update it when the parser's public
 contract, ownership boundaries, or major internal decomposition change. Do not
 rewrite it just because one more consumer starts calling into the parser. It is
 also intentionally self-contained: historical implementations may have helped
 pressure the current design, but they are not the authority for this document.
+
+The parser is not exempt from the current clean-room rebuild. It is provisionally
+retained because its ownership boundaries are clearer than the removed
+template/compiler scaffold, but later template work may still rewrite it if the
+new authored-template model reveals better primitives.
 
 ## Public Contract
 
@@ -120,12 +128,12 @@ owns this?" rather than "which giant parser method do we patch?"
 - Attribute-pattern selection and normalized attribute syntax.
 - Runtime instruction spend or binding materialization.
 
-Those are compiler-side concerns above the parser.
+Those are template/compiler concerns above the parser.
 
 ## Integration Boundary
 
-The parser itself is meant to stay stable while compiler-side callers evolve.
-Current handoff status, compiler-side routing seams, and the next recommended
+The parser itself is meant to stay stable while template/compiler callers evolve.
+Current handoff status, template/compiler routing seams, and the next recommended
 integration slice live in [INTEGRATION.md](./INTEGRATION.md).
 
 Keep this README focused on parser contract and ownership. If a note is mainly
@@ -160,7 +168,7 @@ interpolation distinctions.
 - Public result shape:
   start in `parse-result-algebra.ts` and `parse-result-inspection.ts`.
 - Caller ownership and routing:
-  start in `parse-selection.ts` and then the compiler-side routing layer above
+  start in `parse-selection.ts` and then the template/compiler routing layer above
   the parser.
 - Span/provenance or parser-local retained state:
   start in `ast.ts`, `completed-input-parser-state.ts`, or
@@ -170,4 +178,4 @@ When in doubt, preserve the separation:
 
 - caller chooses ownership
 - parser publishes parsing truth
-- compiler spends authored-site provenance above that
+- template/compiler layers spend authored-site provenance above that

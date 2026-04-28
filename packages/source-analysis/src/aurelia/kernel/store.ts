@@ -2,7 +2,7 @@ import type { SemanticAddress } from './address.js';
 import type { SemanticClaim } from './claim.js';
 import type { SemanticIdentity } from './identity.js';
 import type { MaterializationRecord, MaterializedProduct } from './materialization.js';
-import type { KernelVocabularyKey } from './vocabulary.js';
+import type { ClaimPredicateKey } from './vocabulary.js';
 import type {
   AddressHandle,
   ClaimHandle,
@@ -92,7 +92,7 @@ export class KernelStore {
   private readonly provenanceByEvidence = new Map<EvidenceHandle, Set<ProvenanceHandle>>();
   private readonly claimsBySubject = new Map<AddressHandle | IdentityHandle | ProductHandle, Set<ClaimHandle>>();
   private readonly claimsByObject = new Map<AddressHandle | IdentityHandle | ProductHandle, Set<ClaimHandle>>();
-  private readonly claimsByPredicate = new Map<KernelVocabularyKey, Set<ClaimHandle>>();
+  private readonly claimsByPredicate = new Map<ClaimPredicateKey, Set<ClaimHandle>>();
 
   constructor(
     /** Human-readable key for the active analysis store; not a persistence authority. */
@@ -248,7 +248,7 @@ export class KernelStore {
     return readSet(this.claimsByObject, handle);
   }
 
-  readClaimsForPredicate(key: KernelVocabularyKey): readonly ClaimHandle[] {
+  readClaimsForPredicate(key: ClaimPredicateKey): readonly ClaimHandle[] {
     return readSet(this.claimsByPredicate, key);
   }
 

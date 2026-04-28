@@ -34,7 +34,7 @@ import {
 import {
   spanFromBounds,
   type SourceSpan,
-} from "../source-address.js";
+} from "./source-span.js";
 import type {
   AssignmentOperator,
   BinaryOperator,

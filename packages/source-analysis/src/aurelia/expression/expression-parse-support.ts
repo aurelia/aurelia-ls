@@ -4,7 +4,7 @@ import {
   sourceSpanFromBounds,
   type SourceFileRef,
   type SourceSpan,
-} from "../source-address.js";
+} from "./source-span.js";
 
 export interface ExpressionParseContext {
   readonly baseSpan?: SourceSpan;

@@ -8,7 +8,7 @@ import {
   spanFromBounds,
   type SourceSpan,
   type TextSpan,
-} from "../source-address.js";
+} from "./source-span.js";
 import {
   ClosedSubtreeRef,
   CompleteInputParseError,

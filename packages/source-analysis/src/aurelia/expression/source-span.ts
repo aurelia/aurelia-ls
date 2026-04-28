@@ -1,25 +1,16 @@
-export class ProgramRef {
-  readonly kind = 'program' as const;
-
-  constructor(
-    readonly id: string,
-    readonly repoRoot: string,
-    readonly tsconfigPath: string | null,
-  ) {}
-}
+/**
+ * Parser-local source span carriers.
+ *
+ * This file exists so the expression parser does not depend on the removed pre-kernel address scaffold. These spans
+ * are parser-local current-input coordinates, not kernel addresses. Callers that need durable
+ * navigation should translate parser spans into kernel `SourceSpanAddress` records at the producer boundary.
+ */
 
 export class SourceFileRef {
-  readonly kind = 'source-file' as const;
-
   constructor(
     readonly id: string,
-    readonly program: ProgramRef,
     readonly path: string,
   ) {}
-
-  get programId(): string {
-    return this.program.id;
-  }
 }
 
 // Keep span carriers method-free so they stay cheap, structurally friendly,
@@ -88,24 +79,6 @@ export function sourceSpanFromBounds(
   return start <= end
     ? new SourceSpan(start, end, file)
     : new SourceSpan(end, start, file);
-}
-
-export function offsetSpan(span: SourceSpan, delta: number): SourceSpan;
-export function offsetSpan(span: TextSpan, delta: number): TextSpan;
-
-export function offsetSpan<TSpan extends SpanLike>(
-  span: TSpan,
-  delta: number,
-): TSpan {
-  if (delta === 0) {
-    return span;
-  }
-
-  return recreateSpanLike(
-    span,
-    span.start + delta,
-    span.end + delta,
-  );
 }
 
 export function absoluteSpan(

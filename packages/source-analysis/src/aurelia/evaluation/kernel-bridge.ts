@@ -23,7 +23,7 @@ import {
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
-import { KernelVocabulary } from '../kernel/vocabulary.js';
+import { KernelVocabulary, type OpenSeamKindKey } from '../kernel/vocabulary.js';
 import type { StaticModuleEvaluationResult } from './evaluator.js';
 import {
   EvaluationOpenSeam,
@@ -99,7 +99,7 @@ export class EvaluationKernelBridge {
   }
 }
 
-function vocabularyForEvaluationSeam(seamKind: EvaluationOpenSeamKind) {
+function vocabularyForEvaluationSeam(seamKind: EvaluationOpenSeamKind): OpenSeamKindKey {
   switch (seamKind) {
     case EvaluationOpenSeamKind.UnresolvedIdentifier:
     case EvaluationOpenSeamKind.UnresolvedModule:

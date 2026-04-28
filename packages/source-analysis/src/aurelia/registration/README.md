@@ -1,5 +1,7 @@
 # Registration
 
+See [../README.md](../README.md) for the folder-wide rebuild map and MCP co-evolution rule.
+
 Registration is the admission layer for values passed to Aurelia's container registration machinery.
 
 It consumes evaluated source values, resource definitions, and configuration admission records, then emits normalized
@@ -13,9 +15,10 @@ resource lookup tables, resolver slots, and dependency availability.
 - Recognize `IRegistry` objects and `register(container, ...params)` methods without executing arbitrary code.
 - Recognize resource definition registration, static `$au` resource registration, resource aliases, and plain class
   self-registration.
-- Preserve key, payload, resolver strategy, admission source, and field provenance as kernel-backed facts or products.
-- Emit open seams for dynamic keys, dynamic payloads, object maps, spreads, callback bodies, and unsupported registry
-  shapes.
+- Preserve key, registered value, resolver strategy, admission source, and field provenance as kernel-backed facts or
+  products.
+- Emit open seams for dynamic keys, dynamic registered values, object maps, spreads, callback bodies, and unsupported
+  registry shapes.
 
 ## Non-Responsibilities
 
@@ -39,9 +42,25 @@ That keeps registration analyzable before DI world construction exists.
 
 ## Watchpoints
 
-- Registration vocabulary will pressure the kernel vocabulary split. Predicate keys, seam kinds, rule kinds, product
-  kinds, and resolver strategy names are different contracts.
+- Registration vocabulary uses explicit kernel slots for claim predicates, seam kinds, and product kinds. Resolver
+  strategies and admission kinds should stay registration model fields unless a real producer or query needs a stable
+  vocabulary key.
 - A registration product should distinguish source admission from runtime consequence. `container.register(Foo)` is
   an observation; the later resolver/resource table rows are DI world products.
-- Avoid generic payload escape hatches. If key or payload shape matters, model it as a typed registration field with
-  provenance or leave an open seam.
+- Avoid generic value escape hatches. If key or registered-value shape matters, model it as a typed registration field
+  with provenance or leave an open seam.
+
+## Current Shape
+
+`registration-observation.ts` is the AST-bearing layer. It records source carriers such as `Registration.*` calls,
+`container.register(...)`, static resource admission, object-map entries, and `IRegistry.register(...)` methods.
+
+`registration-reference.ts` is the source-level reference layer. It names target keys, receiving containers, and
+registered values without retaining TypeScript nodes in durable records.
+
+`registration-admission.ts` is the product model. A `RegistrationAdmission` is normalized intent before DI world
+construction. It can point at a modeled DI key identity, a registered value reference, a container/app boundary, and
+field provenance.
+
+DI key identities are split in the kernel by runtime key shape: class, interface symbol, string, symbol, resource,
+resolver, or unknown. Producers should use those records rather than hiding key semantics in descriptions.

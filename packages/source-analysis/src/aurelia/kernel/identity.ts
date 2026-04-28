@@ -1,5 +1,8 @@
 import type { AddressHandle, IdentityHandle } from './handles.js';
-import type { KernelVocabularyKey } from './vocabulary.js';
+import type {
+  BindingKindKey,
+  InstructionKindKey,
+} from './vocabulary.js';
 
 export const enum IdentityRecordKind {
   /** Names a TypeScript declaration without keeping a ts.Symbol alive. */
@@ -94,6 +97,29 @@ export const enum DiKeyIdentityKind {
   Resolver = 'resolver',
 }
 
+export const enum DiResolverKeyKind {
+  /** Use when a resolver expression was observed but not classified. */
+  Unknown = 'unknown',
+  /** Resolver helper that redirects to a lazily resolved key. */
+  Lazy = 'lazy',
+  /** Resolver helper that returns all registrations for a key. */
+  All = 'all',
+  /** Resolver helper that marks a key lookup as optional. */
+  Optional = 'optional',
+  /** Resolver helper that creates a factory function for a key. */
+  Factory = 'factory',
+  /** Resolver helper that restricts lookup to the current container. */
+  Own = 'own',
+  /** Resolver helper that reads from the hydration context. */
+  FromHydrationContext = 'from-hydration-context',
+  /** Resolver helper that creates a new instance for the request. */
+  NewInstanceOf = 'new-instance-of',
+  /** Resolver helper that creates a new instance for the current scope. */
+  NewInstanceForScope = 'new-instance-for-scope',
+  /** Resolver object supplied by user code or framework code outside the known helper set. */
+  Custom = 'custom',
+}
+
 export const enum TemplatePhase {
   /** Authored markup before compiler transformation. */
   Authored = 'authored',
@@ -170,26 +196,172 @@ export class AureliaAttributePatternIdentity {
   ) {}
 }
 
-/** Identity for a dependency-injection key after source expressions are classified. */
-export class DiKeyIdentity {
+/** DI key identity whose source expression stayed open. */
+export class UnknownDiKeyIdentity {
   /** String discriminator for serialized DI key identity records. */
   readonly kind = IdentityRecordKind.DiKeyIdentity;
   /** Identity-domain discriminator for cheap filtering. */
   readonly domain = IdentityDomain.DiKey;
+  /** Runtime-relevant key shape discriminator. */
+  readonly keyKind = DiKeyIdentityKind.Unknown;
 
   constructor(
     /** Store-local handle for this identity record. */
     readonly handle: IdentityHandle,
     /** Retention promise for this identity inside the active analysis store. */
     readonly stability: IdentityStability,
-    /** Runtime-relevant key shape, such as class, interface, string, or resolver. */
-    readonly keyKind: DiKeyIdentityKind,
-    /** Short description used in traces when no source name is enough. */
-    readonly description: string,
-    /** Optional declaration identity handle for keys backed by source declarations. */
-    readonly declarationHandle: IdentityHandle | null = null,
+    /** Address handle for the key expression that could not be classified. */
+    readonly keyAddressHandle: AddressHandle | null,
+    /** Short explanation of what prevented key classification. */
+    readonly summary: string,
   ) {}
 }
+
+/** DI key identity for a class constructor used directly as the key. */
+export class ClassDiKeyIdentity {
+  /** String discriminator for serialized DI key identity records. */
+  readonly kind = IdentityRecordKind.DiKeyIdentity;
+  /** Identity-domain discriminator for cheap filtering. */
+  readonly domain = IdentityDomain.DiKey;
+  /** Runtime-relevant key shape discriminator. */
+  readonly keyKind = DiKeyIdentityKind.Class;
+
+  constructor(
+    /** Store-local handle for this identity record. */
+    readonly handle: IdentityHandle,
+    /** Retention promise for this identity inside the active analysis store. */
+    readonly stability: IdentityStability,
+    /** Declaration identity for the class constructor used as the key. */
+    readonly declarationHandle: IdentityHandle,
+    /** Local class name used for app maps and traces. */
+    readonly localName: string | null,
+    /** Address handle for the expression or declaration that supplied the key. */
+    readonly keyAddressHandle: AddressHandle | null = null,
+  ) {}
+}
+
+/** DI key identity for an Aurelia interface symbol such as IContainer or IAppTask. */
+export class InterfaceDiKeyIdentity {
+  /** String discriminator for serialized DI key identity records. */
+  readonly kind = IdentityRecordKind.DiKeyIdentity;
+  /** Identity-domain discriminator for cheap filtering. */
+  readonly domain = IdentityDomain.DiKey;
+  /** Runtime-relevant key shape discriminator. */
+  readonly keyKind = DiKeyIdentityKind.Interface;
+
+  constructor(
+    /** Store-local handle for this identity record. */
+    readonly handle: IdentityHandle,
+    /** Retention promise for this identity inside the active analysis store. */
+    readonly stability: IdentityStability,
+    /** Runtime-facing interface name, such as IContainer. */
+    readonly interfaceName: string,
+    /** Declaration identity for the interface symbol value. */
+    readonly declarationHandle: IdentityHandle | null = null,
+    /** Address handle for the expression or declaration that supplied the key. */
+    readonly keyAddressHandle: AddressHandle | null = null,
+  ) {}
+}
+
+/** DI key identity for a string key. */
+export class StringDiKeyIdentity {
+  /** String discriminator for serialized DI key identity records. */
+  readonly kind = IdentityRecordKind.DiKeyIdentity;
+  /** Identity-domain discriminator for cheap filtering. */
+  readonly domain = IdentityDomain.DiKey;
+  /** Runtime-relevant key shape discriminator. */
+  readonly keyKind = DiKeyIdentityKind.String;
+
+  constructor(
+    /** Store-local handle for this identity record. */
+    readonly handle: IdentityHandle,
+    /** Retention promise for this identity inside the active analysis store. */
+    readonly stability: IdentityStability,
+    /** Exact string key used by registration or lookup. */
+    readonly value: string,
+    /** Address handle for the expression or literal that supplied the key. */
+    readonly keyAddressHandle: AddressHandle | null = null,
+  ) {}
+}
+
+/** DI key identity for a JavaScript symbol key. */
+export class SymbolDiKeyIdentity {
+  /** String discriminator for serialized DI key identity records. */
+  readonly kind = IdentityRecordKind.DiKeyIdentity;
+  /** Identity-domain discriminator for cheap filtering. */
+  readonly domain = IdentityDomain.DiKey;
+  /** Runtime-relevant key shape discriminator. */
+  readonly keyKind = DiKeyIdentityKind.Symbol;
+
+  constructor(
+    /** Store-local handle for this identity record. */
+    readonly handle: IdentityHandle,
+    /** Retention promise for this identity inside the active analysis store. */
+    readonly stability: IdentityStability,
+    /** Declaration identity for a named symbol, when the symbol is source-backed. */
+    readonly declarationHandle: IdentityHandle | null,
+    /** Symbol description or Symbol.for key when statically known. */
+    readonly symbolName: string | null,
+    /** Address handle for the expression or declaration that supplied the key. */
+    readonly keyAddressHandle: AddressHandle | null = null,
+  ) {}
+}
+
+/** DI key identity for an Aurelia resource key such as a custom element name. */
+export class ResourceDiKeyIdentity {
+  /** String discriminator for serialized DI key identity records. */
+  readonly kind = IdentityRecordKind.DiKeyIdentity;
+  /** Identity-domain discriminator for cheap filtering. */
+  readonly domain = IdentityDomain.DiKey;
+  /** Runtime-relevant key shape discriminator. */
+  readonly keyKind = DiKeyIdentityKind.Resource;
+
+  constructor(
+    /** Store-local handle for this identity record. */
+    readonly handle: IdentityHandle,
+    /** Retention promise for this identity inside the active analysis store. */
+    readonly stability: IdentityStability,
+    /** Resource identity that determines the semantic resource key. */
+    readonly resourceHandle: IdentityHandle,
+    /** Runtime resource key string when it has been materialized. */
+    readonly resourceKey: string | null,
+    /** Address handle for the expression or definition that supplied the key. */
+    readonly keyAddressHandle: AddressHandle | null = null,
+  ) {}
+}
+
+/** DI key identity for a resolver object or resolver helper expression. */
+export class ResolverDiKeyIdentity {
+  /** String discriminator for serialized DI key identity records. */
+  readonly kind = IdentityRecordKind.DiKeyIdentity;
+  /** Identity-domain discriminator for cheap filtering. */
+  readonly domain = IdentityDomain.DiKey;
+  /** Runtime-relevant key shape discriminator. */
+  readonly keyKind = DiKeyIdentityKind.Resolver;
+
+  constructor(
+    /** Store-local handle for this identity record. */
+    readonly handle: IdentityHandle,
+    /** Retention promise for this identity inside the active analysis store. */
+    readonly stability: IdentityStability,
+    /** Known resolver helper family, or custom/open when not classified. */
+    readonly resolverKind: DiResolverKeyKind,
+    /** Inner DI key identity read by redirecting resolver helpers, when present. */
+    readonly innerKeyHandle: IdentityHandle | null,
+    /** Address handle for the resolver expression that supplied the key. */
+    readonly keyAddressHandle: AddressHandle | null = null,
+  ) {}
+}
+
+/** Concrete DI key identity variants understood by the kernel. */
+export type DiKeyIdentity =
+  | UnknownDiKeyIdentity
+  | ClassDiKeyIdentity
+  | InterfaceDiKeyIdentity
+  | StringDiKeyIdentity
+  | SymbolDiKeyIdentity
+  | ResourceDiKeyIdentity
+  | ResolverDiKeyIdentity;
 
 /** Identity for a registration of one key into a container or configuration pipeline. */
 export class RegistrationIdentity {
@@ -203,8 +375,10 @@ export class RegistrationIdentity {
     readonly handle: IdentityHandle,
     /** Retention promise for this identity inside the active analysis store. */
     readonly stability: IdentityStability,
-    /** DI key, resource, resolver, or service identity being registered. */
-    readonly registeredHandle: IdentityHandle,
+    /** DI key identity offered by this registration admission. */
+    readonly keyHandle: IdentityHandle,
+    /** Source address handle for the admission expression or declaration. */
+    readonly sourceAddressHandle: AddressHandle | null = null,
     /** Optional container/configuration identity that receives the registration. */
     readonly containerHandle: IdentityHandle | null = null,
   ) {}
@@ -267,7 +441,7 @@ export class BindingIdentity {
     /** Template node, resource, or instruction identity that owns the binding. */
     readonly ownerHandle: IdentityHandle,
     /** Controlled vocabulary key describing the binding kind. */
-    readonly bindingKindKey: KernelVocabularyKey,
+    readonly bindingKindKey: BindingKindKey,
   ) {}
 }
 
@@ -286,7 +460,7 @@ export class InstructionIdentity {
     /** Template, node, binding, or generated identity that owns the instruction. */
     readonly ownerHandle: IdentityHandle,
     /** Controlled vocabulary key describing the instruction kind. */
-    readonly instructionKindKey: KernelVocabularyKey,
+    readonly instructionKindKey: InstructionKindKey,
   ) {}
 }
 

@@ -5,7 +5,7 @@ import {
   normalizeSpan,
   sourceSpanFromBounds,
   type SourceSpan,
-} from "../source-address.js";
+} from "./source-span.js";
 import type {
   ExpressionType,
 } from "./ast.js";

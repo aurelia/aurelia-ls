@@ -5,7 +5,7 @@ import type {
   ProductHandle,
   ProvenanceHandle,
 } from './handles.js';
-import type { KernelVocabularyKey } from './vocabulary.js';
+import type { ClaimPredicateKey } from './vocabulary.js';
 
 export const enum ClaimRecordKind {
   /** A single typed assertion about the app or framework semantics. */
@@ -28,7 +28,7 @@ export class SemanticClaim {
     /** Subject being described by the claim. */
     readonly subjectHandle: ClaimEndpointHandle,
     /** Controlled vocabulary key describing the relationship being asserted. */
-    readonly predicateKey: KernelVocabularyKey,
+    readonly predicateKey: ClaimPredicateKey,
     /** Target endpoint of the assertion. */
     readonly objectHandle: ClaimEndpointHandle,
     /** Provenance handle explaining why this claim exists. */

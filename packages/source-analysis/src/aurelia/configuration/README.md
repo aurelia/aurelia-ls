@@ -1,5 +1,7 @@
 # Configuration
 
+See [../README.md](../README.md) for the folder-wide rebuild map and MCP co-evolution rule.
+
 Configuration is the app-admission layer between boot/evaluation and registration.
 
 It answers which evaluated modules, exports, calls, and plugin surfaces participate in constructing an Aurelia app

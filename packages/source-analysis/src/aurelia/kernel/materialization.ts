@@ -9,7 +9,7 @@ import type {
   ProvenanceHandle,
 } from './handles.js';
 import type { DerivationPhase } from './derivation.js';
-import type { KernelVocabularyKey } from './vocabulary.js';
+import type { ProductKindKey } from './vocabulary.js';
 
 export const enum MaterializationRecordKind {
   /** One concrete product produced by a materialization phase. */
@@ -43,7 +43,7 @@ export class MaterializedProduct {
     /** Store-local handle for this materialized product. */
     readonly handle: ProductHandle,
     /** Controlled vocabulary key describing the product kind. */
-    readonly productKindKey: KernelVocabularyKey,
+    readonly productKindKey: ProductKindKey,
     /** Optional semantic identity handle for the product when it can be referred to later. */
     readonly identityHandle: IdentityHandle | null,
     /** Optional navigation/explanation address handle for the product. */

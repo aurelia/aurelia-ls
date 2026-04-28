@@ -43,7 +43,7 @@ import {
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
-import { KernelVocabulary, type KernelVocabularyKey } from '../kernel/vocabulary.js';
+import { KernelVocabulary, type OpenSeamKindKey } from '../kernel/vocabulary.js';
 import type { ResourceRecognitionContext } from './resource-recognition-context.js';
 import {
   AttributePatternDefinitionHeader,
@@ -487,7 +487,7 @@ function observationLocalKey(
 
 function vocabularyForResourceOpen(
   openKind: ResourceOpenKind,
-): KernelVocabularyKey {
+): OpenSeamKindKey {
   switch (openKind) {
     case ResourceOpenKind.Kind:
       return KernelVocabulary.Resource.OpenKindExpression.key;

@@ -1,7 +1,7 @@
 # Expression Parser Integration
 
-This note tracks the intended handoff from compiler-side authored values into
-the expression parser.
+This note tracks the intended handoff from template/compiler authored values
+into the expression parser.
 
 Unlike [README.md](./README.md), this file is allowed to change as caller-side
 integration closes. Keep it short and operational:
@@ -22,7 +22,7 @@ The parser does **not** own:
 - attribute-pattern selection and normalized attribute syntax
 - runtime instruction spend or binding materialization
 
-Those are compiler-side responsibilities above the parser.
+Those are template/compiler responsibilities above the parser.
 
 ## Current Handoff State
 
@@ -33,9 +33,9 @@ The parser now has the surfaces it needs:
 - parser-owned result algebra in `parse-result-algebra.ts`
 - parser-owned inspection helpers in `parse-result-inspection.ts`
 
-The previous compiler-side integration layer has been removed. The next
-handoff should be rebuilt on top of the new template/compiler substrate rather
-than routed through the deleted compiler shims.
+The previous integration layer has been removed. The next handoff should be
+rebuilt on top of the new template/compiler substrate rather than routed
+through deleted integration shims.
 
 ## Next Honest Integration Slice
 
@@ -66,18 +66,19 @@ Examples:
 
 - text interpolation and attribute interpolation both route to the parser's
   `Interpolation` family
-- but they should remain distinct compiler-side carriers because they lower
+- but they should remain distinct template/compiler carriers because they lower
   into different compiler/runtime products
 
 - multi-binding segment values may individually route to `IsProperty`,
   `Interpolation`, or a command-owned value path
-- but semicolon splitting and segment provenance still belong to the compiler,
-  not to the parser
+- but semicolon splitting and segment provenance still belong to the
+  template/compiler layer, not to the parser
 
 ## Current Concrete Seams
 
-The concrete compiler-side files do not exist yet. Revisit this note when the
-new template parser, authored template model, and lowering substrate are added.
+The concrete template/compiler files do not exist yet. Revisit this note when
+the new template parser, authored template model, and lowering substrate are
+added.
 
 If a future integration change starts pushing template-specific routing into
 `packages/source-analysis/src/aurelia/expression/`, pause and re-check whether

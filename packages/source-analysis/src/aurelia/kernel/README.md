@@ -1,12 +1,10 @@
 # Aurelia Analysis Kernel
 
+See [../README.md](../README.md) for the folder-wide rebuild map and MCP co-evolution rule.
+
 The analysis kernel is the low-level machine-readable semantic substrate for Aurelia applications. Its primary
 shape is a long-lived in-memory analysis store that serves IDE features, MCP queries, agents, diagnostics,
 future compilers, and analysis tools from the same normalized records.
-
-The first pressure comes from MCP/AI and IDE features: template autocomplete, go-to-definition from markup,
-future rename support, architecture maps, DI tracing, resource availability, and explanations for why a fact
-exists.
 
 The kernel is intentionally small and record-oriented. It captures observations, semantic claims, derivation
 breadcrumbs, materialized products, and unresolved seams. Higher-level systems can then build IDE, MCP, AI,
@@ -14,25 +12,17 @@ diagnostic, and AOT projections from those records without rediscovering the sam
 
 ## Product Priorities
 
-The first product surface is MCP/AI plus IDE substrate. AOT, snapshots, and refactoring engines matter later, but
-the early kernel must not make them native constraints.
-
-The first valuable experiences are:
-
-- Template autocomplete with deep awareness of scope.
-- Go-to-definition from markup into resources, bindables and DI-backed concepts.
-- AI-readable app maps that explain how an Aurelia app is wired together.
-- DI and configuration tracing that can answer "what is available here, why, and through which path?"
+Folder-level product priorities live in [../README.md](../README.md). The kernel-local consequence is that records
+must preserve enough source, identity, provenance, uncertainty, and navigation shape for many consumers to build
+their own projections without rewriting the semantic substrate.
 
 False positives are more dangerous than false negatives. Candidates, ambiguity, parser recovery, generated
 facts, convention-derived facts, and unresolved seams must remain visible in the data model instead of being
 collapsed into ordinary resolved facts.
 
-Correctness and explanation quality matter before latency. The model should support large applications and
-long-lived analysis processes, but it can spend more CPU while the architecture is still settling.
-
-TypeScript analysis may initially bias toward completed programs. Template and expression analysis need better
-partial-input behavior because autocomplete happens while users are actively typing.
+Correctness and explanation quality matter before latency. TypeScript analysis may initially bias toward completed
+programs. Template and expression analysis need better partial-input behavior because autocomplete happens while
+users are actively typing.
 
 ## Design Rules
 
@@ -46,19 +36,18 @@ semantic truth. Real semantic identity lives in domain fields such as resource k
 declaration coordinates, template owner/phase, and provenance.
 
 Controlled vocabulary uses stable keys, not store handles. Claim predicates, rule kinds, derivation edge roles,
-seam kinds, binding kinds, instruction kinds, and product kinds should use centrally defined vocabulary keys. New
-entries should be added as implementation pressure proves they are needed, with namespace, stable code, and
-grounded usage comment.
+seam kinds, binding kinds, instruction kinds, and product kinds use centrally defined vocabulary keys with an
+explicit usage slot. New entries should be added as implementation pressure proves they are needed, with
+namespace, stable code, slot, and grounded usage comment.
 
 Vocabulary is another fast-evolving pressure surface. It is intentionally small while semantics are still being
 implemented, but it must not become a dumping ground for near-duplicate relationship names or consumer-specific
-answer states. Add vocabulary when a real producer or query needs a stable classifier; split or type vocabulary
-slots when misuse becomes plausible enough to affect correctness.
+answer states. Add vocabulary when a real producer or query needs a stable classifier, and keep usage-slot
+meaning product-owned so MCP and other tools do not rediscover it from constructor positions or naming patterns.
 
-The current unified vocabulary key type is provisional. It intentionally keeps early motion cheap, but it already
-mixes different usage slots: claim predicates, seam kinds, derivation rule kinds, edge roles, product kinds,
-binding kinds, and instruction kinds. These are not the same semantic contract. Split the key type by usage slot
-once producer pressure reveals the taxonomy clearly enough to avoid guesswork.
+The key space is still deliberately small, but the TypeScript contracts now distinguish claim predicates, seam
+kinds, product kinds, derivation rule kinds, derivation edge roles, binding kinds, and instruction kinds. These
+are not interchangeable even when they share the same underlying stable key format.
 
 Do not hide uncertainty behind `null`, empty arrays, or best-effort guesses. Use explicit provenance modes,
 derivation states, materialization states, and open seams. Confidence, ranking, and user-specific belief policy
@@ -92,7 +81,16 @@ indexes. Batches are producer record-emission units, not durable transactions, v
 boundaries.
 
 `vocabulary.ts` defines the controlled vocabulary mechanism used by claims, rules, edge roles, seams, binding
-kinds, instruction kinds, and product kinds.
+kinds, instruction kinds, and product kinds. Each vocabulary definition carries its usage slot.
+
+`substrate-contract.ts` defines MCP-aware, product-owned mapping aids for source-analysis substrate lenses. It is
+not runtime semantics, kernel truth, public API, or persistence schema. Use it only for stable source-inventory
+facts that are not naturally visible through the main model types, such as preservation channels, model-surface
+labels, and helper classes that should not be treated as semantic products.
+
+The folder-wide MCP co-evolution rule lives in [../README.md](../README.md). The kernel-local rule is narrower:
+`substrate-contract.ts` may expose source-inventory aids for MCP lenses, but domain semantics must stay in the real
+model and record types.
 
 `address.ts` describes where something can be observed:
 
@@ -105,8 +103,8 @@ kinds, instruction kinds, and product kinds.
 
 - TypeScript declarations without retaining checker-owned symbols.
 - Aurelia resources.
-- DI keys.
-- Registrations.
+- DI keys, split by runtime key shape rather than carried by display descriptions.
+- Registration admission identities that name a key plus the admission/strategy family before container-state spending.
 - Templates, template nodes, bindings, instructions, and generated identities.
 
 `evidence.ts` describes direct witnesses:
@@ -143,7 +141,7 @@ kinds, instruction kinds, and product kinds.
 
 - Products such as resource definitions, DI associations, binding records, or instructions.
 - Product handles, claim handles, derivation handles, and open seam handles produced alongside those products.
-- Completeness/outcome state only; generated or convention-derived origin belongs in provenance/evidence.
+- Completeness/outcome state only; generated or convention-derived origin belongs in provenance and evidence records.
 
 `note.ts` contains small non-semantic notes for diagnostics and explanation hints.
 

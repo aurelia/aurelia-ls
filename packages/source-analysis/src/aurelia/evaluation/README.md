@@ -1,5 +1,7 @@
 # Static Evaluation Substrate
 
+See [../README.md](../README.md) for the folder-wide rebuild map and MCP co-evolution rule.
+
 Static evaluation is the ECMAScript-shaped substrate between boot admission and Aurelia-specific producers.
 It builds module records, imports/exports, environment records, evaluator-local values, completions, and explicit
 open seams without executing user code.
@@ -44,8 +46,7 @@ configuration vocabulary.
 - Import bindings start as evaluator-local unknown values. They should become seams only when a producer or
   expression actually depends on the imported value and module linking cannot close it.
 - `EvaluationKernelBridge` currently maps evaluator seam kinds onto general `KernelVocabulary.Evaluation` keys.
-  This is a provisional bridge over the kernel's unified vocabulary key type. Claim predicates, seam kinds, rule
-  kinds, edge roles, and product kinds are different usage slots and must split once producer pressure reveals a
-  grounded taxonomy.
+  Keep this bridge narrow: it translates evaluator-local seams to product-owned seam vocabulary, but it must not
+  learn Aurelia resource, configuration, registration, template, or DI semantics.
 - Evaluator guardrails exist only to prevent runaway interpretation of arbitrary source. They are not query
   pagination, ranking, or consumer policy.

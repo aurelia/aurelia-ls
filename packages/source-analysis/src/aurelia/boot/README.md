@@ -1,5 +1,7 @@
 # Boot Substrate
 
+See [../README.md](../README.md) for the folder-wide rebuild map and MCP co-evolution rule.
+
 Boot is the clean-room admission layer above the kernel. It creates workspace and project frames, admits source
 files, and records why those inputs are present in the hot kernel store.
 

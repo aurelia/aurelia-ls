@@ -1,5 +1,7 @@
 # Resource Recognition
 
+See [../README.md](../README.md) for the folder-wide rebuild map and MCP co-evolution rule.
+
 This folder is the first fresh Aurelia-semantic producer layer over boot, kernel, inquiry, and static evaluation.
 
 It recognizes source carriers that the Aurelia runtime turns into resources:
@@ -51,8 +53,9 @@ Watchpoints:
 - Contribution envelopes are provisional. They intentionally keep convergence policy out of recognition, but should
   be tightened once real convergence producers reveal whether fields want per-origin variants, per-field patches, or
   another shape.
-- Resource vocabulary currently carries both claim predicates and seam kinds. Keep new entries small until real
-  producers make a split unavoidable.
+- Resource vocabulary uses explicit kernel slots for claim predicates, seam kinds, and product kinds. Keep new
+  entries small and source-grounded; if a name starts representing answer policy, ranking, or consumer usefulness, it
+  belongs in inquiry rather than resource vocabulary.
 - Product-level provenance is in place and definition models now expose field-level provenance slots. Convergence
   producers must populate those slots when a field's source matters for rename, refactor, explanation, or ambiguity
   handling instead of flattening everything to the carrier observation.

@@ -9,7 +9,11 @@ import type {
   OpenSeamHandle,
 } from './handles.js';
 import type { KernelNote } from './note.js';
-import type { KernelVocabularyKey } from './vocabulary.js';
+import type {
+  DerivationEdgeRoleKey,
+  DerivationRuleKindKey,
+  OpenSeamKindKey,
+} from './vocabulary.js';
 
 /**
  * Derivation is a high-leverage unstable surface: it records rule applications, not consumer answers. Keep
@@ -82,7 +86,7 @@ export class AddressDerivationEdge {
     /** Address handle carried by this edge. */
     readonly addressHandle: AddressHandle,
     /** Optional controlled role key, such as decorator input or lowered-instruction output. */
-    readonly roleKey: KernelVocabularyKey | null = null,
+    readonly roleKey: DerivationEdgeRoleKey | null = null,
   ) {}
 }
 
@@ -99,7 +103,7 @@ export class IdentityDerivationEdge {
     /** Identity handle carried by this edge. */
     readonly identityHandle: IdentityHandle,
     /** Optional controlled role key, such as resource identity, provider, or lookup key. */
-    readonly roleKey: KernelVocabularyKey | null = null,
+    readonly roleKey: DerivationEdgeRoleKey | null = null,
   ) {}
 }
 
@@ -116,7 +120,7 @@ export class ClaimDerivationEdge {
     /** Claim handle carried by this edge. */
     readonly claimHandle: ClaimHandle,
     /** Optional controlled role key, such as input claim or output claim. */
-    readonly roleKey: KernelVocabularyKey | null = null,
+    readonly roleKey: DerivationEdgeRoleKey | null = null,
   ) {}
 }
 
@@ -133,7 +137,7 @@ export class EvidenceDerivationEdge {
     /** Evidence handle carried by this edge. */
     readonly evidenceHandle: EvidenceHandle,
     /** Optional controlled role key, such as direct witness or recovery witness. */
-    readonly roleKey: KernelVocabularyKey | null = null,
+    readonly roleKey: DerivationEdgeRoleKey | null = null,
   ) {}
 }
 
@@ -164,7 +168,7 @@ export class OpenSeam {
     /** Store-local handle for this open seam. */
     readonly handle: OpenSeamHandle,
     /** Controlled vocabulary key describing the seam category. */
-    readonly seamKindKey: KernelVocabularyKey,
+    readonly seamKindKey: OpenSeamKindKey,
     /** Severity that determines whether the seam blocks outputs or is explanatory only. */
     readonly severity: OpenSeamSeverity,
     /** Short explanation of what remained unresolved. */
@@ -187,7 +191,7 @@ export class DerivationRule {
     /** Store-local handle for this derivation rule. */
     readonly handle: DerivationRuleHandle,
     /** Controlled vocabulary key describing the rule family. */
-    readonly ruleKindKey: KernelVocabularyKey,
+    readonly ruleKindKey: DerivationRuleKindKey,
     /** Analysis phase where this rule belongs. */
     readonly phase: DerivationPhase,
     /** Short explanation of what this rule recognizes or produces. */
