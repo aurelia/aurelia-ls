@@ -28,3 +28,12 @@ cursor, range, or known kernel handle and needs a truthful answer plus the next 
 Inquiry is where consumer-specific meaning belongs. A derivation can say a producer was partial or blocked; an
 inquiry answer decides whether that means an autocomplete candidate is useful, a rename is safe, an MCP response
 needs a continuation, or an AOT path is unsupported.
+
+The first serious pressure will come from integrating HTML parsing, attribute classification, expression parsing, and
+instruction lowering. Those flows need to serve batch-like compiler questions and live IDE questions from the same
+semantic substrate. Cursor and range loci, recovery frontiers, candidate sets, explanation paths, and pagination should
+be modeled here or in answer envelopes, not smuggled into kernel claims or compiler products.
+
+This layer is also where false-positive policy belongs. Producers should preserve what they observed, what they could
+derive, and which seams remained open. Inquiry answers decide how much to show, how to rank it, which continuation is
+useful next, and whether a consumer can act on it.

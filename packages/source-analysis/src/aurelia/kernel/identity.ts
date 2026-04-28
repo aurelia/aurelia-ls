@@ -15,6 +15,8 @@ export const enum IdentityRecordKind {
   DiKeyIdentity = 'di-key-identity',
   /** Names an abstract Aurelia container in the analyzed app world. */
   ContainerIdentity = 'container-identity',
+  /** Names a DI product produced while spending configuration or registration into a container world. */
+  DiProductIdentity = 'di-product-identity',
   /** Names a registration admission before container spending. */
   RegistrationIdentity = 'registration-identity',
   /** Names an app/configuration flow product before DI world construction. */
@@ -57,6 +59,8 @@ export const enum IdentityDomain {
   DiKey = 'di-key',
   /** An abstract Aurelia container participating in DI world construction. */
   Container = 'container',
+  /** A DI product produced while spending configuration or registration into a container world. */
+  DiProduct = 'di-product',
   /** A registration admission before container spending. */
   Registration = 'registration',
   /** An app/configuration flow product before DI world construction. */
@@ -143,6 +147,27 @@ export const enum ContainerIdentityKind {
   Synthetic = 'synthetic',
 }
 
+export const enum DiProductIdentityKind {
+  /** Use when DI product identity shape is not known yet. */
+  Unknown = 'unknown',
+  /** A runtime-shaped resolver value produced from a registration admission. */
+  Resolver = 'resolver',
+  /** A runtime-shaped IRegistry value before its body is interpreted. */
+  Registry = 'registry',
+  /** Runtime-shaped ParameterizedRegistry produced by Registration.defer. */
+  ParameterizedRegistry = 'parameterized-registry',
+  /** An operation that spends a registration admission against a container. */
+  ContainerRegistration = 'container-registration',
+  /** A row in a container's resolver map. */
+  ResolverSlot = 'resolver-slot',
+  /** The built-in self resolver row for IContainer. */
+  SelfResolverSlot = 'self-resolver-slot',
+  /** A row in a container's resource lookup table. */
+  ResourceSlot = 'resource-slot',
+  /** A row in a container tree's factory map. */
+  FactorySlot = 'factory-slot',
+}
+
 export const enum ConfigurationIdentityKind {
   /** Use when configuration identity shape is not known yet. */
   Unknown = 'unknown',
@@ -183,10 +208,12 @@ export const enum CompilerIdentityKind {
   CompiledAttributePattern = 'compiled-attribute-pattern',
   /** Catalog of framework-provided syntax resources admitted by configuration. */
   BuiltInSyntaxCatalog = 'built-in-syntax-catalog',
-  /** Framework-provided attribute-pattern handler model. */
-  BuiltInAttributePattern = 'built-in-attribute-pattern',
-  /** Framework-provided binding-command handler model. */
-  BuiltInBindingCommand = 'built-in-binding-command',
+  /** Selection of built-in syntax catalogs admitted by one known framework registration. */
+  ConfiguredSyntaxCatalogSelection = 'configured-syntax-catalog-selection',
+  /** Catalog of framework-provided resource definition headers admitted by configuration. */
+  BuiltInResourceCatalog = 'built-in-resource-catalog',
+  /** Selection of built-in resource catalogs admitted by one known framework registration. */
+  ConfiguredResourceCatalogSelection = 'configured-resource-catalog-selection',
   /** Runtime AttrSyntax product after attribute-pattern interpretation. */
   AttributeSyntax = 'attribute-syntax',
   /** Attribute classification product after resource/bindable lookup. */
@@ -299,6 +326,29 @@ export class ContainerIdentity {
     readonly sourceAddressHandle: AddressHandle | null = null,
     /** Local source name for traces when the container is source-backed. */
     readonly localName: string | null = null,
+  ) {}
+}
+
+/** Identity for a DI product produced while constructing an abstract container world. */
+export class DiProductIdentity {
+  /** String discriminator for serialized DI product identity records. */
+  readonly kind = IdentityRecordKind.DiProductIdentity;
+  /** Identity-domain discriminator for cheap filtering. */
+  readonly domain = IdentityDomain.DiProduct;
+
+  constructor(
+    /** Store-local handle for this identity record. */
+    readonly handle: IdentityHandle,
+    /** Retention promise for this identity inside the active analysis store. */
+    readonly stability: IdentityStability,
+    /** DI product lane represented by this identity. */
+    readonly productKind: DiProductIdentityKind,
+    /** Container identity that owns this product, when applicable. */
+    readonly containerHandle: IdentityHandle | null,
+    /** Source or admission identity that caused this product to exist. */
+    readonly ownerHandle: IdentityHandle | null,
+    /** Source address for the operation or product. */
+    readonly sourceAddressHandle: AddressHandle | null = null,
   ) {}
 }
 
@@ -481,8 +531,8 @@ export class RegistrationIdentity {
     readonly handle: IdentityHandle,
     /** Retention promise for this identity inside the active analysis store. */
     readonly stability: IdentityStability,
-    /** DI key identity offered by this registration admission. */
-    readonly keyHandle: IdentityHandle,
+    /** DI key identity offered by this registration admission, when this admission shape has one. */
+    readonly keyHandle: IdentityHandle | null,
     /** Source address handle for the admission expression or declaration. */
     readonly sourceAddressHandle: AddressHandle | null = null,
   ) {}
@@ -640,6 +690,7 @@ export type SemanticIdentity =
   | AureliaAttributePatternIdentity
   | DiKeyIdentity
   | ContainerIdentity
+  | DiProductIdentity
   | RegistrationIdentity
   | ConfigurationIdentity
   | CompilerIdentity

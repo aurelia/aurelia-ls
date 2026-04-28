@@ -60,8 +60,6 @@ export const enum KernelVocabularyRecordKind {
 }
 
 export const enum KernelVocabularyNamespace {
-  /** Vocabulary about generic claim relationships while domain language is still forming. */
-  Claim = 'claim',
   /** Vocabulary about TypeScript/module evaluation. */
   Evaluation = 'evaluation',
   /** Vocabulary about Aurelia resource discovery and availability. */
@@ -137,15 +135,6 @@ function defineVocabulary<TSlot extends KernelVocabularySlot>(
 
 /** Small seed vocabulary; new entries should be added deliberately as semantics are implemented. */
 export const KernelVocabulary = {
-  Claim: {
-    /** Generic relationship for claims whose domain predicate has not earned a narrower vocabulary entry yet. */
-    RelatesTo: defineVocabulary(
-      KernelVocabularyNamespace.Claim,
-      'relates-to',
-      KernelVocabularySlot.ClaimPredicate,
-      'A conservative generic relation used until implementation pressure justifies a narrower predicate.',
-    ),
-  },
   Evaluation: {
     /** A module or source unit imports another module, binding, or symbol. */
     Imports: defineVocabulary(
@@ -161,33 +150,89 @@ export const KernelVocabulary = {
       KernelVocabularySlot.ClaimPredicate,
       'A module or source unit exports a declaration, value, or resource carrier.',
     ),
-    /** Static evaluation reached syntax that has a named evaluator seam rather than a guessed value. */
-    UnsupportedSyntax: defineVocabulary(
+    /** Evaluation stopped because recursion protection prevented deeper interpretation. */
+    DepthLimit: defineVocabulary(
       KernelVocabularyNamespace.Evaluation,
-      'unsupported-syntax',
+      'depth-limit',
       KernelVocabularySlot.OpenSeamKind,
-      'Static evaluation reached syntax that is intentionally not evaluated by the current substrate.',
+      'Static evaluation stopped because recursion protection prevented deeper interpretation.',
     ),
-    /** Static evaluation could not resolve a binding, module, or reference target. */
-    UnresolvedReference: defineVocabulary(
+    /** Evaluation stopped because statement protection prevented more interpretation. */
+    StatementLimit: defineVocabulary(
       KernelVocabularyNamespace.Evaluation,
-      'unresolved-reference',
+      'statement-limit',
       KernelVocabularySlot.OpenSeamKind,
-      'Static evaluation could not resolve a binding, module, or reference target.',
+      'Static evaluation stopped because statement protection prevented more interpretation.',
     ),
-    /** Static evaluation encountered a call, branch, loop, mutation, or import edge that should not be guessed. */
-    DynamicEvaluation: defineVocabulary(
+    /** The evaluator reached a statement kind with runtime effects it does not model. */
+    UnsupportedStatement: defineVocabulary(
       KernelVocabularyNamespace.Evaluation,
-      'dynamic-evaluation',
+      'unsupported-statement',
       KernelVocabularySlot.OpenSeamKind,
-      'Static evaluation encountered dynamic behavior that must remain visible to producers and queries.',
+      'Static evaluation reached a statement kind with runtime effects it does not model.',
     ),
-    /** Static evaluation stopped because evaluator recursion or statement protection fired. */
-    EvaluationGuardrail: defineVocabulary(
+    /** The evaluator reached an expression kind with runtime effects it does not model. */
+    UnsupportedExpression: defineVocabulary(
       KernelVocabularyNamespace.Evaluation,
-      'evaluation-guardrail',
+      'unsupported-expression',
       KernelVocabularySlot.OpenSeamKind,
-      'Static evaluation stopped because a local evaluator guardrail prevented runaway interpretation.',
+      'Static evaluation reached an expression kind with runtime effects it does not model.',
+    ),
+    /** A binding pattern could not be represented in the environment record. */
+    UnsupportedBindingPattern: defineVocabulary(
+      KernelVocabularyNamespace.Evaluation,
+      'unsupported-binding-pattern',
+      KernelVocabularySlot.OpenSeamKind,
+      'Static evaluation reached a binding pattern that is not represented in environment records yet.',
+    ),
+    /** A referenced identifier was not present in the current environment record. */
+    UnresolvedIdentifier: defineVocabulary(
+      KernelVocabularyNamespace.Evaluation,
+      'unresolved-identifier',
+      KernelVocabularySlot.OpenSeamKind,
+      'Static evaluation could not resolve an identifier in the current environment record.',
+    ),
+    /** A module specifier could not be resolved to a source module. */
+    UnresolvedModule: defineVocabulary(
+      KernelVocabularyNamespace.Evaluation,
+      'unresolved-module',
+      KernelVocabularySlot.OpenSeamKind,
+      'Static evaluation could not resolve a module specifier to a source module.',
+    ),
+    /** A call expression was not a known evaluator intrinsic or simple local function. */
+    DynamicCall: defineVocabulary(
+      KernelVocabularyNamespace.Evaluation,
+      'dynamic-call',
+      KernelVocabularySlot.OpenSeamKind,
+      'Static evaluation reached a call expression that should not be guessed.',
+    ),
+    /** A branch condition could not be reduced without guessing which path executes. */
+    DynamicBranch: defineVocabulary(
+      KernelVocabularyNamespace.Evaluation,
+      'dynamic-branch',
+      KernelVocabularySlot.OpenSeamKind,
+      'Static evaluation reached a branch condition that could not be reduced without guessing.',
+    ),
+    /** A loop could not be reduced to a known finite set of iterations. */
+    DynamicLoop: defineVocabulary(
+      KernelVocabularyNamespace.Evaluation,
+      'dynamic-loop',
+      KernelVocabularySlot.OpenSeamKind,
+      'Static evaluation reached a loop that could not be reduced to a known finite iteration set.',
+    ),
+    /** A mutation could not be represented without executing user behavior. */
+    DynamicMutation: defineVocabulary(
+      KernelVocabularyNamespace.Evaluation,
+      'dynamic-mutation',
+      KernelVocabularySlot.OpenSeamKind,
+      'Static evaluation reached a mutation that could not be represented without executing user behavior.',
+    ),
+    /** A dynamic import or non-literal module edge could not be linked statically. */
+    DynamicImport: defineVocabulary(
+      KernelVocabularyNamespace.Evaluation,
+      'dynamic-import',
+      KernelVocabularySlot.OpenSeamKind,
+      'Static evaluation reached a dynamic import or non-literal module edge that could not be linked statically.',
     ),
   },
   Resource: {
@@ -197,6 +242,12 @@ export const KernelVocabulary = {
       'definition-header',
       KernelVocabularySlot.ProductKind,
       'A resource definition header recognized from source carriers before metadata convergence, scope admission, or template use.',
+    ),
+    BuiltInCatalog: defineVocabulary(
+      KernelVocabularyNamespace.Resource,
+      'built-in-catalog',
+      KernelVocabularySlot.ProductKind,
+      'Catalog of framework-provided resource definition headers admitted by known framework registration effects.',
     ),
     /** Product kind for source-specific resource definition field contributions before convergence. */
     DefinitionContribution: defineVocabulary(
@@ -225,6 +276,12 @@ export const KernelVocabulary = {
       'alias-of',
       KernelVocabularySlot.ClaimPredicate,
       'A recognized resource name is an alias of another resource identity.',
+    ),
+    ContainsDefinitionHeader: defineVocabulary(
+      KernelVocabularyNamespace.Resource,
+      'contains-definition-header',
+      KernelVocabularySlot.ClaimPredicate,
+      'A resource catalog contains a resource definition header product.',
     ),
     /** Resource recognition could not close a resource kind from the carrier shape. */
     OpenKindExpression: defineVocabulary(
@@ -312,6 +369,13 @@ export const KernelVocabulary = {
       KernelVocabularySlot.ProductKind,
       'A DI resolver slot owned by a container for a specific key.',
     ),
+    /** Product kind for the built-in IContainer self resolver row. */
+    SelfResolverSlot: defineVocabulary(
+      KernelVocabularyNamespace.Di,
+      'self-resolver-slot',
+      KernelVocabularySlot.ProductKind,
+      'The built-in IContainer self resolver row owned by a container.',
+    ),
     /** Product kind for a row in a container resource lookup table. */
     ResourceSlot: defineVocabulary(
       KernelVocabularyNamespace.Di,
@@ -340,6 +404,13 @@ export const KernelVocabulary = {
       KernelVocabularySlot.ClaimPredicate,
       'A container accepts a registration admission for later resolver, resource, or factory effects.',
     ),
+    /** A DI operation produced a container-owned product while spending registration or lookup pressure. */
+    ProducesProduct: defineVocabulary(
+      KernelVocabularyNamespace.Di,
+      'produces-product',
+      KernelVocabularySlot.ClaimPredicate,
+      'A DI operation produced a container-owned product while spending registration or lookup pressure.',
+    ),
     /** A DI lookup resolves, ambiguously resolves, or fails to resolve to a provider. */
     ResolvesTo: defineVocabulary(
       KernelVocabularyNamespace.Di,
@@ -347,14 +418,35 @@ export const KernelVocabulary = {
       KernelVocabularySlot.ClaimPredicate,
       'A DI lookup resolves, ambiguously resolves, or fails to resolve to a provider.',
     ),
+    /** DI world construction could not spend a registration admission into concrete container effects. */
+    OpenRegistrationSpending: defineVocabulary(
+      KernelVocabularyNamespace.Di,
+      'open-registration-spending',
+      KernelVocabularySlot.OpenSeamKind,
+      'DI world construction could not spend a registration admission into concrete container effects.',
+    ),
+    /** DI world construction reached an IRegistry body that has not been interpreted yet. */
+    OpenRegistryBody: defineVocabulary(
+      KernelVocabularyNamespace.Di,
+      'open-registry-body',
+      KernelVocabularySlot.OpenSeamKind,
+      'DI world construction reached an IRegistry body that has not been interpreted yet.',
+    ),
+    /** DI world construction reached runtime default resolver or JIT registration behavior. */
+    OpenDefaultResolver: defineVocabulary(
+      KernelVocabularyNamespace.Di,
+      'open-default-resolver',
+      KernelVocabularySlot.OpenSeamKind,
+      'DI world construction reached runtime default resolver or JIT registration behavior.',
+    ),
   },
   Registration: {
-    /** Product kind for a normalized registration admission before container-state spending. */
-    Admission: defineVocabulary(
+    /** Product kind for a registration admission whose runtime effect remains open. */
+    OpenAdmission: defineVocabulary(
       KernelVocabularyNamespace.Registration,
-      'admission',
+      'open-admission',
       KernelVocabularySlot.ProductKind,
-      'A normalized registration admission before DI world construction spends it into resolver or resource state.',
+      'A registration admission whose key, value, strategy, or carrier is not closed enough to spend.',
     ),
     /** Product kind for a resolver-producing registration admission. */
     ResolverAdmission: defineVocabulary(
@@ -376,6 +468,13 @@ export const KernelVocabulary = {
       'registry-admission',
       KernelVocabularySlot.ProductKind,
       'An IRegistry-shaped registration admission before DI world construction spends its register method.',
+    ),
+    /** Product kind for a known framework registration group before its expanded values are spent. */
+    FrameworkRegistrationAdmission: defineVocabulary(
+      KernelVocabularyNamespace.Registration,
+      'framework-registration-admission',
+      KernelVocabularySlot.ProductKind,
+      'A known framework registration group before DI world construction spends its expanded registrations.',
     ),
     /** A registration admission offers a DI key to later world construction. */
     AdmitsKey: defineVocabulary(
@@ -628,19 +727,19 @@ export const KernelVocabulary = {
       KernelVocabularyNamespace.Compiler,
       'built-in-syntax-catalog',
       KernelVocabularySlot.ProductKind,
-      'Catalog of framework-provided syntax resources admitted by configuration.',
+      'Catalog of framework-provided syntax resources admitted by known framework registration effects.',
     ),
-    BuiltInAttributePattern: defineVocabulary(
+    ConfiguredSyntaxCatalogSelection: defineVocabulary(
       KernelVocabularyNamespace.Compiler,
-      'built-in-attribute-pattern',
+      'configured-syntax-catalog-selection',
       KernelVocabularySlot.ProductKind,
-      'Framework-provided attribute-pattern handler model.',
+      'Selection of framework built-in syntax catalogs admitted by one known framework registration before attribute-parser and binding-command resolver input.',
     ),
-    BuiltInBindingCommand: defineVocabulary(
+    ConfiguredResourceCatalogSelection: defineVocabulary(
       KernelVocabularyNamespace.Compiler,
-      'built-in-binding-command',
+      'configured-resource-catalog-selection',
       KernelVocabularySlot.ProductKind,
-      'Framework-provided binding-command handler model.',
+      'Selection of framework built-in resource catalogs admitted by one known framework registration before DI resource-slot spending.',
     ),
     /** Product kind for an executable attribute-pattern handler. */
     AttributePatternExecutable: defineVocabulary(
@@ -683,6 +782,46 @@ export const KernelVocabulary = {
       'provides-resource',
       KernelVocabularySlot.ClaimPredicate,
       'Compiler scope provides a resource to template lookup.',
+    ),
+    /** Compiler scope provides an attribute-pattern or binding-command executable to parser/lowering services. */
+    ProvidesSyntaxResource: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'provides-syntax-resource',
+      KernelVocabularySlot.ClaimPredicate,
+      'Compiler scope provides an attribute-pattern or binding-command executable to parser/lowering services.',
+    ),
+    /** A compiler world uses a resource scope for lookup. */
+    UsesResourceScope: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'uses-resource-scope',
+      KernelVocabularySlot.ClaimPredicate,
+      'A compiler world uses a resource scope for lookup.',
+    ),
+    /** A compiler world uses a compiler service product. */
+    UsesService: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'uses-service',
+      KernelVocabularySlot.ClaimPredicate,
+      'A compiler world uses a compiler service product.',
+    ),
+    /** A syntax catalog includes a compiler-visible attribute-pattern or binding-command executable. */
+    ContainsSyntaxResource: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'contains-syntax-resource',
+      KernelVocabularySlot.ClaimPredicate,
+      'A syntax catalog includes a compiler-visible attribute-pattern or binding-command executable.',
+    ),
+    AdmitsSyntaxCatalog: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'admits-syntax-catalog',
+      KernelVocabularySlot.ClaimPredicate,
+      'A known framework registration admission made a built-in syntax catalog available for attribute-parser and binding-command resolver input.',
+    ),
+    AdmitsResourceCatalog: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'admits-resource-catalog',
+      KernelVocabularySlot.ClaimPredicate,
+      'A known framework registration admission made a built-in resource catalog available for DI resource-slot spending.',
     ),
     /** Compiler service lookup could not be closed. */
     OpenServiceLookup: defineVocabulary(

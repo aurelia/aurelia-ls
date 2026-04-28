@@ -115,6 +115,8 @@ export class ConfigurationOptionValueObservation {
     readonly node: ts.Expression | null,
     /** Closed primitive value for boolean, string, number, or null lanes. */
     readonly primitive: boolean | string | number | null = null,
+    /** Closed string elements for the string-array lane. */
+    readonly stringValues: readonly string[] = [],
     /** Local name or expression preview for traces. */
     readonly localName: string | null = null,
   ) {}

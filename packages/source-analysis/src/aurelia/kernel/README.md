@@ -44,6 +44,9 @@ Vocabulary is another fast-evolving pressure surface. It is intentionally small 
 implemented, but it must not become a dumping ground for near-duplicate relationship names or consumer-specific
 answer states. Add vocabulary when a real producer or query needs a stable classifier, and keep usage-slot
 meaning product-owned so MCP and other tools do not rediscover it from constructor positions or naming patterns.
+As claims start carrying real semantics, revisit vocabulary continuously. A new claim predicate should normally name
+a durable domain relationship, not a temporary producer step, query state, confidence label, or convenient synonym for
+an existing edge.
 
 The key space is still deliberately small, but the TypeScript contracts now distinguish claim predicates, seam
 kinds, product kinds, derivation rule kinds, derivation edge roles, binding kinds, and instruction kinds. These
@@ -58,6 +61,12 @@ implemented, but they must not become catch-all storage for facts that belong in
 products, open seams, or inquiry answers. Treat them as high-leverage unstable surfaces: useful because they sit
 close to source reality and transformation flow, risky because they can quietly absorb policy, confidence,
 debugging notes, partial analysis state, and consumer-specific answer semantics.
+
+Provenance is currently produced before many consumers exist. That is intentional, because rename support,
+go-to-definition, explanations, invalidation, and MCP traces need source lineage later. Until those consumers put
+harder pressure on the model, keep provenance boring: field lineage, evidence links, and derivation breadcrumbs only.
+Do not use provenance as a generic completion marker, payload channel, ranking hint, or place to hide missing domain
+fields.
 
 Semantic graph edges should point at named records by handle. Avoid terminal JSON values, generic payload fields,
 and ref wrappers unless a concrete producer proves they are necessary. If a literal matters semantically, first
@@ -104,6 +113,7 @@ model and record types.
 - TypeScript declarations without retaining checker-owned symbols.
 - Aurelia resources.
 - DI keys, split by runtime key shape rather than carried by display descriptions.
+- DI products produced while configuration and registration are spent into an abstract container world.
 - Registration admission identities that name a key plus the admission/strategy family before container-state spending.
 - Templates, template nodes, bindings, instructions, and generated identities.
 

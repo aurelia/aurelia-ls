@@ -31,6 +31,27 @@ export const enum RegistrationValueKind {
   ObjectMap = 'object-map',
   /** Plain class admitted by the container's fallback self-registration branch. */
   PlainClass = 'plain-class',
+  /** Framework-owned registration group admitted through a recognized spread. */
+  FrameworkRegistration = 'framework-registration',
+}
+
+export const enum FrameworkRegistrationKind {
+  /** Runtime registry shape is known to be an AppTask admission. */
+  AppTask = 'app-task',
+  /** RuntimeHtml StandardConfiguration registry. */
+  StandardConfiguration = 'standard-configuration',
+  /** I18n plugin configuration registry. */
+  I18nConfiguration = 'i18n-configuration',
+  /** State plugin default configuration registry. */
+  StateDefaultConfiguration = 'state-default-configuration',
+  /** RuntimeHtml DefaultBindingSyntax registration group. */
+  RuntimeHtmlDefaultBindingSyntax = 'runtime-html.default-binding-syntax',
+  /** RuntimeHtml ShortHandBindingSyntax registration group. */
+  RuntimeHtmlShortHandBindingSyntax = 'runtime-html.short-hand-binding-syntax',
+  /** RuntimeHtml DefaultBindingLanguage registration group. */
+  RuntimeHtmlDefaultBindingLanguage = 'runtime-html.default-binding-language',
+  /** RuntimeHtml DefaultResources registration group. */
+  RuntimeHtmlDefaultResources = 'runtime-html.default-resources',
 }
 
 /** Source-level reference to the DI key offered by a registration admission. */
@@ -58,5 +79,7 @@ export class RegistrationValueReference {
     readonly addressHandle: AddressHandle | null,
     /** Local value name for traces when no identity exists yet. */
     readonly localName: string | null,
+    /** Known framework registration effect package, when recognized from source. */
+    readonly frameworkKind: FrameworkRegistrationKind | null = null,
   ) {}
 }

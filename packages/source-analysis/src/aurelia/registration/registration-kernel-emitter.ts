@@ -57,6 +57,9 @@ import {
   type RegistrationAdmissionProduct,
   RegistrationKeyRole,
   RegistrationStrategy,
+  FrameworkRegistrationAdmission,
+  isResolverRegistrationStrategy,
+  OpenRegistrationAdmission,
   ParameterizedRegistryAdmission,
   RegistryRegistrationAdmission,
   ResolverRegistrationAdmission,
@@ -68,6 +71,7 @@ import {
   RegistrationValueObservation,
 } from './registration-observation.js';
 import {
+  FrameworkRegistrationKind,
   RegistrationKeyReference,
   RegistrationValueReference,
 } from './registration-reference.js';
@@ -237,7 +241,20 @@ export class RegistrationKernelEmitter {
       registryParametersProvenanceHandle == null ? null : new FieldProvenance('registryParameters', registryParametersProvenanceHandle),
     ]);
     let admission: RegistrationAdmissionProduct;
-    if (observation.keyRole === RegistrationKeyRole.RegistryLookupKey) {
+    let productKind: ProductKindKey;
+    const frameworkKind = value.reference?.frameworkKind ?? null;
+    if (frameworkKind != null && isFrameworkRegistrationGroupKind(frameworkKind)) {
+      admission = new FrameworkRegistrationAdmission(
+        productHandle,
+        registrationIdentityHandle,
+        observation.admissionKind,
+        frameworkKind,
+        value.reference,
+        sourceAddressHandle,
+        fieldProvenance,
+      );
+      productKind = KernelVocabulary.Registration.FrameworkRegistrationAdmission.key;
+    } else if (observation.keyRole === RegistrationKeyRole.RegistryLookupKey) {
       admission = new ParameterizedRegistryAdmission(
         productHandle,
         registrationIdentityHandle,
@@ -247,6 +264,7 @@ export class RegistrationKernelEmitter {
         sourceAddressHandle,
         fieldProvenance,
       );
+      productKind = KernelVocabulary.Registration.ParameterizedRegistryAdmission.key;
     } else if (observation.strategy === RegistrationStrategy.Registry) {
       admission = new RegistryRegistrationAdmission(
         productHandle,
@@ -256,7 +274,8 @@ export class RegistrationKernelEmitter {
         sourceAddressHandle,
         fieldProvenance,
       );
-    } else {
+      productKind = KernelVocabulary.Registration.RegistryAdmission.key;
+    } else if (isResolverRegistrationStrategy(observation.strategy)) {
       admission = new ResolverRegistrationAdmission(
         productHandle,
         registrationIdentityHandle,
@@ -268,12 +287,26 @@ export class RegistrationKernelEmitter {
         sourceAddressHandle,
         fieldProvenance,
       );
+      productKind = KernelVocabulary.Registration.ResolverAdmission.key;
+    } else {
+      admission = new OpenRegistrationAdmission(
+        productHandle,
+        registrationIdentityHandle,
+        observation.admissionKind,
+        observation.strategy,
+        observation.keyRole,
+        key.reference,
+        value.reference,
+        sourceAddressHandle,
+        fieldProvenance,
+      );
+      productKind = KernelVocabulary.Registration.OpenAdmission.key;
     }
 
     records.push(
       new MaterializedProduct(
         productHandle,
-        productKindForObservation(observation),
+        productKind,
         registrationIdentityHandle,
         sourceAddressHandle,
         sourceProvenanceHandle,
@@ -283,7 +316,7 @@ export class RegistrationKernelEmitter {
         this.store.handles.materialization(`registration-admission:${local}`),
         DerivationPhase.Materialization,
         registrationIdentityHandle,
-        materializationStateForObservation(observation, seams.handles),
+        materializationStateForAdmission(admission, observation, seams.handles),
         [productHandle],
         claims.handles,
         [],
@@ -302,22 +335,14 @@ export class RegistrationKernelEmitter {
   ): {
     readonly records: readonly KernelStoreRecord[];
     readonly reference: RegistrationKeyReference;
-    readonly identityHandle: IdentityHandle;
+    readonly identityHandle: IdentityHandle | null;
     readonly provenanceHandle: ProvenanceHandle | null;
   } {
     if (observation == null) {
-      const identityHandle = this.store.handles.identity(`registration-key:${local}:unknown`);
       return {
-        records: [
-          new UnknownDiKeyIdentity(
-            identityHandle,
-            IdentityStability.SourceStable,
-            admissionAddressHandle,
-            'Registration admission did not expose a closed key expression.',
-          ),
-        ],
-        reference: new RegistrationKeyReference(identityHandle, admissionAddressHandle, null),
-        identityHandle,
+        records: [],
+        reference: new RegistrationKeyReference(null, admissionAddressHandle, null),
+        identityHandle: null,
         provenanceHandle: null,
       };
     }
@@ -449,6 +474,7 @@ export class RegistrationKernelEmitter {
         observation.productHandle,
         addressHandle,
         observation.localName,
+        observation.frameworkKind,
       ),
       claimTargetHandle: observation.productHandle ?? identityHandle ?? addressHandle,
       provenanceHandle,
@@ -487,7 +513,7 @@ export class RegistrationKernelEmitter {
     local: string,
     productHandle: ProductHandle,
     keyRole: RegistrationKeyRole,
-    keyIdentityHandle: IdentityHandle,
+    keyIdentityHandle: IdentityHandle | null,
     keyProvenanceHandle: ProvenanceHandle,
     valueTargetHandle: AddressHandle | IdentityHandle | ProductHandle | null,
     valueProvenanceHandle: ProvenanceHandle | null,
@@ -498,7 +524,7 @@ export class RegistrationKernelEmitter {
   } {
     const records: KernelStoreRecord[] = [];
     const handles: ClaimHandle[] = [];
-    if (keyRole === RegistrationKeyRole.AdmittedKey) {
+    if (keyRole === RegistrationKeyRole.AdmittedKey && keyIdentityHandle != null) {
       const keyClaimHandle = this.store.handles.claim(`registration-admits-key:${local}`);
       handles.push(keyClaimHandle);
       records.push(new SemanticClaim(
@@ -595,7 +621,9 @@ function openSeamsForObservation(
 ): readonly RegistrationRecognitionOpen[] {
   const seams: RegistrationRecognitionOpen[] = [...observation.openSeams];
   if (
-    observation.targetKey == null
+    observation.keyRole !== RegistrationKeyRole.Unknown
+    && observation.strategy !== RegistrationStrategy.Registry
+    && observation.targetKey == null
     && !hasRegistrationOpen(seams, KernelVocabulary.Registration.OpenKeyExpression.key)
   ) {
     seams.push(new RegistrationRecognitionOpen(
@@ -624,40 +652,30 @@ function hasRegistrationOpen(
   return seams.some((seam) => seam.openKind === openKind);
 }
 
-function materializationStateForObservation(
+function materializationStateForAdmission(
+  admission: RegistrationAdmissionProduct,
   observation: RegistrationAdmissionObservation,
   openSeamHandles: readonly OpenSeamHandle[],
 ): MaterializationState {
-  return openSeamHandles.length === 0 && observation.strategy !== RegistrationStrategy.Unknown
+  return !(admission instanceof OpenRegistrationAdmission)
+    && openSeamHandles.length === 0
+    && observation.strategy !== RegistrationStrategy.Unknown
     ? MaterializationState.Complete
     : MaterializationState.Partial;
 }
 
-function productKindForObservation(
-  observation: RegistrationAdmissionObservation,
-): ProductKindKey {
-  if (observation.keyRole === RegistrationKeyRole.RegistryLookupKey) {
-    return KernelVocabulary.Registration.ParameterizedRegistryAdmission.key;
-  }
-  switch (observation.strategy) {
-    case RegistrationStrategy.Registry:
-      return KernelVocabulary.Registration.RegistryAdmission.key;
-    case RegistrationStrategy.Instance:
-    case RegistrationStrategy.Singleton:
-    case RegistrationStrategy.Transient:
-    case RegistrationStrategy.Callback:
-    case RegistrationStrategy.CachedCallback:
-    case RegistrationStrategy.AliasTo:
-    case RegistrationStrategy.Array:
-    case RegistrationStrategy.Resolver:
-    case RegistrationStrategy.Factory:
-      return KernelVocabulary.Registration.ResolverAdmission.key;
-    case RegistrationStrategy.Unknown:
-    case RegistrationStrategy.Defer:
-    case RegistrationStrategy.Resource:
-    case RegistrationStrategy.PlainClassSelf:
-    case RegistrationStrategy.ObjectMap:
-      return KernelVocabulary.Registration.Admission.key;
+function isFrameworkRegistrationGroupKind(kind: FrameworkRegistrationKind): boolean {
+  switch (kind) {
+    case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingSyntax:
+    case FrameworkRegistrationKind.RuntimeHtmlShortHandBindingSyntax:
+    case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingLanguage:
+    case FrameworkRegistrationKind.RuntimeHtmlDefaultResources:
+      return true;
+    case FrameworkRegistrationKind.AppTask:
+    case FrameworkRegistrationKind.StandardConfiguration:
+    case FrameworkRegistrationKind.I18nConfiguration:
+    case FrameworkRegistrationKind.StateDefaultConfiguration:
+      return false;
   }
 }
 

@@ -13,6 +13,10 @@ import type {
   TemplateInstruction,
   TemplateInstructionKind,
 } from './instruction-ir.js';
+import {
+  TemplateCompilerServiceKind,
+  TemplateCompilerServiceReference,
+} from './compiler-world.js';
 
 export const enum BindingCommandExecutionKind {
   /** Runtime built-in command whose build behavior can be modeled directly. */
@@ -218,18 +222,56 @@ export class BindingCommandExecutable {
 /** Runtime IBindingCommandResolver model for one compiler world/container. */
 @auLink('template-compiler:IBindingCommandResolver')
 export class BindingCommandResolverService {
+  private readonly _cache = new Map<string, BindingCommandExecutable | null>();
+
   constructor(
     /** Product handle for the materialized-product envelope that represents this resolver service. */
     readonly productHandle: ProductHandle,
     /** Identity for this resolver service model. */
     readonly identityHandle: IdentityHandle,
     /** Binding commands visible to this resolver service. */
-    readonly commandProductHandles: readonly ProductHandle[],
+    readonly commands: readonly BindingCommandExecutable[],
     /** Source address for the resolver service registration or lookup. */
     readonly sourceAddressHandle: AddressHandle | null,
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */
     readonly fieldProvenance: readonly FieldProvenance<BindingCommandResolverField>[] = [],
   ) {}
+
+  /** Product handles for commands visible through this resolver service. */
+  get commandProductHandles(): readonly ProductHandle[] {
+    return this.commands.map((command) => command.productHandle);
+  }
+
+  /** Runtime `IBindingCommandResolver.get(container, name)` shape for this container-scoped service. */
+  get(commandName: string): BindingCommandExecutable | null {
+    if (this._cache.has(commandName)) {
+      return this._cache.get(commandName) ?? null;
+    }
+    const command = this.commands.find((candidate) =>
+      candidate.name === commandName || candidate.aliases.includes(commandName)
+    ) ?? null;
+    this._cache.set(commandName, command);
+    return command;
+  }
+
+  /** Alias used by lowering code that talks in lookup/resolution terms rather than runtime method names. */
+  resolve(commandName: string): BindingCommandExecutable | null {
+    return this.get(commandName);
+  }
+
+  /** Snapshot command lookup cache for answer envelopes or later kernel emission. */
+  readCachedCommands(): ReadonlyMap<string, BindingCommandExecutable | null> {
+    return new Map(this._cache);
+  }
+
+  toReference(): TemplateCompilerServiceReference {
+    return new TemplateCompilerServiceReference(
+      TemplateCompilerServiceKind.BindingCommandResolver,
+      this.productHandle,
+      this.identityHandle,
+      this.sourceAddressHandle,
+    );
+  }
 }
 
 /** Runtime ICommandBuildInfo model, before a binding command builds instructions. */

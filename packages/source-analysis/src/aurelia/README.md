@@ -9,6 +9,18 @@ The early product surface is MCP/AI plus IDE support. The first valuable experie
 go-to-definition from markup, reliable rename substrate, app maps, resource visibility, configuration tracing, and DI
 explanations. Correctness and explanation quality matter before latency while the architecture is still settling.
 
+## Runtime Grounding
+
+The Aurelia runtime is the semantic source of truth. Product models may be more granular than runtime classes when
+tooling needs separate provenance, identity, inquiry, or explanation boundaries, but they should not be less precise
+than the runtime semantics. When the runtime has a compact or performance-oriented representation, first ask whether
+that shape is intended semantic behavior or an implementation optimization.
+
+Known semantic behavior exceptions should be called out explicitly. Attribute patterns and binding commands are the
+current example: runtime stores them through different mechanisms so attribute parsing can be fast, but the intended
+application semantics are a configured, app-global, effectively frozen syntax surface. The product model should not
+turn that runtime storage split into different DI visibility semantics.
+
 ## Layer Map
 
 - `kernel`: hot normalized record store, handles, vocabulary, identities, addresses, claims, evidence, provenance,
@@ -57,6 +69,11 @@ but product semantics still live here. When the MCP starts needing brittle produ
 runtime/compiler concepts. Do not put product taxonomy, producer roles, or model-surface classification into
 `auLink`; those belong in product models or `substrate-contract.ts` when they are truly MCP/source-analysis mapping
 aids.
+
+If the MCP cannot cheaply stitch an important product path, prefer strengthening directional product vocabulary,
+claims, or substrate-contract metadata before adding MCP-local inference tables. The product should expose enough
+typed structure for tsserver-backed lenses to follow paths such as configuration admission, resource or syntax catalog
+selection, DI spending, compiler-world construction, and later template lowering.
 
 ## Documentation Ownership
 

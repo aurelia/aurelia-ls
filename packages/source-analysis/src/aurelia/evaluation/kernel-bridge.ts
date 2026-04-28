@@ -23,12 +23,8 @@ import {
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
-import { KernelVocabulary, type OpenSeamKindKey } from '../kernel/vocabulary.js';
 import type { StaticModuleEvaluationResult } from './evaluator.js';
-import {
-  EvaluationOpenSeam,
-  EvaluationOpenSeamKind,
-} from './seams.js';
+import { EvaluationOpenSeam } from './seams.js';
 
 /** Emits durable kernel records for evaluator boundary pressure. */
 export class EvaluationKernelBridge {
@@ -89,33 +85,12 @@ export class EvaluationKernelBridge {
     );
     const openSeam = new OpenSeam(
       openSeamHandle,
-      vocabularyForEvaluationSeam(seam.seamKind),
+      seam.seamKind,
       OpenSeamSeverity.Warning,
       seam.summary,
       spanHandle,
       evidenceHandle,
     );
     return [span, evidence, provenance, openSeam];
-  }
-}
-
-function vocabularyForEvaluationSeam(seamKind: EvaluationOpenSeamKind): OpenSeamKindKey {
-  switch (seamKind) {
-    case EvaluationOpenSeamKind.UnresolvedIdentifier:
-    case EvaluationOpenSeamKind.UnresolvedModule:
-      return KernelVocabulary.Evaluation.UnresolvedReference.key;
-    case EvaluationOpenSeamKind.DynamicCall:
-    case EvaluationOpenSeamKind.DynamicBranch:
-    case EvaluationOpenSeamKind.DynamicLoop:
-    case EvaluationOpenSeamKind.DynamicMutation:
-    case EvaluationOpenSeamKind.DynamicImport:
-      return KernelVocabulary.Evaluation.DynamicEvaluation.key;
-    case EvaluationOpenSeamKind.DepthLimit:
-    case EvaluationOpenSeamKind.StatementLimit:
-      return KernelVocabulary.Evaluation.EvaluationGuardrail.key;
-    case EvaluationOpenSeamKind.UnsupportedStatement:
-    case EvaluationOpenSeamKind.UnsupportedExpression:
-    case EvaluationOpenSeamKind.UnsupportedBindingPattern:
-      return KernelVocabulary.Evaluation.UnsupportedSyntax.key;
   }
 }

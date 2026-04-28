@@ -9,7 +9,6 @@ import {
 } from './registration-admission.js';
 import {
   REGISTRATION_FACTORY_SHAPES,
-  valueOpenKindForRegistrationFactory,
 } from './registration-factory-shapes.js';
 import type { RegistrationEmissionContext } from './registration-kernel-emitter.js';
 import {
@@ -76,9 +75,9 @@ function recognizeRegistrationFactoryCall(
     'Registration factory call did not expose a target key.',
     openSeams,
   );
-  const valueArgument = shape.valueArgumentIndex == null
+  const valueArgument = shape.value == null
     ? null
-    : readRequiredArgument(call, shape.valueArgumentIndex, valueOpenKindForRegistrationFactory(factoryName), `Registration.${factoryName}(...) did not expose a registered value.`, openSeams);
+    : readRequiredArgument(call, shape.value.argumentIndex, shape.value.missingOpenKind, `Registration.${factoryName}(...) did not expose a registered value.`, openSeams);
 
   for (const argument of call.arguments) {
     if (ts.isSpreadElement(argument)) {
@@ -101,10 +100,10 @@ function recognizeRegistrationFactoryCall(
   const targetKey = keyArgument == null
     ? null
     : new RegistrationKeyObservation(readReferenceName(keyArgument), keyArgument);
-  const registeredValue = valueArgument == null || shape.valueKind == null
+  const registeredValue = valueArgument == null || shape.value == null
     ? null
     : new RegistrationValueObservation(
-      shape.valueKind,
+      shape.value.valueKind,
       readReferenceName(valueArgument),
       valueArgument,
       isDeclarationExpression(valueArgument),

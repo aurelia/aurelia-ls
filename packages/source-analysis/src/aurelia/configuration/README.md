@@ -44,17 +44,49 @@ The tooling model should keep that split:
   builder-style configuration objects, and lifecycle-slot dispatch.
 - Configuration option contributions describe defaults, user customization callbacks, forwarded options, and builder
   method mutations before convergence decides final precedence.
+- Direct assignments inside simple customization callbacks, such as `options.translationAttributeAliases = [...]`, may
+  produce typed option contributions while the callback itself remains preserved as a callback contribution.
 - AppTask records describe deferred lifecycle tasks. Their callback bodies may be inspected later, but they are not
   spent into container state merely because the task was registered.
 - Configuration records describe where app/world admission happens.
 - Registration records describe what is offered to registration admission.
 - DI world construction later spends registration records into container/resource reachability.
+- `app-world-producer.ts` is the current composition point for that handoff. It does not create a new semantic
+  "app world" kernel product; it runs the already-owned configuration, DI, built-in syntax, built-in resource, and
+  compiler-world producers and returns an orchestration envelope for callers. Compiler worlds select one app-level
+  syntax surface from the owning app-root sequence, including both attribute-pattern parser inputs and binding-command
+  executables, then read ordinary named resource visibility from DI-produced container resource slots. They must not
+  receive every framework catalog recognized in the project.
+- Treat this composition point as a watchpoint until the template compiler slice introduces its own
+  `CompilationContext`-shaped owner. The handoff needs to stay explicit enough that compiler work can decide which
+  facts belong to the app root, container, controller, compilation context, parser context, or inquiry answer without
+  moving source scanning back into the template layer.
 
 The first producer slice is deliberately conservative about method receivers. `Aurelia.app(...)`, chained Aurelia
 calls, and local variables initialized from `new Aurelia(...)` are treated as app admission; direct
 `container.register(...)`-shaped calls are treated as container registration. Other `.app(...)` and `.register(...)`
 methods should stay invisible until evaluation or DI context can prove what they are. False positives here would
 pollute the app map and later DI world.
+
+Known framework configuration registries such as `StandardConfiguration`, `I18nConfiguration`, and
+`StateDefaultConfiguration.init(...).withStore(...)` are classified as registry admissions when they appear as
+register arguments. The configuration layer records an explicit `FrameworkRegistrationKind`; it does not hide those
+semantics in trace names. Body effects still belong to registration/DI spending and later resource/compiler-world
+producers. The current template producers consume that framework kind for framework-owned built-in syntax catalog
+selection. Framework-owned built-in resource headers are cataloged from the same kind, then spent into DI resource
+slots before compiler-world resource visibility sees them.
+
+Closed i18n `translationAttributeAliases` contributions are already consumed by built-in syntax production when they
+can be source-associated with the `I18nConfiguration.customize(...)` admission. That mirrors the runtime
+`coreComponents(options)` path without executing the callback body generally.
+
+App-root compiler worlds are complete only when the owning sequence admitted known runtime compiler services. The
+current app-world producer treats `StandardConfiguration` as that service package, because it registers the expression
+parser and runtime template-compiler implementation services we model today. Direct custom service registrations
+should become explicit DI/resource products before they are treated as complete compiler-world services.
+
+Known framework registration spreads such as `...ShortHandBindingSyntax` are modeled separately from registry bodies.
+They produce framework-registration admissions rather than pretending the spread itself is an `IRegistry`.
 
 ## Ordering Axes
 
@@ -78,3 +110,6 @@ slot. The configuration layer records both facts without executing the callback.
   why an ordering was observed.
 - Do not use option contributions as generic payloads for unresolved configuration objects. If a value matters beyond
   primitive option state, keep it referential until a domain-specific product earns a shape.
+- App-world composition is orchestration, not ownership of every downstream fact. If a later producer needs to ask
+  whether a resource, syntax executable, service, or controller state is visible to compilation, prefer adding a
+  directional product/claim at the actual owner rather than hiding that relationship inside the composition envelope.

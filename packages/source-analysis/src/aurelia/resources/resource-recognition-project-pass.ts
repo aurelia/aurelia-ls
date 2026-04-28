@@ -15,6 +15,10 @@ import { StaticModuleGraphEvaluator } from '../evaluation/module-evaluator.js';
 import { ResourceRecognitionContext } from './resource-recognition-context.js';
 import type { ResourceRecognitionObservation } from './resource-observation.js';
 import { ResourceRecognitionPass } from './resource-recognition-pass.js';
+import {
+  ResourceRecognitionKernelEmission,
+  type ResourceDefinitionHeaderEmission,
+} from './resource-recognition-kernel-emitter.js';
 
 /** Resource-recognition result for one boot-admitted source file. */
 export class ResourceRecognitionSourceResult {
@@ -23,6 +27,8 @@ export class ResourceRecognitionSourceResult {
     readonly admission: SourceFileAdmission,
     /** Resource observations found in the admitted source module. */
     readonly observations: readonly ResourceRecognitionObservation[],
+    /** Kernel emission result carrying typed definition-header handles. */
+    readonly emission: ResourceRecognitionKernelEmission,
     /** Module edges left unresolved while preparing evaluation for this source. */
     readonly unresolvedModules: readonly EvaluationModuleResolutionOpen[],
   ) {}
@@ -39,6 +45,10 @@ export class ResourceRecognitionProjectResult {
 
   readObservations(): readonly ResourceRecognitionObservation[] {
     return this.sources.flatMap((source) => source.observations);
+  }
+
+  readDefinitionHeaders(): readonly ResourceDefinitionHeaderEmission[] {
+    return this.sources.flatMap((source) => source.emission.definitions);
   }
 
   readUnresolvedModules(): readonly EvaluationModuleResolutionOpen[] {
@@ -66,19 +76,19 @@ export class ResourceRecognitionProjectPass {
       const build = buildEvaluationModuleGraph(moduleKey, host);
       const record = build.graph.readModule(moduleKey);
       if (record == null) {
-        sources.push(new ResourceRecognitionSourceResult(admission, [], build.unresolvedModules));
+        sources.push(new ResourceRecognitionSourceResult(admission, [], emptyResourceEmission(), build.unresolvedModules));
         continue;
       }
 
       const graphEvaluation = new StaticModuleGraphEvaluator(build.graph).evaluate(moduleKey);
       const moduleEvaluation = graphEvaluation.modules.get(moduleKey) ?? null;
       if (moduleEvaluation == null) {
-        sources.push(new ResourceRecognitionSourceResult(admission, [], build.unresolvedModules));
+        sources.push(new ResourceRecognitionSourceResult(admission, [], emptyResourceEmission(), build.unresolvedModules));
         continue;
       }
 
       evaluationBridge.emitOpenSeams(record.sourceFile, admission.addressHandle, moduleEvaluation);
-      const observations = recognition.recognizeAndEmit(
+      const result = recognition.recognizeAndEmit(
         store,
         new ResourceRecognitionContext(
           record.sourceFile,
@@ -87,7 +97,12 @@ export class ResourceRecognitionProjectPass {
           moduleEvaluation,
         ),
       );
-      sources.push(new ResourceRecognitionSourceResult(admission, observations, build.unresolvedModules));
+      sources.push(new ResourceRecognitionSourceResult(
+        admission,
+        result.observations,
+        result.emission,
+        build.unresolvedModules,
+      ));
     }
 
     return new ResourceRecognitionProjectResult(project, sources);
@@ -102,4 +117,8 @@ function isStaticEvaluationSource(language: SourceLanguage): boolean {
     default:
       return false;
   }
+}
+
+function emptyResourceEmission(): ResourceRecognitionKernelEmission {
+  return new ResourceRecognitionKernelEmission([], []);
 }

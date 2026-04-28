@@ -1,31 +1,36 @@
 import type ts from 'typescript';
+import type { OpenSeamKindKey } from '../kernel/vocabulary.js';
+import { KernelVocabulary } from '../kernel/vocabulary.js';
 
-export const enum EvaluationOpenSeamKind {
+export const EvaluationOpenSeamKind = {
   /** Evaluation stopped because recursion protection prevented deeper interpretation. */
-  DepthLimit = 'depth-limit',
+  DepthLimit: KernelVocabulary.Evaluation.DepthLimit.key,
   /** Evaluation stopped because statement protection prevented more interpretation. */
-  StatementLimit = 'statement-limit',
+  StatementLimit: KernelVocabulary.Evaluation.StatementLimit.key,
   /** The evaluator reached a statement kind with runtime effects it does not model yet. */
-  UnsupportedStatement = 'unsupported-statement',
+  UnsupportedStatement: KernelVocabulary.Evaluation.UnsupportedStatement.key,
   /** The evaluator reached an expression kind with runtime effects it does not model yet. */
-  UnsupportedExpression = 'unsupported-expression',
+  UnsupportedExpression: KernelVocabulary.Evaluation.UnsupportedExpression.key,
   /** A binding pattern could not be represented in the environment record. */
-  UnsupportedBindingPattern = 'unsupported-binding-pattern',
+  UnsupportedBindingPattern: KernelVocabulary.Evaluation.UnsupportedBindingPattern.key,
   /** A referenced identifier was not present in the current environment record. */
-  UnresolvedIdentifier = 'unresolved-identifier',
+  UnresolvedIdentifier: KernelVocabulary.Evaluation.UnresolvedIdentifier.key,
   /** A module specifier could not be resolved to a source module. */
-  UnresolvedModule = 'unresolved-module',
+  UnresolvedModule: KernelVocabulary.Evaluation.UnresolvedModule.key,
   /** A call expression was not a known evaluator intrinsic or simple local function. */
-  DynamicCall = 'dynamic-call',
+  DynamicCall: KernelVocabulary.Evaluation.DynamicCall.key,
   /** A branch condition could not be reduced without guessing which path executes. */
-  DynamicBranch = 'dynamic-branch',
+  DynamicBranch: KernelVocabulary.Evaluation.DynamicBranch.key,
   /** A loop could not be reduced to a known finite set of iterations. */
-  DynamicLoop = 'dynamic-loop',
+  DynamicLoop: KernelVocabulary.Evaluation.DynamicLoop.key,
   /** A mutation could not be represented without executing user behavior. */
-  DynamicMutation = 'dynamic-mutation',
+  DynamicMutation: KernelVocabulary.Evaluation.DynamicMutation.key,
   /** A dynamic import or non-literal module edge could not be linked statically. */
-  DynamicImport = 'dynamic-import',
-}
+  DynamicImport: KernelVocabulary.Evaluation.DynamicImport.key,
+} as const satisfies Record<string, OpenSeamKindKey>;
+
+export type EvaluationOpenSeamKind =
+  typeof EvaluationOpenSeamKind[keyof typeof EvaluationOpenSeamKind];
 
 /** Evaluator-local unresolved point; kernel projection happens through evaluation/kernel-bridge.ts. */
 export class EvaluationOpenSeam {

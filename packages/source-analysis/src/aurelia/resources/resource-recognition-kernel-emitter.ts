@@ -47,6 +47,7 @@ import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { ResourceRecognitionContext } from './resource-recognition-context.js';
 import {
   AttributePatternDefinitionHeader,
+  type ResourceDefinitionHeader,
   type NamedResourceDefinitionHeader,
 } from './resource-definition.js';
 import {
@@ -58,6 +59,41 @@ import {
   toAureliaResourceIdentityKind,
 } from './resource-kind.js';
 
+/** Typed handle surface for a resource definition header that was admitted into the kernel. */
+export class ResourceDefinitionHeaderEmission {
+  constructor(
+    /** Product handle for the materialized resource-definition header. */
+    readonly productHandle: ProductHandle,
+    /** Primary resource identity, when recognition produced one unambiguous identity. */
+    readonly primaryIdentityHandle: IdentityHandle | null,
+    /** Recognized Aurelia resource kind for this header. */
+    readonly resourceKind: ResourceDefinitionHeader['type'],
+    /** Runtime lookup names or pattern strings observed for this header. */
+    readonly lookupNames: readonly string[],
+    /** Source address for the header carrier. */
+    readonly sourceAddressHandle: AddressHandle,
+    /** Claims emitted for resource identities and aliases. */
+    readonly claimHandles: readonly ClaimHandle[],
+  ) {}
+}
+
+/** Result of emitting resource recognition observations into kernel-backed definition headers. */
+export class ResourceRecognitionKernelEmission {
+  constructor(
+    /** Resource-definition headers that now have kernel product handles. */
+    readonly definitions: readonly ResourceDefinitionHeaderEmission[],
+    /** Kernel records committed by this emission. */
+    readonly records: readonly KernelStoreRecord[],
+  ) {}
+}
+
+class ResourceObservationEmission {
+  constructor(
+    readonly records: readonly KernelStoreRecord[],
+    readonly definition: ResourceDefinitionHeaderEmission | null,
+  ) {}
+}
+
 /** Emits source observations from resource recognition into the durable kernel graph. */
 export class ResourceRecognitionKernelEmitter {
   constructor(
@@ -68,22 +104,28 @@ export class ResourceRecognitionKernelEmitter {
   emit(
     context: ResourceRecognitionContext,
     observations: readonly ResourceRecognitionObservation[],
-  ): void {
+  ): ResourceRecognitionKernelEmission {
     const records: KernelStoreRecord[] = [];
+    const definitions: ResourceDefinitionHeaderEmission[] = [];
     observations.forEach((observation, index) => {
-      records.push(...this.recordsForObservation(context, observation, index));
+      const emission = this.recordsForObservation(context, observation, index);
+      records.push(...emission.records);
+      if (emission.definition != null) {
+        definitions.push(emission.definition);
+      }
     });
     if (records.length === 0) {
-      return;
+      return new ResourceRecognitionKernelEmission(definitions, records);
     }
     this.store.commit(new KernelStoreBatch(records, `resource-recognition:${context.moduleKey}`));
+    return new ResourceRecognitionKernelEmission(definitions, records);
   }
 
   private recordsForObservation(
     context: ResourceRecognitionContext,
     observation: ResourceRecognitionObservation,
     index: number,
-  ): readonly KernelStoreRecord[] {
+  ): ResourceObservationEmission {
     const records: KernelStoreRecord[] = [];
     const local = observationLocalKey(context, observation.sourceNode, index);
     const sourceAddressHandle = this.store.handles.address(`resource-source:${local}`);
@@ -154,7 +196,19 @@ export class ResourceRecognitionKernelEmitter {
       openSeams.handles,
     ));
 
-    return records;
+    return new ResourceObservationEmission(
+      records,
+      productHandle == null || observation.definition == null
+        ? null
+        : new ResourceDefinitionHeaderEmission(
+          productHandle,
+          resourceIdentities.primaryIdentityHandle,
+          observation.definition.type,
+          lookupNamesForDefinition(observation.definition),
+          sourceAddressHandle,
+          resourceIdentities.claimHandles,
+        ),
+    );
   }
 
   private recordsForDeclaration(
@@ -456,6 +510,18 @@ function primaryResourceNames(
   definition: NamedResourceDefinitionHeader,
 ): readonly (string | null)[] {
   return definition.name == null ? [] : [definition.name];
+}
+
+function lookupNamesForDefinition(
+  definition: ResourceDefinitionHeader,
+): readonly string[] {
+  if (definition instanceof AttributePatternDefinitionHeader) {
+    return definition.patterns.map((pattern) => pattern.pattern);
+  }
+  return [
+    definition.name,
+    ...definition.aliases,
+  ].filter((name): name is string => name != null);
 }
 
 function attributePatternIdentityLocalKey(

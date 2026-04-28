@@ -5,9 +5,13 @@ import type {
   ProductHandle,
 } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
+import type { FrameworkRegistrationKind } from '../registration/registration-reference.js';
 import { AttributePatternDefinitionEntry } from '../resources/attribute-pattern-definition.js';
 import { BindableBindingMode } from '../resources/bindable-definition.js';
-import { AttributePatternExecutionKind } from './attribute-syntax.js';
+import {
+  AttributePatternExecutionKind,
+  AttributePatternExecutionResult,
+} from './attribute-syntax.js';
 import {
   BindingCommandBuildResult,
   BindingCommandExecutableReference,
@@ -39,8 +43,30 @@ function camelCase(value: string): string {
   return value.replace(/-([a-z])/g, (_match, char: string) => char.toUpperCase());
 }
 
-function bindingCommandReference(command: { readonly name: string; readonly key: string }): BindingCommandExecutableReference {
-  return new BindingCommandExecutableReference(null, null, command.name, command.key);
+function bindingCommandReference(
+  command: {
+    readonly productHandle?: ProductHandle | null;
+    readonly identityHandle?: IdentityHandle | null;
+    readonly name: string;
+    readonly key: string;
+  },
+): BindingCommandExecutableReference {
+  return new BindingCommandExecutableReference(
+    command.productHandle ?? null,
+    command.identityHandle ?? null,
+    command.name,
+    command.key,
+  );
+}
+
+function attributePatternResult(
+  rawName: string,
+  rawValue: string,
+  target: string,
+  command: string | null,
+  parts: readonly string[] = [],
+): AttributePatternExecutionResult {
+  return AttributePatternExecutionResult.pattern(rawName, rawValue, target, command, parts);
 }
 
 function instructionSource(info: BindingCommandBuildInfo): AddressHandle | null {
@@ -195,12 +221,20 @@ export type BuiltInSyntaxCatalogField =
   | 'attributePatterns'
   | 'bindingCommands'
   | 'package'
+  | 'variant'
   | 'group'
+  | 'source';
+
+export type ConfiguredBuiltInSyntaxCatalogSelectionField =
+  | 'registrationAdmission'
+  | 'frameworkKind'
+  | 'catalogs'
   | 'source';
 
 export type BuiltInAttributePatternField =
   | 'targetName'
   | 'patterns'
+  | 'aliases'
   | 'package'
   | 'group';
 
@@ -227,8 +261,20 @@ export class RefAttributePattern {
   readonly executionKind = AttributePatternExecutionKind.BuiltIn;
 
   constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BuiltInAttributePatternField>[] = [],
   ) {}
+
+  'ref'(rawName: string, rawValue: string, _parts: readonly string[]): AttributePatternExecutionResult {
+    return attributePatternResult(rawName, rawValue, 'element', 'ref');
+  }
+
+  'PART.ref'(rawName: string, rawValue: string, parts: readonly string[]): AttributePatternExecutionResult {
+    const target = parts[0] === 'view-model' ? 'component' : parts[0] ?? '';
+    return attributePatternResult(rawName, rawValue, target, 'ref');
+  }
 }
 
 @auLink('template-compiler:DotSeparatedAttributePattern')
@@ -243,8 +289,19 @@ export class DotSeparatedAttributePattern {
   readonly executionKind = AttributePatternExecutionKind.BuiltIn;
 
   constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BuiltInAttributePatternField>[] = [],
   ) {}
+
+  'PART.PART'(rawName: string, rawValue: string, parts: readonly string[]): AttributePatternExecutionResult {
+    return attributePatternResult(rawName, rawValue, parts[0] ?? '', parts[1] ?? null);
+  }
+
+  'PART.PART.PART'(rawName: string, rawValue: string, parts: readonly string[]): AttributePatternExecutionResult {
+    return attributePatternResult(rawName, rawValue, `${parts[0] ?? ''}.${parts[1] ?? ''}`, parts[2] ?? null);
+  }
 }
 
 @auLink('template-compiler:EventAttributePattern')
@@ -259,8 +316,19 @@ export class EventAttributePattern {
   readonly executionKind = AttributePatternExecutionKind.BuiltIn;
 
   constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BuiltInAttributePatternField>[] = [],
   ) {}
+
+  'PART.trigger:PART'(rawName: string, rawValue: string, parts: readonly string[]): AttributePatternExecutionResult {
+    return attributePatternResult(rawName, rawValue, parts[0] ?? '', 'trigger', parts);
+  }
+
+  'PART.capture:PART'(rawName: string, rawValue: string, parts: readonly string[]): AttributePatternExecutionResult {
+    return attributePatternResult(rawName, rawValue, parts[0] ?? '', 'capture', parts);
+  }
 }
 
 @auLink('template-compiler:AtPrefixedTriggerAttributePattern')
@@ -275,8 +343,23 @@ export class AtPrefixedTriggerAttributePattern {
   readonly executionKind = AttributePatternExecutionKind.BuiltIn;
 
   constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BuiltInAttributePatternField>[] = [],
   ) {}
+
+  '@PART'(rawName: string, rawValue: string, parts: readonly string[]): AttributePatternExecutionResult {
+    return attributePatternResult(rawName, rawValue, parts[0] ?? '', 'trigger');
+  }
+
+  '@PART:PART'(rawName: string, rawValue: string, parts: readonly string[]): AttributePatternExecutionResult {
+    return attributePatternResult(rawName, rawValue, parts[0] ?? '', 'trigger', [
+      parts[0] ?? '',
+      'trigger',
+      ...parts.slice(1),
+    ]);
+  }
 }
 
 @auLink('template-compiler:ColonPrefixedBindAttributePattern')
@@ -288,8 +371,15 @@ export class ColonPrefixedBindAttributePattern {
   readonly executionKind = AttributePatternExecutionKind.BuiltIn;
 
   constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BuiltInAttributePatternField>[] = [],
   ) {}
+
+  ':PART'(rawName: string, rawValue: string, parts: readonly string[]): AttributePatternExecutionResult {
+    return attributePatternResult(rawName, rawValue, parts[0] ?? '', 'bind');
+  }
 }
 
 @auLink('runtime-html:PromiseAttributePattern')
@@ -301,8 +391,15 @@ export class PromiseAttributePattern {
   readonly executionKind = AttributePatternExecutionKind.BuiltIn;
 
   constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BuiltInAttributePatternField>[] = [],
   ) {}
+
+  'promise.resolve'(rawName: string, rawValue: string, _parts: readonly string[]): AttributePatternExecutionResult {
+    return attributePatternResult(rawName, rawValue, 'promise', 'bind');
+  }
 }
 
 @auLink('runtime-html:FulfilledAttributePattern')
@@ -314,8 +411,15 @@ export class FulfilledAttributePattern {
   readonly executionKind = AttributePatternExecutionKind.BuiltIn;
 
   constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BuiltInAttributePatternField>[] = [],
   ) {}
+
+  'then'(rawName: string, rawValue: string, _parts: readonly string[]): AttributePatternExecutionResult {
+    return attributePatternResult(rawName, rawValue, 'then', 'from-view');
+  }
 }
 
 @auLink('runtime-html:RejectedAttributePattern')
@@ -327,8 +431,15 @@ export class RejectedAttributePattern {
   readonly executionKind = AttributePatternExecutionKind.BuiltIn;
 
   constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BuiltInAttributePatternField>[] = [],
   ) {}
+
+  'catch'(rawName: string, rawValue: string, _parts: readonly string[]): AttributePatternExecutionResult {
+    return attributePatternResult(rawName, rawValue, 'catch', 'from-view');
+  }
 }
 
 /**
@@ -339,12 +450,28 @@ export class I18nTranslationAttributePattern {
   readonly packageId = BuiltInSyntaxPackage.I18n;
   readonly group = BuiltInSyntaxGroup.I18nTranslationSyntax;
   readonly targetName = 'TranslationAttributePattern';
-  readonly patterns = [new AttributePatternDefinitionEntry('t', '')] as const;
+  readonly patterns: readonly AttributePatternDefinitionEntry[];
   readonly executionKind = AttributePatternExecutionKind.BuiltIn;
 
   constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BuiltInAttributePatternField>[] = [],
-  ) {}
+    readonly aliases: readonly string[] = ['t'],
+  ) {
+    this.patterns = aliases.map((alias) => new AttributePatternDefinitionEntry(alias, ''));
+  }
+
+  't'(rawName: string, rawValue: string, _parts: readonly string[]): AttributePatternExecutionResult {
+    return attributePatternResult(rawName, rawValue, '', 't');
+  }
+
+  execute(pattern: string, rawName: string, rawValue: string, _parts: readonly string[]): AttributePatternExecutionResult | null {
+    return this.aliases.includes(pattern)
+      ? attributePatternResult(rawName, rawValue, '', pattern)
+      : null;
+  }
 }
 
 /**
@@ -355,12 +482,28 @@ export class I18nTranslationBindAttributePattern {
   readonly packageId = BuiltInSyntaxPackage.I18n;
   readonly group = BuiltInSyntaxGroup.I18nTranslationSyntax;
   readonly targetName = 'TranslationBindAttributePattern';
-  readonly patterns = [new AttributePatternDefinitionEntry('t.bind', '.')] as const;
+  readonly patterns: readonly AttributePatternDefinitionEntry[];
   readonly executionKind = AttributePatternExecutionKind.BuiltIn;
 
   constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BuiltInAttributePatternField>[] = [],
-  ) {}
+    readonly aliases: readonly string[] = ['t'],
+  ) {
+    this.patterns = aliases.map((alias) => new AttributePatternDefinitionEntry(`${alias}.bind`, '.'));
+  }
+
+  't.bind'(rawName: string, rawValue: string, parts: readonly string[]): AttributePatternExecutionResult {
+    return attributePatternResult(rawName, rawValue, parts[1] ?? '', 't.bind');
+  }
+
+  execute(pattern: string, rawName: string, rawValue: string, parts: readonly string[]): AttributePatternExecutionResult | null {
+    return this.patterns.some((entry) => entry.pattern === pattern)
+      ? attributePatternResult(rawName, rawValue, parts[1] ?? '', pattern)
+      : null;
+  }
 }
 
 @auLink('i18n:TranslationParametersAttributePattern')
@@ -372,8 +515,15 @@ export class TranslationParametersAttributePattern {
   readonly executionKind = AttributePatternExecutionKind.BuiltIn;
 
   constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BuiltInAttributePatternField>[] = [],
   ) {}
+
+  't-params.bind'(rawName: string, rawValue: string, _parts: readonly string[]): AttributePatternExecutionResult {
+    return attributePatternResult(rawName, rawValue, '', 't-params.bind');
+  }
 }
 
 @auLink('state:StateAttributePattern')
@@ -388,8 +538,19 @@ export class StateAttributePattern {
   readonly executionKind = AttributePatternExecutionKind.BuiltIn;
 
   constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BuiltInAttributePatternField>[] = [],
   ) {}
+
+  'PART.state:PART'(rawName: string, rawValue: string, parts: readonly string[]): AttributePatternExecutionResult {
+    return attributePatternResult(rawName, rawValue, parts[0] ?? '', 'state', parts.slice(2));
+  }
+
+  'PART.dispatch:PART'(rawName: string, rawValue: string, parts: readonly string[]): AttributePatternExecutionResult {
+    return attributePatternResult(rawName, rawValue, parts[0] ?? '', 'dispatch', parts.slice(2));
+  }
 }
 
 @auLink('template-compiler:DefaultBindingCommand')
@@ -406,6 +567,9 @@ export class DefaultBindingCommand {
   readonly executionKind = BindingCommandExecutionKind.BuiltIn;
 
   constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BuiltInBindingCommandField>[] = [],
   ) {}
 
@@ -428,6 +592,9 @@ export class OneTimeBindingCommand {
   readonly executionKind = BindingCommandExecutionKind.BuiltIn;
 
   constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BuiltInBindingCommandField>[] = [],
   ) {}
 
@@ -450,6 +617,9 @@ export class FromViewBindingCommand {
   readonly executionKind = BindingCommandExecutionKind.BuiltIn;
 
   constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BuiltInBindingCommandField>[] = [],
   ) {}
 
@@ -472,6 +642,9 @@ export class ToViewBindingCommand {
   readonly executionKind = BindingCommandExecutionKind.BuiltIn;
 
   constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BuiltInBindingCommandField>[] = [],
   ) {}
 
@@ -494,6 +667,9 @@ export class TwoWayBindingCommand {
   readonly executionKind = BindingCommandExecutionKind.BuiltIn;
 
   constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BuiltInBindingCommandField>[] = [],
   ) {}
 
@@ -516,6 +692,9 @@ export class ForBindingCommand {
   readonly executionKind = BindingCommandExecutionKind.BuiltIn;
 
   constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BuiltInBindingCommandField>[] = [],
   ) {}
 
@@ -587,6 +766,9 @@ export class RefBindingCommand {
   readonly executionKind = BindingCommandExecutionKind.BuiltIn;
 
   constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BuiltInBindingCommandField>[] = [],
   ) {}
 
@@ -620,6 +802,9 @@ export class TriggerBindingCommand {
   readonly executionKind = BindingCommandExecutionKind.BuiltIn;
 
   constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BuiltInBindingCommandField>[] = [],
   ) {}
 
@@ -656,6 +841,9 @@ export class CaptureBindingCommand {
   readonly executionKind = BindingCommandExecutionKind.BuiltIn;
 
   constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BuiltInBindingCommandField>[] = [],
   ) {}
 
@@ -692,6 +880,9 @@ export class ClassBindingCommand {
   readonly executionKind = BindingCommandExecutionKind.BuiltIn;
 
   constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BuiltInBindingCommandField>[] = [],
   ) {}
 
@@ -728,6 +919,9 @@ export class StyleBindingCommand {
   readonly executionKind = BindingCommandExecutionKind.BuiltIn;
 
   constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BuiltInBindingCommandField>[] = [],
   ) {}
 
@@ -750,6 +944,9 @@ export class AttrBindingCommand {
   readonly executionKind = BindingCommandExecutionKind.BuiltIn;
 
   constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BuiltInBindingCommandField>[] = [],
   ) {}
 
@@ -773,6 +970,9 @@ export class SpreadValueBindingCommand {
   readonly executionKind = BindingCommandExecutionKind.BuiltIn;
 
   constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BuiltInBindingCommandField>[] = [],
   ) {}
 
@@ -799,7 +999,6 @@ export class TranslationBindingCommand {
   readonly group = BuiltInSyntaxGroup.I18nTranslationSyntax;
   readonly targetName = 'TranslationBindingCommand';
   readonly name = 't';
-  readonly aliases = [] as const;
   readonly key = bindingCommandKey(this.name);
   readonly ignoreAttr = false;
   readonly producedInstructionKinds = [TemplateInstructionKind.TranslationBinding] as const;
@@ -807,7 +1006,11 @@ export class TranslationBindingCommand {
   readonly executionKind = BindingCommandExecutionKind.BuiltIn;
 
   constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BuiltInBindingCommandField>[] = [],
+    readonly aliases: readonly string[] = [],
   ) {}
 
   build(info: BindingCommandBuildInfo, context: BindingCommandBuildContext): BindingCommandBuildResult {
@@ -832,7 +1035,6 @@ export class TranslationBindBindingCommand {
   readonly group = BuiltInSyntaxGroup.I18nTranslationSyntax;
   readonly targetName = 'TranslationBindBindingCommand';
   readonly name = 't.bind';
-  readonly aliases = [] as const;
   readonly key = bindingCommandKey(this.name);
   readonly ignoreAttr = false;
   readonly producedInstructionKinds = [TemplateInstructionKind.TranslationBindBinding] as const;
@@ -840,7 +1042,11 @@ export class TranslationBindBindingCommand {
   readonly executionKind = BindingCommandExecutionKind.BuiltIn;
 
   constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BuiltInBindingCommandField>[] = [],
+    readonly aliases: readonly string[] = [],
   ) {}
 
   build(info: BindingCommandBuildInfo, context: BindingCommandBuildContext): BindingCommandBuildResult {
@@ -873,6 +1079,9 @@ export class TranslationParametersBindingCommand {
   readonly executionKind = BindingCommandExecutionKind.BuiltIn;
 
   constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BuiltInBindingCommandField>[] = [],
   ) {}
 
@@ -906,6 +1115,9 @@ export class StateBindingCommand {
   readonly executionKind = BindingCommandExecutionKind.BuiltIn;
 
   constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BuiltInBindingCommandField>[] = [],
   ) {}
 
@@ -941,6 +1153,9 @@ export class DispatchBindingCommand {
   readonly executionKind = BindingCommandExecutionKind.BuiltIn;
 
   constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BuiltInBindingCommandField>[] = [],
   ) {}
 
@@ -975,6 +1190,59 @@ export type BuiltInAttributePattern =
   | TranslationParametersAttributePattern
   | StateAttributePattern;
 
+export function executeBuiltInAttributePattern(
+  handler: BuiltInAttributePattern,
+  pattern: string,
+  rawName: string,
+  rawValue: string,
+  parts: readonly string[],
+): AttributePatternExecutionResult | null {
+  switch (pattern) {
+    case 'ref':
+      return handler instanceof RefAttributePattern ? handler['ref'](rawName, rawValue, parts) : null;
+    case 'PART.ref':
+      return handler instanceof RefAttributePattern ? handler['PART.ref'](rawName, rawValue, parts) : null;
+    case 'PART.PART':
+      return handler instanceof DotSeparatedAttributePattern ? handler['PART.PART'](rawName, rawValue, parts) : null;
+    case 'PART.PART.PART':
+      return handler instanceof DotSeparatedAttributePattern ? handler['PART.PART.PART'](rawName, rawValue, parts) : null;
+    case 'PART.trigger:PART':
+      return handler instanceof EventAttributePattern ? handler['PART.trigger:PART'](rawName, rawValue, parts) : null;
+    case 'PART.capture:PART':
+      return handler instanceof EventAttributePattern ? handler['PART.capture:PART'](rawName, rawValue, parts) : null;
+    case '@PART':
+      return handler instanceof AtPrefixedTriggerAttributePattern ? handler['@PART'](rawName, rawValue, parts) : null;
+    case '@PART:PART':
+      return handler instanceof AtPrefixedTriggerAttributePattern ? handler['@PART:PART'](rawName, rawValue, parts) : null;
+    case ':PART':
+      return handler instanceof ColonPrefixedBindAttributePattern ? handler[':PART'](rawName, rawValue, parts) : null;
+    case 'promise.resolve':
+      return handler instanceof PromiseAttributePattern ? handler['promise.resolve'](rawName, rawValue, parts) : null;
+    case 'then':
+      return handler instanceof FulfilledAttributePattern ? handler['then'](rawName, rawValue, parts) : null;
+    case 'catch':
+      return handler instanceof RejectedAttributePattern ? handler['catch'](rawName, rawValue, parts) : null;
+    case 't':
+      return handler instanceof I18nTranslationAttributePattern ? handler['t'](rawName, rawValue, parts) : null;
+    case 't.bind':
+      return handler instanceof I18nTranslationBindAttributePattern ? handler['t.bind'](rawName, rawValue, parts) : null;
+    case 't-params.bind':
+      return handler instanceof TranslationParametersAttributePattern ? handler['t-params.bind'](rawName, rawValue, parts) : null;
+    case 'PART.state:PART':
+      return handler instanceof StateAttributePattern ? handler['PART.state:PART'](rawName, rawValue, parts) : null;
+    case 'PART.dispatch:PART':
+      return handler instanceof StateAttributePattern ? handler['PART.dispatch:PART'](rawName, rawValue, parts) : null;
+    default:
+      if (handler instanceof I18nTranslationAttributePattern) {
+        return handler.execute(pattern, rawName, rawValue, parts);
+      }
+      if (handler instanceof I18nTranslationBindAttributePattern) {
+        return handler.execute(pattern, rawName, rawValue, parts);
+      }
+      return null;
+  }
+}
+
 export type BuiltInBindingCommand =
   | DefaultBindingCommand
   | OneTimeBindingCommand
@@ -1004,6 +1272,8 @@ export class BuiltInSyntaxCatalog {
     readonly identityHandle: IdentityHandle,
     /** Package that owns this catalog. */
     readonly packageId: BuiltInSyntaxPackage,
+    /** Configuration-specific catalog variant, when runtime options changed the admitted syntax. */
+    readonly variantKey: string | null,
     /** Configuration group that admits the catalog. */
     readonly group: BuiltInSyntaxGroup,
     /** Built-in attribute-pattern handlers contributed by this group. */
@@ -1014,6 +1284,26 @@ export class BuiltInSyntaxCatalog {
     readonly sourceAddressHandle: AddressHandle | null,
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */
     readonly fieldProvenance: readonly FieldProvenance<BuiltInSyntaxCatalogField>[] = [],
+  ) {}
+}
+
+/** Syntax catalog selection admitted by a known framework registration. */
+export class ConfiguredBuiltInSyntaxCatalogSelection {
+  constructor(
+    /** Product handle for the materialized-product envelope that represents this selection. */
+    readonly productHandle: ProductHandle,
+    /** Identity for this configured syntax-catalog selection. */
+    readonly identityHandle: IdentityHandle,
+    /** Registration admission product that admitted these catalogs. */
+    readonly registrationAdmissionProductHandle: ProductHandle,
+    /** Known framework registration effect package that caused the selection. */
+    readonly frameworkKind: FrameworkRegistrationKind,
+    /** Built-in syntax catalog products made available by this registration. */
+    readonly catalogProductHandles: readonly ProductHandle[],
+    /** Source address for the registration admission or configuration expression. */
+    readonly sourceAddressHandle: AddressHandle | null,
+    /** Field-level provenance for source facts that matter to explanation or ambiguity. */
+    readonly fieldProvenance: readonly FieldProvenance<ConfiguredBuiltInSyntaxCatalogSelectionField>[] = [],
   ) {}
 }
 

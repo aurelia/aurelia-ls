@@ -1,4 +1,5 @@
 import ts from 'typescript';
+import { readStaticStringArrayValue } from '../evaluation/expression-reader.js';
 import {
   readPropertyName,
   readReferenceName,
@@ -12,7 +13,6 @@ import {
 } from '../registration/registration-admission.js';
 import {
   REGISTRATION_FACTORY_SHAPES,
-  valueOpenKindForRegistrationFactory,
 } from '../registration/registration-factory-shapes.js';
 import {
   RegistrationAdmissionObservation,
@@ -21,7 +21,10 @@ import {
   RegistrationRecognitionOpen,
   RegistrationValueObservation,
 } from '../registration/registration-observation.js';
-import { RegistrationValueKind } from '../registration/registration-reference.js';
+import {
+  FrameworkRegistrationKind,
+  RegistrationValueKind,
+} from '../registration/registration-reference.js';
 import {
   AppTaskCallbackKind,
   AppTaskSlot,
@@ -73,6 +76,25 @@ const APP_TASK_SLOT_NAMES = new Set<string>([
   AppTaskSlot.Deactivated,
 ]);
 
+const KNOWN_FRAMEWORK_REGISTRATION_EXPORTS = new Map<string, readonly FrameworkRegistrationKind[]>([
+  ['aurelia', [
+    FrameworkRegistrationKind.StandardConfiguration,
+    FrameworkRegistrationKind.RuntimeHtmlDefaultBindingSyntax,
+    FrameworkRegistrationKind.RuntimeHtmlShortHandBindingSyntax,
+    FrameworkRegistrationKind.RuntimeHtmlDefaultBindingLanguage,
+    FrameworkRegistrationKind.RuntimeHtmlDefaultResources,
+  ]],
+  ['@aurelia/runtime-html', [
+    FrameworkRegistrationKind.StandardConfiguration,
+    FrameworkRegistrationKind.RuntimeHtmlDefaultBindingSyntax,
+    FrameworkRegistrationKind.RuntimeHtmlShortHandBindingSyntax,
+    FrameworkRegistrationKind.RuntimeHtmlDefaultBindingLanguage,
+    FrameworkRegistrationKind.RuntimeHtmlDefaultResources,
+  ]],
+  ['@aurelia/i18n', [FrameworkRegistrationKind.I18nConfiguration]],
+  ['@aurelia/state', [FrameworkRegistrationKind.StateDefaultConfiguration]],
+]);
+
 class ImportedBindings {
   readonly aureliaIdentifiers = new Set<string>();
   readonly aureliaNamespaces = new Set<string>();
@@ -81,6 +103,8 @@ class ImportedBindings {
   readonly appTaskNamespaces = new Set<string>();
   readonly registrationIdentifiers = new Set<string>();
   readonly registrationNamespaces = new Set<string>();
+  readonly knownFrameworkRegistrationIdentifiers = new Map<string, FrameworkRegistrationKind>();
+  readonly knownFrameworkRegistrationNamespaces = new Map<string, ReadonlySet<FrameworkRegistrationKind>>();
 }
 
 /** Recognizes Aurelia app/configuration flow over one evaluated source module. */
@@ -200,7 +224,7 @@ function recognizeCall(
       registrationArguments.appTasks,
       [],
       registrationArguments.admissions,
-      readSpreadOpens(call),
+      readSpreadOpens(call, bindings),
     );
   }
 
@@ -242,10 +266,13 @@ function recognizeCall(
         registrationArguments.appTasks,
         [],
         registrationArguments.admissions,
-        readSpreadOpens(call),
+        readSpreadOpens(call, bindings),
       );
     }
     case 'customize':
+      if (!isKnownConfigurationCustomizeCall(call, bindings)) {
+        return null;
+      }
       return new ConfigurationStepObservation(
         ConfigurationCarrierKind.CustomizeCall,
         ConfigurationStepKind.Customize,
@@ -258,7 +285,7 @@ function recognizeCall(
         callbackOpenForCall(call, 'Configuration customize callback is preserved for later evaluation.'),
       );
     default:
-      if (isBuilderMethodName(memberName)) {
+      if (isKnownConfigurationBuilderCall(call, memberName, bindings)) {
         return new ConfigurationStepObservation(
           ConfigurationCarrierKind.BuilderMethodCall,
           ConfigurationStepKind.BuilderMutation,
@@ -300,6 +327,10 @@ function readImportedBindings(sourceFile: ts.SourceFile): ImportedBindings {
       if (REGISTRATION_MODULES.has(moduleName)) {
         bindings.registrationNamespaces.add(namedBindings.name.text);
       }
+      const knownFrameworkRegistrationExports = KNOWN_FRAMEWORK_REGISTRATION_EXPORTS.get(moduleName);
+      if (knownFrameworkRegistrationExports != null) {
+        bindings.knownFrameworkRegistrationNamespaces.set(namedBindings.name.text, new Set(knownFrameworkRegistrationExports));
+      }
       continue;
     }
 
@@ -313,6 +344,10 @@ function readImportedBindings(sourceFile: ts.SourceFile): ImportedBindings {
       }
       if (REGISTRATION_MODULES.has(moduleName) && importedName === 'Registration') {
         bindings.registrationIdentifiers.add(element.name.text);
+      }
+      const knownFrameworkRegistration = readKnownFrameworkRegistrationExport(moduleName, importedName);
+      if (knownFrameworkRegistration != null) {
+        bindings.knownFrameworkRegistrationIdentifiers.set(element.name.text, knownFrameworkRegistration);
       }
     }
   }
@@ -435,7 +470,8 @@ function readRegisterArgumentObservations(
   const appTasks: AppTaskObservation[] = [];
   for (const argument of call.arguments) {
     if (ts.isSpreadElement(argument)) {
-      admissions.push(new RegistrationAdmissionObservation(
+      const frameworkGroup = recognizeKnownFrameworkRegistrationGroupSpread(argument, bindings, admissionKind, carrierKind);
+      admissions.push(frameworkGroup ?? new RegistrationAdmissionObservation(
         carrierKind,
         admissionKind,
         RegistrationStrategy.Unknown,
@@ -456,6 +492,12 @@ function readRegisterArgumentObservations(
     const factory = recognizeRegistrationFactoryArgument(argument, bindings, admissionKind, carrierKind);
     if (factory != null) {
       admissions.push(factory);
+      continue;
+    }
+
+    const knownConfiguration = recognizeKnownConfigurationRegistryArgument(argument, bindings, admissionKind, carrierKind);
+    if (knownConfiguration != null) {
+      admissions.push(knownConfiguration);
       continue;
     }
 
@@ -515,9 +557,9 @@ function recognizeRegistrationFactoryArgument(
     `Registration.${factoryName}(...) did not expose a target key.`,
     openSeams,
   );
-  const valueArgument = shape.valueArgumentIndex == null
+  const valueArgument = shape.value == null
     ? null
-    : readRequiredArgument(call, shape.valueArgumentIndex, valueOpenKindForRegistrationFactory(factoryName), `Registration.${factoryName}(...) did not expose a registered value.`, openSeams);
+    : readRequiredArgument(call, shape.value.argumentIndex, shape.value.missingOpenKind, `Registration.${factoryName}(...) did not expose a registered value.`, openSeams);
 
   if (shape.callbackBodyIsOpen && valueArgument != null) {
     openSeams.push(new RegistrationRecognitionOpen(
@@ -534,12 +576,266 @@ function recognizeRegistrationFactoryArgument(
     shape.keyRole,
     call,
     keyArgument == null ? null : new RegistrationKeyObservation(readReferenceName(keyArgument), keyArgument),
-    valueArgument == null || shape.valueKind == null
+    valueArgument == null || shape.value == null
       ? null
-      : new RegistrationValueObservation(shape.valueKind, readReferenceName(valueArgument), valueArgument, isDeclarationExpression(valueArgument)),
+      : new RegistrationValueObservation(shape.value.valueKind, readReferenceName(valueArgument), valueArgument, isDeclarationExpression(valueArgument)),
     factoryName === 'defer' ? readDeferredRegistryParameters(call) : [],
     openSeams,
   );
+}
+
+function recognizeKnownConfigurationRegistryArgument(
+  expression: ts.Expression,
+  bindings: ImportedBindings,
+  admissionKind: RegistrationAdmissionKind,
+  carrierKind: RegistrationCarrierKind,
+): RegistrationAdmissionObservation | null {
+  const frameworkKind = readKnownConfigurationRegistryKind(expression, bindings);
+  if (frameworkKind == null) {
+    return null;
+  }
+  return new RegistrationAdmissionObservation(
+    carrierKind,
+    admissionKind,
+    RegistrationStrategy.Registry,
+    RegistrationKeyRole.Unknown,
+    expression,
+    null,
+    new RegistrationValueObservation(
+      RegistrationValueKind.Registry,
+      readReferenceName(expression) ?? traceNameForFrameworkRegistrationKind(frameworkKind),
+      expression,
+      false,
+      null,
+      frameworkKind,
+    ),
+    [],
+    [],
+  );
+}
+
+function recognizeKnownFrameworkRegistrationGroupSpread(
+  spread: ts.SpreadElement,
+  bindings: ImportedBindings,
+  admissionKind: RegistrationAdmissionKind,
+  carrierKind: RegistrationCarrierKind,
+): RegistrationAdmissionObservation | null {
+  const frameworkKind = readKnownFrameworkRegistrationReference(spread.expression, bindings);
+  if (frameworkKind == null || !isFrameworkRegistrationGroupKind(frameworkKind)) {
+    return null;
+  }
+
+  return new RegistrationAdmissionObservation(
+    carrierKind,
+    admissionKind,
+    RegistrationStrategy.FrameworkGroup,
+    RegistrationKeyRole.Unknown,
+    spread,
+    null,
+    new RegistrationValueObservation(
+      RegistrationValueKind.FrameworkRegistration,
+      readReferenceName(spread.expression) ?? traceNameForFrameworkRegistrationKind(frameworkKind),
+      spread.expression,
+      false,
+      null,
+      frameworkKind,
+    ),
+    [],
+    [],
+  );
+}
+
+function isKnownFrameworkRegistrationGroupSpread(
+  spread: ts.SpreadElement,
+  bindings: ImportedBindings,
+): boolean {
+  const frameworkKind = readKnownFrameworkRegistrationReference(spread.expression, bindings);
+  return frameworkKind != null && isFrameworkRegistrationGroupKind(frameworkKind);
+}
+
+function readKnownConfigurationRegistryKind(
+  expression: ts.Expression,
+  bindings: ImportedBindings,
+): FrameworkRegistrationKind | null {
+  const current = unwrapExpression(expression);
+  if (ts.isIdentifier(current) || ts.isPropertyAccessExpression(current)) {
+    const direct = readKnownConfigurationReference(current, bindings);
+    return direct === FrameworkRegistrationKind.StateDefaultConfiguration ? null : direct;
+  }
+  if (!ts.isCallExpression(current)) {
+    return null;
+  }
+
+  const callee = unwrapExpression(current.expression);
+  if (!ts.isPropertyAccessExpression(callee)) {
+    return null;
+  }
+  if (callee.name.text === 'withStore') {
+    const receiver = unwrapExpression(callee.expression);
+    return ts.isCallExpression(receiver)
+      ? readKnownConfigurationRegistryKind(receiver, bindings)
+      : null;
+  }
+
+  const receiver = readKnownConfigurationReference(callee.expression, bindings);
+  if (
+    receiver === FrameworkRegistrationKind.StandardConfiguration
+    || receiver === FrameworkRegistrationKind.I18nConfiguration
+  ) {
+    return callee.name.text === 'customize' ? receiver : null;
+  }
+  if (receiver === FrameworkRegistrationKind.StateDefaultConfiguration) {
+    return callee.name.text === 'init' ? receiver : null;
+  }
+  return null;
+}
+
+function readKnownConfigurationReference(
+  expression: ts.Expression,
+  bindings: ImportedBindings,
+): FrameworkRegistrationKind | null {
+  const kind = readKnownFrameworkRegistrationReference(expression, bindings);
+  return kind != null && isKnownConfigurationKind(kind) ? kind : null;
+}
+
+function readKnownFrameworkRegistrationReference(
+  expression: ts.Expression,
+  bindings: ImportedBindings,
+): FrameworkRegistrationKind | null {
+  const current = unwrapExpression(expression);
+  if (ts.isIdentifier(current)) {
+    return bindings.knownFrameworkRegistrationIdentifiers.get(current.text) ?? null;
+  }
+  if (!ts.isPropertyAccessExpression(current)) {
+    return null;
+  }
+  const namespace = unwrapExpression(current.expression);
+  if (!ts.isIdentifier(namespace)) {
+    return null;
+  }
+  const exports = bindings.knownFrameworkRegistrationNamespaces.get(namespace.text);
+  if (exports == null) {
+    return null;
+  }
+  return frameworkRegistrationKindForExportName(current.name.text, exports);
+}
+
+function readKnownFrameworkRegistrationExport(
+  moduleName: string,
+  importedName: string,
+): FrameworkRegistrationKind | null {
+  const exports = KNOWN_FRAMEWORK_REGISTRATION_EXPORTS.get(moduleName);
+  if (exports == null) {
+    return null;
+  }
+  return frameworkRegistrationKindForExportName(importedName, exports);
+}
+
+function frameworkRegistrationKindForExportName(
+  exportName: string,
+  exports: readonly FrameworkRegistrationKind[] | ReadonlySet<FrameworkRegistrationKind>,
+): FrameworkRegistrationKind | null {
+  const kind = frameworkRegistrationKindForRuntimeExportName(exportName);
+  return kind != null && hasFrameworkRegistrationKind(exports, kind) ? kind : null;
+}
+
+function frameworkRegistrationKindForRuntimeExportName(exportName: string): FrameworkRegistrationKind | null {
+  switch (exportName) {
+    case 'StandardConfiguration':
+      return FrameworkRegistrationKind.StandardConfiguration;
+    case 'I18nConfiguration':
+      return FrameworkRegistrationKind.I18nConfiguration;
+    case 'StateDefaultConfiguration':
+      return FrameworkRegistrationKind.StateDefaultConfiguration;
+    case 'DefaultBindingSyntax':
+      return FrameworkRegistrationKind.RuntimeHtmlDefaultBindingSyntax;
+    case 'ShortHandBindingSyntax':
+      return FrameworkRegistrationKind.RuntimeHtmlShortHandBindingSyntax;
+    case 'DefaultBindingLanguage':
+      return FrameworkRegistrationKind.RuntimeHtmlDefaultBindingLanguage;
+    case 'DefaultResources':
+      return FrameworkRegistrationKind.RuntimeHtmlDefaultResources;
+    default:
+      return null;
+  }
+}
+
+function hasFrameworkRegistrationKind(
+  exports: readonly FrameworkRegistrationKind[] | ReadonlySet<FrameworkRegistrationKind>,
+  kind: FrameworkRegistrationKind,
+): boolean {
+  return 'has' in exports ? exports.has(kind) : exports.includes(kind);
+}
+
+function isKnownConfigurationKind(kind: FrameworkRegistrationKind): boolean {
+  switch (kind) {
+    case FrameworkRegistrationKind.StandardConfiguration:
+    case FrameworkRegistrationKind.I18nConfiguration:
+    case FrameworkRegistrationKind.StateDefaultConfiguration:
+      return true;
+    case FrameworkRegistrationKind.AppTask:
+    case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingSyntax:
+    case FrameworkRegistrationKind.RuntimeHtmlShortHandBindingSyntax:
+    case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingLanguage:
+    case FrameworkRegistrationKind.RuntimeHtmlDefaultResources:
+      return false;
+  }
+}
+
+function isFrameworkRegistrationGroupKind(kind: FrameworkRegistrationKind): boolean {
+  switch (kind) {
+    case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingSyntax:
+    case FrameworkRegistrationKind.RuntimeHtmlShortHandBindingSyntax:
+    case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingLanguage:
+    case FrameworkRegistrationKind.RuntimeHtmlDefaultResources:
+      return true;
+    case FrameworkRegistrationKind.AppTask:
+    case FrameworkRegistrationKind.StandardConfiguration:
+    case FrameworkRegistrationKind.I18nConfiguration:
+    case FrameworkRegistrationKind.StateDefaultConfiguration:
+      return false;
+  }
+}
+
+function traceNameForFrameworkRegistrationKind(kind: FrameworkRegistrationKind): string {
+  switch (kind) {
+    case FrameworkRegistrationKind.AppTask:
+      return 'AppTask';
+    case FrameworkRegistrationKind.StandardConfiguration:
+      return 'StandardConfiguration';
+    case FrameworkRegistrationKind.I18nConfiguration:
+      return 'I18nConfiguration';
+    case FrameworkRegistrationKind.StateDefaultConfiguration:
+      return 'StateDefaultConfiguration';
+    case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingSyntax:
+      return 'DefaultBindingSyntax';
+    case FrameworkRegistrationKind.RuntimeHtmlShortHandBindingSyntax:
+      return 'ShortHandBindingSyntax';
+    case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingLanguage:
+      return 'DefaultBindingLanguage';
+    case FrameworkRegistrationKind.RuntimeHtmlDefaultResources:
+      return 'DefaultResources';
+  }
+}
+
+function isKnownConfigurationCustomizeCall(
+  call: ts.CallExpression,
+  bindings: ImportedBindings,
+): boolean {
+  const frameworkKind = readKnownConfigurationRegistryKind(call, bindings);
+  return frameworkKind === FrameworkRegistrationKind.StandardConfiguration
+    || frameworkKind === FrameworkRegistrationKind.I18nConfiguration;
+}
+
+function isKnownConfigurationBuilderCall(
+  call: ts.CallExpression,
+  memberName: string | null,
+  bindings: ImportedBindings,
+): boolean {
+  if (memberName !== 'init' && memberName !== 'withStore') {
+    return false;
+  }
+  return readKnownConfigurationRegistryKind(call, bindings) === FrameworkRegistrationKind.StateDefaultConfiguration;
 }
 
 function registrationObservationForAppTask(
@@ -559,6 +855,8 @@ function registrationObservationForAppTask(
       `AppTask.${appTask.slot}`,
       appTask.sourceNode,
       false,
+      null,
+      FrameworkRegistrationKind.AppTask,
     ),
     [],
     appTask.openSeams.map((seam) => new RegistrationRecognitionOpen(seam.openKind, seam.summary, seam.node)),
@@ -573,20 +871,111 @@ function readCustomizeContributions(
   if (callback == null || ts.isSpreadElement(callback)) {
     return [];
   }
-  return [
-    new ConfigurationOptionContributionObservation(
-      ConfigurationOptionContributionKind.CustomizeCallback,
-      ['customize'],
-      new ConfigurationOptionValueObservation(
-        ConfigurationOptionValueKind.Callback,
-        callback,
-        null,
-        readReferenceName(callback),
-      ),
+  const callbackContribution = new ConfigurationOptionContributionObservation(
+    ConfigurationOptionContributionKind.CustomizeCallback,
+    ['customize'],
+    new ConfigurationOptionValueObservation(
+      ConfigurationOptionValueKind.Callback,
       callback,
-      evaluationOpenSeams(context, callback),
+      null,
+      [],
+      readReferenceName(callback),
     ),
+    callback,
+    evaluationOpenSeams(context, callback),
+  );
+  return [
+    callbackContribution,
+    ...readCustomizeAssignmentContributions(context, callback),
   ];
+}
+
+function readCustomizeAssignmentContributions(
+  context: ConfigurationRecognitionContext,
+  callback: ts.Expression,
+): readonly ConfigurationOptionContributionObservation[] {
+  const current = unwrapExpression(callback);
+  if (!ts.isArrowFunction(current) && !ts.isFunctionExpression(current)) {
+    return [];
+  }
+  const parameter = current.parameters[0];
+  if (parameter == null || !ts.isIdentifier(parameter.name)) {
+    return [];
+  }
+
+  const assignments = readDirectOptionAssignments(current.body, parameter.name.text);
+  return assignments.map((assignment) => new ConfigurationOptionContributionObservation(
+    ConfigurationOptionContributionKind.CustomizeCallback,
+    assignment.optionPath,
+    readOptionValue(context, assignment.valueExpression),
+    assignment.sourceNode,
+    evaluationOpenSeams(context, assignment.valueExpression),
+  ));
+}
+
+function readDirectOptionAssignments(
+  body: ts.ConciseBody,
+  parameterName: string,
+): readonly {
+  readonly optionPath: readonly string[];
+  readonly valueExpression: ts.Expression;
+  readonly sourceNode: ts.Node;
+}[] {
+  const assignments: {
+    readonly optionPath: readonly string[];
+    readonly valueExpression: ts.Expression;
+    readonly sourceNode: ts.Node;
+  }[] = [];
+  const expressions = ts.isBlock(body)
+    ? body.statements
+      .filter(ts.isExpressionStatement)
+      .map((statement) => statement.expression)
+    : [body];
+
+  for (const expression of expressions) {
+    const assignment = unwrapExpression(expression);
+    if (!ts.isBinaryExpression(assignment) || assignment.operatorToken.kind !== ts.SyntaxKind.EqualsToken) {
+      continue;
+    }
+    const optionPath = readOptionAssignmentPath(assignment.left, parameterName);
+    if (optionPath == null) {
+      continue;
+    }
+    assignments.push({
+      optionPath,
+      valueExpression: assignment.right,
+      sourceNode: assignment,
+    });
+  }
+  return assignments;
+}
+
+function readOptionAssignmentPath(
+  expression: ts.Expression,
+  parameterName: string,
+): readonly string[] | null {
+  const segments: string[] = [];
+  let current = unwrapExpression(expression);
+  while (ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current)) {
+    if (ts.isPropertyAccessExpression(current)) {
+      segments.unshift(current.name.text);
+      current = unwrapExpression(current.expression);
+      continue;
+    }
+
+    const argument = current.argumentExpression == null
+      ? null
+      : unwrapExpression(current.argumentExpression);
+    if (argument == null || (!ts.isStringLiteral(argument) && !ts.isNoSubstitutionTemplateLiteral(argument))) {
+      return null;
+    }
+    segments.unshift(argument.text);
+    current = unwrapExpression(current.expression);
+  }
+
+  return ts.isIdentifier(current) && current.text === parameterName && segments.length > 0
+    ? segments
+    : null;
 }
 
 function readBuilderContributions(
@@ -628,32 +1017,36 @@ function readOptionValue(
   const read = context.expressionReader.evaluateExpression(expression);
   const value = read.value;
   if (value == null) {
-    return new ConfigurationOptionValueObservation(ConfigurationOptionValueKind.Unknown, expression, null, readReferenceName(expression));
+    return new ConfigurationOptionValueObservation(ConfigurationOptionValueKind.Unknown, expression, null, [], readReferenceName(expression));
   }
   switch (value.kind) {
     case 'boolean':
-      return new ConfigurationOptionValueObservation(ConfigurationOptionValueKind.Boolean, expression, value.value, readReferenceName(expression));
+      return new ConfigurationOptionValueObservation(ConfigurationOptionValueKind.Boolean, expression, value.value, [], readReferenceName(expression));
     case 'string':
-      return new ConfigurationOptionValueObservation(ConfigurationOptionValueKind.String, expression, value.value, readReferenceName(expression));
+      return new ConfigurationOptionValueObservation(ConfigurationOptionValueKind.String, expression, value.value, [], readReferenceName(expression));
     case 'number':
-      return new ConfigurationOptionValueObservation(ConfigurationOptionValueKind.Number, expression, value.value, readReferenceName(expression));
+      return new ConfigurationOptionValueObservation(ConfigurationOptionValueKind.Number, expression, value.value, [], readReferenceName(expression));
     case 'null':
-      return new ConfigurationOptionValueObservation(ConfigurationOptionValueKind.Null, expression, null, readReferenceName(expression));
-    case 'array':
-      return new ConfigurationOptionValueObservation(ConfigurationOptionValueKind.Array, expression, null, readReferenceName(expression));
+      return new ConfigurationOptionValueObservation(ConfigurationOptionValueKind.Null, expression, null, [], readReferenceName(expression));
+    case 'array': {
+      const stringValues = readStaticStringArrayValue(value);
+      return stringValues == null
+        ? new ConfigurationOptionValueObservation(ConfigurationOptionValueKind.Array, expression, null, [], readReferenceName(expression))
+        : new ConfigurationOptionValueObservation(ConfigurationOptionValueKind.StringArray, expression, null, stringValues, readReferenceName(expression));
+    }
     case 'object':
-      return new ConfigurationOptionValueObservation(ConfigurationOptionValueKind.Object, expression, null, readReferenceName(expression));
+      return new ConfigurationOptionValueObservation(ConfigurationOptionValueKind.Object, expression, null, [], readReferenceName(expression));
     case 'function':
-      return new ConfigurationOptionValueObservation(ConfigurationOptionValueKind.Callback, expression, null, readReferenceName(expression));
+      return new ConfigurationOptionValueObservation(ConfigurationOptionValueKind.Callback, expression, null, [], readReferenceName(expression));
     case 'class':
-      return new ConfigurationOptionValueObservation(ConfigurationOptionValueKind.Identity, expression, null, readReferenceName(expression));
+      return new ConfigurationOptionValueObservation(ConfigurationOptionValueKind.Identity, expression, null, [], readReferenceName(expression));
     case 'bigint':
     case 'module-namespace':
     case 'undefined':
     case 'unknown':
-      return new ConfigurationOptionValueObservation(ConfigurationOptionValueKind.Unknown, expression, null, readReferenceName(expression));
+      return new ConfigurationOptionValueObservation(ConfigurationOptionValueKind.Unknown, expression, null, [], readReferenceName(expression));
   }
-  return new ConfigurationOptionValueObservation(ConfigurationOptionValueKind.Unknown, expression, null, readReferenceName(expression));
+  return new ConfigurationOptionValueObservation(ConfigurationOptionValueKind.Unknown, expression, null, [], readReferenceName(expression));
 }
 
 function readBooleanObjectProperty(
@@ -884,13 +1277,13 @@ function isDeclarationExpression(expression: ts.Expression): boolean {
   return ts.isClassExpression(current) || ts.isFunctionExpression(current);
 }
 
-function isBuilderMethodName(name: string | null): boolean {
-  return name === 'init' || (name != null && /^with[A-Z]/.test(name));
-}
-
-function readSpreadOpens(call: ts.CallExpression): readonly ConfigurationRecognitionOpen[] {
+function readSpreadOpens(
+  call: ts.CallExpression,
+  bindings: ImportedBindings,
+): readonly ConfigurationRecognitionOpen[] {
   return call.arguments
     .filter(ts.isSpreadElement)
+    .filter((argument) => !isKnownFrameworkRegistrationGroupSpread(argument, bindings))
     .map((argument) => new ConfigurationRecognitionOpen(
       KernelVocabulary.Registration.OpenSpread.key,
       'Configuration register call contains a spread argument that must be resolved before registration spending.',

@@ -27,6 +27,8 @@ export const enum ConfigurationOptionValueKind {
   Boolean = 'boolean',
   /** A string literal option value. */
   String = 'string',
+  /** A closed array whose elements are all string literals. */
+  StringArray = 'string-array',
   /** A numeric literal option value. */
   Number = 'number',
   /** A null option value. */
@@ -91,6 +93,18 @@ export class StringConfigurationOptionValue {
     /** Closed string option value. */
     readonly value: string,
     /** Source address for the literal or expression that produced this value. */
+    readonly addressHandle: AddressHandle | null,
+  ) {}
+}
+
+/** Closed string-array option value. */
+export class StringArrayConfigurationOptionValue {
+  readonly valueKind = ConfigurationOptionValueKind.StringArray;
+
+  constructor(
+    /** Closed string elements in source/evaluation order. */
+    readonly values: readonly string[],
+    /** Source address for the array expression that produced this value. */
     readonly addressHandle: AddressHandle | null,
   ) {}
 }
@@ -194,6 +208,7 @@ export type ConfigurationOptionValue =
   | AbsentConfigurationOptionValue
   | BooleanConfigurationOptionValue
   | StringConfigurationOptionValue
+  | StringArrayConfigurationOptionValue
   | NumberConfigurationOptionValue
   | NullConfigurationOptionValue
   | ObjectConfigurationOptionValue

@@ -6,7 +6,10 @@ import type {
   RegistrationKeyRole,
   RegistrationStrategy,
 } from './registration-admission.js';
-import type { RegistrationValueKind } from './registration-reference.js';
+import type {
+  FrameworkRegistrationKind,
+  RegistrationValueKind,
+} from './registration-reference.js';
 
 export const enum RegistrationCarrierKind {
   /** Call to `Registration.instance`, `singleton`, `transient`, `callback`, `cachedCallback`, `aliasTo`, or `defer`. */
@@ -50,6 +53,8 @@ export class RegistrationValueObservation {
     readonly isDeclaration: boolean,
     /** Product handle when another producer already materialized this value. */
     readonly productHandle: ProductHandle | null = null,
+    /** Known framework registration effect package, when the source value is recognized. */
+    readonly frameworkKind: FrameworkRegistrationKind | null = null,
   ) {}
 }
 

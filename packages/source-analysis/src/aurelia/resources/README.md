@@ -35,10 +35,21 @@ DI admission or template compilation. Template controllers currently converge th
 operation that turns contributions into full definitions; it should be recorded through materialization/provenance
 rather than being baked into the product name.
 
+Framework-owned built-ins are also modeled as resource headers. `built-in-resources.ts` records the runtime-html,
+i18n, and state default resource catalogs as concrete, runtime-linked model classes so compiler worlds can see
+built-in template controllers, custom attributes/elements, value converters, and binding behaviors without pretending
+they came from user source. These are headers, not converged custom-element/custom-attribute definitions. Bindables,
+controller internals, and template compilation semantics should be added by the definition/convergence producers that
+own those fields.
+
 Recognizer classes stay kernel-free. The kernel boundary is the emitter: each observation records direct evidence
 and provenance, each closed definition header becomes a `resource.definition-header` product, and each observation gets
 a materialization record that points at produced products, declaration claims, and open seams. That keeps recognition
 cheap to evolve while still giving inquiry a durable graph.
+
+Emitter results return typed definition-header handles for downstream producers. Consumers that need resource products
+should use those handles instead of rediscovering emitted products from the store, but full resource convergence still
+belongs to a later pass.
 
 Open seams are part of the product here. A carrier with an open kind, name, alias, pattern, or target should still
 produce kernel pressure rather than disappearing or pretending to be complete.
@@ -56,6 +67,9 @@ Watchpoints:
 - Resource vocabulary uses explicit kernel slots for claim predicates, seam kinds, and product kinds. Keep new
   entries small and source-grounded; if a name starts representing answer policy, ranking, or consumer usefulness, it
   belongs in inquiry rather than resource vocabulary.
+- Built-in resource catalogs are admitted by configuration effects before full resource convergence exists. Do not use
+  those headers as a shortcut for bindable metadata or compiled definitions; let compiler-world visibility consume the
+  header and leave deeper semantics to the producer that proves them.
 - Resource open seams carry product-owned `KernelVocabulary.Resource.*` seam keys directly. Do not add a second local
   open-kind enum unless a future producer needs a genuinely different, non-durable taxonomy.
 - Product-level provenance is in place and definition models now expose field-level provenance slots. Convergence

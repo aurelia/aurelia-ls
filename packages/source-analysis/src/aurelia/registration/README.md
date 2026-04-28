@@ -54,6 +54,9 @@ That keeps registration analyzable before DI world construction exists.
   an observation; the later resolver/resource table rows are DI world products.
 - Key provenance is not always provider-key provenance. `Registration.defer(key, ...params)` references a registry
   lookup key and must not emit the same `registration.admits-key` claim as `Registration.singleton(key, value)`.
+- Known framework registration effects use explicit `FrameworkRegistrationKind` fields. Registry bodies and
+  framework-owned registration spreads are separate admission products; do not infer either from `localName`.
+  Local names are trace/debug labels only.
 - Avoid generic value escape hatches. If key or registered-value shape matters, model it as a typed registration field
   with provenance or leave an open seam.
 
@@ -67,9 +70,12 @@ retaining TypeScript nodes in durable records. Container receivers belong to `di
 products.
 
 `registration-admission.ts` is the product model. `ResolverRegistrationAdmission`,
-`ParameterizedRegistryAdmission`, and `RegistryRegistrationAdmission` mirror the runtime ingress families that feed
-container registration. They carry the same product handle as the kernel `MaterializedProduct` envelope so callers can
-keep typed product indexes without smuggling product fields into the generic kernel product record.
+`ParameterizedRegistryAdmission`, `RegistryRegistrationAdmission`, and `FrameworkRegistrationAdmission` mirror the
+runtime ingress families and framework-owned registration groups that feed container registration.
+`OpenRegistrationAdmission` preserves observed but unclassified registration pressure without pretending it is a
+resolver, registry, or framework group. These products carry the same product handle as the kernel
+`MaterializedProduct` envelope so callers can keep typed product indexes without smuggling product fields into the
+generic kernel product record.
 
 Runtime-shaped `Resolver`, `IRegistry`, and `ParameterizedRegistry` values live in `../di/`. Registration admissions
 may point at those products, but they are not themselves the runtime values.

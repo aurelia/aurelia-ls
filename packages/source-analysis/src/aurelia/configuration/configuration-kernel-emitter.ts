@@ -97,6 +97,7 @@ import {
   NumberConfigurationOptionValue,
   ObjectConfigurationOptionValue,
   StringConfigurationOptionValue,
+  StringArrayConfigurationOptionValue,
   UnknownConfigurationOptionValue,
 } from './configuration-option.js';
 import {
@@ -130,6 +131,8 @@ export class ConfigurationKernelEmission {
     readonly aurelias: readonly Aurelia[],
     /** Typed app-root products produced by this emission. */
     readonly appRoots: readonly AppRoot[],
+    /** Typed root container emulator frames produced by app admission. */
+    readonly containers: readonly Container[],
     /** Typed app-task products produced by this emission. */
     readonly appTasks: readonly AppTaskDefinition[],
     /** Typed option-contribution products produced by this emission. */
@@ -195,6 +198,7 @@ export class ConfigurationKernelEmitter {
     const steps: ConfigurationStep[] = [];
     const aurelias: Aurelia[] = [];
     const appRoots: AppRoot[] = [];
+    const containers: Container[] = [];
     const appTasks: AppTaskDefinition[] = [];
     const optionContributions: ConfigurationOptionContribution[] = [];
     const registrationAdmissions: RegistrationAdmissionProduct[] = [];
@@ -206,6 +210,7 @@ export class ConfigurationKernelEmitter {
       steps.push(...emission.steps);
       aurelias.push(...emission.aurelias);
       appRoots.push(...emission.appRoots);
+      containers.push(...emission.containers);
       appTasks.push(...emission.appTasks);
       optionContributions.push(...emission.optionContributions);
       registrationAdmissions.push(...emission.registrationAdmissions);
@@ -220,6 +225,7 @@ export class ConfigurationKernelEmitter {
       steps,
       aurelias,
       appRoots,
+      containers,
       appTasks,
       optionContributions,
       registrationAdmissions,
@@ -237,6 +243,7 @@ export class ConfigurationKernelEmitter {
     readonly steps: readonly ConfigurationStep[];
     readonly aurelias: readonly Aurelia[];
     readonly appRoots: readonly AppRoot[];
+    readonly containers: readonly Container[];
     readonly appTasks: readonly AppTaskDefinition[];
     readonly optionContributions: readonly ConfigurationOptionContribution[];
     readonly registrationAdmissions: readonly RegistrationAdmissionProduct[];
@@ -342,6 +349,7 @@ export class ConfigurationKernelEmitter {
       steps,
       aurelias: appFrame == null ? [] : [appFrame.aurelia],
       appRoots: appFrame?.appRoot == null ? [] : [appFrame.appRoot],
+      containers: appFrame == null ? [] : [appFrame.container],
       appTasks,
       optionContributions,
       registrationAdmissions,
@@ -939,6 +947,8 @@ export class ConfigurationKernelEmitter {
         return { records, value: new BooleanConfigurationOptionValue(Boolean(observation.primitive), addressHandle), provenanceHandle: source?.provenanceHandle ?? null };
       case ConfigurationOptionValueKind.String:
         return { records, value: new StringConfigurationOptionValue(String(observation.primitive ?? ''), addressHandle), provenanceHandle: source?.provenanceHandle ?? null };
+      case ConfigurationOptionValueKind.StringArray:
+        return { records, value: new StringArrayConfigurationOptionValue(observation.stringValues, addressHandle), provenanceHandle: source?.provenanceHandle ?? null };
       case ConfigurationOptionValueKind.Number:
         return { records, value: new NumberConfigurationOptionValue(typeof observation.primitive === 'number' ? observation.primitive : Number.NaN, addressHandle), provenanceHandle: source?.provenanceHandle ?? null };
       case ConfigurationOptionValueKind.Null:
@@ -1363,6 +1373,7 @@ function enrichAppTaskRegistration(
       observation.registeredValue.node,
       observation.registeredValue.isDeclaration,
       appTask.task.productHandle,
+      observation.registeredValue.frameworkKind,
     ),
     observation.registryParameters,
     observation.openSeams,

@@ -72,10 +72,12 @@ export class TemplateVisibleResource {
     readonly resourceKind: ResourceDefinitionKind,
     /** Runtime lookup name such as element name, attribute name, converter name, or binding-command name. */
     readonly name: string,
-    /** Product handle for the converged resource definition, when materialized. */
-    readonly definitionProductHandle: ProductHandle | null,
-    /** Identity handle for the resource, when materialized. */
-    readonly identityHandle: IdentityHandle | null,
+    /** Other lookup names that resolve to the same resource product. */
+    readonly aliases: readonly string[],
+    /** Product handle for the visible resource model, which may be a header, full definition, or syntax executable. */
+    readonly resourceProductHandle: ProductHandle | null,
+    /** Identity handle for the visible resource model, when materialized. */
+    readonly resourceIdentityHandle: IdentityHandle | null,
     /** How this resource became visible to the compiler world. */
     readonly visibilityKind: TemplateResourceVisibilityKind,
     /** Source address for the registration, definition, import, or convention that made it visible. */
@@ -136,6 +138,58 @@ export class TemplateResourceResolverService {
   toReference(): TemplateCompilerServiceReference {
     return new TemplateCompilerServiceReference(
       TemplateCompilerServiceKind.ResourceResolver,
+      this.productHandle,
+      this.identityHandle,
+      this.sourceAddressHandle,
+    );
+  }
+}
+
+/** Runtime ExpressionParser service model used through the compiler-world parser contract. */
+@auLink('expression-parser:ExpressionParser')
+export class TemplateExpressionParserService {
+  constructor(
+    /** Product handle for the materialized-product envelope that represents this service. */
+    readonly productHandle: ProductHandle,
+    /** Identity for this service model. */
+    readonly identityHandle: IdentityHandle,
+    /** Container used to resolve the parser service. */
+    readonly container: ContainerReference,
+    /** Source address for the service registration or lookup. */
+    readonly sourceAddressHandle: AddressHandle | null,
+    /** Field-level provenance for source facts that matter to explanation or ambiguity. */
+    readonly fieldProvenance: readonly FieldProvenance<TemplateCompilerServiceField>[] = [],
+  ) {}
+
+  toReference(): TemplateCompilerServiceReference {
+    return new TemplateCompilerServiceReference(
+      TemplateCompilerServiceKind.ExpressionParser,
+      this.productHandle,
+      this.identityHandle,
+      this.sourceAddressHandle,
+    );
+  }
+}
+
+/** Runtime AttrMapper service model used through the compiler-world mapper contract. */
+@auLink('runtime-html:AttrMapper')
+export class TemplateAttributeMapperService {
+  constructor(
+    /** Product handle for the materialized-product envelope that represents this service. */
+    readonly productHandle: ProductHandle,
+    /** Identity for this service model. */
+    readonly identityHandle: IdentityHandle,
+    /** Container used to resolve the mapper service. */
+    readonly container: ContainerReference,
+    /** Source address for the service registration or lookup. */
+    readonly sourceAddressHandle: AddressHandle | null,
+    /** Field-level provenance for source facts that matter to explanation or ambiguity. */
+    readonly fieldProvenance: readonly FieldProvenance<TemplateCompilerServiceField>[] = [],
+  ) {}
+
+  toReference(): TemplateCompilerServiceReference {
+    return new TemplateCompilerServiceReference(
+      TemplateCompilerServiceKind.AttributeMapper,
       this.productHandle,
       this.identityHandle,
       this.sourceAddressHandle,

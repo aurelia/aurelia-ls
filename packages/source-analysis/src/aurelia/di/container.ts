@@ -366,7 +366,7 @@ export class Container {
 
   /** Runtime `find(kind, name)` / `find(key)` shape over resource rows. */
   find(kindOrKey: string, name: string | null = null): ContainerResourceLookup {
-    const resourceKey = name == null ? kindOrKey : `au:${kindOrKey}:${name}`;
+    const resourceKey = name == null ? kindOrKey : `au:resource:${kindOrKey}:${name}`;
     if (this.disposed) {
       return new ContainerResourceLookup(
         ContainerLookupState.Disposed,

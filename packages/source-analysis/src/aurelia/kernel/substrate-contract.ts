@@ -131,6 +131,8 @@ export const enum KernelSubstrateModelSurface {
   ConfigurationRecognition = 'configuration-recognition',
   /** Configuration producer support that emits kernel records for recognized configuration flow. */
   ConfigurationEmission = 'configuration-emission',
+  /** App-world producer composition across configuration, DI, and compiler-world handoff. */
+  ConfigurationAppWorld = 'configuration-app-world',
   /** DI container models and references. */
   DiContainer = 'di-container',
   /** DI container configuration values that shape container behavior. */
@@ -145,6 +147,8 @@ export const enum KernelSubstrateModelSurface {
   DiOperation = 'di-operation',
   /** DI container-owned resolver, resource, and factory slots. */
   DiSlot = 'di-slot',
+  /** DI world construction producers that spend configuration-owned registrations into container products. */
+  DiWorldConstruction = 'di-world-construction',
   /** Aurelia expression AST nodes. */
   ExpressionAst = 'expression-ast',
   /** Expression parse result, failure, selection, and candidate algebra. */
@@ -161,6 +165,8 @@ export const enum KernelSubstrateModelSurface {
   ResourceRecognition = 'resource-recognition',
   /** Resource target, alias, dependency, and instruction references. */
   ResourceReference = 'resource-reference',
+  /** Framework-owned built-in resource catalogs and header producers. */
+  ResourceBuiltInCatalog = 'resource-built-in-catalog',
   /** Normalized registration admission records. */
   RegistrationAdmission = 'registration-admission',
   /** Registration recognition observations before admission materialization. */
@@ -364,6 +370,13 @@ export const KernelSubstrateModelSurfaces = {
     },
     summary: 'Configuration emission support that materializes recognized configuration flow into kernel records.',
   },
+  ConfigurationAppWorlds: {
+    surface: KernelSubstrateModelSurface.ConfigurationAppWorld,
+    match: {
+      files: ['packages/source-analysis/src/aurelia/configuration/app-world-producer.ts'],
+    },
+    summary: 'App-world producer composition across configuration emission, DI world construction, and compiler-world handoff.',
+  },
   DiContainers: {
     surface: KernelSubstrateModelSurface.DiContainer,
     match: {
@@ -413,6 +426,16 @@ export const KernelSubstrateModelSurfaces = {
       files: ['packages/source-analysis/src/aurelia/di/container-slot.ts'],
     },
     summary: 'Container-owned resolver, resource, and factory slots produced by DI world construction.',
+  },
+  DiWorldConstruction: {
+    surface: KernelSubstrateModelSurface.DiWorldConstruction,
+    match: {
+      files: [
+        'packages/source-analysis/src/aurelia/di/world-construction.ts',
+        'packages/source-analysis/src/aurelia/di/world-construction-producer.ts',
+      ],
+    },
+    summary: 'DI world-construction producer and emission records that spend configuration admissions.',
   },
   ExpressionAst: {
     surface: KernelSubstrateModelSurface.ExpressionAst,
@@ -495,9 +518,22 @@ export const KernelSubstrateModelSurfaces = {
   ResourceReferences: {
     surface: KernelSubstrateModelSurface.ResourceReference,
     match: {
-      files: ['packages/source-analysis/src/aurelia/resources/resource-reference.ts'],
+      files: [
+        'packages/source-analysis/src/aurelia/resources/resource-kind.ts',
+        'packages/source-analysis/src/aurelia/resources/resource-reference.ts',
+      ],
     },
-    summary: 'Resource target, alias, dependency, and instruction reference models.',
+    summary: 'Resource target, runtime key, alias, dependency, and instruction reference models.',
+  },
+  ResourceBuiltInCatalogs: {
+    surface: KernelSubstrateModelSurface.ResourceBuiltInCatalog,
+    match: {
+      files: [
+        'packages/source-analysis/src/aurelia/resources/built-in-resources.ts',
+        'packages/source-analysis/src/aurelia/resources/built-in-resource-producer.ts',
+      ],
+    },
+    summary: 'Framework-owned built-in resource catalogs, resource headers, configured selections, and producers.',
   },
   RegistrationAdmissions: {
     surface: KernelSubstrateModelSurface.RegistrationAdmission,
@@ -548,7 +584,10 @@ export const KernelSubstrateModelSurfaces = {
   TemplateCompilerWorlds: {
     surface: KernelSubstrateModelSurface.TemplateCompilerWorld,
     match: {
-      files: ['packages/source-analysis/src/aurelia/template/compiler-world.ts'],
+      files: [
+        'packages/source-analysis/src/aurelia/template/compiler-world.ts',
+        'packages/source-analysis/src/aurelia/template/compiler-world-producer.ts',
+      ],
     },
     summary: 'Compiler worlds, resource scopes, visible resources, and compiler service references.',
   },
@@ -576,7 +615,10 @@ export const KernelSubstrateModelSurfaces = {
   TemplateBuiltInSyntax: {
     surface: KernelSubstrateModelSurface.TemplateBuiltInSyntax,
     match: {
-      files: ['packages/source-analysis/src/aurelia/template/built-in-syntax.ts'],
+      files: [
+        'packages/source-analysis/src/aurelia/template/built-in-syntax.ts',
+        'packages/source-analysis/src/aurelia/template/built-in-syntax-producer.ts',
+      ],
     },
     summary: 'Framework-provided attribute-pattern and binding-command syntax catalogs.',
   },

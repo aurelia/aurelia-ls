@@ -74,7 +74,36 @@ kernel records.
 - Auto-registration, constructor invocation, transformers, custom default resolvers, and registry bodies are surfaced
   as lookup/activation pressure for now. They should become explicit products or seams when the producer that needs
   them arrives.
+- Known framework registration effects may feed adjacent product layers without DI executing arbitrary framework code.
+  Attribute-pattern parser inputs and binding-command executables consume the same configured syntax catalogs for
+  compiler-world purposes. Runtime stores them through different mechanisms for performance, but the product model
+  treats framework syntax as effectively app-global and frozen after configuration. Framework resource headers are
+  still spent into `ContainerResourceSlot` products for ordinary resource lookup.
 - Resource inheritance should not reuse parent slot products as child-owned facts. The DI producer that applies
   inheritance must create child slot products with their own provenance.
 - Runtime `deregister(...)` is intentionally not mirrored in the container emulator yet. It primarily serves HMR plugin
   flows, and modeling it now would pull teardown/resource-removal policy into the first DI world-construction pass.
+
+## Current Shape
+
+`world-construction-producer.ts` is the first app-world spending pass. It consumes the typed products emitted by
+configuration recognition, installs each modeled container's built-in `IContainer` self resolver, then spends
+configuration-owned registration admissions against the sequence's root container.
+
+The first spending path is intentionally narrow but end-to-end:
+
+- resolver-producing admissions with closed admitted keys become runtime-shaped `Resolver` products and
+  `ContainerResolverSlot` products;
+- known framework resource catalog admissions become `ContainerResourceSlot` products keyed by
+  `au:resource:<type>:<name>`, including alias keys such as `hide` for `show`;
+- every spent admission produces a `ContainerRegistrationOperation` product and a `di.accepts-registration` claim;
+- registration operations point at their emitted resolver, registry, and slot products through `di.produces-product`
+  claims;
+- resolver products, resolver slots, and resource slots produce `di.provides-key` claims;
+- `Registration.defer(...)` and generic `IRegistry` admissions become runtime-shaped registry products plus open seams
+  until registry-body interpretation and recursive parameter spending are modeled.
+- open registration admissions produce only the container operation and an open DI seam. They are preserved as
+  registration pressure rather than being treated as resolver rows.
+
+`world-construction.ts` is the typed emission envelope for callers that need the live container emulator frames,
+operation products, produced slots, resolver products, and open seams before inquiry projections exist.

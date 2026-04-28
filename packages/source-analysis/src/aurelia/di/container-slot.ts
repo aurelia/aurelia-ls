@@ -64,12 +64,14 @@ export class ContainerResourceSlot {
     readonly productHandle: ProductHandle,
     /** Container whose resource lookup table owns this slot. */
     readonly container: ContainerReference,
-    /** Runtime resource key string such as `au:ce:my-element`, when known. */
+    /** Runtime resource key string such as `au:resource:custom-element:my-element`, when known. */
     readonly resourceKey: string,
     /** DI key identity for the runtime resource key row. */
     readonly keyIdentityHandle: IdentityHandle,
     /** Resource identity visible through this lookup row, when known. */
     readonly resourceIdentityHandle: IdentityHandle | null,
+    /** Resource product visible through this lookup row, when known. */
+    readonly resourceProductHandle: ProductHandle | null,
     /** Resolver slot or resolver product backing the resource key. */
     readonly resolverProductHandle: ProductHandle | null,
     /** Source address for the operation that produced this row. */
