@@ -72,6 +72,8 @@ export const enum KernelVocabularyNamespace {
   Registration = 'registration',
   /** Vocabulary about app and plugin configuration flow. */
   Configuration = 'configuration',
+  /** Vocabulary about template compiler services, scopes, syntax, and lowering. */
+  Compiler = 'compiler',
   /** Vocabulary about template references and scope. */
   Template = 'template',
   /** Vocabulary about binding expression or binding instruction behavior. */
@@ -261,12 +263,82 @@ export const KernelVocabulary = {
     ),
   },
   Di: {
+    /** Product kind for an abstract Aurelia container in the analyzed app world. */
+    Container: defineVocabulary(
+      KernelVocabularyNamespace.Di,
+      'container',
+      KernelVocabularySlot.ProductKind,
+      'An abstract Aurelia container participating in DI world construction.',
+    ),
+    /** Product kind for container configuration that affects abstract container behavior. */
+    ContainerConfiguration: defineVocabulary(
+      KernelVocabularyNamespace.Di,
+      'container-configuration',
+      KernelVocabularySlot.ProductKind,
+      'Container configuration that affects abstract container behavior.',
+    ),
+    /** Product kind for a runtime-shaped resolver value. */
+    Resolver: defineVocabulary(
+      KernelVocabularyNamespace.Di,
+      'resolver',
+      KernelVocabularySlot.ProductKind,
+      'A runtime-shaped DI resolver value whose behavior can be abstractly interpreted.',
+    ),
+    /** Product kind for an IRegistry-shaped value. */
+    Registry: defineVocabulary(
+      KernelVocabularyNamespace.Di,
+      'registry',
+      KernelVocabularySlot.ProductKind,
+      'An IRegistry-shaped value whose register method can be abstractly interpreted.',
+    ),
+    /** Product kind for a runtime-shaped ParameterizedRegistry value. */
+    ParameterizedRegistry: defineVocabulary(
+      KernelVocabularyNamespace.Di,
+      'parameterized-registry',
+      KernelVocabularySlot.ProductKind,
+      'A runtime-shaped ParameterizedRegistry value produced by deferred registration.',
+    ),
+    /** Product kind for applying a registration admission to a concrete container. */
+    ContainerRegistration: defineVocabulary(
+      KernelVocabularyNamespace.Di,
+      'container-registration',
+      KernelVocabularySlot.ProductKind,
+      'A registration admission being spent against a concrete container.',
+    ),
+    /** Product kind for a row in a container resolver map. */
+    ResolverSlot: defineVocabulary(
+      KernelVocabularyNamespace.Di,
+      'resolver-slot',
+      KernelVocabularySlot.ProductKind,
+      'A DI resolver slot owned by a container for a specific key.',
+    ),
+    /** Product kind for a row in a container resource lookup table. */
+    ResourceSlot: defineVocabulary(
+      KernelVocabularyNamespace.Di,
+      'resource-slot',
+      KernelVocabularySlot.ProductKind,
+      'A resource resolver slot visible through container resource lookup.',
+    ),
+    /** Product kind for a row in a container-tree factory map. */
+    FactorySlot: defineVocabulary(
+      KernelVocabularyNamespace.Di,
+      'factory-slot',
+      KernelVocabularySlot.ProductKind,
+      'A factory slot shared by a container tree for a constructable key.',
+    ),
     /** Registration or resolver flow provides a DI key. */
     ProvidesKey: defineVocabulary(
       KernelVocabularyNamespace.Di,
       'provides-key',
       KernelVocabularySlot.ClaimPredicate,
       'Registration or resolver flow provides a DI key.',
+    ),
+    /** A container accepts a registration admission for later resolver/resource/factory effects. */
+    AcceptsRegistration: defineVocabulary(
+      KernelVocabularyNamespace.Di,
+      'accepts-registration',
+      KernelVocabularySlot.ClaimPredicate,
+      'A container accepts a registration admission for later resolver, resource, or factory effects.',
     ),
     /** A DI lookup resolves, ambiguously resolves, or fails to resolve to a provider. */
     ResolvesTo: defineVocabulary(
@@ -283,6 +355,27 @@ export const KernelVocabulary = {
       'admission',
       KernelVocabularySlot.ProductKind,
       'A normalized registration admission before DI world construction spends it into resolver or resource state.',
+    ),
+    /** Product kind for a resolver-producing registration admission. */
+    ResolverAdmission: defineVocabulary(
+      KernelVocabularyNamespace.Registration,
+      'resolver-admission',
+      KernelVocabularySlot.ProductKind,
+      'A registration admission that produces or admits an Aurelia resolver.',
+    ),
+    /** Product kind for a parameterized registry produced by Registration.defer. */
+    ParameterizedRegistryAdmission: defineVocabulary(
+      KernelVocabularyNamespace.Registration,
+      'parameterized-registry-admission',
+      KernelVocabularySlot.ProductKind,
+      'A registration admission that produces a ParameterizedRegistry from Registration.defer.',
+    ),
+    /** Product kind for an IRegistry-shaped value before its register method is spent. */
+    RegistryAdmission: defineVocabulary(
+      KernelVocabularyNamespace.Registration,
+      'registry-admission',
+      KernelVocabularySlot.ProductKind,
+      'An IRegistry-shaped registration admission before DI world construction spends its register method.',
     ),
     /** A registration admission offers a DI key to later world construction. */
     AdmitsKey: defineVocabulary(
@@ -362,13 +455,542 @@ export const KernelVocabulary = {
       'Registration recognition could not close the target of an alias registration.',
     ),
   },
+  Configuration: {
+    /** Product kind for a modeled Aurelia facade that owns the root container/app-root provider handoff. */
+    Aurelia: defineVocabulary(
+      KernelVocabularyNamespace.Configuration,
+      'aurelia',
+      KernelVocabularySlot.ProductKind,
+      'A modeled Aurelia facade that owns the root container and AppRoot provider handoff for app admission.',
+    ),
+    /** Product kind for runtime-shaped AppRoot configuration before construction effects are spent. */
+    AppRootConfig: defineVocabulary(
+      KernelVocabularyNamespace.Configuration,
+      'app-root-config',
+      KernelVocabularySlot.ProductKind,
+      'Runtime-shaped AppRoot configuration before AppRoot construction spends host/component/container facts.',
+    ),
+    /** Product kind for a modeled AppRoot that connects a root component, host, container, and root controller. */
+    AppRoot: defineVocabulary(
+      KernelVocabularyNamespace.Configuration,
+      'app-root',
+      KernelVocabularySlot.ProductKind,
+      'A modeled AppRoot connecting a root component, host, container, and root custom-element controller.',
+    ),
+    /** Product kind for a modeled runtime controller at a known controller phase. */
+    Controller: defineVocabulary(
+      KernelVocabularyNamespace.Configuration,
+      'controller',
+      KernelVocabularySlot.ProductKind,
+      'A modeled runtime controller at a known controller phase, used to connect resources, containers, and templates.',
+    ),
+    /** Product kind for ordered app/plugin/registry/builder configuration flow. */
+    Sequence: defineVocabulary(
+      KernelVocabularyNamespace.Configuration,
+      'sequence',
+      KernelVocabularySlot.ProductKind,
+      'Ordered app, plugin, registry, builder, or lifecycle-slot configuration flow before DI world construction.',
+    ),
+    /** Product kind for one ordered action or observation inside a configuration sequence. */
+    Step: defineVocabulary(
+      KernelVocabularyNamespace.Configuration,
+      'step',
+      KernelVocabularySlot.ProductKind,
+      'One ordered configuration action or observation that connects source/evaluation order to produced products.',
+    ),
+    /** Product kind for source-backed option defaulting, customization, forwarding, or builder mutation. */
+    OptionContribution: defineVocabulary(
+      KernelVocabularyNamespace.Configuration,
+      'option-contribution',
+      KernelVocabularySlot.ProductKind,
+      'One source-backed contribution to a configuration option path before configuration convergence folds precedence.',
+    ),
+    /** Product kind for an IAppTask value produced by AppTask slot factories. */
+    AppTask: defineVocabulary(
+      KernelVocabularyNamespace.Configuration,
+      'app-task',
+      KernelVocabularySlot.ProductKind,
+      'A deferred lifecycle task registered under IAppTask and selected by AppRoot slot dispatch.',
+    ),
+    /** Product kind for an AppRoot lifecycle-slot dispatch point. */
+    AppTaskSlotDispatch: defineVocabulary(
+      KernelVocabularyNamespace.Configuration,
+      'app-task-slot-dispatch',
+      KernelVocabularySlot.ProductKind,
+      'An AppRoot lifecycle-slot dispatch point that selects AppTasks without executing callback bodies.',
+    ),
+    /** A configuration sequence contains one ordered step. */
+    ContainsStep: defineVocabulary(
+      KernelVocabularyNamespace.Configuration,
+      'contains-step',
+      KernelVocabularySlot.ClaimPredicate,
+      'A configuration sequence contains one ordered step.',
+    ),
+    /** A configuration step produced or selected a product that later passes can consume. */
+    ProducesProduct: defineVocabulary(
+      KernelVocabularyNamespace.Configuration,
+      'produces-product',
+      KernelVocabularySlot.ClaimPredicate,
+      'A configuration step produced or selected a product that later passes can consume.',
+    ),
+    /** A configuration step admitted a registration product before DI world construction spends it. */
+    AdmitsRegistration: defineVocabulary(
+      KernelVocabularyNamespace.Configuration,
+      'admits-registration',
+      KernelVocabularySlot.ClaimPredicate,
+      'A configuration step admitted a registration product before DI world construction spends it.',
+    ),
+    /** A modeled Aurelia facade owns the root container used by app admission. */
+    OwnsContainer: defineVocabulary(
+      KernelVocabularyNamespace.Configuration,
+      'owns-container',
+      KernelVocabularySlot.ClaimPredicate,
+      'A modeled Aurelia facade owns the root container used by app admission.',
+    ),
+    /** A modeled Aurelia facade prepared or selected an AppRoot boundary. */
+    HasAppRoot: defineVocabulary(
+      KernelVocabularyNamespace.Configuration,
+      'has-app-root',
+      KernelVocabularySlot.ClaimPredicate,
+      'A modeled Aurelia facade prepared or selected an AppRoot boundary.',
+    ),
+    /** Configuration recognition could not close the call receiver or target. */
+    OpenConfigurationTarget: defineVocabulary(
+      KernelVocabularyNamespace.Configuration,
+      'open-configuration-target',
+      KernelVocabularySlot.OpenSeamKind,
+      'Configuration recognition could not close a call receiver, configuration export, or plugin target.',
+    ),
+    /** Configuration recognition could not close an option contribution. */
+    OpenConfigurationOption: defineVocabulary(
+      KernelVocabularyNamespace.Configuration,
+      'open-configuration-option',
+      KernelVocabularySlot.OpenSeamKind,
+      'Configuration recognition could not close a configuration option path or value.',
+    ),
+    /** Configuration recognition saw a callback body that must not be executed in this layer. */
+    OpenConfigurationCallback: defineVocabulary(
+      KernelVocabularyNamespace.Configuration,
+      'open-configuration-callback',
+      KernelVocabularySlot.OpenSeamKind,
+      'Configuration recognition saw a callback whose body must stay available to later evaluation or DI spending.',
+    ),
+    /** Configuration recognition could not close ordering for a sequence edge. */
+    OpenConfigurationOrder: defineVocabulary(
+      KernelVocabularyNamespace.Configuration,
+      'open-configuration-order',
+      KernelVocabularySlot.OpenSeamKind,
+      'Configuration recognition could not close the ordering of configuration steps from source or evaluation flow.',
+    ),
+  },
+  Compiler: {
+    /** Product kind for a container-scoped compiler world. */
+    World: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'world',
+      KernelVocabularySlot.ProductKind,
+      'Container-scoped compiler world that supplies resources, syntax resources, and services to template passes.',
+    ),
+    /** Product kind for resource and syntax-resource visibility inside a compiler world. */
+    ResourceScope: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'resource-scope',
+      KernelVocabularySlot.ProductKind,
+      'Resource and syntax-resource visibility inside a compiler world.',
+    ),
+    /** Product kind for a runtime-shaped compiler service model. */
+    Service: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'service',
+      KernelVocabularySlot.ProductKind,
+      'Runtime-shaped compiler service such as a resource resolver, attribute parser, or command resolver.',
+    ),
+    /** Product kind for a runtime IAttributeParser model. */
+    AttributeParser: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'attribute-parser',
+      KernelVocabularySlot.ProductKind,
+      'Runtime IAttributeParser model with visible attribute-pattern handlers.',
+    ),
+    AttributeParserMachine: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'attribute-parser-machine',
+      KernelVocabularySlot.ProductKind,
+      'Runtime SyntaxInterpreter model compiled from registered attribute patterns.',
+    ),
+    CompiledAttributePattern: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'compiled-attribute-pattern',
+      KernelVocabularySlot.ProductKind,
+      'Runtime CompiledPattern model used by SyntaxInterpreter matching.',
+    ),
+    BuiltInSyntaxCatalog: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'built-in-syntax-catalog',
+      KernelVocabularySlot.ProductKind,
+      'Catalog of framework-provided syntax resources admitted by configuration.',
+    ),
+    BuiltInAttributePattern: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'built-in-attribute-pattern',
+      KernelVocabularySlot.ProductKind,
+      'Framework-provided attribute-pattern handler model.',
+    ),
+    BuiltInBindingCommand: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'built-in-binding-command',
+      KernelVocabularySlot.ProductKind,
+      'Framework-provided binding-command handler model.',
+    ),
+    /** Product kind for an executable attribute-pattern handler. */
+    AttributePatternExecutable: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'attribute-pattern-executable',
+      KernelVocabularySlot.ProductKind,
+      'Executable attribute-pattern handler visible through IAttributeParser.',
+    ),
+    /** Product kind for a runtime IBindingCommandResolver model. */
+    BindingCommandResolver: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'binding-command-resolver',
+      KernelVocabularySlot.ProductKind,
+      'Runtime IBindingCommandResolver model with visible binding-command handlers.',
+    ),
+    /** Product kind for an executable binding-command handler. */
+    BindingCommandExecutable: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'binding-command-executable',
+      KernelVocabularySlot.ProductKind,
+      'Executable binding-command handler visible through IBindingCommandResolver.',
+    ),
+    /** Product kind for runtime ICommandBuildInfo before command lowering. */
+    BindingCommandBuildInput: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'binding-command-build-input',
+      KernelVocabularySlot.ProductKind,
+      'Runtime ICommandBuildInfo product before a binding command builds instructions.',
+    ),
+    /** Product kind for the result of binding-command lowering. */
+    BindingCommandLowering: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'binding-command-lowering',
+      KernelVocabularySlot.ProductKind,
+      'Result of binding-command lowering before final instruction sequence assembly.',
+    ),
+    /** Compiler scope provides a resource to template lookup. */
+    ProvidesResource: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'provides-resource',
+      KernelVocabularySlot.ClaimPredicate,
+      'Compiler scope provides a resource to template lookup.',
+    ),
+    /** Compiler service lookup could not be closed. */
+    OpenServiceLookup: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'open-service-lookup',
+      KernelVocabularySlot.OpenSeamKind,
+      'Compiler service lookup could not be closed from the DI world.',
+    ),
+    /** Resource lookup for a template name stayed open. */
+    OpenResourceLookup: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'open-resource-lookup',
+      KernelVocabularySlot.OpenSeamKind,
+      'Template resource lookup could not close a custom element, custom attribute, bindable, or syntax resource.',
+    ),
+    /** Executable command or pattern body stayed opaque. */
+    OpenExecutableBody: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'open-executable-body',
+      KernelVocabularySlot.OpenSeamKind,
+      'Compiler reached a custom executable body that should be preserved rather than guessed.',
+    ),
+  },
   Template: {
+    /** Product kind for inquiry pressure shared by template parser and lowering passes. */
+    ParseContext: defineVocabulary(
+      KernelVocabularyNamespace.Template,
+      'parse-context',
+      KernelVocabularySlot.ProductKind,
+      'Inquiry pressure shared by HTML, attribute, expression, and lowering passes.',
+    ),
+    /** Product kind for authored HTML document or template fragments before Aurelia syntax classification. */
+    HtmlDocument: defineVocabulary(
+      KernelVocabularyNamespace.Template,
+      'html-document',
+      KernelVocabularySlot.ProductKind,
+      'Authored HTML document or template fragment before Aurelia syntax classification.',
+    ),
+    /** Product kind for authored HTML nodes before resource lookup or lowering. */
+    HtmlNode: defineVocabulary(
+      KernelVocabularyNamespace.Template,
+      'html-node',
+      KernelVocabularySlot.ProductKind,
+      'Authored HTML node before resource lookup or lowering.',
+    ),
+    /** Product kind for authored HTML attributes before attribute-pattern parsing. */
+    HtmlAttribute: defineVocabulary(
+      KernelVocabularyNamespace.Template,
+      'html-attribute',
+      KernelVocabularySlot.ProductKind,
+      'Authored HTML attribute before attribute-pattern parsing.',
+    ),
+    /** Product kind for runtime AttrSyntax after attribute-pattern interpretation. */
+    AttributeSyntax: defineVocabulary(
+      KernelVocabularyNamespace.Template,
+      'attribute-syntax',
+      KernelVocabularySlot.ProductKind,
+      'Runtime AttrSyntax product after attribute-pattern interpretation.',
+    ),
+    /** Product kind for attribute classification after resource and bindable lookup. */
+    AttributeClassification: defineVocabulary(
+      KernelVocabularyNamespace.Template,
+      'attribute-classification',
+      KernelVocabularySlot.ProductKind,
+      'Attribute classification after resource, bindable, and command lookup.',
+    ),
     /** Markup or binding syntax references a resource by name or command. */
     ReferencesResource: defineVocabulary(
       KernelVocabularyNamespace.Template,
       'references-resource',
       KernelVocabularySlot.ClaimPredicate,
       'Markup or binding syntax references a resource by name or command.',
+    ),
+    /** Template parsing reached malformed or frontier-owned HTML. */
+    OpenHtmlSyntax: defineVocabulary(
+      KernelVocabularyNamespace.Template,
+      'open-html-syntax',
+      KernelVocabularySlot.OpenSeamKind,
+      'Template parsing reached malformed or frontier-owned HTML syntax.',
+    ),
+    /** Attribute parser could not close an attribute pattern or syntax part. */
+    OpenAttributeSyntax: defineVocabulary(
+      KernelVocabularyNamespace.Template,
+      'open-attribute-syntax',
+      KernelVocabularySlot.OpenSeamKind,
+      'Attribute parser could not close an attribute pattern or syntax part.',
+    ),
+  },
+  Binding: {
+    /** Product kind for binding records produced by template lowering. */
+    Binding: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'binding',
+      KernelVocabularySlot.ProductKind,
+      'Binding product produced by template lowering.',
+    ),
+    /** Binding kind for property assignment or observation. */
+    Property: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'property',
+      KernelVocabularySlot.BindingKind,
+      'Property binding produced from bindable or command syntax.',
+    ),
+    /** Binding kind for text or attribute interpolation. */
+    Interpolation: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'interpolation',
+      KernelVocabularySlot.BindingKind,
+      'Interpolation binding produced from text or attribute syntax.',
+    ),
+    /** Binding kind for event listeners. */
+    Listener: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'listener',
+      KernelVocabularySlot.BindingKind,
+      'Event listener binding produced by trigger, capture, or related syntax.',
+    ),
+    /** Binding kind for iterator semantics such as repeat.for. */
+    Iterator: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'iterator',
+      KernelVocabularySlot.BindingKind,
+      'Iterator binding produced by template-controller syntax such as repeat.for.',
+    ),
+    /** Binding kind for ref semantics. */
+    Ref: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'ref',
+      KernelVocabularySlot.BindingKind,
+      'Reference binding produced by ref syntax.',
+    ),
+  },
+  Instruction: {
+    /** Product kind for an ordered instruction list. */
+    Sequence: defineVocabulary(
+      KernelVocabularyNamespace.Instruction,
+      'sequence',
+      KernelVocabularySlot.ProductKind,
+      'Ordered lowered instruction list for a template, fragment, or synthetic view.',
+    ),
+    /** Product kind for one lowered rendering instruction. */
+    Instruction: defineVocabulary(
+      KernelVocabularyNamespace.Instruction,
+      'instruction',
+      KernelVocabularySlot.ProductKind,
+      'One lowered rendering instruction product.',
+    ),
+    HydrateElement: defineVocabulary(
+      KernelVocabularyNamespace.Instruction,
+      'hydrate-element',
+      KernelVocabularySlot.InstructionKind,
+      'Hydrate a custom element or element controller.',
+    ),
+    HydrateAttribute: defineVocabulary(
+      KernelVocabularyNamespace.Instruction,
+      'hydrate-attribute',
+      KernelVocabularySlot.InstructionKind,
+      'Hydrate a custom attribute.',
+    ),
+    HydrateTemplateController: defineVocabulary(
+      KernelVocabularyNamespace.Instruction,
+      'hydrate-template-controller',
+      KernelVocabularySlot.InstructionKind,
+      'Hydrate a template controller with a nested template.',
+    ),
+    HydrateLetElement: defineVocabulary(
+      KernelVocabularyNamespace.Instruction,
+      'hydrate-let-element',
+      KernelVocabularySlot.InstructionKind,
+      'Hydrate a let element and its let-binding instructions.',
+    ),
+    PropertyBinding: defineVocabulary(
+      KernelVocabularyNamespace.Instruction,
+      'property-binding',
+      KernelVocabularySlot.InstructionKind,
+      'Bind an expression to a target property.',
+    ),
+    Interpolation: defineVocabulary(
+      KernelVocabularyNamespace.Instruction,
+      'interpolation',
+      KernelVocabularySlot.InstructionKind,
+      'Bind text or attribute interpolation expressions.',
+    ),
+    ListenerBinding: defineVocabulary(
+      KernelVocabularyNamespace.Instruction,
+      'listener-binding',
+      KernelVocabularySlot.InstructionKind,
+      'Bind an event listener expression.',
+    ),
+    IteratorBinding: defineVocabulary(
+      KernelVocabularyNamespace.Instruction,
+      'iterator-binding',
+      KernelVocabularySlot.InstructionKind,
+      'Bind iterator locals and iterable expression.',
+    ),
+    RefBinding: defineVocabulary(
+      KernelVocabularyNamespace.Instruction,
+      'ref-binding',
+      KernelVocabularySlot.InstructionKind,
+      'Bind a ref expression.',
+    ),
+    LetBinding: defineVocabulary(
+      KernelVocabularyNamespace.Instruction,
+      'let-binding',
+      KernelVocabularySlot.InstructionKind,
+      'Bind a let declaration into template scope.',
+    ),
+    TextBinding: defineVocabulary(
+      KernelVocabularyNamespace.Instruction,
+      'text-binding',
+      KernelVocabularySlot.InstructionKind,
+      'Bind an expression to a text node.',
+    ),
+    AttributeBinding: defineVocabulary(
+      KernelVocabularyNamespace.Instruction,
+      'attribute-binding',
+      KernelVocabularySlot.InstructionKind,
+      'Bind an expression to an attribute, including attr/class/style command output.',
+    ),
+    MultiAttr: defineVocabulary(
+      KernelVocabularyNamespace.Instruction,
+      'multi-attr',
+      KernelVocabularySlot.InstructionKind,
+      'Carry one iterator multi-attribute binding entry.',
+    ),
+    SetProperty: defineVocabulary(
+      KernelVocabularyNamespace.Instruction,
+      'set-property',
+      KernelVocabularySlot.InstructionKind,
+      'Set a static property value.',
+    ),
+    SetAttribute: defineVocabulary(
+      KernelVocabularyNamespace.Instruction,
+      'set-attribute',
+      KernelVocabularySlot.InstructionKind,
+      'Set a static attribute value.',
+    ),
+    SetClassAttribute: defineVocabulary(
+      KernelVocabularyNamespace.Instruction,
+      'set-class-attribute',
+      KernelVocabularySlot.InstructionKind,
+      'Set a static class attribute value.',
+    ),
+    SetStyleAttribute: defineVocabulary(
+      KernelVocabularyNamespace.Instruction,
+      'set-style-attribute',
+      KernelVocabularySlot.InstructionKind,
+      'Set a static style attribute value.',
+    ),
+    StylePropertyBinding: defineVocabulary(
+      KernelVocabularyNamespace.Instruction,
+      'style-property-binding',
+      KernelVocabularySlot.InstructionKind,
+      'Bind an expression to one style property.',
+    ),
+    SpreadTransferedBinding: defineVocabulary(
+      KernelVocabularyNamespace.Instruction,
+      'spread-transfered-binding',
+      KernelVocabularySlot.InstructionKind,
+      'Carry the runtime marker for spread-transfered bindings.',
+    ),
+    SpreadElementPropBinding: defineVocabulary(
+      KernelVocabularyNamespace.Instruction,
+      'spread-element-prop-binding',
+      KernelVocabularySlot.InstructionKind,
+      'Wrap a spread instruction that targets a custom-element bindable.',
+    ),
+    SpreadValueBinding: defineVocabulary(
+      KernelVocabularyNamespace.Instruction,
+      'spread-value-binding',
+      KernelVocabularySlot.InstructionKind,
+      'Bind a spread value to element or bindable spread handling.',
+    ),
+    TranslationBinding: defineVocabulary(
+      KernelVocabularyNamespace.Instruction,
+      'translation-binding',
+      KernelVocabularySlot.InstructionKind,
+      'Bind an i18n translation key or text expression.',
+    ),
+    TranslationBindBinding: defineVocabulary(
+      KernelVocabularyNamespace.Instruction,
+      'translation-bind-binding',
+      KernelVocabularySlot.InstructionKind,
+      'Bind an i18n translation expression.',
+    ),
+    TranslationParametersBinding: defineVocabulary(
+      KernelVocabularyNamespace.Instruction,
+      'translation-parameters-binding',
+      KernelVocabularySlot.InstructionKind,
+      'Bind i18n translation parameter expressions.',
+    ),
+    StateBinding: defineVocabulary(
+      KernelVocabularyNamespace.Instruction,
+      'state-binding',
+      KernelVocabularySlot.InstructionKind,
+      'Bind state plugin output to a target property.',
+    ),
+    DispatchBinding: defineVocabulary(
+      KernelVocabularyNamespace.Instruction,
+      'dispatch-binding',
+      KernelVocabularySlot.InstructionKind,
+      'Bind state plugin dispatch handling to an event.',
+    ),
+    OpenInstruction: defineVocabulary(
+      KernelVocabularyNamespace.Instruction,
+      'open-instruction',
+      KernelVocabularySlot.OpenSeamKind,
+      'Template lowering could not close the rendering instruction shape.',
     ),
   },
   Derivation: {

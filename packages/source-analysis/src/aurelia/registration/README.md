@@ -45,8 +45,15 @@ That keeps registration analyzable before DI world construction exists.
 - Registration vocabulary uses explicit kernel slots for claim predicates, seam kinds, and product kinds. Resolver
   strategies and admission kinds should stay registration model fields unless a real producer or query needs a stable
   vocabulary key.
+- Registration open seams carry product-owned `KernelVocabulary.Registration.*` seam keys directly. Do not add a
+  second local open-kind enum unless a future producer needs a genuinely different, non-durable taxonomy.
+- Registration product models must stay at least as fine-grained as the runtime ingress shapes. Resolver-producing
+  admissions, `Registration.defer`/`ParameterizedRegistry`, and generic `IRegistry` admissions are separate product
+  classes so DI world construction does not have to rediscover the runtime split later.
 - A registration product should distinguish source admission from runtime consequence. `container.register(Foo)` is
   an observation; the later resolver/resource table rows are DI world products.
+- Key provenance is not always provider-key provenance. `Registration.defer(key, ...params)` references a registry
+  lookup key and must not emit the same `registration.admits-key` claim as `Registration.singleton(key, value)`.
 - Avoid generic value escape hatches. If key or registered-value shape matters, model it as a typed registration field
   with provenance or leave an open seam.
 
@@ -55,12 +62,31 @@ That keeps registration analyzable before DI world construction exists.
 `registration-observation.ts` is the AST-bearing layer. It records source carriers such as `Registration.*` calls,
 `container.register(...)`, static resource admission, object-map entries, and `IRegistry.register(...)` methods.
 
-`registration-reference.ts` is the source-level reference layer. It names target keys, receiving containers, and
-registered values without retaining TypeScript nodes in durable records.
+`registration-reference.ts` is the source-level reference layer. It names target keys and registered values without
+retaining TypeScript nodes in durable records. Container receivers belong to `di` operations, not registration
+products.
 
-`registration-admission.ts` is the product model. A `RegistrationAdmission` is normalized intent before DI world
-construction. It can point at a modeled DI key identity, a registered value reference, a container/app boundary, and
-field provenance.
+`registration-admission.ts` is the product model. `ResolverRegistrationAdmission`,
+`ParameterizedRegistryAdmission`, and `RegistryRegistrationAdmission` mirror the runtime ingress families that feed
+container registration. They carry the same product handle as the kernel `MaterializedProduct` envelope so callers can
+keep typed product indexes without smuggling product fields into the generic kernel product record.
+
+Runtime-shaped `Resolver`, `IRegistry`, and `ParameterizedRegistry` values live in `../di/`. Registration admissions
+may point at those products, but they are not themselves the runtime values.
+
+`registration-kernel-emitter.ts` is the current kernel boundary. It turns admission observations into source spans,
+evidence, provenance, typed DI key identities, registration identities, registration claims, materialized-product
+envelopes, materialization records, and open seams.
+
+Registration emission is scope-owned. Standalone source-module recognition is useful for inquiry and low-level
+registration analysis. Configuration emission owns the registration products admitted by a concrete configuration
+step, and later DI world construction should spend those configuration-owned products when constructing an app
+container world.
+
+`registration-recognition-producer.ts` recognizes the first source carrier family: imported `Registration.*(...)`
+factory calls from `aurelia` or `@aurelia/kernel`, including namespace imports such as
+`Aurelia.Registration.singleton(...)`. This is source-shape recognition, not container reachability. Configuration and
+later DI world construction still decide whether a registration product participates in an app/container world.
 
 DI key identities are split in the kernel by runtime key shape: class, interface symbol, string, symbol, resource,
 resolver, or unknown. Producers should use those records rather than hiding key semantics in descriptions.

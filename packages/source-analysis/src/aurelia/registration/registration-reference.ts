@@ -17,8 +17,6 @@ export const enum RegistrationValueKind {
   CachedCallback = 'cached-callback',
   /** Original key or provider targeted by an alias registration. */
   AliasTarget = 'alias-target',
-  /** Deferred registry value created by `Registration.defer`. */
-  DeferredRegistry = 'deferred-registry',
   /** Explicit resolver object supplied to the container. */
   Resolver = 'resolver',
   /** Factory value registered through container factory APIs. */
@@ -33,18 +31,6 @@ export const enum RegistrationValueKind {
   ObjectMap = 'object-map',
   /** Plain class admitted by the container's fallback self-registration branch. */
   PlainClass = 'plain-class',
-}
-
-/** Source-level reference to the container or app boundary receiving a registration. */
-export class RegistrationContainerReference {
-  constructor(
-    /** Container/app identity when the receiver has been modeled. */
-    readonly identityHandle: IdentityHandle | null,
-    /** Source address for the receiver expression or boundary. */
-    readonly addressHandle: AddressHandle | null,
-    /** Local receiver name for traces when no identity exists yet. */
-    readonly localName: string | null,
-  ) {}
 }
 
 /** Source-level reference to the DI key offered by a registration admission. */

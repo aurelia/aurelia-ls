@@ -77,7 +77,7 @@ export const enum DerivationEdgeKind {
 export class AddressDerivationEdge {
   /** String discriminator for serialized derivation-edge records. */
   readonly kind = DerivationRecordKind.DerivationEdge;
-  /** Edge payload category for fast filtering and projection. */
+  /** Edge value category for fast filtering and projection. */
   readonly edgeKind = DerivationEdgeKind.Address;
 
   constructor(
@@ -94,7 +94,7 @@ export class AddressDerivationEdge {
 export class IdentityDerivationEdge {
   /** String discriminator for serialized derivation-edge records. */
   readonly kind = DerivationRecordKind.DerivationEdge;
-  /** Edge payload category for fast filtering and projection. */
+  /** Edge value category for fast filtering and projection. */
   readonly edgeKind = DerivationEdgeKind.Identity;
 
   constructor(
@@ -111,7 +111,7 @@ export class IdentityDerivationEdge {
 export class ClaimDerivationEdge {
   /** String discriminator for serialized derivation-edge records. */
   readonly kind = DerivationRecordKind.DerivationEdge;
-  /** Edge payload category for fast filtering and projection. */
+  /** Edge value category for fast filtering and projection. */
   readonly edgeKind = DerivationEdgeKind.Claim;
 
   constructor(
@@ -128,7 +128,7 @@ export class ClaimDerivationEdge {
 export class EvidenceDerivationEdge {
   /** String discriminator for serialized derivation-edge records. */
   readonly kind = DerivationRecordKind.DerivationEdge;
-  /** Edge payload category for fast filtering and projection. */
+  /** Edge value category for fast filtering and projection. */
   readonly edgeKind = DerivationEdgeKind.Evidence;
 
   constructor(

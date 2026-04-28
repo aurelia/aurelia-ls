@@ -117,6 +117,34 @@ export const enum KernelSubstrateModelSurface {
   EvaluationSeam = 'evaluation-seam',
   /** Static evaluator readers, host adapters, and evaluator entrypoints. */
   EvaluationSupport = 'evaluation-support',
+  /** Aurelia app admission, app-root, and root configuration models. */
+  ConfigurationApp = 'configuration-app',
+  /** Ordered configuration flow, steps, and option contribution models. */
+  ConfigurationFlow = 'configuration-flow',
+  /** Deferred AppTask and lifecycle-slot dispatch models. */
+  ConfigurationAppTask = 'configuration-app-task',
+  /** Controller ontology used to connect app roots, containers, resources, and template phases. */
+  ConfigurationController = 'configuration-controller',
+  /** Configuration recognition observations before kernel product materialization. */
+  ConfigurationObservation = 'configuration-observation',
+  /** Configuration recognition producers, context, and pass orchestration. */
+  ConfigurationRecognition = 'configuration-recognition',
+  /** Configuration producer support that emits kernel records for recognized configuration flow. */
+  ConfigurationEmission = 'configuration-emission',
+  /** DI container models and references. */
+  DiContainer = 'di-container',
+  /** DI container configuration values that shape container behavior. */
+  DiConfiguration = 'di-configuration',
+  /** DI lookup answer records returned by container emulation methods. */
+  DiLookup = 'di-lookup',
+  /** DI resolver values and resolver-resolution answer records. */
+  DiResolver = 'di-resolver',
+  /** DI registry values and registry-registration answer records. */
+  DiRegistry = 'di-registry',
+  /** DI operations that spend registration/configuration facts into container state. */
+  DiOperation = 'di-operation',
+  /** DI container-owned resolver, resource, and factory slots. */
+  DiSlot = 'di-slot',
   /** Aurelia expression AST nodes. */
   ExpressionAst = 'expression-ast',
   /** Expression parse result, failure, selection, and candidate algebra. */
@@ -137,8 +165,26 @@ export const enum KernelSubstrateModelSurface {
   RegistrationAdmission = 'registration-admission',
   /** Registration recognition observations before admission materialization. */
   RegistrationObservation = 'registration-observation',
-  /** Registration key, value, and container references. */
+  /** Registration key and value references before DI world construction. */
   RegistrationReference = 'registration-reference',
+  /** Registration producer support that emits kernel records for admission observations. */
+  RegistrationEmission = 'registration-emission',
+  /** Registration recognition producers and pass orchestration. */
+  RegistrationRecognition = 'registration-recognition',
+  /** Template parse contexts carrying inquiry pressure into parsers and lowering. */
+  TemplateParseContext = 'template-parse-context',
+  /** Template compiler worlds, resource scopes, and compiler service references. */
+  TemplateCompilerWorld = 'template-compiler-world',
+  /** Authored HTML IR before Aurelia syntax classification. */
+  TemplateHtmlIr = 'template-html-ir',
+  /** Attribute parser syntax and classification products. */
+  TemplateAttributeSyntax = 'template-attribute-syntax',
+  /** Binding-command executable, resolver, build-input, and lowering products. */
+  TemplateBindingCommandExecution = 'template-binding-command-execution',
+  /** Framework-provided syntax resource catalogs for template compiler worlds. */
+  TemplateBuiltInSyntax = 'template-built-in-syntax',
+  /** Lowered rendering instruction products. */
+  TemplateInstructionIr = 'template-instruction-ir',
 }
 
 /**
@@ -259,6 +305,115 @@ export const KernelSubstrateModelSurfaces = {
     },
     summary: 'Evaluator entrypoints, expression readers, and TypeScript syntax helpers.',
   },
+  ConfigurationApps: {
+    surface: KernelSubstrateModelSurface.ConfigurationApp,
+    match: {
+      files: [
+        'packages/source-analysis/src/aurelia/configuration/aurelia.ts',
+        'packages/source-analysis/src/aurelia/configuration/app-root.ts',
+      ],
+    },
+    summary: 'Aurelia facade, AppRoot, and app-root configuration models used before DI world construction.',
+  },
+  ConfigurationFlow: {
+    surface: KernelSubstrateModelSurface.ConfigurationFlow,
+    match: {
+      files: [
+        'packages/source-analysis/src/aurelia/configuration/configuration-sequence.ts',
+        'packages/source-analysis/src/aurelia/configuration/configuration-option.ts',
+      ],
+    },
+    summary: 'Ordered configuration sequences, steps, and option contributions before registration or DI spending.',
+  },
+  ConfigurationAppTasks: {
+    surface: KernelSubstrateModelSurface.ConfigurationAppTask,
+    match: {
+      files: ['packages/source-analysis/src/aurelia/configuration/app-task.ts'],
+    },
+    summary: 'Deferred IAppTask definitions and AppRoot lifecycle-slot dispatch points.',
+  },
+  ConfigurationControllers: {
+    surface: KernelSubstrateModelSurface.ConfigurationController,
+    match: {
+      files: ['packages/source-analysis/src/aurelia/configuration/controller.ts'],
+    },
+    summary: 'Controller ontology that tracks runtime controller kind and compiler/hydration phase boundaries.',
+  },
+  ConfigurationObservations: {
+    surface: KernelSubstrateModelSurface.ConfigurationObservation,
+    match: {
+      files: ['packages/source-analysis/src/aurelia/configuration/configuration-observation.ts'],
+    },
+    summary: 'Source-level configuration observations before app, option, registration, and AppTask materialization.',
+  },
+  ConfigurationRecognition: {
+    surface: KernelSubstrateModelSurface.ConfigurationRecognition,
+    match: {
+      files: [
+        'packages/source-analysis/src/aurelia/configuration/configuration-recognition-context.ts',
+        'packages/source-analysis/src/aurelia/configuration/configuration-recognition-pass.ts',
+        'packages/source-analysis/src/aurelia/configuration/configuration-recognition-producer.ts',
+      ],
+    },
+    summary: 'Configuration recognition context, source scanner, and pass orchestration.',
+  },
+  ConfigurationEmission: {
+    surface: KernelSubstrateModelSurface.ConfigurationEmission,
+    match: {
+      files: ['packages/source-analysis/src/aurelia/configuration/configuration-kernel-emitter.ts'],
+    },
+    summary: 'Configuration emission support that materializes recognized configuration flow into kernel records.',
+  },
+  DiContainers: {
+    surface: KernelSubstrateModelSurface.DiContainer,
+    match: {
+      files: ['packages/source-analysis/src/aurelia/di/container.ts'],
+      classNames: ['Container', 'ContainerReference'],
+    },
+    summary: 'Abstract Aurelia containers and container references used by DI world construction.',
+  },
+  DiConfigurations: {
+    surface: KernelSubstrateModelSurface.DiConfiguration,
+    match: {
+      files: ['packages/source-analysis/src/aurelia/di/container-configuration.ts'],
+    },
+    summary: 'Container configuration values that affect abstract DI world construction.',
+  },
+  DiLookups: {
+    surface: KernelSubstrateModelSurface.DiLookup,
+    match: {
+      files: ['packages/source-analysis/src/aurelia/di/container-lookup.ts'],
+    },
+    summary: 'Lookup answer records returned by abstract DI container emulation methods.',
+  },
+  DiResolvers: {
+    surface: KernelSubstrateModelSurface.DiResolver,
+    match: {
+      files: ['packages/source-analysis/src/aurelia/di/resolver.ts'],
+    },
+    summary: 'Runtime-shaped resolver values and resolver-resolution answer records.',
+  },
+  DiRegistries: {
+    surface: KernelSubstrateModelSurface.DiRegistry,
+    match: {
+      files: ['packages/source-analysis/src/aurelia/di/registry.ts'],
+    },
+    summary: 'Runtime-shaped registry values and registry-registration answer records.',
+  },
+  DiOperations: {
+    surface: KernelSubstrateModelSurface.DiOperation,
+    match: {
+      files: ['packages/source-analysis/src/aurelia/di/container-registration.ts'],
+    },
+    summary: 'DI operations that spend registration/configuration facts into container state.',
+  },
+  DiSlots: {
+    surface: KernelSubstrateModelSurface.DiSlot,
+    match: {
+      files: ['packages/source-analysis/src/aurelia/di/container-slot.ts'],
+    },
+    summary: 'Container-owned resolver, resource, and factory slots produced by DI world construction.',
+  },
   ExpressionAst: {
     surface: KernelSubstrateModelSurface.ExpressionAst,
     match: {
@@ -363,7 +518,74 @@ export const KernelSubstrateModelSurfaces = {
     match: {
       files: ['packages/source-analysis/src/aurelia/registration/registration-reference.ts'],
     },
-    summary: 'Registration key, value, and container reference records.',
+    summary: 'Registration key and value reference records before DI world construction.',
+  },
+  RegistrationEmission: {
+    surface: KernelSubstrateModelSurface.RegistrationEmission,
+    match: {
+      files: ['packages/source-analysis/src/aurelia/registration/registration-kernel-emitter.ts'],
+    },
+    summary: 'Registration producer support that emits kernel records and typed admission products.',
+  },
+  RegistrationRecognition: {
+    surface: KernelSubstrateModelSurface.RegistrationRecognition,
+    match: {
+      files: [
+        'packages/source-analysis/src/aurelia/registration/registration-factory-shapes.ts',
+        'packages/source-analysis/src/aurelia/registration/registration-recognition-pass.ts',
+        'packages/source-analysis/src/aurelia/registration/registration-recognition-producer.ts',
+      ],
+    },
+    summary: 'Registration recognition producers and pass orchestration.',
+  },
+  TemplateParseContexts: {
+    surface: KernelSubstrateModelSurface.TemplateParseContext,
+    match: {
+      files: ['packages/source-analysis/src/aurelia/template/parse-context.ts'],
+    },
+    summary: 'Inquiry-aware parse contexts that carry recovery and frontier pressure into parsers and lowering.',
+  },
+  TemplateCompilerWorlds: {
+    surface: KernelSubstrateModelSurface.TemplateCompilerWorld,
+    match: {
+      files: ['packages/source-analysis/src/aurelia/template/compiler-world.ts'],
+    },
+    summary: 'Compiler worlds, resource scopes, visible resources, and compiler service references.',
+  },
+  TemplateHtmlIr: {
+    surface: KernelSubstrateModelSurface.TemplateHtmlIr,
+    match: {
+      files: ['packages/source-analysis/src/aurelia/template/html-ir.ts'],
+    },
+    summary: 'Authored HTML documents, nodes, attributes, comments, and parser recovery observations.',
+  },
+  TemplateAttributeSyntax: {
+    surface: KernelSubstrateModelSurface.TemplateAttributeSyntax,
+    match: {
+      files: ['packages/source-analysis/src/aurelia/template/attribute-syntax.ts'],
+    },
+    summary: 'Attribute parser syntax, attribute-pattern executables, parser service models, and classifications.',
+  },
+  TemplateBindingCommandExecution: {
+    surface: KernelSubstrateModelSurface.TemplateBindingCommandExecution,
+    match: {
+      files: ['packages/source-analysis/src/aurelia/template/binding-command-execution.ts'],
+    },
+    summary: 'Binding-command executables, resolver state, command build inputs, and lowering products.',
+  },
+  TemplateBuiltInSyntax: {
+    surface: KernelSubstrateModelSurface.TemplateBuiltInSyntax,
+    match: {
+      files: ['packages/source-analysis/src/aurelia/template/built-in-syntax.ts'],
+    },
+    summary: 'Framework-provided attribute-pattern and binding-command syntax catalogs.',
+  },
+  TemplateInstructions: {
+    surface: KernelSubstrateModelSurface.TemplateInstructionIr,
+    match: {
+      files: ['packages/source-analysis/src/aurelia/template/instruction-ir.ts'],
+    },
+    summary: 'Lowered rendering instruction products and instruction sequences.',
   },
 } as const;
 

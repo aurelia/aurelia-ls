@@ -1,4 +1,4 @@
-export type PackageId = 'runtime-html' | 'template-compiler';
+export type PackageId = 'kernel' | 'runtime-html' | 'template-compiler' | 'i18n' | 'state';
 
 /**
  * Pure marker decorator that lets au-mcp correlate new analysis substrate boundaries with the Aurelia runtime.
@@ -6,15 +6,97 @@ export type PackageId = 'runtime-html' | 'template-compiler';
  * Keep this catalog small while the compiler model is being rebuilt. Old mirror-era placements should not be
  * treated as semantic ground truth for new producers.
  */
+export function auLink(id: 'kernel:Container'): ClassDecorator;
+export function auLink(id: 'kernel:ContainerConfiguration'): ClassDecorator;
+export function auLink(id: 'kernel:Resolver'): ClassDecorator;
+export function auLink(id: 'kernel:ParameterizedRegistry'): ClassDecorator;
+export function auLink(id: 'kernel:IRegistry'): ClassDecorator;
+export function auLink(id: 'runtime-html:Aurelia'): ClassDecorator;
+export function auLink(id: 'runtime-html:AppRoot'): ClassDecorator;
+export function auLink(id: 'runtime-html:IAppRootConfig'): ClassDecorator;
+export function auLink(id: 'runtime-html:IAppTask'): ClassDecorator;
+export function auLink(id: 'runtime-html:IController'): ClassDecorator;
+export function auLink(id: 'runtime-html:IComponentController'): ClassDecorator;
+export function auLink(id: 'runtime-html:IHydratableController'): ClassDecorator;
+export function auLink(id: 'runtime-html:ISyntheticView'): ClassDecorator;
+export function auLink(id: 'runtime-html:ICustomAttributeController'): ClassDecorator;
+export function auLink(id: 'runtime-html:IDryCustomElementController'): ClassDecorator;
+export function auLink(id: 'runtime-html:IContextualCustomElementController'): ClassDecorator;
+export function auLink(id: 'runtime-html:ICompiledCustomElementController'): ClassDecorator;
+export function auLink(id: 'runtime-html:ICustomElementController'): ClassDecorator;
 export function auLink(id: 'runtime-html:CustomElementDefinition'): ClassDecorator;
 export function auLink(id: 'runtime-html:CustomAttributeDefinition'): ClassDecorator;
 export function auLink(id: 'runtime-html:BindableDefinition'): ClassDecorator;
 export function auLink(id: 'runtime-html:WatchDefinition'): ClassDecorator;
 export function auLink(id: 'runtime-html:ValueConverterDefinition'): ClassDecorator;
 export function auLink(id: 'runtime-html:BindingBehaviorDefinition'): ClassDecorator;
+export function auLink(id: 'runtime-html:PromiseAttributePattern'): ClassDecorator;
+export function auLink(id: 'runtime-html:FulfilledAttributePattern'): ClassDecorator;
+export function auLink(id: 'runtime-html:RejectedAttributePattern'): ClassDecorator;
 export function auLink(id: 'template-compiler:BindingCommandDefinition'): ClassDecorator;
 export function auLink(id: 'template-compiler:AttributePatternDefinition'): ClassDecorator;
 export function auLink(id: 'template-compiler:AttributePattern'): ClassDecorator;
+export function auLink(id: 'template-compiler:DotSeparatedAttributePattern'): ClassDecorator;
+export function auLink(id: 'template-compiler:RefAttributePattern'): ClassDecorator;
+export function auLink(id: 'template-compiler:EventAttributePattern'): ClassDecorator;
+export function auLink(id: 'template-compiler:ColonPrefixedBindAttributePattern'): ClassDecorator;
+export function auLink(id: 'template-compiler:AtPrefixedTriggerAttributePattern'): ClassDecorator;
+export function auLink(id: 'template-compiler:TemplateCompiler'): ClassDecorator;
+export function auLink(id: 'template-compiler:IResourceResolver'): ClassDecorator;
+export function auLink(id: 'template-compiler:IAttributeParser'): ClassDecorator;
+export function auLink(id: 'template-compiler:IAttributePattern'): ClassDecorator;
+export function auLink(id: 'template-compiler:SyntaxInterpreter'): ClassDecorator;
+export function auLink(id: 'template-compiler:CompiledPattern'): ClassDecorator;
+export function auLink(id: 'template-compiler:AttrSyntax'): ClassDecorator;
+export function auLink(id: 'template-compiler:IBindingCommandResolver'): ClassDecorator;
+export function auLink(id: 'template-compiler:BindingCommandInstance'): ClassDecorator;
+export function auLink(id: 'template-compiler:ICommandBuildInfo'): ClassDecorator;
+export function auLink(id: 'template-compiler:DefaultBindingCommand'): ClassDecorator;
+export function auLink(id: 'template-compiler:OneTimeBindingCommand'): ClassDecorator;
+export function auLink(id: 'template-compiler:FromViewBindingCommand'): ClassDecorator;
+export function auLink(id: 'template-compiler:ToViewBindingCommand'): ClassDecorator;
+export function auLink(id: 'template-compiler:TwoWayBindingCommand'): ClassDecorator;
+export function auLink(id: 'template-compiler:ForBindingCommand'): ClassDecorator;
+export function auLink(id: 'template-compiler:RefBindingCommand'): ClassDecorator;
+export function auLink(id: 'template-compiler:TriggerBindingCommand'): ClassDecorator;
+export function auLink(id: 'template-compiler:CaptureBindingCommand'): ClassDecorator;
+export function auLink(id: 'template-compiler:ClassBindingCommand'): ClassDecorator;
+export function auLink(id: 'template-compiler:StyleBindingCommand'): ClassDecorator;
+export function auLink(id: 'template-compiler:AttrBindingCommand'): ClassDecorator;
+export function auLink(id: 'template-compiler:SpreadValueBindingCommand'): ClassDecorator;
+export function auLink(id: 'template-compiler:InterpolationInstruction'): ClassDecorator;
+export function auLink(id: 'template-compiler:PropertyBindingInstruction'): ClassDecorator;
+export function auLink(id: 'template-compiler:IteratorBindingInstruction'): ClassDecorator;
+export function auLink(id: 'template-compiler:RefBindingInstruction'): ClassDecorator;
+export function auLink(id: 'template-compiler:SetPropertyInstruction'): ClassDecorator;
+export function auLink(id: 'template-compiler:MultiAttrInstruction'): ClassDecorator;
+export function auLink(id: 'template-compiler:HydrateElementInstruction'): ClassDecorator;
+export function auLink(id: 'template-compiler:HydrateAttributeInstruction'): ClassDecorator;
+export function auLink(id: 'template-compiler:HydrateTemplateController'): ClassDecorator;
+export function auLink(id: 'template-compiler:HydrateLetElementInstruction'): ClassDecorator;
+export function auLink(id: 'template-compiler:LetBindingInstruction'): ClassDecorator;
+export function auLink(id: 'template-compiler:TextBindingInstruction'): ClassDecorator;
+export function auLink(id: 'template-compiler:ListenerBindingInstruction'): ClassDecorator;
+export function auLink(id: 'template-compiler:StylePropertyBindingInstruction'): ClassDecorator;
+export function auLink(id: 'template-compiler:SetAttributeInstruction'): ClassDecorator;
+export function auLink(id: 'template-compiler:SetClassAttributeInstruction'): ClassDecorator;
+export function auLink(id: 'template-compiler:SetStyleAttributeInstruction'): ClassDecorator;
+export function auLink(id: 'template-compiler:AttributeBindingInstruction'): ClassDecorator;
+export function auLink(id: 'template-compiler:SpreadTransferedBindingInstruction'): ClassDecorator;
+export function auLink(id: 'template-compiler:SpreadElementPropBindingInstruction'): ClassDecorator;
+export function auLink(id: 'template-compiler:SpreadValueBindingInstruction'): ClassDecorator;
+export function auLink(id: 'i18n:TranslationBindingInstruction'): ClassDecorator;
+export function auLink(id: 'i18n:TranslationBindBindingInstruction'): ClassDecorator;
+export function auLink(id: 'i18n:TranslationParametersBindingInstruction'): ClassDecorator;
+export function auLink(id: 'i18n:TranslationParametersAttributePattern'): ClassDecorator;
+export function auLink(id: 'i18n:TranslationBindingCommand'): ClassDecorator;
+export function auLink(id: 'i18n:TranslationBindBindingCommand'): ClassDecorator;
+export function auLink(id: 'i18n:TranslationParametersBindingCommand'): ClassDecorator;
+export function auLink(id: 'state:StateAttributePattern'): ClassDecorator;
+export function auLink(id: 'state:StateBindingCommand'): ClassDecorator;
+export function auLink(id: 'state:DispatchBindingCommand'): ClassDecorator;
+export function auLink(id: 'state:StateBindingInstruction'): ClassDecorator;
+export function auLink(id: 'state:DispatchBindingInstruction'): ClassDecorator;
 export function auLink(_id: `${PackageId}:${string}`): ClassDecorator {
   return function <TFunction extends Function>(_target: TFunction): void {
     // Marker only.

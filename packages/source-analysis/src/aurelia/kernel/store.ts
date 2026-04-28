@@ -266,7 +266,10 @@ export class KernelStore {
       case 'aurelia-resource-identity':
       case 'aurelia-attribute-pattern-identity':
       case 'di-key-identity':
+      case 'container-identity':
       case 'registration-identity':
+      case 'configuration-identity':
+      case 'compiler-identity':
       case 'template-identity':
       case 'template-node-identity':
       case 'binding-identity':

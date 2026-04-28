@@ -2,9 +2,9 @@ import type { FieldProvenance } from '../kernel/provenance.js';
 import type {
   AddressHandle,
   IdentityHandle,
+  ProductHandle,
 } from '../kernel/handles.js';
 import type {
-  RegistrationContainerReference,
   RegistrationKeyReference,
   RegistrationValueReference,
 } from './registration-reference.js';
@@ -55,35 +55,96 @@ export const enum RegistrationStrategy {
   ObjectMap = 'object-map',
   /** Register an explicit resolver object. */
   Resolver = 'resolver',
+  /** Runtime array resolver that preserves multiple resolver rows for the same key. */
+  Array = 'array',
   /** Register a factory object for a constructable key. */
   Factory = 'factory',
+}
+
+export const enum RegistrationKeyRole {
+  /** Use when a key expression exists but its role in registration flow is not closed yet. */
+  Unknown = 'unknown',
+  /** The key is offered as a provider key to later DI world construction. */
+  AdmittedKey = 'admitted-key',
+  /** The key is consulted to locate a registry that may admit other values. */
+  RegistryLookupKey = 'registry-lookup-key',
 }
 
 export type RegistrationAdmissionField =
   | 'admissionKind'
   | 'strategy'
+  | 'keyRole'
+  | 'registryParameters'
   | 'targetKey'
   | 'registeredValue'
-  | 'container'
   | 'source';
 
+export type RegistrationAdmissionProduct =
+  | ResolverRegistrationAdmission
+  | ParameterizedRegistryAdmission
+  | RegistryRegistrationAdmission;
+
 /**
- * Normalized registration intent before it is spent into resolver rows, resource tables, or DI lookup answers.
+ * Resolver-producing registration intent before it is spent into resolver rows or DI lookup answers.
  */
-export class RegistrationAdmission {
+export class ResolverRegistrationAdmission {
   constructor(
+    /** Product handle for the kernel materialized-product envelope that represents this admission. */
+    readonly productHandle: ProductHandle,
     /** Registration identity for this admission event. */
     readonly identityHandle: IdentityHandle,
     /** Source lane that admitted this registration. */
     readonly admissionKind: RegistrationAdmissionKind,
     /** Runtime registration strategy represented by this admission. */
     readonly strategy: RegistrationStrategy,
-    /** DI key offered by this admission, or null while key classification is open. */
+    /** Role played by the observed key expression. */
+    readonly keyRole: RegistrationKeyRole,
+    /** DI key expression observed for this admission, or null while key classification is open. */
     readonly targetKey: RegistrationKeyReference | null,
     /** Value, resolver, registry, resource, or alias target admitted for the key. */
     readonly registeredValue: RegistrationValueReference | null,
-    /** Container or app boundary receiving the admission when known. */
-    readonly container: RegistrationContainerReference | null,
+    /** Source address for the admission expression or declaration. */
+    readonly sourceAddressHandle: AddressHandle | null,
+    /** Field-level provenance for source facts that matter to rename, explanation, or ambiguity. */
+    readonly fieldProvenance: readonly FieldProvenance<RegistrationAdmissionField>[] = [],
+  ) {}
+}
+
+/**
+ * Admission that can materialize the runtime ParameterizedRegistry produced by `Registration.defer(key, ...params)`.
+ */
+export class ParameterizedRegistryAdmission {
+  constructor(
+    /** Product handle for the kernel materialized-product envelope that represents this registry. */
+    readonly productHandle: ProductHandle,
+    /** Registration identity for this registry-producing admission event. */
+    readonly identityHandle: IdentityHandle,
+    /** Source lane that admitted this registry. */
+    readonly admissionKind: RegistrationAdmissionKind,
+    /** Key used to look up an existing registry before falling back to parameter registration. */
+    readonly registryLookupKey: RegistrationKeyReference | null,
+    /** Parameters that the runtime registry may pass back into container registration. */
+    readonly registryParameters: readonly RegistrationValueReference[],
+    /** Source address for the admission expression or declaration. */
+    readonly sourceAddressHandle: AddressHandle | null,
+    /** Field-level provenance for source facts that matter to rename, explanation, or ambiguity. */
+    readonly fieldProvenance: readonly FieldProvenance<RegistrationAdmissionField>[] = [],
+  ) {}
+}
+
+/**
+ * Admission for an IRegistry-shaped value before its `register(container, ...params)` body has been spent.
+ */
+export class RegistryRegistrationAdmission {
+  constructor(
+    /** Product handle for the kernel materialized-product envelope that represents this registry value. */
+    readonly productHandle: ProductHandle,
+    /** Registration identity for this registry admission event. */
+    readonly identityHandle: IdentityHandle,
+    /** Source lane that admitted this registry. */
+    readonly admissionKind: RegistrationAdmissionKind,
+    /** Registry value that will later be analyzed or invoked abstractly by DI world construction. */
+    readonly registryValue: RegistrationValueReference | null,
     /** Source address for the admission expression or declaration. */
     readonly sourceAddressHandle: AddressHandle | null,
     /** Field-level provenance for source facts that matter to rename, explanation, or ambiguity. */

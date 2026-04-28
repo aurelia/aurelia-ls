@@ -52,7 +52,7 @@ export class DerivationLink {
   ) {}
 }
 
-/** Explanation payload for a claim, field, product, or open seam. */
+/** Explanation record for a claim, field, product, or open seam. */
 export class ProvenanceRecord {
   /** String discriminator for serialized provenance records. */
   readonly kind = ProvenanceRecordKind.ProvenanceRecord;

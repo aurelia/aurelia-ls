@@ -1,4 +1,5 @@
 import type ts from 'typescript';
+import type { OpenSeamKindKey } from '../kernel/vocabulary.js';
 import type { ResourceDefinitionHeader } from './resource-definition.js';
 
 export const enum ResourceCarrierKind {
@@ -12,19 +13,6 @@ export const enum ResourceCarrierKind {
   AttributePatternCreate = 'attribute-pattern-create',
   /** Name derived from a conventions layer known to be active. */
   Convention = 'convention',
-}
-
-export const enum ResourceOpenKind {
-  /** The carrier looked like a resource but the resource kind did not close. */
-  Kind = 'open-kind-expression',
-  /** The carrier looked like a resource but the resource name did not close. */
-  Name = 'open-name-expression',
-  /** The carrier may contain aliases that did not close. */
-  Alias = 'open-alias-expression',
-  /** The carrier did not expose a class/function/object target that could be named. */
-  Target = 'open-target-expression',
-  /** An AttributePattern.create(...) carrier had patterns that did not all close. */
-  Pattern = 'open-pattern-expression',
 }
 
 /** Class, function, object, or expression that acts as the runtime resource target. */
@@ -54,8 +42,8 @@ export class AttributePatternObservation {
 /** Explicit unresolved pressure from a resource carrier. */
 export class ResourceRecognitionOpen {
   constructor(
-    /** Machine-readable open resource-recognition category. */
-    readonly openKind: ResourceOpenKind,
+    /** Kernel seam vocabulary key for the unresolved resource pressure. */
+    readonly openKind: OpenSeamKindKey,
     /** Short explanation suitable for IDE/MCP projections. */
     readonly summary: string,
     /** Source node where the unresolved pressure appeared. */

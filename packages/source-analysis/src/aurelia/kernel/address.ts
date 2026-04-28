@@ -194,7 +194,7 @@ export class ExternalAddress {
     readonly stability: AddressStability,
     /** External address scheme, such as `package`, `url`, or host-defined catalog names. */
     readonly scheme: string,
-    /** Scheme-specific address payload. */
+    /** Scheme-specific address value. */
     readonly value: string,
     /** Optional display label for AI/MCP projections and diagnostics. */
     readonly label: string | null = null,

@@ -1,6 +1,7 @@
 import ts from 'typescript';
 import { readClassTarget } from '../evaluation/expression-reader.js';
 import { unwrapExpression } from '../evaluation/ts-syntax.js';
+import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { ResourceRecognitionContext } from './resource-recognition-context.js';
 import { createNamedResourceDefinitionHeader } from './resource-definition.js';
 import {
@@ -18,7 +19,6 @@ import {
   ResourceCarrierKind,
   ResourceRecognitionObservation,
   ResourceRecognitionOpen,
-  ResourceOpenKind,
   ResourceTargetObservation,
 } from './resource-observation.js';
 import {
@@ -102,13 +102,13 @@ function recognizeDecorators(
     const openSeams: ResourceRecognitionOpen[] = [];
     if (definitionExpression == null || name?.value == null) {
       openSeams.push(new ResourceRecognitionOpen(
-        ResourceOpenKind.Name,
+        KernelVocabulary.Resource.OpenNameExpression.key,
         `Decorator ${calleeName}(...) did not expose a static resource name.`,
         definitionExpression ?? decorator,
       ));
     }
     if (aliases?.openSummary != null && aliases.node != null) {
-      openSeams.push(new ResourceRecognitionOpen(ResourceOpenKind.Alias, aliases.openSummary, aliases.node));
+      openSeams.push(new ResourceRecognitionOpen(KernelVocabulary.Resource.OpenAliasExpression.key, aliases.openSummary, aliases.node));
     }
 
     const target = readClassTarget(classNode);
@@ -159,7 +159,7 @@ function recognizeStaticAu(
           null,
           [
             new ResourceRecognitionOpen(
-              ResourceOpenKind.Kind,
+              KernelVocabulary.Resource.OpenKindExpression.key,
               kindRead.openSummary ?? 'Static $au resource kind did not close to a recognized resource type.',
               kindRead.node ?? initializer,
             ),
@@ -180,13 +180,13 @@ function recognizeStaticAu(
   const openSeams: ResourceRecognitionOpen[] = [];
   if (name.value == null) {
     openSeams.push(new ResourceRecognitionOpen(
-      ResourceOpenKind.Name,
+      KernelVocabulary.Resource.OpenNameExpression.key,
       name.openSummary ?? 'Static $au resource name did not close to a static string.',
       name.node ?? initializer,
     ));
   }
   if (aliases.openSummary != null && aliases.node != null) {
-    openSeams.push(new ResourceRecognitionOpen(ResourceOpenKind.Alias, aliases.openSummary, aliases.node));
+    openSeams.push(new ResourceRecognitionOpen(KernelVocabulary.Resource.OpenAliasExpression.key, aliases.openSummary, aliases.node));
   }
 
   const definition = createNamedResourceDefinitionHeader(
@@ -235,17 +235,17 @@ function recognizeDefineCall(
 
   if (definitionExpression == null || name?.value == null) {
     openSeams.push(new ResourceRecognitionOpen(
-      ResourceOpenKind.Name,
+      KernelVocabulary.Resource.OpenNameExpression.key,
       name?.openSummary ?? 'Define call did not expose a static resource name.',
       name?.node ?? definitionExpression ?? call,
     ));
   }
   if (aliases?.openSummary != null && aliases.node != null) {
-    openSeams.push(new ResourceRecognitionOpen(ResourceOpenKind.Alias, aliases.openSummary, aliases.node));
+    openSeams.push(new ResourceRecognitionOpen(KernelVocabulary.Resource.OpenAliasExpression.key, aliases.openSummary, aliases.node));
   }
   if (target == null || target.localName == null) {
     openSeams.push(new ResourceRecognitionOpen(
-      ResourceOpenKind.Target,
+      KernelVocabulary.Resource.OpenTargetExpression.key,
       'Define call did not expose a statically named resource target.',
       targetExpression ?? call,
     ));

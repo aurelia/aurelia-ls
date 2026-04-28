@@ -43,14 +43,13 @@ import {
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
-import { KernelVocabulary, type OpenSeamKindKey } from '../kernel/vocabulary.js';
+import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { ResourceRecognitionContext } from './resource-recognition-context.js';
 import {
   AttributePatternDefinitionHeader,
   type NamedResourceDefinitionHeader,
 } from './resource-definition.js';
 import {
-  ResourceOpenKind,
   ResourceRecognitionObservation,
   ResourceRecognitionOpen,
 } from './resource-observation.js';
@@ -427,7 +426,7 @@ export class ResourceRecognitionKernelEmitter {
         ),
         new OpenSeam(
           openSeamHandle,
-          vocabularyForResourceOpen(seam.openKind),
+          seam.openKind,
           OpenSeamSeverity.Warning,
           seam.summary,
           addressHandle,
@@ -483,21 +482,4 @@ function observationLocalKey(
   index: number,
 ): string {
   return `${context.moduleKey}:${node.getStart(context.sourceFile)}:${node.end}:${index}`;
-}
-
-function vocabularyForResourceOpen(
-  openKind: ResourceOpenKind,
-): OpenSeamKindKey {
-  switch (openKind) {
-    case ResourceOpenKind.Kind:
-      return KernelVocabulary.Resource.OpenKindExpression.key;
-    case ResourceOpenKind.Name:
-      return KernelVocabulary.Resource.OpenNameExpression.key;
-    case ResourceOpenKind.Alias:
-      return KernelVocabulary.Resource.OpenAliasExpression.key;
-    case ResourceOpenKind.Target:
-      return KernelVocabulary.Resource.OpenTargetExpression.key;
-    case ResourceOpenKind.Pattern:
-      return KernelVocabulary.Resource.OpenPatternExpression.key;
-  }
 }

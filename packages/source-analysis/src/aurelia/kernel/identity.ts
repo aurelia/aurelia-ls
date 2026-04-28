@@ -13,8 +13,14 @@ export const enum IdentityRecordKind {
   AureliaAttributePatternIdentity = 'aurelia-attribute-pattern-identity',
   /** Names a dependency injection key as understood by Aurelia. */
   DiKeyIdentity = 'di-key-identity',
-  /** Names a registration of a key into a container or configuration flow. */
+  /** Names an abstract Aurelia container in the analyzed app world. */
+  ContainerIdentity = 'container-identity',
+  /** Names a registration admission before container spending. */
   RegistrationIdentity = 'registration-identity',
+  /** Names an app/configuration flow product before DI world construction. */
+  ConfigurationIdentity = 'configuration-identity',
+  /** Names compiler service, scope, parser, syntax, and lowering products that are not runtime resources. */
+  CompilerIdentity = 'compiler-identity',
   /** Names a template at an authored, transformed, or compiled phase. */
   TemplateIdentity = 'template-identity',
   /** Names a node inside a template tree by semantic anchor, not child path alone. */
@@ -49,8 +55,14 @@ export const enum IdentityDomain {
   AureliaResource = 'aurelia-resource',
   /** A dependency injection lookup or registration key. */
   DiKey = 'di-key',
-  /** A container or configuration registration event. */
+  /** An abstract Aurelia container participating in DI world construction. */
+  Container = 'container',
+  /** A registration admission before container spending. */
   Registration = 'registration',
+  /** An app/configuration flow product before DI world construction. */
+  Configuration = 'configuration',
+  /** A compiler service, scope, parser, syntax, or lowering product. */
+  Compiler = 'compiler',
   /** A template unit before or after compiler transformation. */
   Template = 'template',
   /** A node inside a template unit. */
@@ -118,6 +130,75 @@ export const enum DiResolverKeyKind {
   NewInstanceForScope = 'new-instance-for-scope',
   /** Resolver object supplied by user code or framework code outside the known helper set. */
   Custom = 'custom',
+}
+
+export const enum ContainerIdentityKind {
+  /** Use while container role is not known yet. */
+  Unknown = 'unknown',
+  /** Root container for an app or analysis world. */
+  Root = 'root',
+  /** Child container created from a parent container. */
+  Child = 'child',
+  /** Synthetic container introduced by tooling policy or incomplete configuration recovery. */
+  Synthetic = 'synthetic',
+}
+
+export const enum ConfigurationIdentityKind {
+  /** Use when configuration identity shape is not known yet. */
+  Unknown = 'unknown',
+  /** Aurelia facade construction or static facade admission. */
+  Aurelia = 'aurelia',
+  /** AppRoot configuration passed to `.app(...)` or equivalent. */
+  AppRootConfig = 'app-root-config',
+  /** AppRoot boundary that connects host, root component, container, and controller. */
+  AppRoot = 'app-root',
+  /** Runtime controller boundary owned by app or template construction. */
+  Controller = 'controller',
+  /** Ordered app/plugin/registry/builder configuration flow. */
+  Sequence = 'sequence',
+  /** One ordered step inside a configuration sequence. */
+  Step = 'step',
+  /** One source-backed contribution to a configuration option path. */
+  OptionContribution = 'option-contribution',
+  /** Deferred lifecycle task created by `AppTask.*(...)`. */
+  AppTask = 'app-task',
+  /** AppRoot dispatch point for one AppTask lifecycle slot. */
+  AppTaskSlotDispatch = 'app-task-slot-dispatch',
+}
+
+export const enum CompilerIdentityKind {
+  /** Use when compiler product identity shape is not known yet. */
+  Unknown = 'unknown',
+  /** Container-scoped compiler world used to parse, classify, and lower a template. */
+  TemplateCompilerWorld = 'template-compiler-world',
+  /** Resource and syntax-resource scope visible to one compiler world. */
+  TemplateResourceScope = 'template-resource-scope',
+  /** Runtime-shaped compiler service such as a resource resolver or attribute parser. */
+  TemplateCompilerService = 'template-compiler-service',
+  /** Inquiry-driven parse context shared by HTML, attribute, expression, and lowering passes. */
+  TemplateParseContext = 'template-parse-context',
+  /** Runtime SyntaxInterpreter machine compiled from registered attribute patterns. */
+  AttributeParserMachine = 'attribute-parser-machine',
+  /** Runtime CompiledPattern entry inside a SyntaxInterpreter machine. */
+  CompiledAttributePattern = 'compiled-attribute-pattern',
+  /** Catalog of framework-provided syntax resources admitted by configuration. */
+  BuiltInSyntaxCatalog = 'built-in-syntax-catalog',
+  /** Framework-provided attribute-pattern handler model. */
+  BuiltInAttributePattern = 'built-in-attribute-pattern',
+  /** Framework-provided binding-command handler model. */
+  BuiltInBindingCommand = 'built-in-binding-command',
+  /** Runtime AttrSyntax product after attribute-pattern interpretation. */
+  AttributeSyntax = 'attribute-syntax',
+  /** Attribute classification product after resource/bindable lookup. */
+  AttributeClassification = 'attribute-classification',
+  /** Executable attribute-pattern handler visible to IAttributeParser. */
+  AttributePatternExecutable = 'attribute-pattern-executable',
+  /** Executable binding-command handler visible to IBindingCommandResolver. */
+  BindingCommandExecutable = 'binding-command-executable',
+  /** Runtime ICommandBuildInfo product before command lowering. */
+  BindingCommandBuildInput = 'binding-command-build-input',
+  /** Binding-command lowering result before final instruction sequence assembly. */
+  BindingCommandLowering = 'binding-command-lowering',
 }
 
 export const enum TemplatePhase {
@@ -193,6 +274,31 @@ export class AureliaAttributePatternIdentity {
     readonly declarationHandle: IdentityHandle | null = null,
     /** Optional source span for the pattern definition entry. */
     readonly definitionAddressHandle: AddressHandle | null = null,
+  ) {}
+}
+
+/** Identity for an abstract container in the analyzed DI world. */
+export class ContainerIdentity {
+  /** String discriminator for serialized container identity records. */
+  readonly kind = IdentityRecordKind.ContainerIdentity;
+  /** Identity-domain discriminator for cheap filtering. */
+  readonly domain = IdentityDomain.Container;
+
+  constructor(
+    /** Store-local handle for this identity record. */
+    readonly handle: IdentityHandle,
+    /** Retention promise for this identity inside the active analysis store. */
+    readonly stability: IdentityStability,
+    /** Runtime-shaped container role. */
+    readonly containerKind: ContainerIdentityKind,
+    /** Parent container identity when this is a child container. */
+    readonly parentHandle: IdentityHandle | null,
+    /** Root container identity when known and different from this handle. */
+    readonly rootHandle: IdentityHandle | null,
+    /** Source address for the container-producing expression or app boundary. */
+    readonly sourceAddressHandle: AddressHandle | null = null,
+    /** Local source name for traces when the container is source-backed. */
+    readonly localName: string | null = null,
   ) {}
 }
 
@@ -363,7 +469,7 @@ export type DiKeyIdentity =
   | ResourceDiKeyIdentity
   | ResolverDiKeyIdentity;
 
-/** Identity for a registration of one key into a container or configuration pipeline. */
+/** Identity for a registration admission before container spending. */
 export class RegistrationIdentity {
   /** String discriminator for serialized registration identity records. */
   readonly kind = IdentityRecordKind.RegistrationIdentity;
@@ -379,8 +485,52 @@ export class RegistrationIdentity {
     readonly keyHandle: IdentityHandle,
     /** Source address handle for the admission expression or declaration. */
     readonly sourceAddressHandle: AddressHandle | null = null,
-    /** Optional container/configuration identity that receives the registration. */
-    readonly containerHandle: IdentityHandle | null = null,
+  ) {}
+}
+
+/** Identity for app/configuration flow products before DI world construction. */
+export class ConfigurationIdentity {
+  /** String discriminator for serialized configuration identity records. */
+  readonly kind = IdentityRecordKind.ConfigurationIdentity;
+  /** Identity-domain discriminator for cheap filtering. */
+  readonly domain = IdentityDomain.Configuration;
+
+  constructor(
+    /** Store-local handle for this identity record. */
+    readonly handle: IdentityHandle,
+    /** Retention promise for this identity inside the active analysis store. */
+    readonly stability: IdentityStability,
+    /** Configuration product lane represented by this identity. */
+    readonly configurationKind: ConfigurationIdentityKind,
+    /** Optional owner identity such as an Aurelia facade, AppRoot, sequence, or plugin declaration. */
+    readonly ownerHandle: IdentityHandle | null,
+    /** Source address handle for the expression, declaration, or dispatch point. */
+    readonly sourceAddressHandle: AddressHandle | null = null,
+    /** Local source name for traces when the configuration product is source-backed. */
+    readonly localName: string | null = null,
+  ) {}
+}
+
+/** Identity for compiler service, scope, parser, syntax, and lowering products. */
+export class CompilerIdentity {
+  /** String discriminator for serialized compiler identity records. */
+  readonly kind = IdentityRecordKind.CompilerIdentity;
+  /** Identity-domain discriminator for cheap filtering. */
+  readonly domain = IdentityDomain.Compiler;
+
+  constructor(
+    /** Store-local handle for this identity record. */
+    readonly handle: IdentityHandle,
+    /** Retention promise for this identity inside the active analysis store. */
+    readonly stability: IdentityStability,
+    /** Compiler product lane represented by this identity. */
+    readonly compilerKind: CompilerIdentityKind,
+    /** Optional owner identity such as a container, resource, template, node, or service. */
+    readonly ownerHandle: IdentityHandle | null,
+    /** Source or generated address handle for navigation and explanation. */
+    readonly addressHandle: AddressHandle | null = null,
+    /** Local source/runtime name for traces when one exists. */
+    readonly localName: string | null = null,
   ) {}
 }
 
@@ -489,7 +639,10 @@ export type SemanticIdentity =
   | AureliaResourceIdentity
   | AureliaAttributePatternIdentity
   | DiKeyIdentity
+  | ContainerIdentity
   | RegistrationIdentity
+  | ConfigurationIdentity
+  | CompilerIdentity
   | TemplateIdentity
   | TemplateNodeIdentity
   | BindingIdentity

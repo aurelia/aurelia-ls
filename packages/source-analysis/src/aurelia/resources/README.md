@@ -56,6 +56,8 @@ Watchpoints:
 - Resource vocabulary uses explicit kernel slots for claim predicates, seam kinds, and product kinds. Keep new
   entries small and source-grounded; if a name starts representing answer policy, ranking, or consumer usefulness, it
   belongs in inquiry rather than resource vocabulary.
+- Resource open seams carry product-owned `KernelVocabulary.Resource.*` seam keys directly. Do not add a second local
+  open-kind enum unless a future producer needs a genuinely different, non-durable taxonomy.
 - Product-level provenance is in place and definition models now expose field-level provenance slots. Convergence
   producers must populate those slots when a field's source matters for rename, refactor, explanation, or ambiguity
   handling instead of flattening everything to the carrier observation.

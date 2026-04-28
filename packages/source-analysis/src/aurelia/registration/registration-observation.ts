@@ -1,6 +1,9 @@
 import type ts from 'typescript';
+import type { ProductHandle } from '../kernel/handles.js';
+import type { OpenSeamKindKey } from '../kernel/vocabulary.js';
 import type {
   RegistrationAdmissionKind,
+  RegistrationKeyRole,
   RegistrationStrategy,
 } from './registration-admission.js';
 import type { RegistrationValueKind } from './registration-reference.js';
@@ -24,27 +27,6 @@ export const enum RegistrationCarrierKind {
   ObjectMapEntry = 'object-map-entry',
 }
 
-export const enum RegistrationOpenKind {
-  /** The observed registration could not close its target key. */
-  Key = 'open-key-expression',
-  /** The observed registration could not close its registered value. */
-  Value = 'open-value-expression',
-  /** The observed registration could not close its strategy. */
-  Strategy = 'open-strategy',
-  /** The observed registration could not close the receiving container or app boundary. */
-  Container = 'open-container',
-  /** A callback body exists but is intentionally not evaluated by registration recognition. */
-  CallbackBody = 'open-callback-body',
-  /** An object-map registration could not close all recursive entries. */
-  ObjectMap = 'open-object-map',
-  /** A spread argument or spread property could not close. */
-  Spread = 'open-spread',
-  /** An IRegistry-like value could not expose a closed register shape. */
-  RegistryShape = 'open-registry-shape',
-  /** An alias registration could not close the original target key. */
-  AliasTarget = 'open-alias-target',
-}
-
 /** Source-level key expression observed before kernel identity materialization. */
 export class RegistrationKeyObservation {
   constructor(
@@ -66,14 +48,16 @@ export class RegistrationValueObservation {
     readonly node: ts.Node,
     /** Whether the node is an actual declaration/name site rather than only a reference expression. */
     readonly isDeclaration: boolean,
+    /** Product handle when another producer already materialized this value. */
+    readonly productHandle: ProductHandle | null = null,
   ) {}
 }
 
 /** Explicit unresolved pressure from registration recognition. */
 export class RegistrationRecognitionOpen {
   constructor(
-    /** Machine-readable open registration-recognition category. */
-    readonly openKind: RegistrationOpenKind,
+    /** Kernel seam vocabulary key for the unresolved registration pressure. */
+    readonly openKind: OpenSeamKindKey,
     /** Short explanation suitable for IDE/MCP projections. */
     readonly summary: string,
     /** Source node where the unresolved pressure appeared. */
@@ -90,12 +74,16 @@ export class RegistrationAdmissionObservation {
     readonly admissionKind: RegistrationAdmissionKind,
     /** Strategy recognized from the source shape. */
     readonly strategy: RegistrationStrategy,
+    /** Role played by the observed key expression. */
+    readonly keyRole: RegistrationKeyRole,
     /** Full carrier node, used for the primary evidence span. */
     readonly sourceNode: ts.Node,
     /** Target key observation, or null when the key stayed open. */
     readonly targetKey: RegistrationKeyObservation | null,
     /** Registered value observation, or null when the value stayed open or is not applicable. */
     readonly registeredValue: RegistrationValueObservation | null,
+    /** Registry parameters captured from `Registration.defer(key, ...params)`. */
+    readonly registryParameters: readonly RegistrationValueObservation[] = [],
     /** Unresolved points that must stay visible to later consumers. */
     readonly openSeams: readonly RegistrationRecognitionOpen[] = [],
   ) {}

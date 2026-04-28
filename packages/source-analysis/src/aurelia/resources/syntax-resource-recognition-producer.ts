@@ -1,5 +1,6 @@
 import ts from 'typescript';
 import { readClassTarget } from '../evaluation/expression-reader.js';
+import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { ResourceRecognitionContext } from './resource-recognition-context.js';
 import { AttributePatternDefinitionHeader } from './resource-definition.js';
 import {
@@ -13,7 +14,6 @@ import {
   ResourceCarrierKind,
   ResourceRecognitionObservation,
   ResourceRecognitionOpen,
-  ResourceOpenKind,
   ResourceTargetObservation,
 } from './resource-observation.js';
 
@@ -68,7 +68,7 @@ function recognizeAttributePatternDecorators(
 
     if (call == null || call.arguments.length === 0 || patterns.length !== call.arguments.length) {
       openSeams.push(new ResourceRecognitionOpen(
-        ResourceOpenKind.Pattern,
+        KernelVocabulary.Resource.OpenPatternExpression.key,
         'Attribute pattern decorator did not expose only static pattern entries.',
         call ?? decorator,
       ));
@@ -106,17 +106,17 @@ function recognizeAttributePatternCreate(
 
   if (patternExpression == null || patterns == null || patterns.value == null || patterns.value.length === 0) {
     openSeams.push(new ResourceRecognitionOpen(
-      ResourceOpenKind.Pattern,
+      KernelVocabulary.Resource.OpenPatternExpression.key,
       patterns?.openSummary ?? 'AttributePattern.create(...) did not expose static pattern entries.',
       patterns?.node ?? patternExpression ?? call,
     ));
   } else if (patterns.openSummary != null) {
-    openSeams.push(new ResourceRecognitionOpen(ResourceOpenKind.Pattern, patterns.openSummary, patterns.node ?? patternExpression));
+    openSeams.push(new ResourceRecognitionOpen(KernelVocabulary.Resource.OpenPatternExpression.key, patterns.openSummary, patterns.node ?? patternExpression));
   }
 
   if (target == null || target.localName == null) {
     openSeams.push(new ResourceRecognitionOpen(
-      ResourceOpenKind.Target,
+      KernelVocabulary.Resource.OpenTargetExpression.key,
       'AttributePattern.create(...) did not expose a statically named pattern target.',
       targetExpression ?? call,
     ));

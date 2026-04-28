@@ -22,10 +22,14 @@ explanations. Correctness and explanation quality matter before latency while th
 - `configuration`: app/world admission and configuration ordering. This is the bridge from evaluated modules into
   registration.
 - `registration`: normalized registration admissions before DI world construction spends them into container state.
+- `di`: abstract container world construction, registration spending, resolver/resource/factory slots, and lookup
+  substrate.
+- `template`: compiler world contracts, authored HTML IR, attribute syntax/classification, binding-command execution,
+  and lowered instruction IR.
 - `expression`: Aurelia expression parser and parser-owned recovery/candidate algebra.
 
-Future DI world construction and template compilation should be built on these layers, not by reconnecting old
-runtime-shaped compiler models.
+Template parser and compiler producers should be built on these layers, not by reconnecting old runtime-shaped compiler
+models.
 
 ## Rewrite Targets
 
