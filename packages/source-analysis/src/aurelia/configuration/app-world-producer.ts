@@ -16,6 +16,10 @@ import {
   ConfiguredBuiltInResourceCatalogProducer,
   type ConfiguredBuiltInResourceCatalogEmission,
 } from '../resources/built-in-resource-producer.js';
+import type {
+  FullResourceDefinition,
+} from '../resources/resource-definition.js';
+import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import {
   readRuntimeResourceKey,
   ResourceDefinitionKind,
@@ -77,11 +81,14 @@ export class AureliaAppWorldProducer {
     this.compilerWorldProducer = new TemplateCompilerWorldProducer(store);
   }
 
-  construct(configuration: ConfigurationKernelEmission): AureliaAppWorldEmission {
+  construct(
+    configuration: ConfigurationKernelEmission,
+    resources: ResourceDefinitionIndex | null = null,
+  ): AureliaAppWorldEmission {
     const configuredSyntax = this.configuredSyntaxProducer.materialize(configuration);
     const configuredResources = this.configuredResourceProducer.materialize(configuration);
-    const diWorld = this.diWorldProducer.construct(configuration, configuredResources);
-    const compilerWorlds = this.constructCompilerWorlds(configuration, diWorld, configuredSyntax, configuredResources);
+    const diWorld = this.diWorldProducer.construct(configuration, configuredResources, resources);
+    const compilerWorlds = this.constructCompilerWorlds(configuration, diWorld, configuredSyntax, configuredResources, resources);
 
     return new AureliaAppWorldEmission(
       configuration,
@@ -97,6 +104,7 @@ export class AureliaAppWorldProducer {
     diWorld: DiWorldConstructionEmission,
     configuredSyntax: ConfiguredBuiltInSyntaxCatalogEmission,
     configuredResources: ConfiguredBuiltInResourceCatalogEmission,
+    resourceDefinitions: ResourceDefinitionIndex | null,
   ): readonly TemplateCompilerWorldEmission[] {
     const containersByProduct = new Map(configuration.containers.map((container) => [container.productHandle, container]));
     const compilerWorlds: TemplateCompilerWorldEmission[] = [];
@@ -111,7 +119,7 @@ export class AureliaAppWorldProducer {
         continue;
       }
       const syntax = syntaxForAdmissions(admissions, configuredSyntax);
-      const resources = resourcesForContainer(container, diWorld, configuredResources);
+      const resources = resourcesForContainer(container, diWorld, configuredResources, resourceDefinitions);
 
       compilerWorlds.push(this.compilerWorldProducer.construct(new TemplateCompilerWorldConstructionInput(
         `app-root:${appRoot.productHandle}`,
@@ -169,10 +177,11 @@ function resourcesForContainer(
   container: Container,
   diWorld: DiWorldConstructionEmission,
   configuredResources: ConfiguredBuiltInResourceCatalogEmission,
+  resourceDefinitions: ResourceDefinitionIndex | null,
 ): readonly TemplateVisibleResource[] {
   const configuredResourceByProduct = new Map(configuredResources.catalogEmission.resources.map((emission) => [
     emission.resource.productHandle,
-    emission.resource,
+    emission,
   ]));
   const resources: TemplateVisibleResource[] = [];
   const seenLookupKeys = new Set<string>();
@@ -187,19 +196,49 @@ function resourcesForContainer(
     const configuredResource = visibleSlot.resourceProductHandle == null
       ? null
       : configuredResourceByProduct.get(visibleSlot.resourceProductHandle) ?? null;
-    if (configuredResource != null && configuredResource.productHandle != null) {
-      if (seenResourceProducts.has(configuredResource.productHandle)) {
+    if (configuredResource != null && configuredResource.resource.productHandle != null) {
+      if (seenResourceProducts.has(configuredResource.resource.productHandle)) {
         continue;
       }
-      seenResourceProducts.add(configuredResource.productHandle);
+      seenResourceProducts.add(configuredResource.resource.productHandle);
+      const compilerDefinition = isTemplateCompilableDefinition(configuredResource.definition)
+        ? configuredResource.definition
+        : null;
       resources.push(new TemplateVisibleResource(
-        configuredResource.resourceKind,
-        configuredResource.name,
-        configuredResource.aliases,
-        configuredResource.productHandle,
-        configuredResource.identityHandle,
+        configuredResource.resource.resourceKind,
+        configuredResource.resource.name,
+        configuredResource.resource.aliases,
+        configuredResource.resource.productHandle,
+        configuredResource.resource.identityHandle,
+        compilerDefinition?.productHandle ?? null,
+        compilerDefinition,
         visibleSlot.visibilityKind,
-        configuredResource.sourceAddressHandle ?? visibleSlot.sourceAddressHandle,
+        configuredResource.resource.sourceAddressHandle ?? visibleSlot.sourceAddressHandle,
+      ));
+      continue;
+    }
+
+    const resourceDefinition = resourceDefinitions?.lookupByProduct(visibleSlot.resourceProductHandle) ?? null;
+    if (resourceDefinition != null
+      && resourceDefinition.productHandle != null
+      && resourceDefinition.type !== ResourceDefinitionKind.AttributePattern) {
+      if (seenResourceProducts.has(resourceDefinition.productHandle)) {
+        continue;
+      }
+      seenResourceProducts.add(resourceDefinition.productHandle);
+      const compilerDefinition = isTemplateCompilableDefinition(resourceDefinition)
+        ? resourceDefinition
+        : null;
+      resources.push(new TemplateVisibleResource(
+        resourceDefinition.type,
+        resourceDefinition.name,
+        resourceDefinition.aliases.map((alias) => alias.name),
+        resourceDefinition.productHandle,
+        resourceDefinition.identityHandle,
+        compilerDefinition?.productHandle ?? null,
+        compilerDefinition,
+        visibleSlot.visibilityKind,
+        resourceDefinition.sourceAddressHandle ?? visibleSlot.sourceAddressHandle,
       ));
       continue;
     }
@@ -214,6 +253,8 @@ function resourcesForContainer(
       [],
       visibleSlot.resourceProductHandle,
       visibleSlot.resourceIdentityHandle,
+      null,
+      null,
       visibleSlot.visibilityKind,
       visibleSlot.sourceAddressHandle,
     ));
@@ -259,6 +300,14 @@ function visibleResourceSlotsForContainer(
   }
 
   return slots;
+}
+
+function isTemplateCompilableDefinition(
+  definition: FullResourceDefinition | null,
+): definition is NonNullable<typeof definition> & { readonly type: ResourceDefinitionKind.CustomElement | ResourceDefinitionKind.CustomAttribute } {
+  return definition != null
+    && (definition.type === ResourceDefinitionKind.CustomElement
+      || definition.type === ResourceDefinitionKind.CustomAttribute);
 }
 
 function registrationAdmissionsForAppRoot(

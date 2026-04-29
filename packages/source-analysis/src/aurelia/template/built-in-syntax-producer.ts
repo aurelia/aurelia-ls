@@ -348,6 +348,13 @@ export class BuiltInSyntaxCatalogProducer {
     const compiledPatternEmissions = handler.patterns.map((definition, index) =>
       this.recordsForCompiledPattern(definition, `${local}:compiled-pattern:${index}`, identityHandle, productHandle, source)
     );
+    const compiledPatternClaims = compiledPatternEmissions.map((emission, index) => new SemanticClaim(
+      this.store.handles.claim(`${local}:compiles-attribute-pattern:${index}`),
+      productHandle,
+      KernelVocabulary.Compiler.CompilesAttributePattern.key,
+      emission.product.productHandle,
+      source.provenanceHandle,
+    ));
     const records: KernelStoreRecord[] = [
       new CompilerIdentity(
         identityHandle,
@@ -363,7 +370,9 @@ export class BuiltInSyntaxCatalogProducer {
         identityHandle,
         source.addressHandle,
         source.provenanceHandle,
+        compiledPatternClaims.map((claim) => claim.handle),
       ),
+      ...compiledPatternClaims,
       ...compiledPatternEmissions.flatMap((emission) => emission.records),
     ];
     const compiledPatterns = compiledPatternEmissions.map((emission) => emission.product);

@@ -1,3 +1,4 @@
+import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
 import { auLink } from '../kernel/au-link.js';
 import type { ResourceTargetReference } from './resource-reference.js';
@@ -44,6 +45,22 @@ export class BindableDefinition {
     readonly name: string,
     readonly set: BindableSetterDefinition,
     readonly fieldProvenance: readonly FieldProvenance<BindableDefinitionField>[] = [],
+  ) {}
+}
+
+/** Compiler-facing reference to a bindable nested inside a resource definition. */
+export class BindableDefinitionReference {
+  constructor(
+    /** Product handle for the owning resource definition, when materialized. */
+    readonly ownerDefinitionProductHandle: ProductHandle | null,
+    /** Runtime property name targeted by the bindable. */
+    readonly name: string,
+    /** Attribute name that maps to the bindable. */
+    readonly attribute: string,
+    /** Source address for the bindable declaration, when known. */
+    readonly sourceAddressHandle: AddressHandle | null,
+    /** Whether this bindable was synthesized from a custom attribute default property. */
+    readonly isImplicitDefault: boolean = false,
   ) {}
 }
 

@@ -151,7 +151,7 @@ export const enum KernelSubstrateModelSurface {
   DiWorldConstruction = 'di-world-construction',
   /** Aurelia expression AST nodes. */
   ExpressionAst = 'expression-ast',
-  /** Expression parse result, failure, selection, and candidate algebra. */
+  /** Expression parse result, failure, and candidate algebra. */
   ExpressionParseAlgebra = 'expression-parse-algebra',
   /** Expression parser corridors, scanner, and parser state machinery. */
   ExpressionParser = 'expression-parser',
@@ -163,6 +163,8 @@ export const enum KernelSubstrateModelSurface {
   ResourceObservation = 'resource-observation',
   /** Resource recognition producers and pass orchestration. */
   ResourceRecognition = 'resource-recognition',
+  /** Resource definition convergence producers that materialize full metadata definitions from headers. */
+  ResourceConvergence = 'resource-convergence',
   /** Resource target, alias, dependency, and instruction references. */
   ResourceReference = 'resource-reference',
   /** Framework-owned built-in resource catalogs and header producers. */
@@ -181,10 +183,14 @@ export const enum KernelSubstrateModelSurface {
   TemplateParseContext = 'template-parse-context',
   /** Template compiler worlds, resource scopes, and compiler service references. */
   TemplateCompilerWorld = 'template-compiler-world',
+  /** Template compilation units, authored template sources, and runtime-shaped compilation contexts. */
+  TemplateCompilationUnit = 'template-compilation-unit',
   /** Authored HTML IR before Aurelia syntax classification. */
   TemplateHtmlIr = 'template-html-ir',
   /** Attribute parser syntax and classification products. */
   TemplateAttributeSyntax = 'template-attribute-syntax',
+  /** Compiler-owned selection of authored template value sites and parser-owned publications. */
+  TemplateValueSites = 'template-value-sites',
   /** Binding-command executable, resolver, build-input, and lowering products. */
   TemplateBindingCommandExecution = 'template-binding-command-execution',
   /** Framework-provided syntax resource catalogs for template compiler worlds. */
@@ -279,9 +285,10 @@ export const KernelSubstrateModelSurfaces = {
         'packages/source-analysis/src/aurelia/evaluation/module-graph.ts',
         'packages/source-analysis/src/aurelia/evaluation/module-host.ts',
         'packages/source-analysis/src/aurelia/evaluation/module-evaluator.ts',
+        'packages/source-analysis/src/aurelia/evaluation/project-evaluation.ts',
       ],
     },
-    summary: 'Static module graph records, host adapters, and graph evaluation results.',
+    summary: 'Static module graph records, host adapters, graph evaluation results, and project-level evaluation passes.',
   },
   EvaluationValues: {
     surface: KernelSubstrateModelSurface.EvaluationValue,
@@ -358,10 +365,11 @@ export const KernelSubstrateModelSurfaces = {
       files: [
         'packages/source-analysis/src/aurelia/configuration/configuration-recognition-context.ts',
         'packages/source-analysis/src/aurelia/configuration/configuration-recognition-pass.ts',
+        'packages/source-analysis/src/aurelia/configuration/configuration-recognition-project-pass.ts',
         'packages/source-analysis/src/aurelia/configuration/configuration-recognition-producer.ts',
       ],
     },
-    summary: 'Configuration recognition context, source scanner, and pass orchestration.',
+    summary: 'Configuration recognition context, source/project scanners, and pass orchestration.',
   },
   ConfigurationEmission: {
     surface: KernelSubstrateModelSurface.ConfigurationEmission,
@@ -373,9 +381,12 @@ export const KernelSubstrateModelSurfaces = {
   ConfigurationAppWorlds: {
     surface: KernelSubstrateModelSurface.ConfigurationAppWorld,
     match: {
-      files: ['packages/source-analysis/src/aurelia/configuration/app-world-producer.ts'],
+      files: [
+        'packages/source-analysis/src/aurelia/configuration/app-world-producer.ts',
+        'packages/source-analysis/src/aurelia/configuration/app-world-project-pass.ts',
+      ],
     },
-    summary: 'App-world producer composition across configuration emission, DI world construction, and compiler-world handoff.',
+    summary: 'App-world producer composition across project evaluation, configuration emission, DI world construction, and compiler-world handoff.',
   },
   DiContainers: {
     surface: KernelSubstrateModelSurface.DiContainer,
@@ -450,10 +461,9 @@ export const KernelSubstrateModelSurfaces = {
       files: [
         'packages/source-analysis/src/aurelia/expression/parse-failure.ts',
         'packages/source-analysis/src/aurelia/expression/parse-result-algebra.ts',
-        'packages/source-analysis/src/aurelia/expression/parse-selection.ts',
       ],
     },
-    summary: 'Expression parse outcomes, failure records, and selection/candidate result algebra.',
+    summary: 'Expression parse outcomes, failure records, and candidate result algebra.',
   },
   ExpressionParsers: {
     surface: KernelSubstrateModelSurface.ExpressionParser,
@@ -463,7 +473,6 @@ export const KernelSubstrateModelSurfaces = {
         'packages/source-analysis/src/aurelia/expression/ast.ts',
         'packages/source-analysis/src/aurelia/expression/parse-failure.ts',
         'packages/source-analysis/src/aurelia/expression/parse-result-algebra.ts',
-        'packages/source-analysis/src/aurelia/expression/parse-selection.ts',
       ],
     },
     summary: 'Expression parser corridors, scanner, parser state, and parser integration helpers.',
@@ -515,10 +524,18 @@ export const KernelSubstrateModelSurfaces = {
     },
     summary: 'Resource recognition producers, readers, passes, and kernel emission support.',
   },
+  ResourceConvergence: {
+    surface: KernelSubstrateModelSurface.ResourceConvergence,
+    match: {
+      files: ['packages/source-analysis/src/aurelia/resources/resource-definition-convergence-producer.ts'],
+    },
+    summary: 'Resource definition convergence producers that turn recognized headers into full metadata definition products.',
+  },
   ResourceReferences: {
     surface: KernelSubstrateModelSurface.ResourceReference,
     match: {
       files: [
+        'packages/source-analysis/src/aurelia/resources/resource-definition-index.ts',
         'packages/source-analysis/src/aurelia/resources/resource-kind.ts',
         'packages/source-analysis/src/aurelia/resources/resource-reference.ts',
       ],
@@ -591,26 +608,57 @@ export const KernelSubstrateModelSurfaces = {
     },
     summary: 'Compiler worlds, resource scopes, visible resources, and compiler service references.',
   },
+  TemplateCompilationUnits: {
+    surface: KernelSubstrateModelSurface.TemplateCompilationUnit,
+    match: {
+      files: [
+        'packages/source-analysis/src/aurelia/template/compilation-unit.ts',
+        'packages/source-analysis/src/aurelia/template/compilation-unit-producer.ts',
+        'packages/source-analysis/src/aurelia/template/template-compilation-project-pass.ts',
+      ],
+    },
+    summary: 'Compiler-front-door sources, compilation units, runtime-shaped compilation contexts, and project-level template entrypoint.',
+  },
   TemplateHtmlIr: {
     surface: KernelSubstrateModelSurface.TemplateHtmlIr,
     match: {
-      files: ['packages/source-analysis/src/aurelia/template/html-ir.ts'],
+      files: [
+        'packages/source-analysis/src/aurelia/template/html-ir.ts',
+        'packages/source-analysis/src/aurelia/template/html-parser-producer.ts',
+      ],
     },
     summary: 'Authored HTML documents, nodes, attributes, comments, and parser recovery observations.',
   },
   TemplateAttributeSyntax: {
     surface: KernelSubstrateModelSurface.TemplateAttributeSyntax,
     match: {
-      files: ['packages/source-analysis/src/aurelia/template/attribute-syntax.ts'],
+      files: [
+        'packages/source-analysis/src/aurelia/template/attribute-syntax.ts',
+        'packages/source-analysis/src/aurelia/template/attribute-classification-producer.ts',
+        'packages/source-analysis/src/aurelia/template/attribute-syntax-producer.ts',
+      ],
     },
     summary: 'Attribute parser syntax, attribute-pattern executables, parser service models, and classifications.',
+  },
+  TemplateValueSites: {
+    surface: KernelSubstrateModelSurface.TemplateValueSites,
+    match: {
+      files: [
+        'packages/source-analysis/src/aurelia/template/value-site.ts',
+        'packages/source-analysis/src/aurelia/template/value-site-producer.ts',
+      ],
+    },
+    summary: 'Compiler-owned authored-value selection into template value-site products and expression parser publications.',
   },
   TemplateBindingCommandExecution: {
     surface: KernelSubstrateModelSurface.TemplateBindingCommandExecution,
     match: {
-      files: ['packages/source-analysis/src/aurelia/template/binding-command-execution.ts'],
+      files: [
+        'packages/source-analysis/src/aurelia/template/binding-command-execution.ts',
+        'packages/source-analysis/src/aurelia/template/binding-command-lowering-producer.ts',
+      ],
     },
-    summary: 'Binding-command executables, resolver state, command build inputs, and lowering products.',
+    summary: 'Binding-command executables, resolver state, command build inputs, lowering products, and command-owned instruction production.',
   },
   TemplateBuiltInSyntax: {
     surface: KernelSubstrateModelSurface.TemplateBuiltInSyntax,

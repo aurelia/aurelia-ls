@@ -84,7 +84,14 @@ function readSet<TKey, TValue>(
   return [...(map.get(key) ?? [])];
 }
 
-/** Hot in-memory analysis store for normalized kernel records and handle expansion. */
+/**
+ * Hot in-memory analysis store for normalized kernel records and handle expansion.
+ *
+ * The store owns record identity, graph navigation, and vocabulary validation.
+ * It does not currently own rich product-detail objects. Producers may carry
+ * those objects in emissions while assembling the hot world, but durable
+ * product expansion needs a typed layer rather than generic store payloads.
+ */
 export class KernelStore {
   readonly handles: KernelHandleFactory;
   private readonly records = new Map<KernelRecordHandle, KernelStoreRecord>();

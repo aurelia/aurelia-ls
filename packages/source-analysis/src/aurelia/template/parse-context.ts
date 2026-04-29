@@ -54,6 +54,22 @@ export class TemplateParseFrontier {
   ) {}
 }
 
+/** Reference to parser/lowering inquiry pressure without expanding the full product. */
+export class TemplateParseContextReference {
+  constructor(
+    /** Product handle for the parse context. */
+    readonly productHandle: ProductHandle,
+    /** Consumer lane carried by the referenced context. */
+    readonly consumer: TemplateParseConsumer,
+    /** Recovery behavior carried by the referenced context. */
+    readonly recoveryPolicy: TemplateRecoveryPolicy,
+    /** Active frontier carried by the referenced context. */
+    readonly frontier: TemplateParseFrontier,
+    /** Source address for the template, expression, or fragment being parsed. */
+    readonly sourceAddressHandle: AddressHandle | null,
+  ) {}
+}
+
 /**
  * Parse context shared by the HTML parser, attribute classifier, expression parser, and lowering passes.
  *
@@ -75,4 +91,14 @@ export class TemplateParseContext {
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */
     readonly fieldProvenance: readonly FieldProvenance<TemplateParseContextField>[] = [],
   ) {}
+
+  toReference(): TemplateParseContextReference {
+    return new TemplateParseContextReference(
+      this.productHandle,
+      this.consumer,
+      this.recoveryPolicy,
+      this.frontier,
+      this.sourceAddressHandle,
+    );
+  }
 }

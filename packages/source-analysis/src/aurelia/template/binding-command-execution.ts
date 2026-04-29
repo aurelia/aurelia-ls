@@ -21,7 +21,7 @@ import {
 export const enum BindingCommandExecutionKind {
   /** Runtime built-in command whose build behavior can be modeled directly. */
   BuiltIn = 'built-in',
-  /** User-defined command with a known target and definition. */
+  /** Future user-defined command with a known target; not dynamically executed by the current compiler world. */
   Custom = 'custom',
   /** Command exists but its build behavior must remain as an open execution seam. */
   Opaque = 'opaque',
@@ -67,6 +67,7 @@ export type BindingCommandBuildInputField =
   | 'inputKind'
   | 'attribute'
   | 'syntax'
+  | 'expressionSite'
   | 'bindable'
   | 'definition'
   | 'node'
@@ -95,6 +96,23 @@ export class BindingCommandIteratorParse {
 }
 
 /**
+ * Attribute-like syntax parsed inside a command-owned secondary grammar.
+ *
+ * Runtime `for` command uses `IAttributeParser.parse` for iterator tail entries,
+ * but those entries are not authored HTML attributes and should not become
+ * ordinary AttrSyntax products until a real producer needs that visibility.
+ */
+export class BindingCommandTailSyntax {
+  constructor(
+    readonly rawName: string,
+    readonly rawValue: string,
+    readonly target: string,
+    readonly command: string | null,
+    readonly parts: readonly string[],
+  ) {}
+}
+
+/**
  * Runtime-shaped build info for executing a binding command model.
  *
  * The durable product below keeps normalized handles. This object is the
@@ -107,7 +125,7 @@ export class BindingCommandBuildInfo {
     readonly syntax: AttributeSyntax,
     readonly bindable: BindableDefinition | null,
     readonly buildInputProductHandle: ProductHandle | null,
-    readonly bindableProductHandle: ProductHandle | null,
+    readonly bindableOwnerProductHandle: ProductHandle | null,
     readonly definitionProductHandle: ProductHandle | null,
     readonly sourceAddressHandle: AddressHandle | null,
   ) {}
@@ -139,7 +157,7 @@ export interface BindingCommandBuildContext {
     rawName: string,
     rawValue: string,
     info: BindingCommandBuildInfo,
-  ): AttributeSyntax | null;
+  ): BindingCommandTailSyntax | null;
 
   mapAttribute(
     node: HtmlNodeReference,
@@ -290,8 +308,10 @@ export class BindingCommandBuildInput {
     readonly attribute: HtmlAttributeReference,
     /** Parsed attribute syntax product, when available. */
     readonly syntaxProductHandle: ProductHandle | null,
-    /** Bindable product selected by resource classification, for bindable command info. */
-    readonly bindableProductHandle: ProductHandle | null,
+    /** Compiler-owned value site that transferred ownership to this command, when available. */
+    readonly expressionSiteProductHandle: ProductHandle | null,
+    /** Owning definition product for the selected bindable, when the bindable is source-backed. */
+    readonly bindableOwnerProductHandle: ProductHandle | null,
     /** Resource or element definition product relevant to the command input, when known. */
     readonly definitionProductHandle: ProductHandle | null,
     /** Source address for the command input site. */

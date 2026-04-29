@@ -3,13 +3,14 @@
 See [../README.md](../README.md) for the folder-wide rebuild map and MCP co-evolution rule.
 See [INTEGRATION.md](./INTEGRATION.md) for temporary template/compiler handoff notes.
 
-This directory contains the clean-room Aurelia expression parser used by
+This directory contains the provisional Aurelia expression parser used by
 `packages/source-analysis`.
 
-The parser is intentionally more polished than the current template/compiler
-handoff around it. That is by design. The parser should remain a stable,
-high-confidence substrate that later template, compiler, and tooling layers can
-route into, rather than a place where template-specific routing rules leak in.
+The parser is intentionally narrower than the compiler that consumes it. The
+grammar and canonical AST are useful ore, but the parser predates the kernel and
+should not be allowed to absorb compiler ownership just because it already has a
+convenient hook. Keep template-specific value-site ownership, binding-command preprocessing,
+multi-binding splitting, and lowering above this folder.
 
 This document is meant to be durable. Update it when the parser's public
 contract, ownership boundaries, or major internal decomposition change. Do not
@@ -22,6 +23,13 @@ retained because its ownership boundaries are clearer than the removed
 template/compiler scaffold, but later template work may still rewrite it if the
 new authored-template model reveals better primitives.
 
+This folder has not yet had the same full semantic re-integration pass as the
+new kernel, resources, configuration, DI, and template substrates. Treat it as
+useful parser machinery with a native result algebra, not as a finished producer
+or durable app-map layer. It emits no kernel records by itself; template and
+binding-command producers decide when parser results become products, claims,
+open seams, or inquiry answers.
+
 ## Public Contract
 
 - `expression-parser.ts` is the public facade.
@@ -30,9 +38,8 @@ new authored-template model reveals better primitives.
 - `parsePropertyLike(...)`, `parseIterator(...)`, `parseInterpolation(...)`, and
   `parseCustom(...)` are the direct family entry points for callers that
   already know ownership.
-- `parseSelected(...)` and `parseRequest(...)` are the ownership-aware parser
-  entry points.
-- `parse-selection.ts` is caller-owned policy.
+- Non-owning transfer is not a parser result. Callers decide whether the
+  expression parser owns an authored value before invoking this facade.
 - `parse-result-algebra.ts` is parser-owned publication.
 - `parse-result-inspection.ts` is the stable query surface for downstream
   consumers that should not rebuild sibling-kind switches locally.
@@ -48,6 +55,9 @@ new authored-template model reveals better primitives.
 - Parser result algebra is native. There is no public adapter layer on top of a
   legacy parser return shape.
 - Parser-local failure state is internal only.
+- Parser publication enums are string-valued where they can escape into product
+  records or inquiry payloads. Numeric bitmasks remain internal classifier
+  helpers only.
 
 ## Internal Ownership Map
 
@@ -56,9 +66,7 @@ new authored-template model reveals better primitives.
 - `expression-scanner.ts`
   Tokenization, token flags, and scanner hot path.
 - `expression-parser.ts`
-  Public facade, family dispatch, ownership-aware request/selection entry.
-- `parse-selection.ts`
-  Caller-owned selection and non-owning transfer policy.
+  Public facade and family dispatch for expression-owned input.
 - `parse-result-algebra.ts`
   Public result families, frontier/gap vocabulary, interpolation and iterator
   companion envelopes.
@@ -102,6 +110,9 @@ owns this?" rather than "which giant parser method do we patch?"
 
 ## Important Provisional Decisions
 
+- The parser has been trimmed away from caller-side selection and non-owning
+  transfer, but its grammar corridors and recovery publication still deserve a
+  deeper audit against runtime grammar and the new inquiry/value-site substrate.
 - `IsFunction` currently shares the property-like grammar core. If function-only
   grammar or recovery ever diverges materially, split it at the corridor level,
   not by duplicating the whole parser.
@@ -118,11 +129,11 @@ owns this?" rather than "which giant parser method do we patch?"
   boundary-state objects.
 - `parse()` still defaults to `IsProperty`. If later callers need a true
   tri-state of explicit family, inferred family, and parser-declined ownership,
-  grow that at the selection/request layer, not in ad-hoc overload policy.
+  grow that above the parser in the caller-owned template/compiler layer.
 
 ## What The Parser Explicitly Does Not Own
 
-- Binding-command-to-entry-family routing policy.
+- Binding-command-to-entry-family ownership policy.
 - Text-node vs attribute interpolation provenance.
 - Multi-binding splitting for semicolon-separated custom-attribute syntax.
 - Attribute-pattern selection and normalized attribute syntax.
@@ -133,33 +144,38 @@ Those are template/compiler concerns above the parser.
 ## Integration Boundary
 
 The parser itself is meant to stay stable while template/compiler callers evolve.
-Current handoff status, template/compiler routing seams, and the next recommended
+Current handoff status, template/compiler ownership seams, and the next recommended
 integration slice live in [INTEGRATION.md](./INTEGRATION.md).
 
 Keep this README focused on parser contract and ownership. If a note is mainly
 about how current compiler callers have or have not spent the parser yet, it
 probably belongs in `INTEGRATION.md` instead.
 
-## Recommended Next Integration Slice
+## Current Integration Slice
 
-Build a compiler-owned value-routing layer above the parser.
+`../template/value-site.ts` and
+`../template/value-site-producer.ts` are now the compiler-owned
+value-site layer above the parser.
 
-That layer should decide, for each authored value site:
+That layer decides, for each authored value site:
 
 - which authored site family this is
-  - text interpolation
-  - attribute interpolation
-  - command-owned value
-  - custom-attribute primary value
-  - custom-attribute multi-binding segment value
 - whether the parser owns the site
-- which parser selection/request to publish when it does
-- when ownership is transferred to a secondary grammar or raw-value carrier
+- which parser entry family to invoke when it does
+- when ownership is transferred to a secondary grammar or command-owned carrier
+- which provenance stays attached to the authored site above the parser
 
-The parser should receive one routed value at a time with a parser selection or
-non-owning transfer decision. It should not become aware of semicolon-separated
-multi-binding strings, attribute-pattern policy, or text-vs-attribute
-interpolation distinctions.
+The parser should continue to receive one expression-owned value at a time with
+an entry family. Non-owning transfer stays above it. It should not become aware
+of semicolon-separated multi-binding strings, attribute-pattern policy, or
+text-vs-attribute interpolation distinctions.
+
+The current integration still carries a product-detail pressure: parser results
+are rich in-process objects attached to template value-site emissions and parse
+products. The kernel product envelope records only the product handle, kind,
+identity, address, provenance, and claims. If inquiry later needs durable parser
+publication expansion, add a typed product-detail layer for parser publications
+rather than serializing arbitrary parser objects through `MaterializedProduct`.
 
 ## If You Need To Change Something
 
@@ -167,9 +183,8 @@ interpolation distinctions.
   start in the relevant completed-input corridor or `interpolation-parser.ts`.
 - Public result shape:
   start in `parse-result-algebra.ts` and `parse-result-inspection.ts`.
-- Caller ownership and routing:
-  start in `parse-selection.ts` and then the template/compiler routing layer above
-  the parser.
+- Caller ownership:
+  start in the template/compiler value-site layer above the parser.
 - Span/provenance or parser-local retained state:
   start in `ast.ts`, `completed-input-parser-state.ts`, or
   `parse-companion-state.ts`.

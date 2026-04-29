@@ -1,5 +1,7 @@
 import type {
   AddressHandle,
+  IdentityHandle,
+  ProductHandle,
   ProvenanceHandle,
 } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
@@ -43,6 +45,12 @@ export class AttributePatternDefinition {
   get type(): ResourceDefinitionKind.AttributePattern { return ResourceDefinitionKind.AttributePattern; }
 
   constructor(
+    /** Product handle for the materialized definition product, when emitted. */
+    readonly productHandle: ProductHandle | null,
+    /** Identity for this syntax resource definition. */
+    readonly identityHandle: IdentityHandle | null,
+    /** Source address for the carrier or framework catalog that produced this definition. */
+    readonly sourceAddressHandle: AddressHandle | null,
     readonly target: ResourceTargetReference,
     readonly patterns: readonly AttributePatternDefinitionEntry[],
     readonly contributions: readonly AttributePatternDefinitionContribution[] = [],

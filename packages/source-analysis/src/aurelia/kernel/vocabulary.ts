@@ -342,7 +342,19 @@ function registrationAdmissionEndpoint() {
     [KernelVocabularyNamespace.Registration, 'resolver-admission'],
     [KernelVocabularyNamespace.Registration, 'parameterized-registry-admission'],
     [KernelVocabularyNamespace.Registration, 'registry-admission'],
+    [KernelVocabularyNamespace.Registration, 'resource-admission'],
     [KernelVocabularyNamespace.Registration, 'framework-registration-admission'],
+  );
+}
+
+function registrationValueEndpoint() {
+  return endpoint(
+    [KernelClaimEndpointKind.Address, KernelClaimEndpointKind.Identity, KernelClaimEndpointKind.Product],
+    [
+      [KernelVocabularyNamespace.Configuration, 'app-task'],
+      [KernelVocabularyNamespace.Resource, 'definition'],
+      [KernelVocabularyNamespace.Resource, 'definition-header'],
+    ],
   );
 }
 
@@ -385,20 +397,6 @@ export function readClaimPredicateDefinition<TCode extends string>(
 /** Small seed vocabulary; new entries should be added deliberately as semantics are implemented. */
 export const KernelVocabulary = {
   Evaluation: {
-    /** A module or source unit imports another module, binding, or symbol. */
-    Imports: defineClaimPredicate(
-      KernelVocabularyNamespace.Evaluation,
-      'imports',
-      'A module or source unit imports another module, binding, or symbol.',
-      claimSignature(anyEndpoint(), anyEndpoint()),
-    ),
-    /** A module or source unit exports a declaration, value, or resource carrier. */
-    Exports: defineClaimPredicate(
-      KernelVocabularyNamespace.Evaluation,
-      'exports',
-      'A module or source unit exports a declaration, value, or resource carrier.',
-      claimSignature(anyEndpoint(), anyEndpoint()),
-    ),
     /** Evaluation stopped because recursion protection prevented deeper interpretation. */
     DepthLimit: defineVocabulary(
       KernelVocabularyNamespace.Evaluation,
@@ -541,6 +539,18 @@ export const KernelVocabulary = {
         productEndpoint([KernelVocabularyNamespace.Resource, 'definition-header']),
       ),
     ),
+    ConvergesToDefinition: defineClaimPredicate(
+      KernelVocabularyNamespace.Resource,
+      'converges-to-definition',
+      'A resource definition header or contribution converges into a full resource metadata definition.',
+      claimSignature(
+        productEndpoint(
+          [KernelVocabularyNamespace.Resource, 'definition-header'],
+          [KernelVocabularyNamespace.Resource, 'definition-contribution'],
+        ),
+        productEndpoint([KernelVocabularyNamespace.Resource, 'definition']),
+      ),
+    ),
     /** Resource recognition could not close a resource kind from the carrier shape. */
     OpenKindExpression: defineVocabulary(
       KernelVocabularyNamespace.Resource,
@@ -575,6 +585,13 @@ export const KernelVocabulary = {
       'open-pattern-expression',
       KernelVocabularySlot.OpenSeamKind,
       'Syntax-resource recognition could not close every attribute pattern entry from the carrier shape.',
+    ),
+    /** Resource definition convergence saw metadata fields it cannot safely materialize yet. */
+    OpenDefinitionField: defineVocabulary(
+      KernelVocabularyNamespace.Resource,
+      'open-definition-field',
+      KernelVocabularySlot.OpenSeamKind,
+      'Resource definition convergence saw metadata fields it cannot safely materialize yet.',
     ),
   },
   Di: {
@@ -679,23 +696,20 @@ export const KernelVocabulary = {
       'produces-product',
       'A DI operation produced a container-owned product while spending registration or lookup pressure.',
       claimSignature(
-        productEndpoint([KernelVocabularyNamespace.Di, 'container-registration']),
+        productEndpoint(
+          [KernelVocabularyNamespace.Di, 'container'],
+          [KernelVocabularyNamespace.Di, 'container-registration'],
+        ),
         productEndpoint(
           [KernelVocabularyNamespace.Di, 'resolver'],
           [KernelVocabularyNamespace.Di, 'registry'],
           [KernelVocabularyNamespace.Di, 'parameterized-registry'],
           [KernelVocabularyNamespace.Di, 'resolver-slot'],
+          [KernelVocabularyNamespace.Di, 'self-resolver-slot'],
           [KernelVocabularyNamespace.Di, 'resource-slot'],
           [KernelVocabularyNamespace.Di, 'factory-slot'],
         ),
       ),
-    ),
-    /** A DI lookup resolves, ambiguously resolves, or fails to resolve to a provider. */
-    ResolvesTo: defineClaimPredicate(
-      KernelVocabularyNamespace.Di,
-      'resolves-to',
-      'A DI lookup resolves, ambiguously resolves, or fails to resolve to a provider.',
-      claimSignature(anyEndpoint(), anyEndpoint()),
     ),
     /** DI world construction could not spend a registration admission into concrete container effects. */
     OpenRegistrationSpending: defineVocabulary(
@@ -748,6 +762,13 @@ export const KernelVocabulary = {
       KernelVocabularySlot.ProductKind,
       'An IRegistry-shaped registration admission before DI world construction spends its register method.',
     ),
+    /** Product kind for a converged resource registration before its resource key rows are spent. */
+    ResourceAdmission: defineVocabulary(
+      KernelVocabularyNamespace.Registration,
+      'resource-admission',
+      KernelVocabularySlot.ProductKind,
+      'A converged Aurelia resource registration before DI world construction spends its resource key rows.',
+    ),
     /** Product kind for a known framework registration group before its expanded values are spent. */
     FrameworkRegistrationAdmission: defineVocabulary(
       KernelVocabularyNamespace.Registration,
@@ -767,7 +788,7 @@ export const KernelVocabulary = {
       KernelVocabularyNamespace.Registration,
       'uses-value',
       'A registration admission uses a class, instance, callback, resolver, registry, or resource value.',
-      claimSignature(registrationAdmissionEndpoint(), anyEndpoint()),
+      claimSignature(registrationAdmissionEndpoint(), registrationValueEndpoint()),
     ),
     /** Registration recognition could not close the target key. */
     OpenKeyExpression: defineVocabulary(
@@ -993,6 +1014,20 @@ export const KernelVocabulary = {
       KernelVocabularySlot.ProductKind,
       'Container-scoped compiler world that supplies resources, syntax resources, and services to template passes.',
     ),
+    /** Product kind for one compiler request over an authored template source. */
+    CompilationUnit: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'compilation-unit',
+      KernelVocabularySlot.ProductKind,
+      'One compiler request that binds a template source, compiler world, parse context, and root compilation context.',
+    ),
+    /** Product kind for a runtime-shaped CompilationContext frame. */
+    CompilationContext: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'compilation-context',
+      KernelVocabularySlot.ProductKind,
+      'Runtime-shaped CompilationContext frame for template parsing, classification, and lowering.',
+    ),
     /** Product kind for resource and syntax-resource visibility inside a compiler world. */
     ResourceScope: defineVocabulary(
       KernelVocabularyNamespace.Compiler,
@@ -1079,6 +1114,56 @@ export const KernelVocabulary = {
       KernelVocabularySlot.ProductKind,
       'Result of binding-command lowering before final instruction sequence assembly.',
     ),
+    /** Attribute classification produced a runtime-shaped ICommandBuildInfo product. */
+    BuildsCommandInput: defineClaimPredicate(
+      KernelVocabularyNamespace.Compiler,
+      'builds-command-input',
+      'Attribute classification produced a runtime-shaped ICommandBuildInfo product for binding-command lowering.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Template, 'attribute-classification']),
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'binding-command-build-input']),
+      ),
+    ),
+    /** Runtime-shaped ICommandBuildInfo was lowered through a binding command. */
+    LowersBindingCommand: defineClaimPredicate(
+      KernelVocabularyNamespace.Compiler,
+      'lowers-binding-command',
+      'Runtime-shaped ICommandBuildInfo was lowered through a binding command.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'binding-command-build-input']),
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'binding-command-lowering']),
+      ),
+    ),
+    /** Binding-command lowering used a selected command executable. */
+    UsesBindingCommandExecutable: defineClaimPredicate(
+      KernelVocabularyNamespace.Compiler,
+      'uses-binding-command-executable',
+      'Binding-command lowering used a selected command executable.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'binding-command-lowering']),
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'binding-command-executable']),
+      ),
+    ),
+    /** Binding-command lowering produced one lowered rendering instruction. */
+    ProducesInstruction: defineClaimPredicate(
+      KernelVocabularyNamespace.Compiler,
+      'produces-instruction',
+      'Binding-command lowering produced one lowered rendering instruction.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'binding-command-lowering']),
+        productEndpoint([KernelVocabularyNamespace.Instruction, 'instruction']),
+      ),
+    ),
+    /** Lowered instruction uses an expression parser publication. */
+    UsesExpressionParse: defineClaimPredicate(
+      KernelVocabularyNamespace.Compiler,
+      'uses-expression-parse',
+      'Lowered instruction uses an expression parser publication.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Instruction, 'instruction']),
+        productEndpoint([KernelVocabularyNamespace.Template, 'expression-parse']),
+      ),
+    ),
     /** Compiler scope provides a resource to template lookup. */
     ProvidesResource: defineClaimPredicate(
       KernelVocabularyNamespace.Compiler,
@@ -1113,6 +1198,76 @@ export const KernelVocabulary = {
       claimSignature(
         productEndpoint([KernelVocabularyNamespace.Compiler, 'world']),
         productEndpoint([KernelVocabularyNamespace.Compiler, 'resource-scope']),
+      ),
+    ),
+    /** A compilation unit or context uses a compiler world. */
+    UsesWorld: defineClaimPredicate(
+      KernelVocabularyNamespace.Compiler,
+      'uses-world',
+      'A compilation unit or compilation context uses a compiler world.',
+      claimSignature(
+        productEndpoint(
+          [KernelVocabularyNamespace.Compiler, 'compilation-unit'],
+          [KernelVocabularyNamespace.Compiler, 'compilation-context'],
+        ),
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'world']),
+      ),
+    ),
+    /** A compilation unit or context uses parser/lowering inquiry pressure. */
+    UsesParseContext: defineClaimPredicate(
+      KernelVocabularyNamespace.Compiler,
+      'uses-parse-context',
+      'A compilation unit or compilation context uses parser/lowering inquiry pressure.',
+      claimSignature(
+        productEndpoint(
+          [KernelVocabularyNamespace.Compiler, 'compilation-unit'],
+          [KernelVocabularyNamespace.Compiler, 'compilation-context'],
+        ),
+        productEndpoint([KernelVocabularyNamespace.Template, 'parse-context']),
+      ),
+    ),
+    /** A compilation unit owns or uses its root runtime-shaped compilation context. */
+    UsesCompilationContext: defineClaimPredicate(
+      KernelVocabularyNamespace.Compiler,
+      'uses-compilation-context',
+      'A compilation unit owns or uses its root runtime-shaped compilation context.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'compilation-unit']),
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'compilation-context']),
+      ),
+    ),
+    /** A compilation unit compiles an authored template source. */
+    CompilesTemplate: defineClaimPredicate(
+      KernelVocabularyNamespace.Compiler,
+      'compiles-template',
+      'A compilation unit compiles an authored template source.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'compilation-unit']),
+        productEndpoint([KernelVocabularyNamespace.Template, 'source']),
+      ),
+    ),
+    /** A runtime-shaped compilation context uses a resource scope for lookup. */
+    ContextUsesResourceScope: defineClaimPredicate(
+      KernelVocabularyNamespace.Compiler,
+      'context-uses-resource-scope',
+      'A runtime-shaped compilation context uses a resource scope for lookup.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'compilation-context']),
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'resource-scope']),
+      ),
+    ),
+    /** A runtime-shaped compilation context uses a compiler service product. */
+    ContextUsesService: defineClaimPredicate(
+      KernelVocabularyNamespace.Compiler,
+      'context-uses-service',
+      'A runtime-shaped compilation context uses a compiler service product.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'compilation-context']),
+        productEndpoint(
+          [KernelVocabularyNamespace.Compiler, 'service'],
+          [KernelVocabularyNamespace.Compiler, 'attribute-parser'],
+          [KernelVocabularyNamespace.Compiler, 'binding-command-resolver'],
+        ),
       ),
     ),
     /** A compiler world uses a compiler service product. */
@@ -1151,6 +1306,36 @@ export const KernelVocabulary = {
         productEndpoint([KernelVocabularyNamespace.Compiler, 'built-in-syntax-catalog']),
       ),
     ),
+    /** An attribute-pattern executable owns a compiled SyntaxInterpreter pattern. */
+    CompilesAttributePattern: defineClaimPredicate(
+      KernelVocabularyNamespace.Compiler,
+      'compiles-attribute-pattern',
+      'An attribute-pattern executable owns a compiled SyntaxInterpreter pattern.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'attribute-pattern-executable']),
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'compiled-attribute-pattern']),
+      ),
+    ),
+    /** A runtime IAttributeParser service uses a compiled SyntaxInterpreter machine. */
+    UsesAttributeParserMachine: defineClaimPredicate(
+      KernelVocabularyNamespace.Compiler,
+      'uses-attribute-parser-machine',
+      'A runtime IAttributeParser service uses a compiled SyntaxInterpreter machine.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'attribute-parser']),
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'attribute-parser-machine']),
+      ),
+    ),
+    /** A runtime SyntaxInterpreter machine uses a compiled attribute pattern for matching. */
+    UsesCompiledAttributePattern: defineClaimPredicate(
+      KernelVocabularyNamespace.Compiler,
+      'uses-compiled-attribute-pattern',
+      'A runtime SyntaxInterpreter machine uses a compiled attribute pattern for matching.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'attribute-parser-machine']),
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'compiled-attribute-pattern']),
+      ),
+    ),
     AdmitsResourceCatalog: defineClaimPredicate(
       KernelVocabularyNamespace.Compiler,
       'admits-resource-catalog',
@@ -1183,6 +1368,13 @@ export const KernelVocabulary = {
     ),
   },
   Template: {
+    /** Product kind for an authored template source before HTML parsing. */
+    Source: defineVocabulary(
+      KernelVocabularyNamespace.Template,
+      'source',
+      KernelVocabularySlot.ProductKind,
+      'Authored template source before HTML parsing, attribute classification, or compiler DOM transformation.',
+    ),
     /** Product kind for inquiry pressure shared by template parser and lowering passes. */
     ParseContext: defineVocabulary(
       KernelVocabularyNamespace.Template,
@@ -1225,6 +1417,20 @@ export const KernelVocabulary = {
       KernelVocabularySlot.ProductKind,
       'Attribute classification after resource, bindable, and command lookup.',
     ),
+    /** Product kind for an authored template value with compiler-owned grammar ownership. */
+    ValueSite: defineVocabulary(
+      KernelVocabularyNamespace.Template,
+      'value-site',
+      KernelVocabularySlot.ProductKind,
+      'Authored template value site selected for expression parsing or an explicit non-expression grammar boundary.',
+    ),
+    /** Product kind for one expression parser publication from an authored template value site. */
+    ExpressionParse: defineVocabulary(
+      KernelVocabularyNamespace.Template,
+      'expression-parse',
+      KernelVocabularySlot.ProductKind,
+      'Expression parser publication for one parser-owned authored template value site.',
+    ),
     /** Markup or binding syntax references a resource by name or command. */
     ReferencesResource: defineClaimPredicate(
       KernelVocabularyNamespace.Template,
@@ -1244,6 +1450,95 @@ export const KernelVocabulary = {
           [KernelVocabularyNamespace.Compiler, 'attribute-pattern-executable'],
           [KernelVocabularyNamespace.Compiler, 'binding-command-executable'],
         ),
+      ),
+    ),
+    /** An authored template source belongs to a resource definition or definition header. */
+    SourceForResource: defineClaimPredicate(
+      KernelVocabularyNamespace.Template,
+      'source-for-resource',
+      'An authored template source belongs to a resource definition or definition header.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Template, 'source']),
+        productEndpoint(
+          [KernelVocabularyNamespace.Resource, 'definition-header'],
+          [KernelVocabularyNamespace.Resource, 'definition'],
+        ),
+      ),
+    ),
+    /** An authored template source parsed into an HTML document product. */
+    ParsesToHtmlDocument: defineClaimPredicate(
+      KernelVocabularyNamespace.Template,
+      'parses-to-html-document',
+      'An authored template source parsed into an HTML document product.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Template, 'source']),
+        productEndpoint([KernelVocabularyNamespace.Template, 'html-document']),
+      ),
+    ),
+    /** An authored HTML document or node contains a child HTML node. */
+    ContainsHtmlNode: defineClaimPredicate(
+      KernelVocabularyNamespace.Template,
+      'contains-html-node',
+      'An authored HTML document or node contains a child HTML node.',
+      claimSignature(
+        productEndpoint(
+          [KernelVocabularyNamespace.Template, 'html-document'],
+          [KernelVocabularyNamespace.Template, 'html-node'],
+        ),
+        productEndpoint([KernelVocabularyNamespace.Template, 'html-node']),
+      ),
+    ),
+    /** An authored HTML node owns an authored HTML attribute. */
+    ContainsHtmlAttribute: defineClaimPredicate(
+      KernelVocabularyNamespace.Template,
+      'contains-html-attribute',
+      'An authored HTML node owns an authored HTML attribute.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Template, 'html-node']),
+        productEndpoint([KernelVocabularyNamespace.Template, 'html-attribute']),
+      ),
+    ),
+    /** An authored HTML attribute parsed into runtime AttrSyntax. */
+    ParsesToAttributeSyntax: defineClaimPredicate(
+      KernelVocabularyNamespace.Template,
+      'parses-to-attribute-syntax',
+      'An authored HTML attribute parsed into runtime AttrSyntax.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Template, 'html-attribute']),
+        productEndpoint([KernelVocabularyNamespace.Template, 'attribute-syntax']),
+      ),
+    ),
+    ClassifiesAttributeSyntax: defineClaimPredicate(
+      KernelVocabularyNamespace.Template,
+      'classifies-attribute-syntax',
+      'Runtime AttrSyntax was classified against resource scope, bindables, and binding-command lookup.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Template, 'attribute-syntax']),
+        productEndpoint([KernelVocabularyNamespace.Template, 'attribute-classification']),
+      ),
+    ),
+    SelectsValueSite: defineClaimPredicate(
+      KernelVocabularyNamespace.Template,
+      'selects-value-site',
+      'A template/compiler product selected an authored value into a value-site product.',
+      claimSignature(
+        productEndpoint(
+          [KernelVocabularyNamespace.Template, 'html-node'],
+          [KernelVocabularyNamespace.Template, 'html-attribute'],
+          [KernelVocabularyNamespace.Template, 'attribute-syntax'],
+          [KernelVocabularyNamespace.Template, 'attribute-classification'],
+          [KernelVocabularyNamespace.Compiler, 'binding-command-build-input'],
+        ),
+        productEndpoint([KernelVocabularyNamespace.Template, 'value-site']),
+      ),
+    ),
+    ParsesToExpressionParse: defineClaimPredicate(
+      KernelVocabularyNamespace.Template,
+      'parses-to-expression-parse',
+      'A parser-owned template value site was published through the expression parser boundary.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Template, 'value-site']),
+        productEndpoint([KernelVocabularyNamespace.Template, 'expression-parse']),
       ),
     ),
     /** Template parsing reached malformed or frontier-owned HTML. */

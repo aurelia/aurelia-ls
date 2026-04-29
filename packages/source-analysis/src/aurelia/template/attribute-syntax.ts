@@ -15,6 +15,7 @@ import type { HtmlAttributeReference, HtmlNodeReference } from './html-ir.js';
 import {
   TemplateCompilerServiceKind,
   TemplateCompilerServiceReference,
+  type TemplateBindableReference,
   type TemplateVisibleResource,
 } from './compiler-world.js';
 
@@ -38,6 +39,10 @@ export const enum AttributeClassificationKind {
   TemplateController = 'template-controller',
   /** Attribute is controlled by a binding command. */
   BindingCommand = 'binding-command',
+  /** Attribute is captured and forwarded through a custom element capture definition. */
+  Captured = 'captured',
+  /** Attribute controls compiler behavior directly rather than producing a runtime binding. */
+  CompilerControl = 'compiler-control',
   /** Attribute participates in ref lowering. */
   Ref = 'ref',
   /** Attribute participates in spread lowering. */
@@ -49,7 +54,7 @@ export const enum AttributeClassificationKind {
 export const enum AttributePatternExecutionKind {
   /** Runtime built-in pattern handler whose behavior can be modeled directly. */
   BuiltIn = 'built-in',
-  /** User-defined pattern handler with a known target but not necessarily executable semantics. */
+  /** Future user-defined pattern handler with a known target; not dynamically executed by the current compiler world. */
   Custom = 'custom',
   /** Pattern handler exists but its behavior must be preserved as an open execution seam. */
   Opaque = 'opaque',
@@ -522,8 +527,8 @@ export class AttributeClassification {
     readonly resource: TemplateVisibleResource | null,
     /** Binding command selected by the attribute syntax, if any. */
     readonly bindingCommand: BindingCommandExecutableReference | null,
-    /** Product handle for the bindable selected by classification, if any. */
-    readonly bindableProductHandle: ProductHandle | null,
+    /** Bindable selected by classification, if any. */
+    readonly bindable: TemplateBindableReference | null,
     /** Instruction products produced downstream from this classification. */
     readonly instructionProductHandles: readonly ProductHandle[],
     /** Source address for the classification site. */

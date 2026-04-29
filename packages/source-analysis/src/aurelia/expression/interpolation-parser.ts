@@ -74,7 +74,7 @@ export class InterpolationParser {
    * TODO: This now owns ordered active/suppressed hole boundary truth
    * directly. If later work needs interpolation scanner residue that still
    * sits outside those ordered hole carriers, add a dedicated interpolation
-   * scan-state carrier here instead of routing more meaning through the
+   * scan-state carrier here instead of pushing more meaning through the
    * property/function companion carriers.
    *
    * TODO: If interpolation publication grows another family-local axis

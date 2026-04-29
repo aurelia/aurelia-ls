@@ -58,7 +58,43 @@ import {
   type BuiltInResourceGroup,
   type BuiltInResourcePackage,
 } from './built-in-resources.js';
-import { toAureliaResourceIdentityKind } from './resource-kind.js';
+import {
+  BindableBindingMode,
+  BindableDefinition,
+  BindableSetterDefinition,
+  BindableSetterKind,
+} from './bindable-definition.js';
+import {
+  BindingBehaviorDefinition,
+  type BindingBehaviorDefinitionField,
+} from './binding-behavior-definition.js';
+import {
+  CustomAttributeContainerStrategy,
+  CustomAttributeDefinition,
+  type CustomAttributeDefinitionField,
+} from './custom-attribute-definition.js';
+import {
+  CustomElementCaptureDefinition,
+  CustomElementCaptureKind,
+  CustomElementDefinition,
+  type CustomElementDefinitionField,
+  CustomElementTemplateDefinition,
+  CustomElementTemplateKind,
+} from './custom-element-definition.js';
+import type { FullResourceDefinition } from './resource-definition.js';
+import {
+  ResourceDefinitionKind,
+  runtimeResourceKeyForKind,
+  toAureliaResourceIdentityKind,
+} from './resource-kind.js';
+import {
+  ResourceAliasDefinition,
+  ResourceTargetReference,
+} from './resource-reference.js';
+import {
+  ValueConverterDefinition,
+  type ValueConverterDefinitionField,
+} from './value-converter-definition.js';
 
 class BuiltInResourceSourceSet {
   constructor(
@@ -74,6 +110,8 @@ export class BuiltInResourceEmission {
     readonly catalogProductHandle: ProductHandle,
     /** Materialized built-in resource header. */
     readonly resource: BuiltInResource,
+    /** Framework-owned full definition for compiler/resource consumers, when modeled. */
+    readonly definition: FullResourceDefinition | null,
   ) {}
 }
 
@@ -107,7 +145,7 @@ class ConfiguredResourceSelectionEmission {
   ) {}
 }
 
-/** Materializes framework-owned resource definition headers before compiler-world visibility is decided. */
+/** Materializes framework-owned resource headers and static full definitions before compiler-world visibility is decided. */
 export class BuiltInResourceCatalogProducer {
   constructor(
     /** Hot analysis store that receives built-in resource records. */
@@ -156,8 +194,6 @@ export class BuiltInResourceCatalogProducer {
       this.recordsForResource(
         resource,
         `${local}:resource:${resource.resourceKind}:${resource.name}:${index}`,
-        catalogProductHandle,
-        catalogIdentityHandle,
         source,
       )
     );
@@ -214,6 +250,9 @@ export class BuiltInResourceCatalogProducer {
         [
           catalogProductHandle,
           ...materializedResources.map((resource) => resource.productHandle!),
+          ...resourceEmissions.flatMap((emission) =>
+            emission.definition?.productHandle == null ? [] : [emission.definition.productHandle]
+          ),
         ],
         catalogClaims.map((claim) => claim.handle),
       ),
@@ -223,7 +262,7 @@ export class BuiltInResourceCatalogProducer {
       records,
       catalog,
       resources: resourceEmissions.map((emission) =>
-        new BuiltInResourceEmission(catalogProductHandle, emission.resource)
+        new BuiltInResourceEmission(catalogProductHandle, emission.resource, emission.definition)
       ),
     };
   }
@@ -231,15 +270,15 @@ export class BuiltInResourceCatalogProducer {
   private recordsForResource(
     resource: BuiltInResource,
     local: string,
-    catalogProductHandle: ProductHandle,
-    catalogIdentityHandle: IdentityHandle,
     source: BuiltInResourceSourceSet,
   ): {
     readonly records: readonly KernelStoreRecord[];
     readonly resource: BuiltInResource;
+    readonly definition: FullResourceDefinition | null;
   } {
     const productHandle = this.store.handles.product(local);
     const identityHandle = this.store.handles.identity(local);
+    const definitionProductHandle = this.store.handles.product(`${local}:definition`);
     const fieldProvenance = compactFieldProvenance<BuiltInResourceField>([
       new FieldProvenance('targetName', source.provenanceHandle),
       new FieldProvenance('resourceKind', source.provenanceHandle),
@@ -280,6 +319,24 @@ export class BuiltInResourceCatalogProducer {
       declareClaim.handle,
       ...aliasClaims.map((alias) => alias.claim.handle),
     ];
+    const definition = materializeBuiltInResourceDefinition(
+      materializedResource,
+      definitionProductHandle,
+      identityHandle,
+      source,
+    );
+    const convergenceClaim = definition == null
+      ? null
+      : new SemanticClaim(
+        this.store.handles.claim(`${local}:converges-to-definition`),
+        productHandle,
+        KernelVocabulary.Resource.ConvergesToDefinition.key,
+        definitionProductHandle,
+        source.provenanceHandle,
+      );
+    const allClaimHandles = convergenceClaim == null
+      ? claimHandles
+      : [...claimHandles, convergenceClaim.handle];
     return {
       records: [
         new AureliaResourceIdentity(
@@ -291,24 +348,36 @@ export class BuiltInResourceCatalogProducer {
         ),
         declareClaim,
         ...aliasClaims.flatMap((alias) => [alias.identity, alias.claim]),
+        ...(convergenceClaim == null ? [] : [convergenceClaim]),
         new MaterializedProduct(
           productHandle,
           KernelVocabulary.Resource.DefinitionHeader.key,
           identityHandle,
           source.addressHandle,
           source.provenanceHandle,
-          claimHandles,
+          allClaimHandles,
         ),
+        ...(definition == null ? [] : [
+          new MaterializedProduct(
+            definitionProductHandle,
+            KernelVocabulary.Resource.Definition.key,
+            identityHandle,
+            source.addressHandle,
+            source.provenanceHandle,
+            convergenceClaim == null ? [] : [convergenceClaim.handle],
+          ),
+        ]),
         new MaterializationRecord(
           this.store.handles.materialization(local),
           DerivationPhase.Materialization,
           identityHandle,
           MaterializationState.Complete,
-          [productHandle],
-          claimHandles,
+          definition == null ? [productHandle] : [productHandle, definitionProductHandle],
+          allClaimHandles,
         ),
       ],
       resource: materializedResource,
+      definition,
     };
   }
 
@@ -575,6 +644,283 @@ function summaryForFrameworkKind(frameworkKind: FrameworkRegistrationKind): stri
     case FrameworkRegistrationKind.AppTask:
       return 'AppTask registry does not admit resource catalogs.';
   }
+}
+
+interface BuiltInBindableInput {
+  readonly name: string;
+  readonly attribute?: string;
+  readonly callback?: string;
+  readonly mode?: BindableBindingMode;
+  readonly setterKind?: BindableSetterKind;
+  readonly setterName?: string;
+}
+
+function materializeBuiltInResourceDefinition(
+  resource: BuiltInResource,
+  productHandle: ProductHandle,
+  identityHandle: IdentityHandle,
+  source: BuiltInResourceSourceSet,
+): FullResourceDefinition | null {
+  const target = new ResourceTargetReference(null, source.addressHandle, resource.targetName);
+  const aliases = resource.aliases.map((alias) =>
+    new ResourceAliasDefinition(alias, source.addressHandle, source.provenanceHandle)
+  );
+  const key = runtimeResourceKeyForKind(resource.resourceKind, resource.name);
+  if (key == null) {
+    return null;
+  }
+
+  switch (resource.resourceKind) {
+    case ResourceDefinitionKind.CustomElement:
+      return new CustomElementDefinition(
+        productHandle,
+        identityHandle,
+        source.addressHandle,
+        target,
+        resource.name,
+        aliases,
+        key,
+        new CustomElementCaptureDefinition(resource.targetName === 'AuCompose'
+          ? CustomElementCaptureKind.All
+          : CustomElementCaptureKind.None),
+        new CustomElementTemplateDefinition(CustomElementTemplateKind.None),
+        [],
+        [],
+        null,
+        false,
+        [],
+        builtInElementBindables(resource.targetName, source),
+        resource.targetName === 'AuCompose' || resource.targetName === 'AuSlot',
+        null,
+        false,
+        false,
+        [],
+        null,
+        resource.targetName === 'AuSlot'
+          ? new ResourceTargetReference(null, source.addressHandle, 'AuSlot.processContent')
+          : null,
+        [],
+        customElementDefinitionProvenance(source),
+      );
+    case ResourceDefinitionKind.CustomAttribute:
+    case ResourceDefinitionKind.TemplateController:
+      return new CustomAttributeDefinition(
+        productHandle,
+        identityHandle,
+        source.addressHandle,
+        target,
+        resource.name,
+        aliases,
+        key,
+        resource.resourceKind === ResourceDefinitionKind.TemplateController,
+        builtInAttributeBindables(resource.targetName, source),
+        false,
+        [],
+        [],
+        CustomAttributeContainerStrategy.Reuse,
+        builtInDefaultProperty(resource.targetName),
+        [],
+        customAttributeDefinitionProvenance(source),
+      );
+    case ResourceDefinitionKind.ValueConverter:
+      return new ValueConverterDefinition(
+        productHandle,
+        identityHandle,
+        source.addressHandle,
+        target,
+        resource.name,
+        aliases,
+        key,
+        [],
+        thinResourceDefinitionProvenance<ValueConverterDefinitionField>(source),
+      );
+    case ResourceDefinitionKind.BindingBehavior:
+      return new BindingBehaviorDefinition(
+        productHandle,
+        identityHandle,
+        source.addressHandle,
+        target,
+        resource.name,
+        aliases,
+        key,
+        [],
+        thinResourceDefinitionProvenance<BindingBehaviorDefinitionField>(source),
+      );
+  }
+}
+
+function builtInElementBindables(
+  targetName: string,
+  source: BuiltInResourceSourceSet,
+): readonly BindableDefinition[] {
+  switch (targetName) {
+    case 'AuCompose':
+      return bindables(source, [
+        { name: 'template' },
+        { name: 'component' },
+        { name: 'model' },
+        { name: 'scopeBehavior', setterKind: BindableSetterKind.Function, setterName: 'AuCompose.scopeBehavior.set' },
+        { name: 'composing', mode: BindableBindingMode.FromView },
+        { name: 'composition', mode: BindableBindingMode.FromView },
+        { name: 'tag' },
+        { name: 'flushMode', setterKind: BindableSetterKind.Function, setterName: 'AuCompose.flushMode.set' },
+      ]);
+    case 'AuSlot':
+      return bindables(source, [
+        { name: 'expose' },
+        { name: 'slotchange' },
+      ]);
+    default:
+      return [];
+  }
+}
+
+function builtInAttributeBindables(
+  targetName: string,
+  source: BuiltInResourceSourceSet,
+): readonly BindableDefinition[] {
+  switch (targetName) {
+    case 'If':
+      return bindables(source, [
+        { name: 'value' },
+        { name: 'cache', setterKind: BindableSetterKind.Function, setterName: 'If.cache.set' },
+      ]);
+    case 'Repeat':
+      return bindables(source, [{ name: 'items' }]);
+    case 'With':
+    case 'Switch':
+    case 'PromiseTemplateController':
+    case 'Show':
+      return bindables(source, [{ name: 'value' }]);
+    case 'PendingTemplateController':
+      return bindables(source, [{ name: 'value', mode: BindableBindingMode.ToView }]);
+    case 'FulfilledTemplateController':
+    case 'RejectedTemplateController':
+      return bindables(source, [{ name: 'value', mode: BindableBindingMode.FromView }]);
+    case 'Case':
+    case 'DefaultCase':
+      return bindables(source, [
+        { name: 'value' },
+        {
+          name: 'fallThrough',
+          mode: BindableBindingMode.OneTime,
+          setterKind: BindableSetterKind.Function,
+          setterName: `${targetName}.fallThrough.set`,
+        },
+      ]);
+    case 'Portal':
+      return bindables(source, [
+        { name: 'target' },
+        { name: 'position' },
+        { name: 'activated' },
+        { name: 'activating' },
+        { name: 'callbackContext' },
+        { name: 'renderContext', callback: 'targetChanged' },
+        { name: 'strict' },
+        { name: 'deactivated' },
+        { name: 'deactivating' },
+      ]);
+    case 'Focus':
+      return bindables(source, [{ name: 'value', mode: BindableBindingMode.TwoWay }]);
+    case 'Else':
+    default:
+      return [];
+  }
+}
+
+function builtInDefaultProperty(targetName: string): string {
+  switch (targetName) {
+    case 'Repeat':
+      return 'items';
+    case 'Portal':
+      return 'target';
+    default:
+      return 'value';
+  }
+}
+
+function bindables(
+  source: BuiltInResourceSourceSet,
+  inputs: readonly BuiltInBindableInput[],
+): readonly BindableDefinition[] {
+  return inputs.map((input) => new BindableDefinition(
+    input.attribute ?? toBindableAttribute(input.name),
+    input.callback ?? `${input.name}Changed`,
+    input.mode ?? BindableBindingMode.ToView,
+    input.name,
+    new BindableSetterDefinition(
+      input.setterKind ?? BindableSetterKind.Default,
+      input.setterName == null
+        ? null
+        : new ResourceTargetReference(null, source.addressHandle, input.setterName),
+    ),
+    compactFieldProvenance([
+      new FieldProvenance('attribute', source.provenanceHandle),
+      new FieldProvenance('callback', source.provenanceHandle),
+      new FieldProvenance('mode', source.provenanceHandle),
+      new FieldProvenance('name', source.provenanceHandle),
+      new FieldProvenance('set', source.provenanceHandle),
+    ]),
+  ));
+}
+
+function toBindableAttribute(name: string): string {
+  return name.replace(/([A-Z])/g, (_match, char: string) => `-${char.toLowerCase()}`);
+}
+
+function customElementDefinitionProvenance(
+  source: BuiltInResourceSourceSet,
+): readonly FieldProvenance<CustomElementDefinitionField>[] {
+  return compactFieldProvenance<CustomElementDefinitionField>([
+    new FieldProvenance('target', source.provenanceHandle),
+    new FieldProvenance('name', source.provenanceHandle),
+    new FieldProvenance('aliases', source.provenanceHandle),
+    new FieldProvenance('key', source.provenanceHandle),
+    new FieldProvenance('capture', source.provenanceHandle),
+    new FieldProvenance('template', source.provenanceHandle),
+    new FieldProvenance('instructions', source.provenanceHandle),
+    new FieldProvenance('dependencies', source.provenanceHandle),
+    new FieldProvenance('injectable', source.provenanceHandle),
+    new FieldProvenance('needsCompile', source.provenanceHandle),
+    new FieldProvenance('surrogates', source.provenanceHandle),
+    new FieldProvenance('bindables', source.provenanceHandle),
+    new FieldProvenance('containerless', source.provenanceHandle),
+    new FieldProvenance('shadowOptions', source.provenanceHandle),
+    new FieldProvenance('hasSlots', source.provenanceHandle),
+    new FieldProvenance('enhance', source.provenanceHandle),
+    new FieldProvenance('watches', source.provenanceHandle),
+    new FieldProvenance('strict', source.provenanceHandle),
+    new FieldProvenance('processContent', source.provenanceHandle),
+  ]);
+}
+
+function customAttributeDefinitionProvenance(
+  source: BuiltInResourceSourceSet,
+): readonly FieldProvenance<CustomAttributeDefinitionField>[] {
+  return compactFieldProvenance<CustomAttributeDefinitionField>([
+    new FieldProvenance('target', source.provenanceHandle),
+    new FieldProvenance('name', source.provenanceHandle),
+    new FieldProvenance('aliases', source.provenanceHandle),
+    new FieldProvenance('key', source.provenanceHandle),
+    new FieldProvenance('isTemplateController', source.provenanceHandle),
+    new FieldProvenance('bindables', source.provenanceHandle),
+    new FieldProvenance('noMultiBindings', source.provenanceHandle),
+    new FieldProvenance('watches', source.provenanceHandle),
+    new FieldProvenance('dependencies', source.provenanceHandle),
+    new FieldProvenance('containerStrategy', source.provenanceHandle),
+    new FieldProvenance('defaultProperty', source.provenanceHandle),
+  ]);
+}
+
+function thinResourceDefinitionProvenance<TField extends 'target' | 'name' | 'aliases' | 'key'>(
+  source: BuiltInResourceSourceSet,
+): readonly FieldProvenance<TField>[] {
+  return compactFieldProvenance<TField>([
+    new FieldProvenance('target' as TField, source.provenanceHandle),
+    new FieldProvenance('name' as TField, source.provenanceHandle),
+    new FieldProvenance('aliases' as TField, source.provenanceHandle),
+    new FieldProvenance('key' as TField, source.provenanceHandle),
+  ]);
 }
 
 type BuiltInResourceConstructor = new (

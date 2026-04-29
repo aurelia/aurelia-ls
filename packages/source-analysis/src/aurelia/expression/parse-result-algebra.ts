@@ -10,10 +10,6 @@ import type {
 } from './ast.js';
 import type { SourceSpan } from './source-span.js';
 import type { ExpressionParseContext } from './expression-parse-support.js';
-import type {
-  ExpressionParseRequest,
-  ExpressionParseSelection,
-} from './parse-selection.js';
 
 /**
  * The parser now targets a native publication algebra instead of returning
@@ -47,26 +43,28 @@ export type EmptyExpressionAst = PrimitiveLiteralExpression & { readonly value: 
 export type PropertyLikeEntryFamily = 'IsProperty' | 'IsFunction';
 
 export enum ExpressionParseResultKind {
-  ExpressionSuccess = 1,
-  EmptyExpressionSuccess = 2,
-  IteratorSuccess = 3,
-  InterpolationSuccess = 4,
-  InterpolationAbsent = 5,
-  OpaqueSuccess = 6,
-  NoExpressionParse = 7,
-  CompleteInputParseError = 8,
-  PropertyLikeDegradedPublication = 9,
-  PropertyLikeFrontierPublication = 10,
-  InterpolationDegradedPublication = 11,
-  InterpolationFrontierPublication = 12,
-  IteratorDegradedPublication = 13,
-  IteratorFrontierPublication = 14,
+  ExpressionSuccess = 'expression-success',
+  EmptyExpressionSuccess = 'empty-expression-success',
+  IteratorSuccess = 'iterator-success',
+  InterpolationSuccess = 'interpolation-success',
+  InterpolationAbsent = 'interpolation-absent',
+  OpaqueSuccess = 'opaque-success',
+  CompleteInputParseError = 'complete-input-parse-error',
+  PropertyLikeDegradedPublication = 'property-like-degraded-publication',
+  PropertyLikeFrontierPublication = 'property-like-frontier-publication',
+  InterpolationDegradedPublication = 'interpolation-degraded-publication',
+  InterpolationFrontierPublication = 'interpolation-frontier-publication',
+  IteratorDegradedPublication = 'iterator-degraded-publication',
+  IteratorFrontierPublication = 'iterator-frontier-publication',
 }
 
+/**
+ * Internal classifier bitmask only. Do not persist or publish these ordinals
+ * through parser products; public result vocabulary lives on the result kinds.
+ */
 export enum ExpressionParseResultFlags {
   None = 0,
   Completed = 1 << 0,
-  NonOwning = 1 << 1,
   Companion = 1 << 2,
   HardParseError = 1 << 3,
   HasCanonicalAst = 1 << 4,
@@ -103,9 +101,6 @@ export function expressionParseResultKindFlags(
       return ExpressionParseResultFlags.Completed
         | ExpressionParseResultFlags.HasCanonicalAst
         | ExpressionParseResultFlags.CustomFamily;
-    case ExpressionParseResultKind.NoExpressionParse:
-      return ExpressionParseResultFlags.NonOwning
-        | ExpressionParseResultFlags.CustomFamily;
     case ExpressionParseResultKind.CompleteInputParseError:
       return ExpressionParseResultFlags.HardParseError;
     case ExpressionParseResultKind.PropertyLikeDegradedPublication:
@@ -133,36 +128,36 @@ export function hasExpressionParseResultKindFlag(
 }
 
 export enum ExpressionFrontierKind {
-  AwaitingExpression = 1,
-  AwaitingClosingDelimiter = 2,
-  AwaitingMemberName = 3,
-  AwaitingTailSegment = 4,
-  AmbiguousClosure = 5,
-  AwaitingSeparator = 6,
-  AwaitingBindingDeclaration = 7,
-  AwaitingChainSegment = 8,
+  AwaitingExpression = 'awaiting-expression',
+  AwaitingClosingDelimiter = 'awaiting-closing-delimiter',
+  AwaitingMemberName = 'awaiting-member-name',
+  AwaitingTailSegment = 'awaiting-tail-segment',
+  AmbiguousClosure = 'ambiguous-closure',
+  AwaitingSeparator = 'awaiting-separator',
+  AwaitingBindingDeclaration = 'awaiting-binding-declaration',
+  AwaitingChainSegment = 'awaiting-chain-segment',
 }
 
 export enum ExpressionExpectedContinuationClass {
-  Expression = 1,
-  MemberName = 2,
-  CloseParen = 3,
-  CloseBracket = 4,
-  CloseBrace = 5,
-  Colon = 6,
-  Of = 7,
-  InterpolationHoleClose = 8,
-  ValueConverterName = 9,
-  BindingBehaviorName = 10,
-  Comma = 11,
-  ObjectLiteralKey = 12,
-  BindingDeclaration = 13,
-  IteratorTailSegment = 14,
-  TemplateClose = 15,
-  OpenBracket = 16,
-  OpenParen = 17,
-  ParentScopeKeyword = 18,
-  ArrowToken = 19,
+  Expression = 'expression',
+  MemberName = 'member-name',
+  CloseParen = 'close-paren',
+  CloseBracket = 'close-bracket',
+  CloseBrace = 'close-brace',
+  Colon = 'colon',
+  Of = 'of',
+  InterpolationHoleClose = 'interpolation-hole-close',
+  ValueConverterName = 'value-converter-name',
+  BindingBehaviorName = 'binding-behavior-name',
+  Comma = 'comma',
+  ObjectLiteralKey = 'object-literal-key',
+  BindingDeclaration = 'binding-declaration',
+  IteratorTailSegment = 'iterator-tail-segment',
+  TemplateClose = 'template-close',
+  OpenBracket = 'open-bracket',
+  OpenParen = 'open-paren',
+  ParentScopeKeyword = 'parent-scope-keyword',
+  ArrowToken = 'arrow-token',
 }
 
 /**
@@ -171,80 +166,80 @@ export enum ExpressionExpectedContinuationClass {
  * or gap sits without minting partial-node kinds inside the AST itself.
  */
 export enum ExpressionCompanionFrameKind {
-  ArrayLiteral = 1,
-  BinaryExpression = 2,
-  BindingBehaviorTail = 3,
-  CallArguments = 4,
-  ConditionalExpression = 5,
-  IndexedAccess = 6,
-  InterpolationHole = 7,
-  IteratorDeclaration = 8,
-  IteratorHeader = 9,
-  IteratorIterable = 10,
-  MemberAccess = 11,
-  ObjectLiteral = 12,
-  ParenExpression = 13,
-  TemplateLiteral = 14,
-  ValueConverterTail = 15,
-  AssignmentExpression = 16,
-  UnaryExpression = 17,
-  IteratorTrailingSplit = 18,
-  TemplateHole = 19,
-  NewExpression = 20,
-  OptionalChain = 21,
-  ScopePath = 22,
-  ArrowFunction = 23,
-  ArrowParameterList = 24,
+  ArrayLiteral = 'array-literal',
+  BinaryExpression = 'binary-expression',
+  BindingBehaviorTail = 'binding-behavior-tail',
+  CallArguments = 'call-arguments',
+  ConditionalExpression = 'conditional-expression',
+  IndexedAccess = 'indexed-access',
+  InterpolationHole = 'interpolation-hole',
+  IteratorDeclaration = 'iterator-declaration',
+  IteratorHeader = 'iterator-header',
+  IteratorIterable = 'iterator-iterable',
+  MemberAccess = 'member-access',
+  ObjectLiteral = 'object-literal',
+  ParenExpression = 'paren-expression',
+  TemplateLiteral = 'template-literal',
+  ValueConverterTail = 'value-converter-tail',
+  AssignmentExpression = 'assignment-expression',
+  UnaryExpression = 'unary-expression',
+  IteratorTrailingSplit = 'iterator-trailing-split',
+  TemplateHole = 'template-hole',
+  NewExpression = 'new-expression',
+  OptionalChain = 'optional-chain',
+  ScopePath = 'scope-path',
+  ArrowFunction = 'arrow-function',
+  ArrowParameterList = 'arrow-parameter-list',
 }
 
 export enum ExpressionGapKind {
-  MissingExpression = 1,
-  MissingMemberName = 2,
-  MissingCallArgument = 3,
-  MissingClosingDelimiter = 4,
-  MissingIteratorOf = 5,
-  MissingIteratorIterable = 6,
-  MissingTailName = 7,
-  MissingTernaryArm = 8,
-  MissingObjectValueSeparator = 9,
-  MissingIteratorTailSegment = 10,
-  MissingBindingDeclaration = 11,
-  MissingArrowSeparator = 12,
+  MissingExpression = 'missing-expression',
+  MissingMemberName = 'missing-member-name',
+  MissingCallArgument = 'missing-call-argument',
+  MissingClosingDelimiter = 'missing-closing-delimiter',
+  MissingIteratorOf = 'missing-iterator-of',
+  MissingIteratorIterable = 'missing-iterator-iterable',
+  MissingTailName = 'missing-tail-name',
+  MissingTernaryArm = 'missing-ternary-arm',
+  MissingObjectValueSeparator = 'missing-object-value-separator',
+  MissingIteratorTailSegment = 'missing-iterator-tail-segment',
+  MissingBindingDeclaration = 'missing-binding-declaration',
+  MissingArrowSeparator = 'missing-arrow-separator',
 }
 
 export enum MatchedDelimiterKind {
-  Paren = 1,
-  Bracket = 2,
-  Brace = 3,
-  Template = 4,
-  TemplateHole = 5,
+  Paren = 'paren',
+  Bracket = 'bracket',
+  Brace = 'brace',
+  Template = 'template',
+  TemplateHole = 'template-hole',
 }
 
 export enum IteratorActiveRegionKind {
-  Declaration = 1,
-  Separator = 2,
-  Iterable = 3,
-  TrailingSplit = 4,
+  Declaration = 'declaration',
+  Separator = 'separator',
+  Iterable = 'iterable',
+  TrailingSplit = 'trailing-split',
 }
 
 export enum IteratorOfSeparatorStateKind {
-  Absent = 1,
-  Present = 2,
+  Absent = 'absent',
+  Present = 'present',
 }
 
 export enum IteratorTrailingSplitKind {
-  SemicolonOnly = 1,
-  RawTailVisible = 2,
+  SemicolonOnly = 'semicolon-only',
+  RawTailVisible = 'raw-tail-visible',
 }
 
 export enum InterpolationHoleBoundaryKind {
-  Closed = 1,
-  Unterminated = 2,
+  Closed = 'closed',
+  Unterminated = 'unterminated',
 }
 
 export enum InterpolationSuppressedHolePublicationKind {
-  CompanionSuppressed = 1,
-  HardErrorSuppressed = 2,
+  CompanionSuppressed = 'companion-suppressed',
+  HardErrorSuppressed = 'hard-error-suppressed',
 }
 
 export class MatchedDelimiterEntry {
@@ -432,36 +427,6 @@ export class OpaqueSuccess {
   constructor(
     readonly primarySpan: SourceSpan | null,
     readonly ast: CustomExpression,
-    readonly secondaryGrammarOwner: string | null,
-  ) {}
-}
-
-// TODO: `secondaryGrammarOwner` is now caller-supplied through the selection
-// lane. If later secondary grammars need stronger identity than a raw handle,
-// upgrade that here instead of letting callers invent parallel owner-carrier
-// shapes beside the parser.
-
-/**
- * Distinct from `InterpolationAbsent`: this means the parser intentionally did
- * not claim ownership of a concrete parse attempt for the current text.
- *
- * This belongs to entry-family arbitration and grammar transfer boundaries,
- * not to hard parse failure:
- * - caller short-circuited before invoking the family parser
- * - entry-family selection transferred ownership elsewhere
- * - a secondary grammar took ownership and the expression parser declined
- */
-export class NoExpressionParse {
-  readonly kind = ExpressionParseResultKind.NoExpressionParse;
-
-  constructor(
-    readonly entryFamily: ExpressionType,
-    readonly primarySpan: SourceSpan | null,
-    readonly reason:
-      | 'caller-short-circuit'
-      | 'entry-family-not-selected'
-      | 'secondary-grammar-transfer',
-    readonly secondaryGrammarOwner: string | null,
   ) {}
 }
 
@@ -664,9 +629,6 @@ export type CompletedExpressionParseResult =
   | InterpolationAbsent
   | OpaqueSuccess;
 
-export type NonOwningExpressionParseResult =
-  | NoExpressionParse;
-
 export type CompanionExpressionParseResult =
   | PropertyLikeDegradedPublication
   | PropertyLikeFrontierPublication
@@ -677,7 +639,6 @@ export type CompanionExpressionParseResult =
 
 export type ExpressionParseResult =
   | CompletedExpressionParseResult
-  | NonOwningExpressionParseResult
   | CompanionExpressionParseResult
   | CompleteInputParseError;
 
@@ -714,7 +675,6 @@ export type InterpolationParseResult =
 
 export type CustomParseResult =
   | OpaqueSuccess
-  | NoExpressionParse
   | CompleteInputParseError;
 
 /**
@@ -735,16 +695,6 @@ export interface ExpressionParseResultPublisher {
     expression: string,
     entryFamily?: ExpressionType,
     context?: ExpressionParseContext,
-  ): ExpressionParseResult;
-
-  parseSelected(
-    expression: string,
-    selection: ExpressionParseSelection,
-    context?: ExpressionParseContext,
-  ): ExpressionParseResult;
-
-  parseRequest(
-    request: ExpressionParseRequest,
   ): ExpressionParseResult;
 
   parsePropertyLike(

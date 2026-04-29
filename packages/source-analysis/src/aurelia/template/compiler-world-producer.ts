@@ -92,6 +92,8 @@ export class TemplateCompilerWorldEmission {
     readonly attributeParser: AttributeParserService,
     readonly attributeParserMachine: AttributeParserMachine,
     readonly bindingCommandResolver: BindingCommandResolverService,
+    readonly attributePatterns: readonly BuiltInAttributePatternEmission[],
+    readonly bindingCommands: readonly BuiltInBindingCommandEmission[],
     readonly syntaxResources: readonly TemplateVisibleResource[],
     readonly records: readonly KernelStoreRecord[],
   ) {}
@@ -109,10 +111,11 @@ class CompilerWorldClaimSet {
   constructor(
     readonly worldClaims: readonly SemanticClaim[],
     readonly scopeClaims: readonly SemanticClaim[],
+    readonly serviceClaims: readonly SemanticClaim[],
   ) {}
 
   get allClaims(): readonly SemanticClaim[] {
-    return [...this.worldClaims, ...this.scopeClaims];
+    return [...this.worldClaims, ...this.scopeClaims, ...this.serviceClaims];
   }
 }
 
@@ -224,10 +227,12 @@ export class TemplateCompilerWorldProducer {
       resourceResolverProductHandle,
       resourceResolverIdentityHandle,
       input.container.toReference(),
+      input.resources,
       source.addressHandle,
       compactFieldProvenance([
         new FieldProvenance('serviceKind', source.provenanceHandle),
         new FieldProvenance('container', source.provenanceHandle),
+        input.resources.length === 0 ? null : new FieldProvenance('resources', source.provenanceHandle),
         new FieldProvenance('source', source.provenanceHandle),
       ]),
     );
@@ -287,6 +292,8 @@ export class TemplateCompilerWorldProducer {
       services,
       input.resources,
       syntaxResources,
+      attributeParser,
+      attributeParserMachine,
       source.provenanceHandle,
     );
     records.push(...claims.allClaims);
@@ -302,8 +309,20 @@ export class TemplateCompilerWorldProducer {
       identity(attributeMapperIdentityHandle, CompilerIdentityKind.TemplateCompilerService, worldIdentityHandle, source, 'IAttrMapper'),
       product(worldProductHandle, KernelVocabulary.Compiler.World.key, worldIdentityHandle, source, claims.worldClaims.map((claim) => claim.handle)),
       product(scopeProductHandle, KernelVocabulary.Compiler.ResourceScope.key, scopeIdentityHandle, source, claims.scopeClaims.map((claim) => claim.handle)),
-      product(machineProductHandle, KernelVocabulary.Compiler.AttributeParserMachine.key, machineIdentityHandle, source),
-      product(attributeParserProductHandle, KernelVocabulary.Compiler.AttributeParser.key, attributeParserIdentityHandle, source),
+      product(
+        machineProductHandle,
+        KernelVocabulary.Compiler.AttributeParserMachine.key,
+        machineIdentityHandle,
+        source,
+        claimsForSubject(claims.serviceClaims, machineProductHandle).map((claim) => claim.handle),
+      ),
+      product(
+        attributeParserProductHandle,
+        KernelVocabulary.Compiler.AttributeParser.key,
+        attributeParserIdentityHandle,
+        source,
+        claimsForSubject(claims.serviceClaims, attributeParserProductHandle).map((claim) => claim.handle),
+      ),
       product(bindingResolverProductHandle, KernelVocabulary.Compiler.BindingCommandResolver.key, bindingResolverIdentityHandle, source),
       product(templateCompilerProductHandle, KernelVocabulary.Compiler.Service.key, templateCompilerIdentityHandle, source),
       product(resourceResolverProductHandle, KernelVocabulary.Compiler.Service.key, resourceResolverIdentityHandle, source),
@@ -339,6 +358,8 @@ export class TemplateCompilerWorldProducer {
       attributeParser,
       attributeParserMachine,
       bindingCommandResolver,
+      input.attributePatterns,
+      input.bindingCommands,
       syntaxResources,
       records,
     );
@@ -373,6 +394,8 @@ export class TemplateCompilerWorldProducer {
     services: readonly TemplateCompilerServiceReference[],
     resources: readonly TemplateVisibleResource[],
     syntaxResources: readonly TemplateVisibleResource[],
+    attributeParser: AttributeParserService,
+    attributeParserMachine: AttributeParserMachine,
     provenanceHandle: ProvenanceHandle,
   ): CompilerWorldClaimSet {
     const worldClaims: SemanticClaim[] = [
@@ -399,15 +422,25 @@ export class TemplateCompilerWorldProducer {
     });
     resources.forEach((resource, index) => {
       if (resource.resourceProductHandle == null) {
-        return;
+        if (resource.definitionProductHandle == null) {
+          return;
+        }
       }
-      scopeClaims.push(new SemanticClaim(
-        this.store.handles.claim(`template-resource-scope:${local}:provides-resource:${index}`),
-        scope.productHandle,
-        KernelVocabulary.Compiler.ProvidesResource.key,
+      const productHandles = [
         resource.resourceProductHandle,
-        provenanceHandle,
-      ));
+        resource.definitionProductHandle,
+      ].filter((productHandle, productIndex): productHandle is ProductHandle =>
+        productHandle != null && (productIndex === 0 || productHandle !== resource.resourceProductHandle)
+      );
+      for (const [productIndex, productHandle] of productHandles.entries()) {
+        scopeClaims.push(new SemanticClaim(
+          this.store.handles.claim(`template-resource-scope:${local}:provides-resource:${index}:${productIndex}`),
+          scope.productHandle,
+          KernelVocabulary.Compiler.ProvidesResource.key,
+          productHandle,
+          provenanceHandle,
+        ));
+      }
     });
     syntaxResources.forEach((resource, index) => {
       if (resource.resourceProductHandle == null) {
@@ -421,8 +454,33 @@ export class TemplateCompilerWorldProducer {
         provenanceHandle,
       ));
     });
-    return new CompilerWorldClaimSet(worldClaims, scopeClaims);
+    const serviceClaims: SemanticClaim[] = [
+      new SemanticClaim(
+        this.store.handles.claim(`attribute-parser:${local}:uses-machine`),
+        attributeParser.productHandle,
+        KernelVocabulary.Compiler.UsesAttributeParserMachine.key,
+        attributeParserMachine.productHandle,
+        provenanceHandle,
+      ),
+    ];
+    attributeParserMachine.compiledPatternProductHandles.forEach((productHandle, index) => {
+      serviceClaims.push(new SemanticClaim(
+        this.store.handles.claim(`attribute-parser-machine:${local}:uses-compiled-pattern:${index}`),
+        attributeParserMachine.productHandle,
+        KernelVocabulary.Compiler.UsesCompiledAttributePattern.key,
+        productHandle,
+        provenanceHandle,
+      ));
+    });
+    return new CompilerWorldClaimSet(worldClaims, scopeClaims, serviceClaims);
   }
+}
+
+function claimsForSubject(
+  claims: readonly SemanticClaim[],
+  subjectHandle: ProductHandle,
+): readonly SemanticClaim[] {
+  return claims.filter((claim) => claim.subjectHandle === subjectHandle);
 }
 
 function visibleAttributePattern(
@@ -435,6 +493,8 @@ function visibleAttributePattern(
     [],
     emission.executable.productHandle,
     emission.executable.identityHandle,
+    null,
+    null,
     visibilityKind,
     emission.executable.sourceAddressHandle,
   );
@@ -450,6 +510,8 @@ function visibleBindingCommand(
     emission.handler.aliases,
     emission.executable.productHandle,
     emission.executable.identityHandle,
+    null,
+    null,
     visibilityKind,
     emission.executable.sourceAddressHandle,
   );

@@ -13,7 +13,10 @@ import {
   EvidenceRecord,
   EvidenceRole,
 } from '../kernel/evidence.js';
-import type { AddressHandle } from '../kernel/handles.js';
+import type {
+  AddressHandle,
+  KernelRecordHandle,
+} from '../kernel/handles.js';
 import {
   ProvenanceMode,
   ProvenanceRecord,
@@ -43,10 +46,11 @@ export class EvaluationKernelBridge {
     result.openSeams.forEach((seam, index) => {
       records.push(...this.recordsForOpenSeam(sourceFile, sourceFileAddressHandle, result.moduleKey, seam, index));
     });
-    if (records.length === 0) {
+    const newRecords = records.filter((record) => this.store.read(record.handle as KernelRecordHandle) == null);
+    if (newRecords.length === 0) {
       return;
     }
-    this.store.commit(new KernelStoreBatch(records, `evaluation-open-seams:${result.moduleKey}`));
+    this.store.commit(new KernelStoreBatch(newRecords, `evaluation-open-seams:${result.moduleKey}`));
   }
 
   private recordsForOpenSeam(

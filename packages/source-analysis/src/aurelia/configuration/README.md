@@ -51,12 +51,17 @@ The tooling model should keep that split:
 - Configuration records describe where app/world admission happens.
 - Registration records describe what is offered to registration admission.
 - DI world construction later spends registration records into container/resource reachability.
-- `app-world-producer.ts` is the current composition point for that handoff. It does not create a new semantic
-  "app world" kernel product; it runs the already-owned configuration, DI, built-in syntax, built-in resource, and
-  compiler-world producers and returns an orchestration envelope for callers. Compiler worlds select one app-level
-  syntax surface from the owning app-root sequence, including both attribute-pattern parser inputs and binding-command
-  executables, then read ordinary named resource visibility from DI-produced container resource slots. They must not
-  receive every framework catalog recognized in the project.
+- `configuration-recognition-project-pass.ts` is the project-level recognition pass over shared static evaluation.
+  It is the source/module composition layer for configuration facts, not a second evaluator.
+- `app-world-producer.ts` is the current composition point for the configuration-to-DI/compiler handoff. It does not
+  create a new semantic "app world" kernel product; it runs the already-owned configuration, DI, built-in syntax,
+  built-in resource, and compiler-world producers and returns an orchestration envelope for callers. Compiler worlds
+  select one app-level syntax surface from the owning app-root sequence, including both attribute-pattern parser
+  inputs and binding-command executables, then read ordinary named resource visibility from DI-produced container
+  resource slots. They must not receive every framework catalog recognized in the project.
+- `app-world-project-pass.ts` is the current whole-project orchestration pass: shared static evaluation, resource
+  recognition/convergence, resource indexing, configuration recognition, DI spending, and compiler-world construction.
+  It exists so those producers can run in the intended order without making any one layer own the others' facts.
 - Treat this composition point as a watchpoint until the template compiler slice introduces its own
   `CompilationContext`-shaped owner. The handoff needs to stay explicit enough that compiler work can decide which
   facts belong to the app root, container, controller, compilation context, parser context, or inquiry answer without

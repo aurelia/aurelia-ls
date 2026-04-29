@@ -1,4 +1,5 @@
 import type { SourceSpan } from './source-span.js';
+import { auLink } from '../kernel/au-link.js';
 
 export type UnaryOperator = 'void' | 'typeof' | '!' | '-' | '+' | '++' | '--';
 export type BinaryOperator =
@@ -40,6 +41,7 @@ export class Identifier extends ExpressionNodeBase {
   }
 }
 
+@auLink('expression-parser:BindingBehaviorExpression')
 export class BindingBehaviorExpression extends ExpressionNodeBase {
   readonly $kind = 'BindingBehavior' as const;
   readonly key: string;
@@ -55,6 +57,7 @@ export class BindingBehaviorExpression extends ExpressionNodeBase {
   }
 }
 
+@auLink('expression-parser:ValueConverterExpression')
 export class ValueConverterExpression extends ExpressionNodeBase {
   readonly $kind = 'ValueConverter' as const;
 
@@ -68,6 +71,7 @@ export class ValueConverterExpression extends ExpressionNodeBase {
   }
 }
 
+@auLink('expression-parser:AssignExpression')
 export class AssignExpression extends ExpressionNodeBase {
   readonly $kind = 'Assign' as const;
 
@@ -81,6 +85,7 @@ export class AssignExpression extends ExpressionNodeBase {
   }
 }
 
+@auLink('expression-parser:ConditionalExpression')
 export class ConditionalExpression extends ExpressionNodeBase {
   readonly $kind = 'Conditional' as const;
 
@@ -94,6 +99,7 @@ export class ConditionalExpression extends ExpressionNodeBase {
   }
 }
 
+@auLink('expression-parser:AccessGlobalExpression')
 export class AccessGlobalExpression extends ExpressionNodeBase {
   readonly $kind = 'AccessGlobal' as const;
 
@@ -105,6 +111,7 @@ export class AccessGlobalExpression extends ExpressionNodeBase {
   }
 }
 
+@auLink('expression-parser:AccessThisExpression')
 export class AccessThisExpression extends ExpressionNodeBase {
   readonly $kind = 'AccessThis' as const;
 
@@ -116,10 +123,12 @@ export class AccessThisExpression extends ExpressionNodeBase {
   }
 }
 
+@auLink('expression-parser:AccessBoundaryExpression')
 export class AccessBoundaryExpression extends ExpressionNodeBase {
   readonly $kind = 'AccessBoundary' as const;
 }
 
+@auLink('expression-parser:AccessScopeExpression')
 export class AccessScopeExpression extends ExpressionNodeBase {
   readonly $kind = 'AccessScope' as const;
 
@@ -138,6 +147,7 @@ function isGlobalAccessRoot(expression: IsLeftHandSide): boolean {
       && expression.accessGlobal);
 }
 
+@auLink('expression-parser:AccessMemberExpression')
 export class AccessMemberExpression extends ExpressionNodeBase {
   readonly $kind = 'AccessMember' as const;
   readonly accessGlobal: boolean;
@@ -153,6 +163,7 @@ export class AccessMemberExpression extends ExpressionNodeBase {
   }
 }
 
+@auLink('expression-parser:AccessKeyedExpression')
 export class AccessKeyedExpression extends ExpressionNodeBase {
   readonly $kind = 'AccessKeyed' as const;
   readonly accessGlobal: boolean;
@@ -179,6 +190,7 @@ export class ParenExpression extends ExpressionNodeBase {
   }
 }
 
+@auLink('expression-parser:NewExpression')
 export class NewExpression extends ExpressionNodeBase {
   readonly $kind = 'New' as const;
 
@@ -191,6 +203,7 @@ export class NewExpression extends ExpressionNodeBase {
   }
 }
 
+@auLink('expression-parser:CallScopeExpression')
 export class CallScopeExpression extends ExpressionNodeBase {
   readonly $kind = 'CallScope' as const;
 
@@ -205,6 +218,7 @@ export class CallScopeExpression extends ExpressionNodeBase {
   }
 }
 
+@auLink('expression-parser:CallMemberExpression')
 export class CallMemberExpression extends ExpressionNodeBase {
   readonly $kind = 'CallMember' as const;
 
@@ -220,6 +234,7 @@ export class CallMemberExpression extends ExpressionNodeBase {
   }
 }
 
+@auLink('expression-parser:CallFunctionExpression')
 export class CallFunctionExpression extends ExpressionNodeBase {
   readonly $kind = 'CallFunction' as const;
 
@@ -233,6 +248,7 @@ export class CallFunctionExpression extends ExpressionNodeBase {
   }
 }
 
+@auLink('expression-parser:CallGlobalExpression')
 export class CallGlobalExpression extends ExpressionNodeBase {
   readonly $kind = 'CallGlobal' as const;
 
@@ -245,6 +261,7 @@ export class CallGlobalExpression extends ExpressionNodeBase {
   }
 }
 
+@auLink('expression-parser:BinaryExpression')
 export class BinaryExpression extends ExpressionNodeBase {
   readonly $kind = 'Binary' as const;
 
@@ -258,6 +275,7 @@ export class BinaryExpression extends ExpressionNodeBase {
   }
 }
 
+@auLink('expression-parser:UnaryExpression')
 export class UnaryExpression extends ExpressionNodeBase {
   readonly $kind = 'Unary' as const;
 
@@ -271,6 +289,7 @@ export class UnaryExpression extends ExpressionNodeBase {
   }
 }
 
+@auLink('expression-parser:PrimitiveLiteralExpression')
 export class PrimitiveLiteralExpression extends ExpressionNodeBase {
   readonly $kind = 'PrimitiveLiteral' as const;
 
@@ -282,6 +301,7 @@ export class PrimitiveLiteralExpression extends ExpressionNodeBase {
   }
 }
 
+@auLink('expression-parser:ArrayLiteralExpression')
 export class ArrayLiteralExpression extends ExpressionNodeBase {
   readonly $kind = 'ArrayLiteral' as const;
 
@@ -293,6 +313,7 @@ export class ArrayLiteralExpression extends ExpressionNodeBase {
   }
 }
 
+@auLink('expression-parser:ObjectLiteralExpression')
 export class ObjectLiteralExpression extends ExpressionNodeBase {
   readonly $kind = 'ObjectLiteral' as const;
 
@@ -305,6 +326,7 @@ export class ObjectLiteralExpression extends ExpressionNodeBase {
   }
 }
 
+@auLink('expression-parser:TemplateExpression')
 export class TemplateExpression extends ExpressionNodeBase {
   readonly $kind = 'Template' as const;
 
@@ -317,6 +339,7 @@ export class TemplateExpression extends ExpressionNodeBase {
   }
 }
 
+@auLink('expression-parser:TaggedTemplateExpression')
 export class TaggedTemplateExpression extends ExpressionNodeBase {
   readonly $kind = 'TaggedTemplate' as const;
 
@@ -330,6 +353,7 @@ export class TaggedTemplateExpression extends ExpressionNodeBase {
   }
 }
 
+@auLink('expression-parser:BindingIdentifier')
 export class BindingIdentifier extends ExpressionNodeBase {
   readonly $kind = 'BindingIdentifier' as const;
 
@@ -341,6 +365,7 @@ export class BindingIdentifier extends ExpressionNodeBase {
   }
 }
 
+@auLink('expression-parser:ForOfStatement')
 export class ForOfStatement extends ExpressionNodeBase {
   readonly $kind = 'ForOfStatement' as const;
 
@@ -354,6 +379,7 @@ export class ForOfStatement extends ExpressionNodeBase {
   }
 }
 
+@auLink('expression-parser:Interpolation')
 export class Interpolation extends ExpressionNodeBase {
   readonly $kind = 'Interpolation' as const;
   readonly isMulti: boolean;
@@ -388,6 +414,7 @@ export class BindingPatternHole extends ExpressionNodeBase {
   readonly $kind = 'BindingPatternHole' as const;
 }
 
+@auLink('expression-parser:ArrayBindingPattern')
 export class ArrayBindingPattern extends ExpressionNodeBase {
   readonly $kind = 'ArrayBindingPattern' as const;
 
@@ -407,6 +434,7 @@ export class ObjectBindingPatternProperty {
   ) {}
 }
 
+@auLink('expression-parser:ObjectBindingPattern')
 export class ObjectBindingPattern extends ExpressionNodeBase {
   readonly $kind = 'ObjectBindingPattern' as const;
 
@@ -419,6 +447,7 @@ export class ObjectBindingPattern extends ExpressionNodeBase {
   }
 }
 
+@auLink('expression-parser:DestructuringAssignmentExpression')
 export class DestructuringAssignmentExpression extends ExpressionNodeBase {
   readonly $kind = 'DestructuringAssignment' as const;
 
@@ -431,6 +460,7 @@ export class DestructuringAssignmentExpression extends ExpressionNodeBase {
   }
 }
 
+@auLink('expression-parser:ArrowFunction')
 export class ArrowFunction extends ExpressionNodeBase {
   readonly $kind = 'ArrowFunction' as const;
 
@@ -444,6 +474,7 @@ export class ArrowFunction extends ExpressionNodeBase {
   }
 }
 
+@auLink('expression-parser:CustomExpression')
 export class CustomExpression extends ExpressionNodeBase {
   readonly $kind = 'Custom' as const;
 

@@ -1,0 +1,125 @@
+import type ts from 'typescript';
+import type {
+  ProjectBootFrame,
+  SourceFileAdmission,
+} from '../boot/frames.js';
+import { SourceLanguage } from '../kernel/address.js';
+import type { KernelStore } from '../kernel/store.js';
+import type { StaticModuleEvaluationResult } from './evaluator.js';
+import { EvaluationKernelBridge } from './kernel-bridge.js';
+import {
+  buildEvaluationModuleGraph,
+  FileSystemEvaluationModuleSourceHost,
+  type EvaluationModuleResolutionOpen,
+} from './module-host.js';
+import { StaticModuleGraphEvaluator } from './module-evaluator.js';
+import { normalizeModuleKey } from './module-graph.js';
+
+export type EvaluatedProjectSource = StaticProjectEvaluationSourceResult & {
+  readonly sourceFile: ts.SourceFile;
+  readonly evaluation: StaticModuleEvaluationResult;
+};
+
+/** Static-evaluation result for one boot-admitted source file. */
+export class StaticProjectEvaluationSourceResult {
+  constructor(
+    /** Source admission that anchored evaluation. */
+    readonly admission: SourceFileAdmission,
+    /** Module key used by the static evaluator. */
+    readonly moduleKey: string,
+    /** Parsed source file when module graph construction reached the admission. */
+    readonly sourceFile: ts.SourceFile | null,
+    /** Static evaluator result for the admitted module when evaluation closed enough for producers. */
+    readonly evaluation: StaticModuleEvaluationResult | null,
+    /** Module edges left unresolved while preparing evaluation for this source. */
+    readonly unresolvedModules: readonly EvaluationModuleResolutionOpen[],
+  ) {}
+}
+
+/** Static-evaluation result for one booted project frame. */
+export class StaticProjectEvaluationResult {
+  constructor(
+    /** Project frame whose TS/JS source files were evaluated. */
+    readonly project: ProjectBootFrame,
+    /** Per-source static-evaluation results. */
+    readonly sources: readonly StaticProjectEvaluationSourceResult[],
+  ) {}
+
+  readEvaluatedSources(): readonly EvaluatedProjectSource[] {
+    return this.sources.filter(isEvaluatedProjectSource);
+  }
+
+  readUnresolvedModules(): readonly EvaluationModuleResolutionOpen[] {
+    return this.sources.flatMap((source) => source.unresolvedModules);
+  }
+}
+
+/** Project-level static evaluation shared by Aurelia semantic producers. */
+export class StaticProjectEvaluationPass {
+  evaluate(project: ProjectBootFrame): StaticProjectEvaluationResult {
+    return this.evaluateCore(project, null);
+  }
+
+  evaluateAndEmit(
+    store: KernelStore,
+    project: ProjectBootFrame,
+  ): StaticProjectEvaluationResult {
+    return this.evaluateCore(project, new EvaluationKernelBridge(store));
+  }
+
+  private evaluateCore(
+    project: ProjectBootFrame,
+    kernelBridge: EvaluationKernelBridge | null,
+  ): StaticProjectEvaluationResult {
+    const host = new FileSystemEvaluationModuleSourceHost(project.rootDir);
+    const sources: StaticProjectEvaluationSourceResult[] = [];
+
+    for (const admission of project.sourceFiles) {
+      if (!isStaticEvaluationSource(admission.language)) {
+        continue;
+      }
+
+      const moduleKey = normalizeModuleKey(admission.path);
+      const build = buildEvaluationModuleGraph(moduleKey, host);
+      const record = build.graph.readModule(moduleKey);
+      if (record == null) {
+        sources.push(new StaticProjectEvaluationSourceResult(admission, moduleKey, null, null, build.unresolvedModules));
+        continue;
+      }
+
+      const graphEvaluation = new StaticModuleGraphEvaluator(build.graph).evaluate(moduleKey);
+      const evaluation = graphEvaluation.modules.get(moduleKey) ?? null;
+      if (evaluation == null) {
+        sources.push(new StaticProjectEvaluationSourceResult(admission, moduleKey, record.sourceFile, null, build.unresolvedModules));
+        continue;
+      }
+
+      kernelBridge?.emitOpenSeams(record.sourceFile, admission.addressHandle, evaluation);
+      sources.push(new StaticProjectEvaluationSourceResult(
+        admission,
+        moduleKey,
+        record.sourceFile,
+        evaluation,
+        build.unresolvedModules,
+      ));
+    }
+
+    return new StaticProjectEvaluationResult(project, sources);
+  }
+}
+
+export function isStaticEvaluationSource(language: SourceLanguage): boolean {
+  switch (language) {
+    case SourceLanguage.TypeScript:
+    case SourceLanguage.JavaScript:
+      return true;
+    default:
+      return false;
+  }
+}
+
+export function isEvaluatedProjectSource(
+  source: StaticProjectEvaluationSourceResult,
+): source is EvaluatedProjectSource {
+  return source.sourceFile != null && source.evaluation != null;
+}

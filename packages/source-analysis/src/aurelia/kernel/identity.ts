@@ -196,12 +196,20 @@ export const enum CompilerIdentityKind {
   Unknown = 'unknown',
   /** Container-scoped compiler world used to parse, classify, and lower a template. */
   TemplateCompilerWorld = 'template-compiler-world',
+  /** One compiler request that binds a template source, compiler world, parse context, and root context. */
+  TemplateCompilationUnit = 'template-compilation-unit',
+  /** Runtime-shaped CompilationContext frame used while compiling a template or nested view. */
+  TemplateCompilationContext = 'template-compilation-context',
   /** Resource and syntax-resource scope visible to one compiler world. */
   TemplateResourceScope = 'template-resource-scope',
   /** Runtime-shaped compiler service such as a resource resolver or attribute parser. */
   TemplateCompilerService = 'template-compiler-service',
   /** Inquiry-driven parse context shared by HTML, attribute, expression, and lowering passes. */
   TemplateParseContext = 'template-parse-context',
+  /** Authored HTML document product produced by the template HTML parser. */
+  HtmlDocument = 'html-document',
+  /** Authored HTML attribute product produced by the template HTML parser. */
+  HtmlAttribute = 'html-attribute',
   /** Runtime SyntaxInterpreter machine compiled from registered attribute patterns. */
   AttributeParserMachine = 'attribute-parser-machine',
   /** Runtime CompiledPattern entry inside a SyntaxInterpreter machine. */
@@ -218,6 +226,10 @@ export const enum CompilerIdentityKind {
   AttributeSyntax = 'attribute-syntax',
   /** Attribute classification product after resource/bindable lookup. */
   AttributeClassification = 'attribute-classification',
+  /** Authored template value site selected for expression parsing or another grammar. */
+  TemplateValueSite = 'template-value-site',
+  /** Expression parser publication for one parser-owned template value site. */
+  TemplateExpressionParse = 'template-expression-parse',
   /** Executable attribute-pattern handler visible to IAttributeParser. */
   AttributePatternExecutable = 'attribute-pattern-executable',
   /** Executable binding-command handler visible to IBindingCommandResolver. */

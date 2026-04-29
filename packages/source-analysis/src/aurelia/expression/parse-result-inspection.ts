@@ -16,7 +16,6 @@ import type {
   InterpolationParseResult,
   IteratorSuccess,
   IteratorParseResult,
-  NonOwningExpressionParseResult,
   OpaqueSuccess,
   PropertyLikeParseResult,
 } from './parse-result-algebra.js';
@@ -34,12 +33,6 @@ export class ExpressionParseResultInspector {
     result: ExpressionParseResult,
   ): result is CompletedExpressionParseResult {
     return hasExpressionParseResultKindFlag(result.kind, ExpressionParseResultFlags.Completed);
-  }
-
-  static isNonOwning(
-    result: ExpressionParseResult,
-  ): result is NonOwningExpressionParseResult {
-    return hasExpressionParseResultKindFlag(result.kind, ExpressionParseResultFlags.NonOwning);
   }
 
   static isCompanion(
@@ -107,15 +100,5 @@ export class ExpressionParseResultInspector {
 
   static entryFamily(result: ExpressionParseResult): ExpressionType {
     return result.entryFamily;
-  }
-
-  static secondaryGrammarOwner(result: ExpressionParseResult): string | null {
-    switch (result.kind) {
-      case ExpressionParseResultKind.OpaqueSuccess:
-      case ExpressionParseResultKind.NoExpressionParse:
-        return result.secondaryGrammarOwner;
-      default:
-        return null;
-    }
   }
 }

@@ -102,6 +102,12 @@ boundaries. The store also validates controlled vocabulary usage at commit time:
 product-kind vocabulary, claim predicates must be declared as claim-predicate vocabulary, and claim endpoints must
 match the predicate's directional signature.
 
+The store indexes normalized kernel records, not arbitrary rich product objects. A `MaterializedProduct` is currently
+an envelope that names kind, identity, address, provenance, and claims. Rich domain objects live in producer emissions
+while the current analysis world is being assembled. This is an intentional short-term boundary, but it is also a
+known integration pressure: durable inquiry expansion will eventually need a typed product-detail catalog, named
+domain records, or another explicit layer. Do not reintroduce generic payload fields to bridge that gap.
+
 `vocabulary.ts` defines the controlled vocabulary mechanism used by claims, rules, edge roles, seams, binding
 kinds, instruction kinds, and product kinds. Each vocabulary definition carries its usage slot.
 
@@ -165,6 +171,9 @@ model and record types.
 - Products such as resource definitions, DI associations, binding records, or instructions.
 - Product handles, claim handles, derivation handles, and open seam handles produced alongside those products.
 - Completeness/outcome state only; generated or convention-derived origin belongs in provenance and evidence records.
+- Materialized product envelopes should stay boring. If a consumer needs to expand a product into resource metadata,
+  instruction details, parser publication state, or DI slot shape, model that as typed product detail outside the
+  generic envelope or as domain-specific records, not as `unknown`, JSON, or payload storage.
 
 `note.ts` contains small non-semantic notes for diagnostics and explanation hints.
 

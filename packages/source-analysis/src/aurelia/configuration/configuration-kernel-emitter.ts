@@ -57,6 +57,7 @@ import {
 } from '../kernel/vocabulary.js';
 import { ContainerConfiguration } from '../di/container-configuration.js';
 import { Container } from '../di/container.js';
+import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import { ResourceTargetReference } from '../resources/resource-reference.js';
 import {
   RegistrationKernelEmitter,
@@ -68,7 +69,11 @@ import {
   RegistrationAdmissionObservation,
   RegistrationValueObservation,
 } from '../registration/registration-observation.js';
-import type { RegistrationAdmissionProduct } from '../registration/registration-admission.js';
+import {
+  RegistrationKeyRole,
+  RegistrationStrategy,
+  type RegistrationAdmissionProduct,
+} from '../registration/registration-admission.js';
 import {
   RegistrationKeyReference,
   RegistrationValueKind,
@@ -192,6 +197,7 @@ export class ConfigurationKernelEmitter {
   emit(
     context: ConfigurationRecognitionContext,
     observations: readonly ConfigurationSequenceObservation[],
+    resources: ResourceDefinitionIndex | null = null,
   ): ConfigurationKernelEmission {
     const records: KernelStoreRecord[] = [];
     const sequences: ConfigurationSequence[] = [];
@@ -204,7 +210,7 @@ export class ConfigurationKernelEmitter {
     const registrationAdmissions: RegistrationAdmissionProduct[] = [];
 
     observations.forEach((observation, index) => {
-      const emission = this.recordsForSequence(context, observation, index);
+      const emission = this.recordsForSequence(context, observation, index, resources);
       records.push(...emission.records);
       sequences.push(emission.sequence);
       steps.push(...emission.steps);
@@ -237,6 +243,7 @@ export class ConfigurationKernelEmitter {
     context: ConfigurationRecognitionContext,
     observation: ConfigurationSequenceObservation,
     index: number,
+    resources: ResourceDefinitionIndex | null,
   ): {
     readonly records: readonly KernelStoreRecord[];
     readonly sequence: ConfigurationSequence;
@@ -287,6 +294,7 @@ export class ConfigurationKernelEmitter {
         stepIndex,
         stepReferences[stepIndex]!,
         appFrame,
+        resources,
       );
       records.push(...stepEmission.records);
       steps.push(stepEmission.step);
@@ -364,6 +372,7 @@ export class ConfigurationKernelEmitter {
     index: number,
     referenceSeed: ConfigurationStepReferenceSeed,
     appFrame: AppFrame | null,
+    resources: ResourceDefinitionIndex | null,
   ): {
     readonly records: readonly KernelStoreRecord[];
     readonly step: ConfigurationStep;
@@ -407,6 +416,7 @@ export class ConfigurationKernelEmitter {
       observation,
       appTaskEmissions,
       local,
+      resources,
     );
     records.push(...registrationEmission.records);
 
@@ -984,13 +994,15 @@ export class ConfigurationKernelEmitter {
     observation: ConfigurationStepObservation,
     appTaskEmissions: readonly AppTaskEmission[],
     stepLocal: string,
+    resources: ResourceDefinitionIndex | null,
   ): RegistrationKernelEmission {
     if (observation.registrationAdmissions.length === 0) {
       return new RegistrationKernelEmission([], []);
     }
-    const enriched = observation.registrationAdmissions.map((admission) =>
-      enrichAppTaskRegistration(admission, appTaskEmissions)
-    );
+    const enriched = observation.registrationAdmissions.map((admission) => {
+      const appTaskEnriched = enrichAppTaskRegistration(admission, appTaskEmissions);
+      return enrichResourceRegistration(appTaskEnriched, context, resources);
+    });
     return new RegistrationKernelEmitter(this.store).materialize(
       new RegistrationEmissionContext(
         context.sourceFile,
@@ -1377,6 +1389,44 @@ function enrichAppTaskRegistration(
     ),
     observation.registryParameters,
     observation.openSeams,
+  );
+}
+
+function enrichResourceRegistration(
+  observation: RegistrationAdmissionObservation,
+  context: ConfigurationRecognitionContext,
+  resources: ResourceDefinitionIndex | null,
+): RegistrationAdmissionObservation {
+  if (resources == null || observation.registeredValue == null) {
+    return observation;
+  }
+  if (!ts.isExpression(observation.registeredValue.node)) {
+    return observation;
+  }
+
+  const definition = resources.lookupExpression(observation.registeredValue.node, context.expressionReader);
+  if (definition == null || definition.productHandle == null) {
+    return observation;
+  }
+
+  return new RegistrationAdmissionObservation(
+    observation.carrierKind,
+    observation.admissionKind,
+    RegistrationStrategy.Resource,
+    RegistrationKeyRole.Unknown,
+    observation.sourceNode,
+    null,
+    new RegistrationValueObservation(
+      RegistrationValueKind.ResourceDefinition,
+      definition.target.localName ?? observation.registeredValue.localName,
+      observation.registeredValue.node,
+      observation.registeredValue.isDeclaration,
+      definition.productHandle,
+    ),
+    observation.registryParameters,
+    observation.openSeams.filter((seam) =>
+      seam.openKind !== KernelVocabulary.Registration.OpenStrategy.key
+    ),
   );
 }
 

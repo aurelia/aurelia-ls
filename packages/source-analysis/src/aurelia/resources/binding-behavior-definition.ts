@@ -1,3 +1,8 @@
+import type {
+  AddressHandle,
+  IdentityHandle,
+  ProductHandle,
+} from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
 import { auLink } from '../kernel/au-link.js';
 import { ResourceDefinitionKind } from './resource-kind.js';
@@ -35,6 +40,12 @@ export class BindingBehaviorDefinition {
   get type(): ResourceDefinitionKind.BindingBehavior { return ResourceDefinitionKind.BindingBehavior; }
 
   constructor(
+    /** Product handle for the materialized definition product, when emitted. */
+    readonly productHandle: ProductHandle | null,
+    /** Identity for this resource definition. */
+    readonly identityHandle: IdentityHandle | null,
+    /** Source address for the carrier or framework catalog that produced this definition. */
+    readonly sourceAddressHandle: AddressHandle | null,
     readonly target: ResourceTargetReference,
     readonly name: string,
     readonly aliases: readonly ResourceAliasDefinition[],

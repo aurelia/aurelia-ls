@@ -20,6 +20,8 @@ consume evaluator results and decide which kernel claims or materialized product
   seams.
 - Provide generic expression/value readers over evaluated module environments so producers do not instantiate
   private evaluators or duplicate object/string/target projection helpers.
+- Provide a project-level evaluation envelope that boot-admitted Aurelia producers can share, so resource recognition,
+  configuration recognition, and later DI/template producers do not each invent their own source-evaluation loop.
 - Emit kernel records only for durable boundary facts such as source spans, evidence, provenance, and open seams.
 
 ## Non-Responsibilities
@@ -40,6 +42,10 @@ they are current-run evaluator machinery. The kernel receives normalized links a
 `expression-reader.ts` is the producer-facing read surface for evaluated TypeScript expressions. It may expose
 generic object, string, array, and target reads, but it must not learn Aurelia resource, DI, template, or
 configuration vocabulary.
+
+`project-evaluation.ts` owns the shared project pass over boot admissions. It is still evaluator substrate: it admits
+TS/JS sources into module graph evaluation and emits evaluator open seams, but does not decide which Aurelia facts
+are worth materializing.
 
 ## Watchpoints
 

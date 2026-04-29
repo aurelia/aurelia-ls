@@ -1,17 +1,14 @@
-import { SourceLanguage } from '../kernel/address.js';
 import type { KernelStore } from '../kernel/store.js';
 import type {
   ProjectBootFrame,
   SourceFileAdmission,
 } from '../boot/frames.js';
-import { EvaluationKernelBridge } from '../evaluation/kernel-bridge.js';
+import type { EvaluationModuleResolutionOpen } from '../evaluation/module-host.js';
 import {
-  buildEvaluationModuleGraph,
-  FileSystemEvaluationModuleSourceHost,
-  type EvaluationModuleResolutionOpen,
-} from '../evaluation/module-host.js';
-import { normalizeModuleKey } from '../evaluation/module-graph.js';
-import { StaticModuleGraphEvaluator } from '../evaluation/module-evaluator.js';
+  isEvaluatedProjectSource,
+  StaticProjectEvaluationPass,
+  type StaticProjectEvaluationResult,
+} from '../evaluation/project-evaluation.js';
 import { ResourceRecognitionContext } from './resource-recognition-context.js';
 import type { ResourceRecognitionObservation } from './resource-observation.js';
 import { ResourceRecognitionPass } from './resource-recognition-pass.js';
@@ -19,6 +16,10 @@ import {
   ResourceRecognitionKernelEmission,
   type ResourceDefinitionHeaderEmission,
 } from './resource-recognition-kernel-emitter.js';
+import {
+  ResourceDefinitionConvergenceEmission,
+} from './resource-definition-convergence-producer.js';
+import type { FullResourceDefinition } from './resource-definition.js';
 
 /** Resource-recognition result for one boot-admitted source file. */
 export class ResourceRecognitionSourceResult {
@@ -29,6 +30,8 @@ export class ResourceRecognitionSourceResult {
     readonly observations: readonly ResourceRecognitionObservation[],
     /** Kernel emission result carrying typed definition-header handles. */
     readonly emission: ResourceRecognitionKernelEmission,
+    /** Full definition convergence result for the source. */
+    readonly convergence: ResourceDefinitionConvergenceEmission,
     /** Module edges left unresolved while preparing evaluation for this source. */
     readonly unresolvedModules: readonly EvaluationModuleResolutionOpen[],
   ) {}
@@ -51,6 +54,10 @@ export class ResourceRecognitionProjectResult {
     return this.sources.flatMap((source) => source.emission.definitions);
   }
 
+  readDefinitions(): readonly FullResourceDefinition[] {
+    return this.sources.flatMap((source) => source.convergence.definitions);
+  }
+
   readUnresolvedModules(): readonly EvaluationModuleResolutionOpen[] {
     return this.sources.flatMap((source) => source.unresolvedModules);
   }
@@ -61,47 +68,39 @@ export class ResourceRecognitionProjectPass {
   recognizeAndEmit(
     store: KernelStore,
     project: ProjectBootFrame,
+    evaluation: StaticProjectEvaluationResult | null = null,
   ): ResourceRecognitionProjectResult {
-    const host = new FileSystemEvaluationModuleSourceHost(project.rootDir);
-    const evaluationBridge = new EvaluationKernelBridge(store);
+    const projectEvaluation = evaluation ?? new StaticProjectEvaluationPass().evaluateAndEmit(store, project);
     const recognition = new ResourceRecognitionPass();
     const sources: ResourceRecognitionSourceResult[] = [];
 
-    for (const admission of project.sourceFiles) {
-      if (!isStaticEvaluationSource(admission.language)) {
+    for (const source of projectEvaluation.sources) {
+      if (!isEvaluatedProjectSource(source)) {
+        sources.push(new ResourceRecognitionSourceResult(
+          source.admission,
+          [],
+          emptyResourceEmission(),
+          emptyDefinitionConvergence(),
+          source.unresolvedModules,
+        ));
         continue;
       }
 
-      const moduleKey = normalizeModuleKey(admission.path);
-      const build = buildEvaluationModuleGraph(moduleKey, host);
-      const record = build.graph.readModule(moduleKey);
-      if (record == null) {
-        sources.push(new ResourceRecognitionSourceResult(admission, [], emptyResourceEmission(), build.unresolvedModules));
-        continue;
-      }
-
-      const graphEvaluation = new StaticModuleGraphEvaluator(build.graph).evaluate(moduleKey);
-      const moduleEvaluation = graphEvaluation.modules.get(moduleKey) ?? null;
-      if (moduleEvaluation == null) {
-        sources.push(new ResourceRecognitionSourceResult(admission, [], emptyResourceEmission(), build.unresolvedModules));
-        continue;
-      }
-
-      evaluationBridge.emitOpenSeams(record.sourceFile, admission.addressHandle, moduleEvaluation);
       const result = recognition.recognizeAndEmit(
         store,
         new ResourceRecognitionContext(
-          record.sourceFile,
-          moduleKey,
-          admission.addressHandle,
-          moduleEvaluation,
+          source.sourceFile,
+          source.moduleKey,
+          source.admission.addressHandle,
+          source.evaluation,
         ),
       );
       sources.push(new ResourceRecognitionSourceResult(
-        admission,
+        source.admission,
         result.observations,
         result.emission,
-        build.unresolvedModules,
+        result.convergence,
+        source.unresolvedModules,
       ));
     }
 
@@ -109,16 +108,10 @@ export class ResourceRecognitionProjectPass {
   }
 }
 
-function isStaticEvaluationSource(language: SourceLanguage): boolean {
-  switch (language) {
-    case SourceLanguage.TypeScript:
-    case SourceLanguage.JavaScript:
-      return true;
-    default:
-      return false;
-  }
-}
-
 function emptyResourceEmission(): ResourceRecognitionKernelEmission {
   return new ResourceRecognitionKernelEmission([], []);
+}
+
+function emptyDefinitionConvergence(): ResourceDefinitionConvergenceEmission {
+  return new ResourceDefinitionConvergenceEmission([], []);
 }

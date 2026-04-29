@@ -93,3 +93,28 @@ should carry handles, domain fields, and provenance instead.
 
 The project is expected to refactor in cycles. When a layer starts forcing table-heavy MCP logic, duplicated
 vocabulary, or hidden information loss, pause and improve the substrate before continuing vertically.
+
+## Current Integration Pressure
+
+The current horizontal slice intentionally brings many moving parts into the repo before the full end-to-end producer
+chain is finished: configuration admission, registration spending, DI world construction, compiler-world formation,
+resource convergence, built-in syntax catalogs, HTML/value-site parsing, binding-command lowering, instruction IR,
+and the retained expression parser now all touch the same kernel contracts.
+
+That breadth is useful, but it also exposes the next design pressure: kernel `MaterializedProduct` records are still
+durable envelopes, not the rich domain objects themselves. Producer emissions currently carry the rich in-process
+objects that later producers consume. This is acceptable for the current hot in-memory workbench, but it is not yet a
+complete durable app-map or inquiry hydration story. Do not solve this by adding generic payloads back to products.
+When inquiry needs durable expansion of product details, add a typed product catalog/store layer or named
+domain-specific records that preserve provenance and vocabulary shape.
+
+The expression parser is also not a finished producer. It remains a provisional parser subsystem with useful grammar,
+AST, and parser-owned recovery algebra, but it predates the kernel and has not yet had the same full semantic
+re-integration pass as resources, configuration, DI, and template value-site production. Treat it as callable parser
+machinery above source text, not as kernel truth by itself. Template/compiler ownership, binding-command preprocessing,
+multi-binding splitting, result hydration, and inquiry answer policy must stay outside `expression` unless runtime
+semantics prove otherwise.
+
+These are watchpoints, not blockers. The intended loop remains: keep the model close to Aurelia runtime semantics,
+let producers pressure the kernel, use MCP lenses to find split-brain or information loss, and refactor horizontally
+when the next consumer reveals a better boundary.

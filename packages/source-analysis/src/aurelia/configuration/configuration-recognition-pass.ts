@@ -6,6 +6,7 @@ import {
 import type { ConfigurationSequenceObservation } from './configuration-observation.js';
 import type { ConfigurationRecognitionContext } from './configuration-recognition-context.js';
 import { ConfigurationRecognitionProducer } from './configuration-recognition-producer.js';
+import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 
 /** Result of configuration recognition over one source module. */
 export class ConfigurationRecognitionResult {
@@ -28,9 +29,10 @@ export class ConfigurationRecognitionPass {
   recognizeAndEmit(
     store: KernelStore,
     context: ConfigurationRecognitionContext,
+    resources: ResourceDefinitionIndex | null = null,
   ): ConfigurationRecognitionResult {
     const observations = this.recognize(context);
-    const emission = new ConfigurationKernelEmitter(store).emit(context, observations);
+    const emission = new ConfigurationKernelEmitter(store).emit(context, observations, resources);
     return new ConfigurationRecognitionResult(observations, emission);
   }
 }

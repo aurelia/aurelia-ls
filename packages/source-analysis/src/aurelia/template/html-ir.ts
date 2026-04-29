@@ -140,6 +140,15 @@ export class HtmlFragment {
     readonly sourceAddressHandle: AddressHandle | null,
     readonly recoveries: readonly HtmlRecovery[] = [],
   ) {}
+
+  toReference(): HtmlNodeReference {
+    return new HtmlNodeReference(
+      this.nodeKind,
+      this.identityHandle,
+      this.productHandle,
+      this.sourceAddressHandle,
+    );
+  }
 }
 
 /** Authored element node before resource lookup or lowering. */
@@ -158,12 +167,22 @@ export class HtmlElement {
     readonly recoveries: readonly HtmlRecovery[] = [],
     readonly fieldProvenance: readonly FieldProvenance<HtmlElementField>[] = [],
   ) {}
+
+  toReference(): HtmlNodeReference {
+    return new HtmlNodeReference(
+      this.nodeKind,
+      this.identityHandle,
+      this.productHandle,
+      this.sourceAddressHandle,
+    );
+  }
 }
 
 /** Authored attribute before Aurelia attribute-pattern parsing. */
 export class HtmlAttribute {
   constructor(
     readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
     readonly rawName: string,
     readonly rawValue: string,
     readonly nameAddressHandle: AddressHandle | null,
@@ -172,6 +191,14 @@ export class HtmlAttribute {
     readonly recoveries: readonly HtmlRecovery[] = [],
     readonly fieldProvenance: readonly FieldProvenance<HtmlAttributeField>[] = [],
   ) {}
+
+  toReference(): HtmlAttributeReference {
+    return new HtmlAttributeReference(
+      this.productHandle,
+      this.sourceAddressHandle,
+      this.rawName,
+    );
+  }
 }
 
 /** Authored text node before interpolation parsing. */
@@ -185,6 +212,15 @@ export class HtmlText {
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<HtmlTextField>[] = [],
   ) {}
+
+  toReference(): HtmlNodeReference {
+    return new HtmlNodeReference(
+      this.nodeKind,
+      this.identityHandle,
+      this.productHandle,
+      this.sourceAddressHandle,
+    );
+  }
 }
 
 /** Authored comment node, including compiler-owned marker comments when they are re-read. */
@@ -200,6 +236,15 @@ export class HtmlComment {
     readonly recoveries: readonly HtmlRecovery[] = [],
     readonly fieldProvenance: readonly FieldProvenance<HtmlCommentField>[] = [],
   ) {}
+
+  toReference(): HtmlNodeReference {
+    return new HtmlNodeReference(
+      this.nodeKind,
+      this.identityHandle,
+      this.productHandle,
+      this.sourceAddressHandle,
+    );
+  }
 }
 
 /** Authored doctype node. Usually preserved for diagnostics rather than template lowering. */
@@ -213,6 +258,15 @@ export class HtmlDoctype {
     readonly sourceAddressHandle: AddressHandle | null,
     readonly recoveries: readonly HtmlRecovery[] = [],
   ) {}
+
+  toReference(): HtmlNodeReference {
+    return new HtmlNodeReference(
+      this.nodeKind,
+      this.identityHandle,
+      this.productHandle,
+      this.sourceAddressHandle,
+    );
+  }
 }
 
 export type HtmlIrNode =

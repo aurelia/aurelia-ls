@@ -11,9 +11,9 @@ It recognizes source carriers that the Aurelia runtime turns into resources:
 - imperative `.define(...)` calls on resource definition kinds
 - `AttributePattern.create(...)` syntax-resource carriers
 
-The source-level pass expects an evaluated module environment. The project-level pass starts from boot admissions,
-builds the local ECMAScript module graph, evaluates linked imports/exports through `evaluation`, and then runs the
-same recognition producers over each admitted TS/JS module. Recognition should not grow its own import resolver.
+The source-level pass expects an evaluated module environment. The project-level pass starts from boot admissions and
+uses the shared `evaluation` project pass before running the same recognition producers over each admitted TS/JS
+module. Recognition should not grow its own import resolver.
 Generic expression and value reads belong in `evaluation`; resource field readers should only interpret Aurelia
 definition fields such as `type`, `name`, `aliases`, `pattern`, and `symbols`.
 
@@ -29,27 +29,30 @@ nodes. `BindableDefinition` and `WatchDefinition` mirror runtime metadata record
 capture typed field contributions from headers, definition objects, static properties, annotations, metadata, syntax
 factories, and conventions.
 `CustomElementDefinition`, `CustomAttributeDefinition`, `ValueConverterDefinition`, `BindingBehaviorDefinition`,
-`BindingCommandDefinition`, and `AttributePatternDefinition` are reserved for fully formed metadata definitions before
-DI admission or template compilation. Template controllers currently converge through the custom-attribute shape with
+`BindingCommandDefinition`, and `AttributePatternDefinition` are fully formed metadata definitions before DI admission
+or template compilation. Template controllers currently converge through the custom-attribute shape with
 `isTemplateController: true`, while retaining a distinct resource identity and query projection. Convergence is the
-operation that turns contributions into full definitions; it should be recorded through materialization/provenance
-rather than being baked into the product name.
+operation that turns headers and source metadata into full definitions; it is recorded through
+materialization/provenance rather than being baked into the product name.
 
-Framework-owned built-ins are also modeled as resource headers. `built-in-resources.ts` records the runtime-html,
+Framework-owned built-ins are first modeled as resource headers. `built-in-resources.ts` records the runtime-html,
 i18n, and state default resource catalogs as concrete, runtime-linked model classes so compiler worlds can see
 built-in template controllers, custom attributes/elements, value converters, and binding behaviors without pretending
-they came from user source. These are headers, not converged custom-element/custom-attribute definitions. Bindables,
-controller internals, and template compilation semantics should be added by the definition/convergence producers that
-own those fields.
+they came from user source. The built-in catalog producer now also emits full definition products for built-ins whose
+runtime metadata is static enough to model directly. That is the first convergence pressure from template compilation:
+headers remain admission/lookup facts, while full definitions carry bindables and compiler-consumable metadata.
 
 Recognizer classes stay kernel-free. The kernel boundary is the emitter: each observation records direct evidence
 and provenance, each closed definition header becomes a `resource.definition-header` product, and each observation gets
 a materialization record that points at produced products, declaration claims, and open seams. That keeps recognition
 cheap to evolve while still giving inquiry a durable graph.
 
-Emitter results return typed definition-header handles for downstream producers. Consumers that need resource products
-should use those handles instead of rediscovering emitted products from the store, but full resource convergence still
-belongs to a later pass.
+Emitter results return typed definition-header handles for downstream producers. The convergence producer consumes
+those handles plus the AST-bearing observations and emits `resource.definition` products with field provenance and
+`resource.converges-to-definition` claims. This first convergence slice is conservative: it closes runtime defaults,
+resource keys, aliases, simple static bindables, `@bindable` metadata, template-controller flags, capture/template
+shape, and thin resource definitions. It records open seams for explicit metadata that is visible but not safely
+materialized yet, including dependencies, pre-lowered instructions, surrogates, and watches.
 
 Open seams are part of the product here. A carrier with an open kind, name, alias, pattern, or target should still
 produce kernel pressure rather than disappearing or pretending to be complete.
@@ -67,9 +70,9 @@ Watchpoints:
 - Resource vocabulary uses explicit kernel slots for claim predicates, seam kinds, and product kinds. Keep new
   entries small and source-grounded; if a name starts representing answer policy, ranking, or consumer usefulness, it
   belongs in inquiry rather than resource vocabulary.
-- Built-in resource catalogs are admitted by configuration effects before full resource convergence exists. Do not use
-  those headers as a shortcut for bindable metadata or compiled definitions; let compiler-world visibility consume the
-  header and leave deeper semantics to the producer that proves them.
+- Built-in resource catalogs and userland recognition now both have a route to full definitions. Do not let consumers
+  infer metadata directly from headers; compiler-world visibility should prefer full definitions when convergence
+  produced them and treat header-only rows as visibly incomplete.
 - Resource open seams carry product-owned `KernelVocabulary.Resource.*` seam keys directly. Do not add a second local
   open-kind enum unless a future producer needs a genuinely different, non-durable taxonomy.
 - Product-level provenance is in place and definition models now expose field-level provenance slots. Convergence

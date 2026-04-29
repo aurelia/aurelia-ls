@@ -52,12 +52,16 @@ import type {
 } from '../resources/built-in-resource-producer.js';
 import {
   runtimeResourceKeyForKind,
+  ResourceDefinitionKind,
 } from '../resources/resource-kind.js';
+import type { FullResourceDefinition } from '../resources/resource-definition.js';
+import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import {
   isResolverRegistrationStrategy,
   OpenRegistrationAdmission,
   ParameterizedRegistryAdmission,
   FrameworkRegistrationAdmission,
+  ResourceRegistrationAdmission,
   RegistryRegistrationAdmission,
   RegistrationKeyRole,
   RegistrationStrategy,
@@ -121,6 +125,7 @@ class DiResourceSlotEmission {
     readonly records: readonly KernelStoreRecord[],
     readonly slots: readonly ContainerResourceSlot[],
     readonly claimHandles: readonly ClaimHandle[],
+    readonly openSeams: readonly OpenSeam[] = [],
   ) {}
 }
 
@@ -136,6 +141,7 @@ export class DiWorldConstructionProducer {
   construct(
     configuration: ConfigurationKernelEmission,
     configuredResources: ConfiguredBuiltInResourceCatalogEmission,
+    resourceDefinitions: ResourceDefinitionIndex | null = null,
   ): DiWorldConstructionEmission {
     this.emittedIdentityHandles.clear();
 
@@ -219,7 +225,7 @@ export class DiWorldConstructionProducer {
           continue;
         }
 
-        const spent = this.recordsForRegistrationSpending(container, step, admission, configuredResources);
+        const spent = this.recordsForRegistrationSpending(container, step, admission, configuredResources, resourceDefinitions);
         records.push(...spent.records);
         registrationOperations.push(spent.operation);
         resolvers.push(...spent.resolvers);
@@ -263,6 +269,7 @@ export class DiWorldConstructionProducer {
     step: ConfigurationStep,
     admission: RegistrationAdmissionProduct,
     configuredResources: ConfiguredBuiltInResourceCatalogEmission,
+    resourceDefinitions: ResourceDefinitionIndex | null,
   ): {
     readonly records: readonly KernelStoreRecord[];
     readonly operation: ContainerRegistrationOperation;
@@ -368,6 +375,29 @@ export class DiWorldConstructionProducer {
       records.push(...productClaims.records);
       operationClaimHandles.push(...productClaims.handles);
       openSeams.push(...emission.openSeams);
+    } else if (admission instanceof ResourceRegistrationAdmission) {
+      const slotEmission = this.recordsForResourceAdmission(
+        container,
+        admission,
+        resourceDefinitions,
+        `${local}:resource`,
+        source.provenanceHandle,
+      );
+      records.push(...slotEmission.records);
+      resourceSlots.push(...slotEmission.slots);
+      operationClaimHandles.push(...slotEmission.claimHandles);
+      for (const slot of slotEmission.slots) {
+        container.registerResource(slot);
+      }
+      const productClaims = this.recordsForOperationProductClaims(
+        `${local}:resource-products`,
+        operation.product.productHandle,
+        slotEmission.slots.map((slot) => slot.productHandle),
+        source.provenanceHandle,
+      );
+      records.push(...productClaims.records);
+      operationClaimHandles.push(...productClaims.handles);
+      openSeams.push(...slotEmission.openSeams);
     } else if (admission instanceof FrameworkRegistrationAdmission) {
       const slotEmission = this.recordsForConfiguredResourceSlots(
         container,
@@ -825,6 +855,62 @@ export class DiWorldConstructionProducer {
     return { records, registry, openSeams: [seam.seam] };
   }
 
+  private recordsForResourceAdmission(
+    container: Container,
+    admission: ResourceRegistrationAdmission,
+    resourceDefinitions: ResourceDefinitionIndex | null,
+    local: string,
+    provenanceHandle: ProvenanceHandle,
+  ): DiResourceSlotEmission {
+    const records: KernelStoreRecord[] = [];
+    const slots: ContainerResourceSlot[] = [];
+    const claimHandles: ClaimHandle[] = [];
+    const openSeams: OpenSeam[] = [];
+
+    const definition = resourceDefinitions?.lookupByProduct(admission.registeredValue.productHandle) ?? null;
+    if (definition == null) {
+      const seam = this.recordsForOpenSeam(
+        `${local}:definition-open`,
+        KernelVocabulary.Di.OpenRegistrationSpending.key,
+        'Resource registration admission did not resolve to a full resource definition during DI world construction.',
+        admission.sourceAddressHandle,
+        OpenSeamSeverity.Blocked,
+      );
+      return new DiResourceSlotEmission(seam.records, [], [], [seam.seam]);
+    }
+
+    const names = resourceLookupNames(definition);
+    names.forEach((name, index) => {
+      const slot = this.recordsForResourceDefinitionSlot(
+        container,
+        definition,
+        name,
+        `${local}:${index}`,
+        provenanceHandle,
+      );
+      if (slot == null) {
+        return;
+      }
+      records.push(...slot.records);
+      slots.push(slot.slot);
+      claimHandles.push(...slot.claimHandles);
+    });
+
+    if (slots.length === 0) {
+      const seam = this.recordsForOpenSeam(
+        `${local}:no-resource-key`,
+        KernelVocabulary.Di.OpenRegistrationSpending.key,
+        'Resource registration did not produce any runtime resource-key rows.',
+        admission.sourceAddressHandle,
+        OpenSeamSeverity.Warning,
+      );
+      records.push(...seam.records);
+      openSeams.push(seam.seam);
+    }
+
+    return new DiResourceSlotEmission(records, slots, claimHandles, openSeams);
+  }
+
   private recordsForConfiguredResourceSlots(
     container: Container,
     admission: RegistrationAdmissionProduct,
@@ -870,6 +956,95 @@ export class DiWorldConstructionProducer {
     });
 
     return new DiResourceSlotEmission(records, slots, claimHandles);
+  }
+
+  private recordsForResourceDefinitionSlot(
+    container: Container,
+    definition: FullResourceDefinition,
+    lookupName: string,
+    local: string,
+    provenanceHandle: ProvenanceHandle,
+  ): {
+    readonly records: readonly KernelStoreRecord[];
+    readonly slot: ContainerResourceSlot;
+    readonly claimHandles: readonly ClaimHandle[];
+  } | null {
+    if (definition.identityHandle == null || definition.productHandle == null) {
+      return null;
+    }
+
+    const resourceKey = runtimeResourceKeyForKind(definition.type, lookupName);
+    if (resourceKey == null || container.hasResource(resourceKey, false)) {
+      return null;
+    }
+
+    const records: KernelStoreRecord[] = [];
+    const productHandle = this.store.handles.product(`di-resource-slot:${container.productHandle}:${resourceKey}`);
+    const identityHandle = this.store.handles.identity(`di-resource-slot:${container.productHandle}:${resourceKey}`);
+    const keyIdentityHandle = this.store.handles.identity(`di-key:resource:${resourceKey}`);
+    this.emitResourceKeyIdentity(
+      records,
+      keyIdentityHandle,
+      definition.identityHandle,
+      resourceKey,
+      definition.sourceAddressHandle ?? container.sourceAddressHandle,
+    );
+
+    const claimHandle = this.store.handles.claim(`${local}:provides-key`);
+    const slot = new ContainerResourceSlot(
+      productHandle,
+      container.toReference(),
+      resourceKey,
+      keyIdentityHandle,
+      definition.identityHandle,
+      definition.productHandle,
+      null,
+      definition.sourceAddressHandle ?? container.sourceAddressHandle,
+      compactFieldProvenance<ContainerSlotField>([
+        new FieldProvenance('container', provenanceHandle),
+        new FieldProvenance('key', provenanceHandle),
+        new FieldProvenance('resource', provenanceHandle),
+        new FieldProvenance('source', provenanceHandle),
+      ]),
+    );
+    records.push(
+      new DiProductIdentity(
+        identityHandle,
+        IdentityStability.SourceStable,
+        DiProductIdentityKind.ResourceSlot,
+        container.identityHandle,
+        definition.identityHandle,
+        slot.sourceAddressHandle,
+      ),
+      new SemanticClaim(
+        claimHandle,
+        productHandle,
+        KernelVocabulary.Di.ProvidesKey.key,
+        keyIdentityHandle,
+        provenanceHandle,
+      ),
+      new MaterializedProduct(
+        productHandle,
+        KernelVocabulary.Di.ResourceSlot.key,
+        identityHandle,
+        slot.sourceAddressHandle,
+        provenanceHandle,
+        [claimHandle],
+      ),
+      new MaterializationRecord(
+        this.store.handles.materialization(`di-resource-slot:${container.productHandle}:${resourceKey}`),
+        DerivationPhase.Materialization,
+        identityHandle,
+        MaterializationState.Complete,
+        [productHandle],
+        [claimHandle],
+      ),
+    );
+    return {
+      records,
+      slot,
+      claimHandles: [claimHandle],
+    };
   }
 
   private recordsForBuiltInResourceSlot(
@@ -979,7 +1154,8 @@ export class DiWorldConstructionProducer {
 
     const productHandle = this.store.handles.product(local);
     const identityHandle = this.store.handles.identity(local);
-    const claimHandle = this.store.handles.claim(`${local}:provides-key`);
+    const providesKeyClaimHandle = this.store.handles.claim(`${local}:provides-key`);
+    const producedClaimHandle = this.store.handles.claim(`${local}:container-produces-product`);
     const slot = new ContainerSelfResolverSlot(
       productHandle,
       container.toReference(),
@@ -1001,10 +1177,17 @@ export class DiWorldConstructionProducer {
         container.sourceAddressHandle,
       ),
       new SemanticClaim(
-        claimHandle,
+        providesKeyClaimHandle,
         productHandle,
         KernelVocabulary.Di.ProvidesKey.key,
         keyIdentityHandle,
+        source.provenanceHandle,
+      ),
+      new SemanticClaim(
+        producedClaimHandle,
+        container.productHandle,
+        KernelVocabulary.Di.ProducesProduct.key,
+        productHandle,
         source.provenanceHandle,
       ),
       new MaterializedProduct(
@@ -1013,7 +1196,7 @@ export class DiWorldConstructionProducer {
         identityHandle,
         container.sourceAddressHandle,
         source.provenanceHandle,
-        [claimHandle],
+        [providesKeyClaimHandle, producedClaimHandle],
       ),
       new MaterializationRecord(
         this.store.handles.materialization(local),
@@ -1021,7 +1204,7 @@ export class DiWorldConstructionProducer {
         identityHandle,
         MaterializationState.Complete,
         [productHandle],
-        [claimHandle],
+        [providesKeyClaimHandle, producedClaimHandle],
       ),
     );
     return new DiProductEmission(records, slot, productHandle, identityHandle);
@@ -1127,6 +1310,13 @@ export class DiWorldConstructionProducer {
       addressHandle,
     ));
   }
+}
+
+function resourceLookupNames(definition: FullResourceDefinition): readonly string[] {
+  if (definition.type === ResourceDefinitionKind.AttributePattern) {
+    return [];
+  }
+  return [definition.name, ...definition.aliases.map((alias) => alias.name)];
 }
 
 function summaryForParameterizedRegistryResult(state: RegistryRegistrationState): string {

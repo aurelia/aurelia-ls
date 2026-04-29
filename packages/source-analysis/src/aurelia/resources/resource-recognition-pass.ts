@@ -2,6 +2,10 @@ import type { KernelStore } from '../kernel/store.js';
 import { NamedResourceRecognitionProducer } from './named-resource-recognition-producer.js';
 import type { ResourceRecognitionContext } from './resource-recognition-context.js';
 import {
+  ResourceDefinitionConvergenceProducer,
+  type ResourceDefinitionConvergenceEmission,
+} from './resource-definition-convergence-producer.js';
+import {
   ResourceRecognitionKernelEmitter,
   type ResourceRecognitionKernelEmission,
 } from './resource-recognition-kernel-emitter.js';
@@ -15,6 +19,8 @@ export class ResourceRecognitionResult {
     readonly observations: readonly ResourceRecognitionObservation[],
     /** Kernel emission result carrying typed definition-header handles. */
     readonly emission: ResourceRecognitionKernelEmission,
+    /** Full definition convergence result for headers whose metadata could be materialized. */
+    readonly convergence: ResourceDefinitionConvergenceEmission,
   ) {}
 }
 
@@ -36,6 +42,7 @@ export class ResourceRecognitionPass {
   ): ResourceRecognitionResult {
     const observations = this.recognize(context);
     const emission = new ResourceRecognitionKernelEmitter(store).emit(context, observations);
-    return new ResourceRecognitionResult(observations, emission);
+    const convergence = new ResourceDefinitionConvergenceProducer(store).converge(context, observations, emission);
+    return new ResourceRecognitionResult(observations, emission, convergence);
   }
 }

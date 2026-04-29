@@ -2,7 +2,13 @@ import type {
   AttributePatternObservation,
   ResourceTargetObservation,
 } from './resource-observation.js';
+import type { AttributePatternDefinition } from './attribute-pattern-definition.js';
+import type { BindingBehaviorDefinition } from './binding-behavior-definition.js';
+import type { BindingCommandDefinition } from './binding-command-definition.js';
+import type { CustomAttributeDefinition } from './custom-attribute-definition.js';
+import type { CustomElementDefinition } from './custom-element-definition.js';
 import { ResourceDefinitionKind } from './resource-kind.js';
+import type { ValueConverterDefinition } from './value-converter-definition.js';
 
 export class CustomElementDefinitionHeader {
   get type(): ResourceDefinitionKind.CustomElement { return ResourceDefinitionKind.CustomElement; }
@@ -104,6 +110,18 @@ export type NamedResourceDefinitionHeader =
 export type ResourceDefinitionHeader =
   | NamedResourceDefinitionHeader
   | AttributePatternDefinitionHeader;
+
+export type FullResourceDefinition =
+  | CustomElementDefinition
+  | CustomAttributeDefinition
+  | ValueConverterDefinition
+  | BindingBehaviorDefinition
+  | BindingCommandDefinition
+  | AttributePatternDefinition;
+
+export type TemplateCompilableResourceDefinition =
+  | CustomElementDefinition
+  | CustomAttributeDefinition;
 
 export function createNamedResourceDefinitionHeader(
   resourceKind: NamedResourceDefinitionHeader['type'],

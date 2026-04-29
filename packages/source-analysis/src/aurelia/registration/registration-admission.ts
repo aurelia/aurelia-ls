@@ -87,6 +87,7 @@ export type RegistrationAdmissionProduct =
   | ResolverRegistrationAdmission
   | ParameterizedRegistryAdmission
   | RegistryRegistrationAdmission
+  | ResourceRegistrationAdmission
   | FrameworkRegistrationAdmission;
 
 /** Read the known framework registration effect carried by admission products that expose one. */
@@ -215,6 +216,26 @@ export class RegistryRegistrationAdmission {
     /** Source address for the admission expression or declaration. */
     readonly sourceAddressHandle: AddressHandle | null,
     /** Field-level provenance for source facts that matter to rename, explanation, or ambiguity. */
+    readonly fieldProvenance: readonly FieldProvenance<RegistrationAdmissionField>[] = [],
+  ) {}
+}
+
+/**
+ * Admission for a converged Aurelia resource definition before it is spent into runtime resource-key rows.
+ */
+export class ResourceRegistrationAdmission {
+  constructor(
+    /** Product handle for the kernel materialized-product envelope that represents this admission. */
+    readonly productHandle: ProductHandle,
+    /** Registration identity for this resource admission event. */
+    readonly identityHandle: IdentityHandle,
+    /** Source lane that admitted this resource. */
+    readonly admissionKind: RegistrationAdmissionKind,
+    /** Source-level value that carried the resource class or definition. */
+    readonly registeredValue: RegistrationValueReference,
+    /** Source address for the admission expression or declaration. */
+    readonly sourceAddressHandle: AddressHandle | null,
+    /** Field-level provenance for source facts that matter to explanation or ambiguity. */
     readonly fieldProvenance: readonly FieldProvenance<RegistrationAdmissionField>[] = [],
   ) {}
 }

@@ -1,6 +1,7 @@
 import {
   CustomExpression,
 } from "./ast.js";
+import { auLink } from "../kernel/au-link.js";
 import {
   normalizeSpan,
   sourceSpanFromBounds,
@@ -18,7 +19,6 @@ import {
 import { InterpolationParser } from "./interpolation-parser.js";
 import {
   CompleteInputParseError,
-  NoExpressionParse,
   OpaqueSuccess,
 } from "./parse-result-algebra.js";
 import type {
@@ -30,21 +30,17 @@ import type {
   PropertyLikeEntryFamily,
   PropertyLikeParseResult,
 } from "./parse-result-algebra.js";
-import {
-  ExpressionParseRequest,
-  ExpressionParseSelectionKind,
-  NoParseSelection,
-  SelectedExpressionEntryFamily,
-} from "./parse-selection.js";
-import type { ExpressionParseSelection } from "./parse-selection.js";
 
 /**
  * Public expression parser facade.
  *
+ * This class is parser machinery, not a kernel producer. It does not emit
+ * products, claims, provenance, or inquiry answers by itself. Callers decide
+ * value ownership and then wrap parser publications in kernel-backed products
+ * when that publication becomes semantically useful.
+ *
  * Responsibilities:
  * - expose direct family parse methods for callers that already know ownership
- * - expose caller-level ownership/arbitration entry points when parsing should
- *   be selected, declined, or transferred explicitly
  * - select the caller-visible entry family
  * - resolve and apply base-span context
  * - dispatch to the strict completed-input parser or interpolation parser
@@ -57,11 +53,10 @@ import type { ExpressionParseSelection } from "./parse-selection.js";
  * runtime-shaped split point, not mandatory parser debt. Do not add another
  * adapter layer on top of this facade.
  *
- * TODO: If caller-level entry arbitration grows beyond today's default
- * `IsProperty` fallback plus explicit selection lane, split that concern into
- * a dedicated selector object beside this facade instead of letting `parse(...)`
- * / `parseSelected(...)` accumulate ownership policy forever.
+ * Non-owning transfer is deliberately not a parser result. Template/compiler
+ * callers decide whether this parser owns an authored value before calling it.
  */
+@auLink("expression-parser:ExpressionParser")
 export class ExpressionParser implements ExpressionParseResultPublisher {
   parse(expression: string, context?: ExpressionParseContext): PropertyLikeParseResult;
   parse(expression: string, expressionType: "IsIterator", context?: ExpressionParseContext): IteratorParseResult;
@@ -82,45 +77,16 @@ export class ExpressionParser implements ExpressionParseResultPublisher {
     const expressionType = this.resolveEntryFamily(expressionTypeOrContext);
     const context = this.resolveContext(expressionTypeOrContext, maybeContext);
     const baseSpan = ExpressionParseSupport.resolveBaseSpan(expression, context);
-    return this.publishSelected(
-      expression,
-      new SelectedExpressionEntryFamily(expressionType),
-      baseSpan,
-    );
-  }
-
-  parseSelected(
-    expression: string,
-    selection: ExpressionParseSelection,
-    context?: ExpressionParseContext,
-  ): ExpressionParseResult {
-    const baseSpan = ExpressionParseSupport.resolveBaseSpan(expression, context);
-    return this.publishSelected(expression, selection, baseSpan);
-  }
-
-  parseRequest(
-    request: ExpressionParseRequest,
-  ): ExpressionParseResult {
-    return this.parseSelected(
-      request.expression,
-      request.selection,
-      request.context,
-    );
+    return this.publishEntryFamily(expression, expressionType, baseSpan);
   }
 
   parsePropertyLike(
     expression: string,
-    entryFamily?: PropertyLikeEntryFamily | ExpressionParseContext,
-    maybeContext?: ExpressionParseContext,
+    entryFamily: PropertyLikeEntryFamily = "IsProperty",
+    context?: ExpressionParseContext,
   ): PropertyLikeParseResult {
-    const resolvedEntryFamily = typeof entryFamily === "string"
-      ? entryFamily
-      : "IsProperty";
-    const context = typeof entryFamily === "string"
-      ? maybeContext
-      : entryFamily;
     const baseSpan = ExpressionParseSupport.resolveBaseSpan(expression, context);
-    return this.runPropertyLike(expression, resolvedEntryFamily, baseSpan);
+    return this.runPropertyLike(expression, entryFamily, baseSpan);
   }
 
   parseIterator(
@@ -208,63 +174,28 @@ export class ExpressionParser implements ExpressionParseResultPublisher {
   private runCustom(
     expression: string,
     baseSpan: SourceSpan | null,
-    secondaryGrammarOwner: string | null = null,
   ): CustomParseResult {
     const span = baseSpan ? normalizeSpan(baseSpan) : sourceSpanFromBounds(0, expression.length);
-    // `IsCustom` stays parser-owned and opaque when the selection explicitly
-    // chooses that lane. The non-owning transfer case now lives in the
-    // selection path above through `NoParseSelection`.
-    return new OpaqueSuccess(
-      span,
-      new CustomExpression(span, expression),
-      secondaryGrammarOwner,
-    );
+    return new OpaqueSuccess(span, new CustomExpression(span, expression));
   }
 
-  private publishSelected(
+  private publishEntryFamily(
     expression: string,
-    selection: ExpressionParseSelection,
+    entryFamily: ExpressionType,
     baseSpan: SourceSpan | null,
   ): ExpressionParseResult {
-    switch (selection.kind) {
-      case ExpressionParseSelectionKind.NoParse:
-        return this.publishNoParse(selection, baseSpan);
-      case ExpressionParseSelectionKind.SelectedEntryFamily:
-        return this.publishSelectedEntryFamily(expression, selection, baseSpan);
-      default:
-        return this.createUnknownSelectionError(expression, baseSpan);
-    }
-  }
-
-  private publishNoParse(
-    selection: NoParseSelection,
-    baseSpan: SourceSpan | null,
-  ): NoExpressionParse {
-    return new NoExpressionParse(
-      selection.entryFamily,
-      baseSpan ? normalizeSpan(baseSpan) : sourceSpanFromBounds(0, 0),
-      selection.reason,
-      selection.secondaryGrammarOwner,
-    );
-  }
-
-  private publishSelectedEntryFamily(
-    expression: string,
-    selection: SelectedExpressionEntryFamily,
-    baseSpan: SourceSpan | null,
-  ): ExpressionParseResult {
-    switch (selection.entryFamily) {
+    switch (entryFamily) {
       case "IsProperty":
       case "IsFunction":
-        return this.runPropertyLike(expression, selection.entryFamily, baseSpan);
+        return this.runPropertyLike(expression, entryFamily, baseSpan);
       case "IsIterator":
         return this.runIterator(expression, baseSpan);
       case "Interpolation":
         return this.runInterpolation(expression, baseSpan);
       case "IsCustom":
-        return this.runCustom(expression, baseSpan, selection.secondaryGrammarOwner);
+        return this.runCustom(expression, baseSpan);
       default:
-        return this.createUnknownEntryError(expression, selection.entryFamily, baseSpan);
+        return this.createUnknownEntryError(expression, entryFamily, baseSpan);
     }
   }
 
@@ -287,19 +218,4 @@ export class ExpressionParser implements ExpressionParseResultPublisher {
     );
   }
 
-  private createUnknownSelectionError(
-    expression: string,
-    baseSpan: SourceSpan | null,
-  ): CompleteInputParseError {
-    const span = baseSpan ? normalizeSpan(baseSpan) : sourceSpanFromBounds(0, expression.length);
-    // TODO: If JS callers start handing arbitrary selection shapes into the
-    // parser, give invalid selection requests their own result/diagnostic lane
-    // instead of compressing them into a property parse error.
-    return new CompleteInputParseError(
-      "IsProperty",
-      span,
-      "Unknown parse selection",
-      expression,
-    );
-  }
 }

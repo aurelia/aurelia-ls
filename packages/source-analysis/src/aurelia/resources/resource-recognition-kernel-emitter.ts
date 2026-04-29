@@ -58,20 +58,29 @@ import {
   type NamedResourceDefinitionKind,
   toAureliaResourceIdentityKind,
 } from './resource-kind.js';
+import { ResourceTargetReference } from './resource-reference.js';
 
 /** Typed handle surface for a resource definition header that was admitted into the kernel. */
 export class ResourceDefinitionHeaderEmission {
   constructor(
+    /** Producer-local key shared by header, target, convergence, and materialization records. */
+    readonly localKey: string,
+    /** Index of the source observation that produced this header. */
+    readonly observationIndex: number,
     /** Product handle for the materialized resource-definition header. */
     readonly productHandle: ProductHandle,
     /** Primary resource identity, when recognition produced one unambiguous identity. */
     readonly primaryIdentityHandle: IdentityHandle | null,
+    /** Target reference for the resource implementation, when statically visible. */
+    readonly targetReference: ResourceTargetReference | null,
     /** Recognized Aurelia resource kind for this header. */
     readonly resourceKind: ResourceDefinitionHeader['type'],
     /** Runtime lookup names or pattern strings observed for this header. */
     readonly lookupNames: readonly string[],
     /** Source address for the header carrier. */
     readonly sourceAddressHandle: AddressHandle,
+    /** Provenance handle for the header recognition observation. */
+    readonly provenanceHandle: ProvenanceHandle,
     /** Claims emitted for resource identities and aliases. */
     readonly claimHandles: readonly ClaimHandle[],
   ) {}
@@ -156,8 +165,8 @@ export class ResourceRecognitionKernelEmitter {
 
     records.push(sourceAddress, evidence, provenance);
 
-    const declaration = this.recordsForDeclaration(context, observation, local);
-    records.push(...declaration.records);
+    const target = this.recordsForTarget(context, observation, local);
+    records.push(...target.records);
 
     const productHandle = observation.definition == null
       ? null
@@ -167,7 +176,7 @@ export class ResourceRecognitionKernelEmitter {
       observation,
       local,
       productHandle,
-      declaration.identityHandle,
+      target.identityHandle,
       sourceAddressHandle,
       provenanceHandle,
     );
@@ -188,7 +197,7 @@ export class ResourceRecognitionKernelEmitter {
     records.push(new MaterializationRecord(
       this.store.handles.materialization(`resource-recognition:${local}`),
       DerivationPhase.Materialization,
-      declaration.identityHandle ?? sourceAddressHandle,
+      target.identityHandle ?? sourceAddressHandle,
       materializationStateForObservation(observation, productHandle),
       productHandle == null ? [] : [productHandle],
       resourceIdentities.claimHandles,
@@ -201,42 +210,59 @@ export class ResourceRecognitionKernelEmitter {
       productHandle == null || observation.definition == null
         ? null
         : new ResourceDefinitionHeaderEmission(
+          local,
+          index,
           productHandle,
           resourceIdentities.primaryIdentityHandle,
+          target.targetReference,
           observation.definition.type,
           lookupNamesForDefinition(observation.definition),
           sourceAddressHandle,
+          provenanceHandle,
           resourceIdentities.claimHandles,
         ),
     );
   }
 
-  private recordsForDeclaration(
+  private recordsForTarget(
     context: ResourceRecognitionContext,
     observation: ResourceRecognitionObservation,
     local: string,
   ): {
     readonly records: readonly KernelStoreRecord[];
+    readonly targetReference: ResourceTargetReference | null;
     readonly identityHandle: IdentityHandle | null;
   } {
     const target = observation.definition?.target ?? null;
-    if (target == null || target.localName == null || !target.isDeclaration) {
-      return { records: [], identityHandle: null };
+    if (target == null) {
+      return { records: [], targetReference: null, identityHandle: null };
     }
 
     const addressHandle = this.store.handles.address(`resource-target:${local}`);
-    const identityHandle = this.store.handles.identity(`resource-target:${local}`);
+    const identityHandle = target.localName == null || !target.isDeclaration
+      ? null
+      : this.store.handles.identity(`resource-target:${local}`);
+    const targetReference = new ResourceTargetReference(identityHandle, addressHandle, target.localName);
+    const address = new SourceSpanAddress(
+      addressHandle,
+      AddressStability.SourceStable,
+      context.sourceFileAddressHandle,
+      target.node.getStart(context.sourceFile),
+      target.node.end,
+      SourceSpanRole.Name,
+    );
+    if (identityHandle == null) {
+      return {
+        targetReference,
+        identityHandle,
+        records: [address],
+      };
+    }
     return {
       identityHandle,
+      targetReference,
       records: [
-        new SourceSpanAddress(
-          addressHandle,
-          AddressStability.SourceStable,
-          context.sourceFileAddressHandle,
-          target.node.getStart(context.sourceFile),
-          target.node.end,
-          SourceSpanRole.Name,
-        ),
+        address,
         new TypeScriptDeclarationIdentity(
           identityHandle,
           IdentityStability.SourceStable,

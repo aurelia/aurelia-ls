@@ -61,6 +61,7 @@ import {
   isResolverRegistrationStrategy,
   OpenRegistrationAdmission,
   ParameterizedRegistryAdmission,
+  ResourceRegistrationAdmission,
   RegistryRegistrationAdmission,
   ResolverRegistrationAdmission,
 } from './registration-admission.js';
@@ -73,6 +74,7 @@ import {
 import {
   FrameworkRegistrationKind,
   RegistrationKeyReference,
+  RegistrationValueKind,
   RegistrationValueReference,
 } from './registration-reference.js';
 
@@ -275,6 +277,17 @@ export class RegistrationKernelEmitter {
         fieldProvenance,
       );
       productKind = KernelVocabulary.Registration.RegistryAdmission.key;
+    } else if (observation.strategy === RegistrationStrategy.Resource
+      && isResourceRegistrationReference(value.reference)) {
+      admission = new ResourceRegistrationAdmission(
+        productHandle,
+        registrationIdentityHandle,
+        observation.admissionKind,
+        value.reference,
+        sourceAddressHandle,
+        fieldProvenance,
+      );
+      productKind = KernelVocabulary.Registration.ResourceAdmission.key;
     } else if (isResolverRegistrationStrategy(observation.strategy)) {
       admission = new ResolverRegistrationAdmission(
         productHandle,
@@ -677,6 +690,13 @@ function isFrameworkRegistrationGroupKind(kind: FrameworkRegistrationKind): bool
     case FrameworkRegistrationKind.StateDefaultConfiguration:
       return false;
   }
+}
+
+function isResourceRegistrationReference(
+  reference: RegistrationValueReference | null,
+): reference is RegistrationValueReference {
+  return reference?.valueKind === RegistrationValueKind.ResourceDefinition
+    && reference.productHandle != null;
 }
 
 function stringLiteralValue(node: ts.Node): string | null {
