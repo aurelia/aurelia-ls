@@ -2,6 +2,9 @@ declare const kernelVocabularyKeyBrand: unique symbol;
 
 const VOCABULARY_NAME_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 const definedVocabularyKeys = new Set<string>();
+const definedVocabularySlots = new Map<string, KernelVocabularySlot>();
+const definedVocabularyDefinitions = new Map<string, KernelVocabularyDefinition>();
+const referencedProductKindKeys = new Set<string>();
 
 /**
  * Vocabulary is a fast-evolving pressure surface. Keep it controlled and centrally defined, but let real
@@ -13,8 +16,10 @@ const definedVocabularyKeys = new Set<string>();
  */
 
 /** Stable code for controlled semantic vocabulary, separate from store-local record handles. */
-export type KernelVocabularyKey<TSlot extends KernelVocabularySlot = KernelVocabularySlot> =
-  string & { readonly [kernelVocabularyKeyBrand]: TSlot };
+export type KernelVocabularyKey<
+  TSlot extends KernelVocabularySlot = KernelVocabularySlot,
+  TCode extends string = string,
+> = TCode & { readonly [kernelVocabularyKeyBrand]: TSlot };
 
 export const enum KernelVocabularySlot {
   /** Predicate key used by `SemanticClaim` edges. */
@@ -34,25 +39,99 @@ export const enum KernelVocabularySlot {
 }
 
 /** Controlled claim-predicate vocabulary key. */
-export type ClaimPredicateKey = KernelVocabularyKey<KernelVocabularySlot.ClaimPredicate>;
+export type ClaimPredicateKey<TCode extends string = string> =
+  KernelVocabularyKey<KernelVocabularySlot.ClaimPredicate, TCode>;
 
 /** Controlled open-seam-kind vocabulary key. */
-export type OpenSeamKindKey = KernelVocabularyKey<KernelVocabularySlot.OpenSeamKind>;
+export type OpenSeamKindKey<TCode extends string = string> =
+  KernelVocabularyKey<KernelVocabularySlot.OpenSeamKind, TCode>;
 
 /** Controlled materialized-product-kind vocabulary key. */
-export type ProductKindKey = KernelVocabularyKey<KernelVocabularySlot.ProductKind>;
+export type ProductKindKey<TCode extends string = string> =
+  KernelVocabularyKey<KernelVocabularySlot.ProductKind, TCode>;
 
 /** Controlled derivation-rule-kind vocabulary key. */
-export type DerivationRuleKindKey = KernelVocabularyKey<KernelVocabularySlot.DerivationRuleKind>;
+export type DerivationRuleKindKey<TCode extends string = string> =
+  KernelVocabularyKey<KernelVocabularySlot.DerivationRuleKind, TCode>;
 
 /** Controlled derivation-edge-role vocabulary key. */
-export type DerivationEdgeRoleKey = KernelVocabularyKey<KernelVocabularySlot.DerivationEdgeRole>;
+export type DerivationEdgeRoleKey<TCode extends string = string> =
+  KernelVocabularyKey<KernelVocabularySlot.DerivationEdgeRole, TCode>;
 
 /** Controlled binding-kind vocabulary key. */
-export type BindingKindKey = KernelVocabularyKey<KernelVocabularySlot.BindingKind>;
+export type BindingKindKey<TCode extends string = string> =
+  KernelVocabularyKey<KernelVocabularySlot.BindingKind, TCode>;
 
 /** Controlled instruction-kind vocabulary key. */
-export type InstructionKindKey = KernelVocabularyKey<KernelVocabularySlot.InstructionKind>;
+export type InstructionKindKey<TCode extends string = string> =
+  KernelVocabularyKey<KernelVocabularySlot.InstructionKind, TCode>;
+
+type VocabularyCode<TNamespace extends KernelVocabularyNamespace, TName extends string> = `${TNamespace}.${TName}`;
+type ProductKindPart = readonly [KernelVocabularyNamespace, string];
+type ProductKindKeyFromPart<TPart extends ProductKindPart> =
+  TPart extends readonly [infer TNamespace extends KernelVocabularyNamespace, infer TName extends string]
+    ? ProductKindKey<VocabularyCode<TNamespace, TName>>
+    : never;
+type ProductKindKeysFromParts<TParts extends readonly ProductKindPart[]> = {
+  readonly [TIndex in keyof TParts]: TParts[TIndex] extends ProductKindPart
+    ? ProductKindKeyFromPart<TParts[TIndex]>
+    : never;
+};
+
+export const enum KernelClaimEndpointKind {
+  /** Claim endpoint carried by an AddressHandle. */
+  Address = 'address',
+  /** Claim endpoint carried by an IdentityHandle. */
+  Identity = 'identity',
+  /** Claim endpoint carried by a ProductHandle. */
+  Product = 'product',
+}
+
+export const enum KernelClaimSignatureRecordKind {
+  /** Signature for one side of a claim predicate. */
+  KernelClaimEndpointSignature = 'kernel-claim-endpoint-signature',
+  /** Directional subject/object signature for a claim predicate. */
+  KernelClaimPredicateSignature = 'kernel-claim-predicate-signature',
+}
+
+/** One side of a claim predicate signature. Product kinds constrain ProductHandle endpoints only. */
+export class KernelClaimEndpointSignature<
+  TEndpointKinds extends readonly KernelClaimEndpointKind[] = readonly KernelClaimEndpointKind[],
+  TProductKinds extends readonly ProductKindKey[] = readonly ProductKindKey[],
+> {
+  /** String discriminator for serialized claim endpoint signatures. */
+  readonly kind = KernelClaimSignatureRecordKind.KernelClaimEndpointSignature;
+
+  constructor(
+    /** Handle families accepted on this side of the claim. */
+    readonly endpointKinds: TEndpointKinds,
+    /** Product kinds accepted when the endpoint is a ProductHandle. Empty means any product kind. */
+    readonly productKinds: TProductKinds = [] as unknown as TProductKinds,
+  ) {
+    if (endpointKinds.length === 0) {
+      throw new Error('Claim endpoint signatures must accept at least one endpoint kind.');
+    }
+    if (productKinds.length > 0 && !endpointKinds.includes(KernelClaimEndpointKind.Product)) {
+      throw new Error('Claim endpoint signatures with product-kind constraints must accept product endpoints.');
+    }
+  }
+}
+
+/** Directional shape for claim predicates so graph lenses do not infer edge topology from names. */
+export class KernelClaimPredicateSignature<
+  TSubject extends KernelClaimEndpointSignature = KernelClaimEndpointSignature,
+  TObject extends KernelClaimEndpointSignature = KernelClaimEndpointSignature,
+> {
+  /** String discriminator for serialized claim predicate signatures. */
+  readonly kind = KernelClaimSignatureRecordKind.KernelClaimPredicateSignature;
+
+  constructor(
+    /** Expected subject-side shape for this predicate. */
+    readonly subject: TSubject,
+    /** Expected object-side shape for this predicate. */
+    readonly object: TObject,
+  ) {}
+}
 
 export const enum KernelVocabularyRecordKind {
   /** Defines one controlled vocabulary entry that can classify claims, products, rules, and roles. */
@@ -87,13 +166,17 @@ export const enum KernelVocabularyNamespace {
 }
 
 /** Controlled vocabulary entry with a stable namespaced key, usage slot, and human/AI-readable intent. */
-export class KernelVocabularyDefinition<TSlot extends KernelVocabularySlot = KernelVocabularySlot> {
+export class KernelVocabularyDefinition<
+  TSlot extends KernelVocabularySlot = KernelVocabularySlot,
+  TCode extends string = string,
+  TClaimSignature extends KernelClaimPredicateSignature | null = KernelClaimPredicateSignature | null,
+> {
   /** String discriminator for serialized vocabulary-definition records. */
   readonly kind = KernelVocabularyRecordKind.KernelVocabularyDefinition;
 
   constructor(
     /** Stable vocabulary key, normally `${namespace}.${name}`. */
-    readonly key: KernelVocabularyKey<TSlot>,
+    readonly key: KernelVocabularyKey<TSlot, TCode>,
     /** Broad namespace that keeps provisional ontology growth from drifting globally. */
     readonly namespace: KernelVocabularyNamespace,
     /** Namespace-local kebab-case vocabulary name. */
@@ -102,26 +185,46 @@ export class KernelVocabularyDefinition<TSlot extends KernelVocabularySlot = Ker
     readonly slot: TSlot,
     /** Grounded description of when this vocabulary entry should be used. */
     readonly summary: string,
+    /** Directional subject/object shape for claim predicates; null for non-claim vocabulary entries. */
+    readonly claimSignature: TClaimSignature,
   ) {}
 }
 
-function makeVocabularyKey<TSlot extends KernelVocabularySlot>(
-  namespace: KernelVocabularyNamespace,
-  name: string,
-): KernelVocabularyKey<TSlot> {
-  return `${namespace}.${name}` as KernelVocabularyKey<TSlot>;
+export type KernelVocabularyDefinitionForSlot<
+  TSlot extends KernelVocabularySlot,
+  TCode extends string = string,
+> = TSlot extends KernelVocabularySlot.ClaimPredicate
+  ? KernelVocabularyDefinition<TSlot, TCode, KernelClaimPredicateSignature>
+  : KernelVocabularyDefinition<TSlot, TCode, null>;
+
+function makeVocabularyKey<
+  TSlot extends KernelVocabularySlot,
+  TNamespace extends KernelVocabularyNamespace,
+  TName extends string,
+>(
+  namespace: TNamespace,
+  name: TName,
+): KernelVocabularyKey<TSlot, VocabularyCode<TNamespace, TName>> {
+  return `${namespace}.${name}` as KernelVocabularyKey<TSlot, VocabularyCode<TNamespace, TName>>;
 }
 
-function defineVocabulary<TSlot extends KernelVocabularySlot>(
+function createVocabularyDefinition<
+  const TNamespace extends KernelVocabularyNamespace,
+  const TName extends string,
+  TSlot extends KernelVocabularySlot,
+  TClaimSignature extends KernelClaimPredicateSignature | null,
+>(
   /** Namespace that owns the vocabulary entry. */
-  namespace: KernelVocabularyNamespace,
+  namespace: TNamespace,
   /** Namespace-local kebab-case name. */
-  name: string,
+  name: TName,
   /** Usage slot that owns the key's semantic contract. */
   slot: TSlot,
   /** Grounded usage description for future maintainers and AI agents. */
   summary: string,
-): KernelVocabularyDefinition<TSlot> {
+  /** Optional directional signature for claim-predicate entries. */
+  claimSignature: TClaimSignature,
+): KernelVocabularyDefinition<TSlot, VocabularyCode<TNamespace, TName>, TClaimSignature> {
   if (!VOCABULARY_NAME_PATTERN.test(name)) {
     throw new Error(`Kernel vocabulary names must be kebab-case: ${namespace}.${name}`);
   }
@@ -129,26 +232,172 @@ function defineVocabulary<TSlot extends KernelVocabularySlot>(
   if (definedVocabularyKeys.has(key)) {
     throw new Error(`Duplicate kernel vocabulary definition: ${key}`);
   }
+  if (slot !== KernelVocabularySlot.ClaimPredicate && claimSignature !== null) {
+    throw new Error(`Only claim predicates can declare claim signatures: ${key}`);
+  }
+  if (slot === KernelVocabularySlot.ClaimPredicate && claimSignature === null) {
+    throw new Error(`Claim predicates must declare claim signatures: ${key}`);
+  }
+  const definition = new KernelVocabularyDefinition(
+    makeVocabularyKey<TSlot, TNamespace, TName>(namespace, name),
+    namespace,
+    name,
+    slot,
+    summary,
+    claimSignature,
+  );
   definedVocabularyKeys.add(key);
-  return new KernelVocabularyDefinition(makeVocabularyKey<TSlot>(namespace, name), namespace, name, slot, summary);
+  definedVocabularySlots.set(key, slot);
+  definedVocabularyDefinitions.set(key, definition);
+  return definition;
+}
+
+function defineVocabulary<
+  const TNamespace extends KernelVocabularyNamespace,
+  const TName extends string,
+  TSlot extends Exclude<KernelVocabularySlot, KernelVocabularySlot.ClaimPredicate>,
+>(
+  /** Namespace that owns the vocabulary entry. */
+  namespace: TNamespace,
+  /** Namespace-local kebab-case name. */
+  name: TName,
+  /** Usage slot that owns the key's semantic contract. */
+  slot: TSlot,
+  /** Grounded usage description for future maintainers and AI agents. */
+  summary: string,
+): KernelVocabularyDefinition<TSlot, VocabularyCode<TNamespace, TName>, null> {
+  return createVocabularyDefinition(namespace, name, slot, summary, null);
+}
+
+function defineClaimPredicate<
+  const TNamespace extends KernelVocabularyNamespace,
+  const TName extends string,
+  TSignature extends KernelClaimPredicateSignature,
+>(
+  /** Namespace that owns the claim predicate. */
+  namespace: TNamespace,
+  /** Namespace-local kebab-case name. */
+  name: TName,
+  /** Grounded usage description for future maintainers and AI agents. */
+  summary: string,
+  /** Directional shape for subject/object endpoints. */
+  claimSignature: TSignature,
+): KernelVocabularyDefinition<KernelVocabularySlot.ClaimPredicate, VocabularyCode<TNamespace, TName>, TSignature> {
+  return createVocabularyDefinition(namespace, name, KernelVocabularySlot.ClaimPredicate, summary, claimSignature);
+}
+
+function claimSignature<
+  TSubject extends KernelClaimEndpointSignature,
+  TObject extends KernelClaimEndpointSignature,
+>(
+  subject: TSubject,
+  object: TObject,
+): KernelClaimPredicateSignature<TSubject, TObject> {
+  return new KernelClaimPredicateSignature(subject, object);
+}
+
+function anyEndpoint(): KernelClaimEndpointSignature<
+  readonly [KernelClaimEndpointKind.Address, KernelClaimEndpointKind.Identity, KernelClaimEndpointKind.Product],
+  readonly []
+> {
+  return new KernelClaimEndpointSignature([
+    KernelClaimEndpointKind.Address,
+    KernelClaimEndpointKind.Identity,
+    KernelClaimEndpointKind.Product,
+  ]);
+}
+
+function identityEndpoint(): KernelClaimEndpointSignature<readonly [KernelClaimEndpointKind.Identity], readonly []> {
+  return new KernelClaimEndpointSignature([KernelClaimEndpointKind.Identity]);
+}
+
+function productEndpoint<const TProductKindParts extends readonly ProductKindPart[]>(
+  ...productKinds: TProductKindParts
+): KernelClaimEndpointSignature<
+  readonly [KernelClaimEndpointKind.Product],
+  ProductKindKeysFromParts<TProductKindParts>
+> {
+  return new KernelClaimEndpointSignature(
+    [KernelClaimEndpointKind.Product],
+    productKinds.map(([namespace, name]) => productKindKey(namespace, name)) as ProductKindKeysFromParts<TProductKindParts>,
+  );
+}
+
+function endpoint<
+  const TEndpointKinds extends readonly KernelClaimEndpointKind[],
+  const TProductKindParts extends readonly ProductKindPart[] = readonly [],
+>(
+  endpointKinds: TEndpointKinds,
+  productKinds: TProductKindParts = [] as unknown as TProductKindParts,
+): KernelClaimEndpointSignature<TEndpointKinds, ProductKindKeysFromParts<TProductKindParts>> {
+  return new KernelClaimEndpointSignature(
+    endpointKinds,
+    productKinds.map(([namespace, name]) => productKindKey(namespace, name)) as ProductKindKeysFromParts<TProductKindParts>,
+  );
+}
+
+function registrationAdmissionEndpoint() {
+  return productEndpoint(
+    [KernelVocabularyNamespace.Registration, 'open-admission'],
+    [KernelVocabularyNamespace.Registration, 'resolver-admission'],
+    [KernelVocabularyNamespace.Registration, 'parameterized-registry-admission'],
+    [KernelVocabularyNamespace.Registration, 'registry-admission'],
+    [KernelVocabularyNamespace.Registration, 'framework-registration-admission'],
+  );
+}
+
+function productKindKey<
+  const TNamespace extends KernelVocabularyNamespace,
+  const TName extends string,
+>(
+  namespace: TNamespace,
+  name: TName,
+): ProductKindKey<VocabularyCode<TNamespace, TName>> {
+  if (!VOCABULARY_NAME_PATTERN.test(name)) {
+    throw new Error(`Kernel vocabulary names must be kebab-case: ${namespace}.${name}`);
+  }
+  const key = `${namespace}.${name}`;
+  referencedProductKindKeys.add(key);
+  return makeVocabularyKey<KernelVocabularySlot.ProductKind, TNamespace, TName>(namespace, name);
+}
+
+/** Read a centrally declared vocabulary definition by key. */
+export function readKernelVocabularyDefinition<
+  TSlot extends KernelVocabularySlot,
+  TCode extends string,
+>(
+  key: KernelVocabularyKey<TSlot, TCode>,
+): KernelVocabularyDefinitionForSlot<TSlot, TCode> | null {
+  return definedVocabularyDefinitions.get(key) as KernelVocabularyDefinitionForSlot<TSlot, TCode> | undefined ?? null;
+}
+
+/** Read a claim-predicate definition, including its required directional signature. */
+export function readClaimPredicateDefinition<TCode extends string>(
+  key: ClaimPredicateKey<TCode>,
+): KernelVocabularyDefinition<KernelVocabularySlot.ClaimPredicate, TCode, KernelClaimPredicateSignature> | null {
+  const definition = readKernelVocabularyDefinition(key);
+  if (definition?.slot !== KernelVocabularySlot.ClaimPredicate) {
+    return null;
+  }
+  return definition;
 }
 
 /** Small seed vocabulary; new entries should be added deliberately as semantics are implemented. */
 export const KernelVocabulary = {
   Evaluation: {
     /** A module or source unit imports another module, binding, or symbol. */
-    Imports: defineVocabulary(
+    Imports: defineClaimPredicate(
       KernelVocabularyNamespace.Evaluation,
       'imports',
-      KernelVocabularySlot.ClaimPredicate,
       'A module or source unit imports another module, binding, or symbol.',
+      claimSignature(anyEndpoint(), anyEndpoint()),
     ),
     /** A module or source unit exports a declaration, value, or resource carrier. */
-    Exports: defineVocabulary(
+    Exports: defineClaimPredicate(
       KernelVocabularyNamespace.Evaluation,
       'exports',
-      KernelVocabularySlot.ClaimPredicate,
       'A module or source unit exports a declaration, value, or resource carrier.',
+      claimSignature(anyEndpoint(), anyEndpoint()),
     ),
     /** Evaluation stopped because recursion protection prevented deeper interpretation. */
     DepthLimit: defineVocabulary(
@@ -264,24 +513,33 @@ export const KernelVocabulary = {
       'A fully converged resource metadata definition before DI admission, scope visibility, or template compilation.',
     ),
     /** Source syntax or convention declares an Aurelia resource. */
-    Declares: defineVocabulary(
+    Declares: defineClaimPredicate(
       KernelVocabularyNamespace.Resource,
       'declares',
-      KernelVocabularySlot.ClaimPredicate,
       'Source syntax or convention declares an Aurelia resource.',
+      claimSignature(
+        endpoint(
+          [KernelClaimEndpointKind.Address, KernelClaimEndpointKind.Identity, KernelClaimEndpointKind.Product],
+          [[KernelVocabularyNamespace.Resource, 'definition-header']],
+        ),
+        identityEndpoint(),
+      ),
     ),
     /** A recognized resource name is an alias of another resource identity. */
-    AliasOf: defineVocabulary(
+    AliasOf: defineClaimPredicate(
       KernelVocabularyNamespace.Resource,
       'alias-of',
-      KernelVocabularySlot.ClaimPredicate,
       'A recognized resource name is an alias of another resource identity.',
+      claimSignature(identityEndpoint(), identityEndpoint()),
     ),
-    ContainsDefinitionHeader: defineVocabulary(
+    ContainsDefinitionHeader: defineClaimPredicate(
       KernelVocabularyNamespace.Resource,
       'contains-definition-header',
-      KernelVocabularySlot.ClaimPredicate,
       'A resource catalog contains a resource definition header product.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Resource, 'built-in-catalog']),
+        productEndpoint([KernelVocabularyNamespace.Resource, 'definition-header']),
+      ),
     ),
     /** Resource recognition could not close a resource kind from the carrier shape. */
     OpenKindExpression: defineVocabulary(
@@ -391,32 +649,53 @@ export const KernelVocabulary = {
       'A factory slot shared by a container tree for a constructable key.',
     ),
     /** Registration or resolver flow provides a DI key. */
-    ProvidesKey: defineVocabulary(
+    ProvidesKey: defineClaimPredicate(
       KernelVocabularyNamespace.Di,
       'provides-key',
-      KernelVocabularySlot.ClaimPredicate,
       'Registration or resolver flow provides a DI key.',
+      claimSignature(
+        productEndpoint(
+          [KernelVocabularyNamespace.Di, 'resolver'],
+          [KernelVocabularyNamespace.Di, 'resolver-slot'],
+          [KernelVocabularyNamespace.Di, 'resource-slot'],
+          [KernelVocabularyNamespace.Di, 'self-resolver-slot'],
+        ),
+        identityEndpoint(),
+      ),
     ),
     /** A container accepts a registration admission for later resolver/resource/factory effects. */
-    AcceptsRegistration: defineVocabulary(
+    AcceptsRegistration: defineClaimPredicate(
       KernelVocabularyNamespace.Di,
       'accepts-registration',
-      KernelVocabularySlot.ClaimPredicate,
       'A container accepts a registration admission for later resolver, resource, or factory effects.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Di, 'container']),
+        registrationAdmissionEndpoint(),
+      ),
     ),
     /** A DI operation produced a container-owned product while spending registration or lookup pressure. */
-    ProducesProduct: defineVocabulary(
+    ProducesProduct: defineClaimPredicate(
       KernelVocabularyNamespace.Di,
       'produces-product',
-      KernelVocabularySlot.ClaimPredicate,
       'A DI operation produced a container-owned product while spending registration or lookup pressure.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Di, 'container-registration']),
+        productEndpoint(
+          [KernelVocabularyNamespace.Di, 'resolver'],
+          [KernelVocabularyNamespace.Di, 'registry'],
+          [KernelVocabularyNamespace.Di, 'parameterized-registry'],
+          [KernelVocabularyNamespace.Di, 'resolver-slot'],
+          [KernelVocabularyNamespace.Di, 'resource-slot'],
+          [KernelVocabularyNamespace.Di, 'factory-slot'],
+        ),
+      ),
     ),
     /** A DI lookup resolves, ambiguously resolves, or fails to resolve to a provider. */
-    ResolvesTo: defineVocabulary(
+    ResolvesTo: defineClaimPredicate(
       KernelVocabularyNamespace.Di,
       'resolves-to',
-      KernelVocabularySlot.ClaimPredicate,
       'A DI lookup resolves, ambiguously resolves, or fails to resolve to a provider.',
+      claimSignature(anyEndpoint(), anyEndpoint()),
     ),
     /** DI world construction could not spend a registration admission into concrete container effects. */
     OpenRegistrationSpending: defineVocabulary(
@@ -477,18 +756,18 @@ export const KernelVocabulary = {
       'A known framework registration group before DI world construction spends its expanded registrations.',
     ),
     /** A registration admission offers a DI key to later world construction. */
-    AdmitsKey: defineVocabulary(
+    AdmitsKey: defineClaimPredicate(
       KernelVocabularyNamespace.Registration,
       'admits-key',
-      KernelVocabularySlot.ClaimPredicate,
       'A registration admission offers a DI key to later DI world construction.',
+      claimSignature(registrationAdmissionEndpoint(), identityEndpoint()),
     ),
     /** A registration admission uses a class, instance, callback, resolver, registry, or resource value. */
-    UsesValue: defineVocabulary(
+    UsesValue: defineClaimPredicate(
       KernelVocabularyNamespace.Registration,
       'uses-value',
-      KernelVocabularySlot.ClaimPredicate,
       'A registration admission uses a class, instance, callback, resolver, registry, or resource value.',
+      claimSignature(registrationAdmissionEndpoint(), anyEndpoint()),
     ),
     /** Registration recognition could not close the target key. */
     OpenKeyExpression: defineVocabulary(
@@ -619,39 +898,63 @@ export const KernelVocabulary = {
       'An AppRoot lifecycle-slot dispatch point that selects AppTasks without executing callback bodies.',
     ),
     /** A configuration sequence contains one ordered step. */
-    ContainsStep: defineVocabulary(
+    ContainsStep: defineClaimPredicate(
       KernelVocabularyNamespace.Configuration,
       'contains-step',
-      KernelVocabularySlot.ClaimPredicate,
       'A configuration sequence contains one ordered step.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Configuration, 'sequence']),
+        productEndpoint([KernelVocabularyNamespace.Configuration, 'step']),
+      ),
     ),
     /** A configuration step produced or selected a product that later passes can consume. */
-    ProducesProduct: defineVocabulary(
+    ProducesProduct: defineClaimPredicate(
       KernelVocabularyNamespace.Configuration,
       'produces-product',
-      KernelVocabularySlot.ClaimPredicate,
       'A configuration step produced or selected a product that later passes can consume.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Configuration, 'step']),
+        productEndpoint(
+          [KernelVocabularyNamespace.Configuration, 'aurelia'],
+          [KernelVocabularyNamespace.Configuration, 'app-root-config'],
+          [KernelVocabularyNamespace.Configuration, 'app-root'],
+          [KernelVocabularyNamespace.Configuration, 'controller'],
+          [KernelVocabularyNamespace.Configuration, 'option-contribution'],
+          [KernelVocabularyNamespace.Configuration, 'app-task'],
+          [KernelVocabularyNamespace.Configuration, 'app-task-slot-dispatch'],
+          [KernelVocabularyNamespace.Di, 'container'],
+        ),
+      ),
     ),
     /** A configuration step admitted a registration product before DI world construction spends it. */
-    AdmitsRegistration: defineVocabulary(
+    AdmitsRegistration: defineClaimPredicate(
       KernelVocabularyNamespace.Configuration,
       'admits-registration',
-      KernelVocabularySlot.ClaimPredicate,
       'A configuration step admitted a registration product before DI world construction spends it.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Configuration, 'step']),
+        registrationAdmissionEndpoint(),
+      ),
     ),
     /** A modeled Aurelia facade owns the root container used by app admission. */
-    OwnsContainer: defineVocabulary(
+    OwnsContainer: defineClaimPredicate(
       KernelVocabularyNamespace.Configuration,
       'owns-container',
-      KernelVocabularySlot.ClaimPredicate,
       'A modeled Aurelia facade owns the root container used by app admission.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Configuration, 'aurelia']),
+        productEndpoint([KernelVocabularyNamespace.Di, 'container']),
+      ),
     ),
     /** A modeled Aurelia facade prepared or selected an AppRoot boundary. */
-    HasAppRoot: defineVocabulary(
+    HasAppRoot: defineClaimPredicate(
       KernelVocabularyNamespace.Configuration,
       'has-app-root',
-      KernelVocabularySlot.ClaimPredicate,
       'A modeled Aurelia facade prepared or selected an AppRoot boundary.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Configuration, 'aurelia']),
+        productEndpoint([KernelVocabularyNamespace.Configuration, 'app-root']),
+      ),
     ),
     /** Configuration recognition could not close the call receiver or target. */
     OpenConfigurationTarget: defineVocabulary(
@@ -777,51 +1080,85 @@ export const KernelVocabulary = {
       'Result of binding-command lowering before final instruction sequence assembly.',
     ),
     /** Compiler scope provides a resource to template lookup. */
-    ProvidesResource: defineVocabulary(
+    ProvidesResource: defineClaimPredicate(
       KernelVocabularyNamespace.Compiler,
       'provides-resource',
-      KernelVocabularySlot.ClaimPredicate,
       'Compiler scope provides a resource to template lookup.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'resource-scope']),
+        productEndpoint(
+          [KernelVocabularyNamespace.Resource, 'definition-header'],
+          [KernelVocabularyNamespace.Resource, 'definition'],
+        ),
+      ),
     ),
     /** Compiler scope provides an attribute-pattern or binding-command executable to parser/lowering services. */
-    ProvidesSyntaxResource: defineVocabulary(
+    ProvidesSyntaxResource: defineClaimPredicate(
       KernelVocabularyNamespace.Compiler,
       'provides-syntax-resource',
-      KernelVocabularySlot.ClaimPredicate,
       'Compiler scope provides an attribute-pattern or binding-command executable to parser/lowering services.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'resource-scope']),
+        productEndpoint(
+          [KernelVocabularyNamespace.Compiler, 'attribute-pattern-executable'],
+          [KernelVocabularyNamespace.Compiler, 'binding-command-executable'],
+        ),
+      ),
     ),
     /** A compiler world uses a resource scope for lookup. */
-    UsesResourceScope: defineVocabulary(
+    UsesResourceScope: defineClaimPredicate(
       KernelVocabularyNamespace.Compiler,
       'uses-resource-scope',
-      KernelVocabularySlot.ClaimPredicate,
       'A compiler world uses a resource scope for lookup.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'world']),
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'resource-scope']),
+      ),
     ),
     /** A compiler world uses a compiler service product. */
-    UsesService: defineVocabulary(
+    UsesService: defineClaimPredicate(
       KernelVocabularyNamespace.Compiler,
       'uses-service',
-      KernelVocabularySlot.ClaimPredicate,
       'A compiler world uses a compiler service product.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'world']),
+        productEndpoint(
+          [KernelVocabularyNamespace.Compiler, 'service'],
+          [KernelVocabularyNamespace.Compiler, 'attribute-parser'],
+          [KernelVocabularyNamespace.Compiler, 'binding-command-resolver'],
+        ),
+      ),
     ),
     /** A syntax catalog includes a compiler-visible attribute-pattern or binding-command executable. */
-    ContainsSyntaxResource: defineVocabulary(
+    ContainsSyntaxResource: defineClaimPredicate(
       KernelVocabularyNamespace.Compiler,
       'contains-syntax-resource',
-      KernelVocabularySlot.ClaimPredicate,
       'A syntax catalog includes a compiler-visible attribute-pattern or binding-command executable.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'built-in-syntax-catalog']),
+        productEndpoint(
+          [KernelVocabularyNamespace.Compiler, 'attribute-pattern-executable'],
+          [KernelVocabularyNamespace.Compiler, 'binding-command-executable'],
+        ),
+      ),
     ),
-    AdmitsSyntaxCatalog: defineVocabulary(
+    AdmitsSyntaxCatalog: defineClaimPredicate(
       KernelVocabularyNamespace.Compiler,
       'admits-syntax-catalog',
-      KernelVocabularySlot.ClaimPredicate,
       'A known framework registration admission made a built-in syntax catalog available for attribute-parser and binding-command resolver input.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'configured-syntax-catalog-selection']),
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'built-in-syntax-catalog']),
+      ),
     ),
-    AdmitsResourceCatalog: defineVocabulary(
+    AdmitsResourceCatalog: defineClaimPredicate(
       KernelVocabularyNamespace.Compiler,
       'admits-resource-catalog',
-      KernelVocabularySlot.ClaimPredicate,
       'A known framework registration admission made a built-in resource catalog available for DI resource-slot spending.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'configured-resource-catalog-selection']),
+        productEndpoint([KernelVocabularyNamespace.Resource, 'built-in-catalog']),
+      ),
     ),
     /** Compiler service lookup could not be closed. */
     OpenServiceLookup: defineVocabulary(
@@ -889,11 +1226,25 @@ export const KernelVocabulary = {
       'Attribute classification after resource, bindable, and command lookup.',
     ),
     /** Markup or binding syntax references a resource by name or command. */
-    ReferencesResource: defineVocabulary(
+    ReferencesResource: defineClaimPredicate(
       KernelVocabularyNamespace.Template,
       'references-resource',
-      KernelVocabularySlot.ClaimPredicate,
       'Markup or binding syntax references a resource by name or command.',
+      claimSignature(
+        productEndpoint(
+          [KernelVocabularyNamespace.Template, 'html-node'],
+          [KernelVocabularyNamespace.Template, 'html-attribute'],
+          [KernelVocabularyNamespace.Template, 'attribute-syntax'],
+          [KernelVocabularyNamespace.Template, 'attribute-classification'],
+          [KernelVocabularyNamespace.Binding, 'binding'],
+        ),
+        productEndpoint(
+          [KernelVocabularyNamespace.Resource, 'definition-header'],
+          [KernelVocabularyNamespace.Resource, 'definition'],
+          [KernelVocabularyNamespace.Compiler, 'attribute-pattern-executable'],
+          [KernelVocabularyNamespace.Compiler, 'binding-command-executable'],
+        ),
+      ),
     ),
     /** Template parsing reached malformed or frontier-owned HTML. */
     OpenHtmlSyntax: defineVocabulary(
@@ -1163,3 +1514,14 @@ export const KernelVocabulary = {
     ),
   },
 } as const;
+
+validateKernelVocabularyDefinitions();
+
+function validateKernelVocabularyDefinitions(): void {
+  for (const key of referencedProductKindKeys) {
+    const slot = definedVocabularySlots.get(key);
+    if (slot !== KernelVocabularySlot.ProductKind) {
+      throw new Error(`Claim signatures must reference defined product-kind vocabulary: ${key}`);
+    }
+  }
+}

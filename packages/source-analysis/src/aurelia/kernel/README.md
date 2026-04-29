@@ -40,6 +40,17 @@ seam kinds, binding kinds, instruction kinds, and product kinds use centrally de
 explicit usage slot. New entries should be added as implementation pressure proves they are needed, with
 namespace, stable code, slot, and grounded usage comment.
 
+Claim predicates also declare a directional subject/object signature. The signature is intentionally small: it names
+which endpoint handle families are accepted and, for product endpoints, which product-kind vocabulary keys are expected.
+This lets MCP and inquiry lenses stitch graph paths such as configuration step -> registration admission -> DI
+operation -> compiler scope without hard-coding product-specific edge tables.
+The definition helpers preserve literal vocabulary keys and claim signatures in their return types so product code,
+MCP lenses, and future graph checks can follow declared topology instead of widening everything to string-like keys.
+Those signatures are product topology, not MCP-only metadata. `KernelStore.commit` validates materialized product
+kinds and semantic-claim endpoints against the same vocabulary contract so producer mistakes fail at the record
+boundary, including batches that introduce a product and claim it in the same commit. TypeScript typing keeps normal
+product code narrow; store validation keeps dynamic, generated, or future deserialized producers honest.
+
 Vocabulary is another fast-evolving pressure surface. It is intentionally small while semantics are still being
 implemented, but it must not become a dumping ground for near-duplicate relationship names or consumer-specific
 answer states. Add vocabulary when a real producer or query needs a stable classifier, and keep usage-slot
@@ -87,7 +98,9 @@ record links.
 
 `store.ts` defines the hot in-memory `KernelStore`, batch commit surface, handle expansion, and cheap navigation
 indexes. Batches are producer record-emission units, not durable transactions, vocabulary mutations, or semantic
-boundaries.
+boundaries. The store also validates controlled vocabulary usage at commit time: product kinds must be declared as
+product-kind vocabulary, claim predicates must be declared as claim-predicate vocabulary, and claim endpoints must
+match the predicate's directional signature.
 
 `vocabulary.ts` defines the controlled vocabulary mechanism used by claims, rules, edge roles, seams, binding
 kinds, instruction kinds, and product kinds. Each vocabulary definition carries its usage slot.
