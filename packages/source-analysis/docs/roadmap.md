@@ -189,8 +189,8 @@ Next:
 
 - define which semantic claims belong in the framework-agnostic core versus adapters
 - add Aurelia semantic surfaces as a new layer that spends shared substrate/evaluator primitives
-- use the local Aurelia Atlas ports and export semantic surface ledger as
-  derivation aids, not as already-settled framework contract
+- use the export semantic surface ledger as historical derivation aid while
+  live Aurelia grounding moves to Atlas over auLink and framework source
 - use [docs/aurelia/framework-export-integration-plan.md](./aurelia/framework-export-integration-plan.md)
   as the near-term operational plan for the first framework-wide integration
   slice

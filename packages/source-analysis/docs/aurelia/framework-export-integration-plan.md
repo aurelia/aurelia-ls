@@ -246,7 +246,7 @@ Need:
 
 Grounding:
 
-- [module-export-analysis-ledger.md](./atlas/module-export-analysis-ledger.md)
+- live Atlas orientation over auLink and framework source
 
 Exit condition:
 
@@ -268,7 +268,7 @@ Need:
 Grounding:
 
 - [declaration-world-and-resource-families.md](./declaration-world-and-resource-families.md)
-- [resource-kind-carrier-index.yaml](./atlas/resource-kind-carrier-index.yaml)
+- live Atlas orientation over auLink and framework source
 
 Exit condition:
 
@@ -284,7 +284,7 @@ Need:
 
 Grounding:
 
-- [resource-kind-carrier-index.yaml](./atlas/resource-kind-carrier-index.yaml)
+- live Atlas orientation over auLink and framework source
 
 Exit condition:
 
@@ -304,7 +304,7 @@ Need:
 
 Grounding:
 
-- [kernel-di-and-resource-admission-ledger.md](./atlas/kernel-di-and-resource-admission-ledger.md)
+- live Atlas orientation over auLink and framework source
 
 Exit condition:
 

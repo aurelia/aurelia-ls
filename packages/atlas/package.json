@@ -1,0 +1,34 @@
+{
+  "name": "@aurelia-ls/atlas",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "atlas-session-daemon": "./dist/session/daemon.js"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./inquiry": "./dist/inquiry/index.js",
+    "./inquiry/runtime": "./dist/inquiry/runtime/index.js",
+    "./session": "./dist/session/index.js"
+  },
+  "engines": {
+    "node": ">=23 <25"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "orient": "pnpm build && node dist/scripts/orient.js",
+    "playground:inquiry": "pnpm build && node dist/scripts/inquiry-playground.js",
+    "session:ensure": "pnpm build && node dist/scripts/inquiry-session-ensure.js",
+    "session:playground": "pnpm build && node dist/scripts/inquiry-session-playground.js",
+    "session:shutdown": "pnpm build && node dist/scripts/inquiry-session-shutdown.js",
+    "self-check": "pnpm build && node dist/scripts/self-check.js",
+    "smoke": "pnpm self-check"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.4",
+    "tsx": "^4.20.6",
+    "typescript": "^6.0.3"
+  }
+}

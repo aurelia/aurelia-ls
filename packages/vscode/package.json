@@ -397,7 +397,7 @@
   },
   "dependencies": {
     "@aurelia-ls/compiler": "workspace:*",
-    "typescript": "^5.5.4",
+    "typescript": "^6.0.3",
     "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {

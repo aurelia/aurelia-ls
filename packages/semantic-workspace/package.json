@@ -24,6 +24,6 @@
     "@aurelia-ls/compiler": "workspace:*"
   },
   "peerDependencies": {
-    "typescript": "^5.5.4"
+    "typescript": "^6.0.3"
   }
 }

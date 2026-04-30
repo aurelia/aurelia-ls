@@ -36,6 +36,6 @@
     "test": "node ./scripts/build.mjs"
   },
   "peerDependencies": {
-    "typescript": "^5.5.4"
+    "typescript": "^6.0.3"
   }
 }

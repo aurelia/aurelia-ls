@@ -24,14 +24,14 @@ Read these notes before:
 The export-lens and fixture-derivation work is currently active and still
 provisional.
 
-Use these two artifacts as derivation aids, not as frozen public contract:
+Use this artifact as a derivation aid, not as frozen public contract:
 
 - [export-semantic-surface-ledger.yaml](./export-semantic-surface-ledger.yaml)
-- [atlas/README.md](./atlas/README.md)
 
-They exist to help current protocol and fixture derivation stay grounded while
-we pressure-test export-addressable Aurelia semantics before hardening more
-public framework-facing surfaces.
+The retired static Atlas excerpt bundle has been replaced by live Atlas
+orientation over auLink and the real Aurelia source base. This directory now
+keeps only historical and package-local source-analysis grounding until the
+`aurelia` runtime substrate moves into `semantic-runtime`.
 
 For the near-term operational integration target against the Aurelia framework
 repo itself, also use:
@@ -58,9 +58,8 @@ resources.
 10. [di-interface-key-lens-charter.md](./di-interface-key-lens-charter.md)
 11. [registration-transition-lens-charter.md](./registration-transition-lens-charter.md)
 12. [lens-charter-template.md](./lens-charter-template.md)
-13. [atlas/README.md](./atlas/README.md)
-14. [ai-capability-surface-map.md](./ai-capability-surface-map.md)
-15. [ai-capability-catalog.md](./ai-capability-catalog.md)
+13. [ai-capability-surface-map.md](./ai-capability-surface-map.md)
+14. [ai-capability-catalog.md](./ai-capability-catalog.md)
 
 ## Local Rules
 
@@ -74,8 +73,8 @@ resources.
 - Keep grounding, admissibility, and corridor-local meaning separate.
 - Keep wrong-surface, wrong-member, unresolved, open, and runtime-only outcomes
   explicit.
-- Do not harden around today's helper names, file layout, or Atlas packet
-  names.
+- Do not harden around today's helper names, file layout, or historical Atlas
+  packet names.
 
 ## Use With
 

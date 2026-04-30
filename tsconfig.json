@@ -10,6 +10,7 @@
     { "path": "packages/vscode" },
     { "path": "packages/integration-harness" },
     { "path": "packages/semantic-workspace" },
-    { "path": "packages/source-analysis" }
+    { "path": "packages/source-analysis" },
+    { "path": "packages/atlas" }
   ]
 }

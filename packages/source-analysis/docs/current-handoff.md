@@ -22,9 +22,9 @@ question routing, family ranking, or conversational ingress.
    kernel and packet set before freezing more specific feature surfaces.
 5. Treat the new Aurelia export-lens grounding under
    [docs/aurelia/export-semantic-surface-ledger.yaml](./aurelia/export-semantic-surface-ledger.yaml)
-   and [docs/aurelia/atlas/README.md](./aurelia/atlas/README.md)
-   as active derivation aids for fixture planning and protocol pressure tests,
-   not as frozen framework contract.
+   as historical derivation aid for fixture planning and protocol pressure
+   tests; live Aurelia grounding is moving to Atlas over auLink rather than the
+   retired static Atlas excerpt bundle.
 6. Use that grounding plus the current packet set to derive workbook scenarios
    and invariants before freezing export-facing Aurelia request/response shapes.
 7. For the near-term operational Aurelia slice, use
@@ -157,12 +157,11 @@ question routing, family ranking, or conversational ingress.
   and current-world construction notes so compiler-facing Aurelia work can
   start from a repo-owned world-formation model instead of reconstructing one
   from Atlas on every pass.
-- Added a repo-owned local Atlas excerpt bundle under
-  [docs/aurelia/atlas/README.md](./aurelia/atlas/README.md)
-  plus an initial
+- Added an initial
   [docs/aurelia/export-semantic-surface-ledger.yaml](./aurelia/export-semantic-surface-ledger.yaml)
-  so export-addressable Aurelia semantics can be pressure-tested locally
-  without hard-coded non-local references.
+  so export-addressable Aurelia semantics could be pressure-tested locally;
+  the earlier static Atlas excerpt bundle has since been retired in favor of
+  live Atlas grounding over auLink and framework source.
 - That new Aurelia export-lens material is still explicit work-in-progress for
   protocol and fixture derivation; it should pressure-test the kernel and
   guide fixture choice before it hardens into more public framework-facing
@@ -350,7 +349,6 @@ question routing, family ranking, or conversational ingress.
 - `src/analysis-surface.ts`
 - `docs/aurelia/README.md`
 - `docs/aurelia/export-semantic-surface-ledger.yaml`
-- `docs/aurelia/atlas/README.md`
 - `docs/protocol-derivation-workbook.md`
 - `fixtures/protocol-derivation/README.md`
 - `fixtures/protocol-derivation/manifest.yaml`

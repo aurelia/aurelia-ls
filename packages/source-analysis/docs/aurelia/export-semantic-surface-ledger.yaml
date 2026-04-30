@@ -2,45 +2,25 @@ schema_version: v0alpha1
 ledger_id: aurelia-export-semantic-surface-ledger
 title: Aurelia Export Semantic Surface Ledger
 purpose: >
-  Machine-legible Atlas-derived ledger for what an export-addressable surface can
+  Historical source-analysis ledger for what an export-addressable surface can
   mean once a TypeScript export lens is combined with Aurelia declaration,
   admission, registration-world, and DI/resource semantics.
 status: provisional
 derivation_posture:
-  mode: atlas-derived-local-ledger
+  mode: historical-local-ledger
   notes:
     - >
-      This ledger is intentionally export-lens-shaped. Atlas itself is centered on
-      Aurelia semantics rather than general TypeScript export topology.
+      This ledger is intentionally export-lens-shaped. Live Atlas grounding now
+      comes from auLink and framework source rather than the retired static
+      packet bundle.
     - >
       The ledger therefore keeps the module/export side thin and uses Aurelia
       authority to describe the semantic meanings that an export may feed.
     - >
-      Families marked `closed` are well-supported by current Atlas authority.
-      Families marked `provisional` are useful local syntheses that still need
-      more grounding or fixture pressure.
+      Families marked `closed` were well-supported by the historical local
+      grounding. Families marked `provisional` are useful local syntheses that
+      still need more grounding or fixture pressure.
 
-atlas_refs:
-  module_export_analysis:
-    - ./atlas/module-export-analysis-ledger.md
-  resource_common_denominators:
-    - ./atlas/resource-system-common-denominators-ledger.md
-  entity_ontology:
-    - ./atlas/entity-ontology-and-carrier-contract.md
-  kernel_di_and_resource_admission:
-    - ./atlas/kernel-di-and-resource-admission-ledger.md
-  registration_world_constructors:
-    - ./atlas/registration-world-constructors-ledger.md
-  compile_time_vocabulary:
-    - ./atlas/compile-time-vocabulary.md
-  declaration_world_targets:
-    - ./atlas/declaration-world-searched-target-and-space-surfaces.yaml
-  declaration_world_lookup_regimes:
-    - ./atlas/declaration-world-consultation-bases.yaml
-  compile_time_di_algebra:
-    - ./atlas/compile-time-di-container-state-algebra.yaml
-  resource_kind_carrier_index:
-    - ./atlas/resource-kind-carrier-index.yaml
 
 normative_rules:
   - rule_id: classify-by-value-shape-not-export-name
@@ -273,10 +253,6 @@ export_surface_families:
     non_collapse_rules:
       - do not flatten runtime-visible kinds and compiler-root-only kinds
       - do not treat definition presence as proof of current-world activity
-    atlas_refs:
-      - ./atlas/module-export-analysis-ledger.md#analyzed-export-carriers
-      - ./atlas/resource-system-common-denominators-ledger.md#resource-definition-carrier-family
-      - ./atlas/entity-ontology-and-carrier-contract.md#derived-resource-archetypes
 
   - export_family_id: registry-like-export
     status: provisional
@@ -329,10 +305,6 @@ export_surface_families:
     non_collapse_rules:
       - do not collapse registry-like exports into ordinary resource definitions
       - generated syntax and lifecycle attachment must remain visible when present
-    atlas_refs:
-      - ./atlas/module-export-analysis-ledger.md#consumer-specific-selection
-      - ./atlas/registration-world-constructors-ledger.md#configuration-registry-archetypes
-      - ./atlas/declaration-world-registration-pattern-families.yaml
 
   - export_family_id: constructable-nondefinition-export
     status: provisional
@@ -369,9 +341,6 @@ export_surface_families:
     non_collapse_rules:
       - absence of definition metadata is not automatic no-claim for all consumers
       - consumer-specific promotion must remain above the module bridge
-    atlas_refs:
-      - ./atlas/module-export-analysis-ledger.md#export-classification-law
-      - ./atlas/kernel-di-and-resource-admission-ledger.md#key-world
 
   - export_family_id: interface-symbol-key-export
     status: closed
@@ -397,9 +366,6 @@ export_surface_families:
     non_collapse_rules:
       - interface-symbol keys are not resource keys
       - default registration behavior must remain separate from plain identity
-    atlas_refs:
-      - ./atlas/compile-time-di-container-state-algebra.yaml
-      - ./atlas/kernel-di-and-resource-admission-ledger.md#key-world
 
   - export_family_id: resolver-export
     status: closed
@@ -443,9 +409,6 @@ export_surface_families:
     non_collapse_rules:
       - helper modifiers do not create new base resolver strategies
       - resolver-key meaning stays in generic DI unless additional resource semantics close
-    atlas_refs:
-      - ./atlas/compile-time-di-container-state-algebra.yaml
-      - ./atlas/kernel-di-and-resource-admission-ledger.md#resolver-strategies-and-helper-layer
 
   - export_family_id: resource-key-export
     status: provisional
@@ -472,9 +435,6 @@ export_surface_families:
     non_collapse_rules:
       - resource keys are string-encoded but not equivalent to generic property keys
       - resource-key participation does not by itself prove current-world activity
-    atlas_refs:
-      - ./atlas/kernel-di-and-resource-admission-ledger.md#key-world
-      - ./atlas/declaration-world-searched-target-and-space-surfaces.yaml
 
   - export_family_id: compiler-vocabulary-export
     status: closed
@@ -506,9 +466,6 @@ export_surface_families:
     non_collapse_rules:
       - binding-command and attribute-pattern should not be collapsed merely because both serve compiler syntax
       - command admission and pattern admission have different mechanisms and open-state behavior
-    atlas_refs:
-      - ./atlas/resource-system-common-denominators-ledger.md#compiler-root-only-distinction
-      - ./atlas/compile-time-vocabulary.md#stage-5-admission--activation
 
   - export_family_id: ignored-primitive-like-export
     status: closed
@@ -526,8 +483,6 @@ export_surface_families:
       - reroute-ts-only
     non_collapse_rules:
       - ignored by the Aurelia declaration bridge does not imply useless to TypeScript-only consumers
-    atlas_refs:
-      - ./atlas/module-export-analysis-ledger.md#export-classification-law
 
 open_questions:
   - question_id: export-topology-closure

@@ -8,7 +8,7 @@
     "playground/*"
   ],
   "engines": {
-    "node": ">=18.17 <23"
+    "node": ">=23 <25"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -101,7 +101,7 @@
     "@vitest/coverage-v8": "^4.0.16",
     "eslint": "^9.39.1",
     "globals": "^15.12.0",
-    "typescript": "^5.5.4",
+    "typescript": "^6.0.3",
     "vite": "^6.0.3",
     "vitest": "^4.0.16"
   }
