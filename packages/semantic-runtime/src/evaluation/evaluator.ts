@@ -67,7 +67,7 @@ export class StaticExpressionEvaluationResult {
   ) {}
 }
 
-/** Conservative ECMAScript-shaped evaluator for module-level analysis. */
+/** ECMAScript-shaped evaluator for module-level analysis. */
 export class StaticEvaluator {
   private readonly openSeams: EvaluationOpenSeam[] = [];
   private statementCount = 0;

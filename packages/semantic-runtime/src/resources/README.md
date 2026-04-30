@@ -49,9 +49,9 @@ cheap to evolve while still giving inquiry a durable graph.
 
 Emitter results return typed definition-header handles for downstream materializers. The converger consumes
 those handles plus the AST-bearing observations and emits `resource.definition` products with field provenance and
-`resource.converges-to-definition` claims. This first convergence slice is conservative: it closes runtime defaults,
-resource keys, aliases, simple static bindables, `@bindable` metadata, template-controller flags, capture/template
-shape, and thin resource definitions. Bindable definitions preserve the source address for the metadata entry or
+`resource.converges-to-definition` claims. This first convergence slice closes runtime defaults, resource keys,
+aliases, simple static bindables, `@bindable` metadata, template-controller flags, capture/template shape, and thin
+resource definitions. Bindable definitions preserve the source address for the metadata entry or
 member declaration that produced them, because template attribute completion, go-to-definition, and later rename support
 need that narrower origin instead of only the owning resource definition. It records open seams for explicit metadata
 that is visible but not safely materialized yet, including dependencies, pre-lowered instructions, surrogates, and

@@ -1,9 +1,9 @@
 import type { Answer } from "../inquiry/answer.js";
 import { LensId } from "../inquiry/lens.js";
 import { RepoRootLocus } from "../inquiry/locus.js";
-import { createAtlasApi } from "../session/index.js";
+import { createApi } from "../session/index.js";
 
-const api = createAtlasApi({ idleTtlMs: 30_000 });
+const api = createApi({ idleTtlMs: 30_000 });
 
 const status = await api.status();
 const mapAnswer = await api.map("playground");

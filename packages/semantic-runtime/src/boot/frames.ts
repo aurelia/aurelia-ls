@@ -7,7 +7,7 @@ import type { SourceDiscoveryResult } from './source-discovery.js';
 export interface BootSourceFileInput {
   /** Absolute, workspace-relative, or project-relative path supplied by the host or discovery. */
   readonly path: string;
-  /** Source language when the host already knows it; discovery can infer a conservative default. */
+  /** Source language when the host already knows it; discovery can infer a default from source identity. */
   readonly language?: SourceLanguage;
   /** Optional host-facing note explaining why this source was admitted. */
   readonly note?: string | null;

@@ -32,7 +32,7 @@ export interface QueryInput {
 export interface PressureScenarioInput {
   readonly target: string;
   readonly surfaces?: readonly string[];
-  readonly bounded?: boolean;
+  readonly limited?: boolean;
 }
 
 // ============================================================================

@@ -47,8 +47,8 @@ export const enum SubstrateTrust {
   Exact = "exact",
   /** Substrate derives facts from a compiler/checker/source model. */
   Derived = "derived",
-  /** Substrate uses bounded static interpretation and must expose open seams. */
-  BoundedStatic = "bounded-static",
+  /** Substrate derives facts from an explicit static model and records unmodeled cases as open seams. */
+  ModeledStatic = "modeled-static",
   /** Substrate is a steering signal rather than proof. */
   Steering = "steering",
 }
@@ -130,7 +130,7 @@ export const SubstrateCatalog: readonly SubstrateContract[] = [
   {
     id: SubstrateId.ProductKernel,
     kind: SubstrateKind.Product,
-    trust: SubstrateTrust.BoundedStatic,
+    trust: SubstrateTrust.ModeledStatic,
     summary: "Product-owned kernel substrate: records, claims, producers, provenance, and preservation channels.",
     basisKinds: [BasisKind.ProductKernelSubstrate],
     produces: [EvidenceKind.ProductClaim, EvidenceKind.SourceSpan, EvidenceKind.OpenSeam],
@@ -139,7 +139,7 @@ export const SubstrateCatalog: readonly SubstrateContract[] = [
   {
     id: SubstrateId.ProductVocabulary,
     kind: SubstrateKind.Product,
-    trust: SubstrateTrust.BoundedStatic,
+    trust: SubstrateTrust.ModeledStatic,
     summary: "Product vocabulary definitions and allowed self-description terms.",
     basisKinds: [BasisKind.ProductVocabulary],
     produces: [EvidenceKind.VocabularyTerm, EvidenceKind.ProductClaim, EvidenceKind.SourceSpan],
@@ -148,7 +148,7 @@ export const SubstrateCatalog: readonly SubstrateContract[] = [
   {
     id: SubstrateId.ProductAuLink,
     kind: SubstrateKind.Product,
-    trust: SubstrateTrust.BoundedStatic,
+    trust: SubstrateTrust.ModeledStatic,
     summary: "Narrow product-to-framework anchors declared through auLink.",
     basisKinds: [BasisKind.AuLink],
     produces: [EvidenceKind.AuLinkAnchor, EvidenceKind.SourceSpan],
@@ -157,7 +157,7 @@ export const SubstrateCatalog: readonly SubstrateContract[] = [
   {
     id: SubstrateId.FrameworkStaticEvaluator,
     kind: SubstrateKind.Framework,
-    trust: SubstrateTrust.BoundedStatic,
+    trust: SubstrateTrust.ModeledStatic,
     summary: "Static evaluator for framework world-construction closures and explicit open seams.",
     basisKinds: [BasisKind.StaticEvaluator],
     produces: [EvidenceKind.OpenSeam, EvidenceKind.SourceSpan, EvidenceKind.TypeFact],
@@ -166,7 +166,7 @@ export const SubstrateCatalog: readonly SubstrateContract[] = [
   {
     id: SubstrateId.FrameworkDi,
     kind: SubstrateKind.Framework,
-    trust: SubstrateTrust.BoundedStatic,
+    trust: SubstrateTrust.ModeledStatic,
     summary: "Framework DI keys, registration writes, lookup reads, provider associations, and evaluator-backed closure limits.",
     basisKinds: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
     produces: [EvidenceKind.DiRegistration, EvidenceKind.DiLookup, EvidenceKind.OpenSeam, EvidenceKind.TypeFact, EvidenceKind.SourceSpan],

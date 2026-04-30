@@ -1,6 +1,7 @@
 import type { OutcomeKind } from "../inquiry/answer.js";
 import type { Continuation } from "../inquiry/continuation.js";
 import type { LensId } from "../inquiry/lens.js";
+import type { SourceProjectSummary } from "../source/index.js";
 
 /** Schema marker for the on-disk inquiry session manifest. */
 export const INQUIRY_SESSION_MANIFEST_VERSION = "atlas-session-v1" as const;
@@ -156,6 +157,8 @@ export interface InquirySessionWorldSummary {
   readonly lensContracts: number;
   /** Atlas vocabulary definitions loaded into the runtime world. */
   readonly vocabularyDefinitions: number;
+  /** Hot source project summary held by the daemon. */
+  readonly sourceProject: SourceProjectSummary;
 }
 
 /** Self-check result returned by the daemon. */

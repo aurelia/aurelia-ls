@@ -214,7 +214,7 @@ payloads, explanation paths, and eventually refactor impact views.
 
 The product's value comes from flow: imports, exports, configuration functions, registration APIs, decorators,
 static definitions, object literals, resolver helpers, and DI lookup machinery. The kernel should be used by an
-evaluator substrate that performs conservative abstract interpretation over those shapes.
+evaluator substrate that performs explicit abstract interpretation over those shapes and records open seams.
 
 The evaluator should prefer explicit open seams over pretending a path was understood. A useful partial result
 with clear seams is better than a confident false positive.

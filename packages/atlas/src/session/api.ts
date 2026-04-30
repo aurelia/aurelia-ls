@@ -2,7 +2,7 @@ import type { Answer } from "../inquiry/answer.js";
 import type { Continuation } from "../inquiry/continuation.js";
 import { LensId } from "../inquiry/lens.js";
 import { RepoRootLocus } from "../inquiry/locus.js";
-import type { InquiryRuntimeRequest, AtlasSelfValue } from "../inquiry/runtime/index.js";
+import type { InquiryRuntimeRequest, SelfValue } from "../inquiry/runtime/index.js";
 import type { InquirySurfaceMap } from "../inquiry/surface-map.js";
 import { ensureInquirySession, type EnsureInquirySessionOptions } from "./client.js";
 import type {
@@ -12,21 +12,21 @@ import type {
 } from "./protocol.js";
 
 /** First orientation bundle a Codex-facing entrypoint should read for this repo. */
-export interface AtlasOrientation {
+export interface Orientation {
   /** Daemon identity, build hash, and cheap runtime-world counts. */
   readonly status: InquirySessionStatus;
   /** Surface-map answer returned by the same runtime as normal inquiries. */
   readonly map: Answer<InquirySurfaceMap>;
   /** Atlas self-maintenance answer for contract and implementation pressure. */
-  readonly self: Answer<AtlasSelfValue>;
+  readonly self: Answer<SelfValue>;
   /** Surface-map continuations lifted for quick first follow-up selection. */
   readonly continuations: readonly Continuation[];
 }
 
 /** Session-backed API that auto-starts the daemon before each request. */
-export interface AtlasApi {
+export interface Api {
   /** Return the normal first orientation bundle for Codex-facing work. */
-  orient(): Promise<AtlasOrientation>;
+  orient(): Promise<Orientation>;
   /** Return daemon identity and cheap world summary. */
   status(): Promise<InquirySessionStatus>;
   /** Return the surface map through the daemon-held runtime API. */
@@ -43,11 +43,11 @@ export interface AtlasApi {
   isImplemented(lens: LensId): Promise<boolean>;
 }
 
-/** Create the default atlas API, backed by an auto-ensured session daemon. */
-export function createAtlasApi(
+/** Create the default session API, backed by an auto-ensured daemon. */
+export function createApi(
   /** Session startup and probing options. */
   options: EnsureInquirySessionOptions = {},
-): AtlasApi {
+): Api {
   return {
     orient: async () => {
       const session = await ensureInquirySession(options);
@@ -58,7 +58,7 @@ export function createAtlasApi(
           lens: LensId.AtlasSelf,
           locus: RepoRootLocus,
           projection: "summary",
-        }) as Promise<Answer<AtlasSelfValue>>,
+        }) as Promise<Answer<SelfValue>>,
       ]);
       return {
         status,

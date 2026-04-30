@@ -7,6 +7,7 @@ import { LensFamily, LensId, LensStage } from "../lens.js";
 import { LocusKind, RepoRootLocus } from "../locus.js";
 import { createSurfaceMap, type InquirySurfaceMap } from "../surface-map.js";
 import { RepoAreaStatus } from "../terrain.js";
+import type { SourceProject, SourceProjectSummary } from "../../source/index.js";
 import type { InquiryWorld } from "./world.js";
 
 /** Summary returned by the repo.terrain runtime lens. */
@@ -24,7 +25,7 @@ export interface RepoTerrainValue {
 }
 
 /** Summary returned by the atlas.self runtime lens. */
-export interface AtlasSelfValue {
+export interface SelfValue {
   /** Lens count grouped by implementation stage. */
   readonly lensesByStage: Readonly<Record<LensStage, number>>;
   /** Lens count grouped by broad family. */
@@ -35,6 +36,8 @@ export interface AtlasSelfValue {
   readonly vocabularyDefinitions: number;
   /** Number of contracted lenses without runtime implementations. */
   readonly unimplementedContractedLenses: number;
+  /** Hot source project summary held by the runtime substrate context. */
+  readonly sourceProject: SourceProjectSummary;
   /** Runtime-implemented lens ids observed by the engine. */
   readonly implementedLensIds: readonly LensId[];
   /** Contracted lens ids that still need runtime implementations. */
@@ -45,7 +48,7 @@ export interface AtlasSelfValue {
 export function answerRepoMap(world: InquiryWorld, inquiry: Inquiry): Answer<InquirySurfaceMap> {
   return createAnswer(inquiry, OutcomeKind.Hit, "Returned the Atlas surface map.", {
     value: createSurfaceMap(world),
-    basis: [contractBasis("Answered from the in-memory Atlas world.")],
+    basis: [contractBasis("Answered from the in-memory contract world.")],
     evidence: world.evidence,
     continuations: [
       {
@@ -63,7 +66,7 @@ export function answerRepoMap(world: InquiryWorld, inquiry: Inquiry): Answer<Inq
         id: "repo.map:self",
         kind: ContinuationKind.SwitchLens,
         priority: ContinuationPriority.Secondary,
-        rationale: "Inspect Atlas contract pressure and implementation status.",
+        rationale: "Inspect contract pressure and implementation status.",
         inquiry: {
           lens: LensId.AtlasSelf,
           locus: RepoRootLocus,
@@ -109,9 +112,14 @@ export function answerRepoTerrain(world: InquiryWorld, inquiry: Inquiry): Answer
 }
 
 /** Answer the atlas.self lens from contract-world status. */
-export function answerAtlasSelf(world: InquiryWorld, inquiry: Inquiry, implementedLensIds: ReadonlySet<LensId>): Answer<AtlasSelfValue> {
+export function answerSelf(
+  world: InquiryWorld,
+  inquiry: Inquiry,
+  implementedLensIds: ReadonlySet<LensId>,
+  sourceProject: SourceProject,
+): Answer<SelfValue> {
   const unimplemented = world.lenses.filter((lens) => lens.stage === LensStage.Contracted && !implementedLensIds.has(lens.id));
-  const value: AtlasSelfValue = {
+  const value: SelfValue = {
     lensesByStage: countByEnum(world.lenses.map((lens) => lens.stage), [
       LensStage.Implemented,
       LensStage.Contracted,
@@ -129,6 +137,7 @@ export function answerAtlasSelf(world: InquiryWorld, inquiry: Inquiry, implement
     substrateContracts: world.substrates.length,
     vocabularyDefinitions: world.vocabulary.length,
     unimplementedContractedLenses: unimplemented.length,
+    sourceProject: sourceProject.snapshot().summary,
     implementedLensIds: [...implementedLensIds],
     unimplementedLensIds: unimplemented.map((lens) => lens.id),
   };
@@ -142,7 +151,7 @@ export function answerAtlasSelf(world: InquiryWorld, inquiry: Inquiry, implement
   return createAnswer(
     inquiry,
     openSeams.length === 0 ? OutcomeKind.Hit : OutcomeKind.Partial,
-    `Returned Atlas contract status: ${implementedLensIds.size} implemented lens(es), ${unimplemented.length} contracted lens(es) without implementations.`,
+    `Returned contract status: ${implementedLensIds.size} implemented lens(es), ${unimplemented.length} contracted lens(es) without implementations.`,
     {
       value,
       basis: [contractBasis("Answered from the in-memory lens registry and static catalogs.")],

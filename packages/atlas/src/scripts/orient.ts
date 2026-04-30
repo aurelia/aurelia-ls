@@ -1,7 +1,7 @@
 import type { Answer } from "../inquiry/answer.js";
-import { createAtlasApi } from "../session/index.js";
+import { createApi } from "../session/index.js";
 
-const api = createAtlasApi({ idleTtlMs: 10 * 60 * 1000 });
+const api = createApi({ idleTtlMs: 10 * 60 * 1000 });
 const orientation = await api.orient();
 
 console.log(JSON.stringify({

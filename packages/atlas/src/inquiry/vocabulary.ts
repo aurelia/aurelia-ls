@@ -1,4 +1,4 @@
-declare const AtlasVocabularyKeyBrand: unique symbol;
+declare const vocabularyKeyBrand: unique symbol;
 
 const VOCABULARY_NAME_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 
@@ -34,7 +34,7 @@ export const enum InternalVocabularyNamespace {
 export type InternalVocabularyKey<
   TSlot extends InternalVocabularySlot = InternalVocabularySlot,
   TCode extends string = string,
-> = TCode & { readonly [AtlasVocabularyKeyBrand]: TSlot };
+> = TCode & { readonly [vocabularyKeyBrand]: TSlot };
 
 /** One self-description vocabulary definition that future Atlas lenses can analyze. */
 export interface InternalVocabularyDefinition<

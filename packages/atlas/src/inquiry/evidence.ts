@@ -48,7 +48,7 @@ export const enum EvidenceRole {
 export const enum EvidenceConfidence {
   /** Evidence is exact within the declared basis. */
   Exact = "exact",
-  /** Evidence is strongly supported but may be bounded by static analysis limits. */
+  /** Evidence is strongly supported but may stop at declared analysis budgets or open seams. */
   Strong = "strong",
   /** Evidence is a heuristic steering signal. */
   Heuristic = "heuristic",

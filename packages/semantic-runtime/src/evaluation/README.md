@@ -16,7 +16,7 @@ projects static type and member surfaces from the checker for template/expressio
 
 - Parse TypeScript source files as ECMAScript modules with imports, exports, and top-level bindings.
 - Build module environment records with declared, initialized, imported, function, class, and open bindings.
-- Evaluate conservative expression shapes such as literals, arrays, object literals, property access, simple
+- Evaluate modeled expression shapes such as literals, arrays, object literals, property access, simple
   operators, conditionals, and simple function returns.
 - Traverse a deliberate statement set with explicit unsupported cases for statements that can affect evaluation.
 - Preserve unresolved syntax, dynamic calls, dynamic imports, unknown references, and unsupported effects as open

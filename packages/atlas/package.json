@@ -8,9 +8,11 @@
   },
   "exports": {
     ".": "./dist/index.js",
+    "./evaluation": "./dist/evaluation/index.js",
     "./inquiry": "./dist/inquiry/index.js",
     "./inquiry/runtime": "./dist/inquiry/runtime/index.js",
-    "./session": "./dist/session/index.js"
+    "./session": "./dist/session/index.js",
+    "./source": "./dist/source/index.js"
   },
   "engines": {
     "node": ">=23 <25"

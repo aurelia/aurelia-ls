@@ -341,7 +341,7 @@ function sendProtocolRequest<TResult>(
   });
 }
 
-/** Sleep for a bounded interval while polling daemon startup. */
+/** Sleep for the requested interval while polling daemon startup. */
 function sleep(
   /** Milliseconds to wait. */
   ms: number,

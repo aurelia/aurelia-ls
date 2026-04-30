@@ -2,7 +2,7 @@
 
 `session` runs the inquiry API in a durable local daemon.
 
-The daemon is not an external transport. It is a loopback workbench for hot state: future TypeScript programs, checker state, product substrate snapshots, and framework evaluator caches can live here while scripts or Codex-facing tools ask the same inquiry API over a small line-delimited JSON protocol.
+The daemon is not an external transport. It is a loopback workbench for hot state: TypeScript programs, checker state, TypeChecker-driven product snapshots, and framework evaluator caches can live here while scripts or Codex-facing tools ask the same inquiry API over a small line-delimited JSON protocol.
 
 ## Responsibilities
 
@@ -16,9 +16,9 @@ The daemon is not an external transport. It is a loopback workbench for hot stat
 
 ## Lifecycle
 
-`createAtlasApi()` is the normal entrypoint. Each method calls `ensureInquirySession()` before forwarding the request, so callers do not need a separate startup step.
+`createApi()` is the normal entrypoint. Each method calls `ensureInquirySession()` before forwarding the request, so callers do not need a separate startup step.
 
-`createAtlasApi().orient()` is the intended first call for repo work. It returns status, the surface map, the `atlas.self` maintenance answer, and initial continuations while using the same daemon lifecycle as ordinary inquiries.
+`createApi().orient()` is the intended first call for repo work. It returns status, the surface map, the `atlas.self` maintenance answer, and initial continuations while using the same daemon lifecycle as ordinary inquiries.
 
 `ensureInquirySession()` computes the current build hash, probes the manifest, reuses a compatible daemon, asks an incompatible daemon to shut down, or starts a new detached process from `dist/session/daemon.js`.
 

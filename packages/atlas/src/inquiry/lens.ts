@@ -211,7 +211,7 @@ export const LensCatalog: readonly LensSpec[] = [
     requiredSubstrates: [SubstrateId.SourceFiles, SubstrateId.TypeScriptProgram],
     projections: [
       { id: "summary", summary: "Source metadata and evidence handles." },
-      { id: "text", summary: "Bounded source text.", defaultBudget: { textChars: 20_000 } },
+      { id: "text", summary: "Source text capped by the textChars budget.", defaultBudget: { textChars: 20_000 } },
     ],
     parameters: [
       { id: "sourcePart", role: ParameterRole.Projection, summary: "Select name, declaration, body, file, or exact range text." },

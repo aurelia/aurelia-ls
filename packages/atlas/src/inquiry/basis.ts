@@ -1,4 +1,4 @@
-/** Substrate family that produced, bounded, or blocked an inquiry answer. */
+/** Substrate family that produced, budget-limited, or blocked an inquiry answer. */
 export const enum BasisKind {
   /** Static atlas contract declarations such as lenses, terrain, and substrate specs. */
   AtlasContract = "atlas-contract",
@@ -10,7 +10,7 @@ export const enum BasisKind {
   TypeScriptProgram = "typescript-program",
   /** TypeScript TypeChecker facts such as signatures, symbols, reference roles, and flow. */
   TypeScriptChecker = "typescript-checker",
-  /** Conservative static evaluator facts and explicit open seams. */
+  /** Static evaluator facts and explicit open seams. */
   StaticEvaluator = "static-evaluator",
   /** Product-owned kernel substrate records, claims, products, and provenance. */
   ProductKernelSubstrate = "product-kernel-substrate",
@@ -28,8 +28,8 @@ export const enum BasisKind {
 export const enum BasisClosure {
   /** The substrate closed the requested question within its declared model. */
   Exact = "exact",
-  /** The substrate closed a deliberately bounded slice, such as a depth or row budget. */
-  Bounded = "bounded",
+  /** The substrate closed the requested row, depth, route, fact, or text budget. */
+  Budgeted = "budgeted",
   /** The substrate produced useful facts but did not close the whole question. */
   Partial = "partial",
   /** The substrate reached a modeled open seam. */
@@ -56,7 +56,7 @@ export const enum BasisAuthority {
   Contract = "contract",
   /** Authority comes from TypeScript checker semantics. */
   Checker = "checker",
-  /** Authority comes from conservative evaluator interpretation. */
+  /** Authority comes from evaluator interpretation with explicit open seams. */
   Evaluator = "evaluator",
   /** Authority comes from product-owned kernel or vocabulary declarations. */
   Product = "product",
@@ -68,9 +68,9 @@ export const enum BasisAuthority {
 
 /** Explanation of the substrate an answer actually spent. */
 export interface Basis {
-  /** Substrate family that produced or bounded the answer. */
+  /** Substrate family that produced or budget-limited the answer. */
   readonly kind: BasisKind;
-  /** Whether the substrate closed, bounded, partially answered, or rejected the inquiry. */
+  /** Whether the substrate closed, exhausted a budget, partially answered, or rejected the inquiry. */
   readonly closure: BasisClosure;
   /** Trust authority behind this basis, kept separate from freshness and closure. */
   readonly authority?: BasisAuthority;

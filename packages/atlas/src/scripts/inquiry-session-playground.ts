@@ -1,8 +1,8 @@
 import { LensId } from "../inquiry/lens.js";
 import { RepoRootLocus } from "../inquiry/locus.js";
-import { createAtlasApi } from "../session/index.js";
+import { createApi } from "../session/index.js";
 
-const api = createAtlasApi({
+const api = createApi({
   idleTtlMs: 30_000,
   startupTimeoutMs: 10_000,
 });

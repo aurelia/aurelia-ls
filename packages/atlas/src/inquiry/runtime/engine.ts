@@ -6,13 +6,20 @@ import type { Budget } from "../budget.js";
 import type { Inquiry, InquirySubject } from "../inquiry.js";
 import { LensId, LensStage, type LensSpec } from "../lens.js";
 import { LocusKind, RepoRootLocus, type Locus } from "../locus.js";
+import type { SourceProject } from "../../source/index.js";
 import {
-  answerAtlasSelf,
+  answerSelf,
   answerRepoMap,
   answerRepoTerrain,
   answerUnimplementedLens,
 } from "./lenses.js";
-import { createDefaultInquiryWorld, type InquiryWorld } from "./world.js";
+import type { InquiryWorld } from "./world.js";
+
+/** Hot substrate context shared by runtime lens implementations. */
+export interface InquiryRuntimeSubstrates {
+  /** Source/checker project owned by the daemon process. */
+  readonly sourceProject: SourceProject;
+}
 
 /** Transport-neutral inquiry input accepted by the runtime API. */
 export interface InquiryRuntimeRequest {
@@ -41,7 +48,9 @@ export class InquiryEngine {
 
   constructor(
     /** Contract world queried by the engine. */
-    readonly world: InquiryWorld = createDefaultInquiryWorld(),
+    readonly world: InquiryWorld,
+    /** Hot source and analysis substrates shared across lenses. */
+    readonly substrates: InquiryRuntimeSubstrates,
   ) {}
 
   /** Ask one inquiry or transport-shaped request. */
@@ -67,7 +76,7 @@ export class InquiryEngine {
       case LensId.RepoTerrain:
         return answerRepoTerrain(this.world, normalized.inquiry);
       case LensId.AtlasSelf:
-        return answerAtlasSelf(this.world, normalized.inquiry, this.#implementedLensIds);
+        return answerSelf(this.world, normalized.inquiry, this.#implementedLensIds, this.substrates.sourceProject);
       default:
         return answerUnimplementedLens(this.world, normalized.inquiry);
     }

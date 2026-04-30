@@ -38,7 +38,7 @@ export interface PageInfo {
   readonly total?: number;
 }
 
-/** Clamp one numeric budget lane into a positive bounded integer. */
+/** Clamp one numeric budget lane into the inclusive range 1..max. */
 export function clampBudget(value: number | undefined, defaultValue: number, max: number): number {
   if (value === undefined) {
     return defaultValue;

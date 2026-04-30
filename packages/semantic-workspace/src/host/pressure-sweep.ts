@@ -670,12 +670,12 @@ function buildRenameTarget(identifier: string): string {
 
 function extractIdentifierAt(text: string, offset: number): string | null {
   if (text.length === 0) return null;
-  const bounded = Math.max(0, Math.min(offset, text.length - 1));
-  let start = bounded;
+  const clampedOffset = Math.max(0, Math.min(offset, text.length - 1));
+  let start = clampedOffset;
   while (start > 0 && isIdentifierChar(text.charCodeAt(start - 1))) {
     start -= 1;
   }
-  let end = bounded;
+  let end = clampedOffset;
   while (end < text.length && isIdentifierChar(text.charCodeAt(end))) {
     end += 1;
   }

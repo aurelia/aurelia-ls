@@ -85,8 +85,8 @@ determine which member surface is visible, while leaving unsupported expression 
   definition. Argument-sensitive overload choice, `fromView`, custom expression plugins, and richer collection
   prototype semantics should stay explicit until the binding direction or plugin-specific substrate supplies the
   missing facts.
-- Synthetic union shapes are intentionally conservative: they preserve only members and secondary type references common
-  to every branch. If a future inquiry needs branch-aware completions, add an explicit answer continuation instead of
-  weakening the union product into a bag of possible names.
-- Repeat rest patterns remain intentionally conservative. A destructured local gets a type when the runtime-shaped
-  path to that local is known; rest locals stay open until the product has a precise array/object rest taxonomy.
+- Synthetic union shapes preserve only members and secondary type references common to every branch. If a future inquiry
+  needs branch-aware completions, add an explicit answer continuation instead of weakening the union product into a bag
+  of possible names.
+- Repeat rest patterns stay open until the product has a precise array/object rest taxonomy. A destructured local gets
+  a type when the runtime-shaped path to that local is known.

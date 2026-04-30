@@ -4,7 +4,8 @@ import { createServer, type Server, type Socket } from "node:net";
 import { OutcomeKind } from "../inquiry/answer.js";
 import { LensId } from "../inquiry/lens.js";
 import { RepoRootLocus } from "../inquiry/locus.js";
-import { createInMemoryAtlasApi, type InquiryRuntimeRequest } from "../inquiry/runtime/index.js";
+import { createInMemoryApi, type InquiryRuntimeRequest } from "../inquiry/runtime/index.js";
+import { createSourceProject } from "../source/index.js";
 import { readInquirySessionManifest, removeInquirySessionManifest, writeInquirySessionManifest } from "./manifest.js";
 import { resolveInquirySessionPaths } from "./paths.js";
 import {
@@ -30,7 +31,9 @@ const manifestPath = args.get("manifest") ?? paths.manifestPath;
 const buildHash = requireArg(args, "build-hash");
 const idleTtlMs = readPositiveInteger(args.get("idle-ttl-ms"), 10 * 60 * 1000);
 const heartbeatIntervalMs = readPositiveInteger(args.get("heartbeat-interval-ms"), 2_000);
-const api = createInMemoryAtlasApi();
+const api = createInMemoryApi({
+  sourceProject: createSourceProject({ repoRoot: paths.repoRoot }),
+});
 const startedAtMs = Date.now();
 let lastRequestAtMs = startedAtMs;
 let endpoint: InquirySessionEndpoint | undefined;
@@ -196,6 +199,7 @@ function createWorldSummary(): InquirySessionWorldSummary {
     substrateContracts: api.world.substrates.length,
     lensContracts: api.world.lenses.length,
     vocabularyDefinitions: api.world.vocabulary.length,
+    sourceProject: api.sourceProject.snapshot().summary,
   };
 }
 

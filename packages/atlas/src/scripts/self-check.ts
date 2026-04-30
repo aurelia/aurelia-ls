@@ -2,9 +2,10 @@ import { OutcomeKind } from "../inquiry/answer.js";
 import { LensId, LensStage } from "../inquiry/lens.js";
 import { RepoRootLocus } from "../inquiry/locus.js";
 import { RepoAreaId } from "../inquiry/terrain.js";
-import { createAtlasApi } from "../session/index.js";
+import { createApi } from "../session/index.js";
+import { SourcePackageId } from "../source/index.js";
 
-const api = createAtlasApi({ idleTtlMs: 30_000 });
+const api = createApi({ idleTtlMs: 30_000 });
 const mapAnswer = await api.map();
 const map = mapAnswer.value;
 const status = await api.status();
@@ -55,6 +56,14 @@ for (const definition of map.vocabulary) {
 
 if (!map.activeTerrain.some((area) => area.id === RepoAreaId.SemanticRuntime)) {
   throw new Error("The semantic-runtime terrain is not active.");
+}
+
+if (!status.world.sourceProject.packages.some((entry) => entry.id === SourcePackageId.Atlas && entry.sourceFileCount > 0)) {
+  throw new Error("The hot source project did not admit inquiry package source files.");
+}
+
+if (!status.world.sourceProject.packages.some((entry) => entry.id === SourcePackageId.SemanticRuntime && entry.sourceFileCount > 0)) {
+  throw new Error("The hot source project did not admit semantic-runtime source files.");
 }
 
 if (!map.contractShape.outcomes.includes(OutcomeKind.Open)) {
