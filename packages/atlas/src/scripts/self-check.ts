@@ -53,8 +53,8 @@ for (const definition of map.vocabulary) {
   vocabularyKeys.add(definition.key);
 }
 
-if (!map.activeTerrain.some((area) => area.id === RepoAreaId.SourceAnalysisAurelia)) {
-  throw new Error("The source-analysis aurelia terrain is not active.");
+if (!map.activeTerrain.some((area) => area.id === RepoAreaId.SemanticRuntime)) {
+  throw new Error("The semantic-runtime terrain is not active.");
 }
 
 if (!map.contractShape.outcomes.includes(OutcomeKind.Open)) {

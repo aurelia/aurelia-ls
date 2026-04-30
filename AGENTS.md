@@ -1,44 +1,35 @@
 # AGENTS.md
 
-## Source Analysis
+## Atlas First
 
-`packages/source-analysis/` gives you structured, queryable facts about the codebase — module dependencies, package exports, type declarations and references. It's built on the TypeScript Compiler API and emits deterministic JSON snapshots under `.source-analysis/snapshots/<target>/`. Queries read snapshots, so they're fast and stay useful even when emit is partially broken.
+For work in this repo, start by orienting through Atlas:
 
-### Quick Start
-
-```
-pnpm --filter @aurelia-ls/source-analysis build
-pnpm source-analysis refresh all
-pnpm source-analysis deps summary
-pnpm source-analysis deps packages
-pnpm source-analysis typerefs hubs
-pnpm source-analysis exports package @aurelia-ls/source-analysis
+```powershell
+pnpm --filter @aurelia-ls/atlas orient
 ```
 
-Build when tool source changes. Refresh when the codebase under analysis changes. Query anytime. `--repo <path>` targets another checkout; default is the current working directory.
+Atlas is the live self-description layer for the repo and should be treated as the first read before broad product or architecture work.
 
-### Programmatic API
+## Semantic Runtime
 
-```ts
-import { loadCurrentSnapshots } from '@aurelia-ls/source-analysis/snapshots';
-const { deps, exports, typeRefs } = loadCurrentSnapshots();
+`packages/semantic-runtime/` is the Aurelia semantic substrate. It owns the product model: kernel records, vocabulary, auLink anchors, static evaluation, resources, configuration, DI, templates, expressions, TypeChecker-backed projection, and inquiry contracts.
+
+Build it with:
+
+```powershell
+pnpm --filter @aurelia-ls/semantic-runtime build
 ```
 
-Prototype new queries in user-space against loaded snapshots before promoting them to CLI subcommands.
+Prefer strengthening `semantic-runtime` and Atlas over reintroducing snapshot/query CLI layers.
 
-### Direction
+## External Checkouts
 
-The tool targets itself — its own structure is queryable through the same surface any other TypeScript project gets. Where it's headed:
-
-- Result algebra over exceptions: every query returns a tagged result (`hit`, `miss-unknown-shape`, `ambiguous`, `reroute`) with hints and suggested continuations, so misses teach the caller what to ask next.
-- Self-healing, self-documenting surface: validators run upfront; errors are first-class AI-consumable output, not stack traces.
-- Graceful degradation: a parse-only tier should answer most deps/exports questions even when the project under analysis doesn't fully typecheck.
-- Snapshots as the contract: JSON is the stable interface; CLI and programmatic API are both just readers.
+Do not edit the external submodules `aurelia` or `aurelia2-plugins` unless the user explicitly asks.
 
 ## Commit Style
 
 - Draft an imperative single-line message such as `Add X`, `Fix X`, `Remove X`, or `Refactor X`.
 - Prefer naming the concrete capability or behavior that changed.
-- Do not overcompress the subject just to keep it short. If the you land several coequal changes and there is no single honest unifying capability, name more than one of them in the subject. Commas and `and` are fine.
+- Do not overcompress the subject just to keep it short. If you land several coequal changes and there is no single honest unifying capability, name more than one of them in the subject. Commas and `and` are fine.
 - Mention the package name only when it actually helps disambiguate the change; do not let every commit default to `Add <package name> ...` just because the package is the active surface.
 - No commit bodies beyond the first line.

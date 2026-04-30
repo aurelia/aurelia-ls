@@ -41,13 +41,13 @@
     "lint:language-server": "pnpm -w eslint \"packages/language-server/**/*.{ts,tsx,js,mjs,cjs}\"",
     "lint:compiler": "pnpm -w eslint \"packages/compiler/**/*.{ts,tsx,js,mjs,cjs}\"",
     "test": "pnpm -w build && node scripts/run-vitest.mjs",
-    "test:watch": "pnpm -w build && vitest --exclude \"packages/source-analysis/test/**\"",
+    "test:watch": "pnpm -w build && vitest",
     "pretest:vitest": "pnpm -w build",
     "test:vitest": "node scripts/run-vitest.mjs",
     "pretest:vitest:cov": "pnpm -w build",
     "test:vitest:cov": "node scripts/run-vitest.mjs --coverage",
     "test:cov": "pnpm -w build && node scripts/run-vitest.mjs --coverage",
-    "test:source-analysis": "pnpm --filter @aurelia-ls/source-analysis build",
+    "test:semantic-runtime": "pnpm --filter @aurelia-ls/semantic-runtime build",
     "test:compiler": "pnpm -w build && node scripts/run-vitest.mjs packages/compiler",
     "test:compiler:cov": "pnpm -w build && node scripts/run-vitest.mjs --coverage packages/compiler",
     "test:10-lower": "pnpm -w build && node scripts/run-vitest.mjs packages/compiler/test/10-lower",
@@ -86,8 +86,7 @@
     "test:playground": "pnpm -w build && node scripts/run-vitest.mjs --config playground/vitest.config.ts",
     "test:playground:watch": "pnpm -w build && vitest --config playground/vitest.config.ts",
     "dump:overlay": "pnpm -w build && node scripts/dump-overlays.mjs",
-    "fmt:vectors": "node scripts/fmt-json-vectors.mjs packages/compiler/test packages/compiler/test/project-semantics/routes/vectors packages/compiler/test/project-semantics/integration/expected packages/compiler/test/project-semantics/apps/explicit-app/expected-graph.json packages/compiler/test/project-semantics/apps/routed-app/expected.json packages/integration-harness/test/snapshots",
-    "source-analysis": "node packages/source-analysis/out/cli.js"
+    "fmt:vectors": "node scripts/fmt-json-vectors.mjs packages/compiler/test packages/compiler/test/project-semantics/routes/vectors packages/compiler/test/project-semantics/integration/expected packages/compiler/test/project-semantics/apps/explicit-app/expected-graph.json packages/compiler/test/project-semantics/apps/routed-app/expected.json packages/integration-harness/test/snapshots"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

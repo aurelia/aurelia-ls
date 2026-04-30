@@ -2,8 +2,8 @@
 export const enum RepoAreaId {
   /** The Atlas package itself. */
   Atlas = "atlas",
-  /** The product-semantic center of gravity currently under source-analysis. */
-  SourceAnalysisAurelia = "source-analysis-aurelia",
+  /** The product-semantic center of gravity for Aurelia semantics. */
+  SemanticRuntime = "semantic-runtime",
   /** The Aurelia framework submodule. */
   AureliaFramework = "aurelia-framework",
   /** Older packages that should stay out of the active semantic surface for now. */
@@ -81,13 +81,13 @@ export const RepoTerrain: readonly RepoArea[] = [
     summary: "Atlas package and substrate for repository-aware Codex collaboration.",
   },
   {
-    id: RepoAreaId.SourceAnalysisAurelia,
+    id: RepoAreaId.SemanticRuntime,
     kind: RepoAreaKind.Product,
     status: RepoAreaStatus.Active,
     ownership: RepoAreaOwnership.InRepo,
-    root: "packages/source-analysis/src/aurelia",
+    root: "packages/semantic-runtime/src",
     summary: "Current product-semantic center of gravity: kernel substrate, vocabulary, auLink, inquiry, DI, evaluation, template, resource, and registration work.",
-    packageIds: ["source-analysis"],
+    packageIds: ["semantic-runtime"],
   },
   {
     id: RepoAreaId.AureliaFramework,

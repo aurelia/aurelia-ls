@@ -25,7 +25,6 @@ coverage/
 .inspection-output
 .temp/
 aurelia-manifests/
-.source-analysis/
 
 # Example outputs
 examples/*-output.html

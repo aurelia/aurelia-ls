@@ -1,1 +1,0 @@
-export { AppRoot } from './logger';
