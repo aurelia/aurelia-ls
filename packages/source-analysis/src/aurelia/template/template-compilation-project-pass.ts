@@ -1,28 +1,29 @@
-import type { AureliaAppWorldEmission } from '../configuration/app-world-producer.js';
+import type { AureliaAppWorldEmission } from '../configuration/app-world-composer.js';
 import {
   CustomElementDefinition,
   CustomElementTemplateKind,
 } from '../resources/custom-element-definition.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { KernelStore } from '../kernel/store.js';
+import type { TypeSystemProject } from '../type-system/project.js';
 import {
   AttributeClassificationInput,
-  AttributeClassificationProducer,
+  AttributeClassificationMaterializer,
   type AttributeClassificationEmission,
-} from './attribute-classification-producer.js';
+} from './attribute-classification-materializer.js';
 import {
   AttributeSyntaxParseInput,
-  AttributeSyntaxProducer,
+  AttributeSyntaxMaterializer,
   type AttributeSyntaxParseEmission,
-} from './attribute-syntax-producer.js';
+} from './attribute-syntax-materializer.js';
 import type {
   TemplateCompilerWorldEmission,
-} from './compiler-world-producer.js';
+} from './compiler-world-materializer.js';
 import {
   TemplateCompilationUnitConstructionInput,
-  TemplateCompilationUnitProducer,
+  TemplateCompilationUnitMaterializer,
   type TemplateCompilationUnitEmission,
-} from './compilation-unit-producer.js';
+} from './compilation-unit-materializer.js';
 import {
   TemplateCompilationUnitKind,
   TemplateSourceKind,
@@ -30,19 +31,34 @@ import {
 } from './compilation-unit.js';
 import {
   HtmlParseInput,
-  HtmlParserProducer,
+  HtmlParseMaterializer,
   type HtmlParseEmission,
-} from './html-parser-producer.js';
+} from './html-parse-materializer.js';
 import {
   TemplateValueSiteInput,
-  TemplateValueSiteProducer,
+  TemplateValueSiteMaterializer,
   type TemplateValueSiteEmission,
-} from './value-site-producer.js';
+} from './value-site-materializer.js';
 import {
   BindingCommandLoweringInput,
-  BindingCommandLoweringProducer,
+  BindingCommandLoweringMaterializer,
   type BindingCommandLoweringEmission,
-} from './binding-command-lowering-producer.js';
+} from './binding-command-lowering-materializer.js';
+import {
+  CompiledTemplateMaterializationInput,
+  CompiledTemplateMaterializer,
+  type CompiledTemplateEmission,
+} from './compiled-template-materializer.js';
+import {
+  RuntimeRenderingMaterializationInput,
+  RuntimeRenderingMaterializer,
+  type RuntimeRenderingEmission,
+} from './runtime-rendering-materializer.js';
+import {
+  TemplateControllerScopeMaterializer,
+  TemplateScopeConstructionInput,
+  type TemplateScopeConstructionEmission,
+} from './template-controller-scope-materializer.js';
 
 /** Front-door template products produced for one compiler-visible custom element definition. */
 export class TemplateResourceCompilationEmission {
@@ -63,6 +79,12 @@ export class TemplateResourceCompilationEmission {
     readonly valueSites: TemplateValueSiteEmission,
     /** Binding-command build inputs, command-owned parser publications, and instruction products. */
     readonly bindingCommandLowering: BindingCommandLoweringEmission,
+    /** Compiled template handoff: render targets, instruction rows, and visible compiler gaps. */
+    readonly compiledTemplate: CompiledTemplateEmission,
+    /** Runtime renderer emulation over compiled-template target rows. */
+    readonly runtimeRendering: RuntimeRenderingEmission,
+    /** Checker-backed binding scopes derived from controller/rendering scope effects. */
+    readonly scopes: TemplateScopeConstructionEmission,
   ) {}
 }
 
@@ -81,30 +103,40 @@ export class TemplateCompilationProjectEmission {
  *
  * This pass establishes the route from converged resource definitions through compiler-world selection into
  * compilation units, authored HTML, runtime-shaped attribute syntax, attribute classification, compiler-owned
- * value-site selection, and binding-command lowering. It still stops before element/controller lowering, multi-binding
- * lowering, and final instruction sequence assembly.
+ * value-site selection, binding-command lowering, compiled-template row assembly, runtime Rendering dispatch, and
+ * TypeChecker-backed binding-scope projection. Remaining compiler gaps stay visible as open seams at the materializer
+ * that exposed them.
  */
 export class TemplateCompilationProjectPass {
-  private readonly unitProducer: TemplateCompilationUnitProducer;
-  private readonly htmlParser: HtmlParserProducer;
-  private readonly attributeSyntax: AttributeSyntaxProducer;
-  private readonly attributeClassification: AttributeClassificationProducer;
-  private readonly valueSites: TemplateValueSiteProducer;
-  private readonly bindingCommandLowering: BindingCommandLoweringProducer;
+  private readonly unitMaterializer: TemplateCompilationUnitMaterializer;
+  private readonly htmlParser: HtmlParseMaterializer;
+  private readonly attributeSyntax: AttributeSyntaxMaterializer;
+  private readonly attributeClassification: AttributeClassificationMaterializer;
+  private readonly valueSites: TemplateValueSiteMaterializer;
+  private readonly bindingCommandLowering: BindingCommandLoweringMaterializer;
+  private readonly compiledTemplate: CompiledTemplateMaterializer;
+  private readonly runtimeRendering: RuntimeRenderingMaterializer;
+  private readonly templateScopes: TemplateControllerScopeMaterializer;
 
   constructor(
-    /** Hot analysis store shared by child producers. */
+    /** Hot analysis store shared by child materializers. */
     readonly store: KernelStore,
   ) {
-    this.unitProducer = new TemplateCompilationUnitProducer(store);
-    this.htmlParser = new HtmlParserProducer(store);
-    this.attributeSyntax = new AttributeSyntaxProducer(store);
-    this.attributeClassification = new AttributeClassificationProducer(store);
-    this.valueSites = new TemplateValueSiteProducer(store);
-    this.bindingCommandLowering = new BindingCommandLoweringProducer(store);
+    this.unitMaterializer = new TemplateCompilationUnitMaterializer(store);
+    this.htmlParser = new HtmlParseMaterializer(store);
+    this.attributeSyntax = new AttributeSyntaxMaterializer(store);
+    this.attributeClassification = new AttributeClassificationMaterializer(store);
+    this.valueSites = new TemplateValueSiteMaterializer(store);
+    this.bindingCommandLowering = new BindingCommandLoweringMaterializer(store);
+    this.compiledTemplate = new CompiledTemplateMaterializer(store);
+    this.runtimeRendering = new RuntimeRenderingMaterializer(store);
+    this.templateScopes = new TemplateControllerScopeMaterializer(store);
   }
 
-  compile(appWorld: AureliaAppWorldEmission): TemplateCompilationProjectEmission {
+  compile(
+    appWorld: AureliaAppWorldEmission,
+    typeSystem: TypeSystemProject | null = null,
+  ): TemplateCompilationProjectEmission {
     const resources: TemplateResourceCompilationEmission[] = [];
 
     appWorld.compilerWorlds.forEach((compilerWorld, worldIndex) => {
@@ -127,7 +159,7 @@ export class TemplateCompilationProjectPass {
           definition.sourceAddressHandle,
         );
         const sourceAddressHandle = definition.template?.addressHandle ?? definition.sourceAddressHandle;
-        const unit = this.unitProducer.construct(new TemplateCompilationUnitConstructionInput(
+        const unit = this.unitMaterializer.construct(new TemplateCompilationUnitConstructionInput(
           localKey,
           TemplateCompilationUnitKind.CustomElement,
           compilerWorld,
@@ -135,6 +167,7 @@ export class TemplateCompilationProjectPass {
           sourceKind,
           definition.template?.markup ?? null,
           sourceAddressHandle,
+          definition.template?.sourceMap ?? null,
         ));
         const html = this.htmlParser.parse(new HtmlParseInput(
           localKey,
@@ -155,7 +188,7 @@ export class TemplateCompilationProjectPass {
           attributeSyntax,
           compilerWorld,
         ));
-        const valueSites = this.valueSites.produce(new TemplateValueSiteInput(
+        const valueSites = this.valueSites.materialize(new TemplateValueSiteInput(
           localKey,
           unit.compilationUnit,
           html,
@@ -172,6 +205,30 @@ export class TemplateCompilationProjectPass {
           valueSites,
           compilerWorld,
         ));
+        const compiledTemplate = this.compiledTemplate.materialize(new CompiledTemplateMaterializationInput(
+          localKey,
+          unit.compilationUnit,
+          html,
+          attributeSyntax,
+          attributeClassification,
+          valueSites,
+          bindingCommandLowering,
+          compilerWorld,
+        ));
+        const runtimeRendering = this.runtimeRendering.materialize(new RuntimeRenderingMaterializationInput(
+          localKey,
+          definition,
+          compiledTemplate,
+          compilerWorld,
+        ));
+        const scopes = this.templateScopes.construct(new TemplateScopeConstructionInput(
+          localKey,
+          definition,
+          compiledTemplate,
+          runtimeRendering,
+          typeSystem,
+          compilerWorld.resourceScope,
+        ));
 
         resources.push(new TemplateResourceCompilationEmission(
           compilerWorld,
@@ -182,6 +239,9 @@ export class TemplateCompilationProjectPass {
           attributeClassification,
           valueSites,
           bindingCommandLowering,
+          compiledTemplate,
+          runtimeRendering,
+          scopes,
         ));
       });
     });

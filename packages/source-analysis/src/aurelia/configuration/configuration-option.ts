@@ -221,7 +221,7 @@ export type ConfigurationOptionValue =
  * One source-backed contribution to a configuration option path.
  *
  * This intentionally does not decide final option precedence. Configuration convergence can fold ordered
- * contributions once a producer knows the configuration object's runtime policy.
+ * contributions once a materializer knows the configuration object's runtime policy.
  */
 export class ConfigurationOptionContribution {
   constructor(

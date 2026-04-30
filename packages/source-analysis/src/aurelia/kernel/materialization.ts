@@ -38,7 +38,7 @@ export type MaterializationOwnerHandle = IdentityHandle | AddressHandle;
  * Concrete product envelope produced by a materialization phase.
  *
  * This envelope deliberately does not carry arbitrary product payload. Rich
- * product details live in producer-owned domain objects today and should move
+ * product details live in domain-owned objects today and should move
  * into typed product-detail records or catalogs when durable inquiry expansion
  * needs them. Do not use this record as a shortcut for unmodeled semantics.
  */
@@ -57,7 +57,7 @@ export class MaterializedProduct {
     readonly addressHandle: AddressHandle | null,
     /** Provenance handle explaining why this product exists. */
     readonly provenanceHandle: ProvenanceHandle,
-    /** Claim handles asserted by or about this product. */
+    /** Claim handles whose subject or object is this product, its identity, or its address. */
     readonly claimHandles: readonly ClaimHandle[] = [],
   ) {}
 }

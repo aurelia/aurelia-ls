@@ -27,7 +27,8 @@ export type BindableDefinitionField =
   | 'callback'
   | 'mode'
   | 'name'
-  | 'set';
+  | 'set'
+  | 'source';
 
 export class BindableSetterDefinition {
   constructor(
@@ -44,6 +45,8 @@ export class BindableDefinition {
     readonly mode: BindableBindingMode,
     readonly name: string,
     readonly set: BindableSetterDefinition,
+    /** Source address for the bindable declaration or metadata entry, when known. */
+    readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BindableDefinitionField>[] = [],
   ) {}
 }
@@ -81,6 +84,8 @@ export class BindableDefinitionContribution {
     readonly mode: BindableBindingMode | null,
     readonly name: string | null,
     readonly set: BindableSetterDefinition | null,
+    /** Source address for this contribution, when known. */
+    readonly sourceAddressHandle: AddressHandle | null = null,
     readonly fieldProvenance: readonly FieldProvenance<BindableDefinitionField>[] = [],
   ) {}
 }

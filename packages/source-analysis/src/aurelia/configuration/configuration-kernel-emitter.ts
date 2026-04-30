@@ -273,7 +273,7 @@ export class ConfigurationKernelEmitter {
     );
     records.push(...source.records);
 
-    const appFrame = this.recordsForAppFrame(context, observation, local, source.provenanceHandle);
+    const appFrame = this.recordsForAppFrame(context, observation, local, source.provenanceHandle, resources);
     if (appFrame != null) {
       records.push(...appFrame.records);
     }
@@ -397,15 +397,27 @@ export class ConfigurationKernelEmitter {
     const openSeams = this.recordsForOpenSeams(context, observation.openSeams, `configuration-step:${local}`);
     records.push(...openSeams.records);
 
+    const appProducedProductHandles = productHandlesForAppStep(observation, appFrame);
     const appTaskEmissions: AppTaskEmission[] = [];
     for (const [appTaskIndex, appTask] of observation.appTasks.entries()) {
-      const appTaskEmission = this.recordsForAppTask(context, appTask, `${local}:app-task:${appTaskIndex}`);
+      const appTaskEmission = this.recordsForAppTask(
+        context,
+        appTask,
+        `${local}:app-task:${appTaskIndex}`,
+        [this.stepProductClaimHandle(local, appProducedProductHandles.length + appTaskIndex)],
+      );
       records.push(...appTaskEmission.records);
       appTaskEmissions.push(appTaskEmission);
     }
 
+    const optionBaseIndex = appProducedProductHandles.length + observation.appTasks.length;
     const optionEmissions = observation.optionContributions.map((contribution, optionIndex) =>
-      this.recordsForOptionContribution(context, contribution, `${local}:option:${optionIndex}`)
+      this.recordsForOptionContribution(
+        context,
+        contribution,
+        `${local}:option:${optionIndex}`,
+        [this.stepProductClaimHandle(local, optionBaseIndex + optionIndex)],
+      )
     );
     for (const emission of optionEmissions) {
       records.push(...emission.records);
@@ -421,7 +433,7 @@ export class ConfigurationKernelEmitter {
     records.push(...registrationEmission.records);
 
     const producedProductHandles = [
-      ...productHandlesForAppStep(observation, appFrame),
+      ...appProducedProductHandles,
       ...appTaskEmissions.map((emission) => emission.task.productHandle),
       ...optionEmissions.map((emission) => emission.contribution.productHandle),
     ];
@@ -507,6 +519,7 @@ export class ConfigurationKernelEmitter {
     observation: ConfigurationSequenceObservation,
     sequenceLocal: string,
     provenanceHandle: ProvenanceHandle,
+    resources: ResourceDefinitionIndex | null,
   ): AppFrame | null {
     const appStep = observation.steps.find((step) =>
       step.stepKind === ConfigurationStepKind.CreateAurelia
@@ -543,36 +556,20 @@ export class ConfigurationKernelEmitter {
       [],
       ContainerConfiguration.DEFAULT,
     );
-    records.push(
-      new ContainerIdentity(
-        containerIdentityHandle,
-        IdentityStability.SourceStable,
-        ContainerIdentityKind.Root,
-        null,
-        null,
-        source.addressHandle,
-        appStep.receiverLocalName,
-      ),
-      new MaterializedProduct(
-        containerProductHandle,
-        KernelVocabulary.Di.Container.key,
-        containerIdentityHandle,
-        source.addressHandle,
-        source.provenanceHandle,
-      ),
-      new MaterializationRecord(
-        this.store.handles.materialization(`di-container:${appLocal}`),
-        DerivationPhase.Materialization,
-        containerIdentityHandle,
-        MaterializationState.Complete,
-        [containerProductHandle],
-      ),
-    );
 
     const appRootConfigObservation = observation.steps.find((step) => step.appRootConfig != null)?.appRootConfig ?? null;
+    const appRootConfigClaimHandle = appRootConfigObservation == null
+      ? null
+      : this.store.handles.claim(`configuration-app-root:${appLocal}:uses-config`);
     const appRootConfig = appRootConfigObservation == null
       ? null
-      : this.recordsForAppRootConfig(context, appRootConfigObservation, appLocal);
+      : this.recordsForAppRootConfig(
+        context,
+        appRootConfigObservation,
+        appLocal,
+        appRootConfigClaimHandle == null ? [] : [appRootConfigClaimHandle],
+        resources,
+      );
     if (appRootConfig != null) {
       records.push(...appRootConfig.records);
     }
@@ -599,7 +596,62 @@ export class ConfigurationKernelEmitter {
           new FieldProvenance('source', source.provenanceHandle),
         ]),
       );
+
+    const aureliaProductHandle = this.store.handles.product(`configuration-aurelia:${appLocal}`);
+    const aureliaIdentityHandle = this.store.handles.identity(`configuration-aurelia:${appLocal}`);
+    const appClaims = this.recordsForAureliaClaims(
+      appLocal,
+      aureliaProductHandle,
+      containerProductHandle,
+      appRoot?.productHandle ?? null,
+      provenanceHandle,
+    );
+    records.push(...appClaims.records);
+    const appRootUsesConfigClaim = appRoot == null || appRootConfig == null || appRootConfigClaimHandle == null
+      ? null
+      : new SemanticClaim(
+        appRootConfigClaimHandle,
+        appRoot.productHandle,
+        KernelVocabulary.Configuration.AppRootUsesConfig.key,
+        appRootConfig.productHandle,
+        provenanceHandle,
+      );
+    if (appRootUsesConfigClaim != null) {
+      records.push(appRootUsesConfigClaim);
+    }
+    const containerClaimHandles = claimHandlesForProduct(appClaims.records, containerProductHandle);
+    records.push(
+      new ContainerIdentity(
+        containerIdentityHandle,
+        IdentityStability.SourceStable,
+        ContainerIdentityKind.Root,
+        null,
+        null,
+        source.addressHandle,
+        appStep.receiverLocalName,
+      ),
+      new MaterializedProduct(
+        containerProductHandle,
+        KernelVocabulary.Di.Container.key,
+        containerIdentityHandle,
+        source.addressHandle,
+        source.provenanceHandle,
+        containerClaimHandles,
+      ),
+      new MaterializationRecord(
+        this.store.handles.materialization(`di-container:${appLocal}`),
+        DerivationPhase.Materialization,
+        containerIdentityHandle,
+        MaterializationState.Complete,
+        [containerProductHandle],
+        containerClaimHandles,
+      ),
+    );
     if (appRoot != null) {
+      const appRootClaimHandles = [
+        ...claimHandlesForProduct(appClaims.records, appRoot.productHandle),
+        ...(appRootUsesConfigClaim == null ? [] : [appRootUsesConfigClaim.handle]),
+      ];
       records.push(
         new ConfigurationIdentity(
           appRoot.identityHandle,
@@ -615,6 +667,7 @@ export class ConfigurationKernelEmitter {
           appRoot.identityHandle,
           appRoot.sourceAddressHandle,
           provenanceHandle,
+          appRootClaimHandles,
         ),
         new MaterializationRecord(
           this.store.handles.materialization(`configuration-app-root:${appLocal}`),
@@ -622,20 +675,10 @@ export class ConfigurationKernelEmitter {
           appRoot.identityHandle,
           MaterializationState.Complete,
           [appRoot.productHandle],
+          appRootClaimHandles,
         ),
       );
     }
-
-    const aureliaProductHandle = this.store.handles.product(`configuration-aurelia:${appLocal}`);
-    const aureliaIdentityHandle = this.store.handles.identity(`configuration-aurelia:${appLocal}`);
-    const appClaims = this.recordsForAureliaClaims(
-      appLocal,
-      aureliaProductHandle,
-      containerProductHandle,
-      appRoot?.productHandle ?? null,
-      provenanceHandle,
-    );
-    records.push(...appClaims.records);
     const aurelia = new Aurelia(
       aureliaProductHandle,
       aureliaIdentityHandle,
@@ -697,6 +740,8 @@ export class ConfigurationKernelEmitter {
     context: ConfigurationRecognitionContext,
     observation: AppRootConfigObservation,
     local: string,
+    claimHandles: readonly ClaimHandle[],
+    resources: ResourceDefinitionIndex | null,
   ): {
     readonly records: readonly KernelStoreRecord[];
     readonly productHandle: ProductHandle;
@@ -733,7 +778,7 @@ export class ConfigurationKernelEmitter {
 
     const component = observation.component == null
       ? null
-      : this.recordsForTarget(context, observation.component, `configuration-app-root-config:${local}:component`);
+      : this.recordsForTarget(context, observation.component, `configuration-app-root-config:${local}:component`, resources);
     if (component != null) {
       records.push(...component.records);
     }
@@ -770,6 +815,7 @@ export class ConfigurationKernelEmitter {
         identityHandle,
         source.addressHandle,
         source.provenanceHandle,
+        claimHandles,
       ),
       new MaterializationRecord(
         this.store.handles.materialization(`configuration-app-root-config:${local}`),
@@ -786,6 +832,7 @@ export class ConfigurationKernelEmitter {
     context: ConfigurationRecognitionContext,
     observation: AppTaskObservation,
     local: string,
+    claimHandles: readonly ClaimHandle[],
   ): AppTaskEmission {
     const records: KernelStoreRecord[] = [];
     const source = this.recordsForSource(
@@ -846,6 +893,7 @@ export class ConfigurationKernelEmitter {
         identityHandle,
         source.addressHandle,
         source.provenanceHandle,
+        claimHandles,
       ),
       new MaterializationRecord(
         this.store.handles.materialization(`configuration-app-task:${local}`),
@@ -865,6 +913,7 @@ export class ConfigurationKernelEmitter {
     context: ConfigurationRecognitionContext,
     observation: ConfigurationOptionContributionObservation,
     local: string,
+    claimHandles: readonly ClaimHandle[],
   ): OptionContributionEmission {
     const records: KernelStoreRecord[] = [];
     const source = this.recordsForSource(
@@ -914,6 +963,7 @@ export class ConfigurationKernelEmitter {
         identityHandle,
         source.addressHandle,
         source.provenanceHandle,
+        claimHandles,
       ),
       new MaterializationRecord(
         this.store.handles.materialization(`configuration-option:${local}`),
@@ -1096,6 +1146,7 @@ export class ConfigurationKernelEmitter {
     context: ConfigurationRecognitionContext,
     observation: import('./configuration-observation.js').ConfigurationTargetObservation,
     local: string,
+    resources: ResourceDefinitionIndex | null,
   ): {
     readonly records: readonly KernelStoreRecord[];
     readonly target: ResourceTargetReference;
@@ -1112,10 +1163,15 @@ export class ConfigurationKernelEmitter {
       SourceSpanRole.Value,
     );
     const records: KernelStoreRecord[] = [...source.records];
-    const identityHandle = observation.isDeclaration && observation.localName != null
-      ? this.store.handles.identity(local)
+    const definition = resources != null && ts.isExpression(observation.node)
+      ? resources.lookupExpression(observation.node, context.expressionReader)
       : null;
-    if (identityHandle != null) {
+    const identityHandle = definition?.target.identityHandle
+      ?? (observation.isDeclaration && observation.localName != null
+      ? this.store.handles.identity(local)
+      : null);
+    const shouldEmitIdentity = definition == null && identityHandle != null;
+    if (shouldEmitIdentity) {
       records.push(new TypeScriptDeclarationIdentity(
         identityHandle,
         IdentityStability.SourceStable,
@@ -1127,7 +1183,12 @@ export class ConfigurationKernelEmitter {
     }
     return {
       records,
-      target: new ResourceTargetReference(identityHandle, source.addressHandle, observation.localName),
+      target: new ResourceTargetReference(
+        identityHandle,
+        source.addressHandle,
+        observation.localName,
+        definition?.target.targetType ?? null,
+      ),
       provenanceHandle: source.provenanceHandle,
     };
   }
@@ -1288,7 +1349,7 @@ export class ConfigurationKernelEmitter {
     const records: KernelStoreRecord[] = [];
     const handles: ClaimHandle[] = [];
     producedProductHandles.forEach((productHandle, index) => {
-      const claimHandle = this.store.handles.claim(`configuration-step-produces-product:${local}:${index}`);
+      const claimHandle = this.stepProductClaimHandle(local, index);
       handles.push(claimHandle);
       records.push(new SemanticClaim(
         claimHandle,
@@ -1310,6 +1371,10 @@ export class ConfigurationKernelEmitter {
       ));
     });
     return { records, handles };
+  }
+
+  private stepProductClaimHandle(local: string, index: number): ClaimHandle {
+    return this.store.handles.claim(`configuration-step-produces-product:${local}:${index}`);
   }
 }
 
@@ -1356,6 +1421,16 @@ function productHandlesForAppStep(
     case ConfigurationStepKind.Unknown:
       return [];
   }
+}
+
+function claimHandlesForProduct(
+  records: readonly KernelStoreRecord[],
+  productHandle: ProductHandle,
+): readonly ClaimHandle[] {
+  return records
+    .filter((record): record is SemanticClaim => record.kind === 'semantic-claim')
+    .filter((claim) => claim.subjectHandle === productHandle || claim.objectHandle === productHandle)
+    .map((claim) => claim.handle);
 }
 
 function enrichAppTaskRegistration(

@@ -51,7 +51,7 @@ export class RegistrationValueObservation {
     readonly node: ts.Node,
     /** Whether the node is an actual declaration/name site rather than only a reference expression. */
     readonly isDeclaration: boolean,
-    /** Product handle when another producer already materialized this value. */
+    /** Product handle when another layer already materialized this value. */
     readonly productHandle: ProductHandle | null = null,
     /** Known framework registration effect package, when the source value is recognized. */
     readonly frameworkKind: FrameworkRegistrationKind | null = null,

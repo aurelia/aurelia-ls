@@ -17,8 +17,8 @@ import {
   ResourceTargetObservation,
 } from './resource-observation.js';
 
-/** Combined producer for resources that alter syntax recognition rather than ordinary resource lookup alone. */
-export class SyntaxResourceRecognitionProducer {
+/** Combined recognizer for resources that alter syntax recognition rather than ordinary resource lookup alone. */
+export class SyntaxResourceRecognizer {
   recognize(context: ResourceRecognitionContext): readonly ResourceRecognitionObservation[] {
     return recognizeAttributePatterns(context);
   }

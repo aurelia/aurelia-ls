@@ -48,7 +48,7 @@ export class Aurelia {
     readonly rootProviderProductHandle: ProductHandle | null,
     /** App root produced by `.app(...)` but not necessarily started. */
     readonly pendingRoot: AppRootReference | null,
-    /** Root that has been prepared by start-like analysis, if that later producer runs. */
+    /** Root that has been prepared by start-like analysis, if that later pass runs. */
     readonly activeRoot: AppRootReference | null,
     /** Source address for the constructor or static app admission expression. */
     readonly sourceAddressHandle: AddressHandle | null,

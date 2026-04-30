@@ -6,7 +6,6 @@ import {
   EvidenceRole,
 } from '../kernel/evidence.js';
 import type {
-  ClaimHandle,
   ProductHandle,
   ProvenanceHandle,
 } from '../kernel/handles.js';
@@ -31,10 +30,7 @@ import {
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
-import {
-  KernelVocabulary,
-  type ProductKindKey,
-} from '../kernel/vocabulary.js';
+import { KernelVocabulary } from '../kernel/vocabulary.js';
 import { CustomElementCaptureKind } from '../resources/custom-element-definition.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import {
@@ -43,13 +39,13 @@ import {
   type AttributeClassificationField,
   type AttributeSyntax,
 } from './attribute-syntax.js';
-import type { AttributeSyntaxParseEmission } from './attribute-syntax-producer.js';
+import type { AttributeSyntaxParseEmission } from './attribute-syntax-materializer.js';
 import type {
   TemplateBindableReference,
   TemplateResolvedResource,
   TemplateVisibleResource,
 } from './compiler-world.js';
-import type { TemplateCompilerWorldEmission } from './compiler-world-producer.js';
+import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
 import type { TemplateCompilationUnit } from './compilation-unit.js';
 import {
   HtmlAttribute,
@@ -57,7 +53,8 @@ import {
   HtmlIrNodeKind,
   HtmlNodeReference,
 } from './html-ir.js';
-import type { HtmlParseEmission } from './html-parser-producer.js';
+import type { HtmlParseEmission } from './html-parse-materializer.js';
+import { TemplateProductDetails } from './product-details.js';
 
 export class AttributeClassificationInput {
   constructor(
@@ -107,7 +104,7 @@ class ClassificationDecision {
 }
 
 /** Classifies runtime AttrSyntax against the compiler world's resource and command resolvers. */
-export class AttributeClassificationProducer {
+export class AttributeClassificationMaterializer {
   constructor(
     /** Hot analysis store that receives attribute classification records. */
     readonly store: KernelStore,
@@ -117,6 +114,13 @@ export class AttributeClassificationProducer {
     const emission = this.recordsForClassification(input);
     if (emission.records.length > 0) {
       this.store.commit(new KernelStoreBatch(emission.records, `attribute-classification:${input.localKey}`));
+    }
+    for (const classification of emission.classifications) {
+      this.store.productDetails.add(
+        TemplateProductDetails.AttributeClassification,
+        classification.productHandle,
+        classification,
+      );
     }
     return emission;
   }
@@ -195,13 +199,13 @@ export class AttributeClassificationProducer {
           syntax.sourceAddressHandle,
           syntax.rawName,
         ),
-        product(
+        new MaterializedProduct(
           productHandle,
           KernelVocabulary.Template.AttributeClassification.key,
           identityHandle,
-          syntax,
-          source,
-          claimsForSubject(claims, productHandle).map((claim) => claim.handle),
+          syntax.sourceAddressHandle,
+          source.provenanceHandle,
+          claimsForProduct(claims, productHandle).map((claim) => claim.handle),
         ),
       );
     });
@@ -433,27 +437,12 @@ function openDecision(
   return new ClassificationDecision(AttributeClassificationKind.Open, null, null, bindingCommand, null);
 }
 
-function product(
-  handle: ProductHandle,
-  productKind: ProductKindKey,
-  identityHandle: AttributeClassification['identityHandle'],
-  syntax: AttributeSyntax,
-  source: AttributeClassificationSourceSet,
-  claimHandles: readonly ClaimHandle[] = [],
-): MaterializedProduct {
-  return new MaterializedProduct(
-    handle,
-    productKind,
-    identityHandle,
-    syntax.sourceAddressHandle,
-    source.provenanceHandle,
-    claimHandles,
-  );
-}
-
-function claimsForSubject(
+function claimsForProduct(
   claims: readonly SemanticClaim[],
-  subjectHandle: ProductHandle,
+  productHandle: ProductHandle,
 ): readonly SemanticClaim[] {
-  return claims.filter((claim) => claim.subjectHandle === subjectHandle);
+  return claims.filter((claim) =>
+    claim.subjectHandle === productHandle
+    || claim.objectHandle === productHandle
+  );
 }

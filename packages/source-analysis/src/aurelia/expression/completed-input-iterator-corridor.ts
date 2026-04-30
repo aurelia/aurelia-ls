@@ -5,7 +5,6 @@ import {
   BindingPatternDefault,
   BindingPatternHole,
   ForOfStatement,
-  Identifier,
   ObjectBindingPattern,
   ObjectBindingPatternProperty,
 } from './ast.js';
@@ -41,8 +40,6 @@ import { ParseFailureInspector } from './parse-failure-inspection.js';
 import {
   isParseCompanionFailure,
   isParseFailure,
-  type ParseCompanionFailure,
-  type ParseFailure,
   type ParseOutcome,
 } from './parse-failure.js';
 

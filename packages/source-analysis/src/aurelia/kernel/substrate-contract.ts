@@ -35,6 +35,8 @@ export const enum KernelPreservationChannel {
   Product = 'product',
   /** Channel for current-world source spans and AST-backed source loci. */
   SourceSpan = 'source-span',
+  /** Channel for current TypeScript Program/checker epoch carriers. */
+  TypeChecker = 'type-checker',
 }
 
 /** Product-owned preservation channel carriers for substrate lenses. */
@@ -94,6 +96,11 @@ export const KernelPreservationChannels = {
     carriers: ['SourceSpanAddress', 'SourceSpanRole', 'sourceNode', 'ts.Node'],
     summary: 'Current-world source span and AST carriers used for navigation and explanation.',
   },
+  TypeChecker: {
+    channel: KernelPreservationChannel.TypeChecker,
+    carriers: ['ts.TypeChecker', 'ts.Type', 'ts.Symbol', 'CheckerTypeCarrier', 'CheckerTypeMemberCarrier', 'checker'],
+    summary: 'Current TypeScript Program/checker epoch carriers retained by hot product details rather than durable kernel records.',
+  },
 } as const;
 
 export const enum KernelSubstrateModelSurface {
@@ -113,10 +120,14 @@ export const enum KernelSubstrateModelSurface {
   EvaluationModuleGraph = 'evaluation-module-graph',
   /** Static evaluator runtime-like abstract values. */
   EvaluationValue = 'evaluation-value',
-  /** Static evaluator open-seam records and kernel bridge. */
+  /** Static evaluator open-seam records and one-way kernel emitter. */
   EvaluationSeam = 'evaluation-seam',
   /** Static evaluator readers, host adapters, and evaluator entrypoints. */
   EvaluationSupport = 'evaluation-support',
+  /** Type-system type and member projection models. */
+  TypeSystemShape = 'type-system-shape',
+  /** Type-system projection materializers and hot checker carriers. */
+  TypeSystemProjection = 'type-system-projection',
   /** Aurelia app admission, app-root, and root configuration models. */
   ConfigurationApp = 'configuration-app',
   /** Ordered configuration flow, steps, and option contribution models. */
@@ -125,13 +136,15 @@ export const enum KernelSubstrateModelSurface {
   ConfigurationAppTask = 'configuration-app-task',
   /** Controller ontology used to connect app roots, containers, resources, and template phases. */
   ConfigurationController = 'configuration-controller',
+  /** Runtime binding-scope ontology used by controllers, expressions, and binding lookup. */
+  ConfigurationBindingScope = 'configuration-binding-scope',
   /** Configuration recognition observations before kernel product materialization. */
   ConfigurationObservation = 'configuration-observation',
-  /** Configuration recognition producers, context, and pass orchestration. */
+  /** Configuration recognizers, context, and pass orchestration. */
   ConfigurationRecognition = 'configuration-recognition',
-  /** Configuration producer support that emits kernel records for recognized configuration flow. */
+  /** Configuration emission support that materializes recognized configuration flow. */
   ConfigurationEmission = 'configuration-emission',
-  /** App-world producer composition across configuration, DI, and compiler-world handoff. */
+  /** App-world composition across configuration, DI, and compiler-world handoff. */
   ConfigurationAppWorld = 'configuration-app-world',
   /** DI container models and references. */
   DiContainer = 'di-container',
@@ -147,7 +160,7 @@ export const enum KernelSubstrateModelSurface {
   DiOperation = 'di-operation',
   /** DI container-owned resolver, resource, and factory slots. */
   DiSlot = 'di-slot',
-  /** DI world construction producers that spend configuration-owned registrations into container products. */
+  /** DI world construction that spends configuration-owned registrations into container products. */
   DiWorldConstruction = 'di-world-construction',
   /** Aurelia expression AST nodes. */
   ExpressionAst = 'expression-ast',
@@ -161,13 +174,13 @@ export const enum KernelSubstrateModelSurface {
   ResourceContribution = 'resource-contribution',
   /** Resource recognition observations before definition materialization. */
   ResourceObservation = 'resource-observation',
-  /** Resource recognition producers and pass orchestration. */
+  /** Resource recognizers and pass orchestration. */
   ResourceRecognition = 'resource-recognition',
-  /** Resource definition convergence producers that materialize full metadata definitions from headers. */
+  /** Resource definition convergers that materialize full metadata definitions from headers. */
   ResourceConvergence = 'resource-convergence',
   /** Resource target, alias, dependency, and instruction references. */
   ResourceReference = 'resource-reference',
-  /** Framework-owned built-in resource catalogs and header producers. */
+  /** Framework-owned built-in resource catalogs and header materializers. */
   ResourceBuiltInCatalog = 'resource-built-in-catalog',
   /** Normalized registration admission records. */
   RegistrationAdmission = 'registration-admission',
@@ -175,9 +188,9 @@ export const enum KernelSubstrateModelSurface {
   RegistrationObservation = 'registration-observation',
   /** Registration key and value references before DI world construction. */
   RegistrationReference = 'registration-reference',
-  /** Registration producer support that emits kernel records for admission observations. */
+  /** Registration emission support that materializes admission observations. */
   RegistrationEmission = 'registration-emission',
-  /** Registration recognition producers and pass orchestration. */
+  /** Registration recognizers and pass orchestration. */
   RegistrationRecognition = 'registration-recognition',
   /** Template parse contexts carrying inquiry pressure into parsers and lowering. */
   TemplateParseContext = 'template-parse-context',
@@ -193,10 +206,20 @@ export const enum KernelSubstrateModelSurface {
   TemplateValueSites = 'template-value-sites',
   /** Binding-command executable, resolver, build-input, and lowering products. */
   TemplateBindingCommandExecution = 'template-binding-command-execution',
+  /** Compiled template handoff: transformed-template rows, render targets, and instruction sequences. */
+  TemplateCompiledTemplate = 'template-compiled-template',
   /** Framework-provided syntax resource catalogs for template compiler worlds. */
   TemplateBuiltInSyntax = 'template-built-in-syntax',
+  /** Framework-provided runtime renderer catalogs and renderer products for template compiler worlds. */
+  TemplateRuntimeRenderer = 'template-runtime-renderer',
   /** Lowered rendering instruction products. */
   TemplateInstructionIr = 'template-instruction-ir',
+  /** Runtime binding instances and binding-owned scope effects emulated from renderer semantics. */
+  TemplateRuntimeBinding = 'template-runtime-binding',
+  /** Template binding-scope construction from controller, repeat, let, and TypeChecker facts. */
+  TemplateScope = 'template-scope',
+  /** Router configuration, route, context, instruction, and built-in resource model anchors. */
+  RouterModel = 'router-model',
 }
 
 /**
@@ -233,6 +256,7 @@ export const KernelSubstrateModelSurfaces = {
     match: {
       files: [
         'packages/source-analysis/src/aurelia/kernel/handles.ts',
+        'packages/source-analysis/src/aurelia/kernel/product-details.ts',
         'packages/source-analysis/src/aurelia/kernel/store.ts',
         'packages/source-analysis/src/aurelia/kernel/vocabulary.ts',
       ],
@@ -243,6 +267,9 @@ export const KernelSubstrateModelSurfaces = {
         'KernelStore',
         'KernelStoreBatch',
         'KernelVocabularyDefinition',
+        'ProductDetailCatalog',
+        'ProductDetailEntry',
+        'ProductDetailSlot',
       ],
     },
     summary: 'Kernel support classes and catalogs that help records exist but are not semantic products by themselves.',
@@ -302,10 +329,10 @@ export const KernelSubstrateModelSurfaces = {
     match: {
       files: [
         'packages/source-analysis/src/aurelia/evaluation/seams.ts',
-        'packages/source-analysis/src/aurelia/evaluation/kernel-bridge.ts',
+        'packages/source-analysis/src/aurelia/evaluation/kernel-emitter.ts',
       ],
     },
-    summary: 'Evaluator open seams and their kernel emission bridge.',
+    summary: 'Evaluator open seams and their one-way kernel emission adapter.',
   },
   EvaluationSupport: {
     surface: KernelSubstrateModelSurface.EvaluationSupport,
@@ -317,6 +344,27 @@ export const KernelSubstrateModelSurfaces = {
       ],
     },
     summary: 'Evaluator entrypoints, expression readers, and TypeScript syntax helpers.',
+  },
+  TypeSystemShapes: {
+    surface: KernelSubstrateModelSurface.TypeSystemShape,
+    match: {
+      files: [
+        'packages/source-analysis/src/aurelia/type-system/type-shape.ts',
+        'packages/source-analysis/src/aurelia/type-system/product-details.ts',
+      ],
+    },
+    summary: 'Type-system type/member projection models, synthetic expression shapes, call/construct result references, and typed product-detail slots.',
+  },
+  TypeSystemProjections: {
+    surface: KernelSubstrateModelSurface.TypeSystemProjection,
+    match: {
+      files: [
+        'packages/source-analysis/src/aurelia/type-system/checker-projector.ts',
+        'packages/source-analysis/src/aurelia/type-system/expression-type-evaluator.ts',
+        'packages/source-analysis/src/aurelia/type-system/project.ts',
+      ],
+    },
+    summary: 'Projection materializers and runtime-shaped expression evaluators that materialize or resolve current type-system member, union, and call-result surfaces into kernel envelopes and hot details.',
   },
   ConfigurationApps: {
     surface: KernelSubstrateModelSurface.ConfigurationApp,
@@ -352,6 +400,17 @@ export const KernelSubstrateModelSurfaces = {
     },
     summary: 'Controller ontology that tracks runtime controller kind and compiler/hydration phase boundaries.',
   },
+  ConfigurationBindingScopes: {
+    surface: KernelSubstrateModelSurface.ConfigurationBindingScope,
+    match: {
+      files: [
+        'packages/source-analysis/src/aurelia/configuration/product-details.ts',
+        'packages/source-analysis/src/aurelia/configuration/scope.ts',
+        'packages/source-analysis/src/aurelia/configuration/scope-materializer.ts',
+      ],
+    },
+    summary: 'Runtime Scope, binding-context, and override-context ontology used by controller activation and expression lookup.',
+  },
   ConfigurationObservations: {
     surface: KernelSubstrateModelSurface.ConfigurationObservation,
     match: {
@@ -366,7 +425,7 @@ export const KernelSubstrateModelSurfaces = {
         'packages/source-analysis/src/aurelia/configuration/configuration-recognition-context.ts',
         'packages/source-analysis/src/aurelia/configuration/configuration-recognition-pass.ts',
         'packages/source-analysis/src/aurelia/configuration/configuration-recognition-project-pass.ts',
-        'packages/source-analysis/src/aurelia/configuration/configuration-recognition-producer.ts',
+        'packages/source-analysis/src/aurelia/configuration/configuration-recognizer.ts',
       ],
     },
     summary: 'Configuration recognition context, source/project scanners, and pass orchestration.',
@@ -382,19 +441,24 @@ export const KernelSubstrateModelSurfaces = {
     surface: KernelSubstrateModelSurface.ConfigurationAppWorld,
     match: {
       files: [
-        'packages/source-analysis/src/aurelia/configuration/app-world-producer.ts',
+        'packages/source-analysis/src/aurelia/configuration/app-world-composer.ts',
         'packages/source-analysis/src/aurelia/configuration/app-world-project-pass.ts',
       ],
     },
-    summary: 'App-world producer composition across project evaluation, configuration emission, DI world construction, and compiler-world handoff.',
+    summary: 'App-world composition across project evaluation, configuration emission, DI world construction, and compiler-world handoff.',
   },
   DiContainers: {
     surface: KernelSubstrateModelSurface.DiContainer,
     match: {
       files: ['packages/source-analysis/src/aurelia/di/container.ts'],
-      classNames: ['Container', 'ContainerReference'],
+      classNames: [
+        'Container',
+        'ContainerReference',
+        'ContainerInterfaceToken',
+        'ContainerInterfaceTokenReference',
+      ],
     },
-    summary: 'Abstract Aurelia containers and container references used by DI world construction.',
+    summary: 'Abstract Aurelia containers, container references, and the IContainer token used by DI world construction.',
   },
   DiConfigurations: {
     surface: KernelSubstrateModelSurface.DiConfiguration,
@@ -443,10 +507,10 @@ export const KernelSubstrateModelSurfaces = {
     match: {
       files: [
         'packages/source-analysis/src/aurelia/di/world-construction.ts',
-        'packages/source-analysis/src/aurelia/di/world-construction-producer.ts',
+        'packages/source-analysis/src/aurelia/di/world-constructor.ts',
       ],
     },
-    summary: 'DI world-construction producer and emission records that spend configuration admissions.',
+    summary: 'DI world-construction records that spend configuration admissions.',
   },
   ExpressionAst: {
     surface: KernelSubstrateModelSurface.ExpressionAst,
@@ -513,23 +577,23 @@ export const KernelSubstrateModelSurfaces = {
     surface: KernelSubstrateModelSurface.ResourceRecognition,
     match: {
       files: [
-        'packages/source-analysis/src/aurelia/resources/named-resource-recognition-producer.ts',
+        'packages/source-analysis/src/aurelia/resources/named-resource-recognizer.ts',
         'packages/source-analysis/src/aurelia/resources/resource-field-readers.ts',
         'packages/source-analysis/src/aurelia/resources/resource-recognition-context.ts',
         'packages/source-analysis/src/aurelia/resources/resource-recognition-kernel-emitter.ts',
         'packages/source-analysis/src/aurelia/resources/resource-recognition-pass.ts',
         'packages/source-analysis/src/aurelia/resources/resource-recognition-project-pass.ts',
-        'packages/source-analysis/src/aurelia/resources/syntax-resource-recognition-producer.ts',
+        'packages/source-analysis/src/aurelia/resources/syntax-resource-recognizer.ts',
       ],
     },
-    summary: 'Resource recognition producers, readers, passes, and kernel emission support.',
+    summary: 'Resource recognizers, readers, passes, and kernel emission support.',
   },
   ResourceConvergence: {
     surface: KernelSubstrateModelSurface.ResourceConvergence,
     match: {
-      files: ['packages/source-analysis/src/aurelia/resources/resource-definition-convergence-producer.ts'],
+      files: ['packages/source-analysis/src/aurelia/resources/resource-definition-converger.ts'],
     },
-    summary: 'Resource definition convergence producers that turn recognized headers into full metadata definition products.',
+    summary: 'Resource definition convergers that turn recognized headers into full metadata definition products.',
   },
   ResourceReferences: {
     surface: KernelSubstrateModelSurface.ResourceReference,
@@ -547,10 +611,10 @@ export const KernelSubstrateModelSurfaces = {
     match: {
       files: [
         'packages/source-analysis/src/aurelia/resources/built-in-resources.ts',
-        'packages/source-analysis/src/aurelia/resources/built-in-resource-producer.ts',
+        'packages/source-analysis/src/aurelia/resources/built-in-resource-catalog-materializer.ts',
       ],
     },
-    summary: 'Framework-owned built-in resource catalogs, resource headers, configured selections, and producers.',
+    summary: 'Framework-owned built-in resource catalogs, resource headers, configured selections, and materializers.',
   },
   RegistrationAdmissions: {
     surface: KernelSubstrateModelSurface.RegistrationAdmission,
@@ -578,7 +642,7 @@ export const KernelSubstrateModelSurfaces = {
     match: {
       files: ['packages/source-analysis/src/aurelia/registration/registration-kernel-emitter.ts'],
     },
-    summary: 'Registration producer support that emits kernel records and typed admission products.',
+    summary: 'Registration emission support that materializes kernel records and typed admission products.',
   },
   RegistrationRecognition: {
     surface: KernelSubstrateModelSurface.RegistrationRecognition,
@@ -586,10 +650,10 @@ export const KernelSubstrateModelSurfaces = {
       files: [
         'packages/source-analysis/src/aurelia/registration/registration-factory-shapes.ts',
         'packages/source-analysis/src/aurelia/registration/registration-recognition-pass.ts',
-        'packages/source-analysis/src/aurelia/registration/registration-recognition-producer.ts',
+        'packages/source-analysis/src/aurelia/registration/registration-factory-recognizer.ts',
       ],
     },
-    summary: 'Registration recognition producers and pass orchestration.',
+    summary: 'Registration recognizers and pass orchestration.',
   },
   TemplateParseContexts: {
     surface: KernelSubstrateModelSurface.TemplateParseContext,
@@ -603,7 +667,7 @@ export const KernelSubstrateModelSurfaces = {
     match: {
       files: [
         'packages/source-analysis/src/aurelia/template/compiler-world.ts',
-        'packages/source-analysis/src/aurelia/template/compiler-world-producer.ts',
+        'packages/source-analysis/src/aurelia/template/compiler-world-materializer.ts',
       ],
     },
     summary: 'Compiler worlds, resource scopes, visible resources, and compiler service references.',
@@ -613,7 +677,7 @@ export const KernelSubstrateModelSurfaces = {
     match: {
       files: [
         'packages/source-analysis/src/aurelia/template/compilation-unit.ts',
-        'packages/source-analysis/src/aurelia/template/compilation-unit-producer.ts',
+        'packages/source-analysis/src/aurelia/template/compilation-unit-materializer.ts',
         'packages/source-analysis/src/aurelia/template/template-compilation-project-pass.ts',
       ],
     },
@@ -624,7 +688,7 @@ export const KernelSubstrateModelSurfaces = {
     match: {
       files: [
         'packages/source-analysis/src/aurelia/template/html-ir.ts',
-        'packages/source-analysis/src/aurelia/template/html-parser-producer.ts',
+        'packages/source-analysis/src/aurelia/template/html-parse-materializer.ts',
       ],
     },
     summary: 'Authored HTML documents, nodes, attributes, comments, and parser recovery observations.',
@@ -634,8 +698,8 @@ export const KernelSubstrateModelSurfaces = {
     match: {
       files: [
         'packages/source-analysis/src/aurelia/template/attribute-syntax.ts',
-        'packages/source-analysis/src/aurelia/template/attribute-classification-producer.ts',
-        'packages/source-analysis/src/aurelia/template/attribute-syntax-producer.ts',
+        'packages/source-analysis/src/aurelia/template/attribute-classification-materializer.ts',
+        'packages/source-analysis/src/aurelia/template/attribute-syntax-materializer.ts',
       ],
     },
     summary: 'Attribute parser syntax, attribute-pattern executables, parser service models, and classifications.',
@@ -645,7 +709,7 @@ export const KernelSubstrateModelSurfaces = {
     match: {
       files: [
         'packages/source-analysis/src/aurelia/template/value-site.ts',
-        'packages/source-analysis/src/aurelia/template/value-site-producer.ts',
+        'packages/source-analysis/src/aurelia/template/value-site-materializer.ts',
       ],
     },
     summary: 'Compiler-owned authored-value selection into template value-site products and expression parser publications.',
@@ -655,20 +719,40 @@ export const KernelSubstrateModelSurfaces = {
     match: {
       files: [
         'packages/source-analysis/src/aurelia/template/binding-command-execution.ts',
-        'packages/source-analysis/src/aurelia/template/binding-command-lowering-producer.ts',
+        'packages/source-analysis/src/aurelia/template/binding-command-lowering-materializer.ts',
       ],
     },
-    summary: 'Binding-command executables, resolver state, command build inputs, lowering products, and command-owned instruction production.',
+    summary: 'Binding-command executables, resolver state, command build inputs, inline multi-binding segment/lowering products, and command-owned instruction materialization.',
+  },
+  TemplateCompiledTemplates: {
+    surface: KernelSubstrateModelSurface.TemplateCompiledTemplate,
+    match: {
+      files: [
+        'packages/source-analysis/src/aurelia/template/compiled-template.ts',
+        'packages/source-analysis/src/aurelia/template/compiled-template-materializer.ts',
+      ],
+    },
+    summary: 'Compiled-template handoff products: render targets, instruction rows, and visible compiler DOM gaps before runtime Rendering.',
   },
   TemplateBuiltInSyntax: {
     surface: KernelSubstrateModelSurface.TemplateBuiltInSyntax,
     match: {
       files: [
         'packages/source-analysis/src/aurelia/template/built-in-syntax.ts',
-        'packages/source-analysis/src/aurelia/template/built-in-syntax-producer.ts',
+        'packages/source-analysis/src/aurelia/template/built-in-syntax-catalog-materializer.ts',
       ],
     },
     summary: 'Framework-provided attribute-pattern and binding-command syntax catalogs.',
+  },
+  TemplateRuntimeRenderers: {
+    surface: KernelSubstrateModelSurface.TemplateRuntimeRenderer,
+    match: {
+      files: [
+        'packages/source-analysis/src/aurelia/template/runtime-renderer.ts',
+        'packages/source-analysis/src/aurelia/template/runtime-renderer-catalog-materializer.ts',
+      ],
+    },
+    summary: 'Framework-provided runtime renderer catalogs, renderer products, and configured renderer selection.',
   },
   TemplateInstructions: {
     surface: KernelSubstrateModelSurface.TemplateInstructionIr,
@@ -676,6 +760,31 @@ export const KernelSubstrateModelSurfaces = {
       files: ['packages/source-analysis/src/aurelia/template/instruction-ir.ts'],
     },
     summary: 'Lowered rendering instruction products and instruction sequences.',
+  },
+  TemplateRuntimeBindings: {
+    surface: KernelSubstrateModelSurface.TemplateRuntimeBinding,
+    match: {
+      files: [
+        'packages/source-analysis/src/aurelia/template/runtime-controller.ts',
+        'packages/source-analysis/src/aurelia/template/runtime-binding.ts',
+        'packages/source-analysis/src/aurelia/template/runtime-rendering-materializer.ts',
+      ],
+    },
+    summary: 'Runtime controller frames, binding instances, and scope effects emulated from renderer semantics after instruction lowering.',
+  },
+  TemplateScopes: {
+    surface: KernelSubstrateModelSurface.TemplateScope,
+    match: {
+      files: ['packages/source-analysis/src/aurelia/template/template-controller-scope-materializer.ts'],
+    },
+    summary: 'Template binding-scope construction from controller, repeat, let, and TypeChecker facts.',
+  },
+  RouterModels: {
+    surface: KernelSubstrateModelSurface.RouterModel,
+    match: {
+      pathPrefixes: ['packages/source-analysis/src/aurelia/router/'],
+    },
+    summary: 'Router configuration, route, context, instruction, and built-in resource model anchors.',
   },
 } as const;
 
@@ -703,10 +812,22 @@ export const KernelSubstrateSupportClasses = {
   },
   KernelStoreBatch: {
     className: 'KernelStoreBatch',
-    summary: 'Producer emission batch rather than a semantic product model.',
+    summary: 'Record-emission batch rather than a semantic product model.',
   },
   KernelVocabularyDefinition: {
     className: 'KernelVocabularyDefinition',
     summary: 'Vocabulary catalog entry rather than a semantic product model.',
+  },
+  ProductDetailCatalog: {
+    className: 'ProductDetailCatalog',
+    summary: 'Hot product-detail sidecar for current-run inquiry expansion rather than a kernel record.',
+  },
+  ProductDetailEntry: {
+    className: 'ProductDetailEntry',
+    summary: 'Typed current-run detail attachment for a materialized product rather than durable product truth.',
+  },
+  ProductDetailSlot: {
+    className: 'ProductDetailSlot',
+    summary: 'Typed detail-slot contract tied to one product-kind vocabulary key.',
   },
 } as const;

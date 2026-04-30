@@ -12,7 +12,6 @@ import {
   ExpressionSuccess,
 } from "./parse-result-algebra.js";
 import type {
-  CompletedInputExpressionNode,
   EmptyExpressionAst,
   IteratorParseResult,
   PropertyLikeEntryFamily,
@@ -31,10 +30,7 @@ import {
   PrimitiveLiteralExpression,
   UnaryExpression,
 } from "./ast.js";
-import {
-  spanFromBounds,
-  type SourceSpan,
-} from "./source-span.js";
+import type { SourceSpan } from "./source-span.js";
 import type {
   AssignmentOperator,
   BinaryOperator,

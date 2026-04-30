@@ -70,6 +70,7 @@ import {
   TemplateParseContext,
   TemplateRecoveryPolicy,
 } from './parse-context.js';
+import { TemplateProductDetails } from './product-details.js';
 
 export class HtmlParseInput {
   constructor(
@@ -164,7 +165,7 @@ class HtmlMaterializationState {
 }
 
 /** Parses authored template markup into HTML IR records without performing Aurelia syntax classification. */
-export class HtmlParserProducer {
+export class HtmlParseMaterializer {
   constructor(
     /** Hot analysis store that receives HTML IR records. */
     readonly store: KernelStore,
@@ -175,7 +176,18 @@ export class HtmlParserProducer {
     if (emission.records.length > 0) {
       this.store.commit(new KernelStoreBatch(emission.records, `html-parse:${input.localKey}`));
     }
+    this.registerProductDetails(emission);
     return emission;
+  }
+
+  private registerProductDetails(emission: HtmlParseEmission): void {
+    this.store.productDetails.add(TemplateProductDetails.HtmlDocument, emission.document.productHandle, emission.document);
+    for (const node of emission.nodes) {
+      this.store.productDetails.add(TemplateProductDetails.HtmlNode, node.productHandle, node);
+    }
+    for (const attribute of emission.attributes) {
+      this.store.productDetails.add(TemplateProductDetails.HtmlAttribute, attribute.productHandle, attribute);
+    }
   }
 
   private recordsForParse(input: HtmlParseInput): HtmlParseEmission {
@@ -236,10 +248,7 @@ export class HtmlParserProducer {
         documentIdentityHandle,
         source.sourceAddressHandle,
         source.provenanceHandle,
-        [
-          sourceClaim.handle,
-          ...claimsForSubject(state.claims, documentProductHandle).map((claim) => claim.handle),
-        ],
+        claimsForProduct(state.claims, documentProductHandle).map((claim) => claim.handle),
       ),
       sourceClaim,
       ...state.claims.filter((claim) => claim !== sourceClaim),
@@ -397,10 +406,7 @@ export class HtmlParserProducer {
         identityHandle,
         sourceAddressHandle,
         state.source.provenanceHandle,
-        [
-          claim.handle,
-          ...claimsForSubject(state.claims, productHandle).map((subjectClaim) => subjectClaim.handle),
-        ],
+        claimsForProduct(state.claims, productHandle).map((claim) => claim.handle),
       ),
     );
     return node.toReference();
@@ -467,7 +473,7 @@ export class HtmlParserProducer {
         identityHandle,
         sourceAddressHandle,
         state.source.provenanceHandle,
-        [claim.handle],
+        claimsForProduct(state.claims, productHandle).map((claim) => claim.handle),
       ),
     );
     return attribute.toReference();
@@ -501,13 +507,19 @@ export class HtmlParserProducer {
     if (!(sourceAddress instanceof SourceSpanAddress)) {
       return null;
     }
+    const mapped = mapTemplateSourceSpan(state.templateSource.sourceMap, start, end);
+    if (state.templateSource.sourceMap != null && mapped == null) {
+      return null;
+    }
+    const sourceStart = mapped?.start ?? sourceAddress.start + start;
+    const sourceEnd = mapped?.end ?? sourceAddress.start + end;
     const handle = this.store.handles.address(local);
     state.records.push(new SourceSpanAddress(
       handle,
       AddressStability.SourceStable,
       sourceAddress.fileHandle,
-      sourceAddress.start + start,
-      sourceAddress.start + end,
+      sourceStart,
+      sourceEnd,
       role,
     ));
     return handle;
@@ -529,6 +541,30 @@ export class HtmlParserProducer {
     ));
     return handle;
   }
+}
+
+function mapTemplateSourceSpan(
+  map: TemplateSource['sourceMap'],
+  start: number,
+  end: number,
+): { readonly start: number; readonly end: number } | null {
+  if (map == null) {
+    return null;
+  }
+  if (
+    start < 0
+    || end < start
+    || end > map.decodedLength
+    || start >= map.decodedToSourceOffsets.length
+    || end >= map.decodedToSourceOffsets.length
+  ) {
+    return null;
+  }
+  const mappedStart = map.decodedToSourceOffsets[start];
+  const mappedEnd = map.decodedToSourceOffsets[end];
+  return typeof mappedStart === 'number' && typeof mappedEnd === 'number'
+    ? { start: mappedStart, end: mappedEnd }
+    : null;
 }
 
 class HtmlScanner {
@@ -906,9 +942,12 @@ function nodeKey(draft: ParsedHtmlNodeDraft, sourceAddressHandle: AddressHandle 
     : `${name}:source:${draft.start}-${draft.end}`;
 }
 
-function claimsForSubject(
+function claimsForProduct(
   claims: readonly SemanticClaim[],
-  subjectHandle: ProductHandle,
+  productHandle: ProductHandle,
 ): readonly SemanticClaim[] {
-  return claims.filter((claim) => claim.subjectHandle === subjectHandle);
+  return claims.filter((claim) =>
+    claim.subjectHandle === productHandle
+    || claim.objectHandle === productHandle
+  );
 }

@@ -17,7 +17,7 @@ import type {
 
 /**
  * Derivation is a high-leverage unstable surface: it records rule applications, not consumer answers. Keep
- * phases as indexing hints, edges as rule inputs/outputs, and states as production outcomes. Ranking, confidence,
+ * phases as indexing hints, edges as rule inputs/outputs, and states as materialization outcomes. Ranking, confidence,
  * actionability, and UI/agent answer semantics belong in the inquiry layer built over the kernel.
  */
 

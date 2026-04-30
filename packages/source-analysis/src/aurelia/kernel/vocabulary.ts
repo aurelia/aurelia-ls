@@ -8,7 +8,7 @@ const referencedProductKindKeys = new Set<string>();
 
 /**
  * Vocabulary is a fast-evolving pressure surface. Keep it controlled and centrally defined, but let real
- * producers and queries earn new entries. Do not use vocabulary keys for confidence, ranking, UI states, or
+ * materializers and queries earn new entries. Do not use vocabulary keys for confidence, ranking, UI states, or
  * answer-envelope outcomes; those belong above the kernel.
  *
  * Vocabulary slots are product-owned semantic handles for MCP and other source-analysis lenses. Do not make
@@ -141,6 +141,8 @@ export const enum KernelVocabularyRecordKind {
 export const enum KernelVocabularyNamespace {
   /** Vocabulary about TypeScript/module evaluation. */
   Evaluation = 'evaluation',
+  /** Vocabulary about type-system type and member projections. */
+  TypeSystem = 'type-system',
   /** Vocabulary about Aurelia resource discovery and availability. */
   Resource = 'resource',
   /** Vocabulary about dependency injection keys, registrations, and resolution. */
@@ -294,17 +296,6 @@ function claimSignature<
   object: TObject,
 ): KernelClaimPredicateSignature<TSubject, TObject> {
   return new KernelClaimPredicateSignature(subject, object);
-}
-
-function anyEndpoint(): KernelClaimEndpointSignature<
-  readonly [KernelClaimEndpointKind.Address, KernelClaimEndpointKind.Identity, KernelClaimEndpointKind.Product],
-  readonly []
-> {
-  return new KernelClaimEndpointSignature([
-    KernelClaimEndpointKind.Address,
-    KernelClaimEndpointKind.Identity,
-    KernelClaimEndpointKind.Product,
-  ]);
 }
 
 function identityEndpoint(): KernelClaimEndpointSignature<readonly [KernelClaimEndpointKind.Identity], readonly []> {
@@ -480,6 +471,39 @@ export const KernelVocabulary = {
       'dynamic-import',
       KernelVocabularySlot.OpenSeamKind,
       'Static evaluation reached a dynamic import or non-literal module edge that could not be linked statically.',
+    ),
+  },
+  TypeSystem: {
+    /** Product kind for a type-system type projection. */
+    TypeShape: defineVocabulary(
+      KernelVocabularyNamespace.TypeSystem,
+      'type-shape',
+      KernelVocabularySlot.ProductKind,
+      'Type-system projection of a TypeScript, template, or expression type for inquiry.',
+    ),
+    /** Product kind for one member visible on a type-system type projection. */
+    TypeMember: defineVocabulary(
+      KernelVocabularyNamespace.TypeSystem,
+      'type-member',
+      KernelVocabularySlot.ProductKind,
+      'Type-system projection of one property, method, accessor, call, construct, or index member.',
+    ),
+    /** A type projection exposes a member projection. */
+    TypeShapeHasMember: defineClaimPredicate(
+      KernelVocabularyNamespace.TypeSystem,
+      'type-shape-has-member',
+      'A type-system type projection exposes a member projection.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.TypeSystem, 'type-shape']),
+        productEndpoint([KernelVocabularyNamespace.TypeSystem, 'type-member']),
+      ),
+    ),
+    /** TypeChecker projection could not close the type or member surface. */
+    OpenTypeProjection: defineVocabulary(
+      KernelVocabularyNamespace.TypeSystem,
+      'open-type-projection',
+      KernelVocabularySlot.OpenSeamKind,
+      'TypeChecker projection could not close the type or member surface without guessing.',
     ),
   },
   Resource: {
@@ -732,6 +756,13 @@ export const KernelVocabulary = {
       KernelVocabularySlot.OpenSeamKind,
       'DI world construction reached runtime default resolver or JIT registration behavior.',
     ),
+    /** Renderer/controller emulation reached a runtime child container that has not been materialized. */
+    OpenChildContainer: defineVocabulary(
+      KernelVocabularyNamespace.Di,
+      'open-child-container',
+      KernelVocabularySlot.OpenSeamKind,
+      'Renderer/controller emulation reached a runtime child, attribute, or template-controller container that has not been materialized.',
+    ),
   },
   Registration: {
     /** Product kind for a registration admission whose runtime effect remains open. */
@@ -883,6 +914,27 @@ export const KernelVocabulary = {
       KernelVocabularySlot.ProductKind,
       'A modeled runtime controller at a known controller phase, used to connect resources, containers, and templates.',
     ),
+    /** Product kind for runtime Scope objects used by controller activation and binding lookup. */
+    BindingScope: defineVocabulary(
+      KernelVocabularyNamespace.Configuration,
+      'binding-scope',
+      KernelVocabularySlot.ProductKind,
+      'A modeled runtime Scope connecting parent scope, binding context, override context, and boundary behavior.',
+    ),
+    /** Product kind for runtime binding contexts used by Scope lookup. */
+    BindingContext: defineVocabulary(
+      KernelVocabularyNamespace.Configuration,
+      'binding-context',
+      KernelVocabularySlot.ProductKind,
+      'A modeled runtime binding context that exposes view-model, synthetic, object, or inferred property names.',
+    ),
+    /** Product kind for runtime override contexts used by Scope lookup. */
+    OverrideContext: defineVocabulary(
+      KernelVocabularyNamespace.Configuration,
+      'override-context',
+      KernelVocabularySlot.ProductKind,
+      'A modeled runtime override context that exposes template locals, repeat metadata, and contextual names.',
+    ),
     /** Product kind for ordered app/plugin/registry/builder configuration flow. */
     Sequence: defineVocabulary(
       KernelVocabularyNamespace.Configuration,
@@ -940,6 +992,9 @@ export const KernelVocabulary = {
           [KernelVocabularyNamespace.Configuration, 'app-root-config'],
           [KernelVocabularyNamespace.Configuration, 'app-root'],
           [KernelVocabularyNamespace.Configuration, 'controller'],
+          [KernelVocabularyNamespace.Configuration, 'binding-scope'],
+          [KernelVocabularyNamespace.Configuration, 'binding-context'],
+          [KernelVocabularyNamespace.Configuration, 'override-context'],
           [KernelVocabularyNamespace.Configuration, 'option-contribution'],
           [KernelVocabularyNamespace.Configuration, 'app-task'],
           [KernelVocabularyNamespace.Configuration, 'app-task-slot-dispatch'],
@@ -975,6 +1030,96 @@ export const KernelVocabulary = {
       claimSignature(
         productEndpoint([KernelVocabularyNamespace.Configuration, 'aurelia']),
         productEndpoint([KernelVocabularyNamespace.Configuration, 'app-root']),
+      ),
+    ),
+    /** A modeled AppRoot was constructed from an admitted AppRoot config. */
+    AppRootUsesConfig: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'app-root-uses-config',
+      'A modeled AppRoot was constructed from an admitted AppRoot config.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Configuration, 'app-root']),
+        productEndpoint([KernelVocabularyNamespace.Configuration, 'app-root-config']),
+      ),
+    ),
+    /** A modeled controller owns or receives a runtime binding scope. */
+    ControllerUsesBindingScope: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'controller-uses-binding-scope',
+      'A modeled controller owns, receives, or activates with a runtime binding Scope.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Configuration, 'controller']),
+        productEndpoint([KernelVocabularyNamespace.Configuration, 'binding-scope']),
+      ),
+    ),
+    /** A modeled hydratable controller contains a child controller in the runtime controller tree. */
+    ControllerHasChild: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'controller-has-child',
+      'A modeled hydratable controller contains a child controller in the runtime controller tree.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Configuration, 'controller']),
+        productEndpoint([KernelVocabularyNamespace.Configuration, 'controller']),
+      ),
+    ),
+    /** A modeled controller owns a runtime binding through Controller.addBinding. */
+    ControllerOwnsRuntimeBinding: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'controller-owns-runtime-binding',
+      'A modeled controller owns a runtime binding through Controller.addBinding.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Configuration, 'controller']),
+        productEndpoint([KernelVocabularyNamespace.Binding, 'runtime-binding']),
+      ),
+    ),
+    /** A lowered rendering instruction created a modeled runtime controller. */
+    InstructionCreatesController: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'instruction-creates-controller',
+      'A lowered rendering instruction created a modeled runtime controller.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Instruction, 'instruction']),
+        productEndpoint([KernelVocabularyNamespace.Configuration, 'controller']),
+      ),
+    ),
+    /** A lowered rendering instruction evaluates its expression-owned work under a modeled runtime scope. */
+    InstructionUsesBindingScope: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'instruction-uses-binding-scope',
+      'A lowered rendering instruction evaluates expression-owned work under a modeled runtime Scope.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Instruction, 'instruction']),
+        productEndpoint([KernelVocabularyNamespace.Configuration, 'binding-scope']),
+      ),
+    ),
+    /** A runtime binding scope has an ordinary parent-scope edge. */
+    BindingScopeHasParent: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'binding-scope-has-parent',
+      'A runtime binding Scope has an ordinary parent-scope edge used by $parent and fallback lookup.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Configuration, 'binding-scope']),
+        productEndpoint([KernelVocabularyNamespace.Configuration, 'binding-scope']),
+      ),
+    ),
+    /** A runtime binding scope uses its binding context for ordinary name lookup. */
+    BindingScopeUsesBindingContext: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'binding-scope-uses-binding-context',
+      'A runtime binding Scope uses its binding context for ordinary view-model or synthetic-context lookup.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Configuration, 'binding-scope']),
+        productEndpoint([KernelVocabularyNamespace.Configuration, 'binding-context']),
+      ),
+    ),
+    /** A runtime binding scope uses its override context for template locals and contextual names. */
+    BindingScopeUsesOverrideContext: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'binding-scope-uses-override-context',
+      'A runtime binding Scope uses its override context for template locals, repeat metadata, and contextual lookup.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Configuration, 'binding-scope']),
+        productEndpoint([KernelVocabularyNamespace.Configuration, 'override-context']),
       ),
     ),
     /** Configuration recognition could not close the call receiver or target. */
@@ -1073,6 +1218,24 @@ export const KernelVocabulary = {
       KernelVocabularySlot.ProductKind,
       'Selection of framework built-in syntax catalogs admitted by one known framework registration before attribute-parser and binding-command resolver input.',
     ),
+    BuiltInRuntimeRendererCatalog: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'built-in-runtime-renderer-catalog',
+      KernelVocabularySlot.ProductKind,
+      'Catalog of framework-provided runtime renderers admitted by known framework registration effects.',
+    ),
+    ConfiguredRuntimeRendererCatalogSelection: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'configured-runtime-renderer-catalog-selection',
+      KernelVocabularySlot.ProductKind,
+      'Selection of framework built-in runtime renderer catalogs admitted by one known framework registration before Rendering input.',
+    ),
+    RuntimeRenderer: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'runtime-renderer',
+      KernelVocabularySlot.ProductKind,
+      'Runtime IRenderer product selected by Rendering for one lowered instruction kind.',
+    ),
     ConfiguredResourceCatalogSelection: defineVocabulary(
       KernelVocabularyNamespace.Compiler,
       'configured-resource-catalog-selection',
@@ -1114,13 +1277,50 @@ export const KernelVocabulary = {
       KernelVocabularySlot.ProductKind,
       'Result of binding-command lowering before final instruction sequence assembly.',
     ),
+    /** Product kind for one parsed custom-attribute inline multi-binding segment. */
+    MultiBindingSegment: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'multi-binding-segment',
+      KernelVocabularySlot.ProductKind,
+      'Custom-attribute inline multi-binding segment before instruction assembly.',
+    ),
+    /** Product kind for inline multi-binding lowering. */
+    MultiBindingLowering: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'multi-binding-lowering',
+      KernelVocabularySlot.ProductKind,
+      'Result of custom-attribute inline multi-binding lowering before final instruction sequence assembly.',
+    ),
+    /** A multi-binding value site was split into one secondary segment. */
+    SplitsMultiBindingSegment: defineClaimPredicate(
+      KernelVocabularyNamespace.Compiler,
+      'splits-multi-binding-segment',
+      'A custom-attribute inline multi-binding value site was split into one secondary segment.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Template, 'value-site']),
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'multi-binding-segment']),
+      ),
+    ),
+    /** A multi-binding value site was lowered into instructions. */
+    LowersMultiBinding: defineClaimPredicate(
+      KernelVocabularyNamespace.Compiler,
+      'lowers-multi-binding',
+      'A custom-attribute inline multi-binding value site was lowered into instruction products.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Template, 'value-site']),
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'multi-binding-lowering']),
+      ),
+    ),
     /** Attribute classification produced a runtime-shaped ICommandBuildInfo product. */
     BuildsCommandInput: defineClaimPredicate(
       KernelVocabularyNamespace.Compiler,
       'builds-command-input',
-      'Attribute classification produced a runtime-shaped ICommandBuildInfo product for binding-command lowering.',
+      'Attribute classification or secondary multi-binding segment produced a runtime-shaped ICommandBuildInfo product for binding-command lowering.',
       claimSignature(
-        productEndpoint([KernelVocabularyNamespace.Template, 'attribute-classification']),
+        productEndpoint(
+          [KernelVocabularyNamespace.Template, 'attribute-classification'],
+          [KernelVocabularyNamespace.Compiler, 'multi-binding-segment'],
+        ),
         productEndpoint([KernelVocabularyNamespace.Compiler, 'binding-command-build-input']),
       ),
     ),
@@ -1138,9 +1338,13 @@ export const KernelVocabulary = {
     UsesBindingCommandExecutable: defineClaimPredicate(
       KernelVocabularyNamespace.Compiler,
       'uses-binding-command-executable',
-      'Binding-command lowering used a selected command executable.',
+      'Binding-command or secondary multi-binding lowering used a selected command executable.',
       claimSignature(
-        productEndpoint([KernelVocabularyNamespace.Compiler, 'binding-command-lowering']),
+        productEndpoint(
+          [KernelVocabularyNamespace.Compiler, 'binding-command-lowering'],
+          [KernelVocabularyNamespace.Compiler, 'multi-binding-segment'],
+          [KernelVocabularyNamespace.Compiler, 'multi-binding-lowering'],
+        ),
         productEndpoint([KernelVocabularyNamespace.Compiler, 'binding-command-executable']),
       ),
     ),
@@ -1148,9 +1352,12 @@ export const KernelVocabulary = {
     ProducesInstruction: defineClaimPredicate(
       KernelVocabularyNamespace.Compiler,
       'produces-instruction',
-      'Binding-command lowering produced one lowered rendering instruction.',
+      'Compiler lowering produced one lowered rendering instruction.',
       claimSignature(
-        productEndpoint([KernelVocabularyNamespace.Compiler, 'binding-command-lowering']),
+        productEndpoint(
+          [KernelVocabularyNamespace.Compiler, 'binding-command-lowering'],
+          [KernelVocabularyNamespace.Compiler, 'multi-binding-lowering'],
+        ),
         productEndpoint([KernelVocabularyNamespace.Instruction, 'instruction']),
       ),
     ),
@@ -1284,6 +1491,16 @@ export const KernelVocabulary = {
         ),
       ),
     ),
+    /** A runtime Rendering service uses a runtime renderer product. */
+    RenderingServiceUsesRenderer: defineClaimPredicate(
+      KernelVocabularyNamespace.Compiler,
+      'rendering-service-uses-renderer',
+      'A runtime Rendering service uses a runtime renderer product for one instruction kind.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'service']),
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'runtime-renderer']),
+      ),
+    ),
     /** A syntax catalog includes a compiler-visible attribute-pattern or binding-command executable. */
     ContainsSyntaxResource: defineClaimPredicate(
       KernelVocabularyNamespace.Compiler,
@@ -1297,6 +1514,16 @@ export const KernelVocabulary = {
         ),
       ),
     ),
+    /** A runtime renderer catalog includes an IRenderer product. */
+    ContainsRuntimeRenderer: defineClaimPredicate(
+      KernelVocabularyNamespace.Compiler,
+      'contains-runtime-renderer',
+      'A runtime renderer catalog includes an IRenderer product.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'built-in-runtime-renderer-catalog']),
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'runtime-renderer']),
+      ),
+    ),
     AdmitsSyntaxCatalog: defineClaimPredicate(
       KernelVocabularyNamespace.Compiler,
       'admits-syntax-catalog',
@@ -1304,6 +1531,15 @@ export const KernelVocabulary = {
       claimSignature(
         productEndpoint([KernelVocabularyNamespace.Compiler, 'configured-syntax-catalog-selection']),
         productEndpoint([KernelVocabularyNamespace.Compiler, 'built-in-syntax-catalog']),
+      ),
+    ),
+    AdmitsRuntimeRendererCatalog: defineClaimPredicate(
+      KernelVocabularyNamespace.Compiler,
+      'admits-runtime-renderer-catalog',
+      'A known framework registration admission made a built-in runtime renderer catalog available for Rendering input.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'configured-runtime-renderer-catalog-selection']),
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'built-in-runtime-renderer-catalog']),
       ),
     ),
     /** An attribute-pattern executable owns a compiled SyntaxInterpreter pattern. */
@@ -1366,6 +1602,20 @@ export const KernelVocabulary = {
       KernelVocabularySlot.OpenSeamKind,
       'Compiler reached a custom executable body that should be preserved rather than guessed.',
     ),
+    /** A custom element processContent hook owns child DOM transformation that tooling has not executed. */
+    OpenProcessContentHook: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'open-process-content-hook',
+      KernelVocabularySlot.OpenSeamKind,
+      'Compiler reached a custom element processContent hook and cannot safely guess the transformed child DOM.',
+    ),
+    /** Projection, containerless child content, or slot extraction stayed open at compiled-template assembly. */
+    OpenContentProjection: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'open-content-projection',
+      KernelVocabularySlot.OpenSeamKind,
+      'Compiler could not close child content projection, containerless content, or slot extraction semantics.',
+    ),
   },
   Template: {
     /** Product kind for an authored template source before HTML parsing. */
@@ -1402,6 +1652,20 @@ export const KernelVocabulary = {
       'html-attribute',
       KernelVocabularySlot.ProductKind,
       'Authored HTML attribute before attribute-pattern parsing.',
+    ),
+    /** Product kind for a compiled template after DOM pass-through and instruction-row assembly. */
+    CompiledTemplate: defineVocabulary(
+      KernelVocabularyNamespace.Template,
+      'compiled-template',
+      KernelVocabularySlot.ProductKind,
+      'Compiled template after compiler DOM pass-through, render-target marking, and instruction-row assembly.',
+    ),
+    /** Product kind for one runtime render target in a compiled template. */
+    RenderTarget: defineVocabulary(
+      KernelVocabularyNamespace.Template,
+      'render-target',
+      KernelVocabularySlot.ProductKind,
+      'Runtime render target corresponding to one compiled instruction row.',
     ),
     /** Product kind for runtime AttrSyntax after attribute-pattern interpretation. */
     AttributeSyntax: defineVocabulary(
@@ -1475,6 +1739,46 @@ export const KernelVocabulary = {
         productEndpoint([KernelVocabularyNamespace.Template, 'html-document']),
       ),
     ),
+    /** An authored HTML document compiled into a compiled-template product. */
+    CompilesToCompiledTemplate: defineClaimPredicate(
+      KernelVocabularyNamespace.Template,
+      'compiles-to-compiled-template',
+      'An authored HTML document compiled into a compiled-template product.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Template, 'html-document']),
+        productEndpoint([KernelVocabularyNamespace.Template, 'compiled-template']),
+      ),
+    ),
+    /** A compiled template contains one runtime render target. */
+    ContainsRenderTarget: defineClaimPredicate(
+      KernelVocabularyNamespace.Template,
+      'contains-render-target',
+      'A compiled template contains one runtime render target.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Template, 'compiled-template']),
+        productEndpoint([KernelVocabularyNamespace.Template, 'render-target']),
+      ),
+    ),
+    /** A runtime render target is backed by an authored HTML node. */
+    RenderTargetForHtmlNode: defineClaimPredicate(
+      KernelVocabularyNamespace.Template,
+      'render-target-for-html-node',
+      'A runtime render target is backed by an authored HTML node.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Template, 'render-target']),
+        productEndpoint([KernelVocabularyNamespace.Template, 'html-node']),
+      ),
+    ),
+    /** A runtime render target uses one instruction sequence. */
+    RenderTargetUsesInstructionSequence: defineClaimPredicate(
+      KernelVocabularyNamespace.Template,
+      'render-target-uses-instruction-sequence',
+      'A runtime render target uses one ordered instruction sequence.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Template, 'render-target']),
+        productEndpoint([KernelVocabularyNamespace.Instruction, 'sequence']),
+      ),
+    ),
     /** An authored HTML document or node contains a child HTML node. */
     ContainsHtmlNode: defineClaimPredicate(
       KernelVocabularyNamespace.Template,
@@ -1504,7 +1808,10 @@ export const KernelVocabulary = {
       'parses-to-attribute-syntax',
       'An authored HTML attribute parsed into runtime AttrSyntax.',
       claimSignature(
-        productEndpoint([KernelVocabularyNamespace.Template, 'html-attribute']),
+        productEndpoint(
+          [KernelVocabularyNamespace.Template, 'html-attribute'],
+          [KernelVocabularyNamespace.Compiler, 'multi-binding-segment'],
+        ),
         productEndpoint([KernelVocabularyNamespace.Template, 'attribute-syntax']),
       ),
     ),
@@ -1528,6 +1835,7 @@ export const KernelVocabulary = {
           [KernelVocabularyNamespace.Template, 'attribute-syntax'],
           [KernelVocabularyNamespace.Template, 'attribute-classification'],
           [KernelVocabularyNamespace.Compiler, 'binding-command-build-input'],
+          [KernelVocabularyNamespace.Compiler, 'multi-binding-segment'],
         ),
         productEndpoint([KernelVocabularyNamespace.Template, 'value-site']),
       ),
@@ -1564,6 +1872,20 @@ export const KernelVocabulary = {
       KernelVocabularySlot.ProductKind,
       'Binding product produced by template lowering.',
     ),
+    /** Product kind for runtime binding instances emulated from renderer semantics. */
+    RuntimeBinding: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'runtime-binding',
+      KernelVocabularySlot.ProductKind,
+      'Runtime binding instance emulated from renderer semantics and lowered instructions.',
+    ),
+    /** Product kind for a runtime binding effect that creates or mutates template scope. */
+    ScopeEffect: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'scope-effect',
+      KernelVocabularySlot.ProductKind,
+      'Runtime binding effect that creates or mutates template binding scope.',
+    ),
     /** Binding kind for property assignment or observation. */
     Property: defineVocabulary(
       KernelVocabularyNamespace.Binding,
@@ -1571,12 +1893,26 @@ export const KernelVocabulary = {
       KernelVocabularySlot.BindingKind,
       'Property binding produced from bindable or command syntax.',
     ),
+    /** Binding kind for attribute assignment or observation. */
+    Attribute: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'attribute',
+      KernelVocabularySlot.BindingKind,
+      'Attribute binding produced by attr/class/style command syntax.',
+    ),
     /** Binding kind for text or attribute interpolation. */
     Interpolation: defineVocabulary(
       KernelVocabularyNamespace.Binding,
       'interpolation',
       KernelVocabularySlot.BindingKind,
       'Interpolation binding produced from text or attribute syntax.',
+    ),
+    /** Binding kind for one interpolation part observed by runtime interpolation machinery. */
+    InterpolationPart: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'interpolation-part',
+      KernelVocabularySlot.BindingKind,
+      'Interpolation-part binding used inside runtime interpolation machinery.',
     ),
     /** Binding kind for event listeners. */
     Listener: defineVocabulary(
@@ -1598,6 +1934,129 @@ export const KernelVocabulary = {
       'ref',
       KernelVocabularySlot.BindingKind,
       'Reference binding produced by ref syntax.',
+    ),
+    /** Binding kind for let declarations. */
+    Let: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'let',
+      KernelVocabularySlot.BindingKind,
+      'Let binding produced by let elements or standalone let-binding instructions.',
+    ),
+    /** Binding kind for text-node content updates. */
+    Content: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'content',
+      KernelVocabularySlot.BindingKind,
+      'Content binding produced by text-binding instructions.',
+    ),
+    /** Binding kind for style-property updates. */
+    StyleProperty: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'style-property',
+      KernelVocabularySlot.BindingKind,
+      'Property binding whose runtime target is an element style object.',
+    ),
+    /** Binding kind for spread hydration transfer. */
+    Spread: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'spread',
+      KernelVocabularySlot.BindingKind,
+      'Spread binding that transfers captured attributes through runtime hydration context.',
+    ),
+    /** Binding kind for spread value updates. */
+    SpreadValue: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'spread-value',
+      KernelVocabularySlot.BindingKind,
+      'Spread-value binding produced by spread command syntax.',
+    ),
+    /** Binding kind for i18n translation updates. */
+    Translation: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'translation',
+      KernelVocabularySlot.BindingKind,
+      'I18n translation binding produced by translation renderers.',
+    ),
+    /** Binding kind for i18n translation parameter updates. */
+    TranslationParameters: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'translation-parameters',
+      KernelVocabularySlot.BindingKind,
+      'I18n translation-parameters binding produced by translation parameter renderers.',
+    ),
+    /** Binding kind for state plugin state-to-target updates. */
+    State: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'state',
+      KernelVocabularySlot.BindingKind,
+      'State plugin binding that updates a target property from store state.',
+    ),
+    /** Binding kind for state plugin dispatch listeners. */
+    StateDispatch: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'state-dispatch',
+      KernelVocabularySlot.BindingKind,
+      'State plugin dispatch binding attached to a DOM event.',
+    ),
+    /** A lowered instruction is rendered into a runtime binding instance. */
+    InstructionCreatesRuntimeBinding: defineClaimPredicate(
+      KernelVocabularyNamespace.Binding,
+      'instruction-creates-runtime-binding',
+      'A lowered rendering instruction is rendered into a runtime binding instance.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Instruction, 'instruction']),
+        productEndpoint([KernelVocabularyNamespace.Binding, 'runtime-binding']),
+      ),
+    ),
+    /** A lowered instruction selected a runtime renderer. */
+    InstructionUsesRuntimeRenderer: defineClaimPredicate(
+      KernelVocabularyNamespace.Binding,
+      'instruction-uses-runtime-renderer',
+      'A lowered rendering instruction selected a runtime renderer.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Instruction, 'instruction']),
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'runtime-renderer']),
+      ),
+    ),
+    /** A runtime renderer produced a runtime binding instance. */
+    RuntimeRendererCreatesRuntimeBinding: defineClaimPredicate(
+      KernelVocabularyNamespace.Binding,
+      'runtime-renderer-creates-runtime-binding',
+      'A runtime renderer produced a runtime binding instance.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Compiler, 'runtime-renderer']),
+        productEndpoint([KernelVocabularyNamespace.Binding, 'runtime-binding']),
+      ),
+    ),
+    /** A runtime binding targets a child or custom-attribute controller rather than the rendering controller itself. */
+    RuntimeBindingTargetsController: defineClaimPredicate(
+      KernelVocabularyNamespace.Binding,
+      'runtime-binding-targets-controller',
+      'A runtime binding targets a child or custom-attribute controller while being owned by its rendering controller.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Binding, 'runtime-binding']),
+        productEndpoint([KernelVocabularyNamespace.Configuration, 'controller']),
+      ),
+    ),
+    /** A runtime binding exposes a scope effect such as let or iterator locals. */
+    RuntimeBindingCreatesScopeEffect: defineClaimPredicate(
+      KernelVocabularyNamespace.Binding,
+      'runtime-binding-creates-scope-effect',
+      'A runtime binding exposes a scope effect such as let target assignment or iterator locals.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Binding, 'runtime-binding']),
+        productEndpoint([KernelVocabularyNamespace.Binding, 'scope-effect']),
+      ),
+    ),
+    /** A binding scope effect produced a modeled runtime Scope. */
+    ScopeEffectCreatesBindingScope: defineClaimPredicate(
+      KernelVocabularyNamespace.Binding,
+      'scope-effect-creates-binding-scope',
+      'A binding scope effect produced a modeled runtime Scope.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Binding, 'scope-effect']),
+        productEndpoint([KernelVocabularyNamespace.Configuration, 'binding-scope']),
+      ),
     ),
   },
   Instruction: {
@@ -1776,6 +2235,26 @@ export const KernelVocabulary = {
       'open-instruction',
       KernelVocabularySlot.OpenSeamKind,
       'Template lowering could not close the rendering instruction shape.',
+    ),
+    /** A lowered hydrate instruction owns a child instruction sequence. */
+    InstructionOwnsChildSequence: defineClaimPredicate(
+      KernelVocabularyNamespace.Instruction,
+      'instruction-owns-child-sequence',
+      'A lowered hydrate instruction owns a child instruction sequence.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Instruction, 'instruction']),
+        productEndpoint([KernelVocabularyNamespace.Instruction, 'sequence']),
+      ),
+    ),
+    /** An instruction sequence contains a lowered rendering instruction. */
+    SequenceContainsInstruction: defineClaimPredicate(
+      KernelVocabularyNamespace.Instruction,
+      'sequence-contains-instruction',
+      'An instruction sequence contains a lowered rendering instruction.',
+      claimSignature(
+        productEndpoint([KernelVocabularyNamespace.Instruction, 'sequence']),
+        productEndpoint([KernelVocabularyNamespace.Instruction, 'instruction']),
+      ),
     ),
   },
   Derivation: {

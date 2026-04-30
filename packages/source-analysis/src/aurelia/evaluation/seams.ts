@@ -32,7 +32,7 @@ export const EvaluationOpenSeamKind = {
 export type EvaluationOpenSeamKind =
   typeof EvaluationOpenSeamKind[keyof typeof EvaluationOpenSeamKind];
 
-/** Evaluator-local unresolved point; kernel projection happens through evaluation/kernel-bridge.ts. */
+/** Evaluator-local unresolved point; kernel projection happens through evaluation/kernel-emitter.ts. */
 export class EvaluationOpenSeam {
   readonly kind = 'evaluation-open-seam' as const;
 

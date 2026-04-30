@@ -108,7 +108,7 @@ class ImportedBindings {
 }
 
 /** Recognizes Aurelia app/configuration flow over one evaluated source module. */
-export class ConfigurationRecognitionProducer {
+export class ConfigurationRecognizer {
   recognize(context: ConfigurationRecognitionContext): readonly ConfigurationSequenceObservation[] {
     const bindings = readImportedBindings(context.sourceFile);
     const steps = [...readConfigurationSteps(context, bindings)]

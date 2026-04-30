@@ -3,26 +3,29 @@ import type {
   IdentityHandle,
   ProductHandle,
 } from '../kernel/handles.js';
-import { DiWorldConstructionProducer } from '../di/world-construction-producer.js';
+import { DiWorldConstructor } from '../di/world-constructor.js';
 import type { DiWorldConstructionEmission } from '../di/world-construction.js';
 import type { Container } from '../di/container.js';
 import {
   type BuiltInAttributePatternEmission,
   type BuiltInBindingCommandEmission,
-  ConfiguredBuiltInSyntaxCatalogProducer,
+  ConfiguredBuiltInSyntaxCatalogMaterializer,
   type ConfiguredBuiltInSyntaxCatalogEmission,
-} from '../template/built-in-syntax-producer.js';
+} from '../template/built-in-syntax-catalog-materializer.js';
 import {
-  ConfiguredBuiltInResourceCatalogProducer,
+  ConfiguredBuiltInRuntimeRendererCatalogMaterializer,
+  type BuiltInRuntimeRendererEmission,
+  type ConfiguredBuiltInRuntimeRendererCatalogEmission,
+} from '../template/runtime-renderer-catalog-materializer.js';
+import {
+  ConfiguredBuiltInResourceCatalogMaterializer,
   type ConfiguredBuiltInResourceCatalogEmission,
-} from '../resources/built-in-resource-producer.js';
-import type {
-  FullResourceDefinition,
-} from '../resources/resource-definition.js';
+} from '../resources/built-in-resource-catalog-materializer.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import {
   readRuntimeResourceKey,
   ResourceDefinitionKind,
+  runtimeResourceKeyForKind,
 } from '../resources/resource-kind.js';
 import {
   TemplateCompilerWorldKind,
@@ -31,9 +34,9 @@ import {
 } from '../template/compiler-world.js';
 import {
   TemplateCompilerWorldConstructionInput,
-  TemplateCompilerWorldProducer,
+  TemplateCompilerWorldMaterializer,
   type TemplateCompilerWorldEmission,
-} from '../template/compiler-world-producer.js';
+} from '../template/compiler-world-materializer.js';
 import {
   frameworkRegistrationKindForAdmission,
   type RegistrationAdmissionProduct,
@@ -43,7 +46,7 @@ import type { AppRoot } from './app-root.js';
 import type { ConfigurationKernelEmission } from './configuration-kernel-emitter.js';
 
 /**
- * Current app-world production envelope.
+ * Current app-world composition envelope.
  *
  * This is deliberately not a kernel product. It is the orchestration answer for the current composition pass: spend
  * recognized configuration registrations into DI, materialize framework-owned syntax/resource catalogs from known
@@ -59,42 +62,55 @@ export class AureliaAppWorldEmission {
     readonly configuredSyntax: ConfiguredBuiltInSyntaxCatalogEmission,
     /** Framework-owned resource header catalogs admitted by recognized framework registrations. */
     readonly configuredResources: ConfiguredBuiltInResourceCatalogEmission,
+    /** Framework-owned runtime renderer catalogs admitted by recognized framework registrations. */
+    readonly configuredRenderers: ConfiguredBuiltInRuntimeRendererCatalogEmission,
     /** Compiler worlds created for app roots with modeled containers. */
     readonly compilerWorlds: readonly TemplateCompilerWorldEmission[],
   ) {}
 }
 
-/** Composes the current configuration, DI, and compiler-world producers without adding a new semantic layer. */
-export class AureliaAppWorldProducer {
-  private readonly diWorldProducer: DiWorldConstructionProducer;
-  private readonly configuredSyntaxProducer: ConfiguredBuiltInSyntaxCatalogProducer;
-  private readonly configuredResourceProducer: ConfiguredBuiltInResourceCatalogProducer;
-  private readonly compilerWorldProducer: TemplateCompilerWorldProducer;
+/** Composes the current configuration, DI, and compiler-world materializers without adding a new semantic layer. */
+export class AureliaAppWorldComposer {
+  private readonly diWorldConstructor: DiWorldConstructor;
+  private readonly configuredSyntaxMaterializer: ConfiguredBuiltInSyntaxCatalogMaterializer;
+  private readonly configuredResourceMaterializer: ConfiguredBuiltInResourceCatalogMaterializer;
+  private readonly configuredRendererMaterializer: ConfiguredBuiltInRuntimeRendererCatalogMaterializer;
+  private readonly compilerWorldMaterializer: TemplateCompilerWorldMaterializer;
 
   constructor(
-    /** Hot analysis store shared by the composed producers. */
+    /** Hot analysis store shared by the composed materializers. */
     readonly store: KernelStore,
   ) {
-    this.diWorldProducer = new DiWorldConstructionProducer(store);
-    this.configuredSyntaxProducer = new ConfiguredBuiltInSyntaxCatalogProducer(store);
-    this.configuredResourceProducer = new ConfiguredBuiltInResourceCatalogProducer(store);
-    this.compilerWorldProducer = new TemplateCompilerWorldProducer(store);
+    this.diWorldConstructor = new DiWorldConstructor(store);
+    this.configuredSyntaxMaterializer = new ConfiguredBuiltInSyntaxCatalogMaterializer(store);
+    this.configuredResourceMaterializer = new ConfiguredBuiltInResourceCatalogMaterializer(store);
+    this.configuredRendererMaterializer = new ConfiguredBuiltInRuntimeRendererCatalogMaterializer(store);
+    this.compilerWorldMaterializer = new TemplateCompilerWorldMaterializer(store);
   }
 
   construct(
     configuration: ConfigurationKernelEmission,
     resources: ResourceDefinitionIndex | null = null,
   ): AureliaAppWorldEmission {
-    const configuredSyntax = this.configuredSyntaxProducer.materialize(configuration);
-    const configuredResources = this.configuredResourceProducer.materialize(configuration);
-    const diWorld = this.diWorldProducer.construct(configuration, configuredResources, resources);
-    const compilerWorlds = this.constructCompilerWorlds(configuration, diWorld, configuredSyntax, configuredResources, resources);
+    const configuredSyntax = this.configuredSyntaxMaterializer.materialize(configuration);
+    const configuredResources = this.configuredResourceMaterializer.materialize(configuration);
+    const configuredRenderers = this.configuredRendererMaterializer.materialize(configuration);
+    const diWorld = this.diWorldConstructor.construct(configuration, configuredResources, resources);
+    const compilerWorlds = this.constructCompilerWorlds(
+      configuration,
+      diWorld,
+      configuredSyntax,
+      configuredResources,
+      configuredRenderers,
+      resources,
+    );
 
     return new AureliaAppWorldEmission(
       configuration,
       diWorld,
       configuredSyntax,
       configuredResources,
+      configuredRenderers,
       compilerWorlds,
     );
   }
@@ -104,6 +120,7 @@ export class AureliaAppWorldProducer {
     diWorld: DiWorldConstructionEmission,
     configuredSyntax: ConfiguredBuiltInSyntaxCatalogEmission,
     configuredResources: ConfiguredBuiltInResourceCatalogEmission,
+    configuredRenderers: ConfiguredBuiltInRuntimeRendererCatalogEmission,
     resourceDefinitions: ResourceDefinitionIndex | null,
   ): readonly TemplateCompilerWorldEmission[] {
     const containersByProduct = new Map(configuration.containers.map((container) => [container.productHandle, container]));
@@ -119,9 +136,10 @@ export class AureliaAppWorldProducer {
         continue;
       }
       const syntax = syntaxForAdmissions(admissions, configuredSyntax);
-      const resources = resourcesForContainer(container, diWorld, configuredResources, resourceDefinitions);
+      const runtimeRenderers = runtimeRenderersForAdmissions(admissions, configuredRenderers);
+      const resources = resourcesForContainer(container, diWorld, configuredResources, resourceDefinitions, appRoot);
 
-      compilerWorlds.push(this.compilerWorldProducer.construct(new TemplateCompilerWorldConstructionInput(
+      compilerWorlds.push(this.compilerWorldMaterializer.construct(new TemplateCompilerWorldConstructionInput(
         `app-root:${appRoot.productHandle}`,
         TemplateCompilerWorldKind.AppRoot,
         container,
@@ -129,6 +147,7 @@ export class AureliaAppWorldProducer {
         resources,
         syntax.attributePatterns,
         syntax.bindingCommands,
+        runtimeRenderers,
         TemplateResourceVisibilityKind.Configured,
         appRoot.sourceAddressHandle,
       )));
@@ -136,6 +155,16 @@ export class AureliaAppWorldProducer {
 
     return compilerWorlds;
   }
+}
+
+function runtimeRenderersForAdmissions(
+  admissions: readonly RegistrationAdmissionProduct[],
+  configuredRenderers: ConfiguredBuiltInRuntimeRendererCatalogEmission,
+): readonly BuiltInRuntimeRendererEmission[] {
+  const catalogProductHandles = rendererCatalogProductHandlesForAdmissions(admissions, configuredRenderers);
+  return configuredRenderers.catalogEmission.renderers.filter((renderer) =>
+    catalogProductHandles.has(renderer.catalogProductHandle)
+  );
 }
 
 function containerForAppRoot(
@@ -178,6 +207,7 @@ function resourcesForContainer(
   diWorld: DiWorldConstructionEmission,
   configuredResources: ConfiguredBuiltInResourceCatalogEmission,
   resourceDefinitions: ResourceDefinitionIndex | null,
+  appRoot: AppRoot | null,
 ): readonly TemplateVisibleResource[] {
   const configuredResourceByProduct = new Map(configuredResources.catalogEmission.resources.map((emission) => [
     emission.resource.productHandle,
@@ -201,17 +231,14 @@ function resourcesForContainer(
         continue;
       }
       seenResourceProducts.add(configuredResource.resource.productHandle);
-      const compilerDefinition = isTemplateCompilableDefinition(configuredResource.definition)
-        ? configuredResource.definition
-        : null;
       resources.push(new TemplateVisibleResource(
         configuredResource.resource.resourceKind,
         configuredResource.resource.name,
         configuredResource.resource.aliases,
         configuredResource.resource.productHandle,
         configuredResource.resource.identityHandle,
-        compilerDefinition?.productHandle ?? null,
-        compilerDefinition,
+        configuredResource.definition?.productHandle ?? null,
+        configuredResource.definition,
         visibleSlot.visibilityKind,
         configuredResource.resource.sourceAddressHandle ?? visibleSlot.sourceAddressHandle,
       ));
@@ -226,17 +253,14 @@ function resourcesForContainer(
         continue;
       }
       seenResourceProducts.add(resourceDefinition.productHandle);
-      const compilerDefinition = isTemplateCompilableDefinition(resourceDefinition)
-        ? resourceDefinition
-        : null;
       resources.push(new TemplateVisibleResource(
         resourceDefinition.type,
         resourceDefinition.name,
         resourceDefinition.aliases.map((alias) => alias.name),
         resourceDefinition.productHandle,
         resourceDefinition.identityHandle,
-        compilerDefinition?.productHandle ?? null,
-        compilerDefinition,
+        resourceDefinition.productHandle,
+        resourceDefinition,
         visibleSlot.visibilityKind,
         resourceDefinition.sourceAddressHandle ?? visibleSlot.sourceAddressHandle,
       ));
@@ -260,7 +284,53 @@ function resourcesForContainer(
     ));
   }
 
+  const rootComponent = rootComponentResource(appRoot, resourceDefinitions);
+  if (rootComponent != null) {
+    const resourceKey = runtimeResourceKeyForKind(rootComponent.resourceKind, rootComponent.name);
+    if (
+      (resourceKey == null || !seenLookupKeys.has(resourceKey))
+      && (
+        rootComponent.resourceProductHandle == null
+        || !seenResourceProducts.has(rootComponent.resourceProductHandle)
+      )
+    ) {
+      if (resourceKey != null) {
+        seenLookupKeys.add(resourceKey);
+      }
+      if (rootComponent.resourceProductHandle != null) {
+        seenResourceProducts.add(rootComponent.resourceProductHandle);
+      }
+      resources.unshift(rootComponent);
+    }
+  }
+
   return resources;
+}
+
+function rootComponentResource(
+  appRoot: AppRoot | null,
+  resourceDefinitions: ResourceDefinitionIndex | null,
+): TemplateVisibleResource | null {
+  const definition = resourceDefinitions?.lookupByTargetReference(appRoot?.component ?? null) ?? null;
+  if (
+    definition == null
+    || definition.productHandle == null
+    || definition.type !== ResourceDefinitionKind.CustomElement
+  ) {
+    return null;
+  }
+
+  return new TemplateVisibleResource(
+    definition.type,
+    definition.name,
+    definition.aliases.map((alias) => alias.name),
+    definition.productHandle,
+    definition.identityHandle,
+    definition.productHandle,
+    definition,
+    TemplateResourceVisibilityKind.AppRoot,
+    appRoot?.component?.addressHandle ?? definition.sourceAddressHandle,
+  );
 }
 
 function visibleResourceSlotsForContainer(
@@ -300,14 +370,6 @@ function visibleResourceSlotsForContainer(
   }
 
   return slots;
-}
-
-function isTemplateCompilableDefinition(
-  definition: FullResourceDefinition | null,
-): definition is NonNullable<typeof definition> & { readonly type: ResourceDefinitionKind.CustomElement | ResourceDefinitionKind.CustomAttribute } {
-  return definition != null
-    && (definition.type === ResourceDefinitionKind.CustomElement
-      || definition.type === ResourceDefinitionKind.CustomAttribute);
 }
 
 function registrationAdmissionsForAppRoot(
@@ -359,6 +421,30 @@ function syntaxCatalogProductHandlesForAdmissions(
 
   const catalogProductHandles = new Set<ProductHandle>();
   for (const selection of configuredSyntax.selections) {
+    if (!admissionProductHandles.has(selection.registrationAdmissionProductHandle)) {
+      continue;
+    }
+    for (const catalogProductHandle of selection.catalogProductHandles) {
+      catalogProductHandles.add(catalogProductHandle);
+    }
+  }
+  return catalogProductHandles;
+}
+
+function rendererCatalogProductHandlesForAdmissions(
+  admissions: readonly RegistrationAdmissionProduct[],
+  configuredRenderers: ConfiguredBuiltInRuntimeRendererCatalogEmission,
+): ReadonlySet<ProductHandle> {
+  const admissionProductHandles = new Set<ProductHandle>();
+  for (const admission of admissions) {
+    admissionProductHandles.add(admission.productHandle);
+  }
+  if (admissionProductHandles.size === 0) {
+    return new Set();
+  }
+
+  const catalogProductHandles = new Set<ProductHandle>();
+  for (const selection of configuredRenderers.selections) {
     if (!admissionProductHandles.has(selection.registrationAdmissionProductHandle)) {
       continue;
     }

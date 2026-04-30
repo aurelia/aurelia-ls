@@ -9,6 +9,7 @@ import {
   StaticProjectEvaluationPass,
   type StaticProjectEvaluationResult,
 } from '../evaluation/project-evaluation.js';
+import type { TypeSystemProject } from '../type-system/project.js';
 import { ResourceRecognitionContext } from './resource-recognition-context.js';
 import type { ResourceRecognitionObservation } from './resource-observation.js';
 import { ResourceRecognitionPass } from './resource-recognition-pass.js';
@@ -18,7 +19,7 @@ import {
 } from './resource-recognition-kernel-emitter.js';
 import {
   ResourceDefinitionConvergenceEmission,
-} from './resource-definition-convergence-producer.js';
+} from './resource-definition-converger.js';
 import type { FullResourceDefinition } from './resource-definition.js';
 
 /** Resource-recognition result for one boot-admitted source file. */
@@ -69,6 +70,7 @@ export class ResourceRecognitionProjectPass {
     store: KernelStore,
     project: ProjectBootFrame,
     evaluation: StaticProjectEvaluationResult | null = null,
+    typeSystem: TypeSystemProject | null = null,
   ): ResourceRecognitionProjectResult {
     const projectEvaluation = evaluation ?? new StaticProjectEvaluationPass().evaluateAndEmit(store, project);
     const recognition = new ResourceRecognitionPass();
@@ -93,6 +95,7 @@ export class ResourceRecognitionProjectPass {
           source.moduleKey,
           source.admission.addressHandle,
           source.evaluation,
+          typeSystem,
         ),
       );
       sources.push(new ResourceRecognitionSourceResult(

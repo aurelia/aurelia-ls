@@ -11,11 +11,11 @@ import {
 } from '../kernel/evidence.js';
 import type {
   AddressHandle,
-  ClaimHandle,
   IdentityHandle,
   ProductHandle,
   ProvenanceHandle,
 } from '../kernel/handles.js';
+import type { TemplateSourceOffsetMap } from '../resources/custom-element-definition.js';
 import {
   CompilerIdentity,
   CompilerIdentityKind,
@@ -39,15 +39,12 @@ import {
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
-import {
-  KernelVocabulary,
-  type ProductKindKey,
-} from '../kernel/vocabulary.js';
+import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
   TemplateCompilerWorldKind,
   type TemplateCompilerServiceReference,
 } from './compiler-world.js';
-import type { TemplateCompilerWorldEmission } from './compiler-world-producer.js';
+import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
 import {
   TemplateCompilationContext,
   TemplateCompilationContextKind,
@@ -65,6 +62,7 @@ import {
   TemplateParseFrontier,
   TemplateRecoveryPolicy,
 } from './parse-context.js';
+import { TemplateProductDetails } from './product-details.js';
 
 export class TemplateCompilationUnitConstructionInput {
   constructor(
@@ -82,6 +80,8 @@ export class TemplateCompilationUnitConstructionInput {
     readonly markup: string | null,
     /** Source address for the template carrier. */
     readonly sourceAddressHandle: AddressHandle | null,
+    /** Offset map from decoded markup boundaries to authored source boundaries. */
+    readonly sourceMap: TemplateSourceOffsetMap | null = null,
     /** Consumer lane that requested this compilation unit. */
     readonly consumer: TemplateParseConsumer = TemplateParseConsumer.Compilation,
     /** Recovery behavior requested for this unit. */
@@ -133,8 +133,8 @@ class TemplateCompilationClaimSet {
   }
 }
 
-/** Materializes the compiler-front-door products that parser and lowering producers consume. */
-export class TemplateCompilationUnitProducer {
+/** Materializes the compiler-front-door products that parser and lowering materializers consume. */
+export class TemplateCompilationUnitMaterializer {
   constructor(
     /** Hot analysis store that receives compilation-front-door records. */
     readonly store: KernelStore,
@@ -145,7 +145,15 @@ export class TemplateCompilationUnitProducer {
     if (emission.records.length > 0) {
       this.store.commit(new KernelStoreBatch(emission.records, `template-compilation-unit:${input.localKey}`));
     }
+    this.registerProductDetails(emission);
     return emission;
+  }
+
+  private registerProductDetails(emission: TemplateCompilationUnitEmission): void {
+    this.store.productDetails.add(TemplateProductDetails.Source, emission.templateSource.productHandle, emission.templateSource);
+    this.store.productDetails.add(TemplateProductDetails.ParseContext, emission.parseContext.productHandle, emission.parseContext);
+    this.store.productDetails.add(TemplateProductDetails.CompilationContext, emission.rootContext.productHandle, emission.rootContext);
+    this.store.productDetails.add(TemplateProductDetails.CompilationUnit, emission.compilationUnit.productHandle, emission.compilationUnit);
   }
 
   private recordsForUnit(input: TemplateCompilationUnitConstructionInput): TemplateCompilationUnitEmission {
@@ -171,6 +179,7 @@ export class TemplateCompilationUnitProducer {
       TemplatePhase.Authored,
       input.owner,
       input.markup,
+      input.sourceMap,
       templateAddressHandle,
       source.sourceAddressHandle,
       compactFieldProvenance([
@@ -178,6 +187,7 @@ export class TemplateCompilationUnitProducer {
         new FieldProvenance('phase', source.provenanceHandle),
         input.owner == null ? null : new FieldProvenance('owner', source.provenanceHandle),
         input.markup == null ? null : new FieldProvenance('markup', source.provenanceHandle),
+        input.sourceMap == null ? null : new FieldProvenance('sourceMap', source.provenanceHandle),
         new FieldProvenance('source', source.provenanceHandle),
       ]),
     );
@@ -288,27 +298,37 @@ export class TemplateCompilationUnitProducer {
         source.sourceAddressHandle,
         TemplateCompilationContextKind.Root,
       ),
-      product(
+      new MaterializedProduct(
         templateProductHandle,
         KernelVocabulary.Template.Source.key,
         templateIdentityHandle,
-        source,
-        claims.sourceClaims.map((claim) => claim.handle),
+        source.sourceAddressHandle,
+        source.provenanceHandle,
+        claimsForProduct(claims.allClaims, templateProductHandle).map((claim) => claim.handle),
       ),
-      product(parseContextProductHandle, KernelVocabulary.Template.ParseContext.key, parseContextIdentityHandle, source),
-      product(
+      new MaterializedProduct(
+        parseContextProductHandle,
+        KernelVocabulary.Template.ParseContext.key,
+        parseContextIdentityHandle,
+        source.sourceAddressHandle,
+        source.provenanceHandle,
+        claimsForProduct(claims.allClaims, parseContextProductHandle).map((claim) => claim.handle),
+      ),
+      new MaterializedProduct(
         unitProductHandle,
         KernelVocabulary.Compiler.CompilationUnit.key,
         unitIdentityHandle,
-        source,
-        claims.unitClaims.map((claim) => claim.handle),
+        source.sourceAddressHandle,
+        source.provenanceHandle,
+        claimsForProduct(claims.allClaims, unitProductHandle).map((claim) => claim.handle),
       ),
-      product(
+      new MaterializedProduct(
         contextProductHandle,
         KernelVocabulary.Compiler.CompilationContext.key,
         contextIdentityHandle,
-        source,
-        claims.contextClaims.map((claim) => claim.handle),
+        source.sourceAddressHandle,
+        source.provenanceHandle,
+        claimsForProduct(claims.allClaims, contextProductHandle).map((claim) => claim.handle),
       ),
       new MaterializationRecord(
         this.store.handles.materialization(`template-compilation-unit:${local}`),
@@ -461,6 +481,16 @@ function serviceClaims(
   return claims;
 }
 
+function claimsForProduct(
+  claims: readonly SemanticClaim[],
+  productHandle: ProductHandle,
+): readonly SemanticClaim[] {
+  return claims.filter((claim) =>
+    claim.subjectHandle === productHandle
+    || claim.objectHandle === productHandle
+  );
+}
+
 function addressStabilityForTemplate(input: TemplateCompilationUnitConstructionInput): AddressStability {
   if (input.sourceAddressHandle != null) {
     return AddressStability.SourceStable;
@@ -479,23 +509,6 @@ function identityStabilityForTemplate(input: TemplateCompilationUnitConstruction
     return IdentityStability.SemanticStable;
   }
   return IdentityStability.Session;
-}
-
-function product(
-  handle: ProductHandle,
-  productKind: ProductKindKey,
-  identityHandle: IdentityHandle,
-  source: TemplateCompilationSourceSet,
-  claimHandles: readonly ClaimHandle[] = [],
-): MaterializedProduct {
-  return new MaterializedProduct(
-    handle,
-    productKind,
-    identityHandle,
-    source.sourceAddressHandle,
-    source.provenanceHandle,
-    claimHandles,
-  );
 }
 
 export function compilationUnitKindForWorldKind(worldKind: TemplateCompilerWorldKind): TemplateCompilationUnitKind {

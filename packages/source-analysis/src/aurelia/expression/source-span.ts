@@ -3,7 +3,7 @@
  *
  * This file exists so the expression parser does not depend on the removed pre-kernel address scaffold. These spans
  * are parser-local current-input coordinates, not kernel addresses. Callers that need durable
- * navigation should translate parser spans into kernel `SourceSpanAddress` records at the producer boundary.
+ * navigation should translate parser spans into kernel `SourceSpanAddress` records at the materializer boundary.
  */
 
 export class SourceFileRef {

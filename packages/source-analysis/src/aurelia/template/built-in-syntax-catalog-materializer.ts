@@ -12,6 +12,7 @@ import {
 } from '../kernel/evidence.js';
 import type {
   AddressHandle,
+  ClaimHandle,
   IdentityHandle,
   ProductHandle,
   ProvenanceHandle,
@@ -78,6 +79,7 @@ import {
   type BuiltInSyntaxCatalogField,
   type BuiltInSyntaxGroup,
 } from './built-in-syntax.js';
+import { TemplateProductDetails } from './product-details.js';
 
 export interface BuiltInSyntaxCatalogInput {
   readonly packageId: BuiltInSyntaxPackage;
@@ -147,7 +149,7 @@ class ConfiguredSyntaxSelectionEmission {
 }
 
 /** Materializes framework-owned syntax catalogs before compiler-world visibility is decided. */
-export class BuiltInSyntaxCatalogProducer {
+export class BuiltInSyntaxCatalogMaterializer {
   constructor(
     /** Hot analysis store that receives built-in syntax records. */
     readonly store: KernelStore,
@@ -175,13 +177,38 @@ export class BuiltInSyntaxCatalogProducer {
       this.store.commit(new KernelStoreBatch(records, 'built-in-syntax-catalogs'));
     }
 
-    return new BuiltInSyntaxCatalogEmission(
+    const emission = new BuiltInSyntaxCatalogEmission(
       catalogs,
       attributePatterns,
       bindingCommands,
       compiledPatterns,
       records,
     );
+    this.registerProductDetails(emission);
+    return emission;
+  }
+
+  private registerProductDetails(emission: BuiltInSyntaxCatalogEmission): void {
+    for (const catalog of emission.catalogs) {
+      this.store.productDetails.addIfAbsent(TemplateProductDetails.BuiltInSyntaxCatalog, catalog.productHandle, catalog);
+    }
+    for (const pattern of emission.attributePatterns) {
+      this.store.productDetails.addIfAbsent(
+        TemplateProductDetails.AttributePatternExecutable,
+        pattern.executable.productHandle,
+        pattern.executable,
+      );
+    }
+    for (const command of emission.bindingCommands) {
+      this.store.productDetails.addIfAbsent(
+        TemplateProductDetails.BindingCommandExecutable,
+        command.executable.productHandle,
+        command.executable,
+      );
+    }
+    for (const pattern of emission.compiledPatterns) {
+      this.store.productDetails.addIfAbsent(TemplateProductDetails.CompiledAttributePattern, pattern.productHandle, pattern);
+    }
   }
 
   private recordsForCatalog(input: BuiltInSyntaxCatalogInput): {
@@ -208,6 +235,7 @@ export class BuiltInSyntaxCatalogProducer {
         `${local}:attribute-pattern:${index}`,
         catalogProductHandle,
         catalogIdentityHandle,
+        this.store.handles.claim(`${local}:contains-syntax-resource:${index}`),
         source,
       )
     );
@@ -217,6 +245,7 @@ export class BuiltInSyntaxCatalogProducer {
         `${local}:binding-command:${index}`,
         catalogProductHandle,
         catalogIdentityHandle,
+        this.store.handles.claim(`${local}:contains-syntax-resource:${attributePatternEmissions.length + index}`),
         source,
       )
     );
@@ -308,6 +337,7 @@ export class BuiltInSyntaxCatalogProducer {
     local: string,
     catalogProductHandle: ProductHandle,
     catalogIdentityHandle: IdentityHandle,
+    catalogClaimHandle: ClaimHandle,
     source: BuiltInSyntaxSourceSet,
   ): {
     readonly records: readonly KernelStoreRecord[];
@@ -346,7 +376,14 @@ export class BuiltInSyntaxCatalogProducer {
       ]),
     );
     const compiledPatternEmissions = handler.patterns.map((definition, index) =>
-      this.recordsForCompiledPattern(definition, `${local}:compiled-pattern:${index}`, identityHandle, productHandle, source)
+      this.recordsForCompiledPattern(
+        definition,
+        `${local}:compiled-pattern:${index}`,
+        identityHandle,
+        productHandle,
+        this.store.handles.claim(`${local}:compiles-attribute-pattern:${index}`),
+        source,
+      )
     );
     const compiledPatternClaims = compiledPatternEmissions.map((emission, index) => new SemanticClaim(
       this.store.handles.claim(`${local}:compiles-attribute-pattern:${index}`),
@@ -370,7 +407,10 @@ export class BuiltInSyntaxCatalogProducer {
         identityHandle,
         source.addressHandle,
         source.provenanceHandle,
-        compiledPatternClaims.map((claim) => claim.handle),
+        [
+          catalogClaimHandle,
+          ...compiledPatternClaims.map((claim) => claim.handle),
+        ],
       ),
       ...compiledPatternClaims,
       ...compiledPatternEmissions.flatMap((emission) => emission.records),
@@ -394,6 +434,7 @@ export class BuiltInSyntaxCatalogProducer {
     local: string,
     ownerIdentityHandle: IdentityHandle,
     executableProductHandle: ProductHandle,
+    executableClaimHandle: ClaimHandle,
     source: BuiltInSyntaxSourceSet,
   ): {
     readonly records: readonly KernelStoreRecord[];
@@ -428,6 +469,7 @@ export class BuiltInSyntaxCatalogProducer {
           identityHandle,
           product.sourceAddressHandle,
           source.provenanceHandle,
+          [executableClaimHandle],
         ),
       ],
       product,
@@ -439,6 +481,7 @@ export class BuiltInSyntaxCatalogProducer {
     local: string,
     catalogProductHandle: ProductHandle,
     catalogIdentityHandle: IdentityHandle,
+    catalogClaimHandle: ClaimHandle,
     source: BuiltInSyntaxSourceSet,
   ): {
     readonly records: readonly KernelStoreRecord[];
@@ -501,6 +544,7 @@ export class BuiltInSyntaxCatalogProducer {
         identityHandle,
         source.addressHandle,
         source.provenanceHandle,
+        [catalogClaimHandle],
       ),
     ];
     return {
@@ -556,20 +600,20 @@ export class BuiltInSyntaxCatalogProducer {
  * This is not final template-scope visibility. It only says that recognized framework registration effects made these
  * built-in syntax catalogs available to later attribute-parser and binding-command resolver input.
  */
-export class ConfiguredBuiltInSyntaxCatalogProducer {
-  private readonly catalogProducer: BuiltInSyntaxCatalogProducer;
+export class ConfiguredBuiltInSyntaxCatalogMaterializer {
+  private readonly catalogMaterializer: BuiltInSyntaxCatalogMaterializer;
 
   constructor(
     /** Hot analysis store that receives configured syntax-catalog selection records. */
     readonly store: KernelStore,
   ) {
-    this.catalogProducer = new BuiltInSyntaxCatalogProducer(store);
+    this.catalogMaterializer = new BuiltInSyntaxCatalogMaterializer(store);
   }
 
   materialize(configuration: ConfigurationKernelEmission): ConfiguredBuiltInSyntaxCatalogEmission {
     const selectionInputs = readConfiguredSyntaxCatalogInputs(configuration, this.store);
     const catalogInputs = uniqueCatalogInputs(selectionInputs.flatMap((input) => input.catalogInputs));
-    const catalogEmission = this.catalogProducer.materialize(catalogInputs);
+    const catalogEmission = this.catalogMaterializer.materialize(catalogInputs);
     const catalogsByKey = new Map(catalogEmission.catalogs.map((catalog) => [catalogKey(catalog), catalog]));
 
     const records: KernelStoreRecord[] = [];
@@ -590,6 +634,14 @@ export class ConfiguredBuiltInSyntaxCatalogProducer {
 
     if (records.length > 0) {
       this.store.commit(new KernelStoreBatch(records, 'configured-built-in-syntax-catalogs'));
+    }
+
+    for (const selection of selections) {
+      this.store.productDetails.addIfAbsent(
+        TemplateProductDetails.ConfiguredBuiltInSyntaxCatalogSelection,
+        selection.productHandle,
+        selection,
+      );
     }
 
     return new ConfiguredBuiltInSyntaxCatalogEmission(catalogEmission, selections, records);

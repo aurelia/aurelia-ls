@@ -6,8 +6,6 @@ import {
   EvidenceRole,
 } from '../kernel/evidence.js';
 import type {
-  ClaimHandle,
-  IdentityHandle,
   ProductHandle,
   ProvenanceHandle,
 } from '../kernel/handles.js';
@@ -32,10 +30,7 @@ import {
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
-import {
-  KernelVocabulary,
-  type ProductKindKey,
-} from '../kernel/vocabulary.js';
+import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { AttributePatternDefinitionEntry } from '../resources/attribute-pattern-definition.js';
 import {
   AttributePatternExecutionResult,
@@ -47,10 +42,10 @@ import {
   executeBuiltInAttributePattern,
   type BuiltInAttributePattern,
 } from './built-in-syntax.js';
-import type { TemplateCompilerWorldEmission } from './compiler-world-producer.js';
+import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
 import type { TemplateCompilationUnit } from './compilation-unit.js';
-import type { HtmlAttribute } from './html-ir.js';
-import type { HtmlParseEmission } from './html-parser-producer.js';
+import type { HtmlParseEmission } from './html-parse-materializer.js';
+import { TemplateProductDetails } from './product-details.js';
 
 export class AttributeSyntaxParseInput {
   constructor(
@@ -88,7 +83,7 @@ class MatchedAttributePattern {
 }
 
 /** Interprets authored HTML attributes through the runtime-shaped IAttributeParser model. */
-export class AttributeSyntaxProducer {
+export class AttributeSyntaxMaterializer {
   constructor(
     /** Hot analysis store that receives AttrSyntax records. */
     readonly store: KernelStore,
@@ -98,6 +93,9 @@ export class AttributeSyntaxProducer {
     const emission = this.recordsForParse(input);
     if (emission.records.length > 0) {
       this.store.commit(new KernelStoreBatch(emission.records, `attribute-syntax:${input.localKey}`));
+    }
+    for (const syntax of emission.syntaxes) {
+      this.store.productDetails.add(TemplateProductDetails.AttributeSyntax, syntax.productHandle, syntax);
     }
     return emission;
   }
@@ -181,13 +179,13 @@ export class AttributeSyntaxProducer {
           attribute.sourceAddressHandle,
           attribute.rawName,
         ),
-        product(
+        new MaterializedProduct(
           productHandle,
           KernelVocabulary.Template.AttributeSyntax.key,
           identityHandle,
-          attribute,
-          source,
-          claimsForSubject(claims, productHandle).map((claim) => claim.handle),
+          attribute.sourceAddressHandle,
+          source.provenanceHandle,
+          claimsForProduct(claims, productHandle).map((claim) => claim.handle),
         ),
       );
     });
@@ -250,27 +248,12 @@ function findMatchedPattern(
   return null;
 }
 
-function product(
-  handle: ProductHandle,
-  productKind: ProductKindKey,
-  identityHandle: IdentityHandle,
-  attribute: HtmlAttribute,
-  source: AttributeSyntaxSourceSet,
-  claimHandles: readonly ClaimHandle[] = [],
-): MaterializedProduct {
-  return new MaterializedProduct(
-    handle,
-    productKind,
-    identityHandle,
-    attribute.sourceAddressHandle,
-    source.provenanceHandle,
-    claimHandles,
-  );
-}
-
-function claimsForSubject(
+function claimsForProduct(
   claims: readonly SemanticClaim[],
-  subjectHandle: ProductHandle,
+  productHandle: ProductHandle,
 ): readonly SemanticClaim[] {
-  return claims.filter((claim) => claim.subjectHandle === subjectHandle);
+  return claims.filter((claim) =>
+    claim.subjectHandle === productHandle
+    || claim.objectHandle === productHandle
+  );
 }

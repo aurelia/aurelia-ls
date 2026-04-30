@@ -1,16 +1,16 @@
 import type { KernelStore } from '../kernel/store.js';
-import { NamedResourceRecognitionProducer } from './named-resource-recognition-producer.js';
+import { NamedResourceRecognizer } from './named-resource-recognizer.js';
 import type { ResourceRecognitionContext } from './resource-recognition-context.js';
 import {
-  ResourceDefinitionConvergenceProducer,
+  ResourceDefinitionConverger,
   type ResourceDefinitionConvergenceEmission,
-} from './resource-definition-convergence-producer.js';
+} from './resource-definition-converger.js';
 import {
   ResourceRecognitionKernelEmitter,
   type ResourceRecognitionKernelEmission,
 } from './resource-recognition-kernel-emitter.js';
 import type { ResourceRecognitionObservation } from './resource-observation.js';
-import { SyntaxResourceRecognitionProducer } from './syntax-resource-recognition-producer.js';
+import { SyntaxResourceRecognizer } from './syntax-resource-recognizer.js';
 
 /** Result of resource recognition over one evaluated source module. */
 export class ResourceRecognitionResult {
@@ -26,8 +26,8 @@ export class ResourceRecognitionResult {
 
 /** Horizontal resource-recognition pass over one evaluated source module. */
 export class ResourceRecognitionPass {
-  private readonly namedResources = new NamedResourceRecognitionProducer();
-  private readonly syntaxResources = new SyntaxResourceRecognitionProducer();
+  private readonly namedResources = new NamedResourceRecognizer();
+  private readonly syntaxResources = new SyntaxResourceRecognizer();
 
   recognize(context: ResourceRecognitionContext): readonly ResourceRecognitionObservation[] {
     return [
@@ -42,7 +42,7 @@ export class ResourceRecognitionPass {
   ): ResourceRecognitionResult {
     const observations = this.recognize(context);
     const emission = new ResourceRecognitionKernelEmitter(store).emit(context, observations);
-    const convergence = new ResourceDefinitionConvergenceProducer(store).converge(context, observations, emission);
+    const convergence = new ResourceDefinitionConverger(store).converge(context, observations, emission);
     return new ResourceRecognitionResult(observations, emission, convergence);
   }
 }

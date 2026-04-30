@@ -4,6 +4,7 @@ import type {
   ProductHandle,
   ProvenanceHandle,
 } from '../kernel/handles.js';
+import type { CheckerTypeReference } from '../type-system/type-shape.js';
 
 /**
  * Resource-layer reference to a TypeScript value, declaration, or callable without retaining AST state.
@@ -13,6 +14,7 @@ export class ResourceTargetReference {
     readonly identityHandle: IdentityHandle | null,
     readonly addressHandle: AddressHandle | null,
     readonly localName: string | null,
+    readonly targetType: CheckerTypeReference | null = null,
   ) {}
 }
 

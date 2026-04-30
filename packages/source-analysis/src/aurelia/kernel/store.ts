@@ -2,6 +2,7 @@ import type { SemanticAddress } from './address.js';
 import type { SemanticClaim } from './claim.js';
 import type { SemanticIdentity } from './identity.js';
 import type { MaterializationRecord, MaterializedProduct } from './materialization.js';
+import { ProductDetailCatalog } from './product-details.js';
 import type { ClaimPredicateKey, ProductKindKey } from './vocabulary.js';
 import {
   KernelClaimEndpointKind,
@@ -37,6 +38,7 @@ interface KernelStoreCommitIndex {
   readonly addresses: ReadonlyMap<AddressHandle, SemanticAddress>;
   readonly identities: ReadonlyMap<IdentityHandle, SemanticIdentity>;
   readonly products: ReadonlyMap<ProductHandle, MaterializedProduct>;
+  readonly claims: ReadonlyMap<ClaimHandle, SemanticClaim>;
 }
 
 /** Any handle-bearing record admitted into the hot kernel store; not a semantic taxonomy. */
@@ -54,10 +56,10 @@ export type KernelStoreRecord =
   | MaterializedProduct
   | MaterializationRecord;
 
-/** Coherent producer emission unit for the hot kernel store. */
+/** Coherent record-emission unit for the hot kernel store. */
 export class KernelStoreBatch {
   constructor(
-    /** Normalized records emitted together by one producer step. */
+    /** Normalized records emitted together by one analysis step. */
     readonly records: readonly KernelStoreRecord[] = [],
     /** Optional non-semantic label for debugging and inquiry traces. */
     readonly label: string | null = null,
@@ -84,11 +86,27 @@ function readSet<TKey, TValue>(
   return [...(map.get(key) ?? [])];
 }
 
+function claimTouchesProduct(
+  claim: SemanticClaim,
+  product: MaterializedProduct,
+): boolean {
+  return claim.subjectHandle === product.handle
+    || claim.objectHandle === product.handle
+    || (
+      product.identityHandle != null
+      && (claim.subjectHandle === product.identityHandle || claim.objectHandle === product.identityHandle)
+    )
+    || (
+      product.addressHandle != null
+      && (claim.subjectHandle === product.addressHandle || claim.objectHandle === product.addressHandle)
+    );
+}
+
 /**
  * Hot in-memory analysis store for normalized kernel records and handle expansion.
  *
  * The store owns record identity, graph navigation, and vocabulary validation.
- * It does not currently own rich product-detail objects. Producers may carry
+ * It does not currently own rich product-detail objects. Materializers may carry
  * those objects in emissions while assembling the hot world, but durable
  * product expansion needs a typed layer rather than generic store payloads.
  */
@@ -113,12 +131,14 @@ export class KernelStore {
   private readonly claimsBySubject = new Map<AddressHandle | IdentityHandle | ProductHandle, Set<ClaimHandle>>();
   private readonly claimsByObject = new Map<AddressHandle | IdentityHandle | ProductHandle, Set<ClaimHandle>>();
   private readonly claimsByPredicate = new Map<ClaimPredicateKey, Set<ClaimHandle>>();
+  readonly productDetails: ProductDetailCatalog;
 
   constructor(
     /** Human-readable key for the active analysis store; not a persistence authority. */
     storeKey: string,
   ) {
     this.handles = new KernelHandleFactory(storeKey);
+    this.productDetails = new ProductDetailCatalog((handle) => this.readProduct(handle));
   }
 
   /** Add a normalized kernel record and update cheap navigation indexes. */
@@ -131,7 +151,7 @@ export class KernelStore {
     return record;
   }
 
-  /** Commit one producer batch atomically enough to prevent duplicate handles before indexing. */
+  /** Commit one record batch atomically enough to prevent duplicate handles before indexing. */
   commit(batch: KernelStoreBatch): void {
     const batchLabel = batch.label ?? '(unnamed batch)';
     const batchHandles = new Set<KernelRecordHandle>();
@@ -282,6 +302,7 @@ export class KernelStore {
     const addresses = new Map<AddressHandle, SemanticAddress>();
     const identities = new Map<IdentityHandle, SemanticIdentity>();
     const products = new Map<ProductHandle, MaterializedProduct>();
+    const claims = new Map<ClaimHandle, SemanticClaim>();
 
     for (const record of records) {
       switch (record.kind) {
@@ -306,16 +327,20 @@ export class KernelStore {
         case 'template-node-identity':
         case 'binding-identity':
         case 'instruction-identity':
+        case 'type-system-identity':
         case 'generated-identity':
           identities.set(record.handle, record);
           break;
         case 'materialized-product':
           products.set(record.handle, record);
           break;
+        case 'semantic-claim':
+          claims.set(record.handle, record);
+          break;
       }
     }
 
-    return { addresses, identities, products };
+    return { addresses, identities, products, claims };
   }
 
   private validateBatch(
@@ -325,7 +350,7 @@ export class KernelStore {
   ): void {
     for (const record of batch.records) {
       if (record.kind === 'materialized-product') {
-        this.validateProduct(record, batchLabel);
+        this.validateProduct(record, pending, batchLabel);
       }
     }
     for (const record of batch.records) {
@@ -337,6 +362,7 @@ export class KernelStore {
 
   private validateProduct(
     product: MaterializedProduct,
+    pending: KernelStoreCommitIndex,
     batchLabel: string,
   ): void {
     const definition = readKernelVocabularyDefinition(product.productKindKey);
@@ -344,6 +370,20 @@ export class KernelStore {
       throw new Error(
         `Invalid product kind while committing ${batchLabel}: ${product.handle} uses ${product.productKindKey}.`,
       );
+    }
+    for (const claimHandle of product.claimHandles) {
+      const claim = pending.claims.get(claimHandle) ?? this.claims.get(claimHandle) ?? null;
+      if (claim == null) {
+        throw new Error(
+          `Unknown product claim while committing ${batchLabel}: ${product.handle} references ${claimHandle}.`,
+        );
+      }
+      if (!claimTouchesProduct(claim, product)) {
+        throw new Error(
+          `Invalid product claim while committing ${batchLabel}: ${product.handle} references ` +
+          `${claimHandle}, but the claim is not by or about that product, identity, or address.`,
+        );
+      }
     }
   }
 
@@ -437,6 +477,7 @@ export class KernelStore {
       case 'template-node-identity':
       case 'binding-identity':
       case 'instruction-identity':
+      case 'type-system-identity':
       case 'generated-identity':
         this.identities.set(record.handle, record);
         return;

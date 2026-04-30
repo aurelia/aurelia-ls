@@ -95,6 +95,7 @@ import {
   ValueConverterDefinition,
   type ValueConverterDefinitionField,
 } from './value-converter-definition.js';
+import { ResourceProductDetails } from './product-details.js';
 
 class BuiltInResourceSourceSet {
   constructor(
@@ -146,7 +147,7 @@ class ConfiguredResourceSelectionEmission {
 }
 
 /** Materializes framework-owned resource headers and static full definitions before compiler-world visibility is decided. */
-export class BuiltInResourceCatalogProducer {
+export class BuiltInResourceCatalogMaterializer {
   constructor(
     /** Hot analysis store that receives built-in resource records. */
     readonly store: KernelStore,
@@ -170,7 +171,31 @@ export class BuiltInResourceCatalogProducer {
       this.store.commit(new KernelStoreBatch(records, 'built-in-resource-catalogs'));
     }
 
-    return new BuiltInResourceCatalogEmission(catalogs, resources, records);
+    const emission = new BuiltInResourceCatalogEmission(catalogs, resources, records);
+    this.registerProductDetails(emission);
+    return emission;
+  }
+
+  private registerProductDetails(emission: BuiltInResourceCatalogEmission): void {
+    for (const catalog of emission.catalogs) {
+      this.store.productDetails.addIfAbsent(ResourceProductDetails.BuiltInCatalog, catalog.productHandle, catalog);
+    }
+    for (const resource of emission.resources) {
+      if (resource.resource.productHandle != null) {
+        this.store.productDetails.addIfAbsent(
+          ResourceProductDetails.DefinitionHeader,
+          resource.resource.productHandle,
+          resource.resource,
+        );
+      }
+      if (resource.definition?.productHandle != null) {
+        this.store.productDetails.addIfAbsent(
+          ResourceProductDetails.Definition,
+          resource.definition.productHandle,
+          resource.definition,
+        );
+      }
+    }
   }
 
   private recordsForCatalog(input: BuiltInResourceCatalogInput): {
@@ -423,20 +448,20 @@ export class BuiltInResourceCatalogProducer {
  * This is not final template-scope visibility. It says that recognized framework registration effects made these
  * built-in resource headers available to DI resource-slot spending.
  */
-export class ConfiguredBuiltInResourceCatalogProducer {
-  private readonly catalogProducer: BuiltInResourceCatalogProducer;
+export class ConfiguredBuiltInResourceCatalogMaterializer {
+  private readonly catalogMaterializer: BuiltInResourceCatalogMaterializer;
 
   constructor(
     /** Hot analysis store that receives configured resource-catalog selection records. */
     readonly store: KernelStore,
   ) {
-    this.catalogProducer = new BuiltInResourceCatalogProducer(store);
+    this.catalogMaterializer = new BuiltInResourceCatalogMaterializer(store);
   }
 
   materialize(configuration: ConfigurationKernelEmission): ConfiguredBuiltInResourceCatalogEmission {
     const selectionInputs = readConfiguredResourceCatalogInputs(configuration);
     const catalogInputs = uniqueCatalogInputs(selectionInputs.flatMap((input) => input.catalogInputs));
-    const catalogEmission = this.catalogProducer.materialize(catalogInputs);
+    const catalogEmission = this.catalogMaterializer.materialize(catalogInputs);
     const catalogsByKey = new Map(catalogEmission.catalogs.map((catalog) => [catalogKey(catalog), catalog]));
 
     const records: KernelStoreRecord[] = [];
@@ -457,6 +482,14 @@ export class ConfiguredBuiltInResourceCatalogProducer {
 
     if (records.length > 0) {
       this.store.commit(new KernelStoreBatch(records, 'configured-built-in-resource-catalogs'));
+    }
+
+    for (const selection of selections) {
+      this.store.productDetails.addIfAbsent(
+        ResourceProductDetails.ConfiguredBuiltInResourceCatalogSelection,
+        selection.productHandle,
+        selection,
+      );
     }
 
     return new ConfiguredBuiltInResourceCatalogEmission(catalogEmission, selections, records);
@@ -854,12 +887,14 @@ function bindables(
         ? null
         : new ResourceTargetReference(null, source.addressHandle, input.setterName),
     ),
+    source.addressHandle,
     compactFieldProvenance([
       new FieldProvenance('attribute', source.provenanceHandle),
       new FieldProvenance('callback', source.provenanceHandle),
       new FieldProvenance('mode', source.provenanceHandle),
       new FieldProvenance('name', source.provenanceHandle),
       new FieldProvenance('set', source.provenanceHandle),
+      new FieldProvenance('source', source.provenanceHandle),
     ]),
   ));
 }

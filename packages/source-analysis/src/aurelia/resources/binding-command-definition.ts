@@ -22,7 +22,7 @@ export const enum BindingCommandDefinitionContributionKind {
   Convention = 'convention',
 }
 
-// TODO(resource-convergence): Keep this contribution envelope provisional until binding-command convergence producers
+// TODO(resource-convergence): Keep this contribution envelope provisional until binding-command convergers
 // show whether thin resources want per-origin variants, per-field patches, or a shared named-resource contribution.
 export class BindingCommandDefinitionContribution {
   constructor(

@@ -1,7 +1,7 @@
 import type { AddressHandle, EvidenceHandle, IdentityHandle } from './handles.js';
 
 /**
- * Evidence is a high-leverage unstable surface: it sits close to source reality, so it will evolve as producers
+ * Evidence is a high-leverage unstable surface: it sits close to source reality, so it will evolve as materializers
  * learn more shapes. Keep it as witness data. Derived relationships belong in derivation/claims, unresolved
  * pressure belongs in open seams, and confidence or actionability belongs in inquiry answers.
  */

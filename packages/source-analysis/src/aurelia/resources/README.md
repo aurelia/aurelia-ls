@@ -2,7 +2,7 @@
 
 See [../README.md](../README.md) for the folder-wide rebuild map and MCP co-evolution rule.
 
-This folder is the first fresh Aurelia-semantic producer layer over boot, kernel, inquiry, and static evaluation.
+This folder is the first fresh Aurelia-semantic materialization layer over boot, kernel, inquiry, and static evaluation.
 
 It recognizes source carriers that the Aurelia runtime turns into resources:
 
@@ -12,7 +12,7 @@ It recognizes source carriers that the Aurelia runtime turns into resources:
 - `AttributePattern.create(...)` syntax-resource carriers
 
 The source-level pass expects an evaluated module environment. The project-level pass starts from boot admissions and
-uses the shared `evaluation` project pass before running the same recognition producers over each admitted TS/JS
+uses the shared `evaluation` project pass before running the same recognizers over each admitted TS/JS
 module. Recognition should not grow its own import resolver.
 Generic expression and value reads belong in `evaluation`; resource field readers should only interpret Aurelia
 definition fields such as `type`, `name`, `aliases`, `pattern`, and `symbols`.
@@ -38,7 +38,7 @@ materialization/provenance rather than being baked into the product name.
 Framework-owned built-ins are first modeled as resource headers. `built-in-resources.ts` records the runtime-html,
 i18n, and state default resource catalogs as concrete, runtime-linked model classes so compiler worlds can see
 built-in template controllers, custom attributes/elements, value converters, and binding behaviors without pretending
-they came from user source. The built-in catalog producer now also emits full definition products for built-ins whose
+they came from user source. The built-in catalog materializer now also emits full definition products for built-ins whose
 runtime metadata is static enough to model directly. That is the first convergence pressure from template compilation:
 headers remain admission/lookup facts, while full definitions carry bindables and compiler-consumable metadata.
 
@@ -47,12 +47,20 @@ and provenance, each closed definition header becomes a `resource.definition-hea
 a materialization record that points at produced products, declaration claims, and open seams. That keeps recognition
 cheap to evolve while still giving inquiry a durable graph.
 
-Emitter results return typed definition-header handles for downstream producers. The convergence producer consumes
+Emitter results return typed definition-header handles for downstream materializers. The converger consumes
 those handles plus the AST-bearing observations and emits `resource.definition` products with field provenance and
 `resource.converges-to-definition` claims. This first convergence slice is conservative: it closes runtime defaults,
 resource keys, aliases, simple static bindables, `@bindable` metadata, template-controller flags, capture/template
-shape, and thin resource definitions. It records open seams for explicit metadata that is visible but not safely
-materialized yet, including dependencies, pre-lowered instructions, surrogates, and watches.
+shape, and thin resource definitions. Bindable definitions preserve the source address for the metadata entry or
+member declaration that produced them, because template attribute completion, go-to-definition, and later rename support
+need that narrower origin instead of only the owning resource definition. It records open seams for explicit metadata
+that is visible but not safely materialized yet, including dependencies, pre-lowered instructions, surrogates, and
+watches.
+
+`product-details.ts` declares the typed detail slots that hydrate resource definition headers, built-in catalogs,
+configured catalog selections, and full definitions from product handles. This keeps resource inquiry and MCP
+expansion from treating headers, definitions, or framework catalogs as generic payloads while still letting materializers
+consume rich current-run metadata.
 
 Open seams are part of the product here. A carrier with an open kind, name, alias, pattern, or target should still
 produce kernel pressure rather than disappearing or pretending to be complete.
@@ -63,9 +71,9 @@ Watchpoints:
   patterns are parser-pattern resources and use a dedicated identity that keeps both `pattern` and `symbols`.
   `AttributePatternDefinitionEntry` mirrors the framework pattern record, while `AttributePatternDefinition` models
   the registered target plus its pattern entries.
-- `auLink` belongs on definition models rather than stateless producer classes or recognition headers.
+- `auLink` belongs on definition models rather than stateless recognizer classes or recognition headers.
 - Contribution envelopes are provisional. They intentionally keep convergence policy out of recognition, but should
-  be tightened once real convergence producers reveal whether fields want per-origin variants, per-field patches, or
+  be tightened once real convergers reveal whether fields want per-origin variants, per-field patches, or
   another shape.
 - Resource vocabulary uses explicit kernel slots for claim predicates, seam kinds, and product kinds. Keep new
   entries small and source-grounded; if a name starts representing answer policy, ranking, or consumer usefulness, it
@@ -74,7 +82,7 @@ Watchpoints:
   infer metadata directly from headers; compiler-world visibility should prefer full definitions when convergence
   produced them and treat header-only rows as visibly incomplete.
 - Resource open seams carry product-owned `KernelVocabulary.Resource.*` seam keys directly. Do not add a second local
-  open-kind enum unless a future producer needs a genuinely different, non-durable taxonomy.
+  open-kind enum unless a future materializer needs a genuinely different, non-durable taxonomy.
 - Product-level provenance is in place and definition models now expose field-level provenance slots. Convergence
-  producers must populate those slots when a field's source matters for rename, refactor, explanation, or ambiguity
+  materializers must populate those slots when a field's source matters for rename, refactor, explanation, or ambiguity
   handling instead of flattening everything to the carrier observation.

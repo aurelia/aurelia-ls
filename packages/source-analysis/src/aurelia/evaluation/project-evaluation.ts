@@ -6,7 +6,7 @@ import type {
 import { SourceLanguage } from '../kernel/address.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { StaticModuleEvaluationResult } from './evaluator.js';
-import { EvaluationKernelBridge } from './kernel-bridge.js';
+import { EvaluationKernelEmitter } from './kernel-emitter.js';
 import {
   buildEvaluationModuleGraph,
   FileSystemEvaluationModuleSourceHost,
@@ -29,7 +29,7 @@ export class StaticProjectEvaluationSourceResult {
     readonly moduleKey: string,
     /** Parsed source file when module graph construction reached the admission. */
     readonly sourceFile: ts.SourceFile | null,
-    /** Static evaluator result for the admitted module when evaluation closed enough for producers. */
+    /** Static evaluator result for the admitted module when evaluation closed enough for materializers. */
     readonly evaluation: StaticModuleEvaluationResult | null,
     /** Module edges left unresolved while preparing evaluation for this source. */
     readonly unresolvedModules: readonly EvaluationModuleResolutionOpen[],
@@ -54,7 +54,7 @@ export class StaticProjectEvaluationResult {
   }
 }
 
-/** Project-level static evaluation shared by Aurelia semantic producers. */
+/** Project-level static evaluation shared by Aurelia semantic passes. */
 export class StaticProjectEvaluationPass {
   evaluate(project: ProjectBootFrame): StaticProjectEvaluationResult {
     return this.evaluateCore(project, null);
@@ -64,12 +64,12 @@ export class StaticProjectEvaluationPass {
     store: KernelStore,
     project: ProjectBootFrame,
   ): StaticProjectEvaluationResult {
-    return this.evaluateCore(project, new EvaluationKernelBridge(store));
+    return this.evaluateCore(project, new EvaluationKernelEmitter(store));
   }
 
   private evaluateCore(
     project: ProjectBootFrame,
-    kernelBridge: EvaluationKernelBridge | null,
+    kernelEmitter: EvaluationKernelEmitter | null,
   ): StaticProjectEvaluationResult {
     const host = new FileSystemEvaluationModuleSourceHost(project.rootDir);
     const sources: StaticProjectEvaluationSourceResult[] = [];
@@ -94,7 +94,7 @@ export class StaticProjectEvaluationPass {
         continue;
       }
 
-      kernelBridge?.emitOpenSeams(record.sourceFile, admission.addressHandle, evaluation);
+      kernelEmitter?.emitOpenSeams(record.sourceFile, admission.addressHandle, evaluation);
       sources.push(new StaticProjectEvaluationSourceResult(
         admission,
         moduleKey,

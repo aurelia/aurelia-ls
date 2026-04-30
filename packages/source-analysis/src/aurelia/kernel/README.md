@@ -47,16 +47,16 @@ operation -> compiler scope without hard-coding product-specific edge tables.
 The definition helpers preserve literal vocabulary keys and claim signatures in their return types so product code,
 MCP lenses, and future graph checks can follow declared topology instead of widening everything to string-like keys.
 Those signatures are product topology, not MCP-only metadata. `KernelStore.commit` validates materialized product
-kinds and semantic-claim endpoints against the same vocabulary contract so producer mistakes fail at the record
+kinds and semantic-claim endpoints against the same vocabulary contract so materializer mistakes fail at the record
 boundary, including batches that introduce a product and claim it in the same commit. TypeScript typing keeps normal
-product code narrow; store validation keeps dynamic, generated, or future deserialized producers honest.
+product code narrow; store validation keeps dynamic, generated, or future deserialized materializers honest.
 
 Vocabulary is another fast-evolving pressure surface. It is intentionally small while semantics are still being
 implemented, but it must not become a dumping ground for near-duplicate relationship names or consumer-specific
-answer states. Add vocabulary when a real producer or query needs a stable classifier, and keep usage-slot
+answer states. Add vocabulary when a real materializer or query needs a stable classifier, and keep usage-slot
 meaning product-owned so MCP and other tools do not rediscover it from constructor positions or naming patterns.
 As claims start carrying real semantics, revisit vocabulary continuously. A new claim predicate should normally name
-a durable domain relationship, not a temporary producer step, query state, confidence label, or convenient synonym for
+a durable domain relationship, not a temporary materialization step, query state, confidence label, or convenient synonym for
 an existing edge.
 
 The key space is still deliberately small, but the TypeScript contracts now distinguish claim predicates, seam
@@ -67,7 +67,7 @@ Do not hide uncertainty behind `null`, empty arrays, or best-effort guesses. Use
 derivation states, materialization states, and open seams. Confidence, ranking, and user-specific belief policy
 belong in query answers or consumer projections, not in first-order kernel facts.
 
-Evidence and derivation are deliberate pressure surfaces. They are expected to evolve as real producers are
+Evidence and derivation are deliberate pressure surfaces. They are expected to evolve as real materializers are
 implemented, but they must not become catch-all storage for facts that belong in identities, addresses, claims,
 products, open seams, or inquiry answers. Treat them as high-leverage unstable surfaces: useful because they sit
 close to source reality and transformation flow, risky because they can quietly absorb policy, confidence,
@@ -80,7 +80,7 @@ Do not use provenance as a generic completion marker, payload channel, ranking h
 fields.
 
 Semantic graph edges should point at named records by handle. Avoid terminal JSON values, generic payload fields,
-and ref wrappers unless a concrete producer proves they are necessary. If a literal matters semantically, first
+and ref wrappers unless a concrete materializer proves they are necessary. If a literal matters semantically, first
 look for the named address, identity, product, field, or domain record it should belong to.
 
 Source coordinates are current-world addresses. The active store can keep them useful by recomputing, remapping,
@@ -96,17 +96,18 @@ in the kernel yet.
 `handles.ts` defines branded store-local handles and `KernelHandleFactory`, the scoped minting API for normalized
 record links.
 
-`store.ts` defines the hot in-memory `KernelStore`, batch commit surface, handle expansion, and cheap navigation
-indexes. Batches are producer record-emission units, not durable transactions, vocabulary mutations, or semantic
-boundaries. The store also validates controlled vocabulary usage at commit time: product kinds must be declared as
-product-kind vocabulary, claim predicates must be declared as claim-predicate vocabulary, and claim endpoints must
-match the predicate's directional signature.
+`store.ts` defines the hot in-memory `KernelStore`, batch commit surface, handle expansion, cheap navigation indexes,
+and typed product-detail sidecar. Batches are record-emission units, not durable transactions, vocabulary
+mutations, or semantic boundaries. The store also validates controlled vocabulary usage at commit time: product kinds
+must be declared as product-kind vocabulary, claim predicates must be declared as claim-predicate vocabulary, and claim
+endpoints must match the predicate's directional signature.
 
-The store indexes normalized kernel records, not arbitrary rich product objects. A `MaterializedProduct` is currently
-an envelope that names kind, identity, address, provenance, and claims. Rich domain objects live in producer emissions
-while the current analysis world is being assembled. This is an intentional short-term boundary, but it is also a
-known integration pressure: durable inquiry expansion will eventually need a typed product-detail catalog, named
-domain records, or another explicit layer. Do not reintroduce generic payload fields to bridge that gap.
+The store indexes normalized kernel records first. A `MaterializedProduct` is an envelope that names kind, identity,
+address, provenance, and claims. Rich domain objects can hydrate that envelope through `product-details.ts`, where
+typed slots validate the product kind before attaching current-run detail objects. Product details are for hot inquiry
+and materializer handoff; they are not kernel records, generic payloads, JSON storage, or a persistence schema. If a detail
+starts needing durable graph semantics, promote that semantics into named records, claims, identities, or addresses
+rather than widening the detail sidecar.
 
 `vocabulary.ts` defines the controlled vocabulary mechanism used by claims, rules, edge roles, seams, binding
 kinds, instruction kinds, and product kinds. Each vocabulary definition carries its usage slot.
@@ -135,6 +136,8 @@ model and record types.
 - DI products produced while configuration and registration are spent into an abstract container world.
 - Registration admission identities that name a key plus the admission/strategy family before container-state spending.
 - Templates, template nodes, bindings, instructions, and generated identities.
+- Type-system projections for checker-backed type and member surfaces. These are session-stable handles over the
+  current TypeScript program/checker epoch, not long-lived declaration identities by themselves.
 
 `evidence.ts` describes direct witnesses:
 
@@ -172,8 +175,18 @@ model and record types.
 - Product handles, claim handles, derivation handles, and open seam handles produced alongside those products.
 - Completeness/outcome state only; generated or convention-derived origin belongs in provenance and evidence records.
 - Materialized product envelopes should stay boring. If a consumer needs to expand a product into resource metadata,
-  instruction details, parser publication state, or DI slot shape, model that as typed product detail outside the
-  generic envelope or as domain-specific records, not as `unknown`, JSON, or payload storage.
+  instruction details, parser publication state, or DI slot shape, use typed product detail slots or domain-specific
+  records, not `unknown`, JSON, or payload storage.
+
+`product-details.ts` is the current hot hydration sidecar:
+
+- Detail slots are typed and tied to exactly one product-kind vocabulary key.
+- Details may be rich in-memory objects and may retain current-run machinery when materializers need it, including
+  TypeScript checker objects in the type-system substrate.
+- The catalog validates that a product was committed and that its product kind matches the slot before accepting a
+  detail.
+- Details support inquiry and MCP expansion, but they are not a shortcut around kernel vocabulary, claims, or
+  provenance when a relationship needs to become semantic.
 
 `note.ts` contains small non-semantic notes for diagnostics and explanation hints.
 
@@ -189,7 +202,7 @@ partial, unsupported, and reroute. Answers should be able to carry products, cla
 seams, policy-specific confidence/state, and suggested continuations.
 
 Do not back-port answer semantics into derivation records. A derivation may record partial, blocked, speculative,
-or failed production; the consumer-facing meaning of that result belongs in the inquiry/answer layer. Autocomplete
+or failed materialization; the consumer-facing meaning of that result belongs in the inquiry/answer layer. Autocomplete
 ranking, rename safety, diagnostic severity beyond concrete open seams, AI usefulness, and AOT actionability are
 query policy decisions layered over the kernel.
 
@@ -213,5 +226,5 @@ The first strong vertical slice should connect TypeScript/module evaluation to D
 - Which derivation rules connected the pieces?
 - Which parts are ambiguous, convention-derived, recovered, or still open?
 
-That slice should emit kernel records from the start so the vocabulary is pressure-tested by real producers and
+That slice should emit kernel records from the start so the vocabulary is pressure-tested by real materializers and
 real queries.

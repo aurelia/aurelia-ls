@@ -173,7 +173,7 @@ export class GeneratedAddress {
     readonly handle: AddressHandle,
     /** Retention promise for this address inside the active analysis store. */
     readonly stability: AddressStability,
-    /** Producer-local key for the generated item; derivation/provenance explains how it was produced. */
+    /** Analysis-step-local key for the generated item; derivation/provenance explains how it was produced. */
     readonly localKey: string,
     /** Optional address or identity handle that explains this generated item. */
     readonly anchorHandle: AddressHandle | IdentityHandle | null = null,

@@ -97,6 +97,12 @@ function targetForPropertyBinding(
     : info.bindable.name;
 }
 
+function targetForIteratorBinding(info: BindingCommandBuildInfo): string {
+  return info.bindable == null
+    ? camelCase(info.syntax.target)
+    : info.bindable.name;
+}
+
 function modeFromBindable(mode: BindableBindingMode | null | undefined): TemplateBindingMode {
   switch (mode) {
     case BindableBindingMode.OneTime:
@@ -742,6 +748,7 @@ export class ForBindingCommand {
       allocation.identityHandle,
       info.node,
       info.attribute,
+      targetForIteratorBinding(info),
       iterator.localNames,
       iterator.expressionProductHandle,
       tailInstructionProductHandles,

@@ -7,6 +7,14 @@ import type {
 import type { FieldProvenance } from '../kernel/provenance.js';
 import type { ContainerReference } from '../di/container.js';
 import type { ResourceTargetReference } from '../resources/resource-reference.js';
+import type { CheckerTypeReference } from '../type-system/type-shape.js';
+import {
+  BindingContextKind,
+  BindingScopeConstructionInput,
+  BindingScopeOwnerKind,
+  type BindingScope,
+  type BindingScopeReference,
+} from './scope.js';
 
 export const enum ControllerVmKind {
   CustomElement = 'customElement',
@@ -35,6 +43,7 @@ export type ControllerField =
   | 'scope'
   | 'parent'
   | 'children'
+  | 'bindings'
   | 'location'
   | 'nodes'
   | 'shadowRoot'
@@ -68,7 +77,9 @@ export class Controller {
     readonly vmKind: ControllerVmKind,
     readonly definitionProductHandle: ProductHandle | null,
     readonly hostAddressHandle: AddressHandle | null,
+    readonly scope: BindingScopeReference | null,
     readonly parent: ControllerReference | null,
+    readonly bindingProductHandles: readonly ProductHandle[] | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<ControllerField>[] = [],
   ) {}
@@ -92,7 +103,9 @@ export class ComponentController {
     readonly definitionProductHandle: ProductHandle,
     readonly viewModel: ResourceTargetReference | null,
     readonly hostAddressHandle: AddressHandle | null,
+    readonly scope: BindingScopeReference | null,
     readonly parent: ControllerReference | null,
+    readonly bindingProductHandles: readonly ProductHandle[] | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<ControllerField>[] = [],
   ) {}
@@ -115,8 +128,10 @@ export class HydratableController {
     readonly vmKind: ControllerVmKind.CustomElement | ControllerVmKind.Synthetic,
     readonly definitionProductHandle: ProductHandle | null,
     readonly hostAddressHandle: AddressHandle | null,
+    readonly scope: BindingScopeReference | null,
     readonly parent: ControllerReference | null,
     readonly children: readonly ControllerReference[],
+    readonly bindingProductHandles: readonly ProductHandle[] | null,
     readonly strict: boolean | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<ControllerField>[] = [],
@@ -140,6 +155,8 @@ export class SyntheticViewController {
     readonly container: ContainerReference,
     readonly parent: ControllerReference | null,
     readonly children: readonly ControllerReference[],
+    readonly scope: BindingScopeReference | null,
+    readonly bindingProductHandles: readonly ProductHandle[] | null,
     readonly hostAddressHandle: AddressHandle | null,
     readonly locationAddressHandle: AddressHandle | null,
     readonly shadowRootAddressHandle: AddressHandle | null,
@@ -147,6 +164,30 @@ export class SyntheticViewController {
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<ControllerField>[] = [],
   ) {}
+
+  /** Runtime synthetic-view scope shape produced by template-controller/view-factory activation. */
+  static createBindingScopeInput(input: {
+    readonly localKey: string;
+    readonly ownerProductHandle: ProductHandle | null;
+    readonly ownerIdentityHandle: IdentityHandle | null;
+    readonly parent: BindingScope;
+    readonly sourceAddressHandle: AddressHandle | null;
+  }): BindingScopeConstructionInput {
+    return new BindingScopeConstructionInput(
+      input.localKey,
+      BindingScopeOwnerKind.SyntheticView,
+      input.ownerProductHandle,
+      input.ownerIdentityHandle,
+      input.parent,
+      BindingContextKind.Synthetic,
+      null,
+      [],
+      null,
+      [],
+      false,
+      input.sourceAddressHandle,
+    );
+  }
 
   toReference(): ControllerReference {
     return new ControllerReference(this.identityHandle, this.productHandle, this.sourceAddressHandle, this.name);
@@ -164,9 +205,10 @@ export class CustomAttributeController {
     readonly identityHandle: IdentityHandle,
     readonly name: string | null,
     readonly container: ContainerReference,
-    readonly definitionProductHandle: ProductHandle,
+    readonly definitionProductHandle: ProductHandle | null,
     readonly viewModel: ResourceTargetReference | null,
     readonly hostAddressHandle: AddressHandle | null,
+    readonly scope: BindingScopeReference | null,
     readonly parent: ControllerReference | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<ControllerField>[] = [],
@@ -191,11 +233,38 @@ export class DryCustomElementController {
     readonly definitionProductHandle: ProductHandle,
     readonly viewModel: ResourceTargetReference | null,
     readonly hostAddressHandle: AddressHandle | null,
+    readonly scope: BindingScopeReference,
     readonly parent: ControllerReference | null,
+    readonly bindingProductHandles: readonly ProductHandle[] | null,
     readonly strict: boolean | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<ControllerField>[] = [],
   ) {}
+
+  /** Runtime custom-element scope shape produced during `Controller.$el(...)` hydration. */
+  static createBindingScopeInput(input: {
+    readonly localKey: string;
+    readonly ownerProductHandle: ProductHandle | null;
+    readonly ownerIdentityHandle: IdentityHandle | null;
+    readonly parent: BindingScope | null;
+    readonly viewModelType: CheckerTypeReference | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  }): BindingScopeConstructionInput {
+    return new BindingScopeConstructionInput(
+      input.localKey,
+      BindingScopeOwnerKind.CustomElementController,
+      input.ownerProductHandle,
+      input.ownerIdentityHandle,
+      input.parent,
+      BindingContextKind.ViewModel,
+      input.viewModelType,
+      [],
+      null,
+      [],
+      true,
+      input.sourceAddressHandle,
+    );
+  }
 
   toReference(): ControllerReference {
     return new ControllerReference(this.identityHandle, this.productHandle, this.sourceAddressHandle, this.name);
@@ -216,7 +285,9 @@ export class ContextualCustomElementController {
     readonly definitionProductHandle: ProductHandle,
     readonly viewModel: ResourceTargetReference | null,
     readonly hostAddressHandle: AddressHandle | null,
+    readonly scope: BindingScopeReference,
     readonly parent: ControllerReference | null,
+    readonly bindingProductHandles: readonly ProductHandle[] | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<ControllerField>[] = [],
   ) {}
@@ -240,10 +311,12 @@ export class CompiledCustomElementController {
     readonly definitionProductHandle: ProductHandle,
     readonly viewModel: ResourceTargetReference | null,
     readonly hostAddressHandle: AddressHandle | null,
+    readonly scope: BindingScopeReference,
     readonly parent: ControllerReference | null,
     readonly locationAddressHandle: AddressHandle | null,
     readonly shadowRootAddressHandle: AddressHandle | null,
     readonly nodeSequenceProductHandle: ProductHandle | null,
+    readonly bindingProductHandles: readonly ProductHandle[] | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<ControllerField>[] = [],
   ) {}
@@ -267,8 +340,10 @@ export class CustomElementController {
     readonly definitionProductHandle: ProductHandle,
     readonly viewModel: ResourceTargetReference | null,
     readonly hostAddressHandle: AddressHandle | null,
+    readonly scope: BindingScopeReference,
     readonly parent: ControllerReference | null,
     readonly lifecycleHooksProductHandle: ProductHandle | null,
+    readonly bindingProductHandles: readonly ProductHandle[] | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<ControllerField>[] = [],
   ) {}
@@ -277,3 +352,14 @@ export class CustomElementController {
     return new ControllerReference(this.identityHandle, this.productHandle, this.sourceAddressHandle, this.name);
   }
 }
+
+export type ControllerProduct =
+  | Controller
+  | ComponentController
+  | HydratableController
+  | SyntheticViewController
+  | CustomAttributeController
+  | DryCustomElementController
+  | ContextualCustomElementController
+  | CompiledCustomElementController
+  | CustomElementController;

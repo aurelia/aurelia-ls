@@ -9,6 +9,7 @@ import type { BindableDefinition } from '../resources/bindable-definition.js';
 import type { ResourceTargetReference } from '../resources/resource-reference.js';
 import type { AttributeSyntax } from './attribute-syntax.js';
 import type { HtmlAttributeReference, HtmlNodeReference } from './html-ir.js';
+import type { TemplateValueSiteReference } from './value-site.js';
 import type {
   TemplateInstruction,
   TemplateInstructionKind,
@@ -16,6 +17,7 @@ import type {
 import {
   TemplateCompilerServiceKind,
   TemplateCompilerServiceReference,
+  type TemplateBindableReference,
 } from './compiler-world.js';
 
 export const enum BindingCommandExecutionKind {
@@ -80,6 +82,23 @@ export type BindingCommandLoweringField =
   | 'instructions'
   | 'source';
 
+export type MultiBindingSegmentField =
+  | 'site'
+  | 'attribute'
+  | 'syntax'
+  | 'bindable'
+  | 'command'
+  | 'rawName'
+  | 'rawValue'
+  | 'source';
+
+export type MultiBindingLoweringField =
+  | 'site'
+  | 'state'
+  | 'segments'
+  | 'instructions'
+  | 'source';
+
 export class BindingCommandInstructionAllocation {
   constructor(
     readonly productHandle: ProductHandle,
@@ -100,7 +119,7 @@ export class BindingCommandIteratorParse {
  *
  * Runtime `for` command uses `IAttributeParser.parse` for iterator tail entries,
  * but those entries are not authored HTML attributes and should not become
- * ordinary AttrSyntax products until a real producer needs that visibility.
+ * ordinary AttrSyntax products until a real materializer needs that visibility.
  */
 export class BindingCommandTailSyntax {
   constructor(
@@ -128,6 +147,8 @@ export class BindingCommandBuildInfo {
     readonly bindableOwnerProductHandle: ProductHandle | null,
     readonly definitionProductHandle: ProductHandle | null,
     readonly sourceAddressHandle: AddressHandle | null,
+    /** Source address for the authored expression value submitted to the command parser entry point. */
+    readonly expressionSourceAddressHandle: AddressHandle | null = sourceAddressHandle,
   ) {}
 }
 
@@ -345,5 +366,57 @@ export class BindingCommandLowering {
     readonly sourceAddressHandle: AddressHandle | null,
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */
     readonly fieldProvenance: readonly FieldProvenance<BindingCommandLoweringField>[] = [],
+  ) {}
+}
+
+/** One custom-attribute inline multi-binding segment before instruction assembly. */
+export class MultiBindingSegment {
+  constructor(
+    /** Product handle for the materialized-product envelope that represents this segment. */
+    readonly productHandle: ProductHandle,
+    /** Identity for this multi-binding segment. */
+    readonly identityHandle: IdentityHandle,
+    /** Original custom-attribute value site that was split into segments. */
+    readonly site: TemplateValueSiteReference,
+    /** Authored HTML attribute whose value contains the segment. */
+    readonly attribute: HtmlAttributeReference,
+    /** Secondary AttrSyntax product produced from the segment name/value pair. */
+    readonly syntaxProductHandle: ProductHandle,
+    /** Selected bindable for this segment. */
+    readonly bindable: TemplateBindableReference | null,
+    /** Selected binding command for this segment, when the segment name used command syntax. */
+    readonly command: BindingCommandExecutableReference | null,
+    /** Segment index in authored order. */
+    readonly segmentIndex: number,
+    /** Raw segment name before the colon. */
+    readonly rawName: string,
+    /** Raw segment value after the colon. */
+    readonly rawValue: string,
+    /** Source address for the segment value. */
+    readonly sourceAddressHandle: AddressHandle | null,
+    /** Field-level provenance for source facts that matter to explanation or ambiguity. */
+    readonly fieldProvenance: readonly FieldProvenance<MultiBindingSegmentField>[] = [],
+  ) {}
+}
+
+/** Result of lowering one inline multi-binding custom-attribute value. */
+export class MultiBindingLowering {
+  constructor(
+    /** Product handle for the materialized-product envelope that represents this lowering. */
+    readonly productHandle: ProductHandle,
+    /** Identity for this multi-binding lowering. */
+    readonly identityHandle: IdentityHandle,
+    /** Original custom-attribute value site that was split and lowered. */
+    readonly site: TemplateValueSiteReference,
+    /** Lowering outcome for the whole multi-binding value. */
+    readonly state: BindingCommandLoweringState,
+    /** Segment products in authored order. */
+    readonly segmentProductHandles: readonly ProductHandle[],
+    /** Instruction products produced by all closed segments. */
+    readonly instructionProductHandles: readonly ProductHandle[],
+    /** Source address for the authored custom-attribute value. */
+    readonly sourceAddressHandle: AddressHandle | null,
+    /** Field-level provenance for source facts that matter to explanation or ambiguity. */
+    readonly fieldProvenance: readonly FieldProvenance<MultiBindingLoweringField>[] = [],
   ) {}
 }

@@ -31,7 +31,7 @@ interface RegistrationFactoryBindings {
 }
 
 /** Recognizes Aurelia `Registration.*(...)` factory call source shapes. */
-export class RegistrationFactoryRecognitionProducer {
+export class RegistrationFactoryRecognizer {
   recognize(context: RegistrationEmissionContext): readonly RegistrationAdmissionObservation[] {
     const bindings = readRegistrationFactoryBindings(context.sourceFile);
     if (bindings.identifiers.size === 0 && bindings.namespaces.size === 0) {

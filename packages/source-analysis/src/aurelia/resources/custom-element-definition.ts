@@ -67,6 +67,22 @@ export class CustomElementTemplateDefinition {
     readonly kind: CustomElementTemplateKind,
     readonly markup: string | null = null,
     readonly addressHandle: AddressHandle | null = null,
+    readonly sourceMap: TemplateSourceOffsetMap | null = null,
+  ) {}
+}
+
+/**
+ * Maps decoded inline template markup offsets back to source offsets inside the string/template literal body.
+ *
+ * The template compiler consumes decoded markup, while editor inquiries point at authored source text. Escapes such as
+ * `\"` make those coordinates diverge, so source-address materializers use this boundary map when present.
+ */
+export class TemplateSourceOffsetMap {
+  constructor(
+    /** Number of decoded markup code units covered by this map. */
+    readonly decodedLength: number,
+    /** Absolute source offset for every decoded boundary, length `decodedLength + 1`. */
+    readonly decodedToSourceOffsets: readonly number[],
   ) {}
 }
 
@@ -86,7 +102,7 @@ export const enum CustomElementDefinitionContributionKind {
   Convention = 'convention',
 }
 
-// TODO(resource-convergence): This is a provisional field-contribution envelope. Once convergence has real producers,
+// TODO(resource-convergence): This is a provisional field-contribution envelope. Once convergence has real materializers,
 // decide whether contributions should become per-origin variants, per-field patches, or another tighter shape.
 export class CustomElementDefinitionContribution {
   constructor(

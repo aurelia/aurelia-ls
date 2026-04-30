@@ -22,7 +22,7 @@ export const enum ValueConverterDefinitionContributionKind {
   Convention = 'convention',
 }
 
-// TODO(resource-convergence): Keep this contribution envelope provisional until value-converter convergence producers
+// TODO(resource-convergence): Keep this contribution envelope provisional until value-converter convergers
 // show whether thin resources want per-origin variants, per-field patches, or a shared named-resource contribution.
 export class ValueConverterDefinitionContribution {
   constructor(

@@ -94,7 +94,7 @@ export class RegistrationEmissionContext {
     readonly moduleKey: string,
     /** Source-file address admitted by boot or host setup. */
     readonly sourceFileAddressHandle: AddressHandle,
-    /** Producer scope that owns the emitted registration records. */
+    /** Emission scope that owns the emitted registration records. */
     readonly emissionScope: RegistrationEmissionScope = RegistrationEmissionScope.SourceModule,
     /** Scope-local owner key, such as a configuration step local key. */
     readonly ownerKey: string | null = null,
@@ -146,7 +146,7 @@ export class RegistrationKernelEmitter {
     return emission;
   }
 
-  /** Materialize registration records without committing them, for larger producer-owned batches. */
+  /** Materialize registration records without committing them, for larger caller-owned batches. */
   materialize(
     context: RegistrationEmissionContext,
     observations: readonly RegistrationAdmissionObservation[],

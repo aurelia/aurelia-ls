@@ -1,16 +1,28 @@
-export type PackageId = 'kernel' | 'runtime-html' | 'template-compiler' | 'expression-parser' | 'i18n' | 'state';
+export type PackageId =
+  | 'kernel'
+  | 'runtime'
+  | 'runtime-html'
+  | 'template-compiler'
+  | 'expression-parser'
+  | 'i18n'
+  | 'state'
+  | 'router';
 
 /**
  * Pure marker decorator that lets au-mcp correlate new analysis substrate boundaries with the Aurelia runtime.
  *
  * Keep this catalog small while the compiler model is being rebuilt. Old mirror-era placements should not be
- * treated as semantic ground truth for new producers.
+ * treated as semantic ground truth for new materializers.
  */
 export function auLink(id: 'kernel:Container'): ClassDecorator;
+export function auLink(id: 'kernel:IContainer'): ClassDecorator;
 export function auLink(id: 'kernel:ContainerConfiguration'): ClassDecorator;
 export function auLink(id: 'kernel:Resolver'): ClassDecorator;
 export function auLink(id: 'kernel:ParameterizedRegistry'): ClassDecorator;
 export function auLink(id: 'kernel:IRegistry'): ClassDecorator;
+export function auLink(id: 'runtime:Scope'): ClassDecorator;
+export function auLink(id: 'runtime:BindingContext'): ClassDecorator;
+export function auLink(id: 'runtime:IOverrideContext'): ClassDecorator;
 export function auLink(id: 'runtime-html:Aurelia'): ClassDecorator;
 export function auLink(id: 'runtime-html:AppRoot'): ClassDecorator;
 export function auLink(id: 'runtime-html:IAppRootConfig'): ClassDecorator;
@@ -61,6 +73,35 @@ export function auLink(id: 'runtime-html:PromiseAttributePattern'): ClassDecorat
 export function auLink(id: 'runtime-html:FulfilledAttributePattern'): ClassDecorator;
 export function auLink(id: 'runtime-html:RejectedAttributePattern'): ClassDecorator;
 export function auLink(id: 'runtime-html:ResourceResolver'): ClassDecorator;
+export function auLink(id: 'runtime-html:Rendering'): ClassDecorator;
+export function auLink(id: 'runtime-html:SetPropertyRenderer'): ClassDecorator;
+export function auLink(id: 'runtime-html:CustomElementRenderer'): ClassDecorator;
+export function auLink(id: 'runtime-html:CustomAttributeRenderer'): ClassDecorator;
+export function auLink(id: 'runtime-html:TemplateControllerRenderer'): ClassDecorator;
+export function auLink(id: 'runtime-html:LetElementRenderer'): ClassDecorator;
+export function auLink(id: 'runtime-html:RefBindingRenderer'): ClassDecorator;
+export function auLink(id: 'runtime-html:InterpolationBindingRenderer'): ClassDecorator;
+export function auLink(id: 'runtime-html:PropertyBindingRenderer'): ClassDecorator;
+export function auLink(id: 'runtime-html:IteratorBindingRenderer'): ClassDecorator;
+export function auLink(id: 'runtime-html:TextBindingRenderer'): ClassDecorator;
+export function auLink(id: 'runtime-html:ListenerBindingRenderer'): ClassDecorator;
+export function auLink(id: 'runtime-html:SetAttributeRenderer'): ClassDecorator;
+export function auLink(id: 'runtime-html:SetClassAttributeRenderer'): ClassDecorator;
+export function auLink(id: 'runtime-html:SetStyleAttributeRenderer'): ClassDecorator;
+export function auLink(id: 'runtime-html:StylePropertyBindingRenderer'): ClassDecorator;
+export function auLink(id: 'runtime-html:AttributeBindingRenderer'): ClassDecorator;
+export function auLink(id: 'runtime-html:SpreadRenderer'): ClassDecorator;
+export function auLink(id: 'runtime-html:SpreadValueRenderer'): ClassDecorator;
+export function auLink(id: 'runtime-html:PropertyBinding'): ClassDecorator;
+export function auLink(id: 'runtime-html:AttributeBinding'): ClassDecorator;
+export function auLink(id: 'runtime-html:LetBinding'): ClassDecorator;
+export function auLink(id: 'runtime-html:ListenerBinding'): ClassDecorator;
+export function auLink(id: 'runtime-html:InterpolationBinding'): ClassDecorator;
+export function auLink(id: 'runtime-html:InterpolationPartBinding'): ClassDecorator;
+export function auLink(id: 'runtime-html:RefBinding'): ClassDecorator;
+export function auLink(id: 'runtime-html:ContentBinding'): ClassDecorator;
+export function auLink(id: 'runtime-html:SpreadBinding'): ClassDecorator;
+export function auLink(id: 'runtime-html:SpreadValueBinding'): ClassDecorator;
 export function auLink(id: 'template-compiler:BindingCommandDefinition'): ClassDecorator;
 export function auLink(id: 'template-compiler:AttributePatternDefinition'): ClassDecorator;
 export function auLink(id: 'template-compiler:AttributePattern'): ClassDecorator;
@@ -71,6 +112,7 @@ export function auLink(id: 'template-compiler:ColonPrefixedBindAttributePattern'
 export function auLink(id: 'template-compiler:AtPrefixedTriggerAttributePattern'): ClassDecorator;
 export function auLink(id: 'template-compiler:TemplateCompiler'): ClassDecorator;
 export function auLink(id: 'template-compiler:CompilationContext'): ClassDecorator;
+export function auLink(id: 'template-compiler:ICompiledElementComponentDefinition'): ClassDecorator;
 export function auLink(id: 'template-compiler:IElementBindablesInfo'): ClassDecorator;
 export function auLink(id: 'template-compiler:IAttributeBindablesInfo'): ClassDecorator;
 export function auLink(id: 'template-compiler:IAttributeParser'): ClassDecorator;
@@ -151,6 +193,10 @@ export function auLink(id: 'template-compiler:SpreadValueBindingInstruction'): C
 export function auLink(id: 'i18n:TranslationBindingInstruction'): ClassDecorator;
 export function auLink(id: 'i18n:TranslationBindBindingInstruction'): ClassDecorator;
 export function auLink(id: 'i18n:TranslationParametersBindingInstruction'): ClassDecorator;
+export function auLink(id: 'i18n:TranslationBindingRenderer'): ClassDecorator;
+export function auLink(id: 'i18n:TranslationBindBindingRenderer'): ClassDecorator;
+export function auLink(id: 'i18n:TranslationParametersBindingRenderer'): ClassDecorator;
+export function auLink(id: 'i18n:TranslationBinding'): ClassDecorator;
 export function auLink(id: 'i18n:TranslationValueConverter'): ClassDecorator;
 export function auLink(id: 'i18n:TranslationBindingBehavior'): ClassDecorator;
 export function auLink(id: 'i18n:DateFormatValueConverter'): ClassDecorator;
@@ -169,6 +215,33 @@ export function auLink(id: 'state:StateBindingCommand'): ClassDecorator;
 export function auLink(id: 'state:DispatchBindingCommand'): ClassDecorator;
 export function auLink(id: 'state:StateBindingInstruction'): ClassDecorator;
 export function auLink(id: 'state:DispatchBindingInstruction'): ClassDecorator;
+export function auLink(id: 'state:StateBindingInstructionRenderer'): ClassDecorator;
+export function auLink(id: 'state:DispatchBindingInstructionRenderer'): ClassDecorator;
+export function auLink(id: 'state:StateBinding'): ClassDecorator;
+export function auLink(id: 'state:StateDispatchBinding'): ClassDecorator;
+export function auLink(id: 'router:RouterRegistration'): ClassDecorator;
+export function auLink(id: 'router:RouterConfiguration'): ClassDecorator;
+export function auLink(id: 'router:IRouterOptions'): ClassDecorator;
+export function auLink(id: 'router:RouterOptions'): ClassDecorator;
+export function auLink(id: 'router:IRouter'): ClassDecorator;
+export function auLink(id: 'router:Router'): ClassDecorator;
+export function auLink(id: 'router:IContextRouter'): ClassDecorator;
+export function auLink(id: 'router:ContextRouter'): ClassDecorator;
+export function auLink(id: 'router:ICurrentRoute'): ClassDecorator;
+export function auLink(id: 'router:CurrentRoute'): ClassDecorator;
+export function auLink(id: 'router:IRouteContext'): ClassDecorator;
+export function auLink(id: 'router:RouteContext'): ClassDecorator;
+export function auLink(id: 'router:RouteConfigContext'): ClassDecorator;
+export function auLink(id: 'router:IRouteConfig'): ClassDecorator;
+export function auLink(id: 'router:IChildRouteConfig'): ClassDecorator;
+export function auLink(id: 'router:RouteNode'): ClassDecorator;
+export function auLink(id: 'router:RouteTree'): ClassDecorator;
+export function auLink(id: 'router:ViewportInstruction'): ClassDecorator;
+export function auLink(id: 'router:ViewportInstructionTree'): ClassDecorator;
+export function auLink(id: 'router:TypedNavigationInstruction'): ClassDecorator;
+export function auLink(id: 'router:HrefCustomAttribute'): ClassDecorator;
+export function auLink(id: 'router:LoadCustomAttribute'): ClassDecorator;
+export function auLink(id: 'router:ViewportCustomElement'): ClassDecorator;
 export function auLink(_id: `${PackageId}:${string}`): ClassDecorator {
   return function <TFunction extends Function>(_target: TFunction): void {
     // Marker only.

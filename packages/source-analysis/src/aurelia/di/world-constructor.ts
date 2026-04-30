@@ -49,7 +49,7 @@ import type { ConfigurationStep } from '../configuration/configuration-sequence.
 import type {
   BuiltInResourceEmission,
   ConfiguredBuiltInResourceCatalogEmission,
-} from '../resources/built-in-resource-producer.js';
+} from '../resources/built-in-resource-catalog-materializer.js';
 import {
   runtimeResourceKeyForKind,
   ResourceDefinitionKind,
@@ -130,7 +130,7 @@ class DiResourceSlotEmission {
 }
 
 /** Spends configuration-owned registration products into abstract DI container state. */
-export class DiWorldConstructionProducer {
+export class DiWorldConstructor {
   private readonly emittedIdentityHandles = new Set<IdentityHandle>();
 
   constructor(
@@ -298,7 +298,8 @@ export class DiWorldConstructionProducer {
     const operation = this.operationForAdmission(container, admission, local, source.provenanceHandle);
     records.push(...operation.records);
     container.register(operation.product);
-    const operationClaimHandles = [operation.acceptRegistrationClaimHandle];
+    const operationProductClaimHandles: ClaimHandle[] = [];
+    const operationMaterializationClaimHandles = [operation.acceptRegistrationClaimHandle];
 
     if (admission instanceof OpenRegistrationAdmission) {
       const seam = this.recordsForOpenSeam(
@@ -326,12 +327,20 @@ export class DiWorldConstructionProducer {
         source.provenanceHandle,
       );
       records.push(...productClaims.records);
-      operationClaimHandles.push(...productClaims.handles);
+      operationProductClaimHandles.push(...productClaims.handles);
+      operationMaterializationClaimHandles.push(...productClaims.handles);
       for (const slot of emission.resolverSlots) {
         container.registerResolver(slot);
       }
     } else if (admission instanceof ParameterizedRegistryAdmission) {
-      const emission = this.recordsForParameterizedRegistry(container, admission, local, source.provenanceHandle);
+      const productClaimHandle = this.operationProductClaimHandle(`${local}:parameterized-registry-products`, 0);
+      const emission = this.recordsForParameterizedRegistry(
+        container,
+        admission,
+        local,
+        source.provenanceHandle,
+        [productClaimHandle],
+      );
       records.push(...emission.records);
       if (emission.registry != null) {
         parameterizedRegistries.push(emission.registry);
@@ -342,11 +351,19 @@ export class DiWorldConstructionProducer {
           source.provenanceHandle,
         );
         records.push(...productClaims.records);
-        operationClaimHandles.push(...productClaims.handles);
+        operationProductClaimHandles.push(...productClaims.handles);
+        operationMaterializationClaimHandles.push(...productClaims.handles);
       }
       openSeams.push(...emission.openSeams);
     } else if (admission instanceof RegistryRegistrationAdmission) {
-      const emission = this.recordsForRegistry(container, admission, local, source.provenanceHandle);
+      const productClaimHandle = this.operationProductClaimHandle(`${local}:registry-products`, 0);
+      const emission = this.recordsForRegistry(
+        container,
+        admission,
+        local,
+        source.provenanceHandle,
+        [productClaimHandle],
+      );
       records.push(...emission.records);
       registries.push(emission.registry);
       const slotEmission = this.recordsForConfiguredResourceSlots(
@@ -359,7 +376,6 @@ export class DiWorldConstructionProducer {
       const slots = slotEmission.slots;
       records.push(...slotEmission.records);
       resourceSlots.push(...slots);
-      operationClaimHandles.push(...slotEmission.claimHandles);
       for (const slot of slots) {
         container.registerResource(slot);
       }
@@ -373,7 +389,8 @@ export class DiWorldConstructionProducer {
         source.provenanceHandle,
       );
       records.push(...productClaims.records);
-      operationClaimHandles.push(...productClaims.handles);
+      operationProductClaimHandles.push(...productClaims.handles);
+      operationMaterializationClaimHandles.push(...productClaims.handles);
       openSeams.push(...emission.openSeams);
     } else if (admission instanceof ResourceRegistrationAdmission) {
       const slotEmission = this.recordsForResourceAdmission(
@@ -385,7 +402,6 @@ export class DiWorldConstructionProducer {
       );
       records.push(...slotEmission.records);
       resourceSlots.push(...slotEmission.slots);
-      operationClaimHandles.push(...slotEmission.claimHandles);
       for (const slot of slotEmission.slots) {
         container.registerResource(slot);
       }
@@ -396,7 +412,8 @@ export class DiWorldConstructionProducer {
         source.provenanceHandle,
       );
       records.push(...productClaims.records);
-      operationClaimHandles.push(...productClaims.handles);
+      operationProductClaimHandles.push(...productClaims.handles);
+      operationMaterializationClaimHandles.push(...productClaims.handles);
       openSeams.push(...slotEmission.openSeams);
     } else if (admission instanceof FrameworkRegistrationAdmission) {
       const slotEmission = this.recordsForConfiguredResourceSlots(
@@ -409,7 +426,6 @@ export class DiWorldConstructionProducer {
       const slots = slotEmission.slots;
       records.push(...slotEmission.records);
       resourceSlots.push(...slots);
-      operationClaimHandles.push(...slotEmission.claimHandles);
       for (const slot of slots) {
         container.registerResource(slot);
       }
@@ -420,7 +436,8 @@ export class DiWorldConstructionProducer {
         source.provenanceHandle,
       );
       records.push(...productClaims.records);
-      operationClaimHandles.push(...productClaims.handles);
+      operationProductClaimHandles.push(...productClaims.handles);
+      operationMaterializationClaimHandles.push(...productClaims.handles);
 
       const seam = this.recordsForOpenSeam(
         `${local}:framework-registration-open`,
@@ -435,7 +452,8 @@ export class DiWorldConstructionProducer {
     records.push(...this.recordsForOperationEnvelope(
       local,
       operation,
-      operationClaimHandles,
+      operationProductClaimHandles,
+      operationMaterializationClaimHandles,
       openSeams.map((seam) => seam.handle),
       source.provenanceHandle,
     ));
@@ -497,7 +515,8 @@ export class DiWorldConstructionProducer {
   private recordsForOperationEnvelope(
     local: string,
     operation: DiRegistrationOperationEmission,
-    claimHandles: readonly ClaimHandle[],
+    productClaimHandles: readonly ClaimHandle[],
+    materializationClaimHandles: readonly ClaimHandle[],
     openSeamHandles: readonly OpenSeamHandle[],
     provenanceHandle: ProvenanceHandle,
   ): readonly KernelStoreRecord[] {
@@ -508,7 +527,7 @@ export class DiWorldConstructionProducer {
         operation.identityHandle,
         operation.product.sourceAddressHandle,
         provenanceHandle,
-        claimHandles,
+        productClaimHandles,
       ),
       new MaterializationRecord(
         this.store.handles.materialization(`${local}:operation`),
@@ -516,7 +535,7 @@ export class DiWorldConstructionProducer {
         operation.identityHandle,
         openSeamHandles.length === 0 ? MaterializationState.Complete : MaterializationState.Partial,
         [operation.productHandle],
-        claimHandles,
+        materializationClaimHandles,
         [],
         openSeamHandles,
       ),
@@ -542,6 +561,10 @@ export class DiWorldConstructionProducer {
       );
     });
     return new DiClaimEmission(records, handles);
+  }
+
+  private operationProductClaimHandle(local: string, index: number): ClaimHandle {
+    return this.store.handles.claim(`${local}:${index}`);
   }
 
   private recordsForResolverAdmission(
@@ -721,6 +744,7 @@ export class DiWorldConstructionProducer {
     admission: ParameterizedRegistryAdmission,
     local: string,
     provenanceHandle: ProvenanceHandle,
+    claimHandles: readonly ClaimHandle[],
   ): {
     readonly records: readonly KernelStoreRecord[];
     readonly registry: ParameterizedRegistry | null;
@@ -778,6 +802,7 @@ export class DiWorldConstructionProducer {
         identityHandle,
         admission.sourceAddressHandle,
         provenanceHandle,
+        claimHandles,
       ),
       new MaterializationRecord(
         this.store.handles.materialization(`${local}:parameterized-registry`),
@@ -800,6 +825,7 @@ export class DiWorldConstructionProducer {
     admission: RegistryRegistrationAdmission,
     local: string,
     provenanceHandle: ProvenanceHandle,
+    claimHandles: readonly ClaimHandle[],
   ): {
     readonly records: readonly KernelStoreRecord[];
     readonly registry: RegistryValue;
@@ -839,6 +865,7 @@ export class DiWorldConstructionProducer {
         identityHandle,
         admission.sourceAddressHandle,
         provenanceHandle,
+        claimHandles,
       ),
       new MaterializationRecord(
         this.store.handles.materialization(`${local}:registry`),
@@ -1362,17 +1389,17 @@ function summaryForOpenRegistrationAdmission(admission: OpenRegistrationAdmissio
 function summaryForRegistryAdmissionOpen(admission: RegistryRegistrationAdmission): string {
   switch (admission.registryValue?.frameworkKind) {
     case FrameworkRegistrationKind.StandardConfiguration:
-      return 'StandardConfiguration syntax and default resource effects can feed template production, but DI has not spent the remaining resolver and renderer effects yet.';
+      return 'StandardConfiguration syntax and default resource effects can feed template compilation, but DI has not spent the remaining resolver and renderer effects yet.';
     case FrameworkRegistrationKind.I18nConfiguration:
-      return 'I18nConfiguration syntax and resource effects can feed template production, but DI has not spent the remaining services, tasks, renderer effects, or dynamic alias options yet.';
+      return 'I18nConfiguration syntax and resource effects can feed template compilation, but DI has not spent the remaining services, tasks, renderer effects, or dynamic alias options yet.';
     case FrameworkRegistrationKind.StateDefaultConfiguration:
-      return 'StateDefaultConfiguration syntax and state binding-behavior effects can feed template production, but DI has not spent store services, tasks, and renderer effects yet.';
+      return 'StateDefaultConfiguration syntax and state binding-behavior effects can feed template compilation, but DI has not spent store services, tasks, and renderer effects yet.';
     case FrameworkRegistrationKind.AppTask:
       return 'AppTask registry admission is preserved for lifecycle-slot dispatch; DI does not spend the task callback body into container slots.';
     case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingSyntax:
     case FrameworkRegistrationKind.RuntimeHtmlShortHandBindingSyntax:
     case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingLanguage:
-      return 'Framework syntax group effects can be selected by template production, but DI has not spent remaining expanded registrations yet.';
+      return 'Framework syntax group effects can be selected by template compilation, but DI has not spent remaining expanded registrations yet.';
     case FrameworkRegistrationKind.RuntimeHtmlDefaultResources:
       return 'DefaultResources resource headers can feed DI resource slots; non-resource spread effects are still open.';
     case null:
@@ -1384,19 +1411,19 @@ function summaryForRegistryAdmissionOpen(admission: RegistryRegistrationAdmissio
 function summaryForFrameworkRegistrationOpen(frameworkKind: FrameworkRegistrationKind): string {
   switch (frameworkKind) {
     case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingSyntax:
-      return 'DefaultBindingSyntax spread syntax effects can be selected by template production; EventModifierRegistration and remaining DI effects are not spent yet.';
+      return 'DefaultBindingSyntax spread syntax effects can be selected by template compilation; EventModifierRegistration and remaining DI effects are not spent yet.';
     case FrameworkRegistrationKind.RuntimeHtmlShortHandBindingSyntax:
-      return 'ShortHandBindingSyntax spread syntax effects can be selected by template production.';
+      return 'ShortHandBindingSyntax spread syntax effects can be selected by template compilation.';
     case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingLanguage:
-      return 'DefaultBindingLanguage spread syntax effects can be selected by template production.';
+      return 'DefaultBindingLanguage spread syntax effects can be selected by template compilation.';
     case FrameworkRegistrationKind.RuntimeHtmlDefaultResources:
       return 'DefaultResources spread resource headers can feed DI resource slots; non-resource spread effects are still open.';
     case FrameworkRegistrationKind.StandardConfiguration:
-      return 'StandardConfiguration syntax and default resource effects can feed template production, but DI has not spent the remaining resolver and renderer effects yet.';
+      return 'StandardConfiguration syntax and default resource effects can feed template compilation, but DI has not spent the remaining resolver and renderer effects yet.';
     case FrameworkRegistrationKind.I18nConfiguration:
-      return 'I18nConfiguration syntax and resource effects can feed template production, but DI has not spent the remaining services, tasks, renderer effects, or dynamic alias options yet.';
+      return 'I18nConfiguration syntax and resource effects can feed template compilation, but DI has not spent the remaining services, tasks, renderer effects, or dynamic alias options yet.';
     case FrameworkRegistrationKind.StateDefaultConfiguration:
-      return 'StateDefaultConfiguration syntax and state binding-behavior effects can feed template production, but DI has not spent store services, tasks, and renderer effects yet.';
+      return 'StateDefaultConfiguration syntax and state binding-behavior effects can feed template compilation, but DI has not spent store services, tasks, and renderer effects yet.';
     case FrameworkRegistrationKind.AppTask:
       return 'AppTask registry admission is preserved for lifecycle-slot dispatch; DI does not spend the task callback body into container slots.';
   }

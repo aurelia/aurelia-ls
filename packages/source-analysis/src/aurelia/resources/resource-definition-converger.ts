@@ -50,7 +50,10 @@ import {
   readStaticStringValue,
   type StaticEvaluationExpressionReader,
 } from '../evaluation/expression-reader.js';
-import { readPropertyName } from '../evaluation/ts-syntax.js';
+import {
+  readPropertyName,
+  unwrapExpression,
+} from '../evaluation/ts-syntax.js';
 import {
   EvaluationValueKind,
   type EvaluationObjectValue,
@@ -102,6 +105,7 @@ import {
   CustomElementTemplateKind,
   ShadowOptionsDefinition,
   ShadowRootMode,
+  TemplateSourceOffsetMap,
 } from './custom-element-definition.js';
 import {
   AttributePatternDefinitionHeader,
@@ -133,6 +137,7 @@ import {
   ResourceAliasDefinition,
   ResourceTargetReference,
 } from './resource-reference.js';
+import { ResourceProductDetails } from './product-details.js';
 import {
   ValueConverterDefinition,
   ValueConverterDefinitionContribution,
@@ -160,6 +165,7 @@ class ConvergedResourceDefinition {
   constructor(
     readonly definition: FullResourceDefinition,
     readonly open: readonly ConvergenceOpen[],
+    readonly records: readonly KernelStoreRecord[] = [],
   ) {}
 }
 
@@ -182,11 +188,34 @@ class BindableRead {
     readonly bindables: readonly BindableDefinition[],
     readonly contributions: readonly BindableDefinitionContribution[],
     readonly open: readonly ConvergenceOpen[],
+    readonly records: readonly KernelStoreRecord[] = [],
+  ) {}
+}
+
+class TemplateDefinitionRead {
+  constructor(
+    readonly template: CustomElementTemplateDefinition,
+    readonly records: readonly KernelStoreRecord[] = [],
+  ) {}
+}
+
+class TemplateSourceAddressSet {
+  constructor(
+    readonly records: readonly KernelStoreRecord[],
+    readonly addressHandle: AddressHandle,
+    readonly sourceMap: TemplateSourceOffsetMap | null,
+  ) {}
+}
+
+class SourceSpanAddressSet {
+  constructor(
+    readonly records: readonly KernelStoreRecord[],
+    readonly addressHandle: AddressHandle,
   ) {}
 }
 
 /** Turns recognized resource headers and source metadata into compiler-consumable definition products. */
-export class ResourceDefinitionConvergenceProducer {
+export class ResourceDefinitionConverger {
   constructor(
     /** Hot analysis store that receives converged resource definition records. */
     readonly store: KernelStore,
@@ -214,6 +243,11 @@ export class ResourceDefinitionConvergenceProducer {
 
     if (records.length > 0) {
       this.store.commit(new KernelStoreBatch(records, `resource-definition-convergence:${context.moduleKey}`));
+    }
+    for (const definition of definitions) {
+      if (definition.productHandle != null) {
+        this.store.productDetails.add(ResourceProductDetails.Definition, definition.productHandle, definition);
+      }
     }
 
     return new ResourceDefinitionConvergenceEmission(definitions, records);
@@ -254,6 +288,7 @@ export class ResourceDefinitionConvergenceProducer {
     ];
     const records: KernelStoreRecord[] = [
       ...source.records,
+      ...converged.records,
       ...aliasClaims.records,
       convergenceClaim,
       ...openSeams.records,
@@ -352,10 +387,23 @@ export class ResourceDefinitionConvergenceProducer {
 
     const targetClass = classNodeForTarget(definition.target);
     const definitionExpression = expressionNode(observation.definitionNode);
-    const bindables = readBindables(context, definitionExpression, targetClass, provenanceHandle);
+    const bindables = readBindables(
+      this.store,
+      context,
+      `resource-definition-converged:${header.localKey}:bindable`,
+      definitionExpression,
+      targetClass,
+      provenanceHandle,
+    );
     const aliases = mergeAliases(definition.aliases, readStaticStringArrayClassProperty(context, targetClass, 'aliases'));
     const capture = readCustomElementCapture(context, definitionExpression, targetClass);
-    const template = readCustomElementTemplate(context, definitionExpression, targetClass);
+    const template = readCustomElementTemplate(
+      this.store,
+      context,
+      definitionExpression,
+      targetClass,
+      `resource-definition-converged:${header.localKey}:template`,
+    );
     const containerless = readBooleanField(context, definitionExpression, targetClass, 'containerless') ?? false;
     const shadowOptions = readShadowOptions(context, definitionExpression, targetClass);
     const hasSlots = readBooleanField(context, definitionExpression, targetClass, 'hasSlots') ?? false;
@@ -403,7 +451,7 @@ export class ResourceDefinitionConvergenceProducer {
         aliasDefinitions,
         key,
         capture,
-        template,
+        template.template,
         [],
         [],
         null,
@@ -425,7 +473,7 @@ export class ResourceDefinitionConvergenceProducer {
             aliasDefinitions,
             key,
             capture,
-            template,
+            template.template,
             [],
             [],
             null,
@@ -445,6 +493,10 @@ export class ResourceDefinitionConvergenceProducer {
         fieldProvenance,
       ),
       open,
+      [
+        ...template.records,
+        ...bindables.records,
+      ],
     );
   }
 
@@ -465,7 +517,14 @@ export class ResourceDefinitionConvergenceProducer {
 
     const targetClass = classNodeForTarget(definition.target);
     const definitionExpression = expressionNode(observation.definitionNode);
-    const bindables = readBindables(context, definitionExpression, targetClass, provenanceHandle);
+    const bindables = readBindables(
+      this.store,
+      context,
+      `resource-definition-converged:${header.localKey}:bindable`,
+      definitionExpression,
+      targetClass,
+      provenanceHandle,
+    );
     const aliases = mergeAliases(definition.aliases, readStaticStringArrayClassProperty(context, targetClass, 'aliases'));
     const isTemplateController = definition.type === ResourceDefinitionKind.TemplateController
       || readBooleanField(context, definitionExpression, targetClass, 'isTemplateController') === true;
@@ -528,6 +587,7 @@ export class ResourceDefinitionConvergenceProducer {
         fieldProvenance,
       ),
       open,
+      bindables.records,
     );
   }
 
@@ -878,19 +938,255 @@ function readCustomElementCapture(
 }
 
 function readCustomElementTemplate(
+  store: KernelStore,
   context: ResourceRecognitionContext,
   definitionExpression: ts.Expression | null,
   targetClass: ts.ClassLikeDeclarationBase | null,
-): CustomElementTemplateDefinition {
+  local: string,
+): TemplateDefinitionRead {
   const read = readFieldValue(context, definitionExpression, targetClass, 'template');
   const value = read?.value;
   if (value == null || value.kind === EvaluationValueKind.Null || value.kind === EvaluationValueKind.Undefined) {
-    return new CustomElementTemplateDefinition(CustomElementTemplateKind.None);
+    return new TemplateDefinitionRead(new CustomElementTemplateDefinition(CustomElementTemplateKind.None));
   }
   if (value.kind === EvaluationValueKind.String) {
-    return new CustomElementTemplateDefinition(CustomElementTemplateKind.Markup, value.value);
+    const source = read?.node == null
+      ? null
+      : templateMarkupSourceAddress(store, context, read.node, value.value, local);
+    return new TemplateDefinitionRead(
+      new CustomElementTemplateDefinition(
+        CustomElementTemplateKind.Markup,
+        value.value,
+        source?.addressHandle ?? null,
+        source?.sourceMap ?? null,
+      ),
+      source?.records ?? [],
+    );
   }
-  return new CustomElementTemplateDefinition(CustomElementTemplateKind.Open);
+  return new TemplateDefinitionRead(new CustomElementTemplateDefinition(CustomElementTemplateKind.Open));
+}
+
+function templateMarkupSourceAddress(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  node: ts.Node,
+  markup: string,
+  local: string,
+): TemplateSourceAddressSet | null {
+  const nodeExpression = ts.isPropertyAssignment(node)
+    ? node.initializer
+    : ts.isExpression(node)
+      ? node
+      : null;
+  if (nodeExpression == null) {
+    return null;
+  }
+  const expression = unwrapExpression(nodeExpression);
+  if (
+    !ts.isStringLiteral(expression)
+    && !ts.isNoSubstitutionTemplateLiteral(expression)
+  ) {
+    return null;
+  }
+
+  const contentStart = expression.getStart(context.sourceFile) + 1;
+  const contentEnd = expression.end - 1;
+  const rawContent = context.sourceFile.text.slice(contentStart, contentEnd);
+  const sourceMap = rawContent.length === markup.length
+    ? null
+    : decodedStringSourceMap(rawContent, markup, contentStart);
+  if (rawContent.length !== markup.length && sourceMap == null) {
+    return null;
+  }
+
+  const addressHandle = store.handles.address(`${local}:source`);
+  const evidenceHandle = store.handles.evidence(local);
+  const provenanceHandle = store.handles.provenance(local);
+  const records: KernelStoreRecord[] = [
+    new SourceSpanAddress(
+      addressHandle,
+      AddressStability.SourceStable,
+      context.sourceFileAddressHandle,
+      contentStart,
+      contentEnd,
+      SourceSpanRole.Value,
+    ),
+    new EvidenceRecord(
+      evidenceHandle,
+      EvidenceKind.SemanticObservation,
+      [EvidenceRole.Declaration],
+      'Custom element inline template markup source.',
+      addressHandle,
+    ),
+    new ProvenanceRecord(
+      provenanceHandle,
+      ProvenanceMode.Direct,
+      [evidenceHandle],
+      [],
+      'Custom element template markup source observation.',
+    ),
+  ];
+  return new TemplateSourceAddressSet(records, addressHandle, sourceMap);
+}
+
+function decodedStringSourceMap(
+  rawContent: string,
+  decoded: string,
+  contentStart: number,
+): TemplateSourceOffsetMap | null {
+  const offsets: number[] = [];
+  let decodedText = '';
+  let rawIndex = 0;
+
+  while (rawIndex < rawContent.length) {
+    const sourceOffset = contentStart + rawIndex;
+    const char = rawContent[rawIndex] ?? '';
+    if (char !== '\\') {
+      offsets.push(sourceOffset);
+      decodedText += char;
+      rawIndex++;
+      continue;
+    }
+
+    const escape = readStringEscape(rawContent, rawIndex);
+    if (escape == null) {
+      return null;
+    }
+    for (let i = 0; i < escape.decoded.length; i++) {
+      offsets.push(sourceOffset);
+    }
+    decodedText += escape.decoded;
+    rawIndex += escape.rawLength;
+  }
+
+  offsets.push(contentStart + rawContent.length);
+  if (decodedText !== decoded || offsets.length !== decoded.length + 1) {
+    return null;
+  }
+  return new TemplateSourceOffsetMap(decoded.length, offsets);
+}
+
+function readStringEscape(
+  rawContent: string,
+  slashIndex: number,
+): { readonly decoded: string; readonly rawLength: number } | null {
+  const next = rawContent[slashIndex + 1] ?? '';
+  switch (next) {
+    case 'b':
+      return { decoded: '\b', rawLength: 2 };
+    case 'f':
+      return { decoded: '\f', rawLength: 2 };
+    case 'n':
+      return { decoded: '\n', rawLength: 2 };
+    case 'r':
+      return { decoded: '\r', rawLength: 2 };
+    case 't':
+      return { decoded: '\t', rawLength: 2 };
+    case 'v':
+      return { decoded: '\v', rawLength: 2 };
+    case '0':
+      return { decoded: '\0', rawLength: 2 };
+    case '\\':
+    case '"':
+    case "'":
+    case '`':
+    case '$':
+      return { decoded: next, rawLength: 2 };
+    case '\r': {
+      const rawLength = rawContent[slashIndex + 2] === '\n' ? 3 : 2;
+      return { decoded: '', rawLength };
+    }
+    case '\n':
+      return { decoded: '', rawLength: 2 };
+    case 'x': {
+      const text = rawContent.slice(slashIndex + 2, slashIndex + 4);
+      return /^[0-9a-fA-F]{2}$/.test(text)
+        ? { decoded: String.fromCharCode(parseInt(text, 16)), rawLength: 4 }
+        : null;
+    }
+    case 'u':
+      return readUnicodeEscape(rawContent, slashIndex);
+    default:
+      return null;
+  }
+}
+
+function readUnicodeEscape(
+  rawContent: string,
+  slashIndex: number,
+): { readonly decoded: string; readonly rawLength: number } | null {
+  if (rawContent[slashIndex + 2] === '{') {
+    const close = rawContent.indexOf('}', slashIndex + 3);
+    if (close < 0) {
+      return null;
+    }
+    const text = rawContent.slice(slashIndex + 3, close);
+    if (!/^[0-9a-fA-F]+$/.test(text)) {
+      return null;
+    }
+    const value = parseInt(text, 16);
+    if (value > 0x10FFFF) {
+      return null;
+    }
+    return { decoded: String.fromCodePoint(value), rawLength: close - slashIndex + 1 };
+  }
+
+  const text = rawContent.slice(slashIndex + 2, slashIndex + 6);
+  return /^[0-9a-fA-F]{4}$/.test(text)
+    ? { decoded: String.fromCharCode(parseInt(text, 16)), rawLength: 6 }
+    : null;
+}
+
+function sourceSpanAddressForNode(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  node: ts.Node | null,
+  local: string,
+  role: SourceSpanRole,
+): SourceSpanAddressSet | null {
+  if (node == null) {
+    return null;
+  }
+  const sourceNode = sourceAddressNode(node);
+  const sourceFile = context.sourceFile;
+  let start = sourceNode.getStart(sourceFile);
+  let end = sourceNode.end;
+  if (ts.isStringLiteralLike(sourceNode) || ts.isNoSubstitutionTemplateLiteral(sourceNode)) {
+    start += 1;
+    end -= 1;
+  }
+  if (end < start) {
+    return null;
+  }
+  const addressHandle = store.handles.address(`${local}:source`);
+  return new SourceSpanAddressSet(
+    [
+      new SourceSpanAddress(
+        addressHandle,
+        AddressStability.SourceStable,
+        context.sourceFileAddressHandle,
+        start,
+        end,
+        role,
+      ),
+    ],
+    addressHandle,
+  );
+}
+
+function sourceAddressNode(node: ts.Node): ts.Node {
+  if (
+    (ts.isPropertyAssignment(node)
+      || ts.isShorthandPropertyAssignment(node)
+      || ts.isMethodDeclaration(node)
+      || ts.isPropertyDeclaration(node)
+      || ts.isGetAccessorDeclaration(node)
+      || ts.isSetAccessorDeclaration(node))
+    && node.name != null
+  ) {
+    return node.name;
+  }
+  return node;
 }
 
 function readShadowOptions(
@@ -942,19 +1238,22 @@ function readContainerStrategy(
 }
 
 function readBindables(
+  store: KernelStore,
   context: ResourceRecognitionContext,
+  local: string,
   definitionExpression: ts.Expression | null,
   targetClass: ts.ClassLikeDeclarationBase | null,
   provenanceHandle: ProvenanceHandle,
 ): BindableRead {
   const reads = [
-    ...readDecoratorBindables(context, targetClass, provenanceHandle),
-    ...readBindableListExpression(context, readStaticClassProperty(targetClass, 'bindables'), provenanceHandle, BindableContributionKind.StaticBindables),
-    ...readBindableListValue(readObjectProperty(context.expressionReader, definitionExpression, 'bindables'), provenanceHandle, BindableContributionKind.RuntimePartial),
+    ...readDecoratorBindables(store, context, `${local}:decorator`, targetClass, provenanceHandle),
+    ...readBindableListExpression(store, context, `${local}:static`, readStaticClassProperty(targetClass, 'bindables'), provenanceHandle, BindableContributionKind.StaticBindables),
+    ...readBindableListValue(store, context, `${local}:definition-object`, readObjectProperty(context.expressionReader, definitionExpression, 'bindables'), provenanceHandle, BindableContributionKind.RuntimePartial),
   ];
   const byName = new Map<string, BindableDefinition>();
   const contributions: BindableDefinitionContribution[] = [];
   const open: ConvergenceOpen[] = [];
+  const records: KernelStoreRecord[] = [];
   for (const read of reads) {
     if (read.bindable != null) {
       byName.set(read.bindable.name, read.bindable);
@@ -965,8 +1264,9 @@ function readBindables(
     if (read.open != null) {
       open.push(read.open);
     }
+    records.push(...read.records);
   }
-  return new BindableRead([...byName.values()], contributions, open);
+  return new BindableRead([...byName.values()], contributions, open, records);
 }
 
 class BindableEntryRead {
@@ -974,11 +1274,14 @@ class BindableEntryRead {
     readonly bindable: BindableDefinition | null,
     readonly contribution: BindableDefinitionContribution | null,
     readonly open: ConvergenceOpen | null,
+    readonly records: readonly KernelStoreRecord[] = [],
   ) {}
 }
 
 function readDecoratorBindables(
+  store: KernelStore,
   context: ResourceRecognitionContext,
+  local: string,
   targetClass: ts.ClassLikeDeclarationBase | null,
   provenanceHandle: ProvenanceHandle,
 ): readonly BindableEntryRead[] {
@@ -986,8 +1289,8 @@ function readDecoratorBindables(
     return [];
   }
   const entries: BindableEntryRead[] = [];
-  for (const decorator of ts.canHaveDecorators(targetClass) ? ts.getDecorators(targetClass) ?? [] : []) {
-    const entry = readClassBindableDecorator(context, decorator, provenanceHandle);
+  for (const [index, decorator] of (ts.canHaveDecorators(targetClass) ? ts.getDecorators(targetClass) ?? [] : []).entries()) {
+    const entry = readClassBindableDecorator(store, context, `${local}:class:${index}`, decorator, provenanceHandle);
     if (entry != null) {
       entries.push(entry);
     }
@@ -997,8 +1300,8 @@ function readDecoratorBindables(
     if (propertyName == null || !ts.canHaveDecorators(member)) {
       continue;
     }
-    for (const decorator of ts.getDecorators(member) ?? []) {
-      const entry = readMemberBindableDecorator(context, decorator, propertyName, provenanceHandle);
+    for (const [index, decorator] of (ts.getDecorators(member) ?? []).entries()) {
+      const entry = readMemberBindableDecorator(store, context, `${local}:member:${propertyName}:${index}`, decorator, member, propertyName, provenanceHandle);
       if (entry != null) {
         entries.push(entry);
       }
@@ -1008,7 +1311,9 @@ function readDecoratorBindables(
 }
 
 function readClassBindableDecorator(
+  store: KernelStore,
   context: ResourceRecognitionContext,
+  local: string,
   decorator: ts.Decorator,
   provenanceHandle: ProvenanceHandle,
 ): BindableEntryRead | null {
@@ -1025,13 +1330,14 @@ function readClassBindableDecorator(
     );
   }
   const value = context.expressionReader.evaluateExpression(argument).value;
+  const source = sourceSpanAddressForNode(store, context, argument, local, SourceSpanRole.Name);
   if (value?.kind === EvaluationValueKind.String) {
-    return bindableEntry(value.value, null, BindableContributionKind.Decorator, provenanceHandle);
+    return bindableEntry(value.value, null, BindableContributionKind.Decorator, provenanceHandle, source);
   }
   if (value?.kind === EvaluationValueKind.Object) {
     const name = readObjectString(value, 'name');
     if (name != null) {
-      return bindableEntry(name, value, BindableContributionKind.Decorator, provenanceHandle);
+      return bindableEntry(name, value, BindableContributionKind.Decorator, provenanceHandle, source);
     }
   }
   return new BindableEntryRead(
@@ -1042,14 +1348,18 @@ function readClassBindableDecorator(
 }
 
 function readMemberBindableDecorator(
+  store: KernelStore,
   context: ResourceRecognitionContext,
+  local: string,
   decorator: ts.Decorator,
+  member: ts.ClassElement,
   propertyName: string,
   provenanceHandle: ProvenanceHandle,
 ): BindableEntryRead | null {
+  const source = sourceSpanAddressForNode(store, context, memberNameNode(member) ?? member, local, SourceSpanRole.Name);
   const expression = decorator.expression;
   if (ts.isIdentifier(expression) && expression.text === 'bindable') {
-    return bindableEntry(propertyName, null, BindableContributionKind.Decorator, provenanceHandle);
+    return bindableEntry(propertyName, null, BindableContributionKind.Decorator, provenanceHandle, source);
   }
   const call = decoratorCallNamed(decorator, 'bindable');
   if (call == null) {
@@ -1057,7 +1367,7 @@ function readMemberBindableDecorator(
   }
   const argument = call.arguments[0] ?? null;
   if (argument == null) {
-    return bindableEntry(propertyName, null, BindableContributionKind.Decorator, provenanceHandle);
+    return bindableEntry(propertyName, null, BindableContributionKind.Decorator, provenanceHandle, source);
   }
   const value = context.expressionReader.evaluateExpression(argument).value;
   if (value == null || value.kind !== EvaluationValueKind.Object) {
@@ -1067,21 +1377,26 @@ function readMemberBindableDecorator(
       new ConvergenceOpen('@bindable(...) configuration did not close to a static object.', argument),
     );
   }
-  return bindableEntry(propertyName, value, BindableContributionKind.Decorator, provenanceHandle);
+  return bindableEntry(propertyName, value, BindableContributionKind.Decorator, provenanceHandle, source);
 }
 
 function readBindableListExpression(
+  store: KernelStore,
   context: ResourceRecognitionContext,
+  local: string,
   expression: ts.Expression | null,
   provenanceHandle: ProvenanceHandle,
   contributionKind: BindableContributionKind,
 ): readonly BindableEntryRead[] {
   return expression == null
     ? []
-    : readBindableListValue(context.expressionReader.evaluateExpression(expression), provenanceHandle, contributionKind);
+    : readBindableListValue(store, context, local, context.expressionReader.evaluateExpression(expression), provenanceHandle, contributionKind);
 }
 
 function readBindableListValue(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  local: string,
   read: EvaluationRead<EvaluationValue> | null,
   provenanceHandle: ProvenanceHandle,
   contributionKind: BindableContributionKind,
@@ -1091,15 +1406,16 @@ function readBindableListValue(
     return [];
   }
   if (value.kind === EvaluationValueKind.Array) {
-    const entries = value.elements.map((element) => {
+    const entries = value.elements.map((element, index) => {
+      const source = sourceSpanAddressForNode(store, context, element.expression, `${local}:array:${index}`, SourceSpanRole.Name);
       if (element.value.kind === EvaluationValueKind.String) {
-        return bindableEntry(element.value.value, null, contributionKind, provenanceHandle);
+        return bindableEntry(element.value.value, null, contributionKind, provenanceHandle, source);
       }
       if (element.value.kind === EvaluationValueKind.Object) {
         const name = readObjectString(element.value, 'name');
         return name == null
           ? new BindableEntryRead(null, null, new ConvergenceOpen('Bindable array entry did not expose a static name.', element.expression))
-          : bindableEntry(name, element.value, contributionKind, provenanceHandle);
+          : bindableEntry(name, element.value, contributionKind, provenanceHandle, source);
       }
       return new BindableEntryRead(null, null, new ConvergenceOpen('Bindable array entry did not close to a string or static object.', element.expression));
     });
@@ -1114,12 +1430,13 @@ function readBindableListValue(
   if (value.kind === EvaluationValueKind.Object) {
     const entries: BindableEntryRead[] = [];
     for (const property of value.properties.values()) {
+      const source = sourceSpanAddressForNode(store, context, property.node, `${local}:object:${property.name}`, SourceSpanRole.Name);
       if (property.value.kind === EvaluationValueKind.Boolean && property.value.value === true) {
-        entries.push(bindableEntry(property.name, null, contributionKind, provenanceHandle));
+        entries.push(bindableEntry(property.name, null, contributionKind, provenanceHandle, source));
         continue;
       }
       if (property.value.kind === EvaluationValueKind.Object) {
-        entries.push(bindableEntry(property.name, property.value, contributionKind, provenanceHandle));
+        entries.push(bindableEntry(property.name, property.value, contributionKind, provenanceHandle, source));
         continue;
       }
       entries.push(new BindableEntryRead(
@@ -1147,13 +1464,14 @@ function bindableEntry(
   partial: EvaluationObjectValue | null,
   contributionKind: BindableContributionKind,
   provenanceHandle: ProvenanceHandle,
+  source: SourceSpanAddressSet | null,
 ): BindableEntryRead {
   const attribute = readObjectString(partial, 'attribute') ?? toBindableAttribute(propertyName);
   const callback = readObjectString(partial, 'callback') ?? `${propertyName}Changed`;
   const mode = readBindableMode(partial?.properties.get('mode')?.value) ?? BindableBindingMode.ToView;
   const name = readObjectString(partial, 'name') ?? propertyName;
   const setter = readBindableSetter(partial);
-  const fieldProvenance = fieldProvenanceFor<BindableDefinitionField>(provenanceHandle, ['attribute', 'callback', 'mode', 'name', 'set']);
+  const fieldProvenance = fieldProvenanceFor<BindableDefinitionField>(provenanceHandle, ['attribute', 'callback', 'mode', 'name', 'set', 'source']);
   return new BindableEntryRead(
     new BindableDefinition(
       attribute,
@@ -1161,6 +1479,7 @@ function bindableEntry(
       mode,
       name,
       setter,
+      source?.addressHandle ?? null,
       fieldProvenance,
     ),
     new BindableDefinitionContribution(
@@ -1171,9 +1490,11 @@ function bindableEntry(
       mode,
       name,
       setter,
+      source?.addressHandle ?? null,
       fieldProvenance,
     ),
     null,
+    source?.records ?? [],
   );
 }
 
@@ -1278,6 +1599,18 @@ function memberName(member: ts.ClassElement): string | null {
     || ts.isMethodDeclaration(member)
   ) {
     return readPropertyName(member.name);
+  }
+  return null;
+}
+
+function memberNameNode(member: ts.ClassElement): ts.PropertyName | null {
+  if (
+    ts.isPropertyDeclaration(member)
+    || ts.isGetAccessorDeclaration(member)
+    || ts.isSetAccessorDeclaration(member)
+    || ts.isMethodDeclaration(member)
+  ) {
+    return member.name;
   }
   return null;
 }

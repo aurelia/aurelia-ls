@@ -6,7 +6,7 @@ Boot is the clean-room admission layer above the kernel. It creates workspace an
 files, and records why those inputs are present in the hot kernel store.
 
 Boot does not interpret Aurelia semantics. It must not scan resources, configurations, registrations, templates,
-or DI. Those belong to later producers that consume admitted sources and emit their own evidence, derivations,
+or DI. Those belong to later materializers that consume admitted sources and emit their own evidence, derivations,
 claims, products, and seams.
 
 ## Responsibilities
@@ -29,4 +29,4 @@ claims, products, and seams.
 
 Boot is allowed to know host and filesystem facts. It is not allowed to turn those facts into app semantics. A
 missing root, scan limit, host-supplied file list, or excluded directory is boot/admission pressure. Whether a
-file declares a custom element, exports configuration, or registers a DI key is producer pressure layered later.
+file declares a custom element, exports configuration, or registers a DI key is materializer pressure layered later.

@@ -44,6 +44,15 @@ import {
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
+import {
+  CheckerTypeProjectionInput,
+  CheckerTypeProjector,
+} from '../type-system/checker-projector.js';
+import {
+  CheckerTypeProjectionOrigin,
+  type CheckerTypeReference,
+} from '../type-system/type-shape.js';
+import type { TypeSystemProject } from '../type-system/project.js';
 import type { ResourceRecognitionContext } from './resource-recognition-context.js';
 import {
   AttributePatternDefinitionHeader,
@@ -59,11 +68,12 @@ import {
   toAureliaResourceIdentityKind,
 } from './resource-kind.js';
 import { ResourceTargetReference } from './resource-reference.js';
+import { ResourceProductDetails } from './product-details.js';
 
 /** Typed handle surface for a resource definition header that was admitted into the kernel. */
 export class ResourceDefinitionHeaderEmission {
   constructor(
-    /** Producer-local key shared by header, target, convergence, and materialization records. */
+    /** Emission-local key shared by header, target, convergence, and materialization records. */
     readonly localKey: string,
     /** Index of the source observation that produced this header. */
     readonly observationIndex: number,
@@ -127,6 +137,9 @@ export class ResourceRecognitionKernelEmitter {
       return new ResourceRecognitionKernelEmission(definitions, records);
     }
     this.store.commit(new KernelStoreBatch(records, `resource-recognition:${context.moduleKey}`));
+    for (const definition of definitions) {
+      this.store.productDetails.add(ResourceProductDetails.DefinitionHeader, definition.productHandle, definition);
+    }
     return new ResourceRecognitionKernelEmission(definitions, records);
   }
 
@@ -242,7 +255,18 @@ export class ResourceRecognitionKernelEmitter {
     const identityHandle = target.localName == null || !target.isDeclaration
       ? null
       : this.store.handles.identity(`resource-target:${local}`);
-    const targetReference = new ResourceTargetReference(identityHandle, addressHandle, target.localName);
+    const targetType = context.typeSystem == null
+      ? null
+      : projectTargetType(
+        this.store,
+        context.typeSystem,
+        target.node,
+        local,
+        addressHandle,
+        identityHandle,
+        target.localName,
+      );
+    const targetReference = new ResourceTargetReference(identityHandle, addressHandle, target.localName, targetType);
     const address = new SourceSpanAddress(
       addressHandle,
       AddressStability.SourceStable,
@@ -574,4 +598,30 @@ function observationLocalKey(
   index: number,
 ): string {
   return `${context.moduleKey}:${node.getStart(context.sourceFile)}:${node.end}:${index}`;
+}
+
+function projectTargetType(
+  store: KernelStore,
+  typeSystem: TypeSystemProject,
+  node: ts.Node,
+  local: string,
+  sourceAddressHandle: AddressHandle,
+  ownerIdentityHandle: IdentityHandle | null,
+  display: string | null,
+): CheckerTypeReference | null {
+  const type = typeSystem.readRuntimeTargetType(node);
+  if (type == null) {
+    return null;
+  }
+  const typeShape = new CheckerTypeProjector(store).ensureProjection(new CheckerTypeProjectionInput(
+    `resource-target:${local}:runtime-type`,
+    typeSystem.checker,
+    type,
+    CheckerTypeProjectionOrigin.TypeChecker,
+    node,
+    sourceAddressHandle,
+    ownerIdentityHandle,
+    display,
+  ));
+  return typeShape.toReference();
 }

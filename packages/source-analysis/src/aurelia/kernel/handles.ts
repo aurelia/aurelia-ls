@@ -97,64 +97,64 @@ function serializeKernelHandle<TKind extends KernelHandleKind>(
   ].join(':') as KernelHandle<TKind>;
 }
 
-/** Scoped handle factory for producer-local record keys in one active analysis store. */
+/** Scoped handle factory for analysis-step-local record keys in one active analysis store. */
 export class KernelHandleFactory {
   constructor(
     /** Human-readable label for the store that owns handles minted by this factory. */
     private readonly storeKey: string,
   ) {}
 
-  /** Mint an address handle from a producer-local key. */
+  /** Mint an address handle from an analysis-step-local key. */
   address(local: string): AddressHandle {
     return serializeKernelHandle(this.storeKey, KernelHandleKind.Address, local);
   }
 
-  /** Mint an identity handle from a producer-local key. */
+  /** Mint an identity handle from an analysis-step-local key. */
   identity(local: string): IdentityHandle {
     return serializeKernelHandle(this.storeKey, KernelHandleKind.Identity, local);
   }
 
-  /** Mint an evidence handle from a producer-local key. */
+  /** Mint an evidence handle from an analysis-step-local key. */
   evidence(local: string): EvidenceHandle {
     return serializeKernelHandle(this.storeKey, KernelHandleKind.Evidence, local);
   }
 
-  /** Mint a provenance handle from a producer-local key. */
+  /** Mint a provenance handle from an analysis-step-local key. */
   provenance(local: string): ProvenanceHandle {
     return serializeKernelHandle(this.storeKey, KernelHandleKind.Provenance, local);
   }
 
-  /** Mint a claim handle from a producer-local key. */
+  /** Mint a claim handle from an analysis-step-local key. */
   claim(local: string): ClaimHandle {
     return serializeKernelHandle(this.storeKey, KernelHandleKind.Claim, local);
   }
 
-  /** Mint a derivation-edge handle from a producer-local key. */
+  /** Mint a derivation-edge handle from an analysis-step-local key. */
   derivationEdge(local: string): DerivationEdgeHandle {
     return serializeKernelHandle(this.storeKey, KernelHandleKind.DerivationEdge, local);
   }
 
-  /** Mint a derivation-rule handle from a producer-local key. */
+  /** Mint a derivation-rule handle from an analysis-step-local key. */
   derivationRule(local: string): DerivationRuleHandle {
     return serializeKernelHandle(this.storeKey, KernelHandleKind.DerivationRule, local);
   }
 
-  /** Mint a derivation handle from a producer-local key. */
+  /** Mint a derivation handle from an analysis-step-local key. */
   derivation(local: string): DerivationHandle {
     return serializeKernelHandle(this.storeKey, KernelHandleKind.Derivation, local);
   }
 
-  /** Mint an open-seam handle from a producer-local key. */
+  /** Mint an open-seam handle from an analysis-step-local key. */
   openSeam(local: string): OpenSeamHandle {
     return serializeKernelHandle(this.storeKey, KernelHandleKind.OpenSeam, local);
   }
 
-  /** Mint a product handle from a producer-local key. */
+  /** Mint a product handle from an analysis-step-local key. */
   product(local: string): ProductHandle {
     return serializeKernelHandle(this.storeKey, KernelHandleKind.Product, local);
   }
 
-  /** Mint a materialization handle from a producer-local key. */
+  /** Mint a materialization handle from an analysis-step-local key. */
   materialization(local: string): MaterializationHandle {
     return serializeKernelHandle(this.storeKey, KernelHandleKind.Materialization, local);
   }

@@ -26,8 +26,8 @@ import {
   type NamedResourceDefinitionKind,
 } from './resource-kind.js';
 
-/** Combined producer for named resources that are visible by markup or expression syntax names. */
-export class NamedResourceRecognitionProducer {
+/** Combined recognizer for named resources that are visible by markup or expression syntax names. */
+export class NamedResourceRecognizer {
   recognize(context: ResourceRecognitionContext): readonly ResourceRecognitionObservation[] {
     return recognizeNamedResources(context, null);
   }

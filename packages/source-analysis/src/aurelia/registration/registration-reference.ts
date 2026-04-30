@@ -73,7 +73,7 @@ export class RegistrationValueReference {
     readonly valueKind: RegistrationValueKind,
     /** Identity for declaration-like values such as classes, callbacks, resolvers, or registries. */
     readonly identityHandle: IdentityHandle | null,
-    /** Product handle for values already materialized by another producer, such as resources. */
+    /** Product handle for values already materialized by another layer, such as resources. */
     readonly productHandle: ProductHandle | null,
     /** Source address for the value expression. */
     readonly addressHandle: AddressHandle | null,

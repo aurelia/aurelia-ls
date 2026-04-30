@@ -3,7 +3,7 @@ import { StaticEvaluationExpressionReader } from '../evaluation/expression-reade
 import type { StaticModuleEvaluationResult } from '../evaluation/evaluator.js';
 import type { AddressHandle } from '../kernel/handles.js';
 
-/** Inputs shared by configuration recognition producers for one evaluated source module. */
+/** Inputs shared by configuration recognizers for one evaluated source module. */
 export class ConfigurationRecognitionContext {
   /** Generic TypeScript expression reader for this module evaluation. */
   readonly expressionReader: StaticEvaluationExpressionReader;

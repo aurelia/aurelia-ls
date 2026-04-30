@@ -5,7 +5,7 @@ import {
 } from './configuration-kernel-emitter.js';
 import type { ConfigurationSequenceObservation } from './configuration-observation.js';
 import type { ConfigurationRecognitionContext } from './configuration-recognition-context.js';
-import { ConfigurationRecognitionProducer } from './configuration-recognition-producer.js';
+import { ConfigurationRecognizer } from './configuration-recognizer.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 
 /** Result of configuration recognition over one source module. */
@@ -20,7 +20,7 @@ export class ConfigurationRecognitionResult {
 
 /** Horizontal configuration-recognition pass over one evaluated source module. */
 export class ConfigurationRecognitionPass {
-  private readonly configuration = new ConfigurationRecognitionProducer();
+  private readonly configuration = new ConfigurationRecognizer();
 
   recognize(context: ConfigurationRecognitionContext): readonly ConfigurationSequenceObservation[] {
     return this.configuration.recognize(context);

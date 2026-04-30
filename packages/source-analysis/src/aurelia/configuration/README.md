@@ -40,6 +40,16 @@ The tooling model should keep that split:
 - `AppRoot` records describe the host/component/container/controller connection.
 - Controller records describe runtime controller kind and phase so later template/compiler work can attach definition,
   container, scope, DOM, and hydration facts to the right boundary.
+- Binding-scope records model runtime `Scope`, binding context, and override context separately from compiler resource
+  scope. They are the future meeting point for controller activation, template locals, expression name lookup,
+  autocomplete, rename, and go-to-definition.
+- Binding and override contexts may carry a type-system context type beside explicit template-local slots. Scope
+  materialization spends projected type members into slots so runtime `name in context` lookup has a concrete
+  product-owned surface; the context type still answers `$this`, member-chain projection, and deeper TypeChecker
+  follow-up without making `Scope` itself a TypeScript evaluator.
+- `scope-materializer.ts` materializes runtime-shaped `Scope`, binding-context, and override-context products together,
+  then attaches typed product details. Inquiry should read those details for expression name visibility instead of
+  peeking into controller construction or compiler-world internals.
 - Configuration sequence records describe source/evaluation order for app setup, plugin setup, registry bodies,
   builder-style configuration objects, and lifecycle-slot dispatch.
 - Configuration option contributions describe defaults, user customization callbacks, forwarded options, and builder
@@ -53,21 +63,23 @@ The tooling model should keep that split:
 - DI world construction later spends registration records into container/resource reachability.
 - `configuration-recognition-project-pass.ts` is the project-level recognition pass over shared static evaluation.
   It is the source/module composition layer for configuration facts, not a second evaluator.
-- `app-world-producer.ts` is the current composition point for the configuration-to-DI/compiler handoff. It does not
+- `app-world-composer.ts` is the current composition point for the configuration-to-DI/compiler handoff. It does not
   create a new semantic "app world" kernel product; it runs the already-owned configuration, DI, built-in syntax,
-  built-in resource, and compiler-world producers and returns an orchestration envelope for callers. Compiler worlds
+  built-in resource, and compiler-world materializers and returns an orchestration envelope for callers. Compiler worlds
   select one app-level syntax surface from the owning app-root sequence, including both attribute-pattern parser
   inputs and binding-command executables, then read ordinary named resource visibility from DI-produced container
   resource slots. They must not receive every framework catalog recognized in the project.
-- `app-world-project-pass.ts` is the current whole-project orchestration pass: shared static evaluation, resource
-  recognition/convergence, resource indexing, configuration recognition, DI spending, and compiler-world construction.
-  It exists so those producers can run in the intended order without making any one layer own the others' facts.
-- Treat this composition point as a watchpoint until the template compiler slice introduces its own
-  `CompilationContext`-shaped owner. The handoff needs to stay explicit enough that compiler work can decide which
-  facts belong to the app root, container, controller, compilation context, parser context, or inquiry answer without
-  moving source scanning back into the template layer.
+- `app-world-project-pass.ts` is the current whole-project orchestration pass: shared static evaluation, TypeChecker
+  epoch construction, resource recognition/convergence, resource indexing, configuration recognition, DI spending,
+  compiler-world construction, template compilation-front-door materialization, renderer emulation, and binding-scope
+  projection. It exists so those materializers can run in the intended order without making any one layer own the
+  others' facts.
+- Treat this composition point as a watchpoint while template/controller semantics keep sharpening. The handoff needs
+  to stay explicit enough that compiler work can decide which facts belong to the app root, container, controller,
+  compilation context, parser context, TypeChecker projection, or inquiry answer without moving source scanning back
+  into the template layer.
 
-The first producer slice is deliberately conservative about method receivers. `Aurelia.app(...)`, chained Aurelia
+The first recognition slice is deliberately conservative about method receivers. `Aurelia.app(...)`, chained Aurelia
 calls, and local variables initialized from `new Aurelia(...)` are treated as app admission; direct
 `container.register(...)`-shaped calls are treated as container registration. Other `.app(...)` and `.register(...)`
 methods should stay invisible until evaluation or DI context can prove what they are. False positives here would
@@ -77,16 +89,16 @@ Known framework configuration registries such as `StandardConfiguration`, `I18nC
 `StateDefaultConfiguration.init(...).withStore(...)` are classified as registry admissions when they appear as
 register arguments. The configuration layer records an explicit `FrameworkRegistrationKind`; it does not hide those
 semantics in trace names. Body effects still belong to registration/DI spending and later resource/compiler-world
-producers. The current template producers consume that framework kind for framework-owned built-in syntax catalog
+materializers. The current template materializers consume that framework kind for framework-owned built-in syntax catalog
 selection. Framework-owned built-in resource headers are cataloged from the same kind, then spent into DI resource
 slots before compiler-world resource visibility sees them.
 
-Closed i18n `translationAttributeAliases` contributions are already consumed by built-in syntax production when they
+Closed i18n `translationAttributeAliases` contributions are already consumed by built-in syntax materialization when they
 can be source-associated with the `I18nConfiguration.customize(...)` admission. That mirrors the runtime
 `coreComponents(options)` path without executing the callback body generally.
 
 App-root compiler worlds are complete only when the owning sequence admitted known runtime compiler services. The
-current app-world producer treats `StandardConfiguration` as that service package, because it registers the expression
+current app-world composer treats `StandardConfiguration` as that service package, because it registers the expression
 parser and runtime template-compiler implementation services we model today. Direct custom service registrations
 should become explicit DI/resource products before they are treated as complete compiler-world services.
 
@@ -111,10 +123,12 @@ slot. The configuration layer records both facts without executing the callback.
   state, not DOM events, lifecycle task execution, activation, deactivation, enhance, or hydrate behavior.
 - Do not hide app-task callback effects inside configuration. Callback bodies may produce registration observations,
   but their container consequences belong to registration and DI world construction.
+- Keep runtime binding scope distinct from compiler resource scope. Binding scope answers "which object/local does this
+  expression name target?"; resource scope answers "which Aurelia resources and compiler services are visible here?".
 - Configuration ordering is semantic, but it is not a linear compiler stage machine. Use derivation/provenance for
   why an ordering was observed.
 - Do not use option contributions as generic payloads for unresolved configuration objects. If a value matters beyond
   primitive option state, keep it referential until a domain-specific product earns a shape.
-- App-world composition is orchestration, not ownership of every downstream fact. If a later producer needs to ask
+- App-world composition is orchestration, not ownership of every downstream fact. If a later materializer needs to ask
   whether a resource, syntax executable, service, or controller state is visible to compilation, prefer adding a
   directional product/claim at the actual owner rather than hiding that relationship inside the composition envelope.

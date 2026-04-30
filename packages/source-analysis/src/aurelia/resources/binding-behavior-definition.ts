@@ -22,7 +22,7 @@ export const enum BindingBehaviorDefinitionContributionKind {
   Convention = 'convention',
 }
 
-// TODO(resource-convergence): Keep this contribution envelope provisional until binding-behavior convergence producers
+// TODO(resource-convergence): Keep this contribution envelope provisional until binding-behavior convergers
 // show whether thin resources want per-origin variants, per-field patches, or a shared named-resource contribution.
 export class BindingBehaviorDefinitionContribution {
   constructor(

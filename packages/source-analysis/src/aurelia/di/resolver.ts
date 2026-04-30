@@ -107,7 +107,7 @@ export class Resolver {
 
   /**
    * Runtime `register(container, key?)` shape. The caller supplies the slot because handle/provenance minting belongs
-   * to the DI producer that spends this resolver.
+   * to the DI constructor that spends this resolver.
    */
   register(container: Container, slot: ContainerResolverSlot): ContainerResolverSlot {
     return container.registerResolver(slot);

@@ -31,6 +31,8 @@ export const enum IdentityRecordKind {
   BindingIdentity = 'binding-identity',
   /** Names a rendering instruction produced by compiler lowering. */
   InstructionIdentity = 'instruction-identity',
+  /** Names a type-system projection visible to template/expression inquiry. */
+  TypeSystemIdentity = 'type-system-identity',
   /** Names synthetic structure created by policy or compiler generation. */
   GeneratedIdentity = 'generated-identity',
 }
@@ -75,6 +77,8 @@ export const enum IdentityDomain {
   Binding = 'binding',
   /** A rendering instruction emitted by template lowering. */
   Instruction = 'instruction',
+  /** Type-system type and member projections for template/expression inquiry. */
+  TypeSystem = 'type-system',
   /** Synthetic structure created by compiler or tooling policy. */
   Generated = 'generated',
 }
@@ -179,6 +183,12 @@ export const enum ConfigurationIdentityKind {
   AppRoot = 'app-root',
   /** Runtime controller boundary owned by app or template construction. */
   Controller = 'controller',
+  /** Runtime Scope used by controller activation and binding expression lookup. */
+  BindingScope = 'binding-scope',
+  /** Runtime binding context used by Scope lookup. */
+  BindingContext = 'binding-context',
+  /** Runtime override context used by Scope lookup. */
+  OverrideContext = 'override-context',
   /** Ordered app/plugin/registry/builder configuration flow. */
   Sequence = 'sequence',
   /** One ordered step inside a configuration sequence. */
@@ -210,6 +220,12 @@ export const enum CompilerIdentityKind {
   HtmlDocument = 'html-document',
   /** Authored HTML attribute product produced by the template HTML parser. */
   HtmlAttribute = 'html-attribute',
+  /** Compiled template product after compiler DOM pass-through and instruction row assembly. */
+  CompiledTemplate = 'compiled-template',
+  /** Runtime render target corresponding to one compiled instruction row. */
+  TemplateRenderTarget = 'template-render-target',
+  /** Ordered runtime instruction row for one render target or surrogate host. */
+  TemplateInstructionSequence = 'template-instruction-sequence',
   /** Runtime SyntaxInterpreter machine compiled from registered attribute patterns. */
   AttributeParserMachine = 'attribute-parser-machine',
   /** Runtime CompiledPattern entry inside a SyntaxInterpreter machine. */
@@ -218,6 +234,12 @@ export const enum CompilerIdentityKind {
   BuiltInSyntaxCatalog = 'built-in-syntax-catalog',
   /** Selection of built-in syntax catalogs admitted by one known framework registration. */
   ConfiguredSyntaxCatalogSelection = 'configured-syntax-catalog-selection',
+  /** Catalog of framework-provided runtime renderers admitted by configuration. */
+  BuiltInRuntimeRendererCatalog = 'built-in-runtime-renderer-catalog',
+  /** Selection of built-in runtime renderer catalogs admitted by one known framework registration. */
+  ConfiguredRuntimeRendererCatalogSelection = 'configured-runtime-renderer-catalog-selection',
+  /** Runtime IRenderer product selected by Rendering for one instruction type. */
+  RuntimeRenderer = 'runtime-renderer',
   /** Catalog of framework-provided resource definition headers admitted by configuration. */
   BuiltInResourceCatalog = 'built-in-resource-catalog',
   /** Selection of built-in resource catalogs admitted by one known framework registration. */
@@ -238,6 +260,21 @@ export const enum CompilerIdentityKind {
   BindingCommandBuildInput = 'binding-command-build-input',
   /** Binding-command lowering result before final instruction sequence assembly. */
   BindingCommandLowering = 'binding-command-lowering',
+  /** One secondary custom-attribute inline multi-binding segment. */
+  MultiBindingSegment = 'multi-binding-segment',
+  /** Inline custom-attribute multi-binding lowering result before final instruction sequence assembly. */
+  MultiBindingLowering = 'multi-binding-lowering',
+  /** Runtime binding scope effect such as let target assignment or iterator locals. */
+  BindingScopeEffect = 'binding-scope-effect',
+}
+
+export const enum TypeSystemIdentityKind {
+  /** Use when the checker-backed identity shape is not known yet. */
+  Unknown = 'unknown',
+  /** Projection of a TypeScript type as a queryable product. */
+  TypeShape = 'type-shape',
+  /** Projection of a member visible on a TypeScript type. */
+  TypeMember = 'type-member',
 }
 
 export const enum TemplatePhase {
@@ -676,6 +713,31 @@ export class InstructionIdentity {
   ) {}
 }
 
+/** Identity for a type-system type or member projection. */
+export class TypeSystemIdentity {
+  /** String discriminator for serialized type-system identity records. */
+  readonly kind = IdentityRecordKind.TypeSystemIdentity;
+  /** Identity-domain discriminator for cheap filtering. */
+  readonly domain = IdentityDomain.TypeSystem;
+
+  constructor(
+    /** Store-local handle for this identity record. */
+    readonly handle: IdentityHandle,
+    /** Retention promise for this identity inside the active analysis store. */
+    readonly stability: IdentityStability,
+    /** Type-system product lane represented by this identity. */
+    readonly typeSystemKind: TypeSystemIdentityKind,
+    /** Checker/program-local key that lets the hot sidecar reconnect to current TypeChecker state. */
+    readonly checkerKey: string,
+    /** Optional owner identity such as a declaration, binding context, or containing type shape. */
+    readonly ownerHandle: IdentityHandle | null,
+    /** Source address for the declaration or use-site that caused this projection. */
+    readonly sourceAddressHandle: AddressHandle | null = null,
+    /** Human-readable checker display for traces; not a semantic carrier. */
+    readonly display: string | null = null,
+  ) {}
+}
+
 /** Identity for synthetic compiler/tooling structure that still needs store tracking. */
 export class GeneratedIdentity {
   /** String discriminator for serialized generated identity records. */
@@ -710,4 +772,5 @@ export type SemanticIdentity =
   | TemplateNodeIdentity
   | BindingIdentity
   | InstructionIdentity
+  | TypeSystemIdentity
   | GeneratedIdentity;

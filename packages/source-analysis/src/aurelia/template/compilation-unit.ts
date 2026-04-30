@@ -7,6 +7,7 @@ import type {
 import type { TemplatePhase } from '../kernel/identity.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
 import type { ResourceDefinitionKind } from '../resources/resource-kind.js';
+import type { TemplateSourceOffsetMap } from '../resources/custom-element-definition.js';
 import type {
   TemplateCompilerServiceReference,
   TemplateCompilerWorldReference,
@@ -54,6 +55,7 @@ export type TemplateSourceField =
   | 'phase'
   | 'owner'
   | 'markup'
+  | 'sourceMap'
   | 'source';
 
 export type TemplateCompilationUnitField =
@@ -126,6 +128,8 @@ export class TemplateSource {
     readonly owner: TemplateSourceOwnerReference | null,
     /** Markup text when the carrier is closed enough to preserve it directly. */
     readonly markup: string | null,
+    /** Offset map from decoded markup boundaries to authored source boundaries. */
+    readonly sourceMap: TemplateSourceOffsetMap | null,
     /** Address for the template unit. */
     readonly templateAddressHandle: AddressHandle,
     /** Authored source span or external address for the source carrier. */

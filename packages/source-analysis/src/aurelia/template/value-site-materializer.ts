@@ -36,10 +36,7 @@ import {
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
-import {
-  KernelVocabulary,
-  type ProductKindKey,
-} from '../kernel/vocabulary.js';
+import { KernelVocabulary } from '../kernel/vocabulary.js';
 import { ExpressionParser } from '../expression/expression-parser.js';
 import type { ExpressionParseContext } from '../expression/expression-parse-support.js';
 import {
@@ -49,13 +46,13 @@ import {
 import type { ExpressionType } from '../expression/ast.js';
 import { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
-import type { AttributeClassificationEmission } from './attribute-classification-producer.js';
+import type { AttributeClassificationEmission } from './attribute-classification-materializer.js';
 import {
   AttributeClassification,
   AttributeClassificationKind,
   type AttributeSyntax,
 } from './attribute-syntax.js';
-import type { AttributeSyntaxParseEmission } from './attribute-syntax-producer.js';
+import type { AttributeSyntaxParseEmission } from './attribute-syntax-materializer.js';
 import type {
   TemplateBindableReference,
   TemplateCompilerServiceReference,
@@ -63,13 +60,13 @@ import type {
 import {
   TemplateCompilerServiceKind,
 } from './compiler-world.js';
-import type { TemplateCompilerWorldEmission } from './compiler-world-producer.js';
+import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
 import type { TemplateCompilationUnit } from './compilation-unit.js';
 import {
   HtmlAttribute,
   HtmlText,
 } from './html-ir.js';
-import type { HtmlParseEmission } from './html-parser-producer.js';
+import type { HtmlParseEmission } from './html-parse-materializer.js';
 import {
   expressionParseStateForResult,
   TemplateExpressionParse,
@@ -79,6 +76,7 @@ import {
   type TemplateExpressionParseField,
   type TemplateValueSiteField,
 } from './value-site.js';
+import { TemplateProductDetails } from './product-details.js';
 
 export class TemplateValueSiteInput {
   constructor(
@@ -128,7 +126,7 @@ class PendingValueSite {
 }
 
 /** Selects compiler-owned template value sites and publishes parser-owned values. */
-export class TemplateValueSiteProducer {
+export class TemplateValueSiteMaterializer {
   private readonly parser = new ExpressionParser();
 
   constructor(
@@ -136,10 +134,16 @@ export class TemplateValueSiteProducer {
     readonly store: KernelStore,
   ) {}
 
-  produce(input: TemplateValueSiteInput): TemplateValueSiteEmission {
+  materialize(input: TemplateValueSiteInput): TemplateValueSiteEmission {
     const emission = this.recordsForValueSites(input);
     if (emission.records.length > 0) {
       this.store.commit(new KernelStoreBatch(emission.records, `template-value-site:${input.localKey}`));
+    }
+    for (const site of emission.sites) {
+      this.store.productDetails.add(TemplateProductDetails.ValueSite, site.productHandle, site);
+    }
+    for (const parse of emission.parses) {
+      this.store.productDetails.add(TemplateProductDetails.ExpressionParse, parse.productHandle, parse);
     }
     return emission;
   }
@@ -215,7 +219,8 @@ export class TemplateValueSiteProducer {
       if (pending.entryFamily == null) {
         records.push(
           ...siteRecords,
-          product(
+          ...(routeClaim == null ? [] : [routeClaim]),
+          new MaterializedProduct(
             site.productHandle,
             KernelVocabulary.Template.ValueSite.key,
             site.identityHandle,
@@ -263,7 +268,8 @@ export class TemplateValueSiteProducer {
       parses.push(parse);
       records.push(
         ...siteRecords,
-        product(
+        ...(routeClaim == null ? [] : [routeClaim]),
+        new MaterializedProduct(
           site.productHandle,
           KernelVocabulary.Template.ValueSite.key,
           site.identityHandle,
@@ -279,12 +285,13 @@ export class TemplateValueSiteProducer {
           pending.sourceAddressHandle,
           `${pending.siteKind}:${result.kind}`,
         ),
-        product(
+        new MaterializedProduct(
           parse.productHandle,
           KernelVocabulary.Template.ExpressionParse.key,
           parse.identityHandle,
           pending.sourceAddressHandle,
           source.provenanceHandle,
+          [claim.handle],
         ),
         claim,
       );
@@ -546,22 +553,4 @@ function materializationStateForParses(
     return MaterializationState.Partial;
   }
   return MaterializationState.Complete;
-}
-
-function product(
-  handle: ProductHandle,
-  productKind: ProductKindKey,
-  identityHandle: CompilerIdentity['handle'],
-  addressHandle: TemplateValueSite['sourceAddressHandle'],
-  provenanceHandle: ProvenanceHandle,
-  claimHandles: readonly ClaimHandle[] = [],
-): MaterializedProduct {
-  return new MaterializedProduct(
-    handle,
-    productKind,
-    identityHandle,
-    addressHandle,
-    provenanceHandle,
-    claimHandles,
-  );
 }

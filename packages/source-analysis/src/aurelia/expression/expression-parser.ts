@@ -34,7 +34,7 @@ import type {
 /**
  * Public expression parser facade.
  *
- * This class is parser machinery, not a kernel producer. It does not emit
+ * This class is parser machinery, not a kernel materializer. It does not emit
  * products, claims, provenance, or inquiry answers by itself. Callers decide
  * value ownership and then wrap parser publications in kernel-backed products
  * when that publication becomes semantically useful.
@@ -77,7 +77,12 @@ export class ExpressionParser implements ExpressionParseResultPublisher {
     const expressionType = this.resolveEntryFamily(expressionTypeOrContext);
     const context = this.resolveContext(expressionTypeOrContext, maybeContext);
     const baseSpan = ExpressionParseSupport.resolveBaseSpan(expression, context);
-    return this.publishEntryFamily(expression, expressionType, baseSpan);
+    return this.publishEntryFamily(
+      expression,
+      expressionType,
+      baseSpan,
+      ExpressionParseSupport.resolveLocalActiveOffset(baseSpan, context),
+    );
   }
 
   parsePropertyLike(
@@ -102,7 +107,11 @@ export class ExpressionParser implements ExpressionParseResultPublisher {
     context?: ExpressionParseContext,
   ): InterpolationParseResult {
     const baseSpan = ExpressionParseSupport.resolveBaseSpan(expression, context);
-    return this.runInterpolation(expression, baseSpan);
+    return this.runInterpolation(
+      expression,
+      baseSpan,
+      ExpressionParseSupport.resolveLocalActiveOffset(baseSpan, context),
+    );
   }
 
   parseCustom(
@@ -154,11 +163,12 @@ export class ExpressionParser implements ExpressionParseResultPublisher {
   private runInterpolation(
     expression: string,
     baseSpan: SourceSpan | null,
+    activeOffset: number | null,
   ): InterpolationParseResult {
     // TODO: Interpolation currently reuses the property-like parser via a
     // callback boundary. If later family-specific provenance or recovery
-    // policy needs more than hole-local delegation, promote this bridge into a
-    // dedicated interpolation-expression runner rather than threading more
+    // policy needs more than hole-local delegation, promote that boundary into
+    // a dedicated interpolation-expression runner rather than threading more
     // orchestration through the callback shape.
     return InterpolationParser.parse(
       expression,
@@ -168,6 +178,7 @@ export class ExpressionParser implements ExpressionParseResultPublisher {
         return parser.parsePropertyLike("IsProperty");
       },
       baseSpan,
+      activeOffset,
     );
   }
 
@@ -183,6 +194,7 @@ export class ExpressionParser implements ExpressionParseResultPublisher {
     expression: string,
     entryFamily: ExpressionType,
     baseSpan: SourceSpan | null,
+    activeOffset: number | null,
   ): ExpressionParseResult {
     switch (entryFamily) {
       case "IsProperty":
@@ -191,7 +203,7 @@ export class ExpressionParser implements ExpressionParseResultPublisher {
       case "IsIterator":
         return this.runIterator(expression, baseSpan);
       case "Interpolation":
-        return this.runInterpolation(expression, baseSpan);
+        return this.runInterpolation(expression, baseSpan, activeOffset);
       case "IsCustom":
         return this.runCustom(expression, baseSpan);
       default:

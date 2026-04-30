@@ -30,7 +30,7 @@ import type { StaticModuleEvaluationResult } from './evaluator.js';
 import { EvaluationOpenSeam } from './seams.js';
 
 /** Emits durable kernel records for evaluator boundary pressure. */
-export class EvaluationKernelBridge {
+export class EvaluationKernelEmitter {
   constructor(
     /** Hot analysis store that receives evaluator boundary records. */
     readonly store: KernelStore,

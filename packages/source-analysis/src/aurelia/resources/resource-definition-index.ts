@@ -2,7 +2,11 @@ import ts from 'typescript';
 import type { StaticEvaluationExpressionReader } from '../evaluation/expression-reader.js';
 import { normalizeModuleKey } from '../evaluation/module-graph.js';
 import { EvaluationValueKind } from '../evaluation/values.js';
-import type { ProductHandle } from '../kernel/handles.js';
+import type {
+  IdentityHandle,
+  ProductHandle,
+} from '../kernel/handles.js';
+import type { ResourceTargetReference } from './resource-reference.js';
 import type { FullResourceDefinition } from './resource-definition.js';
 import type { ResourceRecognitionProjectResult } from './resource-recognition-project-pass.js';
 
@@ -18,7 +22,7 @@ export class ResourceDefinitionIndexEntry {
 }
 
 /**
- * Lookup table that lets later producers connect evaluated registration values back to converged resource definitions.
+ * Lookup table that lets later materializers connect evaluated registration values back to converged resource definitions.
  */
 export class ResourceDefinitionIndex {
   static fromProject(project: ResourceRecognitionProjectResult): ResourceDefinitionIndex {
@@ -39,6 +43,8 @@ export class ResourceDefinitionIndex {
 
   private readonly byModuleLocal = new Map<string, ResourceDefinitionIndexEntry>();
   private readonly byProduct = new Map<ProductHandle, FullResourceDefinition>();
+  private readonly byTargetIdentity = new Map<IdentityHandle, FullResourceDefinition>();
+  private readonly byLocalName = new Map<string, readonly FullResourceDefinition[]>();
 
   constructor(
     readonly entries: readonly ResourceDefinitionIndexEntry[],
@@ -48,6 +54,13 @@ export class ResourceDefinitionIndex {
       if (entry.definition.productHandle != null) {
         this.byProduct.set(entry.definition.productHandle, entry.definition);
       }
+      if (entry.definition.target.identityHandle != null) {
+        this.byTargetIdentity.set(entry.definition.target.identityHandle, entry.definition);
+      }
+      this.byLocalName.set(entry.localName, [
+        ...(this.byLocalName.get(entry.localName) ?? []),
+        entry.definition,
+      ]);
     }
   }
 
@@ -59,6 +72,27 @@ export class ResourceDefinitionIndex {
     return productHandle == null
       ? null
       : this.byProduct.get(productHandle) ?? null;
+  }
+
+  lookupByTargetIdentity(identityHandle: IdentityHandle | null): FullResourceDefinition | null {
+    return identityHandle == null
+      ? null
+      : this.byTargetIdentity.get(identityHandle) ?? null;
+  }
+
+  lookupByTargetReference(reference: ResourceTargetReference | null): FullResourceDefinition | null {
+    if (reference == null) {
+      return null;
+    }
+    const byIdentity = this.lookupByTargetIdentity(reference.identityHandle);
+    if (byIdentity != null) {
+      return byIdentity;
+    }
+    if (reference.localName == null) {
+      return null;
+    }
+    const matching = this.byLocalName.get(reference.localName) ?? [];
+    return matching.length === 1 ? matching[0]! : null;
   }
 
   lookupExpression(

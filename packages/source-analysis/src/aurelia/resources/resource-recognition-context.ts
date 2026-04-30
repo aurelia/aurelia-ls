@@ -2,8 +2,9 @@ import type ts from 'typescript';
 import { StaticEvaluationExpressionReader } from '../evaluation/expression-reader.js';
 import type { AddressHandle } from '../kernel/handles.js';
 import type { StaticModuleEvaluationResult } from '../evaluation/evaluator.js';
+import type { TypeSystemProject } from '../type-system/project.js';
 
-/** Inputs shared by resource recognition producers for one evaluated source module. */
+/** Inputs shared by resource recognizers for one evaluated source module. */
 export class ResourceRecognitionContext {
   /** Generic TypeScript expression reader for this module evaluation. */
   readonly expressionReader: StaticEvaluationExpressionReader;
@@ -17,6 +18,8 @@ export class ResourceRecognitionContext {
     readonly sourceFileAddressHandle: AddressHandle,
     /** Static evaluator result for the same source file. */
     readonly evaluation: StaticModuleEvaluationResult,
+    /** Current TypeChecker epoch for the project, when the caller needs runtime target types. */
+    readonly typeSystem: TypeSystemProject | null = null,
   ) {
     this.expressionReader = new StaticEvaluationExpressionReader(evaluation.environment, moduleKey);
   }

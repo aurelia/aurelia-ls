@@ -41,6 +41,9 @@ also installs an `IContainer` self resolver that resolves to the requestor.
 The tooling model keeps those consequences distinct:
 
 - `Container` names the abstract container itself.
+- `ContainerInterfaceToken` names the runtime `IContainer` interface symbol separately from any concrete container
+  frame. The token is the DI key; `ContainerSelfResolverSlot` is the per-container row that makes that key resolve to
+  the requestor.
 - `ContainerConfiguration` names the runtime-shaped configuration policy.
 - `ContainerRegistrationOperation` names the act of spending an admission against a container.
 - `Resolver` names a runtime-shaped resolver value. Its `resolve(...)`, `register(...)`, and `getFactory(...)` methods
@@ -59,7 +62,7 @@ The tooling model keeps those consequences distinct:
 
 `Container` is intentionally a live emulator frame, not a durable kernel record. Durable app-map facts still flow
 through handles, provenance, materialized products, claims, derivations, and open seams. The mutable maps inside
-`Container` let DI world construction behave like the runtime while producers decide which effects become stored
+`Container` let DI world construction behave like the runtime while materializers decide which effects become stored
 kernel records.
 
 ## Watchpoints
@@ -72,21 +75,21 @@ kernel records.
 - `ParameterizedRegistry` and generic `IRegistry` products should stay container-free until their `register(...)`
   behavior is spent against a specific container.
 - Auto-registration, constructor invocation, transformers, custom default resolvers, and registry bodies are surfaced
-  as lookup/activation pressure for now. They should become explicit products or seams when the producer that needs
+  as lookup/activation pressure for now. They should become explicit products or seams when the materializer that needs
   them arrives.
 - Known framework registration effects may feed adjacent product layers without DI executing arbitrary framework code.
   Attribute-pattern parser inputs and binding-command executables consume the same configured syntax catalogs for
   compiler-world purposes. Runtime stores them through different mechanisms for performance, but the product model
   treats framework syntax as effectively app-global and frozen after configuration. Framework resource headers are
   still spent into `ContainerResourceSlot` products for ordinary resource lookup.
-- Resource inheritance should not reuse parent slot products as child-owned facts. The DI producer that applies
+- Resource inheritance should not reuse parent slot products as child-owned facts. The DI constructor that applies
   inheritance must create child slot products with their own provenance.
 - Runtime `deregister(...)` is intentionally not mirrored in the container emulator yet. It primarily serves HMR plugin
   flows, and modeling it now would pull teardown/resource-removal policy into the first DI world-construction pass.
 
 ## Current Shape
 
-`world-construction-producer.ts` is the first app-world spending pass. It consumes the typed products emitted by
+`world-constructor.ts` is the first app-world spending pass. It consumes the typed products emitted by
 configuration recognition, installs each modeled container's built-in `IContainer` self resolver, then spends
 configuration-owned registration admissions against the sequence's root container.
 

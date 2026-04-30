@@ -4,6 +4,7 @@ import type { KernelStore } from '../kernel/store.js';
 import {
   InquiryAnswer,
   InquiryContinuation,
+  InquiryContinuationKind,
   InquiryOutcomeKind,
 } from './answer.js';
 import { KernelExactBasis } from './basis.js';
@@ -18,6 +19,13 @@ import {
   WorkspaceInquiryLocus,
   type InquiryLocus,
 } from './locus.js';
+import {
+  InquiryFamilyKind,
+  InquiryIntent,
+  InquiryIntents,
+  InquiryRelationKind,
+  InquirySubjectKind,
+} from './ontology.js';
 
 export const enum InquirySelectorKind {
   Workspace = 'workspace',
@@ -127,7 +135,7 @@ function resolveSourceFileSelector(
   if (matches.length > 1) {
     const continuations = matches.map((match) =>
       new InquiryContinuation(
-        'select-source-file',
+        InquiryContinuationKind.SelectSourceFile,
         `Narrow to admitted source file ${match.path}.`,
         new SourceFileSelector(match.path),
       )
@@ -143,6 +151,9 @@ function resolveSourceFileSelector(
       [],
       [],
       continuations,
+      null,
+      null,
+      selectorIntent(selector),
     );
   }
 
@@ -174,6 +185,9 @@ function resolveSourceCursorSelector(
       fileAnswer.claimHandles,
       fileAnswer.openSeamHandles,
       fileAnswer.continuations,
+      null,
+      null,
+      selectorIntent(selector),
     );
   }
   return hit(
@@ -199,6 +213,9 @@ function resolveSourceRangeSelector(
       fileAnswer.claimHandles,
       fileAnswer.openSeamHandles,
       fileAnswer.continuations,
+      null,
+      null,
+      selectorIntent(selector),
     );
   }
   return hit(
@@ -222,6 +239,9 @@ function hit(
     [],
     [],
     [],
+    null,
+    null,
+    selectorIntent(selector),
   );
 }
 
@@ -242,10 +262,40 @@ function miss(
     [],
     [
       new InquiryContinuation(
-        'list-admitted-sources',
+        InquiryContinuationKind.ListAdmittedSources,
         'Inspect admitted source files before selecting a source locus.',
         selector,
       ),
     ],
+    null,
+    null,
+    selectorIntent(selector),
   );
+}
+
+function selectorIntent(selector: InquirySelector): InquiryIntent {
+  switch (selector.kind) {
+    case InquirySelectorKind.Workspace:
+      return new InquiryIntent(
+        InquiryFamilyKind.Resolve,
+        InquirySubjectKind.Workspace,
+        InquiryRelationKind.ResolvesTo,
+      );
+    case InquirySelectorKind.Project:
+      return new InquiryIntent(
+        InquiryFamilyKind.Resolve,
+        InquirySubjectKind.Project,
+        InquiryRelationKind.ResolvesTo,
+      );
+    case InquirySelectorKind.SourceFile:
+    case InquirySelectorKind.SourceCursor:
+    case InquirySelectorKind.SourceRange:
+      return InquiryIntents.SelectorResolution;
+    case InquirySelectorKind.KernelRecord:
+      return new InquiryIntent(
+        InquiryFamilyKind.Resolve,
+        InquirySubjectKind.KernelRecord,
+        InquiryRelationKind.ResolvesTo,
+      );
+  }
 }

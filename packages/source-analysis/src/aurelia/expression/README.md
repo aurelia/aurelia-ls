@@ -1,7 +1,7 @@
 # Expression Parser
 
 See [../README.md](../README.md) for the folder-wide rebuild map and MCP co-evolution rule.
-See [INTEGRATION.md](./INTEGRATION.md) for temporary template/compiler handoff notes.
+See [INTEGRATION.md](./INTEGRATION.md) for template/compiler handoff notes.
 
 This directory contains the provisional Aurelia expression parser used by
 `packages/source-analysis`.
@@ -25,9 +25,9 @@ new authored-template model reveals better primitives.
 
 This folder has not yet had the same full semantic re-integration pass as the
 new kernel, resources, configuration, DI, and template substrates. Treat it as
-useful parser machinery with a native result algebra, not as a finished producer
+useful parser machinery with a native result algebra, not as a finished materializer
 or durable app-map layer. It emits no kernel records by itself; template and
-binding-command producers decide when parser results become products, claims,
+binding-command materializers decide when parser results become products, claims,
 open seams, or inquiry answers.
 
 ## Public Contract
@@ -38,6 +38,9 @@ open seams, or inquiry answers.
 - `parsePropertyLike(...)`, `parseIterator(...)`, `parseInterpolation(...)`, and
   `parseCustom(...)` are the direct family entry points for callers that
   already know ownership.
+- `ExpressionParseContext.activeOffset` is an inquiry-owned cursor hint for parser families that can expose multiple
+  incomplete regions, currently interpolation holes. It selects which frontier is published without changing completed
+  AST truth.
 - Non-owning transfer is not a parser result. Callers decide whether the
   expression parser owns an authored value before invoking this facade.
 - `parse-result-algebra.ts` is parser-owned publication.
@@ -127,6 +130,8 @@ owns this?" rather than "which giant parser method do we patch?"
   need richer interpolation scanner residue, add a dedicated scan-state carrier
   beside the current hole carriers instead of overloading the existing
   boundary-state objects.
+- Cursor-aware interpolation does not create a second AST family. It uses the caller's active offset to choose the
+  active companion hole while preserving the same ordered closed/suppressed hole model.
 - `parse()` still defaults to `IsProperty`. If later callers need a true
   tri-state of explicit family, inferred family, and parser-declined ownership,
   grow that above the parser in the caller-owned template/compiler layer.
@@ -154,7 +159,7 @@ probably belongs in `INTEGRATION.md` instead.
 ## Current Integration Slice
 
 `../template/value-site.ts` and
-`../template/value-site-producer.ts` are now the compiler-owned
+`../template/value-site-materializer.ts` are now the compiler-owned
 value-site layer above the parser.
 
 That layer decides, for each authored value site:

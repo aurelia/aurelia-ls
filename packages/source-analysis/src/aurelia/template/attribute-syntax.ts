@@ -303,7 +303,7 @@ export function interpretCompiledAttributePatterns(
  * Hydrated result of invoking an attribute-pattern handler method.
  *
  * Runtime returns AttrSyntax here. The product model below allocates identity and provenance later, after a parser
- * producer knows the owning HTML attribute, matched compiled pattern, and inquiry mode.
+ * materializer knows the owning HTML attribute, matched compiled pattern, and inquiry mode.
  */
 export class AttributePatternExecutionResult {
   constructor(

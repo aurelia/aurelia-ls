@@ -12,9 +12,17 @@ import {
   type ResourceRecognitionProjectResult,
 } from '../resources/resource-recognition-project-pass.js';
 import {
+  TypeSystemProjectBuilder,
+} from '../type-system/project.js';
+import type { TypeSystemProject } from '../type-system/project.js';
+import {
   AureliaAppWorldEmission,
-  AureliaAppWorldProducer,
-} from './app-world-producer.js';
+  AureliaAppWorldComposer,
+} from './app-world-composer.js';
+import {
+  TemplateCompilationProjectPass,
+  type TemplateCompilationProjectEmission,
+} from '../template/template-compilation-project-pass.js';
 import {
   ConfigurationRecognitionProjectPass,
   type ConfigurationRecognitionProjectResult,
@@ -31,8 +39,10 @@ export class AureliaAppWorldProjectEmission {
   constructor(
     /** Project frame analyzed by this composition pass. */
     readonly project: ProjectBootFrame,
-    /** Shared static evaluation consumed by resource and configuration producers. */
+    /** Shared static evaluation consumed by resource and configuration passes. */
     readonly evaluation: StaticProjectEvaluationResult,
+    /** Shared TypeChecker epoch consumed by resource, template, and inquiry passes. */
+    readonly typeSystem: TypeSystemProject,
     /** Resource recognition and convergence over the project. */
     readonly resources: ResourceRecognitionProjectResult,
     /** Product-handle and declaration index for converged resource definitions. */
@@ -41,17 +51,20 @@ export class AureliaAppWorldProjectEmission {
     readonly configuration: ConfigurationRecognitionProjectResult,
     /** App-world composition over the aggregated project configuration. */
     readonly appWorld: AureliaAppWorldEmission,
+    /** Template compiler front-door and downstream rendering/scope products for compiler-visible custom elements. */
+    readonly templates: TemplateCompilationProjectEmission,
   ) {}
 }
 
-/** Compose the current project-level Aurelia semantic producers over one booted project frame. */
+/** Compose the current project-level Aurelia semantic passes over one booted project frame. */
 export class AureliaAppWorldProjectPass {
   constructAndEmit(
     store: KernelStore,
     project: ProjectBootFrame,
   ): AureliaAppWorldProjectEmission {
     const evaluation = new StaticProjectEvaluationPass().evaluateAndEmit(store, project);
-    const resources = new ResourceRecognitionProjectPass().recognizeAndEmit(store, project, evaluation);
+    const typeSystem = new TypeSystemProjectBuilder().build(project, evaluation);
+    const resources = new ResourceRecognitionProjectPass().recognizeAndEmit(store, project, evaluation, typeSystem);
     const resourceIndex = ResourceDefinitionIndex.fromProject(resources);
     const configuration = new ConfigurationRecognitionProjectPass().recognizeAndEmit(
       store,
@@ -59,15 +72,18 @@ export class AureliaAppWorldProjectPass {
       resourceIndex,
       evaluation,
     );
-    const appWorld = new AureliaAppWorldProducer(store).construct(configuration.readConfiguration(), resourceIndex);
+    const appWorld = new AureliaAppWorldComposer(store).construct(configuration.readConfiguration(), resourceIndex);
+    const templates = new TemplateCompilationProjectPass(store).compile(appWorld, typeSystem);
 
     return new AureliaAppWorldProjectEmission(
       project,
       evaluation,
+      typeSystem,
       resources,
       resourceIndex,
       configuration,
       appWorld,
+      templates,
     );
   }
 }

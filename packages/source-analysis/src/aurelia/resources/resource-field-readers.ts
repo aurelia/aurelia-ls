@@ -112,7 +112,7 @@ export function readResourceKindField(
     ? new ResourceFieldRead<ResourceDefinitionKind>(
       null,
       value.node,
-      summaryWithEvaluationSeams(`Resource definition type '${raw}' is not recognized by this producer.`, value.openSeams),
+      summaryWithEvaluationSeams(`Resource definition type '${raw}' is not recognized by this resource reader.`, value.openSeams),
     )
     : new ResourceFieldRead(kind, value.node);
 }

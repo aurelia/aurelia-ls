@@ -5,7 +5,7 @@ import {
   type RegistrationEmissionContext,
 } from './registration-kernel-emitter.js';
 import type { RegistrationAdmissionObservation } from './registration-observation.js';
-import { RegistrationFactoryRecognitionProducer } from './registration-recognition-producer.js';
+import { RegistrationFactoryRecognizer } from './registration-factory-recognizer.js';
 
 /** Result of registration recognition over one source module. */
 export class RegistrationRecognitionResult {
@@ -19,7 +19,7 @@ export class RegistrationRecognitionResult {
 
 /** Horizontal registration-recognition pass over one evaluated source module. */
 export class RegistrationRecognitionPass {
-  private readonly registrationFactories = new RegistrationFactoryRecognitionProducer();
+  private readonly registrationFactories = new RegistrationFactoryRecognizer();
 
   recognize(context: RegistrationEmissionContext): readonly RegistrationAdmissionObservation[] {
     return this.registrationFactories.recognize(context);

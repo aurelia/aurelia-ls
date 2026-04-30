@@ -71,6 +71,7 @@ export type TemplateInstructionField =
   | 'storeName'
   | 'rawExpression'
   | 'children'
+  | 'captures'
   | 'instructions'
   | 'tailInstructions'
   | 'toBindingContext'
@@ -119,6 +120,7 @@ export class HydrateElementInstruction {
     readonly definitionProductHandle: ProductHandle | null,
     readonly childInstructionSequenceProductHandle: ProductHandle | null,
     readonly bindableInstructionProductHandles: readonly ProductHandle[],
+    readonly captureSyntaxProductHandles: readonly ProductHandle[],
     readonly containerless: boolean,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<TemplateInstructionField>[] = [],
@@ -228,6 +230,7 @@ export class IteratorBindingInstruction {
     readonly identityHandle: IdentityHandle,
     readonly node: HtmlNodeReference,
     readonly attribute: HtmlAttributeReference,
+    readonly targetProperty: string,
     readonly localNames: readonly string[],
     readonly iterableExpressionProductHandle: ProductHandle | null,
     readonly tailInstructionProductHandles: readonly ProductHandle[],

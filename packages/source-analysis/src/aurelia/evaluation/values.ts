@@ -181,7 +181,7 @@ export class EvaluationClassValue {
   constructor(
     /** Class declaration or expression represented by this value. */
     readonly declaration: ts.ClassLikeDeclaration,
-    /** Captured environment record available to later class-aware producers. */
+    /** Captured environment record available to later class-aware materializers. */
     readonly environment: ModuleEnvironmentRecord,
     /** Syntax node that produced the value, when one exists. */
     readonly node: ts.Node | null = null,

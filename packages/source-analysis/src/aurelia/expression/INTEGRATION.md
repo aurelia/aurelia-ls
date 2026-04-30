@@ -35,13 +35,13 @@ The parser now has the surfaces it needs:
 The previous integration layer has been removed. The current handoff is rebuilt
 on top of the new template/compiler substrate through
 `../template/value-site.ts` and
-`../template/value-site-producer.ts`.
+`../template/value-site-materializer.ts`.
 
 This is not a declaration that the expression parser is finished. It only means
-the handoff no longer depends on a compatibility selector/router inside the
-parser. The parser remains provisional until its grammar corridors, recovery
+the handoff no longer depends on a parser-owned selector/router for caller
+policy. The parser remains provisional until its grammar corridors, recovery
 publication, source/provenance shape, and inquiry behavior have been reviewed
-against the runtime grammar and the new value-site/lowering producers.
+against the runtime grammar and the new value-site/lowering materializers.
 
 ## Current Honest Integration Slice
 
@@ -92,4 +92,4 @@ that logic actually belongs above the parser instead.
 If future inquiry work needs to expand parser publications from the kernel
 store, add typed parser-publication product details or a product-detail catalog.
 Do not add generic payloads to kernel products and do not make the expression
-parser a hidden kernel producer just to make expansion convenient.
+parser a hidden kernel materializer just to make expansion convenient.

@@ -43,10 +43,10 @@ That keeps registration analyzable before DI world construction exists.
 ## Watchpoints
 
 - Registration vocabulary uses explicit kernel slots for claim predicates, seam kinds, and product kinds. Resolver
-  strategies and admission kinds should stay registration model fields unless a real producer or query needs a stable
+  strategies and admission kinds should stay registration model fields unless a real materializer or query needs a stable
   vocabulary key.
 - Registration open seams carry product-owned `KernelVocabulary.Registration.*` seam keys directly. Do not add a
-  second local open-kind enum unless a future producer needs a genuinely different, non-durable taxonomy.
+  second local open-kind enum unless a future materializer needs a genuinely different, non-durable taxonomy.
 - Registration product models must stay at least as fine-grained as the runtime ingress shapes. Resolver-producing
   admissions, `Registration.defer`/`ParameterizedRegistry`, and generic `IRegistry` admissions are separate product
   classes so DI world construction does not have to rediscover the runtime split later.
@@ -89,10 +89,10 @@ registration analysis. Configuration emission owns the registration products adm
 step, and later DI world construction should spend those configuration-owned products when constructing an app
 container world.
 
-`registration-recognition-producer.ts` recognizes the first source carrier family: imported `Registration.*(...)`
+`registration-factory-recognizer.ts` recognizes the first source carrier family: imported `Registration.*(...)`
 factory calls from `aurelia` or `@aurelia/kernel`, including namespace imports such as
 `Aurelia.Registration.singleton(...)`. This is source-shape recognition, not container reachability. Configuration and
 later DI world construction still decide whether a registration product participates in an app/container world.
 
 DI key identities are split in the kernel by runtime key shape: class, interface symbol, string, symbol, resource,
-resolver, or unknown. Producers should use those records rather than hiding key semantics in descriptions.
+resolver, or unknown. Materializers should use those records rather than hiding key semantics in descriptions.

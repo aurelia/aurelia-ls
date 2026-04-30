@@ -10,6 +10,11 @@ export interface ExpressionParseContext {
   readonly baseSpan?: SourceSpan;
   readonly baseOffset?: number;
   readonly file?: SourceFileRef;
+  /**
+   * Absolute source offset that should own cursor/frontier publication when a parser family can expose more than one
+   * incomplete region. This is inquiry pressure only; completed AST truth is unchanged.
+   */
+  readonly activeOffset?: number;
 }
 
 export class ExpressionParseSupport {
@@ -29,5 +34,21 @@ export class ExpressionParseSupport {
     const candidate = sourceSpanFromBounds(start, end, file);
     const normalized = normalizeSpan(candidate);
     return ensureSpanFile(normalized, file) ?? normalized;
+  }
+
+  static resolveLocalActiveOffset(
+    baseSpan: SourceSpan | null,
+    context?: ExpressionParseContext,
+  ): number | null {
+    const offset = context?.activeOffset;
+    if (offset == null) {
+      return null;
+    }
+    if (baseSpan == null) {
+      return offset;
+    }
+    return offset >= baseSpan.start && offset <= baseSpan.end
+      ? offset - baseSpan.start
+      : offset;
   }
 }
