@@ -6,7 +6,7 @@ handles and fingerprints.
 
 ## Current Shape
 
-The current cache family root is `framework.discovery.entity-catalog.*`. It stores package-scoped chunks for
+The current entity cache family root is `framework.discovery.entity-catalog.*`. It stores package-scoped chunks for
 framework existence atoms:
 
 - `package-exports`
@@ -31,6 +31,15 @@ dependent; re-measure locally when performance decisions depend on them.
 The cached rows are not inquiry answers. They are serializable atoms that the `framework.discovery` projections page,
 filter, decorate with evidence, and continue from at query time.
 
+The first relationship cache family is `framework.di.relationship-atoms`. It stores package-scoped DI key and
+relationship atoms produced by the framework DI index. It follows the same contract: JSON is derived memory, TypeScript
+remains authority, and continuations are created at query time rather than persisted.
+
+The first evaluator-derived admission cache family is `framework.discovery.bundle-admissions`. It stores
+package-scoped bundle/configuration rows and their normalized registration associations. These rows are not existence
+catalog atoms, so they live in their own family and invalidate against all admitted framework package fingerprints:
+bundle associations can depend on resources, DI keys, and registry exports declared outside the bundle's package.
+
 ## Inclusion Policy
 
 The cache should not depend on somebody remembering a projection name. A framework atom family belongs in JSON when it
@@ -48,6 +57,8 @@ The current policy is:
 - package-local existence atoms use package-scoped chunks
 - entity atoms that embed cross-package joins must declare dependency package fingerprints
 - relationship/effect families should get their own family ids instead of being smuggled into entity chunks
+- bundle admission chunks depend on all admitted framework packages until the evaluator can record a narrower
+  per-association dependency set
 - projection paging, filtering, evidence shaping, and continuations stay outside the cache
 
 This makes the entity catalog a seed layer, not a one-off. As Atlas adds DI, lifecycle, compiler, activation, and
@@ -66,6 +77,10 @@ Every package chunk carries:
 - absolute repo root
 - `SourceProject` identity
 - package fingerprint
+
+Cache reads first check the cheap header fields above, including producer and source-project identity, before hashing
+package contents. Package fingerprints are only computed after the chunk is plausibly current. This keeps stale chunks
+from old analyzer builds from making daemon startup pay source hashing costs.
 
 The package fingerprint hashes:
 

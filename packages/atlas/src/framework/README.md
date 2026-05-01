@@ -44,9 +44,23 @@ anchors; better anchors make future product modeling cheaper.
 - [json-cache.ts](json-cache.ts) owns the JSON cache used to hydrate expensive derived framework atoms after daemon
   restart. [JSON-CACHE.md](JSON-CACHE.md) records the storage contract, invalidation keys, entity-family inclusion
   policy, trade-offs, and falsifiers.
+- [relationships.ts](relationships.ts) defines the shared relationship atom axes: family, relation, mechanism, phase,
+  evidence basis, closure, source endpoints, and optional TypeChecker-backed call evidence. Lenses should derive
+  corridors from these atoms instead of inventing projection-local graph shapes.
+- [di-index.ts](di-index.ts) is the first relationship atom producer. It starts inside the Aurelia kernel DI mechanics,
+  discovers exported framework `createInterface` keys across admitted packages, records default provider/alias targets
+  when builder callbacks expose them, records TypeChecker-qualified `Registration.*` provider/alias targets across
+  admitted packages, and records kernel registration, lookup, resolver, slot, factory, and construction atoms with
+  source-backed evidence.
 - [../inquiry/runtime/framework-lenses.ts](../inquiry/runtime/framework-lenses.ts) exposes the seeds as the
   `framework.discovery` inquiry lens, including package export surfaces for admitted Aurelia framework packages, and
   the first `framework.rendering` lens for instruction, binding, and observer-adjacent rendering rows.
+- [../inquiry/runtime/framework-di-lenses.ts](../inquiry/runtime/framework-di-lenses.ts) exposes the `framework.di`
+  lens over the DI relationship atom index.
+- [../inquiry/runtime/framework-materialization-lenses.ts](../inquiry/runtime/framework-materialization-lenses.ts)
+  exposes first-pass DI provider materialization routes derived from DI relationship atoms, including exact container
+  dependency calls observed inside callback providers, dependency policy classes, and graph relationships from keys to
+  providers and dependency keys.
 - Future files in this folder should own Aurelia-specific semantic indexes over the hot source project, such as DI,
   app/world formation, compiler, rendering, lifecycle, resource, plugin, and reactivity indexes.
 - The generic ECMAScript evaluator remains in [../evaluation](../evaluation/README.md). Aurelia-specific meaning belongs
@@ -57,6 +71,8 @@ anchors; better anchors make future product modeling cheaper.
 - Do not make route rows fuzzy. Every indexed row should have source, TypeChecker, evaluator, or explicit human basis.
 - Prefer exact source selectors and auLink target continuations over direct source reading.
 - Treat seed anchors as starting handles, not authoritative taxonomy.
+- Keep relationship axes separate. A relation is not a mechanism, a phase is not a relation, and evidence basis is not
+  confidence. If a projection wants to merge those dimensions, derive that view from atoms.
 - Keep old compensation layers small. Product vocabulary and kernel substrate contracts should shrink when framework
   semantics can carry the relationship more honestly.
 - Make expensive discovery explicit at daemon boot when it makes query-time reads cheap and repeatable.

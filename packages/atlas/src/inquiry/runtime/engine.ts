@@ -21,6 +21,8 @@ import {
 import { answerBridgeAuLink } from "./bridge-lenses.js";
 import { answerFrameworkDiscovery, answerFrameworkRendering } from "./framework-lenses.js";
 import { answerFrameworkEvaluator } from "./framework-evaluator-lenses.js";
+import { answerFrameworkDi } from "./framework-di-lenses.js";
+import { answerFrameworkMaterialization } from "./framework-materialization-lenses.js";
 import type { InquiryWorld } from "./world.js";
 
 /** Hot substrate context shared by runtime lens implementations. */
@@ -60,7 +62,9 @@ export class InquiryEngine {
     LensId.BridgeAuLink,
     LensId.FrameworkDiscovery,
     LensId.FrameworkRendering,
+    LensId.FrameworkDi,
     LensId.FrameworkEvaluator,
+    LensId.FrameworkMaterialization,
   ]);
 
   constructor(
@@ -106,8 +110,12 @@ export class InquiryEngine {
         return answerFrameworkDiscovery(normalized.inquiry, this.substrates.sourceProject);
       case LensId.FrameworkRendering:
         return answerFrameworkRendering(normalized.inquiry, this.substrates.sourceProject);
+      case LensId.FrameworkDi:
+        return answerFrameworkDi(normalized.inquiry, this.substrates.sourceProject);
       case LensId.FrameworkEvaluator:
         return answerFrameworkEvaluator(normalized.inquiry, this.substrates.sourceProject);
+      case LensId.FrameworkMaterialization:
+        return answerFrameworkMaterialization(normalized.inquiry, this.substrates.sourceProject);
       default:
         return answerUnimplementedLens(this.world, normalized.inquiry);
     }

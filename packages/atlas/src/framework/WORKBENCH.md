@@ -138,9 +138,50 @@ compensatory aliases, or unclear ontology.
     node sequence, lifecycle hook, platform boundary, mount target, and SSR rows
   - these are still "what exists" catalogs. The next layers should spend these seeds into relationship lenses for DI,
     lifecycle, compiler/rendering, activation, and observer flow instead of overloading `framework.discovery`.
+- `framework.di` is now the first relationship-atom lens. It starts at the Aurelia kernel because DI is the lowest
+  framework dependency layer:
+  - `relationships.ts` separates relation, mechanism, phase, evidence basis, closure, and endpoints so later lenses can
+    compose atoms without collapsing ontology dimensions into one enum
+  - `di-index.ts` discovers exported `createInterface` keys across admitted framework packages, TypeChecker-qualified
+    `Registration.*` provider/alias targets across admitted packages, and kernel DI registration/lookup/materialization
+    mechanics from exact source and TypeChecker-backed call facts
+  - createInterface builder callbacks now produce both a registration-strategy atom and, when an argument is visible,
+    a provider or alias-target atom. This keeps "a resolver registration exists" separate from "this key is provided
+    by this expression".
+  - registration-factory calls now produce a separate provider/alias-target atom only when the callee resolves back to
+    Aurelia kernel registration API declarations and its call type is a registration/registry product
+  - the lens exposes `keys`, `relationships`/`facts`, `registrations`, `providers`, `lookups`, and `materializations`
+    projections, with source continuations for every returned atom
+  - this is still provider-source substrate, not a full app-world constructor; admission/configuration execution and
+    resource construction should later be expressed as outer relationships over these DI primitives
+- `framework.materialization` now spends visible DI provider atoms into first-pass route rows:
+  - instance providers, constructable singleton/transient providers, and aliases close to exact provider expressions
+    with TypeChecker facts and source continuations
+  - callback and cached-callback providers now spend evaluator invocation effects into exact container dependency rows
+    for callback receiver calls such as `handler.get(...)`, `handler.has(...)`, `getAll(...)`, `getResolver(...)`,
+    and `find(...)`
+  - dependency rows now carry a separate policy axis for direct, guarded, fallback, repeated, and deferred callback
+    dependencies. This policy is derived from evaluator certainty plus control-path labels; it is not a substitute for
+    semantic-runtime's eventual container execution model.
+  - materialization graph rows now keep `materializes-through` and `depends-on-key` as separate relationship kinds,
+    so callers can traverse from a DI key to its provider or from a DI key to callback dependency keys it reads
+  - callback routes deliberately remain partial and carry open seams for return/value closure until evaluator/effect
+    tracing can model the produced value, not just its container reads
+  - this lens is a route layer over DI provider atoms, not yet the full container construction model
 
 ## Immediate Loose Ends
 
+- Deepen `framework.di` without turning it into a product emulator:
+  - add explicit alias rows for non-`createInterface` key aliases such as interface-token casts
+  - distinguish provider registration, resolver slot ownership, resource slot mirroring, array resolver aggregation,
+    and default resolver/JIT pressure as separate relation/mechanism combinations when the current atoms prove too
+    coarse
+  - extend provider-target atoms beyond `createInterface` builder callbacks into evaluated configuration and
+    registration-factory admissions once the evaluator can close the call/effect route
+  - validate the callback dependency policy classifier against more callback-provider shapes as provider admission grows
+  - add source/type continuations from DI atoms into `ts.type` call-sites, references, and definitions where useful
+  - keep `Container` emulator behavior in semantic-runtime; Atlas should expose framework facts and corridors that make
+    emulator gaps obvious
 - Harden the DI interface classifier:
   - current projection is public package-entrypoint exports only; source-export carriers are not treated as package
     exports
@@ -209,6 +250,8 @@ compensatory aliases, or unclear ontology.
 - Add a stable disk manifest layer above the daemon's warm in-memory cache:
   - the JSON cache now covers the current existence/entity atom families; see `JSON-CACHE.md` for the storage
     contract, invalidation keys, inclusion policy, trade-offs, and falsifiers
+  - the first relationship atom cache family is `framework.di.relationship-atoms`; use it as the template for future
+    relationship caches only if the atom axes continue to hold up under query pressure
   - next candidates are relationship/effect families, starting with evaluated bundle admissions and then DI,
     lifecycle, compiler, activation, and observer-flow atoms as their row shapes stabilize
   - keep manifest rows as stable semantic addresses/evidence summaries; rehydrate or lazily reacquire full TypeScript
@@ -227,6 +270,9 @@ compensatory aliases, or unclear ontology.
     should be warm-cache cheap.
   - `app-tasks`, `router-entities`, `expression-entities`, and `rendering-structures` use the same cheap public-name
     admission surface plus exact export expansion.
+  - `framework.di` and `framework.materialization` are blocking daemon prewarm reads. Bundle admissions use their own
+    JSON cache family and package-by-package background prewarm because a cold all-package bundle fill can exceed the
+    session startup budget.
   - package-scoped JSON hydration should materially reduce daemon restart warmup after the cache has been filled.
   - `readExportNames` is the cheap public-name surface; avoid `readExportSurface` when only admission names are needed
   - profile before adding more boot-time graph work; prefer indexed atoms with stable keys over repeated scans

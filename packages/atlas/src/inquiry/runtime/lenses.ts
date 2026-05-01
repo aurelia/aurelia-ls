@@ -79,6 +79,30 @@ export function answerRepoMap(world: InquiryWorld, inquiry: Inquiry): Answer<Inq
         route: route(NavigationPlane.Semantic, NavigationRelation.FrameworkFlowOf, [BasisKind.AtlasContract], "Aurelia framework discovery seeds from the surface map."),
       },
       {
+        id: "repo.map:framework-di",
+        kind: ContinuationKind.SwitchLens,
+        priority: ContinuationPriority.Primary,
+        rationale: "Enter the Aurelia framework DI relationship atoms.",
+        inquiry: {
+          lens: LensId.FrameworkDi,
+          locus: RepoRootLocus,
+          projection: "summary",
+        },
+        route: route(NavigationPlane.Semantic, NavigationRelation.FrameworkFlowOf, [BasisKind.TypeScriptChecker], "Aurelia framework DI relationship graph."),
+      },
+      {
+        id: "repo.map:framework-materialization",
+        kind: ContinuationKind.SwitchLens,
+        priority: ContinuationPriority.Secondary,
+        rationale: "Enter first-pass DI provider materialization routes.",
+        inquiry: {
+          lens: LensId.FrameworkMaterialization,
+          locus: RepoRootLocus,
+          projection: "summary",
+        },
+        route: route(NavigationPlane.Semantic, NavigationRelation.FrameworkFlowOf, [BasisKind.TypeScriptChecker], "Aurelia framework DI provider materialization routes."),
+      },
+      {
         id: "repo.map:framework-rendering",
         kind: ContinuationKind.SwitchLens,
         priority: ContinuationPriority.Primary,

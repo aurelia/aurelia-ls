@@ -6,7 +6,7 @@ import { LensId } from "../inquiry/lens.js";
 import { RepoRootLocus } from "../inquiry/locus.js";
 import { createInMemoryApi, type InquiryRuntimeRequest } from "../inquiry/runtime/index.js";
 import { prewarmFrameworkDiscoveryIndex } from "../framework/index.js";
-import { createSourceProject, prewarmAuLinkIndex } from "../source/index.js";
+import { AURELIA_FRAMEWORK_PACKAGE_IDS, createSourceProject, prewarmAuLinkIndex } from "../source/index.js";
 import { readInquirySessionManifest, removeInquirySessionManifest, writeInquirySessionManifest } from "./manifest.js";
 import { resolveInquirySessionPaths } from "./paths.js";
 import {
@@ -43,6 +43,20 @@ const blockingFrameworkEntityPrewarmProjections = [
   "expression-entities",
   "rendering-structures",
 ] as const;
+const blockingSemanticPrewarmInquiries: readonly InquiryRuntimeRequest[] = [
+  {
+    lens: LensId.FrameworkDi,
+    locus: RepoRootLocus,
+    projection: "summary",
+    budget: { rows: 1, evidencePerSubject: 1 },
+  },
+  {
+    lens: LensId.FrameworkMaterialization,
+    locus: RepoRootLocus,
+    projection: "summary",
+    budget: { rows: 1, evidencePerSubject: 1 },
+  },
+];
 const backgroundFrameworkEntityPrewarmProjections = [
   "package-exports",
   "registry-exports",
@@ -53,14 +67,16 @@ const backgroundFrameworkEntityPrewarmProjections = [
   "instruction-slots",
   "binding-products",
 ] as const;
-await Promise.all(blockingFrameworkEntityPrewarmProjections.map((projection) =>
-  api.ask({
-    lens: LensId.FrameworkDiscovery,
-    locus: RepoRootLocus,
-    projection,
-    budget: { rows: 1, evidencePerSubject: 1 },
-  })
-));
+await Promise.all([
+  ...blockingFrameworkEntityPrewarmProjections.map((projection) =>
+    api.ask({
+      lens: LensId.FrameworkDiscovery,
+      locus: RepoRootLocus,
+      projection,
+      budget: { rows: 1, evidencePerSubject: 1 },
+    })),
+  ...blockingSemanticPrewarmInquiries.map((inquiry) => api.ask(inquiry)),
+]);
 const startedAtMs = Date.now();
 let lastRequestAtMs = startedAtMs;
 let endpoint: InquirySessionEndpoint | undefined;
@@ -256,6 +272,31 @@ async function prewarmFrameworkEntityCatalogsInBackground(): Promise<void> {
       console.error(`Atlas background framework entity prewarm failed for ${projection}: ${errorSummary(error)}`);
     });
   }
+  await prewarmFrameworkBundleAdmissionsInBackground();
+}
+
+/** Prewarm bundle admissions package-by-package so a cold fill does not monopolize startup. */
+async function prewarmFrameworkBundleAdmissionsInBackground(): Promise<void> {
+  for (const packageId of AURELIA_FRAMEWORK_PACKAGE_IDS) {
+    if (shuttingDown) {
+      return;
+    }
+    await api.ask({
+      lens: LensId.FrameworkDiscovery,
+      locus: RepoRootLocus,
+      projection: "bundles",
+      filters: { packageId },
+      budget: { rows: 1, evidencePerSubject: 1 },
+    }).catch((error: unknown) => {
+      console.error(`Atlas background framework bundle prewarm failed for ${packageId}: ${errorSummary(error)}`);
+    });
+    await sleep(0);
+  }
+}
+
+/** Yield to pending session IO between package-scoped background fills. */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /** Refresh the manifest heartbeat or exit if this daemon no longer owns it. */

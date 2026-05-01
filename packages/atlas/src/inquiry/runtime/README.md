@@ -22,6 +22,15 @@ This is not a compatibility layer for old readers and not the default caller sur
   router, expression, rendering structure entities, and rendering/binding rows. The first entity catalogs use the
   framework JSON cache as derived atom storage, while paging, filtering, evidence, and continuations remain projection
   work over the live runtime.
+- [framework-di-lenses.ts](framework-di-lenses.ts) exposes the first relationship-atom lens, `framework.di`. It reads
+  DI relationship atoms from `framework/di-index.ts` and keeps keys, registrations, provider/alias targets, lookups,
+  and materialization mechanics navigable without folding those phases into the discovery catalog.
+- [framework-materialization-lenses.ts](framework-materialization-lenses.ts) spends DI provider atoms into first-pass
+  materialization routes. It closes exact provider expressions and constructable/instance/alias seeds, while carrying
+  callback-provider return/value closure as explicit evaluator seams. Callback provider routes now also spend evaluator
+  invocation effects into exact container dependency rows for calls such as `handler.get(...)` and `handler.has(...)`,
+  classify those dependency rows by direct/guarded/fallback/repeated/deferred policy, and expose graph rows that
+  separate "key materializes through provider" from "key depends on dependency key".
 
 The first runtime lenses answer only contract-world questions. Thick TypeScript, product, and framework substrates plug
 into this layer by satisfying the same inquiry and answer contracts. Runtime continuations may now carry route claims

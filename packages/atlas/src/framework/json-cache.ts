@@ -17,6 +17,9 @@ export const FRAMEWORK_JSON_CACHE_PACKAGE_SCHEMA_VERSION = "atlas.framework-json
 /** Stable id for the framework discovery entity catalog cache family. */
 export const FRAMEWORK_ENTITY_CATALOG_CACHE_FAMILY_ID = "framework.discovery.entity-catalog";
 
+/** Stable id for evaluator-derived framework bundle admission cache chunks. */
+export const FRAMEWORK_BUNDLE_ADMISSION_CACHE_FAMILY_ID = "framework.discovery.bundle-admissions";
+
 /** Source fingerprint for one admitted package. */
 export interface FrameworkJsonCachePackageFingerprint {
   /** Package id from the Atlas source admission contract. */
@@ -112,16 +115,19 @@ export function readFrameworkJsonCachePackage<TPayload>(
   if (!existsSync(cachePath)) {
     return undefined;
   }
-  const fingerprint = frameworkJsonCachePackageFingerprint(sourceProject, options.packageId);
-  if (fingerprint === null) {
-    return undefined;
-  }
-  const dependencyFingerprints = dependencyFingerprintsForOptions(sourceProject, options);
-  if (dependencyFingerprints === null) {
-    return undefined;
-  }
   try {
     const parsed = JSON.parse(readFileSync(cachePath, "utf8")) as Partial<FrameworkJsonCachePackageFile<TPayload>>;
+    if (!frameworkJsonCacheCheapHeaderMatches(sourceProject, options, parsed)) {
+      return undefined;
+    }
+    const fingerprint = frameworkJsonCachePackageFingerprint(sourceProject, options.packageId);
+    if (fingerprint === null) {
+      return undefined;
+    }
+    const dependencyFingerprints = dependencyFingerprintsForOptions(sourceProject, options);
+    if (dependencyFingerprints === null) {
+      return undefined;
+    }
     if (!frameworkJsonCacheHeaderMatches(sourceProject, options, fingerprint, dependencyFingerprints, parsed)) {
       return undefined;
     }
@@ -213,6 +219,21 @@ function frameworkJsonCacheHeaderMatches<TPayload>(
     && parsed.sourceIdentity === sourceProject.snapshot().identity
     && packageFingerprintMatches(parsed.packageFingerprint, fingerprint)
     && packageFingerprintListsMatch(parsed.dependencyFingerprints, dependencyFingerprints)
+    && parsed.payload !== undefined;
+}
+
+function frameworkJsonCacheCheapHeaderMatches<TPayload>(
+  sourceProject: SourceProject,
+  options: FrameworkJsonCachePackageOptions,
+  parsed: Partial<FrameworkJsonCachePackageFile<TPayload>>,
+): boolean {
+  return parsed.schemaVersion === FRAMEWORK_JSON_CACHE_PACKAGE_SCHEMA_VERSION
+    && parsed.familyId === options.familyId
+    && parsed.familyVersion === options.familyVersion
+    && parsed.producerVersion === options.producerVersion
+    && parsed.typescriptVersion === ts.version
+    && parsed.repoRoot === sourceProject.repoRoot
+    && parsed.sourceIdentity === sourceProject.snapshot().identity
     && parsed.payload !== undefined;
 }
 

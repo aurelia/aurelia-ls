@@ -122,6 +122,77 @@ if (!frameworkDiscoveryAnswer.continuations.some((continuation) => continuation.
   throw new Error("The framework.discovery lens must expose source navigation route claims.");
 }
 
+const frameworkDiProviderAnswer = await api.ask({
+  lens: LensId.FrameworkDi,
+  locus: RepoRootLocus,
+  projection: "providers",
+  filters: { query: "IHttpClient" },
+  budget: { rows: 5, evidencePerSubject: 1 },
+});
+
+if (frameworkDiProviderAnswer.outcome !== OutcomeKind.Hit) {
+  throw new Error("The framework.di lens did not return provider relationship atoms.");
+}
+
+const frameworkDiProviderRows = (frameworkDiProviderAnswer.value as { readonly relationships?: readonly { readonly relation: string; readonly key?: string; readonly value?: string; readonly to: { readonly expression?: { readonly type?: string } } }[] } | undefined)?.relationships ?? [];
+if (!frameworkDiProviderRows.some((row) => row.relation === "aliases-key" && row.key === "IHttpClient" && row.value === "HttpClient" && row.to.expression?.type === "typeof HttpClient")) {
+  throw new Error("The framework.di provider projection did not expose fetch-client:IHttpClient -> HttpClient.");
+}
+
+const frameworkMaterializationAnswer = await api.ask({
+  lens: LensId.FrameworkMaterialization,
+  locus: RepoRootLocus,
+  projection: "routes",
+  filters: { key: "IHttpClient" },
+  budget: { rows: 5, evidencePerSubject: 1 },
+});
+
+if (frameworkMaterializationAnswer.outcome !== OutcomeKind.Hit) {
+  throw new Error("The framework.materialization lens did not return DI provider routes.");
+}
+
+const frameworkMaterializationRows = (frameworkMaterializationAnswer.value as { readonly routes?: readonly { readonly key: string; readonly routeKind: string; readonly providerType?: string }[] } | undefined)?.routes ?? [];
+if (!frameworkMaterializationRows.some((row) => row.key === "IHttpClient" && row.routeKind === "alias-delegation" && row.providerType === "typeof HttpClient")) {
+  throw new Error("The framework.materialization route projection did not expose IHttpClient alias delegation.");
+}
+
+const frameworkMaterializationDependencyAnswer = await api.ask({
+  lens: LensId.FrameworkMaterialization,
+  locus: RepoRootLocus,
+  projection: "dependencies",
+  filters: { key: "IEventTarget" },
+  budget: { rows: 10, evidencePerSubject: 1 },
+});
+
+if (frameworkMaterializationDependencyAnswer.outcome !== OutcomeKind.Hit) {
+  throw new Error("The framework.materialization lens did not return callback dependency rows.");
+}
+
+const frameworkMaterializationDependencyRows = (frameworkMaterializationDependencyAnswer.value as { readonly dependencies?: readonly { readonly key: string; readonly access: string; readonly dependencyKey: string; readonly policy: string; readonly certainty: string }[] } | undefined)?.dependencies ?? [];
+if (!frameworkMaterializationDependencyRows.some((row) => row.key === "IEventTarget" && row.access === "get" && row.dependencyKey === "IPlatform" && row.policy === "direct" && row.certainty === "unconditional")) {
+  throw new Error("The framework.materialization dependency projection did not expose IEventTarget -> IPlatform.");
+}
+if (!frameworkMaterializationDependencyRows.some((row) => row.key === "IEventTarget" && row.access === "get" && row.dependencyKey === "IAppRoot" && row.policy === "guarded" && row.certainty === "potential")) {
+  throw new Error("The framework.materialization dependency projection did not classify IEventTarget -> IAppRoot as guarded.");
+}
+
+const frameworkMaterializationRelationshipAnswer = await api.ask({
+  lens: LensId.FrameworkMaterialization,
+  locus: RepoRootLocus,
+  projection: "relationships",
+  filters: { key: "IEventTarget", relation: "depends-on-key", dependencyKey: "IPlatform" },
+  budget: { rows: 10, evidencePerSubject: 1 },
+});
+
+if (frameworkMaterializationRelationshipAnswer.outcome !== OutcomeKind.Hit) {
+  throw new Error("The framework.materialization lens did not return callback dependency relationship rows.");
+}
+
+const frameworkMaterializationRelationshipRows = (frameworkMaterializationRelationshipAnswer.value as { readonly relationships?: readonly { readonly key: string; readonly relation: string; readonly to: { readonly name: string }; readonly policy?: string; readonly certainty?: string }[] } | undefined)?.relationships ?? [];
+if (!frameworkMaterializationRelationshipRows.some((row) => row.key === "IEventTarget" && row.relation === "depends-on-key" && row.to.name === "IPlatform" && row.policy === "direct" && row.certainty === "unconditional")) {
+  throw new Error("The framework.materialization relationship projection did not expose IEventTarget depends-on-key IPlatform.");
+}
+
 const frameworkCallEdgesAnswer = await api.ask({
   lens: LensId.FrameworkDiscovery,
   locus: RepoRootLocus,

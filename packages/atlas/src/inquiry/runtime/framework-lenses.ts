@@ -1,6 +1,7 @@
 import ts from "typescript";
 
 import {
+  FRAMEWORK_BUNDLE_ADMISSION_CACHE_FAMILY_ID,
   FRAMEWORK_DISCOVERY_SEEDS,
   FRAMEWORK_ENTITY_CATALOG_CACHE_FAMILY_ID,
   FrameworkAnchorResolutionStatus,
@@ -969,6 +970,12 @@ const FRAMEWORK_ENTITY_CATALOG_CACHE_FAMILY_VERSION = "entity-catalog-atoms@1";
 const frameworkEntityCatalogCacheProducerVersion = frameworkJsonCacheProducerVersion(
   FRAMEWORK_ENTITY_CATALOG_CACHE_FAMILY_ID,
   FRAMEWORK_ENTITY_CATALOG_CACHE_FAMILY_VERSION,
+  import.meta.url,
+);
+const FRAMEWORK_BUNDLE_ADMISSION_CACHE_FAMILY_VERSION = "bundle-admissions@1";
+const frameworkBundleAdmissionCacheProducerVersion = frameworkJsonCacheProducerVersion(
+  FRAMEWORK_BUNDLE_ADMISSION_CACHE_FAMILY_ID,
+  FRAMEWORK_BUNDLE_ADMISSION_CACHE_FAMILY_VERSION,
   import.meta.url,
 );
 
@@ -5188,8 +5195,14 @@ function readFrameworkBundlePackageRows(
   if (cached !== undefined) {
     return cached;
   }
+  const diskCached = readFrameworkBundleAdmissionCache(sourceProject, packageId);
+  if (diskCached !== undefined) {
+    cache.set(packageId, diskCached);
+    return diskCached;
+  }
   const rows = scanFrameworkBundlePackageRows(sourceProject, packageId, packageName);
   cache.set(packageId, rows);
+  writeFrameworkBundleAdmissionCache(sourceProject, packageId, rows);
   return rows;
 }
 
@@ -5206,6 +5219,13 @@ function readFrameworkBundleExportRows(
   const cache = bundleRowsByExportByProject.get(sourceProject) ?? new Map<string, readonly FrameworkBundleExportRow[]>();
   if (!bundleRowsByExportByProject.has(sourceProject)) {
     bundleRowsByExportByProject.set(sourceProject, cache);
+  }
+  const diskCached = readFrameworkBundleAdmissionCache(sourceProject, packageId);
+  if (diskCached !== undefined) {
+    const rows = diskCached.filter((row) => row.exportEntry.exportName === exportName);
+    bundleRowsByPackageByProject.get(sourceProject)?.set(packageId, diskCached);
+    cache.set(`${packageId}:${exportName}`, rows);
+    return rows;
   }
   const key = `${packageId}:${exportName}`;
   const cached = cache.get(key);
@@ -5226,6 +5246,39 @@ function scanFrameworkBundlePackageRows(
   return readFrameworkRegistryExports(sourceProject, { packageId, ...(exportName === undefined ? {} : { exportName }) })
     .map((row) => bundleRowForRegistryExport(sourceProject, row))
     .sort((left, right) => left.exportEntry.exportName.localeCompare(right.exportEntry.exportName));
+}
+
+function readFrameworkBundleAdmissionCache(
+  sourceProject: SourceProject,
+  packageId: string,
+): readonly FrameworkBundleExportRow[] | undefined {
+  if (process.env.ATLAS_FRAMEWORK_JSON_CACHE === "0") {
+    return undefined;
+  }
+  return readFrameworkJsonCachePackage<readonly FrameworkBundleExportRow[]>(sourceProject, {
+    familyId: FRAMEWORK_BUNDLE_ADMISSION_CACHE_FAMILY_ID,
+    familyVersion: FRAMEWORK_BUNDLE_ADMISSION_CACHE_FAMILY_VERSION,
+    producerVersion: frameworkBundleAdmissionCacheProducerVersion,
+    packageId,
+    dependencyPackageIds: frameworkEntityCatalogDependencyPackageIds(sourceProject, packageId),
+  });
+}
+
+function writeFrameworkBundleAdmissionCache(
+  sourceProject: SourceProject,
+  packageId: string,
+  rows: readonly FrameworkBundleExportRow[],
+): void {
+  if (process.env.ATLAS_FRAMEWORK_JSON_CACHE === "0") {
+    return;
+  }
+  writeFrameworkJsonCachePackage(sourceProject, {
+    familyId: FRAMEWORK_BUNDLE_ADMISSION_CACHE_FAMILY_ID,
+    familyVersion: FRAMEWORK_BUNDLE_ADMISSION_CACHE_FAMILY_VERSION,
+    producerVersion: frameworkBundleAdmissionCacheProducerVersion,
+    packageId,
+    dependencyPackageIds: frameworkEntityCatalogDependencyPackageIds(sourceProject, packageId),
+  }, rows);
 }
 
 function bundleRowForRegistryExport(sourceProject: SourceProject, row: FrameworkRegistryExportRow): FrameworkBundleExportRow {
