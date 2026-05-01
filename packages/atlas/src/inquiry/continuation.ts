@@ -1,5 +1,6 @@
 import type { Evidence } from "./evidence.js";
 import type { Inquiry } from "./inquiry.js";
+import type { NavigationRouteClaim } from "./navigation.js";
 
 /** Semantic move suggested by an answer, independent from the target lens name. */
 export const enum ContinuationKind {
@@ -66,6 +67,8 @@ export interface Continuation<TInquiry extends Inquiry = Inquiry> {
   readonly inquiry: TInquiry;
   /** Evidence rows that motivated this continuation. */
   readonly evidence?: readonly Evidence[];
+  /** Optional route grammar claim explaining why this continuation exists. */
+  readonly route?: NavigationRouteClaim;
 }
 
 /** Build a compact deterministic id for an answer-local continuation. */

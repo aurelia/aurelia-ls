@@ -2,6 +2,8 @@ import type { Evidence, OpenSeam } from "../evidence.js";
 import { EvidenceConfidence, EvidenceKind, EvidenceRole } from "../evidence.js";
 import type { LensSpec } from "../lens.js";
 import { LensCatalog } from "../lens.js";
+import type { NavigationGrammar } from "../navigation.js";
+import { NAVIGATION_GRAMMAR } from "../navigation.js";
 import type { SubstrateContract } from "../substrate.js";
 import { SubstrateCatalog } from "../substrate.js";
 import type { RepoArea } from "../terrain.js";
@@ -23,6 +25,8 @@ export interface InquiryWorld {
   readonly lenses: readonly LensSpec[];
   /** package-owned vocabulary declarations available to self-analysis. */
   readonly vocabulary: readonly InternalVocabularyDefinition[];
+  /** Route grammar used to audit and promote continuations. */
+  readonly navigation: NavigationGrammar;
   /** Static evidence rows describing the contract world itself. */
   readonly evidence: readonly Evidence[];
   /** Static open seams known before any thick substrate implementation runs. */
@@ -35,6 +39,7 @@ export function createDefaultInquiryWorld(): InquiryWorld {
   const substrates = SubstrateCatalog;
   const lenses = LensCatalog;
   const vocabulary = InternalVocabularyDefinitions;
+  const navigation = NAVIGATION_GRAMMAR;
 
   return {
     packageName: "@aurelia-ls/atlas",
@@ -43,6 +48,7 @@ export function createDefaultInquiryWorld(): InquiryWorld {
     substrates,
     lenses,
     vocabulary,
+    navigation,
     evidence: [
       {
         id: "contract:lens-catalog",
@@ -71,6 +77,13 @@ export function createDefaultInquiryWorld(): InquiryWorld {
         role: EvidenceRole.Support,
         confidence: EvidenceConfidence.Exact,
         summary: "Atlas self-description vocabulary is loaded from the static vocabulary declarations.",
+      },
+      {
+        id: "contract:navigation",
+        kind: EvidenceKind.MaintenanceSignal,
+        role: EvidenceRole.Support,
+        confidence: EvidenceConfidence.Exact,
+        summary: "Navigation route grammar is loaded from the static Atlas navigation declarations.",
       },
     ],
     openSeams: [],

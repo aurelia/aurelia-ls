@@ -7,6 +7,7 @@ export * from "./handle.js";
 export * from "./inquiry.js";
 export * from "./lens.js";
 export * from "./locus.js";
+export * from "./navigation.js";
 export * from "./surface-map.js";
 export * from "./substrate.js";
 export * from "./terrain.js";

@@ -9,6 +9,7 @@
   "exports": {
     ".": "./dist/index.js",
     "./evaluation": "./dist/evaluation/index.js",
+    "./framework": "./dist/framework/index.js",
     "./inquiry": "./dist/inquiry/index.js",
     "./inquiry/runtime": "./dist/inquiry/runtime/index.js",
     "./session": "./dist/session/index.js",

@@ -11,6 +11,8 @@ export interface InquirySessionPaths {
   readonly sessionDir: string;
   /** JSON manifest path for the active daemon lease. */
   readonly manifestPath: string;
+  /** Atomic lock path used to singleflight cold daemon startup. */
+  readonly startupLockPath: string;
   /** Log file receiving daemon stdout. */
   readonly stdoutPath: string;
   /** Log file receiving daemon stderr. */
@@ -41,6 +43,7 @@ export function resolveInquirySessionPaths(
     repoRoot,
     sessionDir,
     manifestPath: join(sessionDir, "session.json"),
+    startupLockPath: join(sessionDir, "startup.lock.json"),
     stdoutPath: join(sessionDir, "daemon.stdout.log"),
     stderrPath: join(sessionDir, "daemon.stderr.log"),
     daemonEntry: join(normalizedPackageRoot, "dist", "session", "daemon.js"),

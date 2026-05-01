@@ -5,7 +5,8 @@ import { OutcomeKind } from "../inquiry/answer.js";
 import { LensId } from "../inquiry/lens.js";
 import { RepoRootLocus } from "../inquiry/locus.js";
 import { createInMemoryApi, type InquiryRuntimeRequest } from "../inquiry/runtime/index.js";
-import { createSourceProject } from "../source/index.js";
+import { prewarmFrameworkDiscoveryIndex } from "../framework/index.js";
+import { createSourceProject, prewarmAuLinkIndex } from "../source/index.js";
 import { readInquirySessionManifest, removeInquirySessionManifest, writeInquirySessionManifest } from "./manifest.js";
 import { resolveInquirySessionPaths } from "./paths.js";
 import {
@@ -31,9 +32,18 @@ const manifestPath = args.get("manifest") ?? paths.manifestPath;
 const buildHash = requireArg(args, "build-hash");
 const idleTtlMs = readPositiveInteger(args.get("idle-ttl-ms"), 10 * 60 * 1000);
 const heartbeatIntervalMs = readPositiveInteger(args.get("heartbeat-interval-ms"), 2_000);
-const api = createInMemoryApi({
-  sourceProject: createSourceProject({ repoRoot: paths.repoRoot }),
-});
+const sourceProject = createSourceProject({ repoRoot: paths.repoRoot });
+prewarmAuLinkIndex(sourceProject);
+prewarmFrameworkDiscoveryIndex(sourceProject);
+const api = createInMemoryApi({ sourceProject });
+await Promise.all(["observers", "app-tasks", "router-entities", "expression-entities", "rendering-structures"].map((projection) =>
+  api.ask({
+    lens: LensId.FrameworkDiscovery,
+    locus: RepoRootLocus,
+    projection,
+    budget: { rows: 1, evidencePerSubject: 1 },
+  })
+));
 const startedAtMs = Date.now();
 let lastRequestAtMs = startedAtMs;
 let endpoint: InquirySessionEndpoint | undefined;
@@ -73,6 +83,9 @@ function wireSocket(
 ): void {
   let buffer = "";
   socket.setEncoding("utf8");
+  socket.on("error", () => {
+    // A client may time out and close the connection while a heavy inquiry is still finishing.
+  });
   socket.on("data", (chunk) => {
     buffer += chunk;
     const lines = buffer.split("\n");
@@ -213,10 +226,10 @@ function refreshManifest(): void {
   if (current === undefined && manifestEstablished) {
     process.exit(0);
   }
-  if (current !== undefined && current.pid !== process.pid) {
+  if (current !== undefined && current.pid !== process.pid && isProcessAlive(current.pid)) {
     process.exit(0);
   }
-  if (current !== undefined && current.buildHash !== buildHash) {
+  if (current !== undefined && current.pid === process.pid && current.buildHash !== buildHash) {
     process.exit(0);
   }
 
@@ -239,6 +252,19 @@ function refreshManifest(): void {
   };
   writeInquirySessionManifest(manifestPath, manifest);
   manifestEstablished = true;
+}
+
+/** Return true when a manifest-owning process still appears to be alive. */
+function isProcessAlive(
+  /** Process id read from the current session manifest. */
+  pid: number,
+): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Stop the server, remove the owned manifest, and exit. */

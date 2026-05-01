@@ -1,10 +1,11 @@
 import { OutcomeKind, createAnswer, type Answer } from "../answer.js";
 import { BasisAuthority, BasisClosure, BasisFreshness, BasisKind } from "../basis.js";
-import { ContinuationKind, ContinuationPriority, type Continuation } from "../continuation.js";
+import { ContinuationKind, ContinuationPriority } from "../continuation.js";
 import { EvidenceConfidence, EvidenceKind, EvidenceRole, OpenSeamKind, type OpenSeam } from "../evidence.js";
 import type { Inquiry } from "../inquiry.js";
 import { LensFamily, LensId, LensStage } from "../lens.js";
 import { LocusKind, RepoRootLocus } from "../locus.js";
+import { NavigationPlane, NavigationRelation, type NavigationRouteClaim } from "../navigation.js";
 import { createSurfaceMap, type InquirySurfaceMap } from "../surface-map.js";
 import { RepoAreaStatus } from "../terrain.js";
 import type { SourceProject, SourceProjectSummary } from "../../source/index.js";
@@ -34,6 +35,8 @@ export interface SelfValue {
   readonly substrateContracts: number;
   /** Number of vocabulary definitions in the world. */
   readonly vocabularyDefinitions: number;
+  /** Number of declared navigation route specs in the world. */
+  readonly navigationRoutes: number;
   /** Number of contracted lenses without runtime implementations. */
   readonly unimplementedContractedLenses: number;
   /** Hot source project summary held by the runtime substrate context. */
@@ -61,6 +64,31 @@ export function answerRepoMap(world: InquiryWorld, inquiry: Inquiry): Answer<Inq
           locus: RepoRootLocus,
           projection: "areas",
         },
+        route: route(NavigationPlane.Structure, NavigationRelation.ProjectionOf, [BasisKind.AtlasContract], "Repository terrain rows behind the surface map."),
+      },
+      {
+        id: "repo.map:framework-discovery",
+        kind: ContinuationKind.SwitchLens,
+        priority: ContinuationPriority.Primary,
+        rationale: "Enter the Aurelia framework discovery seeds.",
+        inquiry: {
+          lens: LensId.FrameworkDiscovery,
+          locus: RepoRootLocus,
+          projection: "summary",
+        },
+        route: route(NavigationPlane.Semantic, NavigationRelation.FrameworkFlowOf, [BasisKind.AtlasContract], "Aurelia framework discovery seeds from the surface map."),
+      },
+      {
+        id: "repo.map:framework-rendering",
+        kind: ContinuationKind.SwitchLens,
+        priority: ContinuationPriority.Primary,
+        rationale: "Enter the Aurelia framework rendering graph.",
+        inquiry: {
+          lens: LensId.FrameworkRendering,
+          locus: RepoRootLocus,
+          projection: "summary",
+        },
+        route: route(NavigationPlane.Semantic, NavigationRelation.FrameworkFlowOf, [BasisKind.TypeScriptChecker], "Aurelia framework rendering graph from instruction products through binding setup."),
       },
       {
         id: "repo.map:self",
@@ -72,6 +100,7 @@ export function answerRepoMap(world: InquiryWorld, inquiry: Inquiry): Answer<Inq
           locus: RepoRootLocus,
           projection: "summary",
         },
+        route: route(NavigationPlane.Maintenance, NavigationRelation.DiagnosticsFor, [BasisKind.AtlasContract], "Atlas contract pressure behind the surface map."),
       },
     ],
   });
@@ -136,6 +165,7 @@ export function answerSelf(
     ]),
     substrateContracts: world.substrates.length,
     vocabularyDefinitions: world.vocabulary.length,
+    navigationRoutes: world.navigation.routes.length,
     unimplementedContractedLenses: unimplemented.length,
     sourceProject: sourceProject.snapshot().summary,
     implementedLensIds: [...implementedLensIds],
@@ -212,6 +242,15 @@ function contractBasis(summary: string) {
     summary,
     identity: "@aurelia-ls/atlas",
   };
+}
+
+function route(
+  plane: NavigationPlane,
+  relation: NavigationRelation,
+  basis: readonly BasisKind[],
+  summary: string,
+): NavigationRouteClaim {
+  return { plane, relation, basis, summary };
 }
 
 /** Count enum values while preserving all declared buckets. */

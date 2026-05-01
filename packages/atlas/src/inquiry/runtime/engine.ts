@@ -13,6 +13,14 @@ import {
   answerRepoTerrain,
   answerUnimplementedLens,
 } from "./lenses.js";
+import {
+  answerTsSource,
+  answerTsStructure,
+  answerTsType,
+} from "./ts-lenses.js";
+import { answerBridgeAuLink } from "./bridge-lenses.js";
+import { answerFrameworkDiscovery, answerFrameworkRendering } from "./framework-lenses.js";
+import { answerFrameworkEvaluator } from "./framework-evaluator-lenses.js";
 import type { InquiryWorld } from "./world.js";
 
 /** Hot substrate context shared by runtime lens implementations. */
@@ -35,6 +43,8 @@ export interface InquiryRuntimeRequest {
   readonly filters?: Record<string, unknown>;
   /** Shared budget lanes. */
   readonly budget?: unknown;
+  /** Optional cursor/page request. */
+  readonly page?: unknown;
 }
 
 /** Deterministic in-memory inquiry engine over one inquiry world. */
@@ -44,6 +54,13 @@ export class InquiryEngine {
     LensId.RepoMap,
     LensId.RepoTerrain,
     LensId.AtlasSelf,
+    LensId.TsSource,
+    LensId.TsStructure,
+    LensId.TsType,
+    LensId.BridgeAuLink,
+    LensId.FrameworkDiscovery,
+    LensId.FrameworkRendering,
+    LensId.FrameworkEvaluator,
   ]);
 
   constructor(
@@ -77,6 +94,20 @@ export class InquiryEngine {
         return answerRepoTerrain(this.world, normalized.inquiry);
       case LensId.AtlasSelf:
         return answerSelf(this.world, normalized.inquiry, this.#implementedLensIds, this.substrates.sourceProject);
+      case LensId.TsSource:
+        return answerTsSource(normalized.inquiry, this.substrates.sourceProject);
+      case LensId.TsStructure:
+        return answerTsStructure(normalized.inquiry, this.substrates.sourceProject);
+      case LensId.TsType:
+        return answerTsType(normalized.inquiry, this.substrates.sourceProject);
+      case LensId.BridgeAuLink:
+        return answerBridgeAuLink(normalized.inquiry, this.substrates.sourceProject);
+      case LensId.FrameworkDiscovery:
+        return answerFrameworkDiscovery(normalized.inquiry, this.substrates.sourceProject);
+      case LensId.FrameworkRendering:
+        return answerFrameworkRendering(normalized.inquiry, this.substrates.sourceProject);
+      case LensId.FrameworkEvaluator:
+        return answerFrameworkEvaluator(normalized.inquiry, this.substrates.sourceProject);
       default:
         return answerUnimplementedLens(this.world, normalized.inquiry);
     }
@@ -114,6 +145,7 @@ export class InquiryEngine {
         ...(input.projection === undefined ? {} : { projection: input.projection }),
         ...(input.filters === undefined ? {} : { filters: input.filters }),
         ...(input.budget === undefined ? {} : { budget: normalizeBudget(input.budget) }),
+        ...(input.page === undefined ? {} : { page: normalizePage(input.page) }),
       },
       ...(unknownLens === undefined ? {} : { unknownLens }),
     };
@@ -246,6 +278,20 @@ function normalizeBudget(value: unknown): Budget | undefined {
     ...numericBudgetLane(source, "evidencePerSubject"),
     ...numericBudgetLane(source, "depth"),
     ...numericBudgetLane(source, "textChars"),
+  };
+}
+
+/** Normalize unknown transport page input into a page request. */
+function normalizePage(value: unknown): { readonly size?: number; readonly cursor?: string } | undefined {
+  if (value === undefined || value === null || typeof value !== "object") {
+    return undefined;
+  }
+  const source = value as Record<string, unknown>;
+  const size = source.size;
+  const cursor = source.cursor;
+  return {
+    ...(typeof size === "number" && Number.isFinite(size) ? { size } : {}),
+    ...(typeof cursor === "string" ? { cursor } : {}),
   };
 }
 

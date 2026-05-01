@@ -18,6 +18,9 @@ Stable identifiers are represented with commented `const enum` declarations. Exp
 
 `src/inquiry/runtime` is the in-memory execution workbench. It is the implementation substrate used by the durable session daemon.
 
+`src/inquiry/navigation.ts` declares the reusable route grammar that turns answer-local continuations into auditable
+source/type/semantic route claims.
+
 `src/session` is the default request surface. `createAtlasApi()` auto-starts or reuses the local daemon before every request, giving long-running work a place to keep hot state while still restarting when the compiled build output changes.
 
 `createAtlasApi().orient()` is the highest-level entrypoint. It returns daemon status, the surface map, the `atlas.self` maintenance answer, and first continuations through the same auto-starting session path. The package script `pnpm --filter @aurelia-ls/atlas orient` is the stable Codex-facing activation call.
@@ -25,6 +28,7 @@ Stable identifiers are represented with commented `const enum` declarations. Exp
 ## Map
 
 - [src](src/README.md) is the implementation root.
+- [src/framework](src/framework/README.md) owns the Aurelia-specific discovery workbench and seed spine.
 - [src/inquiry](src/inquiry/README.md) owns the inquiry, answer, lens, substrate, terrain, vocabulary, and runtime contracts.
 - [src/session](src/session/README.md) owns the local daemon, filesystem manifest, and restart lifecycle.
 - [src/scripts](src/scripts/README.md) owns static coherence checks and maintenance entrypoints.

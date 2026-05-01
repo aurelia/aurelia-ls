@@ -4,6 +4,7 @@ import { CONTINUATION_KINDS } from "./continuation.js";
 import type { Inquiry } from "./inquiry.js";
 import { LensCatalog, LensId, type LensSpec } from "./lens.js";
 import { RepoRootLocus } from "./locus.js";
+import { NAVIGATION_GRAMMAR, type NavigationGrammar } from "./navigation.js";
 import { SubstrateCatalog, type SubstrateContract } from "./substrate.js";
 import { RepoTerrain, activeTerrain, type RepoArea } from "./terrain.js";
 import { InternalVocabularyDefinitions, type InternalVocabularyDefinition } from "./vocabulary.js";
@@ -22,6 +23,8 @@ export interface SurfaceMapContracts {
   readonly substrates: readonly SubstrateContract[];
   /** Lens contracts known to the inquiry surface. */
   readonly lenses: readonly LensSpec[];
+  /** Navigation grammar used to audit and promote continuations. */
+  readonly navigation: NavigationGrammar;
 }
 
 /** High-level map of Atlas's static inquiry contracts. */
@@ -49,6 +52,8 @@ export interface InquirySurfaceMap {
   readonly substrates: readonly SubstrateContract[];
   /** Lens contracts known to the inquiry surface. */
   readonly lenses: readonly LensSpec[];
+  /** Navigation grammar used to audit and promote continuations. */
+  readonly navigation: NavigationGrammar;
 }
 
 /** Create the static surface map answer payload. */
@@ -63,6 +68,7 @@ export function createSurfaceMap(
       "Prefer a small inquiry algebra over a large operation/aspect matrix.",
       "Treat product substrate and vocabulary as the allowed product self-description layer.",
       "Make basis, evidence, open seams, and continuations explicit on every answer.",
+      "Use declared navigation routes to keep cross-lens hops auditable instead of answer-local folklore.",
       "Let TypeScript, product, framework, bridge, and Atlas maintenance lenses compose through one answer shape.",
       "Declare Atlas intent through controlled vocabulary so self-analysis can inspect design pressure directly.",
     ],
@@ -75,6 +81,7 @@ export function createSurfaceMap(
     activeTerrain: contracts.activeTerrain ?? activeTerrain(),
     substrates: contracts.substrates ?? SubstrateCatalog,
     lenses: contracts.lenses ?? LensCatalog,
+    navigation: contracts.navigation ?? NAVIGATION_GRAMMAR,
   };
 }
 

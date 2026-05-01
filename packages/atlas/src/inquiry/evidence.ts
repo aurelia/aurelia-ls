@@ -16,6 +16,8 @@ export const enum EvidenceKind {
   DiRegistration = "di-registration",
   /** DI lookup read such as container/service-locator resolution. */
   DiLookup = "di-lookup",
+  /** Aurelia resource definition or syntax-resource carrier. */
+  ResourceDefinition = "resource-definition",
   /** Product-owned semantic claim or claim graph row. */
   ProductClaim = "product-claim",
   /** Product vocabulary definition, slot, or usage. */

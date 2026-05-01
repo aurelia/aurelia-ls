@@ -18,8 +18,17 @@ The daemon is not an external transport. It is a loopback workbench for hot stat
 
 `createApi()` is the normal entrypoint. Each method calls `ensureInquirySession()` before forwarding the request, so callers do not need a separate startup step.
 
-`createApi().orient()` is the intended first call for repo work. It returns status, the surface map, the `atlas.self` maintenance answer, and initial continuations while using the same daemon lifecycle as ordinary inquiries.
+`createApi().orient()` is the intended first call for repo work. It returns status, the surface map, the `atlas.self`
+maintenance answer, initial continuations, and a derived usage guide that names callable lenses, projections, request
+lanes, open seams, first moves, source package roots, and terrain ownership without requiring the caller to inspect
+Atlas source.
 
-`ensureInquirySession()` computes the current build hash, probes the manifest, reuses a compatible daemon, asks an incompatible daemon to shut down, or starts a new detached process from `dist/session/daemon.js`.
+`ensureInquirySession()` computes the current build hash, probes the manifest, reuses a compatible daemon, asks an
+incompatible daemon to shut down, or starts a new detached process from `dist/session/daemon.js`. The daemon prewarms
+the auLink bridge index, framework discovery index, and first framework entity catalogs before publishing its
+manifest. Cold startup is singleflighted with an in-process pending promise plus an atomic
+`.temp/atlas/session/startup.lock.json` lease so parallel callers wait for the first warmup instead of spawning
+duplicate heavyweight daemons. Stale startup locks are removed when their owner process exits or when the startup
+timeout expires.
 
 The daemon writes a heartbeat into `.temp/atlas/session/session.json`, exits after an idle TTL, and exits if another daemon takes over the manifest. The transport binds to `127.0.0.1`; no auth token is used because the session is local-only and intended as a developer workbench.

@@ -14,6 +14,7 @@ It defines the nouns that later TypeScript, product, framework, bridge, and Atla
 - [continuation.ts](continuation.ts) defines semantic next-question moves.
 - [budget.ts](budget.ts) defines shared budget and pagination lanes.
 - [handle.ts](handle.ts) defines navigable handles used by loci, evidence, and continuations.
+- [navigation.ts](navigation.ts) defines reusable route grammar for continuation generation and promotion.
 - [terrain.ts](terrain.ts) defines active, deferred, and external repository terrain.
 - [substrate.ts](substrate.ts) defines static substrate contracts and trust.
 - [lens.ts](lens.ts) defines lens contracts and the lens catalog.
