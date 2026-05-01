@@ -19,7 +19,9 @@ This is not a compatibility layer for old readers and not the default caller sur
   as first-class inquiry lenses so the long-running workbench can be navigated through Atlas itself. It reads the
   prewarmed framework discovery index for exact seed-anchor source candidates, source-bound flow seeds, precomputed
   framework flow call edges, exact call-site argument rows, grouped call targets, public observer-system, AppTask,
-  router, expression, rendering structure entities, and rendering/binding rows.
+  router, expression, rendering structure entities, and rendering/binding rows. The first entity catalogs use the
+  framework JSON cache as derived atom storage, while paging, filtering, evidence, and continuations remain projection
+  work over the live runtime.
 
 The first runtime lenses answer only contract-world questions. Thick TypeScript, product, and framework substrates plug
 into this layer by satisfying the same inquiry and answer contracts. Runtime continuations may now carry route claims

@@ -36,7 +36,24 @@ const sourceProject = createSourceProject({ repoRoot: paths.repoRoot });
 prewarmAuLinkIndex(sourceProject);
 prewarmFrameworkDiscoveryIndex(sourceProject);
 const api = createInMemoryApi({ sourceProject });
-await Promise.all(["observers", "app-tasks", "router-entities", "expression-entities", "rendering-structures"].map((projection) =>
+const blockingFrameworkEntityPrewarmProjections = [
+  "observers",
+  "app-tasks",
+  "router-entities",
+  "expression-entities",
+  "rendering-structures",
+] as const;
+const backgroundFrameworkEntityPrewarmProjections = [
+  "package-exports",
+  "registry-exports",
+  "di-interfaces",
+  "resource-carriers",
+  "resources",
+  "syntax-products",
+  "instruction-slots",
+  "binding-products",
+] as const;
+await Promise.all(blockingFrameworkEntityPrewarmProjections.map((projection) =>
   api.ask({
     lens: LensId.FrameworkDiscovery,
     locus: RepoRootLocus,
@@ -62,6 +79,7 @@ server.listen(0, "127.0.0.1", () => {
   }
   endpoint = { host: "127.0.0.1", port: address.port };
   refreshManifest();
+  scheduleBackgroundFrameworkEntityPrewarm();
 });
 
 const heartbeat = setInterval(() => {
@@ -214,6 +232,30 @@ function createWorldSummary(): InquirySessionWorldSummary {
     vocabularyDefinitions: api.world.vocabulary.length,
     sourceProject: api.sourceProject.snapshot().summary,
   };
+}
+
+/** Warm the rest of the entity atom cache after startup so first-fill misses do not block manifest publication. */
+function scheduleBackgroundFrameworkEntityPrewarm(): void {
+  setTimeout(() => {
+    void prewarmFrameworkEntityCatalogsInBackground();
+  }, 30_000).unref();
+}
+
+/** Prewarm non-critical entity families opportunistically. */
+async function prewarmFrameworkEntityCatalogsInBackground(): Promise<void> {
+  for (const projection of backgroundFrameworkEntityPrewarmProjections) {
+    if (shuttingDown) {
+      return;
+    }
+    await api.ask({
+      lens: LensId.FrameworkDiscovery,
+      locus: RepoRootLocus,
+      projection,
+      budget: { rows: 1, evidencePerSubject: 1 },
+    }).catch((error: unknown) => {
+      console.error(`Atlas background framework entity prewarm failed for ${projection}: ${errorSummary(error)}`);
+    });
+  }
 }
 
 /** Refresh the manifest heartbeat or exit if this daemon no longer owns it. */

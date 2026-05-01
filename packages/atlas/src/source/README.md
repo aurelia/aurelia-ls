@@ -23,7 +23,9 @@ runtime exports.
   startup: semantic-runtime overload declarations, exact decorator placements, source-only Aurelia framework target
   declarations, seed-anchor declarations, source-bound flow seeds, precomputed seed call edges, exact framework flow
   call sites, observer-locator, AppTask, router, expression, rendering structure entity rows, and catalog/placement
-  gaps are indexed once so bridge and framework discovery queries are cheap.
+  gaps are indexed once so bridge and framework discovery queries are cheap. The first framework entity catalogs can
+  hydrate from package-scoped JSON atoms when the cache keys described in
+  [../framework/JSON-CACHE.md](../framework/JSON-CACHE.md) still match the live Program.
 - Stay semantics-neutral: source declarations are not vocabulary facts, product claims, DI facts, or framework facts.
 - Provide a boring base that TypeChecker-driven product, self-analysis, and source navigation lenses can share.
 

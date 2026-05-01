@@ -2,14 +2,18 @@ import ts from "typescript";
 
 import {
   FRAMEWORK_DISCOVERY_SEEDS,
+  FRAMEWORK_ENTITY_CATALOG_CACHE_FAMILY_ID,
   FrameworkAnchorResolutionStatus,
   FrameworkExportCapability,
+  frameworkJsonCacheProducerVersion,
   groupFrameworkFlowCallTargets,
   readFrameworkDiscoveryIndex,
   readFrameworkDiscoverySeedIndex,
+  readFrameworkJsonCachePackage,
   sourceRangeForFrameworkAnchorCandidate,
   sourceRangeForFrameworkFlowCallEdge,
   sourceRangeForFrameworkFlowCallSite,
+  writeFrameworkJsonCachePackage,
   type FrameworkAnchorResolution,
   type FrameworkDiscoveryAnchor,
   type FrameworkFlowCallEdgeRow,
@@ -936,6 +940,7 @@ const diInterfaceRowsByPackageByProject = new WeakMap<SourceProject, Map<string,
 const diInterfaceRowsByExportByProject = new WeakMap<SourceProject, Map<string, readonly FrameworkDiInterfaceExportRow[]>>();
 const frameworkPackageNamesByProject = new WeakMap<SourceProject, ReadonlyMap<string, string>>();
 const frameworkPackageExportRowsByFilterByProject = new WeakMap<SourceProject, Map<string, readonly FrameworkPackageExportRow[]>>();
+const packageExportRowsByPackageByProject = new WeakMap<SourceProject, Map<string, readonly FrameworkPackageExportRow[]>>();
 const publicExportSurfaceByPackageByProject = new WeakMap<SourceProject, Map<string, FrameworkPublicExportSurface>>();
 const registryRowsByPackageByProject = new WeakMap<SourceProject, Map<string, readonly FrameworkRegistryExportRow[]>>();
 const registryRowsByExportByProject = new WeakMap<SourceProject, Map<string, readonly FrameworkRegistryExportRow[]>>();
@@ -959,6 +964,13 @@ const expressionEntityRowsByPackageByProject = new WeakMap<SourceProject, Map<st
 const renderingStructureRowsByPackageByProject = new WeakMap<SourceProject, Map<string, readonly FrameworkRenderingStructureEntityRow[]>>();
 const bundleClassificationContextByProject = new WeakMap<SourceProject, FrameworkBundleClassificationContext>();
 const moduleEvaluationByFileByProject = new WeakMap<SourceProject, Map<string, ModuleEvaluationResult>>();
+
+const FRAMEWORK_ENTITY_CATALOG_CACHE_FAMILY_VERSION = "entity-catalog-atoms@1";
+const frameworkEntityCatalogCacheProducerVersion = frameworkJsonCacheProducerVersion(
+  FRAMEWORK_ENTITY_CATALOG_CACHE_FAMILY_ID,
+  FRAMEWORK_ENTITY_CATALOG_CACHE_FAMILY_VERSION,
+  import.meta.url,
+);
 
 interface FrameworkPublicExportSurface {
   readonly exportsByName: ReadonlyMap<string, TypeScriptExportNameEntry>;
@@ -1790,6 +1802,15 @@ function frameworkPackageIdsForFilters(
 }
 
 function readFrameworkPackageExports(sourceProject: SourceProject, filters: FrameworkDiscoveryFilters): readonly FrameworkPackageExportRow[] {
+  const packageNames = readFrameworkPackageNames(sourceProject);
+  if (filters.exportName === undefined && filters.query === undefined && filters.memberName === undefined) {
+    return frameworkPackageIdsForFilters(packageNames, filters)
+      .flatMap((packageId) => readFrameworkPackageExportPackageRows(sourceProject, packageId, packageNames.get(packageId) ?? packageId))
+      .sort((left, right) =>
+        left.packageId.localeCompare(right.packageId)
+      || left.exportEntry.exportName.localeCompare(right.exportEntry.exportName)
+      );
+  }
   const cache = frameworkPackageExportRowsByFilterByProject.get(sourceProject) ?? new Map<string, readonly FrameworkPackageExportRow[]>();
   if (!frameworkPackageExportRowsByFilterByProject.has(sourceProject)) {
     frameworkPackageExportRowsByFilterByProject.set(sourceProject, cache);
@@ -1800,7 +1821,6 @@ function readFrameworkPackageExports(sourceProject: SourceProject, filters: Fram
     return cached;
   }
   const admittedFrameworkPackageIds = new Set(AURELIA_FRAMEWORK_PACKAGE_IDS);
-  const packageNames = readFrameworkPackageNames(sourceProject);
   const selector = filters.packageId === undefined
     ? { scheme: SourceSelectorScheme.Workspace } as const
     : { scheme: SourceSelectorScheme.Package, packageId: filters.packageId } as const;
@@ -1831,6 +1851,44 @@ function readFrameworkPackageExports(sourceProject: SourceProject, filters: Fram
     || left.exportEntry.exportName.localeCompare(right.exportEntry.exportName)
     );
   cache.set(cacheKey, rows);
+  return rows;
+}
+
+function readFrameworkPackageExportPackageRows(
+  sourceProject: SourceProject,
+  packageId: string,
+  packageName: string,
+): readonly FrameworkPackageExportRow[] {
+  const cache = packageExportRowsByPackageByProject.get(sourceProject) ?? new Map<string, readonly FrameworkPackageExportRow[]>();
+  if (!packageExportRowsByPackageByProject.has(sourceProject)) {
+    packageExportRowsByPackageByProject.set(sourceProject, cache);
+  }
+  const cached = cache.get(packageId);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const diskCached = readFrameworkEntityCatalogCache<FrameworkPackageExportRow>(sourceProject, "package-exports", packageId);
+  if (diskCached !== undefined) {
+    cache.set(packageId, diskCached);
+    return diskCached;
+  }
+  const rows = readExportSurface(sourceProject, {
+    scheme: SourceSelectorScheme.Package,
+    packageId,
+  }, {
+    limit: 100_000,
+    offset: 0,
+  }).exports
+    .filter((exportEntry) => exportEntry.surfaceFile.packageId === packageId)
+    .map((exportEntry) => ({
+      id: `framework-export:${packageId}:${exportEntry.exportName}`,
+      packageId,
+      packageName,
+      exportEntry,
+    }))
+    .sort((left, right) => left.exportEntry.exportName.localeCompare(right.exportEntry.exportName));
+  cache.set(packageId, rows);
+  writeFrameworkEntityCatalogCache(sourceProject, "package-exports", packageId, rows);
   return rows;
 }
 
@@ -1875,8 +1933,14 @@ function readFrameworkRegistryPackageRows(
   if (cached !== undefined) {
     return cached;
   }
+  const diskCached = readFrameworkEntityCatalogCache<FrameworkRegistryExportRow>(sourceProject, `registry-exports.${memberName}`, packageId);
+  if (diskCached !== undefined) {
+    cache.set(key, diskCached);
+    return diskCached;
+  }
   const rows = scanFrameworkRegistryPackageRows(sourceProject, packageId, packageName, memberName);
   cache.set(key, rows);
+  writeFrameworkEntityCatalogCache(sourceProject, `registry-exports.${memberName}`, packageId, rows);
   return rows;
 }
 
@@ -1962,8 +2026,14 @@ function readFrameworkDiInterfacePackageRows(
   if (cached !== undefined) {
     return cached;
   }
+  const diskCached = readFrameworkEntityCatalogCache<FrameworkDiInterfaceExportRow>(sourceProject, "di-interfaces", packageId);
+  if (diskCached !== undefined) {
+    cache.set(packageId, diskCached);
+    return diskCached;
+  }
   const rows = scanFrameworkDiInterfacePackageRows(sourceProject, packageId, packageName);
   cache.set(packageId, rows);
+  writeFrameworkEntityCatalogCache(sourceProject, "di-interfaces", packageId, rows);
   return rows;
 }
 
@@ -2050,8 +2120,14 @@ function readFrameworkObserverEntityPackageRows(
   if (cached !== undefined) {
     return cached;
   }
+  const diskCached = readFrameworkEntityCatalogCache<FrameworkObserverEntityRow>(sourceProject, "observers", packageId);
+  if (diskCached !== undefined) {
+    cache.set(packageId, diskCached);
+    return diskCached;
+  }
   const rows = scanFrameworkObserverEntityPackageRows(sourceProject, packageId, packageName);
   cache.set(packageId, rows);
+  writeFrameworkEntityCatalogCache(sourceProject, "observers", packageId, rows);
   return rows;
 }
 
@@ -2442,10 +2518,16 @@ function readFrameworkAppTaskEntityPackageRows(
   if (cached !== undefined) {
     return cached;
   }
+  const diskCached = readFrameworkEntityCatalogCache<FrameworkAppTaskEntityRow>(sourceProject, "app-tasks", packageId);
+  if (diskCached !== undefined) {
+    cache.set(packageId, diskCached);
+    return diskCached;
+  }
   const candidateNames = candidateExportNamesForPackage(sourceProject, packageId, false, isAppTaskNameCandidate);
   const rows = packageExportsForCandidateNames(sourceProject, packageId, candidateNames, false)
     .flatMap((row) => appTaskEntityRowForPackageExport(row));
   cache.set(packageId, rows);
+  writeFrameworkEntityCatalogCache(sourceProject, "app-tasks", packageId, rows);
   return rows;
 }
 
@@ -2494,11 +2576,17 @@ function readFrameworkRouterEntityPackageRows(
   if (cached !== undefined) {
     return cached;
   }
+  const diskCached = readFrameworkEntityCatalogCache<FrameworkRouterEntityRow>(sourceProject, "router-entities", packageId);
+  if (diskCached !== undefined) {
+    cache.set(packageId, diskCached);
+    return diskCached;
+  }
   const includePackage = packageId === "router" || packageId === "route-recognizer";
   const candidateNames = candidateExportNamesForPackage(sourceProject, packageId, includePackage, isRouterNameCandidate);
   const rows = packageExportsForCandidateNames(sourceProject, packageId, candidateNames, packageId === "router")
     .flatMap((row) => routerEntityRowForPackageExport(row, includePackage));
   cache.set(packageId, rows);
+  writeFrameworkEntityCatalogCache(sourceProject, "router-entities", packageId, rows);
   return rows;
 }
 
@@ -2547,11 +2635,17 @@ function readFrameworkExpressionEntityPackageRows(
   if (cached !== undefined) {
     return cached;
   }
+  const diskCached = readFrameworkEntityCatalogCache<FrameworkExpressionEntityRow>(sourceProject, "expression-entities", packageId);
+  if (diskCached !== undefined) {
+    cache.set(packageId, diskCached);
+    return diskCached;
+  }
   const includePackage = packageId === "expression-parser";
   const candidateNames = candidateExportNamesForPackage(sourceProject, packageId, includePackage, isExpressionNameCandidate);
   const rows = packageExportsForCandidateNames(sourceProject, packageId, candidateNames, false)
     .flatMap((row) => expressionEntityRowForPackageExport(row, includePackage));
   cache.set(packageId, rows);
+  writeFrameworkEntityCatalogCache(sourceProject, "expression-entities", packageId, rows);
   return rows;
 }
 
@@ -2600,10 +2694,16 @@ function readFrameworkRenderingStructurePackageRows(
   if (cached !== undefined) {
     return cached;
   }
+  const diskCached = readFrameworkEntityCatalogCache<FrameworkRenderingStructureEntityRow>(sourceProject, "rendering-structures", packageId);
+  if (diskCached !== undefined) {
+    cache.set(packageId, diskCached);
+    return diskCached;
+  }
   const candidateNames = candidateExportNamesForPackage(sourceProject, packageId, false, isRenderingStructureNameCandidate);
   const rows = packageExportsForCandidateNames(sourceProject, packageId, candidateNames, false)
     .flatMap((row) => renderingStructureRowForPackageExport(row));
   cache.set(packageId, rows);
+  writeFrameworkEntityCatalogCache(sourceProject, "rendering-structures", packageId, rows);
   return rows;
 }
 
@@ -2629,6 +2729,51 @@ function frameworkPackageIdsForEntityFilters(
 ): readonly string[] {
   const allowed = new Set(allowedPackageIds);
   return frameworkPackageIdsForFilters(packageNames, filters).filter((packageId) => allowed.has(packageId));
+}
+
+function readFrameworkEntityCatalogCache<T>(
+  sourceProject: SourceProject,
+  catalogId: string,
+  packageId: string,
+  dependencyPackageIds: readonly string[] = [],
+): readonly T[] | undefined {
+  if (process.env.ATLAS_FRAMEWORK_JSON_CACHE === "0") {
+    return undefined;
+  }
+  return readFrameworkJsonCachePackage<readonly T[]>(sourceProject, {
+    familyId: frameworkEntityCatalogCacheFamilyId(catalogId),
+    familyVersion: FRAMEWORK_ENTITY_CATALOG_CACHE_FAMILY_VERSION,
+    producerVersion: frameworkEntityCatalogCacheProducerVersion,
+    packageId,
+    dependencyPackageIds,
+  });
+}
+
+function writeFrameworkEntityCatalogCache<T>(
+  sourceProject: SourceProject,
+  catalogId: string,
+  packageId: string,
+  rows: readonly T[],
+  dependencyPackageIds: readonly string[] = [],
+): void {
+  if (process.env.ATLAS_FRAMEWORK_JSON_CACHE === "0") {
+    return;
+  }
+  writeFrameworkJsonCachePackage(sourceProject, {
+    familyId: frameworkEntityCatalogCacheFamilyId(catalogId),
+    familyVersion: FRAMEWORK_ENTITY_CATALOG_CACHE_FAMILY_VERSION,
+    producerVersion: frameworkEntityCatalogCacheProducerVersion,
+    packageId,
+    dependencyPackageIds,
+  }, rows);
+}
+
+function frameworkEntityCatalogCacheFamilyId(catalogId: string): string {
+  return `${FRAMEWORK_ENTITY_CATALOG_CACHE_FAMILY_ID}.${catalogId}`;
+}
+
+function frameworkEntityCatalogDependencyPackageIds(sourceProject: SourceProject, ownerPackageId: string): readonly string[] {
+  return [...readFrameworkPackageNames(sourceProject).keys()].filter((packageId) => packageId !== ownerPackageId);
 }
 
 function candidateExportNamesForPackage(
@@ -3202,8 +3347,14 @@ function readFrameworkResourcePackageCarrierRows(
   if (cached !== undefined) {
     return cached;
   }
+  const diskCached = readFrameworkEntityCatalogCache<FrameworkResourceCarrierRow>(sourceProject, "resource-carriers", packageId);
+  if (diskCached !== undefined) {
+    cache.set(packageId, diskCached);
+    return diskCached;
+  }
   const rows = scanFrameworkResourcePackageCarrierRows(sourceProject, packageId, packageName);
   cache.set(packageId, rows);
+  writeFrameworkEntityCatalogCache(sourceProject, "resource-carriers", packageId, rows);
   return rows;
 }
 
@@ -3296,8 +3447,14 @@ function readFrameworkResourcePackageRows(
   if (cached !== undefined) {
     return cached;
   }
+  const diskCached = readFrameworkEntityCatalogCache<FrameworkResourceExportRow>(sourceProject, "resources", packageId);
+  if (diskCached !== undefined) {
+    cache.set(packageId, diskCached);
+    return diskCached;
+  }
   const rows = scanFrameworkResourcePackageRows(sourceProject, packageId, packageName);
   cache.set(packageId, rows);
+  writeFrameworkEntityCatalogCache(sourceProject, "resources", packageId, rows);
   return rows;
 }
 
@@ -3571,6 +3728,12 @@ function readFrameworkBindingProductPackageRows(
   if (cached !== undefined) {
     return cached;
   }
+  const dependencyPackageIds = frameworkEntityCatalogDependencyPackageIds(sourceProject, packageId);
+  const diskCached = readFrameworkEntityCatalogCache<FrameworkBindingProductRow>(sourceProject, "binding-products", packageId, dependencyPackageIds);
+  if (diskCached !== undefined) {
+    cache.set(packageId, diskCached);
+    return diskCached;
+  }
   const bindingNames = new Set(constructionProducts
     .map((product) => product.bindingName)
     .filter((bindingName): bindingName is string => bindingName !== null));
@@ -3582,6 +3745,7 @@ function readFrameworkBindingProductPackageRows(
     .flatMap((sourceFile) => bindingProductsForSourceFile(sourceProject, sourceFile, packageId, packageName, bindingNames, constructionProducts, bindingAdmissions));
   const unique = uniqueById(rows);
   cache.set(packageId, unique);
+  writeFrameworkEntityCatalogCache(sourceProject, "binding-products", packageId, unique, dependencyPackageIds);
   return unique;
 }
 
@@ -3599,11 +3763,18 @@ function readFrameworkBindingAdmissionPackageRows(
   if (cached !== undefined) {
     return cached;
   }
+  const dependencyPackageIds = frameworkEntityCatalogDependencyPackageIds(sourceProject, packageId);
+  const diskCached = readFrameworkEntityCatalogCache<FrameworkBindingAdmissionRow>(sourceProject, "binding-admissions", packageId, dependencyPackageIds);
+  if (diskCached !== undefined) {
+    cache.set(packageId, diskCached);
+    return diskCached;
+  }
   const rows = sourceProject.ownedSourceFiles()
     .filter((sourceFile) => !sourceFile.isDeclarationFile && sourceProject.packageForFileName(sourceFile.fileName)?.id === packageId)
     .flatMap((sourceFile) => bindingAdmissionsForSourceFile(sourceProject, sourceFile, packageId, packageName, constructionProducts));
   const unique = uniqueById(rows);
   cache.set(packageId, unique);
+  writeFrameworkEntityCatalogCache(sourceProject, "binding-admissions", packageId, unique, dependencyPackageIds);
   return unique;
 }
 
@@ -4272,6 +4443,12 @@ function readFrameworkInstructionSlotPackageRows(
   if (cached !== undefined) {
     return cached;
   }
+  const dependencyPackageIds = frameworkEntityCatalogDependencyPackageIds(sourceProject, packageId);
+  const diskCached = readFrameworkEntityCatalogCache<FrameworkInstructionSlotRow>(sourceProject, "instruction-slots", packageId, dependencyPackageIds);
+  if (diskCached !== undefined) {
+    cache.set(packageId, diskCached);
+    return diskCached;
+  }
   const sourceFiles = sourceProject.ownedSourceFiles()
     .filter((sourceFile) => !sourceFile.isDeclarationFile && sourceProject.packageForFileName(sourceFile.fileName)?.id === packageId);
   const declarationsBySlot = instructionDeclarationsBySlot(sourceProject, sourceFiles);
@@ -4281,6 +4458,7 @@ function readFrameworkInstructionSlotPackageRows(
       .filter((row): row is FrameworkInstructionSlotRow => row !== null));
   const unique = uniqueById(rows);
   cache.set(packageId, unique);
+  writeFrameworkEntityCatalogCache(sourceProject, "instruction-slots", packageId, unique, dependencyPackageIds);
   return unique;
 }
 
@@ -4467,6 +4645,11 @@ function readFrameworkSyntaxProductPackageRows(
   if (cached !== undefined) {
     return cached;
   }
+  const diskCached = readFrameworkEntityCatalogCache<FrameworkSyntaxProductRow>(sourceProject, "syntax-products", packageId);
+  if (diskCached !== undefined) {
+    cache.set(packageId, diskCached);
+    return diskCached;
+  }
   const resourceCarriers = readFrameworkResourcePackageCarrierRows(sourceProject, packageId, packageName);
   const rows = sourceProject.ownedSourceFiles()
     .filter((sourceFile) => sourceProject.packageForFileName(sourceFile.fileName)?.id === packageId)
@@ -4477,6 +4660,7 @@ function readFrameworkSyntaxProductPackageRows(
     ]);
   const unique = uniqueById(rows);
   cache.set(packageId, unique);
+  writeFrameworkEntityCatalogCache(sourceProject, "syntax-products", packageId, unique);
   return unique;
 }
 

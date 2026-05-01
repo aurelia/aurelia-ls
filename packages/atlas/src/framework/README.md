@@ -41,6 +41,9 @@ anchors; better anchors make future product modeling cheaper.
   framework anchors resolve to exact source candidates at boot. It also derives source-bound flow seed rows and
   first-page call-hierarchy edges for those seeds, expands those edges into exact call-site argument rows, and exposes
   grouped call targets through the discovery lens.
+- [json-cache.ts](json-cache.ts) owns the JSON cache used to hydrate expensive derived framework atoms after daemon
+  restart. [JSON-CACHE.md](JSON-CACHE.md) records the storage contract, invalidation keys, entity-family inclusion
+  policy, trade-offs, and falsifiers.
 - [../inquiry/runtime/framework-lenses.ts](../inquiry/runtime/framework-lenses.ts) exposes the seeds as the
   `framework.discovery` inquiry lens, including package export surfaces for admitted Aurelia framework packages, and
   the first `framework.rendering` lens for instruction, binding, and observer-adjacent rendering rows.

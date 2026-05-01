@@ -85,15 +85,15 @@ compensatory aliases, or unclear ontology.
   emits separate rows for lifecycle method declarations, observer/accessor lookups, event listener registration/removal,
   and subscription/unsubscription effects inside binding classes.
 - `framework.rendering` is now the first split lens for the resource/instruction/rendering/binding corridor. Its
-  summary currently reports 101 syntax products, 26 instruction slots, 23 instruction dispatch edges, 16 binding
-  products, 21 admission edges, 92 binding effects, and 5 binding setup overrides.
+  summary reports syntax products, instruction slots, instruction dispatch edges, binding products, admission edges,
+  binding effects, and binding setup overrides without forcing callers back through `framework.discovery`.
 - `framework.rendering` has a public `instruction-dispatches` projection that turns slot-to-renderer matching into
   explicit dispatch rows. This is now the direct bridge from emitted instruction discriminators into renderer behavior.
 - `framework.rendering` has a public `binding-setups` projection for renderer/resource-side setup calls that alter
   binding observation behavior outside the binding class. It currently recognizes `useTargetObserver`, `useAccessor`,
   and `useTargetSubscriber`.
 - Rest-package discovery now covers the non-`runtime-html` configuration/resource surfaces:
-  - `dialog` configurations close to two DI registrations, one registry export registration, and one AppTask.
+  - `dialog` configurations close to DI registrations, registry export registration, and AppTask admission.
   - `i18n` expands nested `coreComponents(...)` into DI registrations, an AppTask, renderer/resource catalogs, and
     alias-sensitive dynamic binding-command/attribute-pattern registrations.
   - `router` expands the local `configure(...)` call into DI registrations, AppTasks, default component/resource
@@ -101,89 +101,40 @@ compensatory aliases, or unclear ontology.
   - `ui-virtualization` closes to collection/dom renderer registry exports plus `VirtualRepeat`.
   - `validation`, `validation-html`, and `validation-i18n` close their `Registration.*`, chained configuration,
     `registerFactory`, binding behavior, custom attribute, and dynamic custom element admissions.
-- Full resource-carrier query after the rest-package pass: 91 rows total.
-  - `runtime-html`: 48
-  - `template-compiler`: 18
-  - `i18n`: 13
-  - `state`: 6
-  - `router`: 3
-  - `validation-html`: 2
-  - `ui-virtualization`: 1
-- Full DI interface export query after the rest-package pass: 90 rows total across dialog, expression-parser,
-  fetch-client, i18n, kernel, router, runtime, runtime-html, state, template-compiler, ui-virtualization, validation,
-  validation-html, and validation-i18n.
-- Full syntax-product query after the first instruction-slot/factory pass: 101 rows total.
-  - `i18n`: 9
-  - `runtime-html`: 44
-  - `state`: 6
-  - `template-compiler`: 42
-  - product lanes: 18 binding-command instruction-build rows, 23 renderer instruction-handler rows, 17 renderer
-    binding-creation rows, and 43 instruction-factory emission rows
-- Full instruction-slot query after the first slot pass: 26 rows total.
-  - `template-compiler`: 21 core compiler/runtime-html instruction slots
-  - `i18n`: 3 plugin instruction slots (`100`-`102`)
-  - `state`: 2 plugin instruction slots (`120`-`121`)
-  - every discovered slot has at least one syntax product after adding the instruction-factory lane
-- Full instruction-dispatch query after the first rendering-lens split: 23 rows total.
-  - `runtime-html`: 18
-  - `i18n`: 3
-  - `state`: 2
-  - rows include `itPropertyBinding -> PropertyBindingRenderer`,
-    `itInterpolation -> InterpolationBindingRenderer`,
-    `itTranslation -> TranslationBindingRenderer`, and
-    `itState -> StateBindingRenderer`
-- Full binding-admission query after the first admission pass: 21 rows total.
-  - `runtime-html`: 16
-  - `i18n`: 1
-  - `state`: 4
-  - construction lanes: 13 inline `new`, 5 local variable, 3 factory collection element
-- Full binding-product query after the first admission pass: 16 rows total.
-  - `runtime-html`: 12 (`PropertyBinding`, `InterpolationBinding`, `ContentBinding`, `AttributeBinding`, `LetBinding`,
-    `RefBinding`, `ListenerBinding`, `SpreadBinding`, `SpreadValueBinding`, `DevStylePropertyBinding`,
-    `AuSlotWatcherBinding`, `ChildrenBinding`)
-  - `i18n`: 1 (`TranslationBinding`)
-  - `state`: 3 (`StateBinding`, `StateDispatchBinding`, `StateGetterBinding`)
-  - every renderer-created or controller-admitted binding name has a source class row
-  - three admitted lifecycle/decorator bindings currently have admission edges but no renderer construction products:
-    `AuSlotWatcherBinding`, `ChildrenBinding`, and `StateGetterBinding`
-- Full binding-effect query after the first effect pass: 92 rows total.
-  - `runtime-html`: 55
-  - `state`: 31
-  - `i18n`: 6
-  - effect lanes: 63 lifecycle methods, 5 observer/accessor lookups, 4 event listener operations, 20 subscriptions
-  - this now exposes rows such as `PropertyBinding.bind -> observerLocator.getObserver/getAccessor`,
-    `ListenerBinding.bind/unbind -> addEventListener/removeEventListener`, and
-    `StateBinding.bind/useStore -> store.subscribe/unsubscribe`
-- Full binding-setup query after the first rendering-lens split: 5 rows total.
-  - `runtime-html`: 4
-  - `validation-html`: 1
-  - setup lanes: 3 target-observer, 1 accessor, 1 target-subscriber
-  - rows include `InterpolationBindingRenderer.render -> InterpolationBinding.useAccessor(...)`,
-    `PropertyBindingRenderer.render -> PropertyBinding.useTargetObserver(...)`,
-    `AttrBindingBehavior.bind -> PropertyBinding.useTargetObserver(...)`,
-    `UpdateTriggerBindingBehavior.bind -> PropertyBinding.useTargetObserver(...)`, and
-    `ValidateBindingBehavior.bind -> PropertyBinding.useTargetSubscriber(...)`
-- Full observer-system entity query after the first catalog pass: 75 public export rows total.
+- Resource-carrier discovery now spans framework and plugin packages that contribute resources or syntax products.
+- DI interface export discovery spans the framework and plugin packages that publish `createInterface` keys.
+- Syntax-product discovery covers binding commands, renderers, binding construction, and instruction factories.
+- Instruction-slot discovery joins slot constants to instruction declarations and syntax products.
+- Instruction-dispatch discovery includes rows such as `itPropertyBinding -> PropertyBindingRenderer`,
+  `itInterpolation -> InterpolationBindingRenderer`, `itTranslation -> TranslationBindingRenderer`, and
+  `itState -> StateBindingRenderer`.
+- Binding-admission discovery covers inline construction, local variable construction, and factory collection elements.
+- Binding-product discovery covers renderer-created and controller-admitted bindings, including lifecycle/decorator
+  bindings that have admission edges but no renderer construction products.
+- Binding-effect discovery exposes rows such as `PropertyBinding.bind -> observerLocator.getObserver/getAccessor`,
+  `ListenerBinding.bind/unbind -> addEventListener/removeEventListener`, and
+  `StateBinding.bind/useStore -> store.subscribe/unsubscribe`.
+- Binding-setup discovery includes setup calls such as `InterpolationBindingRenderer.render -> InterpolationBinding.useAccessor(...)`,
+  `PropertyBindingRenderer.render -> PropertyBinding.useTargetObserver(...)`,
+  `AttrBindingBehavior.bind -> PropertyBinding.useTargetObserver(...)`,
+  `UpdateTriggerBindingBehavior.bind -> PropertyBinding.useTargetObserver(...)`, and
+  `ValidateBindingBehavior.bind -> PropertyBinding.useTargetSubscriber(...)`.
+- Full observer-system entity query after the first catalog pass:
   - the seed layer now names `runtime:IObserverLocator`, `runtime:ObserverLocator`,
     `runtime:INodeObserverLocator`, and `runtime-html:NodeObserverLocator` as first-class reactivity anchors
   - rows are public package exports with explicit `observerKinds`, `observerCapabilities`, `exportShape`,
     `matchedBy`, and DI default implementation provenance when visible from `createInterface` builder callbacks
   - this is still an existence catalog, not a relationship graph; binding lookup/setup rows now continue into it
     instead of making observer-locator relationships implicit
-  - first broad all-package materialization was around 18s after the daemon/source project was warm; subsequent reads
-    are around 100ms from the daemon cache
 - The framework entity seed layer now also exposes public export catalogs for AppTask/lifecycle work, router,
   expression, and rendering structures:
-  - `app-tasks`: 36 rows across `runtime-html`, including AppTask factories, task-slot constants, task callbacks,
-    task queues, recurring task helpers, and lifecycle hook exports
-  - `router-entities`: 90 rows across `router`, `route-recognizer`, and umbrella `aurelia` exports, including router,
-    configuration, route tree/context, navigation, viewport/endpoint, URL parser, recognizer, state, route-resource,
-    event, instruction, and router-local location rows
-  - `expression-entities`: 144 rows across `expression-parser`, `runtime`, `runtime-html`, `template-compiler`, and
-    umbrella `aurelia` exports, including AST nodes, parser/evaluator/unparser/visitor helpers, interpolation,
+  - `app-tasks`: AppTask factories, task-slot constants, task callbacks, task queues, recurring task helpers, and
+    lifecycle hook exports
+  - `router-entities`: router, configuration, route tree/context, navigation, viewport/endpoint, URL parser,
+    recognizer, state, route-resource, event, instruction, and router-local location rows
+  - `expression-entities`: AST nodes, parser/evaluator/unparser/visitor helpers, interpolation,
     access/call/literal/operator/pattern nodes, binding behavior, and value-converter expression rows
-  - `rendering-structures`: 123 rows across `runtime-html`, `template-compiler`, `runtime`, and umbrella `aurelia`
-    exports, including app root, controller, view/view-factory, hydration, renderer, render context/location,
+  - `rendering-structures`: app root, controller, view/view-factory, hydration, renderer, render context/location,
     node sequence, lifecycle hook, platform boundary, mount target, and SSR rows
   - these are still "what exists" catalogs. The next layers should spend these seeds into relationship lenses for DI,
     lifecycle, compiler/rendering, activation, and observer flow instead of overloading `framework.discovery`.
@@ -256,41 +207,27 @@ compensatory aliases, or unclear ontology.
   - keep the observer-locator contracts and implementations as spine anchors because bindings delegate through them
     rather than constructing most observers directly
 - Add a stable disk manifest layer above the daemon's warm in-memory cache:
-  - cache expensive, deterministic catalog products such as DI interfaces, resource carriers, public resources,
-    registry exports, and evaluated bundle admissions
-  - include scanner/recognition/evaluator version keys and manifest schema version keys so cache invalidation is tied
-    to Atlas logic changes and manifest shape changes, not only source timestamps
+  - the JSON cache now covers the current existence/entity atom families; see `JSON-CACHE.md` for the storage
+    contract, invalidation keys, inclusion policy, trade-offs, and falsifiers
+  - next candidates are relationship/effect families, starting with evaluated bundle admissions and then DI,
+    lifecycle, compiler, activation, and observer-flow atoms as their row shapes stabilize
   - keep manifest rows as stable semantic addresses/evidence summaries; rehydrate or lazily reacquire full TypeScript
     nodes from the live Program when a query needs rich checker/source graph access
   - avoid letting the manifest become a hand-maintained substrate contract; it should be derived output with exact
     invalidation rules
 - Keep performance honest:
   - broad export member scans can still be expensive without a narrowing query
-  - framework seed discovery is around tens of milliseconds; full call hierarchy/call-site expansion remains several
-    seconds and is now lazy unless `ATLAS_PREWARM_FRAMEWORK_FLOW=1`
-  - `di-interfaces` is around sub-second for exact export-name reads, several seconds for cold large packages, and
-    tens of milliseconds after cache warmup
-  - `bundles(runtime-html:StandardConfiguration)` is currently about 20s cold and about 130ms warm. The cold path is
-    dominated by first TypeChecker/evaluator reads and package-scoped resource fallback for declaration-file imports,
-    not all-package scans.
-  - `syntax-products` is currently about 27s for the first broad query after daemon restart when it has to materialize
-    source project/resource-carrier/factory caches, then about 100ms for broad or filtered warm-cache reads.
-  - `instruction-slots` is currently about the same cold path as syntax-products because it joins syntax products, then
-    about 95ms for broad or exact warm-cache reads.
-  - `binding-admissions` is currently about the same cold path as syntax-products because it joins construction
-    products, then about low hundreds of milliseconds for broad or exact warm-cache reads.
-  - `binding-products` is currently about the same cold path as syntax-products because it joins construction products
-    and admissions, then about low hundreds of milliseconds for broad or exact warm-cache reads.
-  - `binding-effects` is currently about the same cold path as binding-products because it uses the binding product set
-    as admission; after warmup it returns low hundreds of milliseconds for broad or filtered reads.
-  - `binding-setups` currently rides the `framework.rendering` cold path, then returns low hundreds of milliseconds
-    after warmup.
+  - full call hierarchy/call-site expansion remains lazy unless `ATLAS_PREWARM_FRAMEWORK_FLOW=1`
+  - bundle cold paths are dominated by first TypeChecker/evaluator reads and package-scoped resource fallback for
+    declaration-file imports, not all-package scans.
+  - rendering graph projections share cold materialization paths when they join syntax products, construction
+    products, admissions, and binding effects.
   - `observers` uses `readExportNames` as the cheap admission surface and only expands TypeChecker export facts for
     observer-ish candidate names and DI observer interfaces; it is prewarmed by the session daemon so ordinary API reads
     should be warm-cache cheap.
   - `app-tasks`, `router-entities`, `expression-entities`, and `rendering-structures` use the same cheap public-name
-    admission surface plus exact export expansion. Cold broad materialization after the source project is warm is about
-    6s, 6s, 16s, and 12s respectively; warm-cache reads are intended to be low hundreds of milliseconds.
+    admission surface plus exact export expansion.
+  - package-scoped JSON hydration should materially reduce daemon restart warmup after the cache has been filled.
   - `readExportNames` is the cheap public-name surface; avoid `readExportSurface` when only admission names are needed
   - profile before adding more boot-time graph work; prefer indexed atoms with stable keys over repeated scans
 

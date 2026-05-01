@@ -26,7 +26,10 @@ Atlas source.
 `ensureInquirySession()` computes the current build hash, probes the manifest, reuses a compatible daemon, asks an
 incompatible daemon to shut down, or starts a new detached process from `dist/session/daemon.js`. The daemon prewarms
 the auLink bridge index, framework discovery index, and first framework entity catalogs before publishing its
-manifest. Cold startup is singleflighted with an in-process pending promise plus an atomic
+manifest. The first framework entity catalogs hydrate from the package-scoped JSON cache described in
+[../framework/JSON-CACHE.md](../framework/JSON-CACHE.md) when its invalidation keys still match the live TypeScript
+source basis. Broader entity atom families are warmed after manifest publication so first-fill cache misses do not block
+the session from becoming usable. Cold startup is singleflighted with an in-process pending promise plus an atomic
 `.temp/atlas/session/startup.lock.json` lease so parallel callers wait for the first warmup instead of spawning
 duplicate heavyweight daemons. Stale startup locks are removed when their owner process exits or when the startup
 timeout expires.
