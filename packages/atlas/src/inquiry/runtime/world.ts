@@ -55,35 +55,40 @@ export function createDefaultInquiryWorld(): InquiryWorld {
         kind: EvidenceKind.MaintenanceSignal,
         role: EvidenceRole.Subject,
         confidence: EvidenceConfidence.Exact,
-        summary: "Lens contracts are loaded from the static Atlas lens catalog.",
+        summary:
+          "Lens contracts are loaded from the static Atlas lens catalog.",
       },
       {
         id: "contract:substrate-catalog",
         kind: EvidenceKind.MaintenanceSignal,
         role: EvidenceRole.Support,
         confidence: EvidenceConfidence.Exact,
-        summary: "Substrate contracts are loaded from the static atlas substrate catalog.",
+        summary:
+          "Substrate contracts are loaded from the static atlas substrate catalog.",
       },
       {
         id: "contract:terrain",
         kind: EvidenceKind.MaintenanceSignal,
         role: EvidenceRole.Support,
         confidence: EvidenceConfidence.Exact,
-        summary: "Repository terrain is loaded from the static atlas terrain map.",
+        summary:
+          "Repository terrain is loaded from the static atlas terrain map.",
       },
       {
         id: "contract:vocabulary",
         kind: EvidenceKind.VocabularyTerm,
         role: EvidenceRole.Support,
         confidence: EvidenceConfidence.Exact,
-        summary: "Atlas self-description vocabulary is loaded from the static vocabulary declarations.",
+        summary:
+          "Atlas self-description vocabulary is loaded from the static vocabulary declarations.",
       },
       {
         id: "contract:navigation",
         kind: EvidenceKind.MaintenanceSignal,
         role: EvidenceRole.Support,
         confidence: EvidenceConfidence.Exact,
-        summary: "Navigation route grammar is loaded from the static Atlas navigation declarations.",
+        summary:
+          "Navigation route grammar is loaded from the static Atlas navigation declarations.",
       },
     ],
     openSeams: [],

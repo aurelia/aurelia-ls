@@ -31,6 +31,11 @@ dependent; re-measure locally when performance decisions depend on them.
 The cached rows are not inquiry answers. They are serializable atoms that the `framework.discovery` projections page,
 filter, decorate with evidence, and continue from at query time.
 
+Entity catalog producer versions are scoped by catalog id. A syntax-product recognizer change should invalidate
+`syntax-products` and dependent syntax-family chunks, but it should not force unrelated resource, export, observer, or
+structural entity chunks to be rediscovered. The cache wrapper still participates in each producer hash, so cache-policy
+changes intentionally cause a broader refill.
+
 The first relationship cache family is `framework.di.relationship-atoms`. It stores package-scoped DI key and
 relationship atoms produced by the framework DI index. It follows the same contract: JSON is derived memory, TypeScript
 remains authority, and continuations are created at query time rather than persisted.
@@ -39,6 +44,20 @@ The first evaluator-derived admission cache family is `framework.discovery.bundl
 package-scoped bundle/configuration rows and their normalized registration associations. These rows are not existence
 catalog atoms, so they live in their own family and invalidate against all admitted framework package fingerprints:
 bundle associations can depend on resources, DI keys, and registry exports declared outside the bundle's package.
+The `framework.admission` lens currently derives its relationship rows from this family at query time instead of
+persisting a second admission-relationship family. Promote a separate relationship cache only if the derived row shape
+starts being reused by multiple lenses or broad admission queries remain expensive after package-scoped bundle
+hydration.
+
+`framework.materialization` derives routes, dependencies, relationships, DI key instantiation rows, and resource
+instantiation rows from the DI atom cache, resource carrier cache, and live evaluator reads for callback provider
+bodies. Do not cache those projections as final answers; promote a materialization relationship/effect cache only when
+the route/dependency/instantiation atoms become stable enough to serve more than one lens or cold callback/resource
+tracing becomes a startup bottleneck.
+
+`framework.rendering:relationships` currently derives from cached syntax, instruction, binding, and observer-adjacent
+catalog atoms. Keep it query-derived until duplicate-edge pressure, reuse from another lens, or cold relationship
+assembly cost proves that the normalized relationship family needs its own manifest chunk.
 
 ## Inclusion Policy
 
@@ -88,9 +107,11 @@ The package fingerprint hashes:
 - tsconfig content
 - every owned source file path and text for that package
 
-The producer version combines a human-readable family version with a SHA-256 hash of the compiled module that owns the
-recognition logic. This is intentionally conservative: edits to `framework-lenses` invalidate the current entity
-catalog family without relying on a maintainer to remember to bump a version string.
+The producer version combines a human-readable family version with SHA-256 hashes of the compiled modules that
+participate in producing a cache family. Entity catalog chunks hash only the recognition modules relevant to that
+catalog id; bundle admission chunks keep a broader producer hash because evaluator associations spend DI, resources,
+registry exports, and package-export classification together. This should keep invalidation conservative without
+turning every analyzer refactor into a full entity-cache refill.
 
 ## Hydration Contract
 
@@ -125,9 +146,9 @@ payload is intended to stay human-inspectable and cheap to parse. If framework g
 JSON parsing dominates startup, the right next move is probably per-family JSONL or a tiny local KV store, not
 projection caching.
 
-The producer hash is conservative and can invalidate more than necessary. That is acceptable while the analyzer logic is
-moving quickly. If invalidations become too frequent, split producer modules by family and hash only the smaller
-recognition modules.
+The producer hash remains conservative inside each atom family. That is acceptable while the analyzer logic is moving
+quickly. If invalidations become too frequent even with catalog-scoped entity producer versions, split producer modules
+more narrowly or promote a heavily reused relationship/effect family into its own cache family.
 
 ## Falsifiers
 

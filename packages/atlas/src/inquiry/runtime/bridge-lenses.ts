@@ -1,13 +1,34 @@
 import { OutcomeKind, createAnswer, type Answer } from "../answer.js";
-import { BasisAuthority, BasisClosure, BasisFreshness, BasisKind, type Basis } from "../basis.js";
+import {
+  BasisAuthority,
+  BasisClosure,
+  BasisFreshness,
+  BasisKind,
+  type Basis,
+} from "../basis.js";
 import { clampBudget } from "../budget.js";
-import { ContinuationKind, ContinuationPriority, type Continuation } from "../continuation.js";
-import { EvidenceConfidence, EvidenceKind, EvidenceRole, OpenSeamKind, type Evidence, type OpenSeam } from "../evidence.js";
+import {
+  ContinuationKind,
+  ContinuationPriority,
+  type Continuation,
+} from "../continuation.js";
+import {
+  EvidenceConfidence,
+  EvidenceKind,
+  EvidenceRole,
+  OpenSeamKind,
+  type Evidence,
+  type OpenSeam,
+} from "../evidence.js";
 import { HandleKind, HandleNamespace, type InquiryHandle } from "../handle.js";
 import type { Inquiry } from "../inquiry.js";
 import { LensId } from "../lens.js";
 import { LocusKind, type SourceRange } from "../locus.js";
-import { NavigationPlane, NavigationRelation, type NavigationRouteClaim } from "../navigation.js";
+import {
+  NavigationPlane,
+  NavigationRelation,
+  type NavigationRouteClaim,
+} from "../navigation.js";
 import {
   AuLinkGapKind,
   readAuLinkModel,
@@ -62,20 +83,36 @@ export function answerBridgeAuLink(
       rollup: model.rollup,
       anchors: page.rows,
     };
-    return createAnswer(inquiry, page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit, `Returned ${page.rows.length} of ${model.anchors.length} auLink anchor row(s).`, {
-      value,
-      basis: [auLinkBasis(sourceProject), checkerBasis(sourceProject)],
-      evidence: page.rows.slice(0, evidenceLimit(inquiry)).map(evidenceForAnchor),
-      openSeams: model.gaps.slice(0, evidenceLimit(inquiry)).map(openSeamForGap),
-      page: {
-        size: limit,
-        cursor: inquiry.page?.cursor,
-        returned: page.rows.length,
-        total: model.anchors.length,
-        ...(page.nextOffset === undefined ? {} : { nextCursor: String(page.nextOffset) }),
+    return createAnswer(
+      inquiry,
+      page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
+      `Returned ${page.rows.length} of ${model.anchors.length} auLink anchor row(s).`,
+      {
+        value,
+        basis: [auLinkBasis(sourceProject), checkerBasis(sourceProject)],
+        evidence: page.rows
+          .slice(0, evidenceLimit(inquiry))
+          .map(evidenceForAnchor),
+        openSeams: model.gaps
+          .slice(0, evidenceLimit(inquiry))
+          .map(openSeamForGap),
+        page: {
+          size: limit,
+          cursor: inquiry.page?.cursor,
+          returned: page.rows.length,
+          total: model.anchors.length,
+          ...(page.nextOffset === undefined
+            ? {}
+            : { nextCursor: String(page.nextOffset) }),
+        },
+        continuations: anchorContinuations(
+          inquiry,
+          page.rows,
+          page.nextOffset,
+          limit,
+        ),
       },
-      continuations: anchorContinuations(inquiry, page.rows, page.nextOffset, limit),
-    });
+    );
   }
 
   if (projection === "gaps") {
@@ -85,20 +122,36 @@ export function answerBridgeAuLink(
       rollup: model.rollup,
       gaps: page.rows,
     };
-    return createAnswer(inquiry, page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit, `Returned ${page.rows.length} of ${model.gaps.length} auLink gap row(s).`, {
-      value,
-      basis: [auLinkBasis(sourceProject), checkerBasis(sourceProject)],
-      evidence: page.rows.slice(0, evidenceLimit(inquiry)).map(evidenceForGap),
-      openSeams: page.rows.slice(0, evidenceLimit(inquiry)).map(openSeamForGap),
-      page: {
-        size: limit,
-        cursor: inquiry.page?.cursor,
-        returned: page.rows.length,
-        total: model.gaps.length,
-        ...(page.nextOffset === undefined ? {} : { nextCursor: String(page.nextOffset) }),
+    return createAnswer(
+      inquiry,
+      page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
+      `Returned ${page.rows.length} of ${model.gaps.length} auLink gap row(s).`,
+      {
+        value,
+        basis: [auLinkBasis(sourceProject), checkerBasis(sourceProject)],
+        evidence: page.rows
+          .slice(0, evidenceLimit(inquiry))
+          .map(evidenceForGap),
+        openSeams: page.rows
+          .slice(0, evidenceLimit(inquiry))
+          .map(openSeamForGap),
+        page: {
+          size: limit,
+          cursor: inquiry.page?.cursor,
+          returned: page.rows.length,
+          total: model.gaps.length,
+          ...(page.nextOffset === undefined
+            ? {}
+            : { nextCursor: String(page.nextOffset) }),
+        },
+        continuations: gapContinuations(
+          inquiry,
+          page.rows,
+          page.nextOffset,
+          limit,
+        ),
       },
-      continuations: gapContinuations(inquiry, page.rows, page.nextOffset, limit),
-    });
+    );
   }
 
   if (projection === "targets") {
@@ -108,30 +161,51 @@ export function answerBridgeAuLink(
       rollup: model.rollup,
       targets: page.rows,
     };
-    return createAnswer(inquiry, page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit, `Returned ${page.rows.length} of ${model.frameworkTargets.length} auLink framework target row(s).`, {
-      value,
-      basis: [auLinkBasis(sourceProject), checkerBasis(sourceProject), frameworkBasis(sourceProject)],
-      evidence: page.rows.slice(0, evidenceLimit(inquiry)).flatMap(evidenceForFrameworkTarget),
-      openSeams: page.rows
-        .filter((target) => target.status !== "resolved")
-        .slice(0, evidenceLimit(inquiry))
-        .map(openSeamForFrameworkTarget),
-      page: {
-        size: limit,
-        cursor: inquiry.page?.cursor,
-        returned: page.rows.length,
-        total: model.frameworkTargets.length,
-        ...(page.nextOffset === undefined ? {} : { nextCursor: String(page.nextOffset) }),
+    return createAnswer(
+      inquiry,
+      page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
+      `Returned ${page.rows.length} of ${model.frameworkTargets.length} auLink framework target row(s).`,
+      {
+        value,
+        basis: [
+          auLinkBasis(sourceProject),
+          checkerBasis(sourceProject),
+          frameworkBasis(sourceProject),
+        ],
+        evidence: page.rows
+          .slice(0, evidenceLimit(inquiry))
+          .flatMap(evidenceForFrameworkTarget),
+        openSeams: page.rows
+          .filter((target) => target.status !== "resolved")
+          .slice(0, evidenceLimit(inquiry))
+          .map(openSeamForFrameworkTarget),
+        page: {
+          size: limit,
+          cursor: inquiry.page?.cursor,
+          returned: page.rows.length,
+          total: model.frameworkTargets.length,
+          ...(page.nextOffset === undefined
+            ? {}
+            : { nextCursor: String(page.nextOffset) }),
+        },
+        continuations: targetContinuations(
+          inquiry,
+          page.rows,
+          page.nextOffset,
+          limit,
+        ),
       },
-      continuations: targetContinuations(inquiry, page.rows, page.nextOffset, limit),
-    });
+    );
   }
 
   const value: BridgeAuLinkValue = {
     filters,
     rollup: model.rollup,
   };
-  const outcome = model.rollup.catalogEntries === 0 && model.rollup.anchors === 0 ? OutcomeKind.Miss : OutcomeKind.Hit;
+  const outcome =
+    model.rollup.catalogEntries === 0 && model.rollup.anchors === 0
+      ? OutcomeKind.Miss
+      : OutcomeKind.Hit;
   return createAnswer(inquiry, outcome, summaryForRollup(model.rollup), {
     value,
     basis: [auLinkBasis(sourceProject), checkerBasis(sourceProject)],
@@ -158,7 +232,9 @@ function filtersFromSubject(subject: unknown): AuLinkFilters {
   return {};
 }
 
-function filtersFromRecord(source: Record<string, unknown> | undefined): AuLinkFilters {
+function filtersFromRecord(
+  source: Record<string, unknown> | undefined,
+): AuLinkFilters {
   if (source === undefined) {
     return {};
   }
@@ -168,12 +244,19 @@ function filtersFromRecord(source: Record<string, unknown> | undefined): AuLinkF
     ...stringField(source, "targetName"),
     ...stringField(source, "filePath"),
     ...stringField(source, "frameworkStatus"),
-    ...(typeof source.symbolName === "string" ? { symbolName: source.symbolName } : {}),
-    ...(typeof source.frameworkSymbol === "string" ? { symbolName: source.frameworkSymbol } : {}),
+    ...(typeof source.symbolName === "string"
+      ? { symbolName: source.symbolName }
+      : {}),
+    ...(typeof source.frameworkSymbol === "string"
+      ? { symbolName: source.frameworkSymbol }
+      : {}),
   };
 }
 
-function stringField(source: Record<string, unknown>, key: keyof AuLinkFilters): object {
+function stringField(
+  source: Record<string, unknown>,
+  key: keyof AuLinkFilters,
+): object {
   const value = source[key];
   return typeof value === "string" && value.length > 0 ? { [key]: value } : {};
 }
@@ -182,7 +265,10 @@ function summaryForRollup(rollup: AuLinkRollup): string {
   return `Read ${rollup.anchors} auLink anchor(s), ${rollup.catalogEntries} catalog entrie(s), ${rollup.gaps} gap row(s), and ${rollup.resolvedFrameworkTargets} resolved framework target(s).`;
 }
 
-function summaryEvidence(model: AuLinkModel, inquiry: Inquiry): readonly Evidence[] {
+function summaryEvidence(
+  model: AuLinkModel,
+  inquiry: Inquiry,
+): readonly Evidence[] {
   const limit = evidenceLimit(inquiry);
   const anchors = model.anchors.slice(0, limit).map(evidenceForAnchor);
   if (anchors.length >= limit) {
@@ -194,7 +280,11 @@ function summaryEvidence(model: AuLinkModel, inquiry: Inquiry): readonly Evidenc
   ];
 }
 
-function summaryContinuations(inquiry: Inquiry, filters: AuLinkFilters, model: AuLinkModel): readonly Continuation[] {
+function summaryContinuations(
+  inquiry: Inquiry,
+  filters: AuLinkFilters,
+  model: AuLinkModel,
+): readonly Continuation[] {
   const continuations: Continuation[] = [
     {
       id: "bridge.aulink:anchors",
@@ -208,12 +298,17 @@ function summaryContinuations(inquiry: Inquiry, filters: AuLinkFilters, model: A
         projection: "anchors",
         budget: inquiry.budget,
       },
-      route: projectionRoute("auLink decorator placements for the current filters."),
+      route: projectionRoute(
+        "auLink decorator placements for the current filters.",
+      ),
     },
     {
       id: "bridge.aulink:gaps",
       kind: ContinuationKind.SwitchProjection,
-      priority: model.gaps.length === 0 ? ContinuationPriority.Secondary : ContinuationPriority.Primary,
+      priority:
+        model.gaps.length === 0
+          ? ContinuationPriority.Secondary
+          : ContinuationPriority.Primary,
       rationale: "Inspect exact catalog and placement gaps.",
       inquiry: {
         lens: LensId.BridgeAuLink,
@@ -222,14 +317,18 @@ function summaryContinuations(inquiry: Inquiry, filters: AuLinkFilters, model: A
         projection: "gaps",
         budget: inquiry.budget,
       },
-      route: seamRoute("auLink catalog and placement gaps for the current filters."),
+      route: seamRoute(
+        "auLink catalog and placement gaps for the current filters.",
+      ),
     },
     {
       id: "bridge.aulink:targets",
       kind: ContinuationKind.SwitchProjection,
-      priority: model.rollup.unresolvedFrameworkTargets > 0 || model.rollup.ambiguousFrameworkTargets > 0
-        ? ContinuationPriority.Primary
-        : ContinuationPriority.Secondary,
+      priority:
+        model.rollup.unresolvedFrameworkTargets > 0 ||
+        model.rollup.ambiguousFrameworkTargets > 0
+          ? ContinuationPriority.Primary
+          : ContinuationPriority.Secondary,
       rationale: "Resolve auLink ids to exact Aurelia framework declarations.",
       inquiry: {
         lens: LensId.BridgeAuLink,
@@ -238,13 +337,22 @@ function summaryContinuations(inquiry: Inquiry, filters: AuLinkFilters, model: A
         projection: "targets",
         budget: inquiry.budget,
       },
-      route: mirrorTargetRoute("Framework targets for the current auLink filters."),
+      route: mirrorTargetRoute(
+        "Framework targets for the current auLink filters.",
+      ),
     },
   ];
 
   const firstAnchor = model.anchors[0];
   if (firstAnchor !== undefined) {
-    continuations.push(sourceContinuation("bridge.aulink:source:0", "Inspect the source behind the first auLink anchor.", firstAnchor, sourceRangeForAuLinkAnchor(firstAnchor)));
+    continuations.push(
+      sourceContinuation(
+        "bridge.aulink:source:0",
+        "Inspect the source behind the first auLink anchor.",
+        firstAnchor,
+        sourceRangeForAuLinkAnchor(firstAnchor),
+      ),
+    );
   }
   return continuations;
 }
@@ -291,23 +399,38 @@ function anchorContinuations(
       projection: "targets",
       page: undefined,
     },
-    route: mirrorTargetRoute("Framework declaration targets for these auLink anchors."),
+    route: mirrorTargetRoute(
+      "Framework declaration targets for these auLink anchors.",
+    ),
   });
   for (const [index, anchor] of anchors.slice(0, 3).entries()) {
-    continuations.push(sourceContinuation(`bridge.aulink:anchors:source:${index}`, "Inspect the decorator source for this auLink anchor.", anchor, sourceRangeForAuLinkAnchor(anchor)));
+    continuations.push(
+      sourceContinuation(
+        `bridge.aulink:anchors:source:${index}`,
+        "Inspect the decorator source for this auLink anchor.",
+        anchor,
+        sourceRangeForAuLinkAnchor(anchor),
+      ),
+    );
     continuations.push({
       id: `bridge.aulink:anchors:type:${index}`,
       kind: ContinuationKind.SwitchLens,
       priority: ContinuationPriority.Secondary,
-      rationale: "Inspect TypeChecker facts for the decorated product declaration.",
+      rationale:
+        "Inspect TypeChecker facts for the decorated product declaration.",
       inquiry: {
         lens: LensId.TsType,
-        locus: { kind: LocusKind.SourceRange, range: sourceRangeForAuLinkTarget(anchor) },
+        locus: {
+          kind: LocusKind.SourceRange,
+          range: sourceRangeForAuLinkTarget(anchor),
+        },
         projection: "facts",
         budget: inquiry.budget,
       },
       evidence: [evidenceForAnchor(anchor)],
-      route: typeFactsRoute("Type facts for the decorated product declaration."),
+      route: typeFactsRoute(
+        "Type facts for the decorated product declaration.",
+      ),
     });
   }
   return continuations;
@@ -354,10 +477,14 @@ function targetContinuations(
       id: `bridge.aulink:targets:source:${index}`,
       kind: ContinuationKind.InspectEvidence,
       priority: ContinuationPriority.Primary,
-      rationale: "Inspect the framework declaration resolved by this auLink id.",
+      rationale:
+        "Inspect the framework declaration resolved by this auLink id.",
       inquiry: {
         lens: LensId.TsSource,
-        locus: { kind: LocusKind.SourceRange, range: sourceRangeForAuLinkFrameworkCandidate(firstCandidate) },
+        locus: {
+          kind: LocusKind.SourceRange,
+          range: sourceRangeForAuLinkFrameworkCandidate(firstCandidate),
+        },
         projection: "text",
         budget: inquiry.budget,
       },
@@ -371,12 +498,17 @@ function targetContinuations(
       rationale: "Inspect TypeChecker facts for the framework declaration.",
       inquiry: {
         lens: LensId.TsType,
-        locus: { kind: LocusKind.SourceRange, range: sourceRangeForAuLinkFrameworkCandidate(firstCandidate) },
+        locus: {
+          kind: LocusKind.SourceRange,
+          range: sourceRangeForAuLinkFrameworkCandidate(firstCandidate),
+        },
         projection: "facts",
         budget: inquiry.budget,
       },
       evidence: [evidenceForFrameworkCandidate(firstCandidate)],
-      route: typeFactsRoute("Type facts for the framework declaration resolved by auLink."),
+      route: typeFactsRoute(
+        "Type facts for the framework declaration resolved by auLink.",
+      ),
     });
   }
   return continuations;
@@ -459,27 +591,57 @@ function sourceContinuation(
 }
 
 function nextPageRoute(summary: string): NavigationRouteClaim {
-  return continuationRoute(NavigationPlane.Addressing, NavigationRelation.NextPageOf, [], summary);
+  return continuationRoute(
+    NavigationPlane.Addressing,
+    NavigationRelation.NextPageOf,
+    [],
+    summary,
+  );
 }
 
 function projectionRoute(summary: string): NavigationRouteClaim {
-  return continuationRoute(NavigationPlane.Semantic, NavigationRelation.ProjectionOf, [BasisKind.AuLink], summary);
+  return continuationRoute(
+    NavigationPlane.Semantic,
+    NavigationRelation.ProjectionOf,
+    [BasisKind.AuLink],
+    summary,
+  );
 }
 
 function sourceRoute(summary: string): NavigationRouteClaim {
-  return continuationRoute(NavigationPlane.Inspection, NavigationRelation.SourceFor, [BasisKind.SourceText, BasisKind.TypeScriptProgram], summary);
+  return continuationRoute(
+    NavigationPlane.Inspection,
+    NavigationRelation.SourceFor,
+    [BasisKind.SourceText, BasisKind.TypeScriptProgram],
+    summary,
+  );
 }
 
 function typeFactsRoute(summary: string): NavigationRouteClaim {
-  return continuationRoute(NavigationPlane.Inspection, NavigationRelation.TypeFactsFor, [BasisKind.TypeScriptChecker], summary);
+  return continuationRoute(
+    NavigationPlane.Inspection,
+    NavigationRelation.TypeFactsFor,
+    [BasisKind.TypeScriptChecker],
+    summary,
+  );
 }
 
 function mirrorTargetRoute(summary: string): NavigationRouteClaim {
-  return continuationRoute(NavigationPlane.Semantic, NavigationRelation.MirrorTargetOf, [BasisKind.AuLink, BasisKind.TypeScriptChecker], summary);
+  return continuationRoute(
+    NavigationPlane.Semantic,
+    NavigationRelation.MirrorTargetOf,
+    [BasisKind.AuLink, BasisKind.TypeScriptChecker],
+    summary,
+  );
 }
 
 function seamRoute(summary: string): NavigationRouteClaim {
-  return continuationRoute(NavigationPlane.Semantic, NavigationRelation.SeamFor, [BasisKind.AuLink], summary);
+  return continuationRoute(
+    NavigationPlane.Semantic,
+    NavigationRelation.SeamFor,
+    [BasisKind.AuLink],
+    summary,
+  );
 }
 
 function continuationRoute(
@@ -511,28 +673,36 @@ function evidenceForGap(gap: AuLinkGapRow): Evidence {
     role: EvidenceRole.Diagnostic,
     confidence: EvidenceConfidence.Exact,
     summary: summaryForGap(gap),
-    ...(sourceRangeForGap(gap) === null ? {} : { source: sourceRangeForGap(gap) ?? undefined }),
+    ...(sourceRangeForGap(gap) === null
+      ? {}
+      : { source: sourceRangeForGap(gap) ?? undefined }),
     handle: handleForGap(gap),
     data: gap,
   };
 }
 
-function evidenceForFrameworkTarget(target: AuLinkFrameworkTargetResolution): readonly Evidence[] {
+function evidenceForFrameworkTarget(
+  target: AuLinkFrameworkTargetResolution,
+): readonly Evidence[] {
   if (target.candidates.length === 0) {
-    return [{
-      id: target.id,
-      kind: EvidenceKind.OpenSeam,
-      role: EvidenceRole.Boundary,
-      confidence: EvidenceConfidence.Exact,
-      summary: `${target.linkId} framework target is ${target.status}.`,
-      handle: handleForFrameworkTarget(target),
-      data: target,
-    }];
+    return [
+      {
+        id: target.id,
+        kind: EvidenceKind.OpenSeam,
+        role: EvidenceRole.Boundary,
+        confidence: EvidenceConfidence.Exact,
+        summary: `${target.linkId} framework target is ${target.status}.`,
+        handle: handleForFrameworkTarget(target),
+        data: target,
+      },
+    ];
   }
   return target.candidates.map(evidenceForFrameworkCandidate);
 }
 
-function evidenceForFrameworkCandidate(candidate: AuLinkFrameworkTargetCandidate): Evidence {
+function evidenceForFrameworkCandidate(
+  candidate: AuLinkFrameworkTargetCandidate,
+): Evidence {
   return {
     id: candidate.id,
     kind: EvidenceKind.Symbol,
@@ -562,17 +732,23 @@ function openSeamForGap(gap: AuLinkGapRow): OpenSeam {
       closure: BasisClosure.Open,
       authority: BasisAuthority.Product,
       freshness: BasisFreshness.Live,
-      summary: "auLink catalog and placement comparison exposed an unresolved bridge gap.",
+      summary:
+        "auLink catalog and placement comparison exposed an unresolved bridge gap.",
     },
     handle: handleForGap(gap),
     data: gap,
   };
 }
 
-function openSeamForFrameworkTarget(target: AuLinkFrameworkTargetResolution): OpenSeam {
+function openSeamForFrameworkTarget(
+  target: AuLinkFrameworkTargetResolution,
+): OpenSeam {
   return {
     id: target.id,
-    kind: target.status === "ambiguous" ? OpenSeamKind.UnresolvedSymbol : OpenSeamKind.InsufficientBasis,
+    kind:
+      target.status === "ambiguous"
+        ? OpenSeamKind.UnresolvedSymbol
+        : OpenSeamKind.InsufficientBasis,
     summary: `auLink id ${target.linkId} framework target is ${target.status}.`,
     evidence: evidenceForFrameworkTarget(target)[0],
     basis: {
@@ -580,7 +756,8 @@ function openSeamForFrameworkTarget(target: AuLinkFrameworkTargetResolution): Op
       closure: BasisClosure.Open,
       authority: BasisAuthority.Checker,
       freshness: BasisFreshness.Live,
-      summary: "Framework target resolution could not close to exactly one declaration.",
+      summary:
+        "Framework target resolution could not close to exactly one declaration.",
     },
     handle: handleForFrameworkTarget(target),
     data: target,
@@ -603,7 +780,9 @@ function sourceRangeForGap(gap: AuLinkGapRow): SourceRange | null {
   if (firstAnchor !== undefined) {
     return sourceRangeForAuLinkAnchor(firstAnchor);
   }
-  return gap.catalog === undefined ? null : sourceRangeForAuLinkCatalog(gap.catalog);
+  return gap.catalog === undefined
+    ? null
+    : sourceRangeForAuLinkCatalog(gap.catalog);
 }
 
 function handleForAnchor(anchor: AuLinkAnchorRow): InquiryHandle {
@@ -626,7 +805,9 @@ function handleForGap(gap: AuLinkGapRow): InquiryHandle {
   };
 }
 
-function handleForFrameworkTarget(target: AuLinkFrameworkTargetResolution): InquiryHandle {
+function handleForFrameworkTarget(
+  target: AuLinkFrameworkTargetResolution,
+): InquiryHandle {
   return {
     namespace: HandleNamespace.Framework,
     kind: HandleKind.EvaluatorValue,
@@ -642,7 +823,8 @@ function auLinkBasis(sourceProject: SourceProject): Basis {
     closure: BasisClosure.Exact,
     authority: BasisAuthority.Product,
     freshness: BasisFreshness.Live,
-    summary: "Answered from semantic-runtime auLink overload declarations and decorator placements.",
+    summary:
+      "Answered from semantic-runtime auLink overload declarations and decorator placements.",
     identity: sourceProject.snapshot().identity,
   };
 }
@@ -653,7 +835,8 @@ function checkerBasis(sourceProject: SourceProject): Basis {
     closure: BasisClosure.Exact,
     authority: BasisAuthority.Checker,
     freshness: BasisFreshness.Live,
-    summary: "Resolved auLink decorator calls through the current TypeScript TypeChecker.",
+    summary:
+      "Resolved auLink decorator calls through the current TypeScript TypeChecker.",
     identity: sourceProject.snapshot().identity,
   };
 }
@@ -664,7 +847,8 @@ function frameworkBasis(sourceProject: SourceProject): Basis {
     closure: BasisClosure.Exact,
     authority: BasisAuthority.Checker,
     freshness: BasisFreshness.Live,
-    summary: "Resolved framework-side auLink targets from admitted Aurelia package declarations.",
+    summary:
+      "Resolved framework-side auLink targets from admitted Aurelia package declarations.",
     identity: sourceProject.snapshot().identity,
   };
 }
@@ -675,7 +859,8 @@ function pageRows<TValue>(
   limit: number,
 ): { readonly rows: readonly TValue[]; readonly nextOffset?: number } {
   const page = rows.slice(offset, offset + limit);
-  const nextOffset = offset + page.length < rows.length ? offset + page.length : undefined;
+  const nextOffset =
+    offset + page.length < rows.length ? offset + page.length : undefined;
   return {
     rows: page,
     ...(nextOffset === undefined ? {} : { nextOffset }),

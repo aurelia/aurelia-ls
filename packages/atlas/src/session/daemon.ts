@@ -4,10 +4,21 @@ import { createServer, type Server, type Socket } from "node:net";
 import { OutcomeKind } from "../inquiry/answer.js";
 import { LensId } from "../inquiry/lens.js";
 import { RepoRootLocus } from "../inquiry/locus.js";
-import { createInMemoryApi, type InquiryRuntimeRequest } from "../inquiry/runtime/index.js";
+import {
+  createInMemoryApi,
+  type InquiryRuntimeRequest,
+} from "../inquiry/runtime/index.js";
 import { prewarmFrameworkDiscoveryIndex } from "../framework/index.js";
-import { AURELIA_FRAMEWORK_PACKAGE_IDS, createSourceProject, prewarmAuLinkIndex } from "../source/index.js";
-import { readInquirySessionManifest, removeInquirySessionManifest, writeInquirySessionManifest } from "./manifest.js";
+import {
+  AURELIA_FRAMEWORK_PACKAGE_IDS,
+  createSourceProject,
+  prewarmAuLinkIndex,
+} from "../source/index.js";
+import {
+  readInquirySessionManifest,
+  removeInquirySessionManifest,
+  writeInquirySessionManifest,
+} from "./manifest.js";
 import { resolveInquirySessionPaths } from "./paths.js";
 import {
   INQUIRY_SESSION_MANIFEST_VERSION,
@@ -31,7 +42,10 @@ const paths = resolveInquirySessionPaths(packageRoot);
 const manifestPath = args.get("manifest") ?? paths.manifestPath;
 const buildHash = requireArg(args, "build-hash");
 const idleTtlMs = readPositiveInteger(args.get("idle-ttl-ms"), 10 * 60 * 1000);
-const heartbeatIntervalMs = readPositiveInteger(args.get("heartbeat-interval-ms"), 2_000);
+const heartbeatIntervalMs = readPositiveInteger(
+  args.get("heartbeat-interval-ms"),
+  2_000,
+);
 const sourceProject = createSourceProject({ repoRoot: paths.repoRoot });
 prewarmAuLinkIndex(sourceProject);
 prewarmFrameworkDiscoveryIndex(sourceProject);
@@ -74,7 +88,8 @@ await Promise.all([
       locus: RepoRootLocus,
       projection,
       budget: { rows: 1, evidencePerSubject: 1 },
-    })),
+    }),
+  ),
   ...blockingSemanticPrewarmInquiries.map((inquiry) => api.ask(inquiry)),
 ]);
 const startedAtMs = Date.now();
@@ -90,7 +105,11 @@ server = createServer((socket) => {
 
 server.listen(0, "127.0.0.1", () => {
   const address = server?.address();
-  if (address === undefined || address === null || typeof address === "string") {
+  if (
+    address === undefined ||
+    address === null ||
+    typeof address === "string"
+  ) {
     throw new Error("Atlas session could not resolve its listening address.");
   }
   endpoint = { host: "127.0.0.1", port: address.port };
@@ -144,18 +163,44 @@ async function handleLine(
   try {
     request = JSON.parse(line) as InquirySessionRequest;
   } catch (error) {
-    socket.write(`${JSON.stringify(failure("unknown", "invalid-json", errorSummary(error)))}\n`);
+    socket.write(
+      `${JSON.stringify(
+        failure("unknown", "invalid-json", errorSummary(error)),
+      )}\n`,
+    );
     return;
   }
 
   lastRequestAtMs = Date.now();
   try {
     const result = await handleRequest(request);
-    const response: InquirySessionResponse = { id: request.id, ok: true, result };
+    const response: InquirySessionResponse = {
+      id: request.id,
+      ok: true,
+      result,
+    };
     socket.write(`${JSON.stringify(response)}\n`);
   } catch (error) {
-    socket.write(`${JSON.stringify(failure(request.id, "request-failed", errorSummary(error)))}\n`);
+    socket.write(
+      `${JSON.stringify(
+        failure(request.id, "request-failed", errorSummary(error)),
+      )}\n`,
+    );
   }
+  await api
+    .ask({
+      lens: LensId.FrameworkAdmission,
+      locus: RepoRootLocus,
+      projection: "summary",
+      budget: { rows: 1, evidencePerSubject: 1 },
+    })
+    .catch((error: unknown) => {
+      console.error(
+        `Atlas background framework admission prewarm failed: ${errorSummary(
+          error,
+        )}`,
+      );
+    });
 }
 
 /** Handle one parsed protocol request. */
@@ -175,13 +220,16 @@ async function handleRequest(
     case InquirySessionMethod.SelfCheck:
       return runSelfCheck();
     case InquirySessionMethod.Shutdown: {
-      const reason = readShutdownParams(request.params).reason ?? "protocol shutdown";
+      const reason =
+        readShutdownParams(request.params).reason ?? "protocol shutdown";
       const result: InquirySessionShutdownResult = { accepted: true, reason };
       setTimeout(() => shutdown(reason), 0).unref();
       return result;
     }
     default:
-      throw new Error(`Unknown inquiry session method: ${String(request.method)}`);
+      throw new Error(
+        `Unknown inquiry session method: ${String(request.method)}`,
+      );
   }
 }
 
@@ -199,16 +247,26 @@ async function runSelfCheck(): Promise<InquirySessionSelfCheckResult> {
     projection: "summary",
   });
   const firstContinuation = mapAnswer.continuations[0];
-  const followedAnswer = firstContinuation === undefined ? undefined : await api.follow(firstContinuation);
+  const followedAnswer =
+    firstContinuation === undefined
+      ? undefined
+      : await api.follow(firstContinuation);
 
   if (mapAnswer.outcome !== OutcomeKind.Hit) {
     throw new Error("Session self-check expected repo.map to return a hit.");
   }
   if (terrainAnswer.outcome !== OutcomeKind.Hit) {
-    throw new Error("Session self-check expected repo.terrain to return a hit.");
+    throw new Error(
+      "Session self-check expected repo.terrain to return a hit.",
+    );
   }
-  if (selfAnswer.outcome !== OutcomeKind.Hit && selfAnswer.outcome !== OutcomeKind.Partial) {
-    throw new Error("Session self-check expected atlas.self to return hit or partial.");
+  if (
+    selfAnswer.outcome !== OutcomeKind.Hit &&
+    selfAnswer.outcome !== OutcomeKind.Partial
+  ) {
+    throw new Error(
+      "Session self-check expected atlas.self to return hit or partial.",
+    );
   }
 
   return {
@@ -216,7 +274,9 @@ async function runSelfCheck(): Promise<InquirySessionSelfCheckResult> {
     mapOutcome: mapAnswer.outcome,
     terrainOutcome: terrainAnswer.outcome,
     selfOutcome: selfAnswer.outcome,
-    ...(followedAnswer === undefined ? {} : { followedOutcome: followedAnswer.outcome }),
+    ...(followedAnswer === undefined
+      ? {}
+      : { followedOutcome: followedAnswer.outcome }),
     selfOpenSeams: selfAnswer.openSeams.length,
   };
 }
@@ -263,14 +323,20 @@ async function prewarmFrameworkEntityCatalogsInBackground(): Promise<void> {
     if (shuttingDown) {
       return;
     }
-    await api.ask({
-      lens: LensId.FrameworkDiscovery,
-      locus: RepoRootLocus,
-      projection,
-      budget: { rows: 1, evidencePerSubject: 1 },
-    }).catch((error: unknown) => {
-      console.error(`Atlas background framework entity prewarm failed for ${projection}: ${errorSummary(error)}`);
-    });
+    await api
+      .ask({
+        lens: LensId.FrameworkDiscovery,
+        locus: RepoRootLocus,
+        projection,
+        budget: { rows: 1, evidencePerSubject: 1 },
+      })
+      .catch((error: unknown) => {
+        console.error(
+          `Atlas background framework entity prewarm failed for ${projection}: ${errorSummary(
+            error,
+          )}`,
+        );
+      });
   }
   await prewarmFrameworkBundleAdmissionsInBackground();
 }
@@ -281,15 +347,21 @@ async function prewarmFrameworkBundleAdmissionsInBackground(): Promise<void> {
     if (shuttingDown) {
       return;
     }
-    await api.ask({
-      lens: LensId.FrameworkDiscovery,
-      locus: RepoRootLocus,
-      projection: "bundles",
-      filters: { packageId },
-      budget: { rows: 1, evidencePerSubject: 1 },
-    }).catch((error: unknown) => {
-      console.error(`Atlas background framework bundle prewarm failed for ${packageId}: ${errorSummary(error)}`);
-    });
+    await api
+      .ask({
+        lens: LensId.FrameworkDiscovery,
+        locus: RepoRootLocus,
+        projection: "bundles",
+        filters: { packageId },
+        budget: { rows: 1, evidencePerSubject: 1 },
+      })
+      .catch((error: unknown) => {
+        console.error(
+          `Atlas background framework bundle prewarm failed for ${packageId}: ${errorSummary(
+            error,
+          )}`,
+        );
+      });
     await sleep(0);
   }
 }
@@ -309,10 +381,18 @@ function refreshManifest(): void {
   if (current === undefined && manifestEstablished) {
     process.exit(0);
   }
-  if (current !== undefined && current.pid !== process.pid && isProcessAlive(current.pid)) {
+  if (
+    current !== undefined &&
+    current.pid !== process.pid &&
+    isProcessAlive(current.pid)
+  ) {
     process.exit(0);
   }
-  if (current !== undefined && current.pid === process.pid && current.buildHash !== buildHash) {
+  if (
+    current !== undefined &&
+    current.pid === process.pid &&
+    current.buildHash !== buildHash
+  ) {
     process.exit(0);
   }
 
@@ -413,11 +493,18 @@ function readFollowParams(
   if (params === undefined || params === null || typeof params !== "object") {
     throw new Error("follow requires an object payload.");
   }
-  const continuation = (params as { readonly continuation?: unknown }).continuation;
-  if (continuation === undefined || continuation === null || typeof continuation !== "object") {
+  const continuation = (params as { readonly continuation?: unknown })
+    .continuation;
+  if (
+    continuation === undefined ||
+    continuation === null ||
+    typeof continuation !== "object"
+  ) {
     throw new Error("follow requires a continuation object.");
   }
-  return { continuation: continuation as InquirySessionFollowParams["continuation"] };
+  return {
+    continuation: continuation as InquirySessionFollowParams["continuation"],
+  };
 }
 
 /** Parse shutdown params from an unknown protocol payload. */

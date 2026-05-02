@@ -259,6 +259,12 @@ export interface ApiSurfaceOptions {
   readonly offset?: number;
 }
 
+/** Options for document-symbol projection. */
+export interface DocumentSymbolOptions extends ApiSurfaceOptions {
+  /** Optional exact substring to match against symbol names or containers. */
+  readonly query?: string;
+}
+
 /** TypeScript declaration row with checker-backed display data. */
 export interface TypeScriptApiSurfaceEntry {
   /** Declaration target row. */
@@ -377,6 +383,8 @@ export interface TypeScriptDocumentSymbolsRead {
   readonly resolution: SourceSelectorResolution;
   /** Number of source files selected before symbol extraction. */
   readonly fileCount: number;
+  /** Optional exact substring applied to symbol names or kind labels. */
+  readonly query?: string;
   /** Total document-symbol rows before pagination. */
   readonly totalSymbols: number;
   /** Document-symbol rows in the requested page. */
@@ -642,7 +650,7 @@ export interface TypeScriptReferenceEntry {
   /** Exact TypeScript and syntax-derived roles for this reference span. */
   readonly roles: readonly TypeScriptReferenceRole[];
   /** TypeScript syntax kind for the smallest node at the reference span, when available. */
-  readonly syntaxKind?: string;
+  readonly syntaxKindName?: string;
 }
 
 /** Bounded TypeScript reference projection for resolved targets. */
@@ -686,7 +694,7 @@ export interface TypeScriptNavigationEntry {
   /** Context span when the language service provides one. */
   readonly contextSpan?: SourceSpan;
   /** TypeScript script element kind, when available. */
-  readonly scriptElementKind?: string;
+  readonly scriptElementKindName?: string;
   /** Target name, when available. */
   readonly name?: string;
   /** Target container name, when available. */
@@ -719,6 +727,12 @@ export const enum TypeScriptCallHierarchyDirection {
   Outgoing = "outgoing",
 }
 
+/** Semantic relation carried by a TypeScript call-hierarchy edge. */
+export const enum TypeScriptCallHierarchyRelation {
+  /** Caller item invokes callee item. */
+  Calls = "calls",
+}
+
 /** One TypeScript call-hierarchy item. */
 export interface TypeScriptCallHierarchyItemRow {
   /** Stable item id inside the current source basis. */
@@ -741,6 +755,8 @@ export interface TypeScriptCallHierarchyItemRow {
 export interface TypeScriptCallHierarchyEdge {
   /** Stable edge id inside the current source basis. */
   readonly id: string;
+  /** Semantic relation from caller to callee. */
+  readonly relation: TypeScriptCallHierarchyRelation;
   /** Incoming or outgoing direction relative to the selected item. */
   readonly direction: TypeScriptCallHierarchyDirection;
   /** Caller item. */
@@ -1381,12 +1397,24 @@ export function readDocumentSymbols(
   /** Selector that roots the document-symbol projection. */
   selector: SourceSelector,
   /** Row budget options. */
-  options: ApiSurfaceOptions,
+  options: DocumentSymbolOptions,
 ): TypeScriptDocumentSymbolsRead {
   const resolution = resolveSourceSelector(project, selector);
   const files = selectedSourceFiles(resolution);
+  const query =
+    options.query ??
+    (selector.scheme === SourceSelectorScheme.Workspace
+      ? selector.query
+      : undefined);
   const allSymbols = files
     .flatMap((sourceFile) => documentSymbolsForFile(project, sourceFile))
+    .filter(
+      (row) =>
+        query === undefined ||
+        row.name.includes(query) ||
+        row.kind.includes(query) ||
+        row.kindModifiers.includes(query),
+    )
     .sort(compareDocumentSymbols);
   const offset = Math.max(0, Math.trunc(options.offset ?? 0));
   const limit = Math.max(1, Math.trunc(options.limit));
@@ -1396,6 +1424,7 @@ export function readDocumentSymbols(
   return {
     resolution: serializableResolution(resolution),
     fileCount: files.length,
+    ...(query === undefined ? {} : { query }),
     totalSymbols: allSymbols.length,
     symbols,
     offset,
@@ -2495,7 +2524,7 @@ function referenceEntry(project: SourceProject, reference: ts.ReferenceEntry, de
     writeAccess: reference.isWriteAccess === true,
     inString: reference.isInString === true,
     roles: referenceRoles(reference, definition, node),
-    ...(node === null ? {} : { syntaxKind: ts.SyntaxKind[node.kind] }),
+    ...(node === null ? {} : { syntaxKindName: ts.SyntaxKind[node.kind] }),
   };
 }
 
@@ -2602,7 +2631,7 @@ function navigationEntry(
     file,
     span: sourceSpanFromTextSpan(sourceFile, entry.textSpan),
     ...(entry.contextSpan === undefined ? {} : { contextSpan: sourceSpanFromTextSpan(sourceFile, entry.contextSpan) }),
-    scriptElementKind: entry.kind,
+    scriptElementKindName: entry.kind,
     ...(name === undefined ? {} : { name }),
     ...(containerName === undefined ? {} : { containerName }),
     ...(display === undefined ? {} : { display }),
@@ -2634,6 +2663,7 @@ function callHierarchyForTarget(
       }
       return {
         id: `call:${TypeScriptCallHierarchyDirection.Incoming}:${from.id}:${selected.id}:${call.fromSpans.map((span) => `${span.start}:${span.length}`).join(",")}`,
+        relation: TypeScriptCallHierarchyRelation.Calls,
         direction: TypeScriptCallHierarchyDirection.Incoming,
         from,
         to: selected,
@@ -2649,6 +2679,7 @@ function callHierarchyForTarget(
       }
       return {
         id: `call:${TypeScriptCallHierarchyDirection.Outgoing}:${selected.id}:${to.id}:${call.fromSpans.map((span) => `${span.start}:${span.length}`).join(",")}`,
+        relation: TypeScriptCallHierarchyRelation.Calls,
         direction: TypeScriptCallHierarchyDirection.Outgoing,
         from: selected,
         to,

@@ -44,7 +44,8 @@ export const AURELIA_FRAMEWORK_PACKAGE_IDS = [
 ] as const;
 
 /** Stable id for one Aurelia framework package admitted into Atlas. */
-export type AureliaFrameworkPackageId = typeof AURELIA_FRAMEWORK_PACKAGE_IDS[number];
+export type AureliaFrameworkPackageId =
+  (typeof AURELIA_FRAMEWORK_PACKAGE_IDS)[number];
 
 /** Source snapshot implementation owned by this package. */
 export const enum SourceSnapshotKind {
@@ -211,7 +212,9 @@ export class SourceProject {
     this.#rootFileNames = rootFileNames;
     this.#compilerOptions = compilerOptions;
     this.#configDiagnostics = configDiagnostics;
-    this.#languageService = ts.createLanguageService(this.createLanguageServiceHost());
+    this.#languageService = ts.createLanguageService(
+      this.createLanguageServiceHost(),
+    );
     this.#index = this.createIndex(this.program);
   }
 
@@ -219,7 +222,9 @@ export class SourceProject {
   get program(): ts.Program {
     const program = this.#languageService.getProgram();
     if (program === undefined) {
-      throw new Error("Source project could not materialize a TypeScript Program.");
+      throw new Error(
+        "Source project could not materialize a TypeScript Program.",
+      );
     }
     return program;
   }
@@ -250,7 +255,11 @@ export class SourceProject {
     const programFiles = index.programSourceFiles;
     const ownedFiles = index.ownedSourceFiles;
     const packageSummaries = this.#packageDefinitions.map((definition) => {
-      const sourceFileCount = ownedFiles.filter((sourceFile) => index.packageByFileKey.get(normalizeFileKey(sourceFile.fileName))?.id === definition.id).length;
+      const sourceFileCount = ownedFiles.filter(
+        (sourceFile) =>
+          index.packageByFileKey.get(normalizeFileKey(sourceFile.fileName))
+            ?.id === definition.id,
+      ).length;
       return {
         id: definition.id,
         packageName: definition.packageName,
@@ -286,7 +295,9 @@ export class SourceProject {
     /** Repository-relative or absolute file path. */
     filePath: string,
   ): ts.SourceFile | null {
-    const absolutePath = path.isAbsolute(filePath) ? path.resolve(filePath) : resolveRepoPath(this.repoRoot, filePath);
+    const absolutePath = path.isAbsolute(filePath)
+      ? path.resolve(filePath)
+      : resolveRepoPath(this.repoRoot, filePath);
     const normalized = normalizeFileKey(absolutePath);
     return this.currentIndex().sourceFileByKey.get(normalized) ?? null;
   }
@@ -307,7 +318,10 @@ export class SourceProject {
     fileName: string,
   ): ResolvedSourcePackageDefinition | null {
     const normalized = normalizeFileKey(fileName);
-    return this.currentIndex().packageByFileKey.get(normalized) ?? packageForFileNameFromDefinitions(this.#packageDefinitions, fileName);
+    return (
+      this.currentIndex().packageByFileKey.get(normalized) ??
+      packageForFileNameFromDefinitions(this.#packageDefinitions, fileName)
+    );
   }
 
   /** Return stable file identity for a TypeScript source file. */
@@ -315,7 +329,11 @@ export class SourceProject {
     /** Source file to identify. */
     sourceFile: ts.SourceFile,
   ): SourceFileIdentity | null {
-    return this.currentIndex().identityByFileKey.get(normalizeFileKey(sourceFile.fileName)) ?? null;
+    return (
+      this.currentIndex().identityByFileKey.get(
+        normalizeFileKey(sourceFile.fileName),
+      ) ?? null
+    );
   }
 
   /** Release TypeScript semantic caches held by the language service. */
@@ -346,7 +364,9 @@ export class SourceProject {
   }
 
   private identity(): string {
-    return `working-tree:${this.#packageDefinitions.map((definition) => definition.id).join("+")}`;
+    return `working-tree:${this.#packageDefinitions
+      .map((definition) => definition.id)
+      .join("+")}`;
   }
 
   private currentIndex(): SourceProjectIndex {
@@ -371,28 +391,55 @@ export class SourceProject {
     for (const sourceFile of programSourceFiles) {
       const fileKey = normalizeFileKey(sourceFile.fileName);
       sourceFileByKey.set(fileKey, sourceFile);
-      const packageDefinition = packageForFileNameFromDefinitions(this.#packageDefinitions, sourceFile.fileName);
+      const packageDefinition = packageForFileNameFromDefinitions(
+        this.#packageDefinitions,
+        sourceFile.fileName,
+      );
       if (packageDefinition === null) {
         continue;
       }
-      const identity = sourceFileIdentityFor(this.repoRoot, sourceFile.fileName, packageDefinition);
+      const identity = sourceFileIdentityFor(
+        this.repoRoot,
+        sourceFile.fileName,
+        packageDefinition,
+      );
       packageByFileKey.set(fileKey, packageDefinition);
       identityByFileKey.set(fileKey, identity);
       ownedSourceFiles.push(sourceFile);
 
       visitSourceDeclarations(sourceFile, (node, kind, nameNode) => {
-        declarationRows.push(declarationRowFor(checker, sourceFile, identity, node, kind, nameNode));
+        declarationRows.push(
+          declarationRowFor(
+            checker,
+            sourceFile,
+            identity,
+            node,
+            kind,
+            nameNode,
+          ),
+        );
       });
       for (const node of topLevelSourceDeclarations(sourceFile)) {
         const kind = declarationKind(node);
         if (kind === null) {
           continue;
         }
-        topLevelDeclarationRows.push(declarationRowFor(checker, sourceFile, identity, node, kind, declarationNameNode(node)));
+        topLevelDeclarationRows.push(
+          declarationRowFor(
+            checker,
+            sourceFile,
+            identity,
+            node,
+            kind,
+            declarationNameNode(node),
+          ),
+        );
       }
     }
 
-    ownedSourceFiles.sort((left, right) => left.fileName.localeCompare(right.fileName));
+    ownedSourceFiles.sort((left, right) =>
+      left.fileName.localeCompare(right.fileName),
+    );
     declarationRows.sort(compareDeclarationRows);
     topLevelDeclarationRows.sort(compareDeclarationRows);
 
@@ -414,7 +461,10 @@ interface SourceProjectIndex {
   readonly programSourceFiles: readonly ts.SourceFile[];
   readonly ownedSourceFiles: readonly ts.SourceFile[];
   readonly sourceFileByKey: ReadonlyMap<string, ts.SourceFile>;
-  readonly packageByFileKey: ReadonlyMap<string, ResolvedSourcePackageDefinition>;
+  readonly packageByFileKey: ReadonlyMap<
+    string,
+    ResolvedSourcePackageDefinition
+  >;
   readonly identityByFileKey: ReadonlyMap<string, SourceFileIdentity>;
   readonly declarationRows: readonly SourceDeclarationRow[];
   readonly topLevelDeclarationRows: readonly SourceDeclarationRow[];
@@ -426,17 +476,32 @@ export function createSourceProject(
   options: SourceProjectOptions = {},
 ): SourceProject {
   const repoRoot = path.resolve(options.repoRoot ?? findRepoRoot());
-  const packages = options.packages ?? defaultSourcePackageDefinitions(repoRoot);
-  const resolvedPackages = packages.map((definition) => resolveSourcePackageDefinition(repoRoot, definition));
-  const packageConfigs = resolvedPackages.map((definition) => readPackageConfig(repoRoot, definition));
-  const rootFileNames = uniqueSorted(packageConfigs.flatMap((config) => config.rootFileNames));
-  const configDiagnostics = packageConfigs.flatMap((config) => config.diagnostics);
+  const packages =
+    options.packages ?? defaultSourcePackageDefinitions(repoRoot);
+  const resolvedPackages = packages.map((definition) =>
+    resolveSourcePackageDefinition(repoRoot, definition),
+  );
+  const packageConfigs = resolvedPackages.map((definition) =>
+    readPackageConfig(definition),
+  );
+  const rootFileNames = uniqueSorted(
+    packageConfigs.flatMap((config) => config.rootFileNames),
+  );
+  const configDiagnostics = packageConfigs.flatMap(
+    (config) => config.diagnostics,
+  );
   const compilerOptions = compilerOptionsForProject(packageConfigs);
   const packagesWithRoots = resolvedPackages.map((definition, index) => ({
     ...definition,
     rootFileNames: packageConfigs[index]?.rootFileNames ?? [],
   }));
-  return new SourceProject(repoRoot, packagesWithRoots, rootFileNames, compilerOptions, configDiagnostics);
+  return new SourceProject(
+    repoRoot,
+    packagesWithRoots,
+    rootFileNames,
+    compilerOptions,
+    configDiagnostics,
+  );
 }
 
 /** Return the default source packages Atlas should keep hot for this repo. */
@@ -483,7 +548,10 @@ function resolveSourcePackageDefinition(
   definition: SourcePackageDefinition,
 ): ResolvedSourcePackageDefinition {
   const rootAbsolutePath = resolveSourcePath(repoRoot, definition.rootPath);
-  const tsconfigAbsolutePath = resolveSourcePath(repoRoot, definition.tsconfigPath);
+  const tsconfigAbsolutePath = resolveSourcePath(
+    repoRoot,
+    definition.tsconfigPath,
+  );
   return {
     ...definition,
     rootAbsolutePath,
@@ -495,12 +563,18 @@ function resolveSourcePackageDefinition(
 }
 
 function readPackageConfig(
-  repoRoot: string,
   definition: ResolvedSourcePackageDefinition,
 ): ReadPackageConfigResult {
-  const read = ts.readConfigFile(definition.tsconfigAbsolutePath, ts.sys.readFile);
+  const read = ts.readConfigFile(
+    definition.tsconfigAbsolutePath,
+    ts.sys.readFile,
+  );
   if (read.error !== undefined) {
-    return { rootFileNames: [], options: defaultCompilerOptions(), diagnostics: [read.error] };
+    return {
+      rootFileNames: [],
+      options: defaultCompilerOptions(),
+      diagnostics: [read.error],
+    };
   }
   const parsed = ts.parseJsonConfigFileContent(
     read.config,
@@ -523,7 +597,11 @@ function packageForFileNameFromDefinitions(
   fileName: string,
 ): ResolvedSourcePackageDefinition | null {
   const normalized = normalizeFileKey(fileName);
-  return definitions.find((definition) => normalized.startsWith(`${definition.rootFileKey}/`)) ?? null;
+  return (
+    definitions.find((definition) =>
+      normalized.startsWith(`${definition.rootFileKey}/`),
+    ) ?? null
+  );
 }
 
 function sourceFileIdentityFor(
@@ -563,7 +641,9 @@ function declarationRowFor(
   };
 }
 
-function topLevelSourceDeclarations(sourceFile: ts.SourceFile): readonly ts.Node[] {
+function topLevelSourceDeclarations(
+  sourceFile: ts.SourceFile,
+): readonly ts.Node[] {
   const declarations: ts.Node[] = [];
   for (const statement of sourceFile.statements) {
     if (declarationKind(statement) !== null) {
@@ -577,7 +657,9 @@ function topLevelSourceDeclarations(sourceFile: ts.SourceFile): readonly ts.Node
   return declarations;
 }
 
-function defaultAureliaFrameworkPackageDefinitions(repoRoot: string): readonly SourcePackageDefinition[] {
+function defaultAureliaFrameworkPackageDefinitions(
+  repoRoot: string,
+): readonly SourcePackageDefinition[] {
   const frameworkRoot = findAureliaFrameworkRootSourcePath(repoRoot);
   if (frameworkRoot === null) {
     return [];
@@ -586,7 +668,12 @@ function defaultAureliaFrameworkPackageDefinitions(repoRoot: string): readonly S
     id,
     packageName: id === "aurelia" ? "aurelia" : `@aurelia/${id}`,
     rootPath: path.posix.join(frameworkRoot, "packages", id),
-    tsconfigPath: path.posix.join(frameworkRoot, "packages", id, "tsconfig.json"),
+    tsconfigPath: path.posix.join(
+      frameworkRoot,
+      "packages",
+      id,
+      "tsconfig.json",
+    ),
   }));
 }
 
@@ -598,22 +685,31 @@ function findAureliaFrameworkRootSourcePath(repoRoot: string): string | null {
   return frameworkRootSourcePathIfPresent(repoRoot, "aurelia");
 }
 
-function frameworkRootSourcePathIfPresent(repoRoot: string, sourcePath: string): string | null {
+function frameworkRootSourcePathIfPresent(
+  repoRoot: string,
+  sourcePath: string,
+): string | null {
   const absolutePath = resolveSourcePath(repoRoot, sourcePath);
-  if (!existsSync(path.join(absolutePath, "packages", "kernel", "tsconfig.json"))) {
+  if (
+    !existsSync(path.join(absolutePath, "packages", "kernel", "tsconfig.json"))
+  ) {
     return null;
   }
   return repoRelativePath(repoRoot, absolutePath) ?? absolutePath;
 }
 
 function resolveSourcePath(repoRoot: string, sourcePath: string): string {
-  return path.isAbsolute(sourcePath) ? path.resolve(sourcePath) : resolveRepoPath(repoRoot, sourcePath);
+  return path.isAbsolute(sourcePath)
+    ? path.resolve(sourcePath)
+    : resolveRepoPath(repoRoot, sourcePath);
 }
 
 function compilerOptionsForProject(
   configs: readonly ReadPackageConfigResult[],
 ): ts.CompilerOptions {
-  const firstOptions = configs.find((config) => Object.keys(config.options).length > 0)?.options ?? {};
+  const firstOptions =
+    configs.find((config) => Object.keys(config.options).length > 0)?.options ??
+    {};
   const {
     composite: _composite,
     declaration: _declaration,
@@ -643,8 +739,14 @@ function defaultCompilerOptions(): ts.CompilerOptions {
 }
 
 function isPathWithin(fileName: string, rootPath: string): boolean {
-  const relativePath = path.relative(path.resolve(rootPath), path.resolve(fileName));
-  return relativePath === "" || (!relativePath.startsWith("..") && !path.isAbsolute(relativePath));
+  const relativePath = path.relative(
+    path.resolve(rootPath),
+    path.resolve(fileName),
+  );
+  return (
+    relativePath === "" ||
+    (!relativePath.startsWith("..") && !path.isAbsolute(relativePath))
+  );
 }
 
 function findRepoRoot(): string {
@@ -678,7 +780,11 @@ function sourceSpan(sourceFile: ts.SourceFile, node: ts.Node): SourceSpan {
 
 function visitSourceDeclarations(
   node: ts.Node,
-  visit: (node: ts.Node, kind: SourceDeclarationKind, nameNode: ts.Node | undefined) => void,
+  visit: (
+    node: ts.Node,
+    kind: SourceDeclarationKind,
+    nameNode: ts.Node | undefined,
+  ) => void,
 ): void {
   const declaration = declarationKind(node);
   if (declaration !== null) {
@@ -731,8 +837,16 @@ function declarationNameNode(node: ts.Node): ts.Node | undefined {
 
 function isExportedDeclaration(node: ts.Node): boolean {
   const target = ts.isVariableDeclaration(node) ? node.parent.parent : node;
-  return ts.canHaveModifiers(target)
-    && ts.getModifiers(target)?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword || modifier.kind === ts.SyntaxKind.DefaultKeyword) === true;
+  return (
+    ts.canHaveModifiers(target) &&
+    ts
+      .getModifiers(target)
+      ?.some(
+        (modifier) =>
+          modifier.kind === ts.SyntaxKind.ExportKeyword ||
+          modifier.kind === ts.SyntaxKind.DefaultKeyword,
+      ) === true
+  );
 }
 
 function symbolKeyForDeclaration(
@@ -755,14 +869,21 @@ function sourceVersion(fileName: string): string {
 }
 
 function uniqueSorted(values: readonly string[]): readonly string[] {
-  return [...new Set(values.map((value) => path.resolve(value)))].sort((left, right) => left.localeCompare(right));
+  return [...new Set(values.map((value) => path.resolve(value)))].sort(
+    (left, right) => left.localeCompare(right),
+  );
 }
 
-function compareDeclarationRows(left: SourceDeclarationRow, right: SourceDeclarationRow): number {
-  return left.file.repoPath.localeCompare(right.file.repoPath)
-    || left.span.start - right.span.start
-    || left.kind.localeCompare(right.kind)
-    || (left.name ?? "").localeCompare(right.name ?? "");
+function compareDeclarationRows(
+  left: SourceDeclarationRow,
+  right: SourceDeclarationRow,
+): number {
+  return (
+    left.file.repoPath.localeCompare(right.file.repoPath) ||
+    left.span.start - right.span.start ||
+    left.kind.localeCompare(right.kind) ||
+    (left.name ?? "").localeCompare(right.name ?? "")
+  );
 }
 
 function normalizeFileKey(fileName: string): string {

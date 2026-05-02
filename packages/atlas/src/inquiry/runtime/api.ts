@@ -47,12 +47,13 @@ export function createInMemoryApi(
     implementedLensIds: engine.implementedLensIds(),
     ask: (input) => engine.ask(input),
     follow: (continuation) => engine.follow(continuation),
-    map: (focus) => engine.ask({
-      lens: LensId.RepoMap,
-      locus: RepoRootLocus,
-      projection: "summary",
-      ...(focus === undefined ? {} : { subject: focus }),
-    }) as Promise<Answer<InquirySurfaceMap>>,
+    map: (focus) =>
+      engine.ask({
+        lens: LensId.RepoMap,
+        locus: RepoRootLocus,
+        projection: "summary",
+        ...(focus === undefined ? {} : { subject: focus }),
+      }) as Promise<Answer<InquirySurfaceMap>>,
     isImplemented: (lens) => engine.isImplemented(lens),
   };
 }

@@ -1,6 +1,6 @@
 import type { Answer } from "../inquiry/answer.js";
 import type { Continuation } from "../inquiry/continuation.js";
-import { LensId } from "../inquiry/lens.js";
+import { LensId, type LensFamily, type LensStage } from "../inquiry/lens.js";
 import { RepoRootLocus } from "../inquiry/locus.js";
 import type { InquiryRuntimeRequest, SelfValue } from "../inquiry/runtime/index.js";
 import type { InquirySurfaceMap } from "../inquiry/surface-map.js";
@@ -14,38 +14,67 @@ import type {
 
 /** First orientation bundle a Codex-facing entrypoint should read for this repo. */
 export interface Orientation {
-  /** Daemon identity, build hash, and cheap runtime-world counts. */
-  readonly status: InquirySessionStatus;
-  /** Surface-map answer returned by the same runtime as normal inquiries. */
-  readonly map: Answer<InquirySurfaceMap>;
-  /** Atlas self-maintenance answer for contract and implementation pressure. */
-  readonly self: Answer<SelfValue>;
-  /** Surface-map continuations lifted for quick first follow-up selection. */
-  readonly continuations: readonly Continuation[];
-  /** API usage guide derived from the live orientation answers. */
+  /** Compact daemon and hot-world footing. */
+  readonly session: OrientationSessionGuide;
+  /** Compact usage guide derived from live orientation answers. */
   readonly guide: OrientationGuide;
+  /** Compact answer summaries for the orientation probes. */
+  readonly answers: OrientationAnswerBundle;
 }
 
-/** First-call usage guide that should keep callers out of Atlas source files. */
+/** First-call usage guide that should keep callers out of Atlas source files without flooding context. */
 export interface OrientationGuide {
-  /** What the orientation bundle is for. */
-  readonly purpose: string;
   /** Stable package API calls available after orientation. */
   readonly entrypoints: OrientationEntrypoints;
   /** Shared request and answer lanes every lens uses. */
   readonly contract: OrientationContractGuide;
-  /** Runtime-implemented lenses and their projections. */
+  /** Runtime-implemented lenses and compact projection ids. */
   readonly implementedLenses: readonly OrientationLensGuide[];
-  /** Contracted lenses that are not callable yet. */
-  readonly unavailableLenses: readonly OrientationLensGuide[];
+  /** Contracted lens ids that are not callable yet. */
+  readonly unavailableLensIds: readonly string[];
   /** Repository terrain and ownership rows that bound edit policy. */
   readonly terrain: readonly OrientationTerrainGuide[];
   /** Exact first inquiries a caller can ask next without opening source. */
   readonly firstMoves: readonly OrientationFirstMove[];
+  /** Curated capability doors that teach larger inquiry families on demand. */
+  readonly capabilityMoves: readonly OrientationCapabilityMove[];
   /** Explicit open seams discovered during orientation. */
   readonly openSeams: readonly OrientationOpenSeamGuide[];
   /** Compact source-project footing behind TypeScript-backed inquiries. */
   readonly sourceProject: OrientationSourceProjectGuide;
+}
+
+/** Compact daemon and hot-world footing. */
+export interface OrientationSessionGuide {
+  readonly packageName: "@aurelia-ls/atlas";
+  readonly pid: number;
+  readonly buildHash: string;
+  readonly uptimeMs: number;
+  readonly world: {
+    readonly terrainAreas: number;
+    readonly activeTerrainAreas: number;
+    readonly substrateContracts: number;
+    readonly lensContracts: number;
+    readonly vocabularyDefinitions: number;
+  };
+}
+
+/** Compact answer summaries for the orientation probes. */
+export interface OrientationAnswerBundle {
+  readonly map: OrientationAnswerGuide;
+  readonly self: OrientationAnswerGuide;
+}
+
+/** Compact answer row for orientation output. */
+export interface OrientationAnswerGuide {
+  readonly outcome: string;
+  readonly lens: string;
+  readonly projection?: string;
+  readonly summary: string;
+  readonly basis: readonly string[];
+  readonly evidenceCount: number;
+  readonly openSeamCount: number;
+  readonly continuationCount: number;
 }
 
 /** Stable package API calls available after orientation. */
@@ -63,23 +92,16 @@ export interface OrientationContractGuide {
   readonly requestFields: readonly string[];
   readonly answerFields: readonly string[];
   readonly continuationFields: readonly string[];
+  readonly routeClaimFields: readonly string[];
+  readonly basisTransitionFields: readonly string[];
 }
 
 /** Compact lens contract row for first-call orientation. */
 export interface OrientationLensGuide {
   readonly id: string;
-  readonly family: string;
-  readonly stage: string;
-  readonly summary: string;
-  readonly projections: readonly OrientationProjectionGuide[];
-  readonly requiredSubstrates: readonly string[];
-}
-
-/** Compact projection contract row for first-call orientation. */
-export interface OrientationProjectionGuide {
-  readonly id: string;
-  readonly summary: string;
-  readonly defaultBudget?: unknown;
+  readonly family: LensFamily;
+  readonly stage: LensStage;
+  readonly projectionIds: readonly string[];
 }
 
 /** Compact terrain row for first-call orientation. */
@@ -89,7 +111,6 @@ export interface OrientationTerrainGuide {
   readonly status: string;
   readonly ownership: string;
   readonly root: string;
-  readonly summary: string;
 }
 
 /** Exact first move a caller can ask after orientation. */
@@ -99,7 +120,14 @@ export interface OrientationFirstMove {
   readonly priority?: string;
   readonly rationale: string;
   readonly ask: InquiryRuntimeRequest;
-  readonly route?: Continuation["route"];
+}
+
+/** Curated capability move exposed by orientation without expanding the full guide. */
+export interface OrientationCapabilityMove {
+  readonly id: string;
+  readonly family: string;
+  readonly summary: string;
+  readonly ask: InquiryRuntimeRequest;
 }
 
 /** Compact open seam row for first-call orientation. */
@@ -120,16 +148,7 @@ export interface OrientationSourceProjectGuide {
   readonly declarationCount: number;
   readonly topLevelDeclarationCount: number;
   readonly configDiagnosticCount: number;
-  readonly packageRoots: readonly OrientationPackageRootGuide[];
-}
-
-/** Compact admitted package root row for first-call orientation. */
-export interface OrientationPackageRootGuide {
-  readonly id: string;
-  readonly rootPath: string;
-  readonly tsconfigPath: string;
-  readonly external: boolean;
-  readonly sourceFileCount: number;
+  readonly packageRoots: Record<string, string>;
 }
 
 /** Session-backed API that auto-starts the daemon before each request. */
@@ -170,11 +189,12 @@ export function createApi(
         }) as Promise<Answer<SelfValue>>,
       ]);
       return {
-        status,
-        map,
-        self,
-        continuations: map.continuations,
+        session: sessionGuide(status),
         guide: createOrientationGuide(status, map, self, map.continuations),
+        answers: {
+          map: answerGuide(map),
+          self: answerGuide(self),
+        },
       };
     },
     status: async () => {
@@ -218,7 +238,6 @@ function createOrientationGuide(
   const implementedIds = new Set(status.implementedLensIds);
   const unavailableIds = new Set(self.value?.unimplementedLensIds ?? []);
   return {
-    purpose: "Use this bundle as the first Atlas read: choose a lens/projection, ask exact inquiries, follow continuations, and inspect seams without opening Atlas source.",
     entrypoints: {
       orient: "createApi().orient()",
       status: "createApi().status()",
@@ -231,16 +250,19 @@ function createOrientationGuide(
       requestFields: ["lens", "locus?", "subject?", "projection?", "filters?", "budget?", "page?"],
       answerFields: ["schemaVersion", "inquiry", "outcome", "summary", "value?", "basis", "evidence", "openSeams", "page?", "continuations"],
       continuationFields: ["id?", "kind", "priority?", "rationale", "inquiry", "evidence?", "route?"],
+      routeClaimFields: ["specId?", "plane", "relation", "basis?", "basisTransition?", "summary?"],
+      basisTransitionFields: ["kind", "from", "to", "summary"],
     },
     implementedLenses: lenses.filter((lens) => implementedIds.has(lens.id)).map(toLensGuide),
-    unavailableLenses: lenses.filter((lens) => unavailableIds.has(lens.id)).map(toLensGuide),
+    unavailableLensIds: lenses
+      .filter((lens) => unavailableIds.has(lens.id))
+      .map((lens) => lens.id),
     terrain: (map.value?.terrain ?? []).map((area) => ({
       id: area.id,
       kind: area.kind,
       status: area.status,
       ownership: area.ownership,
       root: area.root,
-      summary: area.summary,
     })),
     firstMoves: continuations.map((continuation) => ({
       id: continuation.id,
@@ -248,8 +270,8 @@ function createOrientationGuide(
       priority: continuation.priority,
       rationale: continuation.rationale,
       ask: continuation.inquiry,
-      route: continuation.route,
     })),
+    capabilityMoves: orientationCapabilityMoves(),
     openSeams: self.openSeams.map((seam) => ({
       id: seam.id,
       kind: seam.kind,
@@ -259,18 +281,143 @@ function createOrientationGuide(
   };
 }
 
+function orientationCapabilityMoves(): readonly OrientationCapabilityMove[] {
+  return [
+    {
+      id: "typescript.ide-guide",
+      family: "typescript",
+      summary:
+        "Learn exact TypeScript source, structure, checker, reference, call, and edit-affordance request shapes.",
+      ask: {
+        lens: LensId.TsType,
+        locus: RepoRootLocus,
+        projection: "guide",
+      },
+    },
+    {
+      id: "typescript.framework-exports",
+      family: "typescript",
+      summary:
+        "Start with checker-visible exports from the Aurelia kernel package admitted from the in-repo submodule.",
+      ask: {
+        lens: LensId.TsStructure,
+        locus: { kind: "package", packageId: "kernel" },
+        projection: "exports",
+        budget: { rows: 40, evidencePerSubject: 3 },
+      },
+    },
+    {
+      id: "framework.entities",
+      family: "framework",
+      summary:
+        "Enter the Aurelia entity catalogs before asking semantic relationship or flow questions.",
+      ask: {
+        lens: LensId.FrameworkDiscovery,
+        locus: RepoRootLocus,
+        projection: "summary",
+        budget: { rows: 40, evidencePerSubject: 3 },
+      },
+    },
+    {
+      id: "framework.recipes",
+      family: "framework",
+      summary:
+        "Use calibrated hop graphs that combine framework semantics with TypeScript source, type, and call-site reads.",
+      ask: {
+        lens: LensId.FrameworkDiscovery,
+        locus: RepoRootLocus,
+        projection: "recipes",
+        budget: { rows: 12, evidencePerSubject: 3 },
+      },
+    },
+    {
+      id: "framework.compiler",
+      family: "framework",
+      summary:
+        "Inspect compiler instruction-production rows before following them into renderer dispatch and controller hydration.",
+      ask: {
+        lens: LensId.FrameworkCompiler,
+        locus: RepoRootLocus,
+        projection: "summary",
+        budget: { rows: 20, evidencePerSubject: 3 },
+      },
+    },
+    {
+      id: "bridge.aulink",
+      family: "bridge",
+      summary:
+        "Inspect product-to-framework anchors when semantic-runtime obligations need framework targets.",
+      ask: {
+        lens: LensId.BridgeAuLink,
+        locus: RepoRootLocus,
+        projection: "anchors",
+        budget: { rows: 40, evidencePerSubject: 3 },
+      },
+    },
+    {
+      id: "atlas.self",
+      family: "self",
+      summary:
+        "Inspect Atlas architectural surfaces, taxonomy pressure, and continuation coherence.",
+      ask: {
+        lens: LensId.AtlasSelf,
+        locus: RepoRootLocus,
+        projection: "summary",
+        budget: { rows: 40, evidencePerSubject: 3 },
+      },
+    },
+    {
+      id: "atlas.self-recipes",
+      family: "self",
+      summary:
+        "Use calibrated hop graphs that combine Atlas self-analysis with TypeScript source, module, and checker reads.",
+      ask: {
+        lens: LensId.AtlasSelf,
+        locus: RepoRootLocus,
+        projection: "recipes",
+        budget: { rows: 12, evidencePerSubject: 3 },
+      },
+    },
+  ];
+}
+
+function sessionGuide(status: InquirySessionStatus): OrientationSessionGuide {
+  return {
+    packageName: status.packageName,
+    pid: status.pid,
+    buildHash: status.buildHash,
+    uptimeMs: status.uptimeMs,
+    world: {
+      terrainAreas: status.world.terrainAreas,
+      activeTerrainAreas: status.world.activeTerrainAreas,
+      substrateContracts: status.world.substrateContracts,
+      lensContracts: status.world.lensContracts,
+      vocabularyDefinitions: status.world.vocabularyDefinitions,
+    },
+  };
+}
+
+function answerGuide(answer: Answer): OrientationAnswerGuide {
+  return {
+    outcome: answer.outcome,
+    lens: answer.inquiry.lens,
+    ...(answer.inquiry.projection === undefined
+      ? {}
+      : { projection: answer.inquiry.projection }),
+    summary: answer.summary,
+    basis: answer.basis.map((basis) => basis.kind),
+    evidenceCount: answer.evidence.length,
+    openSeamCount: answer.openSeams.length,
+    continuationCount: answer.continuations.length,
+  };
+}
+
 function toLensGuide(lens: NonNullable<InquirySurfaceMap["lenses"][number]>): OrientationLensGuide {
   return {
     id: lens.id,
     family: lens.family,
     stage: lens.stage,
-    summary: lens.summary,
-    projections: lens.projections.map((projection) => ({
-      id: projection.id,
-      summary: projection.summary,
-      ...(projection.defaultBudget === undefined ? {} : { defaultBudget: projection.defaultBudget }),
-    })),
-    requiredSubstrates: lens.requiredSubstrates,
+    projectionIds: lens.projections.map((projection) => projection.id),
   };
 }
 
@@ -285,12 +432,11 @@ function sourceProjectGuide(summary: SourceProjectSummary): OrientationSourcePro
     declarationCount: summary.declarationCount,
     topLevelDeclarationCount: summary.topLevelDeclarationCount,
     configDiagnosticCount: summary.configDiagnosticCount,
-    packageRoots: summary.packages.map((sourcePackage) => ({
-      id: sourcePackage.id,
-      rootPath: sourcePackage.rootPath,
-      tsconfigPath: sourcePackage.tsconfigPath,
-      external: sourcePackage.external,
-      sourceFileCount: sourcePackage.sourceFileCount,
-    })),
+    packageRoots: Object.fromEntries(
+      summary.packages.map((sourcePackage) => [
+        sourcePackage.id,
+        sourcePackage.rootPath,
+      ]),
+    ),
   };
 }

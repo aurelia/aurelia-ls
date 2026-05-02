@@ -2,6 +2,7 @@ import {
   readCallHierarchy,
   readCallSites,
   sourceSelectorForRange,
+  type SourceDeclarationKind,
   type SourceDeclarationRow,
   type SourceFileIdentity,
   type SourceProject,
@@ -34,7 +35,7 @@ export interface FrameworkAnchorCandidate {
   /** Framework symbol name. */
   readonly symbolName: string;
   /** Source declaration kind. */
-  readonly declarationKind: string;
+  readonly declarationKind: SourceDeclarationKind;
   /** File that contains the declaration. */
   readonly file: SourceFileIdentity;
   /** Source span for the declaration. */

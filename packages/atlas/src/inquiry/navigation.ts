@@ -1,4 +1,4 @@
-import { BasisKind } from "./basis.js";
+import { BasisKind, type BasisTransition } from "./basis.js";
 import { ContinuationKind, ContinuationPriority } from "./continuation.js";
 import { EvidenceKind } from "./evidence.js";
 import { HandleKind, HandleNamespace } from "./handle.js";
@@ -6,7 +6,8 @@ import { LensId } from "./lens.js";
 import { LocusKind } from "./locus.js";
 
 /** Schema marker for the Atlas navigation grammar. */
-export const NAVIGATION_GRAMMAR_VERSION = "atlas-navigation-grammar-v0" as const;
+export const NAVIGATION_GRAMMAR_VERSION =
+  "atlas-navigation-grammar-v0" as const;
 
 /** Coarse plane of a navigation route, kept separate from the route relation itself. */
 export const enum NavigationPlane {
@@ -92,6 +93,8 @@ export interface NavigationRouteSpec {
   readonly defaultPriority: ContinuationPriority;
   /** Basis kinds that can honestly support this route. */
   readonly supportedBasis: readonly BasisKind[];
+  /** Optional basis movement when this route intentionally changes authority. */
+  readonly basisTransition?: BasisTransition;
   /** Evidence kinds commonly produced or consumed by this route. */
   readonly evidenceKinds: readonly EvidenceKind[];
   /** Grounded explanation of when this route should be offered. */
@@ -108,6 +111,8 @@ export interface NavigationRouteClaim {
   readonly relation: NavigationRelation;
   /** Basis kinds the continuation expects or preserves. */
   readonly basis?: readonly BasisKind[];
+  /** Explicit basis movement when the continuation changes authority. */
+  readonly basisTransition?: BasisTransition;
   /** Short explanation for route audit output. */
   readonly summary?: string;
 }
@@ -123,12 +128,18 @@ export interface NavigationGrammar {
 }
 
 /** Declare a route claim from a known route spec. */
-export function routeClaim(spec: NavigationRouteSpec, summary?: string): NavigationRouteClaim {
+export function routeClaim(
+  spec: NavigationRouteSpec,
+  summary?: string,
+): NavigationRouteClaim {
   return {
     specId: spec.id,
     plane: spec.plane,
     relation: spec.relation,
     basis: spec.supportedBasis,
+    ...(spec.basisTransition === undefined
+      ? {}
+      : { basisTransition: spec.basisTransition }),
     ...(summary === undefined ? {} : { summary }),
   };
 }
@@ -182,18 +193,35 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
     plane: NavigationPlane.Inspection,
     relation: NavigationRelation.SourceFor,
     from: { evidenceKind: EvidenceKind.SourceSpan },
-    to: { lens: LensId.TsSource, projection: "text", locus: LocusKind.SourceRange },
+    to: {
+      lens: LensId.TsSource,
+      projection: "text",
+      locus: LocusKind.SourceRange,
+    },
     continuationKind: ContinuationKind.InspectEvidence,
     defaultPriority: ContinuationPriority.Primary,
-    supportedBasis: [BasisKind.SourceText, BasisKind.TypeScriptProgram, BasisKind.TypeScriptChecker],
-    evidenceKinds: [EvidenceKind.SourceSpan, EvidenceKind.Symbol, EvidenceKind.TypeFact, EvidenceKind.CallSite],
-    summary: "Inspect exact source behind evidence that carries or resolves to a source range.",
+    supportedBasis: [
+      BasisKind.SourceText,
+      BasisKind.TypeScriptProgram,
+      BasisKind.TypeScriptChecker,
+    ],
+    evidenceKinds: [
+      EvidenceKind.SourceSpan,
+      EvidenceKind.Symbol,
+      EvidenceKind.TypeFact,
+      EvidenceKind.CallSite,
+    ],
+    summary:
+      "Inspect exact source behind evidence that carries or resolves to a source range.",
   },
   {
     id: "symbol.type-facts",
     plane: NavigationPlane.Inspection,
     relation: NavigationRelation.TypeFactsFor,
-    from: { handleNamespace: HandleNamespace.Symbol, handleKind: HandleKind.Symbol },
+    from: {
+      handleNamespace: HandleNamespace.Symbol,
+      handleKind: HandleKind.Symbol,
+    },
     to: { lens: LensId.TsType, projection: "facts" },
     continuationKind: ContinuationKind.SwitchLens,
     defaultPriority: ContinuationPriority.Secondary,
@@ -223,7 +251,8 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
     defaultPriority: ContinuationPriority.Secondary,
     supportedBasis: [BasisKind.TypeScriptChecker],
     evidenceKinds: [EvidenceKind.Symbol, EvidenceKind.SourceSpan],
-    summary: "Follow TypeScript definitions, implementations, and type definitions.",
+    summary:
+      "Follow TypeScript definitions, implementations, and type definitions.",
   },
   {
     id: "symbol.call-hierarchy",
@@ -242,12 +271,21 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
     plane: NavigationPlane.Flow,
     relation: NavigationRelation.CallSitesOf,
     from: { evidenceKind: EvidenceKind.CallSite },
-    to: { lens: LensId.TsType, projection: "call-sites", evidenceKind: EvidenceKind.CallSite },
+    to: {
+      lens: LensId.TsType,
+      projection: "call-sites",
+      evidenceKind: EvidenceKind.CallSite,
+    },
     continuationKind: ContinuationKind.SwitchProjection,
     defaultPriority: ContinuationPriority.Primary,
     supportedBasis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
-    evidenceKinds: [EvidenceKind.CallSite, EvidenceKind.TypeFact, EvidenceKind.SourceSpan],
-    summary: "Inspect exact call expressions, resolved signatures, and argument facts behind call-site evidence.",
+    evidenceKinds: [
+      EvidenceKind.CallSite,
+      EvidenceKind.TypeFact,
+      EvidenceKind.SourceSpan,
+    ],
+    summary:
+      "Inspect exact call expressions, resolved signatures, and argument facts behind call-site evidence.",
   },
   {
     id: "evaluator.effects",
@@ -257,9 +295,19 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
     to: { lens: LensId.FrameworkEvaluator, projection: "effects" },
     continuationKind: ContinuationKind.SwitchLens,
     defaultPriority: ContinuationPriority.Primary,
-    supportedBasis: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker, BasisKind.SourceText],
-    evidenceKinds: [EvidenceKind.Symbol, EvidenceKind.SourceSpan, EvidenceKind.CallSite, EvidenceKind.OpenSeam],
-    summary: "Trace static invocation and effect rows for a source-backed framework symbol or member body.",
+    supportedBasis: [
+      BasisKind.StaticEvaluator,
+      BasisKind.TypeScriptChecker,
+      BasisKind.SourceText,
+    ],
+    evidenceKinds: [
+      EvidenceKind.Symbol,
+      EvidenceKind.SourceSpan,
+      EvidenceKind.CallSite,
+      EvidenceKind.OpenSeam,
+    ],
+    summary:
+      "Trace static invocation and effect rows for a source-backed framework symbol or member body.",
   },
   {
     id: "type.diagnostics",
@@ -271,7 +319,8 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
     defaultPriority: ContinuationPriority.Secondary,
     supportedBasis: [BasisKind.TypeScriptChecker],
     evidenceKinds: [EvidenceKind.TypeFact, EvidenceKind.SourceSpan],
-    summary: "Inspect TypeScript diagnostics for the current selector or source locus.",
+    summary:
+      "Inspect TypeScript diagnostics for the current selector or source locus.",
   },
   {
     id: "edit.rename",
@@ -289,13 +338,47 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
     id: "aulink.targets",
     plane: NavigationPlane.Semantic,
     relation: NavigationRelation.MirrorTargetOf,
-    from: { lens: LensId.BridgeAuLink, projection: "anchors", evidenceKind: EvidenceKind.AuLinkAnchor },
+    from: {
+      lens: LensId.BridgeAuLink,
+      projection: "anchors",
+      evidenceKind: EvidenceKind.AuLinkAnchor,
+    },
     to: { lens: LensId.BridgeAuLink, projection: "targets" },
     continuationKind: ContinuationKind.SwitchProjection,
     defaultPriority: ContinuationPriority.Primary,
     supportedBasis: [BasisKind.AuLink, BasisKind.TypeScriptChecker],
-    evidenceKinds: [EvidenceKind.AuLinkAnchor, EvidenceKind.Symbol, EvidenceKind.OpenSeam],
-    summary: "Resolve product-side auLink anchors to exact Aurelia framework declarations.",
+    evidenceKinds: [
+      EvidenceKind.AuLinkAnchor,
+      EvidenceKind.Symbol,
+      EvidenceKind.OpenSeam,
+    ],
+    summary:
+      "Resolve product-side auLink anchors to exact Aurelia framework declarations.",
+  },
+  {
+    id: "semantic.provenance",
+    plane: NavigationPlane.Semantic,
+    relation: NavigationRelation.ProvenanceOf,
+    from: {},
+    to: {},
+    continuationKind: ContinuationKind.SwitchLens,
+    defaultPriority: ContinuationPriority.Secondary,
+    supportedBasis: [
+      BasisKind.StaticEvaluator,
+      BasisKind.TypeScriptChecker,
+      BasisKind.ProductKernelSubstrate,
+      BasisKind.AuLink,
+    ],
+    evidenceKinds: [
+      EvidenceKind.DiRegistration,
+      EvidenceKind.DiLookup,
+      EvidenceKind.ResourceDefinition,
+      EvidenceKind.TypeFact,
+      EvidenceKind.AuLinkAnchor,
+      EvidenceKind.ProductClaim,
+    ],
+    summary:
+      "Move from a derived semantic row back to the source relationship, bridge, provider, or product fact that produced it.",
   },
   {
     id: "open-seam.inspect",
@@ -305,7 +388,12 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
     to: { handleKind: HandleKind.OpenSeam },
     continuationKind: ContinuationKind.InspectOpenSeam,
     defaultPriority: ContinuationPriority.Primary,
-    supportedBasis: [BasisKind.StaticEvaluator, BasisKind.ProductKernelSubstrate, BasisKind.AuLink, BasisKind.AtlasContract],
+    supportedBasis: [
+      BasisKind.StaticEvaluator,
+      BasisKind.ProductKernelSubstrate,
+      BasisKind.AuLink,
+      BasisKind.AtlasContract,
+    ],
     evidenceKinds: [EvidenceKind.OpenSeam],
     summary: "Inspect the exact unresolved boundary that stopped closure.",
   },
@@ -317,7 +405,11 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
     to: { handleNamespace: HandleNamespace.Framework },
     continuationKind: ContinuationKind.SwitchLens,
     defaultPriority: ContinuationPriority.Primary,
-    supportedBasis: [BasisKind.AtlasContract, BasisKind.TypeScriptChecker, BasisKind.StaticEvaluator],
+    supportedBasis: [
+      BasisKind.AtlasContract,
+      BasisKind.TypeScriptChecker,
+      BasisKind.StaticEvaluator,
+    ],
     evidenceKinds: [
       EvidenceKind.MaintenanceSignal,
       EvidenceKind.SourceSpan,
@@ -327,7 +419,27 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
       EvidenceKind.DiLookup,
       EvidenceKind.OpenSeam,
     ],
-    summary: "Enter an Aurelia framework behavior flow from discovery seeds or an indexed framework route row.",
+    summary:
+      "Enter an Aurelia framework behavior flow from discovery seeds or an indexed framework route row.",
+  },
+  {
+    id: "framework.admission.flow",
+    plane: NavigationPlane.Semantic,
+    relation: NavigationRelation.FrameworkFlowOf,
+    from: { lens: LensId.FrameworkAdmission },
+    to: { handleNamespace: HandleNamespace.Framework },
+    continuationKind: ContinuationKind.SwitchLens,
+    defaultPriority: ContinuationPriority.Primary,
+    supportedBasis: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
+    evidenceKinds: [
+      EvidenceKind.DiRegistration,
+      EvidenceKind.ResourceDefinition,
+      EvidenceKind.TypeFact,
+      EvidenceKind.SourceSpan,
+      EvidenceKind.OpenSeam,
+    ],
+    summary:
+      "Move from framework admission relationship rows into DI, resource, registry, lifecycle, or further admission flow.",
   },
 ];
 

@@ -1,5 +1,9 @@
 import type { SourceRange } from "../inquiry/locus.js";
-import type { TypeScriptCallSiteEntry, TypeScriptExpressionFact } from "../source/index.js";
+import type {
+  TypeScriptCallSiteEntry,
+  TypeScriptExpressionFact,
+} from "../source/index.js";
+import type { FrameworkResourceDefinitionKind } from "./resources.js";
 
 /** Broad framework relationship family. */
 export const enum FrameworkRelationshipFamily {
@@ -11,8 +15,16 @@ export const enum FrameworkRelationshipFamily {
   Resource = "resource",
   /** Compilation, instruction, renderer, binding, and observation relationships. */
   Rendering = "rendering",
+  /** Template/compiler instruction production relationships. */
+  Compiler = "compiler",
+  /** Controller, binding, resource, and task lifecycle relationships. */
+  Lifecycle = "lifecycle",
+  /** Observer location, subscription, dirty-checking, and reactivity relationships. */
+  Observation = "observation",
   /** Cross-domain routes that explain where runtime values come into existence. */
   Materialization = "materialization",
+  /** Configuration/registry admission relationships into the framework world. */
+  Admission = "admission",
 }
 
 /** Semantic relation expressed by one atom. Kept separate from mechanism and phase. */
@@ -30,9 +42,42 @@ export const enum FrameworkRelationshipRelation {
   DelegatesLookup = "delegates-lookup",
   CreatesFactory = "creates-factory",
   MaterializesKey = "materializes-key",
+  MaterializesThrough = "materializes-through",
+  InstantiatesKey = "instantiates-key",
+  DependsOnKey = "depends-on-key",
   ConstructsInstance = "constructs-instance",
+  CreatesController = "creates-controller",
+  AdmitsChildController = "admits-child-controller",
   InvokesRegistry = "invokes-registry",
   CreatesContainer = "creates-container",
+  AdmitsDiKey = "admits-di-key",
+  AdmitsResource = "admits-resource",
+  AdmitsRegistryExport = "admits-registry-export",
+  AdmitsCatalog = "admits-catalog",
+  AdmitsAppTask = "admits-app-task",
+  AdmitsFactory = "admits-factory",
+  AdmitsRegistrationArgument = "admits-registration-argument",
+  AdmitsUnknownArgument = "admits-unknown-argument",
+  RegistersResource = "registers-resource",
+  LooksUpResource = "looks-up-resource",
+  ResolvesResource = "resolves-resource",
+  AppliesResource = "applies-resource",
+  InvokesLifecycle = "invokes-lifecycle",
+  TransitionsLifecycleState = "transitions-lifecycle-state",
+  ProducesInstruction = "produces-instruction",
+  DispatchesInstruction = "dispatches-instruction",
+  ProducesBinding = "produces-binding",
+  AdmitsBinding = "admits-binding",
+  PerformsBindingEffect = "performs-binding-effect",
+  LooksUpObserver = "looks-up-observer",
+  ConfiguresObservation = "configures-observation",
+  StoresWatchDefinition = "stores-watch-definition",
+  ReadsWatchDefinition = "reads-watch-definition",
+  ParsesExpression = "parses-expression",
+  EvaluatesExpression = "evaluates-expression",
+  CollectsDependency = "collects-dependency",
+  SchedulesEffect = "schedules-effect",
+  InvokesCallback = "invokes-callback",
 }
 
 /** Runtime or source mechanism that produced the relation. */
@@ -57,6 +102,43 @@ export const enum FrameworkRelationshipMechanism {
   ResolverHelper = "resolver-helper",
   JitRegister = "jit-register",
   ContainerChild = "container-child",
+  RegisterCall = "register-call",
+  RegistrationHelper = "registration-helper",
+  CatalogExpansion = "catalog-expansion",
+  RegisterFactory = "register-factory",
+  UnknownArgument = "unknown-argument",
+  ResourceRegister = "resource-register",
+  ResourceFind = "resource-find",
+  ResourceGet = "resource-get",
+  AstEvaluatorResource = "ast-evaluator-resource",
+  BindingCommandResolver = "binding-command-resolver",
+  BindingCommandBuild = "binding-command-build",
+  InstructionFactory = "instruction-factory",
+  ControllerLifecycle = "controller-lifecycle",
+  LifecycleHookDispatch = "lifecycle-hook-dispatch",
+  AppTaskLifecycle = "app-task-lifecycle",
+  SyntaxProduct = "syntax-product",
+  RendererDispatch = "renderer-dispatch",
+  RendererControllerFactory = "renderer-controller-factory",
+  ControllerAddChild = "controller-add-child",
+  RecursiveRendererDispatch = "recursive-renderer-dispatch",
+  TemplateControllerLink = "template-controller-link",
+  BindingConstruction = "binding-construction",
+  ControllerAddBinding = "controller-add-binding",
+  BindingLifecycle = "binding-lifecycle",
+  ObserverLookup = "observer-lookup",
+  BindingSetup = "binding-setup",
+  ObserverLocator = "observer-locator",
+  NodeObserverLocator = "node-observer-locator",
+  ObserverCache = "observer-cache",
+  DirtyChecker = "dirty-checker",
+  Connectable = "connectable",
+  CollectionObserver = "collection-observer",
+  WatchDecorator = "watch-decorator",
+  WatchRegistry = "watch-registry",
+  WatchMetadata = "watch-metadata",
+  Watcher = "watcher",
+  Effect = "effect",
 }
 
 /** Aurelia lifecycle/world phase where a relationship participates. */
@@ -68,6 +150,17 @@ export const enum FrameworkRelationshipPhase {
   Materialization = "materialization",
   ContainerConstruction = "container-construction",
   ResourceLookup = "resource-lookup",
+  ConfigurationEvaluation = "configuration-evaluation",
+  RegistrationAdmission = "registration-admission",
+  CatalogExpansion = "catalog-expansion",
+  FactoryAdmission = "factory-admission",
+  LifecycleTaskAdmission = "lifecycle-task-admission",
+  Compilation = "compilation",
+  Hydration = "hydration",
+  Rendering = "rendering",
+  Binding = "binding",
+  Observation = "observation",
+  Lifecycle = "lifecycle",
 }
 
 /** Evidence basis that justifies one relationship atom. */
@@ -114,6 +207,14 @@ export const enum FrameworkRelationshipEndpointKind {
   ResolverStrategy = "resolver-strategy",
   ContainerSlot = "container-slot",
   Concept = "concept",
+  ConfigurationExport = "configuration-export",
+  Resource = "resource",
+  RegistryExport = "registry-export",
+  RegistrationCatalog = "registration-catalog",
+  AppTask = "app-task",
+  Factory = "factory",
+  RegistrationArgument = "registration-argument",
+  Unknown = "unknown",
 }
 
 /** Serializable relationship endpoint. */
@@ -130,6 +231,10 @@ export interface FrameworkRelationshipEndpoint {
   readonly source?: SourceRange;
   /** Checker expression fact when the endpoint is expression-backed. */
   readonly expression?: TypeScriptExpressionFact;
+  /** Optional resource definition kind when the endpoint is a resource carrier. */
+  readonly resourceKind?: FrameworkResourceDefinitionKind;
+  /** Optional resource lookup name when the endpoint is a resource carrier. */
+  readonly resourceName?: string | null;
 }
 
 /** One typed relationship atom. */

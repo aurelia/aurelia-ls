@@ -17,14 +17,35 @@ import {
   type SourceSelector,
 } from "../../source/index.js";
 import { OutcomeKind, createAnswer, type Answer } from "../answer.js";
-import { BasisAuthority, BasisClosure, BasisFreshness, BasisKind, type Basis } from "../basis.js";
+import {
+  BasisAuthority,
+  BasisClosure,
+  BasisFreshness,
+  BasisKind,
+  type Basis,
+} from "../basis.js";
 import { clampBudget } from "../budget.js";
-import { ContinuationKind, ContinuationPriority, type Continuation } from "../continuation.js";
-import { EvidenceConfidence, EvidenceKind, EvidenceRole, OpenSeamKind, type Evidence, type OpenSeam } from "../evidence.js";
+import {
+  ContinuationKind,
+  ContinuationPriority,
+  type Continuation,
+} from "../continuation.js";
+import {
+  EvidenceConfidence,
+  EvidenceKind,
+  EvidenceRole,
+  OpenSeamKind,
+  type Evidence,
+  type OpenSeam,
+} from "../evidence.js";
 import type { Inquiry } from "../inquiry.js";
 import { LensId } from "../lens.js";
 import { LocusKind } from "../locus.js";
-import { NavigationPlane, NavigationRelation, type NavigationRouteClaim } from "../navigation.js";
+import {
+  NavigationPlane,
+  NavigationRelation,
+  type NavigationRouteClaim,
+} from "../navigation.js";
 
 /** Value returned by the framework.evaluator runtime lens. */
 export interface FrameworkEvaluatorValue {
@@ -88,7 +109,11 @@ export function answerFrameworkEvaluator(
   };
 
   if (projection === "effects" || projection === "open-seams") {
-    const effectTrace = readEvaluationEffectTrace(sourceProject, selector, pageOptions);
+    const effectTrace = readEvaluationEffectTrace(
+      sourceProject,
+      selector,
+      pageOptions,
+    );
     const value: FrameworkEvaluatorValue = {
       selector,
       targetCount: resolution.targets.length,
@@ -97,61 +122,124 @@ export function answerFrameworkEvaluator(
       openSeams: effectTrace.openSeams,
     };
     if (projection === "open-seams") {
-      return createAnswer(inquiry, effectTrace.openSeams.length === 0 ? OutcomeKind.Miss : OutcomeKind.Partial, `Returned ${effectTrace.openSeams.length} static evaluator open seam(s).`, {
-        value,
-        basis: [staticEvaluatorBasis(sourceProject), checkerBasis(sourceProject), sourceTextBasis(sourceProject)],
-        evidence: effectTrace.openSeams.slice(0, evidenceLimit(inquiry)).map(evidenceForOpenSeam),
-        openSeams: effectTrace.openSeams.slice(0, evidenceLimit(inquiry)).map(answerOpenSeam),
-        continuations: openSeamContinuations(inquiry, effectTrace.openSeams),
-      });
+      return createAnswer(
+        inquiry,
+        effectTrace.openSeams.length === 0
+          ? OutcomeKind.Miss
+          : OutcomeKind.Partial,
+        `Returned ${effectTrace.openSeams.length} static evaluator open seam(s).`,
+        {
+          value,
+          basis: [
+            staticEvaluatorBasis(sourceProject),
+            checkerBasis(sourceProject),
+            sourceTextBasis(sourceProject),
+          ],
+          evidence: effectTrace.openSeams
+            .slice(0, evidenceLimit(inquiry))
+            .map(evidenceForOpenSeam),
+          openSeams: effectTrace.openSeams
+            .slice(0, evidenceLimit(inquiry))
+            .map(answerOpenSeam),
+          continuations: openSeamContinuations(inquiry, effectTrace.openSeams),
+        },
+      );
     }
-    return createAnswer(inquiry, effectTrace.totalEffects === 0 ? OutcomeKind.Miss : OutcomeKind.Hit, `Returned ${effectTrace.effects.length} of ${effectTrace.totalEffects} static invocation effect row(s) from ${effectTrace.roots.length} root(s).`, {
-      value,
-      basis: [staticEvaluatorBasis(sourceProject), checkerBasis(sourceProject), sourceTextBasis(sourceProject)],
-      evidence: effectTrace.effects.slice(0, evidenceLimit(inquiry)).map(evidenceForEffect),
-      openSeams: effectTrace.openSeams.slice(0, evidenceLimit(inquiry)).map(answerOpenSeam),
-      page: {
-        size: effectTrace.limit,
-        cursor: inquiry.page?.cursor,
-        returned: effectTrace.effects.length,
-        total: effectTrace.totalEffects,
-        ...(effectTrace.nextOffset === undefined ? {} : { nextCursor: String(effectTrace.nextOffset) }),
+    return createAnswer(
+      inquiry,
+      effectTrace.totalEffects === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
+      `Returned ${effectTrace.effects.length} of ${effectTrace.totalEffects} static invocation effect row(s) from ${effectTrace.roots.length} root(s).`,
+      {
+        value,
+        basis: [
+          staticEvaluatorBasis(sourceProject),
+          checkerBasis(sourceProject),
+          sourceTextBasis(sourceProject),
+        ],
+        evidence: effectTrace.effects
+          .slice(0, evidenceLimit(inquiry))
+          .map(evidenceForEffect),
+        openSeams: effectTrace.openSeams
+          .slice(0, evidenceLimit(inquiry))
+          .map(answerOpenSeam),
+        page: {
+          size: effectTrace.limit,
+          cursor: inquiry.page?.cursor,
+          returned: effectTrace.effects.length,
+          total: effectTrace.totalEffects,
+          ...(effectTrace.nextOffset === undefined
+            ? {}
+            : { nextCursor: String(effectTrace.nextOffset) }),
+        },
+        continuations: effectContinuations(inquiry, effectTrace),
       },
-      continuations: effectContinuations(inquiry, effectTrace),
-    });
+    );
   }
 
   const modules = moduleSummaries(sourceProject, selector, pageOptions.limit);
-  return createAnswer(inquiry, modules.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit, `Returned ${modules.length} static module evaluation summary row(s).`, {
-    value: {
-      selector,
-      targetCount: resolution.targets.length,
-      candidateCount: resolution.candidateCount,
-      modules,
-      openSeams: modules.flatMap((module) => module.openSeams),
+  return createAnswer(
+    inquiry,
+    modules.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
+    `Returned ${modules.length} static module evaluation summary row(s).`,
+    {
+      value: {
+        selector,
+        targetCount: resolution.targets.length,
+        candidateCount: resolution.candidateCount,
+        modules,
+        openSeams: modules.flatMap((module) => module.openSeams),
+      },
+      basis: [
+        staticEvaluatorBasis(sourceProject),
+        sourceTextBasis(sourceProject),
+      ],
+      evidence: modules
+        .flatMap((module) => module.openSeams)
+        .slice(0, evidenceLimit(inquiry))
+        .map(evidenceForOpenSeam),
+      openSeams: modules
+        .flatMap((module) => module.openSeams)
+        .slice(0, evidenceLimit(inquiry))
+        .map(answerOpenSeam),
     },
-    basis: [staticEvaluatorBasis(sourceProject), sourceTextBasis(sourceProject)],
-    evidence: modules.flatMap((module) => module.openSeams).slice(0, evidenceLimit(inquiry)).map(evidenceForOpenSeam),
-    openSeams: modules.flatMap((module) => module.openSeams).slice(0, evidenceLimit(inquiry)).map(answerOpenSeam),
-  });
+  );
 }
 
-function moduleSummaries(sourceProject: SourceProject, selector: SourceSelector, limit: number): readonly FrameworkEvaluatorModuleSummary[] {
+function moduleSummaries(
+  sourceProject: SourceProject,
+  selector: SourceSelector,
+  limit: number,
+): readonly FrameworkEvaluatorModuleSummary[] {
   const resolution = resolveSourceSelector(sourceProject, selector);
-  const sourceFiles = uniqueSourceFiles(resolution.targets.map((target) => target.sourceFile).filter((sourceFile): sourceFile is NonNullable<typeof sourceFile> => sourceFile !== undefined));
+  const sourceFiles = uniqueSourceFiles(
+    resolution.targets
+      .map((target) => target.sourceFile)
+      .filter(
+        (sourceFile): sourceFile is NonNullable<typeof sourceFile> =>
+          sourceFile !== undefined,
+      ),
+  );
   return sourceFiles.slice(0, limit).map((sourceFile) => {
-    const moduleKey = sourceProject.sourceFileIdentity(sourceFile)?.repoPath ?? sourceFile.fileName;
-    const result = new StaticEvaluator(sourceProject).evaluateSourceFile(sourceFile, moduleKey);
+    const moduleKey =
+      sourceProject.sourceFileIdentity(sourceFile)?.repoPath ??
+      sourceFile.fileName;
+    const result = new StaticEvaluator(sourceProject).evaluateSourceFile(
+      sourceFile,
+      moduleKey,
+    );
     return {
       moduleKey,
       completionKind: result.completion.kind,
       bindingCount: result.environment.readBindings().length,
-      bindings: result.environment.readBindings().slice(0, limit).map((binding) => ({
-        name: binding.name,
-        bindingKind: binding.bindingKind,
-        state: binding.state,
-        valueKind: binding.value.kind,
-      })),
+      bindings: result.environment
+        .readBindings()
+        .slice(0, limit)
+        .map((binding) => ({
+          name: binding.name,
+          bindingKind: binding.bindingKind,
+          state: binding.state,
+          valueKind: binding.value.kind,
+        })),
       openSeams: result.openSeams.map((seam, index) => ({
         id: `module-evaluation-open:${moduleKey}:${index}`,
         openKind: seam.openKind,
@@ -159,7 +247,8 @@ function moduleSummaries(sourceProject: SourceProject, selector: SourceSelector,
         file: sourceProject.sourceFileIdentity(sourceFile) ?? {
           absolutePath: sourceFile.fileName,
           repoPath: moduleKey as never,
-          packageId: sourceProject.packageForFileName(sourceFile.fileName)?.id ?? null,
+          packageId:
+            sourceProject.packageForFileName(sourceFile.fileName)?.id ?? null,
         },
         span: sourceSpan(sourceFile, seam.node),
         syntaxKindName: ts.SyntaxKind[seam.node.kind] ?? String(seam.node.kind),
@@ -175,45 +264,77 @@ function selectorFromInquiry(inquiry: Inquiry): SourceSelector {
   }
   switch (inquiry.locus.kind) {
     case LocusKind.SourceFile:
-      return { scheme: SourceSelectorScheme.File, filePath: inquiry.locus.filePath };
+      return {
+        scheme: SourceSelectorScheme.File,
+        filePath: inquiry.locus.filePath,
+      };
     case LocusKind.SourceRange:
       return sourceSelectorForRange(inquiry.locus.range);
     case LocusKind.Symbol:
       return {
         scheme: SourceSelectorScheme.Declaration,
         name: inquiry.locus.name,
-        ...(inquiry.locus.filePath === undefined ? {} : { filePath: inquiry.locus.filePath }),
-        ...(inquiry.locus.packageName === undefined ? {} : { packageName: inquiry.locus.packageName }),
+        ...(inquiry.locus.filePath === undefined
+          ? {}
+          : { filePath: inquiry.locus.filePath }),
+        ...(inquiry.locus.packageName === undefined
+          ? {}
+          : { packageName: inquiry.locus.packageName }),
       };
     case LocusKind.Package:
       return {
         scheme: SourceSelectorScheme.Package,
-        ...(inquiry.locus.packageId === undefined ? {} : { packageId: inquiry.locus.packageId }),
-        ...(inquiry.locus.packageName === undefined ? {} : { packageName: inquiry.locus.packageName }),
+        ...(inquiry.locus.packageId === undefined
+          ? {}
+          : { packageId: inquiry.locus.packageId }),
+        ...(inquiry.locus.packageName === undefined
+          ? {}
+          : { packageName: inquiry.locus.packageName }),
       };
     case LocusKind.Handle:
-      return { scheme: SourceSelectorScheme.Workspace, ...(typeof inquiry.subject === "string" ? { query: inquiry.subject } : {}) };
+      return {
+        scheme: SourceSelectorScheme.Workspace,
+        ...(typeof inquiry.subject === "string"
+          ? { query: inquiry.subject }
+          : {}),
+      };
     case LocusKind.Repo:
     case LocusKind.RepoArea:
     case LocusKind.GitTree:
-      return { scheme: SourceSelectorScheme.Workspace, ...(typeof inquiry.subject === "string" ? { query: inquiry.subject } : {}) };
+      return {
+        scheme: SourceSelectorScheme.Workspace,
+        ...(typeof inquiry.subject === "string"
+          ? { query: inquiry.subject }
+          : {}),
+      };
   }
 }
 
 function selectorFromSubject(subject: unknown): SourceSelector | null {
-  if (subject === null || typeof subject !== "object" || !("scheme" in subject)) {
+  if (
+    subject === null ||
+    typeof subject !== "object" ||
+    !("scheme" in subject)
+  ) {
     return null;
   }
   const source = subject as Record<string, unknown>;
   const scheme = source.scheme;
   switch (scheme) {
     case SourceSelectorScheme.Workspace:
-      return { scheme, ...(typeof source.query === "string" ? { query: source.query } : {}) };
+      return {
+        scheme,
+        ...(typeof source.query === "string" ? { query: source.query } : {}),
+      };
     case SourceSelectorScheme.Package:
       return {
         scheme,
-        ...(typeof source.packageId === "string" ? { packageId: source.packageId } : {}),
-        ...(typeof source.packageName === "string" ? { packageName: source.packageName } : {}),
+        ...(typeof source.packageId === "string"
+          ? { packageId: source.packageId }
+          : {}),
+        ...(typeof source.packageName === "string"
+          ? { packageName: source.packageName }
+          : {}),
       };
     case SourceSelectorScheme.File:
       return { scheme, filePath: stringField(source, "filePath") };
@@ -229,31 +350,63 @@ function selectorFromSubject(subject: unknown): SourceSelector | null {
         scheme,
         name: stringField(source, "name"),
         ...(typeof source.kind === "string" ? { kind: source.kind } : {}),
-        ...(typeof source.packageId === "string" ? { packageId: source.packageId } : {}),
-        ...(typeof source.packageName === "string" ? { packageName: source.packageName } : {}),
-        ...(typeof source.filePath === "string" ? { filePath: source.filePath } : {}),
-        ...(typeof source.occurrence === "number" ? { occurrence: source.occurrence } : {}),
+        ...(typeof source.packageId === "string"
+          ? { packageId: source.packageId }
+          : {}),
+        ...(typeof source.packageName === "string"
+          ? { packageName: source.packageName }
+          : {}),
+        ...(typeof source.filePath === "string"
+          ? { filePath: source.filePath }
+          : {}),
+        ...(typeof source.occurrence === "number"
+          ? { occurrence: source.occurrence }
+          : {}),
       };
     case SourceSelectorScheme.Export:
       return {
         scheme,
         exportName: stringField(source, "exportName"),
-        ...(typeof source.packageId === "string" ? { packageId: source.packageId } : {}),
-        ...(typeof source.packageName === "string" ? { packageName: source.packageName } : {}),
-        ...(typeof source.filePath === "string" ? { filePath: source.filePath } : {}),
+        ...(typeof source.packageId === "string"
+          ? { packageId: source.packageId }
+          : {}),
+        ...(typeof source.packageName === "string"
+          ? { packageName: source.packageName }
+          : {}),
+        ...(typeof source.filePath === "string"
+          ? { filePath: source.filePath }
+          : {}),
       };
     default:
       return null;
   }
 }
 
-function effectContinuations(inquiry: Inquiry, read: EvaluationEffectTraceRead): readonly Continuation[] {
+function effectContinuations(
+  inquiry: Inquiry,
+  read: EvaluationEffectTraceRead,
+): readonly Continuation[] {
   const continuations: Continuation[] = [];
   if (read.nextOffset !== undefined) {
-    continuations.push(nextPageContinuation(inquiry, "framework.evaluator:effects:next-page", "Continue static invocation effects.", read.nextOffset, read.limit));
+    continuations.push(
+      nextPageContinuation(
+        inquiry,
+        "framework.evaluator:effects:next-page",
+        "Continue static invocation effects.",
+        read.nextOffset,
+        read.limit,
+      ),
+    );
   }
   if (read.openSeams.length > 0) {
-    continuations.push(projectionContinuation(inquiry, "framework.evaluator:open-seams", "open-seams", "Inspect evaluator seams observed while tracing these effects."));
+    continuations.push(
+      projectionContinuation(
+        inquiry,
+        "framework.evaluator:open-seams",
+        "open-seams",
+        "Inspect evaluator seams observed while tracing these effects.",
+      ),
+    );
   }
   for (const [index, effect] of read.effects.slice(0, 3).entries()) {
     const source = sourceRangeForEvaluationEffect(effect);
@@ -270,7 +423,12 @@ function effectContinuations(inquiry: Inquiry, read: EvaluationEffectTraceRead):
         budget: inquiry.budget,
       },
       evidence: [evidence],
-      route: route(NavigationPlane.Inspection, NavigationRelation.SourceFor, [BasisKind.SourceText, BasisKind.StaticEvaluator], "Source behind a static invocation effect."),
+      route: route(
+        NavigationPlane.Inspection,
+        NavigationRelation.SourceFor,
+        [BasisKind.SourceText, BasisKind.StaticEvaluator],
+        "Source behind a static invocation effect.",
+      ),
     });
     continuations.push({
       id: `framework.evaluator:effects:type:${index}`,
@@ -284,13 +442,21 @@ function effectContinuations(inquiry: Inquiry, read: EvaluationEffectTraceRead):
         budget: inquiry.budget,
       },
       evidence: [evidence],
-      route: route(NavigationPlane.Flow, NavigationRelation.CallSitesOf, [BasisKind.TypeScriptChecker, BasisKind.SourceText], "Exact call-site row behind a static invocation effect."),
+      route: route(
+        NavigationPlane.Flow,
+        NavigationRelation.CallSitesOf,
+        [BasisKind.TypeScriptChecker, BasisKind.SourceText],
+        "Exact call-site row behind a static invocation effect.",
+      ),
     });
   }
   return continuations;
 }
 
-function openSeamContinuations(inquiry: Inquiry, seams: readonly EvaluationEffectOpenSeam[]): readonly Continuation[] {
+function openSeamContinuations(
+  inquiry: Inquiry,
+  seams: readonly EvaluationEffectOpenSeam[],
+): readonly Continuation[] {
   return seams.slice(0, 3).map((seam, index) => ({
     id: `framework.evaluator:open-seams:source:${index}`,
     kind: ContinuationKind.InspectEvidence,
@@ -298,34 +464,63 @@ function openSeamContinuations(inquiry: Inquiry, seams: readonly EvaluationEffec
     rationale: "Inspect source behind this evaluator open seam.",
     inquiry: {
       lens: LensId.TsSource,
-      locus: { kind: LocusKind.SourceRange, range: sourceRangeForEvaluationOpenSeam(seam) },
+      locus: {
+        kind: LocusKind.SourceRange,
+        range: sourceRangeForEvaluationOpenSeam(seam),
+      },
       projection: "text",
       budget: inquiry.budget,
     },
     evidence: [evidenceForOpenSeam(seam)],
-    route: route(NavigationPlane.Inspection, NavigationRelation.SourceFor, [BasisKind.SourceText, BasisKind.StaticEvaluator], "Source behind an evaluator open seam."),
+    route: route(
+      NavigationPlane.Inspection,
+      NavigationRelation.SourceFor,
+      [BasisKind.SourceText, BasisKind.StaticEvaluator],
+      "Source behind an evaluator open seam.",
+    ),
   }));
 }
 
-function projectionContinuation(inquiry: Inquiry, id: string, projection: string, rationale: string): Continuation {
+function projectionContinuation(
+  inquiry: Inquiry,
+  id: string,
+  projection: string,
+  rationale: string,
+): Continuation {
   return {
     id,
     kind: ContinuationKind.SwitchProjection,
     priority: ContinuationPriority.Secondary,
     rationale,
     inquiry: { ...inquiry, projection, page: undefined },
-    route: route(NavigationPlane.Semantic, NavigationRelation.ProjectionOf, [BasisKind.StaticEvaluator], rationale),
+    route: route(
+      NavigationPlane.Semantic,
+      NavigationRelation.ProjectionOf,
+      [BasisKind.StaticEvaluator],
+      rationale,
+    ),
   };
 }
 
-function nextPageContinuation(inquiry: Inquiry, id: string, rationale: string, nextOffset: number, limit: number): Continuation {
+function nextPageContinuation(
+  inquiry: Inquiry,
+  id: string,
+  rationale: string,
+  nextOffset: number,
+  limit: number,
+): Continuation {
   return {
     id,
     kind: ContinuationKind.NextPage,
     priority: ContinuationPriority.Primary,
     rationale,
     inquiry: { ...inquiry, page: { size: limit, cursor: String(nextOffset) } },
-    route: route(NavigationPlane.Addressing, NavigationRelation.NextPageOf, [], rationale),
+    route: route(
+      NavigationPlane.Addressing,
+      NavigationRelation.NextPageOf,
+      [],
+      rationale,
+    ),
   };
 }
 
@@ -359,7 +554,9 @@ function answerOpenSeam(seam: EvaluationEffectOpenSeam): OpenSeam {
     kind: openSeamKind(seam.openKind),
     summary: seam.summary,
     evidence: evidenceForOpenSeam(seam),
-    basis: staticEvaluatorBasisForIdentity("Observed while statically tracing invocation effects."),
+    basis: staticEvaluatorBasisForIdentity(
+      "Observed while statically tracing invocation effects.",
+    ),
     data: seam,
   };
 }
@@ -383,12 +580,16 @@ function openSeamKind(kind: EvaluationOpenKind): OpenSeamKind {
   }
 }
 
-function uniqueSourceFiles(sourceFiles: readonly import("typescript").SourceFile[]): readonly import("typescript").SourceFile[] {
+function uniqueSourceFiles(
+  sourceFiles: readonly import("typescript").SourceFile[],
+): readonly import("typescript").SourceFile[] {
   const byName = new Map<string, ts.SourceFile>();
   for (const sourceFile of sourceFiles) {
     byName.set(sourceFile.fileName, sourceFile);
   }
-  return [...byName.values()].sort((left, right) => left.fileName.localeCompare(right.fileName));
+  return [...byName.values()].sort((left, right) =>
+    left.fileName.localeCompare(right.fileName),
+  );
 }
 
 function sourceSpan(sourceFile: ts.SourceFile, node: ts.Node) {
@@ -406,7 +607,10 @@ function sourceSpan(sourceFile: ts.SourceFile, node: ts.Node) {
   };
 }
 
-function stringFilter(source: Record<string, unknown> | undefined, key: string): object {
+function stringFilter(
+  source: Record<string, unknown> | undefined,
+  key: string,
+): object {
   const value = source?.[key];
   return typeof value === "string" && value.length > 0 ? { [key]: value } : {};
 }
@@ -416,7 +620,10 @@ function stringField(source: Record<string, unknown>, key: string): string {
   return typeof value === "string" ? value : "";
 }
 
-function positionField(source: Record<string, unknown>, key: string): { readonly line: number; readonly character: number } {
+function positionField(
+  source: Record<string, unknown>,
+  key: string,
+): { readonly line: number; readonly character: number } {
   const value = source[key];
   if (value === null || typeof value !== "object") {
     return { line: 0, character: 0 };
@@ -446,7 +653,8 @@ function sourceTextBasis(sourceProject: SourceProject): Basis {
     kind: BasisKind.SourceText,
     closure: BasisClosure.Exact,
     freshness: BasisFreshness.Live,
-    summary: "Answered from exact source text selected in the current source project.",
+    summary:
+      "Answered from exact source text selected in the current source project.",
     identity: sourceProject.snapshot().identity,
   };
 }
@@ -457,14 +665,17 @@ function checkerBasis(sourceProject: SourceProject): Basis {
     closure: BasisClosure.Exact,
     authority: BasisAuthority.Checker,
     freshness: BasisFreshness.Live,
-    summary: "Effect rows include TypeChecker-backed callee, receiver, argument, and signature facts.",
+    summary:
+      "Effect rows include TypeChecker-backed callee, receiver, argument, and signature facts.",
     identity: sourceProject.snapshot().identity,
   };
 }
 
 function staticEvaluatorBasis(sourceProject: SourceProject): Basis {
   return {
-    ...staticEvaluatorBasisForIdentity("Answered from Atlas static invocation/effect tracing."),
+    ...staticEvaluatorBasisForIdentity(
+      "Answered from Atlas static invocation/effect tracing.",
+    ),
     identity: sourceProject.snapshot().identity,
   };
 }

@@ -1,6 +1,15 @@
 import { OutcomeKind, createAnswer, type Answer } from "../answer.js";
-import { BasisAuthority, BasisClosure, BasisFreshness, BasisKind } from "../basis.js";
-import { ContinuationKind, ContinuationPriority, type Continuation } from "../continuation.js";
+import {
+  BasisAuthority,
+  BasisClosure,
+  BasisFreshness,
+  BasisKind,
+} from "../basis.js";
+import {
+  ContinuationKind,
+  ContinuationPriority,
+  type Continuation,
+} from "../continuation.js";
 import { OpenSeamKind } from "../evidence.js";
 import type { Budget } from "../budget.js";
 import type { Inquiry, InquirySubject } from "../inquiry.js";
@@ -19,10 +28,18 @@ import {
   answerTsType,
 } from "./ts-lenses.js";
 import { answerBridgeAuLink } from "./bridge-lenses.js";
-import { answerFrameworkDiscovery, answerFrameworkRendering } from "./framework-lenses.js";
+import {
+  answerFrameworkDiscovery,
+  answerFrameworkLifecycle,
+  answerFrameworkRendering,
+} from "./framework-lenses.js";
 import { answerFrameworkEvaluator } from "./framework-evaluator-lenses.js";
 import { answerFrameworkDi } from "./framework-di-lenses.js";
 import { answerFrameworkMaterialization } from "./framework-materialization-lenses.js";
+import { answerFrameworkAdmission } from "./framework-admission-lenses.js";
+import { answerFrameworkCompiler } from "./framework-compiler-lenses.js";
+import { answerFrameworkObservation } from "./framework-observation-lenses.js";
+import { answerFrameworkResources } from "./framework-resource-lenses.js";
 import type { InquiryWorld } from "./world.js";
 
 /** Hot substrate context shared by runtime lens implementations. */
@@ -62,9 +79,14 @@ export class InquiryEngine {
     LensId.BridgeAuLink,
     LensId.FrameworkDiscovery,
     LensId.FrameworkRendering,
+    LensId.FrameworkResources,
+    LensId.FrameworkCompiler,
     LensId.FrameworkDi,
     LensId.FrameworkEvaluator,
     LensId.FrameworkMaterialization,
+    LensId.FrameworkLifecycle,
+    LensId.FrameworkObservation,
+    LensId.FrameworkAdmission,
   ]);
 
   constructor(
@@ -83,7 +105,10 @@ export class InquiryEngine {
 
     const spec = this.findLens(normalized.inquiry.lens);
     if (spec === undefined) {
-      return this.unknownLensAnswer(normalized.inquiry, normalized.inquiry.lens);
+      return this.unknownLensAnswer(
+        normalized.inquiry,
+        normalized.inquiry.lens,
+      );
     }
 
     const validation = this.validate(normalized.inquiry, spec);
@@ -97,25 +122,79 @@ export class InquiryEngine {
       case LensId.RepoTerrain:
         return answerRepoTerrain(this.world, normalized.inquiry);
       case LensId.AtlasSelf:
-        return answerSelf(this.world, normalized.inquiry, this.#implementedLensIds, this.substrates.sourceProject);
+        return answerSelf(
+          this.world,
+          normalized.inquiry,
+          this.#implementedLensIds,
+          this.substrates.sourceProject,
+        );
       case LensId.TsSource:
-        return answerTsSource(normalized.inquiry, this.substrates.sourceProject);
+        return answerTsSource(
+          normalized.inquiry,
+          this.substrates.sourceProject,
+        );
       case LensId.TsStructure:
-        return answerTsStructure(normalized.inquiry, this.substrates.sourceProject);
+        return answerTsStructure(
+          normalized.inquiry,
+          this.substrates.sourceProject,
+        );
       case LensId.TsType:
         return answerTsType(normalized.inquiry, this.substrates.sourceProject);
       case LensId.BridgeAuLink:
-        return answerBridgeAuLink(normalized.inquiry, this.substrates.sourceProject);
+        return answerBridgeAuLink(
+          normalized.inquiry,
+          this.substrates.sourceProject,
+        );
       case LensId.FrameworkDiscovery:
-        return answerFrameworkDiscovery(normalized.inquiry, this.substrates.sourceProject);
+        return answerFrameworkDiscovery(
+          normalized.inquiry,
+          this.substrates.sourceProject,
+        );
       case LensId.FrameworkRendering:
-        return answerFrameworkRendering(normalized.inquiry, this.substrates.sourceProject);
+        return answerFrameworkRendering(
+          normalized.inquiry,
+          this.substrates.sourceProject,
+        );
+      case LensId.FrameworkResources:
+        return answerFrameworkResources(
+          normalized.inquiry,
+          this.substrates.sourceProject,
+        );
+      case LensId.FrameworkCompiler:
+        return answerFrameworkCompiler(
+          normalized.inquiry,
+          this.substrates.sourceProject,
+        );
       case LensId.FrameworkDi:
-        return answerFrameworkDi(normalized.inquiry, this.substrates.sourceProject);
+        return answerFrameworkDi(
+          normalized.inquiry,
+          this.substrates.sourceProject,
+        );
       case LensId.FrameworkEvaluator:
-        return answerFrameworkEvaluator(normalized.inquiry, this.substrates.sourceProject);
+        return answerFrameworkEvaluator(
+          normalized.inquiry,
+          this.substrates.sourceProject,
+        );
       case LensId.FrameworkMaterialization:
-        return answerFrameworkMaterialization(normalized.inquiry, this.substrates.sourceProject);
+        return answerFrameworkMaterialization(
+          normalized.inquiry,
+          this.substrates.sourceProject,
+        );
+      case LensId.FrameworkLifecycle:
+        return answerFrameworkLifecycle(
+          normalized.inquiry,
+          this.substrates.sourceProject,
+        );
+      case LensId.FrameworkObservation:
+        return answerFrameworkObservation(
+          normalized.inquiry,
+          this.substrates.sourceProject,
+        );
+      case LensId.FrameworkAdmission:
+        return answerFrameworkAdmission(
+          normalized.inquiry,
+          this.substrates.sourceProject,
+        );
       default:
         return answerUnimplementedLens(this.world, normalized.inquiry);
     }
@@ -137,23 +216,33 @@ export class InquiryEngine {
   }
 
   /** Normalize raw input into an inquiry plus any unknown lens marker. */
-  private normalize(input: Inquiry | InquiryRuntimeRequest): { readonly inquiry: Inquiry; readonly unknownLens?: string } {
+  private normalize(input: Inquiry | InquiryRuntimeRequest): {
+    readonly inquiry: Inquiry;
+    readonly unknownLens?: string;
+  } {
     const inputLens = String(input.lens);
     const requestedLens = this.parseLensId(inputLens);
     const unknownLens = requestedLens === undefined ? inputLens : undefined;
-    const subject = unknownLens === undefined
-      ? normalizeSubject(input.subject)
-      : { requestedLens: unknownLens };
+    const subject =
+      unknownLens === undefined
+        ? normalizeSubject(input.subject)
+        : { requestedLens: unknownLens };
 
     return {
       inquiry: {
         lens: requestedLens ?? LensId.RepoMap,
         locus: normalizeLocus(input.locus),
         ...(subject === undefined ? {} : { subject }),
-        ...(input.projection === undefined ? {} : { projection: input.projection }),
+        ...(input.projection === undefined
+          ? {}
+          : { projection: input.projection }),
         ...(input.filters === undefined ? {} : { filters: input.filters }),
-        ...(input.budget === undefined ? {} : { budget: normalizeBudget(input.budget) }),
-        ...(input.page === undefined ? {} : { page: normalizePage(input.page) }),
+        ...(input.budget === undefined
+          ? {}
+          : { budget: normalizeBudget(input.budget) }),
+        ...(input.page === undefined
+          ? {}
+          : { page: normalizePage(input.page) }),
       },
       ...(unknownLens === undefined ? {} : { unknownLens }),
     };
@@ -161,7 +250,9 @@ export class InquiryEngine {
 
   /** Parse one lens id against the static world. */
   private parseLensId(lens: string): LensId | undefined {
-    return this.world.lenses.some((entry) => entry.id === lens) ? lens as LensId : undefined;
+    return this.world.lenses.some((entry) => entry.id === lens)
+      ? (lens as LensId)
+      : undefined;
   }
 
   /** Find one lens spec by id. */
@@ -172,45 +263,112 @@ export class InquiryEngine {
   /** Validate lens/locus/projection/substrate coherence before running a lens. */
   private validate(inquiry: Inquiry, spec: LensSpec): Answer | undefined {
     if (!spec.supportedLoci.includes(inquiry.locus.kind)) {
-      return createAnswer(inquiry, OutcomeKind.Reroute, `Lens ${spec.id} does not support locus ${inquiry.locus.kind}.`, {
-        basis: [contractBasis("Rejected by lens/locus validation before execution.")],
-        openSeams: [{
-          kind: OpenSeamKind.UnsupportedLocus,
-          summary: `Supported loci: ${spec.supportedLoci.join(", ")}`,
-        }],
-        continuations: [surfaceMapContinuation("Inspect lens contracts before choosing a different locus.")],
-      });
+      return createAnswer(
+        inquiry,
+        OutcomeKind.Reroute,
+        `Lens ${spec.id} does not support locus ${inquiry.locus.kind}.`,
+        {
+          basis: [
+            contractBasis(
+              "Rejected by lens/locus validation before execution.",
+            ),
+          ],
+          openSeams: [
+            {
+              kind: OpenSeamKind.UnsupportedLocus,
+              summary: `Supported loci: ${spec.supportedLoci.join(", ")}`,
+            },
+          ],
+          continuations: [
+            surfaceMapContinuation(
+              "Inspect lens contracts before choosing a different locus.",
+            ),
+          ],
+        },
+      );
     }
 
-    if (inquiry.projection !== undefined && !spec.projections.some((projection) => projection.id === inquiry.projection)) {
-      return createAnswer(inquiry, OutcomeKind.Reroute, `Lens ${spec.id} does not support projection ${inquiry.projection}.`, {
-        basis: [contractBasis("Rejected by projection validation before execution.")],
-        openSeams: [{
-          kind: OpenSeamKind.UnsupportedProjection,
-          summary: `Supported projections: ${spec.projections.map((projection) => projection.id).join(", ")}`,
-        }],
-        continuations: [surfaceMapContinuation("Inspect lens projection contracts before choosing a different projection.")],
-      });
+    if (
+      inquiry.projection !== undefined &&
+      !spec.projections.some(
+        (projection) => projection.id === inquiry.projection,
+      )
+    ) {
+      return createAnswer(
+        inquiry,
+        OutcomeKind.Reroute,
+        `Lens ${spec.id} does not support projection ${inquiry.projection}.`,
+        {
+          basis: [
+            contractBasis(
+              "Rejected by projection validation before execution.",
+            ),
+          ],
+          openSeams: [
+            {
+              kind: OpenSeamKind.UnsupportedProjection,
+              summary: `Supported projections: ${spec.projections
+                .map((projection) => projection.id)
+                .join(", ")}`,
+            },
+          ],
+          continuations: [
+            surfaceMapContinuation(
+              "Inspect lens projection contracts before choosing a different projection.",
+            ),
+          ],
+        },
+      );
     }
 
     for (const substrateId of spec.requiredSubstrates) {
-      if (!this.world.substrates.some((substrate) => substrate.id === substrateId)) {
-        return createAnswer(inquiry, OutcomeKind.Open, `Lens ${spec.id} requires missing substrate ${substrateId}.`, {
-          basis: [contractBasis("Rejected by substrate validation before execution.")],
-          openSeams: [{
-            kind: OpenSeamKind.MissingSubstrate,
-            summary: `Required substrate ${substrateId} is not present in the inquiry world.`,
-          }],
-          continuations: [surfaceMapContinuation("Inspect substrate contracts before running this lens.")],
-        });
+      if (
+        !this.world.substrates.some((substrate) => substrate.id === substrateId)
+      ) {
+        return createAnswer(
+          inquiry,
+          OutcomeKind.Open,
+          `Lens ${spec.id} requires missing substrate ${substrateId}.`,
+          {
+            basis: [
+              contractBasis(
+                "Rejected by substrate validation before execution.",
+              ),
+            ],
+            openSeams: [
+              {
+                kind: OpenSeamKind.MissingSubstrate,
+                summary: `Required substrate ${substrateId} is not present in the inquiry world.`,
+              },
+            ],
+            continuations: [
+              surfaceMapContinuation(
+                "Inspect substrate contracts before running this lens.",
+              ),
+            ],
+          },
+        );
       }
     }
 
     if (spec.stage === LensStage.Deprecated) {
-      return createAnswer(inquiry, OutcomeKind.Unsupported, `Lens ${spec.id} is deprecated.`, {
-        basis: [contractBasis("Rejected by lens stage validation before execution.")],
-        continuations: [surfaceMapContinuation("Inspect active lens contracts before asking another question.")],
-      });
+      return createAnswer(
+        inquiry,
+        OutcomeKind.Unsupported,
+        `Lens ${spec.id} is deprecated.`,
+        {
+          basis: [
+            contractBasis(
+              "Rejected by lens stage validation before execution.",
+            ),
+          ],
+          continuations: [
+            surfaceMapContinuation(
+              "Inspect active lens contracts before asking another question.",
+            ),
+          ],
+        },
+      );
     }
 
     return undefined;
@@ -218,14 +376,29 @@ export class InquiryEngine {
 
   /** Build an unsupported answer for an unknown lens id. */
   private unknownLensAnswer(inquiry: Inquiry, unknownLens: string): Answer {
-    return createAnswer(inquiry, OutcomeKind.Unsupported, `Unknown inquiry lens '${unknownLens}'.`, {
-      basis: [contractBasis("The requested lens is not part of the Atlas lens catalog.")],
-      openSeams: [{
-        kind: OpenSeamKind.MissingLens,
-        summary: `No lens contract is registered for '${unknownLens}'.`,
-      }],
-      continuations: [surfaceMapContinuation("Inspect the lens catalog before asking another question.")],
-    });
+    return createAnswer(
+      inquiry,
+      OutcomeKind.Unsupported,
+      `Unknown inquiry lens '${unknownLens}'.`,
+      {
+        basis: [
+          contractBasis(
+            "The requested lens is not part of the Atlas lens catalog.",
+          ),
+        ],
+        openSeams: [
+          {
+            kind: OpenSeamKind.MissingLens,
+            summary: `No lens contract is registered for '${unknownLens}'.`,
+          },
+        ],
+        continuations: [
+          surfaceMapContinuation(
+            "Inspect the lens catalog before asking another question.",
+          ),
+        ],
+      },
+    );
   }
 }
 
@@ -290,7 +463,9 @@ function normalizeBudget(value: unknown): Budget | undefined {
 }
 
 /** Normalize unknown transport page input into a page request. */
-function normalizePage(value: unknown): { readonly size?: number; readonly cursor?: string } | undefined {
+function normalizePage(
+  value: unknown,
+): { readonly size?: number; readonly cursor?: string } | undefined {
   if (value === undefined || value === null || typeof value !== "object") {
     return undefined;
   }
@@ -304,9 +479,14 @@ function normalizePage(value: unknown): { readonly size?: number; readonly curso
 }
 
 /** Read one numeric budget lane from a transport object. */
-function numericBudgetLane<TKey extends keyof Budget>(source: Record<string, unknown>, key: TKey): Pick<Budget, TKey> | object {
+function numericBudgetLane<TKey extends keyof Budget>(
+  source: Record<string, unknown>,
+  key: TKey,
+): Pick<Budget, TKey> | object {
   const value = source[key];
-  return typeof value === "number" && Number.isFinite(value) ? { [key]: value } as Pick<Budget, TKey> : {};
+  return typeof value === "number" && Number.isFinite(value)
+    ? ({ [key]: value } as Pick<Budget, TKey>)
+    : {};
 }
 
 /** Shared exact Atlas contract basis for engine-level validation answers. */

@@ -21,6 +21,10 @@ export const enum SubstrateId {
   FrameworkStaticEvaluator = "framework.static-evaluator",
   /** Framework DI substrate. */
   FrameworkDi = "framework.di",
+  /** Framework resource convergence substrate. */
+  FrameworkResources = "framework.resources",
+  /** Framework configuration/bundle admission substrate. */
+  FrameworkAdmission = "framework.admission",
   /** Atlas static contracts. */
   AtlasContracts = "atlas.contracts",
 }
@@ -84,7 +88,9 @@ export interface SubstrateSnapshot {
 }
 
 /** Port implemented by future hot-session substrates. */
-export interface SubstratePort<TSnapshot extends SubstrateSnapshot = SubstrateSnapshot> {
+export interface SubstratePort<
+  TSnapshot extends SubstrateSnapshot = SubstrateSnapshot,
+> {
   /** Static contract this port satisfies. */
   readonly contract: SubstrateContract;
   /** Read the current snapshot identity without running a lens. */
@@ -105,7 +111,8 @@ export const SubstrateCatalog: readonly SubstrateContract[] = [
     id: SubstrateId.SourceFiles,
     kind: SubstrateKind.Source,
     trust: SubstrateTrust.Exact,
-    summary: "Filesystem or git-tree source text, source ranges, and file identity.",
+    summary:
+      "Filesystem or git-tree source text, source ranges, and file identity.",
     basisKinds: [BasisKind.SourceText, BasisKind.GitTree],
     produces: [EvidenceKind.SourceSpan],
   },
@@ -113,7 +120,8 @@ export const SubstrateCatalog: readonly SubstrateContract[] = [
     id: SubstrateId.TypeScriptProgram,
     kind: SubstrateKind.TypeScript,
     trust: SubstrateTrust.Derived,
-    summary: "TypeScript program structure, module graph, symbols, and declarations.",
+    summary:
+      "TypeScript program structure, module graph, symbols, and declarations.",
     basisKinds: [BasisKind.TypeScriptProgram],
     produces: [EvidenceKind.Symbol, EvidenceKind.SourceSpan],
     dependsOn: [SubstrateId.SourceFiles],
@@ -122,27 +130,42 @@ export const SubstrateCatalog: readonly SubstrateContract[] = [
     id: SubstrateId.TypeScriptChecker,
     kind: SubstrateKind.TypeScript,
     trust: SubstrateTrust.Derived,
-    summary: "TypeChecker facts: apparent types, signatures, reference roles, and typed flow evidence.",
+    summary:
+      "TypeChecker facts: apparent types, signatures, reference roles, and typed flow evidence.",
     basisKinds: [BasisKind.TypeScriptChecker],
-    produces: [EvidenceKind.TypeFact, EvidenceKind.CallSite, EvidenceKind.Symbol],
+    produces: [
+      EvidenceKind.TypeFact,
+      EvidenceKind.CallSite,
+      EvidenceKind.Symbol,
+    ],
     dependsOn: [SubstrateId.TypeScriptProgram],
   },
   {
     id: SubstrateId.ProductKernel,
     kind: SubstrateKind.Product,
     trust: SubstrateTrust.ModeledStatic,
-    summary: "Product-owned kernel substrate: records, claims, producers, provenance, and preservation channels.",
+    summary:
+      "Product-owned kernel substrate: records, claims, producers, provenance, and preservation channels.",
     basisKinds: [BasisKind.ProductKernelSubstrate],
-    produces: [EvidenceKind.ProductClaim, EvidenceKind.SourceSpan, EvidenceKind.OpenSeam],
+    produces: [
+      EvidenceKind.ProductClaim,
+      EvidenceKind.SourceSpan,
+      EvidenceKind.OpenSeam,
+    ],
     dependsOn: [SubstrateId.TypeScriptProgram, SubstrateId.TypeScriptChecker],
   },
   {
     id: SubstrateId.ProductVocabulary,
     kind: SubstrateKind.Product,
     trust: SubstrateTrust.ModeledStatic,
-    summary: "Product vocabulary definitions and allowed self-description terms.",
+    summary:
+      "Product vocabulary definitions and allowed self-description terms.",
     basisKinds: [BasisKind.ProductVocabulary],
-    produces: [EvidenceKind.VocabularyTerm, EvidenceKind.ProductClaim, EvidenceKind.SourceSpan],
+    produces: [
+      EvidenceKind.VocabularyTerm,
+      EvidenceKind.ProductClaim,
+      EvidenceKind.SourceSpan,
+    ],
     dependsOn: [SubstrateId.ProductKernel],
   },
   {
@@ -158,27 +181,83 @@ export const SubstrateCatalog: readonly SubstrateContract[] = [
     id: SubstrateId.FrameworkStaticEvaluator,
     kind: SubstrateKind.Framework,
     trust: SubstrateTrust.ModeledStatic,
-    summary: "Static evaluator for framework world-construction closures and explicit open seams.",
+    summary:
+      "Static evaluator for framework world-construction closures and explicit open seams.",
     basisKinds: [BasisKind.StaticEvaluator],
-    produces: [EvidenceKind.OpenSeam, EvidenceKind.SourceSpan, EvidenceKind.TypeFact],
+    produces: [
+      EvidenceKind.OpenSeam,
+      EvidenceKind.SourceSpan,
+      EvidenceKind.TypeFact,
+    ],
     dependsOn: [SubstrateId.TypeScriptChecker],
   },
   {
     id: SubstrateId.FrameworkDi,
     kind: SubstrateKind.Framework,
     trust: SubstrateTrust.ModeledStatic,
-    summary: "Framework DI keys, registration writes, lookup reads, provider associations, and evaluator-backed closure limits.",
+    summary:
+      "Framework DI keys, registration writes, lookup reads, provider associations, and evaluator-backed closure limits.",
     basisKinds: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
-    produces: [EvidenceKind.DiRegistration, EvidenceKind.DiLookup, EvidenceKind.OpenSeam, EvidenceKind.TypeFact, EvidenceKind.SourceSpan],
-    dependsOn: [SubstrateId.FrameworkStaticEvaluator, SubstrateId.TypeScriptChecker],
+    produces: [
+      EvidenceKind.DiRegistration,
+      EvidenceKind.DiLookup,
+      EvidenceKind.OpenSeam,
+      EvidenceKind.TypeFact,
+      EvidenceKind.SourceSpan,
+    ],
+    dependsOn: [
+      SubstrateId.FrameworkStaticEvaluator,
+      SubstrateId.TypeScriptChecker,
+    ],
+  },
+  {
+    id: SubstrateId.FrameworkResources,
+    kind: SubstrateKind.Framework,
+    trust: SubstrateTrust.ModeledStatic,
+    summary:
+      "Framework resource carriers, package exports, bundle admissions, syntax products, and materialization convergence rows.",
+    basisKinds: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
+    produces: [
+      EvidenceKind.ResourceDefinition,
+      EvidenceKind.OpenSeam,
+      EvidenceKind.TypeFact,
+      EvidenceKind.SourceSpan,
+    ],
+    dependsOn: [
+      SubstrateId.FrameworkStaticEvaluator,
+      SubstrateId.TypeScriptChecker,
+    ],
+  },
+  {
+    id: SubstrateId.FrameworkAdmission,
+    kind: SubstrateKind.Framework,
+    trust: SubstrateTrust.ModeledStatic,
+    summary:
+      "Framework configuration and bundle admissions derived from evaluator effects and TypeChecker-classified DI/resource/registry targets.",
+    basisKinds: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
+    produces: [
+      EvidenceKind.DiRegistration,
+      EvidenceKind.ResourceDefinition,
+      EvidenceKind.OpenSeam,
+      EvidenceKind.TypeFact,
+      EvidenceKind.SourceSpan,
+    ],
+    dependsOn: [
+      SubstrateId.FrameworkStaticEvaluator,
+      SubstrateId.TypeScriptChecker,
+    ],
   },
   {
     id: SubstrateId.AtlasContracts,
     kind: SubstrateKind.Atlas,
     trust: SubstrateTrust.Exact,
-    summary: "Atlas answer, lens, terrain, vocabulary, and substrate contracts.",
+    summary:
+      "Atlas answer, lens, terrain, vocabulary, and substrate contracts.",
     basisKinds: [BasisKind.AtlasContract],
-    produces: [EvidenceKind.MaintenanceSignal, EvidenceKind.OpenSeam],
+    produces: [
+      EvidenceKind.MaintenanceSignal,
+      EvidenceKind.OpenSeam,
+    ],
     dependsOn: [SubstrateId.RepoTerrain],
   },
 ];

@@ -66,6 +66,30 @@ export const enum BasisAuthority {
   None = "none",
 }
 
+/** Relationship between basis lanes when an inquiry changes epistemic footing. */
+export const enum BasisTransitionKind {
+  /** The next inquiry preserves the same basis lane. */
+  Preserve = "preserve",
+  /** The next inquiry narrows or strengthens facts within a compatible basis lane. */
+  Refine = "refine",
+  /** The next inquiry joins facts from multiple basis lanes. */
+  Join = "join",
+  /** The next inquiry crosses into a different modeling authority. */
+  Handoff = "handoff",
+}
+
+/** Explicit basis movement for continuations that should not hide authority changes. */
+export interface BasisTransition {
+  /** Basis movement kind. */
+  readonly kind: BasisTransitionKind;
+  /** Basis lanes consumed or left by the current inquiry. */
+  readonly from: readonly BasisKind[];
+  /** Basis lanes expected or entered by the next inquiry. */
+  readonly to: readonly BasisKind[];
+  /** Grounded explanation of why this transition is valid. */
+  readonly summary: string;
+}
+
 /** Explanation of the substrate an answer actually spent. */
 export interface Basis {
   /** Substrate family that produced or budget-limited the answer. */
