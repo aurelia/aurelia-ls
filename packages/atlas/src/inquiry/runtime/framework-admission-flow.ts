@@ -6,7 +6,10 @@ import {
   FrameworkRelationshipEndpointKind,
   type FrameworkRelationshipEndpoint,
 } from "../../framework/relationships.js";
-import { FrameworkResourceDefinitionKind } from "../../framework/resources.js";
+import {
+  FrameworkResourceDefinitionKind,
+  FrameworkResourceInstantiationKind,
+} from "../../framework/resources.js";
 import type { SourceProject } from "../../source/index.js";
 import type { SourceRange } from "../locus.js";
 import {
@@ -28,10 +31,7 @@ import {
   readFrameworkResourceConvergenceRows,
   type FrameworkResourceConvergenceRow,
 } from "./framework-resource-lenses.js";
-import {
-  FrameworkResourceInstantiationKind,
-  FrameworkResourceMaterializationSiteKind,
-} from "./framework-resource-materialization.js";
+import { FrameworkResourceMaterializationSiteKind } from "./framework-resource-materialization.js";
 import {
   countBy,
   sourceRangeForCallSiteEntry,

@@ -36,6 +36,10 @@ export interface FrameworkEmulationSymbolsReportStats {
   readonly materializationSlots: number;
   /** DI dependency-read rows included in the report. */
   readonly dependencyReads: number;
+  /** Variable-carried DI dependency-read rows included in the report. */
+  readonly variableDependencyReads: number;
+  /** Rows whose semantic-runtime interpretation is intentionally provisional. */
+  readonly provisionalInterpretationRows: number;
   /** UTF-8 byte length of the Markdown body. */
   readonly markdownBytes: number;
 }
@@ -66,6 +70,8 @@ export function createFrameworkEmulationSymbolsReport(
       interfaceDefaults: interfaceAdmissionRows(rows).length,
       materializationSlots: rowsFor(rows, "materialize-di-key").length,
       dependencyReads: rowsFor(rows, "resolve-dependency").length,
+      variableDependencyReads: variableDependencyRows(rows).length,
+      provisionalInterpretationRows: provisionalRows(rows).length,
       markdownBytes: Buffer.byteLength(markdown, "utf8"),
     },
   };
@@ -83,15 +89,19 @@ function renderFrameworkEmulationSymbolsMarkdown(
   const compilerRows = rows.filter((row) => row.layer === "jit-compilation");
   const hydrationRows = rows.filter((row) => row.layer === "resolved-hydration");
   const virtualizationRows = rowsFor(rows, "virtualize-template-controller");
+  const variableConstructionRows = variableDependencyRows(rows);
   const handoffRows = rows.filter(
     (row) =>
       row.mode === "typescript-handoff" ||
       row.layer === "typechecker-reactivity",
   );
-  const resourceFindRows = dependencyRows.filter(
+  const exactDependencyRows = dependencyRows.filter(
+    (row) => row.targetExpression === undefined,
+  );
+  const resourceFindRows = exactDependencyRows.filter(
     (row) => row.targetKind === "find",
   );
-  const constructionDependencyRows = dependencyRows.filter(
+  const constructionDependencyRows = exactDependencyRows.filter(
     (row) => row.targetKind !== "find",
   );
 
@@ -108,6 +118,7 @@ function renderFrameworkEmulationSymbolsMarkdown(
     ["layers", countText(rollup.layers)],
     ["modes", countText(rollup.modes)],
     ["obligation kinds", countText(rollup.obligationKinds)],
+    ["interpretation status", countText(rollup.interpretationStatuses)],
     [
       "observer kinds",
       countText(countFlat(observers.flatMap((row) => row.observerKinds))),
@@ -209,10 +220,10 @@ function renderFrameworkEmulationSymbolsMarkdown(
     sourceLoc(sourceProject, row),
   ])));
 
-  md.push("## All DI Materialization Slots");
+  md.push("## DI Resolver Materialization Slots");
   md.push("");
   md.push(
-    "Every materialized key/provider pair currently visible from the evaluated framework world.",
+    "Every materialized DI key/provider pair currently visible from the evaluated framework world, excluding resource type/factory carrier rows. Resource discovery and resource instance lifetime are modeled separately below.",
   );
   md.push("");
   md.push(table(["DI key", "provider(s)", "strategy/kind", "composition", "source"], groupBy(materializeRows, (row) => row.ownerName).map((group) => [
@@ -222,6 +233,14 @@ function renderFrameworkEmulationSymbolsMarkdown(
     list(uniqueRaw(group.rows.map(composition))),
     list(uniqueRaw(group.rows.map((row) => sourceLoc(sourceProject, row))), 3),
   ])));
+
+  md.push("## Resource Catalog Slots And Instance Lifetime");
+  md.push("");
+  md.push(
+    "Resource catalog admission is not the same fact as resource instance construction. Template resources are discovered as resource definitions, then CE/CA/TC view models are created per `container.invoke(def.Type)` during hydration. Runtime renderers are singleton `IRenderer` providers registered by `renderer(...)` and consumed through `getAll(IRenderer)`.",
+  );
+  md.push("");
+  md.push(table(["resource kind", "instance lifetime", "symbols", "source lens"], resourceLifetimeRows(rows)));
 
   md.push("## Resource Catalog Reads (`find`)");
   md.push("");
@@ -252,13 +271,27 @@ function renderFrameworkEmulationSymbolsMarkdown(
     ];
   })));
 
+  md.push("## Variable-Key Construction Reads");
+  md.push("");
+  md.push(
+    "These are container construction reads where the key or constructable type is carried by runtime value flow. They are source-backed, but they are not stable DI key identities and should not seed DI closure.",
+  );
+  md.push("");
+  md.push(table(["owner/provider", "access", "variable key/type expression", "checker type", "source"], variableConstructionRows.map((row) => [
+    cleanName(row.ownerName),
+    cleanName(row.targetKind),
+    row.targetExpression ?? row.targetName,
+    row.targetType ?? "",
+    sourceLoc(sourceProject, row),
+  ])));
+
   md.push("## Built-In Resources And Semantic-Runtime Placement");
   md.push("");
   md.push(
     "This combines the ECMAScript-emulated resource catalog with the TypeChecker handoff families, so the section shows where each built-in resource family lands in the composition.",
   );
   md.push("");
-  md.push(table(["resource/target kind", "rows", "symbols", "composition", "packages"], resourcePlacementRows(rows, resourceRows)));
+  md.push(table(["resource/target kind", "unique symbols", "instance lifetime", "symbols", "composition", "packages"], resourcePlacementRows(rows, resourceRows)));
 
   md.push("## JIT Compiler Obligations");
   md.push("");
@@ -281,7 +314,7 @@ function renderFrameworkEmulationSymbolsMarkdown(
 
   md.push("## Template Controller Virtualization");
   md.push("");
-  md.push(table(["template controller / virtualized symbol", "source package(s)", "source"], virtualizationRows
+  md.push(table(["template controller / virtualized symbol", "source package(s)", "source"], uniqueRowsBy(virtualizationRows, (row) => `${row.targetKind}:${row.targetName}:${sourceLoc(sourceProject, row)}`)
     .slice()
     .sort((left, right) => cleanName(left.targetName).localeCompare(cleanName(right.targetName)))
     .map((row) => [
@@ -290,14 +323,15 @@ function renderFrameworkEmulationSymbolsMarkdown(
       sourceLoc(sourceProject, row),
     ])));
 
-  md.push("## TypeChecker Handoff");
+  md.push("## Provisional TypeChecker Handoff");
   md.push("");
   md.push(
-    "These symbols are visible to the emulation graph, but deeper behavior should be modeled by TypeChecker-backed semantic-runtime machinery rather than ECMAScript evaluation.",
+    "These source-backed rows mark where Atlas can already see a boundary into binding, observer, accessor, and reactive behavior. The boundary is intentionally provisional and approximate: it is a navigation aid for semantic-runtime work, not a complete TypeChecker behavior graph. Handoff confidence is depth-sensitive: root/controller-owned binding materialization can be deterministic while bindings under template-controller-created synthetic views may be speculative because the owning controllers are speculative even when the compiled instructions are deterministic.",
   );
   md.push("");
-  md.push(table(["handoff owner/symbol", "kind(s)", "targets / methods", "composition evidence"], groupBy(handoffRows, (row) => row.ownerName).map((group) => [
+  md.push(table(["handoff owner/symbol", "status", "kind(s)", "targets / methods", "composition evidence"], groupBy(handoffRows, (row) => row.ownerName).map((group) => [
     cleanName(group.key),
+    list(unique(group.rows.map((row) => row.interpretationStatus ?? "source-visible"))),
     list(unique(group.rows.map((row) => `${row.obligationKind}:${row.targetKind}`))),
     list(unique(group.rows.map((row) => row.targetName))),
     list(uniqueRaw(group.rows.map(lens))),
@@ -341,6 +375,22 @@ function rowsFor(
   kind: FrameworkEmulationObligationKind,
 ): readonly FrameworkEmulationObligationRow[] {
   return rows.filter((row) => row.obligationKind === kind);
+}
+
+function variableDependencyRows(
+  rows: readonly FrameworkEmulationObligationRow[],
+): readonly FrameworkEmulationObligationRow[] {
+  return rows.filter(
+    (row) =>
+      row.obligationKind === "resolve-dependency" &&
+      row.targetExpression !== undefined,
+  );
+}
+
+function provisionalRows(
+  rows: readonly FrameworkEmulationObligationRow[],
+): readonly FrameworkEmulationObligationRow[] {
+  return rows.filter((row) => row.interpretationStatus !== undefined);
 }
 
 function directStandardConfigurationRows(
@@ -439,11 +489,49 @@ function resourcePlacementRow(
 ): string[] {
   return [
     label,
-    String(rows.length),
+    String(unique(rows.map((row) => row.targetName)).length),
+    list(uniqueRaw(rows.map((row) => row.runtimeLifetime ?? ""))),
     list(unique(rows.map((row) => row.targetName))),
     list(uniqueRaw(rows.map(composition))),
     list(uniqueRaw(rows.map((row) => row.packageId ?? packageOf(null, row)))),
   ];
+}
+
+function resourceLifetimeRows(
+  rows: readonly FrameworkEmulationObligationRow[],
+): readonly string[][] {
+  const resourceRows = rows.filter(
+    (row) => row.runtimeLifetime !== undefined,
+  );
+  return groupBy(
+    resourceRows,
+    (row) => `${row.targetKind}::${row.runtimeLifetime}`,
+  ).map((group) => {
+    const [kind = "", lifetime = ""] = group.key.split("::");
+    return [
+      cleanName(kind),
+      cleanName(lifetime),
+      list(unique(group.rows.map((row) => row.targetName)), 80),
+      list(uniqueRaw(group.rows.map(lens))),
+    ];
+  });
+}
+
+function uniqueRowsBy<TRow>(
+  rows: readonly TRow[],
+  keyForRow: (row: TRow) => string,
+): readonly TRow[] {
+  const seen = new Set<string>();
+  const result: TRow[] = [];
+  for (const row of rows) {
+    const key = keyForRow(row);
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(row);
+  }
+  return result;
 }
 
 function countFlat(values: readonly string[]): Readonly<Record<string, number>> {

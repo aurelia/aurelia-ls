@@ -4,9 +4,11 @@ import {
   SourceProjectMemo,
   type SourceProject,
 } from "../../source/index.js";
+import type { FrameworkBindingAdmissionRow } from "./framework-entities.js";
 import type { SourceRange } from "../locus.js";
 import type { FrameworkDiscoveryFilters } from "./framework-filters.js";
 import { readFrameworkPackageNames } from "./framework-package-exports.js";
+import { readFrameworkBindingAdmissions } from "./framework-rendering-bindings.js";
 import { rendererClassExpression } from "./framework-rendering-inspection.js";
 import {
   sourceRangeFromFileSpan,
@@ -171,6 +173,7 @@ function scanFrameworkHydrationFlow(
     ...controllerRows(sourceProject),
     ...renderingRows(sourceProject),
     ...rendererRows(sourceProject),
+    ...bindingAdmissionRows(sourceProject),
   ];
   return rows.sort(
     (left, right) =>
@@ -925,44 +928,49 @@ function rendererRows(
         overview: true,
       },
     ]),
-    ...rendererMethodRows(basis, "LetElementRenderer", [
-      {
-        stage: "binding-admission",
-        operation: "admit-binding",
-        targetKind: "binding",
-        needle: "renderingCtrl.addBinding",
-        targetName: "LetBinding",
-        summary:
-          "Admit LetBinding instances produced from let-element child instructions.",
-        overview: false,
-      },
-    ]),
-    ...rendererMethodRows(basis, "PropertyBindingRenderer", [
-      {
-        stage: "binding-admission",
-        operation: "admit-binding",
-        targetKind: "binding",
-        needle: "renderingCtrl.addBinding",
-        targetName: "PropertyBinding",
-        summary:
-          "Admit property bindings and optional target-observer overrides during rendering.",
-        overview: true,
-      },
-    ]),
-    ...rendererMethodRows(basis, "SpreadRenderer", [
-      {
-        stage: "binding-admission",
-        operation: "admit-binding",
-        targetKind: "binding",
-        needle: "renderingCtrl.addBinding",
-        targetName: "SpreadBinding",
-        summary:
-          "Admit bindings returned by SpreadBinding.create for transferred spread attributes.",
-        overview: false,
-      },
-    ]),
   );
   return rows;
+}
+
+function bindingAdmissionRows(
+  sourceProject: SourceProject,
+): readonly FrameworkHydrationFlowRow[] {
+  return readFrameworkBindingAdmissions(sourceProject, {}).map((row) =>
+    bindingAdmissionHydrationRow(row),
+  );
+}
+
+function bindingAdmissionHydrationRow(
+  row: FrameworkBindingAdmissionRow,
+): FrameworkHydrationFlowRow {
+  const { ownerName, methodName } = ownerAndMethodForProducer(row.producerName);
+  return {
+    id: `framework-hydration-flow:${row.id}`,
+    packageId: row.packageId,
+    packageName: row.packageName,
+    stage: "binding-admission",
+    operation: "admit-binding",
+    targetKind: "binding",
+    ownerName,
+    methodName,
+    targetName: row.bindingName,
+    overview: row.producerName === "PropertyBindingRenderer.render",
+    source: row.source,
+    summary: `${row.producerName} admits ${row.bindingName} into ${row.controllerExpression} through addBinding (${row.constructionKind}).`,
+  };
+}
+
+function ownerAndMethodForProducer(
+  producerName: string,
+): { readonly ownerName: string; readonly methodName: string } {
+  const dot = producerName.lastIndexOf(".");
+  if (dot <= 0 || dot === producerName.length - 1) {
+    return { ownerName: producerName, methodName: producerName };
+  }
+  return {
+    ownerName: producerName.slice(0, dot),
+    methodName: producerName.slice(dot + 1),
+  };
 }
 
 interface FileBasis {

@@ -1,5 +1,6 @@
 import {
   FrameworkResourceDefinitionKind,
+  FrameworkResourceInstantiationKind,
   FrameworkSyntaxProductKind,
 } from "../../framework/index.js";
 import type { SourceProject } from "../../source/index.js";
@@ -47,7 +48,6 @@ import {
   readFrameworkResourceExports,
 } from "./framework-resources.js";
 import {
-  FrameworkResourceInstantiationKind,
   readFrameworkResourceInstantiationRows,
   type FrameworkResourceInstantiationRow,
 } from "./framework-resource-materialization.js";
@@ -114,6 +114,7 @@ export interface FrameworkResourceConvergenceRow {
   readonly instructionNames: readonly string[];
   readonly bindingNames: readonly string[];
   readonly instantiationKinds: readonly string[];
+  readonly instanceLifetime: string;
   readonly materializationSiteKinds: readonly string[];
   readonly materializationPhases: readonly string[];
   readonly materializationRelations: readonly string[];
@@ -302,6 +303,7 @@ function convergenceRow(
         .filter((name): name is string => name !== null),
     ),
     instantiationKinds,
+    instanceLifetime: instantiation?.instanceLifetime ?? "definition-only",
     materializationSiteKinds: unique(
       materializationSites.map((site) => site.siteKind),
     ),
@@ -489,6 +491,7 @@ function convergenceRowMatches(
         ...row.instructionNames,
         ...row.bindingNames,
         ...row.instantiationKinds,
+        row.instanceLifetime,
         ...row.materializationSiteKinds,
         ...row.openReasons,
       ].some((value) => typeof value === "string" && value.includes(filters.query!)))

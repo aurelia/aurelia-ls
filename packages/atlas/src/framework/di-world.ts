@@ -31,6 +31,10 @@ import {
 } from "./relationships.js";
 import { readFrameworkModuleBootIndex } from "./module-boot.js";
 import { readFrameworkDiIndex } from "./di-index.js";
+import {
+  FrameworkResourceRuntimePolicy,
+  type FrameworkResourceInstanceLifetime,
+} from "./resources.js";
 
 const standardConfigurationDiWorldMemo = new SourceProjectMemo<FrameworkDiWorld>();
 
@@ -53,6 +57,11 @@ export type FrameworkDiDependencyAccess =
   | "find"
   | "invoke"
   | "resolve";
+
+/** Role a resolver slot plays after configuration spending. */
+export type FrameworkDiResolverSlotRole =
+  | "di-key-provider"
+  | "resource-type-factory";
 
 /** Source-level value identity used by DI world rows. */
 export class FrameworkDiValueRef {
@@ -97,6 +106,8 @@ export class FrameworkDiResolverSlot {
     readonly provider: FrameworkDiValueRef,
     /** Runtime resolver strategy modeled for this slot. */
     readonly strategy: FrameworkDiResolverStrategy,
+    /** Ontological role of the resolver row. */
+    readonly role: FrameworkDiResolverSlotRole,
     /** Source admission that produced this slot. */
     readonly admissionId: string,
     /** Whether this row is exact, modeled, partial, or open. */
@@ -117,6 +128,12 @@ export class FrameworkDiResourceSlot {
     readonly key: FrameworkDiValueRef,
     /** Resource class admitted to the container. */
     readonly resource: FrameworkDiValueRef,
+    /** Aurelia resource definition kind. */
+    readonly resourceKind: string,
+    /** Aurelia resource lookup name. */
+    readonly resourceName: string,
+    /** Runtime instance policy for this resource class. */
+    readonly instanceLifetime: FrameworkResourceInstanceLifetime,
     /** Source admission that produced this slot. */
     readonly admissionId: string,
     /** Exact source evidence for the slot. */
@@ -150,6 +167,54 @@ export class FrameworkDiDependencyRow {
     /** Dependency key argument expression fact. */
     readonly argument: TypeScriptExpressionFact | undefined,
     /** Exact dependency key argument source. */
+    readonly argumentSource: SourceRange | undefined,
+    /** Human-facing summary. */
+    readonly summary: string,
+  ) {}
+}
+
+/** Runtime expression that carries a DI key or constructable type. */
+export class FrameworkDiVariableKeyRef {
+  constructor(
+    /** Exact expression text used as the container key/type argument. */
+    readonly expressionText: string,
+    /** Checker symbol visible at the expression, when one exists. */
+    readonly symbolName: string | null,
+    /** Checker display type for the expression. */
+    readonly checkerType: string | undefined,
+    /** Checker apparent type for the expression. */
+    readonly apparentType: string | undefined,
+    /** Exact source range for the carrier expression. */
+    readonly source: SourceRange | undefined,
+  ) {}
+}
+
+/** Container dependency read whose key/type is carried by runtime value flow. */
+export class FrameworkDiVariableDependencyRead {
+  constructor(
+    /** Stable row id. */
+    readonly id: string,
+    /** Owning resolver slot. */
+    readonly slotId: string,
+    /** DI key whose provider owns this read. */
+    readonly ownerKey: FrameworkDiValueRef,
+    /** Provider whose source was scanned. */
+    readonly ownerProvider: FrameworkDiValueRef,
+    /** Container/read mechanism. */
+    readonly access: FrameworkDiDependencyAccess,
+    /** Runtime key/type carrier expression. */
+    readonly variableKey: FrameworkDiVariableKeyRef,
+    /** Why this read cannot be promoted to a stable dependency edge. */
+    readonly reason: string,
+    /** Path through provider method, constructor, or class field. */
+    readonly path: readonly string[],
+    /** Exact dependency source. */
+    readonly source: SourceRange | undefined,
+    /** Exact call-site fact when this dependency came from a call expression. */
+    readonly callSite: TypeScriptCallSiteEntry | undefined,
+    /** Dependency key/type argument expression fact. */
+    readonly argument: TypeScriptExpressionFact | undefined,
+    /** Exact dependency key/type argument source. */
     readonly argumentSource: SourceRange | undefined,
     /** Human-facing summary. */
     readonly summary: string,
@@ -205,6 +270,8 @@ export class FrameworkDiWorld {
     readonly resourceSlots: readonly FrameworkDiResourceSlot[],
     /** Provider dependency edges found after registration spending. */
     readonly dependencies: readonly FrameworkDiDependencyRow[],
+    /** Runtime-produced dependency reads that did not close to stable DI keys. */
+    readonly variableDependencies: readonly FrameworkDiVariableDependencyRead[],
     /** Open boundaries encountered during spending. */
     readonly opens: readonly FrameworkDiWorldOpen[],
   ) {}
@@ -230,6 +297,28 @@ export class FrameworkDiWorld {
         row.ownerProvider.name === key,
     );
   }
+
+  /** Read dynamic dependencies for a materialization route key/provider pair. */
+  readVariableDependenciesForRoute(
+    key: string,
+    provider: string,
+  ): readonly FrameworkDiVariableDependencyRead[] {
+    const exact = this.variableDependencies.filter(
+      (row) => row.ownerKey.name === key && row.ownerProvider.name === provider,
+    );
+    if (exact.length > 0) {
+      return exact;
+    }
+    const keyOwned = this.variableDependencies.filter((row) => row.ownerKey.name === key);
+    if (key === provider && keyOwned.length > 0) {
+      return keyOwned;
+    }
+    return this.variableDependencies.filter(
+      (row) =>
+        row.ownerProvider.name === provider ||
+        row.ownerProvider.name === key,
+    );
+  }
 }
 
 /** Build/read StandardConfiguration's abstract DI world from linked framework source values. */
@@ -250,6 +339,7 @@ class FrameworkDiWorldBuilder {
   readonly #resolverSlots: FrameworkDiResolverSlot[] = [];
   readonly #resourceSlots: FrameworkDiResourceSlot[] = [];
   readonly #dependencies: FrameworkDiDependencyRow[] = [];
+  readonly #variableDependencies: FrameworkDiVariableDependencyRead[] = [];
   readonly #opens: FrameworkDiWorldOpen[] = [];
   readonly #spentRegistries = new Set<string>();
   readonly #spentDefaultInterfaceKeys = new Set<string>();
@@ -287,9 +377,10 @@ class FrameworkDiWorldBuilder {
     return new FrameworkDiWorld(
       owner,
       [...this.#admissions],
-      uniqueBy(this.#resolverSlots, (row) => `${row.key.name}:${row.provider.name}:${row.strategy}`),
-      uniqueBy(this.#resourceSlots, (row) => `${row.key.name}:${row.resource.name}`),
+      uniqueBy(this.#resolverSlots, (row) => `${row.key.name}:${row.provider.name}:${row.strategy}:${row.role}`),
+      uniqueBy(this.#resourceSlots, (row) => `${row.key.name}:${row.resource.name}:${row.instanceLifetime}`),
       uniqueBy(this.#dependencies, (row) => `${row.slotId}:${row.dependencyKey.name}:${row.access}:${row.source?.filePath}:${row.source?.start.line}:${row.source?.start.character}`),
+      uniqueBy(this.#variableDependencies, (row) => `${row.slotId}:${row.variableKey.expressionText}:${row.access}:${row.source?.filePath}:${row.source?.start.line}:${row.source?.start.character}`),
       [...this.#opens],
     );
   }
@@ -545,6 +636,7 @@ class FrameworkDiWorldBuilder {
       key,
       provider,
       helper,
+      "di-key-provider",
       FrameworkRelationshipClosure.Exact,
       sourceRangeForNode(call),
     );
@@ -566,6 +658,7 @@ class FrameworkDiWorldBuilder {
         implementationKey,
         classRef,
         FrameworkDiResolverStrategy.Singleton,
+        "di-key-provider",
         FrameworkRelationshipClosure.Modeled,
         implementationKey.source ?? classRef.source,
       );
@@ -574,6 +667,7 @@ class FrameworkDiWorldBuilder {
         classRef,
         classRef,
         FrameworkDiResolverStrategy.Singleton,
+        "di-key-provider",
         FrameworkRelationshipClosure.Modeled,
         classRef.source,
       );
@@ -602,6 +696,7 @@ class FrameworkDiWorldBuilder {
           key,
           classRef,
           FrameworkDiResolverStrategy.Singleton,
+          "di-key-provider",
           FrameworkRelationshipClosure.Modeled,
           classRef.source ?? key.source,
         );
@@ -620,9 +715,12 @@ class FrameworkDiWorldBuilder {
         [...path, "metadata"],
         value,
       );
+      return;
     }
 
-    const resource = staticAuResourceRef(this.sourceProject, value);
+    const resource =
+      staticAuResourceRef(this.sourceProject, value) ??
+      staticDefineResourceRef(this.sourceProject, value);
     if (resource !== null) {
       this.addResourceSlot(admission.id, resource, classRef, resource.source ?? classRef.source);
       this.addResolverSlot(
@@ -630,6 +728,7 @@ class FrameworkDiWorldBuilder {
         classRef,
         classRef,
         FrameworkDiResolverStrategy.Singleton,
+        "resource-type-factory",
         FrameworkRelationshipClosure.Modeled,
         classRef.source,
       );
@@ -641,6 +740,7 @@ class FrameworkDiWorldBuilder {
       classRef,
       classRef,
       FrameworkDiResolverStrategy.Singleton,
+      "di-key-provider",
       FrameworkRelationshipClosure.Modeled,
       classRef.source,
     );
@@ -708,6 +808,7 @@ class FrameworkDiWorldBuilder {
         relationship.relation === FrameworkRelationshipRelation.AliasesKey
           ? FrameworkDiResolverStrategy.Alias
           : relationship.strategy,
+        "di-key-provider",
         FrameworkRelationshipClosure.Exact,
         relationship.to.source ?? relationship.source,
       );
@@ -742,6 +843,7 @@ class FrameworkDiWorldBuilder {
     key: FrameworkDiValueRef,
     provider: FrameworkDiValueRef,
     strategy: FrameworkDiResolverStrategy,
+    role: FrameworkDiResolverSlotRole,
     closure: FrameworkRelationshipClosure,
     source: SourceRange | undefined,
   ): FrameworkDiResolverSlot {
@@ -750,10 +852,11 @@ class FrameworkDiWorldBuilder {
       key,
       provider,
       strategy,
+      role,
       admissionId,
       closure,
       source,
-      `${key.name} resolves through ${strategy} provider ${provider.name}.`,
+      resolverSlotSummary(key, provider, strategy, role),
     );
     this.#resolverSlots.push(slot);
     return slot;
@@ -765,13 +868,19 @@ class FrameworkDiWorldBuilder {
     resource: FrameworkDiValueRef,
     source: SourceRange | undefined,
   ): FrameworkDiResourceSlot {
+    const parsedKey = parseResourceKey(key.name);
+    const resourceKind = parsedKey?.kind ?? key.kind;
+    const resourceName = parsedKey?.name ?? key.name;
     const slot = new FrameworkDiResourceSlot(
       `framework-di-world:resource:${++this.#slotSequence}`,
       key,
       resource,
+      resourceKind,
+      resourceName,
+      resourceInstanceLifetime(resourceKind),
       admissionId,
       source,
-      `${resource.name} registers resource key ${key.name}.`,
+      `${resource.name} registers resource key ${key.name} with ${resourceInstanceLifetime(resourceKind)} instance lifetime.`,
     );
     this.#resourceSlots.push(slot);
     return slot;
@@ -1049,7 +1158,24 @@ class FrameworkDiWorldBuilder {
       environment,
       slot.provider.name,
     ).value;
-    const key = valueRefForValue(this.sourceProject, value, keyExpression);
+    const key = dependencyKeyRefForValue(
+      this.sourceProject,
+      value,
+      keyExpression,
+    );
+    if (key === null) {
+      this.addVariableDependency(
+        slot,
+        keyExpression,
+        access,
+        path,
+        sourceNode,
+        value.kind === EvaluationValueKind.Unknown
+          ? value.reason
+          : "Dependency key expression did not reduce to a stable module key.",
+      );
+      return;
+    }
     const sourceFile = keyExpression.getSourceFile();
     const callSite = ts.isCallExpression(sourceNode)
       ? readTypeScriptCallSiteEntry(this.sourceProject, sourceFile, sourceNode)
@@ -1076,6 +1202,136 @@ class FrameworkDiWorldBuilder {
       ),
     );
   }
+
+  private addVariableDependency(
+    slot: FrameworkDiResolverSlot,
+    keyExpression: ts.Expression,
+    access: FrameworkDiDependencyAccess,
+    path: readonly string[],
+    sourceNode: ts.Node,
+    reason: string,
+  ): void {
+    const sourceFile = keyExpression.getSourceFile();
+    const callSite = ts.isCallExpression(sourceNode)
+      ? readTypeScriptCallSiteEntry(this.sourceProject, sourceFile, sourceNode)
+      : null;
+    const argument = readTypeScriptExpressionFact(
+      this.sourceProject,
+      sourceFile,
+      keyExpression,
+    );
+    const variableKey = new FrameworkDiVariableKeyRef(
+      argument?.text ?? keyExpression.getText(sourceFile),
+      argument?.symbolName ?? null,
+      argument?.type,
+      argument?.apparentType,
+      sourceRangeForNode(keyExpression),
+    );
+    this.#variableDependencies.push(
+      new FrameworkDiVariableDependencyRead(
+        `framework-di-world:variable-dependency:${++this.#dependencySequence}`,
+        slot.id,
+        slot.key,
+        slot.provider,
+        access,
+        variableKey,
+        reason,
+        path,
+        sourceRangeForNode(sourceNode),
+        callSite ?? undefined,
+        argument,
+        sourceRangeForNode(keyExpression),
+        `${slot.provider.name} ${access} uses variable-carried key/type ${variableKey.expressionText}.`,
+      ),
+    );
+  }
+}
+
+function dependencyKeyRefForValue(
+  sourceProject: SourceProject,
+  value: EvaluationValue,
+  expression: ts.Expression,
+): FrameworkDiValueRef | null {
+  if (value.kind !== EvaluationValueKind.Unknown) {
+    return valueRefForValue(sourceProject, value, expression);
+  }
+  return staticDependencyKeyRefFromChecker(sourceProject, expression);
+}
+
+function staticDependencyKeyRefFromChecker(
+  sourceProject: SourceProject,
+  expression: ts.Expression,
+): FrameworkDiValueRef | null {
+  const current = unwrapExpression(expression);
+  if (!ts.isIdentifier(current)) {
+    return null;
+  }
+  const symbol = resolvedSymbolAtLocation(sourceProject, current);
+  const declaration = preferredSymbolDeclaration(symbol);
+  if (symbol === null || declaration === null || !isModuleScopeDeclaration(declaration)) {
+    return null;
+  }
+  const source = sourceRangeForNode(declaration);
+  const typeText = sourceProject.checker.typeToString(
+    sourceProject.checker.getTypeAtLocation(current),
+  );
+  if (typeText.startsWith("InterfaceSymbol<")) {
+    return new FrameworkDiValueRef("interface", current.text, source);
+  }
+  if (
+    (symbol.flags & ts.SymbolFlags.Class) !== 0 ||
+    ts.isClassDeclaration(declaration)
+  ) {
+    return new FrameworkDiValueRef("class", current.text, source);
+  }
+  if (
+    (symbol.flags & ts.SymbolFlags.Function) !== 0 ||
+    ts.isFunctionDeclaration(declaration)
+  ) {
+    return new FrameworkDiValueRef("function", current.text, source);
+  }
+  return null;
+}
+
+function resolvedSymbolAtLocation(
+  sourceProject: SourceProject,
+  node: ts.Node,
+): ts.Symbol | null {
+  const symbol = sourceProject.checker.getSymbolAtLocation(node);
+  if (symbol === undefined) {
+    return null;
+  }
+  if ((symbol.flags & ts.SymbolFlags.Alias) === 0) {
+    return symbol;
+  }
+  return sourceProject.checker.getAliasedSymbol(symbol);
+}
+
+function preferredSymbolDeclaration(symbol: ts.Symbol | null): ts.Declaration | null {
+  const declarations = symbol?.getDeclarations() ?? [];
+  return (
+    declarations.find(
+      (declaration) => !declaration.getSourceFile().isDeclarationFile,
+    ) ??
+    declarations[0] ??
+    null
+  );
+}
+
+function isModuleScopeDeclaration(declaration: ts.Declaration): boolean {
+  if (ts.isVariableDeclaration(declaration)) {
+    const statement = declaration.parent.parent;
+    return ts.isVariableStatement(statement) && ts.isSourceFile(statement.parent);
+  }
+  if (
+    ts.isClassDeclaration(declaration) ||
+    ts.isFunctionDeclaration(declaration) ||
+    ts.isInterfaceDeclaration(declaration) ||
+    ts.isEnumDeclaration(declaration)
+  ) {
+    return ts.isSourceFile(declaration.parent);
+  }
+  return false;
 }
 
 function registrationHelperForCall(
@@ -1316,11 +1572,169 @@ function staticAuResourceRef(
     }
     return new FrameworkDiValueRef(
       "resource",
-      `${type}:${name}`,
+      resourceKey(type, name),
       sourceRangeForNode(member),
     );
   }
   return null;
+}
+
+function staticDefineResourceRef(
+  sourceProject: SourceProject,
+  value: EvaluationClassValue,
+): FrameworkDiValueRef | null {
+  const className = value.declaration.name?.text;
+  if (className === undefined) {
+    return null;
+  }
+  for (const member of value.declaration.members) {
+    if (!ts.isClassStaticBlockDeclaration(member)) {
+      continue;
+    }
+    for (const statement of member.body.statements) {
+      if (!ts.isExpressionStatement(statement)) {
+        continue;
+      }
+      const call = unwrapExpression(statement.expression);
+      if (!ts.isCallExpression(call)) {
+        continue;
+      }
+      const helper = propertyOrIdentifierName(call.expression);
+      if (helper !== "defineAttribute" && helper !== "defineElement") {
+        continue;
+      }
+      const definitionArgument = call.arguments[0];
+      const typeArgument = call.arguments[1];
+      if (
+        definitionArgument === undefined ||
+        typeArgument === undefined ||
+        ts.isSpreadElement(definitionArgument) ||
+        ts.isSpreadElement(typeArgument) ||
+        unwrapExpression(typeArgument).getText(typeArgument.getSourceFile()) !== className
+      ) {
+        continue;
+      }
+      const resourceName = resourceNameFromDefinitionArgument(
+        sourceProject,
+        value,
+        definitionArgument,
+      );
+      if (resourceName === null) {
+        continue;
+      }
+      const kind =
+        helper === "defineElement"
+          ? "custom-element"
+          : resourceDefinitionArgumentIsTemplateController(
+              sourceProject,
+              value,
+              definitionArgument,
+            )
+          ? "template-controller"
+          : "custom-attribute";
+      return new FrameworkDiValueRef(
+        "resource",
+        resourceKey(kind, resourceName),
+        sourceRangeForNode(call),
+      );
+    }
+  }
+  return null;
+}
+
+function resourceNameFromDefinitionArgument(
+  sourceProject: SourceProject,
+  value: EvaluationClassValue,
+  expression: ts.Expression,
+): string | null {
+  const unwrapped = unwrapExpression(expression);
+  if (ts.isStringLiteralLike(unwrapped)) {
+    return unwrapped.text;
+  }
+  if (ts.isObjectLiteralExpression(unwrapped)) {
+    for (const property of unwrapped.properties) {
+      if (
+        ts.isPropertyAssignment(property) &&
+        propertyNameText(property.name) === "name"
+      ) {
+        const initializer = unwrapExpression(property.initializer);
+        if (ts.isStringLiteralLike(initializer)) {
+          return initializer.text;
+        }
+      }
+    }
+  }
+  const evaluated = new StaticEvaluator(sourceProject).evaluateExpressionInEnvironment(
+    expression,
+    value.environment,
+    value.declaration.getSourceFile().fileName,
+  ).value;
+  return stringProperty(evaluated, "name");
+}
+
+function resourceDefinitionArgumentIsTemplateController(
+  sourceProject: SourceProject,
+  value: EvaluationClassValue,
+  expression: ts.Expression,
+): boolean {
+  const unwrapped = unwrapExpression(expression);
+  if (ts.isObjectLiteralExpression(unwrapped)) {
+    for (const property of unwrapped.properties) {
+      if (
+        ts.isPropertyAssignment(property) &&
+        propertyNameText(property.name) === "isTemplateController" &&
+        property.initializer.kind === ts.SyntaxKind.TrueKeyword
+      ) {
+        return true;
+      }
+    }
+  }
+  const evaluated = new StaticEvaluator(sourceProject).evaluateExpressionInEnvironment(
+    expression,
+    value.environment,
+    value.declaration.getSourceFile().fileName,
+  ).value;
+  return booleanProperty(evaluated, "isTemplateController") === true;
+}
+
+function resourceKey(kind: string, name: string): string {
+  return `au:resource:${kind}:${name}`;
+}
+
+function parseResourceKey(
+  key: string,
+): { readonly kind: string; readonly name: string } | null {
+  const parts = key.split(":");
+  if (parts.length === 4 && parts[0] === "au" && parts[1] === "resource") {
+    const kind = parts[2];
+    const name = parts[3];
+    return kind === undefined || name === undefined ? null : { kind, name };
+  }
+  if (parts.length === 2) {
+    const kind = parts[0];
+    const name = parts[1];
+    return kind === undefined || name === undefined ? null : { kind, name };
+  }
+  return null;
+}
+
+function resourceInstanceLifetime(
+  resourceKind: string,
+): FrameworkResourceInstanceLifetime {
+  return FrameworkResourceRuntimePolicy.forRegisteredResourceKind(resourceKind)
+    .instanceLifetime;
+}
+
+function resolverSlotSummary(
+  key: FrameworkDiValueRef,
+  provider: FrameworkDiValueRef,
+  strategy: FrameworkDiResolverStrategy,
+  role: FrameworkDiResolverSlotRole,
+): string {
+  if (role === "resource-type-factory") {
+    return `${provider.name} is registered as the resource type/factory carrier for ${key.name}; template resource instances are created through container.invoke.`;
+  }
+  return `${key.name} resolves through ${strategy} provider ${provider.name}.`;
 }
 
 function classValueForNewExpression(
@@ -1819,6 +2233,14 @@ function stringProperty(value: EvaluationValue, key: string): string | null {
   }
   const property = value.properties.get(key)?.value;
   return property?.kind === EvaluationValueKind.String ? property.value : null;
+}
+
+function booleanProperty(value: EvaluationValue, key: string): boolean | null {
+  if (value.kind !== EvaluationValueKind.Object) {
+    return null;
+  }
+  const property = value.properties.get(key)?.value;
+  return property?.kind === EvaluationValueKind.Boolean ? property.value : null;
 }
 
 function containerAccessForMember(name: string): FrameworkDiDependencyAccess | null {

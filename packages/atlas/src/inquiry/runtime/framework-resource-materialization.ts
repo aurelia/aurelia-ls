@@ -8,7 +8,12 @@ import {
   FrameworkRelationshipRelation,
   type FrameworkRelationshipEndpoint,
 } from "../../framework/relationships.js";
-import { FrameworkResourceDefinitionKind } from "../../framework/resources.js";
+import {
+  FrameworkResourceDefinitionKind,
+  FrameworkResourceInstantiationKind,
+  FrameworkResourceRuntimePolicy,
+  type FrameworkResourceInstanceLifetime,
+} from "../../framework/resources.js";
 import {
   FrameworkSyntaxProducerKind,
   FrameworkSyntaxProductKind,
@@ -31,22 +36,6 @@ import { readFrameworkResourceCarriers } from "./framework-resources.js";
 import { readFrameworkSyntaxProducts } from "./framework-rendering-syntax.js";
 import { sourceRangeFromFileSpan } from "./framework-support.js";
 import { calleeTail } from "./framework-ts-utils.js";
-
-/** Resource runtime-existence class. */
-export const enum FrameworkResourceInstantiationKind {
-  /** Custom element, custom attribute, or template-controller view-model construction goes through container.invoke. */
-  ViewModelContainerInvoke = "view-model-container-invoke",
-  /** Custom element construction is possible through dynamic composition. */
-  DynamicComposition = "dynamic-composition",
-  /** Value converter or binding behavior instances are reached through expression evaluator resource lookup. */
-  ExpressionResourceLookup = "expression-resource-lookup",
-  /** Binding command instances are reached by the template compiler and produce instruction records. */
-  CompilerCommand = "compiler-command",
-  /** Attribute pattern handlers are registered with the compiler parser and resolved while parsing attributes. */
-  SyntaxPatternHandler = "syntax-pattern-handler",
-  /** The resource carrier defines metadata/definition but no runtime materialization route is modeled yet. */
-  DefinitionOnly = "definition-only",
-}
 
 /** Source site class for framework resource materialization. */
 export const enum FrameworkResourceMaterializationSiteKind {
@@ -74,6 +63,8 @@ export const enum FrameworkResourceMaterializationSiteKind {
   AttributePatternRegistration = "attribute-pattern-registration",
   /** AttributeParser resolves the handler instance for a matched pattern. */
   AttributePatternHandlerResolution = "attribute-pattern-handler-resolution",
+  /** The renderer(...) helper registers an IRenderer singleton consumed by Rendering.getAll(IRenderer). */
+  RendererRegistration = "renderer-registration",
 }
 
 /** Low-level framework site that can materialize or apply a resource. */
@@ -130,6 +121,8 @@ export interface FrameworkResourceInstantiationRow {
   readonly instantiationKind: FrameworkResourceInstantiationKind;
   /** All runtime-existence classes observed for the resource. */
   readonly instantiationKinds: readonly FrameworkResourceInstantiationKind[];
+  /** Runtime instance lifetime implied by the materialization route. */
+  readonly instanceLifetime: FrameworkResourceInstanceLifetime;
   /** Resource endpoint suitable for relationship continuations. */
   readonly resource: FrameworkRelationshipEndpoint;
   /** Runtime/compiler/evaluator sites that apply to this resource class. */
@@ -205,11 +198,11 @@ function readFrameworkResourceMaterializationSites(
           ? materializationSitesForSourceFile(sourceProject, sourceFile)
           : [],
       );
-    const syntaxProducts = readFrameworkSyntaxProducts(sourceProject, {
+    const bindingCommandProducts = readFrameworkSyntaxProducts(sourceProject, {
       producerKind: FrameworkSyntaxProducerKind.BindingCommand,
       productKind: FrameworkSyntaxProductKind.BuildsInstruction,
     }).map(materializationSiteForSyntaxProduct);
-    return [...callSites, ...syntaxProducts].sort(
+    return [...callSites, ...bindingCommandProducts].sort(
       (left, right) =>
         left.source.filePath.localeCompare(right.source.filePath) ||
         left.source.start.line - right.source.start.line ||
@@ -755,10 +748,17 @@ function resourceInstantiationRow(
   row: FrameworkResourceCarrierRow,
   materializationSites: readonly FrameworkResourceMaterializationSiteRow[],
 ): FrameworkResourceInstantiationRow {
-  const sites = materializationSitesForResource(row, materializationSites);
+  const sites = [
+    ...materializationSitesForResource(row, materializationSites),
+    ...registrationSitesForResourceCarrier(row),
+  ];
   const instantiationKinds = resourceInstantiationKinds(row, sites);
   const instantiationKind =
     instantiationKinds[0] ?? FrameworkResourceInstantiationKind.DefinitionOnly;
+  const runtimePolicy = FrameworkResourceRuntimePolicy.fromInstantiationKinds(
+    row.resourceKind,
+    instantiationKinds,
+  );
   return {
     id: `framework-resource-instantiation:${row.id}`,
     packageId: row.packageId,
@@ -770,6 +770,7 @@ function resourceInstantiationRow(
     targetName: row.targetName,
     instantiationKind,
     instantiationKinds,
+    instanceLifetime: runtimePolicy.instanceLifetime,
     resource: {
       kind: FrameworkRelationshipEndpointKind.Resource,
       name: row.targetName ?? row.sourceExportName,
@@ -785,8 +786,41 @@ function resourceInstantiationRow(
         ? FrameworkRelationshipClosure.Partial
         : FrameworkRelationshipClosure.Modeled,
     source: row.source,
-    summary: resourceInstantiationSummary(row, instantiationKinds, sites),
+    summary: resourceInstantiationSummary(
+      row,
+      instantiationKinds,
+      sites,
+      runtimePolicy.instanceLifetime,
+    ),
   };
+}
+
+function registrationSitesForResourceCarrier(
+  row: FrameworkResourceCarrierRow,
+): readonly FrameworkResourceMaterializationSiteRow[] {
+  if (
+    row.resourceKind !== FrameworkResourceDefinitionKind.Renderer ||
+    row.carrierKind !== FrameworkResourceCarrierKind.RendererHelper
+  ) {
+    return [];
+  }
+  const producerName = row.targetName ?? row.sourceExportName;
+  return [
+    {
+      id: `framework-resource-materialization:${row.id}:renderer-registration`,
+      siteKind: FrameworkResourceMaterializationSiteKind.RendererRegistration,
+      relation: FrameworkRelationshipRelation.ProvidesKey,
+      mechanism: FrameworkRelationshipMechanism.RegistrationHelper,
+      phase: FrameworkRelationshipPhase.Registration,
+      resourceKinds: [FrameworkResourceDefinitionKind.Renderer],
+      packageId: row.packageId,
+      packageName: row.packageName,
+      subjectText: "IRenderer",
+      producerName,
+      source: row.source,
+      summary: `${producerName} is registered by renderer(...) as a singleton IRenderer provider.`,
+    },
+  ];
 }
 
 function materializationSitesForResource(
@@ -888,6 +922,17 @@ function resourceInstantiationKinds(
         kinds.push(FrameworkResourceInstantiationKind.SyntaxPatternHandler);
       }
       break;
+    case FrameworkResourceDefinitionKind.Renderer:
+      if (
+        materializationSites.some(
+          (site) =>
+            site.siteKind ===
+            FrameworkResourceMaterializationSiteKind.RendererRegistration,
+        )
+      ) {
+        kinds.push(FrameworkResourceInstantiationKind.RendererSingleton);
+      }
+      break;
     default:
       break;
   }
@@ -900,6 +945,7 @@ function resourceInstantiationSummary(
   row: FrameworkResourceCarrierRow,
   instantiationKinds: readonly FrameworkResourceInstantiationKind[],
   materializationSites: readonly FrameworkResourceMaterializationSiteRow[],
+  instanceLifetime: FrameworkResourceInstanceLifetime,
 ): string {
   const target = row.targetName ?? row.sourceExportName;
   if (
@@ -911,7 +957,7 @@ function resourceInstantiationSummary(
   const siteKinds = [...new Set(materializationSites.map((site) => site.siteKind))]
     .sort()
     .join(", ");
-  return `${row.resourceKind} ${target} has runtime materialization via ${siteKinds}.`;
+  return `${row.resourceKind} ${target} has ${instanceLifetime} runtime materialization via ${siteKinds}.`;
 }
 
 function normalizedPath(filePath: string): string {

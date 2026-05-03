@@ -995,7 +995,7 @@ export const LensCatalog: readonly LensSpec[] = [
         id: "instantiationKind",
         role: ParameterRole.Filter,
         summary:
-          "Filter by resource runtime-existence class such as view-model-container-invoke, expression-resource-lookup, compiler-command, or definition-only.",
+          "Filter by resource runtime-existence class such as view-model-container-invoke, expression-resource-lookup, compiler-command, renderer-singleton, or definition-only.",
       },
       {
         id: "materializationSiteKind",

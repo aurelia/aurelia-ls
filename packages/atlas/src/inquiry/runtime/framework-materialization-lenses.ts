@@ -423,6 +423,7 @@ export function readFrameworkMaterializationIndex(
       .filter((row) => !isParameterizedProviderSeed(sourceProject, row))
       .map((row) => routeForProviderSeed(sourceProject, row)),
     ...world.resolverSlots
+      .filter((slot) => slot.role !== "resource-type-factory")
       .map((slot) => routeForStandardConfigurationSlot(sourceProject, world, slot))
       .filter((row): row is FrameworkMaterializationRouteRow => row !== null),
   ]).filter((row) => routeMatches(row, filters));

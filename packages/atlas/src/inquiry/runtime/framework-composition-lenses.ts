@@ -156,7 +156,7 @@ export function answerFrameworkComposition(
       return createAnswer(
         inquiry,
         rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Framework emulation view has ${rows.length} obligation row(s), ${value.handoffCount} handoff/virtualization row(s). Ask for a mode/layer slice or row budget to expand rows.`,
+        `${emulationSummaryPrefix(rows.length, value)}. Ask for a mode/layer slice or row budget to expand rows.`,
         {
           value,
           basis,
@@ -173,7 +173,7 @@ export function answerFrameworkComposition(
       basis,
       value: (page) => ({ ...value, obligations: page.rows }),
       summary: (page) =>
-        `Framework emulation view has ${rows.length} obligation row(s), ${value.handoffCount} handoff/virtualization row(s); returned ${page.rows.length}.`,
+        `${emulationSummaryPrefix(rows.length, value)}; returned ${page.rows.length}.`,
     });
   }
 
@@ -222,6 +222,19 @@ export function answerFrameworkComposition(
     summary: (page) =>
       `Framework composition has ${actors.length} actor(s) and ${claims.length} signed claim(s); returned ${page.rows.length} claim row(s).`,
   });
+}
+
+function emulationSummaryPrefix(
+  rowCount: number,
+  value: FrameworkEmulationViewValue,
+): string {
+  const provisionalTypechecker =
+    value.interpretationStatuses["provisional-typechecker-handoff"] ?? 0;
+  const provisionalText =
+    provisionalTypechecker === 0
+      ? ""
+      : `, including ${provisionalTypechecker} provisional TypeChecker handoff row(s)`;
+  return `Framework emulation view has ${rowCount} obligation row(s), ${value.handoffCount} handoff/virtualization row(s)${provisionalText}`;
 }
 
 function readFrameworkCompositionClaims(

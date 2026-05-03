@@ -1,5 +1,4 @@
 import { readFrameworkStandardConfigurationDiWorld } from "../../framework/di-world.js";
-import type { FrameworkResourceDefinitionKind } from "../../framework/index.js";
 import type { SourceProject } from "../../source/index.js";
 import { BasisKind } from "../basis.js";
 import type { Inquiry } from "../inquiry.js";
@@ -18,6 +17,7 @@ import {
 } from "./framework-rendering-hydration-flow.js";
 import {
   readFrameworkRenderConsequenceRows,
+  type FrameworkRenderConsequenceKind,
   type FrameworkRenderConsequenceFilters,
 } from "./framework-rendering-consequences.js";
 import { countBy } from "./framework-support.js";
@@ -53,6 +53,10 @@ export type FrameworkEmulationObligationKind =
   | "model-binding"
   | "model-observation";
 
+/** How complete Atlas believes the semantic-runtime interpretation is for a visible obligation. */
+export type FrameworkEmulationInterpretationStatus =
+  | "provisional-typechecker-handoff";
+
 export interface FrameworkEmulationFilters extends FrameworkDiscoveryFilters {
   readonly emulationLayer?: string;
   readonly emulationMode?: string;
@@ -69,8 +73,12 @@ export interface FrameworkEmulationObligationRow {
   readonly ownerName: string;
   readonly targetName: string;
   readonly targetKind: string;
+  readonly targetExpression?: string;
+  readonly targetType?: string;
+  readonly runtimeLifetime?: string;
   readonly packageId?: string;
   readonly packageName?: string;
+  readonly interpretationStatus?: FrameworkEmulationInterpretationStatus;
   readonly closure: "exact" | "modeled" | "partial" | "handoff" | "open";
   readonly sourceLens: LensId;
   readonly sourceProjection: string;
@@ -89,6 +97,7 @@ export interface FrameworkEmulationViewValue {
   readonly modes: Readonly<Record<string, number>>;
   readonly obligationKinds: Readonly<Record<string, number>>;
   readonly closures: Readonly<Record<string, number>>;
+  readonly interpretationStatuses: Readonly<Record<string, number>>;
   readonly handoffCount: number;
   readonly obligations?: readonly FrameworkEmulationObligationRow[];
 }
@@ -104,7 +113,7 @@ export function readFrameworkEmulationObligations(
     ...compilerObligations(sourceProject, filters),
     ...hydrationObligations(sourceProject, filters),
     ...renderConsequenceObligations(sourceProject, filters),
-  ];
+  ].map(withInterpretationStatus);
   return rows.filter((row) => emulationRowMatches(row, filters)).sort(compareRows);
 }
 
@@ -119,6 +128,10 @@ export function frameworkEmulationValue(
     modes: countBy(rows, (row) => row.mode),
     obligationKinds: countBy(rows, (row) => row.obligationKind),
     closures: countBy(rows, (row) => row.closure),
+    interpretationStatuses: countBy(
+      rows.filter((row) => row.interpretationStatus !== undefined),
+      (row) => row.interpretationStatus!,
+    ),
     handoffCount: rows.filter(
       (row) =>
         row.mode === "typescript-handoff" ||
@@ -126,6 +139,21 @@ export function frameworkEmulationValue(
         row.closure === "handoff",
     ).length,
   };
+}
+
+function withInterpretationStatus(
+  row: FrameworkEmulationObligationRow,
+): FrameworkEmulationObligationRow {
+  if (
+    row.mode === "typescript-handoff" ||
+    row.layer === "typechecker-reactivity"
+  ) {
+    return {
+      ...row,
+      interpretationStatus: "provisional-typechecker-handoff",
+    };
+  }
+  return row;
 }
 
 function diWorldObligations(
@@ -150,7 +178,9 @@ function diWorldObligations(
       sourceRowId: row.id,
       summary: `Evaluate ${row.owner} registration admission for ${row.value.name}.`,
     })),
-    ...world.resolverSlots.map((row): FrameworkEmulationObligationRow => ({
+    ...world.resolverSlots
+      .filter((row) => row.role !== "resource-type-factory")
+      .map((row): FrameworkEmulationObligationRow => ({
       id: `framework-emulation:di-slot:${row.id}`,
       layer: "di-world",
       mode: "ecmascript-evaluation",
@@ -169,12 +199,13 @@ function diWorldObligations(
     })),
     ...world.resourceSlots.map((row): FrameworkEmulationObligationRow => ({
       id: `framework-emulation:di-resource:${row.id}`,
-      layer: layerForResourceKey(row.key.name),
-      mode: modeForResourceKey(row.key.name),
-      obligationKind: obligationForResourceKey(row.key.name),
-      ownerName: row.key.name,
+      layer: layerForResource(row.resourceKind),
+      mode: modeForResourceKind(row.resourceKind),
+      obligationKind: obligationForResourceKind(row.resourceKind),
+      ownerName: row.resource.name,
       targetName: row.resource.name,
-      targetKind: targetKindForResourceKey(row.key.name) ?? row.key.kind,
+      targetKind: row.resourceKind,
+      runtimeLifetime: row.instanceLifetime,
       closure: "exact",
       sourceLens: LensId.FrameworkDi,
       sourceProjection: "slots",
@@ -182,7 +213,7 @@ function diWorldObligations(
       basis: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
       source: row.source ?? row.resource.source ?? row.key.source,
       sourceRowId: row.id,
-      summary: `Admit built-in resource ${row.resource.name} as ${row.key.name}.`,
+      summary: `Admit built-in resource ${row.resource.name} as ${row.key.name}; instance lifetime is ${row.instanceLifetime}.`,
     })),
     ...world.dependencies.map((row): FrameworkEmulationObligationRow => ({
       id: `framework-emulation:di-dependency:${row.id}`,
@@ -204,6 +235,28 @@ function diWorldObligations(
       sourceRowId: row.id,
       summary: `${row.ownerProvider.name} ${row.access} resolves ${row.dependencyKey.name}.`,
     })),
+    ...world.variableDependencies.map((row): FrameworkEmulationObligationRow => ({
+      id: `framework-emulation:di-variable-dependency:${row.id}`,
+      layer: "di-world",
+      mode: "open-boundary",
+      obligationKind: "resolve-dependency",
+      ownerName: row.ownerProvider.name,
+      targetName: row.variableKey.expressionText,
+      targetKind: row.access,
+      targetExpression: row.variableKey.expressionText,
+      targetType: row.variableKey.checkerType,
+      closure: "open",
+      sourceLens: LensId.FrameworkDi,
+      sourceProjection: "dependencies",
+      detailFilters: {
+        key: row.ownerKey.name,
+        dependencyKey: row.variableKey.expressionText,
+      },
+      basis: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
+      source: row.source ?? row.argumentSource,
+      sourceRowId: row.id,
+      summary: `${row.ownerProvider.name} ${row.access} uses variable-carried key/type ${row.variableKey.expressionText}; static DI key remains open.`,
+    })),
   ];
 }
 
@@ -220,6 +273,7 @@ function resourceObligations(
       ownerName: row.sourceExportName,
       targetName: row.targetName ?? row.resourceName ?? row.sourceExportName,
       targetKind: row.resourceKind,
+      runtimeLifetime: row.instanceLifetime,
       packageId: row.packageId,
       packageName: row.packageName,
       closure: row.openReasons.length === 0 ? "exact" : "partial",
@@ -233,7 +287,7 @@ function resourceObligations(
       basis: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
       source: row.source,
       sourceRowId: row.id,
-      summary: `Semantic-runtime needs a ${modeForResourceKind(row.resourceKind)} row for ${row.resourceKind} ${row.targetName ?? row.sourceExportName}.`,
+      summary: `Semantic-runtime needs a ${modeForResourceKind(row.resourceKind)} row for ${row.resourceKind} ${row.targetName ?? row.sourceExportName} with ${row.instanceLifetime} instance lifetime.`,
     }),
   );
 }
@@ -315,7 +369,11 @@ function hydrationObligations(
     targetKind: row.targetKind,
     packageId: row.packageId,
     packageName: row.packageName,
-    closure: row.targetKind === "template-controller" ? "handoff" : "exact",
+    closure:
+      row.targetKind === "template-controller" ||
+      modeForHydrationTarget(row.targetKind) === "typescript-handoff"
+        ? "handoff"
+        : "exact",
     sourceLens: LensId.FrameworkRendering,
     sourceProjection: "hydration-flow",
     detailFilters: {
@@ -344,7 +402,7 @@ function renderConsequenceObligations(
     obligationKind: obligationForConsequence(row.consequenceKind),
     ownerName: row.actorName,
     targetName: row.targetName,
-    targetKind: row.targetKind,
+    targetKind: targetKindForConsequence(row.consequenceKind),
     packageId: row.packageId,
     packageName: row.packageName,
     closure:
@@ -364,8 +422,14 @@ function renderConsequenceObligations(
   }));
 }
 
+function targetKindForConsequence(
+  kind: FrameworkRenderConsequenceKind,
+): string {
+  return kind;
+}
+
 function layerForResource(
-  kind: FrameworkResourceDefinitionKind,
+  kind: string,
 ): FrameworkEmulationLayer {
   if (kind === "template-controller") {
     return "template-controller-virtualization";
@@ -377,7 +441,7 @@ function layerForResource(
 }
 
 function modeForResourceKind(
-  kind: FrameworkResourceDefinitionKind,
+  kind: string,
 ): FrameworkEmulationMode {
   if (kind === "template-controller") {
     return "virtualized-runtime";
@@ -388,54 +452,8 @@ function modeForResourceKind(
   return "semantic-runtime-emulator";
 }
 
-function modeForResourceKey(key: string): FrameworkEmulationMode {
-  if (key.startsWith("template-controller:")) {
-    return "virtualized-runtime";
-  }
-  if (
-    key.startsWith("binding-behavior:") ||
-    key.startsWith("value-converter:")
-  ) {
-    return "typescript-handoff";
-  }
-  return "semantic-runtime-emulator";
-}
-
-function layerForResourceKey(key: string): FrameworkEmulationLayer {
-  if (key.startsWith("template-controller:")) {
-    return "template-controller-virtualization";
-  }
-  if (
-    key.startsWith("binding-behavior:") ||
-    key.startsWith("value-converter:")
-  ) {
-    return "typechecker-reactivity";
-  }
-  return "resource-catalog";
-}
-
-function obligationForResourceKey(
-  key: string,
-): FrameworkEmulationObligationKind {
-  if (key.startsWith("template-controller:")) {
-    return "virtualize-template-controller";
-  }
-  if (
-    key.startsWith("binding-behavior:") ||
-    key.startsWith("value-converter:")
-  ) {
-    return "model-binding";
-  }
-  return "admit-built-in-resource";
-}
-
-function targetKindForResourceKey(key: string): string | null {
-  const separator = key.indexOf(":");
-  return separator === -1 ? null : key.slice(0, separator);
-}
-
 function obligationForResourceKind(
-  kind: FrameworkResourceDefinitionKind,
+  kind: string,
 ): FrameworkEmulationObligationKind {
   if (kind === "template-controller") {
     return "virtualize-template-controller";
@@ -485,6 +503,8 @@ function layerForConsequence(kind: string): FrameworkEmulationLayer {
   switch (kind) {
     case "template-controller-link":
       return "template-controller-virtualization";
+    case "binding-admission":
+    case "binding-production":
     case "binding-effect":
     case "observer-lookup":
     case "observation-setup":
@@ -498,6 +518,8 @@ function modeForConsequence(kind: string): FrameworkEmulationMode {
   switch (kind) {
     case "template-controller-link":
       return "virtualized-runtime";
+    case "binding-admission":
+    case "binding-production":
     case "binding-effect":
     case "observer-lookup":
     case "observation-setup":
@@ -546,6 +568,9 @@ function emulationRowMatches(
       row.ownerName.includes(filters.query) ||
       row.targetName.includes(filters.query) ||
       row.targetKind.includes(filters.query) ||
+      row.targetExpression?.includes(filters.query) === true ||
+      row.targetType?.includes(filters.query) === true ||
+      row.interpretationStatus?.includes(filters.query) === true ||
       row.summary.includes(filters.query))
   );
 }

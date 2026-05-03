@@ -7,6 +7,7 @@ import {
   type FrameworkDiDependencyRow,
   type FrameworkDiResolverSlot,
   type FrameworkDiResourceSlot,
+  type FrameworkDiVariableDependencyRead,
 } from "../../framework/di-world.js";
 import {
   FrameworkRelationshipEndpointKind,
@@ -91,6 +92,8 @@ export interface FrameworkStandardConfigurationDiWorldValue {
   readonly resourceSlotCount: number;
   /** Number of provider dependency edges. */
   readonly dependencyCount: number;
+  /** Number of variable-carried provider dependency reads. */
+  readonly variableDependencyCount: number;
   /** Number of open DI-world boundaries. */
   readonly openCount: number;
   /** Resolver slots returned by world/slots projections. */
@@ -99,6 +102,8 @@ export interface FrameworkStandardConfigurationDiWorldValue {
   readonly resourceSlots?: readonly FrameworkDiResourceSlot[];
   /** Dependency rows returned by dependency projections. */
   readonly dependencies?: readonly FrameworkDiDependencyRow[];
+  /** Variable-carried dependency reads returned by dependency projections. */
+  readonly variableDependencies?: readonly FrameworkDiVariableDependencyRead[];
 }
 
 const CHECKER_PROJECTION_BASIS = [BasisKind.TypeScriptChecker] as const;
@@ -185,18 +190,24 @@ export function answerFrameworkDi(
     const worldDependencies = world.dependencies.filter((row) =>
       diWorldDependencyMatches(row, filters),
     );
+    const worldVariableDependencies = world.variableDependencies.filter((row) =>
+      diWorldVariableDependencyMatches(row, filters),
+    );
     const evidence = [
       ...worldSlots.slice(0, 3).map(evidenceForDiWorldResolverSlot),
+      ...resourceSlots.slice(0, 3).map(evidenceForDiWorldResourceSlot),
       ...worldDependencies.slice(0, 3).map(evidenceForDiWorldDependency),
+      ...worldVariableDependencies.slice(0, 3).map(evidenceForDiWorldVariableDependency),
     ];
     return createAnswer(
       inquiry,
       worldSlots.length === 0 &&
         resourceSlots.length === 0 &&
-        worldDependencies.length === 0
+        worldDependencies.length === 0 &&
+        worldVariableDependencies.length === 0
         ? OutcomeKind.Miss
         : OutcomeKind.Hit,
-      `StandardConfiguration DI world has ${world.resolverSlots.length} resolver slot(s), ${world.resourceSlots.length} resource slot(s), and ${world.dependencies.length} dependency edge(s).`,
+      `StandardConfiguration DI world has ${world.resolverSlots.length} resolver slot(s), ${world.resourceSlots.length} resource slot(s), ${world.dependencies.length} exact dependency edge(s), and ${world.variableDependencies.length} variable-carried dependency read(s).`,
       {
         value: {
           version: index.version,
@@ -210,9 +221,13 @@ export function answerFrameworkDi(
             resolverSlotCount: world.resolverSlots.length,
             resourceSlotCount: world.resourceSlots.length,
             dependencyCount: world.dependencies.length,
+            variableDependencyCount: world.variableDependencies.length,
             openCount: world.opens.length,
             ...(projection === "dependencies"
-              ? { dependencies: worldDependencies.slice(offset, offset + limit) }
+              ? {
+                  dependencies: worldDependencies.slice(offset, offset + limit),
+                  variableDependencies: worldVariableDependencies.slice(offset, offset + limit),
+                }
               : {
                   resolverSlots: worldSlots.slice(offset, offset + limit),
                   resourceSlots: resourceSlots.slice(offset, offset + limit),
@@ -517,6 +532,27 @@ function diWorldDependencyMatches(
   );
 }
 
+function diWorldVariableDependencyMatches(
+  row: FrameworkDiVariableDependencyRead,
+  filters: FrameworkDiFilters,
+): boolean {
+  return (
+    (filters.key === undefined ||
+      row.ownerKey.name === filters.key ||
+      row.ownerProvider.name === filters.key) &&
+    (filters.dependencyKey === undefined ||
+      row.variableKey.expressionText === filters.dependencyKey ||
+      row.variableKey.symbolName === filters.dependencyKey) &&
+    (filters.query === undefined ||
+      row.summary.includes(filters.query) ||
+      row.ownerKey.name.includes(filters.query) ||
+      row.ownerProvider.name.includes(filters.query) ||
+      row.variableKey.expressionText.includes(filters.query) ||
+      row.variableKey.symbolName?.includes(filters.query) === true ||
+      row.variableKey.checkerType?.includes(filters.query) === true)
+  );
+}
+
 function evidenceForDiKey(row: FrameworkDiKeyRow): Evidence {
   return {
     id: row.id,
@@ -543,8 +579,36 @@ function evidenceForDiWorldResolverSlot(
   };
 }
 
+function evidenceForDiWorldResourceSlot(
+  row: FrameworkDiResourceSlot,
+): Evidence {
+  return {
+    id: row.id,
+    kind: EvidenceKind.ResourceDefinition,
+    role: EvidenceRole.Support,
+    confidence: EvidenceConfidence.Strong,
+    summary: row.summary,
+    source: row.source,
+    data: row,
+  };
+}
+
 function evidenceForDiWorldDependency(
   row: FrameworkDiDependencyRow,
+): Evidence {
+  return {
+    id: row.id,
+    kind: EvidenceKind.DiLookup,
+    role: EvidenceRole.Support,
+    confidence: EvidenceConfidence.Strong,
+    summary: row.summary,
+    source: row.source,
+    data: row,
+  };
+}
+
+function evidenceForDiWorldVariableDependency(
+  row: FrameworkDiVariableDependencyRead,
 ): Evidence {
   return {
     id: row.id,

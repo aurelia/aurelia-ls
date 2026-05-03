@@ -12,16 +12,14 @@ import {
   FrameworkRelationshipRelation,
   type FrameworkRelationshipEndpoint,
 } from "../../framework/relationships.js";
+import { FrameworkResourceInstantiationKind } from "../../framework/resources.js";
 import type { SourceProject } from "../../source/index.js";
 import type { SourceRange } from "../locus.js";
 import {
   readFrameworkMaterializationIndex,
   type FrameworkMaterializationInstantiationRow,
 } from "./framework-materialization-lenses.js";
-import {
-  FrameworkResourceInstantiationKind,
-  type FrameworkResourceInstantiationRow,
-} from "./framework-resource-materialization.js";
+import { type FrameworkResourceInstantiationRow } from "./framework-resource-materialization.js";
 
 /** Filters understood by admission-to-materialization link reads. */
 export interface FrameworkAdmissionMaterializationFilters {

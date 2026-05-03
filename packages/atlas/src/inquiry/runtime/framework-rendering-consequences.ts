@@ -61,13 +61,13 @@ export interface FrameworkRenderConsequenceRow {
   /** Source-side actor, usually a renderer, binding, syntax producer, or instruction concept. */
   readonly actorName: string;
   /** Source-side actor endpoint kind. */
-  readonly actorKind: FrameworkRelationshipEndpointKind;
+  readonly actorEndpointKind: FrameworkRelationshipEndpointKind;
   /** Consumed input or source concept for the consequence. */
   readonly inputName: string;
   /** Product, target method, effect, binding, renderer, or controller slot reached. */
   readonly targetName: string;
   /** Target endpoint kind. */
-  readonly targetKind: FrameworkRelationshipEndpointKind;
+  readonly targetEndpointKind: FrameworkRelationshipEndpointKind;
   /** Projection that owns the detailed row family for this consequence. */
   readonly detailProjection: FrameworkRenderConsequenceDetailProjection;
   /** Exact filters for opening the detailed row family. */
@@ -169,10 +169,10 @@ function renderConsequenceForRelationship(
     mechanism: row.mechanism,
     phase: row.phase,
     actorName: row.from.name,
-    actorKind: row.from.kind,
+    actorEndpointKind: row.from.kind,
     inputName: row.from.name,
     targetName: row.to.name,
-    targetKind: row.to.kind,
+    targetEndpointKind: row.to.kind,
     detailProjection: detail.projection,
     detailFilters: detail.filters,
     relationshipId: row.id,
@@ -301,8 +301,10 @@ function renderConsequenceMatches(
         row.mechanism,
         row.phase,
         row.actorName,
+        row.actorEndpointKind,
         row.inputName,
         row.targetName,
+        row.targetEndpointKind,
         row.summary,
       ].some((value) => value.includes(filters.query!)))
   );

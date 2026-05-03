@@ -91,8 +91,8 @@ This is not a compatibility layer for old readers and not the default caller sur
   Materialization route rows also carry `providerIdentity`, which separates concise graph/display names from raw
   provider endpoint text for anonymous callback/class/object expressions. It also exposes resource instantiation rows
   that join resource carriers to runtime/compiler/evaluator
-  materialization sites for view-model construction, expression-resource lookup/application, binding-command build, and
-  resource-kind DI registration/lookup.
+  materialization sites for view-model construction, expression-resource lookup/application, binding-command build,
+  resource-kind DI registration/lookup, and singleton runtime renderer registration.
 - [framework-resource-lenses.ts](framework-resource-lenses.ts) exposes `framework.resources`. It converges resource
   carriers with public package exports, evaluated bundle admissions, syntax products, and materialization lanes without
   claiming final container/template visibility. Its materialization, admission, and syntax-product route hops use the
@@ -126,14 +126,18 @@ This is not a compatibility layer for old readers and not the default caller sur
   hydration rows can localize the `Rendering.compile` / `TemplateCompiler.compile` source of a compiled definition,
   and compile-flow rows that produce definitions or instruction rows can return to hydration-flow by target kind.
   The default answer is an overview; it reports total corridor rows separately so callers can see that detail rows are
-  available through filters such as `operation`, `targetKind`, `ownerName`, or `methodName`.
+  available through filters such as `operation`, `targetKind`, `ownerName`, or `methodName`. Binding-admission rows in
+  hydration-flow are projected from `binding-admissions`, so filtered binding reads are complete even though the default
+  overview only keeps a small bridge row.
 - [framework-rendering-consequences.ts](framework-rendering-consequences.ts) owns the compact renderer consequence
   view behind hydration. It derives from normalized rendering relationship atoms rather than scanning source again, and
   names the runtime consequences of dispatch as `instruction-dispatch`, `controller-creation`,
   `child-controller-admission`, `binding-production`, `binding-admission`, `observer-lookup`,
   `observation-setup`, and binding/lifecycle effect rows. The default answer is an overview with per-kind quotas and
   total counts; filtered reads open the full consequence set and row-local continuations jump into the heavy detail
-  families only when needed.
+  families only when needed. Emulation rows should lift `consequenceKind` into their domain `targetKind`; do not leak
+  relationship endpoint kinds such as `symbol`, `method`, or `expression` into the semantic-runtime worklist.
+  Render-consequence rows expose those source-level categories as `actorEndpointKind` and `targetEndpointKind`.
 - [framework-rendering-public-rows.ts](framework-rendering-public-rows.ts) owns compact public answer rows for
   historically heavy rendering detail projections. `syntax-products`, `instruction-slots`, `instruction-dispatches`,
   `controller-creations`, `binding-products`, and `binding-admissions` still use the full internal index rows for
@@ -198,6 +202,17 @@ This is not a compatibility layer for old readers and not the default caller sur
   ready. The corridor distinguishes compile-time `find`/definition lookup from `get`/`invoke` materialization pressure:
   custom elements, custom attributes, and template controllers stay visible as compiler definition lookups, while their
   view-model construction and hydration dependencies are outside this corridor.
+- `framework.di:dependencies` separates exact DI dependency edges from variable-carried key/type reads. Exact rows have
+  a stable `dependencyKey` such as an `InterfaceSymbol` or module-level class; variable rows preserve
+  `FrameworkDiVariableKeyRef` (`handlerInfo.type`, `comp`, `def.Type`, etc.) with checker type and source. Lenses and
+  reports should keep this split visible so variable carrier names do not masquerade as DI keys or drive recursive DI
+  closure.
+- `framework.composition:emulation` marks TypeChecker handoff rows with
+  `interpretationStatus: "provisional-typechecker-handoff"`. These rows are source-backed boundaries into future
+  semantic-runtime binding/reactivity work, not a complete behavior graph. Avoid filling missing renderer peer rows by
+  hand unless a first-class binding/reactivity handoff substrate exists to own that taxonomy. Handoff interpretation is
+  also depth-sensitive: root/controller-owned binding materialization may be deterministic, while bindings under
+  template-controller synthetic views can remain speculative because the owning controller realization is speculative.
 - [framework-jit-compiler-corridor.ts](framework-jit-compiler-corridor.ts) names the StandardConfiguration /
   TemplateCompiler corridor affordance shared by admission-flow and compiler continuations. The route catalog declares
   both directions: JIT flow rollups can jump to TemplateCompiler instruction products, and compiler summaries or

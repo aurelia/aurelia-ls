@@ -275,6 +275,9 @@ deliberately separate `find` resource lookup from `get`/`get-all` DI lookup, `in
 watcher/observer setup. Keep this as an entry map with source provenance and continuations into compiler, DI,
 resources, lifecycle, observation, controller creation, instruction dispatch, and binding admission; do not let it
 become a duplicate detailed rendering graph.
+Binding-admission rows in hydration-flow are projected from the exact `binding-admissions` substrate, so
+`targetKind: "binding"` filters see the complete admission lane while the default overview keeps only a small bridge
+row. Do not re-add hand-picked renderer binding rows here; they caused partial coverage to look like a taxonomy.
 The default `hydration-flow` projection is an overview answer. It now reports both the visible overview count and the
 total source-backed corridor row count, so a caller can see when detail rows exist and reach them with filters instead
 of receiving a 26k-token dump up front.
@@ -284,6 +287,12 @@ relationship atoms, not another source scanner, and exposes dispatch consequence
 use it to answer "what did rendering produce or effect?" before opening nested `instruction-dispatches`,
 `controller-creations`, `binding-products`, `binding-admissions`, `binding-effects`, or `binding-setups` rows. Its
 default answer is an overview with explicit total counts; filtered reads expose the full consequence set.
+When rendering consequences are lifted into `framework.composition:emulation`, the emulation `targetKind` should be the
+domain consequence kind (`instruction-dispatch`, `binding-admission`, etc.), not the relationship endpoint kind
+(`symbol`, `method`, `expression`). Endpoint kind belongs in the source relationship row, not the worklist taxonomy.
+`framework.rendering:render-consequences` names those lower facts explicitly as `actorEndpointKind` and
+`targetEndpointKind`. If a future view needs to group by domain consequence, use `consequenceKind`; do not recover a
+domain bucket from endpoint kinds.
 The old rendering detail projections should behave as jump surfaces, not as raw substrate dumps. `syntax-products`,
 `instruction-slots`, `instruction-dispatches`, `controller-creations`, `binding-products`, and `binding-admissions`
 now return compact public rows from `framework-rendering-public-rows.ts` while preserving full internal index rows for
@@ -741,6 +750,56 @@ and classification indexes. If a facade starts owning logic again, treat that as
     as the current price of simpler substrate ownership and profile before adding durability back.
   - `readExportNames` is the cheap public-name surface; avoid `readExportSurface` when only admission names are needed
   - profile before adding more boot-time graph work; prefer indexed atoms with stable keys over repeated scans
+
+## Resource Lifetime Split
+
+- Keep resource catalog admission separate from resource instance lifetime:
+  - resource key/factory resolver rows make resource types discoverable through `container.find(...)` and related
+    resource lookup paths
+  - CE/CA/TC view-model instances are created per hydration/composition invocation through
+    `container.invoke(def.Type)`, so they should surface as `per-invocation` resource instantiation rows, not as
+    singleton DI materialization rows
+  - binding commands, binding behaviors, value converters, and attribute-pattern handlers still use resolver-cached
+    resource/service instances where the framework resolves/applies those resource objects directly
+  - runtime renderers are not definition-only syntax facts; `renderer(...)` registers singleton `IRenderer` providers
+    and `Rendering.renderers` consumes them through `getAll(IRenderer, false)`, so renderer convergence should surface
+    `renderer-singleton` / `singleton`
+- Resource runtime policy is shared substrate in `framework/resources.ts`. Do not let individual lenses infer lifetime
+  from their local projection shape; they should feed source-backed instantiation kinds into that policy.
+- `FrameworkDiResolverSlot.role === "resource-type-factory"` marks static resource carrier self-resolver rows that
+  are useful for dependency scanning but should not become ordinary `framework.materialization:instantiations` routes.
+  Use `framework.materialization:resource-instantiations` or resource convergence rows for resource runtime-existence.
+- Static `$au` resources and static-block `defineAttribute(...)` resources both need to enter `FrameworkDiResourceSlot`.
+  Treat misses here as evaluator/resource-admission gaps, not as reasons to relabel resources as singleton DI keys.
+
+## Variable-Carried DI Keys
+
+- Container reads have two different key carriers:
+  - stable module/interface/class symbols such as `IPlatform`, `ITemplateCompiler`, or `CompositionContextFactory`
+    are exact DI dependency edges and may seed DI closure
+  - runtime variables/properties such as `handlerInfo.type`, `comp`, `def.Type`, and `definition.Type` are
+    variable-carried key/type reads; they are source-backed construction facts, but not stable DI key identities
+- `FrameworkDiVariableKeyRef` preserves the variable expression, checker symbol, checker type, and source span. Do not
+  collapse these rows back to `dependencyKey.name`; names like `type`, `comp`, and `Type` are carrier names, not DI keys.
+- If the evaluator misses a stable module-scope identifier, use checker-backed module-scope classification before
+  calling it variable-carried. `resolve(IPlatform)` is a canary: it is an exact `InterfaceSymbol` dependency even when
+  the evaluator cannot close the local alias.
+- Exact dependency edges drive default-interface closure and materialization dependency rows. Variable-carried reads
+  belong in DI/emulation navigation and reports, not in recursive DI closure.
+
+## Provisional TypeChecker Handoff
+
+- `framework.composition:emulation` marks TypeChecker handoff rows with
+  `interpretationStatus: "provisional-typechecker-handoff"`.
+- The source facts behind those rows are useful navigation evidence, but the semantic-runtime model is not complete yet.
+  Do not interpret the current handoff table as exhaustive renderer/binding/reactivity coverage.
+- Current handoff rows mix several provenance families: resource convergence for binding behaviors/value converters,
+  rendering consequence rows for binding/observer methods, and a few hydration-flow affordances such as
+  `PropertyBindingRenderer -> PropertyBinding`. Missing peer renderer rows are not necessarily meaningful until the
+  TypeChecker-backed semantic-runtime model introduces a first-class binding/reactivity handoff graph.
+- Handoff confidence is depth-sensitive. Source and compiled-instruction facts may be deterministic, while the runtime
+  controller that owns the binding can become speculative underneath template-controller-created synthetic views. Phrase
+  these rows as handoff/navigation boundaries, not as a single uniform certainty class.
 
 ## Semantic Runtime Lessons To Reuse Carefully
 
