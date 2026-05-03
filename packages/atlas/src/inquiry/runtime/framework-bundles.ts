@@ -1,5 +1,6 @@
 import { readEvaluationEffectTrace } from "../../evaluation/index.js";
 import {
+  SourceProjectKeyedMemo,
   sourceSelectorForRange,
   type SourceProject,
 } from "../../source/index.js";
@@ -8,10 +9,6 @@ import {
   profileFrameworkBundles,
   readFrameworkBundleClassificationContext,
 } from "./framework-bundle-classification.js";
-import {
-  readFrameworkBundleAdmissionCache,
-  writeFrameworkBundleAdmissionCache,
-} from "./framework-cache.js";
 import {
   type FrameworkBundleExportRow,
   type FrameworkRegistryExportRow,
@@ -27,14 +24,13 @@ import {
   sourceRangeForTarget,
 } from "./framework-support.js";
 
-const bundleRowsByPackageByProject = new WeakMap<
-  SourceProject,
-  Map<string, readonly FrameworkBundleExportRow[]>
+const bundleRowsByPackage = new SourceProjectKeyedMemo<
+  string,
+  readonly FrameworkBundleExportRow[]
 >();
-
-const bundleRowsByExportByProject = new WeakMap<
-  SourceProject,
-  Map<string, readonly FrameworkBundleExportRow[]>
+const bundleRowsByExport = new SourceProjectKeyedMemo<
+  string,
+  readonly FrameworkBundleExportRow[]
 >();
 
 export function readFrameworkBundles(
@@ -84,32 +80,9 @@ export function readFrameworkBundlePackageRows(
   packageId: string,
   packageName: string,
 ): readonly FrameworkBundleExportRow[] {
-  const cache =
-    bundleRowsByPackageByProject.get(sourceProject) ??
-    new Map<string, readonly FrameworkBundleExportRow[]>();
-  if (!bundleRowsByPackageByProject.has(sourceProject)) {
-    bundleRowsByPackageByProject.set(sourceProject, cache);
-  }
-  const cached = cache.get(packageId);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const diskCached = readFrameworkBundleAdmissionCache(
-    sourceProject,
-    packageId,
+  return bundleRowsByPackage.read(sourceProject, packageId, () =>
+    scanFrameworkBundlePackageRows(sourceProject, packageId, packageName),
   );
-  if (diskCached !== undefined) {
-    cache.set(packageId, diskCached);
-    return diskCached;
-  }
-  const rows = scanFrameworkBundlePackageRows(
-    sourceProject,
-    packageId,
-    packageName,
-  );
-  cache.set(packageId, rows);
-  writeFrameworkBundleAdmissionCache(sourceProject, packageId, rows);
-  return rows;
 }
 
 export function readFrameworkBundleExportRows(
@@ -118,45 +91,21 @@ export function readFrameworkBundleExportRows(
   packageName: string,
   exportName: string,
 ): readonly FrameworkBundleExportRow[] {
-  const packageCache = bundleRowsByPackageByProject
-    .get(sourceProject)
-    ?.get(packageId);
+  const packageCache = bundleRowsByPackage.get(sourceProject, packageId);
   if (packageCache !== undefined) {
     return packageCache.filter(
       (row) => row.exportEntry.exportName === exportName,
     );
   }
-  const cache =
-    bundleRowsByExportByProject.get(sourceProject) ??
-    new Map<string, readonly FrameworkBundleExportRow[]>();
-  if (!bundleRowsByExportByProject.has(sourceProject)) {
-    bundleRowsByExportByProject.set(sourceProject, cache);
-  }
-  const diskCached = readFrameworkBundleAdmissionCache(
-    sourceProject,
-    packageId,
-  );
-  if (diskCached !== undefined) {
-    const rows = diskCached.filter(
-      (row) => row.exportEntry.exportName === exportName,
-    );
-    bundleRowsByPackageByProject.get(sourceProject)?.set(packageId, diskCached);
-    cache.set(`${packageId}:${exportName}`, rows);
-    return rows;
-  }
   const key = `${packageId}:${exportName}`;
-  const cached = cache.get(key);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const rows = scanFrameworkBundlePackageRows(
-    sourceProject,
-    packageId,
-    packageName,
-    exportName,
+  return bundleRowsByExport.read(sourceProject, key, () =>
+    scanFrameworkBundlePackageRows(
+      sourceProject,
+      packageId,
+      packageName,
+      exportName,
+    ),
   );
-  cache.set(key, rows);
-  return rows;
 }
 
 export function scanFrameworkBundlePackageRows(

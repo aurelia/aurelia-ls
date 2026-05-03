@@ -1,6 +1,12 @@
 import type { FrameworkAdmissionRelationshipRow } from "../../framework/admission.js";
 import {
+  FrameworkAdmissionMaterializationLinkKind,
+  FrameworkAdmissionMaterializationMatchBasis,
+} from "../../framework/admission-world.js";
+import type { FrameworkMaterializationRouteKind } from "../../framework/materialization.js";
+import {
   FrameworkRelationshipClosure,
+  FrameworkRelationshipEndpointKind,
   FrameworkRelationshipMechanism,
   FrameworkRelationshipPhase,
   FrameworkRelationshipRelation,
@@ -10,37 +16,12 @@ import type { SourceProject } from "../../source/index.js";
 import type { SourceRange } from "../locus.js";
 import {
   readFrameworkMaterializationIndex,
-  type FrameworkMaterializationInstantiationKind,
   type FrameworkMaterializationInstantiationRow,
 } from "./framework-materialization-lenses.js";
 import {
   FrameworkResourceInstantiationKind,
   type FrameworkResourceInstantiationRow,
 } from "./framework-resource-materialization.js";
-
-/** Bridge class from admission rows to runtime-existence/materialization rows. */
-export const enum FrameworkAdmissionMaterializationLinkKind {
-  /** An admitted DI key has visible provider/runtime-existence evidence. */
-  DiKeyInstantiation = "di-key-instantiation",
-  /** An admitted framework resource has visible runtime/compiler/evaluator materialization evidence. */
-  ResourceInstantiation = "resource-instantiation",
-}
-
-/** Exact matching basis used to join admission rows to materialization rows. */
-export const enum FrameworkAdmissionMaterializationMatchBasis {
-  /** The admitted DI key name exactly matched a key-instantiation row. */
-  DiKeyName = "di-key-name",
-  /** The admitted DI target name exactly matched the provider endpoint. */
-  DiProviderName = "di-provider-name",
-  /** The admitted resource source range matched the resource carrier. */
-  ResourceSourceCarrier = "resource-source-carrier",
-  /** The admitted resource target matched the local resource target name. */
-  ResourceTargetName = "resource-target-name",
-  /** The admitted resource target matched the exported carrier name. */
-  ResourceExportName = "resource-export-name",
-  /** The admitted resource target matched the static resource lookup name. */
-  ResourceLookupName = "resource-lookup-name",
-}
 
 /** Filters understood by admission-to-materialization link reads. */
 export interface FrameworkAdmissionMaterializationFilters {
@@ -69,9 +50,7 @@ export interface FrameworkAdmissionMaterializationLinkRow {
   /** Source admission relationship row id. */
   readonly admissionRelationshipId: string;
   /** Admission relation that produced this bridge. */
-  readonly admissionRelation:
-    | FrameworkRelationshipRelation.AdmitsDiKey
-    | FrameworkRelationshipRelation.AdmitsResource;
+  readonly admissionRelation: FrameworkRelationshipRelation;
   /** Source bundle association classifier that admitted the target. */
   readonly associationKind: string;
   /** Whether this is a DI key or resource materialization bridge. */
@@ -86,7 +65,7 @@ export interface FrameworkAdmissionMaterializationLinkRow {
   readonly materializationId: string;
   /** Materialization row kind. */
   readonly materializationKind:
-    | FrameworkMaterializationInstantiationKind
+    | FrameworkMaterializationRouteKind
     | FrameworkResourceInstantiationKind;
   /** Materialization route id when this bridge targets a DI key instantiation row. */
   readonly routeId?: string;
@@ -122,12 +101,12 @@ export function readFrameworkAdmissionMaterializationLinks(
   const materialization = readFrameworkMaterializationIndex(sourceProject);
   return relationships
     .flatMap((relationship) => {
-      switch (relationship.relation) {
-        case FrameworkRelationshipRelation.AdmitsDiKey:
+      switch (relationship.to.kind) {
+        case FrameworkRelationshipEndpointKind.DiKey:
           return materialization.instantiations.flatMap((instantiation) =>
             diLinkForInstantiation(relationship, instantiation),
           );
-        case FrameworkRelationshipRelation.AdmitsResource:
+        case FrameworkRelationshipEndpointKind.Resource:
           return materialization.resourceInstantiations.flatMap((resource) =>
             resourceLinkForInstantiation(relationship, resource),
           );
@@ -161,14 +140,14 @@ function diLinkForInstantiation(
       packageName: relationship.packageName,
       exportName: relationship.exportName,
       admissionRelationshipId: relationship.id,
-      admissionRelation: FrameworkRelationshipRelation.AdmitsDiKey,
+      admissionRelation: relationship.relation,
       associationKind: relationship.associationKind,
       linkKind: FrameworkAdmissionMaterializationLinkKind.DiKeyInstantiation,
       matchBasis,
       admittedTarget: relationship.to,
       materializedTarget: instantiation.provider,
       materializationId: instantiation.id,
-      materializationKind: instantiation.instantiationKind,
+      materializationKind: instantiation.routeKind,
       routeId: instantiation.routeId,
       materializationSiteKinds: instantiation.constructionSites.map(
         (site) => site.siteKind,
@@ -226,7 +205,7 @@ function resourceLinkForInstantiation(
       packageName: relationship.packageName,
       exportName: relationship.exportName,
       admissionRelationshipId: relationship.id,
-      admissionRelation: FrameworkRelationshipRelation.AdmitsResource,
+      admissionRelation: relationship.relation,
       associationKind: relationship.associationKind,
       linkKind: FrameworkAdmissionMaterializationLinkKind.ResourceInstantiation,
       matchBasis,

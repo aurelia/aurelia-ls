@@ -9,6 +9,8 @@ import {
   type FrameworkFlowCallTargetRow,
   type FrameworkFlowDefinition,
   type FrameworkFlowSeedRow,
+  FrameworkRelationshipRelation,
+  type FrameworkRelationshipAtom,
 } from "../../framework/index.js";
 import { FrameworkBundleAssociationKind } from "../../framework/admission.js";
 import {
@@ -38,12 +40,80 @@ import {
   type FrameworkRouterEntityRow,
   type FrameworkSyntaxProductRow,
 } from "./framework-entities.js";
+import type { FrameworkDiscoveryRecipeRow } from "./framework-recipes.js";
+import type { FrameworkHydrationFlowRow } from "./framework-rendering-hydration-flow.js";
+import type { FrameworkRenderConsequenceRow } from "./framework-rendering-consequences.js";
+import {
+  bindingAdmissionSummaryRow,
+  bindingProductSummaryRow,
+  controllerCreationSummaryRow,
+  instructionDispatchSummaryRow,
+  instructionSlotSummaryRow,
+  syntaxProductSummaryRow,
+} from "./framework-rendering-public-rows.js";
 import type { FrameworkRenderingRelationshipRow } from "./framework-rendering-relationships.js";
 import {
   concreteExportTarget,
   sourceRangeForCallSiteEntry,
   sourceRangeForTarget,
 } from "./framework-support.js";
+
+/** Evidence profile for presenting a DI relationship atom in an answer. */
+export class FrameworkDiRelationshipEvidenceProfile {
+  private static readonly registration =
+    new FrameworkDiRelationshipEvidenceProfile(EvidenceKind.DiRegistration);
+
+  private static readonly lookup =
+    new FrameworkDiRelationshipEvidenceProfile(EvidenceKind.DiLookup);
+
+  private static readonly typeFact =
+    new FrameworkDiRelationshipEvidenceProfile(EvidenceKind.TypeFact);
+
+  private constructor(
+    /** Answer-layer evidence kind for the relationship profile. */
+    readonly evidenceKind: EvidenceKind,
+  ) {}
+
+  /** Classify a DI relationship relation into its answer evidence profile. */
+  static forRelation(
+    relation: FrameworkRelationshipRelation,
+  ): FrameworkDiRelationshipEvidenceProfile {
+    switch (relation) {
+      case FrameworkRelationshipRelation.LooksUpKey:
+      case FrameworkRelationshipRelation.ResolvesKey:
+      case FrameworkRelationshipRelation.DelegatesLookup:
+        return FrameworkDiRelationshipEvidenceProfile.lookup;
+      case FrameworkRelationshipRelation.MaterializesKey:
+      case FrameworkRelationshipRelation.ConstructsInstance:
+      case FrameworkRelationshipRelation.CreatesFactory:
+        return FrameworkDiRelationshipEvidenceProfile.typeFact;
+      default:
+        return FrameworkDiRelationshipEvidenceProfile.registration;
+    }
+  }
+
+  /** Build answer evidence for one DI relationship atom. */
+  evidenceFor(row: FrameworkRelationshipAtom): Evidence {
+    return {
+      id: row.id,
+      kind: this.evidenceKind,
+      role: EvidenceRole.Subject,
+      confidence: evidenceConfidenceForDiRelationship(row),
+      summary: row.summary,
+      source: row.source,
+      data: row,
+    };
+  }
+}
+
+/** Build answer evidence for one DI relationship atom. */
+export function evidenceForDiRelationship(
+  row: FrameworkRelationshipAtom,
+): Evidence {
+  return FrameworkDiRelationshipEvidenceProfile.forRelation(
+    row.relation,
+  ).evidenceFor(row);
+}
 
 export function evidenceForFlow(flow: FrameworkFlowDefinition): Evidence {
   return {
@@ -53,6 +123,19 @@ export function evidenceForFlow(flow: FrameworkFlowDefinition): Evidence {
     confidence: EvidenceConfidence.Exact,
     summary: `${flow.flow}: ${flow.summary}`,
     data: flow,
+  };
+}
+
+export function evidenceForFrameworkDiscoveryRecipe(
+  recipe: FrameworkDiscoveryRecipeRow,
+): Evidence {
+  return {
+    id: recipe.id,
+    kind: EvidenceKind.MaintenanceSignal,
+    role: EvidenceRole.Subject,
+    confidence: EvidenceConfidence.Exact,
+    summary: `${recipe.title}: ${recipe.question}`,
+    data: recipe,
   };
 }
 
@@ -269,6 +352,7 @@ export function evidenceForBundleAssociation(
 export function evidenceForSyntaxProduct(
   row: FrameworkSyntaxProductRow,
 ): Evidence {
+  const data = syntaxProductSummaryRow(row);
   const product =
     row.instructionName ??
     row.bindingName ??
@@ -281,54 +365,64 @@ export function evidenceForSyntaxProduct(
     confidence: EvidenceConfidence.Strong,
     summary: `${row.packageId}:${row.producerName} ${row.productKind} ${product}`,
     source: row.source,
-    data: row,
+    data,
   };
 }
 
 export function evidenceForInstructionSlot(
   row: FrameworkInstructionSlotRow,
 ): Evidence {
-  const declarations = row.instructionDeclarations
-    .map((declaration) => declaration.instructionName)
-    .join(", ");
+  const data = instructionSlotSummaryRow(row);
   return {
     id: row.id,
     kind: EvidenceKind.TypeFact,
     role: EvidenceRole.Subject,
     confidence: EvidenceConfidence.Exact,
-    summary: `${row.packageId}:${row.slotName} = ${row.slotValue ?? "unknown"}${
-      declarations.length === 0 ? "" : ` declares ${declarations}`
-    } and has ${row.syntaxProducts.length} syntax product(s)`,
+    summary: `${row.packageId}:${data.summary}`,
     source: row.source,
-    data: row,
+    data,
   };
 }
 
 export function evidenceForInstructionDispatch(
   row: FrameworkInstructionDispatchRow,
 ): Evidence {
+  const data = instructionDispatchSummaryRow(row);
   return {
     id: row.id,
     kind: EvidenceKind.TypeFact,
     role: EvidenceRole.Subject,
     confidence: EvidenceConfidence.Strong,
-    summary: `${row.packageId}:${row.slotName} dispatches to ${
-      row.rendererName
-    }${row.instructionName === null ? "" : ` for ${row.instructionName}`}`,
+    summary: `${row.packageId}:${data.summary}`,
     source: row.source,
-    data: row,
+    data,
   };
 }
 
 export function evidenceForControllerCreation(
   row: FrameworkControllerCreationRow,
 ): Evidence {
+  const data = controllerCreationSummaryRow(row);
   return {
     id: row.id,
     kind: EvidenceKind.TypeFact,
     role: EvidenceRole.Subject,
     confidence: EvidenceConfidence.Strong,
     summary: `${row.packageId}:${row.rendererName} creates ${row.resourceKind} controller ${row.childControllerExpression}`,
+    source: row.source,
+    data,
+  };
+}
+
+export function evidenceForHydrationFlow(
+  row: FrameworkHydrationFlowRow,
+): Evidence {
+  return {
+    id: row.id,
+    kind: EvidenceKind.TypeFact,
+    role: EvidenceRole.Subject,
+    confidence: EvidenceConfidence.Exact,
+    summary: `${row.ownerName}.${row.methodName} ${row.operation} ${row.targetName ?? row.targetKind}: ${row.summary}`,
     source: row.source,
     data: row,
   };
@@ -337,34 +431,30 @@ export function evidenceForControllerCreation(
 export function evidenceForBindingProduct(
   row: FrameworkBindingProductRow,
 ): Evidence {
+  const data = bindingProductSummaryRow(row);
   return {
     id: row.id,
     kind: EvidenceKind.TypeFact,
     role: EvidenceRole.Subject,
     confidence: EvidenceConfidence.Strong,
-    summary: `${row.packageId}:${row.bindingName} has ${
-      row.constructionProducts.length
-    } construction product(s), ${
-      row.admissions.length
-    } admission edge(s), lifecycle [${row.lifecycleMethods.join(", ")}], and ${
-      row.observerLocatorCallSites.length
-    } observer-locator call(s)`,
+    summary: `${row.packageId}:${data.summary}`,
     source: row.source,
-    data: row,
+    data,
   };
 }
 
 export function evidenceForBindingAdmission(
   row: FrameworkBindingAdmissionRow,
 ): Evidence {
+  const data = bindingAdmissionSummaryRow(row);
   return {
     id: row.id,
     kind: EvidenceKind.TypeFact,
     role: EvidenceRole.Subject,
     confidence: EvidenceConfidence.Strong,
-    summary: `${row.packageId}:${row.producerName} admits ${row.bindingName} into ${row.controllerExpression} via ${row.constructionKind}`,
+    summary: `${row.packageId}:${data.summary}`,
     source: row.source,
-    data: row,
+    data,
   };
 }
 
@@ -398,6 +488,20 @@ export function evidenceForBindingSetup(
 
 export function evidenceForRenderingRelationship(
   row: FrameworkRenderingRelationshipRow,
+): Evidence {
+  return {
+    id: row.id,
+    kind: EvidenceKind.TypeFact,
+    role: EvidenceRole.Subject,
+    confidence: EvidenceConfidence.Strong,
+    summary: row.summary,
+    source: row.source,
+    data: row,
+  };
+}
+
+export function evidenceForRenderConsequence(
+  row: FrameworkRenderConsequenceRow,
 ): Evidence {
   return {
     id: row.id,
@@ -523,4 +627,19 @@ export function evidenceForQuestion(question: string, index: number): Evidence {
     confidence: EvidenceConfidence.Exact,
     summary: question,
   };
+}
+
+function evidenceConfidenceForDiRelationship(
+  row: FrameworkRelationshipAtom,
+): EvidenceConfidence {
+  switch (row.closure) {
+    case "exact":
+      return EvidenceConfidence.Exact;
+    case "modeled":
+      return EvidenceConfidence.Strong;
+    case "partial":
+    case "open":
+      return EvidenceConfidence.Unknown;
+  }
+  return EvidenceConfidence.Unknown;
 }

@@ -13,7 +13,11 @@ import type {
   SourceProject,
   TypeScriptCallSiteEntry,
 } from "../../source/index.js";
-import { readTypeScriptCallSiteEntry } from "../../source/index.js";
+import {
+  readTypeScriptCallSiteEntry,
+  SourceProjectKeyedMemo,
+  SourceProjectMemo,
+} from "../../source/index.js";
 import type { SourceRange } from "../locus.js";
 import type { FrameworkObserverEntityRow } from "./framework-entities.js";
 import type { FrameworkDiscoveryFilters } from "./framework-filters.js";
@@ -239,10 +243,13 @@ interface SiteClassification {
   readonly relation: FrameworkRelationshipRelation;
   readonly mechanism: FrameworkRelationshipMechanism;
   readonly targetName: string;
+  readonly targetKind: FrameworkRelationshipEndpointKind;
 }
 
-const observationInternalsByProject = new WeakMap<
-  SourceProject,
+const observationInternalsMemo =
+  new SourceProjectMemo<ObservationInternalsIndex>();
+const observationInternalsBySurfaceKind = new SourceProjectKeyedMemo<
+  string,
   ObservationInternalsIndex
 >();
 
@@ -356,7 +363,7 @@ export function readFrameworkObservationSurfaceMethods(
   sourceProject: SourceProject,
   filters: FrameworkObservationInternalFilters,
 ): readonly FrameworkObservationSurfaceMethodRow[] {
-  return readObservationInternalsIndex(sourceProject).methods
+  return readObservationInternalsIndex(sourceProject, filters.surfaceKind).methods
     .filter((row) => observationSurfaceMethodMatches(row, filters))
     .sort(compareSurfaceMethods);
 }
@@ -365,7 +372,7 @@ export function readFrameworkObservationFlowSites(
   sourceProject: SourceProject,
   filters: FrameworkObservationInternalFilters,
 ): readonly FrameworkObservationFlowSiteRow[] {
-  return readObservationInternalsIndex(sourceProject).sites
+  return readObservationInternalsIndex(sourceProject, filters.surfaceKind).sites
     .filter((row) => observationFlowSiteMatches(row, filters))
     .sort(compareFlowSites);
 }
@@ -374,7 +381,7 @@ export function readFrameworkObservationInternalRelationships(
   sourceProject: SourceProject,
   filters: FrameworkObservationInternalFilters,
 ): readonly FrameworkObservationInternalRelationshipRow[] {
-  return readObservationInternalsIndex(sourceProject).relationships
+  return readObservationInternalsIndex(sourceProject, filters.surfaceKind).relationships
     .filter((row) => observationRelationshipMatches(row, filters))
     .sort(compareInternalRelationships);
 }
@@ -399,29 +406,61 @@ function isInternalObserverEntity(entity: FrameworkObserverEntityRow): boolean {
 
 function readObservationInternalsIndex(
   sourceProject: SourceProject,
+  surfaceKind?: string,
 ): ObservationInternalsIndex {
-  const cached = observationInternalsByProject.get(sourceProject);
-  if (cached !== undefined) {
-    return cached;
+  if (surfaceKind !== undefined) {
+    return readObservationSurfaceInternalsIndex(sourceProject, surfaceKind);
   }
-  const rows = sourceProject
-    .ownedSourceFiles()
-    .flatMap((sourceFile) =>
-      observationInternalsForSourceFile(sourceProject, sourceFile),
-    );
-  const methods = rows.flatMap((row) => row.methods).sort(compareSurfaceMethods);
-  const sites = rows.flatMap((row) => row.sites).sort(compareFlowSites);
-  const relationships = sites
-    .map(observationRelationshipForFlowSite)
-    .sort(compareInternalRelationships);
-  const index = { methods, sites, relationships };
-  observationInternalsByProject.set(sourceProject, index);
-  return index;
+  return observationInternalsMemo.read(sourceProject, () => {
+    const rows = sourceProject
+      .ownedSourceFiles()
+      .flatMap((sourceFile) =>
+        observationInternalsForSourceFile(sourceProject, sourceFile),
+      );
+    const methods = rows
+      .flatMap((row) => row.methods)
+      .sort(compareSurfaceMethods);
+    const sites = rows.flatMap((row) => row.sites).sort(compareFlowSites);
+    const relationships = sites
+      .map(observationRelationshipForFlowSite)
+      .sort(compareInternalRelationships);
+    return { methods, sites, relationships };
+  });
+}
+
+function readObservationSurfaceInternalsIndex(
+  sourceProject: SourceProject,
+  surfaceKind: string,
+): ObservationInternalsIndex {
+  return observationInternalsBySurfaceKind.read(
+    sourceProject,
+    surfaceKind,
+    () => {
+      const rows = sourceProject
+        .ownedSourceFiles()
+        .flatMap((sourceFile) =>
+          observationInternalsForSourceFile(
+            sourceProject,
+            sourceFile,
+            surfaceKind,
+          ),
+        );
+      const methods = rows
+        .flatMap((row) => row.methods)
+        .sort(compareSurfaceMethods);
+      const sites = rows.flatMap((row) => row.sites).sort(compareFlowSites);
+      const relationships = sites
+        .map(observationRelationshipForFlowSite)
+        .sort(compareInternalRelationships);
+      return { methods, sites, relationships };
+    },
+  );
 }
 
 function observationInternalsForSourceFile(
   sourceProject: SourceProject,
   sourceFile: ts.SourceFile,
+  requestedSurfaceKind?: string,
 ): readonly {
   readonly methods: readonly FrameworkObservationSurfaceMethodRow[];
   readonly sites: readonly FrameworkObservationFlowSiteRow[];
@@ -442,7 +481,10 @@ function observationInternalsForSourceFile(
   const visit = (node: ts.Node): void => {
     if (ts.isClassDeclaration(node) && node.name !== undefined) {
       const surfaceKind = observationClassSurfaces.get(node.name.text);
-      if (surfaceKind !== undefined) {
+      if (
+        surfaceKind !== undefined &&
+        surfaceKindMatches(surfaceKind, requestedSurfaceKind)
+      ) {
         for (const member of node.members) {
           const executable = executableForClassMember(
             sourceFile,
@@ -467,7 +509,10 @@ function observationInternalsForSourceFile(
         file,
         node.name.text,
       );
-      if (resourceWatchSurfaceKind !== undefined) {
+      if (
+        resourceWatchSurfaceKind !== undefined &&
+        surfaceKindMatches(resourceWatchSurfaceKind, requestedSurfaceKind)
+      ) {
         for (const member of node.members) {
           if (
             !ts.isMethodDeclaration(member) ||
@@ -496,7 +541,10 @@ function observationInternalsForSourceFile(
       node.body !== undefined
     ) {
       const surfaceKind = observationFunctionSurfaceKind(file, node.name.text);
-      if (surfaceKind !== undefined) {
+      if (
+        surfaceKind !== undefined &&
+        surfaceKindMatches(surfaceKind, requestedSurfaceKind)
+      ) {
         const declaration = node as ts.FunctionDeclaration & {
           readonly name: ts.Identifier;
           readonly body: ts.Block;
@@ -517,7 +565,13 @@ function observationInternalsForSourceFile(
       ts.isObjectLiteralExpression(node.parent)
     ) {
       const objectMethodSurface = observationObjectMethodSurface(file, node);
-      if (objectMethodSurface !== null) {
+      if (
+        objectMethodSurface !== null &&
+        surfaceKindMatches(
+          objectMethodSurface.surfaceKind,
+          requestedSurfaceKind,
+        )
+      ) {
         const executable = executableForObjectMethod(
           sourceFile,
           file,
@@ -538,7 +592,10 @@ function observationInternalsForSourceFile(
       node.body !== undefined
     ) {
       const surfaceKind = observationFunctionSurfaceKind(file, node.name.text);
-      if (surfaceKind !== undefined) {
+      if (
+        surfaceKind !== undefined &&
+        surfaceKindMatches(surfaceKind, requestedSurfaceKind)
+      ) {
         const executable = executableForFunctionLike(
           sourceFile,
           file,
@@ -572,6 +629,13 @@ function observationInternalsForSourceFile(
       ),
     },
   ];
+}
+
+function surfaceKindMatches(
+  surfaceKind: FrameworkObservationSurfaceKind,
+  requestedSurfaceKind: string | undefined,
+): boolean {
+  return requestedSurfaceKind === undefined || surfaceKind === requestedSurfaceKind;
 }
 
 function isObservationSourceFile(file: SourceFileIdentity): boolean {
@@ -870,7 +934,7 @@ function flowSiteRow(
     classification.targetName,
     executable,
     source,
-    targetEndpointKind(classification),
+    classification.targetKind,
   );
   return {
     id: `framework-observation-site:${executable.packageId}:${executable.surfaceKind}:${executable.ownerName}:${executable.methodName}:${classification.siteKind}:${sourceKey(source)}`,
@@ -965,6 +1029,7 @@ function classifyCallLike(
       isObserverCacheWrite(node)
         ? FrameworkRelationshipRelation.ConfiguresObservation
         : FrameworkRelationshipRelation.LooksUpObserver,
+      FrameworkRelationshipEndpointKind.Concept,
     );
   }
   if (calleeText.includes("_dirtyChecker.createProperty")) {
@@ -982,6 +1047,7 @@ function classifyCallLike(
       FrameworkObservationFlowSiteKind.DirtyCheckTrack,
       "IDirtyChecker.addProperty",
       FrameworkRelationshipRelation.ConfiguresObservation,
+      FrameworkRelationshipEndpointKind.Concept,
     );
   }
   if (
@@ -992,6 +1058,7 @@ function classifyCallLike(
       FrameworkObservationFlowSiteKind.DirtyCheckUntrack,
       "IDirtyChecker.removeProperty",
       FrameworkRelationshipRelation.ConfiguresObservation,
+      FrameworkRelationshipEndpointKind.Concept,
     );
   }
   if (calleeName === "queueRecurringTask") {
@@ -999,6 +1066,7 @@ function classifyCallLike(
       FrameworkObservationFlowSiteKind.DirtyCheckSchedule,
       "queueRecurringTask",
       FrameworkRelationshipRelation.ConfiguresObservation,
+      FrameworkRelationshipEndpointKind.Concept,
     );
   }
   if (calleeName === "notify" && receiverText?.includes("subs") === true) {
@@ -1006,6 +1074,7 @@ function classifyCallLike(
       FrameworkObservationFlowSiteKind.DirtyCheckFlush,
       "subscriber notification",
       FrameworkRelationshipRelation.ConfiguresObservation,
+      FrameworkRelationshipEndpointKind.Concept,
     );
   }
   const collectionClassification = classifyCollectionCall(
@@ -1053,6 +1122,7 @@ function classifyCallLike(
       FrameworkObservationFlowSiteKind.NodeAccessorOverride,
       "NodeObserverLocator.getObserver",
       FrameworkRelationshipRelation.DelegatesLookup,
+      FrameworkRelationshipEndpointKind.Concept,
     );
   }
   if (
@@ -1063,6 +1133,7 @@ function classifyCallLike(
       FrameworkObservationFlowSiteKind.NodeObserverConfig,
       `NodeObserverLocator.${calleeName}`,
       FrameworkRelationshipRelation.ConfiguresObservation,
+      FrameworkRelationshipEndpointKind.Concept,
     );
   }
   if (
@@ -1073,6 +1144,7 @@ function classifyCallLike(
       FrameworkObservationFlowSiteKind.NodeAccessorOverride,
       `NodeObserverLocator.${calleeName}`,
       FrameworkRelationshipRelation.ConfiguresObservation,
+      FrameworkRelationshipEndpointKind.Concept,
     );
   }
   if (calleeName === "forNs" && calleeText.includes("AttributeNSAccessor")) {
@@ -1087,6 +1159,7 @@ function classifyCallLike(
       FrameworkObservationFlowSiteKind.ConnectableSubscribe,
       "BindingObserverRecord.add",
       FrameworkRelationshipRelation.ConfiguresObservation,
+      FrameworkRelationshipEndpointKind.Concept,
     );
   }
   if (calleeName === "subscribe") {
@@ -1094,6 +1167,7 @@ function classifyCallLike(
       FrameworkObservationFlowSiteKind.ConnectableSubscribe,
       receiverText === null ? "subscribe" : `${receiverText}.subscribe`,
       FrameworkRelationshipRelation.ConfiguresObservation,
+      FrameworkRelationshipEndpointKind.Concept,
     );
   }
   if (calleeName === "unsubscribe") {
@@ -1101,6 +1175,7 @@ function classifyCallLike(
       FrameworkObservationFlowSiteKind.ConnectableUnsubscribe,
       receiverText === null ? "unsubscribe" : `${receiverText}.unsubscribe`,
       FrameworkRelationshipRelation.ConfiguresObservation,
+      FrameworkRelationshipEndpointKind.Concept,
     );
   }
   if (calleeName === "getObserver") {
@@ -1226,6 +1301,7 @@ function classifyWatcherCall(
       FrameworkObservationFlowSiteKind.WatchCallbackResolve,
       "watch callback method",
       FrameworkRelationshipRelation.ReadsWatchDefinition,
+      FrameworkRelationshipEndpointKind.Concept,
     );
   }
   if (
@@ -1237,6 +1313,7 @@ function classifyWatcherCall(
       FrameworkObservationFlowSiteKind.WatchExpressionBranch,
       "watch expression kind",
       FrameworkRelationshipRelation.ReadsWatchDefinition,
+      FrameworkRelationshipEndpointKind.Concept,
     );
   }
   if (
@@ -1249,6 +1326,7 @@ function classifyWatcherCall(
       FrameworkObservationFlowSiteKind.WatchExpressionParse,
       "IExpressionParser.parse",
       FrameworkRelationshipRelation.ParsesExpression,
+      FrameworkRelationshipEndpointKind.Expression,
     );
   }
   if (isWatcherSetup && calleeName === "getAccessScopeAst") {
@@ -1256,6 +1334,7 @@ function classifyWatcherCall(
       FrameworkObservationFlowSiteKind.WatchAccessScopeAst,
       "AccessScopeExpression",
       FrameworkRelationshipRelation.ParsesExpression,
+      FrameworkRelationshipEndpointKind.Expression,
     );
   }
   if (
@@ -1276,6 +1355,7 @@ function classifyWatcherCall(
       FrameworkObservationFlowSiteKind.WatcherQueue,
       "queueTask",
       FrameworkRelationshipRelation.SchedulesEffect,
+      FrameworkRelationshipEndpointKind.Concept,
     );
   }
   if (isWatcher && calleeName === "enter") {
@@ -1283,6 +1363,7 @@ function classifyWatcherCall(
       FrameworkObservationFlowSiteKind.WatcherDependencyEnter,
       "ConnectableSwitcher.enter",
       FrameworkRelationshipRelation.CollectsDependency,
+      FrameworkRelationshipEndpointKind.Concept,
     );
   }
   if (isWatcher && calleeName === "exit") {
@@ -1290,6 +1371,7 @@ function classifyWatcherCall(
       FrameworkObservationFlowSiteKind.WatcherDependencyExit,
       "ConnectableSwitcher.exit",
       FrameworkRelationshipRelation.CollectsDependency,
+      FrameworkRelationshipEndpointKind.Concept,
     );
   }
   if (isWatcher && calleeName === "astEvaluate") {
@@ -1297,6 +1379,7 @@ function classifyWatcherCall(
       FrameworkObservationFlowSiteKind.WatcherCompute,
       "astEvaluate",
       FrameworkRelationshipRelation.EvaluatesExpression,
+      FrameworkRelationshipEndpointKind.Expression,
     );
   }
   if (isWatcher && calleeName === "compute" && receiverText === "this") {
@@ -1304,6 +1387,7 @@ function classifyWatcherCall(
       FrameworkObservationFlowSiteKind.WatcherCompute,
       "ComputedWatcher.compute",
       FrameworkRelationshipRelation.EvaluatesExpression,
+      FrameworkRelationshipEndpointKind.Expression,
     );
   }
   if (isWatcher && calleeName === "call" && receiverText === "this.$get") {
@@ -1311,6 +1395,7 @@ function classifyWatcherCall(
       FrameworkObservationFlowSiteKind.WatcherCompute,
       "dependency collection function",
       FrameworkRelationshipRelation.EvaluatesExpression,
+      FrameworkRelationshipEndpointKind.Expression,
     );
   }
   if (
@@ -1322,6 +1407,7 @@ function classifyWatcherCall(
       FrameworkObservationFlowSiteKind.WatcherCallbackInvoke,
       "IWatcherCallback",
       FrameworkRelationshipRelation.InvokesCallback,
+      FrameworkRelationshipEndpointKind.Concept,
     );
   }
   if (
@@ -1333,6 +1419,7 @@ function classifyWatcherCall(
       FrameworkObservationFlowSiteKind.WatcherDependencyClear,
       `observer record ${calleeName}`,
       FrameworkRelationshipRelation.CollectsDependency,
+      FrameworkRelationshipEndpointKind.Concept,
     );
   }
   if (isSlotWatcher && calleeName === "subscribe" && receiverText === "slot") {
@@ -1340,6 +1427,7 @@ function classifyWatcherCall(
       FrameworkObservationFlowSiteKind.SlotWatcherSubscribe,
       "IAuSlot.subscribe",
       FrameworkRelationshipRelation.ConfiguresObservation,
+      FrameworkRelationshipEndpointKind.Concept,
     );
   }
   if (
@@ -1351,6 +1439,7 @@ function classifyWatcherCall(
       FrameworkObservationFlowSiteKind.SlotWatcherUnsubscribe,
       "IAuSlot.unsubscribe",
       FrameworkRelationshipRelation.ConfiguresObservation,
+      FrameworkRelationshipEndpointKind.Concept,
     );
   }
   if (isSlotWatcher && calleeName === "notify" && receiverText === "this.subs") {
@@ -1389,6 +1478,7 @@ function classifyEffectCall(
       FrameworkObservationFlowSiteKind.EffectWatchExpression,
       "watch expression kind",
       FrameworkRelationshipRelation.ReadsWatchDefinition,
+      FrameworkRelationshipEndpointKind.Expression,
     );
   }
   if (calleeName === "getExpressionObserver") {
@@ -1398,6 +1488,7 @@ function classifyEffectCall(
         ? "IObserverLocator.getExpressionObserver"
         : `${receiverText}.getExpressionObserver`,
       FrameworkRelationshipRelation.LooksUpObserver,
+      FrameworkRelationshipEndpointKind.Expression,
     );
   }
   if (calleeName === "getObserver") {
@@ -1407,6 +1498,7 @@ function classifyEffectCall(
         ? "IObserverLocator.getObserver"
         : `${receiverText}.getObserver`,
       FrameworkRelationshipRelation.LooksUpObserver,
+      FrameworkRelationshipEndpointKind.Expression,
     );
   }
   if (calleeName === "subscribe" && receiverText === "observer") {
@@ -1647,6 +1739,7 @@ function classifyReturnExpression(
       FrameworkRelationshipMechanism.ObserverCache,
       "observer lookup cache",
       FrameworkRelationshipRelation.LooksUpObserver,
+      FrameworkRelationshipEndpointKind.Concept,
     );
   }
   if (
@@ -1676,6 +1769,7 @@ function classifyPropertyAccess(
     FrameworkObservationFlowSiteKind.WatchDefinitionRead,
     node.getText(executable.sourceFile),
     FrameworkRelationshipRelation.ReadsWatchDefinition,
+    FrameworkRelationshipEndpointKind.Concept,
   );
 }
 
@@ -1736,12 +1830,14 @@ function nodeSite(
   siteKind: FrameworkObservationFlowSiteKind,
   targetName: string,
   relation: FrameworkRelationshipRelation,
+  targetKind: FrameworkRelationshipEndpointKind = FrameworkRelationshipEndpointKind.Symbol,
 ): SiteClassification {
   return lookupSite(
     siteKind,
     FrameworkRelationshipMechanism.NodeObserverLocator,
     targetName,
     relation,
+    targetKind,
   );
 }
 
@@ -1749,12 +1845,14 @@ function dirtySite(
   siteKind: FrameworkObservationFlowSiteKind,
   targetName: string,
   relation: FrameworkRelationshipRelation,
+  targetKind: FrameworkRelationshipEndpointKind = FrameworkRelationshipEndpointKind.Symbol,
 ): SiteClassification {
   return lookupSite(
     siteKind,
     FrameworkRelationshipMechanism.DirtyChecker,
     targetName,
     relation,
+    targetKind,
   );
 }
 
@@ -1775,12 +1873,14 @@ function connectableSite(
   siteKind: FrameworkObservationFlowSiteKind,
   targetName: string,
   relation: FrameworkRelationshipRelation,
+  targetKind: FrameworkRelationshipEndpointKind = FrameworkRelationshipEndpointKind.Symbol,
 ): SiteClassification {
   return lookupSite(
     siteKind,
     FrameworkRelationshipMechanism.Connectable,
     targetName,
     relation,
+    targetKind,
   );
 }
 
@@ -1794,6 +1894,7 @@ function watchDecoratorSite(
     FrameworkRelationshipMechanism.WatchDecorator,
     targetName,
     relation,
+    FrameworkRelationshipEndpointKind.Concept,
   );
 }
 
@@ -1807,6 +1908,7 @@ function watchRegistrySite(
     FrameworkRelationshipMechanism.WatchRegistry,
     targetName,
     relation,
+    FrameworkRelationshipEndpointKind.Concept,
   );
 }
 
@@ -1820,6 +1922,7 @@ function watchMetadataSite(
     FrameworkRelationshipMechanism.WatchMetadata,
     targetName,
     relation,
+    FrameworkRelationshipEndpointKind.Concept,
   );
 }
 
@@ -1827,12 +1930,14 @@ function watcherSite(
   siteKind: FrameworkObservationFlowSiteKind,
   targetName: string,
   relation: FrameworkRelationshipRelation,
+  targetKind: FrameworkRelationshipEndpointKind = FrameworkRelationshipEndpointKind.Symbol,
 ): SiteClassification {
   return lookupSite(
     siteKind,
     FrameworkRelationshipMechanism.Watcher,
     targetName,
     relation,
+    targetKind,
   );
 }
 
@@ -1840,12 +1945,14 @@ function effectSite(
   siteKind: FrameworkObservationFlowSiteKind,
   targetName: string,
   relation: FrameworkRelationshipRelation,
+  targetKind: FrameworkRelationshipEndpointKind = FrameworkRelationshipEndpointKind.Concept,
 ): SiteClassification {
   return lookupSite(
     siteKind,
     FrameworkRelationshipMechanism.Effect,
     targetName,
     relation,
+    targetKind,
   );
 }
 
@@ -1854,8 +1961,9 @@ function lookupSite(
   mechanism: FrameworkRelationshipMechanism,
   targetName: string,
   relation: FrameworkRelationshipRelation,
+  targetKind: FrameworkRelationshipEndpointKind = FrameworkRelationshipEndpointKind.Symbol,
 ): SiteClassification {
-  return { siteKind, relation, mechanism, targetName };
+  return { siteKind, relation, mechanism, targetName, targetKind };
 }
 
 function methodEndpoint(
@@ -1885,52 +1993,9 @@ function targetEndpoint(
   };
 }
 
-function targetEndpointKind(
-  classification: SiteClassification,
-): FrameworkRelationshipEndpointKind {
-  switch (classification.siteKind) {
-    case FrameworkObservationFlowSiteKind.ObserverCacheRead:
-    case FrameworkObservationFlowSiteKind.ObserverCacheWrite:
-    case FrameworkObservationFlowSiteKind.NodeObserverConfig:
-    case FrameworkObservationFlowSiteKind.NodeAccessorOverride:
-    case FrameworkObservationFlowSiteKind.DirtyCheckSchedule:
-    case FrameworkObservationFlowSiteKind.DirtyCheckTrack:
-    case FrameworkObservationFlowSiteKind.DirtyCheckUntrack:
-    case FrameworkObservationFlowSiteKind.DirtyCheckFlush:
-    case FrameworkObservationFlowSiteKind.ConnectableSubscribe:
-    case FrameworkObservationFlowSiteKind.ConnectableUnsubscribe:
-    case FrameworkObservationFlowSiteKind.WatchDefinitionCreate:
-    case FrameworkObservationFlowSiteKind.WatchDefinitionStore:
-    case FrameworkObservationFlowSiteKind.WatchDefinitionRead:
-    case FrameworkObservationFlowSiteKind.ResourceWatchDefinitionMerge:
-    case FrameworkObservationFlowSiteKind.WatchCallbackResolve:
-    case FrameworkObservationFlowSiteKind.WatchExpressionBranch:
-    case FrameworkObservationFlowSiteKind.WatcherQueue:
-    case FrameworkObservationFlowSiteKind.WatcherDependencyEnter:
-    case FrameworkObservationFlowSiteKind.WatcherDependencyExit:
-    case FrameworkObservationFlowSiteKind.WatcherDependencyClear:
-    case FrameworkObservationFlowSiteKind.WatcherCallbackInvoke:
-    case FrameworkObservationFlowSiteKind.EffectRunner:
-    case FrameworkObservationFlowSiteKind.EffectSubscribe:
-    case FrameworkObservationFlowSiteKind.EffectCleanup:
-    case FrameworkObservationFlowSiteKind.EffectStop:
-    case FrameworkObservationFlowSiteKind.EffectDependencyEnter:
-    case FrameworkObservationFlowSiteKind.EffectDependencyExit:
-    case FrameworkObservationFlowSiteKind.SlotWatcherSubscribe:
-    case FrameworkObservationFlowSiteKind.SlotWatcherUnsubscribe:
-      return FrameworkRelationshipEndpointKind.Concept;
-    case FrameworkObservationFlowSiteKind.WatchExpressionParse:
-    case FrameworkObservationFlowSiteKind.WatchAccessScopeAst:
-    case FrameworkObservationFlowSiteKind.WatcherCompute:
-    case FrameworkObservationFlowSiteKind.EffectWatchExpression:
-    case FrameworkObservationFlowSiteKind.EffectWatchGetter:
-      return FrameworkRelationshipEndpointKind.Expression;
-    default:
-      return FrameworkRelationshipEndpointKind.Symbol;
-  }
-}
-
-function summaryVerb(classification: SiteClassification): string {
+function summaryVerb(classification: {
+  readonly relation: FrameworkRelationshipRelation;
+}): string {
   switch (classification.relation) {
     case FrameworkRelationshipRelation.DelegatesLookup:
       return "delegates observation to";

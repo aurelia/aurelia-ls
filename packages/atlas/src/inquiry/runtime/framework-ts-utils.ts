@@ -5,14 +5,15 @@ import {
   StaticEvaluator,
   type ModuleEvaluationResult,
 } from "../../evaluation/index.js";
-import type {
-  SourceProject,
-  TypeScriptExpressionFact,
+import {
+  SourceProjectKeyedMemo,
+  type SourceProject,
+  type TypeScriptExpressionFact,
 } from "../../source/index.js";
 
-const moduleEvaluationByFileByProject = new WeakMap<
-  SourceProject,
-  Map<string, ModuleEvaluationResult>
+const moduleEvaluationByFile = new SourceProjectKeyedMemo<
+  string,
+  ModuleEvaluationResult
 >();
 
 export function localVariableInitializerForIdentifier(
@@ -520,20 +521,10 @@ export function readModuleEvaluation(
   sourceProject: SourceProject,
   sourceFile: ts.SourceFile,
 ): ModuleEvaluationResult {
-  const cache =
-    moduleEvaluationByFileByProject.get(sourceProject) ??
-    new Map<string, ModuleEvaluationResult>();
-  if (!moduleEvaluationByFileByProject.has(sourceProject)) {
-    moduleEvaluationByFileByProject.set(sourceProject, cache);
-  }
-  const cached = cache.get(sourceFile.fileName);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const evaluator = new StaticEvaluator(sourceProject);
-  const result = evaluator.evaluateSourceFile(sourceFile, sourceFile.fileName);
-  cache.set(sourceFile.fileName, result);
-  return result;
+  return moduleEvaluationByFile.read(sourceProject, sourceFile.fileName, () => {
+    const evaluator = new StaticEvaluator(sourceProject);
+    return evaluator.evaluateSourceFile(sourceFile, sourceFile.fileName);
+  });
 }
 
 export function objectProperty(

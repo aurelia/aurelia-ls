@@ -3,6 +3,12 @@ import {
   type FrameworkDiKeyRow,
 } from "../../framework/di-index.js";
 import {
+  readFrameworkStandardConfigurationDiWorld,
+  type FrameworkDiDependencyRow,
+  type FrameworkDiResolverSlot,
+  type FrameworkDiResourceSlot,
+} from "../../framework/di-world.js";
+import {
   FrameworkRelationshipEndpointKind,
   FrameworkRelationshipPhase,
   FrameworkRelationshipRelation,
@@ -31,16 +37,29 @@ import {
 } from "../evidence.js";
 import type { Inquiry } from "../inquiry.js";
 import { LensId } from "../lens.js";
-import { LocusKind, type SourceRange } from "../locus.js";
 import {
   NavigationPlane,
   NavigationRelation,
-  type NavigationRouteClaim,
 } from "../navigation.js";
+import { pageOffset } from "../paging.js";
+import {
+  FrameworkRowContinuationBuilder,
+  nextPageContinuation,
+  projectionContinuation,
+} from "./framework-continuation-core.js";
+import {
+  readFrameworkDiGraph,
+  type FrameworkDiGraphComponentRow,
+  type FrameworkDiGraphEdgeRow,
+  type FrameworkDiGraphValue,
+} from "./framework-di-graph.js";
+import { evidenceForDiRelationship } from "./framework-evidence.js";
+import { PagedRowFamily } from "../paged-row-family.js";
+import { countBy, route } from "./framework-support.js";
 
 /** Value returned by framework.di. */
 export interface FrameworkDiValue {
-  /** DI relationship index schema/cache version. */
+  /** DI relationship index schema version. */
   readonly version: string;
   /** Number of DI key rows after filtering. */
   readonly keyCount: number;
@@ -56,7 +75,33 @@ export interface FrameworkDiValue {
   readonly keys?: readonly FrameworkDiKeyRow[];
   /** DI relationship atoms returned by fact/relationship projections. */
   readonly relationships?: readonly FrameworkRelationshipAtom[];
+  /** DI graph projection shaped after registration admission, container state, lookup, and materialization layers. */
+  readonly diGraph?: FrameworkDiGraphValue;
+  /** StandardConfiguration DI world projection from booted source values. */
+  readonly standardConfigurationWorld?: FrameworkStandardConfigurationDiWorldValue;
 }
+
+/** Value returned for framework.di world/dependency projections. */
+export interface FrameworkStandardConfigurationDiWorldValue {
+  /** Number of configuration/registry admissions. */
+  readonly admissionCount: number;
+  /** Number of modeled resolver slots. */
+  readonly resolverSlotCount: number;
+  /** Number of modeled resource slots. */
+  readonly resourceSlotCount: number;
+  /** Number of provider dependency edges. */
+  readonly dependencyCount: number;
+  /** Number of open DI-world boundaries. */
+  readonly openCount: number;
+  /** Resolver slots returned by world/slots projections. */
+  readonly resolverSlots?: readonly FrameworkDiResolverSlot[];
+  /** Resource slots returned by world/slots projections. */
+  readonly resourceSlots?: readonly FrameworkDiResourceSlot[];
+  /** Dependency rows returned by dependency projections. */
+  readonly dependencies?: readonly FrameworkDiDependencyRow[];
+}
+
+const CHECKER_PROJECTION_BASIS = [BasisKind.TypeScriptChecker] as const;
 
 interface FrameworkDiFilters {
   readonly packageId?: string;
@@ -65,8 +110,42 @@ interface FrameworkDiFilters {
   readonly phase?: string;
   readonly key?: string;
   readonly strategy?: string;
+  readonly routeKind?: string;
+  readonly nodeKind?: string;
+  readonly edgeKind?: string;
+  readonly dependencyKey?: string;
   readonly query?: string;
 }
+
+const DI_KEY_ROW_FAMILY = new PagedRowFamily<FrameworkDiKeyRow>({
+  id: "framework.di:keys",
+  rowLabel: "framework DI key row(s)",
+  evidenceForRow: evidenceForDiKey,
+  continuationsForPage: diKeyContinuations,
+});
+
+const DI_RELATIONSHIP_ROW_FAMILY =
+  new PagedRowFamily<FrameworkRelationshipAtom>({
+    id: "framework.di:relationships",
+    rowLabel: "framework DI relationship atom(s)",
+    evidenceForRow: evidenceForDiRelationship,
+    continuationsForPage: relationshipContinuations,
+  });
+
+const DI_GRAPH_EDGE_ROW_FAMILY = new PagedRowFamily<FrameworkDiGraphEdgeRow>({
+  id: "framework.di:graph",
+  rowLabel: "framework DI graph edge(s)",
+  evidenceForRow: evidenceForDiGraphEdge,
+  continuationsForPage: graphEdgeContinuations,
+});
+
+const DI_GRAPH_COMPONENT_ROW_FAMILY =
+  new PagedRowFamily<FrameworkDiGraphComponentRow>({
+    id: "framework.di:dag",
+    rowLabel: "framework DI dependency component(s)",
+    evidenceForRow: evidenceForDiGraphComponent,
+    continuationsForPage: graphComponentContinuations,
+  });
 
 /** Answer framework.di inquiries from kernel DI relationship atoms. */
 export function answerFrameworkDi(
@@ -85,42 +164,136 @@ export function answerFrameworkDi(
   ).filter((row) => relationshipMatches(row, filters));
   const limit = clampBudget(inquiry.budget?.rows, 80, 1_000);
   const offset = pageOffset(inquiry);
+  const basis = [frameworkDiBasis(sourceProject)];
 
-  if (projection === "keys") {
-    const page = pageRows(keys, offset, limit);
+  if (
+    projection === "world" ||
+    projection === "slots" ||
+    projection === "dependencies"
+  ) {
+    const worldBasis = [
+      frameworkDiBasis(sourceProject),
+      frameworkDiWorldBasis(sourceProject),
+    ];
+    const world = readFrameworkStandardConfigurationDiWorld(sourceProject);
+    const worldSlots = world.resolverSlots.filter((row) =>
+      diWorldSlotMatches(row, filters),
+    );
+    const resourceSlots = world.resourceSlots.filter((row) =>
+      diWorldResourceSlotMatches(row, filters),
+    );
+    const worldDependencies = world.dependencies.filter((row) =>
+      diWorldDependencyMatches(row, filters),
+    );
+    const evidence = [
+      ...worldSlots.slice(0, 3).map(evidenceForDiWorldResolverSlot),
+      ...worldDependencies.slice(0, 3).map(evidenceForDiWorldDependency),
+    ];
     return createAnswer(
       inquiry,
-      page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-      `Returned ${page.rows.length} of ${keys.length} framework DI key row(s).`,
+      worldSlots.length === 0 &&
+        resourceSlots.length === 0 &&
+        worldDependencies.length === 0
+        ? OutcomeKind.Miss
+        : OutcomeKind.Hit,
+      `StandardConfiguration DI world has ${world.resolverSlots.length} resolver slot(s), ${world.resourceSlots.length} resource slot(s), and ${world.dependencies.length} dependency edge(s).`,
       {
         value: {
           version: index.version,
           keyCount: keys.length,
           relationshipCount: relationships.length,
-          relations: index.rollup.relations,
-          mechanisms: index.rollup.mechanisms,
-          phases: index.rollup.phases,
-          keys: page.rows,
+          relations: countBy(relationships, (row) => row.relation),
+          mechanisms: countBy(relationships, (row) => row.mechanism),
+          phases: countBy(relationships, (row) => row.phase),
+          standardConfigurationWorld: {
+            admissionCount: world.admissions.length,
+            resolverSlotCount: world.resolverSlots.length,
+            resourceSlotCount: world.resourceSlots.length,
+            dependencyCount: world.dependencies.length,
+            openCount: world.opens.length,
+            ...(projection === "dependencies"
+              ? { dependencies: worldDependencies.slice(offset, offset + limit) }
+              : {
+                  resolverSlots: worldSlots.slice(offset, offset + limit),
+                  resourceSlots: resourceSlots.slice(offset, offset + limit),
+                }),
+          },
         },
-        basis: [frameworkDiBasis(sourceProject)],
-        evidence: page.rows
-          .slice(0, evidenceLimit(inquiry))
-          .map(evidenceForDiKey),
-        page: pageInfo(
-          inquiry,
-          page.rows.length,
-          keys.length,
-          limit,
-          page.nextOffset,
-        ),
-        continuations: diKeyContinuations(
-          inquiry,
-          page.rows,
-          page.nextOffset,
-          limit,
-        ),
+        basis: worldBasis,
+        evidence,
+        continuations: diWorldContinuations(inquiry),
       },
     );
+  }
+
+  if (projection === "graph") {
+    const graph = readFrameworkDiGraph(sourceProject, filters);
+    return DI_GRAPH_EDGE_ROW_FAMILY.answer({
+      inquiry,
+      rows: graph.edges,
+      limit,
+      offset,
+      basis,
+      value: (page) => ({
+        version: index.version,
+        keyCount: keys.length,
+        relationshipCount: relationships.length,
+        relations: countBy(relationships, (row) => row.relation),
+        mechanisms: countBy(relationships, (row) => row.mechanism),
+        phases: countBy(relationships, (row) => row.phase),
+        diGraph: {
+          ...graph.value,
+          nodes: graph.nodes,
+          edges: page.rows,
+        },
+      }),
+      summary: (page) =>
+        `Framework DI graph has ${graph.nodes.length} node(s), ${graph.edges.length} edge(s), and ${graph.components.length} dependency component(s); returned ${page.rows.length} edge row(s).`,
+    });
+  }
+
+  if (projection === "dag") {
+    const graph = readFrameworkDiGraph(sourceProject, filters);
+    return DI_GRAPH_COMPONENT_ROW_FAMILY.answer({
+      inquiry,
+      rows: graph.components,
+      limit,
+      offset,
+      basis,
+      value: (page) => ({
+        version: index.version,
+        keyCount: keys.length,
+        relationshipCount: relationships.length,
+        relations: countBy(relationships, (row) => row.relation),
+        mechanisms: countBy(relationships, (row) => row.mechanism),
+        phases: countBy(relationships, (row) => row.phase),
+        diGraph: {
+          ...graph.value,
+          components: page.rows,
+        },
+      }),
+      summary: (page) =>
+        `Framework DI dependency DAG has ${graph.components.length} component(s), including ${graph.value.cyclicComponentCount} cyclic component(s); returned ${page.rows.length} component row(s).`,
+    });
+  }
+
+  if (projection === "keys") {
+    return DI_KEY_ROW_FAMILY.answer({
+      inquiry,
+      rows: keys,
+      limit,
+      offset,
+      basis,
+      value: (page) => ({
+        version: index.version,
+        keyCount: keys.length,
+        relationshipCount: relationships.length,
+        relations: index.rollup.relations,
+        mechanisms: index.rollup.mechanisms,
+        phases: index.rollup.phases,
+        keys: page.rows,
+      }),
+    });
   }
 
   if (
@@ -132,40 +305,22 @@ export function answerFrameworkDi(
     projection === "materializations" ||
     projection === "evidence"
   ) {
-    const page = pageRows(relationships, offset, limit);
-    return createAnswer(
+    return DI_RELATIONSHIP_ROW_FAMILY.answer({
       inquiry,
-      page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-      `Returned ${page.rows.length} of ${relationships.length} framework DI relationship atom(s).`,
-      {
-        value: {
-          version: index.version,
-          keyCount: keys.length,
-          relationshipCount: relationships.length,
-          relations: countBy(relationships, (row) => row.relation),
-          mechanisms: countBy(relationships, (row) => row.mechanism),
-          phases: countBy(relationships, (row) => row.phase),
-          relationships: page.rows,
-        },
-        basis: [frameworkDiBasis(sourceProject)],
-        evidence: page.rows
-          .slice(0, evidenceLimit(inquiry))
-          .map(evidenceForRelationship),
-        page: pageInfo(
-          inquiry,
-          page.rows.length,
-          relationships.length,
-          limit,
-          page.nextOffset,
-        ),
-        continuations: relationshipContinuations(
-          inquiry,
-          page.rows,
-          page.nextOffset,
-          limit,
-        ),
-      },
-    );
+      rows: relationships,
+      limit,
+      offset,
+      basis,
+      value: (page) => ({
+        version: index.version,
+        keyCount: keys.length,
+        relationshipCount: relationships.length,
+        relations: countBy(relationships, (row) => row.relation),
+        mechanisms: countBy(relationships, (row) => row.mechanism),
+        phases: countBy(relationships, (row) => row.phase),
+        relationships: page.rows,
+      }),
+    });
   }
 
   return createAnswer(
@@ -181,10 +336,10 @@ export function answerFrameworkDi(
         mechanisms: countBy(relationships, (row) => row.mechanism),
         phases: countBy(relationships, (row) => row.phase),
       },
-      basis: [frameworkDiBasis(sourceProject)],
+      basis,
       evidence: [
         ...keys.slice(0, 2).map(evidenceForDiKey),
-        ...relationships.slice(0, 4).map(evidenceForRelationship),
+        ...relationships.slice(0, 4).map(evidenceForDiRelationship),
       ],
       continuations: diSummaryContinuations(inquiry),
     },
@@ -258,6 +413,10 @@ function filtersFromRecord(value: unknown): FrameworkDiFilters {
     ...stringFilter(source, "phase"),
     ...stringFilter(source, "key"),
     ...stringFilter(source, "strategy"),
+    ...stringFilter(source, "routeKind"),
+    ...stringFilter(source, "nodeKind"),
+    ...stringFilter(source, "edgeKind"),
+    ...stringFilter(source, "dependencyKey"),
     ...stringFilter(source, "query"),
   };
 }
@@ -309,6 +468,55 @@ function relationshipMatches(
   );
 }
 
+function diWorldSlotMatches(
+  row: FrameworkDiResolverSlot,
+  filters: FrameworkDiFilters,
+): boolean {
+  return (
+    (filters.key === undefined ||
+      row.key.name === filters.key ||
+      row.provider.name === filters.key) &&
+    (filters.strategy === undefined || row.strategy === filters.strategy) &&
+    (filters.query === undefined ||
+      row.summary.includes(filters.query) ||
+      row.key.name.includes(filters.query) ||
+      row.provider.name.includes(filters.query))
+  );
+}
+
+function diWorldResourceSlotMatches(
+  row: FrameworkDiResourceSlot,
+  filters: FrameworkDiFilters,
+): boolean {
+  return (
+    (filters.key === undefined ||
+      row.key.name === filters.key ||
+      row.resource.name === filters.key) &&
+    (filters.query === undefined ||
+      row.summary.includes(filters.query) ||
+      row.key.name.includes(filters.query) ||
+      row.resource.name.includes(filters.query))
+  );
+}
+
+function diWorldDependencyMatches(
+  row: FrameworkDiDependencyRow,
+  filters: FrameworkDiFilters,
+): boolean {
+  return (
+    (filters.key === undefined ||
+      row.ownerKey.name === filters.key ||
+      row.ownerProvider.name === filters.key) &&
+    (filters.dependencyKey === undefined ||
+      row.dependencyKey.name === filters.dependencyKey) &&
+    (filters.query === undefined ||
+      row.summary.includes(filters.query) ||
+      row.ownerKey.name.includes(filters.query) ||
+      row.ownerProvider.name.includes(filters.query) ||
+      row.dependencyKey.name.includes(filters.query))
+  );
+}
+
 function evidenceForDiKey(row: FrameworkDiKeyRow): Evidence {
   return {
     id: row.id,
@@ -321,48 +529,32 @@ function evidenceForDiKey(row: FrameworkDiKeyRow): Evidence {
   };
 }
 
-function evidenceForRelationship(row: FrameworkRelationshipAtom): Evidence {
+function evidenceForDiWorldResolverSlot(
+  row: FrameworkDiResolverSlot,
+): Evidence {
   return {
     id: row.id,
-    kind: evidenceKindForRelationship(row),
-    role: EvidenceRole.Subject,
-    confidence: evidenceConfidenceForRelationship(row),
+    kind: EvidenceKind.DiRegistration,
+    role: EvidenceRole.Support,
+    confidence: EvidenceConfidence.Strong,
     summary: row.summary,
     source: row.source,
     data: row,
   };
 }
 
-function evidenceKindForRelationship(
-  row: FrameworkRelationshipAtom,
-): EvidenceKind {
-  switch (row.relation) {
-    case FrameworkRelationshipRelation.LooksUpKey:
-    case FrameworkRelationshipRelation.ResolvesKey:
-    case FrameworkRelationshipRelation.DelegatesLookup:
-      return EvidenceKind.DiLookup;
-    case FrameworkRelationshipRelation.MaterializesKey:
-    case FrameworkRelationshipRelation.ConstructsInstance:
-    case FrameworkRelationshipRelation.CreatesFactory:
-      return EvidenceKind.TypeFact;
-    default:
-      return EvidenceKind.DiRegistration;
-  }
-}
-
-function evidenceConfidenceForRelationship(
-  row: FrameworkRelationshipAtom,
-): EvidenceConfidence {
-  switch (row.closure) {
-    case "exact":
-      return EvidenceConfidence.Exact;
-    case "modeled":
-      return EvidenceConfidence.Strong;
-    case "partial":
-    case "open":
-      return EvidenceConfidence.Unknown;
-  }
-  return EvidenceConfidence.Unknown;
+function evidenceForDiWorldDependency(
+  row: FrameworkDiDependencyRow,
+): Evidence {
+  return {
+    id: row.id,
+    kind: EvidenceKind.DiLookup,
+    role: EvidenceRole.Support,
+    confidence: EvidenceConfidence.Strong,
+    summary: row.summary,
+    source: row.source,
+    data: row,
+  };
 }
 
 function diSummaryContinuations(inquiry: Inquiry): readonly Continuation[] {
@@ -372,30 +564,92 @@ function diSummaryContinuations(inquiry: Inquiry): readonly Continuation[] {
       "framework.di:keys",
       "keys",
       "Inspect DI InterfaceSymbol keys before following provider and lookup mechanics.",
+      { basis: CHECKER_PROJECTION_BASIS },
     ),
     projectionContinuation(
       inquiry,
       "framework.di:registrations",
       "registrations",
       "Inspect provider and resolver registration mechanics in kernel DI.",
+      { basis: CHECKER_PROJECTION_BASIS },
     ),
     projectionContinuation(
       inquiry,
       "framework.di:providers",
       "providers",
       "Inspect DI key provider and alias targets where Atlas can see them exactly.",
+      { basis: CHECKER_PROJECTION_BASIS },
     ),
     projectionContinuation(
       inquiry,
       "framework.di:lookups",
       "lookups",
       "Inspect lookup and resolution mechanics in kernel DI.",
+      { basis: CHECKER_PROJECTION_BASIS },
+    ),
+    projectionContinuation(
+      inquiry,
+      "framework.di:graph",
+      "graph",
+      "Inspect registration, slot, lookup, materialization, and dependency edges as one typed DI graph.",
+      { basis: CHECKER_PROJECTION_BASIS },
+    ),
+    projectionContinuation(
+      inquiry,
+      "framework.di:world",
+      "world",
+      "Inspect StandardConfiguration as a spent DI world derived from booted framework source values.",
+      { basis: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker] },
+    ),
+    projectionContinuation(
+      inquiry,
+      "framework.di:dependencies",
+      "dependencies",
+      "Inspect provider dependency edges discovered after spending StandardConfiguration registrations.",
+      { basis: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker] },
+    ),
+    projectionContinuation(
+      inquiry,
+      "framework.di:dag",
+      "dag",
+      "Inspect the SCC-collapsed DI key dependency graph.",
+      { basis: CHECKER_PROJECTION_BASIS },
     ),
     projectionContinuation(
       inquiry,
       "framework.di:materializations",
       "materializations",
       "Inspect the low-level construction and factory sites behind DI materialization.",
+      { basis: CHECKER_PROJECTION_BASIS },
+    ),
+  ];
+}
+
+function diWorldContinuations(inquiry: Inquiry): readonly Continuation[] {
+  return [
+    projectionContinuation(
+      inquiry,
+      "framework.di:world",
+      "world",
+      "Inspect resolver and resource slots produced by StandardConfiguration spending.",
+      { basis: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker] },
+    ),
+    projectionContinuation(
+      inquiry,
+      "framework.di:dependencies",
+      "dependencies",
+      "Inspect provider dependency edges produced by the DI world scanner.",
+      { basis: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker] },
+    ),
+    projectionContinuation(
+      inquiry,
+      "framework.materialization:dependencies",
+      "dependencies",
+      "Inspect the same dependency edges through materialization routes.",
+      {
+        lens: LensId.FrameworkMaterialization,
+        basis: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
+      },
     ),
   ];
 }
@@ -420,49 +674,179 @@ function diKeyContinuations(
   }
   for (const [index, row] of rows.slice(0, 5).entries()) {
     const evidence = evidenceForDiKey(row);
-    continuations.push({
-      id: `framework.di:keys:source:${index}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Primary,
-      rationale: "Inspect the exact createInterface source for this DI key.",
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: sourceRangeLocus(row.source),
-        projection: "text",
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.SourceFor,
-        [BasisKind.SourceText],
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.di:keys",
+      index,
+      evidence,
+    );
+    continuations.push(
+      builder.source(
+        "source",
+        row.source,
+        "Inspect the exact createInterface source for this DI key.",
         "Exact createInterface source for a DI key.",
+        { basis: [BasisKind.SourceText] },
       ),
-    });
+    );
     if (row.defaultRegistrationAtomIds.length > 0) {
-      continuations.push({
-        id: `framework.di:keys:providers:${index}`,
-        kind: ContinuationKind.SwitchProjection,
-        priority: ContinuationPriority.Primary,
-        rationale:
+      continuations.push(
+        projectionContinuation(
+          inquiry,
+          `framework.di:keys:providers:${index}`,
+          "providers",
           "Inspect the default provider registration attached to this InterfaceSymbol.",
-        inquiry: {
-          ...inquiry,
-          projection: "providers",
+          {
+            filters: {
+              ...inquiry.filters,
+              key: row.interfaceKey,
+            },
+            evidence,
+            basis: CHECKER_PROJECTION_BASIS,
+            summary: "Default provider atoms for one DI key.",
+          },
+        ),
+      );
+    }
+  }
+  return continuations;
+}
+
+function evidenceForDiGraphEdge(row: FrameworkDiGraphEdgeRow): Evidence {
+  return {
+    id: row.id,
+    kind:
+      row.layer === "lookup" || row.layer === "resolution"
+        ? EvidenceKind.DiLookup
+        : row.layer === "admission" || row.layer === "container-state"
+        ? EvidenceKind.DiRegistration
+        : EvidenceKind.TypeFact,
+    role: EvidenceRole.Subject,
+    confidence: EvidenceConfidence.Strong,
+    summary: row.summary,
+    ...(row.source === undefined ? {} : { source: row.source }),
+    data: row,
+  };
+}
+
+function evidenceForDiGraphComponent(
+  row: FrameworkDiGraphComponentRow,
+): Evidence {
+  return {
+    id: row.id,
+    kind: EvidenceKind.TypeFact,
+    role: EvidenceRole.Subject,
+    confidence: EvidenceConfidence.Strong,
+    summary: row.summary,
+    data: row,
+  };
+}
+
+function graphEdgeContinuations(
+  inquiry: Inquiry,
+  rows: readonly FrameworkDiGraphEdgeRow[],
+  nextOffset: number | undefined,
+  limit: number,
+): readonly Continuation[] {
+  const continuations: Continuation[] = [];
+  if (nextOffset !== undefined) {
+    continuations.push(
+      nextPageContinuation(
+        inquiry,
+        "framework.di:graph:next-page",
+        "Continue DI graph edge rows.",
+        nextOffset,
+        limit,
+      ),
+    );
+  }
+  continuations.push(
+    projectionContinuation(
+      inquiry,
+      "framework.di:graph:dag",
+      "dag",
+      "Collapse key dependency and alias edges into DAG components.",
+      { basis: CHECKER_PROJECTION_BASIS },
+    ),
+  );
+  for (const [index, row] of rows.slice(0, 5).entries()) {
+    const evidence = evidenceForDiGraphEdge(row);
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.di:graph",
+      index,
+      evidence,
+    );
+    if (row.source !== undefined) {
+      continuations.push(
+        builder.source(
+          "source",
+          row.source,
+          "Inspect source behind this DI graph edge.",
+          "Source behind a DI graph edge.",
+        ),
+      );
+    }
+    continuations.push(
+      projectionContinuation(
+        inquiry,
+        `framework.di:graph:key:${index}`,
+        "graph",
+        "Stay in the graph and narrow to the edge target name.",
+        {
           filters: {
             ...inquiry.filters,
-            key: row.interfaceKey,
+            key: row.toName,
           },
-          page: undefined,
+          evidence,
+          basis: CHECKER_PROJECTION_BASIS,
         },
-        evidence: [evidence],
-        route: route(
-          NavigationPlane.Semantic,
-          NavigationRelation.ProjectionOf,
-          [BasisKind.TypeScriptChecker],
-          "Default provider atoms for one DI key.",
-        ),
-      });
+      ),
+    );
+  }
+  return continuations;
+}
+
+function graphComponentContinuations(
+  inquiry: Inquiry,
+  rows: readonly FrameworkDiGraphComponentRow[],
+  nextOffset: number | undefined,
+  limit: number,
+): readonly Continuation[] {
+  const continuations: Continuation[] = [];
+  if (nextOffset !== undefined) {
+    continuations.push(
+      nextPageContinuation(
+        inquiry,
+        "framework.di:dag:next-page",
+        "Continue DI dependency component rows.",
+        nextOffset,
+        limit,
+      ),
+    );
+  }
+  for (const [index, row] of rows.slice(0, 5).entries()) {
+    const key = row.keyNames[0];
+    if (key === undefined) {
+      continue;
     }
+    const evidence = evidenceForDiGraphComponent(row);
+    continuations.push(
+      projectionContinuation(
+        inquiry,
+        `framework.di:dag:graph:${index}`,
+        "graph",
+        "Inspect graph edges touching this dependency component key.",
+        {
+          filters: {
+            ...inquiry.filters,
+            key,
+          },
+          evidence,
+          basis: CHECKER_PROJECTION_BASIS,
+        },
+      ),
+    );
   }
   return continuations;
 }
@@ -486,25 +870,21 @@ function relationshipContinuations(
     );
   }
   for (const [index, row] of rows.slice(0, 5).entries()) {
-    const evidence = evidenceForRelationship(row);
-    continuations.push({
-      id: `framework.di:relationships:source:${index}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Primary,
-      rationale: "Inspect the exact source for this DI relationship atom.",
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: sourceRangeLocus(row.source),
-        projection: "text",
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.SourceFor,
-        [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+    const evidence = evidenceForDiRelationship(row);
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.di:relationships",
+      index,
+      evidence,
+    );
+    continuations.push(
+      builder.source(
+        "source",
+        row.source,
+        "Inspect the exact source for this DI relationship atom.",
         "Exact source for a DI relationship atom.",
       ),
-    });
+    );
     if (row.key !== undefined) {
       continuations.push({
         id: `framework.di:relationships:key:${index}`,
@@ -522,7 +902,7 @@ function relationshipContinuations(
         evidence: [evidence],
         route: route(
           NavigationPlane.Semantic,
-          NavigationRelation.ProjectionOf,
+          NavigationRelation.RefinementOf,
           [BasisKind.TypeScriptChecker],
           "Narrow DI relationship atoms by key.",
         ),
@@ -532,106 +912,6 @@ function relationshipContinuations(
   return continuations;
 }
 
-function projectionContinuation(
-  inquiry: Inquiry,
-  id: string,
-  projection: string,
-  rationale: string,
-): Continuation {
-  return {
-    id,
-    kind: ContinuationKind.SwitchProjection,
-    priority: ContinuationPriority.Primary,
-    rationale,
-    inquiry: {
-      ...inquiry,
-      projection,
-      page: undefined,
-    },
-    route: route(
-      NavigationPlane.Semantic,
-      NavigationRelation.ProjectionOf,
-      [BasisKind.TypeScriptChecker],
-      rationale,
-    ),
-  };
-}
-
-function nextPageContinuation(
-  inquiry: Inquiry,
-  id: string,
-  rationale: string,
-  nextOffset: number,
-  limit: number,
-): Continuation {
-  return {
-    id,
-    kind: ContinuationKind.NextPage,
-    priority: ContinuationPriority.Primary,
-    rationale,
-    inquiry: {
-      ...inquiry,
-      page: { size: limit, cursor: String(nextOffset) },
-    },
-    route: route(
-      NavigationPlane.Addressing,
-      NavigationRelation.NextPageOf,
-      [],
-      rationale,
-    ),
-  };
-}
-
-function sourceRangeLocus(range: SourceRange) {
-  return {
-    kind: LocusKind.SourceRange,
-    range,
-  } as const;
-}
-
-function pageInfo(
-  inquiry: Inquiry,
-  returned: number,
-  total: number,
-  limit: number,
-  nextOffset: number | undefined,
-) {
-  return {
-    size: limit,
-    cursor: inquiry.page?.cursor,
-    returned,
-    total,
-    ...(nextOffset === undefined ? {} : { nextCursor: String(nextOffset) }),
-  };
-}
-
-function pageRows<TValue>(
-  rows: readonly TValue[],
-  offset: number,
-  limit: number,
-): { readonly rows: readonly TValue[]; readonly nextOffset?: number } {
-  const page = rows.slice(offset, offset + limit);
-  const nextOffset =
-    offset + page.length < rows.length ? offset + page.length : undefined;
-  return {
-    rows: page,
-    ...(nextOffset === undefined ? {} : { nextOffset }),
-  };
-}
-
-function pageOffset(inquiry: Inquiry): number {
-  const cursor = inquiry.page?.cursor;
-  if (cursor === undefined) {
-    return 0;
-  }
-  const parsed = Number.parseInt(cursor, 10);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function evidenceLimit(inquiry: Inquiry): number {
-  return clampBudget(inquiry.budget?.evidencePerSubject, 5, 20);
-}
-
 function frameworkDiBasis(sourceProject: SourceProject): Basis {
   return {
     kind: BasisKind.TypeScriptChecker,
@@ -639,30 +919,19 @@ function frameworkDiBasis(sourceProject: SourceProject): Basis {
     authority: BasisAuthority.Checker,
     freshness: BasisFreshness.Live,
     summary:
-      "Answered from cached framework DI relationship atoms derived from Aurelia kernel source and checker-backed call facts.",
+      "Answered from framework DI relationship atoms derived from Aurelia kernel source and checker-backed call facts.",
     identity: sourceProject.snapshot().identity,
   };
 }
 
-function route(
-  plane: NavigationPlane,
-  relation: NavigationRelation,
-  basis: readonly BasisKind[],
-  summary: string,
-): NavigationRouteClaim {
-  return { plane, relation, basis, summary };
-}
-
-function countBy<TValue>(
-  rows: readonly TValue[],
-  keyFor: (row: TValue) => string,
-): Readonly<Record<string, number>> {
-  const counts: Record<string, number> = {};
-  for (const row of rows) {
-    const key = keyFor(row);
-    counts[key] = (counts[key] ?? 0) + 1;
-  }
-  return Object.fromEntries(
-    Object.entries(counts).sort(([left], [right]) => left.localeCompare(right)),
-  );
+function frameworkDiWorldBasis(sourceProject: SourceProject): Basis {
+  return {
+    kind: BasisKind.StaticEvaluator,
+    closure: BasisClosure.Partial,
+    authority: BasisAuthority.Evaluator,
+    freshness: BasisFreshness.Live,
+    summary:
+      "Answered from linked framework source-module evaluation and abstract DI world spending.",
+    identity: sourceProject.snapshot().identity,
+  };
 }

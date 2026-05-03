@@ -2,15 +2,17 @@ import type {
   FrameworkAdmissionRelationshipRow,
 } from "../../framework/admission.js";
 import {
+  FrameworkAdmissionWorldFormationKind,
+  FrameworkAdmissionWorldFormationStatus,
+  frameworkAdmissionWorldFormation,
+  type FrameworkAdmissionWorldFormationRow,
+} from "../../framework/admission-world.js";
+import {
   FrameworkRelationshipClosure,
   FrameworkRelationshipEndpointKind,
-  FrameworkRelationshipRelation,
-  type FrameworkRelationshipEndpoint,
 } from "../../framework/relationships.js";
 import type { SourceProject } from "../../source/index.js";
-import type { SourceRange } from "../locus.js";
 import {
-  FrameworkAdmissionMaterializationLinkKind,
   readFrameworkAdmissionMaterializationLinks,
   type FrameworkAdmissionMaterializationFilters,
   type FrameworkAdmissionMaterializationLinkRow,
@@ -20,40 +22,6 @@ import {
   type FrameworkLifecycleAppTaskExecutionRow,
 } from "./framework-lifecycle-lenses.js";
 
-/** World-formation class derived from admission rows without claiming final container state. */
-export const enum FrameworkAdmissionWorldFormationKind {
-  /** Admission joined to visible DI/resource runtime-existence evidence. */
-  RuntimeExistence = "runtime-existence",
-  /** Admission joined to AppRoot lifecycle task execution evidence. */
-  AppTaskExecution = "app-task-execution",
-  /** Registry/configuration export was admitted, but execution is a separate downstream question. */
-  RegistryExportAdmission = "registry-export-admission",
-  /** Catalog/array admission was statically expanded by evaluator evidence. */
-  CatalogExpansion = "catalog-expansion",
-  /** Factory/registration helper was admitted, but provider execution is not closed here. */
-  FactoryAdmission = "factory-admission",
-  /** Concrete registration argument was admitted without a richer world-formation row. */
-  RegistrationArgumentAdmission = "registration-argument-admission",
-  /** Unknown admission remains unclassified. */
-  UnknownAdmission = "unknown-admission",
-  /** DI/resource/AppTask admission has no matching materialization/execution row yet. */
-  AdmissionOnly = "admission-only",
-}
-
-/** Whether an admission row has been spent into visible world evidence. */
-export const enum FrameworkAdmissionWorldFormationStatus {
-  /** A DI key or resource has visible materialization evidence. */
-  Materialized = "materialized",
-  /** An AppTask has visible lifecycle execution evidence. */
-  Executed = "executed",
-  /** A catalog was statically expanded by the evaluator. */
-  Expanded = "expanded",
-  /** The row is intentionally only an admission fact at this layer. */
-  AdmissionOnly = "admission-only",
-  /** Atlas expected a downstream fact but did not find one. */
-  Open = "open",
-}
-
 /** Filters for admission-to-world-formation reads. */
 export interface FrameworkAdmissionWorldFormationFilters
   extends FrameworkAdmissionMaterializationFilters {
@@ -62,35 +30,6 @@ export interface FrameworkAdmissionWorldFormationFilters
   readonly status?: string;
   readonly slotName?: string;
   readonly appTaskExecutionKind?: string;
-}
-
-/** Compact row joining admission to visible world-formation evidence, or preserving an admission-only boundary. */
-export interface FrameworkAdmissionWorldFormationRow {
-  readonly id: string;
-  readonly packageId: string;
-  readonly packageName: string;
-  readonly exportName: string;
-  readonly admissionRelationshipId: string;
-  readonly admissionRelation: FrameworkRelationshipRelation;
-  readonly associationKind: string;
-  readonly formationKind: FrameworkAdmissionWorldFormationKind;
-  readonly status: FrameworkAdmissionWorldFormationStatus;
-  readonly admittedTarget: FrameworkRelationshipEndpoint;
-  readonly formedTarget: FrameworkRelationshipEndpoint;
-  readonly source: SourceRange;
-  readonly formationSource?: SourceRange;
-  readonly materializationId?: string;
-  readonly materializationKind?: string;
-  readonly linkKind?: FrameworkAdmissionMaterializationLinkKind;
-  readonly matchBasis?: string;
-  readonly resourceKind?: string;
-  readonly materializationSiteKinds?: readonly string[];
-  readonly lifecycleExecutionId?: string;
-  readonly appTaskExecutionKind?: string;
-  readonly slotName?: string;
-  readonly closure: FrameworkRelationshipClosure;
-  readonly openReason?: string;
-  readonly summary: string;
 }
 
 /** Read admission-to-world rows over already-scoped admission relationships. */
@@ -112,16 +51,15 @@ export function readFrameworkAdmissionWorldFormationRows(
   ];
 
   for (const relationship of relationships) {
-    if (relationship.relation === FrameworkRelationshipRelation.AdmitsAppTask) {
+    if (relationship.to.kind === FrameworkRelationshipEndpointKind.AppTask) {
       rows.push(
         ...worldFormationRowsForAppTask(sourceProject, relationship, filters),
       );
       continue;
     }
     if (
-      (relationship.relation === FrameworkRelationshipRelation.AdmitsDiKey ||
-        relationship.relation ===
-          FrameworkRelationshipRelation.AdmitsResource) &&
+      (relationship.to.kind === FrameworkRelationshipEndpointKind.DiKey ||
+        relationship.to.kind === FrameworkRelationshipEndpointKind.Resource) &&
       materializedAdmissionIds.has(relationship.id)
     ) {
       continue;
@@ -227,9 +165,8 @@ function worldFormationRowForAppTaskExecution(
 function worldFormationRowForAdmissionOnly(
   relationship: FrameworkAdmissionRelationshipRow,
 ): FrameworkAdmissionWorldFormationRow {
-  const formationKind = admissionOnlyFormationKind(relationship);
-  const status = admissionOnlyStatus(relationship);
-  const openReason = openReasonForAdmissionOnly(relationship, status);
+  const interpretation =
+    frameworkAdmissionWorldFormation.interpretAdmissionOnly(relationship);
   return {
     id: `${relationship.id}:world-formation:admission-only`,
     packageId: relationship.packageId,
@@ -238,95 +175,20 @@ function worldFormationRowForAdmissionOnly(
     admissionRelationshipId: relationship.id,
     admissionRelation: relationship.relation,
     associationKind: relationship.associationKind,
-    formationKind,
-    status,
+    formationKind: interpretation.formationKind,
+    status: interpretation.status,
     admittedTarget: relationship.to,
     formedTarget: relationship.to,
     source: relationship.source,
-    closure: FrameworkRelationshipClosure.Partial,
-    ...(openReason === undefined ? {} : { openReason }),
+    closure: interpretation.closure,
+    ...(interpretation.openReason === undefined
+      ? {}
+      : { openReason: interpretation.openReason }),
     ...(relationship.to.resourceKind === undefined
       ? {}
       : { resourceKind: relationship.to.resourceKind }),
-    summary: admissionOnlySummary(relationship, formationKind, status),
+    summary: interpretation.summary,
   };
-}
-
-function admissionOnlyFormationKind(
-  relationship: FrameworkAdmissionRelationshipRow,
-): FrameworkAdmissionWorldFormationKind {
-  switch (relationship.relation) {
-    case FrameworkRelationshipRelation.AdmitsRegistryExport:
-      return FrameworkAdmissionWorldFormationKind.RegistryExportAdmission;
-    case FrameworkRelationshipRelation.AdmitsCatalog:
-      return FrameworkAdmissionWorldFormationKind.CatalogExpansion;
-    case FrameworkRelationshipRelation.AdmitsFactory:
-      return FrameworkAdmissionWorldFormationKind.FactoryAdmission;
-    case FrameworkRelationshipRelation.AdmitsUnknownArgument:
-      return FrameworkAdmissionWorldFormationKind.UnknownAdmission;
-    case FrameworkRelationshipRelation.AdmitsRegistrationArgument:
-      return FrameworkAdmissionWorldFormationKind.RegistrationArgumentAdmission;
-    case FrameworkRelationshipRelation.AdmitsDiKey:
-    case FrameworkRelationshipRelation.AdmitsResource:
-    case FrameworkRelationshipRelation.AdmitsAppTask:
-    default:
-      return FrameworkAdmissionWorldFormationKind.AdmissionOnly;
-  }
-}
-
-function admissionOnlyStatus(
-  relationship: FrameworkAdmissionRelationshipRow,
-): FrameworkAdmissionWorldFormationStatus {
-  switch (relationship.relation) {
-    case FrameworkRelationshipRelation.AdmitsCatalog:
-      return FrameworkAdmissionWorldFormationStatus.Expanded;
-    case FrameworkRelationshipRelation.AdmitsDiKey:
-    case FrameworkRelationshipRelation.AdmitsResource:
-    case FrameworkRelationshipRelation.AdmitsAppTask:
-    case FrameworkRelationshipRelation.AdmitsUnknownArgument:
-      return FrameworkAdmissionWorldFormationStatus.Open;
-    default:
-      return FrameworkAdmissionWorldFormationStatus.AdmissionOnly;
-  }
-}
-
-function openReasonForAdmissionOnly(
-  relationship: FrameworkAdmissionRelationshipRow,
-  status: FrameworkAdmissionWorldFormationStatus,
-): string | undefined {
-  if (status !== FrameworkAdmissionWorldFormationStatus.Open) {
-    return undefined;
-  }
-  switch (relationship.relation) {
-    case FrameworkRelationshipRelation.AdmitsDiKey:
-      return "Admitted DI key has no matching materialization row in the current Atlas indexes.";
-    case FrameworkRelationshipRelation.AdmitsResource:
-      return "Admitted resource has no matching resource materialization row in the current Atlas indexes.";
-    case FrameworkRelationshipRelation.AdmitsAppTask:
-      return "Admitted AppTask has no concrete AppRoot slot execution row joined from the helper name.";
-    default:
-      return "Admission remains unclassified for world formation.";
-  }
-}
-
-function admissionOnlySummary(
-  relationship: FrameworkAdmissionRelationshipRow,
-  formationKind: FrameworkAdmissionWorldFormationKind,
-  status: FrameworkAdmissionWorldFormationStatus,
-): string {
-  if (status === FrameworkAdmissionWorldFormationStatus.Open) {
-    return `${relationship.exportName} admits ${relationship.to.name}; no downstream world-formation row is currently joined.`;
-  }
-  if (formationKind === FrameworkAdmissionWorldFormationKind.CatalogExpansion) {
-    return `${relationship.exportName} expands catalog ${relationship.to.name} during static admission evaluation.`;
-  }
-  if (
-    formationKind ===
-    FrameworkAdmissionWorldFormationKind.RegistryExportAdmission
-  ) {
-    return `${relationship.exportName} admits registry/configuration export ${relationship.to.name}; execution is a separate world-formation path.`;
-  }
-  return `${relationship.exportName} admits ${relationship.to.name}; Atlas preserves this as an admission-only fact.`;
 }
 
 function appTaskSlotName(row: FrameworkAdmissionRelationshipRow): string | null {

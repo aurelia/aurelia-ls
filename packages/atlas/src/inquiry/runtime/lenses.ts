@@ -4,8 +4,9 @@ import {
   BasisClosure,
   BasisFreshness,
   BasisKind,
+  type Basis,
 } from "../basis.js";
-import { clampBudget, type PageInfo } from "../budget.js";
+import { clampBudget } from "../budget.js";
 import {
   ContinuationKind,
   ContinuationPriority,
@@ -27,6 +28,8 @@ import {
   NavigationRelation,
   type NavigationRouteClaim,
 } from "../navigation.js";
+import { PagedRowFamily } from "../paged-row-family.js";
+import { pageOffset } from "../paging.js";
 import { createSurfaceMap, type InquirySurfaceMap } from "../surface-map.js";
 import { RepoAreaStatus } from "../terrain.js";
 import type {
@@ -35,24 +38,32 @@ import type {
 } from "../../source/index.js";
 import {
   readAtlasSelfAnalysis,
-  type AtlasSelfAnalysisIndex,
+  type AtlasSelfAnalysis,
   type AtlasSelfAxisPressureRow,
   type AtlasSelfClassSurfaceRow,
   type AtlasSelfContractStringRow,
   type AtlasSelfContinuationRow,
+  type AtlasSelfEnumMappingRow,
+  type AtlasSelfEnumReferenceRow,
   type AtlasSelfEnumRow,
+  type AtlasSelfEnumValueSpaceRow,
   type AtlasSelfFunctionSurfaceRow,
-  type AtlasSelfIndexProvenanceRow,
+  type AtlasSelfSubstrateSurfaceRow,
   type AtlasSelfModuleDependencyRow,
   type AtlasSelfProjectionBranchRow,
   type AtlasSelfRelationshipSurfaceRow,
   type AtlasSelfRowSurfaceRow,
+  type AtlasSelfSemanticRouteRow,
   type AtlasSelfStringLiteralRow,
 } from "./self-analysis.js";
 import {
   filterAtlasSelfRecipes,
   type AtlasSelfRecipeRow,
 } from "./self-recipes.js";
+import {
+  SelfContractReader,
+  type SelfContractRow,
+} from "./self-contracts.js";
 import type { InquiryWorld } from "./world.js";
 
 /** Summary returned by the repo.terrain runtime lens. */
@@ -97,6 +108,12 @@ export interface SelfValue {
   readonly recipes?: readonly AtlasSelfRecipeRow[];
   /** Enum declaration rows for enum/taxonomy projections. */
   readonly enums?: readonly AtlasSelfEnumRow[];
+  /** Exact Enum.Member reference rows. */
+  readonly enumReferences?: readonly AtlasSelfEnumReferenceRow[];
+  /** Enum value-space overlap rows. */
+  readonly enumValueSpaces?: readonly AtlasSelfEnumValueSpaceRow[];
+  /** Exact enum-to-enum mapping rows. */
+  readonly enumMappings?: readonly AtlasSelfEnumMappingRow[];
   /** Grouped string literal rows for magic-string projections. */
   readonly strings?: readonly AtlasSelfStringLiteralRow[];
   /** Relationship-like row/interface surfaces discovered in Atlas source. */
@@ -113,10 +130,12 @@ export interface SelfValue {
   readonly projectionBranches?: readonly AtlasSelfProjectionBranchRow[];
   /** Continuation object literals observed in source. */
   readonly continuationRows?: readonly AtlasSelfContinuationRow[];
+  /** Declared framework semantic route topology rows. */
+  readonly semanticRoutes?: readonly AtlasSelfSemanticRouteRow[];
   /** Relative module dependency rows. */
   readonly moduleDependencies?: readonly AtlasSelfModuleDependencyRow[];
-  /** Index/cache/schema provenance rows. */
-  readonly indexProvenance?: readonly AtlasSelfIndexProvenanceRow[];
+  /** Substrate reader, builder, and schema surface rows. */
+  readonly substrateSurfaces?: readonly AtlasSelfSubstrateSurfaceRow[];
   /** Contract-bearing string rows. */
   readonly contractStrings?: readonly AtlasSelfContractStringRow[];
   /** Exact axis/mapping/stringly-surface pressure rows. */
@@ -126,45 +145,20 @@ export interface SelfValue {
 /** Compact source project summary without per-package rows. */
 export type SourceProjectRollup = Omit<SourceProjectSummary, "packages">;
 
-/** Lens contract joined to runtime implementation and projection branches. */
-export interface SelfContractRow {
-  /** Stable row id. */
-  readonly id: string;
-  /** Lens id. */
-  readonly lensId: LensId;
-  /** Lens family. */
-  readonly family: LensFamily;
-  /** Lens implementation stage. */
-  readonly stage: LensStage;
-  /** True when the runtime engine reports an implementation. */
-  readonly implemented: boolean;
-  /** Runtime answer function when found in the engine switch. */
-  readonly implementationFunction: string | null;
-  /** Declared projection ids from LensCatalog. */
-  readonly declaredProjectionIds: readonly string[];
-  /** Projection branch ids observed under the implementation call path. */
-  readonly observedProjectionIds: readonly string[];
-  /** Declared projections without an observed string-literal runtime branch. */
-  readonly unobservedProjectionIds: readonly string[];
-  /** Runtime projection branches not declared by the lens contract. */
-  readonly extraRuntimeProjectionIds: readonly string[];
-  /** Implementation source when found. */
-  readonly source?: SourceRange;
-  /** Compact row summary. */
-  readonly summary: string;
-}
-
 /** Compact source-backed self taxonomy attached to atlas.self answers. */
 export interface SelfTaxonomyValue {
   /** Self-analysis schema marker. */
-  readonly version: AtlasSelfAnalysisIndex["version"];
+  readonly version: AtlasSelfAnalysis["version"];
   /** Analyzed Atlas source files. */
   readonly sourceFileCount: number;
   /** Stable rollup counts for enum/string/relationship-source surfaces. */
-  readonly rollup: AtlasSelfAnalysisIndex["rollup"];
+  readonly rollup: AtlasSelfAnalysis["rollup"];
   /** Pressure signals that should guide future cleanup without claiming semantic bugs. */
   readonly pressure: {
     readonly unreferencedEnumMembers: number;
+    readonly enumReferences: number;
+    readonly enumValueSpaces: number;
+    readonly enumMappings: number;
     readonly enumLiteralReuses: number;
     readonly magicStringValues: number;
     readonly relationshipSurfacesWithoutSourceField: number;
@@ -364,10 +358,28 @@ export function answerRepoMap(
           ),
         },
         {
+          id: "repo.map:framework-composition",
+          kind: ContinuationKind.SwitchLens,
+          priority: ContinuationPriority.Secondary,
+          rationale:
+            "Enter actor-centered framework composition across auLink and relationship claims.",
+          inquiry: {
+            lens: LensId.FrameworkComposition,
+            locus: RepoRootLocus,
+            projection: "summary",
+          },
+          route: route(
+            NavigationPlane.Semantic,
+            NavigationRelation.FrameworkFlowOf,
+            [BasisKind.AuLink, BasisKind.TypeScriptChecker],
+            "Aurelia framework actor composition graph.",
+          ),
+        },
+        {
           id: "repo.map:self",
           kind: ContinuationKind.SwitchLens,
           priority: ContinuationPriority.Secondary,
-          rationale: "Inspect contract pressure and implementation status.",
+          rationale: "Inspect Atlas self-maintenance source surfaces.",
           inquiry: {
             lens: LensId.AtlasSelf,
             locus: RepoRootLocus,
@@ -377,7 +389,7 @@ export function answerRepoMap(
             NavigationPlane.Maintenance,
             NavigationRelation.DiagnosticsFor,
             [BasisKind.AtlasContract],
-            "Atlas contract pressure behind the surface map.",
+            "Atlas self-maintenance surfaces behind the surface map.",
           ),
         },
       ],
@@ -459,7 +471,7 @@ class AtlasSelfAnswerer {
   readonly #inquiry: Inquiry;
   readonly #implementedLensIds: ReadonlySet<LensId>;
   readonly #unimplemented: readonly { readonly id: LensId }[];
-  readonly #analysis: AtlasSelfAnalysisIndex;
+  readonly #analysis: AtlasSelfAnalysis;
   readonly #value: SelfValue;
 
   constructor(
@@ -510,14 +522,20 @@ class AtlasSelfAnswerer {
           this.#value,
           this.#analysis,
         );
+      case "semantic-routes":
+        return answerSelfSemanticRoutesProjection(
+          this.#inquiry,
+          this.#value,
+          this.#analysis,
+        );
       case "modules":
         return answerSelfModulesProjection(
           this.#inquiry,
           this.#value,
           this.#analysis,
         );
-      case "indexes":
-        return answerSelfIndexesProjection(
+      case "substrate-surfaces":
+        return answerSelfSubstrateSurfacesProjection(
           this.#inquiry,
           this.#value,
           this.#analysis,
@@ -530,6 +548,24 @@ class AtlasSelfAnswerer {
         );
       case "enums":
         return answerSelfEnumProjection(
+          this.#inquiry,
+          this.#value,
+          this.#analysis,
+        );
+      case "enum-references":
+        return answerSelfEnumReferencesProjection(
+          this.#inquiry,
+          this.#value,
+          this.#analysis,
+        );
+      case "enum-value-spaces":
+        return answerSelfEnumValueSpacesProjection(
+          this.#inquiry,
+          this.#value,
+          this.#analysis,
+        );
+      case "enum-mappings":
+        return answerSelfEnumMappingsProjection(
           this.#inquiry,
           this.#value,
           this.#analysis,
@@ -576,19 +612,6 @@ class AtlasSelfAnswerer {
           this.#value,
           this.#analysis,
         );
-      case "pressure":
-        return answerSelfPressureProjection(
-          this.#inquiry,
-          this.#value,
-          this.#analysis,
-          this.#openSeams(),
-        );
-      case "wiring":
-        return answerSelfWiringProjection(
-          this.#inquiry,
-          this.#value,
-          this.#analysis,
-        );
       case "summary":
       default:
         return answerSelfSummaryProjection(
@@ -611,50 +634,29 @@ function answerSelfRecipesProjection(
   value: SelfValue,
 ): Answer<SelfValue> {
   const rows = filterAtlasSelfRecipes(inquiry.filters);
-  const limit = rowLimit(inquiry);
-  const page = pageRows(rows, pageOffset(inquiry), limit);
-  return createAnswer(
-    inquiry,
-    page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-    `Returned ${page.rows.length} of ${rows.length} Atlas self-analysis recipe row(s).`,
-    {
-      value: {
-        ...value,
-        recipes: page.rows,
-      },
-      basis: [
-        contractBasis(
-          "Returned calibrated self-analysis hop graphs from the Atlas inquiry contract surface.",
-        ),
-      ],
-      page: pageInfo(
-        inquiry,
-        page.rows.length,
-        rows.length,
-        limit,
-        page.nextOffset,
+  return answerSelfRowProjection(inquiry, {
+    familyId: "atlas.self:recipes",
+    rows,
+    valueWithRows: (recipes) => ({ ...value, recipes }),
+    rowNoun: "Atlas self-analysis recipe row(s)",
+    basis: [
+      contractBasis(
+        "Returned stored self-maintenance recipes from the Atlas inquiry contract surface.",
       ),
-      continuations: [
-        ...(page.nextOffset === undefined
-          ? []
-          : [
-              nextPageContinuation(
-                inquiry,
-                "atlas.self:recipes:next-page",
-                "Continue Atlas self-analysis recipe rows.",
-                page.nextOffset,
-                limit,
-              ),
-            ]),
-        projectionContinuation(
-          inquiry,
-          "atlas.self:summary",
-          "summary",
-          "Return to Atlas self-maintenance orientation.",
-        ),
-      ],
-    },
-  );
+    ],
+    evidenceForRow: evidenceForRecipe,
+    nextPageId: "atlas.self:recipes:next-page",
+    nextPageRationale: "Continue Atlas self-analysis recipe rows.",
+    inspectionForRow: () => undefined,
+    extraContinuationsForPage: (inquiry) => [
+      projectionContinuation(
+        inquiry,
+        "atlas.self:summary",
+        "summary",
+        "Return to Atlas self-maintenance orientation.",
+      ),
+    ],
+  });
 }
 
 function selfBaseValue(
@@ -662,7 +664,7 @@ function selfBaseValue(
   implementedLensIds: ReadonlySet<LensId>,
   sourceProject: SourceProject,
   unimplemented: readonly { readonly id: LensId }[],
-  analysis: AtlasSelfAnalysisIndex,
+  analysis: AtlasSelfAnalysis,
   includeSourceProject: boolean,
 ): SelfValue {
   const sourceProjectSummary = sourceProject.snapshot().summary;
@@ -707,7 +709,7 @@ function sourceProjectRollup(
 }
 
 function selfTaxonomyValue(
-  analysis: AtlasSelfAnalysisIndex,
+  analysis: AtlasSelfAnalysis,
 ): SelfTaxonomyValue {
   return {
     version: analysis.version,
@@ -715,6 +717,9 @@ function selfTaxonomyValue(
     rollup: analysis.rollup,
     pressure: {
       unreferencedEnumMembers: analysis.rollup.unreferencedEnumMemberCount,
+      enumReferences: analysis.rollup.enumReferenceCount,
+      enumValueSpaces: analysis.rollup.enumValueSpaceCount,
+      enumMappings: analysis.rollup.enumMappingCount,
       enumLiteralReuses: analysis.enums.reduce(
         (sum, row) => sum + row.literalReuseCount,
         0,
@@ -734,52 +739,14 @@ function selfTaxonomyValue(
 
 function selfContractRows(
   world: InquiryWorld,
-  analysis: AtlasSelfAnalysisIndex,
+  analysis: AtlasSelfAnalysis,
   implementedLensIds: ReadonlySet<LensId>,
 ): readonly SelfContractRow[] {
-  return world.lenses.map((lens) => {
-    const implementation = analysis.lensImplementations.find(
-      (row) => row.lensId === lens.id,
-    );
-    const declaredProjectionIds = lens.projections.map(
-      (projection) => projection.id,
-    );
-    const observedProjectionIds = uniqueSorted(
-      analysis.projectionBranches
-        .filter((row) => row.lensIds.includes(lens.id))
-        .map((row) => row.projection),
-    );
-    const unobservedProjectionIds = declaredProjectionIds.filter(
-      (projection) => !observedProjectionIds.includes(projection),
-    );
-    const extraRuntimeProjectionIds = observedProjectionIds.filter(
-      (projection) => !declaredProjectionIds.includes(projection),
-    );
-    return {
-      id: `atlas-self:contract:${lens.id}`,
-      lensId: lens.id,
-      family: lens.family,
-      stage: lens.stage,
-      implemented: implementedLensIds.has(lens.id),
-      implementationFunction: implementation?.implementationFunction ?? null,
-      declaredProjectionIds,
-      observedProjectionIds,
-      unobservedProjectionIds,
-      extraRuntimeProjectionIds,
-      ...(implementation?.source === undefined
-        ? {}
-        : { source: implementation.source }),
-      summary: `${lens.id} declares ${
-        declaredProjectionIds.length
-      } projection(s), has ${
-        observedProjectionIds.length
-      } observed runtime branch(es), and ${
-        implementation === undefined
-          ? "has no engine implementation row"
-          : `is answered by ${implementation.implementationFunction}`
-      }.`,
-    };
-  });
+  return new SelfContractReader(
+    world.lenses,
+    analysis,
+    implementedLensIds,
+  ).rows();
 }
 
 function selfOpenSeams(
@@ -799,7 +766,7 @@ function answerSelfSummaryProjection(
   world: InquiryWorld,
   inquiry: Inquiry,
   value: SelfValue,
-  analysis: AtlasSelfAnalysisIndex,
+  analysis: AtlasSelfAnalysis,
   openSeams: readonly OpenSeam[],
 ): Answer<SelfValue> {
   return createAnswer(
@@ -821,7 +788,7 @@ function answerSelfSummaryProjection(
         selfAnalysisEvidence(
           analysis,
           "atlas.self:taxonomy",
-          "Atlas self-analysis indexed enums, string literals, and relationship-like row surfaces.",
+          "Atlas self-analysis derived enums, string literals, and relationship-like row surfaces.",
         ),
       ],
       openSeams,
@@ -833,7 +800,7 @@ function answerSelfSummaryProjection(
 function answerSelfTaxonomyProjection(
   inquiry: Inquiry,
   value: SelfValue,
-  analysis: AtlasSelfAnalysisIndex,
+  analysis: AtlasSelfAnalysis,
 ): Answer<SelfValue> {
   return createAnswer(
     inquiry,
@@ -862,714 +829,529 @@ function answerSelfContractsProjection(
   world: InquiryWorld,
   inquiry: Inquiry,
   value: SelfValue,
-  analysis: AtlasSelfAnalysisIndex,
+  analysis: AtlasSelfAnalysis,
   implementedLensIds: ReadonlySet<LensId>,
 ): Answer<SelfValue> {
   const rows = filterContracts(
     selfContractRows(world, analysis, implementedLensIds),
     inquiry,
   );
-  const limit = rowLimit(inquiry);
-  const page = pageRows(rows, pageOffset(inquiry), limit);
-  return createAnswer(
-    inquiry,
-    page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-    `Returned ${page.rows.length} of ${rows.length} Atlas lens contract coherence row(s).`,
+  return answerSelfRowProjection(inquiry, {
+    familyId: "atlas.self:contracts",
+    rows,
+    valueWithRows: (contracts) => ({ ...value, contracts }),
+    rowNoun: "Atlas lens contract coherence row(s)",
+    basis: [
+      contractBasis("Read declared lens contracts from the in-memory world."),
+      selfSourceBasis(
+        "Joined lens contracts to runtime implementation source paths through the hot TypeScript Program.",
+      ),
+    ],
+    evidenceForRow: evidenceForContract,
+    nextPageId: "atlas.self:contracts:next-page",
+    nextPageRationale: "Continue Atlas lens contract rows.",
+    inspectionForRow: contractContinuationSubjects,
+  });
+}
+
+function contractContinuationSubjects(
+  row: SelfContractRow,
+): readonly {
+  readonly id: string;
+  readonly source?: SourceRange;
+  readonly summary: string;
+}[] {
+  return [
     {
-      value: {
-        ...value,
-        contracts: page.rows,
-      },
-      basis: [
-        contractBasis("Read declared lens contracts from the in-memory world."),
+      id: row.id,
+      source: row.source,
+      summary: `Inspect runtime implementation for ${row.lensId}.`,
+    },
+    ...row.coherenceFacts.map((fact) => ({
+      id: fact.id,
+      source: fact.source,
+      summary: `Inspect source for ${fact.dimension} coherence fact on ${row.lensId}.`,
+    })),
+  ];
+}
+
+interface SelfRowInspectionSubject {
+  readonly id: string;
+  readonly source?: SourceRange;
+  readonly summary: string;
+}
+
+interface SelfRowProjectionOptions<TRow> {
+  readonly familyId: string;
+  readonly rows: readonly TRow[];
+  readonly valueWithRows: (rows: readonly TRow[]) => SelfValue;
+  readonly rowNoun: string;
+  readonly basis?: readonly Basis[];
+  readonly basisSummary?: string;
+  readonly evidenceForRow: (row: TRow) => Evidence;
+  readonly nextPageId: string;
+  readonly nextPageRationale: string;
+  readonly inspectionForRow: (
+    row: TRow,
+  ) =>
+    | SelfRowInspectionSubject
+    | readonly SelfRowInspectionSubject[]
+    | undefined;
+  readonly extraContinuationsForPage?: (
+    inquiry: Inquiry,
+    rows: readonly TRow[],
+    nextOffset: number | undefined,
+    limit: number,
+  ) => readonly Continuation[];
+}
+
+function answerSelfRowProjection<TRow>(
+  inquiry: Inquiry,
+  options: SelfRowProjectionOptions<TRow>,
+): Answer<SelfValue> {
+  const limit = rowLimit(inquiry);
+  const rowFamily = new PagedRowFamily<TRow>({
+    id: options.familyId,
+    rowLabel: options.rowNoun,
+    evidenceForRow: options.evidenceForRow,
+    continuationsForPage: (inquiry, rows, nextOffset, limit) => [
+      ...selfRowContinuations(
+        inquiry,
+        rows.flatMap((row) => {
+          const subjects = options.inspectionForRow(row);
+          if (subjects === undefined) {
+            return [];
+          }
+          return Array.isArray(subjects) ? subjects : [subjects];
+        }),
+        nextOffset,
+        limit,
+        options.nextPageId,
+        options.nextPageRationale,
+      ),
+      ...(options.extraContinuationsForPage?.(
+        inquiry,
+        rows,
+        nextOffset,
+        limit,
+      ) ?? []),
+    ],
+  });
+  return rowFamily.answer({
+    inquiry,
+    rows: options.rows,
+    limit,
+    offset: pageOffset(inquiry),
+    basis:
+      options.basis ??
+      [
         selfSourceBasis(
-          "Joined lens contracts to runtime implementation source paths through the hot TypeScript Program.",
+          options.basisSummary ??
+            "Read Atlas self-analysis rows through the hot TypeScript Program.",
         ),
       ],
-      evidence: page.rows
-        .slice(0, evidenceLimit(inquiry))
-        .map(evidenceForContract),
-      page: pageInfo(
-        inquiry,
-        page.rows.length,
-        rows.length,
-        limit,
-        page.nextOffset,
-      ),
-      continuations: selfRowContinuations(
-        inquiry,
-        page.rows.map((row) => ({
-          id: row.id,
-          source: row.source,
-          summary: `Inspect runtime implementation for ${row.lensId}.`,
-        })),
-        page.nextOffset,
-        limit,
-        "atlas.self:contracts:next-page",
-        "Continue Atlas lens contract rows.",
-      ),
-    },
-  );
+    value: (page) => options.valueWithRows(page.rows),
+  });
 }
 
 function answerSelfProjectionBranchesProjection(
   inquiry: Inquiry,
   value: SelfValue,
-  analysis: AtlasSelfAnalysisIndex,
+  analysis: AtlasSelfAnalysis,
 ): Answer<SelfValue> {
   const rows = filterProjectionBranches(analysis.projectionBranches, inquiry);
-  const limit = rowLimit(inquiry);
-  const page = pageRows(rows, pageOffset(inquiry), limit);
-  return createAnswer(
-    inquiry,
-    page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-    `Returned ${page.rows.length} of ${rows.length} Atlas projection branch row(s).`,
-    {
-      value: {
-        ...value,
-        projectionBranches: page.rows,
-      },
-      basis: [
-        selfSourceBasis(
-          "Read runtime projection branches through the hot TypeScript Program.",
-        ),
-      ],
-      evidence: page.rows
-        .slice(0, evidenceLimit(inquiry))
-        .map(evidenceForProjectionBranch),
-      page: pageInfo(
-        inquiry,
-        page.rows.length,
-        rows.length,
-        limit,
-        page.nextOffset,
-      ),
-      continuations: selfRowContinuations(
-        inquiry,
-        page.rows.map((row) => ({
-          id: row.id,
-          source: row.source,
-          summary: `Inspect projection branch ${row.projection} in ${row.functionName}.`,
-        })),
-        page.nextOffset,
-        limit,
-        "atlas.self:projections:next-page",
-        "Continue Atlas projection branch rows.",
-      ),
-    },
-  );
+  return answerSelfRowProjection(inquiry, {
+    familyId: "atlas.self:projections",
+    rows,
+    valueWithRows: (pageRows) => ({ ...value, projectionBranches: pageRows }),
+    rowNoun: "Atlas projection branch row(s)",
+    basisSummary:
+      "Read runtime projection branches through the hot TypeScript Program.",
+    evidenceForRow: evidenceForProjectionBranch,
+    nextPageId: "atlas.self:projections:next-page",
+    nextPageRationale: "Continue Atlas projection branch rows.",
+    inspectionForRow: (row) => ({
+      id: row.id,
+      source: row.source,
+      summary: `Inspect projection branch ${row.projection} in ${row.functionName}.`,
+    }),
+  });
 }
 
 function answerSelfContinuationsProjection(
   inquiry: Inquiry,
   value: SelfValue,
-  analysis: AtlasSelfAnalysisIndex,
+  analysis: AtlasSelfAnalysis,
 ): Answer<SelfValue> {
   const rows = filterContinuations(analysis.continuations, inquiry);
-  const limit = rowLimit(inquiry);
-  const page = pageRows(rows, pageOffset(inquiry), limit);
-  return createAnswer(
-    inquiry,
-    page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-    `Returned ${page.rows.length} of ${rows.length} Atlas continuation row(s).`,
-    {
-      value: {
-        ...value,
-        continuationRows: page.rows,
-      },
-      basis: [
-        selfSourceBasis(
-          "Read continuation object literals through the hot TypeScript Program.",
-        ),
-      ],
-      evidence: page.rows
-        .slice(0, evidenceLimit(inquiry))
-        .map(evidenceForContinuation),
-      page: pageInfo(
-        inquiry,
-        page.rows.length,
-        rows.length,
-        limit,
-        page.nextOffset,
-      ),
-      continuations: selfRowContinuations(
-        inquiry,
-        page.rows.map((row) => ({
-          id: row.id,
-          source: row.source,
-          summary: `Inspect continuation ${row.continuationId ?? row.id}.`,
-        })),
-        page.nextOffset,
-        limit,
-        "atlas.self:continuations:next-page",
-        "Continue Atlas continuation rows.",
-      ),
-    },
-  );
+  return answerSelfRowProjection(inquiry, {
+    familyId: "atlas.self:continuations",
+    rows,
+    valueWithRows: (pageRows) => ({ ...value, continuationRows: pageRows }),
+    rowNoun: "Atlas continuation row(s)",
+    basisSummary:
+      "Read continuation object literals through the hot TypeScript Program.",
+    evidenceForRow: evidenceForContinuation,
+    nextPageId: "atlas.self:continuations:next-page",
+    nextPageRationale: "Continue Atlas continuation rows.",
+    inspectionForRow: (row) => ({
+      id: row.id,
+      source: row.source,
+      summary: `Inspect continuation ${row.continuationId ?? row.id}.`,
+    }),
+  });
+}
+
+function answerSelfSemanticRoutesProjection(
+  inquiry: Inquiry,
+  value: SelfValue,
+  analysis: AtlasSelfAnalysis,
+): Answer<SelfValue> {
+  const rows = filterSemanticRoutes(analysis.semanticRoutes, inquiry);
+  return answerSelfRowProjection(inquiry, {
+    familyId: "atlas.self:semantic-routes",
+    rows,
+    valueWithRows: (pageRows) => ({ ...value, semanticRoutes: pageRows }),
+    rowNoun: "declared framework semantic route row(s)",
+    basisSummary:
+      "Read declared framework semantic route topology from Atlas route catalog source.",
+    evidenceForRow: evidenceForSemanticRoute,
+    nextPageId: "atlas.self:semantic-routes:next-page",
+    nextPageRationale: "Continue declared framework semantic route rows.",
+    inspectionForRow: (row) => ({
+      id: row.id,
+      source: row.source,
+      summary: `Inspect semantic route ${row.semanticRouteId}.`,
+    }),
+  });
 }
 
 function answerSelfModulesProjection(
   inquiry: Inquiry,
   value: SelfValue,
-  analysis: AtlasSelfAnalysisIndex,
+  analysis: AtlasSelfAnalysis,
 ): Answer<SelfValue> {
   const rows = filterModules(analysis.moduleDependencies, inquiry);
-  const limit = rowLimit(inquiry);
-  const page = pageRows(rows, pageOffset(inquiry), limit);
-  return createAnswer(
-    inquiry,
-    page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-    `Returned ${page.rows.length} of ${rows.length} Atlas module dependency row(s).`,
-    {
-      value: {
-        ...value,
-        moduleDependencies: page.rows,
-      },
-      basis: [
-        selfSourceBasis(
-          "Read relative import/export edges through the hot TypeScript Program.",
-        ),
-      ],
-      evidence: page.rows
-        .slice(0, evidenceLimit(inquiry))
-        .map(evidenceForModuleDependency),
-      page: pageInfo(
-        inquiry,
-        page.rows.length,
-        rows.length,
-        limit,
-        page.nextOffset,
-      ),
-      continuations: selfRowContinuations(
-        inquiry,
-        page.rows.map((row) => ({
-          id: row.id,
-          source: row.source,
-          summary: `Inspect module dependency ${row.moduleSpecifier}.`,
-        })),
-        page.nextOffset,
-        limit,
-        "atlas.self:modules:next-page",
-        "Continue Atlas module dependency rows.",
-      ),
-    },
-  );
+  return answerSelfRowProjection(inquiry, {
+    familyId: "atlas.self:modules",
+    rows,
+    valueWithRows: (pageRows) => ({ ...value, moduleDependencies: pageRows }),
+    rowNoun: "Atlas module dependency row(s)",
+    basisSummary:
+      "Read relative import/export edges through the hot TypeScript Program.",
+    evidenceForRow: evidenceForModuleDependency,
+    nextPageId: "atlas.self:modules:next-page",
+    nextPageRationale: "Continue Atlas module dependency rows.",
+    inspectionForRow: (row) => ({
+      id: row.id,
+      source: row.source,
+      summary: `Inspect module dependency ${row.moduleSpecifier}.`,
+    }),
+  });
 }
 
-function answerSelfIndexesProjection(
+function answerSelfSubstrateSurfacesProjection(
   inquiry: Inquiry,
   value: SelfValue,
-  analysis: AtlasSelfAnalysisIndex,
+  analysis: AtlasSelfAnalysis,
 ): Answer<SelfValue> {
-  const rows = filterIndexes(analysis.indexProvenance, inquiry);
-  const limit = rowLimit(inquiry);
-  const page = pageRows(rows, pageOffset(inquiry), limit);
-  return createAnswer(
-    inquiry,
-    page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-    `Returned ${page.rows.length} of ${rows.length} Atlas index/cache provenance row(s).`,
-    {
-      value: {
-        ...value,
-        indexProvenance: page.rows,
-      },
-      basis: [
-        selfSourceBasis(
-          "Read index/cache/schema declarations through the hot TypeScript Program.",
-        ),
-      ],
-      evidence: page.rows
-        .slice(0, evidenceLimit(inquiry))
-        .map(evidenceForIndexProvenance),
-      page: pageInfo(
-        inquiry,
-        page.rows.length,
-        rows.length,
-        limit,
-        page.nextOffset,
-      ),
-      continuations: selfRowContinuations(
-        inquiry,
-        page.rows.map((row) => ({
-          id: row.id,
-          source: row.source,
-          summary: `Inspect index/cache surface ${row.name}.`,
-        })),
-        page.nextOffset,
-        limit,
-        "atlas.self:indexes:next-page",
-        "Continue Atlas index/cache provenance rows.",
-      ),
-    },
-  );
+  const rows = filterSubstrateSurfaces(analysis.substrateSurfaces, inquiry);
+  return answerSelfRowProjection(inquiry, {
+    familyId: "atlas.self:substrate-surfaces",
+    rows,
+    valueWithRows: (pageRows) => ({ ...value, substrateSurfaces: pageRows }),
+    rowNoun: "Atlas substrate surface row(s)",
+    basisSummary:
+      "Read substrate reader, builder, and schema declarations through the hot TypeScript Program.",
+    evidenceForRow: evidenceForSubstrateSurface,
+    nextPageId: "atlas.self:substrate-surfaces:next-page",
+    nextPageRationale: "Continue Atlas substrate surface rows.",
+    inspectionForRow: (row) => ({
+      id: row.id,
+      source: row.source,
+      summary: `Inspect substrate surface ${row.name}.`,
+    }),
+  });
 }
 
 function answerSelfContractStringsProjection(
   inquiry: Inquiry,
   value: SelfValue,
-  analysis: AtlasSelfAnalysisIndex,
+  analysis: AtlasSelfAnalysis,
 ): Answer<SelfValue> {
   const rows = filterContractStrings(analysis.contractStrings, inquiry);
-  const limit = rowLimit(inquiry);
-  const page = pageRows(rows, pageOffset(inquiry), limit);
-  return createAnswer(
-    inquiry,
-    page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-    `Returned ${page.rows.length} of ${rows.length} Atlas contract string row(s).`,
-    {
-      value: {
-        ...value,
-        contractStrings: page.rows,
-      },
-      basis: [
-        selfSourceBasis(
-          "Classified contract-bearing string literals through the hot TypeScript Program.",
-        ),
-      ],
-      evidence: page.rows
-        .slice(0, evidenceLimit(inquiry))
-        .map(evidenceForContractString),
-      page: pageInfo(
-        inquiry,
-        page.rows.length,
-        rows.length,
-        limit,
-        page.nextOffset,
-      ),
-      continuations: selfRowContinuations(
-        inquiry,
-        page.rows.map((row) => ({
-          id: row.id,
-          source: row.firstSource,
-          summary: `Inspect contract string ${JSON.stringify(row.value)}.`,
-        })),
-        page.nextOffset,
-        limit,
-        "atlas.self:contract-strings:next-page",
-        "Continue Atlas contract string rows.",
-      ),
-    },
-  );
+  return answerSelfRowProjection(inquiry, {
+    familyId: "atlas.self:contract-strings",
+    rows,
+    valueWithRows: (pageRows) => ({ ...value, contractStrings: pageRows }),
+    rowNoun: "Atlas contract string row(s)",
+    basisSummary:
+      "Classified contract-bearing string literals through the hot TypeScript Program.",
+    evidenceForRow: evidenceForContractString,
+    nextPageId: "atlas.self:contract-strings:next-page",
+    nextPageRationale: "Continue Atlas contract string rows.",
+    inspectionForRow: (row) => ({
+      id: row.id,
+      source: row.firstSource,
+      summary: `Inspect contract string ${JSON.stringify(row.value)}.`,
+    }),
+  });
 }
 
 function answerSelfEnumProjection(
   inquiry: Inquiry,
   value: SelfValue,
-  analysis: AtlasSelfAnalysisIndex,
+  analysis: AtlasSelfAnalysis,
 ): Answer<SelfValue> {
   const rows = filterEnums(analysis.enums, inquiry);
-  const limit = rowLimit(inquiry);
-  const page = pageRows(rows, pageOffset(inquiry), limit);
-  return createAnswer(
-    inquiry,
-    page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-    `Returned ${page.rows.length} of ${rows.length} Atlas enum declaration row(s).`,
-    {
-      value: {
-        ...value,
-        enums: page.rows,
-      },
-      basis: [
-        selfSourceBasis(
-          "Read enum declarations and Enum.Member references through the hot TypeScript Program.",
-        ),
-      ],
-      evidence: page.rows.slice(0, evidenceLimit(inquiry)).map(evidenceForEnum),
-      page: pageInfo(
-        inquiry,
-        page.rows.length,
-        rows.length,
-        limit,
-        page.nextOffset,
-      ),
-      continuations: selfRowContinuations(
-        inquiry,
-        page.rows.map((row) => ({
-          id: row.id,
-          source: row.source,
-          summary: `Inspect enum ${row.name}.`,
-        })),
-        page.nextOffset,
-        limit,
-        "atlas.self:enums:next-page",
-        "Continue Atlas enum declaration rows.",
-      ),
-    },
-  );
+  return answerSelfRowProjection(inquiry, {
+    familyId: "atlas.self:enums",
+    rows,
+    valueWithRows: (pageRows) => ({ ...value, enums: pageRows }),
+    rowNoun: "Atlas enum declaration row(s)",
+    basisSummary:
+      "Read enum declarations and Enum.Member references through the hot TypeScript Program.",
+    evidenceForRow: evidenceForEnum,
+    nextPageId: "atlas.self:enums:next-page",
+    nextPageRationale: "Continue Atlas enum declaration rows.",
+    inspectionForRow: (row) => ({
+      id: row.id,
+      source: row.source,
+      summary: `Inspect enum ${row.name}.`,
+    }),
+  });
+}
+
+function answerSelfEnumReferencesProjection(
+  inquiry: Inquiry,
+  value: SelfValue,
+  analysis: AtlasSelfAnalysis,
+): Answer<SelfValue> {
+  const rows = filterEnumReferences(analysis.enumReferences, inquiry);
+  return answerSelfRowProjection(inquiry, {
+    familyId: "atlas.self:enum-references",
+    rows,
+    valueWithRows: (pageRows) => ({ ...value, enumReferences: pageRows }),
+    rowNoun: "Atlas enum reference row(s)",
+    basisSummary:
+      "Read exact Enum.Member reference sites through the package-scoped TypeScript enum usage index.",
+    evidenceForRow: evidenceForEnumReference,
+    nextPageId: "atlas.self:enum-references:next-page",
+    nextPageRationale: "Continue Atlas enum reference rows.",
+    inspectionForRow: (row) => ({
+      id: row.id,
+      source: row.source,
+      summary: `Inspect enum reference ${row.enumName}.${row.memberName}.`,
+    }),
+  });
+}
+
+function answerSelfEnumValueSpacesProjection(
+  inquiry: Inquiry,
+  value: SelfValue,
+  analysis: AtlasSelfAnalysis,
+): Answer<SelfValue> {
+  const rows = filterEnumValueSpaces(analysis.enumValueSpaces, inquiry);
+  return answerSelfRowProjection(inquiry, {
+    familyId: "atlas.self:enum-value-spaces",
+    rows,
+    valueWithRows: (pageRows) => ({ ...value, enumValueSpaces: pageRows }),
+    rowNoun: "Atlas enum value-space row(s)",
+    basisSummary:
+      "Read enum member values and raw literal overlaps through the package-scoped TypeScript enum usage index.",
+    evidenceForRow: evidenceForEnumValueSpace,
+    nextPageId: "atlas.self:enum-value-spaces:next-page",
+    nextPageRationale: "Continue Atlas enum value-space rows.",
+    inspectionForRow: (row) =>
+      row.firstSource === undefined
+        ? undefined
+        : {
+            id: row.id,
+            source: row.firstSource,
+            summary: `Inspect first raw value occurrence for ${JSON.stringify(row.value)}.`,
+          },
+  });
+}
+
+function answerSelfEnumMappingsProjection(
+  inquiry: Inquiry,
+  value: SelfValue,
+  analysis: AtlasSelfAnalysis,
+): Answer<SelfValue> {
+  const rows = filterEnumMappings(analysis.enumMappings, inquiry);
+  return answerSelfRowProjection(inquiry, {
+    familyId: "atlas.self:enum-mappings",
+    rows,
+    valueWithRows: (pageRows) => ({ ...value, enumMappings: pageRows }),
+    rowNoun: "Atlas enum mapping row(s)",
+    basisSummary:
+      "Read exact enum-to-enum translation evidence through the package-scoped TypeScript enum usage index.",
+    evidenceForRow: evidenceForEnumMapping,
+    nextPageId: "atlas.self:enum-mappings:next-page",
+    nextPageRationale: "Continue Atlas enum mapping rows.",
+    inspectionForRow: (row) => ({
+      id: row.id,
+      source: row.source,
+      summary: `Inspect enum mapping ${row.fromEnumName}.${row.fromMemberName} to ${row.toEnumName}.${row.toMemberName}.`,
+    }),
+  });
 }
 
 function answerSelfStringProjection(
   inquiry: Inquiry,
   value: SelfValue,
-  analysis: AtlasSelfAnalysisIndex,
+  analysis: AtlasSelfAnalysis,
 ): Answer<SelfValue> {
   const rows = filterStrings(analysis.strings, inquiry);
-  const limit = rowLimit(inquiry);
-  const page = pageRows(rows, pageOffset(inquiry), limit);
-  return createAnswer(
-    inquiry,
-    page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-    `Returned ${page.rows.length} of ${rows.length} Atlas string literal row(s).`,
-    {
-      value: {
-        ...value,
-        strings: page.rows,
-      },
-      basis: [
-        selfSourceBasis(
-          "Read string literal occurrences through the hot TypeScript Program.",
-        ),
-      ],
-      evidence: page.rows
-        .slice(0, evidenceLimit(inquiry))
-        .map(evidenceForStringLiteral),
-      page: pageInfo(
-        inquiry,
-        page.rows.length,
-        rows.length,
-        limit,
-        page.nextOffset,
-      ),
-      continuations: selfRowContinuations(
-        inquiry,
-        page.rows.map((row) => ({
-          id: row.id,
-          source: row.firstSource,
-          summary: `Inspect first occurrence of string literal ${JSON.stringify(
-            row.value,
-          )}.`,
-        })),
-        page.nextOffset,
-        limit,
-        "atlas.self:strings:next-page",
-        "Continue Atlas string literal rows.",
-      ),
-    },
-  );
+  return answerSelfRowProjection(inquiry, {
+    familyId: "atlas.self:strings",
+    rows,
+    valueWithRows: (pageRows) => ({ ...value, strings: pageRows }),
+    rowNoun: "Atlas string literal row(s)",
+    basisSummary:
+      "Read string literal occurrences through the hot TypeScript Program.",
+    evidenceForRow: evidenceForStringLiteral,
+    nextPageId: "atlas.self:strings:next-page",
+    nextPageRationale: "Continue Atlas string literal rows.",
+    inspectionForRow: (row) => ({
+      id: row.id,
+      source: row.firstSource,
+      summary: `Inspect first occurrence of string literal ${JSON.stringify(
+        row.value,
+      )}.`,
+    }),
+  });
 }
 
 function answerSelfRelationshipSurfaceProjection(
   inquiry: Inquiry,
   value: SelfValue,
-  analysis: AtlasSelfAnalysisIndex,
+  analysis: AtlasSelfAnalysis,
 ): Answer<SelfValue> {
   return answerSelfRelationshipRows(
     inquiry,
     value,
     filterRelationshipSurfaces(analysis.relationshipSurfaces, inquiry),
-    "relationship-surfaces",
   );
 }
 
 function answerSelfRowSurfaceProjection(
   inquiry: Inquiry,
   value: SelfValue,
-  analysis: AtlasSelfAnalysisIndex,
+  analysis: AtlasSelfAnalysis,
 ): Answer<SelfValue> {
   const rows = filterRowSurfaces(analysis.rowSurfaces, inquiry);
-  const limit = rowLimit(inquiry);
-  const page = pageRows(rows, pageOffset(inquiry), limit);
-  return createAnswer(
-    inquiry,
-    page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-    `Returned ${page.rows.length} of ${rows.length} Atlas row surface row(s).`,
-    {
-      value: {
-        ...value,
-        rowSurfaces: page.rows,
-      },
-      basis: [
-        selfSourceBasis(
-          "Read structural interface/type row surfaces through the hot TypeScript Program.",
-        ),
-      ],
-      evidence: page.rows
-        .slice(0, evidenceLimit(inquiry))
-        .map(evidenceForRowSurface),
-      page: pageInfo(
-        inquiry,
-        page.rows.length,
-        rows.length,
-        limit,
-        page.nextOffset,
-      ),
-      continuations: selfRowContinuations(
-        inquiry,
-        page.rows.map((row) => ({
-          id: row.id,
-          source: row.source,
-          summary: `Inspect row surface ${row.name}.`,
-        })),
-        page.nextOffset,
-        limit,
-        "atlas.self:row-surfaces:next-page",
-        "Continue Atlas row surface rows.",
-      ),
-    },
-  );
+  return answerSelfRowProjection(inquiry, {
+    familyId: "atlas.self:row-surfaces",
+    rows,
+    valueWithRows: (pageRows) => ({ ...value, rowSurfaces: pageRows }),
+    rowNoun: "Atlas row surface row(s)",
+    basisSummary:
+      "Read structural interface/type row surfaces through the hot TypeScript Program.",
+    evidenceForRow: evidenceForRowSurface,
+    nextPageId: "atlas.self:row-surfaces:next-page",
+    nextPageRationale: "Continue Atlas row surface rows.",
+    inspectionForRow: (row) => ({
+      id: row.id,
+      source: row.source,
+      summary: `Inspect row surface ${row.name}.`,
+    }),
+  });
 }
 
 function answerSelfClassesProjection(
   inquiry: Inquiry,
   value: SelfValue,
-  analysis: AtlasSelfAnalysisIndex,
+  analysis: AtlasSelfAnalysis,
 ): Answer<SelfValue> {
   const rows = filterClassSurfaces(analysis.classSurfaces, inquiry);
-  const limit = rowLimit(inquiry);
-  const page = pageRows(rows, pageOffset(inquiry), limit);
-  return createAnswer(
-    inquiry,
-    page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-    `Returned ${page.rows.length} of ${rows.length} Atlas class surface row(s).`,
-    {
-      value: {
-        ...value,
-        classSurfaces: page.rows,
-      },
-      basis: [
-        selfSourceBasis(
-          "Read class declarations, methods, fields, heritage, and constructor surfaces through the hot TypeScript Program.",
-        ),
-      ],
-      evidence: page.rows
-        .slice(0, evidenceLimit(inquiry))
-        .map(evidenceForClassSurface),
-      page: pageInfo(
-        inquiry,
-        page.rows.length,
-        rows.length,
-        limit,
-        page.nextOffset,
-      ),
-      continuations: selfRowContinuations(
-        inquiry,
-        page.rows.map((row) => ({
-          id: row.id,
-          source: row.source,
-          summary: `Inspect class surface ${row.name}.`,
-        })),
-        page.nextOffset,
-        limit,
-        "atlas.self:classes:next-page",
-        "Continue Atlas class surface rows.",
-      ),
-    },
-  );
+  return answerSelfRowProjection(inquiry, {
+    familyId: "atlas.self:classes",
+    rows,
+    valueWithRows: (pageRows) => ({ ...value, classSurfaces: pageRows }),
+    rowNoun: "Atlas class surface row(s)",
+    basisSummary:
+      "Read class declarations, methods, fields, heritage, and constructor surfaces through the hot TypeScript Program.",
+    evidenceForRow: evidenceForClassSurface,
+    nextPageId: "atlas.self:classes:next-page",
+    nextPageRationale: "Continue Atlas class surface rows.",
+    inspectionForRow: (row) => ({
+      id: row.id,
+      source: row.source,
+      summary: `Inspect class surface ${row.name}.`,
+    }),
+  });
 }
 
 function answerSelfFunctionsProjection(
   inquiry: Inquiry,
   value: SelfValue,
-  analysis: AtlasSelfAnalysisIndex,
+  analysis: AtlasSelfAnalysis,
 ): Answer<SelfValue> {
   const rows = filterFunctionSurfaces(analysis.functionSurfaces, inquiry);
-  const limit = rowLimit(inquiry);
-  const page = pageRows(rows, pageOffset(inquiry), limit);
-  return createAnswer(
-    inquiry,
-    page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-    `Returned ${page.rows.length} of ${rows.length} Atlas function surface row(s).`,
-    {
-      value: {
-        ...value,
-        functionSurfaces: page.rows,
-      },
-      basis: [
-        selfSourceBasis(
-          "Read top-level function and class-method declarations through the hot TypeScript Program.",
-        ),
-      ],
-      evidence: page.rows
-        .slice(0, evidenceLimit(inquiry))
-        .map(evidenceForFunctionSurface),
-      page: pageInfo(
-        inquiry,
-        page.rows.length,
-        rows.length,
-        limit,
-        page.nextOffset,
-      ),
-      continuations: selfRowContinuations(
-        inquiry,
-        page.rows.map((row) => ({
-          id: row.id,
-          source: row.source,
-          summary: `Inspect function surface ${row.name}.`,
-        })),
-        page.nextOffset,
-        limit,
-        "atlas.self:functions:next-page",
-        "Continue Atlas function surface rows.",
-      ),
-    },
-  );
-}
-
-function answerSelfWiringProjection(
-  inquiry: Inquiry,
-  value: SelfValue,
-  analysis: AtlasSelfAnalysisIndex,
-): Answer<SelfValue> {
-  return answerSelfRelationshipRows(
-    inquiry,
-    value,
-    filterRelationshipSurfaces(analysis.relationshipSurfaces, inquiry),
-    "wiring",
-  );
+  return answerSelfRowProjection(inquiry, {
+    familyId: "atlas.self:functions",
+    rows,
+    valueWithRows: (pageRows) => ({ ...value, functionSurfaces: pageRows }),
+    rowNoun: "Atlas function surface row(s)",
+    basisSummary:
+      "Read top-level function and class-method declarations through the hot TypeScript Program.",
+    evidenceForRow: evidenceForFunctionSurface,
+    nextPageId: "atlas.self:functions:next-page",
+    nextPageRationale: "Continue Atlas function surface rows.",
+    inspectionForRow: (row) => ({
+      id: row.id,
+      source: row.source,
+      summary: `Inspect function surface ${row.name}.`,
+    }),
+  });
 }
 
 function answerSelfRelationshipRows(
   inquiry: Inquiry,
   value: SelfValue,
   rows: readonly AtlasSelfRelationshipSurfaceRow[],
-  projection: "relationship-surfaces" | "wiring",
 ): Answer<SelfValue> {
-  const limit = rowLimit(inquiry);
-  const page = pageRows(rows, pageOffset(inquiry), limit);
-  return createAnswer(
-    inquiry,
-    page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-    `Returned ${page.rows.length} of ${rows.length} Atlas relationship surface row(s).`,
-    {
-      value: {
-        ...value,
-        relationshipSurfaces: page.rows,
-      },
-      basis: [
-        selfSourceBasis(
-          "Read relationship-like interface/type surfaces through the hot TypeScript Program.",
-        ),
-      ],
-      evidence: page.rows
-        .slice(0, evidenceLimit(inquiry))
-        .map(evidenceForRelationshipSurface),
-      page: pageInfo(
-        inquiry,
-        page.rows.length,
-        rows.length,
-        limit,
-        page.nextOffset,
-      ),
-      continuations: selfRowContinuations(
-        inquiry,
-        page.rows.map((row) => ({
-          id: row.id,
-          source: row.source,
-          summary: `Inspect ${
-            projection === "wiring" ? "wiring" : "relationship"
-          } surface ${row.name}.`,
-        })),
-        page.nextOffset,
-        limit,
-        `atlas.self:${projection}:next-page`,
-        "Continue Atlas relationship surface rows.",
-      ),
-    },
-  );
+  return answerSelfRowProjection(inquiry, {
+    familyId: "atlas.self:relationship-surfaces",
+    rows,
+    valueWithRows: (pageRows) => ({ ...value, relationshipSurfaces: pageRows }),
+    rowNoun: "Atlas relationship surface row(s)",
+    basisSummary:
+      "Read relationship-like interface/type surfaces through the hot TypeScript Program.",
+    evidenceForRow: evidenceForRelationshipSurface,
+    nextPageId: "atlas.self:relationship-surfaces:next-page",
+    nextPageRationale: "Continue Atlas relationship surface rows.",
+    inspectionForRow: (row) => ({
+      id: row.id,
+      source: row.source,
+      summary: `Inspect relationship surface ${row.name}.`,
+    }),
+  });
 }
 
 function answerSelfAxisPressureProjection(
   inquiry: Inquiry,
   value: SelfValue,
-  analysis: AtlasSelfAnalysisIndex,
+  analysis: AtlasSelfAnalysis,
 ): Answer<SelfValue> {
   const rows = filterAxisPressure(analysis.axisPressure, inquiry);
-  const limit = rowLimit(inquiry);
-  const page = pageRows(rows, pageOffset(inquiry), limit);
-  return createAnswer(
-    inquiry,
-    page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-    `Returned ${page.rows.length} of ${rows.length} Atlas axis pressure row(s).`,
-    {
-      value: {
-        ...value,
-        axisPressure: page.rows,
-      },
-      basis: [
-        selfSourceBasis(
-          "Read axis, mapper, and stringly-surface pressure through the hot TypeScript Program.",
-        ),
-      ],
-      evidence: page.rows
-        .slice(0, evidenceLimit(inquiry))
-        .map(evidenceForAxisPressure),
-      page: pageInfo(
-        inquiry,
-        page.rows.length,
-        rows.length,
-        limit,
-        page.nextOffset,
-      ),
-      continuations: selfRowContinuations(
-        inquiry,
-        page.rows.map((row) => ({
-          id: row.id,
-          source: row.source,
-          summary: `Inspect axis pressure ${row.sourceName}.`,
-        })),
-        page.nextOffset,
-        limit,
-        "atlas.self:axis-pressure:next-page",
-        "Continue Atlas axis pressure rows.",
-      ),
-    },
-  );
-}
-
-function answerSelfPressureProjection(
-  inquiry: Inquiry,
-  value: SelfValue,
-  analysis: AtlasSelfAnalysisIndex,
-  openSeams: readonly OpenSeam[],
-): Answer<SelfValue> {
-  const limit = rowLimit(inquiry);
-  const enums = filterEnums(analysis.enums, inquiry)
-    .filter(
-      (row) => row.unreferencedMemberCount > 0 || row.literalReuseCount > 0,
-    )
-    .slice(0, limit);
-  const strings = filterStrings(analysis.strings, inquiry)
-    .filter((row) => row.reusedOutsideDeclaration)
-    .slice(0, limit);
-  const relationshipSurfaces = filterRelationshipSurfaces(
-    analysis.relationshipSurfaces,
-    inquiry,
-  )
-    .filter((row) => !row.hasSource || !row.hasRelation)
-    .slice(0, limit);
-
-  return createAnswer(
-    inquiry,
-    OutcomeKind.Hit,
-    "Returned Atlas self pressure rows for enum, string, relationship, and lens-contract maintenance.",
-    {
-      value: {
-        ...value,
-        enums,
-        strings,
-        relationshipSurfaces,
-      },
-      basis: [
-        contractBasis(
-          "Answered lens implementation pressure from the in-memory lens registry.",
-        ),
-        selfSourceBasis(
-          "Read source-backed enum, string, and relationship pressure through the hot TypeScript Program.",
-        ),
-      ],
-      evidence: [
-        ...enums.slice(0, evidenceLimit(inquiry)).map(evidenceForEnum),
-        ...strings
-          .slice(0, evidenceLimit(inquiry))
-          .map(evidenceForStringLiteral),
-        ...relationshipSurfaces
-          .slice(0, evidenceLimit(inquiry))
-          .map(evidenceForRelationshipSurface),
-      ],
-      openSeams,
-      continuations: selfSummaryContinuations(inquiry),
-    },
-  );
+  return answerSelfRowProjection(inquiry, {
+    familyId: "atlas.self:axis-pressure",
+    rows,
+    valueWithRows: (pageRows) => ({ ...value, axisPressure: pageRows }),
+    rowNoun: "Atlas axis pressure row(s)",
+    basisSummary:
+      "Read axis, mapper, and stringly-surface pressure through the hot TypeScript Program.",
+    evidenceForRow: evidenceForAxisPressure,
+    nextPageId: "atlas.self:axis-pressure:next-page",
+    nextPageRationale: "Continue Atlas axis pressure rows.",
+    inspectionForRow: (row) => ({
+      id: row.id,
+      source: row.source,
+      summary: `Inspect axis pressure ${row.sourceName}.`,
+    }),
+  });
 }
 
 function selfSummaryContinuations(inquiry: Inquiry): readonly Continuation[] {
@@ -1578,7 +1360,7 @@ function selfSummaryContinuations(inquiry: Inquiry): readonly Continuation[] {
       inquiry,
       "atlas.self:recipes",
       "recipes",
-      "Use calibrated self-analysis hop graphs before broad Atlas architecture work.",
+      "Use stored self-maintenance recipes when they fit the current architecture question.",
     ),
     projectionContinuation(
       inquiry,
@@ -1606,15 +1388,21 @@ function selfSummaryContinuations(inquiry: Inquiry): readonly Continuation[] {
     ),
     projectionContinuation(
       inquiry,
+      "atlas.self:semantic-routes",
+      "semantic-routes",
+      "Inspect declared framework semantic route topology.",
+    ),
+    projectionContinuation(
+      inquiry,
       "atlas.self:modules",
       "modules",
       "Inspect Atlas module dependency edges.",
     ),
     projectionContinuation(
       inquiry,
-      "atlas.self:indexes",
-      "indexes",
-      "Inspect index, cache, warmup, and schema provenance surfaces.",
+      "atlas.self:substrate-surfaces",
+      "substrate-surfaces",
+      "Inspect substrate reader, builder, and schema surfaces.",
     ),
     projectionContinuation(
       inquiry,
@@ -1627,6 +1415,24 @@ function selfSummaryContinuations(inquiry: Inquiry): readonly Continuation[] {
       "atlas.self:enums",
       "enums",
       "Inspect enum axes and enum-member usage pressure.",
+    ),
+    projectionContinuation(
+      inquiry,
+      "atlas.self:enum-references",
+      "enum-references",
+      "Inspect exact Enum.Member reference sites.",
+    ),
+    projectionContinuation(
+      inquiry,
+      "atlas.self:enum-value-spaces",
+      "enum-value-spaces",
+      "Inspect enum member value spaces and raw literal overlap.",
+    ),
+    projectionContinuation(
+      inquiry,
+      "atlas.self:enum-mappings",
+      "enum-mappings",
+      "Inspect exact enum-to-enum translation edges.",
     ),
     projectionContinuation(
       inquiry,
@@ -1708,7 +1514,7 @@ function selfRowContinuations(
       ),
     );
   }
-  for (const row of rows.slice(0, 3)) {
+  for (const row of rows.filter((entry) => entry.source !== undefined).slice(0, 3)) {
     if (row.source === undefined) {
       continue;
     }
@@ -1832,6 +1638,127 @@ function filterEnums(
             .toLowerCase()
             .includes(query),
       )
+    );
+  });
+}
+
+function filterEnumReferences(
+  rows: readonly AtlasSelfEnumReferenceRow[],
+  inquiry: Inquiry,
+): readonly AtlasSelfEnumReferenceRow[] {
+  const enumName = stringFilter(inquiry, "enumName");
+  const memberName = stringFilter(inquiry, "memberName");
+  const role = stringFilter(inquiry, "role");
+  const query = lowerStringFilter(inquiry, "query");
+  return rows.filter((row) => {
+    if (enumName !== undefined && row.enumName !== enumName) {
+      return false;
+    }
+    if (memberName !== undefined && row.memberName !== memberName) {
+      return false;
+    }
+    if (role !== undefined && row.role !== role) {
+      return false;
+    }
+    if (query === undefined) {
+      return true;
+    }
+    return (
+      row.enumName.toLowerCase().includes(query) ||
+      row.memberName.toLowerCase().includes(query) ||
+      row.role.toLowerCase().includes(query) ||
+      row.expressionText.toLowerCase().includes(query) ||
+      (row.containingFunction?.toLowerCase().includes(query) ?? false) ||
+      (row.containingClass?.toLowerCase().includes(query) ?? false) ||
+      row.source.filePath.toLowerCase().includes(query)
+    );
+  });
+}
+
+function filterEnumValueSpaces(
+  rows: readonly AtlasSelfEnumValueSpaceRow[],
+  inquiry: Inquiry,
+): readonly AtlasSelfEnumValueSpaceRow[] {
+  const enumName = stringFilter(inquiry, "enumName");
+  const memberName = stringFilter(inquiry, "memberName");
+  const value = stringFilter(inquiry, "value");
+  const query = lowerStringFilter(inquiry, "query");
+  return rows.filter((row) => {
+    if (enumName !== undefined && !row.enumNames.includes(enumName)) {
+      return false;
+    }
+    if (
+      memberName !== undefined &&
+      !row.memberNames.some((name) => name.endsWith(`.${memberName}`))
+    ) {
+      return false;
+    }
+    if (value !== undefined && String(row.value) !== value) {
+      return false;
+    }
+    if (query === undefined) {
+      return true;
+    }
+    return (
+      String(row.value).toLowerCase().includes(query) ||
+      row.enumNames.some((name) => name.toLowerCase().includes(query)) ||
+      row.memberNames.some((name) => name.toLowerCase().includes(query)) ||
+      row.sourceFiles.some((file) => file.toLowerCase().includes(query))
+    );
+  });
+}
+
+function filterEnumMappings(
+  rows: readonly AtlasSelfEnumMappingRow[],
+  inquiry: Inquiry,
+): readonly AtlasSelfEnumMappingRow[] {
+  const enumName = stringFilter(inquiry, "enumName");
+  const fromEnum = stringFilter(inquiry, "fromEnum");
+  const toEnum = stringFilter(inquiry, "toEnum");
+  const memberName = stringFilter(inquiry, "memberName");
+  const carrier = stringFilter(inquiry, "carrier");
+  const relation = stringFilter(inquiry, "enumRelation");
+  const query = lowerStringFilter(inquiry, "query");
+  return rows.filter((row) => {
+    if (
+      enumName !== undefined &&
+      row.fromEnumName !== enumName &&
+      row.toEnumName !== enumName
+    ) {
+      return false;
+    }
+    if (fromEnum !== undefined && row.fromEnumName !== fromEnum) {
+      return false;
+    }
+    if (toEnum !== undefined && row.toEnumName !== toEnum) {
+      return false;
+    }
+    if (
+      memberName !== undefined &&
+      row.fromMemberName !== memberName &&
+      row.toMemberName !== memberName
+    ) {
+      return false;
+    }
+    if (carrier !== undefined && row.carrier !== carrier) {
+      return false;
+    }
+    if (relation !== undefined && row.relation !== relation) {
+      return false;
+    }
+    if (query === undefined) {
+      return true;
+    }
+    return (
+      row.fromEnumName.toLowerCase().includes(query) ||
+      row.fromMemberName.toLowerCase().includes(query) ||
+      row.toEnumName.toLowerCase().includes(query) ||
+      row.toMemberName.toLowerCase().includes(query) ||
+      row.carrier.toLowerCase().includes(query) ||
+      row.relation.toLowerCase().includes(query) ||
+      row.evidence.toLowerCase().includes(query) ||
+      row.expressionText.toLowerCase().includes(query) ||
+      row.source.filePath.toLowerCase().includes(query)
     );
   });
 }
@@ -2055,6 +1982,7 @@ function filterContracts(
 ): readonly SelfContractRow[] {
   const lensId = stringFilter(inquiry, "lensId");
   const projection = stringFilter(inquiry, "projectionId");
+  const parameter = stringFilter(inquiry, "parameterId");
   const query = lowerStringFilter(inquiry, "query");
   return rows.filter((row) => {
     if (lensId !== undefined && row.lensId !== lensId) {
@@ -2064,6 +1992,12 @@ function filterContracts(
       projection !== undefined &&
       !row.declaredProjectionIds.includes(projection) &&
       !row.observedProjectionIds.includes(projection)
+    ) {
+      return false;
+    }
+    if (
+      parameter !== undefined &&
+      !row.declaredParameterIds.includes(parameter)
     ) {
       return false;
     }
@@ -2078,7 +2012,24 @@ function filterContracts(
       row.declaredProjectionIds.some((id) =>
         id.toLowerCase().includes(query),
       ) ||
-      row.observedProjectionIds.some((id) => id.toLowerCase().includes(query))
+      row.observedProjectionIds.some((id) =>
+        id.toLowerCase().includes(query),
+      ) ||
+      row.declaredParameterIds.some((id) =>
+        id.toLowerCase().includes(query),
+      ) ||
+      row.duplicateParameterIds.some((id) =>
+        id.toLowerCase().includes(query),
+      ) ||
+      row.coherenceFacts.some(
+        (entry) =>
+          entry.dimension.toLowerCase().includes(query) ||
+          entry.subjectId.toLowerCase().includes(query) ||
+          entry.signals.some((signal) => signal.toLowerCase().includes(query)) ||
+          entry.interpretationSpace.some((signal) =>
+            signal.toLowerCase().includes(query),
+          ),
+      )
     );
   });
 }
@@ -2120,6 +2071,7 @@ function filterContinuations(
   const lensId = stringFilter(inquiry, "lensId");
   const kind = stringFilter(inquiry, "kind");
   const targetLens = stringFilter(inquiry, "targetLens");
+  const targetProjection = stringFilter(inquiry, "targetProjection");
   const routeRelationMember = stringFilter(inquiry, "routeRelationMember");
   const query = lowerStringFilter(inquiry, "query");
   return rows.filter((row) => {
@@ -2130,6 +2082,12 @@ function filterContinuations(
       return false;
     }
     if (targetLens !== undefined && row.targetLens !== targetLens) {
+      return false;
+    }
+    if (
+      targetProjection !== undefined &&
+      row.targetProjection !== targetProjection
+    ) {
       return false;
     }
     if (
@@ -2150,6 +2108,64 @@ function filterContinuations(
       row.filePath.toLowerCase().includes(query) ||
       row.functionName.toLowerCase().includes(query) ||
       row.lensIds.some((id) => id.toLowerCase().includes(query))
+    );
+  });
+}
+
+function filterSemanticRoutes(
+  rows: readonly AtlasSelfSemanticRouteRow[],
+  inquiry: Inquiry,
+): readonly AtlasSelfSemanticRouteRow[] {
+  const semanticRouteId = stringFilter(inquiry, "semanticRouteId");
+  const navigationSpecId = stringFilter(inquiry, "navigationSpecId");
+  const targetEndpointId = stringFilter(inquiry, "targetEndpointId");
+  const targetLens = stringFilter(inquiry, "targetLens");
+  const targetProjection = stringFilter(inquiry, "targetProjection");
+  const relation = stringFilter(inquiry, "routeRelationMember");
+  const query = lowerStringFilter(inquiry, "query");
+  return rows.filter((row) => {
+    if (
+      semanticRouteId !== undefined &&
+      row.semanticRouteId !== semanticRouteId
+    ) {
+      return false;
+    }
+    if (
+      navigationSpecId !== undefined &&
+      row.navigationSpecId !== navigationSpecId
+    ) {
+      return false;
+    }
+    if (
+      targetEndpointId !== undefined &&
+      row.targetEndpointId !== targetEndpointId
+    ) {
+      return false;
+    }
+    if (targetLens !== undefined && row.targetLens !== targetLens) {
+      return false;
+    }
+    if (
+      targetProjection !== undefined &&
+      row.targetProjection !== targetProjection
+    ) {
+      return false;
+    }
+    if (relation !== undefined && row.relation !== relation) {
+      return false;
+    }
+    if (query === undefined) {
+      return true;
+    }
+    return (
+      row.semanticRouteId.toLowerCase().includes(query) ||
+      row.navigationSpecId.toLowerCase().includes(query) ||
+      row.targetEndpointId.toLowerCase().includes(query) ||
+      row.targetLens.toLowerCase().includes(query) ||
+      row.targetProjection.toLowerCase().includes(query) ||
+      row.relation.toLowerCase().includes(query) ||
+      row.basis.some((entry) => entry.toLowerCase().includes(query)) ||
+      row.summary.toLowerCase().includes(query)
     );
   });
 }
@@ -2185,10 +2201,10 @@ function filterModules(
   });
 }
 
-function filterIndexes(
-  rows: readonly AtlasSelfIndexProvenanceRow[],
+function filterSubstrateSurfaces(
+  rows: readonly AtlasSelfSubstrateSurfaceRow[],
   inquiry: Inquiry,
-): readonly AtlasSelfIndexProvenanceRow[] {
+): readonly AtlasSelfSubstrateSurfaceRow[] {
   const kind = stringFilter(inquiry, "kind");
   const query = lowerStringFilter(inquiry, "query");
   return rows.filter((row) => {
@@ -2229,6 +2245,20 @@ function filterContractStrings(
       )
     );
   });
+}
+
+function evidenceForRecipe(row: AtlasSelfRecipeRow): Evidence {
+  return {
+    id: `${row.id}:evidence`,
+    kind: EvidenceKind.MaintenanceSignal,
+    role: EvidenceRole.Subject,
+    confidence: EvidenceConfidence.Exact,
+    summary: row.question,
+    basis: contractBasis(
+      "Atlas self-maintenance recipes are declared inquiry contract rows.",
+    ),
+    data: row,
+  };
 }
 
 function evidenceForContract(row: SelfContractRow): Evidence {
@@ -2274,6 +2304,21 @@ function evidenceForContinuation(row: AtlasSelfContinuationRow): Evidence {
   };
 }
 
+function evidenceForSemanticRoute(row: AtlasSelfSemanticRouteRow): Evidence {
+  return {
+    id: `${row.id}:evidence`,
+    kind: EvidenceKind.MaintenanceSignal,
+    role: EvidenceRole.Subject,
+    confidence: EvidenceConfidence.Exact,
+    summary: row.summary,
+    basis: selfSourceBasis(
+      "Declared semantic route topology is read from the framework route catalog.",
+    ),
+    ...(row.source === undefined ? {} : { source: row.source }),
+    data: row,
+  };
+}
+
 function evidenceForModuleDependency(
   row: AtlasSelfModuleDependencyRow,
 ): Evidence {
@@ -2291,8 +2336,8 @@ function evidenceForModuleDependency(
   };
 }
 
-function evidenceForIndexProvenance(
-  row: AtlasSelfIndexProvenanceRow,
+function evidenceForSubstrateSurface(
+  row: AtlasSelfSubstrateSurfaceRow,
 ): Evidence {
   return {
     id: `${row.id}:evidence`,
@@ -2300,7 +2345,7 @@ function evidenceForIndexProvenance(
     role: EvidenceRole.Subject,
     confidence: EvidenceConfidence.Exact,
     summary: row.summary,
-    basis: selfSourceBasis("Index/cache provenance discovery is AST-derived."),
+    basis: selfSourceBasis("Substrate surface discovery is AST-derived."),
     source: row.source,
     data: row,
   };
@@ -2338,7 +2383,54 @@ function evidenceForEnum(row: AtlasSelfEnumRow): Evidence {
       referencedMemberCount: row.referencedMemberCount,
       unreferencedMemberCount: row.unreferencedMemberCount,
       literalReuseCount: row.literalReuseCount,
+      translationInCount: row.translationInCount,
+      translationOutCount: row.translationOutCount,
     },
+  };
+}
+
+function evidenceForEnumReference(row: AtlasSelfEnumReferenceRow): Evidence {
+  return {
+    id: `${row.id}:evidence`,
+    kind: EvidenceKind.MaintenanceSignal,
+    role: EvidenceRole.Subject,
+    confidence: EvidenceConfidence.Exact,
+    summary: row.summary,
+    basis: selfSourceBasis(
+      "Enum reference rows are AST-derived and resolved against the TypeChecker-backed enum usage index.",
+    ),
+    source: row.source,
+    data: row,
+  };
+}
+
+function evidenceForEnumValueSpace(row: AtlasSelfEnumValueSpaceRow): Evidence {
+  return {
+    id: `${row.id}:evidence`,
+    kind: EvidenceKind.MaintenanceSignal,
+    role: EvidenceRole.Subject,
+    confidence: EvidenceConfidence.Exact,
+    summary: row.summary,
+    basis: selfSourceBasis(
+      "Enum value-space rows are derived from enum member values and raw literal overlap.",
+    ),
+    ...(row.firstSource === undefined ? {} : { source: row.firstSource }),
+    data: row,
+  };
+}
+
+function evidenceForEnumMapping(row: AtlasSelfEnumMappingRow): Evidence {
+  return {
+    id: `${row.id}:evidence`,
+    kind: EvidenceKind.MaintenanceSignal,
+    role: EvidenceRole.Subject,
+    confidence: EvidenceConfidence.Exact,
+    summary: row.summary,
+    basis: selfSourceBasis(
+      "Enum mapping rows are exact local translation edges from the enum usage index.",
+    ),
+    source: row.source,
+    data: row,
   };
 }
 
@@ -2451,7 +2543,7 @@ function evidenceForFunctionSurface(
 }
 
 function selfAnalysisEvidence(
-  analysis: AtlasSelfAnalysisIndex,
+  analysis: AtlasSelfAnalysis,
   id: string,
   summary: string,
 ): Evidence {
@@ -2462,7 +2554,7 @@ function selfAnalysisEvidence(
     confidence: EvidenceConfidence.Exact,
     summary,
     basis: selfSourceBasis(
-      "Atlas self-analysis index was derived from the hot TypeScript Program.",
+      "Atlas self-analysis was derived from the hot TypeScript Program.",
     ),
     data: {
       version: analysis.version,
@@ -2485,49 +2577,6 @@ function selfSourceBasis(summary: string) {
 
 function rowLimit(inquiry: Inquiry): number {
   return clampBudget(inquiry.budget?.rows ?? inquiry.page?.size, 80, 1_000);
-}
-
-function evidenceLimit(inquiry: Inquiry): number {
-  return clampBudget(inquiry.budget?.evidencePerSubject, 5, 20);
-}
-
-function pageInfo(
-  inquiry: Inquiry,
-  returned: number,
-  total: number,
-  limit: number,
-  nextOffset: number | undefined,
-): PageInfo {
-  return {
-    size: limit,
-    cursor: inquiry.page?.cursor,
-    returned,
-    total,
-    ...(nextOffset === undefined ? {} : { nextCursor: String(nextOffset) }),
-  };
-}
-
-function pageRows<TValue>(
-  rows: readonly TValue[],
-  offset: number,
-  limit: number,
-): { readonly rows: readonly TValue[]; readonly nextOffset?: number } {
-  const page = rows.slice(offset, offset + limit);
-  const nextOffset =
-    offset + page.length < rows.length ? offset + page.length : undefined;
-  return {
-    rows: page,
-    ...(nextOffset === undefined ? {} : { nextOffset }),
-  };
-}
-
-function pageOffset(inquiry: Inquiry): number {
-  const cursor = inquiry.page?.cursor;
-  if (cursor === undefined) {
-    return 0;
-  }
-  const offset = Number(cursor);
-  return Number.isSafeInteger(offset) && offset >= 0 ? offset : 0;
 }
 
 function stringFilter(inquiry: Inquiry, key: string): string | undefined {
@@ -2572,10 +2621,6 @@ function optionalBooleanFilter(
     return false;
   }
   return undefined;
-}
-
-function uniqueSorted(values: readonly string[]): readonly string[] {
-  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }
 
 /** Build an unsupported answer for cataloged lenses without runtime implementation. */

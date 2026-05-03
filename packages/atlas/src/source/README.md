@@ -1,7 +1,7 @@
 # Source Substrate
 
 The source substrate owns the hot TypeScript world for Atlas, semantic-runtime, and the admitted Aurelia framework
-packages. It admits source into a shared LanguageService-backed Program, builds boot-time indexes, keeps the current
+packages. It admits source into a shared LanguageService-backed Program, builds source-epoch indexes, keeps the current
 TypeChecker available, and gives higher lenses stable source and declaration addresses without importing package
 runtime exports.
 
@@ -12,6 +12,11 @@ runtime exports.
 - Keep a hot TypeScript `Program`, `TypeChecker`, LanguageService, file index, declaration index, and top-level
   declaration index in the daemon process.
 - Normalize file, span, declaration, symbol, and package identities into source-level records.
+- Treat `SourceProject` as a source epoch: script versions, script snapshots, and normalized file keys are cached for
+  that epoch so TypeScript up-to-date checks and Atlas indexes do not repeatedly hit filesystem stat/path work.
+- Use [memo.ts](memo.ts) for source-epoch memoization. `SourceProjectMemo` owns one derived value per source epoch;
+  `SourceProjectKeyedMemo` owns keyed derived rows per source epoch. Keep this as hot in-memory memoization near the
+  owning reader, not persisted cache policy.
 - Resolve exact TypeScript selectors into current-epoch source targets, then project serializable source, structure, and
   checker-fact rows for Atlas lenses.
 - Expose IDE-shaped TypeScript LanguageService primitives: document symbols, quick info, signature help, references with
@@ -19,13 +24,12 @@ runtime exports.
   refactor affordances, code fixes, refactor edit plans, organize-import edit plans, and file-rename edit plans.
 - Expose exact call-site facts over source ranges, declarations, files, packages, or the workspace: callee expression,
   resolved signature, argument spans, argument text, argument types, primitive literals, object keys, and array counts.
-- Prewarm the `auLink` bridge index, framework discovery index, and first framework entity catalogs at daemon
-  startup: semantic-runtime overload declarations, exact decorator placements, source-only Aurelia framework target
-  declarations, seed-anchor declarations, source-bound flow seeds, precomputed seed call edges, exact framework flow
-  call sites, observer-locator, AppTask, router, expression, rendering structure entity rows, and catalog/placement
-  gaps are indexed once so bridge and framework discovery queries are cheap. The first framework entity catalogs can
-  hydrate from package-scoped JSON atoms when the cache keys described in
-  [../framework/JSON-CACHE.md](../framework/JSON-CACHE.md) still match the live Program.
+- Expose package-scoped enum usage indexes: enum/member declarations, exact `Enum.Member` reference sites, raw literal
+  value-space overlap, and exact enum-to-enum translation edges. This is source substrate, not `atlas.self`
+  diagnostics; higher lenses decide what the value-space pressure means.
+- Build source-index bases such as `auLink` anchors and framework discovery seeds on demand within the current
+  source-project epoch. Framework projection rows should fill on demand unless profiling proves their owning substrate
+  cannot be made cheap.
 - Stay semantics-neutral: source declarations are not vocabulary facts, product claims, DI facts, or framework facts.
 - Provide a boring base that TypeChecker-driven product, self-analysis, and source navigation lenses can share.
 

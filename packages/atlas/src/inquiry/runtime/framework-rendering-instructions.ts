@@ -2,6 +2,8 @@ import ts from "typescript";
 
 import {
   readTypeScriptExpressionFact,
+  SourceProjectKeyedMemo,
+  SourceProjectMemo,
   SourceDeclarationKind,
   type SourceFileIdentity,
   type SourceProject,
@@ -10,11 +12,6 @@ import {
   FrameworkSyntaxProducerKind,
   FrameworkSyntaxProductKind,
 } from "../../framework/index.js";
-import {
-  frameworkEntityCatalogDependencyPackageIds,
-  readFrameworkEntityCatalogCache,
-  writeFrameworkEntityCatalogCache,
-} from "./framework-cache.js";
 import {
   type FrameworkInstructionDeclarationRow,
   type FrameworkInstructionDispatchRow,
@@ -44,13 +41,11 @@ import {
   unwrapExpression,
 } from "./framework-ts-utils.js";
 
-const instructionSlotRowsByPackageByProject = new WeakMap<
-  SourceProject,
-  Map<string, readonly FrameworkInstructionSlotRow[]>
+const instructionSlotRowsByPackage = new SourceProjectKeyedMemo<
+  string,
+  readonly FrameworkInstructionSlotRow[]
 >();
-
-const instructionDispatchRowsByProject = new WeakMap<
-  SourceProject,
+const instructionDispatchRows = new SourceProjectMemo<
   readonly FrameworkInstructionDispatchRow[]
 >();
 
@@ -109,11 +104,9 @@ export function readFrameworkInstructionDispatches(
   sourceProject: SourceProject,
   filters: FrameworkDiscoveryFilters,
 ): readonly FrameworkInstructionDispatchRow[] {
-  const cached = instructionDispatchRowsByProject.get(sourceProject);
-  const rows = cached ?? createFrameworkInstructionDispatchRows(sourceProject);
-  if (cached === undefined) {
-    instructionDispatchRowsByProject.set(sourceProject, rows);
-  }
+  const rows = instructionDispatchRows.read(sourceProject, () =>
+    createFrameworkInstructionDispatchRows(sourceProject),
+  );
   return rows
     .filter(
       (row) =>
@@ -180,67 +173,37 @@ export function readFrameworkInstructionSlotPackageRows(
   packageName: string,
   syntaxProducts: readonly FrameworkSyntaxProductRow[],
 ): readonly FrameworkInstructionSlotRow[] {
-  const cache =
-    instructionSlotRowsByPackageByProject.get(sourceProject) ??
-    new Map<string, readonly FrameworkInstructionSlotRow[]>();
-  if (!instructionSlotRowsByPackageByProject.has(sourceProject)) {
-    instructionSlotRowsByPackageByProject.set(sourceProject, cache);
-  }
-  const cached = cache.get(packageId);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const dependencyPackageIds = frameworkEntityCatalogDependencyPackageIds(
-    sourceProject,
-    packageId,
-  );
-  const diskCached =
-    readFrameworkEntityCatalogCache<FrameworkInstructionSlotRow>(
+  return instructionSlotRowsByPackage.read(sourceProject, packageId, () => {
+    const sourceFiles = sourceProject
+      .ownedSourceFiles()
+      .filter(
+        (sourceFile) =>
+          !sourceFile.isDeclarationFile &&
+          sourceProject.packageForFileName(sourceFile.fileName)?.id ===
+            packageId,
+      );
+    const declarationsBySlot = instructionDeclarationsBySlot(
       sourceProject,
-      "instruction-slots",
-      packageId,
-      dependencyPackageIds,
+      sourceFiles,
     );
-  if (diskCached !== undefined) {
-    cache.set(packageId, diskCached);
-    return diskCached;
-  }
-  const sourceFiles = sourceProject
-    .ownedSourceFiles()
-    .filter(
-      (sourceFile) =>
-        !sourceFile.isDeclarationFile &&
-        sourceProject.packageForFileName(sourceFile.fileName)?.id === packageId,
+    return uniqueById(
+      sourceFiles.flatMap((sourceFile) =>
+        instructionSlotVariablesIn(sourceFile)
+          .map((declaration) =>
+            instructionSlotRow(
+              sourceProject,
+              sourceFile,
+              packageId,
+              packageName,
+              declaration,
+              declarationsBySlot,
+              syntaxProducts,
+            ),
+          )
+          .filter((row): row is FrameworkInstructionSlotRow => row !== null),
+      ),
     );
-  const declarationsBySlot = instructionDeclarationsBySlot(
-    sourceProject,
-    sourceFiles,
-  );
-  const rows = sourceFiles.flatMap((sourceFile) =>
-    instructionSlotVariablesIn(sourceFile)
-      .map((declaration) =>
-        instructionSlotRow(
-          sourceProject,
-          sourceFile,
-          packageId,
-          packageName,
-          declaration,
-          declarationsBySlot,
-          syntaxProducts,
-        ),
-      )
-      .filter((row): row is FrameworkInstructionSlotRow => row !== null),
-  );
-  const unique = uniqueById(rows);
-  cache.set(packageId, unique);
-  writeFrameworkEntityCatalogCache(
-    sourceProject,
-    "instruction-slots",
-    packageId,
-    unique,
-    dependencyPackageIds,
-  );
-  return unique;
+  });
 }
 
 export function instructionSlotVariablesIn(

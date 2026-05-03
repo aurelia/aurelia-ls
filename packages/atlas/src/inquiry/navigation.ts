@@ -21,7 +21,7 @@ export const enum NavigationPlane {
   Flow = "flow",
   /** Move through product, bridge, framework, evaluator, DI, materialization, or claim meaning. */
   Semantic = "semantic",
-  /** Move through Atlas contracts, wiring, and maintenance pressure. */
+  /** Move through Atlas contracts and source-backed maintenance surfaces. */
   Maintenance = "maintenance",
 }
 
@@ -31,6 +31,8 @@ export const enum NavigationRelation {
   NextPageOf = "next-page-of",
   /** The target inquiry changes projection over the same basis and subject. */
   ProjectionOf = "projection-of",
+  /** The target inquiry narrows filters, locus, or subject while preserving the same answer family. */
+  RefinementOf = "refinement-of",
   /** The target inquiry inspects source behind a subject, evidence row, or route row. */
   SourceFor = "source-for",
   /** The target inquiry inspects TypeChecker facts behind a subject, evidence row, or route row. */
@@ -105,6 +107,8 @@ export interface NavigationRouteSpec {
 export interface NavigationRouteClaim {
   /** Route spec id when the continuation follows a declared route. */
   readonly specId?: string;
+  /** Domain-level route declaration when a semantic catalog owns the exact endpoint topology. */
+  readonly semanticRouteId?: string;
   /** Coarse route plane. */
   readonly plane: NavigationPlane;
   /** Exact relation claimed by the continuation. */
@@ -187,6 +191,28 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
     ],
     evidenceKinds: [],
     summary: "Switch projection over the same subject, filters, and basis.",
+  },
+  {
+    id: "inquiry.refine",
+    plane: NavigationPlane.Addressing,
+    relation: NavigationRelation.RefinementOf,
+    from: {},
+    to: {},
+    continuationKind: ContinuationKind.Narrow,
+    defaultPriority: ContinuationPriority.Secondary,
+    supportedBasis: [
+      BasisKind.AtlasContract,
+      BasisKind.SourceText,
+      BasisKind.TypeScriptProgram,
+      BasisKind.TypeScriptChecker,
+      BasisKind.StaticEvaluator,
+      BasisKind.ProductKernelSubstrate,
+      BasisKind.ProductVocabulary,
+      BasisKind.AuLink,
+    ],
+    evidenceKinds: [],
+    summary:
+      "Narrow filters, locus, or subject while preserving the current answer family.",
   },
   {
     id: "evidence.source",

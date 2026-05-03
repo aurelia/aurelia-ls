@@ -1,28 +1,27 @@
 import {
   readExportNames,
-  SourceDeclarationKind,
+  SourceProjectKeyedMemo,
   SourceSelectorScheme,
   type SourceProject,
 } from "../../source/index.js";
 import {
-  readFrameworkEntityCatalogCache,
-  writeFrameworkEntityCatalogCache,
-} from "./framework-cache.js";
-import { packageExportsForCandidateNames } from "./framework-catalog-helpers.js";
+  catalogExportShapeForPackageExport,
+  packageExportsForCandidateNames,
+} from "./framework-catalog-helpers.js";
 import {
   normalizeIdentifierText,
   uniqueEnumValues,
-  uniqueObserverMatches,
+  uniqueCatalogMatches,
   uniqueStrings,
 } from "./framework-catalog-utils.js";
 import {
+  FrameworkCatalogExportShape,
   FrameworkObserverCapability,
   FrameworkObserverEntityKind,
-  FrameworkObserverEntityShape,
-  FrameworkObserverMatchBasis,
+  FrameworkCatalogMatchBasis,
   type FrameworkDiInterfaceExportRow,
   type FrameworkObserverEntityRow,
-  type FrameworkObserverMatchRow,
+  type FrameworkCatalogMatchRow,
   type FrameworkPackageExportRow,
 } from "./framework-entities.js";
 import type { FrameworkDiscoveryFilters } from "./framework-filters.js";
@@ -32,9 +31,9 @@ import {
   readFrameworkPackageNames,
 } from "./framework-package-exports.js";
 
-const observerEntityRowsByPackageByProject = new WeakMap<
-  SourceProject,
-  Map<string, readonly FrameworkObserverEntityRow[]>
+const observerEntityRowsByPackage = new SourceProjectKeyedMemo<
+  string,
+  readonly FrameworkObserverEntityRow[]
 >();
 
 export function readFrameworkObserverEntities(
@@ -95,34 +94,13 @@ export function readFrameworkObserverEntityPackageRows(
   packageId: string,
   packageName: string,
 ): readonly FrameworkObserverEntityRow[] {
-  const cache =
-    observerEntityRowsByPackageByProject.get(sourceProject) ??
-    new Map<string, readonly FrameworkObserverEntityRow[]>();
-  if (!observerEntityRowsByPackageByProject.has(sourceProject)) {
-    observerEntityRowsByPackageByProject.set(sourceProject, cache);
-  }
-  const cached = cache.get(packageId);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const diskCached =
-    readFrameworkEntityCatalogCache<FrameworkObserverEntityRow>(
+  return observerEntityRowsByPackage.read(sourceProject, packageId, () =>
+    scanFrameworkObserverEntityPackageRows(
       sourceProject,
-      "observers",
       packageId,
-    );
-  if (diskCached !== undefined) {
-    cache.set(packageId, diskCached);
-    return diskCached;
-  }
-  const rows = scanFrameworkObserverEntityPackageRows(
-    sourceProject,
-    packageId,
-    packageName,
+      packageName,
+    ),
   );
-  cache.set(packageId, rows);
-  writeFrameworkEntityCatalogCache(sourceProject, "observers", packageId, rows);
-  return rows;
 }
 
 export function scanFrameworkObserverEntityPackageRows(
@@ -229,66 +207,66 @@ export function observerEntityRowForPackageExport(
 export function observerMatchesForPackageExport(
   row: FrameworkPackageExportRow,
   diInterface: FrameworkDiInterfaceExportRow | undefined,
-): readonly FrameworkObserverMatchRow[] {
-  const matches: FrameworkObserverMatchRow[] = [];
+): readonly FrameworkCatalogMatchRow[] {
+  const matches: FrameworkCatalogMatchRow[] = [];
   addObserverMatch(
     matches,
-    FrameworkObserverMatchBasis.ExportName,
+    FrameworkCatalogMatchBasis.ExportName,
     row.exportEntry.exportName,
   );
   addObserverMatch(
     matches,
-    FrameworkObserverMatchBasis.ResolvedName,
+    FrameworkCatalogMatchBasis.ResolvedName,
     row.exportEntry.resolvedName,
   );
   if (row.exportEntry.type !== null) {
     addObserverMatch(
       matches,
-      FrameworkObserverMatchBasis.TypeText,
+      FrameworkCatalogMatchBasis.TypeText,
       row.exportEntry.type,
     );
   }
   for (const memberName of row.exportEntry.memberNames) {
     addObserverMatch(
       matches,
-      FrameworkObserverMatchBasis.MemberName,
+      FrameworkCatalogMatchBasis.MemberName,
       memberName,
     );
   }
   if (diInterface !== undefined) {
     addObserverMatch(
       matches,
-      FrameworkObserverMatchBasis.DiInterface,
+      FrameworkCatalogMatchBasis.DiInterface,
       diInterface.interfaceKey,
     );
     for (const builderCall of diInterface.builderCalls) {
       addObserverMatch(
         matches,
-        FrameworkObserverMatchBasis.DiInterface,
+        FrameworkCatalogMatchBasis.DiInterface,
         builderCall.calleeName,
       );
       for (const argument of builderCall.arguments) {
         addObserverMatch(
           matches,
-          FrameworkObserverMatchBasis.DiInterface,
+          FrameworkCatalogMatchBasis.DiInterface,
           argument.expression.text,
         );
         if (argument.expression.symbolName !== null) {
           addObserverMatch(
             matches,
-            FrameworkObserverMatchBasis.DiInterface,
+            FrameworkCatalogMatchBasis.DiInterface,
             argument.expression.symbolName,
           );
         }
       }
     }
   }
-  return uniqueObserverMatches(matches);
+  return uniqueCatalogMatches(matches);
 }
 
 export function addObserverMatch(
-  matches: FrameworkObserverMatchRow[],
-  basis: FrameworkObserverMatchBasis,
+  matches: FrameworkCatalogMatchRow[],
+  basis: FrameworkCatalogMatchBasis,
   text: string,
 ): void {
   if (isObservationMatchText(text)) {
@@ -350,7 +328,7 @@ export function isEffectObservationText(normalized: string): boolean {
 
 export function observerKindsForPackageExport(
   row: FrameworkPackageExportRow,
-  matchedBy: readonly FrameworkObserverMatchRow[],
+  matchedBy: readonly FrameworkCatalogMatchRow[],
   diInterface: FrameworkDiInterfaceExportRow | undefined,
 ): readonly FrameworkObserverEntityKind[] {
   if (matchedBy.length === 0) {
@@ -447,7 +425,7 @@ export function observerKindsForPackageExport(
 
 export function observerClassificationTexts(
   row: FrameworkPackageExportRow,
-  matchedBy: readonly FrameworkObserverMatchRow[],
+  matchedBy: readonly FrameworkCatalogMatchRow[],
   diInterface: FrameworkDiInterfaceExportRow | undefined,
 ): readonly string[] {
   return [
@@ -577,32 +555,11 @@ export function observerCapabilitiesForEntity(
 export function observerEntityShapeForPackageExport(
   row: FrameworkPackageExportRow,
   diInterface: FrameworkDiInterfaceExportRow | undefined,
-): FrameworkObserverEntityShape {
+): FrameworkCatalogExportShape {
   if (diInterface !== undefined) {
-    return FrameworkObserverEntityShape.DiInterface;
+    return FrameworkCatalogExportShape.DiInterface;
   }
-  const declarationKinds = row.exportEntry.targets
-    .map((target) => target.declarationKind)
-    .filter(
-      (declarationKind): declarationKind is SourceDeclarationKind =>
-        declarationKind !== undefined,
-    );
-  if (declarationKinds.includes(SourceDeclarationKind.Class)) {
-    return FrameworkObserverEntityShape.Class;
-  }
-  if (declarationKinds.includes(SourceDeclarationKind.Interface)) {
-    return FrameworkObserverEntityShape.Interface;
-  }
-  if (declarationKinds.includes(SourceDeclarationKind.TypeAlias)) {
-    return FrameworkObserverEntityShape.TypeAlias;
-  }
-  if (declarationKinds.includes(SourceDeclarationKind.Function)) {
-    return FrameworkObserverEntityShape.Function;
-  }
-  if (declarationKinds.includes(SourceDeclarationKind.Variable)) {
-    return FrameworkObserverEntityShape.Value;
-  }
-  return FrameworkObserverEntityShape.Unknown;
+  return catalogExportShapeForPackageExport(row);
 }
 
 export function defaultImplementationNamesForDiInterface(

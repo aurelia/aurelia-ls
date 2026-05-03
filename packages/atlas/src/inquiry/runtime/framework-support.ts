@@ -16,8 +16,6 @@ import {
   type BasisTransition,
   type Basis,
 } from "../basis.js";
-import { clampBudget } from "../budget.js";
-import type { Inquiry } from "../inquiry.js";
 import type { SourceRange } from "../locus.js";
 import {
   NavigationPlane,
@@ -104,47 +102,18 @@ export function externalFileIdentity(
   };
 }
 
-export function pageInfo(
-  inquiry: Inquiry,
-  returned: number,
-  total: number,
-  limit: number,
-  nextOffset: number | undefined,
-) {
-  return {
-    size: limit,
-    cursor: inquiry.page?.cursor,
-    returned,
-    total,
-    ...(nextOffset === undefined ? {} : { nextCursor: String(nextOffset) }),
-  };
-}
-
-export function pageRows<TValue>(
+export function countBy<TValue>(
   rows: readonly TValue[],
-  offset: number,
-  limit: number,
-): { readonly rows: readonly TValue[]; readonly nextOffset?: number } {
-  const page = rows.slice(offset, offset + limit);
-  const nextOffset =
-    offset + page.length < rows.length ? offset + page.length : undefined;
-  return {
-    rows: page,
-    ...(nextOffset === undefined ? {} : { nextOffset }),
-  };
-}
-
-export function pageOffset(inquiry: Inquiry): number {
-  const cursor = inquiry.page?.cursor;
-  if (cursor === undefined) {
-    return 0;
+  keyFor: (row: TValue) => string,
+): Readonly<Record<string, number>> {
+  const counts: Record<string, number> = {};
+  for (const row of rows) {
+    const key = keyFor(row);
+    counts[key] = (counts[key] ?? 0) + 1;
   }
-  const parsed = Number.parseInt(cursor, 10);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-export function evidenceLimit(inquiry: Inquiry): number {
-  return clampBudget(inquiry.budget?.evidencePerSubject, 5, 20);
+  return Object.fromEntries(
+    Object.entries(counts).sort(([left], [right]) => left.localeCompare(right)),
+  );
 }
 
 export function frameworkDiscoverySeedBasis(): Basis {
@@ -167,7 +136,7 @@ export function sourceIndexBasis(sourceProject: SourceProject): Basis {
     authority: BasisAuthority.Checker,
     freshness: BasisFreshness.Live,
     summary:
-      "Resolved framework seed anchors against the daemon-prewarmed source declaration index.",
+      "Resolved framework seed anchors against the live source declaration index.",
     identity: sourceProject.snapshot().identity,
   };
 }

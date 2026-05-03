@@ -3,16 +3,12 @@ import ts from "typescript";
 import {
   readTypeScriptCallSiteEntry,
   readTypeScriptExpressionFact,
+  SourceProjectKeyedMemo,
   SourceDeclarationKind,
   type SourceProject,
   type TypeScriptCallSiteEntry,
 } from "../../source/index.js";
 import { FrameworkSyntaxProductKind } from "../../framework/index.js";
-import {
-  frameworkEntityCatalogDependencyPackageIds,
-  readFrameworkEntityCatalogCache,
-  writeFrameworkEntityCatalogCache,
-} from "./framework-cache.js";
 import {
   FrameworkBindingConstructionKind,
   FrameworkBindingEffectKind,
@@ -56,24 +52,21 @@ interface BindingAdmissionExpression {
   readonly expression: ts.Expression;
 }
 
-const bindingProductRowsByPackageByProject = new WeakMap<
-  SourceProject,
-  Map<string, readonly FrameworkBindingProductRow[]>
+const bindingProductRowsByPackage = new SourceProjectKeyedMemo<
+  string,
+  readonly FrameworkBindingProductRow[]
 >();
-
-const bindingAdmissionRowsByPackageByProject = new WeakMap<
-  SourceProject,
-  Map<string, readonly FrameworkBindingAdmissionRow[]>
+const bindingAdmissionRowsByPackage = new SourceProjectKeyedMemo<
+  string,
+  readonly FrameworkBindingAdmissionRow[]
 >();
-
-const bindingEffectRowsByPackageByProject = new WeakMap<
-  SourceProject,
-  Map<string, readonly FrameworkBindingEffectRow[]>
+const bindingEffectRowsByPackage = new SourceProjectKeyedMemo<
+  string,
+  readonly FrameworkBindingEffectRow[]
 >();
-
-const bindingSetupRowsByPackageByProject = new WeakMap<
-  SourceProject,
-  Map<string, readonly FrameworkBindingSetupRow[]>
+const bindingSetupRowsByPackage = new SourceProjectKeyedMemo<
+  string,
+  readonly FrameworkBindingSetupRow[]
 >();
 
 export function readFrameworkBindingProducts(
@@ -285,69 +278,39 @@ export function readFrameworkBindingProductPackageRows(
   constructionProducts: readonly FrameworkSyntaxProductRow[],
   bindingAdmissions: readonly FrameworkBindingAdmissionRow[],
 ): readonly FrameworkBindingProductRow[] {
-  const cache =
-    bindingProductRowsByPackageByProject.get(sourceProject) ??
-    new Map<string, readonly FrameworkBindingProductRow[]>();
-  if (!bindingProductRowsByPackageByProject.has(sourceProject)) {
-    bindingProductRowsByPackageByProject.set(sourceProject, cache);
-  }
-  const cached = cache.get(packageId);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const dependencyPackageIds = frameworkEntityCatalogDependencyPackageIds(
-    sourceProject,
-    packageId,
-  );
-  const diskCached =
-    readFrameworkEntityCatalogCache<FrameworkBindingProductRow>(
-      sourceProject,
-      "binding-products",
-      packageId,
-      dependencyPackageIds,
+  return bindingProductRowsByPackage.read(sourceProject, packageId, () => {
+    const bindingNames = new Set(
+      constructionProducts
+        .map((product) => product.bindingName)
+        .filter((bindingName): bindingName is string => bindingName !== null),
     );
-  if (diskCached !== undefined) {
-    cache.set(packageId, diskCached);
-    return diskCached;
-  }
-  const bindingNames = new Set(
-    constructionProducts
-      .map((product) => product.bindingName)
-      .filter((bindingName): bindingName is string => bindingName !== null),
-  );
-  for (const bindingName of bindingAdmissions.map(
-    (admission) => admission.bindingName,
-  )) {
-    bindingNames.add(bindingName);
-  }
-  const rows = sourceProject
-    .ownedSourceFiles()
-    .filter(
-      (sourceFile) =>
-        !sourceFile.isDeclarationFile &&
-        sourceProject.packageForFileName(sourceFile.fileName)?.id === packageId,
-    )
-    .flatMap((sourceFile) =>
-      bindingProductsForSourceFile(
-        sourceProject,
-        sourceFile,
-        packageId,
-        packageName,
-        bindingNames,
-        constructionProducts,
-        bindingAdmissions,
-      ),
+    for (const bindingName of bindingAdmissions.map(
+      (admission) => admission.bindingName,
+    )) {
+      bindingNames.add(bindingName);
+    }
+    return uniqueById(
+      sourceProject
+        .ownedSourceFiles()
+        .filter(
+          (sourceFile) =>
+            !sourceFile.isDeclarationFile &&
+            sourceProject.packageForFileName(sourceFile.fileName)?.id ===
+              packageId,
+        )
+        .flatMap((sourceFile) =>
+          bindingProductsForSourceFile(
+            sourceProject,
+            sourceFile,
+            packageId,
+            packageName,
+            bindingNames,
+            constructionProducts,
+            bindingAdmissions,
+          ),
+        ),
     );
-  const unique = uniqueById(rows);
-  cache.set(packageId, unique);
-  writeFrameworkEntityCatalogCache(
-    sourceProject,
-    "binding-products",
-    packageId,
-    unique,
-    dependencyPackageIds,
-  );
-  return unique;
+  });
 }
 
 export function readFrameworkBindingAdmissionPackageRows(
@@ -356,57 +319,27 @@ export function readFrameworkBindingAdmissionPackageRows(
   packageName: string,
   constructionProducts: readonly FrameworkSyntaxProductRow[],
 ): readonly FrameworkBindingAdmissionRow[] {
-  const cache =
-    bindingAdmissionRowsByPackageByProject.get(sourceProject) ??
-    new Map<string, readonly FrameworkBindingAdmissionRow[]>();
-  if (!bindingAdmissionRowsByPackageByProject.has(sourceProject)) {
-    bindingAdmissionRowsByPackageByProject.set(sourceProject, cache);
-  }
-  const cached = cache.get(packageId);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const dependencyPackageIds = frameworkEntityCatalogDependencyPackageIds(
-    sourceProject,
-    packageId,
+  return bindingAdmissionRowsByPackage.read(sourceProject, packageId, () =>
+    uniqueById(
+      sourceProject
+        .ownedSourceFiles()
+        .filter(
+          (sourceFile) =>
+            !sourceFile.isDeclarationFile &&
+            sourceProject.packageForFileName(sourceFile.fileName)?.id ===
+              packageId,
+        )
+        .flatMap((sourceFile) =>
+          bindingAdmissionsForSourceFile(
+            sourceProject,
+            sourceFile,
+            packageId,
+            packageName,
+            constructionProducts,
+          ),
+        ),
+    ),
   );
-  const diskCached =
-    readFrameworkEntityCatalogCache<FrameworkBindingAdmissionRow>(
-      sourceProject,
-      "binding-admissions",
-      packageId,
-      dependencyPackageIds,
-    );
-  if (diskCached !== undefined) {
-    cache.set(packageId, diskCached);
-    return diskCached;
-  }
-  const rows = sourceProject
-    .ownedSourceFiles()
-    .filter(
-      (sourceFile) =>
-        !sourceFile.isDeclarationFile &&
-        sourceProject.packageForFileName(sourceFile.fileName)?.id === packageId,
-    )
-    .flatMap((sourceFile) =>
-      bindingAdmissionsForSourceFile(
-        sourceProject,
-        sourceFile,
-        packageId,
-        packageName,
-        constructionProducts,
-      ),
-    );
-  const unique = uniqueById(rows);
-  cache.set(packageId, unique);
-  writeFrameworkEntityCatalogCache(
-    sourceProject,
-    "binding-admissions",
-    packageId,
-    unique,
-    dependencyPackageIds,
-  );
-  return unique;
 }
 
 export function readFrameworkBindingEffectPackageRows(
@@ -415,40 +348,32 @@ export function readFrameworkBindingEffectPackageRows(
   packageName: string,
   bindingProducts: readonly FrameworkBindingProductRow[],
 ): readonly FrameworkBindingEffectRow[] {
-  const cache =
-    bindingEffectRowsByPackageByProject.get(sourceProject) ??
-    new Map<string, readonly FrameworkBindingEffectRow[]>();
-  if (!bindingEffectRowsByPackageByProject.has(sourceProject)) {
-    bindingEffectRowsByPackageByProject.set(sourceProject, cache);
-  }
-  const cached = cache.get(packageId);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const bindingNames = new Set(
-    bindingProducts
-      .filter((row) => row.packageId === packageId)
-      .map((row) => row.bindingName),
-  );
-  const rows = sourceProject
-    .ownedSourceFiles()
-    .filter(
-      (sourceFile) =>
-        !sourceFile.isDeclarationFile &&
-        sourceProject.packageForFileName(sourceFile.fileName)?.id === packageId,
-    )
-    .flatMap((sourceFile) =>
-      bindingEffectsForSourceFile(
-        sourceProject,
-        sourceFile,
-        packageId,
-        packageName,
-        bindingNames,
-      ),
+  return bindingEffectRowsByPackage.read(sourceProject, packageId, () => {
+    const bindingNames = new Set(
+      bindingProducts
+        .filter((row) => row.packageId === packageId)
+        .map((row) => row.bindingName),
     );
-  const unique = uniqueById(rows);
-  cache.set(packageId, unique);
-  return unique;
+    return uniqueById(
+      sourceProject
+        .ownedSourceFiles()
+        .filter(
+          (sourceFile) =>
+            !sourceFile.isDeclarationFile &&
+            sourceProject.packageForFileName(sourceFile.fileName)?.id ===
+              packageId,
+        )
+        .flatMap((sourceFile) =>
+          bindingEffectsForSourceFile(
+            sourceProject,
+            sourceFile,
+            packageId,
+            packageName,
+            bindingNames,
+          ),
+        ),
+    );
+  });
 }
 
 export function readFrameworkBindingSetupPackageRows(
@@ -456,34 +381,26 @@ export function readFrameworkBindingSetupPackageRows(
   packageId: string,
   packageName: string,
 ): readonly FrameworkBindingSetupRow[] {
-  const cache =
-    bindingSetupRowsByPackageByProject.get(sourceProject) ??
-    new Map<string, readonly FrameworkBindingSetupRow[]>();
-  if (!bindingSetupRowsByPackageByProject.has(sourceProject)) {
-    bindingSetupRowsByPackageByProject.set(sourceProject, cache);
-  }
-  const cached = cache.get(packageId);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const rows = sourceProject
-    .ownedSourceFiles()
-    .filter(
-      (sourceFile) =>
-        !sourceFile.isDeclarationFile &&
-        sourceProject.packageForFileName(sourceFile.fileName)?.id === packageId,
-    )
-    .flatMap((sourceFile) =>
-      bindingSetupsForSourceFile(
-        sourceProject,
-        sourceFile,
-        packageId,
-        packageName,
-      ),
-    );
-  const unique = uniqueById(rows);
-  cache.set(packageId, unique);
-  return unique;
+  return bindingSetupRowsByPackage.read(sourceProject, packageId, () =>
+    uniqueById(
+      sourceProject
+        .ownedSourceFiles()
+        .filter(
+          (sourceFile) =>
+            !sourceFile.isDeclarationFile &&
+            sourceProject.packageForFileName(sourceFile.fileName)?.id ===
+              packageId,
+        )
+        .flatMap((sourceFile) =>
+          bindingSetupsForSourceFile(
+            sourceProject,
+            sourceFile,
+            packageId,
+            packageName,
+          ),
+        ),
+    ),
+  );
 }
 
 export function bindingProductsForSourceFile(

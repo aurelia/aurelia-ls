@@ -24,6 +24,8 @@ export const enum EvaluationValueKind {
   Function = "function",
   /** Class-like value; constructor execution is intentionally outside this substrate. */
   Class = "class",
+  /** Module namespace value assembled from a linked module record. */
+  ModuleNamespace = "module-namespace",
 }
 
 /** Unknown value carrying why evaluation stayed open. */
@@ -197,6 +199,21 @@ export class EvaluationClassValue {
   ) {}
 }
 
+/** Module namespace assembled from linked exports. */
+export class EvaluationModuleNamespaceValue {
+  /** Value category discriminator. */
+  readonly kind = EvaluationValueKind.ModuleNamespace;
+
+  constructor(
+    /** Module key whose exports are represented by this namespace. */
+    readonly moduleKey: string,
+    /** Export values by exported name. */
+    readonly exports: ReadonlyMap<string, EvaluationValue>,
+    /** Syntax node that produced the namespace, when one exists. */
+    readonly node: ts.Node | null = null,
+  ) {}
+}
+
 /** Evaluator-local value union. */
 export type EvaluationValue =
   | EvaluationUnknownValue
@@ -209,7 +226,8 @@ export type EvaluationValue =
   | EvaluationArrayValue
   | EvaluationObjectValue
   | EvaluationFunctionValue
-  | EvaluationClassValue;
+  | EvaluationClassValue
+  | EvaluationModuleNamespaceValue;
 
 /** Shared undefined value for missing expression results. */
 export const EvaluationUndefined = new EvaluationUndefinedValue();
@@ -237,6 +255,7 @@ export function readEvaluationTruthiness(
     case EvaluationValueKind.Object:
     case EvaluationValueKind.Function:
     case EvaluationValueKind.Class:
+    case EvaluationValueKind.ModuleNamespace:
       return true;
   }
 }

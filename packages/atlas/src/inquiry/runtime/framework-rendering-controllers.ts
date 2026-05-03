@@ -3,6 +3,7 @@ import ts from "typescript";
 import { FrameworkResourceDefinitionKind } from "../../framework/index.js";
 import {
   readTypeScriptCallSiteEntry,
+  SourceProjectMemo,
   type SourceProject,
   type TypeScriptCallSiteEntry,
 } from "../../source/index.js";
@@ -29,8 +30,7 @@ import {
 } from "./framework-ts-utils.js";
 import { isRendererHelperCall } from "./framework-resources.js";
 
-const controllerCreationsByProject = new WeakMap<
-  SourceProject,
+const controllerCreationsMemo = new SourceProjectMemo<
   readonly FrameworkControllerCreationRow[]
 >();
 
@@ -39,12 +39,9 @@ export function readFrameworkControllerCreations(
   sourceProject: SourceProject,
   filters: FrameworkDiscoveryFilters,
 ): readonly FrameworkControllerCreationRow[] {
-  const cached = controllerCreationsByProject.get(sourceProject);
-  if (cached !== undefined) {
-    return cached.filter((row) => controllerCreationMatches(row, filters));
-  }
-  const rows = scanFrameworkControllerCreations(sourceProject);
-  controllerCreationsByProject.set(sourceProject, rows);
+  const rows = controllerCreationsMemo.read(sourceProject, () =>
+    scanFrameworkControllerCreations(sourceProject),
+  );
   return rows.filter((row) => controllerCreationMatches(row, filters));
 }
 

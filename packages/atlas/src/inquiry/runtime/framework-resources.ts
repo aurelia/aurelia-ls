@@ -1,16 +1,13 @@
 import ts from "typescript";
 
 import {
+  SourceProjectKeyedMemo,
   SourceDeclarationKind,
   type SourceProject,
   type TypeScriptExportNameEntry,
   type TypeScriptExportSurfaceEntry,
 } from "../../source/index.js";
 import { FrameworkResourceDefinitionKind } from "../../framework/index.js";
-import {
-  readFrameworkEntityCatalogCache,
-  writeFrameworkEntityCatalogCache,
-} from "./framework-cache.js";
 import {
   FrameworkResourceCarrierKind,
   type FrameworkResourceCarrierRow,
@@ -50,24 +47,21 @@ import {
   unwrapExpression,
 } from "./framework-ts-utils.js";
 
-const resourceCarrierRowsByPackageByProject = new WeakMap<
-  SourceProject,
-  Map<string, readonly FrameworkResourceCarrierRow[]>
+const resourceCarrierRowsByPackage = new SourceProjectKeyedMemo<
+  string,
+  readonly FrameworkResourceCarrierRow[]
 >();
-
-const resourceCarrierRowsByExportByProject = new WeakMap<
-  SourceProject,
-  Map<string, readonly FrameworkResourceCarrierRow[]>
+const resourceCarrierRowsByExport = new SourceProjectKeyedMemo<
+  string,
+  readonly FrameworkResourceCarrierRow[]
 >();
-
-const resourceRowsByPackageByProject = new WeakMap<
-  SourceProject,
-  Map<string, readonly FrameworkResourceExportRow[]>
+const resourceRowsByPackage = new SourceProjectKeyedMemo<
+  string,
+  readonly FrameworkResourceExportRow[]
 >();
-
-const resourceRowsByExportByProject = new WeakMap<
-  SourceProject,
-  Map<string, readonly FrameworkResourceExportRow[]>
+const resourceRowsByExport = new SourceProjectKeyedMemo<
+  string,
+  readonly FrameworkResourceExportRow[]
 >();
 
 export function readFrameworkResourceCarriers(
@@ -120,39 +114,13 @@ export function readFrameworkResourcePackageCarrierRows(
   packageId: string,
   packageName: string,
 ): readonly FrameworkResourceCarrierRow[] {
-  const cache =
-    resourceCarrierRowsByPackageByProject.get(sourceProject) ??
-    new Map<string, readonly FrameworkResourceCarrierRow[]>();
-  if (!resourceCarrierRowsByPackageByProject.has(sourceProject)) {
-    resourceCarrierRowsByPackageByProject.set(sourceProject, cache);
-  }
-  const cached = cache.get(packageId);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const diskCached =
-    readFrameworkEntityCatalogCache<FrameworkResourceCarrierRow>(
+  return resourceCarrierRowsByPackage.read(sourceProject, packageId, () =>
+    scanFrameworkResourcePackageCarrierRows(
       sourceProject,
-      "resource-carriers",
       packageId,
-    );
-  if (diskCached !== undefined) {
-    cache.set(packageId, diskCached);
-    return diskCached;
-  }
-  const rows = scanFrameworkResourcePackageCarrierRows(
-    sourceProject,
-    packageId,
-    packageName,
+      packageName,
+    ),
   );
-  cache.set(packageId, rows);
-  writeFrameworkEntityCatalogCache(
-    sourceProject,
-    "resource-carriers",
-    packageId,
-    rows,
-  );
-  return rows;
 }
 
 export function readFrameworkResourceExportCarrierRows(
@@ -161,31 +129,22 @@ export function readFrameworkResourceExportCarrierRows(
   packageName: string,
   exportName: string,
 ): readonly FrameworkResourceCarrierRow[] {
-  const packageCache = resourceCarrierRowsByPackageByProject
-    .get(sourceProject)
-    ?.get(packageId);
+  const packageCache = resourceCarrierRowsByPackage.get(
+    sourceProject,
+    packageId,
+  );
   if (packageCache !== undefined) {
     return packageCache.filter((row) => row.sourceExportName === exportName);
   }
-  const cache =
-    resourceCarrierRowsByExportByProject.get(sourceProject) ??
-    new Map<string, readonly FrameworkResourceCarrierRow[]>();
-  if (!resourceCarrierRowsByExportByProject.has(sourceProject)) {
-    resourceCarrierRowsByExportByProject.set(sourceProject, cache);
-  }
   const key = `${packageId}:${exportName}`;
-  const cached = cache.get(key);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const rows = scanFrameworkResourcePackageCarrierRows(
-    sourceProject,
-    packageId,
-    packageName,
-    exportName,
+  return resourceCarrierRowsByExport.read(sourceProject, key, () =>
+    scanFrameworkResourcePackageCarrierRows(
+      sourceProject,
+      packageId,
+      packageName,
+      exportName,
+    ),
   );
-  cache.set(key, rows);
-  return rows;
 }
 
 export function scanFrameworkResourcePackageCarrierRows(
@@ -303,34 +262,9 @@ export function readFrameworkResourcePackageRows(
   packageId: string,
   packageName: string,
 ): readonly FrameworkResourceExportRow[] {
-  const cache =
-    resourceRowsByPackageByProject.get(sourceProject) ??
-    new Map<string, readonly FrameworkResourceExportRow[]>();
-  if (!resourceRowsByPackageByProject.has(sourceProject)) {
-    resourceRowsByPackageByProject.set(sourceProject, cache);
-  }
-  const cached = cache.get(packageId);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const diskCached =
-    readFrameworkEntityCatalogCache<FrameworkResourceExportRow>(
-      sourceProject,
-      "resources",
-      packageId,
-    );
-  if (diskCached !== undefined) {
-    cache.set(packageId, diskCached);
-    return diskCached;
-  }
-  const rows = scanFrameworkResourcePackageRows(
-    sourceProject,
-    packageId,
-    packageName,
+  return resourceRowsByPackage.read(sourceProject, packageId, () =>
+    scanFrameworkResourcePackageRows(sourceProject, packageId, packageName),
   );
-  cache.set(packageId, rows);
-  writeFrameworkEntityCatalogCache(sourceProject, "resources", packageId, rows);
-  return rows;
 }
 
 export function readFrameworkResourceExportRows(
@@ -339,33 +273,21 @@ export function readFrameworkResourceExportRows(
   packageName: string,
   exportName: string,
 ): readonly FrameworkResourceExportRow[] {
-  const packageCache = resourceRowsByPackageByProject
-    .get(sourceProject)
-    ?.get(packageId);
+  const packageCache = resourceRowsByPackage.get(sourceProject, packageId);
   if (packageCache !== undefined) {
     return packageCache.filter(
       (row) => row.exportEntry.exportName === exportName,
     );
   }
-  const cache =
-    resourceRowsByExportByProject.get(sourceProject) ??
-    new Map<string, readonly FrameworkResourceExportRow[]>();
-  if (!resourceRowsByExportByProject.has(sourceProject)) {
-    resourceRowsByExportByProject.set(sourceProject, cache);
-  }
   const key = `${packageId}:${exportName}`;
-  const cached = cache.get(key);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const rows = scanFrameworkResourcePackageRows(
-    sourceProject,
-    packageId,
-    packageName,
-    exportName,
+  return resourceRowsByExport.read(sourceProject, key, () =>
+    scanFrameworkResourcePackageRows(
+      sourceProject,
+      packageId,
+      packageName,
+      exportName,
+    ),
   );
-  cache.set(key, rows);
-  return rows;
 }
 
 export function scanFrameworkResourcePackageRows(

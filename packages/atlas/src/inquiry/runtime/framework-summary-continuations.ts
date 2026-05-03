@@ -83,48 +83,6 @@ export function summaryContinuations(
     ),
     projectionContinuation(
       inquiry,
-      "framework.discovery:syntax-products",
-      "syntax-products",
-      "Inspect syntax producers and the instruction or binding products they expose.",
-    ),
-    projectionContinuation(
-      inquiry,
-      "framework.discovery:instruction-slots",
-      "instruction-slots",
-      "Inspect instruction discriminator slots joined to declarations and syntax products.",
-    ),
-    projectionContinuation(
-      inquiry,
-      "framework.discovery:instruction-dispatches",
-      "instruction-dispatches",
-      "Inspect instruction slot to renderer dispatch edges.",
-    ),
-    projectionContinuation(
-      inquiry,
-      "framework.discovery:binding-products",
-      "binding-products",
-      "Inspect binding classes materialized by renderer syntax products.",
-    ),
-    projectionContinuation(
-      inquiry,
-      "framework.discovery:binding-admissions",
-      "binding-admissions",
-      "Inspect controller.addBinding admission edges for framework binding products.",
-    ),
-    projectionContinuation(
-      inquiry,
-      "framework.discovery:binding-effects",
-      "binding-effects",
-      "Inspect binding lifecycle and setup effect rows.",
-    ),
-    projectionContinuation(
-      inquiry,
-      "framework.discovery:binding-setups",
-      "binding-setups",
-      "Inspect renderer/resource-side target observer/accessor/subscriber setup calls.",
-    ),
-    projectionContinuation(
-      inquiry,
       "framework.discovery:observers",
       "observers",
       "Inspect public observer-system exports, including ObserverLocator and NodeObserverLocator surfaces.",
@@ -166,6 +124,18 @@ export function renderingSummaryContinuations(
   inquiry: Inquiry,
 ): readonly Continuation[] {
   return [
+    projectionContinuation(
+      inquiry,
+      "framework.rendering:hydration-flow",
+      "hydration-flow",
+      "Inspect the compact hydration/runtime rendering corridor before expanding detailed rendering rows.",
+    ),
+    projectionContinuation(
+      inquiry,
+      "framework.rendering:render-consequences",
+      "render-consequences",
+      "Inspect compact renderer consequences before opening nested rendering detail projections.",
+    ),
     projectionContinuation(
       inquiry,
       "framework.rendering:syntax-products",

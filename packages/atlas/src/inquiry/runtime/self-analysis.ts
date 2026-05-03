@@ -1,99 +1,53 @@
 import ts from "typescript";
 
-import type { SourceProject, SourceSpan } from "../../source/index.js";
+import {
+  readTypeScriptEnumUsageIndex,
+  SourceProjectMemo,
+  type SourceProject,
+  type SourceSpan,
+  type TypeScriptEnumDeclarationRow,
+  type TypeScriptEnumUsageIndex,
+} from "../../source/index.js";
 import { LensCatalog } from "../lens.js";
 import type { SourceRange } from "../locus.js";
+import type { FrameworkSemanticRouteSpec } from "./framework-continuation-core.js";
+import {
+  FRAMEWORK_SEMANTIC_ROUTE_SPECS,
+  frameworkSemanticRouteSpecByPropertyName,
+} from "./framework-route-catalog.js";
+import {
+  buildAtlasSelfEnumAnalysis,
+  enumMemberNameByValue,
+  enumMemberValueByName,
+  type AtlasSelfEnumMappingRow,
+  type AtlasSelfEnumReferenceRow,
+  type AtlasSelfEnumRow,
+  type AtlasSelfEnumValueSpaceRow,
+} from "./self-enums.js";
+import {
+  AtlasSelfContractStringClassifier,
+  buildAtlasSelfStringRows,
+  isStringLiteralLike,
+  stringRoleForNode,
+  type AtlasSelfContractStringRow,
+  type AtlasSelfStringLiteralRow,
+  type AtlasSelfStringOccurrence,
+} from "./self-strings.js";
+export type {
+  AtlasSelfEnumMappingRow,
+  AtlasSelfEnumMemberRow,
+  AtlasSelfEnumReferenceRow,
+  AtlasSelfEnumRow,
+  AtlasSelfEnumValueSpaceRow,
+} from "./self-enums.js";
+export type {
+  AtlasSelfContractStringRow,
+  AtlasSelfStringLiteralRow,
+  AtlasSelfStringOccurrence,
+} from "./self-strings.js";
 
-/** Schema marker for the Atlas self-analysis source index. */
+/** Schema marker for the Atlas self-analysis source model. */
 export const ATLAS_SELF_ANALYSIS_VERSION = "atlas-self-analysis-v1";
-
-/** Role assigned to one string literal occurrence. */
-export const enum AtlasSelfStringRole {
-  /** Module specifier in an import/export declaration. */
-  ModuleSpecifier = "module-specifier",
-  /** String-valued enum member initializer. */
-  EnumMemberValue = "enum-member-value",
-  /** Literal type such as `"summary"`. */
-  LiteralType = "literal-type",
-  /** Switch case label. */
-  CaseLabel = "case-label",
-  /** Object property value. */
-  PropertyValue = "property-value",
-  /** Call/new expression argument. */
-  Argument = "argument",
-  /** Equality/comparison operand. */
-  Comparison = "comparison",
-  /** Template literal with no substitution. */
-  TemplateLiteral = "template-literal",
-  /** Other string literal occurrence. */
-  Other = "other",
-}
-
-/** Enum member plus local use pressure. */
-export interface AtlasSelfEnumMemberRow {
-  /** Member name. */
-  readonly name: string;
-  /** Member initializer text/value when static. */
-  readonly value: string | number | null;
-  /** Property-access references such as EnumName.Member outside the declaration. */
-  readonly referenceCount: number;
-  /** String literal occurrences that duplicate this member's string value outside enum declarations/imports. */
-  readonly literalReuseCount: number;
-  /** Exact member declaration source. */
-  readonly source: SourceRange;
-}
-
-/** Enum declaration row. */
-export interface AtlasSelfEnumRow {
-  /** Stable row id. */
-  readonly id: string;
-  /** Package that owns the enum declaration. */
-  readonly packageId: string;
-  /** Enum declaration name. */
-  readonly name: string;
-  /** True when the enum is exported from its source module. */
-  readonly exported: boolean;
-  /** True when declared as a const enum. */
-  readonly constEnum: boolean;
-  /** Number of enum members. */
-  readonly memberCount: number;
-  /** Members with at least one property-access reference. */
-  readonly referencedMemberCount: number;
-  /** Members with no property-access reference. */
-  readonly unreferencedMemberCount: number;
-  /** String literal occurrences that duplicate string-valued member values outside enum declarations/imports. */
-  readonly literalReuseCount: number;
-  /** Exact enum declaration source. */
-  readonly source: SourceRange;
-  /** Member rows. */
-  readonly members: readonly AtlasSelfEnumMemberRow[];
-  /** Compact row summary. */
-  readonly summary: string;
-}
-
-/** One grouped string literal value. */
-export interface AtlasSelfStringLiteralRow {
-  /** Stable row id. */
-  readonly id: string;
-  /** Literal text value. */
-  readonly value: string;
-  /** Total occurrence count after grouping. */
-  readonly count: number;
-  /** Counts by string role. */
-  readonly roles: Readonly<Record<string, number>>;
-  /** Owning package ids where this literal appears. */
-  readonly packageIds: readonly string[];
-  /** Source files where this literal appears. */
-  readonly files: readonly string[];
-  /** First occurrence source. */
-  readonly firstSource: SourceRange;
-  /** Enum members that declare this exact string value. */
-  readonly declaredByEnumMembers: readonly string[];
-  /** True when this value also appears outside enum declarations/imports. */
-  readonly reusedOutsideDeclaration: boolean;
-  /** Compact row summary. */
-  readonly summary: string;
-}
 
 /** Source-level interface/type row surface. */
 export type AtlasSelfRowSurfaceRole =
@@ -265,13 +219,37 @@ export interface AtlasSelfContinuationRow {
   readonly targetLens: string | null;
   /** Target projection when statically visible. */
   readonly targetProjection: string | null;
-  /** NavigationRelation enum member name when statically visible. */
+  /** NavigationRelation enum member or value when statically visible. */
   readonly routeRelationMember: string | null;
   /** Lens ids whose implementation path reaches this continuation. */
   readonly lensIds: readonly string[];
   /** Exact continuation object source. */
   readonly source: SourceRange;
   /** Compact row summary. */
+  readonly summary: string;
+}
+
+/** Declared semantic route from Atlas framework route topology. */
+export interface AtlasSelfSemanticRouteRow {
+  /** Stable row id. */
+  readonly id: string;
+  /** Domain route declaration id. */
+  readonly semanticRouteId: string;
+  /** Generic navigation grammar route id this route follows. */
+  readonly navigationSpecId: string;
+  /** Target endpoint declaration id. */
+  readonly targetEndpointId: string;
+  /** Target lens id. */
+  readonly targetLens: string;
+  /** Target projection id. */
+  readonly targetProjection: string;
+  /** NavigationRelation member name when visible, otherwise the route value. */
+  readonly relation: string;
+  /** Basis values carried by this declared route. */
+  readonly basis: readonly string[];
+  /** Exact route declaration source when visible. */
+  readonly source?: SourceRange;
+  /** Compact route summary. */
   readonly summary: string;
 }
 
@@ -297,12 +275,12 @@ export interface AtlasSelfModuleDependencyRow {
   readonly summary: string;
 }
 
-/** Heavyweight index/cache/provenance surface observed in Atlas source. */
-export interface AtlasSelfIndexProvenanceRow {
+/** Substrate reader, builder, and schema declaration observed in Atlas source. */
+export interface AtlasSelfSubstrateSurfaceRow {
   /** Stable row id. */
   readonly id: string;
   /** Surface kind. */
-  readonly kind: "schema-version" | "reader" | "builder" | "warmup" | "cache";
+  readonly kind: "schema-version" | "reader" | "builder";
   /** Declaration name. */
   readonly name: string;
   /** Source file that owns the declaration. */
@@ -311,26 +289,6 @@ export interface AtlasSelfIndexProvenanceRow {
   readonly value: string | null;
   /** Exact declaration source. */
   readonly source: SourceRange;
-  /** Compact row summary. */
-  readonly summary: string;
-}
-
-/** String literal grouped by likely contract-bearing role. */
-export interface AtlasSelfContractStringRow {
-  /** Stable row id. */
-  readonly id: string;
-  /** Literal value. */
-  readonly value: string;
-  /** Contract-bearing classes assigned to this value. */
-  readonly classes: readonly string[];
-  /** Number of grouped literal occurrences. */
-  readonly count: number;
-  /** Enum members that declare this string value. */
-  readonly declaredByEnumMembers: readonly string[];
-  /** Source files where this value appears. */
-  readonly files: readonly string[];
-  /** First occurrence source. */
-  readonly firstSource: SourceRange;
   /** Compact row summary. */
   readonly summary: string;
 }
@@ -384,13 +342,19 @@ export interface AtlasSelfAxisPressureRow {
 }
 
 /** Compact self-analysis rollup. */
-export interface AtlasSelfAnalysisIndex {
+export interface AtlasSelfAnalysis {
   /** Schema marker. */
   readonly version: typeof ATLAS_SELF_ANALYSIS_VERSION;
   /** Number of analyzed source files. */
   readonly sourceFileCount: number;
   /** Enum declaration rows. */
   readonly enums: readonly AtlasSelfEnumRow[];
+  /** Exact Enum.Member reference rows. */
+  readonly enumReferences: readonly AtlasSelfEnumReferenceRow[];
+  /** Enum value-space rows. */
+  readonly enumValueSpaces: readonly AtlasSelfEnumValueSpaceRow[];
+  /** Enum-to-enum mapping rows. */
+  readonly enumMappings: readonly AtlasSelfEnumMappingRow[];
   /** Grouped string literal rows. */
   readonly strings: readonly AtlasSelfStringLiteralRow[];
   /** Structural row/interface/type surfaces. */
@@ -407,10 +371,12 @@ export interface AtlasSelfAnalysisIndex {
   readonly projectionBranches: readonly AtlasSelfProjectionBranchRow[];
   /** Runtime continuation object literals. */
   readonly continuations: readonly AtlasSelfContinuationRow[];
+  /** Declared semantic framework route topology rows. */
+  readonly semanticRoutes: readonly AtlasSelfSemanticRouteRow[];
   /** Relative module dependency rows. */
   readonly moduleDependencies: readonly AtlasSelfModuleDependencyRow[];
-  /** Index/cache/schema provenance rows. */
-  readonly indexProvenance: readonly AtlasSelfIndexProvenanceRow[];
+  /** Substrate reader, builder, and schema surface rows. */
+  readonly substrateSurfaces: readonly AtlasSelfSubstrateSurfaceRow[];
   /** Contract-bearing string rows. */
   readonly contractStrings: readonly AtlasSelfContractStringRow[];
   /** Exact rows that identify axis, mapper, and stringly-surface pressure. */
@@ -420,6 +386,10 @@ export interface AtlasSelfAnalysisIndex {
     readonly enumCount: number;
     readonly enumMemberCount: number;
     readonly unreferencedEnumMemberCount: number;
+    readonly enumReferenceCount: number;
+    readonly enumRawValueOccurrenceCount: number;
+    readonly enumValueSpaceCount: number;
+    readonly enumMappingCount: number;
     readonly stringValueCount: number;
     readonly magicStringValueCount: number;
     readonly rowSurfaceCount: number;
@@ -436,38 +406,13 @@ export interface AtlasSelfAnalysisIndex {
     readonly lensImplementationCount: number;
     readonly projectionBranchCount: number;
     readonly continuationCount: number;
+    readonly semanticRouteCount: number;
     readonly moduleDependencyCount: number;
     readonly crossAreaModuleDependencyCount: number;
-    readonly indexProvenanceCount: number;
+    readonly substrateSurfaceCount: number;
     readonly contractStringCount: number;
     readonly axisPressureCount: number;
   };
-}
-
-interface MutableEnumMember {
-  readonly name: string;
-  readonly value: string | number | null;
-  referenceCount: number;
-  literalReuseCount: number;
-  readonly source: SourceRange;
-}
-
-interface MutableEnumRow {
-  readonly id: string;
-  readonly packageId: string;
-  readonly name: string;
-  readonly exported: boolean;
-  readonly constEnum: boolean;
-  readonly source: SourceRange;
-  readonly members: MutableEnumMember[];
-}
-
-interface StringOccurrence {
-  readonly value: string;
-  readonly role: AtlasSelfStringRole;
-  readonly packageId: string;
-  readonly filePath: string;
-  readonly source: SourceRange;
 }
 
 type FunctionDeclarationRow = AtlasSelfFunctionSurfaceRow;
@@ -476,6 +421,13 @@ interface FunctionCallEdge {
   readonly filePath: string;
   readonly fromFunction: string;
   readonly toFunction: string;
+}
+
+interface FunctionImportBinding {
+  readonly filePath: string;
+  readonly localName: string;
+  readonly importedName: string;
+  readonly importedFilePath: string;
 }
 
 interface AxisCarrier {
@@ -493,40 +445,33 @@ interface MutableProjectionBranchRow
 interface MutableContinuationRow
   extends Omit<AtlasSelfContinuationRow, "lensIds" | "summary"> {}
 
-const selfAnalysisByProject = new WeakMap<
-  SourceProject,
-  AtlasSelfAnalysisIndex
->();
+const atlasSelfAnalysisMemo = new SourceProjectMemo<AtlasSelfAnalysis>();
 
-/** Read or build the Atlas self-analysis source index for the current Program epoch. */
+/** Read or build the Atlas self-analysis model for the current Program epoch. */
 export function readAtlasSelfAnalysis(
   /** Hot source project owned by the runtime. */
   sourceProject: SourceProject,
-): AtlasSelfAnalysisIndex {
-  const cached = selfAnalysisByProject.get(sourceProject);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const index = buildAtlasSelfAnalysis(sourceProject);
-  selfAnalysisByProject.set(sourceProject, index);
-  return index;
+): AtlasSelfAnalysis {
+  return atlasSelfAnalysisMemo.read(sourceProject, () =>
+    buildAtlasSelfAnalysis(sourceProject),
+  );
 }
 
 function buildAtlasSelfAnalysis(
   sourceProject: SourceProject,
-): AtlasSelfAnalysisIndex {
+): AtlasSelfAnalysis {
   return new AtlasSelfAnalysisBuilder(sourceProject).build();
 }
 
 class AtlasSelfAnalysisBuilder {
   readonly #sourceProject: SourceProject;
-  readonly #enumRows: MutableEnumRow[] = [];
-  readonly #enumRowsByName = new Map<string, MutableEnumRow[]>();
-  readonly #stringOccurrences: StringOccurrence[] = [];
+  readonly #enumUsage: TypeScriptEnumUsageIndex;
+  readonly #stringOccurrences: AtlasSelfStringOccurrence[] = [];
   readonly #rowSurfaces: AtlasSelfRowSurfaceRow[] = [];
   readonly #classSurfaces: AtlasSelfClassSurfaceRow[] = [];
   readonly #functionDeclarations: FunctionDeclarationRow[] = [];
   readonly #functionCallEdges: FunctionCallEdge[] = [];
+  readonly #functionImportBindings: FunctionImportBinding[] = [];
   readonly #lensImplementationSeeds: Omit<
     AtlasSelfLensImplementationRow,
     "id" | "lensId" | "reachableFunctions" | "summary"
@@ -534,14 +479,17 @@ class AtlasSelfAnalysisBuilder {
   readonly #projectionBranchSeeds: MutableProjectionBranchRow[] = [];
   readonly #continuationSeeds: MutableContinuationRow[] = [];
   readonly #moduleDependencies: AtlasSelfModuleDependencyRow[] = [];
-  readonly #indexProvenance: AtlasSelfIndexProvenanceRow[] = [];
+  readonly #substrateSurfaces: AtlasSelfSubstrateSurfaceRow[] = [];
   readonly #axisMapperPressure: AtlasSelfAxisPressureRow[] = [];
 
   constructor(sourceProject: SourceProject) {
     this.#sourceProject = sourceProject;
+    this.#enumUsage = readTypeScriptEnumUsageIndex(sourceProject, {
+      packageId: "atlas",
+    });
   }
 
-  build(): AtlasSelfAnalysisIndex {
+  build(): AtlasSelfAnalysis {
     const sourceFiles = this.#sourceProject
       .ownedSourceFiles()
       .filter(
@@ -552,9 +500,6 @@ class AtlasSelfAnalysisBuilder {
 
     for (const sourceFile of sourceFiles) {
       this.#collectSourceFile(sourceFile);
-    }
-    for (const sourceFile of sourceFiles) {
-      this.#collectEnumReferences(sourceFile);
     }
 
     return this.#finalize(sourceFiles.length);
@@ -567,6 +512,9 @@ class AtlasSelfAnalysisBuilder {
     const filePath =
       this.#sourceProject.sourceFileIdentity(sourceFile)?.repoPath ??
       sourceFile.fileName;
+    this.#functionImportBindings.push(
+      ...functionImportBindings(sourceFile, filePath),
+    );
     this.#moduleDependencies.push(
       ...moduleDependencyRows(sourceFile, filePath),
     );
@@ -606,8 +554,8 @@ class AtlasSelfAnalysisBuilder {
           node,
         ),
       );
-      this.#indexProvenance.push(
-        ...indexProvenanceForFunction(sourceFile, filePath, node),
+      this.#substrateSurfaces.push(
+        ...substrateSurfacesForFunction(sourceFile, filePath, node),
       );
       ts.forEachChild(node, (child) =>
         this.#collectDeclarations(
@@ -679,13 +627,8 @@ class AtlasSelfAnalysisBuilder {
       return;
     }
     if (ts.isVariableStatement(node)) {
-      this.#indexProvenance.push(
-        ...indexProvenanceForVariableStatement(sourceFile, filePath, node),
-      );
-    }
-    if (ts.isEnumDeclaration(node)) {
-      this.#addEnumRow(
-        enumRowForDeclaration(sourceFile, packageId, filePath, node),
+      this.#substrateSurfaces.push(
+        ...substrateSurfacesForVariableStatement(sourceFile, filePath, node),
       );
     }
     if (isStringLiteralLike(node)) {
@@ -781,38 +724,18 @@ class AtlasSelfAnalysisBuilder {
     );
   }
 
-  #addEnumRow(row: MutableEnumRow): void {
-    this.#enumRows.push(row);
-    const rows = this.#enumRowsByName.get(row.name) ?? [];
-    rows.push(row);
-    this.#enumRowsByName.set(row.name, rows);
-  }
-
-  #collectEnumReferences(sourceFile: ts.SourceFile): void {
-    const collectReferences = (node: ts.Node): void => {
-      if (ts.isPropertyAccessExpression(node)) {
-        recordEnumMemberReference(this.#enumRowsByName, node);
-      }
-      ts.forEachChild(node, collectReferences);
-    };
-    collectReferences(sourceFile);
-  }
-
-  #finalize(sourceFileCount: number): AtlasSelfAnalysisIndex {
-    const strings = stringRows(this.#stringOccurrences, this.#enumRows);
-    for (const row of this.#enumRows) {
-      for (const member of row.members) {
-        if (typeof member.value !== "string") {
-          continue;
-        }
-        member.literalReuseCount = this.#stringOccurrences.filter(
-          (occurrence) =>
-            occurrence.value === member.value &&
-            isMagicStringRole(occurrence.role),
-        ).length;
-      }
-    }
-    const enums = this.#enumRows.map(finalizeEnumRow);
+  #finalize(sourceFileCount: number): AtlasSelfAnalysis {
+    const strings = buildAtlasSelfStringRows(
+      this.#stringOccurrences,
+      this.#enumUsage,
+    );
+    const { enums, enumReferences, enumValueSpaces, enumMappings } =
+      buildAtlasSelfEnumAnalysis(this.#enumUsage);
+    const lensIdByMemberName = enumMemberValueByName(enums, "LensId");
+    const navigationRelationMemberByValue = enumMemberNameByValue(
+      enums,
+      "NavigationRelation",
+    );
     const rowSurfaces = this.#rowSurfaces.sort(compareByName);
     const relationshipSurfaces = rowSurfaces.filter(isRelationshipSurface);
     const classSurfaces = this.#classSurfaces.sort(compareClassSurface);
@@ -821,9 +744,10 @@ class AtlasSelfAnalysisBuilder {
     );
     const lensImplementations = finalizeLensImplementations(
       this.#lensImplementationSeeds,
-      this.#enumRows,
+      this.#enumUsage.enumDeclarations,
       this.#functionDeclarations,
       this.#functionCallEdges,
+      this.#functionImportBindings,
     );
     const projectionBranches = finalizeProjectionBranches(
       this.#projectionBranchSeeds,
@@ -832,11 +756,17 @@ class AtlasSelfAnalysisBuilder {
     const continuations = finalizeContinuations(
       this.#continuationSeeds,
       lensImplementations,
+      lensIdByMemberName,
+      navigationRelationMemberByValue,
+    );
+    const semanticRoutes = atlasSemanticRouteRows(
+      this.#stringOccurrences,
+      navigationRelationMemberByValue,
     );
     const contractStrings = new AtlasSelfContractStringClassifier(
       strings,
       continuations,
-      this.#indexProvenance,
+      this.#substrateSurfaces,
     ).rows();
     const axisPressure = new AtlasSelfAxisPressureClassifier(
       enums,
@@ -852,6 +782,13 @@ class AtlasSelfAnalysisBuilder {
         (sum, row) => sum + row.unreferencedMemberCount,
         0,
       ),
+      enumReferenceCount: enumReferences.length,
+      enumRawValueOccurrenceCount: enumValueSpaces.reduce(
+        (sum, row) => sum + row.rawValueOccurrenceCount,
+        0,
+      ),
+      enumValueSpaceCount: enumValueSpaces.length,
+      enumMappingCount: enumMappings.length,
       stringValueCount: strings.length,
       magicStringValueCount: strings.filter(
         (row) => row.reusedOutsideDeclaration,
@@ -886,11 +823,12 @@ class AtlasSelfAnalysisBuilder {
       lensImplementationCount: lensImplementations.length,
       projectionBranchCount: projectionBranches.length,
       continuationCount: continuations.length,
+      semanticRouteCount: semanticRoutes.length,
       moduleDependencyCount: this.#moduleDependencies.length,
       crossAreaModuleDependencyCount: this.#moduleDependencies.filter(
         (row) => row.crossesArea,
       ).length,
-      indexProvenanceCount: this.#indexProvenance.length,
+      substrateSurfaceCount: this.#substrateSurfaces.length,
       contractStringCount: contractStrings.length,
       axisPressureCount: axisPressure.length,
     };
@@ -899,6 +837,9 @@ class AtlasSelfAnalysisBuilder {
       version: ATLAS_SELF_ANALYSIS_VERSION,
       sourceFileCount,
       enums,
+      enumReferences,
+      enumValueSpaces,
+      enumMappings,
       strings,
       rowSurfaces,
       relationshipSurfaces,
@@ -907,10 +848,11 @@ class AtlasSelfAnalysisBuilder {
       lensImplementations,
       projectionBranches,
       continuations,
+      semanticRoutes,
       moduleDependencies: this.#moduleDependencies.sort(
         compareModuleDependency,
       ),
-      indexProvenance: this.#indexProvenance.sort(compareIndexProvenance),
+      substrateSurfaces: this.#substrateSurfaces.sort(compareSubstrateSurfaces),
       contractStrings,
       axisPressure,
       rollup,
@@ -918,131 +860,35 @@ class AtlasSelfAnalysisBuilder {
   }
 }
 
-function enumRowForDeclaration(
-  sourceFile: ts.SourceFile,
-  packageId: string,
-  filePath: string,
-  node: ts.EnumDeclaration,
-): MutableEnumRow {
-  const members = node.members.map((member) => ({
-    name: member.name.getText(sourceFile),
-    value: enumMemberValue(member),
-    referenceCount: 0,
-    literalReuseCount: 0,
-    source: sourceRangeForNode(sourceFile, filePath, member),
-  }));
-  return {
-    id: `atlas-self:enum:${packageId}:${filePath}:${node.name.text}`,
-    packageId,
-    name: node.name.text,
-    exported: hasModifier(node, ts.SyntaxKind.ExportKeyword),
-    constEnum: hasModifier(node, ts.SyntaxKind.ConstKeyword),
-    source: sourceRangeForNode(sourceFile, filePath, node),
-    members,
-  };
-}
-
-function finalizeEnumRow(row: MutableEnumRow): AtlasSelfEnumRow {
-  const members = row.members.map((member) => ({
-    name: member.name,
-    value: member.value,
-    referenceCount: member.referenceCount,
-    literalReuseCount: member.literalReuseCount,
-    source: member.source,
-  }));
-  const referencedMemberCount = members.filter(
-    (member) => member.referenceCount > 0,
-  ).length;
-  const literalReuseCount = members.reduce(
-    (sum, member) => sum + member.literalReuseCount,
-    0,
+function atlasSemanticRouteRows(
+  occurrences: readonly AtlasSelfStringOccurrence[],
+  relationMemberByValue: ReadonlyMap<string, string>,
+): readonly AtlasSelfSemanticRouteRow[] {
+  const sourceByRouteId = new Map(
+    occurrences
+      .filter(
+        (occurrence) =>
+          occurrence.filePath.endsWith(
+            "packages/atlas/src/inquiry/runtime/framework-route-catalog.ts",
+          ) && occurrence.value.startsWith("framework.route."),
+      )
+      .map((occurrence) => [occurrence.value, occurrence.source]),
   );
-  return {
-    id: row.id,
-    packageId: row.packageId,
-    name: row.name,
-    exported: row.exported,
-    constEnum: row.constEnum,
-    memberCount: members.length,
-    referencedMemberCount,
-    unreferencedMemberCount: members.length - referencedMemberCount,
-    literalReuseCount,
-    source: row.source,
-    members,
-    summary: `${row.name} declares ${members.length} member(s); ${
-      members.length - referencedMemberCount
-    } member(s) have no Enum.Member reference and ${literalReuseCount} matching magic string occurrence(s).`,
-  };
-}
-
-function recordEnumMemberReference(
-  enumRowsByName: ReadonlyMap<string, readonly MutableEnumRow[]>,
-  node: ts.PropertyAccessExpression,
-): void {
-  const enumName = node.expression.getText();
-  const memberName = node.name.text;
-  const rows = enumRowsByName.get(enumName);
-  if (rows === undefined) {
-    return;
-  }
-  for (const row of rows) {
-    const member = row.members.find((entry) => entry.name === memberName);
-    if (member !== undefined) {
-      member.referenceCount += 1;
-    }
-  }
-}
-
-function stringRows(
-  occurrences: readonly StringOccurrence[],
-  enums: readonly MutableEnumRow[],
-): readonly AtlasSelfStringLiteralRow[] {
-  const enumMembersByValue = new Map<string, string[]>();
-  for (const enumRow of enums) {
-    for (const member of enumRow.members) {
-      if (typeof member.value !== "string") {
-        continue;
-      }
-      const rows = enumMembersByValue.get(member.value) ?? [];
-      rows.push(`${enumRow.name}.${member.name}`);
-      enumMembersByValue.set(member.value, rows);
-    }
-  }
-  const byValue = new Map<string, StringOccurrence[]>();
-  for (const occurrence of occurrences) {
-    const rows = byValue.get(occurrence.value) ?? [];
-    rows.push(occurrence);
-    byValue.set(occurrence.value, rows);
-  }
-  return [...byValue.entries()]
-    .map(([value, rows]) => {
-      const roles = countBy(rows, (row) => row.role);
-      const files = uniqueSorted(rows.map((row) => row.filePath));
-      const packageIds = uniqueSorted(rows.map((row) => row.packageId));
-      const declaredByEnumMembers = enumMembersByValue.get(value) ?? [];
-      const reusedOutsideDeclaration = rows.some((row) =>
-        isMagicStringRole(row.role),
-      );
-      return {
-        id: `atlas-self:string:${stableStringId(value)}`,
-        value,
-        count: rows.length,
-        roles,
-        packageIds,
-        files,
-        firstSource: rows[0]!.source,
-        declaredByEnumMembers,
-        reusedOutsideDeclaration,
-        summary: `"${value}" appears ${rows.length} time(s) across ${files.length} file(s).`,
-      };
-    })
-    .sort(
-      (left, right) =>
-        Number(right.reusedOutsideDeclaration) -
-          Number(left.reusedOutsideDeclaration) ||
-        right.count - left.count ||
-        left.value.localeCompare(right.value),
-    );
+  return FRAMEWORK_SEMANTIC_ROUTE_SPECS.map((routeSpec) => ({
+    id: `atlas-self:semantic-route:${routeSpec.id}`,
+    semanticRouteId: routeSpec.id,
+    navigationSpecId: routeSpec.navigationSpecId,
+    targetEndpointId: routeSpec.target.id,
+    targetLens: routeSpec.target.lens,
+    targetProjection: routeSpec.target.projection,
+    relation:
+      relationMemberByValue.get(routeSpec.relation) ?? routeSpec.relation,
+    basis: routeSpec.basis,
+    ...(sourceByRouteId.get(routeSpec.id) === undefined
+      ? {}
+      : { source: sourceByRouteId.get(routeSpec.id) }),
+    summary: routeSpec.summary,
+  }));
 }
 
 function rowSurfaceForInterface(
@@ -1373,6 +1219,46 @@ function moduleDependencyRows(
   });
 }
 
+function functionImportBindings(
+  sourceFile: ts.SourceFile,
+  filePath: string,
+): readonly FunctionImportBinding[] {
+  const bindings: FunctionImportBinding[] = [];
+  for (const statement of sourceFile.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      statement.moduleSpecifier === undefined ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      !statement.moduleSpecifier.text.startsWith(".")
+    ) {
+      continue;
+    }
+    const importedFilePath = resolveRelativeModule(
+      filePath,
+      statement.moduleSpecifier.text,
+    );
+    if (importedFilePath === null) {
+      continue;
+    }
+    const namedBindings = statement.importClause?.namedBindings;
+    if (
+      namedBindings === undefined ||
+      !ts.isNamedImports(namedBindings)
+    ) {
+      continue;
+    }
+    for (const element of namedBindings.elements) {
+      bindings.push({
+        filePath,
+        localName: element.name.text,
+        importedName: element.propertyName?.text ?? element.name.text,
+        importedFilePath,
+      });
+    }
+  }
+  return bindings;
+}
+
 function moduleSpecifierText(statement: ts.Statement): string | null {
   if (
     (ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement)) &&
@@ -1416,22 +1302,22 @@ function atlasAreaForPath(filePath: string): string {
   return relative.split("/")[0] ?? "unknown";
 }
 
-function indexProvenanceForFunction(
+function substrateSurfacesForFunction(
   sourceFile: ts.SourceFile,
   filePath: string,
   node: ts.FunctionDeclaration,
-): readonly AtlasSelfIndexProvenanceRow[] {
+): readonly AtlasSelfSubstrateSurfaceRow[] {
   const name = node.name?.text;
   if (name === undefined) {
     return [];
   }
-  const kind = indexFunctionKind(name);
+  const kind = substrateSurfaceKindForFunctionName(name);
   if (kind === null) {
     return [];
   }
   return [
     {
-      id: `atlas-self:index:${kind}:${filePath}:${name}`,
+      id: `atlas-self:substrate-surface:${kind}:${filePath}:${name}`,
       kind,
       name,
       filePath,
@@ -1442,28 +1328,24 @@ function indexProvenanceForFunction(
   ];
 }
 
-function indexProvenanceForVariableStatement(
+function substrateSurfacesForVariableStatement(
   sourceFile: ts.SourceFile,
   filePath: string,
   node: ts.VariableStatement,
-): readonly AtlasSelfIndexProvenanceRow[] {
+): readonly AtlasSelfSubstrateSurfaceRow[] {
   return node.declarationList.declarations.flatMap((declaration) => {
     if (!ts.isIdentifier(declaration.name)) {
       return [];
     }
     const name = declaration.name.text;
-    const value =
-      declaration.initializer !== undefined &&
-      isStringLiteralLike(declaration.initializer)
-        ? declaration.initializer.text
-        : null;
-    const kind = indexVariableKind(name, value);
+    const value = stringLiteralExpressionText(declaration.initializer);
+    const kind = substrateSurfaceKindForVariable(name, value);
     if (kind === null) {
       return [];
     }
     return [
       {
-        id: `atlas-self:index:${kind}:${filePath}:${name}`,
+        id: `atlas-self:substrate-surface:${kind}:${filePath}:${name}`,
         kind,
         name,
         filePath,
@@ -1478,35 +1360,43 @@ function indexProvenanceForVariableStatement(
   });
 }
 
-function indexFunctionKind(
+function substrateSurfaceKindForFunctionName(
   name: string,
-): AtlasSelfIndexProvenanceRow["kind"] | null {
+): AtlasSelfSubstrateSurfaceRow["kind"] | null {
   if (/^(read|get).*?(Index|Cache|Manifest)$/u.test(name)) {
     return "reader";
   }
   if (/^(build|create|write).*?(Index|Cache|Manifest)$/u.test(name)) {
     return "builder";
   }
-  if (/(warmup|prewarm|warm)/iu.test(name)) {
-    return "warmup";
-  }
-  if (/(cache|manifest)/iu.test(name)) {
-    return "cache";
+  return null;
+}
+
+function substrateSurfaceKindForVariable(
+  name: string,
+  value: string | null,
+): AtlasSelfSubstrateSurfaceRow["kind"] | null {
+  if (/(SCHEMA|VERSION)/u.test(name) && value !== null) {
+    return "schema-version";
   }
   return null;
 }
 
-function indexVariableKind(
-  name: string,
-  value: string | null,
-): AtlasSelfIndexProvenanceRow["kind"] | null {
-  if (/(SCHEMA|VERSION)/u.test(name) && value !== null) {
-    return "schema-version";
+function stringLiteralExpressionText(
+  expression: ts.Expression | undefined,
+): string | null {
+  if (expression === undefined) {
+    return null;
   }
-  if (/(CACHE|MANIFEST|INDEX)/u.test(name)) {
-    return "cache";
+  let current: ts.Expression = expression;
+  while (
+    ts.isAsExpression(current) ||
+    ts.isTypeAssertionExpression(current) ||
+    ts.isSatisfiesExpression(current)
+  ) {
+    current = current.expression;
   }
-  return null;
+  return isStringLiteralLike(current) ? current.text : null;
 }
 
 function lensImplementationSeedForCase(
@@ -1718,32 +1608,68 @@ function continuationForHelperCall(
   currentFunction: string,
   node: ts.CallExpression,
 ): MutableContinuationRow | null {
+  const rowContinuation = continuationForRowContinuationBuilderCall(
+    sourceFile,
+    filePath,
+    currentFunction,
+    node,
+  );
+  if (rowContinuation !== null) {
+    return rowContinuation;
+  }
+  const builderContinuation = continuationForSemanticRouteBuilderCall(
+    sourceFile,
+    filePath,
+    currentFunction,
+    node,
+  );
+  if (builderContinuation !== null) {
+    return builderContinuation;
+  }
   const helperName = calledFunctionName(node);
   if (helperName === "projectionContinuation") {
     const options = objectArgument(node, 4);
+    const targetLens =
+      options === null
+        ? null
+        : enumMemberProperty(options, "lens", "LensId", sourceFile) ??
+          stringProperty(options, "lens");
     return {
       id: `atlas-self:continuation:${filePath}:${currentFunction}:${node.pos}`,
       continuationId: stringArgument(node, 1),
-      kind: "SwitchProjection",
-      priority: "Primary",
+      kind: targetLens === null ? "SwitchProjection" : null,
+      priority:
+        options === null
+          ? "Primary"
+          : enumMemberProperty(
+              options,
+              "priority",
+              "ContinuationPriority",
+              sourceFile,
+            ) ?? "Primary",
       functionName: currentFunction,
       filePath,
-      targetLens:
-        options === null
-          ? null
-          : enumMemberProperty(options, "lens", "LensId", sourceFile) ??
-            stringProperty(options, "lens"),
+      targetLens,
       targetProjection: stringArgument(node, 2),
       routeRelationMember: "ProjectionOf",
       source: sourceRangeForNode(sourceFile, filePath, node),
     };
   }
   if (helperName === "nextPageContinuation") {
+    const options = objectArgument(node, 5);
     return {
       id: `atlas-self:continuation:${filePath}:${currentFunction}:${node.pos}`,
       continuationId: stringArgument(node, 1),
       kind: "NextPage",
-      priority: "Primary",
+      priority:
+        options === null
+          ? "Primary"
+          : enumMemberProperty(
+              options,
+              "priority",
+              "ContinuationPriority",
+              sourceFile,
+            ) ?? "Primary",
       functionName: currentFunction,
       filePath,
       targetLens: null,
@@ -1753,6 +1679,189 @@ function continuationForHelperCall(
     };
   }
   return null;
+}
+
+const rowContinuationBuilderMethodSpecs = {
+  source: {
+    kind: "InspectEvidence",
+    priority: "Primary",
+    targetLens: "TsSource",
+    targetProjection: "text",
+    routeRelationMember: "SourceFor",
+  },
+  typeFacts: {
+    kind: "SwitchLens",
+    priority: "Secondary",
+    targetLens: "TsType",
+    targetProjection: "facts",
+    routeRelationMember: "TypeFactsFor",
+  },
+  callSites: {
+    kind: "SwitchLens",
+    priority: "Secondary",
+    targetLens: "TsType",
+    targetProjection: "call-sites",
+    routeRelationMember: "CallSitesOf",
+  },
+  effects: {
+    kind: "SwitchLens",
+    priority: "Primary",
+    targetLens: "FrameworkEvaluator",
+    targetProjection: "effects",
+    routeRelationMember: "EffectsOf",
+  },
+} as const;
+
+const rowContinuationBuilderNamesBySourceFile = new WeakMap<
+  ts.SourceFile,
+  ReadonlySet<string>
+>();
+
+function continuationForRowContinuationBuilderCall(
+  sourceFile: ts.SourceFile,
+  filePath: string,
+  currentFunction: string,
+  node: ts.CallExpression,
+): MutableContinuationRow | null {
+  if (!ts.isPropertyAccessExpression(node.expression)) {
+    return null;
+  }
+  const receiver = node.expression.expression;
+  if (
+    !ts.isIdentifier(receiver) ||
+    !rowContinuationBuilderVariableNames(sourceFile).has(receiver.text)
+  ) {
+    return null;
+  }
+  const methodName = node.expression.name.text;
+  const methodSpec =
+    rowContinuationBuilderMethodSpecs[
+      methodName as keyof typeof rowContinuationBuilderMethodSpecs
+    ];
+  if (methodSpec === undefined) {
+    return null;
+  }
+  const options = objectArgument(node, 4);
+  return {
+    id: `atlas-self:continuation:${filePath}:${currentFunction}:${node.pos}`,
+    continuationId: stringArgument(node, 0),
+    kind: methodSpec.kind,
+    priority:
+      options === null
+        ? methodSpec.priority
+        : enumMemberProperty(
+            options,
+            "priority",
+            "ContinuationPriority",
+            sourceFile,
+          ) ?? methodSpec.priority,
+    functionName: currentFunction,
+    filePath,
+    targetLens: methodSpec.targetLens,
+    targetProjection: methodSpec.targetProjection,
+    routeRelationMember: methodSpec.routeRelationMember,
+    source: sourceRangeForNode(sourceFile, filePath, node),
+  };
+}
+
+function rowContinuationBuilderVariableNames(
+  sourceFile: ts.SourceFile,
+): ReadonlySet<string> {
+  const cached = rowContinuationBuilderNamesBySourceFile.get(sourceFile);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const names = new Set<string>();
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer !== undefined &&
+      ts.isNewExpression(node.initializer) &&
+      ts.isIdentifier(node.initializer.expression) &&
+      node.initializer.expression.text === "FrameworkRowContinuationBuilder"
+    ) {
+      names.add(node.name.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  rowContinuationBuilderNamesBySourceFile.set(sourceFile, names);
+  return names;
+}
+
+function continuationForSemanticRouteBuilderCall(
+  sourceFile: ts.SourceFile,
+  filePath: string,
+  currentFunction: string,
+  node: ts.CallExpression,
+): MutableContinuationRow | null {
+  if (
+    !ts.isPropertyAccessExpression(node.expression) ||
+    node.expression.name.text !== "continuation"
+  ) {
+    return null;
+  }
+  const routeSpec = semanticRouteSpecArgument(node, 0, sourceFile);
+  if (routeSpec === null) {
+    return null;
+  }
+  const instance = objectArgument(node, 2);
+  return {
+    id: `atlas-self:continuation:${filePath}:${currentFunction}:${node.pos}`,
+    continuationId: stringArgument(node, 1),
+    kind:
+      instance === null
+        ? null
+        : enumMemberProperty(
+            instance,
+            "kind",
+            "ContinuationKind",
+            sourceFile,
+          ),
+    priority:
+      instance === null
+        ? null
+        : enumMemberProperty(
+            instance,
+            "priority",
+            "ContinuationPriority",
+            sourceFile,
+          ),
+    functionName: currentFunction,
+    filePath,
+    targetLens: routeSpec.target.lens,
+    targetProjection: routeSpec.target.projection,
+    routeRelationMember: routeSpec.relation,
+    source: sourceRangeForNode(sourceFile, filePath, node),
+  };
+}
+
+function semanticRouteSpecArgument(
+  node: ts.CallExpression,
+  index: number,
+  sourceFile: ts.SourceFile,
+): FrameworkSemanticRouteSpec | null {
+  const argument = node.arguments[index];
+  if (argument === undefined) {
+    return null;
+  }
+  return frameworkSemanticRouteSpecByPropertyName(
+    semanticRouteSpecPropertyName(argument, sourceFile),
+  );
+}
+
+function semanticRouteSpecPropertyName(
+  node: ts.Node,
+  sourceFile: ts.SourceFile,
+): string {
+  if (ts.isIdentifier(node)) {
+    return node.text;
+  }
+  if (ts.isPropertyAccessExpression(node)) {
+    return node.name.text;
+  }
+  return node.getText(sourceFile);
 }
 
 function stringArgument(
@@ -1872,22 +1981,24 @@ function finalizeLensImplementations(
     AtlasSelfLensImplementationRow,
     "id" | "lensId" | "reachableFunctions" | "summary"
   >[],
-  enumRows: readonly MutableEnumRow[],
+  enumRows: readonly TypeScriptEnumDeclarationRow[],
   functionDeclarations: readonly FunctionDeclarationRow[],
   callEdges: readonly FunctionCallEdge[],
+  importBindings: readonly FunctionImportBinding[],
 ): readonly AtlasSelfLensImplementationRow[] {
   const functionGraph = AtlasSelfFunctionGraph.from(
     functionDeclarations,
     callEdges,
+    importBindings,
   );
   const lensIdMembers = new Map<string, string | null>();
   for (const enumRow of enumRows) {
-    if (enumRow.name !== "LensId") {
+    if (enumRow.enumName !== "LensId") {
       continue;
     }
     for (const member of enumRow.members) {
       lensIdMembers.set(
-        member.name,
+        member.memberName,
         typeof member.value === "string" ? member.value : null,
       );
     }
@@ -1924,25 +2035,40 @@ function finalizeLensImplementations(
 
 class AtlasSelfFunctionGraph {
   readonly #fileByFunctionName: ReadonlyMap<string, string>;
+  readonly #declaredFunctionsByFile: ReadonlyMap<string, ReadonlySet<string>>;
   readonly #callsByFileAndFunction: ReadonlyMap<string, readonly string[]>;
+  readonly #importsByFileAndLocalName: ReadonlyMap<
+    string,
+    FunctionImportBinding
+  >;
 
   private constructor(
     fileByFunctionName: ReadonlyMap<string, string>,
+    declaredFunctionsByFile: ReadonlyMap<string, ReadonlySet<string>>,
     callsByFileAndFunction: ReadonlyMap<string, readonly string[]>,
+    importsByFileAndLocalName: ReadonlyMap<string, FunctionImportBinding>,
   ) {
     this.#fileByFunctionName = fileByFunctionName;
+    this.#declaredFunctionsByFile = declaredFunctionsByFile;
     this.#callsByFileAndFunction = callsByFileAndFunction;
+    this.#importsByFileAndLocalName = importsByFileAndLocalName;
   }
 
   static from(
     declarations: readonly FunctionDeclarationRow[],
     callEdges: readonly FunctionCallEdge[],
+    importBindings: readonly FunctionImportBinding[],
   ): AtlasSelfFunctionGraph {
     const fileByFunctionName = new Map<string, string>();
+    const declaredFunctionsByFile = new Map<string, Set<string>>();
     for (const declaration of declarations) {
       if (!fileByFunctionName.has(declaration.name)) {
         fileByFunctionName.set(declaration.name, declaration.filePath);
       }
+      const functions =
+        declaredFunctionsByFile.get(declaration.filePath) ?? new Set<string>();
+      functions.add(declaration.name);
+      declaredFunctionsByFile.set(declaration.filePath, functions);
     }
     const calls = new Map<string, string[]>();
     for (const edge of callEdges) {
@@ -1951,7 +2077,16 @@ class AtlasSelfFunctionGraph {
       targets.push(edge.toFunction);
       calls.set(key, targets);
     }
-    return new AtlasSelfFunctionGraph(fileByFunctionName, calls);
+    const imports = new Map<string, FunctionImportBinding>();
+    for (const binding of importBindings) {
+      imports.set(this.#callKey(binding.filePath, binding.localName), binding);
+    }
+    return new AtlasSelfFunctionGraph(
+      fileByFunctionName,
+      declaredFunctionsByFile,
+      calls,
+      imports,
+    );
   }
 
   fileForFunction(functionName: string): string | undefined {
@@ -1960,24 +2095,49 @@ class AtlasSelfFunctionGraph {
 
   reachableFunctionKeys(start: string, filePath: string): readonly string[] {
     const visited = new Set<string>();
-    const queue = [start];
+    const queue: { readonly filePath: string; readonly functionName: string }[] = [
+      { filePath, functionName: start },
+    ];
     while (queue.length > 0) {
       const next = queue.shift()!;
-      if (visited.has(next)) {
+      const key = AtlasSelfFunctionGraph.#callKey(
+        next.filePath,
+        next.functionName,
+      );
+      if (visited.has(key)) {
         continue;
       }
-      visited.add(next);
+      visited.add(key);
       for (const target of this.#callsByFileAndFunction.get(
-        AtlasSelfFunctionGraph.#callKey(filePath, next),
+        key,
       ) ?? []) {
-        if (!visited.has(target)) {
-          queue.push(target);
+        const resolved = this.#resolveCallTarget(next.filePath, target);
+        if (resolved !== null) {
+          queue.push(resolved);
         }
       }
     }
     return [...visited]
-      .map((name) => `${filePath}:${name}`)
       .sort((left, right) => left.localeCompare(right));
+  }
+
+  #resolveCallTarget(
+    filePath: string,
+    targetName: string,
+  ): { readonly filePath: string; readonly functionName: string } | null {
+    if (this.#declaredFunctionsByFile.get(filePath)?.has(targetName)) {
+      return { filePath, functionName: targetName };
+    }
+    const binding = this.#importsByFileAndLocalName.get(
+      AtlasSelfFunctionGraph.#callKey(filePath, targetName),
+    );
+    if (binding !== undefined) {
+      return {
+        filePath: binding.importedFilePath,
+        functionName: binding.importedName,
+      };
+    }
+    return null;
   }
 
   static #callKey(filePath: string, functionName: string): string {
@@ -2015,19 +2175,33 @@ function finalizeProjectionBranches(
 function finalizeContinuations(
   seeds: readonly MutableContinuationRow[],
   lensImplementations: readonly AtlasSelfLensImplementationRow[],
+  lensIdByMemberName: ReadonlyMap<string, string>,
+  navigationRelationMemberByValue: ReadonlyMap<string, string>,
 ): readonly AtlasSelfContinuationRow[] {
   return dedupeById(seeds)
     .map((seed) => {
+      const routeRelationMember =
+        seed.routeRelationMember === null
+          ? null
+          : navigationRelationMemberByValue.get(seed.routeRelationMember) ??
+            seed.routeRelationMember;
       const lensIds = lensIdsForFunction(
         seed.filePath,
         seed.functionName,
         lensImplementations,
       );
+      const kind = continuationKindForSeed(
+        seed,
+        lensIds,
+        lensIdByMemberName,
+      );
       return {
         ...seed,
+        kind,
+        routeRelationMember,
         lensIds,
         summary: `${seed.continuationId ?? "(anonymous continuation)"} emits ${
-          seed.kind ?? "unknown"
+          kind ?? "unknown"
         }${
           seed.targetLens === null
             ? ""
@@ -2045,6 +2219,31 @@ function finalizeContinuations(
         left.functionName.localeCompare(right.functionName) ||
         (left.continuationId ?? "").localeCompare(right.continuationId ?? ""),
     );
+}
+
+function continuationKindForSeed(
+  seed: MutableContinuationRow,
+  lensIds: readonly string[],
+  lensIdByMemberName: ReadonlyMap<string, string>,
+): string | null {
+  if (seed.kind !== null) {
+    return seed.kind;
+  }
+  if (seed.targetProjection === null) {
+    return null;
+  }
+  if (seed.targetLens === null) {
+    return "SwitchProjection";
+  }
+  const targetLensId =
+    lensIdByMemberName.get(seed.targetLens) ?? seed.targetLens;
+  if (lensIds.length === 1 && lensIds[0] === targetLensId) {
+    return "SwitchProjection";
+  }
+  if (lensIds.length > 0 && !lensIds.includes(targetLensId)) {
+    return "SwitchLens";
+  }
+  return null;
 }
 
 function lensIdsForFunction(
@@ -2704,189 +2903,10 @@ function pressureRank(pressure: AtlasSelfAxisPressureRow["pressure"]): number {
   }
 }
 
-class AtlasSelfContractStringClassifier {
-  readonly #strings: readonly AtlasSelfStringLiteralRow[];
-  readonly #continuationIds: ReadonlySet<string>;
-  readonly #schemaValues: ReadonlySet<string>;
-
-  constructor(
-    strings: readonly AtlasSelfStringLiteralRow[],
-    continuations: readonly AtlasSelfContinuationRow[],
-    indexProvenance: readonly AtlasSelfIndexProvenanceRow[],
-  ) {
-    this.#strings = strings;
-    this.#continuationIds = new Set(
-      continuations.flatMap((row) =>
-        row.continuationId === null ? [] : [row.continuationId],
-      ),
-    );
-    this.#schemaValues = new Set(
-      indexProvenance.flatMap((row) => (row.value === null ? [] : [row.value])),
-    );
-  }
-
-  rows(): readonly AtlasSelfContractStringRow[] {
-    return this.#strings
-      .flatMap((row) => {
-        const classes = this.#classesFor(row);
-        if (classes.length === 0) {
-          return [];
-        }
-        return [
-          {
-            id: `atlas-self:contract-string:${stableStringId(row.value)}`,
-            value: row.value,
-            classes,
-            count: row.count,
-            declaredByEnumMembers: row.declaredByEnumMembers,
-            files: row.files,
-            firstSource: row.firstSource,
-            summary: `${JSON.stringify(
-              row.value,
-            )} is contract-bearing as ${classes.join(", ")}.`,
-          },
-        ];
-      })
-      .sort(
-        (left, right) =>
-          left.classes[0]!.localeCompare(right.classes[0]!) ||
-          left.value.localeCompare(right.value),
-      );
-  }
-
-  #classesFor(row: AtlasSelfStringLiteralRow): readonly string[] {
-    const classes = new Set<string>();
-    for (const enumMember of row.declaredByEnumMembers) {
-      this.#addEnumMemberClasses(classes, enumMember);
-    }
-    if (
-      this.#continuationIds.has(row.value) ||
-      /^[a-z0-9.-]+:[a-z0-9:._-]+$/u.test(row.value)
-    ) {
-      classes.add("continuation-or-row-id");
-    }
-    if (this.#schemaValues.has(row.value) || /-v\d+$/u.test(row.value)) {
-      classes.add("schema-or-version");
-    }
-    if (
-      row.files.some((file) => file.endsWith("lens.ts")) &&
-      row.roles["property-value"] !== undefined
-    ) {
-      classes.add("lens-contract-literal");
-    }
-    return [...classes].sort((left, right) => left.localeCompare(right));
-  }
-
-  #addEnumMemberClasses(classes: Set<string>, enumMember: string): void {
-    const enumName = enumMember.split(".")[0];
-    switch (enumName) {
-      case "LensId":
-        classes.add("lens-id");
-        break;
-      case "SubstrateId":
-        classes.add("substrate-id");
-        break;
-      case "NavigationRelation":
-        classes.add("navigation-relation");
-        break;
-      case "NavigationPlane":
-        classes.add("navigation-plane");
-        break;
-      case "EvidenceKind":
-        classes.add("evidence-kind");
-        break;
-      case "BasisKind":
-        classes.add("basis-kind");
-        break;
-      case "ContinuationKind":
-        classes.add("continuation-kind");
-        break;
-      default:
-        if (enumName?.endsWith("Relation") === true) {
-          classes.add("relation-axis-value");
-        } else if (enumName?.endsWith("Kind") === true) {
-          classes.add("kind-axis-value");
-        } else if (enumName?.endsWith("Phase") === true) {
-          classes.add("phase-axis-value");
-        }
-        break;
-    }
-  }
-}
-
 function dedupeById<TRow extends { readonly id: string }>(
   rows: readonly TRow[],
 ): readonly TRow[] {
   return [...new Map(rows.map((row) => [row.id, row])).values()];
-}
-
-function enumMemberValue(member: ts.EnumMember): string | number | null {
-  const initializer = member.initializer;
-  if (initializer === undefined) {
-    return null;
-  }
-  if (ts.isStringLiteralLike(initializer)) {
-    return initializer.text;
-  }
-  if (ts.isNumericLiteral(initializer)) {
-    return Number(initializer.text);
-  }
-  if (
-    ts.isPrefixUnaryExpression(initializer) &&
-    ts.isNumericLiteral(initializer.operand)
-  ) {
-    const value = Number(initializer.operand.text);
-    return initializer.operator === ts.SyntaxKind.MinusToken ? -value : value;
-  }
-  return initializer.getText();
-}
-
-function stringRoleForNode(node: ts.StringLiteralLike): AtlasSelfStringRole {
-  const parent = node.parent;
-  if (ts.isImportDeclaration(parent) || ts.isExportDeclaration(parent)) {
-    return AtlasSelfStringRole.ModuleSpecifier;
-  }
-  if (ts.isEnumMember(parent) && parent.initializer === node) {
-    return AtlasSelfStringRole.EnumMemberValue;
-  }
-  if (ts.isLiteralTypeNode(parent)) {
-    return AtlasSelfStringRole.LiteralType;
-  }
-  if (ts.isCaseClause(parent)) {
-    return AtlasSelfStringRole.CaseLabel;
-  }
-  if (ts.isPropertyAssignment(parent) && parent.initializer === node) {
-    return AtlasSelfStringRole.PropertyValue;
-  }
-  if (
-    (ts.isCallExpression(parent) || ts.isNewExpression(parent)) &&
-    parent.arguments?.includes(node as ts.Expression) === true
-  ) {
-    return AtlasSelfStringRole.Argument;
-  }
-  if (
-    ts.isBinaryExpression(parent) &&
-    (parent.left === node || parent.right === node)
-  ) {
-    return AtlasSelfStringRole.Comparison;
-  }
-  if (ts.isNoSubstitutionTemplateLiteral(node)) {
-    return AtlasSelfStringRole.TemplateLiteral;
-  }
-  return AtlasSelfStringRole.Other;
-}
-
-function isMagicStringRole(role: AtlasSelfStringRole): boolean {
-  return (
-    role !== AtlasSelfStringRole.ModuleSpecifier &&
-    role !== AtlasSelfStringRole.EnumMemberValue
-  );
-}
-
-function isStringLiteralLike(
-  node: ts.Node,
-): node is ts.StringLiteral | ts.NoSubstitutionTemplateLiteral {
-  return ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node);
 }
 
 function memberNameText(
@@ -2967,15 +2987,6 @@ function sourceRangeFromFileSpan(
   };
 }
 
-function stableStringId(value: string): string {
-  const readable =
-    [...value]
-      .map((char) => (/[a-zA-Z0-9._-]/u.test(char) ? char : "_"))
-      .join("")
-      .slice(0, 64) || "empty";
-  return `${readable}:${stableHash(value)}`;
-}
-
 function stableHash(value: string): string {
   let hash = 0x811c9dc5;
   for (let index = 0; index < value.length; index += 1) {
@@ -2987,6 +2998,18 @@ function stableHash(value: string): string {
 
 function uniqueSorted(values: readonly string[]): readonly string[] {
   return [...new Set(values)].sort((left, right) => left.localeCompare(right));
+}
+
+function countByMap<T>(
+  rows: readonly T[],
+  key: (row: T) => string,
+): ReadonlyMap<string, number> {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const id = key(row);
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  return counts;
 }
 
 function compareByName(
@@ -3006,9 +3029,9 @@ function compareModuleDependency(
   );
 }
 
-function compareIndexProvenance(
-  left: AtlasSelfIndexProvenanceRow,
-  right: AtlasSelfIndexProvenanceRow,
+function compareSubstrateSurfaces(
+  left: AtlasSelfSubstrateSurfaceRow,
+  right: AtlasSelfSubstrateSurfaceRow,
 ): number {
   return (
     left.filePath.localeCompare(right.filePath) ||
@@ -3035,19 +3058,5 @@ function compareFunctionSurface(
     left.filePath.localeCompare(right.filePath) ||
     left.functionKind.localeCompare(right.functionKind) ||
     left.name.localeCompare(right.name)
-  );
-}
-
-function countBy<TValue>(
-  rows: readonly TValue[],
-  keyFor: (row: TValue) => string,
-): Readonly<Record<string, number>> {
-  const counts: Record<string, number> = {};
-  for (const row of rows) {
-    const key = keyFor(row);
-    counts[key] = (counts[key] ?? 0) + 1;
-  }
-  return Object.fromEntries(
-    Object.entries(counts).sort(([left], [right]) => left.localeCompare(right)),
   );
 }

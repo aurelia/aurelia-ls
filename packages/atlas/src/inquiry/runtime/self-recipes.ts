@@ -66,6 +66,9 @@ export const ATLAS_SELF_RECIPES: readonly AtlasSelfRecipeRow[] = [
           "value.contracts[].observedProjectionIds",
           "value.contracts[].unobservedProjectionIds",
           "value.contracts[].extraRuntimeProjectionIds",
+          "value.contracts[].declaredParameterIds",
+          "value.contracts[].duplicateParameterIds",
+          "value.contracts[].coherenceFacts",
           "continuations pointing at implementation source",
         ],
       },
@@ -103,6 +106,42 @@ export const ATLAS_SELF_RECIPES: readonly AtlasSelfRecipeRow[] = [
           "value.continuationRows[].targetProjection",
           "value.continuationRows[].routeRelationMember",
           "value.continuationRows[].source",
+        ],
+      },
+      {
+        id: "enum-value-spaces",
+        purpose:
+          "Inspect enum member values and raw literal overlap before deciding whether a value space should stay as an enum, collapse into a primitive, or become a richer row type.",
+        ask: {
+          lens: LensId.AtlasSelf,
+          locus: { kind: LocusKind.Repo },
+          projection: "enum-value-spaces",
+          budget: { rows: 40, evidencePerSubject: 4 },
+        },
+        read: [
+          "value.enumValueSpaces[].value",
+          "value.enumValueSpaces[].enumNames",
+          "value.enumValueSpaces[].memberNames",
+          "value.enumValueSpaces[].rawValueOccurrenceCount",
+          "source continuations for raw value occurrences",
+        ],
+      },
+      {
+        id: "enum-translation-edges",
+        purpose:
+          "Find exact enum-to-enum translations before smoothing them with local mappings or aliases.",
+        ask: {
+          lens: LensId.AtlasSelf,
+          locus: { kind: LocusKind.Repo },
+          projection: "enum-mappings",
+          budget: { rows: 40, evidencePerSubject: 4 },
+        },
+        read: [
+          "value.enumMappings[].fromEnumName",
+          "value.enumMappings[].toEnumName",
+          "value.enumMappings[].carrier",
+          "value.enumMappings[].evidence",
+          "value.enumMappings[].source",
         ],
       },
       {
@@ -171,35 +210,35 @@ export const ATLAS_SELF_RECIPES: readonly AtlasSelfRecipeRow[] = [
     ],
   },
   {
-    id: "self-analysis-index-growth",
-    title: "Self-analysis index growth without split-brain maintenance",
+    id: "self-analysis-substrate-growth",
+    title: "Self-analysis substrate growth without split-brain maintenance",
     question:
-      "When Atlas needs a new self-analysis fact, row family, or cache/index provenance signal, where should it enter the source-backed index and how do we keep the public answer surface compact?",
+      "When Atlas needs a new self-analysis fact, row family, or substrate surface signal, where should it enter the source-backed substrate and how do we keep the public answer surface compact?",
     domains: [
       "self-analysis",
-      "index",
-      "cache",
+      "substrate",
+      "substrate-surface",
       "source-project",
       "architecture",
     ],
     startingPoint:
-      "Start with the self-analysis index provenance, then inspect the builder class, the exported function surfaces, and the package module graph.",
+      "Start with the self-analysis substrate surfaces, then inspect the builder class, the exported function surfaces, and the package module graph.",
     hops: [
       {
-        id: "index-provenance",
+        id: "substrate-surfaces",
         purpose:
-          "See which cache, reader, builder, warmup, and schema surfaces Atlas already recognizes.",
+          "See which reader, builder, and schema surfaces Atlas already recognizes.",
         ask: {
           lens: LensId.AtlasSelf,
           locus: { kind: LocusKind.Repo },
-          projection: "indexes",
+          projection: "substrate-surfaces",
           budget: { rows: 40, evidencePerSubject: 4 },
         },
         read: [
-          "value.indexProvenance[].kind",
-          "value.indexProvenance[].name",
-          "value.indexProvenance[].filePath",
-          "value.indexProvenance[].source",
+          "value.substrateSurfaces[].kind",
+          "value.substrateSurfaces[].name",
+          "value.substrateSurfaces[].filePath",
+          "value.substrateSurfaces[].source",
         ],
       },
       {
@@ -301,7 +340,7 @@ export const ATLAS_SELF_RECIPES: readonly AtlasSelfRecipeRow[] = [
       },
     ],
     calibrationNotes: [
-      "Keep raw AST-derived rows in the self-analysis index and keep answer projections as compact views over that index.",
+      "Keep raw AST-derived rows in the self-analysis model and keep answer projections as compact views over that model.",
       "If a new row family needs a bespoke string filter or enum mapping, first ask whether the lower taxonomy should own that axis.",
       "Use the module graph to decide decomposition pressure; do not let one large answer file become the only place where self-analysis facts are interpreted.",
     ],

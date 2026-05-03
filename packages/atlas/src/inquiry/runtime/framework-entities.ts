@@ -20,6 +20,16 @@ import type {
 } from "../../source/index.js";
 import type { SourceRange } from "../locus.js";
 import type { FrameworkDiscoveryRecipeRow } from "./framework-recipes.js";
+import type { FrameworkHydrationFlowRow } from "./framework-rendering-hydration-flow.js";
+import type { FrameworkRenderConsequenceRow } from "./framework-rendering-consequences.js";
+import type {
+  FrameworkBindingAdmissionSummaryRow,
+  FrameworkBindingProductSummaryRow,
+  FrameworkControllerCreationSummaryRow,
+  FrameworkInstructionDispatchSummaryRow,
+  FrameworkInstructionSlotSummaryRow,
+  FrameworkSyntaxProductSummaryRow,
+} from "./framework-rendering-public-rows.js";
 import type { FrameworkRenderingRelationshipRow } from "./framework-rendering-relationships.js";
 
 /** Value returned by the framework.discovery runtime lens. */
@@ -65,22 +75,6 @@ export interface FrameworkDiscoveryValue {
   readonly resources?: readonly FrameworkResourceExportRow[];
   /** Registry/configuration exports with evaluator-derived registration associations. */
   readonly bundles?: readonly FrameworkBundleExportRow[];
-  /** Syntax/resource producers and the instruction or binding products they expose. */
-  readonly syntaxProducts?: readonly FrameworkSyntaxProductRow[];
-  /** Instruction discriminator constants joined to instruction declarations and syntax products. */
-  readonly instructionSlots?: readonly FrameworkInstructionSlotRow[];
-  /** Instruction slot to renderer dispatch rows. */
-  readonly instructionDispatches?: readonly FrameworkInstructionDispatchRow[];
-  /** Renderer flows that create/admit child controllers during hydration. */
-  readonly controllerCreations?: readonly FrameworkControllerCreationRow[];
-  /** Binding classes joined to renderer construction products and observer/lifecycle surfaces. */
-  readonly bindingProducts?: readonly FrameworkBindingProductRow[];
-  /** Exact controller.addBinding admission edges for framework binding-like products. */
-  readonly bindingAdmissions?: readonly FrameworkBindingAdmissionRow[];
-  /** Binding lifecycle and setup effect rows discovered inside binding classes. */
-  readonly bindingEffects?: readonly FrameworkBindingEffectRow[];
-  /** Binding setup calls that alter target observers, accessors, or subscribers outside the binding class. */
-  readonly bindingSetups?: readonly FrameworkBindingSetupRow[];
   /** Public observer-system exports: locators, observers, accessors, subscribers, connectables, effects, and signals. */
   readonly observers?: readonly FrameworkObserverEntityRow[];
   /** Public AppTask, lifecycle-task, and scheduler/task queue exports. */
@@ -119,6 +113,34 @@ export interface FrameworkRenderingValue {
   readonly renderingRelationshipCount?: number;
   /** Controller creation flow count after filtering, when computed. */
   readonly controllerCreationCount?: number;
+  /** Compact hydration/runtime rendering corridor row count after filtering, when computed. */
+  readonly hydrationFlowCount?: number;
+  /** Hydration-flow visibility mode for the current inquiry. */
+  readonly hydrationFlowMode?: "overview" | "filtered";
+  /** Total source-backed hydration-flow rows before overview/detail selection. */
+  readonly hydrationFlowTotalCount?: number;
+  /** Source-backed hydration-flow rows included in the default overview. */
+  readonly hydrationFlowOverviewCount?: number;
+  /** Hydration-flow row counts grouped by coarse runtime stage. */
+  readonly hydrationStages?: Readonly<Record<string, number>>;
+  /** Hydration-flow row counts grouped by runtime operation. */
+  readonly hydrationOperations?: Readonly<Record<string, number>>;
+  /** Hydration-flow row counts grouped by semantic target kind. */
+  readonly hydrationTargetKinds?: Readonly<Record<string, number>>;
+  /** Compact renderer consequence row count after filtering, when computed. */
+  readonly renderConsequenceCount?: number;
+  /** Render-consequence visibility mode for the current inquiry. */
+  readonly renderConsequenceMode?: "overview" | "filtered";
+  /** Total render-consequence rows before overview/detail selection. */
+  readonly renderConsequenceTotalCount?: number;
+  /** Render-consequence rows included in the default overview. */
+  readonly renderConsequenceOverviewCount?: number;
+  /** Render-consequence row counts grouped by compact kind. */
+  readonly renderConsequenceKinds?: Readonly<Record<string, number>>;
+  /** Render-consequence row counts grouped by runtime/source mechanism. */
+  readonly renderConsequenceMechanisms?: Readonly<Record<string, number>>;
+  /** Render-consequence row counts grouped by rendering/runtime phase. */
+  readonly renderConsequencePhases?: Readonly<Record<string, number>>;
   /** Recursive renderer dispatch count inside controller creation flows, when computed. */
   readonly recursiveDispatchCount?: number;
   /** Relationship counts grouped by semantic relation. */
@@ -127,18 +149,22 @@ export interface FrameworkRenderingValue {
   readonly relationshipMechanisms?: Readonly<Record<string, number>>;
   /** Relationship counts grouped by compiler/rendering/lifecycle phase. */
   readonly relationshipPhases?: Readonly<Record<string, number>>;
-  /** Syntax/resource producers and the instruction or binding products they expose. */
-  readonly syntaxProducts?: readonly FrameworkSyntaxProductRow[];
-  /** Instruction discriminator constants joined to declarations and syntax products. */
-  readonly instructionSlots?: readonly FrameworkInstructionSlotRow[];
-  /** Instruction slot to renderer dispatch rows. */
-  readonly instructionDispatches?: readonly FrameworkInstructionDispatchRow[];
-  /** Renderer flows that create/admit child controllers during hydration. */
-  readonly controllerCreations?: readonly FrameworkControllerCreationRow[];
-  /** Binding classes joined to construction, admission, lifecycle, and observer surfaces. */
-  readonly bindingProducts?: readonly FrameworkBindingProductRow[];
-  /** Exact controller.addBinding admission edges for framework binding-like products. */
-  readonly bindingAdmissions?: readonly FrameworkBindingAdmissionRow[];
+  /** Compact syntax/resource producers and the instruction or binding products they expose. */
+  readonly syntaxProducts?: readonly FrameworkSyntaxProductSummaryRow[];
+  /** Compact instruction discriminator constants joined to declarations and syntax products. */
+  readonly instructionSlots?: readonly FrameworkInstructionSlotSummaryRow[];
+  /** Compact instruction slot to renderer dispatch rows. */
+  readonly instructionDispatches?: readonly FrameworkInstructionDispatchSummaryRow[];
+  /** Compact renderer flows that create/admit child controllers during hydration. */
+  readonly controllerCreations?: readonly FrameworkControllerCreationSummaryRow[];
+  /** Compact source-backed hydration/runtime rendering corridor rows. */
+  readonly hydrationFlow?: readonly FrameworkHydrationFlowRow[];
+  /** Compact renderer consequence rows over dispatch, controller, binding, lifecycle, and observation effects. */
+  readonly renderConsequences?: readonly FrameworkRenderConsequenceRow[];
+  /** Compact binding classes joined to construction, admission, lifecycle, and observer surfaces. */
+  readonly bindingProducts?: readonly FrameworkBindingProductSummaryRow[];
+  /** Compact controller.addBinding admission edges for framework binding-like products. */
+  readonly bindingAdmissions?: readonly FrameworkBindingAdmissionSummaryRow[];
   /** Binding lifecycle and setup effect rows discovered inside binding classes. */
   readonly bindingEffects?: readonly FrameworkBindingEffectRow[];
   /** Binding setup calls that alter target observers, accessors, or subscribers outside the binding class. */
@@ -585,24 +611,6 @@ export const enum FrameworkObserverEntityKind {
   ObservationHelper = "observation-helper",
 }
 
-/** Public export shape for an observer-system entity. */
-export const enum FrameworkObserverEntityShape {
-  /** DI InterfaceSymbol export produced through DI.createInterface/rtCreateInterface. */
-  DiInterface = "di-interface",
-  /** Class export. */
-  Class = "class",
-  /** Interface export. */
-  Interface = "interface",
-  /** Type alias export. */
-  TypeAlias = "type-alias",
-  /** Function export. */
-  Function = "function",
-  /** Variable/value export. */
-  Value = "value",
-  /** Mixed or unavailable declaration shape. */
-  Unknown = "unknown",
-}
-
 /** Capability observed on an observer-system entity. */
 export const enum FrameworkObserverCapability {
   /** Can locate or produce property observers. */
@@ -633,38 +641,16 @@ export const enum FrameworkObserverCapability {
   Collection = "collection",
 }
 
-/** Provenance lane that caused an observer-system entity classification. */
-export const enum FrameworkObserverMatchBasis {
-  /** Exported name matched a stable observation/reactivity concept. */
-  ExportName = "export-name",
-  /** Resolved checker symbol name matched a stable observation/reactivity concept. */
-  ResolvedName = "resolved-name",
-  /** Checker type display matched a stable observation/reactivity concept. */
-  TypeText = "type-text",
-  /** Checker-visible member name matched an observation/reactivity capability. */
-  MemberName = "member-name",
-  /** DI interface creation or resolver builder tied the export to observation/reactivity. */
-  DiInterface = "di-interface",
-}
-
-/** One exact match reason for an observer-system entity row. */
-export interface FrameworkObserverMatchRow {
-  /** Match basis. */
-  readonly basis: FrameworkObserverMatchBasis;
-  /** Exact text that matched. */
-  readonly text: string;
-}
-
 /** Public framework export that belongs to the observer/reactivity side system. */
 export interface FrameworkObserverEntityRow extends FrameworkPackageExportRow {
   /** Observation/reactivity semantic roles carried by this export. */
   readonly observerKinds: readonly FrameworkObserverEntityKind[];
   /** Public export declaration shape. */
-  readonly exportShape: FrameworkObserverEntityShape;
+  readonly exportShape: FrameworkCatalogExportShape;
   /** Capabilities inferred from TypeChecker facts, DI provenance, and stable observer role shape. */
   readonly observerCapabilities: readonly FrameworkObserverCapability[];
   /** Exact match provenance for this classification. */
-  readonly matchedBy: readonly FrameworkObserverMatchRow[];
+  readonly matchedBy: readonly FrameworkCatalogMatchRow[];
   /** DI interface row behind this entity, when this export is a createInterface key. */
   readonly diInterface?: FrameworkDiInterfaceExportRow;
   /** Implementation names visible in DI builder/default-registration provenance. */
@@ -701,6 +687,8 @@ export const enum FrameworkCatalogMatchBasis {
   MemberName = "member-name",
   /** Package membership admitted the export into a bounded package-specific catalog. */
   Package = "package",
+  /** DI interface creation or resolver builder tied the export to a semantic catalog. */
+  DiInterface = "di-interface",
 }
 
 /** One exact match reason for a framework entity catalog row. */

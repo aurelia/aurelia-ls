@@ -4,17 +4,14 @@ import {
   AURELIA_FRAMEWORK_PACKAGE_IDS,
   readTypeScriptCallSiteEntry,
   readTypeScriptExpressionFact,
+  SourceProjectKeyedMemo,
+  SourceProjectMemo,
   type SourceFileIdentity,
   type SourceProject,
   type SourceSpan,
   type TypeScriptCallSiteEntry,
 } from "../source/index.js";
 import type { SourceRange } from "../inquiry/locus.js";
-import {
-  frameworkJsonCacheProducerVersion,
-  readFrameworkJsonCachePackage,
-  writeFrameworkJsonCachePackage,
-} from "./json-cache.js";
 import {
   FrameworkDiResolverStrategy,
   FrameworkRelationshipClosure,
@@ -27,10 +24,6 @@ import {
   type FrameworkRelationshipAtom,
   type FrameworkRelationshipEndpoint,
 } from "./relationships.js";
-
-/** Stable id for the framework DI relationship atom cache family. */
-export const FRAMEWORK_DI_RELATIONSHIP_CACHE_FAMILY_ID =
-  "framework.di.relationship-atoms";
 
 /** One framework DI key declaration discovered from createInterface. */
 export interface FrameworkDiKeyRow {
@@ -72,7 +65,7 @@ export interface FrameworkDiIndexRollup {
 
 /** Framework DI index over the hot TypeScript project. */
 export interface FrameworkDiIndex {
-  /** Cache/schema version for this index family. */
+  /** Schema version for this index family. */
   readonly version: string;
   /** Framework InterfaceSymbol keys discovered across admitted packages. */
   readonly keys: readonly FrameworkDiKeyRow[];
@@ -97,22 +90,12 @@ interface FrameworkRelationshipClassification {
   readonly strategy?: FrameworkDiResolverStrategy;
 }
 
-const FRAMEWORK_DI_RELATIONSHIP_CACHE_FAMILY_VERSION =
-  "di-relationship-atoms@3";
-const frameworkDiRelationshipCacheProducerVersion =
-  frameworkJsonCacheProducerVersion(
-    FRAMEWORK_DI_RELATIONSHIP_CACHE_FAMILY_ID,
-    FRAMEWORK_DI_RELATIONSHIP_CACHE_FAMILY_VERSION,
-    import.meta.url,
-  );
+const FRAMEWORK_DI_RELATIONSHIP_INDEX_VERSION = "di-relationship-atoms@3";
 
-const frameworkDiIndexByProject = new WeakMap<
-  SourceProject,
-  FrameworkDiIndex
->();
-const frameworkDiPackagePayloadByProject = new WeakMap<
-  SourceProject,
-  Map<string, FrameworkDiPackagePayload>
+const frameworkDiIndexMemo = new SourceProjectMemo<FrameworkDiIndex>();
+const frameworkDiPackagePayloadByPackage = new SourceProjectKeyedMemo<
+  string,
+  FrameworkDiPackagePayload
 >();
 
 /** Build or read the framework DI index for one hot source project. */
@@ -120,37 +103,32 @@ export function readFrameworkDiIndex(
   /** Hot source project held by the Atlas daemon. */
   sourceProject: SourceProject,
 ): FrameworkDiIndex {
-  const cached = frameworkDiIndexByProject.get(sourceProject);
-  if (cached !== undefined) {
-    return cached;
-  }
-
-  const packageNames = readFrameworkPackageNames(sourceProject);
-  const payloads = [...packageNames.keys()].map((packageId) =>
-    readFrameworkDiPackagePayload(
-      sourceProject,
-      packageId,
-      packageNames.get(packageId) ?? packageId,
-    ),
-  );
-  const keys = payloads.flatMap((payload) => payload.keys);
-  const relationships = [
-    ...uniqueAtoms(payloads.flatMap((payload) => payload.relationships)),
-  ].sort(compareRelationshipAtoms);
-  const index: FrameworkDiIndex = {
-    version: FRAMEWORK_DI_RELATIONSHIP_CACHE_FAMILY_VERSION,
-    keys: [...keys].sort(compareDiKeys),
-    relationships,
-    rollup: {
-      keys: keys.length,
-      relationships: relationships.length,
-      relations: countBy(relationships, (row) => row.relation),
-      mechanisms: countBy(relationships, (row) => row.mechanism),
-      phases: countBy(relationships, (row) => row.phase),
-    },
-  };
-  frameworkDiIndexByProject.set(sourceProject, index);
-  return index;
+  return frameworkDiIndexMemo.read(sourceProject, () => {
+    const packageNames = readFrameworkPackageNames(sourceProject);
+    const payloads = [...packageNames.keys()].map((packageId) =>
+      readFrameworkDiPackagePayload(
+        sourceProject,
+        packageId,
+        packageNames.get(packageId) ?? packageId,
+      ),
+    );
+    const keys = payloads.flatMap((payload) => payload.keys);
+    const relationships = [
+      ...uniqueAtoms(payloads.flatMap((payload) => payload.relationships)),
+    ].sort(compareRelationshipAtoms);
+    return {
+      version: FRAMEWORK_DI_RELATIONSHIP_INDEX_VERSION,
+      keys: [...keys].sort(compareDiKeys),
+      relationships,
+      rollup: {
+        keys: keys.length,
+        relationships: relationships.length,
+        relations: countBy(relationships, (row) => row.relation),
+        mechanisms: countBy(relationships, (row) => row.mechanism),
+        phases: countBy(relationships, (row) => row.phase),
+      },
+    };
+  });
 }
 
 function readFrameworkDiPackagePayload(
@@ -158,48 +136,9 @@ function readFrameworkDiPackagePayload(
   packageId: string,
   packageName: string,
 ): FrameworkDiPackagePayload {
-  const cache =
-    frameworkDiPackagePayloadByProject.get(sourceProject) ??
-    new Map<string, FrameworkDiPackagePayload>();
-  if (!frameworkDiPackagePayloadByProject.has(sourceProject)) {
-    frameworkDiPackagePayloadByProject.set(sourceProject, cache);
-  }
-  const cached = cache.get(packageId);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const diskCached = readFrameworkJsonCachePackage<FrameworkDiPackagePayload>(
-    sourceProject,
-    {
-      familyId: FRAMEWORK_DI_RELATIONSHIP_CACHE_FAMILY_ID,
-      familyVersion: FRAMEWORK_DI_RELATIONSHIP_CACHE_FAMILY_VERSION,
-      producerVersion: frameworkDiRelationshipCacheProducerVersion,
-      packageId,
-    },
+  return frameworkDiPackagePayloadByPackage.read(sourceProject, packageId, () =>
+    scanFrameworkDiPackagePayload(sourceProject, packageId, packageName),
   );
-  if (diskCached !== undefined) {
-    cache.set(packageId, diskCached);
-    return diskCached;
-  }
-  const payload = scanFrameworkDiPackagePayload(
-    sourceProject,
-    packageId,
-    packageName,
-  );
-  cache.set(packageId, payload);
-  if (payload.keys.length > 0 || payload.relationships.length > 0) {
-    writeFrameworkJsonCachePackage(
-      sourceProject,
-      {
-        familyId: FRAMEWORK_DI_RELATIONSHIP_CACHE_FAMILY_ID,
-        familyVersion: FRAMEWORK_DI_RELATIONSHIP_CACHE_FAMILY_VERSION,
-        producerVersion: frameworkDiRelationshipCacheProducerVersion,
-        packageId,
-      },
-      payload,
-    );
-  }
-  return payload;
 }
 
 function scanFrameworkDiPackagePayload(
@@ -219,7 +158,7 @@ function scanFrameworkDiPackagePayload(
 
     const visit = (node: ts.Node): void => {
       if (ts.isCallExpression(node)) {
-        if (isCreateInterfaceCall(node)) {
+        if (isCreateInterfaceCall(sourceProject, node)) {
           const key = createInterfaceKeyRow(
             sourceProject,
             sourceFile,
@@ -516,6 +455,17 @@ function relationshipAtomsForCall(
   call: ts.CallExpression,
   includeKernelInternals: boolean,
 ): readonly FrameworkRelationshipAtom[] {
+  const implementationRegisterAtom = implementationRegisterAtomForCall(
+    sourceProject,
+    sourceFile,
+    file,
+    packageId,
+    packageName,
+    call,
+  );
+  if (implementationRegisterAtom !== null) {
+    return [implementationRegisterAtom];
+  }
   const classified = classifyCall(
     sourceProject,
     sourceFile,
@@ -578,6 +528,69 @@ function relationshipAtomsForCall(
     classified,
   );
   return providerAtom === null ? [atom] : [atom, providerAtom];
+}
+
+function implementationRegisterAtomForCall(
+  sourceProject: SourceProject,
+  sourceFile: ts.SourceFile,
+  file: SourceFileIdentity,
+  packageId: string,
+  packageName: string,
+  call: ts.CallExpression,
+): FrameworkRelationshipAtom | null {
+  if (!isCreateImplementationRegisterCall(sourceProject, call)) {
+    return null;
+  }
+  const keyArgument = call.arguments[0];
+  const owner = enclosingStaticRegisterClass(call);
+  if (keyArgument === undefined || owner?.name === undefined) {
+    return null;
+  }
+  const source = sourceRangeForNode(file.repoPath, sourceFile, call);
+  const callSite =
+    readTypeScriptCallSiteEntry(sourceProject, sourceFile, call) ?? undefined;
+  const key = expressionDisplayName(sourceFile, keyArgument);
+  const provider = owner.name.text;
+  return {
+    id: `framework-di:${packageId}:${file.repoPath}:${call.getStart(
+      sourceFile,
+    )}:implementation-register:${key}:${provider}`,
+    family: FrameworkRelationshipFamily.Di,
+    relation: FrameworkRelationshipRelation.ProvidesKey,
+    mechanism: FrameworkRelationshipMechanism.RegistrationFactory,
+    phase: FrameworkRelationshipPhase.Definition,
+    evidenceBasis: FrameworkRelationshipEvidenceBasis.Syntax,
+    closure: FrameworkRelationshipClosure.Exact,
+    packageId,
+    packageName,
+    from: diKeyEndpointForExpression(
+      sourceProject,
+      sourceFile,
+      file,
+      packageId,
+      packageName,
+      keyArgument,
+      key,
+    ),
+    to: {
+      kind: FrameworkRelationshipEndpointKind.Symbol,
+      name: provider,
+      packageId,
+      packageName,
+      source: sourceRangeForNode(file.repoPath, sourceFile, owner),
+      expression: readTypeScriptExpressionFact(
+        sourceProject,
+        sourceFile,
+        owner.name,
+      ),
+    },
+    source,
+    ...(callSite === undefined ? {} : { callSite }),
+    key,
+    value: provider,
+    strategy: FrameworkDiResolverStrategy.Singleton,
+    summary: `${provider}.register provides DI key ${key} through createImplementationRegister.`,
+  };
 }
 
 function relationshipAtomForNew(
@@ -728,8 +741,8 @@ function registrationFactoryProviderAtomForCall(
   const source = sourceRangeForNode(file.repoPath, sourceFile, call);
   const callSite =
     readTypeScriptCallSiteEntry(sourceProject, sourceFile, call) ?? undefined;
-  const key = keyArgument.getText(sourceFile);
-  const value = providerArgument.getText(sourceFile);
+  const key = expressionDisplayName(sourceFile, keyArgument);
+  const value = expressionDisplayName(sourceFile, providerArgument);
   const relation =
     classified.strategy === FrameworkDiResolverStrategy.Alias
       ? FrameworkRelationshipRelation.AliasesKey
@@ -1105,19 +1118,7 @@ function isFrameworkRegistrationFactoryCallee(
   if (!isRegistrationFactoryName(calleeName)) {
     return false;
   }
-  const symbolNode = ts.isPropertyAccessExpression(expression)
-    ? expression.name
-    : expression;
-  const symbol =
-    sourceProject.checker.getSymbolAtLocation(symbolNode) ??
-    sourceProject.checker.getSymbolAtLocation(expression);
-  const declarations = symbol?.getDeclarations() ?? [];
-  const hasKernelDeclaration = declarations.some(
-    (declaration) =>
-      sourceProject.sourceFileIdentity(declaration.getSourceFile())
-        ?.packageId === "kernel",
-  );
-  if (!hasKernelDeclaration) {
+  if (!isRegistrationFactoryExpression(sourceProject, expression)) {
     return false;
   }
   const type = sourceProject.checker.typeToString(
@@ -1125,6 +1126,34 @@ function isFrameworkRegistrationFactoryCallee(
     expression,
   );
   return type.includes("IRegistration") || type.includes("IRegistry");
+}
+
+function isRegistrationFactoryExpression(
+  sourceProject: SourceProject,
+  expression: ts.Expression,
+): boolean {
+  const calleeName = propertyOrIdentifierName(expression);
+  if (!isRegistrationFactoryName(calleeName)) {
+    return false;
+  }
+  const symbol = resolvedSymbolAt(sourceProject, expression);
+  return symbol?.getDeclarations()?.some((declaration) => {
+    const packageId =
+      sourceProject.sourceFileIdentity(declaration.getSourceFile())?.packageId;
+    if (packageId === "kernel") {
+      return true;
+    }
+    if (
+      ts.isVariableDeclaration(declaration) &&
+      declaration.initializer !== undefined
+    ) {
+      return isRegistrationFactoryExpression(
+        sourceProject,
+        declaration.initializer,
+      );
+    }
+    return false;
+  }) === true;
 }
 
 function isRegistrationFactoryName(name: string): boolean {
@@ -1174,13 +1203,86 @@ function resolverBuilderStrategy(
   }
 }
 
-function isCreateInterfaceCall(call: ts.CallExpression): boolean {
-  const expression = call.expression;
-  return (
-    (ts.isIdentifier(expression) && expression.text === "createInterface") ||
-    (ts.isPropertyAccessExpression(expression) &&
-      expression.name.text === "createInterface")
-  );
+function isCreateInterfaceCall(
+  sourceProject: SourceProject,
+  call: ts.CallExpression,
+): boolean {
+  if (!returnsInterfaceSymbol(sourceProject, call)) {
+    return false;
+  }
+  return isCreateInterfaceExpression(sourceProject, call.expression);
+}
+
+function returnsInterfaceSymbol(
+  sourceProject: SourceProject,
+  call: ts.CallExpression,
+): boolean {
+  const signature = sourceProject.checker.getResolvedSignature(call);
+  const type =
+    signature === undefined
+      ? sourceProject.checker.getTypeAtLocation(call)
+      : sourceProject.checker.getReturnTypeOfSignature(signature);
+  return sourceProject.checker
+    .typeToString(type, call)
+    .includes("InterfaceSymbol");
+}
+
+function isCreateInterfaceExpression(
+  sourceProject: SourceProject,
+  expression: ts.Expression,
+): boolean {
+  if (
+    ts.isPropertyAccessExpression(expression) &&
+    expression.name.text === "createInterface"
+  ) {
+    return true;
+  }
+  if (ts.isIdentifier(expression) && expression.text === "createInterface") {
+    return true;
+  }
+  const symbol = resolvedSymbolAt(sourceProject, expression);
+  return symbol?.getDeclarations()?.some((declaration) => {
+    if (
+      ts.isVariableDeclaration(declaration) &&
+      declaration.initializer !== undefined
+    ) {
+      return isCreateInterfaceExpression(sourceProject, declaration.initializer);
+    }
+    return false;
+  }) === true;
+}
+
+function resolvedSymbolAt(
+  sourceProject: SourceProject,
+  expression: ts.Expression,
+): ts.Symbol | undefined {
+  const symbolNode = ts.isPropertyAccessExpression(expression)
+    ? expression.name
+    : expression;
+  const symbol =
+    sourceProject.checker.getSymbolAtLocation(symbolNode) ??
+    sourceProject.checker.getSymbolAtLocation(expression);
+  if (symbol === undefined) {
+    return undefined;
+  }
+  return (symbol.flags & ts.SymbolFlags.Alias) === 0
+    ? symbol
+    : sourceProject.checker.getAliasedSymbol(symbol);
+}
+
+function isCreateImplementationRegisterCall(
+  sourceProject: SourceProject,
+  call: ts.CallExpression,
+): boolean {
+  if (propertyOrIdentifierName(call.expression) !== "createImplementationRegister") {
+    return false;
+  }
+  const symbol = resolvedSymbolAt(sourceProject, call.expression);
+  return symbol?.getDeclarations()?.some(
+    (declaration) =>
+      sourceProject.sourceFileIdentity(declaration.getSourceFile())
+        ?.packageId === "kernel",
+  ) === true;
 }
 
 function createInterfaceConfigureArgument(
@@ -1229,6 +1331,23 @@ function enclosingVariableDeclaration(
   while (current !== undefined) {
     if (ts.isVariableDeclaration(current)) {
       return current;
+    }
+    current = current.parent;
+  }
+  return null;
+}
+
+function enclosingStaticRegisterClass(
+  node: ts.Node,
+): ts.ClassDeclaration | null {
+  let current: ts.Node | undefined = node;
+  while (current !== undefined) {
+    if (ts.isPropertyDeclaration(current) || ts.isMethodDeclaration(current)) {
+      const name = declarationName(current);
+      if (name !== "register" || !hasModifier(current, ts.SyntaxKind.StaticKeyword)) {
+        return null;
+      }
+      return ts.isClassDeclaration(current.parent) ? current.parent : null;
     }
     current = current.parent;
   }
@@ -1336,6 +1455,46 @@ function diKeyEndpoint(
   };
 }
 
+function diKeyEndpointForExpression(
+  sourceProject: SourceProject,
+  sourceFile: ts.SourceFile,
+  file: SourceFileIdentity,
+  fallbackPackageId: string,
+  fallbackPackageName: string,
+  expression: ts.Expression,
+  key: string,
+): FrameworkRelationshipEndpoint {
+  const symbol = resolvedSymbolAt(sourceProject, expression);
+  const declaration = symbol
+    ?.getDeclarations()
+    ?.find(
+      (candidate): candidate is ts.VariableDeclaration =>
+        ts.isVariableDeclaration(candidate) &&
+        candidate.name.getText(candidate.getSourceFile()) === key,
+    );
+  if (declaration !== undefined) {
+    const declarationFile = declaration.getSourceFile();
+    const identity = sourceProject.sourceFileIdentity(declarationFile);
+    const packageDefinition = sourceProject.packageForFileName(
+      declarationFile.fileName,
+    );
+    if (identity !== null && packageDefinition !== null) {
+      return diKeyEndpoint(
+        identity.packageId ?? fallbackPackageId,
+        packageDefinition.packageName,
+        key,
+        sourceRangeForNode(identity.repoPath, declarationFile, declaration),
+      );
+    }
+  }
+  return diKeyEndpoint(
+    fallbackPackageId,
+    fallbackPackageName,
+    key,
+    sourceRangeForNode(file.repoPath, sourceFile, expression),
+  );
+}
+
 function expressionEndpoint(
   sourceProject: SourceProject,
   sourceFile: ts.SourceFile,
@@ -1362,6 +1521,12 @@ function expressionDisplayName(
   sourceFile: ts.SourceFile,
   expression: ts.Expression,
 ): string {
+  if (expression.kind === ts.SyntaxKind.ThisKeyword) {
+    const owner = enclosingStaticRegisterClass(expression);
+    if (owner?.name !== undefined) {
+      return owner.name.text;
+    }
+  }
   if (
     ts.isIdentifier(expression) ||
     ts.isStringLiteralLike(expression) ||
@@ -1403,8 +1568,12 @@ function keyAndValueFromArguments(
     };
   }
   return {
-    ...(first === undefined ? {} : { key: first.getText(sourceFile) }),
-    ...(second === undefined ? {} : { value: second.getText(sourceFile) }),
+    ...(first === undefined
+      ? {}
+      : { key: expressionDisplayName(sourceFile, first) }),
+    ...(second === undefined
+      ? {}
+      : { value: expressionDisplayName(sourceFile, second) }),
   };
 }
 

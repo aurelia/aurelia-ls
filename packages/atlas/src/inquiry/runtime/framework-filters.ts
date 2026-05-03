@@ -35,6 +35,7 @@ export interface FrameworkDiscoveryFilters {
   readonly instructionName?: string;
   readonly rendererName?: string;
   readonly bindingName?: string;
+  readonly consequenceKind?: string;
   readonly constructionKind?: string;
   readonly effectKind?: string;
   readonly setupKind?: string;
@@ -105,6 +106,7 @@ export function filtersFromRecord(value: unknown): FrameworkDiscoveryFilters {
     ...stringFilter(source, "instructionName"),
     ...stringFilter(source, "rendererName"),
     ...stringFilter(source, "bindingName"),
+    ...stringFilter(source, "consequenceKind"),
     ...stringFilter(source, "constructionKind"),
     ...stringFilter(source, "effectKind"),
     ...stringFilter(source, "setupKind"),

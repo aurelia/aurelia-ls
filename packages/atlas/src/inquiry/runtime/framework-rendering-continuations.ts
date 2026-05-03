@@ -5,18 +5,21 @@ import {
   ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
+import type { Evidence } from "../evidence.js";
 import type { Inquiry } from "../inquiry.js";
 import { LensId } from "../lens.js";
-import { LocusKind } from "../locus.js";
 import { NavigationPlane, NavigationRelation } from "../navigation.js";
 import {
   FrameworkRelationshipMechanism,
   FrameworkRelationshipRelation,
 } from "../../framework/relationships.js";
 import {
+  FrameworkRowContinuationBuilder,
+  FrameworkSemanticRouteBuilder,
   nextPageContinuation,
   projectionContinuation,
 } from "./framework-continuation-core.js";
+import { FrameworkSemanticRoutes } from "./framework-route-catalog.js";
 import {
   FrameworkBindingEffectKind,
   FrameworkBindingSetupKind,
@@ -36,13 +39,18 @@ import {
   evidenceForBindingProduct,
   evidenceForBindingSetup,
   evidenceForControllerCreation,
+  evidenceForHydrationFlow,
   evidenceForInstructionDispatch,
   evidenceForInstructionSlot,
+  evidenceForRenderConsequence,
   evidenceForSyntaxProduct,
   evidenceForRenderingRelationship,
 } from "./framework-evidence.js";
+import type { FrameworkHydrationFlowRow } from "./framework-rendering-hydration-flow.js";
+import type { FrameworkRenderConsequenceRow } from "./framework-rendering-consequences.js";
 import type { FrameworkRenderingRelationshipRow } from "./framework-rendering-relationships.js";
 import { route } from "./framework-support.js";
+
 export function syntaxProductContinuations(
   inquiry: Inquiry,
   rows: readonly FrameworkSyntaxProductRow[],
@@ -54,7 +62,7 @@ export function syntaxProductContinuations(
     continuations.push(
       nextPageContinuation(
         inquiry,
-        "framework.discovery:syntax-products:next-page",
+        "framework.rendering:syntax-products:next-page",
         "Continue Aurelia framework syntax product rows.",
         nextOffset,
         limit,
@@ -64,7 +72,7 @@ export function syntaxProductContinuations(
   continuations.push(
     projectionContinuation(
       inquiry,
-      "framework.discovery:resource-carriers",
+      "framework.rendering:syntax-products:resource-carriers",
       "resource-carriers",
       "Return to source-level syntax/resource carriers behind these products.",
       { lens: LensId.FrameworkDiscovery, filters: {} },
@@ -73,7 +81,7 @@ export function syntaxProductContinuations(
   continuations.push(
     projectionContinuation(
       inquiry,
-      "framework.discovery:bundles",
+      "framework.rendering:syntax-products:bundles",
       "bundles",
       "Return to evaluated bundle admissions that can register these producers.",
       { lens: LensId.FrameworkDiscovery, filters: {} },
@@ -81,45 +89,46 @@ export function syntaxProductContinuations(
   );
   for (const [index, row] of rows.slice(0, 3).entries()) {
     const evidence = evidenceForSyntaxProduct(row);
-    continuations.push({
-      id: `framework.discovery:syntax-products:source:${index}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Primary,
-      rationale: "Inspect source behind this syntax product expression.",
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: { kind: LocusKind.SourceRange, range: row.source },
-        projection: "text",
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.SourceFor,
-        [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.rendering:syntax-products",
+      index,
+      evidence,
+    );
+    const routeBuilder = new FrameworkSemanticRouteBuilder(
+      inquiry,
+      "framework.rendering:syntax-products",
+      index,
+      evidence,
+    );
+    continuations.push(
+      builder.source(
+        "source",
+        row.source,
+        "Inspect source behind this syntax product expression.",
         "Source behind a syntax product expression.",
       ),
-    });
-    continuations.push({
-      id: `framework.discovery:syntax-products:type:${index}`,
-      kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Secondary,
-      rationale:
+      builder.typeFacts(
+        "type",
+        row.source,
         "Inspect TypeChecker facts for this syntax product expression.",
-      inquiry: {
-        lens: LensId.TsType,
-        locus: { kind: LocusKind.SourceRange, range: row.source },
-        projection: "facts",
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.TypeFactsFor,
-        [BasisKind.TypeScriptChecker],
         "Type facts for a syntax product expression.",
       ),
-    });
+    );
+    if (row.instructionName !== null) {
+      continuations.push(
+        routeBuilder.continuation(
+          FrameworkSemanticRoutes.RenderingToCompilerInstructionProducts,
+          "compiler-products",
+          {
+            filters: { instructionName: row.instructionName },
+            rationale:
+              "Inspect compiler instruction products that produce this instruction.",
+            priority: ContinuationPriority.Secondary,
+          },
+        ),
+      );
+    }
   }
   return continuations;
 }
@@ -135,7 +144,7 @@ export function instructionSlotContinuations(
     continuations.push(
       nextPageContinuation(
         inquiry,
-        "framework.discovery:instruction-slots:next-page",
+        "framework.rendering:instruction-slots:next-page",
         "Continue Aurelia framework instruction slot rows.",
         nextOffset,
         limit,
@@ -145,74 +154,49 @@ export function instructionSlotContinuations(
   continuations.push(
     projectionContinuation(
       inquiry,
-      "framework.discovery:syntax-products",
+      "framework.rendering:syntax-products",
       "syntax-products",
       "Return to syntax products that consume instruction slots.",
     ),
   );
   for (const [index, row] of rows.slice(0, 3).entries()) {
     const evidence = evidenceForInstructionSlot(row);
-    continuations.push({
-      id: `framework.discovery:instruction-slots:source:${index}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Primary,
-      rationale: "Inspect source behind this instruction slot constant.",
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: { kind: LocusKind.SourceRange, range: row.source },
-        projection: "text",
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.SourceFor,
-        [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.rendering:instruction-slots",
+      index,
+      evidence,
+    );
+    continuations.push(
+      builder.source(
+        "source",
+        row.source,
+        "Inspect source behind this instruction slot constant.",
         "Source behind an instruction slot constant.",
       ),
-    });
-    continuations.push({
-      id: `framework.discovery:instruction-slots:type:${index}`,
-      kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Secondary,
-      rationale:
+      builder.typeFacts(
+        "type",
+        row.source,
         "Inspect TypeChecker facts for this instruction slot constant.",
-      inquiry: {
-        lens: LensId.TsType,
-        locus: { kind: LocusKind.SourceRange, range: row.source },
-        projection: "facts",
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.TypeFactsFor,
-        [BasisKind.TypeScriptChecker],
         "Type facts for an instruction slot constant.",
       ),
-    });
+    );
     if (row.syntaxProducts.length > 0) {
-      continuations.push({
-        id: `framework.discovery:instruction-slots:syntax-products:${index}`,
-        kind: ContinuationKind.SwitchProjection,
-        priority: ContinuationPriority.Primary,
-        rationale:
+      continuations.push(
+        projectionContinuation(
+          inquiry,
+          `framework.rendering:instruction-slots:syntax-products:${index}`,
+          "syntax-products",
           "Inspect syntax products that build or handle this instruction slot.",
-        inquiry: {
-          lens: LensId.FrameworkDiscovery,
-          locus: inquiry.locus,
-          projection: "syntax-products",
-          filters: { query: row.slotName },
-          budget: inquiry.budget,
-        },
-        evidence: [evidence],
-        route: route(
-          NavigationPlane.Semantic,
-          NavigationRelation.ProjectionOf,
-          [BasisKind.SourceText, BasisKind.TypeScriptChecker],
-          "Syntax products connected to one instruction slot.",
+          {
+            lens: LensId.FrameworkRendering,
+            filters: { query: row.slotName },
+            evidence,
+            basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+            summary: "Syntax products connected to one instruction slot.",
+          },
         ),
-      });
+      );
     }
   }
   return continuations;
@@ -237,6 +221,18 @@ export function instructionDispatchContinuations(
     );
   }
   continuations.push(
+    FrameworkSemanticRoutes.RenderingToHydrationFlow.continuation(inquiry, {
+      id: "framework.rendering:instruction-dispatches:hydration-flow",
+      filters: { targetKind: "instruction" },
+      rationale:
+        "Return to the compact hydration/runtime rendering corridor that owns these dispatch rows.",
+    }),
+    FrameworkSemanticRoutes.RenderingToRenderConsequences.continuation(inquiry, {
+      id: "framework.rendering:instruction-dispatches:render-consequences",
+      filters: { consequenceKind: "instruction-dispatch" },
+      rationale:
+        "Return to compact renderer consequence rows before opening nested dispatch details.",
+    }),
     projectionContinuation(
       inquiry,
       "framework.rendering:instruction-slots",
@@ -254,46 +250,55 @@ export function instructionDispatchContinuations(
   );
   for (const [index, row] of rows.slice(0, 3).entries()) {
     const evidence = evidenceForInstructionDispatch(row);
-    continuations.push({
-      id: `framework.rendering:instruction-dispatches:source:${index}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Primary,
-      rationale: "Inspect source behind this renderer target dispatch.",
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: { kind: LocusKind.SourceRange, range: row.source },
-        projection: "text",
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.SourceFor,
-        [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.rendering:instruction-dispatches",
+      index,
+      evidence,
+    );
+    const routeBuilder = new FrameworkSemanticRouteBuilder(
+      inquiry,
+      "framework.rendering:instruction-dispatches",
+      index,
+      evidence,
+    );
+    continuations.push(
+      builder.source(
+        "source",
+        row.source,
+        "Inspect source behind this renderer target dispatch.",
         "Source behind an instruction renderer dispatch edge.",
       ),
-    });
-    continuations.push({
-      id: `framework.rendering:instruction-dispatches:binding-admissions:${index}`,
-      kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Primary,
-      rationale:
+    );
+    if (row.instructionName !== null) {
+      continuations.push(
+        routeBuilder.continuation(
+          FrameworkSemanticRoutes.RenderingToCompilerInstructionProducts,
+          "compiler-products",
+          {
+            filters: { instructionName: row.instructionName },
+            rationale:
+              "Inspect compiler instruction products that produce this rendered instruction.",
+            priority: ContinuationPriority.Secondary,
+          },
+        ),
+      );
+    }
+    continuations.push(
+      projectionContinuation(
+        inquiry,
+        `framework.rendering:instruction-dispatches:binding-admissions:${index}`,
+        "binding-admissions",
         "Inspect binding admissions produced while rendering this instruction slot.",
-      inquiry: {
-        lens: LensId.FrameworkRendering,
-        locus: inquiry.locus,
-        projection: "binding-admissions",
-        filters: { query: row.rendererName },
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Semantic,
-        NavigationRelation.ProjectionOf,
-        [BasisKind.SourceText, BasisKind.TypeScriptChecker],
-        "Binding admissions connected to one renderer dispatch edge.",
+        {
+          lens: LensId.FrameworkRendering,
+          filters: { query: row.rendererName },
+          evidence,
+          basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+          summary: "Binding admissions connected to one renderer dispatch edge.",
+        },
       ),
-    });
+    );
   }
   return continuations;
 }
@@ -317,6 +322,18 @@ export function controllerCreationContinuations(
     );
   }
   continuations.push(
+    FrameworkSemanticRoutes.RenderingToHydrationFlow.continuation(inquiry, {
+      id: "framework.rendering:controller-creations:hydration-flow",
+      filters: { operation: "create-controller" },
+      rationale:
+        "Return to the compact hydration/runtime rendering corridor that owns controller creation and admission.",
+    }),
+    FrameworkSemanticRoutes.RenderingToRenderConsequences.continuation(inquiry, {
+      id: "framework.rendering:controller-creations:render-consequences",
+      filters: {},
+      rationale:
+        "Return to compact renderer consequence rows that summarize controller creation, child admission, recursive dispatch, and link callbacks.",
+    }),
     projectionContinuation(
       inquiry,
       "framework.rendering:instruction-dispatches",
@@ -350,26 +367,20 @@ export function controllerCreationContinuations(
   });
   for (const [index, row] of rows.slice(0, 3).entries()) {
     const evidence = evidenceForControllerCreation(row);
-    continuations.push({
-      id: `framework.rendering:controller-creations:source:${index}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Primary,
-      rationale:
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.rendering:controller-creations",
+      index,
+      evidence,
+    );
+    continuations.push(
+      builder.source(
+        "source",
+        row.source,
         "Inspect the renderer source that constructs and admits this child controller.",
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: { kind: LocusKind.SourceRange, range: row.source },
-        projection: "text",
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.SourceFor,
-        [BasisKind.SourceText, BasisKind.TypeScriptChecker],
         "Source behind a renderer child-controller creation flow.",
       ),
-    });
+    );
     continuations.push({
       id: `framework.rendering:controller-creations:resource:${index}`,
       kind: ContinuationKind.SwitchLens,
@@ -395,30 +406,319 @@ export function controllerCreationContinuations(
       ),
     });
     if (row.recursiveDispatchCalls.length > 0) {
-      continuations.push({
-        id: `framework.rendering:controller-creations:recursive:${index}`,
-        kind: ContinuationKind.SwitchLens,
-        priority: ContinuationPriority.Secondary,
-        rationale:
+      continuations.push(
+        projectionContinuation(
+          inquiry,
+          `framework.rendering:controller-creations:recursive:${index}`,
+          "controller-creations",
           "Inspect controller creation rows with recursive child instruction dispatch.",
-        inquiry: {
-          lens: LensId.FrameworkRendering,
-          locus: inquiry.locus,
-          projection: "controller-creations",
-          filters: { rendererName: row.rendererName },
-          budget: inquiry.budget,
-        },
-        evidence: [evidence],
-        route: route(
-          NavigationPlane.Semantic,
-          NavigationRelation.ProjectionOf,
-          [BasisKind.TypeScriptChecker],
-          "Recursive renderer dispatch sites inside one renderer flow.",
+          {
+            lens: LensId.FrameworkRendering,
+            filters: { rendererName: row.rendererName },
+            evidence,
+            basis: [BasisKind.TypeScriptChecker],
+            priority: ContinuationPriority.Secondary,
+            summary: "Recursive renderer dispatch sites inside one renderer flow.",
+          },
         ),
-      });
+      );
     }
   }
   return continuations;
+}
+
+export function hydrationFlowContinuations(
+  inquiry: Inquiry,
+  rows: readonly FrameworkHydrationFlowRow[],
+  nextOffset: number | undefined,
+  limit: number,
+): readonly Continuation[] {
+  const continuations: Continuation[] = [];
+  if (nextOffset !== undefined) {
+    continuations.push(
+      nextPageContinuation(
+        inquiry,
+        "framework.rendering:hydration-flow:next-page",
+        "Continue hydration/runtime rendering corridor rows.",
+        nextOffset,
+        limit,
+      ),
+    );
+  }
+
+  continuations.push(
+    FrameworkSemanticRoutes.RenderingToRenderConsequences.continuation(inquiry, {
+      id: "framework.rendering:hydration-flow:render-consequences",
+      filters: {},
+      rationale:
+        "Inspect compact renderer consequences before opening nested rendering detail projections.",
+    }),
+    FrameworkSemanticRoutes.RenderingToControllerCreations.continuation(inquiry, {
+      id: "framework.rendering:hydration-flow:controller-creations",
+      filters: {},
+      rationale: "Inspect renderer rows that create and admit child controllers.",
+    }),
+    FrameworkSemanticRoutes.RenderingToInstructionDispatches.continuation(inquiry, {
+      id: "framework.rendering:hydration-flow:instruction-dispatches",
+      filters: {},
+      rationale:
+        "Inspect instruction discriminator dispatch rows reached by Rendering.render.",
+    }),
+    FrameworkSemanticRoutes.RenderingToBindingAdmissions.continuation(inquiry, {
+      id: "framework.rendering:hydration-flow:binding-admissions",
+      filters: {},
+      rationale:
+        "Inspect controller.addBinding admission edges reached by renderers.",
+    }),
+    FrameworkSemanticRoutes.RenderingToCompilerCompileFlow.continuation(inquiry, {
+      id: "framework.rendering:hydration-flow:compiler",
+      filters: { methodName: "compile" },
+      rationale:
+        "Inspect the JIT compiler flow that produces definitions and instruction rows consumed by hydration.",
+      priority: ContinuationPriority.Secondary,
+    }),
+  );
+
+  for (const [index, row] of hydrationRowsForDirectContinuations(rows).entries()) {
+    const evidence = evidenceForHydrationFlow(row);
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.rendering:hydration-flow",
+      index,
+      evidence,
+    );
+    continuations.push(
+      builder.source(
+        "source",
+        row.source,
+        "Inspect source behind this hydration/runtime rendering corridor row.",
+        "Source behind a hydration/runtime rendering corridor row.",
+      ),
+    );
+    pushHydrationSemanticContinuations(continuations, inquiry, row, index, evidence);
+  }
+  return continuations;
+}
+
+function pushHydrationSemanticContinuations(
+  continuations: Continuation[],
+  inquiry: Inquiry,
+  row: FrameworkHydrationFlowRow,
+  index: number,
+  evidence: Evidence,
+): void {
+  const route = new FrameworkSemanticRouteBuilder(
+    inquiry,
+    "framework.rendering:hydration-flow",
+    index,
+    evidence,
+  );
+  if (
+    row.operation === "compile" ||
+    row.targetKind === "template-compiler" ||
+    row.targetName === "TemplateCompiler.compile" ||
+    row.targetName === "Rendering.compile"
+  ) {
+    continuations.push(
+      route.continuation(
+        FrameworkSemanticRoutes.RenderingToCompilerCompileFlow,
+        "compiler",
+        {
+          filters: hydrationCompilerFlowFilters(row),
+          rationale:
+            "Inspect the JIT compiler flow that produces the compiled definition consumed by this hydration step.",
+          priority: ContinuationPriority.Secondary,
+        },
+      ),
+    );
+  }
+
+  if (row.operation === "get-all" && row.targetName === "IRenderer") {
+    continuations.push(
+      projectionContinuation(
+        inquiry,
+        `framework.rendering:hydration-flow:di-renderers:${index}`,
+        "providers",
+        "Inspect DI providers that materialize IRenderer implementations.",
+        {
+          lens: LensId.FrameworkDi,
+          filters: { key: "IRenderer" },
+          evidence,
+          basis: [BasisKind.TypeScriptChecker],
+          priority: ContinuationPriority.Secondary,
+        },
+      ),
+      projectionContinuation(
+        inquiry,
+        `framework.rendering:hydration-flow:renderer-dispatch:${index}`,
+        "instruction-dispatches",
+        "Inspect instruction dispatch rows that spend the renderer table.",
+        {
+          filters: {},
+          evidence,
+          basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+        },
+      ),
+    );
+  }
+
+  if (row.operation === "dispatch" || row.targetKind === "instruction") {
+    continuations.push(
+      route.continuation(
+        FrameworkSemanticRoutes.RenderingToInstructionDispatches,
+        "instruction-dispatches",
+        {
+          filters: hydrationRendererFilters(row),
+          rationale:
+            "Inspect concrete instruction dispatch rows for this rendering hand-off.",
+        },
+      ),
+    );
+  }
+
+  if (row.operation === "create-controller" || row.operation === "admit-child") {
+    continuations.push(
+      route.continuation(
+        FrameworkSemanticRoutes.RenderingToControllerCreations,
+        "controller-creations",
+        {
+          filters: hydrationRendererFilters(row),
+          rationale:
+            "Inspect renderer controller-creation rows for this child-controller hand-off.",
+        },
+      ),
+    );
+  }
+
+  if (row.operation === "admit-binding" || row.targetKind === "binding") {
+    const bindingFilters = hydrationBindingFilters(row);
+    continuations.push(
+      route.continuation(
+        FrameworkSemanticRoutes.RenderingToBindingAdmissions,
+        "binding-admissions",
+        {
+          filters: bindingFilters,
+          rationale:
+            "Inspect binding admission edges for this renderer binding hand-off.",
+        },
+      ),
+      route.continuation(
+        FrameworkSemanticRoutes.RenderingToBindingProducts,
+        "binding-products",
+        {
+          filters: bindingFilters,
+          rationale:
+            "Inspect binding products reached by this renderer binding hand-off.",
+          priority: ContinuationPriority.Secondary,
+        },
+      ),
+    );
+  }
+
+  if (row.operation === "find") {
+    const resourceKind = hydrationResourceKind(row);
+    if (resourceKind !== null) {
+      continuations.push(
+        projectionContinuation(
+          inquiry,
+          `framework.rendering:hydration-flow:resources:${index}`,
+          "convergence",
+          "Inspect resource convergence rows for the runtime resource lookup used here.",
+          {
+            lens: LensId.FrameworkResources,
+            filters: { resourceKind },
+            evidence,
+            basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+            priority: ContinuationPriority.Secondary,
+          },
+        ),
+      );
+    }
+  }
+
+  if (row.operation === "run-hook" || row.targetKind === "lifecycle-hook") {
+    continuations.push(
+      projectionContinuation(
+        inquiry,
+        `framework.rendering:hydration-flow:lifecycle:${index}`,
+        row.ownerName === "AppRoot" ? "app-tasks" : "hook-dispatches",
+        "Inspect lifecycle rows that own this hydration hook hand-off.",
+        {
+          lens: LensId.FrameworkLifecycle,
+          filters: row.targetName === null ? {} : { query: row.targetName },
+          evidence,
+          basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+          priority: ContinuationPriority.Secondary,
+        },
+      ),
+    );
+  }
+
+  if (row.targetKind === "observer") {
+    continuations.push(
+      projectionContinuation(
+        inquiry,
+        `framework.rendering:hydration-flow:observation:${index}`,
+        "flow-sites",
+        "Inspect observation flow sites behind watcher/observer creation during hydration.",
+        {
+          lens: LensId.FrameworkObservation,
+          filters: row.targetName === null ? {} : { query: row.targetName },
+          evidence,
+          basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+          priority: ContinuationPriority.Secondary,
+        },
+      ),
+    );
+  }
+}
+
+function hydrationRendererFilters(
+  row: FrameworkHydrationFlowRow,
+): Inquiry["filters"] {
+  return row.ownerName.endsWith("Renderer")
+    ? { rendererName: row.ownerName }
+    : {};
+}
+
+function hydrationCompilerFlowFilters(
+  row: FrameworkHydrationFlowRow,
+): Inquiry["filters"] {
+  if (
+    row.targetKind === "template-compiler" ||
+    row.targetName === "TemplateCompiler.compile" ||
+    row.targetName === "Rendering.compile"
+  ) {
+    return { methodName: "compile" };
+  }
+  return {};
+}
+
+function hydrationBindingFilters(
+  row: FrameworkHydrationFlowRow,
+): Inquiry["filters"] {
+  return row.targetName !== null && row.targetName.endsWith("Binding")
+    ? { bindingName: row.targetName }
+    : hydrationRendererFilters(row);
+}
+
+function hydrationResourceKind(row: FrameworkHydrationFlowRow): string | null {
+  switch (row.targetKind) {
+    case "custom-element":
+      return "custom-element";
+    case "custom-attribute":
+      return "custom-attribute";
+    case "template-controller":
+      return "template-controller";
+    default:
+      return null;
+  }
+}
+
+function hydrationRowsForDirectContinuations(
+  rows: readonly FrameworkHydrationFlowRow[],
+): readonly FrameworkHydrationFlowRow[] {
+  return rows.slice(0, 8);
 }
 
 export function bindingProductContinuations(
@@ -432,7 +732,7 @@ export function bindingProductContinuations(
     continuations.push(
       nextPageContinuation(
         inquiry,
-        "framework.discovery:binding-products:next-page",
+        "framework.rendering:binding-products:next-page",
         "Continue Aurelia framework binding product rows.",
         nextOffset,
         limit,
@@ -440,9 +740,21 @@ export function bindingProductContinuations(
     );
   }
   continuations.push(
+    FrameworkSemanticRoutes.RenderingToHydrationFlow.continuation(inquiry, {
+      id: "framework.rendering:binding-products:hydration-flow",
+      filters: { operation: "admit-binding" },
+      rationale:
+        "Return to the compact hydration/runtime rendering corridor that admits bindings.",
+    }),
+    FrameworkSemanticRoutes.RenderingToRenderConsequences.continuation(inquiry, {
+      id: "framework.rendering:binding-products:render-consequences",
+      filters: {},
+      rationale:
+        "Return to compact renderer consequence rows that summarize binding production, admission, and effects.",
+    }),
     projectionContinuation(
       inquiry,
-      "framework.discovery:syntax-products",
+      "framework.rendering:syntax-products",
       "syntax-products",
       "Return to renderer syntax products that create these bindings.",
     ),
@@ -450,7 +762,7 @@ export function bindingProductContinuations(
   continuations.push(
     projectionContinuation(
       inquiry,
-      "framework.discovery:binding-admissions",
+      "framework.rendering:binding-admissions",
       "binding-admissions",
       "Inspect controller binding-list admissions for these bindings.",
     ),
@@ -458,71 +770,48 @@ export function bindingProductContinuations(
   continuations.push(
     projectionContinuation(
       inquiry,
-      "framework.discovery:binding-effects",
+      "framework.rendering:binding-effects",
       "binding-effects",
       "Inspect lifecycle and setup effects inside these binding classes.",
     ),
   );
   for (const [index, row] of rows.slice(0, 3).entries()) {
     const evidence = evidenceForBindingProduct(row);
-    continuations.push({
-      id: `framework.discovery:binding-products:source:${index}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Primary,
-      rationale: "Inspect source behind this binding class.",
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: { kind: LocusKind.SourceRange, range: row.source },
-        projection: "text",
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.SourceFor,
-        [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.rendering:binding-products",
+      index,
+      evidence,
+    );
+    continuations.push(
+      builder.source(
+        "source",
+        row.source,
+        "Inspect source behind this binding class.",
         "Source behind a renderer-created binding class.",
       ),
-    });
-    continuations.push({
-      id: `framework.discovery:binding-products:type:${index}`,
-      kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Secondary,
-      rationale: "Inspect TypeChecker facts for this binding class.",
-      inquiry: {
-        lens: LensId.TsType,
-        locus: { kind: LocusKind.SourceRange, range: row.source },
-        projection: "facts",
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.TypeFactsFor,
-        [BasisKind.TypeScriptChecker],
+      builder.typeFacts(
+        "type",
+        row.source,
+        "Inspect TypeChecker facts for this binding class.",
         "Type facts for a renderer-created binding class.",
       ),
-    });
-    continuations.push({
-      id: `framework.discovery:binding-products:syntax-products:${index}`,
-      kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Primary,
-      rationale: "Inspect syntax products that create this binding class.",
-      inquiry: {
-        lens: LensId.FrameworkDiscovery,
-        locus: inquiry.locus,
-        projection: "syntax-products",
-        filters: { bindingName: row.bindingName },
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Semantic,
-        NavigationRelation.ProjectionOf,
-        [BasisKind.SourceText, BasisKind.TypeScriptChecker],
-        "Syntax products connected to one binding class.",
+    );
+    continuations.push(
+      projectionContinuation(
+        inquiry,
+        `framework.rendering:binding-products:syntax-products:${index}`,
+        "syntax-products",
+        "Inspect syntax products that create this binding class.",
+        {
+          lens: LensId.FrameworkRendering,
+          filters: { bindingName: row.bindingName },
+          evidence,
+          basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+          summary: "Syntax products connected to one binding class.",
+        },
       ),
-    });
+    );
   }
   return continuations;
 }
@@ -538,7 +827,7 @@ export function bindingEffectContinuations(
     continuations.push(
       nextPageContinuation(
         inquiry,
-        "framework.discovery:binding-effects:next-page",
+        "framework.rendering:binding-effects:next-page",
         "Continue Aurelia framework binding effect rows.",
         nextOffset,
         limit,
@@ -546,9 +835,21 @@ export function bindingEffectContinuations(
     );
   }
   continuations.push(
+    FrameworkSemanticRoutes.RenderingToHydrationFlow.continuation(inquiry, {
+      id: "framework.rendering:binding-effects:hydration-flow",
+      filters: { operation: "admit-binding" },
+      rationale:
+        "Return to the compact hydration/runtime rendering corridor that admits bindings before these effects run.",
+    }),
+    FrameworkSemanticRoutes.RenderingToRenderConsequences.continuation(inquiry, {
+      id: "framework.rendering:binding-effects:render-consequences",
+      filters: {},
+      rationale:
+        "Return to compact renderer consequence rows before expanding binding effect details.",
+    }),
     projectionContinuation(
       inquiry,
-      "framework.discovery:binding-products",
+      "framework.rendering:binding-products",
       "binding-products",
       "Inspect binding classes that own these effects.",
       { filters: {} },
@@ -562,7 +863,7 @@ export function bindingEffectContinuations(
     continuations.push(
       projectionContinuation(
         inquiry,
-        "framework.discovery:observers",
+        "framework.rendering:binding-effects:observers",
         "observers",
         "Inspect observer-locator and observer/accessor exports behind these lookup effects.",
         { lens: LensId.FrameworkDiscovery, filters: {} },
@@ -577,45 +878,35 @@ export function bindingEffectContinuations(
   }
   for (const [index, row] of rows.slice(0, 3).entries()) {
     const evidence = evidenceForBindingEffect(row);
-    continuations.push({
-      id: `framework.discovery:binding-effects:source:${index}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Primary,
-      rationale: "Inspect source behind this binding lifecycle/setup effect.",
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: { kind: LocusKind.SourceRange, range: row.source },
-        projection: "text",
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.SourceFor,
-        [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.rendering:binding-effects",
+      index,
+      evidence,
+    );
+    continuations.push(
+      builder.source(
+        "source",
+        row.source,
+        "Inspect source behind this binding lifecycle/setup effect.",
         "Source behind a binding lifecycle/setup effect.",
       ),
-    });
-    continuations.push({
-      id: `framework.discovery:binding-effects:binding-products:${index}`,
-      kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Primary,
-      rationale: "Inspect the binding product that owns this effect.",
-      inquiry: {
-        lens: LensId.FrameworkDiscovery,
-        locus: inquiry.locus,
-        projection: "binding-products",
-        filters: { bindingName: row.bindingName },
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Semantic,
-        NavigationRelation.ProjectionOf,
-        [BasisKind.SourceText, BasisKind.TypeScriptChecker],
-        "Binding product connected to one effect row.",
+    );
+    continuations.push(
+      projectionContinuation(
+        inquiry,
+        `framework.rendering:binding-effects:binding-products:${index}`,
+        "binding-products",
+        "Inspect the binding product that owns this effect.",
+        {
+          lens: LensId.FrameworkRendering,
+          filters: { bindingName: row.bindingName },
+          evidence,
+          basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+          summary: "Binding product connected to one effect row.",
+        },
       ),
-    });
+    );
   }
   return continuations;
 }
@@ -639,6 +930,12 @@ export function bindingSetupContinuations(
     );
   }
   continuations.push(
+    FrameworkSemanticRoutes.RenderingToRenderConsequences.continuation(inquiry, {
+      id: "framework.rendering:binding-setups:render-consequences",
+      filters: { consequenceKind: "observation-setup" },
+      rationale:
+        "Return to compact renderer consequence rows for observation setup before expanding setup details.",
+    }),
     projectionContinuation(
       inquiry,
       "framework.rendering:binding-products",
@@ -659,7 +956,7 @@ export function bindingSetupContinuations(
   continuations.push(
     projectionContinuation(
       inquiry,
-      "framework.discovery:observers",
+      "framework.rendering:binding-setups:observers",
       "observers",
       "Inspect observer/accessor/subscriber exports named by these setup calls.",
       { lens: LensId.FrameworkDiscovery, filters: {} },
@@ -673,48 +970,203 @@ export function bindingSetupContinuations(
   );
   for (const [index, row] of rows.slice(0, 3).entries()) {
     const evidence = evidenceForBindingSetup(row);
-    continuations.push({
-      id: `framework.rendering:binding-setups:source:${index}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Primary,
-      rationale: "Inspect source behind this binding setup call.",
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: { kind: LocusKind.SourceRange, range: row.source },
-        projection: "text",
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.SourceFor,
-        [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.rendering:binding-setups",
+      index,
+      evidence,
+    );
+    continuations.push(
+      builder.source(
+        "source",
+        row.source,
+        "Inspect source behind this binding setup call.",
         "Source behind a binding setup call.",
       ),
-    });
-    continuations.push({
-      id: `framework.rendering:binding-setups:binding-products:${index}`,
-      kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Primary,
-      rationale:
+    );
+    continuations.push(
+      projectionContinuation(
+        inquiry,
+        `framework.rendering:binding-setups:binding-products:${index}`,
+        "binding-products",
         "Inspect the binding product whose setup method is called here.",
-      inquiry: {
-        lens: LensId.FrameworkRendering,
-        locus: inquiry.locus,
-        projection: "binding-products",
-        filters: { bindingName: row.bindingName },
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Semantic,
-        NavigationRelation.ProjectionOf,
-        [BasisKind.SourceText, BasisKind.TypeScriptChecker],
-        "Binding product connected to one setup edge.",
+        {
+          lens: LensId.FrameworkRendering,
+          filters: { bindingName: row.bindingName },
+          evidence,
+          basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+          summary: "Binding product connected to one setup edge.",
+        },
       ),
-    });
+    );
   }
   return continuations;
+}
+
+export function renderConsequenceContinuations(
+  inquiry: Inquiry,
+  rows: readonly FrameworkRenderConsequenceRow[],
+  nextOffset: number | undefined,
+  limit: number,
+): readonly Continuation[] {
+  const continuations: Continuation[] = [];
+  if (nextOffset !== undefined) {
+    continuations.push(
+      nextPageContinuation(
+        inquiry,
+        "framework.rendering:render-consequences:next-page",
+        "Continue compact renderer consequence rows.",
+        nextOffset,
+        limit,
+      ),
+    );
+  }
+  continuations.push(
+    FrameworkSemanticRoutes.RenderingToHydrationFlow.continuation(inquiry, {
+      id: "framework.rendering:render-consequences:hydration-flow",
+      filters: {},
+      rationale:
+        "Return to the hydration/runtime corridor that frames these renderer consequences.",
+    }),
+  );
+  for (const [index, row] of rows.slice(0, 3).entries()) {
+    const evidence = evidenceForRenderConsequence(row);
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.rendering:render-consequences",
+      index,
+      evidence,
+    );
+    const route = new FrameworkSemanticRouteBuilder(
+      inquiry,
+      "framework.rendering:render-consequences",
+      index,
+      evidence,
+    );
+    continuations.push(
+      builder.source(
+        "source",
+        row.source,
+        "Inspect source behind this compact renderer consequence.",
+        "Source behind a compact renderer consequence.",
+      ),
+    );
+    pushRenderConsequenceDetailContinuation(continuations, route, row);
+    pushRenderConsequenceCrossLensContinuations(continuations, route, row);
+  }
+  return continuations;
+}
+
+function pushRenderConsequenceDetailContinuation(
+  continuations: Continuation[],
+  route: FrameworkSemanticRouteBuilder,
+  row: FrameworkRenderConsequenceRow,
+): void {
+  const options = {
+    filters: row.detailFilters,
+    rationale: `Open detailed ${row.detailProjection} rows for this compact renderer consequence.`,
+  };
+  switch (row.detailProjection) {
+    case "binding-admissions":
+      continuations.push(
+        route.continuation(
+          FrameworkSemanticRoutes.RenderingToBindingAdmissions,
+          "binding-admissions",
+          options,
+        ),
+      );
+      return;
+    case "binding-effects":
+      continuations.push(
+        route.continuation(
+          FrameworkSemanticRoutes.RenderingToBindingEffects,
+          "binding-effects",
+          options,
+        ),
+      );
+      return;
+    case "binding-products":
+      continuations.push(
+        route.continuation(
+          FrameworkSemanticRoutes.RenderingToBindingProducts,
+          "binding-products",
+          options,
+        ),
+      );
+      return;
+    case "binding-setups":
+      continuations.push(
+        route.continuation(
+          FrameworkSemanticRoutes.RenderingToBindingSetups,
+          "binding-setups",
+          options,
+        ),
+      );
+      return;
+    case "controller-creations":
+      continuations.push(
+        route.continuation(
+          FrameworkSemanticRoutes.RenderingToControllerCreations,
+          "controller-creations",
+          options,
+        ),
+      );
+      return;
+    case "instruction-dispatches":
+      continuations.push(
+        route.continuation(
+          FrameworkSemanticRoutes.RenderingToInstructionDispatches,
+          "instruction-dispatches",
+          options,
+        ),
+      );
+      return;
+    case "relationships":
+      return;
+  }
+}
+
+function pushRenderConsequenceCrossLensContinuations(
+  continuations: Continuation[],
+  route: FrameworkSemanticRouteBuilder,
+  row: FrameworkRenderConsequenceRow,
+): void {
+  if (row.consequenceKind === "observer-lookup") {
+    continuations.push(
+      route.continuation(
+        FrameworkSemanticRoutes.RenderingToObservationBindingLookups,
+        "observation-binding-lookups",
+        {
+          filters: {
+            packageId: row.packageId,
+            bindingName: row.actorName,
+            query: row.targetName,
+          },
+          rationale:
+            "Enter observation-owned binding lookup rows for this renderer consequence.",
+          priority: ContinuationPriority.Secondary,
+        },
+      ),
+    );
+  }
+  if (row.consequenceKind === "observation-setup") {
+    continuations.push(
+      route.continuation(
+        FrameworkSemanticRoutes.RenderingToObservationBindingSetups,
+        "observation-binding-setups",
+        {
+          filters: {
+            packageId: row.packageId,
+            bindingName: row.actorName,
+            query: row.targetName,
+          },
+          rationale:
+            "Enter observation-owned setup rows for this renderer consequence.",
+          priority: ContinuationPriority.Secondary,
+        },
+      ),
+    );
+  }
 }
 
 export function renderingRelationshipContinuations(
@@ -735,6 +1187,14 @@ export function renderingRelationshipContinuations(
       ),
     );
   }
+  continuations.push(
+    FrameworkSemanticRoutes.RenderingToRenderConsequences.continuation(inquiry, {
+      id: "framework.rendering:relationships:render-consequences",
+      filters: {},
+      rationale:
+        "Open compact renderer consequence rows derived from these relationships before expanding detail families.",
+    }),
+  );
   for (const [index, row] of rows.slice(0, 5).entries()) {
     const evidence = evidenceForRenderingRelationship(row);
     pushRenderingRelationshipSemanticContinuations(
@@ -742,46 +1202,31 @@ export function renderingRelationshipContinuations(
       inquiry,
       row,
       index,
+      evidence,
     );
-    continuations.push({
-      id: `framework.rendering:relationships:source:${index}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Primary,
-      rationale: "Inspect source behind this rendering relationship.",
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: { kind: LocusKind.SourceRange, range: row.source },
-        projection: "text",
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.SourceFor,
-        [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.rendering:relationships",
+      index,
+      evidence,
+    );
+    continuations.push(
+      builder.source(
+        "source",
+        row.source,
+        "Inspect source behind this rendering relationship.",
         "Source behind a rendering relationship.",
       ),
-    });
+    );
     if (row.to.source !== undefined) {
-      continuations.push({
-        id: `framework.rendering:relationships:target-type:${index}`,
-        kind: ContinuationKind.SwitchLens,
-        priority: ContinuationPriority.Secondary,
-        rationale: "Inspect TypeChecker facts for this rendering relationship target.",
-        inquiry: {
-          lens: LensId.TsType,
-          locus: { kind: LocusKind.SourceRange, range: row.to.source },
-          projection: "facts",
-          budget: inquiry.budget,
-        },
-        evidence: [evidence],
-        route: route(
-          NavigationPlane.Inspection,
-          NavigationRelation.TypeFactsFor,
-          [BasisKind.TypeScriptChecker],
+      continuations.push(
+        builder.typeFacts(
+          "target-type",
+          row.to.source,
+          "Inspect TypeChecker facts for this rendering relationship target.",
           "Type facts for a rendering relationship target.",
         ),
-      });
+      );
     }
   }
   return continuations;
@@ -792,75 +1237,50 @@ function pushRenderingRelationshipSemanticContinuations(
   inquiry: Inquiry,
   row: FrameworkRenderingRelationshipRow,
   index: number,
+  evidence: Evidence,
 ): void {
+  const route = new FrameworkSemanticRouteBuilder(
+    inquiry,
+    "framework.rendering:relationships",
+    index,
+    evidence,
+  );
   switch (row.relation) {
     case FrameworkRelationshipRelation.CreatesController:
       continuations.push(
-        projectionContinuation(
-          inquiry,
-          `framework.rendering:relationships:controller-creation:${index}`,
-          "controller-creations",
-          "Inspect the renderer hydration row that creates this child controller.",
+        route.continuation(
+          FrameworkSemanticRoutes.RenderingToControllerCreations,
+          "controller-creation",
           {
-            lens: LensId.FrameworkRendering,
             filters: { packageId: row.packageId, rendererName: row.from.name },
-            basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+            rationale:
+              "Inspect the renderer hydration row that creates this child controller.",
           },
         ),
       );
       return;
     case FrameworkRelationshipRelation.AdmitsChildController:
       continuations.push(
-        projectionContinuation(
-          inquiry,
-          `framework.rendering:relationships:controller-admission:${index}`,
-          "controller-creations",
-          "Inspect the renderer hydration row that admits this child controller.",
+        route.continuation(
+          FrameworkSemanticRoutes.RenderingToControllerCreations,
+          "controller-admission",
           {
-            lens: LensId.FrameworkRendering,
             filters: { packageId: row.packageId, rendererName: row.from.name },
-            basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+            rationale:
+              "Inspect the renderer hydration row that admits this child controller.",
           },
         ),
-        projectionContinuation(
-          inquiry,
-          `framework.rendering:relationships:child-activation:${index}`,
-          "controller-calls",
-          "Inspect controller lifecycle propagation that later spends admitted child controllers.",
+        route.continuation(
+          FrameworkSemanticRoutes.RenderingToLifecycleControllerCalls,
+          "child-activation",
           {
-            lens: LensId.FrameworkLifecycle,
             filters: {
               packageId: row.packageId,
               lifecycleStage: "activate",
               callKind: FrameworkLifecycleControllerCallKind.ChildController,
             },
-            basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
-          },
-        ),
-      );
-      return;
-    case FrameworkRelationshipRelation.ProducesInstruction:
-      continuations.push(
-        projectionContinuation(
-          inquiry,
-          `framework.rendering:relationships:instruction-dispatches:${index}`,
-          "instruction-dispatches",
-          "Inspect renderers that dispatch this produced instruction.",
-          {
-            lens: LensId.FrameworkRendering,
-            filters: { instructionName: row.to.name },
-            basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
-          },
-        ),
-        projectionContinuation(
-          inquiry,
-          `framework.rendering:relationships:instruction-slots:${index}`,
-          "instruction-slots",
-          "Inspect instruction slots associated with this produced instruction.",
-          {
-            lens: LensId.FrameworkRendering,
-            filters: { instructionName: row.to.name },
-            basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+            rationale:
+              "Inspect controller lifecycle propagation that later spends admitted child controllers.",
           },
         ),
       );
@@ -868,52 +1288,52 @@ function pushRenderingRelationshipSemanticContinuations(
     case FrameworkRelationshipRelation.DispatchesInstruction:
       if (row.mechanism === FrameworkRelationshipMechanism.RecursiveRendererDispatch) {
         continuations.push(
-          projectionContinuation(
-            inquiry,
-            `framework.rendering:relationships:recursive-controller-creation:${index}`,
-            "controller-creations",
-            "Inspect the renderer hydration row that recursively dispatches child property instructions.",
+          route.continuation(
+            FrameworkSemanticRoutes.RenderingToControllerCreations,
+            "recursive-controller-creation",
             {
-              lens: LensId.FrameworkRendering,
               filters: { packageId: row.packageId, rendererName: row.from.name },
-              basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+              rationale:
+                "Inspect the renderer hydration row that recursively dispatches child property instructions.",
             },
           ),
-          projectionContinuation(
-            inquiry,
-            `framework.rendering:relationships:recursive-instruction-dispatches:${index}`,
-            "instruction-dispatches",
-            "Inspect concrete instruction discriminator dispatch rows that can be reached by this dynamic renderer call.",
+          route.continuation(
+            FrameworkSemanticRoutes.RenderingToInstructionDispatches,
+            "recursive-instruction-dispatches",
             {
-              lens: LensId.FrameworkRendering,
               filters: { packageId: row.packageId },
-              basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+              rationale:
+                "Inspect concrete instruction discriminator dispatch rows that can be reached by this dynamic renderer call.",
             },
           ),
         );
         return;
       }
       continuations.push(
-        projectionContinuation(
-          inquiry,
-          `framework.rendering:relationships:renderer-syntax:${index}`,
-          "syntax-products",
-          "Inspect syntax products owned by the renderer target.",
+        route.continuation(
+          FrameworkSemanticRoutes.RenderingToCompilerInstructionProducts,
+          "compiler-products",
           {
-            lens: LensId.FrameworkRendering,
-            filters: { query: row.to.name },
-            basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+            filters: { instructionName: row.to.name },
+            rationale:
+              "Inspect compiler instruction products that produce this dispatched instruction.",
+            priority: ContinuationPriority.Secondary,
           },
         ),
-        projectionContinuation(
-          inquiry,
-          `framework.rendering:relationships:renderer-admissions:${index}`,
-          "binding-admissions",
-          "Inspect binding admissions emitted by the renderer target.",
+        route.continuation(
+          FrameworkSemanticRoutes.RenderingToSyntaxProducts,
+          "renderer-syntax",
           {
-            lens: LensId.FrameworkRendering,
             filters: { query: row.to.name },
-            basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+            rationale: "Inspect syntax products owned by the renderer target.",
+          },
+        ),
+        route.continuation(
+          FrameworkSemanticRoutes.RenderingToBindingAdmissions,
+          "renderer-admissions",
+          {
+            filters: { query: row.to.name },
+            rationale: "Inspect binding admissions emitted by the renderer target.",
           },
         ),
       );
@@ -921,41 +1341,34 @@ function pushRenderingRelationshipSemanticContinuations(
     case FrameworkRelationshipRelation.ProducesBinding:
     case FrameworkRelationshipRelation.AdmitsBinding:
       continuations.push(
-        projectionContinuation(
-          inquiry,
-          `framework.rendering:relationships:binding-products:${index}`,
+        route.continuation(
+          FrameworkSemanticRoutes.RenderingToBindingProducts,
           "binding-products",
-          "Inspect the binding product reached by this relationship.",
           {
-            lens: LensId.FrameworkRendering,
             filters: { bindingName: row.to.name },
-            basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+            rationale: "Inspect the binding product reached by this relationship.",
           },
         ),
-        projectionContinuation(
-          inquiry,
-          `framework.rendering:relationships:binding-effects:${index}`,
+        route.continuation(
+          FrameworkSemanticRoutes.RenderingToBindingEffects,
           "binding-effects",
-          "Inspect lifecycle and observer effects for the reached binding.",
           {
-            lens: LensId.FrameworkRendering,
             filters: { bindingName: row.to.name },
-            basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+            rationale:
+              "Inspect lifecycle and observer effects for the reached binding.",
           },
         ),
       );
       return;
     case FrameworkRelationshipRelation.PerformsBindingEffect:
       continuations.push(
-        projectionContinuation(
-          inquiry,
-          `framework.rendering:relationships:effect-binding:${index}`,
-          "binding-products",
-          "Inspect the binding product that owns this lifecycle effect.",
+        route.continuation(
+          FrameworkSemanticRoutes.RenderingToBindingProducts,
+          "effect-binding",
           {
-            lens: LensId.FrameworkRendering,
             filters: { bindingName: row.from.name },
-            basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+            rationale:
+              "Inspect the binding product that owns this lifecycle effect.",
           },
         ),
       );
@@ -963,15 +1376,13 @@ function pushRenderingRelationshipSemanticContinuations(
     case FrameworkRelationshipRelation.InvokesCallback:
       if (row.mechanism === FrameworkRelationshipMechanism.TemplateControllerLink) {
         continuations.push(
-          projectionContinuation(
-            inquiry,
-            `framework.rendering:relationships:template-controller-link:${index}`,
-            "controller-creations",
-            "Inspect the template-controller hydration row that invokes the link callback.",
+          route.continuation(
+            FrameworkSemanticRoutes.RenderingToControllerCreations,
+            "template-controller-link",
             {
-              lens: LensId.FrameworkRendering,
               filters: { packageId: row.packageId, rendererName: row.from.name },
-              basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+              rationale:
+                "Inspect the template-controller hydration row that invokes the link callback.",
             },
           ),
         );
@@ -980,58 +1391,75 @@ function pushRenderingRelationshipSemanticContinuations(
     case FrameworkRelationshipRelation.LooksUpObserver:
       const capability = observerCapabilityForLookupName(row.to.name);
       continuations.push(
-        projectionContinuation(
-          inquiry,
-          `framework.rendering:relationships:observer-catalog:${index}`,
-          "observers",
-          "Inspect observer-system exports related to this lookup method.",
+        route.continuation(
+          FrameworkSemanticRoutes.RenderingToObservationBindingLookups,
+          "observation-binding-lookups",
           {
-            lens: LensId.FrameworkDiscovery,
+            filters: {
+              packageId: row.packageId,
+              bindingName: row.from.name,
+              query: row.to.name,
+            },
+            rationale:
+              "Enter observation-owned binding lookup rows for this observer lookup.",
+          },
+        ),
+        route.continuation(
+          FrameworkSemanticRoutes.RenderingToDiscoveryObservers,
+          "observer-catalog",
+          {
             filters:
               capability === undefined
                 ? { query: row.to.name }
                 : { observerCapability: capability },
-            basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+            rationale:
+              "Inspect observer-system exports related to this lookup method.",
           },
         ),
-        projectionContinuation(
-          inquiry,
-          `framework.rendering:relationships:lookup-binding:${index}`,
-          "binding-products",
-          "Inspect the binding product that performs this observer lookup.",
+        route.continuation(
+          FrameworkSemanticRoutes.RenderingToBindingProducts,
+          "lookup-binding",
           {
-            lens: LensId.FrameworkRendering,
             filters: { bindingName: row.from.name },
-            basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+            rationale:
+              "Inspect the binding product that performs this observer lookup.",
           },
         ),
       );
       return;
     case FrameworkRelationshipRelation.ConfiguresObservation:
       continuations.push(
-        projectionContinuation(
-          inquiry,
-          `framework.rendering:relationships:configured-binding:${index}`,
-          "binding-products",
-          "Inspect the binding product whose observation surface is configured.",
+        route.continuation(
+          FrameworkSemanticRoutes.RenderingToObservationBindingSetups,
+          "observation-binding-setups",
           {
-            lens: LensId.FrameworkRendering,
-            filters: { bindingName: row.from.name },
-            basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+            filters: {
+              packageId: row.packageId,
+              bindingName: row.from.name,
+              query: row.to.name,
+            },
+            rationale:
+              "Enter observation-owned binding setup rows for this observation configuration.",
           },
         ),
-        projectionContinuation(
-          inquiry,
-          `framework.rendering:relationships:configured-effects:${index}`,
-          "binding-effects",
-          "Inspect observer lookup effects for the configured binding.",
+        route.continuation(
+          FrameworkSemanticRoutes.RenderingToBindingProducts,
+          "configured-binding",
           {
-            lens: LensId.FrameworkRendering,
+            filters: { bindingName: row.from.name },
+            rationale:
+              "Inspect the binding product whose observation surface is configured.",
+          },
+        ),
+        route.continuation(
+          FrameworkSemanticRoutes.RenderingToBindingEffects,
+          "configured-effects",
+          {
             filters: {
               bindingName: row.from.name,
               effectKind: FrameworkBindingEffectKind.ObserverLookup,
             },
-            basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+            rationale: "Inspect observer lookup effects for the configured binding.",
           },
         ),
       );
@@ -1051,7 +1479,7 @@ function pushObserverCapabilityContinuations(
     continuations.push(
       projectionContinuation(
         inquiry,
-        `framework.discovery:observers:${sourceKind}:${capability}`,
+        `framework.rendering:observers:${sourceKind}:${capability}`,
         "observers",
         `Inspect observer-system exports with ${capability} capability.`,
         {
@@ -1148,7 +1576,7 @@ export function bindingAdmissionContinuations(
     continuations.push(
       nextPageContinuation(
         inquiry,
-        "framework.discovery:binding-admissions:next-page",
+        "framework.rendering:binding-admissions:next-page",
         "Continue Aurelia framework binding admission rows.",
         nextOffset,
         limit,
@@ -1156,9 +1584,21 @@ export function bindingAdmissionContinuations(
     );
   }
   continuations.push(
+    FrameworkSemanticRoutes.RenderingToHydrationFlow.continuation(inquiry, {
+      id: "framework.rendering:binding-admissions:hydration-flow",
+      filters: { operation: "admit-binding" },
+      rationale:
+        "Return to the compact hydration/runtime rendering corridor that owns binding admission.",
+    }),
+    FrameworkSemanticRoutes.RenderingToRenderConsequences.continuation(inquiry, {
+      id: "framework.rendering:binding-admissions:render-consequences",
+      filters: { consequenceKind: "binding-admission" },
+      rationale:
+        "Return to compact renderer consequence rows before expanding binding admission details.",
+    }),
     projectionContinuation(
       inquiry,
-      "framework.discovery:binding-products",
+      "framework.rendering:binding-products",
       "binding-products",
       "Inspect binding classes behind these admission edges.",
     ),
@@ -1166,72 +1606,48 @@ export function bindingAdmissionContinuations(
   continuations.push(
     projectionContinuation(
       inquiry,
-      "framework.discovery:syntax-products",
+      "framework.rendering:syntax-products",
       "syntax-products",
       "Inspect renderer/factory products that construct admitted bindings.",
     ),
   );
   for (const [index, row] of rows.slice(0, 3).entries()) {
     const evidence = evidenceForBindingAdmission(row);
-    continuations.push({
-      id: `framework.discovery:binding-admissions:source:${index}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Primary,
-      rationale:
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.rendering:binding-admissions",
+      index,
+      evidence,
+    );
+    continuations.push(
+      builder.source(
+        "source",
+        row.source,
         "Inspect source behind this controller.addBinding admission call.",
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: { kind: LocusKind.SourceRange, range: row.source },
-        projection: "text",
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.SourceFor,
-        [BasisKind.SourceText, BasisKind.TypeScriptChecker],
         "Source behind a controller binding admission edge.",
       ),
-    });
-    continuations.push({
-      id: `framework.discovery:binding-admissions:type:${index}`,
-      kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Secondary,
-      rationale: "Inspect TypeChecker facts for this binding admission call.",
-      inquiry: {
-        lens: LensId.TsType,
-        locus: { kind: LocusKind.SourceRange, range: row.source },
-        projection: "facts",
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.TypeFactsFor,
-        [BasisKind.TypeScriptChecker],
+      builder.typeFacts(
+        "type",
+        row.source,
+        "Inspect TypeChecker facts for this binding admission call.",
         "Type facts for a controller binding admission edge.",
       ),
-    });
-    continuations.push({
-      id: `framework.discovery:binding-admissions:binding-products:${index}`,
-      kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Primary,
-      rationale: "Inspect the binding product row admitted by this call.",
-      inquiry: {
-        lens: LensId.FrameworkDiscovery,
-        locus: inquiry.locus,
-        projection: "binding-products",
-        filters: { bindingName: row.bindingName },
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Semantic,
-        NavigationRelation.ProjectionOf,
-        [BasisKind.SourceText, BasisKind.TypeScriptChecker],
-        "Binding product connected to one admission edge.",
+    );
+    continuations.push(
+      projectionContinuation(
+        inquiry,
+        `framework.rendering:binding-admissions:binding-products:${index}`,
+        "binding-products",
+        "Inspect the binding product row admitted by this call.",
+        {
+          lens: LensId.FrameworkRendering,
+          filters: { bindingName: row.bindingName },
+          evidence,
+          basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+          summary: "Binding product connected to one admission edge.",
+        },
       ),
-    });
+    );
   }
   return continuations;
 }

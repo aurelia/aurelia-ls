@@ -57,7 +57,7 @@ export interface FrameworkAdmissionClassification {
 
 /** One relationship row describing a value admitted by a framework configuration/bundle. */
 export interface FrameworkAdmissionRelationshipRow {
-  /** Stable row id inside the current source/cache basis. */
+  /** Stable row id inside the current source basis. */
   readonly id: string;
   /** Schema marker for compaction-safe consumers. */
   readonly version: typeof FRAMEWORK_ADMISSION_RELATIONSHIP_VERSION;
@@ -112,35 +112,14 @@ export function classifyFrameworkAdmissionAssociation(
   association: FrameworkAdmissionAssociationInput,
 ): FrameworkAdmissionClassification {
   return {
-    relation: admissionRelationForAssociation(association),
+    relation: admissionRelationForAssociation(),
     mechanism: admissionMechanismForAssociation(association),
     phase: admissionPhaseForAssociation(association),
   };
 }
 
-function admissionRelationForAssociation(
-  association: FrameworkAdmissionAssociationInput,
-): FrameworkRelationshipRelation {
-  switch (association.associationKind) {
-    case FrameworkBundleAssociationKind.DiInterfaceRegistration:
-      return FrameworkRelationshipRelation.AdmitsDiKey;
-    case FrameworkBundleAssociationKind.ResourceRegistration:
-      return FrameworkRelationshipRelation.AdmitsResource;
-    case FrameworkBundleAssociationKind.RegistryExportRegistration:
-      return FrameworkRelationshipRelation.AdmitsRegistryExport;
-    case FrameworkBundleAssociationKind.RegistrationCatalog:
-      return FrameworkRelationshipRelation.AdmitsCatalog;
-    case FrameworkBundleAssociationKind.AppTaskRegistration:
-      return FrameworkRelationshipRelation.AdmitsAppTask;
-    case FrameworkBundleAssociationKind.FactoryRegistration:
-      return FrameworkRelationshipRelation.AdmitsFactory;
-    case FrameworkBundleAssociationKind.UnknownRegistrationArgument:
-      return FrameworkRelationshipRelation.AdmitsUnknownArgument;
-    case FrameworkBundleAssociationKind.RegistrationHelper:
-    case FrameworkBundleAssociationKind.RegistrationArgument:
-    default:
-      return FrameworkRelationshipRelation.AdmitsRegistrationArgument;
-  }
+function admissionRelationForAssociation(): FrameworkRelationshipRelation {
+  return FrameworkRelationshipRelation.AdmitsValue;
 }
 
 function admissionMechanismForAssociation(

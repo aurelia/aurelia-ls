@@ -29,6 +29,11 @@ import {
   NavigationRelation,
   type NavigationRouteClaim,
 } from "../navigation.js";
+import { PagedRowFamily } from "../paged-row-family.js";
+import {
+  evidenceLimit,
+  pageOffset,
+} from "../paging.js";
 import {
   AuLinkGapKind,
   readAuLinkModel,
@@ -63,6 +68,28 @@ export interface BridgeAuLinkValue {
   readonly gaps?: readonly AuLinkGapRow[];
 }
 
+const AULINK_ANCHOR_ROW_FAMILY = new PagedRowFamily<AuLinkAnchorRow>({
+  id: "bridge.aulink:anchors",
+  rowLabel: "auLink anchor row(s)",
+  evidenceForRow: evidenceForAnchor,
+  continuationsForPage: anchorContinuations,
+});
+
+const AULINK_GAP_ROW_FAMILY = new PagedRowFamily<AuLinkGapRow>({
+  id: "bridge.aulink:gaps",
+  rowLabel: "auLink gap row(s)",
+  evidenceForRow: evidenceForGap,
+  continuationsForPage: gapContinuations,
+});
+
+const AULINK_FRAMEWORK_TARGET_ROW_FAMILY =
+  new PagedRowFamily<AuLinkFrameworkTargetResolution>({
+    id: "bridge.aulink:targets",
+    rowLabel: "auLink framework target row(s)",
+    evidenceForRow: evidenceForFrameworkTarget,
+    continuationsForPage: targetContinuations,
+  });
+
 /** Answer auLink bridge inquiries from semantic-runtime source and TypeChecker state. */
 export function answerBridgeAuLink(
   /** Inquiry being answered. */
@@ -77,125 +104,61 @@ export function answerBridgeAuLink(
   const offset = pageOffset(inquiry);
 
   if (projection === "anchors") {
-    const page = pageRows(model.anchors, offset, limit);
-    const value: BridgeAuLinkValue = {
-      filters,
-      rollup: model.rollup,
-      anchors: page.rows,
-    };
-    return createAnswer(
+    return AULINK_ANCHOR_ROW_FAMILY.answer({
       inquiry,
-      page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-      `Returned ${page.rows.length} of ${model.anchors.length} auLink anchor row(s).`,
-      {
-        value,
-        basis: [auLinkBasis(sourceProject), checkerBasis(sourceProject)],
-        evidence: page.rows
-          .slice(0, evidenceLimit(inquiry))
-          .map(evidenceForAnchor),
-        openSeams: model.gaps
-          .slice(0, evidenceLimit(inquiry))
-          .map(openSeamForGap),
-        page: {
-          size: limit,
-          cursor: inquiry.page?.cursor,
-          returned: page.rows.length,
-          total: model.anchors.length,
-          ...(page.nextOffset === undefined
-            ? {}
-            : { nextCursor: String(page.nextOffset) }),
-        },
-        continuations: anchorContinuations(
-          inquiry,
-          page.rows,
-          page.nextOffset,
-          limit,
-        ),
-      },
-    );
+      rows: model.anchors,
+      limit,
+      offset,
+      basis: [auLinkBasis(sourceProject), checkerBasis(sourceProject)],
+      value: (page) => ({
+        filters,
+        rollup: model.rollup,
+        anchors: page.rows,
+      }),
+      openSeams: () =>
+        model.gaps.slice(0, evidenceLimit(inquiry)).map(openSeamForGap),
+    });
   }
 
   if (projection === "gaps") {
-    const page = pageRows(model.gaps, offset, limit);
-    const value: BridgeAuLinkValue = {
-      filters,
-      rollup: model.rollup,
-      gaps: page.rows,
-    };
-    return createAnswer(
+    return AULINK_GAP_ROW_FAMILY.answer({
       inquiry,
-      page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-      `Returned ${page.rows.length} of ${model.gaps.length} auLink gap row(s).`,
-      {
-        value,
-        basis: [auLinkBasis(sourceProject), checkerBasis(sourceProject)],
-        evidence: page.rows
-          .slice(0, evidenceLimit(inquiry))
-          .map(evidenceForGap),
-        openSeams: page.rows
-          .slice(0, evidenceLimit(inquiry))
-          .map(openSeamForGap),
-        page: {
-          size: limit,
-          cursor: inquiry.page?.cursor,
-          returned: page.rows.length,
-          total: model.gaps.length,
-          ...(page.nextOffset === undefined
-            ? {}
-            : { nextCursor: String(page.nextOffset) }),
-        },
-        continuations: gapContinuations(
-          inquiry,
-          page.rows,
-          page.nextOffset,
-          limit,
-        ),
-      },
-    );
+      rows: model.gaps,
+      limit,
+      offset,
+      basis: [auLinkBasis(sourceProject), checkerBasis(sourceProject)],
+      value: (page) => ({
+        filters,
+        rollup: model.rollup,
+        gaps: page.rows,
+      }),
+      openSeams: (page) =>
+        page.rows.slice(0, evidenceLimit(inquiry)).map(openSeamForGap),
+    });
   }
 
   if (projection === "targets") {
-    const page = pageRows(model.frameworkTargets, offset, limit);
-    const value: BridgeAuLinkValue = {
-      filters,
-      rollup: model.rollup,
-      targets: page.rows,
-    };
-    return createAnswer(
+    return AULINK_FRAMEWORK_TARGET_ROW_FAMILY.answer({
       inquiry,
-      page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-      `Returned ${page.rows.length} of ${model.frameworkTargets.length} auLink framework target row(s).`,
-      {
-        value,
-        basis: [
-          auLinkBasis(sourceProject),
-          checkerBasis(sourceProject),
-          frameworkBasis(sourceProject),
-        ],
-        evidence: page.rows
-          .slice(0, evidenceLimit(inquiry))
-          .flatMap(evidenceForFrameworkTarget),
-        openSeams: page.rows
+      rows: model.frameworkTargets,
+      limit,
+      offset,
+      basis: [
+        auLinkBasis(sourceProject),
+        checkerBasis(sourceProject),
+        frameworkBasis(sourceProject),
+      ],
+      value: (page) => ({
+        filters,
+        rollup: model.rollup,
+        targets: page.rows,
+      }),
+      openSeams: (page) =>
+        page.rows
           .filter((target) => target.status !== "resolved")
           .slice(0, evidenceLimit(inquiry))
           .map(openSeamForFrameworkTarget),
-        page: {
-          size: limit,
-          cursor: inquiry.page?.cursor,
-          returned: page.rows.length,
-          total: model.frameworkTargets.length,
-          ...(page.nextOffset === undefined
-            ? {}
-            : { nextCursor: String(page.nextOffset) }),
-        },
-        continuations: targetContinuations(
-          inquiry,
-          page.rows,
-          page.nextOffset,
-          limit,
-        ),
-      },
-    );
+    });
   }
 
   const value: BridgeAuLinkValue = {
@@ -828,7 +791,6 @@ function auLinkBasis(sourceProject: SourceProject): Basis {
     identity: sourceProject.snapshot().identity,
   };
 }
-
 function checkerBasis(sourceProject: SourceProject): Basis {
   return {
     kind: BasisKind.TypeScriptChecker,
@@ -851,31 +813,4 @@ function frameworkBasis(sourceProject: SourceProject): Basis {
       "Resolved framework-side auLink targets from admitted Aurelia package declarations.",
     identity: sourceProject.snapshot().identity,
   };
-}
-
-function pageRows<TValue>(
-  rows: readonly TValue[],
-  offset: number,
-  limit: number,
-): { readonly rows: readonly TValue[]; readonly nextOffset?: number } {
-  const page = rows.slice(offset, offset + limit);
-  const nextOffset =
-    offset + page.length < rows.length ? offset + page.length : undefined;
-  return {
-    rows: page,
-    ...(nextOffset === undefined ? {} : { nextOffset }),
-  };
-}
-
-function pageOffset(inquiry: Inquiry): number {
-  const cursor = inquiry.page?.cursor;
-  if (cursor === undefined) {
-    return 0;
-  }
-  const parsed = Number.parseInt(cursor, 10);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function evidenceLimit(inquiry: Inquiry): number {
-  return clampBudget(inquiry.budget?.evidencePerSubject, 5, 20);
 }

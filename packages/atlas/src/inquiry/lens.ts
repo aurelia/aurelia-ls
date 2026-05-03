@@ -73,7 +73,9 @@ export const enum LensId {
   FrameworkObservation = "framework.observation",
   /** Aurelia framework configuration and bundle admission graph. */
   FrameworkAdmission = "framework.admission",
-  /** atlas maintenance and contract pressure. */
+  /** Aurelia framework actor-centered semantic composition graph. */
+  FrameworkComposition = "framework.composition",
+  /** Atlas self-maintenance source surfaces. */
   AtlasSelf = "atlas.self",
 }
 
@@ -620,45 +622,6 @@ export const LensCatalog: readonly LensSpec[] = [
           "Evaluator-derived registration associations for registry/configuration bundle exports.",
       },
       {
-        id: "syntax-products",
-        summary:
-          "Syntax producers and the instruction or binding products they expose.",
-      },
-      {
-        id: "instruction-slots",
-        summary:
-          "Instruction discriminator constants joined to instruction declarations and syntax products.",
-      },
-      {
-        id: "instruction-dispatches",
-        summary: "Instruction discriminator slot to renderer dispatch edges.",
-      },
-      {
-        id: "controller-creations",
-        summary:
-          "Renderer hydration flows that construct view models, create child controllers, recursively render property instructions, and admit children to the parent controller.",
-      },
-      {
-        id: "binding-products",
-        summary:
-          "Binding classes materialized by renderer syntax products, with lifecycle and observer-locator surfaces.",
-      },
-      {
-        id: "binding-admissions",
-        summary:
-          "Controller.addBinding admission edges that attach framework binding products to controller lifecycle lists.",
-      },
-      {
-        id: "binding-effects",
-        summary:
-          "Binding lifecycle declarations and setup effects such as observer lookup, event listeners, and subscriptions.",
-      },
-      {
-        id: "binding-setups",
-        summary:
-          "Renderer/resource-side calls that install target observers, accessors, or target subscribers on bindings.",
-      },
-      {
         id: "observers",
         summary:
           "Framework observer-system exports, including ObserverLocator/NodeObserverLocator, observers, accessors, subscribers, connectables, effects, and signals.",
@@ -1087,7 +1050,17 @@ export const LensCatalog: readonly LensSpec[] = [
       {
         id: "summary",
         summary:
-          "Compiler instruction-production rollup across binding-command build methods and instruction factories.",
+          "Compiler rollup across compile-flow stages, attribute classification, instruction products, and relationship atoms.",
+      },
+      {
+        id: "compile-flow",
+        summary:
+          "High-level TemplateCompiler compilation corridor across compile, compileSpread, node/element compilation, local elements, projections, attribute classification, instruction assembly, and compiled definition output.",
+      },
+      {
+        id: "attribute-classification",
+        summary:
+          "Detailed TemplateCompiler._classifyAttributes branch rows for custom elements, custom attributes, template controllers, binding commands, spreads, and plain attributes.",
       },
       {
         id: "instruction-products",
@@ -1105,6 +1078,12 @@ export const LensCatalog: readonly LensSpec[] = [
         id: "packageId",
         role: ParameterRole.Filter,
         summary: "Filter compiler rows by Aurelia framework package id.",
+      },
+      {
+        id: "exportName",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter compiler rows by exact source producer/export name when the producer is exported.",
       },
       {
         id: "producerKind",
@@ -1137,6 +1116,24 @@ export const LensCatalog: readonly LensSpec[] = [
         id: "phase",
         role: ParameterRole.Filter,
         summary: "Filter compiler relationship rows by framework phase.",
+      },
+      {
+        id: "compileStage",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter compile-flow rows by exact stage such as compile-spread, attribute-classification, custom-attribute-bindables, slot-projection-extraction, element-compilation, node-dispatch, or compiled-definition.",
+      },
+      {
+        id: "branchKind",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter attribute-classification rows by exact decision branch such as element-bindable, attribute-resource-lookup, template-controller-instruction, or plain-binding-command.",
+      },
+      {
+        id: "methodName",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter compiler flow rows by owning TemplateCompiler method name.",
       },
       {
         id: "query",
@@ -1177,7 +1174,7 @@ export const LensCatalog: readonly LensSpec[] = [
       {
         id: "syntax-products",
         summary:
-          "Syntax producers and the instruction or binding products they expose.",
+          "Rendering-owned syntax products: renderer instruction handling and binding construction.",
       },
       {
         id: "instruction-slots",
@@ -1187,6 +1184,16 @@ export const LensCatalog: readonly LensSpec[] = [
       {
         id: "instruction-dispatches",
         summary: "Instruction discriminator slot to renderer dispatch edges.",
+      },
+      {
+        id: "hydration-flow",
+        summary:
+          "Compact source-backed hydration/runtime rendering corridor from AppRoot and Controller through Rendering.render, renderer dispatch, child controller creation, binding admission, lifecycle hooks, and observation setup.",
+      },
+      {
+        id: "render-consequences",
+        summary:
+          "Compact renderer consequence rows over instruction dispatch, controller creation/admission, binding production/admission/effects, and observation setup before opening heavy detail projections.",
       },
       {
         id: "controller-creations",
@@ -1264,6 +1271,48 @@ export const LensCatalog: readonly LensSpec[] = [
         summary: "Filter binding rows by exact binding class name.",
       },
       {
+        id: "hydrationStage",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter hydration-flow rows by coarse runtime stage such as app-root-hydration, controller-hydration, view-compilation, renderer-table, instruction-dispatch, child-controller, binding-admission, lifecycle-hooks, or observation-setup.",
+      },
+      {
+        id: "operation",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter hydration-flow rows by exact runtime operation such as find, get, get-all, invoke, register, compile, hydrate, render, dispatch, admit-child, admit-binding, run-hook, create-observers, create-watchers, create-nodes, or adopt-nodes.",
+      },
+      {
+        id: "targetKind",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter hydration-flow rows by semantic target kind such as custom-element, custom-attribute, template-controller, template-compiler, renderer-table, instruction, binding, lifecycle-hook, observer, node-sequence, or view-model.",
+      },
+      {
+        id: "ownerName",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter hydration-flow rows by owning class, renderer, or helper name.",
+      },
+      {
+        id: "methodName",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter hydration-flow rows by owning method/accessor/function name.",
+      },
+      {
+        id: "targetName",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter hydration-flow rows by named callee, DI key, renderer target, or substrate.",
+      },
+      {
+        id: "consequenceKind",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter render-consequence rows by compact kind such as instruction-dispatch, controller-creation, child-controller-admission, binding-production, binding-admission, binding-effect, observer-lookup, observation-setup, recursive-dispatch, or template-controller-link.",
+      },
+      {
         id: "constructionKind",
         role: ParameterRole.Filter,
         summary:
@@ -1321,7 +1370,7 @@ export const LensCatalog: readonly LensSpec[] = [
     family: LensFamily.Framework,
     stage: LensStage.Implemented,
     summary:
-      "Trace Aurelia framework DI keys, relationship atoms, registrations, lookups, providers, and materialization mechanics.",
+      "Trace Aurelia framework DI keys, relationship atoms, graph layers, dependency DAG, registrations, lookups, providers, and materialization mechanics.",
     supportedLoci: [
       LocusKind.Repo,
       LocusKind.RepoArea,
@@ -1333,6 +1382,7 @@ export const LensCatalog: readonly LensSpec[] = [
     ],
     requiredSubstrates: [
       SubstrateId.FrameworkDi,
+      SubstrateId.FrameworkStaticEvaluator,
       SubstrateId.TypeScriptChecker,
     ],
     projections: [
@@ -1362,6 +1412,31 @@ export const LensCatalog: readonly LensSpec[] = [
       {
         id: "materializations",
         summary: "Kernel DI factory and construction atoms.",
+      },
+      {
+        id: "graph",
+        summary:
+          "Typed DI graph over key declarations, registration admission, container slots, lookups, materialization routes, and dependency edges.",
+      },
+      {
+        id: "world",
+        summary:
+          "StandardConfiguration spent into abstract resolver/resource slots from linked framework source values.",
+      },
+      {
+        id: "slots",
+        summary:
+          "Resolver and resource slots produced by StandardConfiguration DI-world spending.",
+      },
+      {
+        id: "dependencies",
+        summary:
+          "Provider dependency edges discovered after spending StandardConfiguration registrations.",
+      },
+      {
+        id: "dag",
+        summary:
+          "SCC-collapsed DI key dependency graph derived from alias and dependency edges.",
       },
       { id: "evidence", summary: "Source-backed relationship atom evidence." },
     ],
@@ -1395,6 +1470,26 @@ export const LensCatalog: readonly LensSpec[] = [
         id: "strategy",
         role: ParameterRole.Filter,
         summary: "Filter DI rows by resolver strategy.",
+      },
+      {
+        id: "routeKind",
+        role: ParameterRole.Filter,
+        summary: "Filter DI graph/materialization rows by route kind.",
+      },
+      {
+        id: "nodeKind",
+        role: ParameterRole.Filter,
+        summary: "Filter DI graph rows by graph node kind.",
+      },
+      {
+        id: "edgeKind",
+        role: ParameterRole.Filter,
+        summary: "Filter DI graph rows by graph edge kind.",
+      },
+      {
+        id: "dependencyKey",
+        role: ParameterRole.Filter,
+        summary: "Filter DI-world dependency rows by requested key.",
       },
       {
         id: "query",
@@ -1487,12 +1582,6 @@ export const LensCatalog: readonly LensSpec[] = [
         summary: "Filter materialization routes by route kind.",
       },
       {
-        id: "instantiationKind",
-        role: ParameterRole.Filter,
-        summary:
-          "Filter key instantiation rows by existing value, constructable, callback return, alias delegation, or provider.",
-      },
-      {
         id: "resourceKind",
         role: ParameterRole.Filter,
         summary:
@@ -1574,6 +1663,7 @@ export const LensCatalog: readonly LensSpec[] = [
     ],
     requiredSubstrates: [
       SubstrateId.FrameworkDi,
+      SubstrateId.FrameworkStaticEvaluator,
       SubstrateId.TypeScriptChecker,
     ],
     projections: [
@@ -1895,6 +1985,26 @@ export const LensCatalog: readonly LensSpec[] = [
           "Join admitted values to materialization or lifecycle execution evidence while preserving registry/catalog admission-only boundaries.",
       },
       {
+        id: "flow",
+        summary:
+          "Compact graph rollup for configuration admission flow and optional named corridors.",
+      },
+      {
+        id: "flow-edges",
+        summary:
+          "Paged configuration admission flow edges after graph rollup is worth inspecting.",
+      },
+      {
+        id: "flow-edge-details",
+        summary:
+          "Paged full configuration admission flow edge payloads when compact edge rows are insufficient.",
+      },
+      {
+        id: "flow-nodes",
+        summary:
+          "Paged configuration admission flow nodes after graph rollup is worth inspecting.",
+      },
+      {
         id: "registries",
         summary: "Admission rows that offer registry/configuration exports.",
       },
@@ -1954,17 +2064,20 @@ export const LensCatalog: readonly LensSpec[] = [
       {
         id: "targetName",
         role: ParameterRole.Filter,
-        summary: "Filter admission rows by admitted target name.",
+        summary:
+          "Filter admission rows by admitted target name; on flow, filter source or target graph node names after composition.",
       },
       {
         id: "resourceKind",
         role: ParameterRole.Filter,
-        summary: "Filter admitted resource rows by resource definition kind.",
+        summary:
+          "Filter admitted resource rows or flow resource-world edges by resource definition kind.",
       },
       {
         id: "key",
         role: ParameterRole.Filter,
-        summary: "Filter admitted DI rows by key or target name.",
+        summary:
+          "Filter admitted DI rows by key or target name; on flow, filter source or target graph node names.",
       },
       {
         id: "linkKind",
@@ -1988,7 +2101,7 @@ export const LensCatalog: readonly LensSpec[] = [
         id: "formationKind",
         role: ParameterRole.Filter,
         summary:
-          "Filter world-formation rows by runtime-existence, app-task-execution, registry-export-admission, catalog-expansion, factory-admission, registration-argument-admission, unknown-admission, or admission-only.",
+          "Filter world-formation rows by runtime-existence, app-task-execution, catalog-expansion, or admission-only.",
       },
       {
         id: "status",
@@ -2013,10 +2126,32 @@ export const LensCatalog: readonly LensSpec[] = [
         summary: "Filter admission rows by static evaluator certainty.",
       },
       {
+        id: "corridor",
+        role: ParameterRole.Filter,
+        summary:
+          "Slice admission flow to a named semantic corridor such as jit-compiler.",
+      },
+      {
+        id: "edgeKind",
+        role: ParameterRole.Filter,
+        summary: "Filter admission flow rows by graph edge kind.",
+      },
+      {
+        id: "nodeKind",
+        role: ParameterRole.Filter,
+        summary: "Filter admission flow rows by source or target node kind.",
+      },
+      {
+        id: "role",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter admission flow rows by association, route, or resource role.",
+      },
+      {
         id: "query",
         role: ParameterRole.Filter,
         summary:
-          "Filter admission rows by exact substring across bundle and target names.",
+          "Filter admission rows by exact substring; on flow, apply after composition across node and edge fields.",
       },
     ],
     outputKinds: [
@@ -2029,11 +2164,103 @@ export const LensCatalog: readonly LensSpec[] = [
     defaultBudget: { rows: 100, evidencePerSubject: 5 },
   },
   {
+    id: LensId.FrameworkComposition,
+    family: LensFamily.Framework,
+    stage: LensStage.Implemented,
+    summary:
+      "Compose high-salience Aurelia framework actors with signed claims from auLink and framework relationship rows.",
+    supportedLoci: [
+      LocusKind.Repo,
+      LocusKind.RepoArea,
+      LocusKind.Package,
+      LocusKind.Symbol,
+      LocusKind.Handle,
+    ],
+    requiredSubstrates: [
+      SubstrateId.ProductAuLink,
+      SubstrateId.FrameworkDi,
+      SubstrateId.FrameworkResources,
+      SubstrateId.FrameworkAdmission,
+      SubstrateId.TypeScriptChecker,
+    ],
+    projections: [
+      {
+        id: "summary",
+        summary:
+          "Actor-centered semantic composition rollup over core framework classes and interfaces.",
+      },
+      {
+        id: "actors",
+        summary:
+          "Framework/product actor rows with claim counts and auLink ids.",
+      },
+      {
+        id: "claims",
+        summary:
+          "Signed subject-predicate-object claims involving selected actors.",
+      },
+    ],
+    parameters: [
+      {
+        id: "actorName",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter the induced graph by actor/class/interface name such as Container or TemplateCompiler.",
+      },
+      {
+        id: "symbolName",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter auLink and framework actor matching by exact framework symbol name.",
+      },
+      {
+        id: "packageId",
+        role: ParameterRole.Filter,
+        summary: "Filter composition claims by Aurelia framework package id.",
+      },
+      {
+        id: "family",
+        role: ParameterRole.Filter,
+        summary: "Filter signed claims by broad source family.",
+      },
+      {
+        id: "predicate",
+        role: ParameterRole.Filter,
+        summary: "Filter signed claims by semantic predicate.",
+      },
+      {
+        id: "mechanism",
+        role: ParameterRole.Filter,
+        summary: "Filter signed claims by runtime/source mechanism.",
+      },
+      {
+        id: "phase",
+        role: ParameterRole.Filter,
+        summary: "Filter signed claims by framework phase.",
+      },
+      {
+        id: "query",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter composition actors and claims by exact substring across endpoint names.",
+      },
+    ],
+    outputKinds: [
+      EvidenceKind.AuLinkAnchor,
+      EvidenceKind.DiRegistration,
+      EvidenceKind.DiLookup,
+      EvidenceKind.TypeFact,
+      EvidenceKind.SourceSpan,
+      EvidenceKind.OpenSeam,
+    ],
+    defaultBudget: { rows: 80, evidencePerSubject: 4 },
+  },
+  {
     id: LensId.AtlasSelf,
     family: LensFamily.Atlas,
     stage: LensStage.Implemented,
     summary:
-      "Maintain Atlas by inspecting inquiry/lens wiring, contract pressure, and static coherence evidence.",
+      "Inspect exact Atlas source surfaces, contracts, routes, and value spaces for maintenance work.",
     supportedLoci: [
       LocusKind.Repo,
       LocusKind.RepoArea,
@@ -2050,7 +2277,7 @@ export const LensCatalog: readonly LensSpec[] = [
       {
         id: "recipes",
         summary:
-          "Calibrated hop graphs that combine Atlas self-analysis projections with TypeScript source, type, module, and diagnostic reads.",
+          "Stored maintenance recipes that combine self-analysis rows with TypeScript source, type, module, and diagnostic reads.",
       },
       {
         id: "taxonomy",
@@ -2073,14 +2300,19 @@ export const LensCatalog: readonly LensSpec[] = [
           "Continuation object literals with target inquiry and route-claim visibility.",
       },
       {
+        id: "semantic-routes",
+        summary:
+          "Declared framework semantic route topology with target endpoint visibility.",
+      },
+      {
         id: "modules",
         summary:
           "Atlas relative module dependency edges and cross-area pressure.",
       },
       {
-        id: "indexes",
+        id: "substrate-surfaces",
         summary:
-          "Index, cache, warmup, reader, builder, and schema provenance surfaces.",
+          "Substrate reader, builder, and schema surface declarations.",
       },
       {
         id: "contract-strings",
@@ -2090,7 +2322,22 @@ export const LensCatalog: readonly LensSpec[] = [
       {
         id: "enums",
         summary:
-          "Atlas enum declarations with member reference and literal reuse pressure.",
+          "Atlas enum declarations backed by the package-scoped enum usage index.",
+      },
+      {
+        id: "enum-references",
+        summary:
+          "Exact Enum.Member reference sites with role and source context.",
+      },
+      {
+        id: "enum-value-spaces",
+        summary:
+          "Enum member value spaces with raw literal overlap and shared values.",
+      },
+      {
+        id: "enum-mappings",
+        summary:
+          "Exact enum-to-enum translation edges from case returns, object entries, assignments, and member initializers.",
       },
       {
         id: "strings",
@@ -2121,11 +2368,6 @@ export const LensCatalog: readonly LensSpec[] = [
         id: "functions",
         summary: "Top-level function and class-method declaration surfaces.",
       },
-      {
-        id: "pressure",
-        summary: "Refactor pressure and missing contract evidence.",
-      },
-      { id: "wiring", summary: "Lens, substrate, and answer-shape wiring." },
     ],
     parameters: [
       {
@@ -2157,6 +2399,11 @@ export const LensCatalog: readonly LensSpec[] = [
         summary: "Filter contract or projection rows by projection id.",
       },
       {
+        id: "parameterId",
+        role: ParameterRole.Filter,
+        summary: "Filter lens contract rows by declared parameter id.",
+      },
+      {
         id: "functionName",
         role: ParameterRole.Filter,
         summary:
@@ -2168,14 +2415,54 @@ export const LensCatalog: readonly LensSpec[] = [
         summary: "Filter continuation rows by target lens id or LensId member.",
       },
       {
+        id: "targetProjection",
+        role: ParameterRole.Filter,
+        summary: "Filter continuation rows by target projection id.",
+      },
+      {
         id: "routeRelationMember",
         role: ParameterRole.Filter,
-        summary: "Filter continuation rows by NavigationRelation member.",
+        summary:
+          "Filter continuation or semantic-route rows by NavigationRelation member or value.",
+      },
+      {
+        id: "semanticRouteId",
+        role: ParameterRole.Filter,
+        summary: "Filter semantic-route rows by declared route id.",
+      },
+      {
+        id: "navigationSpecId",
+        role: ParameterRole.Filter,
+        summary: "Filter semantic-route rows by generic navigation route spec id.",
+      },
+      {
+        id: "targetEndpointId",
+        role: ParameterRole.Filter,
+        summary: "Filter semantic-route rows by declared endpoint id.",
       },
       {
         id: "axis",
         role: ParameterRole.Filter,
-        summary: "Filter row surfaces or axis-pressure rows by semantic axis.",
+        summary:
+          "Filter row, relationship, or axis-pressure surfaces by semantic axis.",
+      },
+      {
+        id: "axisId",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter axis-pressure rows by stable axis identity, keeping field labels and value spaces distinct.",
+      },
+      {
+        id: "axisField",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter axis-pressure rows by the concrete field that carries the axis.",
+      },
+      {
+        id: "valueSpace",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter axis-pressure rows by the typed value space carried by an axis.",
       },
       {
         id: "pressure",
@@ -2207,12 +2494,53 @@ export const LensCatalog: readonly LensSpec[] = [
       {
         id: "kind",
         role: ParameterRole.Filter,
-        summary: "Filter continuation or index provenance rows by row kind.",
+        summary:
+          "Filter continuation, substrate surface, or axis-pressure rows by row kind.",
       },
       {
         id: "enumName",
         role: ParameterRole.Filter,
-        summary: "Filter enum rows by exact enum declaration name.",
+        summary:
+          "Filter enum declarations, references, value spaces, or mappings by exact enum declaration name.",
+      },
+      {
+        id: "memberName",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter enum references, value spaces, or mappings by exact enum member name.",
+      },
+      {
+        id: "value",
+        role: ParameterRole.Filter,
+        summary: "Filter enum value-space rows by exact raw string/number value.",
+      },
+      {
+        id: "fromEnum",
+        role: ParameterRole.Filter,
+        summary: "Filter enum mapping rows by source enum name.",
+      },
+      {
+        id: "toEnum",
+        role: ParameterRole.Filter,
+        summary: "Filter enum mapping rows by target enum name.",
+      },
+      {
+        id: "carrier",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter enum mapping rows by carrier such as case-return or object-entry.",
+      },
+      {
+        id: "enumRelation",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter enum mapping rows by relation, distinguishing translation from raw value-overlap.",
+      },
+      {
+        id: "role",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter enum reference rows by syntactic role such as case-label, return-expression, or call-argument.",
       },
       {
         id: "stringRole",
@@ -2250,12 +2578,6 @@ export const LensCatalog: readonly LensSpec[] = [
           "basis-transition",
           "navigation-contract",
         ],
-      },
-      {
-        id: "axis",
-        role: ParameterRole.Filter,
-        summary:
-          "Filter relationship surfaces by field or axis name such as relation, mechanism, phase, source, from, or to.",
       },
       {
         id: "className",

@@ -6,7 +6,6 @@ import type { SourceProject } from "../../source/index.js";
 import { OutcomeKind, createAnswer, type Answer } from "../answer.js";
 import { clampBudget } from "../budget.js";
 import {
-  ContinuationKind,
   ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
@@ -18,12 +17,9 @@ import {
 } from "../evidence.js";
 import type { Inquiry } from "../inquiry.js";
 import { LensId } from "../lens.js";
-import { LocusKind, RepoRootLocus, type SourceRange } from "../locus.js";
-import {
-  NavigationPlane,
-  NavigationRelation,
-  type NavigationRouteClaim,
-} from "../navigation.js";
+import { RepoRootLocus, type SourceRange } from "../locus.js";
+import { PagedRowFamily } from "../paged-row-family.js";
+import { pageOffset } from "../paging.js";
 import {
   FrameworkBindingEffectKind,
   type FrameworkBindingEffectRow,
@@ -52,13 +48,17 @@ import {
 } from "./framework-rendering-relationships.js";
 import {
   checkerBasis,
-  evidenceLimit,
-  pageInfo,
-  pageOffset,
-  pageRows,
+  countBy,
   sourceIndexBasis,
   sourceRangeFromFileSpan,
 } from "./framework-support.js";
+import {
+  FrameworkRowContinuationBuilder,
+  FrameworkSemanticRouteBuilder,
+  nextPageContinuation,
+  projectionContinuation,
+} from "./framework-continuation-core.js";
+import { FrameworkSemanticRoutes } from "./framework-route-catalog.js";
 
 /** Value returned by framework.observation. */
 export interface FrameworkObservationValue {
@@ -88,7 +88,7 @@ export interface FrameworkObservationValue {
   readonly relationships?: readonly FrameworkObservationRelationshipRow[];
 }
 
-interface FrameworkObservationFilters extends FrameworkDiscoveryFilters {
+export interface FrameworkObservationFilters extends FrameworkDiscoveryFilters {
   readonly surfaceKind?: string;
   readonly siteKind?: string;
   readonly methodName?: string;
@@ -99,7 +99,7 @@ interface FrameworkObservationFilters extends FrameworkDiscoveryFilters {
   readonly phase?: string;
 }
 
-type FrameworkObservationRelationshipRow =
+export type FrameworkObservationRelationshipRow =
   | FrameworkRenderingRelationshipRow
   | FrameworkObservationInternalRelationshipRow;
 
@@ -112,6 +112,62 @@ interface FrameworkObservationRollupInput {
   readonly flowEntityLinks?: readonly FrameworkObservationFlowEntityLinkRow[];
   readonly relationships?: readonly FrameworkObservationRelationshipRow[];
 }
+
+const OBSERVATION_ENTITY_ROW_FAMILY =
+  new PagedRowFamily<FrameworkObserverEntityRow>({
+    id: "framework.observation:entities",
+    rowLabel: "framework observer entity row(s)",
+    evidenceForRow: evidenceForObserverEntity,
+    continuationsForPage: entityContinuations,
+  });
+
+const OBSERVATION_BINDING_LOOKUP_ROW_FAMILY =
+  new PagedRowFamily<FrameworkBindingEffectRow>({
+    id: "framework.observation:binding-lookups",
+    rowLabel: "framework binding observer lookup row(s)",
+    evidenceForRow: evidenceForBindingLookup,
+    continuationsForPage: bindingLookupContinuations,
+  });
+
+const OBSERVATION_BINDING_SETUP_ROW_FAMILY =
+  new PagedRowFamily<FrameworkBindingSetupRow>({
+    id: "framework.observation:binding-setups",
+    rowLabel: "framework binding observation setup row(s)",
+    evidenceForRow: evidenceForBindingSetup,
+    continuationsForPage: bindingSetupContinuations,
+  });
+
+const OBSERVATION_SURFACE_METHOD_ROW_FAMILY =
+  new PagedRowFamily<FrameworkObservationSurfaceMethodRow>({
+    id: "framework.observation:surface-methods",
+    rowLabel: "framework observation surface method row(s)",
+    evidenceForRow: evidenceForSurfaceMethod,
+    continuationsForPage: surfaceMethodContinuations,
+  });
+
+const OBSERVATION_FLOW_SITE_ROW_FAMILY =
+  new PagedRowFamily<FrameworkObservationFlowSiteRow>({
+    id: "framework.observation:flow-sites",
+    rowLabel: "framework observation flow site row(s)",
+    evidenceForRow: evidenceForFlowSite,
+    continuationsForPage: flowSiteContinuations,
+  });
+
+const OBSERVATION_FLOW_ENTITY_LINK_ROW_FAMILY =
+  new PagedRowFamily<FrameworkObservationFlowEntityLinkRow>({
+    id: "framework.observation:flow-entity-links",
+    rowLabel: "framework observation flow-to-entity link row(s)",
+    evidenceForRow: evidenceForFlowEntityLink,
+    continuationsForPage: flowEntityLinkContinuations,
+  });
+
+const OBSERVATION_RELATIONSHIP_ROW_FAMILY =
+  new PagedRowFamily<FrameworkObservationRelationshipRow>({
+    id: "framework.observation:relationships",
+    rowLabel: "framework observation relationship row(s)",
+    evidenceForRow: evidenceForObservationRelationship,
+    continuationsForPage: relationshipContinuations,
+  });
 
 /** Answer framework.observation inquiries from observer entities and binding observer rows. */
 export function answerFrameworkObservation(
@@ -126,17 +182,15 @@ export function answerFrameworkObservation(
   switch (projection) {
     case "entities": {
       const observers = readFrameworkObserverEntities(sourceProject, filters);
-      return observationPageAnswer(
+      return observationPagedAnswer(
         inquiry,
         sourceProject,
+        OBSERVATION_ENTITY_ROW_FAMILY,
         observationBaseValue({ observers }),
         observers,
         offset,
         limit,
         "observers",
-        "framework observer entity row(s)",
-        evidenceForObserverEntity,
-        entityContinuations,
       );
     }
     case "binding-lookups": {
@@ -144,32 +198,28 @@ export function answerFrameworkObservation(
         ...filters,
         effectKind: FrameworkBindingEffectKind.ObserverLookup,
       });
-      return observationPageAnswer(
+      return observationPagedAnswer(
         inquiry,
         sourceProject,
+        OBSERVATION_BINDING_LOOKUP_ROW_FAMILY,
         observationBaseValue({ bindingLookups }),
         bindingLookups,
         offset,
         limit,
         "bindingLookups",
-        "framework binding observer lookup row(s)",
-        evidenceForBindingLookup,
-        bindingLookupContinuations,
       );
     }
     case "binding-setups": {
       const bindingSetups = readFrameworkBindingSetups(sourceProject, filters);
-      return observationPageAnswer(
+      return observationPagedAnswer(
         inquiry,
         sourceProject,
+        OBSERVATION_BINDING_SETUP_ROW_FAMILY,
         observationBaseValue({ bindingSetups }),
         bindingSetups,
         offset,
         limit,
         "bindingSetups",
-        "framework binding observation setup row(s)",
-        evidenceForBindingSetup,
-        bindingSetupContinuations,
       );
     }
     case "surface-methods": {
@@ -177,17 +227,15 @@ export function answerFrameworkObservation(
         sourceProject,
         filters,
       );
-      return observationPageAnswer(
+      return observationPagedAnswer(
         inquiry,
         sourceProject,
+        OBSERVATION_SURFACE_METHOD_ROW_FAMILY,
         observationBaseValue({ surfaceMethods }),
         surfaceMethods,
         offset,
         limit,
         "surfaceMethods",
-        "framework observation surface method row(s)",
-        evidenceForSurfaceMethod,
-        surfaceMethodContinuations,
       );
     }
     case "flow-sites": {
@@ -195,17 +243,15 @@ export function answerFrameworkObservation(
         sourceProject,
         filters,
       );
-      return observationPageAnswer(
+      return observationPagedAnswer(
         inquiry,
         sourceProject,
+        OBSERVATION_FLOW_SITE_ROW_FAMILY,
         observationBaseValue({ flowSites }),
         flowSites,
         offset,
         limit,
         "flowSites",
-        "framework observation flow site row(s)",
-        evidenceForFlowSite,
-        flowSiteContinuations,
       );
     }
     case "flow-entity-links": {
@@ -213,32 +259,31 @@ export function answerFrameworkObservation(
         sourceProject,
         filters,
       );
-      return observationPageAnswer(
+      return observationPagedAnswer(
         inquiry,
         sourceProject,
+        OBSERVATION_FLOW_ENTITY_LINK_ROW_FAMILY,
         observationBaseValue({ flowEntityLinks }),
         flowEntityLinks,
         offset,
         limit,
         "flowEntityLinks",
-        "framework observation flow-to-entity link row(s)",
-        evidenceForFlowEntityLink,
-        flowEntityLinkContinuations,
       );
     }
     case "relationships": {
-      const relationships = readObservationRelationships(sourceProject, filters);
-      return observationPageAnswer(
+      const relationships = readFrameworkObservationRelationships(
+        sourceProject,
+        filters,
+      );
+      return observationPagedAnswer(
         inquiry,
         sourceProject,
+        OBSERVATION_RELATIONSHIP_ROW_FAMILY,
         observationBaseValue({ relationships }),
         relationships,
         offset,
         limit,
         "relationships",
-        "framework observation relationship row(s)",
-        evidenceForObservationRelationship,
-        relationshipContinuations,
       );
     }
     case "summary":
@@ -261,7 +306,10 @@ export function answerFrameworkObservation(
         sourceProject,
         filters,
       );
-      const relationships = readObservationRelationships(sourceProject, filters);
+      const relationships = readFrameworkObservationRelationships(
+        sourceProject,
+        filters,
+      );
       const baseValue = observationBaseValue({
         observers,
         bindingLookups,
@@ -292,9 +340,10 @@ export function answerFrameworkObservation(
   }
 }
 
-function observationPageAnswer<TRow>(
+function observationPagedAnswer<TRow>(
   inquiry: Inquiry,
   sourceProject: SourceProject,
+  rowFamily: PagedRowFamily<TRow>,
   baseValue: FrameworkObservationValue,
   rows: readonly TRow[],
   offset: number,
@@ -307,42 +356,19 @@ function observationPageAnswer<TRow>(
     | "flowSites"
     | "flowEntityLinks"
     | "relationships",
-  label: string,
-  evidenceForRow: (row: TRow) => Evidence,
-  continuationsForRows: (
-    inquiry: Inquiry,
-    rows: readonly TRow[],
-    nextOffset: number | undefined,
-    limit: number,
-  ) => readonly Continuation[],
 ): Answer<FrameworkObservationValue> {
-  const page = pageRows(rows, offset, limit);
-  return createAnswer(
+  return rowFamily.answer({
     inquiry,
-    page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-    `Returned ${page.rows.length} of ${rows.length} ${label}.`,
-    {
-      value: {
+    rows,
+    offset,
+    limit,
+    basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
+    value: (page) =>
+      ({
         ...baseValue,
         [key]: page.rows,
-      } as FrameworkObservationValue,
-      basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
-      evidence: page.rows.slice(0, evidenceLimit(inquiry)).map(evidenceForRow),
-      page: pageInfo(
-        inquiry,
-        page.rows.length,
-        rows.length,
-        limit,
-        page.nextOffset,
-      ),
-      continuations: continuationsForRows(
-        inquiry,
-        page.rows,
-        page.nextOffset,
-        limit,
-      ),
-    },
-  );
+      }) as FrameworkObservationValue,
+  });
 }
 
 function observationBaseValue(
@@ -362,61 +388,63 @@ function observationBaseValue(
       ? {}
       : {
           observerCount: observers.length,
-          observerKinds: countBy(observers.flatMap((row) => row.observerKinds)),
+          observerKinds: countBy(
+            observers.flatMap((row) => row.observerKinds),
+            (value) => value,
+          ),
           observerCapabilities: countBy(
             observers.flatMap((row) => row.observerCapabilities),
+            (value) => value,
           ),
         }),
     ...(bindingLookups === undefined
       ? {}
       : {
           bindingLookupCount: bindingLookups.length,
-          bindingLookupNames: countBy(
-            bindingLookups.map((row) => row.effectName),
-          ),
+          bindingLookupNames: countBy(bindingLookups, (row) => row.effectName),
         }),
     ...(bindingSetups === undefined
       ? {}
       : {
           bindingSetupCount: bindingSetups.length,
-          bindingSetupKinds: countBy(bindingSetups.map((row) => row.setupKind)),
+          bindingSetupKinds: countBy(bindingSetups, (row) => row.setupKind),
         }),
     ...(surfaceMethods === undefined
       ? {}
       : {
           surfaceMethodCount: surfaceMethods.length,
-          surfaceKinds: countBy(surfaceMethods.map((row) => row.surfaceKind)),
+          surfaceKinds: countBy(surfaceMethods, (row) => row.surfaceKind),
         }),
     ...(flowSites === undefined
       ? {}
       : {
           flowSiteCount: flowSites.length,
-          flowSiteKinds: countBy(flowSites.map((row) => row.siteKind)),
+          flowSiteKinds: countBy(flowSites, (row) => row.siteKind),
         }),
     ...(flowEntityLinks === undefined
       ? {}
       : {
           flowEntityLinkCount: flowEntityLinks.length,
           flowEntityMatchBases: countBy(
-            flowEntityLinks.map((row) => row.matchBasis),
+            flowEntityLinks,
+            (row) => row.matchBasis,
           ),
         }),
     ...(relationships === undefined
       ? {}
       : {
           relationshipCount: relationships.length,
-          relationshipRelations: countBy(
-            relationships.map((row) => row.relation),
-          ),
+          relationshipRelations: countBy(relationships, (row) => row.relation),
           relationshipMechanisms: countBy(
-            relationships.map((row) => row.mechanism),
+            relationships,
+            (row) => row.mechanism,
           ),
-          relationshipPhases: countBy(relationships.map((row) => row.phase)),
+          relationshipPhases: countBy(relationships, (row) => row.phase),
         }),
   };
 }
 
-function readObservationRelationships(
+export function readFrameworkObservationRelationships(
   sourceProject: SourceProject,
   filters: FrameworkObservationFilters,
 ): readonly FrameworkObservationRelationshipRow[] {
@@ -637,42 +665,49 @@ function summaryContinuations(inquiry: Inquiry): readonly Continuation[] {
       "framework.observation:entities",
       "entities",
       "Inspect observer/reactivity entity rows.",
+      { basis: [], summary: "framework.observation:entities" },
     ),
     projectionContinuation(
       inquiry,
       "framework.observation:binding-lookups",
       "binding-lookups",
       "Inspect binding observer/accessor lookup rows.",
+      { basis: [], summary: "framework.observation:binding-lookups" },
     ),
     projectionContinuation(
       inquiry,
       "framework.observation:binding-setups",
       "binding-setups",
       "Inspect binding observation setup override rows.",
+      { basis: [], summary: "framework.observation:binding-setups" },
     ),
     projectionContinuation(
       inquiry,
       "framework.observation:surface-methods",
       "surface-methods",
       "Inspect observer-locator, connectable, watcher, effect, registry, and metadata surface methods.",
+      { basis: [], summary: "framework.observation:surface-methods" },
     ),
     projectionContinuation(
       inquiry,
       "framework.observation:flow-sites",
       "flow-sites",
       "Inspect source-backed observation flow sites inside locator, dirty-checker, and connectable surfaces.",
+      { basis: [], summary: "framework.observation:flow-sites" },
     ),
     projectionContinuation(
       inquiry,
       "framework.observation:flow-entity-links",
       "flow-entity-links",
       "Inspect flow-site targets linked back to public observer entity rows.",
+      { basis: [], summary: "framework.observation:flow-entity-links" },
     ),
     projectionContinuation(
       inquiry,
       "framework.observation:relationships",
       "relationships",
       "Inspect normalized observation relationships.",
+      { basis: [], summary: "framework.observation:relationships" },
     ),
   ];
 }
@@ -705,6 +740,7 @@ function entityContinuations(
       "framework.observation:entities:lookups",
       "binding-lookups",
       "Jump from observer entities to binding lookup consumers.",
+      { basis: [], summary: "framework.observation:binding-lookups" },
     ),
   ];
 }
@@ -804,12 +840,14 @@ function flowSiteContinuations(
       "framework.observation:flow-sites:entity-links",
       "flow-entity-links",
       "Jump from observation flow sites to public observer entity links.",
+      { basis: [], summary: "framework.observation:flow-entity-links" },
     ),
     projectionContinuation(
       inquiry,
       "framework.observation:flow-sites:relationships",
       "relationships",
       "Jump from observation flow sites to normalized observation relationships.",
+      { basis: [], summary: "framework.observation:relationships" },
     ),
   ];
 }
@@ -832,46 +870,44 @@ function flowEntityLinkContinuations(
     ),
   ];
   for (const [index, row] of rows.slice(0, 3).entries()) {
-    continuations.push({
-      id: `framework.observation:flow-entity-links:entity:${index}`,
-      kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Primary,
-      rationale: "Jump to the public observer entity row linked from this flow site.",
-      inquiry: {
-        lens: LensId.FrameworkObservation,
-        locus: RepoRootLocus,
-        projection: "entities",
-        filters: {
-          packageId: row.entityPackageId,
-          exportName: row.entityExportName,
+    const semanticRoute = new FrameworkSemanticRouteBuilder(
+      inquiry,
+      "framework.observation:flow-entity-links",
+      index,
+    );
+    continuations.push(
+      semanticRoute.continuation(
+        FrameworkSemanticRoutes.ObservationToEntities,
+        "entity",
+        {
+          filters: {
+            packageId: row.entityPackageId,
+            exportName: row.entityExportName,
+          },
+          rationale:
+            "Jump to the public observer entity row linked from this flow site.",
+          routeSummary:
+            "Observation flow-to-entity link back to observer entity catalog.",
         },
-        page: undefined,
-      },
-      route: route(
-        NavigationPlane.Semantic,
-        NavigationRelation.FrameworkFlowOf,
-        "Observation flow-to-entity link back to observer entity catalog.",
       ),
-    });
+    );
     if (row.entitySource === undefined) {
       continue;
     }
-    continuations.push({
-      id: `framework.observation:flow-entity-links:entity-source:${index}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Secondary,
-      rationale: "Inspect the public observer entity declaration linked from this flow site.",
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: { kind: LocusKind.SourceRange, range: row.entitySource },
-        projection: "text",
-      },
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.SourceFor,
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.observation:flow-entity-links",
+      index,
+    );
+    continuations.push(
+      builder.source(
+        "entity-source",
+        row.entitySource,
+        "Inspect the public observer entity declaration linked from this flow site.",
         "Source for linked observer entity declaration.",
+        { priority: ContinuationPriority.Secondary },
       ),
-    });
+    );
   }
   return continuations;
 }
@@ -898,26 +934,27 @@ function observerCapabilityContinuation(
   index: number,
   evidence: Evidence,
 ): Continuation {
-  return {
-    id: `framework.observation:binding-lookups:observer-capability:${index}`,
-    kind: ContinuationKind.SwitchProjection,
-    priority: ContinuationPriority.Secondary,
-    rationale:
-      "Inspect observer entities with the capability implied by this binding lookup.",
-    inquiry: {
+  const semanticRoute = new FrameworkSemanticRouteBuilder(
+    {
       lens: LensId.FrameworkObservation,
       locus: RepoRootLocus,
-      projection: "entities",
-      filters: { observerCapability: observerCapabilityForLookup(effectName) },
-      page: undefined,
+      projection: "binding-lookups",
     },
-    evidence: [evidence],
-    route: route(
-      NavigationPlane.Semantic,
-      NavigationRelation.FrameworkFlowOf,
-      "Binding observer lookup to observer capability catalog.",
-    ),
-  };
+    "framework.observation:binding-lookups",
+    index,
+    evidence,
+  );
+  return semanticRoute.continuation(
+    FrameworkSemanticRoutes.ObservationToEntities,
+    "observer-capability",
+    {
+      filters: { observerCapability: observerCapabilityForLookup(effectName) },
+      rationale:
+        "Inspect observer entities with the capability implied by this binding lookup.",
+      routeSummary: "Binding observer lookup to observer capability catalog.",
+      priority: ContinuationPriority.Secondary,
+    },
+  );
 }
 
 function observerEntityFlowLinksContinuation(
@@ -925,28 +962,28 @@ function observerEntityFlowLinksContinuation(
   index: number,
   evidence: Evidence,
 ): Continuation {
-  return {
-    id: `framework.observation:entities:flow-entity-links:${index}`,
-    kind: ContinuationKind.SwitchProjection,
-    priority: ContinuationPriority.Primary,
-    rationale:
-      "Inspect observation subsystem flow sites linked to this public observer entity.",
-    inquiry: {
+  const semanticRoute = new FrameworkSemanticRouteBuilder(
+    {
       lens: LensId.FrameworkObservation,
       locus: RepoRootLocus,
-      projection: "flow-entity-links",
+      projection: "entities",
+    },
+    "framework.observation:entities",
+    index,
+    evidence,
+  );
+  return semanticRoute.continuation(
+    FrameworkSemanticRoutes.ObservationToFlowEntityLinks,
+    "flow-entity-links",
+    {
       filters: {
         exportName: row.exportEntry.exportName,
       },
-      page: undefined,
+      rationale:
+        "Inspect observation subsystem flow sites linked to this public observer entity.",
+      routeSummary: "Observer entity catalog to observation subsystem flow links.",
     },
-    evidence: [evidence],
-    route: route(
-      NavigationPlane.Semantic,
-      NavigationRelation.FrameworkFlowOf,
-      "Observer entity catalog to observation subsystem flow links.",
-    ),
-  };
+  );
 }
 
 function observerLookupFlowContinuation(
@@ -954,26 +991,26 @@ function observerLookupFlowContinuation(
   index: number,
   evidence: Evidence,
 ): Continuation {
-  return {
-    id: `framework.observation:binding-lookups:flow-sites:${index}`,
-    kind: ContinuationKind.SwitchProjection,
-    priority: ContinuationPriority.Primary,
-    rationale:
-      "Jump from a binding observer lookup API to matching observation subsystem flow sites.",
-    inquiry: {
+  const semanticRoute = new FrameworkSemanticRouteBuilder(
+    {
       lens: LensId.FrameworkObservation,
       locus: RepoRootLocus,
-      projection: "flow-sites",
-      filters: { methodName: row.effectName },
-      page: undefined,
+      projection: "binding-lookups",
     },
-    evidence: [evidence],
-    route: route(
-      NavigationPlane.Semantic,
-      NavigationRelation.FrameworkFlowOf,
-      "Binding observer lookup to ObserverLocator flow sites.",
-    ),
-  };
+    "framework.observation:binding-lookups",
+    index,
+    evidence,
+  );
+  return semanticRoute.continuation(
+    FrameworkSemanticRoutes.ObservationToFlowSites,
+    "flow-sites",
+    {
+      filters: { methodName: row.effectName },
+      rationale:
+        "Jump from a binding observer lookup API to matching observation subsystem flow sites.",
+      routeSummary: "Binding observer lookup to ObserverLocator flow sites.",
+    },
+  );
 }
 
 function observerLookupEntityLinkContinuation(
@@ -981,26 +1018,27 @@ function observerLookupEntityLinkContinuation(
   index: number,
   evidence: Evidence,
 ): Continuation {
-  return {
-    id: `framework.observation:binding-lookups:flow-entity-links:${index}`,
-    kind: ContinuationKind.SwitchProjection,
-    priority: ContinuationPriority.Secondary,
-    rationale:
-      "Jump from a binding observer lookup API to linked observer entity rows inside the observation subsystem.",
-    inquiry: {
+  const semanticRoute = new FrameworkSemanticRouteBuilder(
+    {
       lens: LensId.FrameworkObservation,
       locus: RepoRootLocus,
-      projection: "flow-entity-links",
-      filters: { methodName: row.effectName },
-      page: undefined,
+      projection: "binding-lookups",
     },
-    evidence: [evidence],
-    route: route(
-      NavigationPlane.Semantic,
-      NavigationRelation.FrameworkFlowOf,
-      "Binding observer lookup to observer entity links.",
-    ),
-  };
+    "framework.observation:binding-lookups",
+    index,
+    evidence,
+  );
+  return semanticRoute.continuation(
+    FrameworkSemanticRoutes.ObservationToFlowEntityLinks,
+    "flow-entity-links",
+    {
+      filters: { methodName: row.effectName },
+      rationale:
+        "Jump from a binding observer lookup API to linked observer entity rows inside the observation subsystem.",
+      routeSummary: "Binding observer lookup to observer entity links.",
+      priority: ContinuationPriority.Secondary,
+    },
+  );
 }
 
 function observerEntitySourceContinuations(
@@ -1014,38 +1052,35 @@ function observerEntitySourceContinuations(
 ): readonly Continuation[] {
   const continuations: Continuation[] = [];
   if (nextOffset !== undefined) {
-    continuations.push({
-      id: `${idPrefix}:next-page`,
-      kind: ContinuationKind.NextPage,
-      priority: ContinuationPriority.Secondary,
-      rationale: nextPageRationale,
-      inquiry: {
-        ...inquiry,
-        page: { size: limit, cursor: String(nextOffset) },
-      },
-    });
+    continuations.push(
+      nextPageContinuation(
+        inquiry,
+        `${idPrefix}:next-page`,
+        nextPageRationale,
+        nextOffset,
+        limit,
+        { priority: ContinuationPriority.Secondary },
+      ),
+    );
   }
   for (const [index, row] of rows.slice(0, 3).entries()) {
     const source = sourceForObserverEntity(row);
     if (source === undefined) {
       continue;
     }
-    continuations.push({
-      id: `${idPrefix}:source:${index}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Primary,
-      rationale: sourceRationale,
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: { kind: LocusKind.SourceRange, range: source },
-        projection: "text",
-      },
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.SourceFor,
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      idPrefix,
+      index,
+    );
+    continuations.push(
+      builder.source(
+        "source",
+        source,
+        sourceRationale,
         "Source for observer entity row.",
       ),
-    });
+    );
   }
   return continuations;
 }
@@ -1084,72 +1119,31 @@ function sourceContinuations<TRow extends { readonly source: SourceRange }>(
 ): readonly Continuation[] {
   const continuations: Continuation[] = [];
   if (nextOffset !== undefined) {
-    continuations.push({
-      id: `${idPrefix}:next-page`,
-      kind: ContinuationKind.NextPage,
-      priority: ContinuationPriority.Secondary,
-      rationale: nextPageRationale,
-      inquiry: {
-        ...inquiry,
-        page: { size: limit, cursor: String(nextOffset) },
-      },
-    });
+    continuations.push(
+      nextPageContinuation(
+        inquiry,
+        `${idPrefix}:next-page`,
+        nextPageRationale,
+        nextOffset,
+        limit,
+        { priority: ContinuationPriority.Secondary },
+      ),
+    );
   }
   for (const [index, row] of rows.slice(0, 3).entries()) {
-    continuations.push({
-      id: `${idPrefix}:source:${index}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Primary,
-      rationale: sourceRationale,
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: { kind: LocusKind.SourceRange, range: row.source },
-        projection: "text",
-      },
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.SourceFor,
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      idPrefix,
+      index,
+    );
+    continuations.push(
+      builder.source(
+        "source",
+        row.source,
+        sourceRationale,
         "Source for observation row.",
       ),
-    });
+    );
   }
   return continuations;
-}
-
-function projectionContinuation(
-  inquiry: Inquiry,
-  id: string,
-  projection: string,
-  rationale: string,
-): Continuation {
-  return {
-    id,
-    kind: ContinuationKind.SwitchProjection,
-    priority: ContinuationPriority.Primary,
-    rationale,
-    inquiry: { ...inquiry, projection, page: undefined },
-    route: route(
-      NavigationPlane.Semantic,
-      NavigationRelation.ProjectionOf,
-      `framework.observation:${projection}`,
-    ),
-  };
-}
-
-function route(
-  plane: NavigationPlane,
-  relation: NavigationRelation,
-  summary: string,
-): NavigationRouteClaim {
-  return { plane, relation, basis: [], summary };
-}
-
-function countBy(values: readonly string[]): Readonly<Record<string, number>> {
-  const counts: Record<string, number> = {};
-  for (const value of values) {
-    counts[value] = (counts[value] ?? 0) + 1;
-  }
-  return Object.fromEntries(
-    Object.entries(counts).sort(([left], [right]) => left.localeCompare(right)),
-  );
 }

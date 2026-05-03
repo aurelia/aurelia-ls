@@ -2,7 +2,7 @@
 
 `session` runs the inquiry API in a durable local daemon.
 
-The daemon is not an external transport. It is a loopback workbench for hot state: TypeScript programs, checker state, TypeChecker-driven product snapshots, and framework evaluator caches can live here while scripts or Codex-facing tools ask the same inquiry API over a small line-delimited JSON protocol.
+The daemon is not an external transport. It is a loopback workbench for hot state: TypeScript programs, checker state, TypeChecker-driven product snapshots, and memoized framework evaluator state can live here while scripts or Codex-facing tools ask the same inquiry API over a small line-delimited JSON protocol.
 
 ## Responsibilities
 
@@ -26,15 +26,11 @@ the caller to inspect Atlas source. Richer API teaching stays behind follow-up i
 the TypeScript/IDE, framework cross-lens, and Atlas self-maintenance surfaces discoverable.
 
 `ensureInquirySession()` computes the current build hash, probes the manifest, reuses a compatible daemon, asks an
-incompatible daemon to shut down, or starts a new detached process from `dist/session/daemon.js`. The daemon prewarms
-the auLink bridge index, framework discovery index, core framework entity catalogs, DI atoms, and materialization
-routes before publishing its manifest. Those warm paths hydrate from the package-scoped JSON cache described in
-[../framework/JSON-CACHE.md](../framework/JSON-CACHE.md) when its invalidation keys still match the live TypeScript
-source basis. Entity catalog cache invalidation is scoped by catalog id, so most analyzer refactors should not force a
-full entity-cache refill. Broader entity atom families and bundle admissions are warmed after manifest publication;
-bundle admissions fill package-by-package so a cold evaluator pass does not make first startup unbounded. Cold startup
-is singleflighted with an in-process pending promise plus an atomic
-`.temp/atlas/session/startup.lock.json` lease so parallel callers wait for the first warmup instead of spawning
+incompatible daemon to shut down, or starts a new detached process from `dist/session/daemon.js`. Startup constructs the
+hot source project and leaves framework projection answers on demand; do not add daemon projection warmup unless profiling shows a repeated
+foreground query cannot be made cheap at its owning substrate. Cold startup is singleflighted with an in-process
+pending promise plus an atomic
+`.temp/atlas/session/startup.lock.json` lease so parallel callers wait for the first startup instead of spawning
 duplicate heavyweight daemons. Stale startup locks are removed when their owner process exits or when the startup
 timeout expires.
 

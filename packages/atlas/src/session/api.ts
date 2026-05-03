@@ -250,7 +250,7 @@ function createOrientationGuide(
       requestFields: ["lens", "locus?", "subject?", "projection?", "filters?", "budget?", "page?"],
       answerFields: ["schemaVersion", "inquiry", "outcome", "summary", "value?", "basis", "evidence", "openSeams", "page?", "continuations"],
       continuationFields: ["id?", "kind", "priority?", "rationale", "inquiry", "evidence?", "route?"],
-      routeClaimFields: ["specId?", "plane", "relation", "basis?", "basisTransition?", "summary?"],
+      routeClaimFields: ["specId?", "semanticRouteId?", "plane", "relation", "basis?", "basisTransition?", "summary?"],
       basisTransitionFields: ["kind", "from", "to", "summary"],
     },
     implementedLenses: lenses.filter((lens) => implementedIds.has(lens.id)).map(toLensGuide),
@@ -343,6 +343,18 @@ function orientationCapabilityMoves(): readonly OrientationCapabilityMove[] {
       },
     },
     {
+      id: "framework.composition",
+      family: "framework",
+      summary:
+        "Compose high-salience framework classes and interfaces with auLink anchors and signed relationship claims.",
+      ask: {
+        lens: LensId.FrameworkComposition,
+        locus: RepoRootLocus,
+        projection: "summary",
+        budget: { rows: 20, evidencePerSubject: 3 },
+      },
+    },
+    {
       id: "bridge.aulink",
       family: "bridge",
       summary:
@@ -358,7 +370,7 @@ function orientationCapabilityMoves(): readonly OrientationCapabilityMove[] {
       id: "atlas.self",
       family: "self",
       summary:
-        "Inspect Atlas architectural surfaces, taxonomy pressure, and continuation coherence.",
+        "Inspect exact Atlas source surfaces, value spaces, and continuation rows.",
       ask: {
         lens: LensId.AtlasSelf,
         locus: RepoRootLocus,
@@ -370,7 +382,7 @@ function orientationCapabilityMoves(): readonly OrientationCapabilityMove[] {
       id: "atlas.self-recipes",
       family: "self",
       summary:
-        "Use calibrated hop graphs that combine Atlas self-analysis with TypeScript source, module, and checker reads.",
+        "Use stored self-maintenance recipes when they fit the current architecture question.",
       ask: {
         lens: LensId.AtlasSelf,
         locus: RepoRootLocus,

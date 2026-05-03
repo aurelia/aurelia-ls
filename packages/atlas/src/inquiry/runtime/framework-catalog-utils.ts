@@ -1,28 +1,10 @@
-import type {
-  FrameworkCatalogMatchRow,
-  FrameworkObserverMatchRow,
-} from "./framework-entities.js";
+import type { FrameworkCatalogMatchRow } from "./framework-entities.js";
 
 export function uniqueCatalogMatches(
   matches: readonly FrameworkCatalogMatchRow[],
 ): readonly FrameworkCatalogMatchRow[] {
   const seen = new Set<string>();
   const unique: FrameworkCatalogMatchRow[] = [];
-  for (const match of matches) {
-    const key = `${match.basis}:${match.text}`;
-    if (!seen.has(key)) {
-      seen.add(key);
-      unique.push(match);
-    }
-  }
-  return unique;
-}
-
-export function uniqueObserverMatches(
-  matches: readonly FrameworkObserverMatchRow[],
-): readonly FrameworkObserverMatchRow[] {
-  const seen = new Set<string>();
-  const unique: FrameworkObserverMatchRow[] = [];
   for (const match of matches) {
     const key = `${match.basis}:${match.text}`;
     if (!seen.has(key)) {

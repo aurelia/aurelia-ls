@@ -2,6 +2,7 @@ import ts from "typescript";
 
 import {
   readTypeScriptExpressionFact,
+  SourceProjectKeyedMemo,
   type SourceProject,
 } from "../../source/index.js";
 import {
@@ -9,10 +10,6 @@ import {
   FrameworkSyntaxProducerKind,
   FrameworkSyntaxProductKind,
 } from "../../framework/index.js";
-import {
-  readFrameworkEntityCatalogCache,
-  writeFrameworkEntityCatalogCache,
-} from "./framework-cache.js";
 import type {
   FrameworkResourceCarrierRow,
   FrameworkSyntaxProductRow,
@@ -48,9 +45,9 @@ import {
 import { uniqueById } from "./framework-symbols.js";
 import { callExpressionsIn, propertyNameText } from "./framework-ts-utils.js";
 
-const syntaxProductRowsByPackageByProject = new WeakMap<
-  SourceProject,
-  Map<string, readonly FrameworkSyntaxProductRow[]>
+const syntaxProductRowsByPackage = new SourceProjectKeyedMemo<
+  string,
+  readonly FrameworkSyntaxProductRow[]
 >();
 
 export function readFrameworkSyntaxProducts(
@@ -118,73 +115,93 @@ export function readFrameworkSyntaxProducts(
     );
 }
 
+/** Read only syntax products owned by rendering-time products and dispatch. */
+export function readFrameworkRenderingSyntaxProducts(
+  sourceProject: SourceProject,
+  filters: FrameworkDiscoveryFilters,
+): readonly FrameworkSyntaxProductRow[] {
+  return readFrameworkSyntaxProducts(sourceProject, filters).filter(
+    isFrameworkRenderingSyntaxProduct,
+  );
+}
+
+/** Read only syntax products that produce compiler instruction records. */
+export function readFrameworkCompilerSyntaxProducts(
+  sourceProject: SourceProject,
+  filters: FrameworkDiscoveryFilters,
+): readonly FrameworkSyntaxProductRow[] {
+  return readFrameworkSyntaxProducts(sourceProject, filters).filter(
+    isFrameworkCompilerInstructionProduct,
+  );
+}
+
+/** Whether a syntax product belongs to the compiler instruction-production side. */
+export function isFrameworkCompilerInstructionProduct(
+  row: FrameworkSyntaxProductRow,
+): boolean {
+  if (row.instructionName === null) {
+    return false;
+  }
+  return (
+    row.productKind === FrameworkSyntaxProductKind.BuildsInstruction ||
+    row.productKind === FrameworkSyntaxProductKind.EmitsInstruction
+  );
+}
+
+/** Whether a syntax product belongs to the rendering side after compilation. */
+export function isFrameworkRenderingSyntaxProduct(
+  row: FrameworkSyntaxProductRow,
+): boolean {
+  return (
+    row.productKind === FrameworkSyntaxProductKind.HandlesInstruction ||
+    row.productKind === FrameworkSyntaxProductKind.CreatesBinding
+  );
+}
+
 export function readFrameworkSyntaxProductPackageRows(
   sourceProject: SourceProject,
   packageId: string,
   packageName: string,
 ): readonly FrameworkSyntaxProductRow[] {
-  const cache =
-    syntaxProductRowsByPackageByProject.get(sourceProject) ??
-    new Map<string, readonly FrameworkSyntaxProductRow[]>();
-  if (!syntaxProductRowsByPackageByProject.has(sourceProject)) {
-    syntaxProductRowsByPackageByProject.set(sourceProject, cache);
-  }
-  const cached = cache.get(packageId);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const diskCached = readFrameworkEntityCatalogCache<FrameworkSyntaxProductRow>(
-    sourceProject,
-    "syntax-products",
-    packageId,
-  );
-  if (diskCached !== undefined) {
-    cache.set(packageId, diskCached);
-    return diskCached;
-  }
-  const resourceCarriers = readFrameworkResourcePackageCarrierRows(
-    sourceProject,
-    packageId,
-    packageName,
-  );
-  const rows = sourceProject
-    .ownedSourceFiles()
-    .filter(
-      (sourceFile) =>
-        sourceProject.packageForFileName(sourceFile.fileName)?.id === packageId,
-    )
-    .flatMap((sourceFile) => [
-      ...syntaxProductsForBindingCommandClasses(
-        sourceProject,
-        sourceFile,
-        packageId,
-        packageName,
-        resourceCarriers,
-      ),
-      ...syntaxProductsForRendererVariables(
-        sourceProject,
-        sourceFile,
-        packageId,
-        packageName,
-        resourceCarriers,
-      ),
-      ...syntaxProductsForInstructionFactories(
-        sourceProject,
-        sourceFile,
-        packageId,
-        packageName,
-        resourceCarriers,
-      ),
-    ]);
-  const unique = uniqueById(rows);
-  cache.set(packageId, unique);
-  writeFrameworkEntityCatalogCache(
-    sourceProject,
-    "syntax-products",
-    packageId,
-    unique,
-  );
-  return unique;
+  return syntaxProductRowsByPackage.read(sourceProject, packageId, () => {
+    const resourceCarriers = readFrameworkResourcePackageCarrierRows(
+      sourceProject,
+      packageId,
+      packageName,
+    );
+    return uniqueById(
+      sourceProject
+        .ownedSourceFiles()
+        .filter(
+          (sourceFile) =>
+            sourceProject.packageForFileName(sourceFile.fileName)?.id ===
+            packageId,
+        )
+        .flatMap((sourceFile) => [
+          ...syntaxProductsForBindingCommandClasses(
+            sourceProject,
+            sourceFile,
+            packageId,
+            packageName,
+            resourceCarriers,
+          ),
+          ...syntaxProductsForRendererVariables(
+            sourceProject,
+            sourceFile,
+            packageId,
+            packageName,
+            resourceCarriers,
+          ),
+          ...syntaxProductsForInstructionFactories(
+            sourceProject,
+            sourceFile,
+            packageId,
+            packageName,
+            resourceCarriers,
+          ),
+        ]),
+    );
+  });
 }
 
 export function syntaxProductsForBindingCommandClasses(

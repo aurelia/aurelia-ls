@@ -4,42 +4,65 @@ import {
   readFrameworkDiscoveryIndex,
   readFrameworkDiscoverySeedIndex,
   type FrameworkAnchorResolution,
+  type FrameworkFlowCallEdgeRow,
+  type FrameworkFlowCallSiteRow,
+  type FrameworkFlowCallTargetRow,
   type FrameworkFlowDefinition,
   type FrameworkFlowSeedRow,
 } from "../../framework/index.js";
 import type { SourceProject } from "../../source/index.js";
 import { OutcomeKind, createAnswer, type Answer } from "../answer.js";
 import { clampBudget } from "../budget.js";
-import type { Inquiry } from "../inquiry.js";
-import { readFrameworkBundles } from "./framework-bundles.js";
 import {
-  anchorContinuations,
+  ContinuationKind,
+  ContinuationPriority,
+  type Continuation,
+} from "../continuation.js";
+import type { Inquiry } from "../inquiry.js";
+import {
+  evidenceLimit,
+  pageOffset,
+} from "../paging.js";
+import { readFrameworkBundles } from "./framework-bundles.js";
+import { nextPageContinuation } from "./framework-continuation-core.js";
+import {
   appTaskEntityContinuations,
-  bindingAdmissionContinuations,
-  bindingEffectContinuations,
-  bindingProductContinuations,
-  bindingSetupContinuations,
   bundleContinuations,
-  callEdgeContinuations,
-  callSiteContinuations,
-  callTargetContinuations,
   diInterfaceContinuations,
   expressionEntityContinuations,
-  flowContinuations,
-  flowSeedContinuations,
-  instructionDispatchContinuations,
-  instructionSlotContinuations,
   observerEntityContinuations,
-  openQuestionContinuations,
   packageExportContinuations,
   renderingStructureContinuations,
   resourceCarrierContinuations,
   resourceExportContinuations,
   routerEntityContinuations,
+} from "./framework-catalog-continuations.js";
+import {
+  anchorContinuations,
+  callEdgeContinuations,
+  callSiteContinuations,
+  callTargetContinuations,
+  flowContinuations,
+  flowSeedContinuations,
+} from "./framework-flow-continuations.js";
+import {
+  openQuestionContinuations,
   summaryContinuations,
-  syntaxProductContinuations,
-} from "./framework-continuations.js";
-import type { FrameworkDiscoveryValue } from "./framework-entities.js";
+} from "./framework-summary-continuations.js";
+import type {
+  FrameworkAppTaskEntityRow,
+  FrameworkBundleExportRow,
+  FrameworkDiInterfaceExportRow,
+  FrameworkDiscoveryValue,
+  FrameworkExpressionEntityRow,
+  FrameworkObserverEntityRow,
+  FrameworkPackageExportRow,
+  FrameworkRegistryExportRow,
+  FrameworkRenderingStructureEntityRow,
+  FrameworkResourceCarrierRow,
+  FrameworkResourceExportRow,
+  FrameworkRouterEntityRow,
+} from "./framework-entities.js";
 import {
   readFrameworkAppTaskEntities,
   readFrameworkExpressionEntities,
@@ -50,10 +73,6 @@ import {
 import {
   evidenceForAnchorResolution,
   evidenceForAppTaskEntity,
-  evidenceForBindingAdmission,
-  evidenceForBindingEffect,
-  evidenceForBindingProduct,
-  evidenceForBindingSetup,
   evidenceForBundle,
   evidenceForCallEdge,
   evidenceForCallSite,
@@ -62,8 +81,7 @@ import {
   evidenceForExpressionEntity,
   evidenceForFlow,
   evidenceForFlowSeed,
-  evidenceForInstructionDispatch,
-  evidenceForInstructionSlot,
+  evidenceForFrameworkDiscoveryRecipe,
   evidenceForObserverEntity,
   evidenceForPackageExport,
   evidenceForQuestion,
@@ -71,7 +89,6 @@ import {
   evidenceForResourceCarrier,
   evidenceForResourceExport,
   evidenceForRouterEntity,
-  evidenceForSyntaxProduct,
 } from "./framework-evidence.js";
 import {
   anchorResolutionForRollup,
@@ -89,26 +106,17 @@ import {
   readFrameworkRegistryExports,
 } from "./framework-package-exports.js";
 import {
-  readFrameworkBindingAdmissions,
-  readFrameworkBindingEffects,
-  readFrameworkBindingProducts,
-  readFrameworkBindingSetups,
-  readFrameworkInstructionDispatches,
-  readFrameworkInstructionSlots,
-  readFrameworkSyntaxProducts,
-} from "./framework-rendering-graph.js";
-import {
   readFrameworkResourceCarriers,
   readFrameworkResourceExports,
 } from "./framework-resources.js";
-import { filterFrameworkDiscoveryRecipes } from "./framework-recipes.js";
+import {
+  filterFrameworkDiscoveryRecipes,
+  type FrameworkDiscoveryRecipeRow,
+} from "./framework-recipes.js";
+import { PagedRowFamily } from "../paged-row-family.js";
 import {
   checkerBasis,
-  evidenceLimit,
   frameworkDiscoverySeedBasis,
-  pageInfo,
-  pageOffset,
-  pageRows,
   sourceIndexBasis,
   staticEvaluatorBasis,
 } from "./framework-support.js";
@@ -145,6 +153,159 @@ class FrameworkDiscoveryQueryContext {
     this.offset = pageOffset(inquiry);
   }
 }
+
+const FLOW_DEFINITION_ROW_FAMILY =
+  new PagedRowFamily<FrameworkFlowDefinition>({
+    id: "framework.discovery:flows",
+    rowLabel: "framework flow definition(s)",
+    evidenceForRow: evidenceForFlow,
+    continuationsForPage: (inquiry, _rows, nextOffset, limit) =>
+      flowContinuations(inquiry, nextOffset, limit),
+  });
+
+const DISCOVERY_RECIPE_ROW_FAMILY =
+  new PagedRowFamily<FrameworkDiscoveryRecipeRow>({
+    id: "framework.discovery:recipes",
+    rowLabel: "framework discovery recipe row(s)",
+    evidenceForRow: evidenceForFrameworkDiscoveryRecipe,
+    continuationsForPage: recipeContinuations,
+  });
+
+const ANCHOR_ROW_FAMILY =
+  new PagedRowFamily<FrameworkAnchorResolution>({
+    id: "framework.discovery:anchors",
+    rowLabel: "framework seed anchor(s)",
+    evidenceForRow: evidenceForAnchorResolution,
+    continuationsForPage: anchorContinuations,
+  });
+
+const FLOW_SEED_ROW_FAMILY =
+  new PagedRowFamily<FrameworkFlowSeedRow>({
+    id: "framework.discovery:flow-seeds",
+    rowLabel: "framework flow seed row(s)",
+    evidenceForRow: evidenceForFlowSeed,
+    continuationsForPage: flowSeedContinuations,
+  });
+
+const CALL_EDGE_ROW_FAMILY =
+  new PagedRowFamily<FrameworkFlowCallEdgeRow>({
+    id: "framework.discovery:call-edges",
+    rowLabel: "framework flow call-edge row(s)",
+    evidenceForRow: evidenceForCallEdge,
+    continuationsForPage: callEdgeContinuations,
+  });
+
+const CALL_SITE_ROW_FAMILY =
+  new PagedRowFamily<FrameworkFlowCallSiteRow>({
+    id: "framework.discovery:call-sites",
+    rowLabel: "framework flow call-site row(s)",
+    evidenceForRow: evidenceForCallSite,
+    continuationsForPage: callSiteContinuations,
+  });
+
+const CALL_TARGET_ROW_FAMILY =
+  new PagedRowFamily<FrameworkFlowCallTargetRow>({
+    id: "framework.discovery:call-targets",
+    rowLabel: "framework flow call-target row(s)",
+    evidenceForRow: evidenceForCallTarget,
+    continuationsForPage: callTargetContinuations,
+  });
+
+const PACKAGE_EXPORT_ROW_FAMILY =
+  new PagedRowFamily<FrameworkPackageExportRow>({
+    id: "framework.discovery:package-exports",
+    rowLabel: "Aurelia framework package export row(s)",
+    evidenceForRow: evidenceForPackageExport,
+    continuationsForPage: packageExportContinuations,
+  });
+
+const REGISTRY_EXPORT_ROW_FAMILY =
+  new PagedRowFamily<FrameworkRegistryExportRow>({
+    id: "framework.discovery:registry-exports",
+    rowLabel: "Aurelia framework registry export row(s)",
+    evidenceForRow: evidenceForPackageExport,
+    continuationsForPage: packageExportContinuations,
+  });
+
+const DI_INTERFACE_ROW_FAMILY =
+  new PagedRowFamily<FrameworkDiInterfaceExportRow>({
+    id: "framework.discovery:di-interfaces",
+    rowLabel: "Aurelia framework DI interface export row(s)",
+    evidenceForRow: evidenceForDiInterface,
+    continuationsForPage: diInterfaceContinuations,
+  });
+
+const RESOURCE_CARRIER_ROW_FAMILY =
+  new PagedRowFamily<FrameworkResourceCarrierRow>({
+    id: "framework.discovery:resource-carriers",
+    rowLabel: "Aurelia framework resource carrier row(s)",
+    evidenceForRow: evidenceForResourceCarrier,
+    continuationsForPage: resourceCarrierContinuations,
+  });
+
+const RESOURCE_EXPORT_ROW_FAMILY =
+  new PagedRowFamily<FrameworkResourceExportRow>({
+    id: "framework.discovery:resources",
+    rowLabel: "Aurelia framework resource export row(s)",
+    evidenceForRow: evidenceForResourceExport,
+    continuationsForPage: resourceExportContinuations,
+  });
+
+const BUNDLE_ROW_FAMILY =
+  new PagedRowFamily<FrameworkBundleExportRow>({
+    id: "framework.discovery:bundles",
+    rowLabel: "Aurelia framework bundle row(s)",
+    evidenceForRow: evidenceForBundle,
+    continuationsForPage: bundleContinuations,
+  });
+
+const OBSERVER_ROW_FAMILY =
+  new PagedRowFamily<FrameworkObserverEntityRow>({
+    id: "framework.discovery:observers",
+    rowLabel: "Aurelia framework observer-system export row(s)",
+    evidenceForRow: evidenceForObserverEntity,
+    continuationsForPage: observerEntityContinuations,
+  });
+
+const APP_TASK_ROW_FAMILY =
+  new PagedRowFamily<FrameworkAppTaskEntityRow>({
+    id: "framework.discovery:app-tasks",
+    rowLabel: "Aurelia framework AppTask/lifecycle task export row(s)",
+    evidenceForRow: evidenceForAppTaskEntity,
+    continuationsForPage: appTaskEntityContinuations,
+  });
+
+const ROUTER_ENTITY_ROW_FAMILY =
+  new PagedRowFamily<FrameworkRouterEntityRow>({
+    id: "framework.discovery:router-entities",
+    rowLabel: "Aurelia framework router export row(s)",
+    evidenceForRow: evidenceForRouterEntity,
+    continuationsForPage: routerEntityContinuations,
+  });
+
+const EXPRESSION_ENTITY_ROW_FAMILY =
+  new PagedRowFamily<FrameworkExpressionEntityRow>({
+    id: "framework.discovery:expression-entities",
+    rowLabel: "Aurelia framework expression/parser export row(s)",
+    evidenceForRow: evidenceForExpressionEntity,
+    continuationsForPage: expressionEntityContinuations,
+  });
+
+const RENDERING_STRUCTURE_ROW_FAMILY =
+  new PagedRowFamily<FrameworkRenderingStructureEntityRow>({
+    id: "framework.discovery:rendering-structures",
+    rowLabel: "Aurelia framework rendering/lifecycle structural export row(s)",
+    evidenceForRow: evidenceForRenderingStructure,
+    continuationsForPage: renderingStructureContinuations,
+  });
+
+const OPEN_QUESTION_ROW_FAMILY = new PagedRowFamily<string>({
+  id: "framework.discovery:open-questions",
+  rowLabel: "framework discovery question(s)",
+  evidenceForRow: evidenceForQuestion,
+  continuationsForPage: (inquiry, _rows, nextOffset, limit) =>
+    openQuestionContinuations(inquiry, nextOffset, limit),
+});
 
 /** Answer framework discovery-seed inquiries from package-local Atlas contracts and the hot source index. */
 export function answerFrameworkDiscovery(
@@ -183,138 +344,75 @@ class FrameworkDiscoveryAnswerer {
       limit,
       offset,
     } = context;
+    const seedBasis = [frameworkDiscoverySeedBasis()];
+    const seedSourceBasis = [
+      frameworkDiscoverySeedBasis(),
+      sourceIndexBasis(sourceProject),
+    ];
+    const checkerFlowBasis = [
+      frameworkDiscoverySeedBasis(),
+      sourceIndexBasis(sourceProject),
+      checkerBasis(sourceProject),
+    ];
+    const sourceCheckerBasis = [
+      sourceIndexBasis(sourceProject),
+      checkerBasis(sourceProject),
+    ];
+    const evaluatorBasis = [
+      sourceIndexBasis(sourceProject),
+      checkerBasis(sourceProject),
+      staticEvaluatorBasis(sourceProject),
+    ];
+    const baseValue = {
+      seedVersion: seedIndex.seedVersion,
+      flowCount: flows.length,
+      anchorCount: anchors.length,
+      anchorResolution,
+    };
 
     if (projection === "flows") {
-      const page = pageRows(flows, offset, limit);
-      return createAnswer(
+      return FLOW_DEFINITION_ROW_FAMILY.answer({
         inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${flows.length} framework flow definition(s).`,
-        {
-          value: {
-            seedVersion: seedIndex.seedVersion,
-            flowCount: flows.length,
-            anchorCount: anchors.length,
-            anchorResolution,
-            flows: page.rows,
-          },
-          basis: [frameworkDiscoverySeedBasis()],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map(evidenceForFlow),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            flows.length,
-            limit,
-            page.nextOffset,
-          ),
-          continuations: flowContinuations(inquiry, page.nextOffset, limit),
-        },
-      );
+        rows: flows,
+        limit,
+        offset,
+        basis: seedBasis,
+        value: (page) => ({ ...baseValue, flows: page.rows }),
+      });
     }
 
     if (projection === "recipes") {
       const recipes = filterFrameworkDiscoveryRecipes(filters);
-      const page = pageRows(recipes, offset, limit);
-      return createAnswer(
+      return DISCOVERY_RECIPE_ROW_FAMILY.answer({
         inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${recipes.length} framework discovery recipe row(s).`,
-        {
-          value: {
-            seedVersion: seedIndex.seedVersion,
-            flowCount: flows.length,
-            anchorCount: anchors.length,
-            anchorResolution,
-            recipes: page.rows,
-          },
-          basis: [frameworkDiscoverySeedBasis()],
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            recipes.length,
-            limit,
-            page.nextOffset,
-          ),
-        },
-      );
+        rows: recipes,
+        limit,
+        offset,
+        basis: seedBasis,
+        value: (page) => ({ ...baseValue, recipes: page.rows }),
+      });
     }
 
     if (projection === "anchors") {
-      const page = pageRows(anchors, offset, limit);
-      return createAnswer(
+      return ANCHOR_ROW_FAMILY.answer({
         inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${anchors.length} framework seed anchor(s).`,
-        {
-          value: {
-            seedVersion: seedIndex.seedVersion,
-            flowCount: flows.length,
-            anchorCount: anchors.length,
-            anchorResolution,
-            anchors: page.rows,
-          },
-          basis: [
-            frameworkDiscoverySeedBasis(),
-            sourceIndexBasis(sourceProject),
-          ],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map(evidenceForAnchorResolution),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            anchors.length,
-            limit,
-            page.nextOffset,
-          ),
-          continuations: anchorContinuations(
-            inquiry,
-            page.rows,
-            page.nextOffset,
-            limit,
-          ),
-        },
-      );
+        rows: anchors,
+        limit,
+        offset,
+        basis: seedSourceBasis,
+        value: (page) => ({ ...baseValue, anchors: page.rows }),
+      });
     }
 
     if (projection === "flow-seeds") {
-      const page = pageRows(flowSeeds, offset, limit);
-      return createAnswer(
+      return FLOW_SEED_ROW_FAMILY.answer({
         inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${flowSeeds.length} framework flow seed row(s).`,
-        {
-          value: {
-            seedVersion: seedIndex.seedVersion,
-            flowCount: flows.length,
-            anchorCount: anchors.length,
-            anchorResolution,
-            flowSeeds: page.rows,
-          },
-          basis: [
-            frameworkDiscoverySeedBasis(),
-            sourceIndexBasis(sourceProject),
-          ],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map(evidenceForFlowSeed),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            flowSeeds.length,
-            limit,
-            page.nextOffset,
-          ),
-          continuations: flowSeedContinuations(
-            inquiry,
-            page.rows,
-            page.nextOffset,
-            limit,
-          ),
-        },
-      );
+        rows: flowSeeds,
+        limit,
+        offset,
+        basis: seedSourceBasis,
+        value: (page) => ({ ...baseValue, flowSeeds: page.rows }),
+      });
     }
 
     if (projection === "call-edges") {
@@ -323,42 +421,19 @@ class FrameworkDiscoveryAnswerer {
         callEdgeMatches(row, filters),
       );
       const fullAnchorResolution = anchorResolutionForRollup(index.rollup);
-      const page = pageRows(callEdges, offset, limit);
-      return createAnswer(
+      const fullBaseValue = {
+        ...baseValue,
+        seedVersion: index.seedVersion,
+        anchorResolution: fullAnchorResolution,
+      };
+      return CALL_EDGE_ROW_FAMILY.answer({
         inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${callEdges.length} framework flow call-edge row(s).`,
-        {
-          value: {
-            seedVersion: index.seedVersion,
-            flowCount: flows.length,
-            anchorCount: anchors.length,
-            anchorResolution: fullAnchorResolution,
-            callEdges: page.rows,
-          },
-          basis: [
-            frameworkDiscoverySeedBasis(),
-            sourceIndexBasis(sourceProject),
-            checkerBasis(sourceProject),
-          ],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map(evidenceForCallEdge),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            callEdges.length,
-            limit,
-            page.nextOffset,
-          ),
-          continuations: callEdgeContinuations(
-            inquiry,
-            page.rows,
-            page.nextOffset,
-            limit,
-          ),
-        },
-      );
+        rows: callEdges,
+        limit,
+        offset,
+        basis: checkerFlowBasis,
+        value: (page) => ({ ...fullBaseValue, callEdges: page.rows }),
+      });
     }
 
     if (projection === "call-sites") {
@@ -367,42 +442,19 @@ class FrameworkDiscoveryAnswerer {
         callSiteMatches(row, filters),
       );
       const fullAnchorResolution = anchorResolutionForRollup(index.rollup);
-      const page = pageRows(callSites, offset, limit);
-      return createAnswer(
+      const fullBaseValue = {
+        ...baseValue,
+        seedVersion: index.seedVersion,
+        anchorResolution: fullAnchorResolution,
+      };
+      return CALL_SITE_ROW_FAMILY.answer({
         inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${callSites.length} framework flow call-site row(s).`,
-        {
-          value: {
-            seedVersion: index.seedVersion,
-            flowCount: flows.length,
-            anchorCount: anchors.length,
-            anchorResolution: fullAnchorResolution,
-            callSites: page.rows,
-          },
-          basis: [
-            frameworkDiscoverySeedBasis(),
-            sourceIndexBasis(sourceProject),
-            checkerBasis(sourceProject),
-          ],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map(evidenceForCallSite),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            callSites.length,
-            limit,
-            page.nextOffset,
-          ),
-          continuations: callSiteContinuations(
-            inquiry,
-            page.rows,
-            page.nextOffset,
-            limit,
-          ),
-        },
-      );
+        rows: callSites,
+        limit,
+        offset,
+        basis: checkerFlowBasis,
+        value: (page) => ({ ...fullBaseValue, callSites: page.rows }),
+      });
     }
 
     if (projection === "call-targets") {
@@ -412,42 +464,19 @@ class FrameworkDiscoveryAnswerer {
       );
       const callTargets = groupFrameworkFlowCallTargets(callEdges);
       const fullAnchorResolution = anchorResolutionForRollup(index.rollup);
-      const page = pageRows(callTargets, offset, limit);
-      return createAnswer(
+      const fullBaseValue = {
+        ...baseValue,
+        seedVersion: index.seedVersion,
+        anchorResolution: fullAnchorResolution,
+      };
+      return CALL_TARGET_ROW_FAMILY.answer({
         inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${callTargets.length} framework flow call-target row(s).`,
-        {
-          value: {
-            seedVersion: index.seedVersion,
-            flowCount: flows.length,
-            anchorCount: anchors.length,
-            anchorResolution: fullAnchorResolution,
-            callTargets: page.rows,
-          },
-          basis: [
-            frameworkDiscoverySeedBasis(),
-            sourceIndexBasis(sourceProject),
-            checkerBasis(sourceProject),
-          ],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map(evidenceForCallTarget),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            callTargets.length,
-            limit,
-            page.nextOffset,
-          ),
-          continuations: callTargetContinuations(
-            inquiry,
-            page.rows,
-            page.nextOffset,
-            limit,
-          ),
-        },
-      );
+        rows: callTargets,
+        limit,
+        offset,
+        basis: checkerFlowBasis,
+        value: (page) => ({ ...fullBaseValue, callTargets: page.rows }),
+      });
     }
 
     if (projection === "package-exports") {
@@ -455,38 +484,14 @@ class FrameworkDiscoveryAnswerer {
         sourceProject,
         filters,
       );
-      const page = pageRows(packageExports, offset, limit);
-      return createAnswer(
+      return PACKAGE_EXPORT_ROW_FAMILY.answer({
         inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${packageExports.length} Aurelia framework package export row(s).`,
-        {
-          value: {
-            seedVersion: seedIndex.seedVersion,
-            flowCount: flows.length,
-            anchorCount: anchors.length,
-            anchorResolution,
-            packageExports: page.rows,
-          },
-          basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map(evidenceForPackageExport),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            packageExports.length,
-            limit,
-            page.nextOffset,
-          ),
-          continuations: packageExportContinuations(
-            inquiry,
-            page.rows,
-            page.nextOffset,
-            limit,
-          ),
-        },
-      );
+        rows: packageExports,
+        limit,
+        offset,
+        basis: sourceCheckerBasis,
+        value: (page) => ({ ...baseValue, packageExports: page.rows }),
+      });
     }
 
     if (projection === "registry-exports") {
@@ -494,74 +499,26 @@ class FrameworkDiscoveryAnswerer {
         sourceProject,
         filters,
       );
-      const page = pageRows(registryExports, offset, limit);
-      return createAnswer(
+      return REGISTRY_EXPORT_ROW_FAMILY.answer({
         inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${registryExports.length} Aurelia framework registry export row(s).`,
-        {
-          value: {
-            seedVersion: seedIndex.seedVersion,
-            flowCount: flows.length,
-            anchorCount: anchors.length,
-            anchorResolution,
-            registryExports: page.rows,
-          },
-          basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map(evidenceForPackageExport),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            registryExports.length,
-            limit,
-            page.nextOffset,
-          ),
-          continuations: packageExportContinuations(
-            inquiry,
-            page.rows,
-            page.nextOffset,
-            limit,
-          ),
-        },
-      );
+        rows: registryExports,
+        limit,
+        offset,
+        basis: sourceCheckerBasis,
+        value: (page) => ({ ...baseValue, registryExports: page.rows }),
+      });
     }
 
     if (projection === "di-interfaces") {
       const diInterfaces = readFrameworkDiInterfaces(sourceProject, filters);
-      const page = pageRows(diInterfaces, offset, limit);
-      return createAnswer(
+      return DI_INTERFACE_ROW_FAMILY.answer({
         inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${diInterfaces.length} Aurelia framework DI interface export row(s).`,
-        {
-          value: {
-            seedVersion: seedIndex.seedVersion,
-            flowCount: flows.length,
-            anchorCount: anchors.length,
-            anchorResolution,
-            diInterfaces: page.rows,
-          },
-          basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map(evidenceForDiInterface),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            diInterfaces.length,
-            limit,
-            page.nextOffset,
-          ),
-          continuations: diInterfaceContinuations(
-            inquiry,
-            page.rows,
-            page.nextOffset,
-            limit,
-          ),
-        },
-      );
+        rows: diInterfaces,
+        limit,
+        offset,
+        basis: sourceCheckerBasis,
+        value: (page) => ({ ...baseValue, diInterfaces: page.rows }),
+      });
     }
 
     if (projection === "resource-carriers") {
@@ -569,456 +526,62 @@ class FrameworkDiscoveryAnswerer {
         sourceProject,
         filters,
       );
-      const page = pageRows(resourceCarriers, offset, limit);
-      return createAnswer(
+      return RESOURCE_CARRIER_ROW_FAMILY.answer({
         inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${resourceCarriers.length} Aurelia framework resource carrier row(s).`,
-        {
-          value: {
-            seedVersion: seedIndex.seedVersion,
-            flowCount: flows.length,
-            anchorCount: anchors.length,
-            anchorResolution,
-            resourceCarriers: page.rows,
-          },
-          basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map(evidenceForResourceCarrier),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            resourceCarriers.length,
-            limit,
-            page.nextOffset,
-          ),
-          continuations: resourceCarrierContinuations(
-            inquiry,
-            page.rows,
-            page.nextOffset,
-            limit,
-          ),
-        },
-      );
+        rows: resourceCarriers,
+        limit,
+        offset,
+        basis: sourceCheckerBasis,
+        value: (page) => ({ ...baseValue, resourceCarriers: page.rows }),
+      });
     }
 
     if (projection === "resources") {
       const resources = readFrameworkResourceExports(sourceProject, filters);
-      const page = pageRows(resources, offset, limit);
-      return createAnswer(
+      return RESOURCE_EXPORT_ROW_FAMILY.answer({
         inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${resources.length} Aurelia framework resource export row(s).`,
-        {
-          value: {
-            seedVersion: seedIndex.seedVersion,
-            flowCount: flows.length,
-            anchorCount: anchors.length,
-            anchorResolution,
-            resources: page.rows,
-          },
-          basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map(evidenceForResourceExport),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            resources.length,
-            limit,
-            page.nextOffset,
-          ),
-          continuations: resourceExportContinuations(
-            inquiry,
-            page.rows,
-            page.nextOffset,
-            limit,
-          ),
-        },
-      );
+        rows: resources,
+        limit,
+        offset,
+        basis: sourceCheckerBasis,
+        value: (page) => ({ ...baseValue, resources: page.rows }),
+      });
     }
 
     if (projection === "bundles") {
       const bundles = readFrameworkBundles(sourceProject, filters);
-      const page = pageRows(bundles, offset, limit);
-      return createAnswer(
+      return BUNDLE_ROW_FAMILY.answer({
         inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${bundles.length} Aurelia framework bundle row(s).`,
-        {
-          value: {
-            seedVersion: seedIndex.seedVersion,
-            flowCount: flows.length,
-            anchorCount: anchors.length,
-            anchorResolution,
-            bundles: page.rows,
-          },
-          basis: [
-            sourceIndexBasis(sourceProject),
-            checkerBasis(sourceProject),
-            staticEvaluatorBasis(sourceProject),
-          ],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map(evidenceForBundle),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            bundles.length,
-            limit,
-            page.nextOffset,
-          ),
-          continuations: bundleContinuations(
-            inquiry,
-            page.rows,
-            page.nextOffset,
-            limit,
-          ),
-        },
-      );
-    }
-
-    if (projection === "syntax-products") {
-      const syntaxProducts = readFrameworkSyntaxProducts(
-        sourceProject,
-        filters,
-      );
-      const page = pageRows(syntaxProducts, offset, limit);
-      return createAnswer(
-        inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${syntaxProducts.length} Aurelia framework syntax product row(s).`,
-        {
-          value: {
-            seedVersion: seedIndex.seedVersion,
-            flowCount: flows.length,
-            anchorCount: anchors.length,
-            anchorResolution,
-            syntaxProducts: page.rows,
-          },
-          basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map(evidenceForSyntaxProduct),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            syntaxProducts.length,
-            limit,
-            page.nextOffset,
-          ),
-          continuations: syntaxProductContinuations(
-            inquiry,
-            page.rows,
-            page.nextOffset,
-            limit,
-          ),
-        },
-      );
-    }
-
-    if (projection === "instruction-slots") {
-      const instructionSlots = readFrameworkInstructionSlots(
-        sourceProject,
-        filters,
-      );
-      const page = pageRows(instructionSlots, offset, limit);
-      return createAnswer(
-        inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${instructionSlots.length} Aurelia framework instruction slot row(s).`,
-        {
-          value: {
-            seedVersion: seedIndex.seedVersion,
-            flowCount: flows.length,
-            anchorCount: anchors.length,
-            anchorResolution,
-            instructionSlots: page.rows,
-          },
-          basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map(evidenceForInstructionSlot),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            instructionSlots.length,
-            limit,
-            page.nextOffset,
-          ),
-          continuations: instructionSlotContinuations(
-            inquiry,
-            page.rows,
-            page.nextOffset,
-            limit,
-          ),
-        },
-      );
-    }
-
-    if (projection === "instruction-dispatches") {
-      const instructionDispatches = readFrameworkInstructionDispatches(
-        sourceProject,
-        filters,
-      );
-      const page = pageRows(instructionDispatches, offset, limit);
-      return createAnswer(
-        inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${instructionDispatches.length} Aurelia framework instruction dispatch row(s).`,
-        {
-          value: {
-            seedVersion: seedIndex.seedVersion,
-            flowCount: flows.length,
-            anchorCount: anchors.length,
-            anchorResolution,
-            instructionDispatches: page.rows,
-          },
-          basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map(evidenceForInstructionDispatch),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            instructionDispatches.length,
-            limit,
-            page.nextOffset,
-          ),
-          continuations: instructionDispatchContinuations(
-            inquiry,
-            page.rows,
-            page.nextOffset,
-            limit,
-          ),
-        },
-      );
-    }
-
-    if (projection === "binding-products") {
-      const bindingProducts = readFrameworkBindingProducts(
-        sourceProject,
-        filters,
-      );
-      const page = pageRows(bindingProducts, offset, limit);
-      return createAnswer(
-        inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${bindingProducts.length} Aurelia framework binding product row(s).`,
-        {
-          value: {
-            seedVersion: seedIndex.seedVersion,
-            flowCount: flows.length,
-            anchorCount: anchors.length,
-            anchorResolution,
-            bindingProducts: page.rows,
-          },
-          basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map(evidenceForBindingProduct),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            bindingProducts.length,
-            limit,
-            page.nextOffset,
-          ),
-          continuations: bindingProductContinuations(
-            inquiry,
-            page.rows,
-            page.nextOffset,
-            limit,
-          ),
-        },
-      );
-    }
-
-    if (projection === "binding-admissions") {
-      const bindingAdmissions = readFrameworkBindingAdmissions(
-        sourceProject,
-        filters,
-      );
-      const page = pageRows(bindingAdmissions, offset, limit);
-      return createAnswer(
-        inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${bindingAdmissions.length} Aurelia framework binding admission row(s).`,
-        {
-          value: {
-            seedVersion: seedIndex.seedVersion,
-            flowCount: flows.length,
-            anchorCount: anchors.length,
-            anchorResolution,
-            bindingAdmissions: page.rows,
-          },
-          basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map(evidenceForBindingAdmission),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            bindingAdmissions.length,
-            limit,
-            page.nextOffset,
-          ),
-          continuations: bindingAdmissionContinuations(
-            inquiry,
-            page.rows,
-            page.nextOffset,
-            limit,
-          ),
-        },
-      );
-    }
-
-    if (projection === "binding-effects") {
-      const bindingEffects = readFrameworkBindingEffects(
-        sourceProject,
-        filters,
-      );
-      const page = pageRows(bindingEffects, offset, limit);
-      return createAnswer(
-        inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${bindingEffects.length} Aurelia framework binding effect row(s).`,
-        {
-          value: {
-            seedVersion: seedIndex.seedVersion,
-            flowCount: flows.length,
-            anchorCount: anchors.length,
-            anchorResolution,
-            bindingEffects: page.rows,
-          },
-          basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map(evidenceForBindingEffect),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            bindingEffects.length,
-            limit,
-            page.nextOffset,
-          ),
-          continuations: bindingEffectContinuations(
-            inquiry,
-            page.rows,
-            page.nextOffset,
-            limit,
-          ),
-        },
-      );
-    }
-
-    if (projection === "binding-setups") {
-      const bindingSetups = readFrameworkBindingSetups(sourceProject, filters);
-      const page = pageRows(bindingSetups, offset, limit);
-      return createAnswer(
-        inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${bindingSetups.length} Aurelia framework binding setup row(s).`,
-        {
-          value: {
-            seedVersion: seedIndex.seedVersion,
-            flowCount: flows.length,
-            anchorCount: anchors.length,
-            anchorResolution,
-            bindingSetups: page.rows,
-          },
-          basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map(evidenceForBindingSetup),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            bindingSetups.length,
-            limit,
-            page.nextOffset,
-          ),
-          continuations: bindingSetupContinuations(
-            inquiry,
-            page.rows,
-            page.nextOffset,
-            limit,
-          ),
-        },
-      );
+        rows: bundles,
+        limit,
+        offset,
+        basis: evaluatorBasis,
+        value: (page) => ({ ...baseValue, bundles: page.rows }),
+      });
     }
 
     if (projection === "observers") {
       const observers = readFrameworkObserverEntities(sourceProject, filters);
-      const page = pageRows(observers, offset, limit);
-      return createAnswer(
+      return OBSERVER_ROW_FAMILY.answer({
         inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${observers.length} Aurelia framework observer-system export row(s).`,
-        {
-          value: {
-            seedVersion: seedIndex.seedVersion,
-            flowCount: flows.length,
-            anchorCount: anchors.length,
-            anchorResolution,
-            observers: page.rows,
-          },
-          basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map(evidenceForObserverEntity),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            observers.length,
-            limit,
-            page.nextOffset,
-          ),
-          continuations: observerEntityContinuations(
-            inquiry,
-            page.rows,
-            page.nextOffset,
-            limit,
-          ),
-        },
-      );
+        rows: observers,
+        limit,
+        offset,
+        basis: sourceCheckerBasis,
+        value: (page) => ({ ...baseValue, observers: page.rows }),
+      });
     }
 
     if (projection === "app-tasks") {
       const appTasks = readFrameworkAppTaskEntities(sourceProject, filters);
-      const page = pageRows(appTasks, offset, limit);
-      return createAnswer(
+      return APP_TASK_ROW_FAMILY.answer({
         inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${appTasks.length} Aurelia framework AppTask/lifecycle task export row(s).`,
-        {
-          value: {
-            seedVersion: seedIndex.seedVersion,
-            flowCount: flows.length,
-            anchorCount: anchors.length,
-            anchorResolution,
-            appTasks: page.rows,
-          },
-          basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map(evidenceForAppTaskEntity),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            appTasks.length,
-            limit,
-            page.nextOffset,
-          ),
-          continuations: appTaskEntityContinuations(
-            inquiry,
-            page.rows,
-            page.nextOffset,
-            limit,
-          ),
-        },
-      );
+        rows: appTasks,
+        limit,
+        offset,
+        basis: sourceCheckerBasis,
+        value: (page) => ({ ...baseValue, appTasks: page.rows }),
+      });
     }
 
     if (projection === "router-entities") {
@@ -1026,38 +589,14 @@ class FrameworkDiscoveryAnswerer {
         sourceProject,
         filters,
       );
-      const page = pageRows(routerEntities, offset, limit);
-      return createAnswer(
+      return ROUTER_ENTITY_ROW_FAMILY.answer({
         inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${routerEntities.length} Aurelia framework router export row(s).`,
-        {
-          value: {
-            seedVersion: seedIndex.seedVersion,
-            flowCount: flows.length,
-            anchorCount: anchors.length,
-            anchorResolution,
-            routerEntities: page.rows,
-          },
-          basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map(evidenceForRouterEntity),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            routerEntities.length,
-            limit,
-            page.nextOffset,
-          ),
-          continuations: routerEntityContinuations(
-            inquiry,
-            page.rows,
-            page.nextOffset,
-            limit,
-          ),
-        },
-      );
+        rows: routerEntities,
+        limit,
+        offset,
+        basis: sourceCheckerBasis,
+        value: (page) => ({ ...baseValue, routerEntities: page.rows }),
+      });
     }
 
     if (projection === "expression-entities") {
@@ -1065,38 +604,14 @@ class FrameworkDiscoveryAnswerer {
         sourceProject,
         filters,
       );
-      const page = pageRows(expressionEntities, offset, limit);
-      return createAnswer(
+      return EXPRESSION_ENTITY_ROW_FAMILY.answer({
         inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${expressionEntities.length} Aurelia framework expression/parser export row(s).`,
-        {
-          value: {
-            seedVersion: seedIndex.seedVersion,
-            flowCount: flows.length,
-            anchorCount: anchors.length,
-            anchorResolution,
-            expressionEntities: page.rows,
-          },
-          basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map(evidenceForExpressionEntity),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            expressionEntities.length,
-            limit,
-            page.nextOffset,
-          ),
-          continuations: expressionEntityContinuations(
-            inquiry,
-            page.rows,
-            page.nextOffset,
-            limit,
-          ),
-        },
-      );
+        rows: expressionEntities,
+        limit,
+        offset,
+        basis: sourceCheckerBasis,
+        value: (page) => ({ ...baseValue, expressionEntities: page.rows }),
+      });
     }
 
     if (projection === "rendering-structures") {
@@ -1104,78 +619,25 @@ class FrameworkDiscoveryAnswerer {
         sourceProject,
         filters,
       );
-      const page = pageRows(renderingStructures, offset, limit);
-      return createAnswer(
+      return RENDERING_STRUCTURE_ROW_FAMILY.answer({
         inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${renderingStructures.length} Aurelia framework rendering/lifecycle structural export row(s).`,
-        {
-          value: {
-            seedVersion: seedIndex.seedVersion,
-            flowCount: flows.length,
-            anchorCount: anchors.length,
-            anchorResolution,
-            renderingStructures: page.rows,
-          },
-          basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map(evidenceForRenderingStructure),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            renderingStructures.length,
-            limit,
-            page.nextOffset,
-          ),
-          continuations: renderingStructureContinuations(
-            inquiry,
-            page.rows,
-            page.nextOffset,
-            limit,
-          ),
-        },
-      );
+        rows: renderingStructures,
+        limit,
+        offset,
+        basis: sourceCheckerBasis,
+        value: (page) => ({ ...baseValue, renderingStructures: page.rows }),
+      });
     }
 
     if (projection === "open-questions") {
-      const page = pageRows(
-        FRAMEWORK_DISCOVERY_SEEDS.openQuestions,
-        offset,
-        limit,
-      );
-      return createAnswer(
+      return OPEN_QUESTION_ROW_FAMILY.answer({
         inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${FRAMEWORK_DISCOVERY_SEEDS.openQuestions.length} framework discovery question(s).`,
-        {
-          value: {
-            seedVersion: seedIndex.seedVersion,
-            flowCount: flows.length,
-            anchorCount: anchors.length,
-            anchorResolution,
-            openQuestions: page.rows,
-          },
-          basis: [frameworkDiscoverySeedBasis()],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map((question, questionIndex) =>
-              evidenceForQuestion(question, offset + questionIndex),
-            ),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            FRAMEWORK_DISCOVERY_SEEDS.openQuestions.length,
-            limit,
-            page.nextOffset,
-          ),
-          continuations: openQuestionContinuations(
-            inquiry,
-            page.nextOffset,
-            limit,
-          ),
-        },
-      );
+        rows: FRAMEWORK_DISCOVERY_SEEDS.openQuestions,
+        limit,
+        offset,
+        basis: seedBasis,
+        value: (page) => ({ ...baseValue, openQuestions: page.rows }),
+      });
     }
 
     return createAnswer(
@@ -1202,4 +664,42 @@ class FrameworkDiscoveryAnswerer {
       },
     );
   }
+}
+
+function recipeContinuations(
+  inquiry: Inquiry,
+  rows: readonly FrameworkDiscoveryRecipeRow[],
+  nextOffset: number | undefined,
+  limit: number,
+): readonly Continuation[] {
+  const continuations: Continuation[] = [];
+  if (nextOffset !== undefined) {
+    continuations.push(
+      nextPageContinuation(
+        inquiry,
+        "framework.discovery:recipes:next-page",
+        "Continue framework discovery recipe rows.",
+        nextOffset,
+        limit,
+      ),
+    );
+  }
+  for (const [index, recipe] of rows.slice(0, 3).entries()) {
+    const firstHop = recipe.hops[0];
+    if (firstHop === undefined) {
+      continue;
+    }
+    continuations.push({
+      id: `framework.discovery:recipes:first-hop:${index}`,
+      kind: ContinuationKind.SwitchLens,
+      priority: ContinuationPriority.Primary,
+      rationale: `Start recipe ${recipe.id}: ${firstHop.purpose}`,
+      inquiry: {
+        ...firstHop.ask,
+        locus: firstHop.ask.locus ?? inquiry.locus,
+      },
+      evidence: [evidenceForFrameworkDiscoveryRecipe(recipe)],
+    });
+  }
+  return continuations;
 }

@@ -26,7 +26,7 @@ import {
   readFrameworkBindingSetups,
   readFrameworkControllerCreations,
   readFrameworkInstructionDispatches,
-  readFrameworkSyntaxProducts,
+  readFrameworkRenderingSyntaxProducts,
 } from "./framework-rendering-graph.js";
 import { sourceRangeForCallSiteEntry } from "./framework-support.js";
 
@@ -75,7 +75,7 @@ export function readFrameworkRenderingRelationships(
   filters: FrameworkRenderingRelationshipFilters,
 ): readonly FrameworkRenderingRelationshipRow[] {
   const rows = uniqueRenderingRelationships([
-    ...readFrameworkSyntaxProducts(sourceProject, filters).flatMap(
+    ...readFrameworkRenderingSyntaxProducts(sourceProject, filters).flatMap(
       syntaxProductRelationships,
     ),
     ...readFrameworkInstructionDispatches(sourceProject, filters).map(
@@ -160,22 +160,6 @@ function syntaxProductRelationships(
 ): readonly FrameworkRenderingRelationshipRow[] {
   const relationships: FrameworkRenderingRelationshipRow[] = [];
   const from = syntaxProductEndpoint(row);
-  if (row.instructionName !== null) {
-    relationships.push({
-      id: `${row.id}:relationship:produces-instruction`,
-      family: FrameworkRelationshipFamily.Rendering,
-      relation: FrameworkRelationshipRelation.ProducesInstruction,
-      mechanism: FrameworkRelationshipMechanism.SyntaxProduct,
-      phase: FrameworkRelationshipPhase.Compilation,
-      packageId: row.packageId,
-      packageName: row.packageName,
-      from,
-      to: symbolEndpoint(row.instructionName, row.packageId, row.packageName),
-      source: row.source,
-      sourceRowId: row.id,
-      summary: `${from.name} produces instruction ${row.instructionName}.`,
-    });
-  }
   if (row.bindingName !== null) {
     relationships.push({
       id: `${row.id}:relationship:produces-binding`,

@@ -187,6 +187,23 @@ export interface SourceDeclarationRow {
   readonly exported: boolean;
 }
 
+/** Process-local normalized path keys shared by source substrate indexes. */
+class NormalizedFileKeyCache {
+  readonly #keys = new Map<string, string>();
+
+  normalize(fileName: string): string {
+    const cached = this.#keys.get(fileName);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const normalized = toPosixPath(path.resolve(fileName)).toLowerCase();
+    this.#keys.set(fileName, normalized);
+    return normalized;
+  }
+}
+
+const normalizedFileKeys = new NormalizedFileKeyCache();
+
 /** Hot TypeScript source world shared by source, checker, and TypeChecker-driven semantic lenses. */
 export class SourceProject {
   readonly #languageService: ts.LanguageService;
@@ -194,6 +211,7 @@ export class SourceProject {
   readonly #rootFileNames: readonly string[];
   readonly #configDiagnostics: readonly ts.Diagnostic[];
   readonly #compilerOptions: ts.CompilerOptions;
+  readonly #fileCache = new SourceProjectFileCache();
   #index: SourceProjectIndex | undefined;
 
   constructor(
@@ -345,13 +363,8 @@ export class SourceProject {
     return {
       getCompilationSettings: () => this.#compilerOptions,
       getScriptFileNames: () => [...this.#rootFileNames],
-      getScriptVersion: (fileName) => sourceVersion(fileName),
-      getScriptSnapshot: (fileName) => {
-        if (!existsSync(fileName)) {
-          return undefined;
-        }
-        return ts.ScriptSnapshot.fromString(readFileSync(fileName, "utf8"));
-      },
+      getScriptVersion: (fileName) => this.#fileCache.scriptVersion(fileName),
+      getScriptSnapshot: (fileName) => this.#fileCache.scriptSnapshot(fileName),
       getCurrentDirectory: () => this.repoRoot,
       getDefaultLibFileName: (options) => ts.getDefaultLibFilePath(options),
       readFile: ts.sys.readFile,
@@ -453,6 +466,51 @@ export class SourceProject {
       declarationRows,
       topLevelDeclarationRows,
     };
+  }
+}
+
+/** Per-source-project file facts used by the TypeScript LanguageService host. */
+class SourceProjectFileCache {
+  readonly #scriptVersions = new Map<string, string>();
+  readonly #scriptSnapshots = new Map<string, ts.IScriptSnapshot | undefined>();
+
+  /** Return the stable file version for this SourceProject epoch. */
+  scriptVersion(fileName: string): string {
+    const fileKey = normalizeFileKey(fileName);
+    const cached = this.#scriptVersions.get(fileKey);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const version = this.#readScriptVersion(fileName);
+    this.#scriptVersions.set(fileKey, version);
+    return version;
+  }
+
+  /** Return the cached script text for this SourceProject epoch. */
+  scriptSnapshot(fileName: string): ts.IScriptSnapshot | undefined {
+    const fileKey = normalizeFileKey(fileName);
+    if (this.#scriptSnapshots.has(fileKey)) {
+      return this.#scriptSnapshots.get(fileKey);
+    }
+    const snapshot = this.#readScriptSnapshot(fileName);
+    this.#scriptSnapshots.set(fileKey, snapshot);
+    return snapshot;
+  }
+
+  #readScriptVersion(fileName: string): string {
+    try {
+      return String(statSync(fileName).mtimeMs);
+    } catch {
+      return "0";
+    }
+  }
+
+  #readScriptSnapshot(fileName: string): ts.IScriptSnapshot | undefined {
+    try {
+      return ts.ScriptSnapshot.fromString(readFileSync(fileName, "utf8"));
+    } catch {
+      return undefined;
+    }
   }
 }
 
@@ -860,14 +918,6 @@ function symbolKeyForDeclaration(
   return checker.getFullyQualifiedName(symbol);
 }
 
-function sourceVersion(fileName: string): string {
-  try {
-    return String(statSync(fileName).mtimeMs);
-  } catch {
-    return "0";
-  }
-}
-
 function uniqueSorted(values: readonly string[]): readonly string[] {
   return [...new Set(values.map((value) => path.resolve(value)))].sort(
     (left, right) => left.localeCompare(right),
@@ -887,5 +937,5 @@ function compareDeclarationRows(
 }
 
 function normalizeFileKey(fileName: string): string {
-  return toPosixPath(path.resolve(fileName)).toLowerCase();
+  return normalizedFileKeys.normalize(fileName);
 }

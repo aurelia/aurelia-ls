@@ -26,7 +26,7 @@ export const enum EvidenceKind {
   AuLinkAnchor = "aulink-anchor",
   /** Explicit seam that blocked complete closure. */
   OpenSeam = "open-seam",
-  /** Atlas maintenance signal about contracts, wiring, or static coherence. */
+  /** Atlas maintenance signal about source-backed contract or coherence facts. */
   MaintenanceSignal = "maintenance-signal",
 }
 

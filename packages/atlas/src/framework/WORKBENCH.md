@@ -28,8 +28,8 @@ implementation files. Use `taxonomy` for compact rollup, `enums` for enum axes a
 `strings` for magic string literal pressure, `row-surfaces` for structural interface/type shapes,
 `relationship-surfaces` only for surfaces with relationship axes, `axis-pressure` for exact mapper/stringly-field/parallel-axis pressure, `classes` for OOP surfaces, `functions` for top-level function and class-method pressure,
 `contracts` for LensCatalog-to-runtime coherence, `projections` for observed runtime projection branches,
-`continuations` for route/source follow-up objects, `modules` for Atlas area dependency edges, `indexes` for
-cache/schema/warmup provenance, and `contract-strings` for string values that behave like API contract. Keep these
+`continuations` for route/source follow-up objects, `semantic-routes` for declared framework route topology,
+`modules` for Atlas area dependency edges, `substrate-surfaces` for reader/builder/schema declarations, and `contract-strings` for string values that behave like API contract. Keep these
 answers compact by default; opt into the full source-project package summary only when the package inventory itself is
 the question. Projection observations are intentionally literal: an unobserved projection string is not automatically a
 bug because some lenses answer through default branches or pre-switch logic.
@@ -37,6 +37,9 @@ bug because some lenses answer through default branches or pre-switch logic.
 Keep `self-check` as a thin liveness/contract sanity pass, not as the place where evolving ontology is defended.
 Architectural soundness should come from coherent substrates and from using Atlas projections to interpret exact facts,
 not from adding compatibility assertions for whatever enum or row shape happened to exist in one session.
+Do not treat `atlas.self` as an architectural judge. Its job is to expose exact source-backed rows and stable
+continuations so a maintainer can reason faster; when a row creates friction, improve the underlying primitive or
+delete the misleading surface rather than teaching self-analysis to make stronger claims.
 
 `axis-pressure` is now value-space aware. A field label such as `relation` is not treated as a complete axis identity;
 rows keep the field label, typed value space, and stable axis id separately so framework relations, navigation
@@ -44,6 +47,8 @@ relations, loose filters, and reflected enum member names do not collapse into o
 carry a role such as `relationship-row`, `filter`, `classification`, `basis-transition`, or `navigation-contract`;
 only graph-like relationship rows should produce relationship-shape gap pressure. Continuation target/projection
 coherence is also checked against `LensCatalog`, including helper-generated continuations.
+The self-analysis call graph follows same-file calls and exact named imports across modules, so barrel/facade imports
+that hide owned functions should be treated as analyzability pressure, not harmless convenience.
 
 Atlas no longer carries a static framework handoff catalog. The semantic-runtime evaluator/checker handoff is a future
 product concern that Atlas can learn later through explicit product metadata. For now, Atlas should expose concrete
@@ -51,17 +56,258 @@ framework rows, source-backed provenance, route claims, and optional `basisTrans
 continuation changes epistemic footing.
 
 When touching Atlas internals, treat static analyzability as a design constraint. Substantial behaviors should prefer
-named classes such as builders, indexes, classifiers, graphs, registries, and caches over sprawling object literals or
+named classes such as builders, indexes, classifiers, graphs, registries, and memos over sprawling object literals or
 anonymous helper clusters. The point is not ceremony; it is to leave stable TypeScript shapes that Atlas can inspect
 through `classes`, `functions`, `modules`, and relationship projections before falling back to raw source.
 
+Framework semantic continuations now split stable topology from row-local continuation instances.
+`packages/atlas/src/inquiry/runtime/framework-route-catalog.ts` declares `FrameworkRouteEndpoint` and
+`FrameworkSemanticRouteSpec` instances for repeated framework row-to-lens hops; call sites apply those specs with
+row-local filters, evidence, and rationale through `FrameworkSemanticRouteBuilder`. Route claims now carry
+both the generic navigation `specId` and a domain `semanticRouteId`. Use `atlas.self:semantic-routes` to inspect the
+declared route topology and `atlas.self:continuations` to inspect where those routes are instantiated. Avoid local
+route wrapper aliases and avoid reconstructing target lens/projection/relation/basis bundles inline once a hop has a
+stable semantic route.
+
+Framework source/type/call-site inspection continuations are now a separate row-local primitive.
+`FrameworkRowContinuationBuilder` owns the repeated `TsSource:text`, `TsType:facts`, `TsType:call-sites`, and
+`framework.evaluator:effects` moves for source-backed framework rows. `atlas.self` recognizes these builder calls, so
+using the primitive reduces object-literal continuation surfaces without making navigation invisible. If a row needs a
+special non-source-range target, keep that local until a narrower primitive emerges rather than widening the builder
+into a catch-all adapter.
+
+Paged row answers are inquiry algebra, not framework ontology. `packages/atlas/src/inquiry/paged-row-family.ts`
+owns the common row-family answer envelope: paging, evidence slicing, page continuations, optional open seams, and the
+default hit/miss outcome. Runtime lenses should use `PagedRowFamily` when they are returning one ordered row family
+with evidence and continuation semantics; they should keep genuinely different summaries, multi-family rollups, or
+flow-specific answer shapes local. DI, materialization, admission, rendering, discovery, compiler, lifecycle,
+observation, resource convergence, and `atlas.self` source-row projections now use this primitive, which removed
+repeated answer plumbing and made missing evidence/continuation rows visible as taxonomy pressure rather than silent
+inconsistency. The runtime should not reintroduce local `pageRows`/`pageInfo`/`pageOffset`/`evidenceLimit` helpers;
+use `inquiry/paging.ts` and `PagedRowFamily` unless a lower substrate already owns a paged trace, as with evaluator
+effect rows and TypeScript source-reader result envelopes. Discovery recipes were promoted to typed `LensId`/`Locus`
+asks and now expose first-hop continuations; do not add string-to-lens casts around recipe asks. Atlas self-maintenance
+recipes/contracts also use the row-family primitive now; keep them literal rows with evidence rather than adding
+higher-level self-judgment. `bridge.aulink` also uses the row-family primitive, which required the primitive to allow
+one row to emit a bounded evidence group. Do not use that as permission to hide unrelated rows behind one row; it exists
+for exact row products like auLink framework targets where one logical target can have multiple concrete candidate
+declarations.
+
+Reality-grounding probes after the row-family pass showed Atlas can cheaply walk compiler instruction products into
+rendering dispatch/relationship rows, admission into world-formation/materialization rows, and callback materialization
+routes into evaluator/dependency follow-ups. The remaining pressure is higher-order: Atlas still returns composable row
+families, not path products for latent cross-lens routes that have not been modeled yet. When a hard framework question
+requires manual composition across several projections, treat that as evidence for a missing route/path primitive or a
+missing framework relationship family, not as a reason to add another local compatibility projection. The latest
+post-refactor probes hit compiler products/relationships, resource convergence, lifecycle AppTask/relationship rows,
+observation flow/relationship rows, and evaluator package effects successfully; resource convergence still takes about
+one foreground second cold because it composes resource carriers, exports, bundle admissions, syntax products, and
+materialization rows, which is acceptable until a profiler says the convergence substrate itself needs a new atom.
+The first semantic-widening follow-up promoted compiler-to-rendering instruction hops into declared semantic routes and
+let rendering observer/configuration relationships enter `framework.observation` binding lookup/setup projections
+directly. Prefer this shape when a row crosses a real ownership boundary: add a named route endpoint/spec, then let
+row-local continuations supply exact filters and evidence. Do not leave repeated cross-lens hops as anonymous
+`ProjectionOf` continuations once the target lens has become the owner of that semantic phase.
+The next composition primitive is actor-centered rather than route-centered. `inquiry/composition.ts` defines a small
+answer algebra for `SemanticEntityRef`, signed `SemanticClaim` rows (`subject -> predicate -> object`), and
+`SemanticCompositionValue`. `framework.composition` uses that shape to join auLink anchors with framework relationship
+rows around high-salience class/interface names such as `Aurelia`, `Container`, `TemplateCompiler`, `Rendering`, and
+`Controller`. Treat this as the Atlas-side analogue of semantic-runtime's future claim schema graph: product-kind-like
+nodes and claim-predicate-like signed relations are the durable kernel, while route continuations and source projections
+are navigation over the graph. Do not turn this into another broad compatibility adapter; if a family cannot project a
+signed claim with clear subject, predicate, object, owner lens, basis, and evidence, improve that family first.
+
+`atlas.self:enum-mappings` should remain exact enum-member translation evidence. Raw literal/member value overlap lives
+in `enum-value-spaces`; do not re-expand mapping rows to include incidental string literals or enum initializer value
+overlap. This keeps enum pressure actionable: a mapping row should mean "code translated one enum member space into
+another", while a value-space row means "these raw values collide or repeat." The source substrate owns this boundary in
+`source/enum-usage.ts`. Case-return indexing is switch-block aware so grouped cases such as
+`case A: case B: return X` credit every active case label, and returned complex objects only contribute direct returned
+members or top-level discriminator-like enum members rather than nested configuration values.
+`FrameworkDiRelationshipEvidenceProfile` owns the answer-layer presentation of DI relationship atoms as
+`EvidenceKind.DiRegistration`, `EvidenceKind.DiLookup`, or `EvidenceKind.TypeFact`. This is an evidence-profile
+boundary, not a framework relation ontology; keep it named in runtime evidence helpers rather than scattering
+`FrameworkRelationshipRelation -> EvidenceKind` switches through answerers.
+`framework.di:graph` is now the preferred entry point for "what resolves what?" questions. It was shaped against
+semantic-runtime's `di/` and `registration/` folders rather than invented from the old atom pages: registration
+admission, container-owned resolver/self/resource slots, lookup/resolution requests, provider materialization routes,
+and callback dependency edges are separate graph layers. Closed framework keys are `di-key` nodes; arbitrary lookup
+arguments that are not closed to known framework keys are `key-expression` nodes and do not pollute the DI dependency
+DAG. `framework.di:dag` collapses only exact key-to-key alias/dependency edges into components, so a "DAG" answer is
+derived from graph semantics rather than assumed of the full DI system. If future probes need constructor/static-inject
+dependencies or registry body spending, add those as new graph-producing facts instead of smuggling them into
+`materializes-through` summaries.
+The DI index now follows TypeChecker-backed aliases for package-local `createInterface` wrappers such as
+`rtCreateInterface`/`tcCreateInterface` and registration-factory aliases such as runtime-html `instanceRegistration`.
+It also recognizes class static `register = createImplementationRegister(IKey)` as a constructable provider seed for
+the keyed class. These are substrate facts, not StandardConfiguration special cases: without them the compiler,
+runtime, and runtime-html DI surfaces look artificially sparse and downstream admission answers preserve too many
+registry exports as opaque leaves.
+
+Framework boot and DI world spending now sit above the generic evaluator. `framework/module-boot.ts` resolves Aurelia
+package imports to framework `src/` entrypoints and evaluates linked source modules; do not let evaluator-based
+framework reads fall back to package `.d.ts` truth. `framework/di-world.ts` spends `StandardConfiguration` from those
+booted values into abstract resolver/resource slots, nested registry registrations, implementation-register class
+providers, and provider dependency edges. `StandardConfiguration` is still only the first canary, not a privileged
+ontology: future configuration/plugin worlds should reuse this machinery rather than adding local admission shims.
+The canary now closes `ITemplateCompiler -> TemplateCompiler -> CompilationContext` container dependencies:
+`IResourceResolver`, `IBindingCommandResolver`, `ITemplateElementFactory`, `IAttributeParser`, `IExpressionParser`,
+`IAttrMapper`, `ILogger`, and `IPlatform`. `framework.di:world` and `framework.di:dependencies` expose the spent world;
+`framework.materialization:dependencies` joins the same dependency edges to materialization routes. If a future query
+needs constructor/static-inject/default-interface registration behavior, extend DI-world spending as a new source-backed
+fact rather than teaching materialization or admission to special-case the symptom.
+DI-world now follows on-demand `createInterface` default providers discovered from requested dependency keys, tracks
+TypeChecker-proven container aliases/properties instead of local variable name lists, and follows bounded same-file
+helper calls when they reveal container accesses such as `invokeAttribute(...) -> ctn.invoke(definition.Type)`. Runtime
+`renderer(class ... implements IRenderer)` helper products are spent as registrable-metadata `IRenderer` slots from the
+concrete class source; the helper body's generic `target` parameter remains a DI relationship fact, not a
+materialization route. `framework.materialization` now also admits concrete StandardConfiguration DI-world slots as
+provider routes, so `key: IRenderer` yields the 18 concrete renderer providers and `Rendering.renderers` has a
+`getAll(IRenderer)` edge that can land on those providers.
+`framework.admission:flow` now composes the same DI-world routes transitively: admitted values materialize DI keys,
+providers expose their dependency-key reads, and dependency keys pull in their own materialization providers. Dependency
+flow edges are provider-to-key facts with `ownerKey` metadata, not key-to-key guesses; this matters for multi-provider
+keys like `IRenderer`, where the renderer class is the actor and `IRenderer` is the materialized role. A
+StandardConfiguration flow query for `IRenderer` should remain a small graph: 18 concrete renderer providers plus the
+provider dependency reads, including `Rendering -> getAll(IRenderer)`.
+Materialization provider identity is now split from raw provider endpoint text. `FrameworkMaterializationProviderIdentity`
+keeps named providers as source symbols, but gives anonymous callback/class/object/expression providers concise graph
+names such as `INodeObserverLocator callback provider` or `IKeyMapping value provider` while preserving the raw
+expression text as evidence. Do not use raw endpoint `name` as both graph identity and display; broad flow and DI graph
+answers should stay actor-readable without losing source-backed raw provider provenance.
+
+DI materialization now uses `FrameworkMaterializationRouteKind` as the single DI provider route/runtime-existence
+classification. The old derived `FrameworkMaterializationInstantiationKind` was removed because it mechanically
+translated route kind into synonym values. Resource materialization still keeps `FrameworkResourceInstantiationKind`
+because resource runtime modes are not DI provider routes. Shared answer code should use `materializationCounts(...)`
+rather than rebuilding the same rollup object per projection.
+`FrameworkMaterializationRouteKind` and `FrameworkMaterializationRouteDescriptor` live in the framework substrate, not
+the materialization answerer. Resolver strategy is kernel evidence; the descriptor is the named materialization
+interpreter that turns provider/alias atoms into route shape, callback tracing policy, construction-site policy,
+instantiation relationship emission, closure, and route summaries. Do not reintroduce a runtime-lens-local
+`FrameworkDiResolverStrategy -> FrameworkMaterializationRouteKind` switch; if this classifier becomes awkward, improve
+the descriptor or promote a more explicit route primitive instead of adding a compatibility mapping.
+
+`EvaluationOpenKind` is not the same kind of pressure as Atlas `OpenSeamKind`. Treat it as evaluator-local closure
+boundary evidence: the ECMAScript evaluator reached a real limit where semantic-runtime may later hand off to
+TypeChecker/speculative modeling for lifecycles, reactivity, expression tooling, or app-world conceptual trees. Atlas
+open seams are answer-layer envelopes and can stay coarser. Do not collapse these value spaces without first modeling
+the evaluator/checker handoff explicitly. `FrameworkEvaluatorOpenSeamProfile` is the runtime answer profile that
+projects evaluator-local closure evidence into public `OpenSeamKind` envelopes without pretending the two enum spaces
+are the same ontology.
+
+The inquiry-locus/subject to source-selector transition is centralized in
+`inquiry/runtime/source-selector.ts`. `ts.*` and `framework.evaluator` should use that primitive instead of carrying
+local `LocusKind -> SourceSelectorScheme` switch copies. This is a real layer transition, not a duplicate ontology, so
+keep it named and inspectable rather than hiding it in each lens.
+
+Admission world-formation kind should name world evidence shape, not restate the admitted endpoint kind. Keep
+`RuntimeExistence`, `AppTaskExecution`, `CatalogExpansion`, and `AdmissionOnly` as the formation axis; registry export,
+factory, registration argument, unknown, DI key, resource, and AppTask specificity belongs on
+`admittedTarget.kind`/`formedTarget.kind` plus `status`.
+`FrameworkAdmissionWorldFormationDisposition` is the framework-owned admission-only boundary interpreter. It classifies
+an admitted target into a disposition such as catalog expansion, missing DI/resource materialization, missing AppTask
+execution, registry admission, unclassified open admission, or plain admission-only preservation, then emits
+formation kind, status, open reason, closure, and summary together. Keep this as a named boundary primitive instead of
+reintroducing separate `FrameworkRelationshipEndpointKind -> FrameworkAdmissionWorldFormationKind/Status` switches.
+`framework.admission:flow` is the current answer for configuration-root questions such as
+`StandardConfiguration`: it composes configuration admission, catalog expansion, registry body expansion,
+DI materialization routes, and resource convergence roles into one graph-shaped answer family. Treat it as a path
+product over existing exact substrates. The base `flow` projection should stay a cheap rollup; agents should follow
+`flow-edges`, `flow-nodes`, or explicit `flow-edge-details` continuations only after the rollup shows that row detail is
+worth the context cost. Compact edge pages should not offer per-edge source continuations directly; route through
+`flow-edge-details` first so source inspection is paid only when a concrete edge payload is already under review. It
+should reveal missing world links by preserving registry/materialization/resource edges with source rows; do not turn it
+into a hand-maintained StandardConfiguration diagram or a fuzzy importance ranker.
+Flow-specific filters are downstream graph filters. Use `packageId` and `exportName` to scope the admission root; apply
+`targetName`, `key`, `nodeKind`, `edgeKind`, `role`, `resourceKind`, and `query` after graph composition so registry
+expansion and DI/resource joins can still reveal nodes that are not directly admitted by the root configuration.
+`framework.admission:flow` also has a first named graph corridor, `corridor: "jit-compiler"`. This is the compiler-only
+StandardConfiguration slice: resource definitions needed by compilation, TemplateCompiler and binding-command
+materialization/dependency reads, and compiler instruction-production edges. It deliberately keeps renderer dispatch
+and controller hydration out of the corridor so the compiler path can be reasoned about before widening into the next
+resolved-runtime phase. The corridor maintains two notions of relevance: resource definitions can be part of the
+compiler world without seeding runtime DI construction, while compiler producers such as `TemplateCompiler` and
+admitted binding commands do seed DI dependency closure.
+Within that corridor, CE/CA/TC rows are definition lookup facts, not construction facts. ResourceResolver `find` calls
+should remain visible as lookup edges (`ResourceResolver -> CustomElement/CustomAttribute`) but must not recursively
+pull in view-model construction, renderer dispatch, or hydration dependencies. Container `get`/`invoke` edges are the
+materialization boundary. A recent substrate bug came from treating `WeakMap<IContainer, ...>.get(c)` as a container
+read because the old type check matched any type string containing `IContainer`; container identity is now checked
+against the actual `IContainer` type symbol/constraint so generic cache keys do not become DI dependencies.
+The JIT compiler corridor and compiler lens now have a declared bidirectional semantic route:
+`framework.route.admission-flow.compiler-instruction-products` jumps from the corridor rollup to TemplateCompiler
+instruction products, and `framework.route.compiler.admission-jit-flow` places compiler summaries or TemplateCompiler
+instruction rows back into the `StandardConfiguration` JIT flow slice. The corridor constants live in
+`framework-jit-compiler-corridor.ts`; keep the root export, actor, package, and DI key named there instead of scattering
+`StandardConfiguration` / `TemplateCompiler` strings through continuation code.
+Rendering instruction dispatch/syntax rows also navigate back to `framework.compiler:instruction-products` through
+`framework.route.rendering.compiler-instruction-products`, closing the existing compiler-to-rendering instruction path.
+`framework.compiler:compile-flow` and `framework.compiler:attribute-classification` are intentionally separate.
+Compile flow is the high-level TemplateCompiler corridor: `compile(...)`, `compileSpread(...)`, context/template setup,
+hook/local-element passes, node dispatch, element compilation, attribute classification as one stage, order-sensitive
+attribute reordering, projection extraction, custom-attribute bindable compilation, multi-bindings, instruction
+assembly, template-controller wrapping, leaf compilation, surrogate compilation, and compiled-definition output.
+Attribute classification is the dense `_classifyAttributes` decision tree inside that corridor. Keep it as a detail
+projection with its own branch rows and instruction-product/resource continuations; do not make the compiler overview
+pay for the full branch taxonomy up front. Broad `compile-flow` returns overview rows, while `methodName`,
+`compileStage`, `instructionName`, and `query` filters can expose method-local detail. The compiler summary is
+rollup-only and should stay cheap. Agents should follow `compile-flow` before spending the more detailed
+`attribute-classification`, `instruction-products`, or rendering continuations. Flow rows carry exact `SourceRange`
+provenance and small pages expose row-local source continuations; keep that property if the flow widens again.
+`framework.rendering:hydration-flow` is the next resolved-runtime corridor after that JIT compiler slice. It should
+answer "how does a compiled definition become hydrated controller/rendered instruction/binding work?" without expanding
+the heavy rendering row families by default. Its first-pass axes are `stage`, `operation`, and `targetKind`; operations
+deliberately separate `find` resource lookup from `get`/`get-all` DI lookup, `invoke` view-model construction,
+`compile`, `render`, `dispatch`, `create-controller`, `admit-child`, `admit-binding`, hook execution, and
+watcher/observer setup. Keep this as an entry map with source provenance and continuations into compiler, DI,
+resources, lifecycle, observation, controller creation, instruction dispatch, and binding admission; do not let it
+become a duplicate detailed rendering graph.
+The default `hydration-flow` projection is an overview answer. It now reports both the visible overview count and the
+total source-backed corridor row count, so a caller can see when detail rows exist and reach them with filters instead
+of receiving a 26k-token dump up front.
+`framework.rendering:render-consequences` is the compact layer behind hydration. It is derived from rendering
+relationship atoms, not another source scanner, and exposes dispatch consequences with `consequenceKind`,
+`actorName`, `targetName`, `detailProjection`, and exact `detailFilters`. Keep this as the first rendering detail hop:
+use it to answer "what did rendering produce or effect?" before opening nested `instruction-dispatches`,
+`controller-creations`, `binding-products`, `binding-admissions`, `binding-effects`, or `binding-setups` rows. Its
+default answer is an overview with explicit total counts; filtered reads expose the full consequence set.
+The old rendering detail projections should behave as jump surfaces, not as raw substrate dumps. `syntax-products`,
+`instruction-slots`, `instruction-dispatches`, `controller-creations`, `binding-products`, and `binding-admissions`
+now return compact public rows from `framework-rendering-public-rows.ts` while preserving full internal index rows for
+relationship derivation and continuations. This is the preferred pattern for any remaining heavy rendering detail
+projection: first return stable identifiers, names, counts, source ranges, and detail references; keep nested
+checker/call-site payloads behind source/type/detail continuations.
+The route catalog declares the compiler-to-hydration, rendering-detail-to-hydration, and
+hydration-to-compiler-compile-flow hops, so this corridor is a prominent navigation point without relying on anonymous
+projection glue. Compile-flow rows that produce compiled definitions or instruction rows can route back to
+hydration-flow with local `targetKind` filters, which makes the rendering -> compilation -> rendering loop inspectable
+without asking callers to remember the previous lens context.
+
+Lifecycle AppTask execution rows carry their observed relationship target endpoint directly. Do not rederive the target
+endpoint from `FrameworkLifecycleAppTaskExecutionKind` in a relationship builder; the detector that found the execution
+site already knows whether it saw the AppTask slot, IAppTask key lookup, slot-filter concept, or `task.run` method.
+
+Observation flow-site classification carries `targetKind` alongside `siteKind`, relation, mechanism, and target name.
+Avoid a late `FrameworkObservationFlowSiteKind -> FrameworkRelationshipEndpointKind` switch: the classifier that
+recognizes a watch parse, observer cache read, connectable subscription, or constructed observer should state whether
+the target is a symbol, concept, or expression at the source of the classification.
+
+Generic framework projection and pagination moves should go through `projectionContinuation` and
+`nextPageContinuation`. Lens-specific authority belongs in their options (`basis`, `priority`, `summary`, evidence),
+not in copied local helper functions. `projectionContinuation` now emits `SwitchLens` only when the target lens differs
+from the caller at runtime; otherwise it remains `SwitchProjection`. Filter/locus/subject narrowing is now named by
+`NavigationRelation.RefinementOf`; do not use `ProjectionOf` for continuations that preserve the same answer family and
+only tighten the question.
+
 Framework runtime implementation is intentionally split by semantic phase. Facade modules such as
-`framework-lenses.ts`, `framework-continuations.ts`, `framework-rendering-graph.ts`, and
-`framework-entity-catalogs.ts` preserve stable import surfaces only. New behavior should usually land in a phase module:
-answerers orchestrate projections, evidence modules build provenance, continuation families own route hops, entity
-catalog modules own "what exists", rendering modules own syntax/instruction/binding phases, and bundle modules separate
-public bundle reads from evaluator association walking and classification indexes. If a facade starts owning logic
-again, treat that as architectural drift.
+`framework-lenses.ts`, `framework-rendering-graph.ts`, and `framework-entity-catalogs.ts` preserve stable import
+surfaces only. Continuation barrels should not sit on the answerer hot path; answerers should import the phase
+continuation module that owns the hop family so `atlas.self` can trace ownership through named imports. New behavior
+should usually land in a phase module: answerers orchestrate projections, evidence modules build provenance,
+continuation families own route hops, entity catalog modules own "what exists", rendering modules own
+syntax/instruction/binding phases, and bundle modules separate public bundle reads from evaluator association walking
+and classification indexes. If a facade starts owning logic again, treat that as architectural drift.
 
 ## Active Substrates
 
@@ -99,29 +345,31 @@ again, treat that as architectural drift.
   source-level resource carriers, public resource exports, registry/configuration exports, and evaluated bundle
   admissions. This catalog is the base layer before deeper ontology work connects binding commands to instructions,
   instructions/renderers to bindings, bindings to observer-locator products, and so on.
-- `framework.discovery` has a public `syntax-products` projection for the first layer below the resource/bundle seed
-  graph. It scans source producers across admitted Aurelia packages and emits:
-  - binding-command `build(...)` products, including constructor-returned instructions and object-literal instruction
-    records typed by the TypeChecker
-  - renderer `target`/`render(...)` instruction handling rows, including named `IInstruction` descendants such as
-    `HydrateTemplateController` that do not end in `Instruction`
-  - renderer binding-creation rows for `new *Binding(...)` and `*Binding.create(...)` products inside render bodies
-  - instruction-factory object literals that emit instruction records outside binding-command `build(...)`, including
-    compiler methods and SSR instruction translation
-  - exact source/TypeChecker continuations for each row, plus jumps back to resource carriers and evaluated bundles
-- `framework.discovery` has a public `instruction-slots` projection for runtime instruction discriminator constants.
+- Rendering/binding row families no longer live on `framework.discovery`. The old discovery `syntax-products`,
+  `instruction-slots`, `instruction-dispatches`, `binding-products`, `binding-admissions`, `binding-effects`, and
+  `binding-setups` projections were removed once `framework.rendering` became the owning lens. Discovery should stay
+  focused on seed/package/resource/bundle/entity catalogs and point into rendering instead of duplicating those row
+  surfaces.
+- The shared syntax-product substrate still scans source producers across admitted Aurelia packages, but public lenses
+  now split ownership. `framework.compiler:instruction-products` owns binding-command `build(...)` products and
+  instruction-factory object literals that emit instruction records. `framework.rendering:syntax-products` owns only
+  rendering-time syntax products: renderer `target`/`render(...)` instruction handling rows and renderer binding
+  creation rows for `new *Binding(...)` / `*Binding.create(...)` products inside render bodies. Do not make rendering
+  relationship rows claim `produces-instruction`; that relation belongs to the compiler lens. Rendering rows can
+  navigate back to compiler products by instruction name when provenance is needed.
+- `framework.rendering` has a public `instruction-slots` projection for runtime instruction discriminator constants.
   It joins source slot constants such as `itPropertyBinding`, numeric runtime values, instruction declarations whose
   `type` property references the slot, and syntax products that construct or handle the slot. Declaration-file rows
   from `dist/types` are intentionally excluded from this source-semantics scan.
-- `framework.discovery` has a public `binding-products` projection for binding classes materialized by renderer
+- `framework.rendering` has a public `binding-products` projection for binding classes materialized by renderer
   syntax products or admitted through controller binding lists. It joins renderer construction products, exact
   `controller.addBinding(...)` / `renderingCtrl.addBinding(...)` admission edges, binding class declarations,
   constructor parameter surfaces, lifecycle-relevant methods, observer-locator constructor parameters,
   observer-locator call sites, and target-observer override methods such as `useTargetObserver` / `useAccessor`.
-- `framework.discovery` has a public `binding-admissions` projection for exact controller binding-list admission
+- `framework.rendering` has a public `binding-admissions` projection for exact controller binding-list admission
   edges. It recognizes inline `new *Binding(...)`, inline `*Binding.create(...)`, local variable construction, and
   factory collection elements such as `SpreadBinding.create(...).forEach(b => renderingCtrl.addBinding(b))`.
-- `framework.discovery` has a public `binding-effects` projection for binding-class lifecycle and setup effects. It
+- `framework.rendering` has a public `binding-effects` projection for binding-class lifecycle and setup effects. It
   emits separate rows for lifecycle method declarations, observer/accessor lookups, event listener registration/removal,
   and subscription/unsubscription effects inside binding classes.
 - `framework.rendering` is now the first split lens for the resource/instruction/rendering/binding corridor. Its
@@ -141,7 +389,8 @@ again, treat that as architectural drift.
 - `framework.rendering` has a public `relationships` projection that normalizes syntax products, instruction
   dispatch, binding construction/admission/effects, and observation setup onto the shared relation/mechanism/phase
   axes. Relationship continuations now offer semantic hops back into instruction slots/dispatches, binding products,
-  binding effects, and observer catalogs instead of only source/type inspection.
+  binding effects, and observer catalogs through declared semantic route specs instead of only source/type inspection
+  or local projection-only route claims.
 - `framework.rendering` continuations stay source-backed: instruction dispatch, binding products, binding effects, and
   setup rows jump to concrete source/type/observer/catalog projections instead of a static handoff catalog.
 - Rendering-to-observer continuations now switch explicitly into `framework.discovery:observers` and add capability
@@ -227,7 +476,12 @@ again, treat that as architectural drift.
     from a key to the runtime-existence edge without reinterpreting route rows by hand.
   - `resource-instantiations` is the first resource materialization layer. It joins source-backed resource carriers to
     runtime/compiler/evaluator sites: CE/CA/TC view-model `container.invoke(...)`, VC/BB expression evaluator lookup
-    and application, BC compiler command resolution/build, and resource-kind DI registration/lookup seams.
+    and application, BC compiler command resolution/build, AP compiler parser registry/handler resolution, and
+    resource-kind DI registration/lookup seams.
+  - Attribute-pattern materialization is a useful evaluator canary. Exact AP registry rows require booted framework
+    source values for `Symbol.for(...)`, object-freeze helpers, and object-binding exports before
+    `AttributePattern.create(...).register(...)` can be spent as a metadata registry. Avoid reclassifying APs as
+    "definition-only" unless the evaluator/registy substrate has genuinely lost that path.
   - callback routes deliberately remain partial and carry open seams for return/value closure until evaluator/effect
     tracing can model the produced value, not just its container reads
   - this lens is a route layer over DI provider atoms, not yet the full container construction model
@@ -237,6 +491,8 @@ again, treat that as architectural drift.
   - the row is an evidence convergence view, not a claim about final container/template visibility
   - use this lens when a resource-specific question would otherwise require hopping through discovery, admission,
     materialization, and rendering just to learn which facts Atlas already has
+  - convergence/resource-carrier/resource-export hops into materialization, admission, and syntax products now use
+    declared semantic route specs so target lens/projection facts remain visible to `atlas.self`
 - `framework.compiler` is now a dedicated instruction-production lens:
   - instruction products cover binding-command `build(...)` outputs and instruction-factory object literals
   - relationship rows use the shared `compiler` family with `produces-instruction` relation and source mechanisms such
@@ -253,7 +509,7 @@ again, treat that as architectural drift.
   - lifecycle participant, controller call, AppTask execution, and hook dispatch lanes now live in the framework
     substrate so cross-lens continuations do not encode those lanes as ad hoc strings
   - child-controller activation rows now continue back to renderer `controller-creations` and `controller-add-child`
-    relationship rows, making the hydration-to-activation handoff bidirectional
+    relationship rows through declared semantic route specs, making the hydration-to-activation handoff bidirectional
   - hook dispatch rows separate direct view-model lifecycle hook calls from registered lifecycle-hook collection
     dispatch and helper callback invocation
 - `framework.observation` is now the dedicated observation/reactivity lens:
@@ -279,10 +535,15 @@ again, treat that as architectural drift.
     `target-root-name`)
   - `relationships` joins binding lookup/setup rows with the internal observation flow sites through shared
     relationship axes, so the rendering-to-observation handoff is now visible without rereading the locator sources
+  - binding lookup, observer entity, and flow-to-entity semantic hops now use declared semantic route specs with
+    explicit source/checker basis instead of empty local route claims
 - `framework.admission` is now the relationship layer over evaluated configuration and bundle associations:
   - it turns bundle rows into relationship rows from configuration export to admitted target
   - relation, mechanism, phase, endpoint kind, original association kind, and evaluator certainty now reuse stable
     typed axes instead of admission-local enum/string mirrors; path/catalog/helper data remain admission-local evidence
+  - admission relationship rows now use one generic `admits-value` relation. The admitted target taxonomy is carried by
+    `to.kind` plus `associationKind`, so DI key/resource/registry/catalog/AppTask/factory distinctions do not create
+    relation enum mirrors.
   - admitted targets currently include DI keys, resources, registry/configuration exports, catalogs, factories,
     concrete registration arguments, unknown arguments, and AppTasks
   - `materializations` joins admitted DI keys and resources to visible `framework.materialization` DI/resource
@@ -297,6 +558,12 @@ again, treat that as architectural drift.
     `exportName`; this avoids making a naive API consumer pay the cold all-package bundle-evaluation cost
   - source/type continuations are capped tightly, and semantic continuations jump into `framework.di`,
     `framework.discovery`, or back into `framework.admission` depending on target kind
+- Admission-to-materialization and admission-to-world-formation axes now live in
+  `packages/atlas/src/framework/admission-world.ts`, not in runtime lens files. The runtime world-formation reader joins
+  materialization/lifecycle evidence, while `FrameworkAdmissionWorldFormationInterpreter` owns the admission-only
+  boundary interpretation. Semantic route hops for admission rows are centralized in
+  `FrameworkAdmissionContinuationPlanner` and emitted through declared semantic route specs, so relation-to-lens
+  choices are inspectable as typed route facts instead of being hidden in the large answerer.
 - Shared framework axes should live in `packages/atlas/src/framework` instead of runtime lens files when more than one
   semantic layer needs them. Resource definition kind now lives in the framework substrate so relationship endpoints,
   entity catalogs, bundle associations, and rendering syntax rows can carry the same typed resource value space.
@@ -310,8 +577,9 @@ again, treat that as architectural drift.
   - add registry execution rows only when source-backed execution evidence makes that distinction visible
   - distinguish registry export admission from registry execution; an admitted registry/configuration export may own
     further admissions, but it is not automatically executed without a world-formation path
-  - record when broad admission queries become hot enough to safely promote more package summaries into daemon prewarm
-  - decide whether repeated AppTask admission-to-execution joins should become cached relationship atoms or stay
+  - record when broad admission queries become hot enough to justify a substrate improvement; do not promote them into
+    daemon warmup by default
+  - decide whether repeated AppTask admission-to-execution joins should become indexed relationship atoms or stay
     derived rows over admission and lifecycle indexes
 - Promote repeated boundary-like facts only after source-backed rows demand them:
   - connect package-export admission and registration evaluation through admission/DI/materialization relationships
@@ -333,7 +601,7 @@ again, treat that as architectural drift.
 - Deepen materialization after the instantiation surface:
   - validate whether constructable rows should separate factory-entry and constructor-call continuations into distinct
     projections once the site list becomes too large for common navigation
-  - decide whether repeated admission/materialization bridge rows should become cached relationship atoms or remain
+  - decide whether repeated admission/materialization bridge rows should become indexed relationship atoms or remain
     cheap derived rows over admission and materialization indexes
   - keep callback return/value closure evaluator-backed; do not collapse callback dependency reads into produced-value
     claims
@@ -426,35 +694,39 @@ again, treat that as architectural drift.
     DI admissions to these dispatch rows when the hook registry side is modeled more deeply
   - keep controller/view/binding lifecycle out of `framework.rendering` unless the row is specifically about renderer
     construction, instruction dispatch, binding construction, or observer setup
-- Add a stable disk manifest layer above the daemon's warm in-memory cache:
-  - the JSON cache now covers the current existence/entity atom families; see `JSON-CACHE.md` for the storage
-    contract, invalidation keys, inclusion policy, trade-offs, and falsifiers
-  - entity catalog producer versions are catalog-scoped so syntax-recognition refactors do not invalidate unrelated
-    resource, export, observer, or structural entity JSON
-  - the first relationship atom cache family is `framework.di.relationship-atoms`; use it as the template for future
-    relationship caches only if the atom axes continue to hold up under query pressure
-  - next candidates are relationship/effect families, starting with evaluated bundle admissions and then DI,
-    lifecycle, compiler, activation, and observer-flow atoms as their row shapes stabilize
-  - keep manifest rows as stable semantic addresses/evidence summaries; rehydrate or lazily reacquire full TypeScript
-    nodes from the live Program when a query needs rich checker/source graph access
-  - avoid letting the manifest become a hand-maintained substrate contract; it should be derived output with exact
-    invalidation rules
+- Keep durable cache machinery out until repeated foreground pressure proves it belongs:
+  - the package-scoped framework JSON cache was removed after source-epoch file/version caching made the old
+    daemon-restart benefit narrow. Keep hot `SourceProject`-scoped memos near their owning readers, but
+    do not reintroduce persisted cache families, producer hashes, dependency fingerprints, or env toggles without a
+    fresh profile and a named substrate primitive that explains why the data deserves durability.
+  - source-epoch memoization now lives in `source/memo.ts` as `SourceProjectMemo` and `SourceProjectKeyedMemo`. Use
+    those named primitives for hot per-epoch rows instead of repeating ad hoc `WeakMap<SourceProject, Map<...>>`
+    scaffolding in framework lenses.
+  - if a derived relationship/effect family becomes slow again, first ask whether it should become a stable atom
+    producer with exact row keys. A disk cache should be a consequence of durable substrate ownership, not a way to
+    hide an awkward query path.
 - Keep performance honest:
   - broad export member scans can still be expensive without a narrowing query
-  - full call hierarchy/call-site expansion remains lazy unless `ATLAS_PREWARM_FRAMEWORK_FLOW=1`
+  - full call hierarchy/call-site expansion remains lazy unless an owning framework projection asks for it
   - bundle cold paths are dominated by first TypeChecker/evaluator reads and package-scoped resource fallback for
     declaration-file imports, not all-package scans.
   - rendering graph projections share cold materialization paths when they join syntax products, construction
     products, admissions, and binding effects.
+  - daemon projection warmup and startup seed-index preloads have been removed. Keep startup focused on constructing
+    the source epoch; bridge and framework indexes should fill on demand unless a profiler shows a repeated foreground
+    query that cannot be made cheap at the owning substrate.
+  - CPU profiling showed cold observation/rendering summaries were dominated by TypeScript host `getScriptVersion`
+    `statSync` calls and repeated `normalizeFileKey` path resolution. `SourceProjectFileCache` and
+    `NormalizedFileKeyCache` now make these source-epoch facts explicit; keep future source substrate performance
+    work near those named primitives instead of adding per-lens caches for file identity/version facts.
   - `observers` uses `readExportNames` as the cheap admission surface and only expands TypeChecker export facts for
-    observer-ish candidate names and DI observer interfaces; it is prewarmed by the session daemon so ordinary API reads
-    should be warm-cache cheap.
+    observer-ish candidate names and DI observer interfaces.
   - `app-tasks`, `router-entities`, `expression-entities`, and `rendering-structures` use the same cheap public-name
     admission surface plus exact export expansion.
-  - `framework.di` and `framework.materialization` are blocking daemon prewarm reads. Bundle admissions use their own
-    JSON cache family and package-by-package background prewarm because a cold all-package bundle fill can exceed the
-    session startup budget.
-  - package-scoped JSON hydration should materially reduce daemon restart warmup after the cache has been filled.
+  - `framework.di`, `framework.materialization`, and bundle admissions now fill on first foreground use. If one becomes
+    foreground-slow again, profile before adding cache or warmup policy back.
+  - cold bundle admission without persisted JSON now costs roughly one foreground second on this checkout; keep that
+    as the current price of simpler substrate ownership and profile before adding durability back.
   - `readExportNames` is the cheap public-name surface; avoid `readExportSurface` when only admission names are needed
   - profile before adding more boot-time graph work; prefer indexed atoms with stable keys over repeated scans
 

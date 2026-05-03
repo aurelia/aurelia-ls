@@ -8,9 +8,10 @@ import {
   type SourceProject,
   type SourceSpan,
 } from "./project.js";
+import { SourceProjectMemo } from "./memo.js";
 
 const AU_LINK_SOURCE_FILE = "packages/semantic-runtime/src/kernel/au-link.ts";
-const auLinkIndexByProject = new WeakMap<SourceProject, AuLinkIndex>();
+const auLinkMemo = new SourceProjectMemo<AuLinkIndex>();
 
 /** Gap family observed when comparing the auLink overload catalog to decorator placements. */
 export const enum AuLinkGapKind {
@@ -241,45 +242,47 @@ export function readAuLinkModel(
   };
 }
 
-/** Build and retain the heavyweight auLink bridge index for cheap session queries. */
-export function prewarmAuLinkIndex(project: SourceProject): void {
-  void auLinkIndex(project);
-}
-
 function auLinkIndex(project: SourceProject): AuLinkIndex {
-  const cached = auLinkIndexByProject.get(project);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const startedAt = performance.now();
-  const context: AuLinkBuildContext = {
-    admittedPackageIds: new Set(project.snapshot().summary.packages.map((entry) => entry.id)),
-  };
-  const frameworkTargetsByLinkId = collectAuLinkFrameworkTargets(project);
-  const afterFrameworkTargets = performance.now();
-  const catalog = collectAuLinkCatalog(project, frameworkTargetsByLinkId, context);
-  const afterCatalog = performance.now();
-  const anchors = attachCatalogEntries(collectAuLinkAnchors(project, frameworkTargetsByLinkId, context), catalog);
-  const afterAnchors = performance.now();
-  const gaps = collectAuLinkGaps(catalog, anchors);
-  const afterGaps = performance.now();
-  if (process.env.ATLAS_PROFILE_AULINK_BOOT === "1") {
-    console.error(JSON.stringify({
-      event: "atlas.aulink.profile",
-      frameworkTargetsMs: Math.round(afterFrameworkTargets - startedAt),
-      catalogMs: Math.round(afterCatalog - afterFrameworkTargets),
-      anchorsMs: Math.round(afterAnchors - afterCatalog),
-      gapsMs: Math.round(afterGaps - afterAnchors),
-      totalMs: Math.round(afterGaps - startedAt),
-      frameworkTargets: frameworkTargetsByLinkId.size,
-      catalog: catalog.length,
-      anchors: anchors.length,
-      gaps: gaps.length,
-    }));
-  }
-  const index = { catalog, anchors, gaps, frameworkTargetsByLinkId };
-  auLinkIndexByProject.set(project, index);
-  return index;
+  return auLinkMemo.read(project, () => {
+    const startedAt = performance.now();
+    const context: AuLinkBuildContext = {
+      admittedPackageIds: new Set(
+        project.snapshot().summary.packages.map((entry) => entry.id),
+      ),
+    };
+    const frameworkTargetsByLinkId = collectAuLinkFrameworkTargets(project);
+    const afterFrameworkTargets = performance.now();
+    const catalog = collectAuLinkCatalog(
+      project,
+      frameworkTargetsByLinkId,
+      context,
+    );
+    const afterCatalog = performance.now();
+    const anchors = attachCatalogEntries(
+      collectAuLinkAnchors(project, frameworkTargetsByLinkId, context),
+      catalog,
+    );
+    const afterAnchors = performance.now();
+    const gaps = collectAuLinkGaps(catalog, anchors);
+    const afterGaps = performance.now();
+    if (process.env.ATLAS_PROFILE_AULINK_BOOT === "1") {
+      console.error(
+        JSON.stringify({
+          event: "atlas.aulink.profile",
+          frameworkTargetsMs: Math.round(afterFrameworkTargets - startedAt),
+          catalogMs: Math.round(afterCatalog - afterFrameworkTargets),
+          anchorsMs: Math.round(afterAnchors - afterCatalog),
+          gapsMs: Math.round(afterGaps - afterAnchors),
+          totalMs: Math.round(afterGaps - startedAt),
+          frameworkTargets: frameworkTargetsByLinkId.size,
+          catalog: catalog.length,
+          anchors: anchors.length,
+          gaps: gaps.length,
+        }),
+      );
+    }
+    return { catalog, anchors, gaps, frameworkTargetsByLinkId };
+  });
 }
 
 /** Convert an auLink catalog row into a source range suitable for continuations. */

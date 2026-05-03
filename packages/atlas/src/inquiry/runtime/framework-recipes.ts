@@ -1,14 +1,18 @@
+import type { Budget, PageRequest } from "../budget.js";
+import type { InquirySubject } from "../inquiry.js";
+import { LensId } from "../lens.js";
+import { LocusKind, RepoRootLocus, type Locus } from "../locus.js";
 import type { FrameworkDiscoveryFilters } from "./framework-filters.js";
 
 /** Exact inquiry payload embedded in a framework discovery recipe. */
 export interface FrameworkDiscoveryRecipeAsk {
-  readonly lens: string;
-  readonly locus?: unknown;
-  readonly subject?: unknown;
+  readonly lens: LensId;
+  readonly locus?: Locus;
+  readonly subject?: InquirySubject;
   readonly projection: string;
   readonly filters?: Record<string, unknown>;
-  readonly budget?: Record<string, unknown>;
-  readonly page?: Record<string, unknown>;
+  readonly budget?: Budget;
+  readonly page?: PageRequest;
 }
 
 /** One calibrated hop inside a framework discovery recipe. */
@@ -50,8 +54,8 @@ export const FRAMEWORK_DISCOVERY_RECIPES: readonly FrameworkDiscoveryRecipeRow[]
           purpose:
             "Get the source-bound Aurelia facade seeds and exact source continuations.",
           ask: {
-            lens: "framework.discovery",
-            locus: { kind: "repo" },
+            lens: LensId.FrameworkDiscovery,
+            locus: RepoRootLocus,
             projection: "flow-seeds",
             filters: { flow: "startup" },
             budget: { rows: 12, evidencePerSubject: 3 },
@@ -69,8 +73,8 @@ export const FRAMEWORK_DISCOVERY_RECIPES: readonly FrameworkDiscoveryRecipeRow[]
           purpose:
             "Resolve the implementation class as a TypeChecker target and expose full declaration source ranges.",
           ask: {
-            lens: "ts.type",
-            locus: { kind: "repo" },
+            lens: LensId.TsType,
+            locus: RepoRootLocus,
             subject: {
               scheme: "declaration",
               name: "Aurelia",
@@ -92,9 +96,9 @@ export const FRAMEWORK_DISCOVERY_RECIPES: readonly FrameworkDiscoveryRecipeRow[]
           purpose:
             "Read the local control-flow landmarks inside Aurelia startup without loading unrelated framework code.",
           ask: {
-            lens: "ts.type",
+            lens: LensId.TsType,
             locus: {
-              kind: "source-file",
+              kind: LocusKind.SourceFile,
               filePath: "aurelia/packages/runtime-html/src/aurelia.ts",
             },
             projection: "call-sites",
@@ -113,8 +117,8 @@ export const FRAMEWORK_DISCOVERY_RECIPES: readonly FrameworkDiscoveryRecipeRow[]
           purpose:
             "Switch from source control flow to the indexed DI relationship atom model.",
           ask: {
-            lens: "framework.di",
-            locus: { kind: "repo" },
+            lens: LensId.FrameworkDi,
+            locus: RepoRootLocus,
             projection: "summary",
             budget: { rows: 12, evidencePerSubject: 3 },
           },
@@ -130,14 +134,14 @@ export const FRAMEWORK_DISCOVERY_RECIPES: readonly FrameworkDiscoveryRecipeRow[]
           purpose:
             "Jump from DI keys/provider routes to where keys enter runtime existence.",
           ask: {
-            lens: "framework.materialization",
-            locus: { kind: "repo" },
+            lens: LensId.FrameworkMaterialization,
+            locus: RepoRootLocus,
             projection: "instantiations",
             budget: { rows: 16, evidencePerSubject: 3 },
           },
           read: [
             "value.instantiations[].key",
-            "value.instantiations[].instantiationKind",
+            "value.instantiations[].routeKind",
             "value.instantiations[].provider.name",
             "value.instantiations[].constructionSites[].siteKind",
             "continuations into provider source and low-level construction source",
@@ -148,8 +152,8 @@ export const FRAMEWORK_DISCOVERY_RECIPES: readonly FrameworkDiscoveryRecipeRow[]
           purpose:
             "See the evaluated StandardConfiguration bundle and what it admits into registration.",
           ask: {
-            lens: "framework.admission",
-            locus: { kind: "repo" },
+            lens: LensId.FrameworkAdmission,
+            locus: RepoRootLocus,
             projection: "bundles",
             filters: { query: "StandardConfiguration" },
             budget: { rows: 12, evidencePerSubject: 3 },
@@ -165,8 +169,8 @@ export const FRAMEWORK_DISCOVERY_RECIPES: readonly FrameworkDiscoveryRecipeRow[]
           purpose:
             "Attach startup to lifecycle task registration and task queue surfaces.",
           ask: {
-            lens: "framework.discovery",
-            locus: { kind: "repo" },
+            lens: LensId.FrameworkDiscovery,
+            locus: RepoRootLocus,
             projection: "app-tasks",
             budget: { rows: 16, evidencePerSubject: 3 },
           },
@@ -198,8 +202,8 @@ export const FRAMEWORK_DISCOVERY_RECIPES: readonly FrameworkDiscoveryRecipeRow[]
           purpose:
             "Locate compiler anchors and their source-bound declaration ranges.",
           ask: {
-            lens: "framework.discovery",
-            locus: { kind: "repo" },
+            lens: LensId.FrameworkDiscovery,
+            locus: RepoRootLocus,
             projection: "flow-seeds",
             filters: { flow: "compilation" },
             budget: { rows: 12, evidencePerSubject: 3 },
@@ -215,8 +219,8 @@ export const FRAMEWORK_DISCOVERY_RECIPES: readonly FrameworkDiscoveryRecipeRow[]
           purpose:
             "Resolve TemplateCompiler and get declaration-sized source ranges for implementation inspection.",
           ask: {
-            lens: "ts.type",
-            locus: { kind: "repo" },
+            lens: LensId.TsType,
+            locus: RepoRootLocus,
             subject: {
               scheme: "declaration",
               name: "TemplateCompiler",
@@ -238,8 +242,8 @@ export const FRAMEWORK_DISCOVERY_RECIPES: readonly FrameworkDiscoveryRecipeRow[]
           purpose:
             "Map compiler producers to emitted instruction rows before following them into renderer consumption.",
           ask: {
-            lens: "framework.compiler",
-            locus: { kind: "repo" },
+            lens: LensId.FrameworkCompiler,
+            locus: RepoRootLocus,
             projection: "instruction-products",
             budget: { rows: 20, evidencePerSubject: 3 },
           },
@@ -255,8 +259,8 @@ export const FRAMEWORK_DISCOVERY_RECIPES: readonly FrameworkDiscoveryRecipeRow[]
           purpose:
             "Join instruction discriminator slots to renderer dispatch rows.",
           ask: {
-            lens: "framework.rendering",
-            locus: { kind: "repo" },
+            lens: LensId.FrameworkRendering,
+            locus: RepoRootLocus,
             projection: "instruction-dispatches",
             budget: { rows: 20, evidencePerSubject: 3 },
           },
@@ -272,8 +276,8 @@ export const FRAMEWORK_DISCOVERY_RECIPES: readonly FrameworkDiscoveryRecipeRow[]
           purpose:
             "Normalize renderer, binding, and observation edges before choosing a source implementation to inspect.",
           ask: {
-            lens: "framework.rendering",
-            locus: { kind: "repo" },
+            lens: LensId.FrameworkRendering,
+            locus: RepoRootLocus,
             projection: "relationships",
             budget: { rows: 20, evidencePerSubject: 3 },
           },
@@ -289,8 +293,8 @@ export const FRAMEWORK_DISCOVERY_RECIPES: readonly FrameworkDiscoveryRecipeRow[]
           purpose:
             "Inspect binding classes, lifecycle methods, observer-locator parameters, and construction/admission links.",
           ask: {
-            lens: "framework.rendering",
-            locus: { kind: "repo" },
+            lens: LensId.FrameworkRendering,
+            locus: RepoRootLocus,
             projection: "binding-products",
             budget: { rows: 20, evidencePerSubject: 3 },
           },
@@ -308,8 +312,8 @@ export const FRAMEWORK_DISCOVERY_RECIPES: readonly FrameworkDiscoveryRecipeRow[]
           purpose:
             "Connect binding lifecycle/setup rows to ObserverLocator-style APIs.",
           ask: {
-            lens: "framework.rendering",
-            locus: { kind: "repo" },
+            lens: LensId.FrameworkRendering,
+            locus: RepoRootLocus,
             projection: "relationships",
             filters: { relation: "looks-up-observer" },
             budget: { rows: 20, evidencePerSubject: 3 },
@@ -342,8 +346,8 @@ export const FRAMEWORK_DISCOVERY_RECIPES: readonly FrameworkDiscoveryRecipeRow[]
           purpose:
             "Locate Controller, Rendering, AppRoot, and hydration-oriented source-bound anchors.",
           ask: {
-            lens: "framework.discovery",
-            locus: { kind: "repo" },
+            lens: LensId.FrameworkDiscovery,
+            locus: RepoRootLocus,
             projection: "flow-seeds",
             filters: { flow: "hydration" },
             budget: { rows: 16, evidencePerSubject: 3 },
@@ -359,8 +363,8 @@ export const FRAMEWORK_DISCOVERY_RECIPES: readonly FrameworkDiscoveryRecipeRow[]
           purpose:
             "Find controller-shaped rendering/lifecycle exports and their source/type continuations.",
           ask: {
-            lens: "framework.discovery",
-            locus: { kind: "repo" },
+            lens: LensId.FrameworkDiscovery,
+            locus: RepoRootLocus,
             projection: "rendering-structures",
             filters: { renderingStructureKind: "controller" },
             budget: { rows: 12, evidencePerSubject: 3 },
@@ -376,8 +380,8 @@ export const FRAMEWORK_DISCOVERY_RECIPES: readonly FrameworkDiscoveryRecipeRow[]
           purpose:
             "Resolve Controller as an implementation class and expose the full declaration body continuation.",
           ask: {
-            lens: "ts.type",
-            locus: { kind: "repo" },
+            lens: LensId.TsType,
+            locus: RepoRootLocus,
             subject: {
               scheme: "declaration",
               name: "Controller",
@@ -399,9 +403,9 @@ export const FRAMEWORK_DISCOVERY_RECIPES: readonly FrameworkDiscoveryRecipeRow[]
           purpose:
             "Use document symbols as a cheap method map for controller activation/deactivation before reading method bodies.",
           ask: {
-            lens: "ts.structure",
+            lens: LensId.TsStructure,
             locus: {
-              kind: "source-file",
+              kind: LocusKind.SourceFile,
               filePath: "aurelia/packages/runtime-html/src/templating/controller.ts",
             },
             projection: "document-symbols",
@@ -421,8 +425,8 @@ export const FRAMEWORK_DISCOVERY_RECIPES: readonly FrameworkDiscoveryRecipeRow[]
           purpose:
             "Read resource-definition rows that can create controller/viewmodel work.",
           ask: {
-            lens: "framework.resources",
-            locus: { kind: "repo" },
+            lens: LensId.FrameworkResources,
+            locus: RepoRootLocus,
             projection: "convergence",
             filters: { resourceKind: "custom-element" },
             budget: { rows: 12, evidencePerSubject: 3 },
@@ -440,8 +444,8 @@ export const FRAMEWORK_DISCOVERY_RECIPES: readonly FrameworkDiscoveryRecipeRow[]
           purpose:
             "Jump from resource carriers to runtime/compiler/evaluator materialization sites.",
           ask: {
-            lens: "framework.materialization",
-            locus: { kind: "repo" },
+            lens: LensId.FrameworkMaterialization,
+            locus: RepoRootLocus,
             projection: "resource-instantiations",
             filters: { resourceKind: "custom-element" },
             budget: { rows: 12, evidencePerSubject: 3 },
@@ -459,8 +463,8 @@ export const FRAMEWORK_DISCOVERY_RECIPES: readonly FrameworkDiscoveryRecipeRow[]
           purpose:
             "Jump from resource materialization into renderer hydration rows that create and admit child controllers.",
           ask: {
-            lens: "framework.rendering",
-            locus: { kind: "repo" },
+            lens: LensId.FrameworkRendering,
+            locus: RepoRootLocus,
             projection: "controller-creations",
             budget: { rows: 12, evidencePerSubject: 3 },
           },
@@ -476,8 +480,8 @@ export const FRAMEWORK_DISCOVERY_RECIPES: readonly FrameworkDiscoveryRecipeRow[]
           purpose:
             "Find where renderer/resource code admits binding products into controller binding lists.",
           ask: {
-            lens: "framework.rendering",
-            locus: { kind: "repo" },
+            lens: LensId.FrameworkRendering,
+            locus: RepoRootLocus,
             projection: "binding-admissions",
             budget: { rows: 20, evidencePerSubject: 3 },
           },
@@ -493,8 +497,8 @@ export const FRAMEWORK_DISCOVERY_RECIPES: readonly FrameworkDiscoveryRecipeRow[]
           purpose:
             "Attach controller lifecycle work to public lifecycle hook/task exports.",
           ask: {
-            lens: "framework.discovery",
-            locus: { kind: "repo" },
+            lens: LensId.FrameworkDiscovery,
+            locus: RepoRootLocus,
             projection: "app-tasks",
             filters: { appTaskKind: "lifecycle-hook" },
             budget: { rows: 12, evidencePerSubject: 3 },
@@ -510,8 +514,8 @@ export const FRAMEWORK_DISCOVERY_RECIPES: readonly FrameworkDiscoveryRecipeRow[]
           purpose:
             "End the slice where binding lifecycle becomes observation/reactivity.",
           ask: {
-            lens: "framework.discovery",
-            locus: { kind: "repo" },
+            lens: LensId.FrameworkRendering,
+            locus: RepoRootLocus,
             projection: "binding-effects",
             filters: { effectKind: "observer-lookup" },
             budget: { rows: 20, evidencePerSubject: 3 },
@@ -542,18 +546,35 @@ export const FRAMEWORK_DISCOVERY_RECIPES: readonly FrameworkDiscoveryRecipeRow[]
         {
           id: "watch-definition-registry",
           purpose:
-            "Separate decorator-time definition storage from the WeakMap-backed Watch registry and CE/CA metadata merge.",
+            "Inspect the WeakMap-backed Watch registry without forcing a broad relation scan.",
           ask: {
-            lens: "framework.observation",
-            locus: { kind: "repo" },
+            lens: LensId.FrameworkObservation,
+            locus: RepoRootLocus,
             projection: "flow-sites",
-            filters: { relation: "reads-watch-definition" },
-            budget: { rows: 20, evidencePerSubject: 3 },
+            filters: { surfaceKind: "watch-registry" },
+            budget: { rows: 12, evidencePerSubject: 3 },
           },
           read: [
-            "value.flowSites[].surfaceKind for watch-registry, resource-watch-metadata, and watcher-setup",
+            "value.flowSites[].relation for stores-watch-definition and reads-watch-definition",
+            "value.flowSites[].siteKind for Watch registry WeakMap reads/writes",
+            "value.flowSites[].source for exact registry sites",
+          ],
+        },
+        {
+          id: "resource-watch-metadata-flow",
+          purpose:
+            "Inspect CE/CA resource watch metadata merge rows separately from registry storage.",
+          ask: {
+            lens: LensId.FrameworkObservation,
+            locus: RepoRootLocus,
+            projection: "flow-sites",
+            filters: { surfaceKind: "resource-watch-metadata" },
+            budget: { rows: 12, evidencePerSubject: 3 },
+          },
+          read: [
+            "value.flowSites[].relation for reads-watch-definition and stores-watch-definition",
             "value.flowSites[].siteKind for watch-definition-read and resource-watch-definition-merge",
-            "value.flowSites[].source for exact registry/metadata/read sites",
+            "value.flowSites[].source for exact metadata merge sites",
           ],
         },
         {
@@ -561,8 +582,8 @@ export const FRAMEWORK_DISCOVERY_RECIPES: readonly FrameworkDiscoveryRecipeRow[]
           purpose:
             "Read the createWatchers branch that turns function, string, and symbol watch definitions into watcher instances.",
           ask: {
-            lens: "framework.observation",
-            locus: { kind: "repo" },
+            lens: LensId.FrameworkObservation,
+            locus: RepoRootLocus,
             projection: "flow-sites",
             filters: { surfaceKind: "watcher-setup" },
             budget: { rows: 20, evidencePerSubject: 3 },
@@ -580,8 +601,8 @@ export const FRAMEWORK_DISCOVERY_RECIPES: readonly FrameworkDiscoveryRecipeRow[]
           purpose:
             "Inspect ComputedWatcher and ExpressionWatcher evaluation, dependency collection, callback invocation, and queued execution.",
           ask: {
-            lens: "framework.observation",
-            locus: { kind: "repo" },
+            lens: LensId.FrameworkObservation,
+            locus: RepoRootLocus,
             projection: "flow-sites",
             filters: { surfaceKind: "watcher" },
             budget: { rows: 20, evidencePerSubject: 3 },
@@ -597,8 +618,8 @@ export const FRAMEWORK_DISCOVERY_RECIPES: readonly FrameworkDiscoveryRecipeRow[]
           purpose:
             "Inspect Observation.run/watch and private effect runner rows that subscribe, clean up, and delegate expression/getter observation.",
           ask: {
-            lens: "framework.observation",
-            locus: { kind: "repo" },
+            lens: LensId.FrameworkObservation,
+            locus: RepoRootLocus,
             projection: "flow-sites",
             filters: { surfaceKind: "effect" },
             budget: { rows: 20, evidencePerSubject: 3 },
@@ -614,10 +635,13 @@ export const FRAMEWORK_DISCOVERY_RECIPES: readonly FrameworkDiscoveryRecipeRow[]
           purpose:
             "Normalize expression-sensitive watcher/effect edges before deciding whether to inspect source or enter TypeScript rename APIs.",
           ask: {
-            lens: "framework.observation",
-            locus: { kind: "repo" },
+            lens: LensId.FrameworkObservation,
+            locus: RepoRootLocus,
             projection: "relationships",
-            filters: { relation: "parses-expression" },
+            filters: {
+              surfaceKind: "watcher-setup",
+              relation: "parses-expression",
+            },
             budget: { rows: 20, evidencePerSubject: 3 },
           },
           read: [
@@ -631,8 +655,8 @@ export const FRAMEWORK_DISCOVERY_RECIPES: readonly FrameworkDiscoveryRecipeRow[]
           purpose:
             "Keep slot watcher subscription separate from ordinary expression watchers.",
           ask: {
-            lens: "framework.observation",
-            locus: { kind: "repo" },
+            lens: LensId.FrameworkObservation,
+            locus: RepoRootLocus,
             projection: "flow-sites",
             filters: { surfaceKind: "slot-watcher" },
             budget: { rows: 12, evidencePerSubject: 3 },
@@ -646,6 +670,7 @@ export const FRAMEWORK_DISCOVERY_RECIPES: readonly FrameworkDiscoveryRecipeRow[]
       calibrationNotes: [
         "Watcher string and symbol expressions are rename-sensitive carriers like template expressions, but Atlas currently exposes source-backed parse/access-scope/evaluation sites rather than closing string contents to view-model property symbols.",
         "Decorator storage, registry storage, resource metadata merge, watcher setup, and watcher runtime are separate surfaces because each can affect rename/materialization provenance differently.",
+        "Start watcher/effect recipes with surfaceKind-scoped flow-site reads; use relation-scoped flow-sites only after the observation index is warm or when a cross-surface relation is the question.",
         "Function watchers and string/symbol watchers enter different construction paths; keep them separate when promoting future rename or materialization facts.",
         "Effect watching delegates to ObserverLocator through expression/getter branches and has cleanup/subscription semantics that should stay distinct from controller-managed watcher bindings.",
       ],

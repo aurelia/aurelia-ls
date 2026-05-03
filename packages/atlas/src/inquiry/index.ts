@@ -1,6 +1,7 @@
 export * from "./answer.js";
 export * from "./basis.js";
 export * from "./budget.js";
+export * from "./composition.js";
 export * from "./continuation.js";
 export * from "./evidence.js";
 export * from "./handle.js";

@@ -3,27 +3,42 @@ import type { SourceProject } from "../../source/index.js";
 import { OutcomeKind, createAnswer, type Answer } from "../answer.js";
 import { clampBudget } from "../budget.js";
 import type { Inquiry } from "../inquiry.js";
+import { pageOffset } from "../paging.js";
 import {
   bindingAdmissionContinuations,
   bindingEffectContinuations,
   bindingProductContinuations,
   bindingSetupContinuations,
   controllerCreationContinuations,
+  hydrationFlowContinuations,
   instructionDispatchContinuations,
   instructionSlotContinuations,
+  renderConsequenceContinuations,
   renderingRelationshipContinuations,
-  renderingSummaryContinuations,
   syntaxProductContinuations,
-} from "./framework-continuations.js";
-import type { FrameworkRenderingValue } from "./framework-entities.js";
+} from "./framework-rendering-continuations.js";
+import { renderingSummaryContinuations } from "./framework-summary-continuations.js";
+import type {
+  FrameworkBindingAdmissionRow,
+  FrameworkBindingEffectRow,
+  FrameworkBindingProductRow,
+  FrameworkBindingSetupRow,
+  FrameworkControllerCreationRow,
+  FrameworkInstructionSlotRow,
+  FrameworkInstructionDispatchRow,
+  FrameworkRenderingValue,
+  FrameworkSyntaxProductRow,
+} from "./framework-entities.js";
 import {
   evidenceForBindingAdmission,
   evidenceForBindingEffect,
   evidenceForBindingProduct,
   evidenceForBindingSetup,
   evidenceForControllerCreation,
+  evidenceForHydrationFlow,
   evidenceForInstructionDispatch,
   evidenceForInstructionSlot,
+  evidenceForRenderConsequence,
   evidenceForRenderingRelationship,
   evidenceForSyntaxProduct,
 } from "./framework-evidence.js";
@@ -37,26 +52,49 @@ import {
   readFrameworkBindingProducts,
   readFrameworkBindingSetups,
   readFrameworkControllerCreations,
+  readFrameworkHydrationFlow,
+  readFrameworkHydrationFlowRows,
   readFrameworkInstructionDispatches,
   readFrameworkInstructionSlots,
-  readFrameworkSyntaxProducts,
+  readFrameworkRenderingSyntaxProducts,
 } from "./framework-rendering-graph.js";
+import type {
+  FrameworkHydrationFlowFilters,
+  FrameworkHydrationFlowRead,
+  FrameworkHydrationFlowRow,
+} from "./framework-rendering-hydration-flow.js";
+import {
+  readFrameworkRenderConsequenceRead,
+  readFrameworkRenderConsequenceRows,
+  type FrameworkRenderConsequenceFilters,
+  type FrameworkRenderConsequenceRead,
+  type FrameworkRenderConsequenceRow,
+} from "./framework-rendering-consequences.js";
+import {
+  bindingAdmissionSummaryRow,
+  bindingProductSummaryRow,
+  controllerCreationSummaryRow,
+  instructionDispatchSummaryRow,
+  instructionSlotSummaryRow,
+  syntaxProductSummaryRow,
+} from "./framework-rendering-public-rows.js";
 import {
   readFrameworkRenderingRelationships,
+  type FrameworkRenderingRelationshipRow,
   type FrameworkRenderingRelationshipFilters,
 } from "./framework-rendering-relationships.js";
 import {
   checkerBasis,
-  evidenceLimit,
-  pageInfo,
-  pageOffset,
-  pageRows,
+  countBy,
   sourceIndexBasis,
 } from "./framework-support.js";
+import { PagedRowFamily } from "../paged-row-family.js";
 
 class FrameworkRenderingQueryContext {
   readonly projection: string;
   readonly filters: FrameworkDiscoveryFilters;
+  readonly hydrationFilters: FrameworkHydrationFlowFilters;
+  readonly consequenceFilters: FrameworkRenderConsequenceFilters;
   readonly relationshipFilters: FrameworkRenderingRelationshipFilters;
   readonly seedIndex: ReturnType<typeof readFrameworkDiscoverySeedIndex>;
   readonly limit: number;
@@ -68,6 +106,15 @@ class FrameworkRenderingQueryContext {
   ) {
     this.projection = inquiry.projection ?? "summary";
     this.filters = filtersFromInquiry(inquiry);
+    this.hydrationFilters = {
+      ...this.filters,
+      ...hydrationAxisFiltersFromInquiry(inquiry),
+    };
+    this.consequenceFilters = {
+      ...this.filters,
+      ...relationshipAxisFiltersFromInquiry(inquiry),
+      ...consequenceAxisFiltersFromInquiry(inquiry),
+    };
     this.relationshipFilters = {
       ...this.filters,
       ...relationshipAxisFiltersFromInquiry(inquiry),
@@ -77,6 +124,114 @@ class FrameworkRenderingQueryContext {
     this.offset = pageOffset(inquiry);
   }
 }
+
+const SYNTAX_PRODUCT_ROW_FAMILY =
+  new PagedRowFamily<FrameworkSyntaxProductRow>({
+    id: "framework.rendering:syntax-products",
+    rowLabel: "Aurelia framework syntax product row(s)",
+    evidenceForRow: evidenceForSyntaxProduct,
+    continuationsForPage: syntaxProductContinuations,
+  });
+
+const INSTRUCTION_SLOT_ROW_FAMILY =
+  new PagedRowFamily<FrameworkInstructionSlotRow>({
+    id: "framework.rendering:instruction-slots",
+    rowLabel: "Aurelia framework instruction slot row(s)",
+    evidenceForRow: evidenceForInstructionSlot,
+    continuationsForPage: instructionSlotContinuations,
+  });
+
+const INSTRUCTION_DISPATCH_ROW_FAMILY =
+  new PagedRowFamily<FrameworkInstructionDispatchRow>({
+    id: "framework.rendering:instruction-dispatches",
+    rowLabel: "Aurelia framework instruction dispatch row(s)",
+    evidenceForRow: evidenceForInstructionDispatch,
+    continuationsForPage: instructionDispatchContinuations,
+  });
+
+const CONTROLLER_CREATION_ROW_FAMILY =
+  new PagedRowFamily<FrameworkControllerCreationRow>({
+    id: "framework.rendering:controller-creations",
+    rowLabel: "Aurelia framework controller creation row(s)",
+    evidenceForRow: evidenceForControllerCreation,
+    continuationsForPage: controllerCreationContinuations,
+  });
+
+const HYDRATION_FLOW_ROW_FAMILY =
+  new PagedRowFamily<FrameworkHydrationFlowRow>({
+    id: "framework.rendering:hydration-flow",
+    rowLabel: "Aurelia framework hydration-flow corridor row(s)",
+    evidenceForRow: evidenceForHydrationFlow,
+    continuationsForPage: hydrationFlowContinuations,
+  });
+
+const RENDER_CONSEQUENCE_ROW_FAMILY =
+  new PagedRowFamily<FrameworkRenderConsequenceRow>({
+    id: "framework.rendering:render-consequences",
+    rowLabel: "Aurelia framework renderer consequence row(s)",
+    evidenceForRow: evidenceForRenderConsequence,
+    continuationsForPage: renderConsequenceContinuations,
+  });
+
+function hydrationFlowSummary(
+  read: FrameworkHydrationFlowRead,
+  pageRowCount: number,
+): string {
+  if (read.mode === "overview") {
+    return `Returned ${pageRowCount} of ${read.rows.length} hydration/runtime rendering overview row(s); ${read.totalRowCount} total source-backed corridor row(s) are available through filters.`;
+  }
+  return `Returned ${pageRowCount} of ${read.rows.length} filtered hydration/runtime rendering corridor row(s); ${read.totalRowCount} total source-backed row(s).`;
+}
+
+function renderConsequenceSummary(
+  read: FrameworkRenderConsequenceRead,
+  pageRowCount: number,
+): string {
+  if (read.mode === "overview") {
+    return `Returned ${pageRowCount} of ${read.rows.length} compact renderer consequence overview row(s); ${read.totalRowCount} total consequence row(s) are available through filters.`;
+  }
+  return `Returned ${pageRowCount} of ${read.rows.length} filtered compact renderer consequence row(s); ${read.totalRowCount} total consequence row(s).`;
+}
+
+const BINDING_PRODUCT_ROW_FAMILY =
+  new PagedRowFamily<FrameworkBindingProductRow>({
+    id: "framework.rendering:binding-products",
+    rowLabel: "Aurelia framework binding product row(s)",
+    evidenceForRow: evidenceForBindingProduct,
+    continuationsForPage: bindingProductContinuations,
+  });
+
+const BINDING_ADMISSION_ROW_FAMILY =
+  new PagedRowFamily<FrameworkBindingAdmissionRow>({
+    id: "framework.rendering:binding-admissions",
+    rowLabel: "Aurelia framework binding admission row(s)",
+    evidenceForRow: evidenceForBindingAdmission,
+    continuationsForPage: bindingAdmissionContinuations,
+  });
+
+const BINDING_EFFECT_ROW_FAMILY =
+  new PagedRowFamily<FrameworkBindingEffectRow>({
+    id: "framework.rendering:binding-effects",
+    rowLabel: "Aurelia framework binding effect row(s)",
+    evidenceForRow: evidenceForBindingEffect,
+    continuationsForPage: bindingEffectContinuations,
+  });
+
+const BINDING_SETUP_ROW_FAMILY =
+  new PagedRowFamily<FrameworkBindingSetupRow>({
+    id: "framework.rendering:binding-setups",
+    rowLabel: "Aurelia framework binding setup row(s)",
+    evidenceForRow: evidenceForBindingSetup,
+    continuationsForPage: bindingSetupContinuations,
+  });
+
+const RENDERING_RELATIONSHIP_ROW_FAMILY =
+  new PagedRowFamily<FrameworkRenderingRelationshipRow>({
+    id: "framework.rendering:relationships",
+    rowLabel: "Aurelia framework rendering relationship row(s)",
+    evidenceForRow: evidenceForRenderingRelationship,
+    continuationsForPage: renderingRelationshipContinuations,
+  });
 
 /** Answer framework.rendering inquiries from rendering/resource/binding indexes over the hot source project. */
 export function answerFrameworkRendering(
@@ -111,43 +266,28 @@ class FrameworkRenderingAnswerer {
       limit,
       offset,
       relationshipFilters,
+      hydrationFilters,
+      consequenceFilters,
     } = context;
+    const basis = [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)];
 
     if (projection === "syntax-products") {
-      const syntaxProducts = readFrameworkSyntaxProducts(
+      const syntaxProducts = readFrameworkRenderingSyntaxProducts(
         sourceProject,
         filters,
       );
-      const page = pageRows(syntaxProducts, offset, limit);
-      return createAnswer(
+      return SYNTAX_PRODUCT_ROW_FAMILY.answer({
         inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${syntaxProducts.length} Aurelia framework syntax product row(s).`,
-        {
-          value: {
-            seedVersion: seedIndex.seedVersion,
-            syntaxProductCount: syntaxProducts.length,
-            syntaxProducts: page.rows,
-          },
-          basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map(evidenceForSyntaxProduct),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            syntaxProducts.length,
-            limit,
-            page.nextOffset,
-          ),
-          continuations: syntaxProductContinuations(
-            inquiry,
-            page.rows,
-            page.nextOffset,
-            limit,
-          ),
-        },
-      );
+        rows: syntaxProducts,
+        limit,
+        offset,
+        basis,
+        value: (page) => ({
+          seedVersion: seedIndex.seedVersion,
+          syntaxProductCount: syntaxProducts.length,
+          syntaxProducts: page.rows.map(syntaxProductSummaryRow),
+        }),
+      });
     }
 
     if (projection === "instruction-slots") {
@@ -155,36 +295,18 @@ class FrameworkRenderingAnswerer {
         sourceProject,
         filters,
       );
-      const page = pageRows(instructionSlots, offset, limit);
-      return createAnswer(
+      return INSTRUCTION_SLOT_ROW_FAMILY.answer({
         inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${instructionSlots.length} Aurelia framework instruction slot row(s).`,
-        {
-          value: {
-            seedVersion: seedIndex.seedVersion,
-            instructionSlotCount: instructionSlots.length,
-            instructionSlots: page.rows,
-          },
-          basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map(evidenceForInstructionSlot),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            instructionSlots.length,
-            limit,
-            page.nextOffset,
-          ),
-          continuations: instructionSlotContinuations(
-            inquiry,
-            page.rows,
-            page.nextOffset,
-            limit,
-          ),
-        },
-      );
+        rows: instructionSlots,
+        limit,
+        offset,
+        basis,
+        value: (page) => ({
+          seedVersion: seedIndex.seedVersion,
+          instructionSlotCount: instructionSlots.length,
+          instructionSlots: page.rows.map(instructionSlotSummaryRow),
+        }),
+      });
     }
 
     if (projection === "instruction-dispatches") {
@@ -192,36 +314,18 @@ class FrameworkRenderingAnswerer {
         sourceProject,
         filters,
       );
-      const page = pageRows(instructionDispatches, offset, limit);
-      return createAnswer(
+      return INSTRUCTION_DISPATCH_ROW_FAMILY.answer({
         inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${instructionDispatches.length} Aurelia framework instruction dispatch row(s).`,
-        {
-          value: {
-            seedVersion: seedIndex.seedVersion,
-            instructionDispatchCount: instructionDispatches.length,
-            instructionDispatches: page.rows,
-          },
-          basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map(evidenceForInstructionDispatch),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            instructionDispatches.length,
-            limit,
-            page.nextOffset,
-          ),
-          continuations: instructionDispatchContinuations(
-            inquiry,
-            page.rows,
-            page.nextOffset,
-            limit,
-          ),
-        },
-      );
+        rows: instructionDispatches,
+        limit,
+        offset,
+        basis,
+        value: (page) => ({
+          seedVersion: seedIndex.seedVersion,
+          instructionDispatchCount: instructionDispatches.length,
+          instructionDispatches: page.rows.map(instructionDispatchSummaryRow),
+        }),
+      });
     }
 
     if (projection === "controller-creations") {
@@ -229,40 +333,84 @@ class FrameworkRenderingAnswerer {
         sourceProject,
         filters,
       );
-      const page = pageRows(controllerCreations, offset, limit);
-      return createAnswer(
+      return CONTROLLER_CREATION_ROW_FAMILY.answer({
         inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${controllerCreations.length} Aurelia framework controller creation row(s).`,
-        {
-          value: {
-            seedVersion: seedIndex.seedVersion,
-            controllerCreationCount: controllerCreations.length,
-            recursiveDispatchCount: controllerCreations.reduce(
-              (total, row) => total + row.recursiveDispatchCalls.length,
-              0,
-            ),
-            controllerCreations: page.rows,
-          },
-          basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map(evidenceForControllerCreation),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            controllerCreations.length,
-            limit,
-            page.nextOffset,
+        rows: controllerCreations,
+        limit,
+        offset,
+        basis,
+        value: (page) => ({
+          seedVersion: seedIndex.seedVersion,
+          controllerCreationCount: controllerCreations.length,
+          recursiveDispatchCount: controllerCreations.reduce(
+            (total, row) => total + row.recursiveDispatchCalls.length,
+            0,
           ),
-          continuations: controllerCreationContinuations(
-            inquiry,
-            page.rows,
-            page.nextOffset,
-            limit,
-          ),
-        },
+          controllerCreations: page.rows.map(controllerCreationSummaryRow),
+        }),
+      });
+    }
+
+    if (projection === "hydration-flow") {
+      const hydrationFlow = readFrameworkHydrationFlow(
+        sourceProject,
+        hydrationFilters,
       );
+      return HYDRATION_FLOW_ROW_FAMILY.answer({
+        inquiry,
+        rows: hydrationFlow.rows,
+        limit,
+        offset,
+        basis,
+        value: (page) => ({
+          seedVersion: seedIndex.seedVersion,
+          hydrationFlowCount: hydrationFlow.rows.length,
+          hydrationFlowMode: hydrationFlow.mode,
+          hydrationFlowTotalCount: hydrationFlow.totalRowCount,
+          hydrationFlowOverviewCount: hydrationFlow.overviewRowCount,
+          hydrationStages: countBy(hydrationFlow.rows, (row) => row.stage),
+          hydrationOperations: countBy(hydrationFlow.rows, (row) => row.operation),
+          hydrationTargetKinds: countBy(hydrationFlow.rows, (row) => row.targetKind),
+          hydrationFlow: page.rows,
+        }),
+        summary: (page) => hydrationFlowSummary(hydrationFlow, page.rows.length),
+      });
+    }
+
+    if (projection === "render-consequences") {
+      const renderConsequences = readFrameworkRenderConsequenceRead(
+        sourceProject,
+        consequenceFilters,
+      );
+      return RENDER_CONSEQUENCE_ROW_FAMILY.answer({
+        inquiry,
+        rows: renderConsequences.rows,
+        limit,
+        offset,
+        basis,
+        value: (page) => ({
+          seedVersion: seedIndex.seedVersion,
+          renderConsequenceCount: renderConsequences.rows.length,
+          renderConsequenceMode: renderConsequences.mode,
+          renderConsequenceTotalCount: renderConsequences.totalRowCount,
+          renderConsequenceOverviewCount: renderConsequences.overviewRowCount,
+          renderConsequenceKinds: countBy(
+            renderConsequences.rows,
+            (row) => row.consequenceKind,
+          ),
+          renderConsequenceMechanisms: countBy(
+            renderConsequences.rows,
+            (row) => row.mechanism,
+          ),
+          renderConsequencePhases: countBy(
+            renderConsequences.rows,
+            (row) => row.phase,
+          ),
+          renderConsequences: page.rows,
+        }),
+        summary: (page) =>
+          renderConsequenceSummary(renderConsequences, page.rows.length),
+      });
     }
 
     if (projection === "binding-products") {
@@ -270,36 +418,18 @@ class FrameworkRenderingAnswerer {
         sourceProject,
         filters,
       );
-      const page = pageRows(bindingProducts, offset, limit);
-      return createAnswer(
+      return BINDING_PRODUCT_ROW_FAMILY.answer({
         inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${bindingProducts.length} Aurelia framework binding product row(s).`,
-        {
-          value: {
-            seedVersion: seedIndex.seedVersion,
-            bindingProductCount: bindingProducts.length,
-            bindingProducts: page.rows,
-          },
-          basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map(evidenceForBindingProduct),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            bindingProducts.length,
-            limit,
-            page.nextOffset,
-          ),
-          continuations: bindingProductContinuations(
-            inquiry,
-            page.rows,
-            page.nextOffset,
-            limit,
-          ),
-        },
-      );
+        rows: bindingProducts,
+        limit,
+        offset,
+        basis,
+        value: (page) => ({
+          seedVersion: seedIndex.seedVersion,
+          bindingProductCount: bindingProducts.length,
+          bindingProducts: page.rows.map(bindingProductSummaryRow),
+        }),
+      });
     }
 
     if (projection === "binding-admissions") {
@@ -307,36 +437,18 @@ class FrameworkRenderingAnswerer {
         sourceProject,
         filters,
       );
-      const page = pageRows(bindingAdmissions, offset, limit);
-      return createAnswer(
+      return BINDING_ADMISSION_ROW_FAMILY.answer({
         inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${bindingAdmissions.length} Aurelia framework binding admission row(s).`,
-        {
-          value: {
-            seedVersion: seedIndex.seedVersion,
-            bindingAdmissionCount: bindingAdmissions.length,
-            bindingAdmissions: page.rows,
-          },
-          basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map(evidenceForBindingAdmission),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            bindingAdmissions.length,
-            limit,
-            page.nextOffset,
-          ),
-          continuations: bindingAdmissionContinuations(
-            inquiry,
-            page.rows,
-            page.nextOffset,
-            limit,
-          ),
-        },
-      );
+        rows: bindingAdmissions,
+        limit,
+        offset,
+        basis,
+        value: (page) => ({
+          seedVersion: seedIndex.seedVersion,
+          bindingAdmissionCount: bindingAdmissions.length,
+          bindingAdmissions: page.rows.map(bindingAdmissionSummaryRow),
+        }),
+      });
     }
 
     if (projection === "binding-effects") {
@@ -344,70 +456,34 @@ class FrameworkRenderingAnswerer {
         sourceProject,
         filters,
       );
-      const page = pageRows(bindingEffects, offset, limit);
-      return createAnswer(
+      return BINDING_EFFECT_ROW_FAMILY.answer({
         inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${bindingEffects.length} Aurelia framework binding effect row(s).`,
-        {
-          value: {
-            seedVersion: seedIndex.seedVersion,
-            bindingEffectCount: bindingEffects.length,
-            bindingEffects: page.rows,
-          },
-          basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map(evidenceForBindingEffect),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            bindingEffects.length,
-            limit,
-            page.nextOffset,
-          ),
-          continuations: bindingEffectContinuations(
-            inquiry,
-            page.rows,
-            page.nextOffset,
-            limit,
-          ),
-        },
-      );
+        rows: bindingEffects,
+        limit,
+        offset,
+        basis,
+        value: (page) => ({
+          seedVersion: seedIndex.seedVersion,
+          bindingEffectCount: bindingEffects.length,
+          bindingEffects: page.rows,
+        }),
+      });
     }
 
     if (projection === "binding-setups") {
       const bindingSetups = readFrameworkBindingSetups(sourceProject, filters);
-      const page = pageRows(bindingSetups, offset, limit);
-      return createAnswer(
+      return BINDING_SETUP_ROW_FAMILY.answer({
         inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${bindingSetups.length} Aurelia framework binding setup row(s).`,
-        {
-          value: {
-            seedVersion: seedIndex.seedVersion,
-            bindingSetupCount: bindingSetups.length,
-            bindingSetups: page.rows,
-          },
-          basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map(evidenceForBindingSetup),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            bindingSetups.length,
-            limit,
-            page.nextOffset,
-          ),
-          continuations: bindingSetupContinuations(
-            inquiry,
-            page.rows,
-            page.nextOffset,
-            limit,
-          ),
-        },
-      );
+        rows: bindingSetups,
+        limit,
+        offset,
+        basis,
+        value: (page) => ({
+          seedVersion: seedIndex.seedVersion,
+          bindingSetupCount: bindingSetups.length,
+          bindingSetups: page.rows,
+        }),
+      });
     }
 
     if (projection === "relationships") {
@@ -415,51 +491,36 @@ class FrameworkRenderingAnswerer {
         sourceProject,
         relationshipFilters,
       );
-      const page = pageRows(renderingRelationships, offset, limit);
-      return createAnswer(
+      return RENDERING_RELATIONSHIP_ROW_FAMILY.answer({
         inquiry,
-        page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-        `Returned ${page.rows.length} of ${renderingRelationships.length} Aurelia framework rendering relationship row(s).`,
-        {
-          value: {
-            seedVersion: seedIndex.seedVersion,
-            renderingRelationshipCount: renderingRelationships.length,
-            relationshipRelations: countBy(
-              renderingRelationships,
-              (row) => row.relation,
-            ),
-            relationshipMechanisms: countBy(
-              renderingRelationships,
-              (row) => row.mechanism,
-            ),
-            relationshipPhases: countBy(
-              renderingRelationships,
-              (row) => row.phase,
-            ),
-            renderingRelationships: page.rows,
-          },
-          basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
-          evidence: page.rows
-            .slice(0, evidenceLimit(inquiry))
-            .map(evidenceForRenderingRelationship),
-          page: pageInfo(
-            inquiry,
-            page.rows.length,
-            renderingRelationships.length,
-            limit,
-            page.nextOffset,
+        rows: renderingRelationships,
+        limit,
+        offset,
+        basis,
+        value: (page) => ({
+          seedVersion: seedIndex.seedVersion,
+          renderingRelationshipCount: renderingRelationships.length,
+          relationshipRelations: countBy(
+            renderingRelationships,
+            (row) => row.relation,
           ),
-          continuations: renderingRelationshipContinuations(
-            inquiry,
-            page.rows,
-            page.nextOffset,
-            limit,
+          relationshipMechanisms: countBy(
+            renderingRelationships,
+            (row) => row.mechanism,
           ),
-        },
-      );
+          relationshipPhases: countBy(
+            renderingRelationships,
+            (row) => row.phase,
+          ),
+          renderingRelationships: page.rows,
+        }),
+      });
     }
 
-    const syntaxProducts = readFrameworkSyntaxProducts(sourceProject, filters);
+    const syntaxProducts = readFrameworkRenderingSyntaxProducts(
+      sourceProject,
+      filters,
+    );
     const instructionSlots = readFrameworkInstructionSlots(
       sourceProject,
       filters,
@@ -476,6 +537,10 @@ class FrameworkRenderingAnswerer {
       sourceProject,
       filters,
     );
+    const hydrationFlow = readFrameworkHydrationFlowRows(
+      sourceProject,
+      hydrationFilters,
+    );
     const bindingAdmissions = readFrameworkBindingAdmissions(
       sourceProject,
       filters,
@@ -486,10 +551,14 @@ class FrameworkRenderingAnswerer {
       sourceProject,
       relationshipFilters,
     );
+    const renderConsequences = readFrameworkRenderConsequenceRows(
+      sourceProject,
+      consequenceFilters,
+    );
     return createAnswer(
       inquiry,
       OutcomeKind.Hit,
-      `Framework rendering index has ${syntaxProducts.length} syntax product(s), ${instructionSlots.length} instruction slot(s), ${instructionDispatches.length} instruction dispatch edge(s), ${controllerCreations.length} controller creation flow(s), ${bindingProducts.length} binding product(s), ${bindingAdmissions.length} admission edge(s), ${bindingEffects.length} binding effect(s), ${bindingSetups.length} binding setup override(s), and ${renderingRelationships.length} rendering relationship row(s).`,
+      `Framework rendering index has ${hydrationFlow.length} hydration-flow corridor row(s), ${renderConsequences.length} compact renderer consequence row(s), ${syntaxProducts.length} syntax product(s), ${instructionSlots.length} instruction slot(s), ${instructionDispatches.length} instruction dispatch edge(s), ${controllerCreations.length} controller creation flow(s), ${bindingProducts.length} binding product(s), ${bindingAdmissions.length} admission edge(s), ${bindingEffects.length} binding effect(s), ${bindingSetups.length} binding setup override(s), and ${renderingRelationships.length} rendering relationship row(s).`,
       {
         value: {
           seedVersion: seedIndex.seedVersion,
@@ -497,6 +566,8 @@ class FrameworkRenderingAnswerer {
           instructionSlotCount: instructionSlots.length,
           instructionDispatchCount: instructionDispatches.length,
           controllerCreationCount: controllerCreations.length,
+          hydrationFlowCount: hydrationFlow.length,
+          renderConsequenceCount: renderConsequences.length,
           recursiveDispatchCount: controllerCreations.reduce(
             (total, row) => total + row.recursiveDispatchCalls.length,
             0,
@@ -518,13 +589,32 @@ class FrameworkRenderingAnswerer {
             renderingRelationships,
             (row) => row.phase,
           ),
+          hydrationStages: countBy(hydrationFlow, (row) => row.stage),
+          hydrationOperations: countBy(hydrationFlow, (row) => row.operation),
+          hydrationTargetKinds: countBy(hydrationFlow, (row) => row.targetKind),
+          renderConsequenceKinds: countBy(
+            renderConsequences,
+            (row) => row.consequenceKind,
+          ),
+          renderConsequenceMechanisms: countBy(
+            renderConsequences,
+            (row) => row.mechanism,
+          ),
+          renderConsequencePhases: countBy(
+            renderConsequences,
+            (row) => row.phase,
+          ),
         },
-        basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
+        basis,
         evidence: [
           ...syntaxProducts.slice(0, 2).map(evidenceForSyntaxProduct),
+          ...renderConsequences
+            .slice(0, 2)
+            .map(evidenceForRenderConsequence),
           ...controllerCreations
             .slice(0, 2)
             .map(evidenceForControllerCreation),
+          ...hydrationFlow.slice(0, 2).map(evidenceForHydrationFlow),
           ...bindingProducts.slice(0, 2).map(evidenceForBindingProduct),
           ...renderingRelationships
             .slice(0, 2)
@@ -537,18 +627,6 @@ class FrameworkRenderingAnswerer {
   }
 }
 
-function countBy<TValue>(
-  values: readonly TValue[],
-  key: (value: TValue) => string,
-): Readonly<Record<string, number>> {
-  const counts: Record<string, number> = {};
-  for (const value of values) {
-    const bucket = key(value);
-    counts[bucket] = (counts[bucket] ?? 0) + 1;
-  }
-  return counts;
-}
-
 function relationshipAxisFiltersFromInquiry(
   inquiry: Inquiry,
 ): Pick<FrameworkRenderingRelationshipFilters, "relation" | "mechanism" | "phase"> {
@@ -556,6 +634,69 @@ function relationshipAxisFiltersFromInquiry(
     ...relationshipAxisFiltersFromRecord(inquiry.subject),
     ...relationshipAxisFiltersFromRecord(inquiry.filters),
   };
+}
+
+function hydrationAxisFiltersFromInquiry(
+  inquiry: Inquiry,
+): Partial<FrameworkHydrationFlowFilters> {
+  return {
+    ...hydrationAxisFiltersFromRecord(inquiry.subject),
+    ...hydrationAxisFiltersFromRecord(inquiry.filters),
+  };
+}
+
+function consequenceAxisFiltersFromInquiry(
+  inquiry: Inquiry,
+): Pick<FrameworkRenderConsequenceFilters, "consequenceKind"> {
+  return {
+    ...consequenceAxisFiltersFromRecord(inquiry.subject),
+    ...consequenceAxisFiltersFromRecord(inquiry.filters),
+  };
+}
+
+function hydrationAxisFiltersFromRecord(
+  value: unknown,
+): Partial<FrameworkHydrationFlowFilters> {
+  if (value === null || typeof value !== "object") {
+    return {};
+  }
+  const source = value as Record<string, unknown>;
+  return {
+    ...hydrationStringFilter(source, "hydrationStage"),
+    ...hydrationStringFilter(source, "operation"),
+    ...hydrationStringFilter(source, "targetKind"),
+    ...hydrationStringFilter(source, "ownerName"),
+    ...hydrationStringFilter(source, "methodName"),
+    ...hydrationStringFilter(source, "targetName"),
+  };
+}
+
+function hydrationStringFilter(
+  source: Record<string, unknown>,
+  key: keyof FrameworkHydrationFlowFilters,
+): object {
+  const value = source[key];
+  return typeof value === "string" && value.length > 0 ? { [key]: value } : {};
+}
+
+function consequenceAxisFiltersFromRecord(
+  value: unknown,
+): Pick<FrameworkRenderConsequenceFilters, "consequenceKind"> {
+  if (value === null || typeof value !== "object") {
+    return {};
+  }
+  const source = value as Record<string, unknown>;
+  return {
+    ...consequenceStringFilter(source, "consequenceKind"),
+  };
+}
+
+function consequenceStringFilter(
+  source: Record<string, unknown>,
+  key: keyof Pick<FrameworkRenderConsequenceFilters, "consequenceKind">,
+): object {
+  const value = source[key];
+  return typeof value === "string" && value.length > 0 ? { [key]: value } : {};
 }
 
 function relationshipAxisFiltersFromRecord(

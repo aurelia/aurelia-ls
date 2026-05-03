@@ -7,14 +7,19 @@ It defines the nouns that later TypeScript, product, framework, bridge, and Atla
 ## Contract Groups
 
 - [answer.ts](answer.ts) defines answer outcomes, answer envelopes, and the shared answer constructor.
-- [inquiry.ts](inquiry.ts) defines the shared question envelope, caller intent, subject, and context.
+- [inquiry.ts](inquiry.ts) defines the shared question envelope and subject.
 - [locus.ts](locus.ts) defines where an inquiry is rooted.
 - [basis.ts](basis.ts) defines what substrate authority an answer spent.
 - [evidence.ts](evidence.ts) defines witnesses and open seams.
 - [continuation.ts](continuation.ts) defines semantic next-question moves.
 - [budget.ts](budget.ts) defines shared budget and pagination lanes.
+- [composition.ts](composition.ts) defines the shared actor/claim composition answer shape. Use it when a lens can
+  expose precise signed claims (`subject -> predicate -> object`) around semantic actors instead of returning only
+  lens-local rows plus continuations.
 - [handle.ts](handle.ts) defines navigable handles used by loci, evidence, and continuations.
 - [navigation.ts](navigation.ts) defines reusable route grammar for continuation generation and promotion.
+  Keep route relations semantic rather than cosmetic: `ProjectionOf` changes the answer projection, while
+  `RefinementOf` tightens filters, locus, or subject inside the same answer family.
 - [terrain.ts](terrain.ts) defines active, deferred, and external repository terrain.
 - [substrate.ts](substrate.ts) defines static substrate contracts and trust.
 - [lens.ts](lens.ts) defines lens contracts and the lens catalog.

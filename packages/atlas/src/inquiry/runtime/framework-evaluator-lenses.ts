@@ -8,11 +8,10 @@ import {
   type EvaluationEffectTraceRead,
   type EvaluationInvocationEffect,
 } from "../../evaluation/index.js";
+import { readFrameworkModuleBootIndex } from "../../framework/module-boot.js";
 import ts from "typescript";
 import {
-  SourceSelectorScheme,
   resolveSourceSelector,
-  sourceSelectorForRange,
   type SourceProject,
   type SourceSelector,
 } from "../../source/index.js";
@@ -26,7 +25,6 @@ import {
 } from "../basis.js";
 import { clampBudget } from "../budget.js";
 import {
-  ContinuationKind,
   ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
@@ -39,13 +37,16 @@ import {
   type OpenSeam,
 } from "../evidence.js";
 import type { Inquiry } from "../inquiry.js";
-import { LensId } from "../lens.js";
-import { LocusKind } from "../locus.js";
 import {
-  NavigationPlane,
-  NavigationRelation,
-  type NavigationRouteClaim,
-} from "../navigation.js";
+  evidenceLimit,
+  pageOffset,
+} from "../paging.js";
+import {
+  FrameworkRowContinuationBuilder,
+  nextPageContinuation,
+  projectionContinuation,
+} from "./framework-continuation-core.js";
+import { sourceSelectorFromInquiry as selectorFromInquiry } from "./source-selector.js";
 
 /** Value returned by the framework.evaluator runtime lens. */
 export interface FrameworkEvaluatorValue {
@@ -219,19 +220,27 @@ function moduleSummaries(
           sourceFile !== undefined,
       ),
   );
+  const frameworkBoot = readFrameworkModuleBootIndex(sourceProject);
   return sourceFiles.slice(0, limit).map((sourceFile) => {
-    const moduleKey =
-      sourceProject.sourceFileIdentity(sourceFile)?.repoPath ??
-      sourceFile.fileName;
-    const result = new StaticEvaluator(sourceProject).evaluateSourceFile(
-      sourceFile,
-      moduleKey,
-    );
+    const identity = sourceProject.sourceFileIdentity(sourceFile);
+    const moduleKey = identity?.repoPath ?? sourceFile.fileName;
+    const result =
+      identity?.packageId === undefined || identity.packageId === null
+        ? null
+        : frameworkBoot.readPackage(identity.packageId)?.evaluator.evaluateModule(
+            moduleKey,
+          );
+    const moduleResult =
+      result ??
+      new StaticEvaluator(sourceProject).evaluateSourceFile(
+        sourceFile,
+        moduleKey,
+      );
     return {
       moduleKey,
-      completionKind: result.completion.kind,
-      bindingCount: result.environment.readBindings().length,
-      bindings: result.environment
+      completionKind: moduleResult.completion.kind,
+      bindingCount: moduleResult.environment.readBindings().length,
+      bindings: moduleResult.environment
         .readBindings()
         .slice(0, limit)
         .map((binding) => ({
@@ -240,7 +249,7 @@ function moduleSummaries(
           state: binding.state,
           valueKind: binding.value.kind,
         })),
-      openSeams: result.openSeams.map((seam, index) => ({
+      openSeams: moduleResult.openSeams.map((seam, index) => ({
         id: `module-evaluation-open:${moduleKey}:${index}`,
         openKind: seam.openKind,
         summary: seam.summary,
@@ -255,131 +264,6 @@ function moduleSummaries(
       })),
     };
   });
-}
-
-function selectorFromInquiry(inquiry: Inquiry): SourceSelector {
-  const subjectSelector = selectorFromSubject(inquiry.subject);
-  if (subjectSelector !== null) {
-    return subjectSelector;
-  }
-  switch (inquiry.locus.kind) {
-    case LocusKind.SourceFile:
-      return {
-        scheme: SourceSelectorScheme.File,
-        filePath: inquiry.locus.filePath,
-      };
-    case LocusKind.SourceRange:
-      return sourceSelectorForRange(inquiry.locus.range);
-    case LocusKind.Symbol:
-      return {
-        scheme: SourceSelectorScheme.Declaration,
-        name: inquiry.locus.name,
-        ...(inquiry.locus.filePath === undefined
-          ? {}
-          : { filePath: inquiry.locus.filePath }),
-        ...(inquiry.locus.packageName === undefined
-          ? {}
-          : { packageName: inquiry.locus.packageName }),
-      };
-    case LocusKind.Package:
-      return {
-        scheme: SourceSelectorScheme.Package,
-        ...(inquiry.locus.packageId === undefined
-          ? {}
-          : { packageId: inquiry.locus.packageId }),
-        ...(inquiry.locus.packageName === undefined
-          ? {}
-          : { packageName: inquiry.locus.packageName }),
-      };
-    case LocusKind.Handle:
-      return {
-        scheme: SourceSelectorScheme.Workspace,
-        ...(typeof inquiry.subject === "string"
-          ? { query: inquiry.subject }
-          : {}),
-      };
-    case LocusKind.Repo:
-    case LocusKind.RepoArea:
-    case LocusKind.GitTree:
-      return {
-        scheme: SourceSelectorScheme.Workspace,
-        ...(typeof inquiry.subject === "string"
-          ? { query: inquiry.subject }
-          : {}),
-      };
-  }
-}
-
-function selectorFromSubject(subject: unknown): SourceSelector | null {
-  if (
-    subject === null ||
-    typeof subject !== "object" ||
-    !("scheme" in subject)
-  ) {
-    return null;
-  }
-  const source = subject as Record<string, unknown>;
-  const scheme = source.scheme;
-  switch (scheme) {
-    case SourceSelectorScheme.Workspace:
-      return {
-        scheme,
-        ...(typeof source.query === "string" ? { query: source.query } : {}),
-      };
-    case SourceSelectorScheme.Package:
-      return {
-        scheme,
-        ...(typeof source.packageId === "string"
-          ? { packageId: source.packageId }
-          : {}),
-        ...(typeof source.packageName === "string"
-          ? { packageName: source.packageName }
-          : {}),
-      };
-    case SourceSelectorScheme.File:
-      return { scheme, filePath: stringField(source, "filePath") };
-    case SourceSelectorScheme.Range:
-      return {
-        scheme,
-        filePath: stringField(source, "filePath"),
-        start: positionField(source, "start"),
-        end: positionField(source, "end"),
-      };
-    case SourceSelectorScheme.Declaration:
-      return {
-        scheme,
-        name: stringField(source, "name"),
-        ...(typeof source.kind === "string" ? { kind: source.kind } : {}),
-        ...(typeof source.packageId === "string"
-          ? { packageId: source.packageId }
-          : {}),
-        ...(typeof source.packageName === "string"
-          ? { packageName: source.packageName }
-          : {}),
-        ...(typeof source.filePath === "string"
-          ? { filePath: source.filePath }
-          : {}),
-        ...(typeof source.occurrence === "number"
-          ? { occurrence: source.occurrence }
-          : {}),
-      };
-    case SourceSelectorScheme.Export:
-      return {
-        scheme,
-        exportName: stringField(source, "exportName"),
-        ...(typeof source.packageId === "string"
-          ? { packageId: source.packageId }
-          : {}),
-        ...(typeof source.packageName === "string"
-          ? { packageName: source.packageName }
-          : {}),
-        ...(typeof source.filePath === "string"
-          ? { filePath: source.filePath }
-          : {}),
-      };
-    default:
-      return null;
-  }
 }
 
 function effectContinuations(
@@ -405,50 +289,37 @@ function effectContinuations(
         "framework.evaluator:open-seams",
         "open-seams",
         "Inspect evaluator seams observed while tracing these effects.",
+        {
+          basis: [BasisKind.StaticEvaluator],
+          priority: ContinuationPriority.Secondary,
+        },
       ),
     );
   }
   for (const [index, effect] of read.effects.slice(0, 3).entries()) {
     const source = sourceRangeForEvaluationEffect(effect);
     const evidence = evidenceForEffect(effect);
-    continuations.push({
-      id: `framework.evaluator:effects:source:${index}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Primary,
-      rationale: "Inspect source behind this static invocation effect.",
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: { kind: LocusKind.SourceRange, range: source },
-        projection: "text",
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.SourceFor,
-        [BasisKind.SourceText, BasisKind.StaticEvaluator],
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.evaluator:effects",
+      index,
+      evidence,
+    );
+    continuations.push(
+      builder.source(
+        "source",
+        source,
+        "Inspect source behind this static invocation effect.",
         "Source behind a static invocation effect.",
+        { basis: [BasisKind.SourceText, BasisKind.StaticEvaluator] },
       ),
-    });
-    continuations.push({
-      id: `framework.evaluator:effects:type:${index}`,
-      kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Secondary,
-      rationale: "Inspect TypeChecker facts for this static invocation effect.",
-      inquiry: {
-        lens: LensId.TsType,
-        locus: { kind: LocusKind.SourceRange, range: source },
-        projection: "call-sites",
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Flow,
-        NavigationRelation.CallSitesOf,
-        [BasisKind.TypeScriptChecker, BasisKind.SourceText],
+      builder.callSites(
+        "type",
+        source,
+        "Inspect TypeChecker facts for this static invocation effect.",
         "Exact call-site row behind a static invocation effect.",
       ),
-    });
+    );
   }
   return continuations;
 }
@@ -457,71 +328,21 @@ function openSeamContinuations(
   inquiry: Inquiry,
   seams: readonly EvaluationEffectOpenSeam[],
 ): readonly Continuation[] {
-  return seams.slice(0, 3).map((seam, index) => ({
-    id: `framework.evaluator:open-seams:source:${index}`,
-    kind: ContinuationKind.InspectEvidence,
-    priority: ContinuationPriority.Primary,
-    rationale: "Inspect source behind this evaluator open seam.",
-    inquiry: {
-      lens: LensId.TsSource,
-      locus: {
-        kind: LocusKind.SourceRange,
-        range: sourceRangeForEvaluationOpenSeam(seam),
-      },
-      projection: "text",
-      budget: inquiry.budget,
-    },
-    evidence: [evidenceForOpenSeam(seam)],
-    route: route(
-      NavigationPlane.Inspection,
-      NavigationRelation.SourceFor,
-      [BasisKind.SourceText, BasisKind.StaticEvaluator],
+  return seams.slice(0, 3).map((seam, index) => {
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.evaluator:open-seams",
+      index,
+      evidenceForOpenSeam(seam),
+    );
+    return builder.source(
+      "source",
+      sourceRangeForEvaluationOpenSeam(seam),
+      "Inspect source behind this evaluator open seam.",
       "Source behind an evaluator open seam.",
-    ),
-  }));
-}
-
-function projectionContinuation(
-  inquiry: Inquiry,
-  id: string,
-  projection: string,
-  rationale: string,
-): Continuation {
-  return {
-    id,
-    kind: ContinuationKind.SwitchProjection,
-    priority: ContinuationPriority.Secondary,
-    rationale,
-    inquiry: { ...inquiry, projection, page: undefined },
-    route: route(
-      NavigationPlane.Semantic,
-      NavigationRelation.ProjectionOf,
-      [BasisKind.StaticEvaluator],
-      rationale,
-    ),
-  };
-}
-
-function nextPageContinuation(
-  inquiry: Inquiry,
-  id: string,
-  rationale: string,
-  nextOffset: number,
-  limit: number,
-): Continuation {
-  return {
-    id,
-    kind: ContinuationKind.NextPage,
-    priority: ContinuationPriority.Primary,
-    rationale,
-    inquiry: { ...inquiry, page: { size: limit, cursor: String(nextOffset) } },
-    route: route(
-      NavigationPlane.Addressing,
-      NavigationRelation.NextPageOf,
-      [],
-      rationale,
-    ),
-  };
+      { basis: [BasisKind.SourceText, BasisKind.StaticEvaluator] },
+    );
+  });
 }
 
 function evidenceForEffect(effect: EvaluationInvocationEffect): Evidence {
@@ -547,37 +368,66 @@ function evidenceForOpenSeam(seam: EvaluationEffectOpenSeam): Evidence {
     data: seam,
   };
 }
+/** Answer-layer profile for presenting evaluator closure boundaries. */
+class FrameworkEvaluatorOpenSeamProfile {
+  private static readonly depthLimit =
+    new FrameworkEvaluatorOpenSeamProfile(OpenSeamKind.DepthLimit);
 
-function answerOpenSeam(seam: EvaluationEffectOpenSeam): OpenSeam {
-  return {
-    id: seam.id,
-    kind: openSeamKind(seam.openKind),
-    summary: seam.summary,
-    evidence: evidenceForOpenSeam(seam),
-    basis: staticEvaluatorBasisForIdentity(
-      "Observed while statically tracing invocation effects.",
-    ),
-    data: seam,
-  };
+  private static readonly unsupportedSyntax =
+    new FrameworkEvaluatorOpenSeamProfile(OpenSeamKind.UnsupportedSyntax);
+
+  private static readonly unresolvedSymbol =
+    new FrameworkEvaluatorOpenSeamProfile(OpenSeamKind.UnresolvedSymbol);
+
+  private static readonly dynamicRuntime =
+    new FrameworkEvaluatorOpenSeamProfile(OpenSeamKind.DynamicRuntime);
+
+  private constructor(
+    /** Coarser answer-layer seam kind for this evaluator boundary profile. */
+    readonly openSeamKind: OpenSeamKind,
+  ) {}
+
+  /** Classify evaluator-local closure evidence into its answer-layer profile. */
+  static forEvaluationOpenKind(
+    kind: EvaluationOpenKind,
+  ): FrameworkEvaluatorOpenSeamProfile {
+    switch (kind) {
+      case EvaluationOpenKind.DepthLimit:
+      case EvaluationOpenKind.StatementLimit:
+        return FrameworkEvaluatorOpenSeamProfile.depthLimit;
+      case EvaluationOpenKind.UnsupportedStatement:
+      case EvaluationOpenKind.UnsupportedExpression:
+      case EvaluationOpenKind.UnsupportedBindingPattern:
+        return FrameworkEvaluatorOpenSeamProfile.unsupportedSyntax;
+      case EvaluationOpenKind.UnresolvedIdentifier:
+        return FrameworkEvaluatorOpenSeamProfile.unresolvedSymbol;
+      case EvaluationOpenKind.DynamicCall:
+      case EvaluationOpenKind.DynamicBranch:
+      case EvaluationOpenKind.DynamicLoop:
+      case EvaluationOpenKind.DynamicMutation:
+        return FrameworkEvaluatorOpenSeamProfile.dynamicRuntime;
+    }
+  }
+
+  /** Build the public open-seam envelope for one evaluator seam. */
+  openSeamFor(seam: EvaluationEffectOpenSeam): OpenSeam {
+    return {
+      id: seam.id,
+      kind: this.openSeamKind,
+      summary: seam.summary,
+      evidence: evidenceForOpenSeam(seam),
+      basis: staticEvaluatorBasisForIdentity(
+        "Observed while statically tracing invocation effects.",
+      ),
+      data: seam,
+    };
+  }
 }
 
-function openSeamKind(kind: EvaluationOpenKind): OpenSeamKind {
-  switch (kind) {
-    case EvaluationOpenKind.DepthLimit:
-    case EvaluationOpenKind.StatementLimit:
-      return OpenSeamKind.DepthLimit;
-    case EvaluationOpenKind.UnsupportedStatement:
-    case EvaluationOpenKind.UnsupportedExpression:
-    case EvaluationOpenKind.UnsupportedBindingPattern:
-      return OpenSeamKind.UnsupportedSyntax;
-    case EvaluationOpenKind.UnresolvedIdentifier:
-      return OpenSeamKind.UnresolvedSymbol;
-    case EvaluationOpenKind.DynamicCall:
-    case EvaluationOpenKind.DynamicBranch:
-    case EvaluationOpenKind.DynamicLoop:
-    case EvaluationOpenKind.DynamicMutation:
-      return OpenSeamKind.DynamicRuntime;
-  }
+function answerOpenSeam(seam: EvaluationEffectOpenSeam): OpenSeam {
+  return FrameworkEvaluatorOpenSeamProfile.forEvaluationOpenKind(
+    seam.openKind,
+  ).openSeamFor(seam);
 }
 
 function uniqueSourceFiles(
@@ -613,39 +463,6 @@ function stringFilter(
 ): object {
   const value = source?.[key];
   return typeof value === "string" && value.length > 0 ? { [key]: value } : {};
-}
-
-function stringField(source: Record<string, unknown>, key: string): string {
-  const value = source[key];
-  return typeof value === "string" ? value : "";
-}
-
-function positionField(
-  source: Record<string, unknown>,
-  key: string,
-): { readonly line: number; readonly character: number } {
-  const value = source[key];
-  if (value === null || typeof value !== "object") {
-    return { line: 0, character: 0 };
-  }
-  const record = value as Record<string, unknown>;
-  return {
-    line: typeof record.line === "number" ? record.line : 0,
-    character: typeof record.character === "number" ? record.character : 0,
-  };
-}
-
-function pageOffset(inquiry: Inquiry): number {
-  const cursor = inquiry.page?.cursor;
-  if (cursor === undefined) {
-    return 0;
-  }
-  const parsed = Number.parseInt(cursor, 10);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function evidenceLimit(inquiry: Inquiry): number {
-  return clampBudget(inquiry.budget?.evidencePerSubject, 5, 20);
 }
 
 function sourceTextBasis(sourceProject: SourceProject): Basis {
@@ -689,13 +506,4 @@ function staticEvaluatorBasisForIdentity(summary: string): Basis {
     summary,
     identity: "@aurelia-ls/atlas/evaluation",
   };
-}
-
-function route(
-  plane: NavigationPlane,
-  relation: NavigationRelation,
-  basis: readonly BasisKind[],
-  summary: string,
-): NavigationRouteClaim {
-  return { plane, relation, basis, summary };
 }

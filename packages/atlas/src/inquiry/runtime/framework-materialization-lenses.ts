@@ -1,10 +1,25 @@
+import ts from "typescript";
+
 import {
   readEvaluationEffectTrace,
   sourceRangeForEvaluationEffect,
-  type EvaluationEffectCertainty,
+  EvaluationEffectCertainty,
   type EvaluationInvocationEffect,
 } from "../../evaluation/index.js";
 import { readFrameworkDiIndex } from "../../framework/di-index.js";
+import {
+  readFrameworkStandardConfigurationDiWorld,
+  type FrameworkDiDependencyAccess,
+  type FrameworkDiDependencyRow,
+  type FrameworkDiResolverSlot,
+  type FrameworkDiValueRef,
+} from "../../framework/di-world.js";
+import {
+  FrameworkMaterializationProviderIdentity,
+  FrameworkMaterializationProviderIdentityKind,
+  FrameworkMaterializationRouteDescriptor,
+  type FrameworkMaterializationRouteKind,
+} from "../../framework/materialization.js";
 import {
   FrameworkDiResolverStrategy,
   FrameworkRelationshipClosure,
@@ -15,6 +30,7 @@ import {
   type FrameworkRelationshipEndpoint,
 } from "../../framework/relationships.js";
 import {
+  SourceProjectKeyedMemo,
   sourceSelectorForRange,
   type SourceProject,
   type SourceSpan,
@@ -45,44 +61,31 @@ import {
 } from "../evidence.js";
 import type { Inquiry } from "../inquiry.js";
 import { LensId } from "../lens.js";
-import { LocusKind, type SourceRange } from "../locus.js";
+import type { SourceRange } from "../locus.js";
+import {
+  evidenceLimit,
+  pageOffset,
+} from "../paging.js";
 import {
   NavigationPlane,
   NavigationRelation,
-  type NavigationRouteClaim,
 } from "../navigation.js";
 import {
   readFrameworkResourceInstantiationRows,
   type FrameworkResourceInstantiationRow,
 } from "./framework-resource-materialization.js";
+import {
+  FrameworkRowContinuationBuilder,
+  nextPageContinuation,
+  projectionContinuation,
+} from "./framework-continuation-core.js";
+import { PagedRowFamily } from "../paged-row-family.js";
+import {
+  countBy,
+  route,
+} from "./framework-support.js";
 
-/** First-pass route class for a DI key provider materialization seed. */
-export const enum FrameworkMaterializationRouteKind {
-  /** Existing runtime value is registered for the key. */
-  InstanceValue = "instance-value",
-  /** Constructable provider is visible for singleton/transient resolution. */
-  ConstructableProvider = "constructable-provider",
-  /** Callback provider is visible but needs evaluator/effect tracing to close. */
-  CallbackProvider = "callback-provider",
-  /** Key resolves through another key. */
-  AliasDelegation = "alias-delegation",
-  /** Provider target is visible but not classified more narrowly yet. */
-  Provider = "provider",
-}
-
-/** Runtime-existence class for a DI materialization route. */
-export const enum FrameworkMaterializationInstantiationKind {
-  /** The key is bound to an already-existing value or instance. */
-  ExistingValue = "existing-value",
-  /** The key is backed by a constructable provider and Aurelia's factory construct path. */
-  Constructable = "constructable",
-  /** The key is backed by a callback provider whose return value needs effect closure. */
-  CallbackReturn = "callback-return",
-  /** The key delegates to another key. */
-  AliasDelegation = "alias-delegation",
-  /** The provider is visible but the instantiation class is not yet closed. */
-  Provider = "provider",
-}
+const CHECKER_PROJECTION_BASIS = [BasisKind.TypeScriptChecker] as const;
 
 /** Low-level construction-site class within Aurelia's DI materialization path. */
 export const enum FrameworkMaterializationConstructionSiteKind {
@@ -104,6 +107,8 @@ export const enum FrameworkMaterializationDependencyAccess {
   GetResolver = "get-resolver",
   /** Callback performs Aurelia resource lookup. */
   Find = "find",
+  /** Callback asks the container to construct/invoke a type. */
+  Invoke = "invoke",
 }
 
 /** Execution policy for a callback dependency edge. */
@@ -178,6 +183,8 @@ export interface FrameworkMaterializationRelationshipRow {
   readonly from: FrameworkRelationshipEndpoint;
   /** Relationship target. */
   readonly to: FrameworkRelationshipEndpoint;
+  /** Provider identity when this relationship targets a materialization provider. */
+  readonly providerIdentity?: FrameworkMaterializationProviderIdentity;
   /** Container access kind when this is a dependency relationship. */
   readonly access?: FrameworkMaterializationDependencyAccess;
   /** Dependency policy when this is a dependency relationship. */
@@ -232,12 +239,12 @@ export interface FrameworkMaterializationInstantiationRow {
   readonly routeKind: FrameworkMaterializationRouteKind;
   /** Resolver strategy observed at the provider site. */
   readonly strategy?: FrameworkDiResolverStrategy;
-  /** Instantiation class for the route. */
-  readonly instantiationKind: FrameworkMaterializationInstantiationKind;
   /** Source-backed key endpoint from the DI provider atom. */
   readonly keyEndpoint: FrameworkRelationshipEndpoint;
   /** Provider or alias target endpoint. */
   readonly provider: FrameworkRelationshipEndpoint;
+  /** Source-backed provider identity used for graph nodes and concise summaries. */
+  readonly providerIdentity: FrameworkMaterializationProviderIdentity;
   /** TypeChecker display type for the provider expression when available. */
   readonly providerType?: string;
   /** Provider source when the provider itself is source-backed. */
@@ -272,6 +279,8 @@ export interface FrameworkMaterializationRouteRow {
   readonly routeKind: FrameworkMaterializationRouteKind;
   /** Provider or alias target endpoint. */
   readonly provider: FrameworkRelationshipEndpoint;
+  /** Source-backed provider identity used for graph nodes and concise summaries. */
+  readonly providerIdentity: FrameworkMaterializationProviderIdentity;
   /** TypeChecker display type for the provider expression when available. */
   readonly providerType?: string;
   /** Relationship atom that seeded this route. */
@@ -308,8 +317,6 @@ export interface FrameworkMaterializationValue {
   readonly relationshipRelations: Readonly<Record<string, number>>;
   /** Number of key instantiation rows after filtering. */
   readonly instantiationCount: number;
-  /** Instantiation counts grouped by route existence class. */
-  readonly instantiationKinds: Readonly<Record<string, number>>;
   /** Number of resource instantiation rows after filtering. */
   readonly resourceInstantiationCount: number;
   /** Resource instantiation counts grouped by resource runtime-existence class. */
@@ -332,7 +339,6 @@ export interface FrameworkMaterializationFilters {
   readonly strategy?: string;
   readonly routeKind?: string;
   readonly relation?: string;
-  readonly instantiationKind?: string;
   readonly resourceKind?: string;
   readonly resourceName?: string;
   readonly resourceSiteKind?: string;
@@ -357,10 +363,50 @@ export interface FrameworkMaterializationIndex {
   readonly resourceInstantiations: readonly FrameworkResourceInstantiationRow[];
 }
 
-const materializationDependenciesByProject = new WeakMap<
-  SourceProject,
-  Map<string, readonly FrameworkMaterializationDependencyRow[]>
+const materializationDependenciesByRoute = new SourceProjectKeyedMemo<
+  string,
+  readonly FrameworkMaterializationDependencyRow[]
 >();
+
+const MATERIALIZATION_DEPENDENCY_ROW_FAMILY =
+  new PagedRowFamily<FrameworkMaterializationDependencyRow>({
+    id: "framework.materialization:dependencies",
+    rowLabel: "framework materialization dependency row(s)",
+    evidenceForRow: evidenceForDependency,
+    continuationsForPage: dependencyContinuations,
+  });
+
+const MATERIALIZATION_RELATIONSHIP_ROW_FAMILY =
+  new PagedRowFamily<FrameworkMaterializationRelationshipRow>({
+    id: "framework.materialization:relationships",
+    rowLabel: "framework materialization relationship row(s)",
+    evidenceForRow: evidenceForRelationship,
+    continuationsForPage: relationshipContinuations,
+  });
+
+const MATERIALIZATION_INSTANTIATION_ROW_FAMILY =
+  new PagedRowFamily<FrameworkMaterializationInstantiationRow>({
+    id: "framework.materialization:instantiations",
+    rowLabel: "framework key instantiation row(s)",
+    evidenceForRow: evidenceForInstantiation,
+    continuationsForPage: instantiationContinuations,
+  });
+
+const RESOURCE_INSTANTIATION_ROW_FAMILY =
+  new PagedRowFamily<FrameworkResourceInstantiationRow>({
+    id: "framework.materialization:resource-instantiations",
+    rowLabel: "framework resource instantiation row(s)",
+    evidenceForRow: evidenceForResourceInstantiation,
+    continuationsForPage: resourceInstantiationContinuations,
+  });
+
+const MATERIALIZATION_ROUTE_ROW_FAMILY =
+  new PagedRowFamily<FrameworkMaterializationRouteRow>({
+    id: "framework.materialization:routes",
+    rowLabel: "framework materialization route(s)",
+    evidenceForRow: evidenceForRoute,
+    continuationsForPage: routeContinuations,
+  });
 
 /** Read materialization rows as a reusable index without projecting an answer. */
 export function readFrameworkMaterializationIndex(
@@ -370,10 +416,16 @@ export function readFrameworkMaterializationIndex(
   filters: FrameworkMaterializationFilters = {},
 ): FrameworkMaterializationIndex {
   const diIndex = readFrameworkDiIndex(sourceProject);
-  const routes = diIndex.relationships
-    .filter(isProviderSeedAtom)
-    .map((row) => routeForProviderSeed(sourceProject, row))
-    .filter((row) => routeMatches(row, filters));
+  const world = readFrameworkStandardConfigurationDiWorld(sourceProject);
+  const routes = uniqueMaterializationRoutes([
+    ...diIndex.relationships
+      .filter(isProviderSeedAtom)
+      .filter((row) => !isParameterizedProviderSeed(sourceProject, row))
+      .map((row) => routeForProviderSeed(sourceProject, row)),
+    ...world.resolverSlots
+      .map((slot) => routeForStandardConfigurationSlot(sourceProject, world, slot))
+      .filter((row): row is FrameworkMaterializationRouteRow => row !== null),
+  ]).filter((row) => routeMatches(row, filters));
   const constructionAtoms = diIndex.relationships.filter(isConstructionSiteAtom);
   const dependencies = routes
     .flatMap((row) => row.dependencies)
@@ -406,210 +458,72 @@ export function answerFrameworkMaterialization(
 ): Answer<FrameworkMaterializationValue> {
   const projection = inquiry.projection ?? "summary";
   const filters = filtersFromInquiry(inquiry);
+  const index = readFrameworkMaterializationIndex(sourceProject, filters);
   const {
     routes,
     dependencies,
     relationships,
     instantiations,
     resourceInstantiations,
-  } = readFrameworkMaterializationIndex(sourceProject, filters);
+  } = index;
   const limit = clampBudget(inquiry.budget?.rows, 80, 1_000);
   const offset = pageOffset(inquiry);
+  const basis = [frameworkMaterializationBasis(sourceProject)];
 
   if (projection === "dependencies") {
-    const page = pageRows(dependencies, offset, limit);
-    return createAnswer(
+    return MATERIALIZATION_DEPENDENCY_ROW_FAMILY.answer({
       inquiry,
-      page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-      `Returned ${page.rows.length} of ${dependencies.length} framework materialization dependency row(s).`,
-      {
-        value: {
-          routeCount: routes.length,
-          routeKinds: countBy(routes, (row) => row.routeKind),
-          strategies: countBy(routes, (row) => row.strategy ?? "unknown"),
-          dependencyCount: dependencies.length,
-          dependencyAccesses: countBy(dependencies, (row) => row.access),
-          dependencyPolicies: countBy(dependencies, (row) => row.policy),
-          relationshipCount: relationships.length,
-          relationshipRelations: countBy(relationships, (row) => row.relation),
-          instantiationCount: instantiations.length,
-          instantiationKinds: countBy(
-            instantiations,
-            (row) => row.instantiationKind,
-          ),
-          resourceInstantiationCount: resourceInstantiations.length,
-          resourceInstantiationKinds: countBy(
-            resourceInstantiations,
-            (row) => row.instantiationKind,
-          ),
-          dependencies: page.rows,
-        },
-        basis: [frameworkMaterializationBasis(sourceProject)],
-        evidence: page.rows
-          .slice(0, evidenceLimit(inquiry))
-          .map(evidenceForDependency),
-        page: pageInfo(
-          inquiry,
-          page.rows.length,
-          dependencies.length,
-          limit,
-          page.nextOffset,
-        ),
-        continuations: dependencyContinuations(
-          inquiry,
-          page.rows,
-          page.nextOffset,
-          limit,
-        ),
-      },
-    );
+      rows: dependencies,
+      limit,
+      offset,
+      basis,
+      value: (page) => ({
+        ...materializationCounts(index),
+        dependencies: page.rows,
+      }),
+    });
   }
 
   if (projection === "relationships") {
-    const page = pageRows(relationships, offset, limit);
-    return createAnswer(
+    return MATERIALIZATION_RELATIONSHIP_ROW_FAMILY.answer({
       inquiry,
-      page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-      `Returned ${page.rows.length} of ${relationships.length} framework materialization relationship row(s).`,
-      {
-        value: {
-          routeCount: routes.length,
-          routeKinds: countBy(routes, (row) => row.routeKind),
-          strategies: countBy(routes, (row) => row.strategy ?? "unknown"),
-          dependencyCount: dependencies.length,
-          dependencyAccesses: countBy(dependencies, (row) => row.access),
-          dependencyPolicies: countBy(dependencies, (row) => row.policy),
-          relationshipCount: relationships.length,
-          relationshipRelations: countBy(relationships, (row) => row.relation),
-          instantiationCount: instantiations.length,
-          instantiationKinds: countBy(
-            instantiations,
-            (row) => row.instantiationKind,
-          ),
-          resourceInstantiationCount: resourceInstantiations.length,
-          resourceInstantiationKinds: countBy(
-            resourceInstantiations,
-            (row) => row.instantiationKind,
-          ),
-          relationships: page.rows,
-        },
-        basis: [frameworkMaterializationBasis(sourceProject)],
-        evidence: page.rows
-          .slice(0, evidenceLimit(inquiry))
-          .map(evidenceForRelationship),
-        page: pageInfo(
-          inquiry,
-          page.rows.length,
-          relationships.length,
-          limit,
-          page.nextOffset,
-        ),
-        continuations: relationshipContinuations(
-          inquiry,
-          page.rows,
-          page.nextOffset,
-          limit,
-        ),
-      },
-      );
+      rows: relationships,
+      limit,
+      offset,
+      basis,
+      value: (page) => ({
+        ...materializationCounts(index),
+        relationships: page.rows,
+      }),
+    });
   }
 
   if (projection === "instantiations") {
-    const page = pageRows(instantiations, offset, limit);
-    return createAnswer(
+    return MATERIALIZATION_INSTANTIATION_ROW_FAMILY.answer({
       inquiry,
-      page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-      `Returned ${page.rows.length} of ${instantiations.length} framework key instantiation row(s).`,
-      {
-        value: {
-          routeCount: routes.length,
-          routeKinds: countBy(routes, (row) => row.routeKind),
-          strategies: countBy(routes, (row) => row.strategy ?? "unknown"),
-          dependencyCount: dependencies.length,
-          dependencyAccesses: countBy(dependencies, (row) => row.access),
-          dependencyPolicies: countBy(dependencies, (row) => row.policy),
-          relationshipCount: relationships.length,
-          relationshipRelations: countBy(relationships, (row) => row.relation),
-          instantiationCount: instantiations.length,
-          instantiationKinds: countBy(
-            instantiations,
-            (row) => row.instantiationKind,
-          ),
-          resourceInstantiationCount: resourceInstantiations.length,
-          resourceInstantiationKinds: countBy(
-            resourceInstantiations,
-            (row) => row.instantiationKind,
-          ),
-          instantiations: page.rows,
-        },
-        basis: [frameworkMaterializationBasis(sourceProject)],
-        evidence: page.rows
-          .slice(0, evidenceLimit(inquiry))
-          .map(evidenceForInstantiation),
-        page: pageInfo(
-          inquiry,
-          page.rows.length,
-          instantiations.length,
-          limit,
-          page.nextOffset,
-        ),
-        continuations: instantiationContinuations(
-          inquiry,
-          page.rows,
-          page.nextOffset,
-          limit,
-        ),
-      },
-    );
+      rows: instantiations,
+      limit,
+      offset,
+      basis,
+      value: (page) => ({
+        ...materializationCounts(index),
+        instantiations: page.rows,
+      }),
+    });
   }
 
   if (projection === "resource-instantiations") {
-    const page = pageRows(resourceInstantiations, offset, limit);
-    return createAnswer(
+    return RESOURCE_INSTANTIATION_ROW_FAMILY.answer({
       inquiry,
-      page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-      `Returned ${page.rows.length} of ${resourceInstantiations.length} framework resource instantiation row(s).`,
-      {
-        value: {
-          routeCount: routes.length,
-          routeKinds: countBy(routes, (row) => row.routeKind),
-          strategies: countBy(routes, (row) => row.strategy ?? "unknown"),
-          dependencyCount: dependencies.length,
-          dependencyAccesses: countBy(dependencies, (row) => row.access),
-          dependencyPolicies: countBy(dependencies, (row) => row.policy),
-          relationshipCount: relationships.length,
-          relationshipRelations: countBy(relationships, (row) => row.relation),
-          instantiationCount: instantiations.length,
-          instantiationKinds: countBy(
-            instantiations,
-            (row) => row.instantiationKind,
-          ),
-          resourceInstantiationCount: resourceInstantiations.length,
-          resourceInstantiationKinds: countBy(
-            resourceInstantiations,
-            (row) => row.instantiationKind,
-          ),
-          resourceInstantiations: page.rows,
-        },
-        basis: [frameworkMaterializationBasis(sourceProject)],
-        evidence: page.rows
-          .slice(0, evidenceLimit(inquiry))
-          .map(evidenceForResourceInstantiation),
-        page: pageInfo(
-          inquiry,
-          page.rows.length,
-          resourceInstantiations.length,
-          limit,
-          page.nextOffset,
-        ),
-        continuations: resourceInstantiationContinuations(
-          inquiry,
-          page.rows,
-          page.nextOffset,
-          limit,
-        ),
-      },
-    );
+      rows: resourceInstantiations,
+      limit,
+      offset,
+      basis,
+      value: (page) => ({
+        ...materializationCounts(index),
+        resourceInstantiations: page.rows,
+      }),
+    });
   }
 
   if (
@@ -617,59 +531,24 @@ export function answerFrameworkMaterialization(
     projection === "facts" ||
     projection === "evidence"
   ) {
-    const page = pageRows(routes, offset, limit);
-    const evidence = page.rows
-      .slice(0, evidenceLimit(inquiry))
-      .map(evidenceForRoute);
-    const openSeams = openSeamsForRoutes(page.rows, evidence);
-    return createAnswer(
+    return MATERIALIZATION_ROUTE_ROW_FAMILY.answer({
       inquiry,
-      page.rows.length === 0
-        ? OutcomeKind.Miss
-        : openSeams.length > 0
-        ? OutcomeKind.Partial
-        : OutcomeKind.Hit,
-      `Returned ${page.rows.length} of ${routes.length} framework materialization route(s).`,
-      {
-        value: {
-          routeCount: routes.length,
-          routeKinds: countBy(routes, (row) => row.routeKind),
-          strategies: countBy(routes, (row) => row.strategy ?? "unknown"),
-          dependencyCount: dependencies.length,
-          dependencyAccesses: countBy(dependencies, (row) => row.access),
-          dependencyPolicies: countBy(dependencies, (row) => row.policy),
-          relationshipCount: relationships.length,
-          relationshipRelations: countBy(relationships, (row) => row.relation),
-          instantiationCount: instantiations.length,
-          instantiationKinds: countBy(
-            instantiations,
-            (row) => row.instantiationKind,
-          ),
-          resourceInstantiationCount: resourceInstantiations.length,
-          resourceInstantiationKinds: countBy(
-            resourceInstantiations,
-            (row) => row.instantiationKind,
-          ),
-          routes: page.rows,
-        },
-        basis: [frameworkMaterializationBasis(sourceProject)],
-        evidence,
-        openSeams,
-        page: pageInfo(
-          inquiry,
-          page.rows.length,
-          routes.length,
-          limit,
-          page.nextOffset,
-        ),
-        continuations: routeContinuations(
-          inquiry,
-          page.rows,
-          page.nextOffset,
-          limit,
-        ),
-      },
-    );
+      rows: routes,
+      limit,
+      offset,
+      basis,
+      value: (page) => ({
+        ...materializationCounts(index),
+        routes: page.rows,
+      }),
+      openSeams: (page, evidence) => openSeamsForRoutes(page.rows, evidence),
+      outcome: (page, openSeams) =>
+        page.rows.length === 0
+          ? OutcomeKind.Miss
+          : openSeams.length > 0
+          ? OutcomeKind.Partial
+          : OutcomeKind.Hit,
+    });
   }
 
   const evidence = routes
@@ -688,32 +567,41 @@ export function answerFrameworkMaterialization(
       : OutcomeKind.Hit,
     `Framework materialization has ${routes.length} DI provider route(s) and ${resourceInstantiations.length} resource instantiation row(s).`,
     {
-      value: {
-        routeCount: routes.length,
-        routeKinds: countBy(routes, (row) => row.routeKind),
-        strategies: countBy(routes, (row) => row.strategy ?? "unknown"),
-        dependencyCount: dependencies.length,
-        dependencyAccesses: countBy(dependencies, (row) => row.access),
-        dependencyPolicies: countBy(dependencies, (row) => row.policy),
-        relationshipCount: relationships.length,
-        relationshipRelations: countBy(relationships, (row) => row.relation),
-        instantiationCount: instantiations.length,
-        instantiationKinds: countBy(
-          instantiations,
-          (row) => row.instantiationKind,
-        ),
-        resourceInstantiationCount: resourceInstantiations.length,
-        resourceInstantiationKinds: countBy(
-          resourceInstantiations,
-          (row) => row.instantiationKind,
-        ),
-      },
-      basis: [frameworkMaterializationBasis(sourceProject)],
+      value: materializationCounts(index),
+      basis,
       evidence,
       openSeams,
       continuations: summaryContinuations(inquiry),
     },
   );
+}
+
+function materializationCounts(
+  index: FrameworkMaterializationIndex,
+): FrameworkMaterializationValue {
+  const {
+    routes,
+    dependencies,
+    relationships,
+    instantiations,
+    resourceInstantiations,
+  } = index;
+  return {
+    routeCount: routes.length,
+    routeKinds: countBy(routes, (row) => row.routeKind),
+    strategies: countBy(routes, (row) => row.strategy ?? "unknown"),
+    dependencyCount: dependencies.length,
+    dependencyAccesses: countBy(dependencies, (row) => row.access),
+    dependencyPolicies: countBy(dependencies, (row) => row.policy),
+    relationshipCount: relationships.length,
+    relationshipRelations: countBy(relationships, (row) => row.relation),
+    instantiationCount: instantiations.length,
+    resourceInstantiationCount: resourceInstantiations.length,
+    resourceInstantiationKinds: countBy(
+      resourceInstantiations,
+      (row) => row.instantiationKind,
+    ),
+  };
 }
 
 function isProviderSeedAtom(row: FrameworkRelationshipAtom): boolean {
@@ -722,6 +610,39 @@ function isProviderSeedAtom(row: FrameworkRelationshipAtom): boolean {
     (row.relation === FrameworkRelationshipRelation.AliasesKey &&
       row.to.kind === FrameworkRelationshipEndpointKind.Expression)
   );
+}
+
+function isParameterizedProviderSeed(
+  sourceProject: SourceProject,
+  row: FrameworkRelationshipAtom,
+): boolean {
+  const source = row.to.source;
+  if (source === undefined) {
+    return false;
+  }
+  const sourceFile = sourceProject.readSourceFile(source.filePath);
+  if (sourceFile === null) {
+    return false;
+  }
+  const position = sourceFile.getPositionOfLineAndCharacter(
+    source.start.line,
+    source.start.character,
+  );
+  let parameterBacked = false;
+  const visit = (node: ts.Node): void => {
+    if (parameterBacked) {
+      return;
+    }
+    if (node.getStart(sourceFile) === position) {
+      const symbol = sourceProject.checker.getSymbolAtLocation(node);
+      const declaration = symbol?.valueDeclaration ?? symbol?.declarations?.[0];
+      parameterBacked = declaration !== undefined && ts.isParameter(declaration);
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return parameterBacked;
 }
 
 function isConstructionSiteAtom(
@@ -737,34 +658,286 @@ function routeForProviderSeed(
   sourceProject: SourceProject,
   row: FrameworkRelationshipAtom,
 ): FrameworkMaterializationRouteRow {
-  const routeKind = routeKindForSeed(row);
+  const route = FrameworkMaterializationRouteDescriptor.forProviderSeed(row);
   const id = `framework-materialization:${row.id}`;
-  const dependencies =
-    routeKind === FrameworkMaterializationRouteKind.CallbackProvider
+  const key = row.key ?? row.from.name;
+  const providerIdentity = FrameworkMaterializationProviderIdentity.forRoute(
+    key,
+    route.routeKind,
+    row.to,
+  );
+  const dependencies = [
+    ...(route.tracesCallbackDependencies
       ? dependencyRowsForProviderSeed(sourceProject, row, id)
-      : [];
+      : []),
+    ...dependencyRowsFromStandardConfigurationDiWorld(sourceProject, row, id),
+  ];
   return {
     id,
     packageId: row.packageId,
     packageName: row.packageName,
-    key: row.key ?? row.from.name,
+    key,
     keyEndpoint: row.from,
     ...(row.strategy === undefined ? {} : { strategy: row.strategy }),
-    routeKind,
+    routeKind: route.routeKind,
     provider: row.to,
+    providerIdentity,
     ...(row.to.expression?.type === undefined
       ? {}
       : { providerType: row.to.expression.type }),
     relationshipAtomId: row.id,
-    closure:
-      routeKind === FrameworkMaterializationRouteKind.CallbackProvider
-        ? FrameworkRelationshipClosure.Partial
-        : row.closure,
+    closure: route.routeClosure(row.closure),
     source: row.source,
     ...(row.to.source === undefined ? {} : { providerSource: row.to.source }),
     dependencies,
-    summary: materializationSummary(row, routeKind),
+    summary: route.summarizeRoute(
+      key,
+      providerIdentity.name,
+      row.strategy,
+    ),
   };
+}
+
+function routeForStandardConfigurationSlot(
+  sourceProject: SourceProject,
+  world: ReturnType<typeof readFrameworkStandardConfigurationDiWorld>,
+  slot: FrameworkDiResolverSlot,
+): FrameworkMaterializationRouteRow | null {
+  const source = slot.source ?? slot.provider.source ?? slot.key.source;
+  if (source === undefined) {
+    return null;
+  }
+  const packageInfo = packageInfoForSource(sourceProject, source);
+  const relation =
+    slot.strategy === FrameworkDiResolverStrategy.Alias
+      ? FrameworkRelationshipRelation.AliasesKey
+      : FrameworkRelationshipRelation.ProvidesKey;
+  const route = FrameworkMaterializationRouteDescriptor.forProviderSeed({
+    relation,
+    strategy: slot.strategy,
+    closure: slot.closure,
+  });
+  const id = `framework-materialization:${slot.id}`;
+  const providerEndpoint = endpointForDiWorldValueRef(slot.provider, packageInfo);
+  const providerIdentity = FrameworkMaterializationProviderIdentity.forRoute(
+    slot.key.name,
+    route.routeKind,
+    providerEndpoint,
+    providerExpressionLabelForDiWorldValueRef(slot.provider),
+  );
+  const dependencies = world
+    .readDependenciesForRoute(slot.key.name, slot.provider.name)
+    .map((dependency, index) =>
+      dependencyRowForDiWorldDependency(
+        sourceProject,
+        id,
+        slot.key.name,
+        dependency,
+        index,
+      ),
+    )
+    .filter(
+      (dependency): dependency is FrameworkMaterializationDependencyRow =>
+        dependency !== null,
+    );
+  return {
+    id,
+    packageId: packageInfo.packageId,
+    packageName: packageInfo.packageName,
+    key: slot.key.name,
+    keyEndpoint: endpointForDiWorldValueRef(slot.key, packageInfo),
+    strategy: slot.strategy,
+    routeKind: route.routeKind,
+    provider: providerEndpoint,
+    providerIdentity,
+    relationshipAtomId: slot.id,
+    closure: route.routeClosure(slot.closure),
+    source,
+    ...(slot.provider.source === undefined
+      ? {}
+      : { providerSource: slot.provider.source }),
+    dependencies,
+    summary: route.summarizeRoute(
+      slot.key.name,
+      providerIdentity.name,
+      slot.strategy,
+    ),
+  };
+}
+
+function dependencyRowsFromStandardConfigurationDiWorld(
+  sourceProject: SourceProject,
+  row: FrameworkRelationshipAtom,
+  routeId: string,
+): readonly FrameworkMaterializationDependencyRow[] {
+  const key = row.key ?? row.from.name;
+  return readFrameworkStandardConfigurationDiWorld(sourceProject)
+    .readDependenciesForRoute(key, row.to.name)
+    .map((dependency, index) =>
+      dependencyRowForDiWorldDependency(
+        sourceProject,
+        routeId,
+        key,
+        dependency,
+        index,
+      ),
+    )
+    .filter(
+      (dependency): dependency is FrameworkMaterializationDependencyRow =>
+        dependency !== null,
+    );
+}
+
+function dependencyRowForDiWorldDependency(
+  sourceProject: SourceProject,
+  routeId: string,
+  key: string,
+  dependency: FrameworkDiDependencyRow,
+  index: number,
+): FrameworkMaterializationDependencyRow | null {
+  const access = dependencyAccessForDiWorldAccess(dependency.access);
+  const source = dependency.source ?? dependency.argumentSource ?? dependency.ownerProvider.source;
+  const argumentSource = dependency.argumentSource ?? source;
+  if (
+    dependency.callSite === undefined ||
+    dependency.argument === undefined ||
+    source === undefined ||
+    argumentSource === undefined
+  ) {
+    return null;
+  }
+  const packageDefinition = sourceProject.packageForFileName(source.filePath);
+  return {
+    id: `${routeId}:di-world-dependency:${index}:${access}:${dependency.dependencyKey.name}`,
+    routeId,
+    packageId: packageDefinition?.id ?? "framework",
+    packageName: packageDefinition?.packageName ?? "framework",
+    key,
+    dependencyKey: dependency.dependencyKey.name,
+    access,
+    policy: FrameworkMaterializationDependencyPolicy.Direct,
+    certainty: EvaluationEffectCertainty.Unconditional,
+    controlPath: dependency.path,
+    callSite: dependency.callSite,
+    receiver: null,
+    argument: dependency.argument,
+    source,
+    argumentSource,
+    summary: `${key} depends on ${dependency.dependencyKey.name} through DI world ${dependency.access}.`,
+  };
+}
+
+function endpointForDiWorldValueRef(
+  ref: FrameworkDiValueRef,
+  packageInfo: MaterializationPackageInfo,
+): FrameworkRelationshipEndpoint {
+  return {
+    kind: endpointKindForDiWorldValueRef(ref),
+    name: ref.name,
+    packageId: packageInfo.packageId,
+    packageName: packageInfo.packageName,
+    ...(ref.source === undefined ? {} : { source: ref.source }),
+  };
+}
+
+function endpointKindForDiWorldValueRef(
+  ref: FrameworkDiValueRef,
+): FrameworkRelationshipEndpointKind {
+  switch (ref.kind) {
+    case "interface":
+      return FrameworkRelationshipEndpointKind.DiKey;
+    case "class":
+    case "function":
+      return FrameworkRelationshipEndpointKind.Symbol;
+    case "class-expression":
+    case "function-expression":
+    case "object":
+      return FrameworkRelationshipEndpointKind.Expression;
+    case "resource":
+      return FrameworkRelationshipEndpointKind.Resource;
+    case "registry":
+      return FrameworkRelationshipEndpointKind.RegistryExport;
+    case "unknown":
+      return FrameworkRelationshipEndpointKind.Unknown;
+    case "value":
+      return FrameworkRelationshipEndpointKind.Expression;
+  }
+}
+
+function providerExpressionLabelForDiWorldValueRef(
+  ref: FrameworkDiValueRef,
+): string | undefined {
+  switch (ref.kind) {
+    case "class-expression":
+      return "class";
+    case "function-expression":
+      return "function";
+    case "object":
+      return "value";
+    default:
+      return undefined;
+  }
+}
+
+interface MaterializationPackageInfo {
+  readonly packageId: string;
+  readonly packageName: string;
+}
+
+function packageInfoForSource(
+  sourceProject: SourceProject,
+  source: SourceRange,
+): MaterializationPackageInfo {
+  const sourceFile = sourceProject.readSourceFile(source.filePath);
+  const packageDefinition =
+    sourceFile === null
+      ? sourceProject.packageForFileName(source.filePath)
+      : sourceProject.packageForFileName(sourceFile.fileName);
+  return {
+    packageId: packageDefinition?.id ?? "framework",
+    packageName: packageDefinition?.packageName ?? "framework",
+  };
+}
+
+function uniqueMaterializationRoutes(
+  rows: readonly FrameworkMaterializationRouteRow[],
+): readonly FrameworkMaterializationRouteRow[] {
+  const seen = new Set<string>();
+  const unique: FrameworkMaterializationRouteRow[] = [];
+  for (const row of rows) {
+    const providerKey =
+      row.providerIdentity.kind === FrameworkMaterializationProviderIdentityKind.Named
+        ? row.providerIdentity.name
+        : row.providerIdentity.id;
+    const key = `${row.key}:${providerKey}:${row.strategy ?? "unknown"}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    unique.push(row);
+  }
+  return unique;
+}
+
+function dependencyAccessForDiWorldAccess(
+  access: FrameworkDiDependencyAccess,
+): FrameworkMaterializationDependencyAccess {
+  switch (access) {
+    case "get":
+      return FrameworkMaterializationDependencyAccess.Get;
+    case "get-all":
+      return FrameworkMaterializationDependencyAccess.GetAll;
+    case "get-resolver":
+      return FrameworkMaterializationDependencyAccess.GetResolver;
+    case "has":
+      return FrameworkMaterializationDependencyAccess.Has;
+    case "find":
+      return FrameworkMaterializationDependencyAccess.Find;
+    case "invoke":
+      return FrameworkMaterializationDependencyAccess.Invoke;
+    case "resolve":
+      return FrameworkMaterializationDependencyAccess.Get;
+  }
 }
 
 function relationshipsForRoute(
@@ -793,15 +966,19 @@ function materializesThroughRelationship(
     ...(row.strategy === undefined ? {} : { strategy: row.strategy }),
     from: row.keyEndpoint,
     to: row.provider,
+    providerIdentity: row.providerIdentity,
     source: row.source,
-    summary: `${row.key} materializes through ${row.provider.name}.`,
+    summary: `${row.key} materializes through ${row.providerIdentity.name}.`,
   };
 }
 
 function instantiatesKeyRelationships(
   row: FrameworkMaterializationRouteRow,
 ): readonly FrameworkMaterializationRelationshipRow[] {
-  if (row.routeKind === FrameworkMaterializationRouteKind.AliasDelegation) {
+  const route = FrameworkMaterializationRouteDescriptor.forRouteKind(
+    row.routeKind,
+  );
+  if (!route.emitsInstantiationRelationship) {
     return [];
   }
   return [
@@ -816,8 +993,9 @@ function instantiatesKeyRelationships(
       ...(row.strategy === undefined ? {} : { strategy: row.strategy }),
       from: row.keyEndpoint,
       to: row.provider,
+      providerIdentity: row.providerIdentity,
       source: row.providerSource ?? row.source,
-      summary: `${row.key} can enter runtime existence through ${row.provider.name}.`,
+      summary: `${row.key} can enter runtime existence through ${row.providerIdentity.name}.`,
     },
   ];
 }
@@ -835,9 +1013,9 @@ function instantiationForRoute(
     key: row.key,
     routeKind: row.routeKind,
     ...(row.strategy === undefined ? {} : { strategy: row.strategy }),
-    instantiationKind: instantiationKindForRoute(row),
     keyEndpoint: row.keyEndpoint,
     provider: row.provider,
+    providerIdentity: row.providerIdentity,
     ...(row.providerType === undefined ? {} : { providerType: row.providerType }),
     ...(row.providerSource === undefined
       ? {}
@@ -854,9 +1032,10 @@ function constructionSitesForRoute(
   row: FrameworkMaterializationRouteRow,
   constructionAtoms: readonly FrameworkRelationshipAtom[],
 ): readonly FrameworkMaterializationConstructionSiteRow[] {
-  if (
-    row.routeKind !== FrameworkMaterializationRouteKind.ConstructableProvider
-  ) {
+  const route = FrameworkMaterializationRouteDescriptor.forRouteKind(
+    row.routeKind,
+  );
+  if (!route.usesFrameworkConstructionSites) {
     return [];
   }
   return constructionAtoms
@@ -887,55 +1066,26 @@ function constructionSiteKindForAtom(
     : FrameworkMaterializationConstructionSiteKind.ConstructorCall;
 }
 
-function instantiationKindForRoute(
-  row: FrameworkMaterializationRouteRow,
-): FrameworkMaterializationInstantiationKind {
-  switch (row.routeKind) {
-    case FrameworkMaterializationRouteKind.InstanceValue:
-      return FrameworkMaterializationInstantiationKind.ExistingValue;
-    case FrameworkMaterializationRouteKind.ConstructableProvider:
-      return FrameworkMaterializationInstantiationKind.Constructable;
-    case FrameworkMaterializationRouteKind.CallbackProvider:
-      return FrameworkMaterializationInstantiationKind.CallbackReturn;
-    case FrameworkMaterializationRouteKind.AliasDelegation:
-      return FrameworkMaterializationInstantiationKind.AliasDelegation;
-    case FrameworkMaterializationRouteKind.Provider:
-      return FrameworkMaterializationInstantiationKind.Provider;
-  }
-}
-
 function instantiationClosureForRoute(
   row: FrameworkMaterializationRouteRow,
   constructionSites: readonly FrameworkMaterializationConstructionSiteRow[],
 ): FrameworkRelationshipClosure {
-  if (
-    row.routeKind === FrameworkMaterializationRouteKind.ConstructableProvider &&
-    constructionSites.length === 0
-  ) {
-    return FrameworkRelationshipClosure.Partial;
-  }
-  if (row.routeKind === FrameworkMaterializationRouteKind.CallbackProvider) {
-    return FrameworkRelationshipClosure.Partial;
-  }
-  return row.closure;
+  return FrameworkMaterializationRouteDescriptor.forRouteKind(
+    row.routeKind,
+  ).instantiationClosure(row.closure, constructionSites.length);
 }
 
 function instantiationSummary(
   row: FrameworkMaterializationRouteRow,
   constructionSites: readonly FrameworkMaterializationConstructionSiteRow[],
 ): string {
-  switch (row.routeKind) {
-    case FrameworkMaterializationRouteKind.InstanceValue:
-      return `${row.key} is an existing registered value; no framework construction site is required.`;
-    case FrameworkMaterializationRouteKind.ConstructableProvider:
-      return `${row.key} is instantiated as ${row.provider.name} through Aurelia factory construction at ${constructionSites.length} framework site(s).`;
-    case FrameworkMaterializationRouteKind.CallbackProvider:
-      return `${row.key} is produced by callback provider ${row.provider.name}; callback return closure remains evaluator work.`;
-    case FrameworkMaterializationRouteKind.AliasDelegation:
-      return `${row.key} delegates instantiation to alias target ${row.provider.name}.`;
-    case FrameworkMaterializationRouteKind.Provider:
-      return `${row.key} has provider ${row.provider.name}, but its instantiation class is not closed yet.`;
-  }
+  return FrameworkMaterializationRouteDescriptor.forRouteKind(
+    row.routeKind,
+  ).summarizeInstantiation(
+    row.key,
+    row.providerIdentity.name,
+    constructionSites.length,
+  );
 }
 
 function dependsOnKeyRelationship(
@@ -970,70 +1120,14 @@ function dependsOnKeyRelationship(
   };
 }
 
-function routeKindForSeed(
-  row: FrameworkRelationshipAtom,
-): FrameworkMaterializationRouteKind {
-  if (row.relation === FrameworkRelationshipRelation.AliasesKey) {
-    return FrameworkMaterializationRouteKind.AliasDelegation;
-  }
-  switch (row.strategy) {
-    case FrameworkDiResolverStrategy.Instance:
-      return FrameworkMaterializationRouteKind.InstanceValue;
-    case FrameworkDiResolverStrategy.Singleton:
-    case FrameworkDiResolverStrategy.Transient:
-      return FrameworkMaterializationRouteKind.ConstructableProvider;
-    case FrameworkDiResolverStrategy.Callback:
-    case FrameworkDiResolverStrategy.CachedCallback:
-      return FrameworkMaterializationRouteKind.CallbackProvider;
-    default:
-      return FrameworkMaterializationRouteKind.Provider;
-  }
-}
-
-function materializationSummary(
-  row: FrameworkRelationshipAtom,
-  routeKind: FrameworkMaterializationRouteKind,
-): string {
-  const key = row.key ?? row.from.name;
-  const provider = row.value ?? row.to.name;
-  switch (routeKind) {
-    case FrameworkMaterializationRouteKind.AliasDelegation:
-      return `${key} resolves by aliasing ${provider}.`;
-    case FrameworkMaterializationRouteKind.InstanceValue:
-      return `${key} materializes as existing instance/value ${provider}.`;
-    case FrameworkMaterializationRouteKind.ConstructableProvider:
-      return `${key} materializes through ${
-        row.strategy ?? "unknown"
-      } constructable ${provider}.`;
-    case FrameworkMaterializationRouteKind.CallbackProvider:
-      return `${key} materializes through callback provider ${provider}; callback effects still need evaluator tracing.`;
-    case FrameworkMaterializationRouteKind.Provider:
-      return `${key} materializes through provider ${provider}.`;
-  }
-}
-
 function dependencyRowsForProviderSeed(
   sourceProject: SourceProject,
   row: FrameworkRelationshipAtom,
   routeId: string,
 ): readonly FrameworkMaterializationDependencyRow[] {
-  const cache =
-    materializationDependenciesByProject.get(sourceProject) ??
-    new Map<string, readonly FrameworkMaterializationDependencyRow[]>();
-  if (!materializationDependenciesByProject.has(sourceProject)) {
-    materializationDependenciesByProject.set(sourceProject, cache);
-  }
-  const cached = cache.get(row.id);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const rows = dependencyRowsForProviderSeedUncached(
-    sourceProject,
-    row,
-    routeId,
+  return materializationDependenciesByRoute.read(sourceProject, row.id, () =>
+    dependencyRowsForProviderSeedUncached(sourceProject, row, routeId),
   );
-  cache.set(row.id, rows);
-  return rows;
 }
 
 function dependencyRowsForProviderSeedUncached(
@@ -1163,6 +1257,8 @@ function dependencyAccessForEffect(
       return FrameworkMaterializationDependencyAccess.GetResolver;
     case "find":
       return FrameworkMaterializationDependencyAccess.Find;
+    case "invoke":
+      return FrameworkMaterializationDependencyAccess.Invoke;
     default:
       return null;
   }
@@ -1198,7 +1294,6 @@ function filtersFromRecord(value: unknown): FrameworkMaterializationFilters {
     ...stringFilter(source, "strategy"),
     ...stringFilter(source, "routeKind"),
     ...stringFilter(source, "relation"),
-    ...stringFilter(source, "instantiationKind"),
     ...stringFilter(source, "resourceKind"),
     ...stringFilter(source, "resourceName"),
     ...stringFilter(source, "resourceSiteKind"),
@@ -1226,7 +1321,8 @@ function routeMatches(
     (filters.packageId === undefined || row.packageId === filters.packageId) &&
     (filters.key === undefined ||
       row.key === filters.key ||
-      row.provider.name === filters.key) &&
+      row.provider.name === filters.key ||
+      row.providerIdentity.name === filters.key) &&
     (filters.strategy === undefined || row.strategy === filters.strategy) &&
     (filters.routeKind === undefined || row.routeKind === filters.routeKind) &&
     (filters.dependencyKey === undefined ||
@@ -1244,6 +1340,8 @@ function routeMatches(
     (filters.query === undefined ||
       row.summary.includes(filters.query) ||
       row.key.includes(filters.query) ||
+      row.providerIdentity.name.includes(filters.query) ||
+      row.providerIdentity.rawName.includes(filters.query) ||
       row.provider.name.includes(filters.query) ||
       row.provider.expression?.text.includes(filters.query) === true ||
       row.providerType?.includes(filters.query) === true ||
@@ -1261,14 +1359,15 @@ function instantiationMatches(
     (filters.packageId === undefined || row.packageId === filters.packageId) &&
     (filters.key === undefined ||
       row.key === filters.key ||
-      row.provider.name === filters.key) &&
+      row.provider.name === filters.key ||
+      row.providerIdentity.name === filters.key) &&
     (filters.strategy === undefined || row.strategy === filters.strategy) &&
     (filters.routeKind === undefined || row.routeKind === filters.routeKind) &&
-    (filters.instantiationKind === undefined ||
-      row.instantiationKind === filters.instantiationKind) &&
     (filters.query === undefined ||
       row.summary.includes(filters.query) ||
       row.key.includes(filters.query) ||
+      row.providerIdentity.name.includes(filters.query) ||
+      row.providerIdentity.rawName.includes(filters.query) ||
       row.provider.name.includes(filters.query) ||
       row.provider.expression?.text.includes(filters.query) === true ||
       row.providerType?.includes(filters.query) === true ||
@@ -1329,6 +1428,8 @@ function relationshipMatches(
       row.key.includes(filters.query) ||
       row.from.name.includes(filters.query) ||
       row.to.name.includes(filters.query) ||
+      row.providerIdentity?.name.includes(filters.query) === true ||
+      row.providerIdentity?.rawName.includes(filters.query) === true ||
       row.to.expression?.text.includes(filters.query) === true ||
       row.to.expression?.type.includes(filters.query) === true)
   );
@@ -1423,7 +1524,8 @@ function openSeamsForRoutes(
 ): readonly OpenSeam[] {
   return rows
     .map((row, index) =>
-      row.routeKind === FrameworkMaterializationRouteKind.CallbackProvider
+      FrameworkMaterializationRouteDescriptor.forRouteKind(row.routeKind)
+        .tracesCallbackDependencies
         ? callbackOpenSeam(row, evidence[index])
         : null,
     )
@@ -1455,36 +1557,42 @@ function summaryContinuations(inquiry: Inquiry): readonly Continuation[] {
       "framework.materialization:routes",
       "routes",
       "Inspect DI provider materialization routes.",
+      { basis: CHECKER_PROJECTION_BASIS },
     ),
     projectionContinuation(
       inquiry,
       "framework.materialization:dependencies",
       "dependencies",
       "Inspect container dependencies found inside callback providers.",
+      { basis: CHECKER_PROJECTION_BASIS },
     ),
     projectionContinuation(
       inquiry,
       "framework.materialization:relationships",
       "relationships",
       "Inspect materialization graph relationships between keys, providers, and dependency keys.",
+      { basis: CHECKER_PROJECTION_BASIS },
     ),
     projectionContinuation(
       inquiry,
       "framework.materialization:instantiations",
       "instantiations",
       "Inspect where DI keys enter runtime existence and which framework construction sites apply.",
+      { basis: CHECKER_PROJECTION_BASIS },
     ),
     projectionContinuation(
       inquiry,
       "framework.materialization:resource-instantiations",
       "resource-instantiations",
       "Inspect where framework resources can enter runtime existence.",
+      { basis: CHECKER_PROJECTION_BASIS },
     ),
     projectionContinuation(
       inquiry,
       "framework.materialization:facts",
       "facts",
       "Inspect normalized materialization route facts.",
+      { basis: CHECKER_PROJECTION_BASIS },
     ),
   ];
 }
@@ -1509,96 +1617,68 @@ function routeContinuations(
   }
   for (const [index, row] of rows.slice(0, 5).entries()) {
     const evidence = evidenceForRoute(row);
-    continuations.push({
-      id: `framework.materialization:routes:source:${index}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Primary,
-      rationale:
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.materialization:routes",
+      index,
+      evidence,
+    );
+    continuations.push(
+      builder.source(
+        "source",
+        row.source,
         "Inspect the exact provider source behind this materialization route.",
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: sourceRangeLocus(row.source),
-        projection: "text",
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.SourceFor,
-        [BasisKind.SourceText, BasisKind.TypeScriptChecker],
         "Exact provider source for a materialization route.",
       ),
-    });
+    );
     if (row.providerSource !== undefined) {
-      continuations.push({
-        id: `framework.materialization:routes:type:${index}`,
-        kind: ContinuationKind.SwitchLens,
-        priority: ContinuationPriority.Secondary,
-        rationale: "Inspect TypeChecker facts for the provider expression.",
-        inquiry: {
-          lens: LensId.TsType,
-          locus: sourceRangeLocus(row.providerSource),
-          projection: "facts",
-        },
-        evidence: [evidence],
-        route: route(
-          NavigationPlane.Inspection,
-          NavigationRelation.TypeFactsFor,
-          [BasisKind.TypeScriptChecker],
+      continuations.push(
+        builder.typeFacts(
+          "type",
+          row.providerSource,
+          "Inspect TypeChecker facts for the provider expression.",
           "Provider expression TypeChecker facts for a materialization route.",
         ),
-      });
+      );
       if (
-        row.routeKind === FrameworkMaterializationRouteKind.CallbackProvider
+        FrameworkMaterializationRouteDescriptor.forRouteKind(row.routeKind)
+          .tracesCallbackDependencies
       ) {
-        continuations.push({
-          id: `framework.materialization:routes:evaluator:${index}`,
-          kind: ContinuationKind.SwitchLens,
-          priority: ContinuationPriority.Primary,
-          rationale:
+        continuations.push(
+          builder.effects(
+            "evaluator",
+            row.providerSource,
             "Inspect static evaluator effects for this callback provider.",
-          inquiry: {
-            lens: LensId.FrameworkEvaluator,
-            locus: sourceRangeLocus(row.providerSource),
-            projection: "effects",
-            budget: {
-              ...inquiry.budget,
-              rows: 40,
-            },
-          },
-          evidence: [evidence],
-          route: route(
-            NavigationPlane.Semantic,
-            NavigationRelation.EffectsOf,
-            [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
             "Static evaluator effects for a callback materialization route.",
+            {
+              budget: {
+                ...inquiry.budget,
+                rows: 40,
+              },
+              basis: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
+            },
           ),
-        });
+        );
       }
     }
     if (row.dependencies.length > 0) {
-      continuations.push({
-        id: `framework.materialization:routes:dependencies:${index}`,
-        kind: ContinuationKind.SwitchProjection,
-        priority: ContinuationPriority.Primary,
-        rationale:
+      continuations.push(
+        projectionContinuation(
+          inquiry,
+          `framework.materialization:routes:dependencies:${index}`,
+          "dependencies",
           "Inspect container dependency calls observed inside this callback provider.",
-        inquiry: {
-          ...inquiry,
-          projection: "dependencies",
-          filters: {
-            ...inquiry.filters,
-            key: row.key,
+          {
+            filters: {
+              ...inquiry.filters,
+              key: row.key,
+            },
+            evidence,
+            basis: [BasisKind.TypeScriptChecker, BasisKind.StaticEvaluator],
+            summary: "Callback dependency calls for one materialization route.",
           },
-          page: undefined,
-        },
-        evidence: [evidence],
-        route: route(
-          NavigationPlane.Semantic,
-          NavigationRelation.ProjectionOf,
-          [BasisKind.TypeScriptChecker, BasisKind.StaticEvaluator],
-          "Callback dependency calls for one materialization route.",
         ),
-      });
+      );
     }
     continuations.push({
       id: `framework.materialization:routes:di-provider:${index}`,
@@ -1648,45 +1728,29 @@ function relationshipContinuations(
   }
   for (const [index, row] of rows.slice(0, 5).entries()) {
     const evidence = evidenceForRelationship(row);
-    continuations.push({
-      id: `framework.materialization:relationships:source:${index}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Primary,
-      rationale:
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.materialization:relationships",
+      index,
+      evidence,
+    );
+    continuations.push(
+      builder.source(
+        "source",
+        row.source,
         "Inspect the exact source for this materialization relationship.",
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: sourceRangeLocus(row.source),
-        projection: "text",
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.SourceFor,
-        [BasisKind.SourceText, BasisKind.TypeScriptChecker],
         "Exact source for a materialization relationship.",
       ),
-    });
+    );
     if (row.to.source !== undefined) {
-      continuations.push({
-        id: `framework.materialization:relationships:target:${index}`,
-        kind: ContinuationKind.SwitchLens,
-        priority: ContinuationPriority.Secondary,
-        rationale:
+      continuations.push(
+        builder.typeFacts(
+          "target",
+          row.to.source,
           "Inspect TypeChecker facts for the materialization relationship target.",
-        inquiry: {
-          lens: LensId.TsType,
-          locus: sourceRangeLocus(row.to.source),
-          projection: "facts",
-        },
-        evidence: [evidence],
-        route: route(
-          NavigationPlane.Inspection,
-          NavigationRelation.TypeFactsFor,
-          [BasisKind.TypeScriptChecker],
           "TypeChecker facts for a materialization relationship target.",
         ),
-      });
+      );
     }
     if (
       row.relation === FrameworkRelationshipRelation.DependsOnKey
@@ -1740,45 +1804,31 @@ function instantiationContinuations(
   }
   for (const [index, row] of rows.slice(0, 5).entries()) {
     const evidence = evidenceForInstantiation(row);
-    continuations.push({
-      id: `framework.materialization:instantiations:provider-source:${index}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Primary,
-      rationale: "Inspect the provider source for this key instantiation.",
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: sourceRangeLocus(row.source),
-        projection: "text",
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.SourceFor,
-        [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.materialization:instantiations",
+      index,
+      evidence,
+    );
+    continuations.push(
+      builder.source(
+        "provider-source",
+        row.source,
+        "Inspect the provider source for this key instantiation.",
         "Provider source for a key instantiation row.",
       ),
-    });
+    );
     const firstConstructionSite = row.constructionSites[0];
     if (firstConstructionSite !== undefined) {
-      continuations.push({
-        id: `framework.materialization:instantiations:construction-source:${index}`,
-        kind: ContinuationKind.InspectEvidence,
-        priority: ContinuationPriority.Secondary,
-        rationale:
+      continuations.push(
+        builder.source(
+          "construction-source",
+          firstConstructionSite.source,
           "Inspect the low-level Aurelia framework construction site used by this route class.",
-        inquiry: {
-          lens: LensId.TsSource,
-          locus: sourceRangeLocus(firstConstructionSite.source),
-          projection: "text",
-        },
-        evidence: [evidence],
-        route: route(
-          NavigationPlane.Inspection,
-          NavigationRelation.SourceFor,
-          [BasisKind.SourceText, BasisKind.TypeScriptChecker],
           "Low-level framework construction site for a key instantiation row.",
+          { priority: ContinuationPriority.Secondary },
         ),
-      });
+      );
     }
     continuations.push({
       id: `framework.materialization:instantiations:route:${index}`,
@@ -1827,45 +1877,31 @@ function resourceInstantiationContinuations(
   }
   for (const [index, row] of rows.slice(0, 5).entries()) {
     const evidence = evidenceForResourceInstantiation(row);
-    continuations.push({
-      id: `framework.materialization:resource-instantiations:resource-source:${index}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Primary,
-      rationale: "Inspect the resource carrier source for this instantiation row.",
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: sourceRangeLocus(row.source),
-        projection: "text",
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.SourceFor,
-        [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.materialization:resource-instantiations",
+      index,
+      evidence,
+    );
+    continuations.push(
+      builder.source(
+        "resource-source",
+        row.source,
+        "Inspect the resource carrier source for this instantiation row.",
         "Resource carrier source for a resource instantiation row.",
       ),
-    });
+    );
     const firstMaterializationSite = row.materializationSites[0];
     if (firstMaterializationSite !== undefined) {
-      continuations.push({
-        id: `framework.materialization:resource-instantiations:materialization-source:${index}`,
-        kind: ContinuationKind.InspectEvidence,
-        priority: ContinuationPriority.Secondary,
-        rationale:
+      continuations.push(
+        builder.source(
+          "materialization-source",
+          firstMaterializationSite.source,
           "Inspect the framework materialization site that can instantiate, resolve, build, or apply this resource class.",
-        inquiry: {
-          lens: LensId.TsSource,
-          locus: sourceRangeLocus(firstMaterializationSite.source),
-          projection: "text",
-        },
-        evidence: [evidence],
-        route: route(
-          NavigationPlane.Inspection,
-          NavigationRelation.SourceFor,
-          [BasisKind.SourceText, BasisKind.TypeScriptChecker],
           "Runtime/compiler/evaluator materialization site for a resource instantiation row.",
+          { priority: ContinuationPriority.Secondary },
         ),
-      });
+      );
     }
   }
   return continuations;
@@ -1891,101 +1927,28 @@ function dependencyContinuations(
   }
   for (const [index, row] of rows.slice(0, 5).entries()) {
     const evidence = evidenceForDependency(row);
-    continuations.push({
-      id: `framework.materialization:dependencies:source:${index}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Primary,
-      rationale: "Inspect the exact source for this callback dependency.",
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: sourceRangeLocus(row.source),
-        projection: "text",
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.SourceFor,
-        [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.materialization:dependencies",
+      index,
+      evidence,
+    );
+    continuations.push(
+      builder.source(
+        "source",
+        row.source,
+        "Inspect the exact source for this callback dependency.",
         "Exact source for a callback dependency.",
       ),
-    });
-    continuations.push({
-      id: `framework.materialization:dependencies:key:${index}`,
-      kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Secondary,
-      rationale: "Inspect TypeChecker facts for the dependency key expression.",
-      inquiry: {
-        lens: LensId.TsType,
-        locus: sourceRangeLocus(row.argumentSource),
-        projection: "facts",
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.TypeFactsFor,
-        [BasisKind.TypeScriptChecker],
+      builder.typeFacts(
+        "key",
+        row.argumentSource,
+        "Inspect TypeChecker facts for the dependency key expression.",
         "TypeChecker facts for a dependency key expression.",
       ),
-    });
+    );
   }
   return continuations;
-}
-
-function projectionContinuation(
-  inquiry: Inquiry,
-  id: string,
-  projection: string,
-  rationale: string,
-): Continuation {
-  return {
-    id,
-    kind: ContinuationKind.SwitchProjection,
-    priority: ContinuationPriority.Primary,
-    rationale,
-    inquiry: {
-      ...inquiry,
-      projection,
-      page: undefined,
-    },
-    route: route(
-      NavigationPlane.Semantic,
-      NavigationRelation.ProjectionOf,
-      [BasisKind.TypeScriptChecker],
-      rationale,
-    ),
-  };
-}
-
-function nextPageContinuation(
-  inquiry: Inquiry,
-  id: string,
-  rationale: string,
-  nextOffset: number,
-  limit: number,
-): Continuation {
-  return {
-    id,
-    kind: ContinuationKind.NextPage,
-    priority: ContinuationPriority.Primary,
-    rationale,
-    inquiry: {
-      ...inquiry,
-      page: { size: limit, cursor: String(nextOffset) },
-    },
-    route: route(
-      NavigationPlane.Addressing,
-      NavigationRelation.NextPageOf,
-      [],
-      rationale,
-    ),
-  };
-}
-
-function sourceRangeLocus(range: SourceRange) {
-  return {
-    kind: LocusKind.SourceRange,
-    range,
-  } as const;
 }
 
 function sourceRangeForSpan(filePath: string, span: SourceSpan): SourceRange {
@@ -2000,49 +1963,6 @@ function sourceRangeForSpan(filePath: string, span: SourceSpan): SourceRange {
       character: span.endCharacter - 1,
     },
   };
-}
-
-function pageInfo(
-  inquiry: Inquiry,
-  returned: number,
-  total: number,
-  limit: number,
-  nextOffset: number | undefined,
-) {
-  return {
-    size: limit,
-    cursor: inquiry.page?.cursor,
-    returned,
-    total,
-    ...(nextOffset === undefined ? {} : { nextCursor: String(nextOffset) }),
-  };
-}
-
-function pageRows<TValue>(
-  rows: readonly TValue[],
-  offset: number,
-  limit: number,
-): { readonly rows: readonly TValue[]; readonly nextOffset?: number } {
-  const page = rows.slice(offset, offset + limit);
-  const nextOffset =
-    offset + page.length < rows.length ? offset + page.length : undefined;
-  return {
-    rows: page,
-    ...(nextOffset === undefined ? {} : { nextOffset }),
-  };
-}
-
-function pageOffset(inquiry: Inquiry): number {
-  const cursor = inquiry.page?.cursor;
-  if (cursor === undefined) {
-    return 0;
-  }
-  const parsed = Number.parseInt(cursor, 10);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function evidenceLimit(inquiry: Inquiry): number {
-  return clampBudget(inquiry.budget?.evidencePerSubject, 5, 20);
 }
 
 function frameworkMaterializationBasis(sourceProject: SourceProject): Basis {
@@ -2061,27 +1981,4 @@ function frameworkMaterializationBasisSummary(): Basis {
     summary:
       "Answered from DI provider relationship atoms plus checker-backed provider expression facts; callback body/effect closure remains a later evaluator layer.",
   };
-}
-
-function route(
-  plane: NavigationPlane,
-  relation: NavigationRelation,
-  basis: readonly BasisKind[],
-  summary: string,
-): NavigationRouteClaim {
-  return { plane, relation, basis, summary };
-}
-
-function countBy<TValue>(
-  rows: readonly TValue[],
-  keyFor: (row: TValue) => string,
-): Readonly<Record<string, number>> {
-  const counts: Record<string, number> = {};
-  for (const row of rows) {
-    const key = keyFor(row);
-    counts[key] = (counts[key] ?? 0) + 1;
-  }
-  return Object.fromEntries(
-    Object.entries(counts).sort(([left], [right]) => left.localeCompare(right)),
-  );
 }

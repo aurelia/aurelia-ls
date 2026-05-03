@@ -7,12 +7,14 @@ import {
 import type { Evidence } from "../evidence.js";
 import type { Inquiry } from "../inquiry.js";
 import { LensId } from "../lens.js";
-import { LocusKind } from "../locus.js";
 import { NavigationPlane, NavigationRelation } from "../navigation.js";
 import {
+  FrameworkRowContinuationBuilder,
+  FrameworkSemanticRouteBuilder,
   nextPageContinuation,
   projectionContinuation,
 } from "./framework-continuation-core.js";
+import { FrameworkSemanticRoutes } from "./framework-route-catalog.js";
 import {
   FrameworkBindingEffectKind,
   type FrameworkAppTaskEntityRow,
@@ -45,6 +47,7 @@ import {
   sourceRangeForCallSiteEntry,
   sourceRangeForTarget,
 } from "./framework-support.js";
+
 export function packageExportContinuations(
   inquiry: Inquiry,
   packageExports: readonly FrameworkPackageExportRow[],
@@ -84,45 +87,29 @@ export function packageExportContinuations(
       },
     };
     const evidence = evidenceForPackageExport(row);
-    continuations.push({
-      id: `framework.discovery:package-exports:source:${index}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Primary,
-      rationale: "Inspect source behind this Aurelia framework package export.",
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: { kind: LocusKind.SourceRange, range: source },
-        projection: "text",
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.SourceFor,
-        [BasisKind.SourceText, BasisKind.TypeScriptProgram],
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.discovery:package-exports",
+      index,
+      evidence,
+    );
+    continuations.push(
+      builder.source(
+        "source",
+        source,
+        "Inspect source behind this Aurelia framework package export.",
         "Source declaration behind an Aurelia framework package export.",
+        { basis: [BasisKind.SourceText, BasisKind.TypeScriptProgram] },
       ),
-    });
-    continuations.push({
-      id: `framework.discovery:package-exports:type:${index}`,
-      kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Secondary,
-      rationale:
+    );
+    continuations.push(
+      builder.typeFacts(
+        "type",
+        source,
         "Inspect TypeChecker facts for this Aurelia framework package export.",
-      inquiry: {
-        lens: LensId.TsType,
-        locus: { kind: LocusKind.SourceRange, range: source },
-        projection: "facts",
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.TypeFactsFor,
-        [BasisKind.TypeScriptChecker],
         "Type facts for an Aurelia framework package export.",
       ),
-    });
+    );
     const effectTarget =
       row.exportEntry.targets.find(
         (target) =>
@@ -144,33 +131,15 @@ export function packageExportContinuations(
             },
           };
     if (row.exportEntry.memberNames.includes("register")) {
-      continuations.push({
-        id: `framework.discovery:package-exports:effects:${index}`,
-        kind: ContinuationKind.SwitchLens,
-        priority: ContinuationPriority.Primary,
-        rationale:
+      continuations.push(
+        builder.effects(
+          "effects",
+          effectSource,
           "Trace static invocation effects inside this export's register member.",
-        inquiry: {
-          lens: LensId.FrameworkEvaluator,
-          locus: { kind: LocusKind.SourceRange, range: effectSource },
-          projection: "effects",
-          filters: {
-            memberName: "register",
-          },
-          budget: inquiry.budget,
-        },
-        evidence: [evidence],
-        route: route(
-          NavigationPlane.Semantic,
-          NavigationRelation.EffectsOf,
-          [
-            BasisKind.StaticEvaluator,
-            BasisKind.TypeScriptChecker,
-            BasisKind.SourceText,
-          ],
           "Static invocation effects for a framework registry export.",
+          { filters: { memberName: "register" } },
         ),
-      });
+      );
     }
   }
   return continuations;
@@ -202,70 +171,48 @@ export function observerEntityContinuations(
       "Return to raw package exports behind observer-system rows.",
     ),
   );
-  continuations.push({
-    id: "framework.discovery:observers:binding-effects",
-    kind: ContinuationKind.SwitchProjection,
-    priority: ContinuationPriority.Secondary,
-    rationale:
+  continuations.push(
+    projectionContinuation(
+      inquiry,
+      "framework.discovery:observers:binding-effects",
+      "binding-effects",
       "Inspect binding observer/accessor lookup rows that consume ObserverLocator-style APIs.",
-    inquiry: {
-      lens: LensId.FrameworkDiscovery,
-      locus: inquiry.locus,
-      projection: "binding-effects",
-      filters: { effectKind: FrameworkBindingEffectKind.ObserverLookup },
-      budget: inquiry.budget,
-    },
-    route: route(
-      NavigationPlane.Semantic,
-      NavigationRelation.ProjectionOf,
-      [BasisKind.SourceText, BasisKind.TypeScriptChecker],
-      "Binding observer lookup rows connected to observer-system entities.",
+      {
+        lens: LensId.FrameworkRendering,
+        filters: { effectKind: FrameworkBindingEffectKind.ObserverLookup },
+        basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+        priority: ContinuationPriority.Secondary,
+        summary:
+          "Binding observer lookup rows connected to observer-system entities.",
+      },
     ),
-  });
+  );
   for (const [index, row] of rows.slice(0, 3).entries()) {
     const source = sourceRangeForTarget(
       concreteExportTarget(row.exportEntry.targets),
     );
     const evidence = evidenceForObserverEntity(row);
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.discovery:observers",
+      index,
+      evidence,
+    );
     if (source !== null) {
-      continuations.push({
-        id: `framework.discovery:observers:source:${index}`,
-        kind: ContinuationKind.InspectEvidence,
-        priority: ContinuationPriority.Primary,
-        rationale: "Inspect source behind this observer-system export.",
-        inquiry: {
-          lens: LensId.TsSource,
-          locus: { kind: LocusKind.SourceRange, range: source },
-          projection: "text",
-          budget: inquiry.budget,
-        },
-        evidence: [evidence],
-        route: route(
-          NavigationPlane.Inspection,
-          NavigationRelation.SourceFor,
-          [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+      continuations.push(
+        builder.source(
+          "source",
+          source,
+          "Inspect source behind this observer-system export.",
           "Source behind an observer-system export.",
         ),
-      });
-      continuations.push({
-        id: `framework.discovery:observers:type:${index}`,
-        kind: ContinuationKind.SwitchLens,
-        priority: ContinuationPriority.Secondary,
-        rationale: "Inspect TypeChecker facts for this observer-system export.",
-        inquiry: {
-          lens: LensId.TsType,
-          locus: { kind: LocusKind.SourceRange, range: source },
-          projection: "facts",
-          budget: inquiry.budget,
-        },
-        evidence: [evidence],
-        route: route(
-          NavigationPlane.Inspection,
-          NavigationRelation.TypeFactsFor,
-          [BasisKind.TypeScriptChecker],
+        builder.typeFacts(
+          "type",
+          source,
+          "Inspect TypeChecker facts for this observer-system export.",
           "Type facts for an observer-system export.",
         ),
-      });
+      );
     }
     for (const [
       implementationIndex,
@@ -289,7 +236,7 @@ export function observerEntityContinuations(
         evidence: [evidence],
         route: route(
           NavigationPlane.Semantic,
-          NavigationRelation.ProjectionOf,
+          NavigationRelation.RefinementOf,
           [BasisKind.TypeScriptChecker],
           "Default implementation named by an observer DI interface.",
         ),
@@ -430,44 +377,26 @@ export function catalogEntityContinuations<
       continue;
     }
     const evidence = options.evidenceFor(row);
-    continuations.push({
-      id: `${options.sourceIdPrefix}:source:${index}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Primary,
-      rationale: options.sourceRationale,
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: { kind: LocusKind.SourceRange, range: source },
-        projection: "text",
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.SourceFor,
-        [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      options.sourceIdPrefix,
+      index,
+      evidence,
+    );
+    continuations.push(
+      builder.source(
+        "source",
+        source,
+        options.sourceRationale,
         options.sourceSummary,
       ),
-    });
-    continuations.push({
-      id: `${options.sourceIdPrefix}:type:${index}`,
-      kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Secondary,
-      rationale: options.typeRationale,
-      inquiry: {
-        lens: LensId.TsType,
-        locus: { kind: LocusKind.SourceRange, range: source },
-        projection: "facts",
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.TypeFactsFor,
-        [BasisKind.TypeScriptChecker],
+      builder.typeFacts(
+        "type",
+        source,
+        options.typeRationale,
         options.typeSummary,
       ),
-    });
+    );
   }
   return continuations;
 }
@@ -501,45 +430,26 @@ export function diInterfaceContinuations(
   for (const [index, row] of rows.slice(0, 3).entries()) {
     const source = sourceRangeForCallSiteEntry(row.createInterfaceCall);
     const evidence = evidenceForDiInterface(row);
-    continuations.push({
-      id: `framework.discovery:di-interfaces:source:${index}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Primary,
-      rationale: "Inspect source behind this DI interface creation call.",
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: { kind: LocusKind.SourceRange, range: source },
-        projection: "text",
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.SourceFor,
-        [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.discovery:di-interfaces",
+      index,
+      evidence,
+    );
+    continuations.push(
+      builder.source(
+        "source",
+        source,
+        "Inspect source behind this DI interface creation call.",
         "Source behind a DI interface creation call.",
       ),
-    });
-    continuations.push({
-      id: `framework.discovery:di-interfaces:type:${index}`,
-      kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Secondary,
-      rationale:
+      builder.callSites(
+        "type",
+        source,
         "Inspect TypeChecker call-site facts for this DI interface creation call.",
-      inquiry: {
-        lens: LensId.TsType,
-        locus: { kind: LocusKind.SourceRange, range: source },
-        projection: "call-sites",
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Flow,
-        NavigationRelation.CallSitesOf,
-        [BasisKind.TypeScriptChecker, BasisKind.SourceText],
         "Exact call-site facts behind a DI interface creation call.",
       ),
-    });
+    );
   }
   return continuations;
 }
@@ -572,69 +482,48 @@ export function resourceCarrierContinuations(
   );
   for (const [index, row] of rows.slice(0, 3).entries()) {
     const evidence = evidenceForResourceCarrier(row);
-    continuations.push({
-      id: `framework.discovery:resource-carriers:source:${index}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Primary,
-      rationale: "Inspect source behind this framework resource carrier.",
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: { kind: LocusKind.SourceRange, range: row.source },
-        projection: "text",
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.SourceFor,
-        [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+    const semanticRoute = new FrameworkSemanticRouteBuilder(
+      inquiry,
+      "framework.discovery:resource-carriers",
+      index,
+      evidence,
+    );
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.discovery:resource-carriers",
+      index,
+      evidence,
+    );
+    continuations.push(
+      builder.source(
+        "source",
+        row.source,
+        "Inspect source behind this framework resource carrier.",
         "Source behind a framework resource carrier.",
       ),
-    });
-    continuations.push({
-      id: `framework.discovery:resource-carriers:type:${index}`,
-      kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Secondary,
-      rationale:
+      builder.typeFacts(
+        "type",
+        row.source,
         "Inspect TypeChecker facts for this framework resource carrier.",
-      inquiry: {
-        lens: LensId.TsType,
-        locus: { kind: LocusKind.SourceRange, range: row.source },
-        projection: "facts",
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.TypeFactsFor,
-        [BasisKind.TypeScriptChecker],
         "Type facts for a framework resource carrier.",
       ),
-    });
-    continuations.push({
-      id: `framework.discovery:resource-carriers:instantiation:${index}`,
-      kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Secondary,
-      rationale:
-        "Follow this resource carrier toward runtime/compiler/evaluator materialization sites.",
-      inquiry: {
-        ...inquiry,
-        lens: LensId.FrameworkMaterialization,
-        projection: "resource-instantiations",
-        filters: {
-          packageId: row.packageId,
-          resourceName: row.targetName ?? row.sourceExportName,
+    );
+    continuations.push(
+      semanticRoute.continuation(
+        FrameworkSemanticRoutes.ResourceToMaterializationResourceInstantiations,
+        "instantiation",
+        {
+          filters: {
+            packageId: row.packageId,
+            resourceName: row.targetName ?? row.sourceExportName,
+          },
+          rationale:
+            "Follow this resource carrier toward runtime/compiler/evaluator materialization sites.",
+          routeSummary: "Resource carrier to materialization sites.",
+          priority: ContinuationPriority.Secondary,
         },
-        page: undefined,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Semantic,
-        NavigationRelation.FrameworkFlowOf,
-        [BasisKind.TypeScriptChecker],
-        "Resource carrier to materialization sites.",
       ),
-    });
+    );
   }
   return continuations;
 }
@@ -667,69 +556,48 @@ export function resourceExportContinuations(
   );
   for (const [index, row] of rows.slice(0, 3).entries()) {
     const evidence = evidenceForResourceExport(row);
-    continuations.push({
-      id: `framework.discovery:resources:source:${index}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Primary,
-      rationale: "Inspect source behind this framework resource carrier.",
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: { kind: LocusKind.SourceRange, range: row.source },
-        projection: "text",
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.SourceFor,
-        [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+    const semanticRoute = new FrameworkSemanticRouteBuilder(
+      inquiry,
+      "framework.discovery:resources",
+      index,
+      evidence,
+    );
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.discovery:resources",
+      index,
+      evidence,
+    );
+    continuations.push(
+      builder.source(
+        "source",
+        row.source,
+        "Inspect source behind this framework resource carrier.",
         "Source behind a framework resource carrier.",
       ),
-    });
-    continuations.push({
-      id: `framework.discovery:resources:type:${index}`,
-      kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Secondary,
-      rationale:
+      builder.typeFacts(
+        "type",
+        row.source,
         "Inspect TypeChecker facts for this framework resource carrier.",
-      inquiry: {
-        lens: LensId.TsType,
-        locus: { kind: LocusKind.SourceRange, range: row.source },
-        projection: "facts",
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.TypeFactsFor,
-        [BasisKind.TypeScriptChecker],
         "Type facts for a framework resource carrier.",
       ),
-    });
-    continuations.push({
-      id: `framework.discovery:resources:instantiation:${index}`,
-      kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Secondary,
-      rationale:
-        "Follow this resource export toward runtime/compiler/evaluator materialization sites.",
-      inquiry: {
-        ...inquiry,
-        lens: LensId.FrameworkMaterialization,
-        projection: "resource-instantiations",
-        filters: {
-          packageId: row.packageId,
-          resourceName: row.targetName ?? row.carrier.sourceExportName,
+    );
+    continuations.push(
+      semanticRoute.continuation(
+        FrameworkSemanticRoutes.ResourceToMaterializationResourceInstantiations,
+        "instantiation",
+        {
+          filters: {
+            packageId: row.packageId,
+            resourceName: row.targetName ?? row.carrier.sourceExportName,
+          },
+          rationale:
+            "Follow this resource export toward runtime/compiler/evaluator materialization sites.",
+          routeSummary: "Resource export to materialization sites.",
+          priority: ContinuationPriority.Secondary,
         },
-        page: undefined,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Semantic,
-        NavigationRelation.FrameworkFlowOf,
-        [BasisKind.TypeScriptChecker],
-        "Resource export to materialization sites.",
       ),
-    });
+    );
   }
   return continuations;
 }
@@ -773,57 +641,42 @@ export function bundleContinuations(
     const firstTarget = concreteExportTarget(row.exportEntry.targets);
     const source = sourceRangeForTarget(firstTarget);
     if (source !== null) {
-      continuations.push({
-        id: `framework.discovery:bundles:effects:${index}`,
-        kind: ContinuationKind.SwitchLens,
-        priority: ContinuationPriority.Primary,
-        rationale:
+      const builder = new FrameworkRowContinuationBuilder(
+        inquiry,
+        "framework.discovery:bundles",
+        index,
+        evidence,
+      );
+      continuations.push(
+        builder.effects(
+          "effects",
+          source,
           "Trace raw evaluator effects behind this bundle's register member.",
-        inquiry: {
-          lens: LensId.FrameworkEvaluator,
-          locus: { kind: LocusKind.SourceRange, range: source },
-          projection: "effects",
-          filters: { memberName: "register" },
-          budget: inquiry.budget,
-        },
-        evidence: [evidence],
-        route: route(
-          NavigationPlane.Semantic,
-          NavigationRelation.EffectsOf,
-          [
-            BasisKind.StaticEvaluator,
-            BasisKind.TypeScriptChecker,
-            BasisKind.SourceText,
-          ],
           "Raw evaluator effects behind a framework bundle association row.",
+          { filters: { memberName: "register" } },
         ),
-      });
+      );
     }
     const firstAssociation = row.associations[0];
     if (firstAssociation !== undefined) {
-      continuations.push({
-        id: `framework.discovery:bundles:association-source:${index}`,
-        kind: ContinuationKind.InspectEvidence,
-        priority: ContinuationPriority.Secondary,
-        rationale:
+      const builder = new FrameworkRowContinuationBuilder(
+        inquiry,
+        "framework.discovery:bundles",
+        index,
+        evidenceForBundleAssociation(firstAssociation),
+      );
+      continuations.push(
+        builder.source(
+          "association-source",
+          firstAssociation.source,
           "Inspect source behind the first evaluated registration association.",
-        inquiry: {
-          lens: LensId.TsSource,
-          locus: {
-            kind: LocusKind.SourceRange,
-            range: firstAssociation.source,
-          },
-          projection: "text",
-          budget: inquiry.budget,
-        },
-        evidence: [evidenceForBundleAssociation(firstAssociation)],
-        route: route(
-          NavigationPlane.Inspection,
-          NavigationRelation.SourceFor,
-          [BasisKind.SourceText, BasisKind.StaticEvaluator],
           "Source behind an evaluated bundle association.",
+          {
+            priority: ContinuationPriority.Secondary,
+            basis: [BasisKind.SourceText, BasisKind.StaticEvaluator],
+          },
         ),
-      });
+      );
     }
   }
   return continuations;

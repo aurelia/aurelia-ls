@@ -70,7 +70,7 @@ export function createSurfaceMap(
       "Make basis, evidence, open seams, and continuations explicit on every answer.",
       "Use declared navigation routes to keep cross-lens hops auditable instead of answer-local folklore.",
       "Let TypeScript, product, framework, bridge, and Atlas maintenance lenses compose through one answer shape.",
-      "Declare Atlas intent through controlled vocabulary so self-analysis can inspect design pressure directly.",
+      "Declare Atlas self-description through controlled vocabulary so self-analysis can inspect design pressure directly.",
     ],
     contractShape: {
       outcomes: OUTCOME_KINDS,

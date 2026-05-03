@@ -50,14 +50,8 @@ export const enum FrameworkRelationshipRelation {
   AdmitsChildController = "admits-child-controller",
   InvokesRegistry = "invokes-registry",
   CreatesContainer = "creates-container",
-  AdmitsDiKey = "admits-di-key",
-  AdmitsResource = "admits-resource",
-  AdmitsRegistryExport = "admits-registry-export",
-  AdmitsCatalog = "admits-catalog",
-  AdmitsAppTask = "admits-app-task",
-  AdmitsFactory = "admits-factory",
-  AdmitsRegistrationArgument = "admits-registration-argument",
-  AdmitsUnknownArgument = "admits-unknown-argument",
+  /** Configuration or bundle evaluation admits a typed endpoint into the framework world. */
+  AdmitsValue = "admits-value",
   RegistersResource = "registers-resource",
   LooksUpResource = "looks-up-resource",
   ResolvesResource = "resolves-resource",
@@ -239,7 +233,7 @@ export interface FrameworkRelationshipEndpoint {
 
 /** One typed relationship atom. */
 export interface FrameworkRelationshipAtom {
-  /** Stable atom id inside the current source/cache basis. */
+  /** Stable atom id inside the current source basis. */
   readonly id: string;
   /** Broad relationship family. */
   readonly family: FrameworkRelationshipFamily;

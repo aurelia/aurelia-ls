@@ -38,6 +38,7 @@ import { answerFrameworkDi } from "./framework-di-lenses.js";
 import { answerFrameworkMaterialization } from "./framework-materialization-lenses.js";
 import { answerFrameworkAdmission } from "./framework-admission-lenses.js";
 import { answerFrameworkCompiler } from "./framework-compiler-lenses.js";
+import { answerFrameworkComposition } from "./framework-composition-lenses.js";
 import { answerFrameworkObservation } from "./framework-observation-lenses.js";
 import { answerFrameworkResources } from "./framework-resource-lenses.js";
 import type { InquiryWorld } from "./world.js";
@@ -87,6 +88,7 @@ export class InquiryEngine {
     LensId.FrameworkLifecycle,
     LensId.FrameworkObservation,
     LensId.FrameworkAdmission,
+    LensId.FrameworkComposition,
   ]);
 
   constructor(
@@ -192,6 +194,11 @@ export class InquiryEngine {
         );
       case LensId.FrameworkAdmission:
         return answerFrameworkAdmission(
+          normalized.inquiry,
+          this.substrates.sourceProject,
+        );
+      case LensId.FrameworkComposition:
+        return answerFrameworkComposition(
           normalized.inquiry,
           this.substrates.sourceProject,
         );

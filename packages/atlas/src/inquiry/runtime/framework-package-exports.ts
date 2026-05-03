@@ -6,6 +6,8 @@ import {
   readExportNames,
   readExportSurface,
   readTypeScriptCallSiteEntry,
+  SourceProjectKeyedMemo,
+  SourceProjectMemo,
   SourceDeclarationKind,
   SourceSelectorScheme,
   SourceTargetKind,
@@ -14,10 +16,6 @@ import {
   type TypeScriptExportNameEntry,
   type TypeScriptExportSurfaceEntry,
 } from "../../source/index.js";
-import {
-  readFrameworkEntityCatalogCache,
-  writeFrameworkEntityCatalogCache,
-} from "./framework-cache.js";
 import type {
   FrameworkDiInterfaceExportRow,
   FrameworkPackageExportRow,
@@ -31,44 +29,36 @@ import {
   unwrapExpression,
 } from "./framework-ts-utils.js";
 
-const diInterfaceRowsByPackageByProject = new WeakMap<
-  SourceProject,
-  Map<string, readonly FrameworkDiInterfaceExportRow[]>
+const diInterfaceRowsByPackage = new SourceProjectKeyedMemo<
+  string,
+  readonly FrameworkDiInterfaceExportRow[]
 >();
-
-const diInterfaceRowsByExportByProject = new WeakMap<
-  SourceProject,
-  Map<string, readonly FrameworkDiInterfaceExportRow[]>
+const diInterfaceRowsByExport = new SourceProjectKeyedMemo<
+  string,
+  readonly FrameworkDiInterfaceExportRow[]
 >();
-
-const frameworkPackageNamesByProject = new WeakMap<
-  SourceProject,
+const frameworkPackageNames = new SourceProjectMemo<
   ReadonlyMap<string, string>
 >();
-
-const frameworkPackageExportRowsByFilterByProject = new WeakMap<
-  SourceProject,
-  Map<string, readonly FrameworkPackageExportRow[]>
+const frameworkPackageExportRowsByFilter = new SourceProjectKeyedMemo<
+  string,
+  readonly FrameworkPackageExportRow[]
 >();
-
-const packageExportRowsByPackageByProject = new WeakMap<
-  SourceProject,
-  Map<string, readonly FrameworkPackageExportRow[]>
+const packageExportRowsByPackage = new SourceProjectKeyedMemo<
+  string,
+  readonly FrameworkPackageExportRow[]
 >();
-
-const publicExportSurfaceByPackageByProject = new WeakMap<
-  SourceProject,
-  Map<string, FrameworkPublicExportSurface>
+const publicExportSurfaceByPackage = new SourceProjectKeyedMemo<
+  string,
+  FrameworkPublicExportSurface
 >();
-
-const registryRowsByPackageByProject = new WeakMap<
-  SourceProject,
-  Map<string, readonly FrameworkRegistryExportRow[]>
+const registryRowsByPackage = new SourceProjectKeyedMemo<
+  string,
+  readonly FrameworkRegistryExportRow[]
 >();
-
-const registryRowsByExportByProject = new WeakMap<
-  SourceProject,
-  Map<string, readonly FrameworkRegistryExportRow[]>
+const registryRowsByExport = new SourceProjectKeyedMemo<
+  string,
+  readonly FrameworkRegistryExportRow[]
 >();
 
 export interface FrameworkPublicExportSurface {
@@ -78,21 +68,17 @@ export interface FrameworkPublicExportSurface {
 export function readFrameworkPackageNames(
   sourceProject: SourceProject,
 ): ReadonlyMap<string, string> {
-  const cached = frameworkPackageNamesByProject.get(sourceProject);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const admittedFrameworkPackageIds = new Set(AURELIA_FRAMEWORK_PACKAGE_IDS);
-  const packageNames = new Map(
-    sourceProject
-      .snapshot()
-      .summary.packages.filter((entry) =>
-        admittedFrameworkPackageIds.has(entry.id as never),
-      )
-      .map((entry) => [entry.id, entry.packageName]),
-  );
-  frameworkPackageNamesByProject.set(sourceProject, packageNames);
-  return packageNames;
+  return frameworkPackageNames.read(sourceProject, () => {
+    const admittedFrameworkPackageIds = new Set(AURELIA_FRAMEWORK_PACKAGE_IDS);
+    return new Map(
+      sourceProject
+        .snapshot()
+        .summary.packages.filter((entry) =>
+          admittedFrameworkPackageIds.has(entry.id as never),
+        )
+        .map((entry) => [entry.id, entry.packageName]),
+    );
+  });
 }
 
 export function frameworkPackageIdsForFilters(
@@ -131,74 +117,66 @@ export function readFrameworkPackageExports(
           ),
       );
   }
-  const cache =
-    frameworkPackageExportRowsByFilterByProject.get(sourceProject) ??
-    new Map<string, readonly FrameworkPackageExportRow[]>();
-  if (!frameworkPackageExportRowsByFilterByProject.has(sourceProject)) {
-    frameworkPackageExportRowsByFilterByProject.set(sourceProject, cache);
-  }
   const cacheKey = frameworkPackageExportFilterCacheKey(filters);
-  const cached = cache.get(cacheKey);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const admittedFrameworkPackageIds = new Set(AURELIA_FRAMEWORK_PACKAGE_IDS);
-  const selector =
-    filters.packageId === undefined
-      ? ({ scheme: SourceSelectorScheme.Workspace } as const)
-      : ({
-          scheme: SourceSelectorScheme.Package,
-          packageId: filters.packageId,
-        } as const);
-  const exports = readExportSurface(
-    sourceProject,
-    {
-      ...selector,
-    },
-    {
-      limit: 100_000,
-      offset: 0,
-      ...((filters.query ?? filters.exportName) === undefined
-        ? {}
-        : { query: filters.query ?? filters.exportName }),
-      ...(filters.memberName === undefined
-        ? {}
-        : { memberName: filters.memberName }),
-    },
-  ).exports;
-  const rows = exports
-    .filter((exportEntry) => exportEntry.surfaceFile.packageId !== null)
-    .filter((exportEntry) =>
-      admittedFrameworkPackageIds.has(
-        exportEntry.surfaceFile.packageId as never,
-      ),
-    )
-    .filter(
-      (exportEntry) =>
-        filters.packageId === undefined ||
-        exportEntry.surfaceFile.packageId === filters.packageId,
-    )
-    .filter(
-      (exportEntry) =>
-        filters.exportName === undefined ||
-        exportEntry.exportName === filters.exportName,
-    )
-    .map((exportEntry) => {
-      const packageId = exportEntry.surfaceFile.packageId!;
-      return {
-        id: `framework-export:${packageId}:${exportEntry.exportName}`,
-        packageId,
-        packageName: packageNames.get(packageId) ?? packageId,
-        exportEntry,
-      };
-    })
-    .sort(
-      (left, right) =>
-        left.packageId.localeCompare(right.packageId) ||
-        left.exportEntry.exportName.localeCompare(right.exportEntry.exportName),
-    );
-  cache.set(cacheKey, rows);
-  return rows;
+  return frameworkPackageExportRowsByFilter.read(sourceProject, cacheKey, () => {
+    const admittedFrameworkPackageIds = new Set(AURELIA_FRAMEWORK_PACKAGE_IDS);
+    const selector =
+      filters.packageId === undefined
+        ? ({ scheme: SourceSelectorScheme.Workspace } as const)
+        : ({
+            scheme: SourceSelectorScheme.Package,
+            packageId: filters.packageId,
+          } as const);
+    const exports = readExportSurface(
+      sourceProject,
+      {
+        ...selector,
+      },
+      {
+        limit: 100_000,
+        offset: 0,
+        ...((filters.query ?? filters.exportName) === undefined
+          ? {}
+          : { query: filters.query ?? filters.exportName }),
+        ...(filters.memberName === undefined
+          ? {}
+          : { memberName: filters.memberName }),
+      },
+    ).exports;
+    return exports
+      .filter((exportEntry) => exportEntry.surfaceFile.packageId !== null)
+      .filter((exportEntry) =>
+        admittedFrameworkPackageIds.has(
+          exportEntry.surfaceFile.packageId as never,
+        ),
+      )
+      .filter(
+        (exportEntry) =>
+          filters.packageId === undefined ||
+          exportEntry.surfaceFile.packageId === filters.packageId,
+      )
+      .filter(
+        (exportEntry) =>
+          filters.exportName === undefined ||
+          exportEntry.exportName === filters.exportName,
+      )
+      .map((exportEntry) => {
+        const packageId = exportEntry.surfaceFile.packageId!;
+        return {
+          id: `framework-export:${packageId}:${exportEntry.exportName}`,
+          packageId,
+          packageName: packageNames.get(packageId) ?? packageId,
+          exportEntry,
+        };
+      })
+      .sort(
+        (left, right) =>
+          left.packageId.localeCompare(right.packageId) ||
+          left.exportEntry.exportName.localeCompare(
+            right.exportEntry.exportName,
+          ),
+      );
+  });
 }
 
 export function readFrameworkPackageExportPackageRows(
@@ -206,56 +184,31 @@ export function readFrameworkPackageExportPackageRows(
   packageId: string,
   packageName: string,
 ): readonly FrameworkPackageExportRow[] {
-  const cache =
-    packageExportRowsByPackageByProject.get(sourceProject) ??
-    new Map<string, readonly FrameworkPackageExportRow[]>();
-  if (!packageExportRowsByPackageByProject.has(sourceProject)) {
-    packageExportRowsByPackageByProject.set(sourceProject, cache);
-  }
-  const cached = cache.get(packageId);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const diskCached = readFrameworkEntityCatalogCache<FrameworkPackageExportRow>(
-    sourceProject,
-    "package-exports",
-    packageId,
-  );
-  if (diskCached !== undefined) {
-    cache.set(packageId, diskCached);
-    return diskCached;
-  }
-  const rows = readExportSurface(
-    sourceProject,
-    {
-      scheme: SourceSelectorScheme.Package,
-      packageId,
-    },
-    {
-      limit: 100_000,
-      offset: 0,
-    },
-  )
-    .exports.filter(
-      (exportEntry) => exportEntry.surfaceFile.packageId === packageId,
+  return packageExportRowsByPackage.read(sourceProject, packageId, () =>
+    readExportSurface(
+      sourceProject,
+      {
+        scheme: SourceSelectorScheme.Package,
+        packageId,
+      },
+      {
+        limit: 100_000,
+        offset: 0,
+      },
     )
-    .map((exportEntry) => ({
-      id: `framework-export:${packageId}:${exportEntry.exportName}`,
-      packageId,
-      packageName,
-      exportEntry,
-    }))
-    .sort((left, right) =>
-      left.exportEntry.exportName.localeCompare(right.exportEntry.exportName),
-    );
-  cache.set(packageId, rows);
-  writeFrameworkEntityCatalogCache(
-    sourceProject,
-    "package-exports",
-    packageId,
-    rows,
+      .exports.filter(
+        (exportEntry) => exportEntry.surfaceFile.packageId === packageId,
+      )
+      .map((exportEntry) => ({
+        id: `framework-export:${packageId}:${exportEntry.exportName}`,
+        packageId,
+        packageName,
+        exportEntry,
+      }))
+      .sort((left, right) =>
+        left.exportEntry.exportName.localeCompare(right.exportEntry.exportName),
+      ),
   );
-  return rows;
 }
 
 export function frameworkPackageExportFilterCacheKey(
@@ -317,41 +270,15 @@ export function readFrameworkRegistryPackageRows(
   packageName: string,
   memberName: string,
 ): readonly FrameworkRegistryExportRow[] {
-  const cache =
-    registryRowsByPackageByProject.get(sourceProject) ??
-    new Map<string, readonly FrameworkRegistryExportRow[]>();
-  if (!registryRowsByPackageByProject.has(sourceProject)) {
-    registryRowsByPackageByProject.set(sourceProject, cache);
-  }
   const key = `${packageId}:${memberName}`;
-  const cached = cache.get(key);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const diskCached =
-    readFrameworkEntityCatalogCache<FrameworkRegistryExportRow>(
+  return registryRowsByPackage.read(sourceProject, key, () =>
+    scanFrameworkRegistryPackageRows(
       sourceProject,
-      `registry-exports.${memberName}`,
       packageId,
-    );
-  if (diskCached !== undefined) {
-    cache.set(key, diskCached);
-    return diskCached;
-  }
-  const rows = scanFrameworkRegistryPackageRows(
-    sourceProject,
-    packageId,
-    packageName,
-    memberName,
+      packageName,
+      memberName,
+    ),
   );
-  cache.set(key, rows);
-  writeFrameworkEntityCatalogCache(
-    sourceProject,
-    `registry-exports.${memberName}`,
-    packageId,
-    rows,
-  );
-  return rows;
 }
 
 export function readFrameworkRegistryExportRows(
@@ -361,34 +288,25 @@ export function readFrameworkRegistryExportRows(
   memberName: string,
   exportName: string,
 ): readonly FrameworkRegistryExportRow[] {
-  const packageCache = registryRowsByPackageByProject
-    .get(sourceProject)
-    ?.get(`${packageId}:${memberName}`);
+  const packageCache = registryRowsByPackage.get(
+    sourceProject,
+    `${packageId}:${memberName}`,
+  );
   if (packageCache !== undefined) {
     return packageCache.filter(
       (row) => row.exportEntry.exportName === exportName,
     );
   }
-  const cache =
-    registryRowsByExportByProject.get(sourceProject) ??
-    new Map<string, readonly FrameworkRegistryExportRow[]>();
-  if (!registryRowsByExportByProject.has(sourceProject)) {
-    registryRowsByExportByProject.set(sourceProject, cache);
-  }
   const key = `${packageId}:${memberName}:${exportName}`;
-  const cached = cache.get(key);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const rows = scanFrameworkRegistryPackageRows(
-    sourceProject,
-    packageId,
-    packageName,
-    memberName,
-    exportName,
+  return registryRowsByExport.read(sourceProject, key, () =>
+    scanFrameworkRegistryPackageRows(
+      sourceProject,
+      packageId,
+      packageName,
+      memberName,
+      exportName,
+    ),
   );
-  cache.set(key, rows);
-  return rows;
 }
 
 export function scanFrameworkRegistryPackageRows(
@@ -478,39 +396,9 @@ export function readFrameworkDiInterfacePackageRows(
   packageId: string,
   packageName: string,
 ): readonly FrameworkDiInterfaceExportRow[] {
-  const cache =
-    diInterfaceRowsByPackageByProject.get(sourceProject) ??
-    new Map<string, readonly FrameworkDiInterfaceExportRow[]>();
-  if (!diInterfaceRowsByPackageByProject.has(sourceProject)) {
-    diInterfaceRowsByPackageByProject.set(sourceProject, cache);
-  }
-  const cached = cache.get(packageId);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const diskCached =
-    readFrameworkEntityCatalogCache<FrameworkDiInterfaceExportRow>(
-      sourceProject,
-      "di-interfaces",
-      packageId,
-    );
-  if (diskCached !== undefined) {
-    cache.set(packageId, diskCached);
-    return diskCached;
-  }
-  const rows = scanFrameworkDiInterfacePackageRows(
-    sourceProject,
-    packageId,
-    packageName,
+  return diInterfaceRowsByPackage.read(sourceProject, packageId, () =>
+    scanFrameworkDiInterfacePackageRows(sourceProject, packageId, packageName),
   );
-  cache.set(packageId, rows);
-  writeFrameworkEntityCatalogCache(
-    sourceProject,
-    "di-interfaces",
-    packageId,
-    rows,
-  );
-  return rows;
 }
 
 export function readFrameworkDiInterfaceExportRows(
@@ -519,33 +407,21 @@ export function readFrameworkDiInterfaceExportRows(
   packageName: string,
   exportName: string,
 ): readonly FrameworkDiInterfaceExportRow[] {
-  const packageCache = diInterfaceRowsByPackageByProject
-    .get(sourceProject)
-    ?.get(packageId);
+  const packageCache = diInterfaceRowsByPackage.get(sourceProject, packageId);
   if (packageCache !== undefined) {
     return packageCache.filter(
       (row) => row.exportEntry.exportName === exportName,
     );
   }
-  const cache =
-    diInterfaceRowsByExportByProject.get(sourceProject) ??
-    new Map<string, readonly FrameworkDiInterfaceExportRow[]>();
-  if (!diInterfaceRowsByExportByProject.has(sourceProject)) {
-    diInterfaceRowsByExportByProject.set(sourceProject, cache);
-  }
   const key = `${packageId}:${exportName}`;
-  const cached = cache.get(key);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const rows = scanFrameworkDiInterfacePackageRows(
-    sourceProject,
-    packageId,
-    packageName,
-    exportName,
+  return diInterfaceRowsByExport.read(sourceProject, key, () =>
+    scanFrameworkDiInterfacePackageRows(
+      sourceProject,
+      packageId,
+      packageName,
+      exportName,
+    ),
   );
-  cache.set(key, rows);
-  return rows;
 }
 
 export function scanFrameworkDiInterfacePackageRows(
@@ -608,32 +484,22 @@ export function readFrameworkPublicExportSurface(
   sourceProject: SourceProject,
   packageId: string,
 ): FrameworkPublicExportSurface {
-  const cache =
-    publicExportSurfaceByPackageByProject.get(sourceProject) ??
-    new Map<string, FrameworkPublicExportSurface>();
-  if (!publicExportSurfaceByPackageByProject.has(sourceProject)) {
-    publicExportSurfaceByPackageByProject.set(sourceProject, cache);
-  }
-  const cached = cache.get(packageId);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const entries = readExportNames(
-    sourceProject,
-    {
-      scheme: SourceSelectorScheme.Package,
-      packageId,
-    },
-    {
-      limit: 100_000,
-      offset: 0,
-    },
-  ).exports;
-  const surface = {
-    exportsByName: new Map(entries.map((entry) => [entry.exportName, entry])),
-  };
-  cache.set(packageId, surface);
-  return surface;
+  return publicExportSurfaceByPackage.read(sourceProject, packageId, () => {
+    const entries = readExportNames(
+      sourceProject,
+      {
+        scheme: SourceSelectorScheme.Package,
+        packageId,
+      },
+      {
+        limit: 100_000,
+        offset: 0,
+      },
+    ).exports;
+    return {
+      exportsByName: new Map(entries.map((entry) => [entry.exportName, entry])),
+    };
+  });
 }
 
 export function exportedClassDeclarations(

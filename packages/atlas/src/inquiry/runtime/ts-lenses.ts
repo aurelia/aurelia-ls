@@ -33,6 +33,10 @@ import {
   NavigationRelation,
   type NavigationRouteClaim,
 } from "../navigation.js";
+import {
+  evidenceLimit,
+  pageOffset,
+} from "../paging.js";
 import type {
   SourceSelector,
   SourceTargetRow,
@@ -101,9 +105,9 @@ import {
   readSymbolIndex,
   readTypeFacts,
   rowForTarget,
-  sourceSelectorForRange,
   type SourceProject,
 } from "../../source/index.js";
+import { sourceSelectorFromInquiry as selectorFromInquiry } from "./source-selector.js";
 
 /** Value returned by the ts.source runtime lens. */
 export interface TsSourceValue {
@@ -921,177 +925,6 @@ export function answerTsType(
   );
 }
 
-function selectorFromInquiry(inquiry: Inquiry): SourceSelector {
-  const subjectSelector = selectorFromSubject(inquiry.subject);
-  if (subjectSelector !== null) {
-    return subjectSelector;
-  }
-
-  switch (inquiry.locus.kind) {
-    case LocusKind.SourceFile:
-      return {
-        scheme: SourceSelectorScheme.File,
-        filePath: inquiry.locus.filePath,
-      };
-    case LocusKind.SourceRange:
-      return sourceSelectorForRange(inquiry.locus.range);
-    case LocusKind.Symbol:
-      return {
-        scheme: SourceSelectorScheme.Declaration,
-        name: inquiry.locus.name,
-        ...(inquiry.locus.filePath === undefined
-          ? {}
-          : { filePath: inquiry.locus.filePath }),
-        ...(inquiry.locus.packageName === undefined
-          ? {}
-          : { packageName: inquiry.locus.packageName }),
-      };
-    case LocusKind.Package:
-      return {
-        scheme: SourceSelectorScheme.Package,
-        ...(inquiry.locus.packageId === undefined
-          ? {}
-          : { packageId: inquiry.locus.packageId }),
-        ...(inquiry.locus.packageName === undefined
-          ? {}
-          : { packageName: inquiry.locus.packageName }),
-      };
-    case LocusKind.Handle:
-      return selectorFromHandle(inquiry.locus.handle);
-    case LocusKind.Repo:
-    case LocusKind.RepoArea:
-    case LocusKind.GitTree:
-      return {
-        scheme: SourceSelectorScheme.Workspace,
-        ...(typeof inquiry.subject === "string"
-          ? { query: inquiry.subject }
-          : {}),
-      };
-  }
-}
-
-function selectorFromSubject(subject: unknown): SourceSelector | null {
-  if (
-    subject === null ||
-    typeof subject !== "object" ||
-    !("scheme" in subject)
-  ) {
-    return null;
-  }
-  const source = subject as Record<string, unknown>;
-  const scheme = source.scheme;
-  switch (scheme) {
-    case SourceSelectorScheme.Workspace:
-      return {
-        scheme,
-        ...(typeof source.query === "string" ? { query: source.query } : {}),
-      };
-    case SourceSelectorScheme.Package:
-      return {
-        scheme,
-        ...(typeof source.packageId === "string"
-          ? { packageId: source.packageId }
-          : {}),
-        ...(typeof source.packageName === "string"
-          ? { packageName: source.packageName }
-          : {}),
-      };
-    case SourceSelectorScheme.Directory:
-      return {
-        scheme,
-        path: stringField(source, "path"),
-        ...(typeof source.recursive === "boolean"
-          ? { recursive: source.recursive }
-          : {}),
-      };
-    case SourceSelectorScheme.File:
-      return { scheme, filePath: stringField(source, "filePath") };
-    case SourceSelectorScheme.Range:
-      return {
-        scheme,
-        filePath: stringField(source, "filePath"),
-        start: positionField(source, "start"),
-        end: positionField(source, "end"),
-      };
-    case SourceSelectorScheme.Position:
-      return {
-        scheme,
-        filePath: stringField(source, "filePath"),
-        ...positionFromRecord(source),
-      };
-    case SourceSelectorScheme.Token:
-      return {
-        scheme,
-        filePath: stringField(source, "filePath"),
-        text: stringField(source, "text"),
-        ...(typeof source.occurrence === "number"
-          ? { occurrence: source.occurrence }
-          : {}),
-      };
-    case SourceSelectorScheme.Declaration:
-      return {
-        scheme,
-        name: stringField(source, "name"),
-        ...(typeof source.kind === "string" ? { kind: source.kind } : {}),
-        ...(typeof source.packageId === "string"
-          ? { packageId: source.packageId }
-          : {}),
-        ...(typeof source.packageName === "string"
-          ? { packageName: source.packageName }
-          : {}),
-        ...(typeof source.filePath === "string"
-          ? { filePath: source.filePath }
-          : {}),
-        ...(typeof source.occurrence === "number"
-          ? { occurrence: source.occurrence }
-          : {}),
-      };
-    case SourceSelectorScheme.Export:
-      return {
-        scheme,
-        exportName: stringField(source, "exportName"),
-        ...(typeof source.packageId === "string"
-          ? { packageId: source.packageId }
-          : {}),
-        ...(typeof source.packageName === "string"
-          ? { packageName: source.packageName }
-          : {}),
-        ...(typeof source.filePath === "string"
-          ? { filePath: source.filePath }
-          : {}),
-      };
-    default:
-      return null;
-  }
-}
-
-function selectorFromHandle(handle: InquiryHandle): SourceSelector {
-  if (
-    handle.namespace === HandleNamespace.Source &&
-    handle.kind === HandleKind.SourceFile &&
-    "filePath" in handle
-  ) {
-    return {
-      scheme: SourceSelectorScheme.File,
-      filePath: String(handle.filePath),
-    };
-  }
-  if (
-    (handle.namespace === HandleNamespace.Symbol ||
-      handle.namespace === HandleNamespace.TypeScript) &&
-    "name" in handle
-  ) {
-    return {
-      scheme: SourceSelectorScheme.Declaration,
-      name: String(handle.name),
-      ...("filePath" in handle && typeof handle.filePath === "string"
-        ? { filePath: handle.filePath }
-        : {}),
-    };
-  }
-  return { scheme: SourceSelectorScheme.Workspace };
-}
-
 function createTypeScriptIdeGuide(
   sourceProject: SourceProject,
 ): TypeScriptIdeGuide {
@@ -1513,34 +1346,6 @@ function typeScriptGuideContinuations(
       ),
     },
   ];
-}
-
-function stringField(source: Record<string, unknown>, key: string): string {
-  const value = source[key];
-  return typeof value === "string" ? value : "";
-}
-
-function positionField(
-  source: Record<string, unknown>,
-  key: string,
-): { readonly line: number; readonly character: number } {
-  const value = source[key];
-  if (value === null || typeof value !== "object") {
-    return { line: 0, character: 0 };
-  }
-  return positionFromRecord(value as Record<string, unknown>);
-}
-
-function positionFromRecord(source: Record<string, unknown>): {
-  readonly line: number;
-  readonly character: number;
-} {
-  const line = source.line;
-  const character = source.character;
-  return {
-    line: typeof line === "number" ? line : 0,
-    character: typeof character === "number" ? character : 0,
-  };
 }
 
 function sourceSummary(
@@ -3063,7 +2868,6 @@ function sourceTextBasis(sourceProject: SourceProject): Basis {
     identity: sourceProject.snapshot().identity,
   };
 }
-
 function programBasis(sourceProject: SourceProject): Basis {
   return {
     kind: BasisKind.TypeScriptProgram,
@@ -3086,17 +2890,4 @@ function checkerBasis(sourceProject: SourceProject): Basis {
       "Answered from the current TypeScript TypeChecker held by the Atlas daemon.",
     identity: sourceProject.snapshot().identity,
   };
-}
-
-function pageOffset(inquiry: Inquiry): number {
-  const cursor = inquiry.page?.cursor;
-  if (cursor === undefined) {
-    return 0;
-  }
-  const parsed = Number.parseInt(cursor, 10);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function evidenceLimit(inquiry: Inquiry): number {
-  return clampBudget(inquiry.budget?.evidencePerSubject, 5, 20);
 }

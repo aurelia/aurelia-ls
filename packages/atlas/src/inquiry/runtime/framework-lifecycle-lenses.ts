@@ -20,11 +20,13 @@ import type {
   SourceProject,
   TypeScriptCallSiteEntry,
 } from "../../source/index.js";
-import { readTypeScriptCallSiteEntry } from "../../source/index.js";
+import {
+  readTypeScriptCallSiteEntry,
+  SourceProjectMemo,
+} from "../../source/index.js";
 import { OutcomeKind, createAnswer, type Answer } from "../answer.js";
 import { clampBudget } from "../budget.js";
 import {
-  ContinuationKind,
   ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
@@ -35,13 +37,9 @@ import {
   type Evidence,
 } from "../evidence.js";
 import type { Inquiry } from "../inquiry.js";
-import { LensId } from "../lens.js";
-import { LocusKind, RepoRootLocus, type SourceRange } from "../locus.js";
-import {
-  NavigationPlane,
-  NavigationRelation,
-  type NavigationRouteClaim,
-} from "../navigation.js";
+import type { SourceRange } from "../locus.js";
+import { PagedRowFamily } from "../paged-row-family.js";
+import { pageOffset } from "../paging.js";
 import {
   FrameworkBindingEffectKind,
   type FrameworkBindingEffectRow,
@@ -58,10 +56,7 @@ import {
 } from "./framework-resource-materialization.js";
 import {
   checkerBasis,
-  evidenceLimit,
-  pageInfo,
-  pageOffset,
-  pageRows,
+  countBy,
   sourceIndexBasis,
   sourceRangeForCallSiteEntry,
   sourceRangeFromFileSpan,
@@ -72,6 +67,13 @@ import {
   isNestedExecutionBoundary,
   propertyNameText,
 } from "./framework-ts-utils.js";
+import {
+  FrameworkRowContinuationBuilder,
+  FrameworkSemanticRouteBuilder,
+  nextPageContinuation,
+  projectionContinuation,
+} from "./framework-continuation-core.js";
+import { FrameworkSemanticRoutes } from "./framework-route-catalog.js";
 
 /** Controller lifecycle method declaration. */
 export interface FrameworkLifecycleControllerMethodRow {
@@ -132,6 +134,7 @@ export interface FrameworkLifecycleAppTaskExecutionRow {
   readonly executionKind: FrameworkLifecycleAppTaskExecutionKind;
   readonly slotName: string | null;
   readonly expressionText: string;
+  readonly target: FrameworkRelationshipEndpoint;
   readonly callSite?: TypeScriptCallSiteEntry;
   readonly source: SourceRange;
   readonly summary: string;
@@ -199,7 +202,7 @@ export interface FrameworkLifecycleValue {
   readonly relationships?: readonly FrameworkLifecycleRelationshipRow[];
 }
 
-interface FrameworkLifecycleFilters extends FrameworkDiscoveryFilters {
+export interface FrameworkLifecycleFilters extends FrameworkDiscoveryFilters {
   readonly lifecycleStage?: string;
   readonly participantKind?: string;
   readonly callKind?: string;
@@ -222,23 +225,74 @@ export interface FrameworkLifecycleAppTaskExecutionFilters {
   readonly query?: string;
 }
 
-const controllerLifecycleByProject = new WeakMap<
-  SourceProject,
+const controllerLifecycleMemo = new SourceProjectMemo<
   {
     readonly methods: readonly FrameworkLifecycleControllerMethodRow[];
     readonly calls: readonly FrameworkLifecycleControllerCallRow[];
   }
 >();
-
-const appTaskExecutionsByProject = new WeakMap<
-  SourceProject,
+const appTaskExecutionsMemo = new SourceProjectMemo<
   readonly FrameworkLifecycleAppTaskExecutionRow[]
 >();
-
-const hookDispatchesByProject = new WeakMap<
-  SourceProject,
+const hookDispatchesMemo = new SourceProjectMemo<
   readonly FrameworkLifecycleHookDispatchRow[]
 >();
+
+const LIFECYCLE_CONTROLLER_METHOD_ROW_FAMILY =
+  new PagedRowFamily<FrameworkLifecycleControllerMethodRow>({
+    id: "framework.lifecycle:controller-methods",
+    rowLabel: "framework lifecycle controller method row(s)",
+    evidenceForRow: evidenceForControllerMethod,
+    continuationsForPage: controllerMethodContinuations,
+  });
+
+const LIFECYCLE_CONTROLLER_CALL_ROW_FAMILY =
+  new PagedRowFamily<FrameworkLifecycleControllerCallRow>({
+    id: "framework.lifecycle:controller-calls",
+    rowLabel: "framework lifecycle controller call row(s)",
+    evidenceForRow: evidenceForControllerCall,
+    continuationsForPage: controllerCallContinuations,
+  });
+
+const LIFECYCLE_BINDING_EFFECT_ROW_FAMILY =
+  new PagedRowFamily<FrameworkBindingEffectRow>({
+    id: "framework.lifecycle:binding-effects",
+    rowLabel: "framework lifecycle binding effect row(s)",
+    evidenceForRow: evidenceForBindingEffect,
+    continuationsForPage: bindingEffectContinuations,
+  });
+
+const LIFECYCLE_RESOURCE_SITE_ROW_FAMILY =
+  new PagedRowFamily<FrameworkLifecycleResourceSiteRow>({
+    id: "framework.lifecycle:resource-sites",
+    rowLabel: "framework lifecycle resource materialization site row(s)",
+    evidenceForRow: evidenceForResourceSite,
+    continuationsForPage: resourceSiteContinuations,
+  });
+
+const LIFECYCLE_APP_TASK_ROW_FAMILY =
+  new PagedRowFamily<FrameworkLifecycleAppTaskExecutionRow>({
+    id: "framework.lifecycle:app-tasks",
+    rowLabel: "framework lifecycle AppTask execution row(s)",
+    evidenceForRow: evidenceForAppTaskExecution,
+    continuationsForPage: appTaskExecutionContinuations,
+  });
+
+const LIFECYCLE_HOOK_DISPATCH_ROW_FAMILY =
+  new PagedRowFamily<FrameworkLifecycleHookDispatchRow>({
+    id: "framework.lifecycle:hook-dispatches",
+    rowLabel: "framework lifecycle hook dispatch row(s)",
+    evidenceForRow: evidenceForHookDispatch,
+    continuationsForPage: hookDispatchContinuations,
+  });
+
+const LIFECYCLE_RELATIONSHIP_ROW_FAMILY =
+  new PagedRowFamily<FrameworkLifecycleRelationshipRow>({
+    id: "framework.lifecycle:relationships",
+    rowLabel: "framework lifecycle relationship row(s)",
+    evidenceForRow: evidenceForLifecycleRelationship,
+    continuationsForPage: relationshipContinuations,
+  });
 
 /** Answer framework.lifecycle inquiries from controller, binding, and resource lifecycle substrates. */
 export function answerFrameworkLifecycle(
@@ -291,95 +345,81 @@ export function answerFrameworkLifecycle(
 
   switch (projection) {
     case "controller-methods":
-      return lifecyclePageAnswer(
+      return lifecyclePagedAnswer(
         inquiry,
         sourceProject,
+        LIFECYCLE_CONTROLLER_METHOD_ROW_FAMILY,
         baseValue,
         controllerMethods,
         offset,
         limit,
         "controllerMethods",
-        "framework lifecycle controller method row(s)",
-        evidenceForControllerMethod,
-        controllerMethodContinuations,
       );
     case "controller-calls":
-      return lifecyclePageAnswer(
+      return lifecyclePagedAnswer(
         inquiry,
         sourceProject,
+        LIFECYCLE_CONTROLLER_CALL_ROW_FAMILY,
         baseValue,
         controllerCalls,
         offset,
         limit,
         "controllerCalls",
-        "framework lifecycle controller call row(s)",
-        evidenceForControllerCall,
-        controllerCallContinuations,
       );
     case "binding-effects":
-      return lifecyclePageAnswer(
+      return lifecyclePagedAnswer(
         inquiry,
         sourceProject,
+        LIFECYCLE_BINDING_EFFECT_ROW_FAMILY,
         baseValue,
         bindingEffects,
         offset,
         limit,
         "bindingEffects",
-        "framework lifecycle binding effect row(s)",
-        evidenceForBindingEffect,
-        bindingEffectContinuations,
       );
     case "resource-sites":
-      return lifecyclePageAnswer(
+      return lifecyclePagedAnswer(
         inquiry,
         sourceProject,
+        LIFECYCLE_RESOURCE_SITE_ROW_FAMILY,
         baseValue,
         resourceSites,
         offset,
         limit,
         "resourceSites",
-        "framework lifecycle resource materialization site row(s)",
-        evidenceForResourceSite,
-        resourceSiteContinuations,
       );
     case "app-tasks":
-      return lifecyclePageAnswer(
+      return lifecyclePagedAnswer(
         inquiry,
         sourceProject,
+        LIFECYCLE_APP_TASK_ROW_FAMILY,
         baseValue,
         appTaskExecutions,
         offset,
         limit,
         "appTaskExecutions",
-        "framework lifecycle AppTask execution row(s)",
-        evidenceForAppTaskExecution,
-        appTaskExecutionContinuations,
       );
     case "hook-dispatches":
-      return lifecyclePageAnswer(
+      return lifecyclePagedAnswer(
         inquiry,
         sourceProject,
+        LIFECYCLE_HOOK_DISPATCH_ROW_FAMILY,
         baseValue,
         hookDispatches,
         offset,
         limit,
         "hookDispatches",
-        "framework lifecycle hook dispatch row(s)",
-        evidenceForHookDispatch,
-        hookDispatchContinuations,
       );
     case "relationships":
-      return lifecyclePageAnswer(
+      return lifecyclePagedAnswer(
         inquiry,
         sourceProject,
+        LIFECYCLE_RELATIONSHIP_ROW_FAMILY,
         baseValue,
         relationships,
         offset,
         limit,
         "relationships",
-        "framework lifecycle relationship row(s)",
-        evidenceForLifecycleRelationship,
-        relationshipContinuations,
       );
     case "summary":
     default:
@@ -409,9 +449,46 @@ export function answerFrameworkLifecycle(
   }
 }
 
-function lifecyclePageAnswer<TRow>(
+/** Read normalized lifecycle relationship rows without projecting a lifecycle answer. */
+export function readFrameworkLifecycleRelationships(
+  sourceProject: SourceProject,
+  filters: FrameworkLifecycleFilters = {},
+): readonly FrameworkLifecycleRelationshipRow[] {
+  const controller = readControllerLifecycle(sourceProject);
+  const controllerMethods = controller.methods.filter((row) =>
+    controllerMethodMatches(row, filters),
+  );
+  const controllerCalls = controller.calls.filter((row) =>
+    controllerCallMatches(row, filters),
+  );
+  const bindingEffects = readFrameworkBindingEffects(
+    sourceProject,
+    filters,
+  ).filter(
+    (row) =>
+      row.effectKind === FrameworkBindingEffectKind.LifecycleMethod &&
+      bindingEffectMatches(row, filters),
+  );
+  const resourceSites = readLifecycleResourceSites(sourceProject, filters);
+  const appTaskExecutions = readLifecycleAppTaskExecutions(
+    sourceProject,
+    filters,
+  );
+  const hookDispatches = readLifecycleHookDispatches(sourceProject, filters);
+  return [
+    ...controllerMethods.map(controllerMethodRelationship),
+    ...controllerCalls.map(controllerCallRelationship),
+    ...bindingEffects.map(bindingEffectRelationship),
+    ...resourceSites.map(resourceSiteRelationship),
+    ...appTaskExecutions.map(appTaskExecutionRelationship),
+    ...hookDispatches.map(hookDispatchRelationship),
+  ].filter((row) => lifecycleRelationshipMatches(row, filters));
+}
+
+function lifecyclePagedAnswer<TRow>(
   inquiry: Inquiry,
   sourceProject: SourceProject,
+  rowFamily: PagedRowFamily<TRow>,
   baseValue: FrameworkLifecycleValue,
   rows: readonly TRow[],
   offset: number,
@@ -424,69 +501,42 @@ function lifecyclePageAnswer<TRow>(
     | "appTaskExecutions"
     | "hookDispatches"
     | "relationships",
-  label: string,
-  evidenceForRow: (row: TRow) => Evidence,
-  continuationsForRows: (
-    inquiry: Inquiry,
-    rows: readonly TRow[],
-    nextOffset: number | undefined,
-    limit: number,
-  ) => readonly Continuation[],
 ): Answer<FrameworkLifecycleValue> {
-  const page = pageRows(rows, offset, limit);
-  return createAnswer(
+  return rowFamily.answer({
     inquiry,
-    page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-    `Returned ${page.rows.length} of ${rows.length} ${label}.`,
-    {
-      value: {
+    rows,
+    offset,
+    limit,
+    basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
+    value: (page) =>
+      ({
         ...baseValue,
         [key]: page.rows,
-      } as FrameworkLifecycleValue,
-      basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
-      evidence: page.rows.slice(0, evidenceLimit(inquiry)).map(evidenceForRow),
-      page: pageInfo(
-        inquiry,
-        page.rows.length,
-        rows.length,
-        limit,
-        page.nextOffset,
-      ),
-      continuations: continuationsForRows(
-        inquiry,
-        page.rows,
-        page.nextOffset,
-        limit,
-      ),
-    },
-  );
+      }) as FrameworkLifecycleValue,
+  });
 }
 
 function readControllerLifecycle(sourceProject: SourceProject): {
   readonly methods: readonly FrameworkLifecycleControllerMethodRow[];
   readonly calls: readonly FrameworkLifecycleControllerCallRow[];
 } {
-  const cached = controllerLifecycleByProject.get(sourceProject);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const rows = sourceProject
-    .ownedSourceFiles()
-    .filter((sourceFile) =>
-      normalizePath(
-        sourceProject.sourceFileIdentity(sourceFile)?.repoPath ??
-          sourceFile.fileName,
-      ).endsWith("runtime-html/src/templating/controller.ts"),
-    )
-    .flatMap((sourceFile) =>
-      controllerLifecycleForSourceFile(sourceProject, sourceFile),
-    );
-  const value = {
-    methods: rows.flatMap((row) => row.methods),
-    calls: rows.flatMap((row) => row.calls),
-  };
-  controllerLifecycleByProject.set(sourceProject, value);
-  return value;
+  return controllerLifecycleMemo.read(sourceProject, () => {
+    const rows = sourceProject
+      .ownedSourceFiles()
+      .filter((sourceFile) =>
+        normalizePath(
+          sourceProject.sourceFileIdentity(sourceFile)?.repoPath ??
+            sourceFile.fileName,
+        ).endsWith("runtime-html/src/templating/controller.ts"),
+      )
+      .flatMap((sourceFile) =>
+        controllerLifecycleForSourceFile(sourceProject, sourceFile),
+      );
+    return {
+      methods: rows.flatMap((row) => row.methods),
+      calls: rows.flatMap((row) => row.calls),
+    };
+  });
 }
 
 function controllerLifecycleForSourceFile(
@@ -729,22 +779,19 @@ export function readLifecycleAppTaskExecutions(
   sourceProject: SourceProject,
   filters: FrameworkLifecycleAppTaskExecutionFilters,
 ): readonly FrameworkLifecycleAppTaskExecutionRow[] {
-  const cached = appTaskExecutionsByProject.get(sourceProject);
-  if (cached !== undefined) {
-    return cached.filter((row) => appTaskExecutionMatches(row, filters));
-  }
-  const rows = sourceProject
-    .ownedSourceFiles()
-    .filter((sourceFile) =>
-      normalizePath(
-        sourceProject.sourceFileIdentity(sourceFile)?.repoPath ??
-          sourceFile.fileName,
-      ).endsWith("runtime-html/src/app-root.ts"),
-    )
-    .flatMap((sourceFile) =>
-      appTaskExecutionsForSourceFile(sourceProject, sourceFile),
-    );
-  appTaskExecutionsByProject.set(sourceProject, rows);
+  const rows = appTaskExecutionsMemo.read(sourceProject, () =>
+    sourceProject
+      .ownedSourceFiles()
+      .filter((sourceFile) =>
+        normalizePath(
+          sourceProject.sourceFileIdentity(sourceFile)?.repoPath ??
+            sourceFile.fileName,
+        ).endsWith("runtime-html/src/app-root.ts"),
+      )
+      .flatMap((sourceFile) =>
+        appTaskExecutionsForSourceFile(sourceProject, sourceFile),
+      ),
+  );
   return rows.filter((row) => appTaskExecutionMatches(row, filters));
 }
 
@@ -861,6 +908,8 @@ function appTaskExecutionForNode(
       slotName: null,
       lifecycleStage: "slot-filter",
       expressionText: node.getText(sourceFile),
+      targetKind: FrameworkRelationshipEndpointKind.Concept,
+      targetName: "task.slot matches requested slot",
       summary:
         "AppRoot filters registered AppTasks by comparing task.slot to the requested lifecycle slot.",
     });
@@ -898,6 +947,8 @@ function appTaskExecutionForCall(
       slotName,
       lifecycleStage: slotName,
       expressionText: calleeText,
+      targetKind: FrameworkRelationshipEndpointKind.AppTask,
+      targetName: slotName,
       summary: `AppRoot invokes AppTask slot ${slotName}.`,
     });
   }
@@ -914,6 +965,8 @@ function appTaskExecutionForCall(
       slotName: null,
       lifecycleStage: "task-lookup",
       expressionText: calleeText,
+      targetKind: FrameworkRelationshipEndpointKind.DiKey,
+      targetName: "IAppTask",
       summary: "AppRoot reads all registered IAppTask entries from the container.",
     });
   }
@@ -929,6 +982,9 @@ function appTaskExecutionForCall(
       slotName: null,
       lifecycleStage: "task-run",
       expressionText: calleeText,
+      targetKind: FrameworkRelationshipEndpointKind.Method,
+      targetName: "task.run",
+      targetExpression: callSite.callee,
       summary:
         "AppRoot invokes task.run() after the task slot matched the requested lifecycle slot.",
     });
@@ -947,6 +1003,9 @@ function appTaskExecutionRow(input: {
   readonly slotName: string | null;
   readonly lifecycleStage: string;
   readonly expressionText: string;
+  readonly targetKind: FrameworkRelationshipEndpointKind;
+  readonly targetName: string;
+  readonly targetExpression?: TypeScriptCallSiteEntry["callee"];
   readonly summary: string;
 }): FrameworkLifecycleAppTaskExecutionRow {
   const source =
@@ -966,6 +1025,16 @@ function appTaskExecutionRow(input: {
     executionKind: input.executionKind,
     slotName: input.slotName,
     expressionText: input.expressionText,
+    target: {
+      kind: input.targetKind,
+      name: input.targetName,
+      packageId: input.file.packageId!,
+      packageName: input.packageName,
+      source,
+      ...(input.targetExpression === undefined
+        ? {}
+        : { expression: input.targetExpression }),
+    },
     ...(input.callSite === undefined ? {} : { callSite: input.callSite }),
     source,
     summary: input.summary,
@@ -999,22 +1068,19 @@ function readLifecycleHookDispatches(
   sourceProject: SourceProject,
   filters: FrameworkLifecycleFilters,
 ): readonly FrameworkLifecycleHookDispatchRow[] {
-  const cached = hookDispatchesByProject.get(sourceProject);
-  if (cached !== undefined) {
-    return cached.filter((row) => hookDispatchMatches(row, filters));
-  }
-  const rows = sourceProject
-    .ownedSourceFiles()
-    .filter((sourceFile) =>
-      normalizePath(
-        sourceProject.sourceFileIdentity(sourceFile)?.repoPath ??
-          sourceFile.fileName,
-      ).endsWith("runtime-html/src/templating/controller.ts"),
-    )
-    .flatMap((sourceFile) =>
-      hookDispatchesForSourceFile(sourceProject, sourceFile),
-    );
-  hookDispatchesByProject.set(sourceProject, rows);
+  const rows = hookDispatchesMemo.read(sourceProject, () =>
+    sourceProject
+      .ownedSourceFiles()
+      .filter((sourceFile) =>
+        normalizePath(
+          sourceProject.sourceFileIdentity(sourceFile)?.repoPath ??
+            sourceFile.fileName,
+        ).endsWith("runtime-html/src/templating/controller.ts"),
+      )
+      .flatMap((sourceFile) =>
+        hookDispatchesForSourceFile(sourceProject, sourceFile),
+      ),
+  );
   return rows.filter((row) => hookDispatchMatches(row, filters));
 }
 
@@ -1443,7 +1509,7 @@ function appTaskExecutionRelationship(
     packageId: row.packageId,
     packageName: row.packageName,
     from: methodEndpoint(row.className, row.methodName, row),
-    to: appTaskExecutionEndpoint(row),
+    to: row.target,
     source: row.source,
     sourceRowId: row.id,
     summary: row.summary,
@@ -1485,46 +1551,6 @@ function phaseForAppTaskExecution(
     case "deactivated":
     default:
       return FrameworkRelationshipPhase.Lifecycle;
-  }
-}
-
-function appTaskExecutionEndpoint(
-  row: FrameworkLifecycleAppTaskExecutionRow,
-): FrameworkRelationshipEndpoint {
-  switch (row.executionKind) {
-    case FrameworkLifecycleAppTaskExecutionKind.TaskCollectionLookup:
-      return {
-        kind: FrameworkRelationshipEndpointKind.DiKey,
-        name: "IAppTask",
-        packageId: row.packageId,
-        packageName: row.packageName,
-        source: row.source,
-      };
-    case FrameworkLifecycleAppTaskExecutionKind.TaskRun:
-      return {
-        kind: FrameworkRelationshipEndpointKind.Method,
-        name: "task.run",
-        packageId: row.packageId,
-        packageName: row.packageName,
-        source: row.source,
-        ...(row.callSite === undefined ? {} : { expression: row.callSite.callee }),
-      };
-    case FrameworkLifecycleAppTaskExecutionKind.SlotFilter:
-      return {
-        kind: FrameworkRelationshipEndpointKind.Concept,
-        name: "task.slot matches requested slot",
-        packageId: row.packageId,
-        packageName: row.packageName,
-        source: row.source,
-      };
-    case FrameworkLifecycleAppTaskExecutionKind.SlotInvocation:
-      return {
-        kind: FrameworkRelationshipEndpointKind.AppTask,
-        name: row.slotName ?? row.lifecycleStage,
-        packageId: row.packageId,
-        packageName: row.packageName,
-        source: row.source,
-      };
   }
 }
 
@@ -1875,30 +1901,35 @@ function lifecycleSummaryContinuations(inquiry: Inquiry): readonly Continuation[
       "framework.lifecycle:controller-methods",
       "controller-methods",
       "Inspect controller lifecycle method declarations.",
+      { basis: [], summary: "framework.lifecycle:controller-methods" },
     ),
     projectionContinuation(
       inquiry,
       "framework.lifecycle:resource-sites",
       "resource-sites",
       "Inspect resource materialization sites by lifecycle/world phase.",
+      { basis: [], summary: "framework.lifecycle:resource-sites" },
     ),
     projectionContinuation(
       inquiry,
       "framework.lifecycle:app-tasks",
       "app-tasks",
       "Inspect AppTask slot invocation, lookup, filtering, and run sites.",
+      { basis: [], summary: "framework.lifecycle:app-tasks" },
     ),
     projectionContinuation(
       inquiry,
       "framework.lifecycle:hook-dispatches",
       "hook-dispatches",
       "Inspect view-model and registered lifecycle hook dispatch sites.",
+      { basis: [], summary: "framework.lifecycle:hook-dispatches" },
     ),
     projectionContinuation(
       inquiry,
       "framework.lifecycle:relationships",
       "relationships",
       "Inspect normalized lifecycle relationships.",
+      { basis: [], summary: "framework.lifecycle:relationships" },
     ),
   ];
 }
@@ -1951,50 +1982,39 @@ function childControllerActivationContinuations(
         return [];
       }
       const evidence = evidenceForControllerCall(row);
+      const semanticRoute = new FrameworkSemanticRouteBuilder(
+        inquiry,
+        "framework.lifecycle:controller-calls",
+        index,
+        evidence,
+      );
       return [
-        {
-          id: `framework.lifecycle:controller-calls:controller-creations:${index}`,
-          kind: ContinuationKind.SwitchLens,
-          priority: ContinuationPriority.Primary,
-          rationale:
-            "Inspect renderer hydration rows that create and admit child controllers before activation.",
-          inquiry: {
-            lens: LensId.FrameworkRendering,
-            locus: RepoRootLocus,
-            projection: "controller-creations",
+        semanticRoute.continuation(
+          FrameworkSemanticRoutes.LifecycleToRenderingControllerCreations,
+          "controller-creations",
+          {
             filters: { packageId: row.packageId },
-            budget: inquiry.budget,
+            rationale:
+              "Inspect renderer hydration rows that create and admit child controllers before activation.",
+            routeSummary:
+              "Child activation back to renderer child-controller creation.",
           },
-          evidence: [evidence],
-          route: route(
-            NavigationPlane.Semantic,
-            NavigationRelation.ProvenanceOf,
-            "Child activation back to renderer child-controller creation.",
-          ),
-        },
-        {
-          id: `framework.lifecycle:controller-calls:child-admissions:${index}`,
-          kind: ContinuationKind.SwitchLens,
-          priority: ContinuationPriority.Secondary,
-          rationale:
-            "Inspect normalized rendering relationship rows for controller child admission.",
-          inquiry: {
-            lens: LensId.FrameworkRendering,
-            locus: RepoRootLocus,
-            projection: "relationships",
+        ),
+        semanticRoute.continuation(
+          FrameworkSemanticRoutes.LifecycleToRenderingRelationships,
+          "child-admissions",
+          {
             filters: {
               packageId: row.packageId,
               mechanism: FrameworkRelationshipMechanism.ControllerAddChild,
             },
-            budget: inquiry.budget,
+            rationale:
+              "Inspect normalized rendering relationship rows for controller child admission.",
+            routeSummary:
+              "Child activation back to controller child-admission relationships.",
+            priority: ContinuationPriority.Secondary,
           },
-          evidence: [evidence],
-          route: route(
-            NavigationPlane.Semantic,
-            NavigationRelation.ProvenanceOf,
-            "Child activation back to controller child-admission relationships.",
-          ),
-        },
+        ),
       ];
     });
 }
@@ -2020,6 +2040,7 @@ function bindingEffectContinuations(
       "framework.lifecycle:rendering-binding-effects",
       "binding-effects",
       "Stay in lifecycle rows filtered to binding effects.",
+      { basis: [], summary: "framework.lifecycle:binding-effects" },
     ),
   ];
 }
@@ -2040,28 +2061,27 @@ function resourceSiteContinuations(
       "Continue resource lifecycle site rows.",
       "Inspect the resource materialization site source.",
     ),
-    ...rows.slice(0, 3).map((row, index) => ({
-      id: `framework.lifecycle:resource-sites:materialization:${index}`,
-      kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Secondary,
-      rationale:
-        "Return to the resource materialization row that contributed this lifecycle site.",
-      inquiry: {
-        lens: LensId.FrameworkMaterialization,
-        locus: RepoRootLocus,
-        projection: "resource-instantiations",
-        filters: {
-          resourceKind: row.resourceKind,
-          resourceName: row.targetName ?? row.sourceExportName,
+    ...rows.slice(0, 3).map((row, index) =>
+      new FrameworkSemanticRouteBuilder(
+        inquiry,
+        "framework.lifecycle:resource-sites",
+        index,
+        evidenceForResourceSite(row),
+      ).continuation(
+        FrameworkSemanticRoutes.LifecycleToMaterializationResourceInstantiations,
+        "materialization",
+        {
+          filters: {
+            resourceKind: row.resourceKind,
+            resourceName: row.targetName ?? row.sourceExportName,
+          },
+          rationale:
+            "Return to the resource materialization row that contributed this lifecycle site.",
+          routeSummary: "Resource lifecycle site back to materialization row.",
+          priority: ContinuationPriority.Secondary,
         },
-      },
-      evidence: [evidenceForResourceSite(row)],
-      route: route(
-        NavigationPlane.Semantic,
-        NavigationRelation.ProvenanceOf,
-        "Resource lifecycle site back to materialization row.",
       ),
-    })),
+    ),
   ];
 }
 
@@ -2081,28 +2101,27 @@ function appTaskExecutionContinuations(
       "Continue AppTask execution rows.",
       "Inspect the AppTask execution source.",
     ),
-    ...rows.slice(0, 3).map((row, index) => ({
-      id: `framework.lifecycle:app-tasks:catalog:${index}`,
-      kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Secondary,
-      rationale:
-        "Return to the AppTask/lifecycle task entity catalog behind this execution site.",
-      inquiry: {
-        lens: LensId.FrameworkDiscovery,
-        locus: RepoRootLocus,
-        projection: "app-tasks",
-        filters: {
-          packageId: row.packageId,
-          query: row.slotName ?? "IAppTask",
+    ...rows.slice(0, 3).map((row, index) =>
+      new FrameworkSemanticRouteBuilder(
+        inquiry,
+        "framework.lifecycle:app-tasks",
+        index,
+        evidenceForAppTaskExecution(row),
+      ).continuation(
+        FrameworkSemanticRoutes.LifecycleToDiscoveryAppTasks,
+        "catalog",
+        {
+          filters: {
+            packageId: row.packageId,
+            query: row.slotName ?? "IAppTask",
+          },
+          rationale:
+            "Return to the AppTask/lifecycle task entity catalog behind this execution site.",
+          routeSummary: "AppTask execution site back to AppTask entity catalog.",
+          priority: ContinuationPriority.Secondary,
         },
-      },
-      evidence: [evidenceForAppTaskExecution(row)],
-      route: route(
-        NavigationPlane.Semantic,
-        NavigationRelation.ProvenanceOf,
-        "AppTask execution site back to AppTask entity catalog.",
       ),
-    })),
+    ),
   ];
 }
 
@@ -2122,29 +2141,24 @@ function hookDispatchContinuations(
       "Continue lifecycle hook dispatch rows.",
       "Inspect the lifecycle hook dispatch source.",
     ),
-    ...rows.slice(0, 3).map((row, index) => ({
-      id: `framework.lifecycle:hook-dispatches:relationships:${index}`,
-      kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Secondary,
-      rationale:
+    ...rows.slice(0, 3).map((row, index) =>
+      projectionContinuation(
+        inquiry,
+        `framework.lifecycle:hook-dispatches:relationships:${index}`,
+        "relationships",
         "Inspect normalized lifecycle relationships for this hook dispatch lane.",
-      inquiry: {
-        ...inquiry,
-        projection: "relationships",
-        filters: {
-          ...inquiry.filters,
-          participantKind: row.participantKind,
-          hookName: row.hookName,
+        {
+          filters: {
+            ...inquiry.filters,
+            participantKind: row.participantKind,
+            hookName: row.hookName,
+          },
+          evidence: evidenceForHookDispatch(row),
+          priority: ContinuationPriority.Secondary,
+          summary: "Lifecycle hook dispatch row to relationship projection.",
         },
-        page: undefined,
-      },
-      evidence: [evidenceForHookDispatch(row)],
-      route: route(
-        NavigationPlane.Semantic,
-        NavigationRelation.ProjectionOf,
-        "Lifecycle hook dispatch row to relationship projection.",
       ),
-    })),
+    ),
   ];
 }
 
@@ -2176,80 +2190,33 @@ function rowSourceContinuations<TRow extends { readonly source: SourceRange }>(
 ): readonly Continuation[] {
   const continuations: Continuation[] = [];
   if (nextOffset !== undefined) {
-    continuations.push({
-      id: `${idPrefix}:next-page`,
-      kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Secondary,
-      rationale: nextPageRationale,
-      inquiry: {
-        ...inquiry,
-        page: { size: limit, cursor: String(nextOffset) },
-      },
-    });
+    continuations.push(
+      nextPageContinuation(
+        inquiry,
+        `${idPrefix}:next-page`,
+        nextPageRationale,
+        nextOffset,
+        limit,
+        { priority: ContinuationPriority.Secondary },
+      ),
+    );
   }
   for (const [index, row] of rows.slice(0, 3).entries()) {
-    continuations.push({
-      id: `${idPrefix}:source:${index}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Primary,
-      rationale: sourceRationale,
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: { kind: LocusKind.SourceRange, range: row.source },
-        projection: "text",
-      },
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.SourceFor,
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      idPrefix,
+      index,
+    );
+    continuations.push(
+      builder.source(
+        "source",
+        row.source,
+        sourceRationale,
         "Source for lifecycle row.",
       ),
-    });
+    );
   }
   return continuations;
-}
-
-function projectionContinuation(
-  inquiry: Inquiry,
-  id: string,
-  projection: string,
-  rationale: string,
-): Continuation {
-  return {
-    id,
-    kind: ContinuationKind.SwitchProjection,
-    priority: ContinuationPriority.Primary,
-    rationale,
-    inquiry: {
-      ...inquiry,
-      projection,
-      page: undefined,
-    },
-    route: route(
-      NavigationPlane.Semantic,
-      NavigationRelation.ProjectionOf,
-      `framework.lifecycle:${projection}`,
-    ),
-  };
-}
-
-function route(
-  plane: NavigationPlane,
-  relation: NavigationRelation,
-  summary: string,
-): NavigationRouteClaim {
-  return { plane, relation, basis: [], summary };
-}
-
-function countBy<TValue>(
-  values: readonly TValue[],
-  key: (value: TValue) => string,
-): Readonly<Record<string, number>> {
-  const counts: Record<string, number> = {};
-  for (const value of values) {
-    const bucket = key(value);
-    counts[bucket] = (counts[bucket] ?? 0) + 1;
-  }
-  return counts;
 }
 
 function normalizePath(path: string): string {

@@ -2,6 +2,7 @@ import {
   readCallHierarchy,
   readCallSites,
   sourceSelectorForRange,
+  SourceProjectMemo,
   type SourceDeclarationKind,
   type SourceDeclarationRow,
   type SourceFileIdentity,
@@ -198,51 +199,32 @@ export interface FrameworkDiscoverySeedIndex {
   readonly rollup: FrameworkDiscoverySeedIndexRollup;
 }
 
-const seedIndexByProject = new WeakMap<SourceProject, FrameworkDiscoverySeedIndex>();
-const indexByProject = new WeakMap<SourceProject, FrameworkDiscoveryIndex>();
+const seedIndexMemo = new SourceProjectMemo<FrameworkDiscoverySeedIndex>();
+const discoveryIndexMemo = new SourceProjectMemo<FrameworkDiscoveryIndex>();
 
 interface FrameworkDiscoveryBuildContext {
   readonly callHierarchyByCandidate: Map<string, readonly TypeScriptCallHierarchyEdge[]>;
   readonly callSitesBySpan: Map<string, readonly TypeScriptCallSiteEntry[]>;
 }
 
-/** Build or read the cached framework discovery seed index for one hot source project. */
+/** Build or read the memoized framework discovery seed index for one hot source project. */
 export function readFrameworkDiscoverySeedIndex(
   /** Hot source project held by the Atlas daemon. */
   sourceProject: SourceProject,
 ): FrameworkDiscoverySeedIndex {
-  const cached = seedIndexByProject.get(sourceProject);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const index = createFrameworkDiscoverySeedIndex(sourceProject);
-  seedIndexByProject.set(sourceProject, index);
-  return index;
+  return seedIndexMemo.read(sourceProject, () =>
+    createFrameworkDiscoverySeedIndex(sourceProject),
+  );
 }
 
-/** Build or read the cached framework discovery index for one hot source project. */
+/** Build or read the memoized framework discovery index for one hot source project. */
 export function readFrameworkDiscoveryIndex(
   /** Hot source project held by the Atlas daemon. */
   sourceProject: SourceProject,
 ): FrameworkDiscoveryIndex {
-  const cached = indexByProject.get(sourceProject);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const index = createFrameworkDiscoveryIndex(sourceProject);
-  indexByProject.set(sourceProject, index);
-  return index;
-}
-
-/** Force stable framework discovery seed rows to materialize during daemon boot. */
-export function prewarmFrameworkDiscoveryIndex(
-  /** Hot source project held by the Atlas daemon. */
-  sourceProject: SourceProject,
-): void {
-  readFrameworkDiscoverySeedIndex(sourceProject);
-  if (process.env.ATLAS_PREWARM_FRAMEWORK_FLOW === "1") {
-    readFrameworkDiscoveryIndex(sourceProject);
-  }
+  return discoveryIndexMemo.read(sourceProject, () =>
+    createFrameworkDiscoveryIndex(sourceProject),
+  );
 }
 
 /** Convert a framework anchor candidate span to an inquiry source range. */

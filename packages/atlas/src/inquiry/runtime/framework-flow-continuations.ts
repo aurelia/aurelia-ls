@@ -21,6 +21,7 @@ import { LensId } from "../lens.js";
 import { LocusKind, RepoRootLocus } from "../locus.js";
 import { NavigationPlane, NavigationRelation } from "../navigation.js";
 import {
+  FrameworkRowContinuationBuilder,
   nextPageContinuation,
   projectionContinuation,
 } from "./framework-continuation-core.js";
@@ -239,29 +240,22 @@ export function flowSeedContinuations(
     const firstCandidate = seed.candidates[0];
     const evidence = evidenceForFlowSeed(seed);
     if (firstCandidate !== undefined) {
-      continuations.push({
-        id: `framework.discovery:flow-seeds:source:${index}`,
-        kind: ContinuationKind.InspectEvidence,
-        priority: ContinuationPriority.Primary,
-        rationale:
+      const source = sourceRangeForFrameworkAnchorCandidate(firstCandidate);
+      const builder = new FrameworkRowContinuationBuilder(
+        inquiry,
+        "framework.discovery:flow-seeds",
+        index,
+        evidence,
+      );
+      continuations.push(
+        builder.source(
+          "source",
+          source,
           "Inspect the source declaration that currently seeds this framework flow.",
-        inquiry: {
-          lens: LensId.TsSource,
-          locus: {
-            kind: LocusKind.SourceRange,
-            range: sourceRangeForFrameworkAnchorCandidate(firstCandidate),
-          },
-          projection: "text",
-          budget: inquiry.budget,
-        },
-        evidence: [evidence],
-        route: route(
-          NavigationPlane.Inspection,
-          NavigationRelation.SourceFor,
-          [BasisKind.SourceText, BasisKind.TypeScriptProgram],
           "Source declaration that seeds a framework flow.",
+          { basis: [BasisKind.SourceText, BasisKind.TypeScriptProgram] },
         ),
-      });
+      );
       continuations.push({
         id: `framework.discovery:flow-seeds:call-hierarchy:${index}`,
         kind: ContinuationKind.SwitchLens,
@@ -272,7 +266,7 @@ export function flowSeedContinuations(
           lens: LensId.TsType,
           locus: {
             kind: LocusKind.SourceRange,
-            range: sourceRangeForFrameworkAnchorCandidate(firstCandidate),
+            range: source,
           },
           projection: "call-hierarchy",
           budget: inquiry.budget,
@@ -361,6 +355,12 @@ export function callEdgeContinuations(
       continue;
     }
     const evidence = evidenceForCallEdge(row);
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.discovery:call-edges",
+      index,
+      evidence,
+    );
     continuations.push({
       id: `framework.discovery:call-edges:call-sites:${index}`,
       kind: ContinuationKind.SwitchLens,
@@ -389,45 +389,21 @@ export function callEdgeContinuations(
         "Exact call-site facts behind a framework flow call edge.",
       ),
     });
-    continuations.push({
-      id: `framework.discovery:call-edges:source:${index}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Primary,
-      rationale:
+    continuations.push(
+      builder.source(
+        "source",
+        source,
         "Inspect the source call site behind this framework flow call edge.",
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: { kind: LocusKind.SourceRange, range: source },
-        projection: "text",
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.SourceFor,
-        [BasisKind.SourceText, BasisKind.TypeScriptProgram],
         "Source call site behind a framework flow call edge.",
+        { basis: [BasisKind.SourceText, BasisKind.TypeScriptProgram] },
       ),
-    });
-    continuations.push({
-      id: `framework.discovery:call-edges:type:${index}`,
-      kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Secondary,
-      rationale: "Inspect TypeChecker facts for this framework flow call site.",
-      inquiry: {
-        lens: LensId.TsType,
-        locus: { kind: LocusKind.SourceRange, range: source },
-        projection: "facts",
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.TypeFactsFor,
-        [BasisKind.TypeScriptChecker],
+      builder.typeFacts(
+        "type",
+        source,
+        "Inspect TypeChecker facts for this framework flow call site.",
         "Type facts for a framework flow call edge.",
       ),
-    });
+    );
   }
   return continuations;
 }
@@ -536,45 +512,27 @@ export function callSiteContinuations(
   for (const [index, row] of callSites.slice(0, 3).entries()) {
     const source = sourceRangeForFrameworkFlowCallSite(row);
     const evidence = evidenceForCallSite(row);
-    continuations.push({
-      id: `framework.discovery:call-sites:source:${index}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Primary,
-      rationale: "Inspect source behind this exact framework flow call site.",
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: { kind: LocusKind.SourceRange, range: source },
-        projection: "text",
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.SourceFor,
-        [BasisKind.SourceText, BasisKind.TypeScriptProgram],
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.discovery:call-sites",
+      index,
+      evidence,
+    );
+    continuations.push(
+      builder.source(
+        "source",
+        source,
+        "Inspect source behind this exact framework flow call site.",
         "Source range behind an exact framework flow call site.",
+        { basis: [BasisKind.SourceText, BasisKind.TypeScriptProgram] },
       ),
-    });
-    continuations.push({
-      id: `framework.discovery:call-sites:type:${index}`,
-      kind: ContinuationKind.SwitchLens,
-      priority: ContinuationPriority.Secondary,
-      rationale:
+      builder.typeFacts(
+        "type",
+        source,
         "Inspect TypeChecker facts for this exact framework flow call site.",
-      inquiry: {
-        lens: LensId.TsType,
-        locus: { kind: LocusKind.SourceRange, range: source },
-        projection: "facts",
-        budget: inquiry.budget,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.TypeFactsFor,
-        [BasisKind.TypeScriptChecker],
         "Type facts for an exact framework flow call site.",
       ),
-    });
+    );
   }
   return continuations;
 }

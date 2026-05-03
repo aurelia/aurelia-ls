@@ -2,9 +2,9 @@
 
 This folder is the Aurelia-specific framework discovery workbench for Atlas.
 
-The goal is not to hand-write an Aurelia model from memory. The goal is to let Atlas pay a heavy boot/indexing cost,
-then use exact inquiry continuations to uncover the Aurelia framework until queries become cheap enough that the model
-can refine itself.
+The goal is not to hand-write an Aurelia model from memory. The goal is to let Atlas pay exact source/indexing costs
+at the owning substrate, then use exact inquiry continuations to uncover the Aurelia framework until queries become
+cheap enough that the model can refine itself.
 
 ## Direction
 
@@ -27,7 +27,7 @@ Those questions should become cheap continuations, not ad hoc source reads.
 2. Use `ts.source`, `ts.structure`, `ts.type`, and `bridge.aulink` to inspect exact source and type evidence.
 3. Add evaluator readers only when TypeScript evidence stops short of runtime/world-construction meaning.
 4. Record unresolved dynamic behavior as open seams instead of filling gaps with naming guesses.
-5. Promote discovered routes into boot-time indexes when they become stable and repeatedly useful.
+5. Promote discovered routes into named substrate indexes when they become stable and repeatedly useful.
 6. Let the improved index expose higher-quality continuations, then repeat.
 
 The shape is intentionally iterative: better anchors make better route reads possible; better route reads reveal better
@@ -37,13 +37,10 @@ anchors; better anchors make future product modeling cheaper.
 
 - [discovery-seeds.ts](discovery-seeds.ts) contains the typed discovery seed contract: semantic domains, framework flows, generic navigation relations,
   provisional seed anchors, and open discovery questions.
-- [discovery-index.ts](discovery-index.ts) joins the discovery seeds to the daemon-prewarmed source declaration index so
+- [discovery-index.ts](discovery-index.ts) joins the discovery seeds to the hot source declaration index so
   framework anchors resolve to exact source candidates at boot. It also derives source-bound flow seed rows and
   first-page call-hierarchy edges for those seeds, expands those edges into exact call-site argument rows, and exposes
   grouped call targets through the discovery lens.
-- [json-cache.ts](json-cache.ts) owns the JSON cache used to hydrate expensive derived framework atoms after daemon
-  restart. [JSON-CACHE.md](JSON-CACHE.md) records the storage contract, invalidation keys, entity-family inclusion
-  policy, trade-offs, and falsifiers.
 - [relationships.ts](relationships.ts) defines the shared relationship atom axes: family, relation, mechanism, phase,
   evidence basis, closure, source endpoints, and optional TypeChecker-backed call evidence. Lenses should derive
   corridors from these atoms instead of inventing projection-local graph shapes.
@@ -60,26 +57,49 @@ anchors; better anchors make future product modeling cheaper.
   rows now use the shared framework relationship relation/mechanism/phase/endpoint axes from
   [relationships.ts](relationships.ts), while still staying separate from DI relationship atoms because "a value is
   offered to registration" is not the same fact as "a resolver exists" or "a key materializes through a provider".
+  Admission rows deliberately use the generic `admits-value` relation; admitted target taxonomy lives on the typed
+  endpoint kind and the original bundle association kind.
+- [admission-world.ts](admission-world.ts) defines the admission-to-materialization and admission-to-world-formation
+  axes, row shape, and admission-only boundary interpreter. The runtime admission lens spends these primitives into
+  materialization and lifecycle joins instead of owning the world-formation taxonomy locally.
 - [di-index.ts](di-index.ts) is the first relationship atom producer. It starts inside the Aurelia kernel DI mechanics,
-  discovers exported framework `createInterface` keys across admitted packages, records default provider/alias targets
+  discovers exported framework `createInterface` keys across admitted packages, including TypeChecker-resolved
+  package-local aliases such as `rtCreateInterface` and `tcCreateInterface`, records default provider/alias targets
   when builder callbacks expose them, records TypeChecker-qualified `Registration.*` provider/alias targets across
-  admitted packages, and records kernel registration, lookup, resolver, slot, factory, and construction atoms with
+  admitted packages, follows package-local registration-factory aliases, recognizes `createImplementationRegister`
+  class providers, and records kernel registration, lookup, resolver, slot, factory, and construction atoms with
   source-backed evidence.
+- [module-boot.ts](module-boot.ts) builds linked evaluator module graphs for Aurelia framework packages. Package imports
+  such as `@aurelia/runtime` resolve to framework `src/index.ts` and relative source modules, not to generated
+  declaration files. This is the framework-specific layer above the generic evaluator.
+- [di-world.ts](di-world.ts) spends booted configuration/registry values into an abstract container world. The first
+  seeded world is `runtime-html:StandardConfiguration`; it expands register spreads, nested registry objects,
+  registration helpers, `createImplementationRegister` classes, resource fallback slots, and provider dependency reads.
+  It follows requested `createInterface` defaults, TypeChecker-backed container aliases/properties, bounded same-file
+  helper calls, and dynamic registrable metadata such as renderer helpers. It is exposed through `framework.di:world`,
+  `framework.di:dependencies`, and concrete StandardConfiguration materialization routes/dependency joins.
 - [../inquiry/runtime/framework-lenses.ts](../inquiry/runtime/framework-lenses.ts) is the stable facade for
   `framework.discovery`, `framework.compiler`, and `framework.rendering`. The implementation now lives in narrower
   runtime modules for answer orchestration, entity catalogs, bundle classification, compiler instruction production,
   rendering syntax/instruction/binding phases, evidence, filters, and continuations.
+- [../inquiry/runtime/framework-continuation-core.ts](../inquiry/runtime/framework-continuation-core.ts) owns shared
+  framework continuation builders. Semantic route specs describe stable framework row-to-lens topology; row
+  continuation builders describe repeated source/type/call-site inspection moves without rebuilding those objects in
+  every lens. Generic projection and next-page continuations also live here so basis, priority, evidence, and route
+  summaries are expressed once instead of copied through local helper functions. Answer-local object literals should
+  remain only when the route is provenance, flow, narrowing, or another genuinely different semantic move.
+  Narrowing continuations should claim `NavigationRelation.RefinementOf`, not `ProjectionOf`.
 - [../inquiry/runtime/framework-di-lenses.ts](../inquiry/runtime/framework-di-lenses.ts) exposes the `framework.di`
   lens over the DI relationship atom index.
 - [../inquiry/runtime/framework-materialization-lenses.ts](../inquiry/runtime/framework-materialization-lenses.ts)
-  exposes first-pass DI provider materialization routes derived from DI relationship atoms, including exact container
-  dependency calls observed inside callback providers, dependency policy classes, and graph relationships from keys to
-  providers, dependency keys, and key instantiation sites. The `instantiations` projection answers where a DI key can
+  exposes first-pass DI provider materialization routes derived from DI relationship atoms and concrete DI-world slots,
+  including exact container dependency calls observed inside callback providers, dependency policy classes, and graph
+  relationships from keys to providers, dependency keys, and key instantiation sites. The `instantiations` projection answers where a DI key can
   enter runtime existence by joining the provider route to source-backed provider evidence and the low-level Aurelia
   factory/constructor sites involved in constructable routes. The `resource-instantiations` projection gives the
   parallel resource answer from source-backed resource carriers to runtime/compiler/evaluator materialization sites,
   including CE/CA/TC view-model construction, VC/BB expression evaluator lookup/application, BC compiler resolution/build,
-  and resource-kind DI registration/lookup seams.
+  AP compiler parser registry/handler resolution, and resource-kind DI registration/lookup seams.
 - [../inquiry/runtime/framework-resource-lenses.ts](../inquiry/runtime/framework-resource-lenses.ts) exposes the
   `framework.resources` convergence lens. It joins resource carriers to public exports, evaluated bundle admissions,
   syntax products, and materialization lanes while keeping known resource evidence separate from final runtime
@@ -98,6 +118,19 @@ anchors; better anchors make future product modeling cheaper.
   lifecycle, and observation catalogs. The row shape uses shared framework relation/mechanism/phase/endpoints, while the
   relation/mechanism/phase filters stay local to the relationship projection instead of widening the broad discovery
   filter bag.
+- [../inquiry/runtime/framework-route-catalog.ts](../inquiry/runtime/framework-route-catalog.ts) declares the current
+  framework semantic route topology. Prefer adding a named route spec there over rebuilding target lens/projection,
+  relation, basis, and navigation spec bundles in answer-local code. `atlas.self:semantic-routes` exposes the declared
+  topology, while `atlas.self:continuations` exposes row-local instantiations.
+- [../inquiry/runtime/framework-composition-lenses.ts](../inquiry/runtime/framework-composition-lenses.ts) exposes
+  `framework.composition`, an actor-centered view over auLink anchors and framework relationship rows. It uses the
+  shared signed-claim answer shape from [../inquiry/composition.ts](../inquiry/composition.ts), so class/interface
+  questions can ask for actors and claims before choosing a narrower phase lens.
+- [../inquiry/runtime/framework-di-graph.ts](../inquiry/runtime/framework-di-graph.ts) builds the graph-shaped DI view
+  used by `framework.di` projections `graph` and `dag`. It keeps semantic-runtime's product split visible: registration
+  admission is not container ownership, container-owned resolver/self/resource slots are not lookup answers, and
+  materialization/dependency edges are not the same as key declaration. The DAG projection is SCC collapse over exact
+  key-to-key alias/dependency edges; open lookup expressions stay outside the DAG as `key-expression` nodes.
 - [../inquiry/runtime/framework-lifecycle-lenses.ts](../inquiry/runtime/framework-lifecycle-lenses.ts) exposes the
   `framework.lifecycle` lens over controller lifecycle methods/calls, binding lifecycle effects, and resource
   materialization sites. It keeps lifecycle stage, participant kind, relation, mechanism, and framework phase separate
@@ -125,6 +158,9 @@ anchors; better anchors make future product modeling cheaper.
   resources to visible DI/resource materialization rows without claiming that admission is container execution. Its
   `world-formation` projection is the next derived view: it spends visible materialization and AppTask execution
   evidence while keeping registry/catalog/factory admissions as distinct downstream questions.
+- [../inquiry/runtime/framework-admission-continuations.ts](../inquiry/runtime/framework-admission-continuations.ts)
+  owns the semantic continuation policy for admission rows. Relationship-to-lens route choices live there as a named
+  planner surface, while the answerer keeps projection orchestration, paging, evidence shaping, and filtering.
 - Future files in this folder should own Aurelia-specific semantic indexes over the hot source project, such as DI,
   app/world formation, compiler, rendering, lifecycle, resource, plugin, and reactivity indexes.
 - The generic ECMAScript evaluator remains in [../evaluation](../evaluation/README.md). Aurelia-specific meaning belongs

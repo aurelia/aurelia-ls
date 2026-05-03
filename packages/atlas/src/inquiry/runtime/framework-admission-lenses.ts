@@ -1,18 +1,22 @@
 import {
   FRAMEWORK_ADMISSION_RELATIONSHIP_VERSION,
+  FrameworkBundleAssociationKind,
   classifyFrameworkAdmissionAssociation,
   type FrameworkAdmissionRelationshipRow,
 } from "../../framework/admission.js";
 import {
+  FrameworkAdmissionMaterializationLinkKind,
+  FrameworkAdmissionWorldFormationStatus,
+  type FrameworkAdmissionWorldFormationRow,
+} from "../../framework/admission-world.js";
+import {
   FrameworkRelationshipClosure,
   FrameworkRelationshipEndpointKind,
-  FrameworkRelationshipRelation,
   type FrameworkRelationshipEndpoint,
 } from "../../framework/relationships.js";
 import {
   AURELIA_FRAMEWORK_PACKAGE_IDS,
   type SourceProject,
-  type SourceSpan,
   type SourceTargetRow,
 } from "../../source/index.js";
 import { OutcomeKind, createAnswer, type Answer } from "../answer.js";
@@ -39,23 +43,49 @@ import {
 } from "../evidence.js";
 import type { Inquiry } from "../inquiry.js";
 import { LensId } from "../lens.js";
-import { LocusKind, type SourceRange } from "../locus.js";
+import type { SourceRange } from "../locus.js";
+import {
+  evidenceLimit,
+  pageOffset,
+} from "../paging.js";
 import {
   NavigationPlane,
   NavigationRelation,
-  type NavigationRouteClaim,
 } from "../navigation.js";
 import {
-  FrameworkAdmissionMaterializationLinkKind,
   readFrameworkAdmissionMaterializationLinks,
   type FrameworkAdmissionMaterializationLinkRow,
 } from "./framework-admission-materialization.js";
+import { frameworkAdmissionContinuationPlanner } from "./framework-admission-continuations.js";
 import {
-  FrameworkAdmissionWorldFormationKind,
-  FrameworkAdmissionWorldFormationStatus,
+  FrameworkRowContinuationBuilder,
+  FrameworkSemanticRouteBuilder,
+  nextPageContinuation,
+  projectionContinuation,
+} from "./framework-continuation-core.js";
+import {
   readFrameworkAdmissionWorldFormationRows,
-  type FrameworkAdmissionWorldFormationRow,
 } from "./framework-admission-world-formation.js";
+import {
+  FrameworkAdmissionFlowCorridor,
+  readFrameworkAdmissionFlow,
+  type FrameworkAdmissionFlowEdgeRow,
+  type FrameworkAdmissionFlowEdgeSummaryRow,
+  type FrameworkAdmissionFlowNodeRow,
+  type FrameworkAdmissionFlowValue,
+} from "./framework-admission-flow.js";
+import {
+  FRAMEWORK_JIT_COMPILER_ACTOR,
+  frameworkTemplateCompilerFilters,
+} from "./framework-jit-compiler-corridor.js";
+import { PagedRowFamily } from "../paged-row-family.js";
+import { FrameworkSemanticRoutes } from "./framework-route-catalog.js";
+import {
+  countBy,
+  route,
+  sourceRangeForCallSiteEntry,
+  sourceRangeForTarget,
+} from "./framework-support.js";
 import { readFrameworkBundles } from "./framework-bundles.js";
 import {
   type FrameworkBundleAssociationRow,
@@ -81,6 +111,8 @@ export interface FrameworkAdmissionBundleSummaryRow {
   readonly relationshipCount: number;
   /** Relationship counts by semantic admission relation. */
   readonly relations: Readonly<Record<string, number>>;
+  /** Relationship counts by admitted target endpoint kind. */
+  readonly endpointKinds: Readonly<Record<string, number>>;
   /** Counts by source bundle association kind. */
   readonly associationKinds: Readonly<Record<string, number>>;
   /** Best source anchor for the bundle or its first retained association. */
@@ -105,6 +137,8 @@ export interface FrameworkAdmissionValue {
   readonly mechanisms: Readonly<Record<string, number>>;
   /** Relationship counts grouped by world phase. */
   readonly phases: Readonly<Record<string, number>>;
+  /** Relationship counts grouped by admitted target endpoint kind. */
+  readonly endpointKinds: Readonly<Record<string, number>>;
   /** Relationship counts grouped by original bundle association kind. */
   readonly associationKinds: Readonly<Record<string, number>>;
   /** Bundle/configuration summary rows returned by bundle projections. */
@@ -129,6 +163,8 @@ export interface FrameworkAdmissionValue {
   readonly worldFormationStatuses?: Readonly<Record<string, number>>;
   /** Admission-to-world-formation rows returned by world-formation projections. */
   readonly worldFormations?: readonly FrameworkAdmissionWorldFormationRow[];
+  /** Configuration-to-world flow graph value returned by the flow projection. */
+  readonly flow?: FrameworkAdmissionFlowValue;
 }
 
 interface FrameworkAdmissionFilters extends FrameworkDiscoveryFilters {
@@ -147,7 +183,59 @@ interface FrameworkAdmissionFilters extends FrameworkDiscoveryFilters {
   readonly slotName?: string;
   readonly appTaskExecutionKind?: string;
   readonly certainty?: string;
+  readonly corridor?: string;
+  readonly edgeKind?: string;
+  readonly nodeKind?: string;
+  readonly role?: string;
 }
+
+const ADMISSION_BUNDLE_ROW_FAMILY =
+  new PagedRowFamily<FrameworkAdmissionBundleSummaryRow>({
+    id: "framework.admission:bundles",
+    rowLabel: "framework admission bundle row(s)",
+    evidenceForRow: evidenceForBundle,
+    continuationsForPage: bundleContinuations,
+  });
+
+const ADMISSION_MATERIALIZATION_ROW_FAMILY =
+  new PagedRowFamily<FrameworkAdmissionMaterializationLinkRow>({
+    id: "framework.admission:materializations",
+    rowLabel: "framework admission materialization link row(s)",
+    evidenceForRow: evidenceForMaterializationLink,
+    continuationsForPage: materializationLinkContinuations,
+  });
+
+const ADMISSION_WORLD_FORMATION_ROW_FAMILY =
+  new PagedRowFamily<FrameworkAdmissionWorldFormationRow>({
+    id: "framework.admission:world-formation",
+    rowLabel: "framework admission world-formation row(s)",
+    evidenceForRow: evidenceForWorldFormation,
+    continuationsForPage: worldFormationContinuations,
+  });
+
+const ADMISSION_RELATIONSHIP_ROW_FAMILY =
+  new PagedRowFamily<FrameworkAdmissionRelationshipRow>({
+    id: "framework.admission:relationships",
+    rowLabel: "framework admission relationship row(s)",
+    evidenceForRow: evidenceForRelationship,
+    continuationsForPage: relationshipContinuations,
+  });
+
+const ADMISSION_FLOW_ROW_FAMILY =
+  new PagedRowFamily<FrameworkAdmissionFlowEdgeRow>({
+    id: "framework.admission:flow-edges",
+    rowLabel: "framework admission flow edge row(s)",
+    evidenceForRow: evidenceForFlowEdge,
+    continuationsForPage: flowEdgeContinuations,
+  });
+
+const ADMISSION_FLOW_NODE_ROW_FAMILY =
+  new PagedRowFamily<FrameworkAdmissionFlowNodeRow>({
+    id: "framework.admission:flow-nodes",
+    rowLabel: "framework admission flow node row(s)",
+    evidenceForRow: evidenceForFlowNode,
+    continuationsForPage: flowNodeContinuations,
+  });
 
 /** Answer framework.admission inquiries from evaluator-derived bundle admission rows. */
 export function answerFrameworkAdmission(
@@ -172,6 +260,7 @@ export function answerFrameworkAdmission(
           relations: {},
           mechanisms: {},
           phases: {},
+          endpointKinds: {},
           associationKinds: {},
         },
         basis: [frameworkAdmissionBasis(sourceProject)],
@@ -179,47 +268,35 @@ export function answerFrameworkAdmission(
       },
     );
   }
-  const bundles = readFrameworkBundles(sourceProject, filters);
+  const relationshipFilters = relationshipFiltersForProjection(
+    projection,
+    filters,
+  );
+  const bundles = readFrameworkBundles(sourceProject, relationshipFilters);
   const relationships = bundles
     .flatMap((bundle) => relationshipsForBundle(bundle))
     .filter((row) => relationshipProjectionRows(row, projection))
-    .filter((row) => relationshipMatches(row, filters));
+    .filter((row) => relationshipMatches(row, relationshipFilters));
   const bundleSummaries = bundleSummariesForRelationships(
     bundles,
     relationships,
-  ).filter((row) => bundleMatches(row, filters));
+  ).filter((row) => bundleMatches(row, relationshipFilters));
   const limit = clampBudget(inquiry.budget?.rows, 80, 1_000);
   const offset = pageOffset(inquiry);
+  const basis = [frameworkAdmissionBasis(sourceProject)];
 
   if (projection === "bundles") {
-    const page = pageRows(bundleSummaries, offset, limit);
-    return createAnswer(
+    return ADMISSION_BUNDLE_ROW_FAMILY.answer({
       inquiry,
-      page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-      `Returned ${page.rows.length} of ${bundleSummaries.length} framework admission bundle row(s).`,
-      {
-        value: valueSummary(bundleSummaries, relationships, {
+      rows: bundleSummaries,
+      limit,
+      offset,
+      basis,
+      value: (page) =>
+        valueSummary(bundleSummaries, relationships, {
           bundles: page.rows,
         }),
-        basis: [frameworkAdmissionBasis(sourceProject)],
-        evidence: page.rows
-          .slice(0, evidenceLimit(inquiry))
-          .map(evidenceForBundle),
-        page: pageInfo(
-          inquiry,
-          page.rows.length,
-          bundleSummaries.length,
-          limit,
-          page.nextOffset,
-        ),
-        continuations: bundleContinuations(
-          inquiry,
-          page.rows,
-          page.nextOffset,
-          limit,
-        ),
-      },
-    );
+    });
   }
 
   if (projection === "materializations") {
@@ -228,46 +305,27 @@ export function answerFrameworkAdmission(
       relationships,
       filters,
     );
-    const page = pageRows(materializationLinks, offset, limit);
-    const evidence = page.rows
-      .slice(0, evidenceLimit(inquiry))
-      .map(evidenceForMaterializationLink);
-    return createAnswer(
+    return ADMISSION_MATERIALIZATION_ROW_FAMILY.answer({
       inquiry,
-      page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-      `Returned ${page.rows.length} of ${materializationLinks.length} framework admission materialization link row(s).`,
-      {
-        value: {
-          ...valueSummary(bundleSummaries, relationships),
-          materializationLinkCount: materializationLinks.length,
-          materializationLinkKinds: countBy(
-            materializationLinks,
-            (row) => row.linkKind,
-          ),
-          materializationKinds: countBy(
-            materializationLinks,
-            (row) => row.materializationKind,
-          ),
-          matchBases: countBy(materializationLinks, (row) => row.matchBasis),
-          materializationLinks: page.rows,
-        },
-        basis: [frameworkAdmissionBasis(sourceProject)],
-        evidence,
-        page: pageInfo(
-          inquiry,
-          page.rows.length,
-          materializationLinks.length,
-          limit,
-          page.nextOffset,
+      rows: materializationLinks,
+      limit,
+      offset,
+      basis,
+      value: (page) => ({
+        ...valueSummary(bundleSummaries, relationships),
+        materializationLinkCount: materializationLinks.length,
+        materializationLinkKinds: countBy(
+          materializationLinks,
+          (row) => row.linkKind,
         ),
-        continuations: materializationLinkContinuations(
-          inquiry,
-          page.rows,
-          page.nextOffset,
-          limit,
+        materializationKinds: countBy(
+          materializationLinks,
+          (row) => row.materializationKind,
         ),
-      },
-    );
+        matchBases: countBy(materializationLinks, (row) => row.matchBasis),
+        materializationLinks: page.rows,
+      }),
+    });
   }
 
   if (projection === "world-formation") {
@@ -276,45 +334,113 @@ export function answerFrameworkAdmission(
       relationships,
       filters,
     );
-    const page = pageRows(worldFormations, offset, limit);
-    const evidence = page.rows
-      .slice(0, evidenceLimit(inquiry))
-      .map(evidenceForWorldFormation);
+    return ADMISSION_WORLD_FORMATION_ROW_FAMILY.answer({
+      inquiry,
+      rows: worldFormations,
+      limit,
+      offset,
+      basis,
+      value: (page) => ({
+        ...valueSummary(bundleSummaries, relationships),
+        worldFormationCount: worldFormations.length,
+        worldFormationKinds: countBy(
+          worldFormations,
+          (row) => row.formationKind,
+        ),
+        worldFormationStatuses: countBy(
+          worldFormations,
+          (row) => row.status,
+        ),
+        worldFormations: page.rows,
+      }),
+    });
+  }
+
+  if (projection === "flow") {
+    const flow = readFrameworkAdmissionFlow(
+      sourceProject,
+      relationships,
+      filters,
+    );
     return createAnswer(
       inquiry,
-      page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-      `Returned ${page.rows.length} of ${worldFormations.length} framework admission world-formation row(s).`,
+      flow.edges.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
+      `Framework admission flow has ${flow.value.nodeCount} node(s) and ${flow.value.edgeCount} edge(s).`,
       {
         value: {
           ...valueSummary(bundleSummaries, relationships),
-          worldFormationCount: worldFormations.length,
-          worldFormationKinds: countBy(
-            worldFormations,
-            (row) => row.formationKind,
-          ),
-          worldFormationStatuses: countBy(
-            worldFormations,
-            (row) => row.status,
-          ),
-          worldFormations: page.rows,
+          flow: flow.value,
         },
-        basis: [frameworkAdmissionBasis(sourceProject)],
-        evidence,
-        page: pageInfo(
-          inquiry,
-          page.rows.length,
-          worldFormations.length,
-          limit,
-          page.nextOffset,
-        ),
-        continuations: worldFormationContinuations(
-          inquiry,
-          page.rows,
-          page.nextOffset,
-          limit,
-        ),
+        basis,
+        continuations: flowSummaryContinuations(inquiry, filters),
       },
     );
+  }
+
+  if (projection === "flow-edges") {
+    const flow = readFrameworkAdmissionFlow(
+      sourceProject,
+      relationships,
+      filters,
+    );
+    return ADMISSION_FLOW_ROW_FAMILY.answer({
+      inquiry,
+      rows: flow.edges,
+      limit,
+      offset,
+      basis,
+      value: (page) => ({
+        ...valueSummary(bundleSummaries, relationships),
+        flow: {
+          ...flow.value,
+          edges: page.rows.map(flowEdgeSummaryRow),
+        },
+      }),
+    });
+  }
+
+  if (projection === "flow-edge-details") {
+    const flow = readFrameworkAdmissionFlow(
+      sourceProject,
+      relationships,
+      filters,
+    );
+    return ADMISSION_FLOW_ROW_FAMILY.answer({
+      inquiry,
+      rows: flow.edges,
+      limit,
+      offset,
+      basis,
+      value: (page) => ({
+        ...valueSummary(bundleSummaries, relationships),
+        flow: {
+          ...flow.value,
+          edgeDetails: page.rows,
+        },
+      }),
+    });
+  }
+
+  if (projection === "flow-nodes") {
+    const flow = readFrameworkAdmissionFlow(
+      sourceProject,
+      relationships,
+      filters,
+    );
+    return ADMISSION_FLOW_NODE_ROW_FAMILY.answer({
+      inquiry,
+      rows: flow.nodes,
+      limit,
+      offset,
+      basis,
+      value: (page) => ({
+        ...valueSummary(bundleSummaries, relationships),
+        flow: {
+          ...flow.value,
+          nodes: page.rows,
+        },
+      }),
+    });
   }
 
   if (
@@ -328,36 +454,19 @@ export function answerFrameworkAdmission(
     projection === "app-tasks" ||
     projection === "evidence"
   ) {
-    const page = pageRows(relationships, offset, limit);
-    const evidence = page.rows
-      .slice(0, evidenceLimit(inquiry))
-      .map(evidenceForRelationship);
-    return createAnswer(
+    return ADMISSION_RELATIONSHIP_ROW_FAMILY.answer({
       inquiry,
-      page.rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
-      `Returned ${page.rows.length} of ${relationships.length} framework admission relationship row(s).`,
-      {
-        value: valueSummary(bundleSummaries, relationships, {
+      rows: relationships,
+      limit,
+      offset,
+      basis,
+      value: (page) =>
+        valueSummary(bundleSummaries, relationships, {
           relationships: page.rows,
         }),
-        basis: [frameworkAdmissionBasis(sourceProject)],
-        evidence,
-        openSeams: openSeamsForRelationships(page.rows, evidence),
-        page: pageInfo(
-          inquiry,
-          page.rows.length,
-          relationships.length,
-          limit,
-          page.nextOffset,
-        ),
-        continuations: relationshipContinuations(
-          inquiry,
-          page.rows,
-          page.nextOffset,
-          limit,
-        ),
-      },
-    );
+      openSeams: (page, evidence) =>
+        openSeamsForRelationships(page.rows, evidence),
+    });
   }
 
   return createAnswer(
@@ -366,7 +475,7 @@ export function answerFrameworkAdmission(
     `Framework admission has ${bundleSummaries.length} bundle row(s) and ${relationships.length} relationship row(s).`,
     {
       value: valueSummary(bundleSummaries, relationships),
-      basis: [frameworkAdmissionBasis(sourceProject)],
+      basis,
       evidence: [
         ...bundleSummaries.slice(0, 2).map(evidenceForBundle),
         ...relationships.slice(0, 4).map(evidenceForRelationship),
@@ -394,7 +503,7 @@ function relationshipForAssociation(
 ): FrameworkAdmissionRelationshipRow {
   const classification = classifyFrameworkAdmissionAssociation(association);
   const from = endpointForBundle(bundle, association);
-  const to = endpointForAssociation(association, classification.relation);
+  const to = endpointForAssociation(association);
   return {
     id: `framework-admission:${association.id}`,
     version: FRAMEWORK_ADMISSION_RELATIONSHIP_VERSION,
@@ -438,7 +547,6 @@ function endpointForBundle(
 
 function endpointForAssociation(
   association: FrameworkBundleAssociationRow,
-  relation: FrameworkRelationshipRelation,
 ): FrameworkRelationshipEndpoint {
   if (association.diInterface !== undefined) {
     return {
@@ -475,7 +583,10 @@ function endpointForAssociation(
         association.source,
     };
   }
-  if (relation === FrameworkRelationshipRelation.AdmitsCatalog) {
+  if (
+    association.associationKind ===
+    FrameworkBundleAssociationKind.RegistrationCatalog
+  ) {
     return {
       kind: FrameworkRelationshipEndpointKind.RegistrationCatalog,
       name:
@@ -487,19 +598,28 @@ function endpointForAssociation(
       source: association.source,
     };
   }
-  if (relation === FrameworkRelationshipRelation.AdmitsAppTask) {
+  if (
+    association.associationKind ===
+    FrameworkBundleAssociationKind.AppTaskRegistration
+  ) {
     return expressionEndpoint(
       FrameworkRelationshipEndpointKind.AppTask,
       association,
     );
   }
-  if (relation === FrameworkRelationshipRelation.AdmitsFactory) {
+  if (
+    association.associationKind ===
+    FrameworkBundleAssociationKind.FactoryRegistration
+  ) {
     return expressionEndpoint(
       FrameworkRelationshipEndpointKind.Factory,
       association,
     );
   }
-  if (relation === FrameworkRelationshipRelation.AdmitsUnknownArgument) {
+  if (
+    association.associationKind ===
+    FrameworkBundleAssociationKind.UnknownRegistrationArgument
+  ) {
     return expressionEndpoint(
       FrameworkRelationshipEndpointKind.Unknown,
       association,
@@ -533,19 +653,19 @@ function relationshipProjectionRows(
 ): boolean {
   switch (projection) {
     case "di":
-      return row.relation === FrameworkRelationshipRelation.AdmitsDiKey;
+      return row.to.kind === FrameworkRelationshipEndpointKind.DiKey;
     case "resources":
-      return row.relation === FrameworkRelationshipRelation.AdmitsResource;
+      return row.to.kind === FrameworkRelationshipEndpointKind.Resource;
     case "registries":
-      return (
-        row.relation === FrameworkRelationshipRelation.AdmitsRegistryExport
-      );
+      return row.to.kind === FrameworkRelationshipEndpointKind.RegistryExport;
     case "catalogs":
-      return row.relation === FrameworkRelationshipRelation.AdmitsCatalog;
+      return (
+        row.to.kind === FrameworkRelationshipEndpointKind.RegistrationCatalog
+      );
     case "factories":
-      return row.relation === FrameworkRelationshipRelation.AdmitsFactory;
+      return row.to.kind === FrameworkRelationshipEndpointKind.Factory;
     case "app-tasks":
-      return row.relation === FrameworkRelationshipRelation.AdmitsAppTask;
+      return row.to.kind === FrameworkRelationshipEndpointKind.AppTask;
     default:
       return true;
   }
@@ -577,6 +697,7 @@ function bundleSummariesForRelationships(
           openSeamCount: bundle.openSeamCount,
           relationshipCount: rows.length,
           relations: countBy(rows, (row) => row.relation),
+          endpointKinds: countBy(rows, (row) => row.to.kind),
           associationKinds: countBy(rows, (row) => row.associationKind),
           source: sourceRangeForExportEntry(bundle) ?? rows[0]?.source,
           summary: `${bundle.packageId}:${bundle.exportEntry.exportName} admits ${rows.length} framework value(s).`,
@@ -603,6 +724,7 @@ function valueSummary(
     relations: countBy(relationships, (row) => row.relation),
     mechanisms: countBy(relationships, (row) => row.mechanism),
     phases: countBy(relationships, (row) => row.phase),
+    endpointKinds: countBy(relationships, (row) => row.to.kind),
     associationKinds: countBy(relationships, (row) => row.associationKind),
     ...extras,
   };
@@ -617,6 +739,28 @@ function filtersFromInquiry(inquiry: Inquiry): FrameworkAdmissionFilters {
 
 function hasExactAdmissionScope(filters: FrameworkAdmissionFilters): boolean {
   return filters.packageId !== undefined || filters.exportName !== undefined;
+}
+
+function relationshipFiltersForProjection(
+  projection: string,
+  filters: FrameworkAdmissionFilters,
+): FrameworkAdmissionFilters {
+  if (!isFlowProjection(projection)) {
+    return filters;
+  }
+  return {
+    ...(filters.packageId === undefined ? {} : { packageId: filters.packageId }),
+    ...(filters.exportName === undefined
+      ? {}
+      : { exportName: filters.exportName }),
+  };
+}
+
+function isFlowProjection(projection: string): boolean {
+  return projection === "flow" ||
+    projection === "flow-edges" ||
+    projection === "flow-edge-details" ||
+    projection === "flow-nodes";
 }
 
 function filtersFromRecord(value: unknown): FrameworkAdmissionFilters {
@@ -643,6 +787,10 @@ function filtersFromRecord(value: unknown): FrameworkAdmissionFilters {
     ...stringFilter(source, "slotName"),
     ...stringFilter(source, "appTaskExecutionKind"),
     ...stringFilter(source, "certainty"),
+    ...stringFilter(source, "corridor"),
+    ...stringFilter(source, "edgeKind"),
+    ...stringFilter(source, "nodeKind"),
+    ...stringFilter(source, "role"),
   };
 }
 
@@ -695,6 +843,7 @@ function relationshipMatches(
       row.summary.includes(filters.query) ||
       row.exportName.includes(filters.query) ||
       row.packageId.includes(filters.query) ||
+      row.to.kind.includes(filters.query) ||
       row.to.name.includes(filters.query) ||
       row.from.name.includes(filters.query) ||
       row.targetName?.includes(filters.query) === true ||
@@ -723,7 +872,7 @@ function evidenceForRelationship(
     kind: evidenceKindForRelationship(row),
     role: EvidenceRole.Subject,
     confidence:
-      row.relation === FrameworkRelationshipRelation.AdmitsUnknownArgument
+      row.to.kind === FrameworkRelationshipEndpointKind.Unknown
         ? EvidenceConfidence.Unknown
         : EvidenceConfidence.Strong,
     summary: row.summary,
@@ -731,6 +880,11 @@ function evidenceForRelationship(
     data: row,
   };
 }
+
+const ADMISSION_PROJECTION_BASIS = [
+  BasisKind.StaticEvaluator,
+  BasisKind.TypeScriptChecker,
+] as const;
 
 function evidenceForMaterializationLink(
   row: FrameworkAdmissionMaterializationLinkRow,
@@ -777,22 +931,77 @@ function evidenceForWorldFormation(
   };
 }
 
+function evidenceForFlowEdge(row: FrameworkAdmissionFlowEdgeRow): Evidence {
+  return {
+    id: row.id,
+    kind:
+      row.layer === "compiler"
+        ? EvidenceKind.TypeFact
+        : row.resourceKind !== undefined
+        ? EvidenceKind.ResourceDefinition
+        : EvidenceKind.DiRegistration,
+    role: EvidenceRole.Subject,
+    confidence:
+      (row.openReasons?.length ?? 0) > 0
+        ? EvidenceConfidence.Strong
+        : EvidenceConfidence.Exact,
+    summary: row.summary,
+    ...(row.source === undefined ? {} : { source: row.source }),
+  };
+}
+
+function flowEdgeSummaryRow(
+  row: FrameworkAdmissionFlowEdgeRow,
+): FrameworkAdmissionFlowEdgeSummaryRow {
+  return {
+    id: row.id,
+    edgeKind: row.edgeKind,
+    layer: row.layer,
+    role: row.role,
+    fromName: row.fromName,
+    toName: row.toName,
+    ...(row.source === undefined ? {} : { source: row.source }),
+    ...(row.ownerKey === undefined ? {} : { ownerKey: row.ownerKey }),
+    ...(row.providerName === undefined
+      ? {}
+      : { providerName: row.providerName }),
+    ...(row.dependencyAccess === undefined
+      ? {}
+      : { dependencyAccess: row.dependencyAccess }),
+    ...(row.dependencyKey === undefined
+      ? {}
+      : { dependencyKey: row.dependencyKey }),
+    ...(row.resourceKind === undefined
+      ? {}
+      : { resourceKind: row.resourceKind }),
+    ...(row.instructionName === undefined
+      ? {}
+      : { instructionName: row.instructionName }),
+    ...(row.compilerProducerName === undefined
+      ? {}
+      : { compilerProducerName: row.compilerProducerName }),
+    summary: row.summary,
+  };
+}
+
+function evidenceForFlowNode(row: FrameworkAdmissionFlowNodeRow): Evidence {
+  return {
+    id: row.id,
+    kind: row.source === undefined ? EvidenceKind.TypeFact : EvidenceKind.SourceSpan,
+    role: EvidenceRole.Subject,
+    confidence: EvidenceConfidence.Exact,
+    summary: row.summary,
+    ...(row.source === undefined ? {} : { source: row.source }),
+  };
+}
+
 function evidenceKindForRelationship(
   row: FrameworkAdmissionRelationshipRow,
 ): EvidenceKind {
-  switch (row.relation) {
-    case FrameworkRelationshipRelation.AdmitsResource:
-      return EvidenceKind.ResourceDefinition;
-    case FrameworkRelationshipRelation.AdmitsDiKey:
-    case FrameworkRelationshipRelation.AdmitsFactory:
-    case FrameworkRelationshipRelation.AdmitsRegistryExport:
-    case FrameworkRelationshipRelation.AdmitsAppTask:
-    case FrameworkRelationshipRelation.AdmitsCatalog:
-    case FrameworkRelationshipRelation.AdmitsRegistrationArgument:
-    case FrameworkRelationshipRelation.AdmitsUnknownArgument:
-    default:
-      return EvidenceKind.DiRegistration;
+  if (row.to.kind === FrameworkRelationshipEndpointKind.Resource) {
+    return EvidenceKind.ResourceDefinition;
   }
+  return EvidenceKind.DiRegistration;
 }
 
 function openSeamsForRelationships(
@@ -801,7 +1010,7 @@ function openSeamsForRelationships(
 ): readonly OpenSeam[] {
   const seams: OpenSeam[] = [];
   for (const [index, row] of rows.entries()) {
-    if (row.relation !== FrameworkRelationshipRelation.AdmitsUnknownArgument) {
+    if (row.to.kind !== FrameworkRelationshipEndpointKind.Unknown) {
       continue;
     }
     seams.push({
@@ -823,43 +1032,72 @@ function summaryContinuations(inquiry: Inquiry): readonly Continuation[] {
       "framework.admission:bundles",
       "bundles",
       "Inspect compact configuration/bundle admission rows.",
+      { basis: ADMISSION_PROJECTION_BASIS },
     ),
     projectionContinuation(
       inquiry,
       "framework.admission:relationships",
       "relationships",
       "Inspect normalized framework admission relationship rows.",
-      admissionRelationshipContinuationFilters(inquiry),
+      {
+        filters: admissionRelationshipContinuationFilters(inquiry),
+        basis: ADMISSION_PROJECTION_BASIS,
+      },
     ),
     projectionContinuation(
       inquiry,
       "framework.admission:di",
       "di",
       "Inspect admitted DI keys and DI registration products.",
+      { basis: ADMISSION_PROJECTION_BASIS },
     ),
     projectionContinuation(
       inquiry,
       "framework.admission:resources",
       "resources",
       "Inspect admitted Aurelia resources.",
+      { basis: ADMISSION_PROJECTION_BASIS },
     ),
     projectionContinuation(
       inquiry,
       "framework.admission:materializations",
       "materializations",
       "Join admitted DI keys and resources to visible materialization rows.",
+      { basis: ADMISSION_PROJECTION_BASIS },
     ),
     projectionContinuation(
       inquiry,
       "framework.admission:world-formation",
       "world-formation",
       "Join admitted values to visible materialization/execution rows while preserving admission-only boundaries.",
+      { basis: ADMISSION_PROJECTION_BASIS },
+    ),
+    projectionContinuation(
+      inquiry,
+      "framework.admission:flow",
+      "flow",
+      "Inspect the compact configuration flow rollup before paging graph rows.",
+      { basis: ADMISSION_PROJECTION_BASIS },
+    ),
+    projectionContinuation(
+      inquiry,
+      "framework.admission:flow:jit-compiler",
+      "flow",
+      "Inspect the compact JIT compiler corridor rollup before paging graph rows.",
+      {
+        filters: {
+          ...inquiry.filters,
+          corridor: FrameworkAdmissionFlowCorridor.JitCompiler,
+        },
+        basis: ADMISSION_PROJECTION_BASIS,
+      },
     ),
     projectionContinuation(
       inquiry,
       "framework.admission:registries",
       "registries",
       "Inspect admitted registry/configuration exports.",
+      { basis: ADMISSION_PROJECTION_BASIS },
     ),
     {
       id: "framework.admission:raw-bundles",
@@ -920,28 +1158,20 @@ function broadSummaryContinuations(
     ...(packageId === undefined
       ? []
       : [
-          {
-            id: `framework.admission:package:${packageId}`,
-            kind: ContinuationKind.SwitchProjection,
-            priority: ContinuationPriority.Primary,
-            rationale:
-              "Inspect package-scoped admission rows to avoid broad cold evaluator work.",
-            inquiry: {
-              ...inquiry,
-              projection: "bundles",
+          projectionContinuation(
+            inquiry,
+            `framework.admission:package:${packageId}`,
+            "bundles",
+            "Inspect package-scoped admission rows to avoid broad cold evaluator work.",
+            {
               filters: {
                 ...inquiry.filters,
                 packageId,
               },
-              page: undefined,
+              basis: ADMISSION_PROJECTION_BASIS,
+              summary: "Package-scoped framework admission rows.",
             },
-            route: route(
-              NavigationPlane.Semantic,
-              NavigationRelation.ProjectionOf,
-              [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
-              "Package-scoped framework admission rows.",
-            ),
-          } satisfies Continuation,
+          ),
         ]),
   ];
 }
@@ -970,58 +1200,235 @@ function bundleContinuations(
       "framework.admission:relationships",
       "relationships",
       "Inspect relationship rows for these admitted values.",
-      admissionRelationshipContinuationFilters(inquiry),
+      {
+        filters: admissionRelationshipContinuationFilters(inquiry),
+        basis: ADMISSION_PROJECTION_BASIS,
+      },
     ),
   );
   for (const [index, row] of rows.slice(0, 3).entries()) {
     const evidence = evidenceForBundle(row);
-    continuations.push({
-      id: `framework.admission:bundles:relationships:${index}`,
-      kind: ContinuationKind.SwitchProjection,
-      priority: ContinuationPriority.Primary,
-      rationale:
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.admission:bundles",
+      index,
+      evidence,
+    );
+    continuations.push(
+      projectionContinuation(
+        inquiry,
+        `framework.admission:bundles:relationships:${index}`,
+        "relationships",
         "Inspect admission relationships for this configuration or bundle export.",
-      inquiry: {
-        ...inquiry,
-        projection: "relationships",
-        filters: {
-          ...inquiry.filters,
-          packageId: row.packageId,
-          exportName: row.exportName,
+        {
+          filters: {
+            ...inquiry.filters,
+            packageId: row.packageId,
+            exportName: row.exportName,
+          },
+          evidence,
+          basis: ADMISSION_PROJECTION_BASIS,
+          summary: "Admission relationships for one configuration or bundle.",
         },
-        page: undefined,
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Semantic,
-        NavigationRelation.ProjectionOf,
-        [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
-        "Admission relationships for one configuration or bundle.",
       ),
-    });
+    );
     if (row.source !== undefined) {
-      continuations.push({
-        id: `framework.admission:bundles:source:${index}`,
-        kind: ContinuationKind.InspectEvidence,
-        priority: ContinuationPriority.Secondary,
-        rationale:
+      continuations.push(
+        builder.source(
+          "source",
+          row.source,
           "Inspect source behind this configuration or bundle admission row.",
-        inquiry: {
-          lens: LensId.TsSource,
-          locus: sourceRangeLocus(row.source),
-          projection: "text",
-        },
-        evidence: [evidence],
-        route: route(
-          NavigationPlane.Inspection,
-          NavigationRelation.SourceFor,
-          [BasisKind.SourceText, BasisKind.StaticEvaluator],
           "Source behind a framework admission bundle row.",
+          {
+            priority: ContinuationPriority.Secondary,
+            basis: [BasisKind.SourceText, BasisKind.StaticEvaluator],
+          },
         ),
-      });
+      );
     }
   }
   return continuations;
+}
+
+function flowSummaryContinuations(
+  inquiry: Inquiry,
+  filters: FrameworkAdmissionFilters,
+): readonly Continuation[] {
+  const continuations: Continuation[] = [
+    projectionContinuation(
+      inquiry,
+      "framework.admission:flow:edges",
+      "flow-edges",
+      "Inspect paged flow edge rows after reviewing the graph rollup.",
+      {
+        filters: flowContinuationFilters(inquiry),
+        basis: ADMISSION_PROJECTION_BASIS,
+      },
+    ),
+    projectionContinuation(
+      inquiry,
+      "framework.admission:flow:nodes",
+      "flow-nodes",
+      "Inspect paged flow node rows after reviewing the graph rollup.",
+      {
+        filters: flowContinuationFilters(inquiry),
+        basis: ADMISSION_PROJECTION_BASIS,
+      },
+    ),
+  ];
+  if (filters.corridor === FrameworkAdmissionFlowCorridor.JitCompiler) {
+    const routeBuilder = new FrameworkSemanticRouteBuilder(
+      inquiry,
+      "framework.admission:flow",
+      0,
+    );
+    continuations.push(
+      routeBuilder.continuation(
+        FrameworkSemanticRoutes.AdmissionFlowToCompilerInstructionProducts,
+        "template-compiler",
+        {
+          filters: frameworkTemplateCompilerFilters(),
+          rationale: `Inspect ${FRAMEWORK_JIT_COMPILER_ACTOR} instruction-production rows behind this JIT compiler corridor.`,
+        },
+      ),
+    );
+  }
+  return continuations;
+}
+
+function flowEdgeContinuations(
+  inquiry: Inquiry,
+  rows: readonly FrameworkAdmissionFlowEdgeRow[],
+  nextOffset: number | undefined,
+  limit: number,
+): readonly Continuation[] {
+  const continuations: Continuation[] = [];
+  if (nextOffset !== undefined) {
+    continuations.push(
+      nextPageContinuation(
+        inquiry,
+        "framework.admission:flow:next-page",
+        "Continue framework admission flow edge rows.",
+        nextOffset,
+        limit,
+      ),
+    );
+  }
+  if (inquiry.projection !== "flow-edge-details") {
+    continuations.push(
+      projectionContinuation(
+        inquiry,
+        "framework.admission:flow:edge-details",
+        "flow-edge-details",
+        "Inspect full flow edge payloads for the current graph slice.",
+        {
+          filters: flowContinuationFilters(inquiry),
+          basis: ADMISSION_PROJECTION_BASIS,
+        },
+      ),
+    );
+    return continuations;
+  }
+  for (const [index, row] of rows.slice(0, 3).entries()) {
+    if (row.source === undefined) {
+      continue;
+    }
+    const evidence = evidenceForFlowEdge(row);
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.admission:flow",
+      index,
+      evidence,
+    );
+    const routeBuilder = new FrameworkSemanticRouteBuilder(
+      inquiry,
+      "framework.admission:flow",
+      index,
+      evidence,
+    );
+    if (row.layer === "compiler" && row.instructionName !== undefined) {
+      continuations.push(
+        routeBuilder.continuation(
+          FrameworkSemanticRoutes.AdmissionFlowToCompilerInstructionProducts,
+          "compiler-products",
+          {
+            filters: { instructionName: row.instructionName },
+            rationale:
+              "Inspect compiler instruction products represented by this flow edge.",
+            priority: ContinuationPriority.Secondary,
+          },
+        ),
+      );
+    }
+    continuations.push(
+      builder.source(
+        "source",
+        row.source,
+        "Inspect the exact source behind this configuration flow edge.",
+        "Source behind a framework admission flow edge.",
+        { basis: [BasisKind.SourceText, BasisKind.StaticEvaluator] },
+      ),
+    );
+  }
+  return continuations;
+}
+
+function flowNodeContinuations(
+  inquiry: Inquiry,
+  rows: readonly FrameworkAdmissionFlowNodeRow[],
+  nextOffset: number | undefined,
+  limit: number,
+): readonly Continuation[] {
+  const continuations: Continuation[] = [];
+  if (nextOffset !== undefined) {
+    continuations.push(
+      nextPageContinuation(
+        inquiry,
+        "framework.admission:flow-nodes:next-page",
+        "Continue framework admission flow node rows.",
+        nextOffset,
+        limit,
+      ),
+    );
+  }
+  continuations.push(
+    projectionContinuation(
+      inquiry,
+      "framework.admission:flow-nodes:edges",
+      "flow-edges",
+      "Inspect paged flow edges for these nodes.",
+      {
+        filters: flowContinuationFilters(inquiry),
+        basis: ADMISSION_PROJECTION_BASIS,
+      },
+    ),
+  );
+  for (const [index, row] of rows.slice(0, 3).entries()) {
+    if (row.source === undefined) {
+      continue;
+    }
+    const evidence = evidenceForFlowNode(row);
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.admission:flow-nodes",
+      index,
+      evidence,
+    );
+    continuations.push(
+      builder.source(
+        "source",
+        row.source,
+        "Inspect the exact source behind this configuration flow node.",
+        "Source behind a framework admission flow node.",
+        { basis: [BasisKind.SourceText, BasisKind.StaticEvaluator] },
+      ),
+    );
+  }
+  return continuations;
+}
+
+function flowContinuationFilters(inquiry: Inquiry): Inquiry["filters"] {
+  return inquiry.filters;
 }
 
 function materializationLinkContinuations(
@@ -1048,51 +1455,45 @@ function materializationLinkContinuations(
       "framework.admission:relationships",
       "relationships",
       "Return to the admission relationship rows that produced these bridges.",
-      admissionRelationshipContinuationFilters(inquiry),
+      {
+        filters: admissionRelationshipContinuationFilters(inquiry),
+        basis: ADMISSION_PROJECTION_BASIS,
+      },
     ),
   );
   for (const [index, row] of rows.slice(0, 3).entries()) {
     const evidence = evidenceForMaterializationLink(row);
-    continuations.push({
-      id: `framework.admission:materializations:admission-source:${index}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Secondary,
-      rationale:
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.admission:materializations",
+      index,
+      evidence,
+    );
+    continuations.push(
+      builder.source(
+        "admission-source",
+        row.source,
         "Inspect the exact source expression that admitted this materialized target.",
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: sourceRangeLocus(row.source),
-        projection: "text",
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.SourceFor,
-        [BasisKind.SourceText, BasisKind.StaticEvaluator],
         "Admission source for a materialization bridge row.",
+        {
+          priority: ContinuationPriority.Secondary,
+          basis: [BasisKind.SourceText, BasisKind.StaticEvaluator],
+        },
       ),
-    });
-    continuations.push({
-      id: `framework.admission:materializations:materialization-source:${index}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Primary,
-      rationale:
+      builder.source(
+        "materialization-source",
+        row.materializationSource,
         "Inspect the exact materialization source for the admitted target.",
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: sourceRangeLocus(row.materializationSource),
-        projection: "text",
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.SourceFor,
-        [BasisKind.SourceText, BasisKind.TypeScriptChecker],
         "Materialization source for an admitted target.",
       ),
-    });
+    );
     continuations.push(
-      materializationDetailContinuation(inquiry, row, index, evidence),
+      frameworkAdmissionContinuationPlanner.materializationDetailContinuation(
+        inquiry,
+        row,
+        index,
+        evidence,
+      ),
     );
   }
   return continuations;
@@ -1122,203 +1523,52 @@ function worldFormationContinuations(
       "framework.admission:world-formation:relationships",
       "relationships",
       "Return to admission relationship rows that feed world formation.",
-      admissionRelationshipContinuationFilters(inquiry),
+      {
+        filters: admissionRelationshipContinuationFilters(inquiry),
+        basis: ADMISSION_PROJECTION_BASIS,
+      },
     ),
   );
   for (const [index, row] of rows.slice(0, 3).entries()) {
     const evidence = evidenceForWorldFormation(row);
-    continuations.push({
-      id: `framework.admission:world-formation:admission-source:${index}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Secondary,
-      rationale:
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.admission:world-formation",
+      index,
+      evidence,
+    );
+    continuations.push(
+      builder.source(
+        "admission-source",
+        row.source,
         "Inspect the exact source expression that admitted this world-formation target.",
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: sourceRangeLocus(row.source),
-        projection: "text",
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.SourceFor,
-        [BasisKind.SourceText, BasisKind.StaticEvaluator],
         "Admission source for a world-formation row.",
-      ),
-    });
-    if (row.formationSource !== undefined) {
-      continuations.push({
-        id: `framework.admission:world-formation:formation-source:${index}`,
-        kind: ContinuationKind.InspectEvidence,
-        priority: ContinuationPriority.Primary,
-        rationale:
-          "Inspect the exact framework source that materializes or executes this admitted target.",
-        inquiry: {
-          lens: LensId.TsSource,
-          locus: sourceRangeLocus(row.formationSource),
-          projection: "text",
+        {
+          priority: ContinuationPriority.Secondary,
+          basis: [BasisKind.SourceText, BasisKind.StaticEvaluator],
         },
-        evidence: [evidence],
-        route: route(
-          NavigationPlane.Inspection,
-          NavigationRelation.SourceFor,
-          [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+      ),
+    );
+    if (row.formationSource !== undefined) {
+      continuations.push(
+        builder.source(
+          "formation-source",
+          row.formationSource,
+          "Inspect the exact framework source that materializes or executes this admitted target.",
           "World-formation source for an admitted target.",
         ),
-      });
+      );
     }
     continuations.push(
-      ...semanticContinuationsForWorldFormation(inquiry, row, index, evidence),
+      ...frameworkAdmissionContinuationPlanner.worldFormationSemanticContinuations(
+        inquiry,
+        row,
+        index,
+        evidence,
+      ),
     );
   }
   return continuations;
-}
-
-function semanticContinuationsForWorldFormation(
-  inquiry: Inquiry,
-  row: FrameworkAdmissionWorldFormationRow,
-  index: number,
-  evidence: Evidence,
-): readonly Continuation[] {
-  if (row.formationKind === FrameworkAdmissionWorldFormationKind.RuntimeExistence) {
-    return [
-      {
-        id: `framework.admission:world-formation:materialization:${index}`,
-        kind: ContinuationKind.SwitchLens,
-        priority: ContinuationPriority.Primary,
-        rationale:
-          "Inspect the materialization detail rows behind this world-formation row.",
-        inquiry: {
-          lens: LensId.FrameworkMaterialization,
-          locus: inquiry.locus,
-          projection:
-            row.linkKind ===
-            FrameworkAdmissionMaterializationLinkKind.ResourceInstantiation
-              ? "resource-instantiations"
-              : "instantiations",
-          filters:
-            row.linkKind ===
-            FrameworkAdmissionMaterializationLinkKind.ResourceInstantiation
-              ? {
-                  resourceKind: row.resourceKind,
-                  resourceName:
-                    row.admittedTarget.resourceName ?? row.admittedTarget.name,
-                }
-              : { key: row.admittedTarget.name },
-          page: undefined,
-        },
-        evidence: [evidence],
-        route: route(
-          NavigationPlane.Semantic,
-          NavigationRelation.FrameworkFlowOf,
-          [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
-          "World-formation row to materialization detail.",
-        ),
-      },
-    ];
-  }
-  if (
-    row.formationKind ===
-      FrameworkAdmissionWorldFormationKind.AppTaskExecution &&
-    row.slotName !== undefined
-  ) {
-    return [
-      {
-        id: `framework.admission:world-formation:app-task-execution:${index}`,
-        kind: ContinuationKind.SwitchLens,
-        priority: ContinuationPriority.Primary,
-        rationale:
-          "Inspect lifecycle AppTask execution rows for this admitted slot.",
-        inquiry: {
-          lens: LensId.FrameworkLifecycle,
-          locus: inquiry.locus,
-          projection: "app-tasks",
-          filters: { slotName: row.slotName },
-          page: undefined,
-        },
-        evidence: [evidence],
-        route: route(
-          NavigationPlane.Semantic,
-          NavigationRelation.FrameworkFlowOf,
-          [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
-          "World-formation row to AppRoot lifecycle execution.",
-        ),
-      },
-    ];
-  }
-  if (
-    row.formationKind ===
-    FrameworkAdmissionWorldFormationKind.RegistryExportAdmission
-  ) {
-    return [
-      {
-        id: `framework.admission:world-formation:registry-admission:${index}`,
-        kind: ContinuationKind.SwitchLens,
-        priority: ContinuationPriority.Primary,
-        rationale:
-          "Inspect admission relationships owned by the admitted registry/configuration export.",
-        inquiry: {
-          lens: LensId.FrameworkAdmission,
-          locus: inquiry.locus,
-          projection: "relationships",
-          filters: {
-            packageId: row.admittedTarget.packageId,
-            exportName: row.admittedTarget.name,
-          },
-          page: undefined,
-        },
-        evidence: [evidence],
-        route: route(
-          NavigationPlane.Semantic,
-          NavigationRelation.FrameworkFlowOf,
-          [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
-          "Registry/configuration admission to its owned admissions.",
-        ),
-      },
-    ];
-  }
-  return [];
-}
-
-function materializationDetailContinuation(
-  inquiry: Inquiry,
-  row: FrameworkAdmissionMaterializationLinkRow,
-  index: number,
-  evidence: Evidence,
-): Continuation {
-  const isResource =
-    row.linkKind ===
-    FrameworkAdmissionMaterializationLinkKind.ResourceInstantiation;
-  return {
-    id: `framework.admission:materializations:detail:${index}`,
-    kind: ContinuationKind.SwitchLens,
-    priority: ContinuationPriority.Primary,
-    rationale: isResource
-      ? "Inspect resource materialization rows for this admitted resource."
-      : "Inspect DI key instantiation rows for this admitted key.",
-    inquiry: {
-      lens: LensId.FrameworkMaterialization,
-      locus: inquiry.locus,
-      projection: isResource ? "resource-instantiations" : "instantiations",
-      filters: isResource
-        ? {
-            resourceKind: row.resourceKind,
-            resourceName:
-              row.admittedTarget.resourceName ?? row.admittedTarget.name,
-          }
-        : {
-            key: row.admittedTarget.name,
-          },
-      page: undefined,
-    },
-    evidence: [evidence],
-    route: route(
-      NavigationPlane.Semantic,
-      NavigationRelation.FrameworkFlowOf,
-      [BasisKind.TypeScriptChecker, BasisKind.StaticEvaluator],
-      "Admitted target to visible materialization rows.",
-    ),
-  };
 }
 
 function relationshipContinuations(
@@ -1345,273 +1595,46 @@ function relationshipContinuations(
       "framework.admission:bundles",
       "bundles",
       "Return to bundle/configuration rows that own these admissions.",
+      { basis: ADMISSION_PROJECTION_BASIS },
     ),
   );
   for (const [index, row] of rows.slice(0, 3).entries()) {
     const evidence = evidenceForRelationship(row);
-    continuations.push({
-      id: `framework.admission:relationships:source:${index}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Primary,
-      rationale:
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.admission:relationships",
+      index,
+      evidence,
+    );
+    continuations.push(
+      builder.source(
+        "source",
+        row.source,
         "Inspect the exact source expression that admitted this value.",
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: sourceRangeLocus(row.source),
-        projection: "text",
-      },
-      evidence: [evidence],
-      route: route(
-        NavigationPlane.Inspection,
-        NavigationRelation.SourceFor,
-        [BasisKind.SourceText, BasisKind.StaticEvaluator],
         "Exact source expression behind a framework admission relationship.",
+        { basis: [BasisKind.SourceText, BasisKind.StaticEvaluator] },
       ),
-    });
+    );
     if (row.to.source !== undefined) {
-      continuations.push({
-        id: `framework.admission:relationships:target-type:${index}`,
-        kind: ContinuationKind.SwitchLens,
-        priority: ContinuationPriority.Secondary,
-        rationale: "Inspect TypeChecker facts for the admitted target.",
-        inquiry: {
-          lens: LensId.TsType,
-          locus: sourceRangeLocus(row.to.source),
-          projection: "facts",
-        },
-        evidence: [evidence],
-        route: route(
-          NavigationPlane.Inspection,
-          NavigationRelation.TypeFactsFor,
-          [BasisKind.TypeScriptChecker],
+      continuations.push(
+        builder.typeFacts(
+          "target-type",
+          row.to.source,
+          "Inspect TypeChecker facts for the admitted target.",
           "TypeChecker facts for an admitted framework target.",
         ),
-      });
+      );
     }
     continuations.push(
-      ...semanticContinuationsForRelationship(inquiry, row, index, evidence),
+      ...frameworkAdmissionContinuationPlanner.relationshipSemanticContinuations(
+        inquiry,
+        row,
+        index,
+        evidence,
+      ),
     );
   }
   return continuations;
-}
-
-function semanticContinuationsForRelationship(
-  inquiry: Inquiry,
-  row: FrameworkAdmissionRelationshipRow,
-  index: number,
-  evidence: Evidence,
-): readonly Continuation[] {
-  switch (row.relation) {
-    case FrameworkRelationshipRelation.AdmitsDiKey:
-      return [
-        {
-          id: `framework.admission:relationships:materialization:${index}`,
-          kind: ContinuationKind.SwitchLens,
-          priority: ContinuationPriority.Primary,
-          rationale:
-            "Follow the admitted DI key toward visible runtime-existence rows.",
-          inquiry: {
-            ...inquiry,
-            lens: LensId.FrameworkMaterialization,
-            projection: "instantiations",
-            filters: { key: row.to.name },
-            page: undefined,
-          },
-          evidence: [evidence],
-          route: route(
-            NavigationPlane.Semantic,
-            NavigationRelation.FrameworkFlowOf,
-            [BasisKind.TypeScriptChecker, BasisKind.StaticEvaluator],
-            "Admitted DI key to runtime-existence rows.",
-          ),
-        },
-        {
-          id: `framework.admission:relationships:di:${index}`,
-          kind: ContinuationKind.SwitchLens,
-          priority: ContinuationPriority.Secondary,
-          rationale:
-            "Inspect DI provider and registration atoms behind the admitted key.",
-          inquiry: {
-            ...inquiry,
-            lens: LensId.FrameworkDi,
-            projection: "providers",
-            filters: { key: row.to.name },
-            page: undefined,
-          },
-          evidence: [evidence],
-          route: route(
-            NavigationPlane.Semantic,
-            NavigationRelation.ProvenanceOf,
-            [BasisKind.TypeScriptChecker, BasisKind.StaticEvaluator],
-            "DI provider atoms behind an admitted DI key.",
-          ),
-        },
-      ];
-    case FrameworkRelationshipRelation.AdmitsResource:
-      return [
-        {
-          id: `framework.admission:relationships:resource-instantiation:${index}`,
-          kind: ContinuationKind.SwitchLens,
-          priority: ContinuationPriority.Primary,
-          rationale:
-            "Follow the admitted resource toward visible runtime/compiler/evaluator materialization sites.",
-          inquiry: {
-            ...inquiry,
-            lens: LensId.FrameworkMaterialization,
-            projection: "resource-instantiations",
-            filters: {
-              packageId: row.to.packageId,
-              resourceKind: row.to.resourceKind,
-              resourceName: row.to.name,
-            },
-            page: undefined,
-          },
-          evidence: [evidence],
-          route: route(
-            NavigationPlane.Semantic,
-            NavigationRelation.FrameworkFlowOf,
-            [BasisKind.TypeScriptChecker, BasisKind.StaticEvaluator],
-            "Admitted resource to materialization sites.",
-          ),
-        },
-        {
-          id: `framework.admission:relationships:resource:${index}`,
-          kind: ContinuationKind.SwitchLens,
-          priority: ContinuationPriority.Secondary,
-          rationale:
-            "Follow the admitted resource into the framework resource catalog.",
-          inquiry: {
-            ...inquiry,
-            lens: LensId.FrameworkDiscovery,
-            projection: "resource-carriers",
-            filters: {
-              resourceKind: row.to.resourceKind,
-              query: row.to.name,
-            },
-            page: undefined,
-          },
-          evidence: [evidence],
-          route: route(
-            NavigationPlane.Semantic,
-            NavigationRelation.FrameworkFlowOf,
-            [BasisKind.TypeScriptChecker],
-            "Admitted resource to framework resource carrier catalog.",
-          ),
-        },
-      ];
-    case FrameworkRelationshipRelation.AdmitsRegistryExport:
-      return [
-        {
-          id: `framework.admission:relationships:registry:${index}`,
-          kind: ContinuationKind.SwitchLens,
-          priority: ContinuationPriority.Primary,
-          rationale:
-            "Inspect admission relationships owned by the admitted registry/configuration export.",
-          inquiry: {
-            ...inquiry,
-            lens: LensId.FrameworkAdmission,
-            projection: "relationships",
-            filters: {
-              packageId: row.to.packageId,
-              exportName: row.to.name,
-            },
-            page: undefined,
-          },
-          evidence: [evidence],
-          route: route(
-            NavigationPlane.Semantic,
-            NavigationRelation.FrameworkFlowOf,
-            [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
-            "Registry/configuration admission to its own admitted values.",
-          ),
-        },
-      ];
-    case FrameworkRelationshipRelation.AdmitsAppTask:
-      return [
-        ...(appTaskSlotName(row) === null
-          ? []
-          : [
-              {
-                id: `framework.admission:relationships:app-task-execution:${index}`,
-                kind: ContinuationKind.SwitchLens,
-                priority: ContinuationPriority.Primary,
-                rationale:
-                  "Follow the admitted AppTask slot to the AppRoot lifecycle execution sites.",
-                inquiry: {
-                  ...inquiry,
-                  lens: LensId.FrameworkLifecycle,
-                  projection: "app-tasks",
-                  filters: { slotName: appTaskSlotName(row)! },
-                  page: undefined,
-                },
-                evidence: [evidence],
-                route: route(
-                  NavigationPlane.Semantic,
-                  NavigationRelation.FrameworkFlowOf,
-                  [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
-                  "Admitted AppTask slot to AppRoot lifecycle execution sites.",
-                ),
-              } satisfies Continuation,
-            ]),
-        {
-          id: `framework.admission:relationships:app-task:${index}`,
-          kind: ContinuationKind.SwitchLens,
-          priority: ContinuationPriority.Secondary,
-          rationale:
-            "Follow the admitted lifecycle task into the AppTask entity catalog.",
-          inquiry: {
-            ...inquiry,
-            lens: LensId.FrameworkDiscovery,
-            projection: "app-tasks",
-            filters: { query: row.to.name },
-            page: undefined,
-          },
-          evidence: [evidence],
-          route: route(
-            NavigationPlane.Semantic,
-            NavigationRelation.FrameworkFlowOf,
-            [BasisKind.TypeScriptChecker],
-            "Admitted AppTask to framework AppTask catalog.",
-          ),
-        },
-      ];
-    default:
-      return [];
-  }
-}
-
-function appTaskSlotName(row: FrameworkAdmissionRelationshipRow): string | null {
-  if (row.helperName?.startsWith("AppTask.") !== true) {
-    return null;
-  }
-  return row.helperName.slice("AppTask.".length);
-}
-
-function projectionContinuation(
-  inquiry: Inquiry,
-  id: string,
-  projection: string,
-  rationale: string,
-  filters?: Record<string, unknown>,
-): Continuation {
-  return {
-    id,
-    kind: ContinuationKind.SwitchProjection,
-    priority: ContinuationPriority.Primary,
-    rationale,
-    inquiry: {
-      ...inquiry,
-      projection,
-      ...(filters === undefined ? {} : { filters }),
-      page: undefined,
-    },
-    route: route(
-      NavigationPlane.Semantic,
-      NavigationRelation.ProjectionOf,
-      [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
-      rationale,
-    ),
-  };
 }
 
 function admissionRelationshipContinuationFilters(
@@ -1639,123 +1662,10 @@ function admissionRelationshipContinuationFilters(
   return Object.keys(retained).length === 0 ? undefined : retained;
 }
 
-function nextPageContinuation(
-  inquiry: Inquiry,
-  id: string,
-  rationale: string,
-  nextOffset: number,
-  limit: number,
-): Continuation {
-  return {
-    id,
-    kind: ContinuationKind.NextPage,
-    priority: ContinuationPriority.Primary,
-    rationale,
-    inquiry: {
-      ...inquiry,
-      page: { size: limit, cursor: String(nextOffset) },
-    },
-    route: route(
-      NavigationPlane.Addressing,
-      NavigationRelation.NextPageOf,
-      [],
-      rationale,
-    ),
-  };
-}
-
-function sourceRangeLocus(range: SourceRange) {
-  return {
-    kind: LocusKind.SourceRange,
-    range,
-  } as const;
-}
-
 function sourceRangeForExportEntry(row: {
   readonly exportEntry: { readonly targets: readonly SourceTargetRow[] };
 }): SourceRange | null {
   return sourceRangeForTarget(row.exportEntry.targets[0]);
-}
-
-function sourceRangeForTarget(
-  target: SourceTargetRow | undefined,
-): SourceRange | null {
-  if (target?.file === undefined || target.span === undefined) {
-    return null;
-  }
-  return sourceRangeFromFileSpan(target.file.repoPath, target.span);
-}
-
-function sourceRangeForCallSiteEntry(callSite: {
-  readonly file: { readonly repoPath: string };
-  readonly span: SourceSpan;
-}): SourceRange {
-  return sourceRangeFromFileSpan(callSite.file.repoPath, callSite.span);
-}
-
-function sourceRangeFromFileSpan(
-  filePath: string,
-  span: {
-    readonly startLine: number;
-    readonly startCharacter: number;
-    readonly endLine: number;
-    readonly endCharacter: number;
-  },
-): SourceRange {
-  return {
-    filePath,
-    start: {
-      line: span.startLine - 1,
-      character: span.startCharacter - 1,
-    },
-    end: {
-      line: span.endLine - 1,
-      character: span.endCharacter - 1,
-    },
-  };
-}
-
-function pageInfo(
-  inquiry: Inquiry,
-  returned: number,
-  total: number,
-  limit: number,
-  nextOffset: number | undefined,
-) {
-  return {
-    size: limit,
-    cursor: inquiry.page?.cursor,
-    returned,
-    total,
-    ...(nextOffset === undefined ? {} : { nextCursor: String(nextOffset) }),
-  };
-}
-
-function pageRows<TValue>(
-  rows: readonly TValue[],
-  offset: number,
-  limit: number,
-): { readonly rows: readonly TValue[]; readonly nextOffset?: number } {
-  const page = rows.slice(offset, offset + limit);
-  const nextOffset =
-    offset + page.length < rows.length ? offset + page.length : undefined;
-  return {
-    rows: page,
-    ...(nextOffset === undefined ? {} : { nextOffset }),
-  };
-}
-
-function pageOffset(inquiry: Inquiry): number {
-  const cursor = inquiry.page?.cursor;
-  if (cursor === undefined) {
-    return 0;
-  }
-  const parsed = Number.parseInt(cursor, 10);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function evidenceLimit(inquiry: Inquiry): number {
-  return clampBudget(inquiry.budget?.evidencePerSubject, 5, 20);
 }
 
 function frameworkAdmissionBasis(sourceProject: SourceProject): Basis {
@@ -1774,27 +1684,4 @@ function frameworkAdmissionBasisSummary(): Basis {
     summary:
       "Answered from evaluator-derived framework bundle admissions joined to TypeChecker-classified DI, resource, registry, factory, and lifecycle targets.",
   };
-}
-
-function route(
-  plane: NavigationPlane,
-  relation: NavigationRelation,
-  basis: readonly BasisKind[],
-  summary: string,
-): NavigationRouteClaim {
-  return { plane, relation, basis, summary };
-}
-
-function countBy<TValue>(
-  rows: readonly TValue[],
-  keyFor: (row: TValue) => string,
-): Readonly<Record<string, number>> {
-  const counts: Record<string, number> = {};
-  for (const row of rows) {
-    const key = keyFor(row);
-    counts[key] = (counts[key] ?? 0) + 1;
-  }
-  return Object.fromEntries(
-    Object.entries(counts).sort(([left], [right]) => left.localeCompare(right)),
-  );
 }

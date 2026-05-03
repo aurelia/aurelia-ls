@@ -33,7 +33,7 @@ export const DEFAULT_SESSION_HEARTBEAT_INTERVAL_MS = 2_000;
 /** Default request timeout for source-backed inquiry work. */
 export const DEFAULT_SESSION_REQUEST_TIMEOUT_MS = 30_000;
 
-/** Default startup timeout for heavyweight daemon boot indexes. */
+/** Default startup timeout while the daemon publishes and answers its first status probe. */
 export const DEFAULT_SESSION_STARTUP_TIMEOUT_MS = 180_000;
 
 const STARTUP_LOCK_SCHEMA_VERSION = "atlas-session-startup-lock-v1" as const;

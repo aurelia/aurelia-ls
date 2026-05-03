@@ -15,6 +15,7 @@ import {
 } from "../../framework/syntax.js";
 import {
   readTypeScriptCallSiteEntry,
+  SourceProjectMemo,
   type SourceFileIdentity,
   type SourceProject,
   type TypeScriptCallSiteEntry,
@@ -41,6 +42,8 @@ export const enum FrameworkResourceInstantiationKind {
   ExpressionResourceLookup = "expression-resource-lookup",
   /** Binding command instances are reached by the template compiler and produce instruction records. */
   CompilerCommand = "compiler-command",
+  /** Attribute pattern handlers are registered with the compiler parser and resolved while parsing attributes. */
+  SyntaxPatternHandler = "syntax-pattern-handler",
   /** The resource carrier defines metadata/definition but no runtime materialization route is modeled yet. */
   DefinitionOnly = "definition-only",
 }
@@ -65,6 +68,12 @@ export const enum FrameworkResourceMaterializationSiteKind {
   CompilerCommandResolution = "compiler-command-resolution",
   /** The template compiler invokes binding-command build(...) to produce an instruction. */
   CompilerCommandBuild = "compiler-command-build",
+  /** AttributePattern.create(...) creates a registry for compiler syntax patterns. */
+  AttributePatternRegistry = "attribute-pattern-registry",
+  /** AttributeParser records pattern definitions and handler types during registration. */
+  AttributePatternRegistration = "attribute-pattern-registration",
+  /** AttributeParser resolves the handler instance for a matched pattern. */
+  AttributePatternHandlerResolution = "attribute-pattern-handler-resolution",
 }
 
 /** Low-level framework site that can materialize or apply a resource. */
@@ -133,8 +142,7 @@ export interface FrameworkResourceInstantiationRow {
   readonly summary: string;
 }
 
-const resourceMaterializationSitesByProject = new WeakMap<
-  SourceProject,
+const resourceMaterializationSitesMemo = new SourceProjectMemo<
   readonly FrameworkResourceMaterializationSiteRow[]
 >();
 
@@ -189,30 +197,26 @@ export function readFrameworkResourceInstantiationRows(
 function readFrameworkResourceMaterializationSites(
   sourceProject: SourceProject,
 ): readonly FrameworkResourceMaterializationSiteRow[] {
-  const cached = resourceMaterializationSitesByProject.get(sourceProject);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const callSites = sourceProject
-    .ownedSourceFiles()
-    .flatMap((sourceFile) =>
-      shouldScanMaterializationSourceFile(sourceProject, sourceFile)
-        ? materializationSitesForSourceFile(sourceProject, sourceFile)
-        : [],
+  return resourceMaterializationSitesMemo.read(sourceProject, () => {
+    const callSites = sourceProject
+      .ownedSourceFiles()
+      .flatMap((sourceFile) =>
+        shouldScanMaterializationSourceFile(sourceProject, sourceFile)
+          ? materializationSitesForSourceFile(sourceProject, sourceFile)
+          : [],
+      );
+    const syntaxProducts = readFrameworkSyntaxProducts(sourceProject, {
+      producerKind: FrameworkSyntaxProducerKind.BindingCommand,
+      productKind: FrameworkSyntaxProductKind.BuildsInstruction,
+    }).map(materializationSiteForSyntaxProduct);
+    return [...callSites, ...syntaxProducts].sort(
+      (left, right) =>
+        left.source.filePath.localeCompare(right.source.filePath) ||
+        left.source.start.line - right.source.start.line ||
+        left.source.start.character - right.source.start.character ||
+        left.siteKind.localeCompare(right.siteKind),
     );
-  const syntaxProducts = readFrameworkSyntaxProducts(sourceProject, {
-    producerKind: FrameworkSyntaxProducerKind.BindingCommand,
-    productKind: FrameworkSyntaxProductKind.BuildsInstruction,
-  }).map(materializationSiteForSyntaxProduct);
-  const rows = [...callSites, ...syntaxProducts].sort(
-    (left, right) =>
-      left.source.filePath.localeCompare(right.source.filePath) ||
-      left.source.start.line - right.source.start.line ||
-      left.source.start.character - right.source.start.character ||
-      left.siteKind.localeCompare(right.siteKind),
-  );
-  resourceMaterializationSitesByProject.set(sourceProject, rows);
-  return rows;
+  });
 }
 
 function shouldScanMaterializationSourceFile(
@@ -220,7 +224,11 @@ function shouldScanMaterializationSourceFile(
   sourceFile: ts.SourceFile,
 ): boolean {
   const packageId = sourceProject.packageForFileName(sourceFile.fileName)?.id;
-  return packageId === "runtime-html" || packageId === "template-compiler";
+  return (
+    packageId === "runtime-html" ||
+    packageId === "template-compiler" ||
+    sourceFile.text.includes("AttributePattern.create")
+  );
 }
 
 function materializationSitesForSourceFile(
@@ -290,6 +298,9 @@ function materializationSiteForCall(
     packageName,
     callSite,
     subjectText: descriptor.subjectText,
+    ...(descriptor.producerName === undefined
+      ? {}
+      : { producerName: descriptor.producerName }),
     source,
     summary: descriptor.summary,
   };
@@ -312,6 +323,10 @@ function isPotentialMaterializationCall(
     (filePath.endsWith("template-compiler/src/template-compiler.ts") &&
       ((tail === "get" && calleeText.endsWith("._commandResolver.get")) ||
         (tail === "build" && calleeText.endsWith(".build")))) ||
+    calleeText === "AttributePattern.create" ||
+    (filePath.endsWith("template-compiler/src/attribute-pattern.ts") &&
+      (tail === "registerPattern" ||
+        (tail === "get" && calleeText.endsWith("._container.get")))) ||
     (filePath.endsWith("binding/binding-utils.ts") &&
       (calleeText.includes("behavior") || calleeText.includes("vc."))) ||
     (resourceKindsForResourceFile(filePath).length > 0 &&
@@ -351,6 +366,7 @@ interface MaterializationCallDescriptor {
   readonly phase: FrameworkRelationshipPhase;
   readonly resourceKinds: readonly FrameworkResourceDefinitionKind[];
   readonly subjectText: string;
+  readonly producerName?: string;
   readonly summary: string;
 }
 
@@ -456,7 +472,73 @@ function materializationCallDescriptor(
         "Template compiler invokes a binding-command build(...) method to produce an instruction.",
     };
   }
+  const attributePatternDescriptor = attributePatternDescriptorForCall(
+    call,
+    sourceFile,
+    tail,
+    calleeText,
+    filePath,
+  );
+  if (attributePatternDescriptor !== null) {
+    return attributePatternDescriptor;
+  }
   return expressionApplicationDescriptor(tail, calleeText, filePath);
+}
+
+function attributePatternDescriptorForCall(
+  call: ts.CallExpression,
+  sourceFile: ts.SourceFile,
+  tail: string | null,
+  calleeText: string,
+  filePath: string,
+): MaterializationCallDescriptor | null {
+  if (calleeText === "AttributePattern.create") {
+    const typeArgument = call.arguments[1];
+    return {
+      siteKind:
+        FrameworkResourceMaterializationSiteKind.AttributePatternRegistry,
+      relation: FrameworkRelationshipRelation.RegistersResource,
+      mechanism: FrameworkRelationshipMechanism.ResourceRegister,
+      phase: FrameworkRelationshipPhase.Definition,
+      resourceKinds: [FrameworkResourceDefinitionKind.AttributePattern],
+      subjectText: calleeText,
+      ...(typeArgument === undefined || ts.isSpreadElement(typeArgument)
+        ? {}
+        : { producerName: typeArgument.getText(sourceFile) }),
+      summary:
+        "AttributePattern.create produces a registry for compiler syntax pattern handlers.",
+    };
+  }
+  if (!filePath.endsWith("template-compiler/src/attribute-pattern.ts")) {
+    return null;
+  }
+  if (tail === "registerPattern") {
+    return {
+      siteKind:
+        FrameworkResourceMaterializationSiteKind.AttributePatternRegistration,
+      relation: FrameworkRelationshipRelation.RegistersResource,
+      mechanism: FrameworkRelationshipMechanism.ResourceRegister,
+      phase: FrameworkRelationshipPhase.Registration,
+      resourceKinds: [FrameworkResourceDefinitionKind.AttributePattern],
+      subjectText: calleeText,
+      summary:
+        "AttributePattern registry adds pattern definitions and handler types to IAttributeParser.",
+    };
+  }
+  if (tail === "get" && calleeText.endsWith("._container.get")) {
+    return {
+      siteKind:
+        FrameworkResourceMaterializationSiteKind.AttributePatternHandlerResolution,
+      relation: FrameworkRelationshipRelation.ResolvesResource,
+      mechanism: FrameworkRelationshipMechanism.ContainerGet,
+      phase: FrameworkRelationshipPhase.Compilation,
+      resourceKinds: [FrameworkResourceDefinitionKind.AttributePattern],
+      subjectText: calleeText,
+      summary:
+        "AttributeParser resolves the handler instance for a matched attribute pattern.",
+    };
+  }
+  return null;
 }
 
 function viewModelConstructionDescriptor(
@@ -789,6 +871,21 @@ function resourceInstantiationKinds(
         )
       ) {
         kinds.push(FrameworkResourceInstantiationKind.CompilerCommand);
+      }
+      break;
+    case FrameworkResourceDefinitionKind.AttributePattern:
+      if (
+        materializationSites.some(
+          (site) =>
+            site.siteKind ===
+              FrameworkResourceMaterializationSiteKind.AttributePatternRegistry ||
+            site.siteKind ===
+              FrameworkResourceMaterializationSiteKind.AttributePatternRegistration ||
+            site.siteKind ===
+              FrameworkResourceMaterializationSiteKind.AttributePatternHandlerResolution,
+        )
+      ) {
+        kinds.push(FrameworkResourceInstantiationKind.SyntaxPatternHandler);
       }
       break;
     default:

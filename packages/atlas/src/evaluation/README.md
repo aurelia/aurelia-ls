@@ -7,7 +7,11 @@ resource definitions, registrations, and world-construction paths have to be int
 ## Responsibilities
 
 - Evaluate literals, arrays, objects, property reads, simple operators, conditionals, and local function returns.
-- Build module-local environments from imports, functions, classes, enums, and variable declarations.
+- Build module-local environments from imports, functions, classes, enums, variable declarations, and simple binding
+  patterns that preserve exported local names.
+- Provide reusable module graph/evaluator primitives that callers can link with their own resolver policy.
+- Represent calm ECMAScript host primitives that framework source uses as declaration machinery, currently
+  `Symbol.for(...)`, `Object.freeze(...)`/package-local freeze aliases, and object-binding exports.
 - Preserve unsupported syntax, unresolved identifiers, dynamic calls, mutation pressure, and branch uncertainty as open seams.
 - Offer an intrinsic hook for known pure helper calls without importing the target package.
 - Stay framework-neutral at the core: Aurelia resource, registration, DI, and materialization readers sit above this layer.
@@ -26,3 +30,8 @@ This layer should publish its expression set, statement set, budgets, and open-s
 substrates can add small intrinsics or readers that declare a helper call as pure within a named model; the evaluator
 itself should not grow private Aurelia semantics, and internal repo semantics should be shaped so the TypeChecker is
 enough.
+
+The generic module graph intentionally does not know how `@aurelia/*` should resolve. Framework package source booting
+lives in `framework/module-boot.ts`, where package imports are resolved to the Aurelia submodule `src/` files. Keep that
+boundary: linked ECMAScript evaluation is generic machinery, while "framework packages must boot from source, not
+`.d.ts`" is Aurelia framework policy.

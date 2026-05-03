@@ -1,6 +1,9 @@
 import ts from "typescript";
 
-import { type SourceProject } from "../../source/index.js";
+import {
+  SourceProjectMemo,
+  type SourceProject,
+} from "../../source/index.js";
 import {
   type FrameworkDiInterfaceExportRow,
   type FrameworkPackageExportRow,
@@ -33,8 +36,7 @@ import {
   visibleExpressionName,
 } from "./framework-ts-utils.js";
 
-const bundleClassificationContextByProject = new WeakMap<
-  SourceProject,
+const bundleClassificationContextMemo = new SourceProjectMemo<
   FrameworkBundleClassificationContext
 >();
 
@@ -81,13 +83,9 @@ export interface FrameworkBundleClassificationMetrics {
 export function readFrameworkBundleClassificationContext(
   sourceProject: SourceProject,
 ): FrameworkBundleClassificationContext {
-  const cached = bundleClassificationContextByProject.get(sourceProject);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const context = createFrameworkBundleClassificationContext(sourceProject);
-  bundleClassificationContextByProject.set(sourceProject, context);
-  return context;
+  return bundleClassificationContextMemo.read(sourceProject, () =>
+    createFrameworkBundleClassificationContext(sourceProject),
+  );
 }
 
 export function createFrameworkBundleClassificationContext(

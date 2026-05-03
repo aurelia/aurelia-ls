@@ -1,8 +1,7 @@
-import { type SourceProject } from "../../source/index.js";
 import {
-  readFrameworkEntityCatalogCache,
-  writeFrameworkEntityCatalogCache,
-} from "./framework-cache.js";
+  SourceProjectKeyedMemo,
+  type SourceProject,
+} from "../../source/index.js";
 import {
   candidateExportNamesForPackage,
   catalogClassificationTexts,
@@ -37,24 +36,21 @@ import {
   readFrameworkPackageNames,
 } from "./framework-package-exports.js";
 
-const appTaskEntityRowsByPackageByProject = new WeakMap<
-  SourceProject,
-  Map<string, readonly FrameworkAppTaskEntityRow[]>
+const appTaskEntityRowsByPackage = new SourceProjectKeyedMemo<
+  string,
+  readonly FrameworkAppTaskEntityRow[]
 >();
-
-const routerEntityRowsByPackageByProject = new WeakMap<
-  SourceProject,
-  Map<string, readonly FrameworkRouterEntityRow[]>
+const routerEntityRowsByPackage = new SourceProjectKeyedMemo<
+  string,
+  readonly FrameworkRouterEntityRow[]
 >();
-
-const expressionEntityRowsByPackageByProject = new WeakMap<
-  SourceProject,
-  Map<string, readonly FrameworkExpressionEntityRow[]>
+const expressionEntityRowsByPackage = new SourceProjectKeyedMemo<
+  string,
+  readonly FrameworkExpressionEntityRow[]
 >();
-
-const renderingStructureRowsByPackageByProject = new WeakMap<
-  SourceProject,
-  Map<string, readonly FrameworkRenderingStructureEntityRow[]>
+const renderingStructureRowsByPackage = new SourceProjectKeyedMemo<
+  string,
+  readonly FrameworkRenderingStructureEntityRow[]
 >();
 
 export function readFrameworkAppTaskEntities(
@@ -120,40 +116,20 @@ export function readFrameworkAppTaskEntityPackageRows(
   packageId: string,
   _packageName: string,
 ): readonly FrameworkAppTaskEntityRow[] {
-  const cache =
-    appTaskEntityRowsByPackageByProject.get(sourceProject) ??
-    new Map<string, readonly FrameworkAppTaskEntityRow[]>();
-  if (!appTaskEntityRowsByPackageByProject.has(sourceProject)) {
-    appTaskEntityRowsByPackageByProject.set(sourceProject, cache);
-  }
-  const cached = cache.get(packageId);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const diskCached = readFrameworkEntityCatalogCache<FrameworkAppTaskEntityRow>(
-    sourceProject,
-    "app-tasks",
-    packageId,
-  );
-  if (diskCached !== undefined) {
-    cache.set(packageId, diskCached);
-    return diskCached;
-  }
-  const candidateNames = candidateExportNamesForPackage(
-    sourceProject,
-    packageId,
-    false,
-    isAppTaskNameCandidate,
-  );
-  const rows = packageExportsForCandidateNames(
-    sourceProject,
-    packageId,
-    candidateNames,
-    false,
-  ).flatMap((row) => appTaskEntityRowForPackageExport(row));
-  cache.set(packageId, rows);
-  writeFrameworkEntityCatalogCache(sourceProject, "app-tasks", packageId, rows);
-  return rows;
+  return appTaskEntityRowsByPackage.read(sourceProject, packageId, () => {
+    const candidateNames = candidateExportNamesForPackage(
+      sourceProject,
+      packageId,
+      false,
+      isAppTaskNameCandidate,
+    );
+    return packageExportsForCandidateNames(
+      sourceProject,
+      packageId,
+      candidateNames,
+      false,
+    ).flatMap((row) => appTaskEntityRowForPackageExport(row));
+  });
 }
 
 export function appTaskEntityRowForPackageExport(
@@ -243,47 +219,22 @@ export function readFrameworkRouterEntityPackageRows(
   packageId: string,
   _packageName: string,
 ): readonly FrameworkRouterEntityRow[] {
-  const cache =
-    routerEntityRowsByPackageByProject.get(sourceProject) ??
-    new Map<string, readonly FrameworkRouterEntityRow[]>();
-  if (!routerEntityRowsByPackageByProject.has(sourceProject)) {
-    routerEntityRowsByPackageByProject.set(sourceProject, cache);
-  }
-  const cached = cache.get(packageId);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const diskCached = readFrameworkEntityCatalogCache<FrameworkRouterEntityRow>(
-    sourceProject,
-    "router-entities",
-    packageId,
-  );
-  if (diskCached !== undefined) {
-    cache.set(packageId, diskCached);
-    return diskCached;
-  }
-  const includePackage =
-    packageId === "router" || packageId === "route-recognizer";
-  const candidateNames = candidateExportNamesForPackage(
-    sourceProject,
-    packageId,
-    includePackage,
-    isRouterNameCandidate,
-  );
-  const rows = packageExportsForCandidateNames(
-    sourceProject,
-    packageId,
-    candidateNames,
-    packageId === "router",
-  ).flatMap((row) => routerEntityRowForPackageExport(row, includePackage));
-  cache.set(packageId, rows);
-  writeFrameworkEntityCatalogCache(
-    sourceProject,
-    "router-entities",
-    packageId,
-    rows,
-  );
-  return rows;
+  return routerEntityRowsByPackage.read(sourceProject, packageId, () => {
+    const includePackage =
+      packageId === "router" || packageId === "route-recognizer";
+    const candidateNames = candidateExportNamesForPackage(
+      sourceProject,
+      packageId,
+      includePackage,
+      isRouterNameCandidate,
+    );
+    return packageExportsForCandidateNames(
+      sourceProject,
+      packageId,
+      candidateNames,
+      packageId === "router",
+    ).flatMap((row) => routerEntityRowForPackageExport(row, includePackage));
+  });
 }
 
 export function routerEntityRowForPackageExport(
@@ -378,47 +329,23 @@ export function readFrameworkExpressionEntityPackageRows(
   packageId: string,
   _packageName: string,
 ): readonly FrameworkExpressionEntityRow[] {
-  const cache =
-    expressionEntityRowsByPackageByProject.get(sourceProject) ??
-    new Map<string, readonly FrameworkExpressionEntityRow[]>();
-  if (!expressionEntityRowsByPackageByProject.has(sourceProject)) {
-    expressionEntityRowsByPackageByProject.set(sourceProject, cache);
-  }
-  const cached = cache.get(packageId);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const diskCached =
-    readFrameworkEntityCatalogCache<FrameworkExpressionEntityRow>(
+  return expressionEntityRowsByPackage.read(sourceProject, packageId, () => {
+    const includePackage = packageId === "expression-parser";
+    const candidateNames = candidateExportNamesForPackage(
       sourceProject,
-      "expression-entities",
       packageId,
+      includePackage,
+      isExpressionNameCandidate,
     );
-  if (diskCached !== undefined) {
-    cache.set(packageId, diskCached);
-    return diskCached;
-  }
-  const includePackage = packageId === "expression-parser";
-  const candidateNames = candidateExportNamesForPackage(
-    sourceProject,
-    packageId,
-    includePackage,
-    isExpressionNameCandidate,
-  );
-  const rows = packageExportsForCandidateNames(
-    sourceProject,
-    packageId,
-    candidateNames,
-    false,
-  ).flatMap((row) => expressionEntityRowForPackageExport(row, includePackage));
-  cache.set(packageId, rows);
-  writeFrameworkEntityCatalogCache(
-    sourceProject,
-    "expression-entities",
-    packageId,
-    rows,
-  );
-  return rows;
+    return packageExportsForCandidateNames(
+      sourceProject,
+      packageId,
+      candidateNames,
+      false,
+    ).flatMap((row) =>
+      expressionEntityRowForPackageExport(row, includePackage),
+    );
+  });
 }
 
 export function expressionEntityRowForPackageExport(
@@ -515,46 +442,24 @@ export function readFrameworkRenderingStructurePackageRows(
   packageId: string,
   _packageName: string,
 ): readonly FrameworkRenderingStructureEntityRow[] {
-  const cache =
-    renderingStructureRowsByPackageByProject.get(sourceProject) ??
-    new Map<string, readonly FrameworkRenderingStructureEntityRow[]>();
-  if (!renderingStructureRowsByPackageByProject.has(sourceProject)) {
-    renderingStructureRowsByPackageByProject.set(sourceProject, cache);
-  }
-  const cached = cache.get(packageId);
-  if (cached !== undefined) {
-    return cached;
-  }
-  const diskCached =
-    readFrameworkEntityCatalogCache<FrameworkRenderingStructureEntityRow>(
-      sourceProject,
-      "rendering-structures",
-      packageId,
-    );
-  if (diskCached !== undefined) {
-    cache.set(packageId, diskCached);
-    return diskCached;
-  }
-  const candidateNames = candidateExportNamesForPackage(
+  return renderingStructureRowsByPackage.read(
     sourceProject,
     packageId,
-    false,
-    isRenderingStructureNameCandidate,
+    () => {
+      const candidateNames = candidateExportNamesForPackage(
+        sourceProject,
+        packageId,
+        false,
+        isRenderingStructureNameCandidate,
+      );
+      return packageExportsForCandidateNames(
+        sourceProject,
+        packageId,
+        candidateNames,
+        false,
+      ).flatMap((row) => renderingStructureRowForPackageExport(row));
+    },
   );
-  const rows = packageExportsForCandidateNames(
-    sourceProject,
-    packageId,
-    candidateNames,
-    false,
-  ).flatMap((row) => renderingStructureRowForPackageExport(row));
-  cache.set(packageId, rows);
-  writeFrameworkEntityCatalogCache(
-    sourceProject,
-    "rendering-structures",
-    packageId,
-    rows,
-  );
-  return rows;
 }
 
 export function renderingStructureRowForPackageExport(
