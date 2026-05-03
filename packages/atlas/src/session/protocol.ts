@@ -1,6 +1,7 @@
 import type { OutcomeKind } from "../inquiry/answer.js";
 import type { Continuation } from "../inquiry/continuation.js";
 import type { LensId } from "../inquiry/lens.js";
+import type { FrameworkEmulationSymbolsReport } from "../inquiry/runtime/index.js";
 import type { SourceProjectSummary } from "../source/index.js";
 
 /** Schema marker for the on-disk inquiry session manifest. */
@@ -56,6 +57,8 @@ export const enum InquirySessionMethod {
   Ask = "ask",
   /** Follow one continuation through the runtime API. */
   Follow = "follow",
+  /** Build the deterministic framework emulation symbols Markdown report. */
+  FrameworkEmulationSymbolsReport = "framework.emulationSymbolsReport",
   /** Run lightweight self-coherence checks inside the daemon. */
   SelfCheck = "self.check",
   /** Politely stop the daemon after responding. */
@@ -118,6 +121,10 @@ export interface InquirySessionFollowParams {
   /** Continuation returned by a previous answer. */
   readonly continuation: Continuation;
 }
+
+/** Result returned by the framework emulation symbols report endpoint. */
+export type InquirySessionFrameworkEmulationSymbolsReportResult =
+  FrameworkEmulationSymbolsReport;
 
 /** Parameters accepted by the shutdown protocol method. */
 export interface InquirySessionShutdownParams {

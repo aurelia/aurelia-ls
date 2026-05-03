@@ -116,6 +116,18 @@ rows around high-salience class/interface names such as `Aurelia`, `Container`, 
 nodes and claim-predicate-like signed relations are the durable kernel, while route continuations and source projections
 are navigation over the graph. Do not turn this into another broad compatibility adapter; if a family cannot project a
 signed claim with clear subject, predicate, object, owner lens, basis, and evidence, improve that family first.
+`framework.composition:emulation` is the current Atlas-side bridge from framework stitching to semantic-runtime work.
+It derives obligation rows from DI-world spending, resource convergence, TemplateCompiler compile/classification rows,
+hydration-flow, and render consequences. The row axis intentionally distinguishes `ecmascript-evaluation`,
+`semantic-runtime-emulator`, `virtualized-runtime`, and `typescript-handoff`: DI, registration, compilation, and
+resolved hydration stay on the evaluator/emulator side, built-in template controllers become virtualized runtime
+obligations, and binding/observation/reactivity rows mark the TypeChecker-backed handoff. Keep this as a compact
+worklist with source/owner continuations; do not encode semantic-runtime's final product ontology here unless auLink or
+product-owned metadata makes that bridge explicit.
+The deterministic report endpoint `createApi().frameworkEmulationSymbolsReport()` renders this view together with
+`framework.observation:entities` into `packages/atlas/workbench/emulation-symbols.md` via
+`pnpm --filter @aurelia-ls/atlas report:framework-emulation`. Treat that Markdown as a maintainer eyeball golden:
+re-run it to review semantic drift, but keep architectural truth in the underlying emulation/observation substrates.
 
 `atlas.self:enum-mappings` should remain exact enum-member translation evidence. Raw literal/member value overlap lives
 in `enum-value-spaces`; do not re-expand mapping rows to include incidental string literals or enum initializer value

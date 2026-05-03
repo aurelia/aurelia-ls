@@ -2199,6 +2199,11 @@ export const LensCatalog: readonly LensSpec[] = [
         summary:
           "Signed subject-predicate-object claims involving selected actors.",
       },
+      {
+        id: "emulation",
+        summary:
+          "Derived semantic-runtime emulation obligations across DI world, resources, JIT compilation, hydration, virtualization, and TypeChecker handoff.",
+      },
     ],
     parameters: [
       {
@@ -2243,6 +2248,30 @@ export const LensCatalog: readonly LensSpec[] = [
         role: ParameterRole.Filter,
         summary:
           "Filter composition actors and claims by exact substring across endpoint names.",
+      },
+      {
+        id: "emulationLayer",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter emulation obligations by semantic-runtime layer such as di-world, jit-compilation, resolved-hydration, or typechecker-reactivity.",
+      },
+      {
+        id: "emulationMode",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter emulation obligations by modeling mode such as ecmascript-evaluation, semantic-runtime-emulator, virtualized-runtime, or typescript-handoff.",
+      },
+      {
+        id: "obligationKind",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter emulation obligations by worklist kind such as materialize-di-key, compile-template, hydrate-runtime, or model-observation.",
+      },
+      {
+        id: "targetName",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter emulation obligations by owner or target name.",
       },
     ],
     outputKinds: [

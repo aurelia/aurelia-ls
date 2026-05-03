@@ -2,7 +2,11 @@ import type { Answer } from "../inquiry/answer.js";
 import type { Continuation } from "../inquiry/continuation.js";
 import { LensId, type LensFamily, type LensStage } from "../inquiry/lens.js";
 import { RepoRootLocus } from "../inquiry/locus.js";
-import type { InquiryRuntimeRequest, SelfValue } from "../inquiry/runtime/index.js";
+import type {
+  FrameworkEmulationSymbolsReport,
+  InquiryRuntimeRequest,
+  SelfValue,
+} from "../inquiry/runtime/index.js";
 import type { InquirySurfaceMap } from "../inquiry/surface-map.js";
 import type { SourceProjectSummary } from "../source/index.js";
 import { ensureInquirySession, type EnsureInquirySessionOptions } from "./client.js";
@@ -84,6 +88,7 @@ export interface OrientationEntrypoints {
   readonly map: "createApi().map(focus?)";
   readonly ask: "createApi().ask({ lens, locus?, subject?, projection?, filters?, budget?, page? })";
   readonly follow: "createApi().follow(continuation)";
+  readonly frameworkEmulationSymbolsReport: "createApi().frameworkEmulationSymbolsReport()";
   readonly selfCheck: "createApi().selfCheck()";
 }
 
@@ -163,6 +168,8 @@ export interface Api {
   ask(input: InquiryRuntimeRequest): Promise<Answer>;
   /** Follow one continuation through the daemon-held runtime API. */
   follow(continuation: Continuation): Promise<Answer>;
+  /** Build the deterministic framework emulation symbols Markdown report. */
+  frameworkEmulationSymbolsReport(): Promise<FrameworkEmulationSymbolsReport>;
   /** Run lightweight self-coherence checks inside the daemon. */
   selfCheck(): Promise<InquirySessionSelfCheckResult>;
   /** Politely stop the daemon after it responds. */
@@ -213,6 +220,10 @@ export function createApi(
       const session = await ensureInquirySession(options);
       return session.follow(continuation);
     },
+    frameworkEmulationSymbolsReport: async () => {
+      const session = await ensureInquirySession(options);
+      return session.frameworkEmulationSymbolsReport();
+    },
     selfCheck: async () => {
       const session = await ensureInquirySession(options);
       return session.selfCheck();
@@ -244,6 +255,7 @@ function createOrientationGuide(
       map: "createApi().map(focus?)",
       ask: "createApi().ask({ lens, locus?, subject?, projection?, filters?, budget?, page? })",
       follow: "createApi().follow(continuation)",
+      frameworkEmulationSymbolsReport: "createApi().frameworkEmulationSymbolsReport()",
       selfCheck: "createApi().selfCheck()",
     },
     contract: {

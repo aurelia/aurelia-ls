@@ -25,6 +25,11 @@ source/type/semantic route claims.
 
 `createAtlasApi().orient()` is the highest-level entrypoint. It returns daemon status, the surface map, the `atlas.self` maintenance answer, and first continuations through the same auto-starting session path. The package script `pnpm --filter @aurelia-ls/atlas orient` is the stable Codex-facing activation call.
 
+`createApi().frameworkEmulationSymbolsReport()` returns the deterministic framework emulation Markdown report used as
+the StandardConfiguration/composition eyeball golden. Re-run it with
+`pnpm --filter @aurelia-ls/atlas report:framework-emulation`, which writes
+`packages/atlas/workbench/emulation-symbols.md`.
+
 ## Map
 
 - [src](src/README.md) is the implementation root.

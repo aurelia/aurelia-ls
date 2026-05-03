@@ -25,6 +25,12 @@ the caller to inspect Atlas source. Richer API teaching stays behind follow-up i
 `framework.discovery:recipes`, and `atlas.self:recipes`, so the orientation answer can stay compact while still making
 the TypeScript/IDE, framework cross-lens, and Atlas self-maintenance surfaces discoverable.
 
+`createApi().frameworkEmulationSymbolsReport()` is the named report endpoint for the StandardConfiguration/framework
+emulation eyeball golden. It runs inside the same daemon-held source project as normal inquiries and returns
+deterministic Markdown plus compact stats. The package script
+`pnpm --filter @aurelia-ls/atlas report:framework-emulation` writes that Markdown to
+`packages/atlas/workbench/emulation-symbols.md` so maintainers can re-run it and inspect the diff.
+
 `ensureInquirySession()` computes the current build hash, probes the manifest, reuses a compatible daemon, asks an
 incompatible daemon to shut down, or starts a new detached process from `dist/session/daemon.js`. Startup constructs the
 hot source project and leaves framework projection answers on demand; do not add daemon projection warmup unless profiling shows a repeated

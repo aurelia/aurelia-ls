@@ -8,7 +8,7 @@ import {
   type AuLinkAnchorRow,
   type SourceProject,
 } from "../../source/index.js";
-import { OutcomeKind, type Answer } from "../answer.js";
+import { createAnswer, OutcomeKind, type Answer } from "../answer.js";
 import {
   BasisAuthority,
   BasisClosure,
@@ -42,6 +42,13 @@ import {
   projectionContinuation,
 } from "./framework-continuation-core.js";
 import { readFrameworkCompilerRelationships } from "./framework-compiler-lenses.js";
+import {
+  frameworkEmulationValue,
+  readFrameworkEmulationObligations,
+  type FrameworkEmulationFilters,
+  type FrameworkEmulationObligationRow,
+  type FrameworkEmulationViewValue,
+} from "./framework-emulation-view.js";
 import { type FrameworkDiscoveryFilters } from "./framework-filters.js";
 import {
   type FrameworkLifecycleFilters,
@@ -78,6 +85,10 @@ interface FrameworkCompositionFilters extends FrameworkDiscoveryFilters {
   readonly relation?: string;
   readonly mechanism?: string;
   readonly phase?: string;
+  readonly emulationLayer?: string;
+  readonly emulationMode?: string;
+  readonly obligationKind?: string;
+  readonly targetName?: string;
 }
 
 interface RelationshipClaimInput {
@@ -111,13 +122,61 @@ const COMPOSITION_CLAIM_ROW_FAMILY = new PagedRowFamily<SemanticClaim>({
   continuationsForPage: claimContinuations,
 });
 
+const EMULATION_OBLIGATION_ROW_FAMILY =
+  new PagedRowFamily<FrameworkEmulationObligationRow>({
+    id: "framework.composition:emulation",
+    rowLabel: "framework emulation obligation row(s)",
+    evidenceForRow: evidenceForEmulationObligation,
+    continuationsForPage: emulationObligationContinuations,
+  });
+
 /** Answer actor-centered framework composition inquiries. */
 export function answerFrameworkComposition(
   inquiry: Inquiry,
   sourceProject: SourceProject,
-): Answer<SemanticCompositionValue> {
+): Answer<SemanticCompositionValue | FrameworkEmulationViewValue> {
   const projection = inquiry.projection ?? "summary";
   const filters = compositionFiltersFromInquiry(inquiry);
+  const limit = clampBudget(
+    inquiry.budget?.rows,
+    projection === "emulation" ? 12 : 80,
+    1_000,
+  );
+  const offset = pageOffset(inquiry);
+  const basis = compositionBasis(sourceProject);
+
+  if (projection === "emulation") {
+    const emulationFilters = emulationFiltersFromInquiry(inquiry);
+    const rows = readFrameworkEmulationObligations(
+      sourceProject,
+      emulationFilters,
+    );
+    const value = frameworkEmulationValue(rows);
+    if (isEmulationOverviewInquiry(inquiry, emulationFilters)) {
+      return createAnswer(
+        inquiry,
+        rows.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
+        `Framework emulation view has ${rows.length} obligation row(s), ${value.handoffCount} handoff/virtualization row(s). Ask for a mode/layer slice or row budget to expand rows.`,
+        {
+          value,
+          basis,
+          evidence: [],
+          continuations: emulationOverviewContinuations(inquiry),
+        },
+      );
+    }
+    return EMULATION_OBLIGATION_ROW_FAMILY.answer({
+      inquiry,
+      rows,
+      offset,
+      limit,
+      basis,
+      value: (page) => ({ ...value, obligations: page.rows }),
+      summary: (page) =>
+        `Framework emulation view has ${rows.length} obligation row(s), ${value.handoffCount} handoff/virtualization row(s); returned ${page.rows.length}.`,
+    });
+  }
+
   const queryTerms = compositionQueryTerms(filters);
   const claims = readFrameworkCompositionClaims(
     sourceProject,
@@ -125,9 +184,6 @@ export function answerFrameworkComposition(
     queryTerms,
   );
   const actors = actorRowsForClaims(claims);
-  const limit = clampBudget(inquiry.budget?.rows, 80, 1_000);
-  const offset = pageOffset(inquiry);
-  const basis = compositionBasis(sourceProject);
   const baseValue = compositionValue(queryTerms, actors, claims);
 
   if (projection === "actors") {
@@ -497,6 +553,17 @@ function compositionFiltersFromInquiry(
   };
 }
 
+function emulationFiltersFromInquiry(
+  inquiry: Inquiry,
+): FrameworkEmulationFilters {
+  return {
+    ...filtersFromRecord(inquiry.subject),
+    ...filtersFromRecord(inquiry.filters),
+    ...emulationOnlyFiltersFromRecord(inquiry.subject),
+    ...emulationOnlyFiltersFromRecord(inquiry.filters),
+  };
+}
+
 function filtersFromRecord(value: unknown): FrameworkCompositionFilters {
   if (value === null || typeof value !== "object") {
     return {};
@@ -513,6 +580,36 @@ function filtersFromRecord(value: unknown): FrameworkCompositionFilters {
     ...stringFilter(source, "phase"),
     ...stringFilter(source, "query"),
   };
+}
+
+function emulationOnlyFiltersFromRecord(value: unknown): FrameworkEmulationFilters {
+  if (value === null || typeof value !== "object") {
+    return {};
+  }
+  const source = value as Record<string, unknown>;
+  return {
+    ...stringFilter(source, "emulationLayer"),
+    ...stringFilter(source, "emulationMode"),
+    ...stringFilter(source, "obligationKind"),
+    ...stringFilter(source, "targetName"),
+  };
+}
+
+function isEmulationOverviewInquiry(
+  inquiry: Inquiry,
+  filters: FrameworkEmulationFilters,
+): boolean {
+  return (
+    inquiry.budget?.rows === undefined &&
+    inquiry.page === undefined &&
+    filters.packageId === undefined &&
+    filters.resourceKind === undefined &&
+    filters.query === undefined &&
+    filters.emulationLayer === undefined &&
+    filters.emulationMode === undefined &&
+    filters.obligationKind === undefined &&
+    filters.targetName === undefined
+  );
 }
 
 function stringFilter(
@@ -544,6 +641,28 @@ function evidenceForClaim(row: SemanticClaim): Evidence {
         : EvidenceKind.TypeFact,
     role: EvidenceRole.Subject,
     confidence: EvidenceConfidence.Strong,
+    summary: row.summary,
+    ...(row.source === undefined ? {} : { source: row.source }),
+    data: row,
+  };
+}
+
+function evidenceForEmulationObligation(
+  row: FrameworkEmulationObligationRow,
+): Evidence {
+  return {
+    id: row.id,
+    kind:
+      row.mode === "typescript-handoff" || row.mode === "virtualized-runtime"
+        ? EvidenceKind.OpenSeam
+        : EvidenceKind.TypeFact,
+    role: EvidenceRole.Subject,
+    confidence:
+      row.closure === "exact"
+        ? EvidenceConfidence.Exact
+        : row.closure === "open"
+          ? EvidenceConfidence.Unknown
+          : EvidenceConfidence.Strong,
     summary: row.summary,
     ...(row.source === undefined ? {} : { source: row.source }),
     data: row,
@@ -595,6 +714,134 @@ function actorContinuations(
         {
           filters: { actorName: row.name },
           evidence,
+          basis: [BasisKind.AuLink, BasisKind.TypeScriptChecker],
+        },
+      ),
+    );
+  }
+  return continuations;
+}
+
+function emulationOverviewContinuations(inquiry: Inquiry): readonly Continuation[] {
+  return [
+    projectionContinuation(
+      inquiry,
+      "framework.composition:emulation:ecmascript-evaluation",
+      "emulation",
+      "Inspect obligations owned by ECMAScript evaluation and DI world spending.",
+      {
+        filters: { emulationMode: "ecmascript-evaluation" },
+        basis: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
+      },
+    ),
+    projectionContinuation(
+      inquiry,
+      "framework.composition:emulation:semantic-runtime-emulator",
+      "emulation",
+      "Inspect obligations where semantic-runtime should faithfully emulate framework behavior.",
+      {
+        filters: { emulationMode: "semantic-runtime-emulator" },
+        basis: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
+      },
+    ),
+    projectionContinuation(
+      inquiry,
+      "framework.composition:emulation:virtualized-runtime",
+      "emulation",
+      "Inspect built-in template-controller obligations that need virtualized runtime modeling.",
+      {
+        filters: { emulationMode: "virtualized-runtime" },
+        basis: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
+      },
+    ),
+    projectionContinuation(
+      inquiry,
+      "framework.composition:emulation:typescript-handoff",
+      "emulation",
+      "Inspect binding and observation obligations that hand off to TypeChecker-backed modeling.",
+      {
+        filters: { emulationMode: "typescript-handoff" },
+        basis: [BasisKind.TypeScriptChecker],
+      },
+    ),
+    projectionContinuation(
+      inquiry,
+      "framework.composition:emulation:template-compiler",
+      "emulation",
+      "Inspect obligations touching TemplateCompiler.",
+      {
+        filters: { targetName: "TemplateCompiler" },
+        basis: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
+      },
+    ),
+  ];
+}
+
+function emulationObligationContinuations(
+  inquiry: Inquiry,
+  rows: readonly FrameworkEmulationObligationRow[],
+  nextOffset: number | undefined,
+  limit: number,
+): readonly Continuation[] {
+  const continuations: Continuation[] = [];
+  if (nextOffset !== undefined) {
+    continuations.push(
+      nextPageContinuation(
+        inquiry,
+        "framework.composition:emulation:next-page",
+        "Continue framework emulation obligation rows.",
+        nextOffset,
+        limit,
+      ),
+    );
+  }
+  continuations.push(
+    projectionContinuation(
+      inquiry,
+      "framework.composition:emulation:actors",
+      "actors",
+      "Inspect framework actors that the emulation obligations reference.",
+      { basis: [BasisKind.AuLink, BasisKind.TypeScriptChecker] },
+    ),
+  );
+  for (const [index, row] of rows.slice(0, 3).entries()) {
+    const builder = new FrameworkRowContinuationBuilder(
+      inquiry,
+      "framework.composition:emulation",
+      index,
+    );
+    if (row.source !== undefined) {
+      continuations.push(
+        builder.source(
+          "source",
+          row.source,
+          "Inspect source behind this emulation obligation.",
+          "Source behind a semantic-runtime emulation obligation.",
+        ),
+      );
+    }
+    continuations.push(
+      projectionContinuation(
+        inquiry,
+        `framework.composition:emulation:owner:${index}`,
+        row.sourceProjection,
+        "Inspect the framework projection that owns this obligation.",
+        {
+          lens: row.sourceLens,
+          filters: row.detailFilters,
+          basis: row.basis,
+        },
+      ),
+    );
+    continuations.push(
+      projectionContinuation(
+        inquiry,
+        `framework.composition:emulation:bridge:${index}`,
+        "anchors",
+        "Look for auLink bridge anchors for this framework target.",
+        {
+          lens: LensId.BridgeAuLink,
+          filters: { symbolName: row.targetName },
           basis: [BasisKind.AuLink, BasisKind.TypeScriptChecker],
         },
       ),

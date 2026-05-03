@@ -63,6 +63,16 @@ This is not a compatibility layer for old readers and not the default caller sur
   auLink anchors and framework relationship rows into the shared `SemanticClaim` answer algebra, so class/interface
   actors such as `Container`, `TemplateCompiler`, or `Controller` can be inspected as induced signed graphs rather than
   as manual hops across bridge, DI, compiler, rendering, lifecycle, and observation projections.
+- [framework-emulation-view.ts](framework-emulation-view.ts) derives `framework.composition:emulation` from existing
+  framework substrates. It is a semantic-runtime obligation map, not a product implementation model: rows say which
+  framework behavior must be covered by ECMAScript evaluation, a semantic-runtime emulator, template-controller
+  virtualization, or TypeChecker handoff, then continue back to the exact DI/resource/compiler/rendering projection
+  that owns the evidence.
+- [framework-emulation-report.ts](framework-emulation-report.ts) renders the deterministic Markdown eyeball golden
+  behind `createApi().frameworkEmulationSymbolsReport()` and
+  `pnpm --filter @aurelia-ls/atlas report:framework-emulation`. Keep the report as a view over
+  `framework.composition:emulation` and `framework.observation:entities` substrates rather than giving it its own
+  ontology; changes should make the underlying rows clearer first, then let the report expose the new shape.
 - [framework-di-lenses.ts](framework-di-lenses.ts) exposes the first relationship-atom lens, `framework.di`. It reads
   DI relationship atoms from `framework/di-index.ts` and keeps keys, registrations, provider/alias targets, lookups,
   and materialization mechanics navigable without folding those phases into the discovery catalog.

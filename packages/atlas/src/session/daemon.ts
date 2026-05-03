@@ -153,6 +153,8 @@ async function handleRequest(
       return api.ask(readAskParams(request.params));
     case InquirySessionMethod.Follow:
       return api.follow(readFollowParams(request.params).continuation);
+    case InquirySessionMethod.FrameworkEmulationSymbolsReport:
+      return api.frameworkEmulationSymbolsReport();
     case InquirySessionMethod.SelfCheck:
       return runSelfCheck();
     case InquirySessionMethod.Shutdown: {

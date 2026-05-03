@@ -5,6 +5,10 @@ import { RepoRootLocus } from "../locus.js";
 import type { InquirySurfaceMap } from "../surface-map.js";
 import { createSourceProject, type SourceProject } from "../../source/index.js";
 import { InquiryEngine, type InquiryRuntimeRequest } from "./engine.js";
+import {
+  createFrameworkEmulationSymbolsReport,
+  type FrameworkEmulationSymbolsReport,
+} from "./framework-emulation-report.js";
 import { createDefaultInquiryWorld, type InquiryWorld } from "./world.js";
 
 /** Options for creating an in-memory runtime. */
@@ -29,6 +33,8 @@ export interface InMemoryApi {
   follow(continuation: Continuation): Promise<Answer>;
   /** Return the surface map through the same runtime engine as normal inquiries. */
   map(focus?: string): Promise<Answer<InquirySurfaceMap>>;
+  /** Build the deterministic framework emulation symbol report from the same runtime substrates. */
+  frameworkEmulationSymbolsReport(): Promise<FrameworkEmulationSymbolsReport>;
   /** True when a lens id has a runtime implementation. */
   isImplemented(lens: LensId): boolean;
 }
@@ -54,6 +60,8 @@ export function createInMemoryApi(
         projection: "summary",
         ...(focus === undefined ? {} : { subject: focus }),
       }) as Promise<Answer<InquirySurfaceMap>>,
+    frameworkEmulationSymbolsReport: async () =>
+      createFrameworkEmulationSymbolsReport(sourceProject),
     isImplemented: (lens) => engine.isImplemented(lens),
   };
 }

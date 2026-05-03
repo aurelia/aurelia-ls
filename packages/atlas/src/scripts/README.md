@@ -8,6 +8,8 @@ These scripts should check static coherence rather than trying to prove runtime 
 
 - [orient.ts](orient.ts) prints the top-level Atlas orientation bundle through the auto-starting session API.
 - [self-check.ts](self-check.ts) validates the current inquiry surface map through the auto-starting session API.
+- [framework-emulation-symbols-report.ts](framework-emulation-symbols-report.ts) writes the deterministic
+  StandardConfiguration/framework emulation Markdown golden by calling the named session report endpoint.
 - [inquiry-playground.ts](inquiry-playground.ts) runs the auto-starting session API and prints compact answer summaries.
 - [inquiry-session-ensure.ts](inquiry-session-ensure.ts) starts or reuses the local inquiry daemon and leaves it available until its idle timeout.
 - [inquiry-session-playground.ts](inquiry-session-playground.ts) exercises idempotent daemon startup, protocol calls, self-check, continuation following, and polite shutdown.

@@ -14,6 +14,7 @@ import { resolveInquirySessionPaths, type InquirySessionPaths } from "./paths.js
 import {
   InquirySessionMethod,
   type InquirySessionFollowParams,
+  type InquirySessionFrameworkEmulationSymbolsReportResult,
   type InquirySessionManifest,
   type InquirySessionMapParams,
   type InquirySessionRequest,
@@ -117,6 +118,11 @@ export class InquirySessionClient {
   follow(continuation: Continuation): Promise<Answer> {
     const params: InquirySessionFollowParams = { continuation };
     return sendProtocolRequest<Answer>(this.manifest, InquirySessionMethod.Follow, params, this.requestTimeoutMs);
+  }
+
+  /** Build the deterministic framework emulation symbols Markdown report. */
+  frameworkEmulationSymbolsReport(): Promise<InquirySessionFrameworkEmulationSymbolsReportResult> {
+    return sendProtocolRequest(this.manifest, InquirySessionMethod.FrameworkEmulationSymbolsReport, undefined, this.requestTimeoutMs);
   }
 
   /** Run lightweight self-coherence checks inside the daemon. */

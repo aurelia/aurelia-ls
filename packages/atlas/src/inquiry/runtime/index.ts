@@ -7,6 +7,8 @@ export * from "./framework-admission-world-formation.js";
 export * from "./framework-compiler-lenses.js";
 export * from "./framework-composition-lenses.js";
 export * from "./framework-di-lenses.js";
+export * from "./framework-emulation-report.js";
+export * from "./framework-emulation-view.js";
 export * from "./framework-evaluator-lenses.js";
 export * from "./framework-lifecycle-lenses.js";
 export * from "./framework-materialization-lenses.js";
