@@ -21,7 +21,6 @@ import type { BuiltInRuntimeRendererEmission } from './runtime-renderer-catalog-
 import type { AppRoot } from '../configuration/app-root.js';
 import type { Container } from '../di/container.js';
 import { SemanticClaim } from '../kernel/claim.js';
-import { DerivationPhase } from '../kernel/derivation.js';
 import {
   EvidenceKind,
   EvidenceRecord,
@@ -35,18 +34,14 @@ import type {
 } from '../kernel/handles.js';
 import {
   CompilerIdentity,
-  CompilerIdentityKind,
-  IdentityStability,
 } from '../kernel/identity.js';
 import {
   MaterializationRecord,
-  MaterializationState,
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
   compactFieldProvenance,
   FieldProvenance,
-  ProvenanceMode,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -54,7 +49,10 @@ import {
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
-import { KernelVocabulary } from '../kernel/vocabulary.js';
+import {
+  KernelVocabulary,
+  type ProductKindKey,
+} from '../kernel/vocabulary.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import { TemplateProductDetails } from './product-details.js';
 
@@ -111,7 +109,7 @@ class CompilerWorldSourceSet {
   ) {}
 }
 
-class CompilerWorldClaimSet {
+class CompilerWorldClaims {
   constructor(
     readonly worldClaims: readonly SemanticClaim[],
     readonly scopeClaims: readonly SemanticClaim[],
@@ -365,23 +363,22 @@ export class TemplateCompilerWorldMaterializer {
     );
     records.push(...claims.allClaims);
     records.push(
-      identity(worldIdentityHandle, CompilerIdentityKind.TemplateCompilerWorld, input.container.identityHandle, source),
-      identity(scopeIdentityHandle, CompilerIdentityKind.TemplateResourceScope, worldIdentityHandle, source),
-      identity(machineIdentityHandle, CompilerIdentityKind.AttributeParserMachine, worldIdentityHandle, source),
-      identity(attributeParserIdentityHandle, CompilerIdentityKind.TemplateCompilerService, worldIdentityHandle, source, 'IAttributeParser'),
-      identity(bindingResolverIdentityHandle, CompilerIdentityKind.TemplateCompilerService, worldIdentityHandle, source, 'IBindingCommandResolver'),
-      identity(templateCompilerIdentityHandle, CompilerIdentityKind.TemplateCompilerService, worldIdentityHandle, source, 'TemplateCompiler'),
-      identity(resourceResolverIdentityHandle, CompilerIdentityKind.TemplateCompilerService, worldIdentityHandle, source, 'IResourceResolver'),
-      identity(expressionParserIdentityHandle, CompilerIdentityKind.TemplateCompilerService, worldIdentityHandle, source, 'IExpressionParser'),
-      identity(attributeMapperIdentityHandle, CompilerIdentityKind.TemplateCompilerService, worldIdentityHandle, source, 'IAttrMapper'),
-      identity(renderingIdentityHandle, CompilerIdentityKind.TemplateCompilerService, worldIdentityHandle, source, 'Rendering'),
+      identity(worldIdentityHandle, KernelVocabulary.Compiler.World.key, input.container.identityHandle, source),
+      identity(scopeIdentityHandle, KernelVocabulary.Compiler.ResourceScope.key, worldIdentityHandle, source),
+      identity(machineIdentityHandle, KernelVocabulary.Compiler.AttributeParserMachine.key, worldIdentityHandle, source),
+      identity(attributeParserIdentityHandle, KernelVocabulary.Compiler.Service.key, worldIdentityHandle, source, 'IAttributeParser'),
+      identity(bindingResolverIdentityHandle, KernelVocabulary.Compiler.Service.key, worldIdentityHandle, source, 'IBindingCommandResolver'),
+      identity(templateCompilerIdentityHandle, KernelVocabulary.Compiler.Service.key, worldIdentityHandle, source, 'TemplateCompiler'),
+      identity(resourceResolverIdentityHandle, KernelVocabulary.Compiler.Service.key, worldIdentityHandle, source, 'IResourceResolver'),
+      identity(expressionParserIdentityHandle, KernelVocabulary.Compiler.Service.key, worldIdentityHandle, source, 'IExpressionParser'),
+      identity(attributeMapperIdentityHandle, KernelVocabulary.Compiler.Service.key, worldIdentityHandle, source, 'IAttrMapper'),
+      identity(renderingIdentityHandle, KernelVocabulary.Compiler.Service.key, worldIdentityHandle, source, 'Rendering'),
       new MaterializedProduct(
         worldProductHandle,
         KernelVocabulary.Compiler.World.key,
         worldIdentityHandle,
         source.addressHandle,
         source.provenanceHandle,
-        claimsForProduct(claims.allClaims, worldProductHandle).map((claim) => claim.handle),
       ),
       new MaterializedProduct(
         scopeProductHandle,
@@ -389,7 +386,6 @@ export class TemplateCompilerWorldMaterializer {
         scopeIdentityHandle,
         source.addressHandle,
         source.provenanceHandle,
-        claimsForProduct(claims.allClaims, scopeProductHandle).map((claim) => claim.handle),
       ),
       new MaterializedProduct(
         machineProductHandle,
@@ -397,7 +393,6 @@ export class TemplateCompilerWorldMaterializer {
         machineIdentityHandle,
         source.addressHandle,
         source.provenanceHandle,
-        claimsForProduct(claims.allClaims, machineProductHandle).map((claim) => claim.handle),
       ),
       new MaterializedProduct(
         attributeParserProductHandle,
@@ -405,7 +400,6 @@ export class TemplateCompilerWorldMaterializer {
         attributeParserIdentityHandle,
         source.addressHandle,
         source.provenanceHandle,
-        claimsForProduct(claims.allClaims, attributeParserProductHandle).map((claim) => claim.handle),
       ),
       new MaterializedProduct(
         bindingResolverProductHandle,
@@ -413,7 +407,6 @@ export class TemplateCompilerWorldMaterializer {
         bindingResolverIdentityHandle,
         source.addressHandle,
         source.provenanceHandle,
-        claimsForProduct(claims.allClaims, bindingResolverProductHandle).map((claim) => claim.handle),
       ),
       new MaterializedProduct(
         templateCompilerProductHandle,
@@ -421,7 +414,6 @@ export class TemplateCompilerWorldMaterializer {
         templateCompilerIdentityHandle,
         source.addressHandle,
         source.provenanceHandle,
-        claimsForProduct(claims.allClaims, templateCompilerProductHandle).map((claim) => claim.handle),
       ),
       new MaterializedProduct(
         resourceResolverProductHandle,
@@ -429,7 +421,6 @@ export class TemplateCompilerWorldMaterializer {
         resourceResolverIdentityHandle,
         source.addressHandle,
         source.provenanceHandle,
-        claimsForProduct(claims.allClaims, resourceResolverProductHandle).map((claim) => claim.handle),
       ),
       new MaterializedProduct(
         expressionParserProductHandle,
@@ -437,7 +428,6 @@ export class TemplateCompilerWorldMaterializer {
         expressionParserIdentityHandle,
         source.addressHandle,
         source.provenanceHandle,
-        claimsForProduct(claims.allClaims, expressionParserProductHandle).map((claim) => claim.handle),
       ),
       new MaterializedProduct(
         attributeMapperProductHandle,
@@ -445,7 +435,6 @@ export class TemplateCompilerWorldMaterializer {
         attributeMapperIdentityHandle,
         source.addressHandle,
         source.provenanceHandle,
-        claimsForProduct(claims.allClaims, attributeMapperProductHandle).map((claim) => claim.handle),
       ),
       new MaterializedProduct(
         renderingProductHandle,
@@ -453,13 +442,10 @@ export class TemplateCompilerWorldMaterializer {
         renderingIdentityHandle,
         source.addressHandle,
         source.provenanceHandle,
-        claimsForProduct(claims.allClaims, renderingProductHandle).map((claim) => claim.handle),
       ),
       new MaterializationRecord(
         this.store.handles.materialization(`template-world:${local}`),
-        DerivationPhase.Materialization,
         worldIdentityHandle,
-        MaterializationState.Complete,
         [
           worldProductHandle,
           scopeProductHandle,
@@ -508,10 +494,7 @@ export class TemplateCompilerWorldMaterializer {
       ),
       new ProvenanceRecord(
         provenanceHandle,
-        ProvenanceMode.Derived,
         [evidenceHandle],
-        [],
-        'Template compiler world construction.',
       ),
     ];
     return new CompilerWorldSourceSet(records, provenanceHandle, addressHandle);
@@ -528,7 +511,7 @@ export class TemplateCompilerWorldMaterializer {
     attributeParserMachine: AttributeParserMachine,
     rendering: TemplateRenderingService,
     provenanceHandle: ProvenanceHandle,
-  ): CompilerWorldClaimSet {
+  ): CompilerWorldClaims {
     const worldClaims: SemanticClaim[] = [
       new SemanticClaim(
         this.store.handles.claim(`template-world:${local}:uses-resource-scope`),
@@ -615,7 +598,7 @@ export class TemplateCompilerWorldMaterializer {
         provenanceHandle,
       ));
     });
-    return new CompilerWorldClaimSet(worldClaims, scopeClaims, serviceClaims);
+    return new CompilerWorldClaims(worldClaims, scopeClaims, serviceClaims);
   }
 }
 
@@ -665,15 +648,14 @@ function visibleBindingCommand(
 
 function identity(
   handle: IdentityHandle,
-  compilerKind: CompilerIdentityKind,
+  productKindKey: ProductKindKey,
   ownerHandle: IdentityHandle | null,
   source: CompilerWorldSourceSet,
   localName: string | null = null,
 ): CompilerIdentity {
   return new CompilerIdentity(
     handle,
-    IdentityStability.SourceStable,
-    compilerKind,
+    productKindKey,
     ownerHandle,
     source.addressHandle,
     localName,

@@ -1,5 +1,4 @@
 import { SemanticClaim } from '../kernel/claim.js';
-import { DerivationPhase } from '../kernel/derivation.js';
 import {
   EvidenceKind,
   EvidenceRecord,
@@ -12,18 +11,14 @@ import type {
 } from '../kernel/handles.js';
 import {
   ConfigurationIdentity,
-  ConfigurationIdentityKind,
-  IdentityStability,
 } from '../kernel/identity.js';
 import {
   MaterializationRecord,
-  MaterializationState,
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
   compactFieldProvenance,
   FieldProvenance,
-  ProvenanceMode,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -162,24 +157,21 @@ export class BindingScopeMaterializer {
     records.push(
       new ConfigurationIdentity(
         bindingContextIdentityHandle,
-        identityStabilityForSource(source.sourceAddressHandle),
-        ConfigurationIdentityKind.BindingContext,
+        KernelVocabulary.Configuration.BindingContext.key,
         input.ownerIdentityHandle,
         source.sourceAddressHandle,
         `binding-context:${local}`,
       ),
       new ConfigurationIdentity(
         overrideContextIdentityHandle,
-        identityStabilityForSource(source.sourceAddressHandle),
-        ConfigurationIdentityKind.OverrideContext,
+        KernelVocabulary.Configuration.OverrideContext.key,
         scopeIdentityHandle,
         source.sourceAddressHandle,
         `override-context:${local}`,
       ),
       new ConfigurationIdentity(
         scopeIdentityHandle,
-        identityStabilityForSource(source.sourceAddressHandle),
-        ConfigurationIdentityKind.BindingScope,
+        KernelVocabulary.Configuration.BindingScope.key,
         input.ownerIdentityHandle,
         source.sourceAddressHandle,
         `binding-scope:${local}`,
@@ -190,7 +182,6 @@ export class BindingScopeMaterializer {
         bindingContextIdentityHandle,
         source.sourceAddressHandle,
         source.provenanceHandle,
-        claimsForProduct(claims, bindingContextProductHandle).map((claim) => claim.handle),
       ),
       new MaterializedProduct(
         overrideContextProductHandle,
@@ -198,7 +189,6 @@ export class BindingScopeMaterializer {
         overrideContextIdentityHandle,
         source.sourceAddressHandle,
         source.provenanceHandle,
-        claimsForProduct(claims, overrideContextProductHandle).map((claim) => claim.handle),
       ),
       new MaterializedProduct(
         scopeProductHandle,
@@ -206,13 +196,10 @@ export class BindingScopeMaterializer {
         scopeIdentityHandle,
         source.sourceAddressHandle,
         source.provenanceHandle,
-        claimsForProduct(claims, scopeProductHandle).map((claim) => claim.handle),
       ),
       new MaterializationRecord(
         this.store.handles.materialization(`binding-scope:${local}`),
-        DerivationPhase.Materialization,
         scopeIdentityHandle,
-        MaterializationState.Complete,
         [
           bindingContextProductHandle,
           overrideContextProductHandle,
@@ -281,10 +268,7 @@ export class BindingScopeMaterializer {
       ),
       new ProvenanceRecord(
         provenanceHandle,
-        ProvenanceMode.Derived,
         [evidenceHandle],
-        [],
-        'Binding scope construction.',
       ),
     ];
     return new BindingScopeSourceSet(records, provenanceHandle, addressHandle);
@@ -358,10 +342,6 @@ export class BindingScopeMaterializer {
   private isScopeEffectProduct(productHandle: ProductHandle): boolean {
     return this.store.readProduct(productHandle)?.productKindKey === KernelVocabulary.Binding.ScopeEffect.key;
   }
-}
-
-function identityStabilityForSource(addressHandle: AddressHandle | null): IdentityStability {
-  return addressHandle == null ? IdentityStability.Session : IdentityStability.SourceStable;
 }
 
 function claimsForProduct(

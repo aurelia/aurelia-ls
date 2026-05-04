@@ -1,16 +1,13 @@
 import ts from 'typescript';
 import { unwrapExpression } from '../evaluation/ts-syntax.js';
 import {
-  AddressStability,
   SourceSpanAddress,
   SourceSpanRole,
 } from '../kernel/address.js';
 import { SemanticClaim } from '../kernel/claim.js';
 import {
-  DerivationPhase,
   OpenSeam,
-  OpenSeamSeverity,
-} from '../kernel/derivation.js';
+} from '../kernel/open-seam.js';
 import {
   EvidenceKind,
   EvidenceRecord,
@@ -27,10 +24,8 @@ import type {
 } from '../kernel/handles.js';
 import {
   ConfigurationIdentity,
-  ConfigurationIdentityKind,
   ContainerIdentity,
   ContainerIdentityKind,
-  IdentityStability,
   InterfaceDiKeyIdentity,
   StringDiKeyIdentity,
   TypeScriptDeclarationIdentity,
@@ -38,13 +33,11 @@ import {
 } from '../kernel/identity.js';
 import {
   MaterializationRecord,
-  MaterializationState,
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
   compactFieldProvenance,
   FieldProvenance,
-  ProvenanceMode,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -313,7 +306,6 @@ export class ConfigurationKernelEmitter {
       observation.sequenceKind,
       appFrame?.aurelia.toReference() ?? null,
       appFrame?.appRoot?.toReference() ?? null,
-      null,
       stepReferences.map((step) => step.toReference()),
       source.addressHandle,
       compactFieldProvenance<ConfigurationSequenceField>([
@@ -325,8 +317,7 @@ export class ConfigurationKernelEmitter {
     records.push(
       new ConfigurationIdentity(
         sequenceIdentityHandle,
-        IdentityStability.SourceStable,
-        ConfigurationIdentityKind.Sequence,
+        KernelVocabulary.Configuration.Sequence.key,
         appFrame?.aurelia.identityHandle ?? null,
         source.addressHandle,
         observation.localName,
@@ -337,16 +328,12 @@ export class ConfigurationKernelEmitter {
         sequenceIdentityHandle,
         source.addressHandle,
         source.provenanceHandle,
-        sequenceClaims.handles,
       ),
       new MaterializationRecord(
         this.store.handles.materialization(`configuration-sequence:${local}`),
-        DerivationPhase.Materialization,
         sequenceIdentityHandle,
-        MaterializationState.Complete,
         [sequenceProductHandle],
         sequenceClaims.handles,
-        [],
         [],
       ),
     );
@@ -479,8 +466,7 @@ export class ConfigurationKernelEmitter {
     records.push(
       new ConfigurationIdentity(
         referenceSeed.identityHandle,
-        IdentityStability.SourceStable,
-        ConfigurationIdentityKind.Step,
+        KernelVocabulary.Configuration.Step.key,
         sequenceReference.identityHandle,
         source.addressHandle,
         observation.receiverLocalName,
@@ -491,16 +477,12 @@ export class ConfigurationKernelEmitter {
         referenceSeed.identityHandle,
         source.addressHandle,
         source.provenanceHandle,
-        stepClaims.handles,
       ),
       new MaterializationRecord(
         this.store.handles.materialization(`configuration-step:${local}`),
-        DerivationPhase.Materialization,
         referenceSeed.identityHandle,
-        materializationState(openSeams.handles),
         [referenceSeed.productHandle],
         stepClaims.handles,
-        [],
         openSeams.handles,
       ),
     );
@@ -623,7 +605,6 @@ export class ConfigurationKernelEmitter {
     records.push(
       new ContainerIdentity(
         containerIdentityHandle,
-        IdentityStability.SourceStable,
         ContainerIdentityKind.Root,
         null,
         null,
@@ -636,13 +617,10 @@ export class ConfigurationKernelEmitter {
         containerIdentityHandle,
         source.addressHandle,
         source.provenanceHandle,
-        containerClaimHandles,
       ),
       new MaterializationRecord(
         this.store.handles.materialization(`di-container:${appLocal}`),
-        DerivationPhase.Materialization,
         containerIdentityHandle,
-        MaterializationState.Complete,
         [containerProductHandle],
         containerClaimHandles,
       ),
@@ -655,8 +633,7 @@ export class ConfigurationKernelEmitter {
       records.push(
         new ConfigurationIdentity(
           appRoot.identityHandle,
-          IdentityStability.SourceStable,
-          ConfigurationIdentityKind.AppRoot,
+          KernelVocabulary.Configuration.AppRoot.key,
           null,
           appRoot.sourceAddressHandle,
           appStep.receiverLocalName,
@@ -667,13 +644,10 @@ export class ConfigurationKernelEmitter {
           appRoot.identityHandle,
           appRoot.sourceAddressHandle,
           provenanceHandle,
-          appRootClaimHandles,
         ),
         new MaterializationRecord(
           this.store.handles.materialization(`configuration-app-root:${appLocal}`),
-          DerivationPhase.Materialization,
           appRoot.identityHandle,
-          MaterializationState.Complete,
           [appRoot.productHandle],
           appRootClaimHandles,
         ),
@@ -696,8 +670,7 @@ export class ConfigurationKernelEmitter {
     records.push(
       new ConfigurationIdentity(
         aureliaIdentityHandle,
-        IdentityStability.SourceStable,
-        ConfigurationIdentityKind.Aurelia,
+        KernelVocabulary.Configuration.Aurelia.key,
         null,
         source.addressHandle,
         appStep.receiverLocalName,
@@ -708,13 +681,10 @@ export class ConfigurationKernelEmitter {
         aureliaIdentityHandle,
         source.addressHandle,
         source.provenanceHandle,
-        appClaims.handles,
       ),
       new MaterializationRecord(
         this.store.handles.materialization(`configuration-aurelia:${appLocal}`),
-        DerivationPhase.Materialization,
         aureliaIdentityHandle,
-        MaterializationState.Complete,
         [aureliaProductHandle],
         appClaims.handles,
       ),
@@ -803,8 +773,7 @@ export class ConfigurationKernelEmitter {
     records.push(
       new ConfigurationIdentity(
         identityHandle,
-        IdentityStability.SourceStable,
-        ConfigurationIdentityKind.AppRootConfig,
+        KernelVocabulary.Configuration.AppRootConfig.key,
         null,
         source.addressHandle,
         observation.component?.localName ?? null,
@@ -815,13 +784,10 @@ export class ConfigurationKernelEmitter {
         identityHandle,
         source.addressHandle,
         source.provenanceHandle,
-        claimHandles,
       ),
       new MaterializationRecord(
         this.store.handles.materialization(`configuration-app-root-config:${local}`),
-        DerivationPhase.Materialization,
         identityHandle,
-        MaterializationState.Complete,
         [productHandle],
       ),
     );
@@ -881,8 +847,7 @@ export class ConfigurationKernelEmitter {
     records.push(
       new ConfigurationIdentity(
         identityHandle,
-        IdentityStability.SourceStable,
-        ConfigurationIdentityKind.AppTask,
+        KernelVocabulary.Configuration.AppTask.key,
         null,
         source.addressHandle,
         `AppTask.${observation.slot}`,
@@ -893,15 +858,11 @@ export class ConfigurationKernelEmitter {
         identityHandle,
         source.addressHandle,
         source.provenanceHandle,
-        claimHandles,
       ),
       new MaterializationRecord(
         this.store.handles.materialization(`configuration-app-task:${local}`),
-        DerivationPhase.Materialization,
         identityHandle,
-        materializationState(openSeams.handles),
         [productHandle],
-        [],
         [],
         openSeams.handles,
       ),
@@ -951,8 +912,7 @@ export class ConfigurationKernelEmitter {
     records.push(
       new ConfigurationIdentity(
         identityHandle,
-        IdentityStability.SourceStable,
-        ConfigurationIdentityKind.OptionContribution,
+        KernelVocabulary.Configuration.OptionContribution.key,
         null,
         source.addressHandle,
         observation.optionPath.join('.'),
@@ -963,15 +923,11 @@ export class ConfigurationKernelEmitter {
         identityHandle,
         source.addressHandle,
         source.provenanceHandle,
-        claimHandles,
       ),
       new MaterializationRecord(
         this.store.handles.materialization(`configuration-option:${local}`),
-        DerivationPhase.Materialization,
         identityHandle,
-        materializationState(openSeams.handles),
         [productHandle],
-        [],
         [],
         openSeams.handles,
       ),
@@ -1023,7 +979,6 @@ export class ConfigurationKernelEmitter {
         const identityHandle = this.store.handles.identity(`configuration-option-value:${local}`);
         records.push(new TypeScriptDeclarationIdentity(
           identityHandle,
-          IdentityStability.SourceStable,
           context.moduleKey,
           null,
           observation.localName,
@@ -1089,11 +1044,11 @@ export class ConfigurationKernelEmitter {
     const records: KernelStoreRecord[] = [...source.records];
     const current = unwrapExpression(expression);
     if (isStringLiteral(current)) {
-      records.push(new StringDiKeyIdentity(identityHandle, IdentityStability.SemanticStable, current.text, source.addressHandle));
+      records.push(new StringDiKeyIdentity(identityHandle, current.text, source.addressHandle));
     } else if (isInterfaceKeyName(localName)) {
-      records.push(new InterfaceDiKeyIdentity(identityHandle, IdentityStability.SemanticStable, localName, null, source.addressHandle));
+      records.push(new InterfaceDiKeyIdentity(identityHandle, localName, null, source.addressHandle));
     } else {
-      records.push(new UnknownDiKeyIdentity(identityHandle, IdentityStability.SourceStable, source.addressHandle, 'AppTask key expression still needs DI key classification.'));
+      records.push(new UnknownDiKeyIdentity(identityHandle, source.addressHandle, 'AppTask key expression still needs DI key classification.'));
     }
     return {
       records,
@@ -1128,7 +1083,6 @@ export class ConfigurationKernelEmitter {
     if (identityHandle != null) {
       records.push(new TypeScriptDeclarationIdentity(
         identityHandle,
-        IdentityStability.SourceStable,
         context.moduleKey,
         null,
         observation.localName,
@@ -1174,7 +1128,6 @@ export class ConfigurationKernelEmitter {
     if (shouldEmitIdentity) {
       records.push(new TypeScriptDeclarationIdentity(
         identityHandle,
-        IdentityStability.SourceStable,
         context.moduleKey,
         null,
         observation.localName,
@@ -1210,7 +1163,6 @@ export class ConfigurationKernelEmitter {
       [
         new SourceSpanAddress(
           addressHandle,
-          AddressStability.SourceStable,
           context.sourceFileAddressHandle,
           node.getStart(context.sourceFile),
           node.end,
@@ -1225,10 +1177,7 @@ export class ConfigurationKernelEmitter {
         ),
         new ProvenanceRecord(
           provenanceHandle,
-          ProvenanceMode.Direct,
           [evidenceHandle],
-          [],
-          provenanceNote,
         ),
       ],
       addressHandle,
@@ -1253,7 +1202,7 @@ export class ConfigurationKernelEmitter {
         context,
         seam.node,
         seamLocal,
-        EvidenceKind.Open,
+        EvidenceKind.SemanticObservation,
         [EvidenceRole.Diagnostic, EvidenceRole.Configuration],
         seam.summary,
         `Configuration recognition left an open seam: ${seam.openKind}.`,
@@ -1266,7 +1215,6 @@ export class ConfigurationKernelEmitter {
         new OpenSeam(
           openSeamHandle,
           seam.openKind,
-          OpenSeamSeverity.Warning,
           seam.summary,
           source.addressHandle,
           source.evidenceHandle,
@@ -1416,7 +1364,6 @@ function productHandlesForAppStep(
     case ConfigurationStepKind.BuilderMutation:
     case ConfigurationStepKind.OptionContribution:
     case ConfigurationStepKind.AppTaskFactory:
-    case ConfigurationStepKind.AppTaskSlotDispatch:
     case ConfigurationStepKind.PluginConfigure:
     case ConfigurationStepKind.Unknown:
       return [];
@@ -1503,10 +1450,6 @@ function enrichResourceRegistration(
       seam.openKind !== KernelVocabulary.Registration.OpenStrategy.key
     ),
   );
-}
-
-function materializationState(openSeamHandles: readonly OpenSeamHandle[]): MaterializationState {
-  return openSeamHandles.length === 0 ? MaterializationState.Complete : MaterializationState.Partial;
 }
 
 function readLocalName(expression: ts.Expression): string | null {

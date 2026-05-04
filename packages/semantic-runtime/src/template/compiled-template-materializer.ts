@@ -1,9 +1,7 @@
 import { SemanticClaim } from '../kernel/claim.js';
 import {
-  DerivationPhase,
   OpenSeam,
-  OpenSeamSeverity,
-} from '../kernel/derivation.js';
+} from '../kernel/open-seam.js';
 import {
   EvidenceKind,
   EvidenceRecord,
@@ -18,19 +16,15 @@ import type {
 } from '../kernel/handles.js';
 import {
   CompilerIdentity,
-  CompilerIdentityKind,
-  IdentityStability,
   InstructionIdentity,
 } from '../kernel/identity.js';
 import {
   MaterializationRecord,
-  MaterializationState,
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
   compactFieldProvenance,
   FieldProvenance,
-  ProvenanceMode,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -303,8 +297,7 @@ export class CompiledTemplateMaterializer {
       records.push(
         new CompilerIdentity(
           targetIdentityHandle,
-          IdentityStability.SourceStable,
-          CompilerIdentityKind.TemplateRenderTarget,
+          KernelVocabulary.Template.RenderTarget.key,
           compiledIdentityHandle,
           target.sourceAddressHandle,
           target.targetKind,
@@ -315,12 +308,10 @@ export class CompiledTemplateMaterializer {
           targetIdentityHandle,
           target.sourceAddressHandle,
           source.provenanceHandle,
-          claimsForProduct(claims, targetProductHandle).map((claim) => claim.handle),
         ),
         new CompilerIdentity(
           sequenceIdentityHandle,
-          IdentityStability.SourceStable,
-          CompilerIdentityKind.TemplateInstructionSequence,
+          KernelVocabulary.Instruction.Sequence.key,
           targetIdentityHandle,
           sequence.sourceAddressHandle,
           `${target.targetKind}:${index}`,
@@ -331,7 +322,6 @@ export class CompiledTemplateMaterializer {
           sequenceIdentityHandle,
           sequence.sourceAddressHandle,
           source.provenanceHandle,
-          claimsForProduct(claims, sequenceProductHandle).map((claim) => claim.handle),
         ),
       );
     });
@@ -374,8 +364,7 @@ export class CompiledTemplateMaterializer {
       records.push(
         new CompilerIdentity(
           sequence.identityHandle,
-          identityStabilityForSource(sequence.sourceAddressHandle),
-          CompilerIdentityKind.TemplateInstructionSequence,
+          KernelVocabulary.Instruction.Sequence.key,
           draft.ownerIdentityHandle,
           sequence.sourceAddressHandle,
           `nested:${index}`,
@@ -386,7 +375,6 @@ export class CompiledTemplateMaterializer {
           sequence.identityHandle,
           sequence.sourceAddressHandle,
           source.provenanceHandle,
-          claimsForProduct(claims, sequence.productHandle).map((claim) => claim.handle),
         ),
       );
     });
@@ -414,8 +402,7 @@ export class CompiledTemplateMaterializer {
     records.push(
       new CompilerIdentity(
         compiledIdentityHandle,
-        IdentityStability.SourceStable,
-        CompilerIdentityKind.CompiledTemplate,
+        KernelVocabulary.Template.CompiledTemplate.key,
         input.compilationUnit.identityHandle,
         input.compilationUnit.sourceAddressHandle,
         state,
@@ -426,7 +413,6 @@ export class CompiledTemplateMaterializer {
         compiledIdentityHandle,
         input.compilationUnit.sourceAddressHandle,
         source.provenanceHandle,
-        claimsForProduct(claims, compiledProductHandle).map((claim) => claim.handle),
       ),
       ...assembly.createdInstructions.map((instruction) => new MaterializedProduct(
         instruction.productHandle,
@@ -434,14 +420,11 @@ export class CompiledTemplateMaterializer {
         instruction.identityHandle,
         instruction.sourceAddressHandle,
         source.provenanceHandle,
-        claimsForProduct(claims, instruction.productHandle).map((claim) => claim.handle),
       )),
       ...claims,
       new MaterializationRecord(
         this.store.handles.materialization(compiledLocal),
-        DerivationPhase.Lowering,
         compiledIdentityHandle,
-        materializationStateForCompiledTemplate(state),
         [
           compiledProductHandle,
           ...renderTargets.map((target) => target.productHandle),
@@ -449,7 +432,6 @@ export class CompiledTemplateMaterializer {
           ...assembly.createdInstructions.map((instruction) => instruction.productHandle),
         ],
         claims.map((claim) => claim.handle),
-        [],
         openSeams.map((seam) => seam.handle),
       ),
     );
@@ -499,7 +481,6 @@ export class CompiledTemplateMaterializer {
       const seam = new OpenSeam(
         this.store.handles.openSeam(`compiled-template:${input.localKey}:assembly:${local}`),
         seamKindKey,
-        OpenSeamSeverity.Blocked,
         summary,
         addressHandle,
         source.evidenceHandle,
@@ -524,7 +505,6 @@ export class CompiledTemplateMaterializer {
       records.push(
         new InstructionIdentity(
           identityHandle,
-          identityStabilityForSource(addressHandle),
           ownerIdentityHandle,
           instructionKindKeyFor(kind),
         ),
@@ -1020,10 +1000,7 @@ export class CompiledTemplateMaterializer {
         ),
         new ProvenanceRecord(
           provenanceHandle,
-          ProvenanceMode.Derived,
           [evidenceHandle],
-          [],
-          'Compiler DOM pass-through and instruction-row assembly before runtime Rendering emulation.',
         ),
       ],
       evidenceHandle,
@@ -1188,10 +1165,6 @@ function nullableInstruction(
   return instruction == null ? [] : [instruction];
 }
 
-function identityStabilityForSource(addressHandle: AddressHandle | null): IdentityStability {
-  return addressHandle == null ? IdentityStability.Session : IdentityStability.SourceStable;
-}
-
 function camelCase(value: string): string {
   return value.replace(/-([a-z])/g, (_, ch: string) => ch.toUpperCase());
 }
@@ -1333,17 +1306,6 @@ function instructionKindKeyFor(
       return KernelVocabulary.Instruction.DispatchBinding.key;
     case TemplateInstructionKind.Open:
       throw new Error('Open instruction kind is a seam kind and cannot be materialized as an instruction product.');
-  }
-}
-
-function materializationStateForCompiledTemplate(state: CompiledTemplateState): MaterializationState {
-  switch (state) {
-    case CompiledTemplateState.Complete:
-      return MaterializationState.Complete;
-    case CompiledTemplateState.Partial:
-      return MaterializationState.Partial;
-    case CompiledTemplateState.Open:
-      return MaterializationState.Open;
   }
 }
 

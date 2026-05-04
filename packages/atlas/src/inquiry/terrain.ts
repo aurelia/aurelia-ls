@@ -86,7 +86,7 @@ export const RepoTerrain: readonly RepoArea[] = [
     status: RepoAreaStatus.Active,
     ownership: RepoAreaOwnership.InRepo,
     root: "packages/semantic-runtime/src",
-    summary: "Current product-semantic center of gravity: kernel substrate, vocabulary, auLink, inquiry, DI, evaluation, template, resource, and registration work.",
+    summary: "Current product-semantic center of gravity: kernel records, vocabulary, auLink, inquiry, DI, evaluation, template, resource, and registration work.",
     packageIds: ["semantic-runtime"],
   },
   {

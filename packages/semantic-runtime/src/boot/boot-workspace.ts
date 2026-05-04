@@ -3,9 +3,9 @@ import {
   isAbsolute,
   relative,
 } from 'node:path';
-import { SourceFileAddress, AddressStability } from '../kernel/address.js';
+import { SourceFileAddress } from '../kernel/address.js';
 import { EvidenceKind, EvidenceRecord, EvidenceRole } from '../kernel/evidence.js';
-import { ProvenanceMode, ProvenanceRecord } from '../kernel/provenance.js';
+import { ProvenanceRecord } from '../kernel/provenance.js';
 import { KernelStore, KernelStoreBatch } from '../kernel/store.js';
 import {
   ProjectBootFrame,
@@ -94,7 +94,6 @@ export function admitSourceFile(
     [
       new SourceFileAddress(
         addressHandle,
-        AddressStability.SourceStable,
         projectKey,
         workspacePath,
         language,
@@ -108,7 +107,6 @@ export function admitSourceFile(
       ),
       new ProvenanceRecord(
         provenanceHandle,
-        ProvenanceMode.Direct,
         [evidenceHandle],
       ),
     ],

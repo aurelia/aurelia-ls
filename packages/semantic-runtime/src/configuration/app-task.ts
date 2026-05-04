@@ -5,9 +5,7 @@ import type {
   ProductHandle,
 } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
-import type { ContainerReference } from '../di/container.js';
 import type { RegistrationKeyReference } from '../registration/registration-reference.js';
-import type { AppRootReference } from './app-root.js';
 
 export const enum AppTaskSlot {
   Creating = 'creating',
@@ -24,21 +22,12 @@ export const enum AppTaskCallbackKind {
   NoArgument = 'no-argument',
   /** Callback is invoked with `container.get(key)`. */
   ResolvedKey = 'resolved-key',
-  /** Callback shape exists but has not been classified yet. */
-  Unknown = 'unknown',
 }
 
 export type AppTaskField =
   | 'slot'
   | 'key'
   | 'callback'
-  | 'source';
-
-export type AppTaskSlotDispatchField =
-  | 'appRoot'
-  | 'container'
-  | 'slot'
-  | 'tasks'
   | 'source';
 
 /** Reference to a callback function without executing or retaining the function object. */
@@ -105,31 +94,4 @@ export class AppTaskDefinition {
       this.slot,
     );
   }
-}
-
-/**
- * AppRoot dispatch point for one lifecycle slot.
- *
- * Dispatch records preserve lifecycle-slot ordering and selected tasks. They do not execute the task callbacks or
- * spend callback-side container effects into DI state.
- */
-export class AppTaskSlotDispatch {
-  constructor(
-    /** Product handle for the materialized-product envelope that represents this dispatch point. */
-    readonly productHandle: ProductHandle,
-    /** Identity for this dispatch point. */
-    readonly identityHandle: IdentityHandle,
-    /** AppRoot whose lifecycle is dispatching the slot. */
-    readonly appRoot: AppRootReference | null,
-    /** Container used by AppRoot to retrieve IAppTask registrations. */
-    readonly container: ContainerReference,
-    /** Lifecycle slot being dispatched. */
-    readonly slot: AppTaskSlot,
-    /** Tasks selected for this slot when registration/DI analysis has closed them. */
-    readonly tasks: readonly AppTaskReference[],
-    /** Source address for the AppRoot dispatch point or lifecycle emulation request. */
-    readonly sourceAddressHandle: AddressHandle | null,
-    /** Field-level provenance for source facts that matter to explanation or ambiguity. */
-    readonly fieldProvenance: readonly FieldProvenance<AppTaskSlotDispatchField>[] = [],
-  ) {}
 }

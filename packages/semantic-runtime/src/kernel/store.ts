@@ -13,9 +13,6 @@ import {
 import type {
   AddressHandle,
   ClaimHandle,
-  DerivationEdgeHandle,
-  DerivationHandle,
-  DerivationRuleHandle,
   EvidenceHandle,
   KernelRecordHandle,
   MaterializationHandle,
@@ -25,14 +22,9 @@ import type {
   IdentityHandle,
 } from './handles.js';
 import { KernelHandleFactory } from './handles.js';
-import type { EvidenceRecord, EvidenceSet } from './evidence.js';
+import type { EvidenceRecord } from './evidence.js';
 import type { ProvenanceRecord } from './provenance.js';
-import type {
-  DerivationEdge,
-  DerivationRecord,
-  DerivationRule,
-  OpenSeam,
-} from './derivation.js';
+import type { OpenSeam } from './open-seam.js';
 
 interface KernelStoreCommitIndex {
   readonly addresses: ReadonlyMap<AddressHandle, SemanticAddress>;
@@ -46,12 +38,8 @@ export type KernelStoreRecord =
   | SemanticAddress
   | SemanticIdentity
   | EvidenceRecord
-  | EvidenceSet
   | ProvenanceRecord
   | SemanticClaim
-  | DerivationEdge
-  | DerivationRule
-  | DerivationRecord
   | OpenSeam
   | MaterializedProduct
   | MaterializationRecord;
@@ -86,22 +74,6 @@ function readSet<TKey, TValue>(
   return [...(map.get(key) ?? [])];
 }
 
-function claimTouchesProduct(
-  claim: SemanticClaim,
-  product: MaterializedProduct,
-): boolean {
-  return claim.subjectHandle === product.handle
-    || claim.objectHandle === product.handle
-    || (
-      product.identityHandle != null
-      && (claim.subjectHandle === product.identityHandle || claim.objectHandle === product.identityHandle)
-    )
-    || (
-      product.addressHandle != null
-      && (claim.subjectHandle === product.addressHandle || claim.objectHandle === product.addressHandle)
-    );
-}
-
 /**
  * Hot in-memory analysis store for normalized kernel records and handle expansion.
  *
@@ -115,12 +87,9 @@ export class KernelStore {
   private readonly records = new Map<KernelRecordHandle, KernelStoreRecord>();
   private readonly addresses = new Map<AddressHandle, SemanticAddress>();
   private readonly identities = new Map<IdentityHandle, SemanticIdentity>();
-  private readonly evidence = new Map<EvidenceHandle, EvidenceRecord | EvidenceSet>();
+  private readonly evidence = new Map<EvidenceHandle, EvidenceRecord>();
   private readonly provenance = new Map<ProvenanceHandle, ProvenanceRecord>();
   private readonly claims = new Map<ClaimHandle, SemanticClaim>();
-  private readonly derivationEdges = new Map<DerivationEdgeHandle, DerivationEdge>();
-  private readonly derivationRules = new Map<DerivationRuleHandle, DerivationRule>();
-  private readonly derivations = new Map<DerivationHandle, DerivationRecord>();
   private readonly openSeams = new Map<OpenSeamHandle, OpenSeam>();
   private readonly products = new Map<ProductHandle, MaterializedProduct>();
   private readonly materializations = new Map<MaterializationHandle, MaterializationRecord>();
@@ -186,7 +155,7 @@ export class KernelStore {
     return this.identities.get(handle) ?? null;
   }
 
-  readEvidence(handle: EvidenceHandle): EvidenceRecord | EvidenceSet | null {
+  readEvidence(handle: EvidenceHandle): EvidenceRecord | null {
     return this.evidence.get(handle) ?? null;
   }
 
@@ -196,18 +165,6 @@ export class KernelStore {
 
   readClaim(handle: ClaimHandle): SemanticClaim | null {
     return this.claims.get(handle) ?? null;
-  }
-
-  readDerivationEdge(handle: DerivationEdgeHandle): DerivationEdge | null {
-    return this.derivationEdges.get(handle) ?? null;
-  }
-
-  readDerivationRule(handle: DerivationRuleHandle): DerivationRule | null {
-    return this.derivationRules.get(handle) ?? null;
-  }
-
-  readDerivation(handle: DerivationHandle): DerivationRecord | null {
-    return this.derivations.get(handle) ?? null;
   }
 
   readOpenSeam(handle: OpenSeamHandle): OpenSeam | null {
@@ -238,24 +195,12 @@ export class KernelStore {
     return [...this.claims.values()];
   }
 
-  readEvidenceRecords(): readonly (EvidenceRecord | EvidenceSet)[] {
+  readEvidenceRecords(): readonly EvidenceRecord[] {
     return [...this.evidence.values()];
   }
 
   readProvenanceRecords(): readonly ProvenanceRecord[] {
     return [...this.provenance.values()];
-  }
-
-  readDerivationEdges(): readonly DerivationEdge[] {
-    return [...this.derivationEdges.values()];
-  }
-
-  readDerivationRules(): readonly DerivationRule[] {
-    return [...this.derivationRules.values()];
-  }
-
-  readDerivations(): readonly DerivationRecord[] {
-    return [...this.derivations.values()];
   }
 
   readOpenSeams(): readonly OpenSeam[] {
@@ -328,7 +273,6 @@ export class KernelStore {
         case 'binding-identity':
         case 'instruction-identity':
         case 'type-system-identity':
-        case 'generated-identity':
           identities.set(record.handle, record);
           break;
         case 'materialized-product':
@@ -370,20 +314,6 @@ export class KernelStore {
       throw new Error(
         `Invalid product kind while committing ${batchLabel}: ${product.handle} uses ${product.productKindKey}.`,
       );
-    }
-    for (const claimHandle of product.claimHandles) {
-      const claim = pending.claims.get(claimHandle) ?? this.claims.get(claimHandle) ?? null;
-      if (claim == null) {
-        throw new Error(
-          `Unknown product claim while committing ${batchLabel}: ${product.handle} references ${claimHandle}.`,
-        );
-      }
-      if (!claimTouchesProduct(claim, product)) {
-        throw new Error(
-          `Invalid product claim while committing ${batchLabel}: ${product.handle} references ` +
-          `${claimHandle}, but the claim is not by or about that product, identity, or address.`,
-        );
-      }
     }
   }
 
@@ -478,7 +408,6 @@ export class KernelStore {
       case 'binding-identity':
       case 'instruction-identity':
       case 'type-system-identity':
-      case 'generated-identity':
         this.identities.set(record.handle, record);
         return;
       case 'evidence-record':
@@ -489,9 +418,6 @@ export class KernelStore {
         if (record.identityHandle != null) {
           addToSet(this.evidenceByIdentity, record.identityHandle, record.handle);
         }
-        return;
-      case 'evidence-set':
-        this.evidence.set(record.handle, record);
         return;
       case 'provenance-record':
         this.provenance.set(record.handle, record);
@@ -504,15 +430,6 @@ export class KernelStore {
         addToSet(this.claimsBySubject, record.subjectHandle, record.handle);
         addToSet(this.claimsByObject, record.objectHandle, record.handle);
         addToSet(this.claimsByPredicate, record.predicateKey, record.handle);
-        return;
-      case 'derivation-edge':
-        this.derivationEdges.set(record.handle, record);
-        return;
-      case 'derivation-rule':
-        this.derivationRules.set(record.handle, record);
-        return;
-      case 'derivation-record':
-        this.derivations.set(record.handle, record);
         return;
       case 'open-seam':
         this.openSeams.set(record.handle, record);

@@ -1,15 +1,12 @@
 import ts from 'typescript';
 import {
-  AddressStability,
   SourceSpanAddress,
   SourceSpanRole,
 } from '../kernel/address.js';
 import { SemanticClaim } from '../kernel/claim.js';
 import {
-  DerivationPhase,
   OpenSeam,
-  OpenSeamSeverity,
-} from '../kernel/derivation.js';
+} from '../kernel/open-seam.js';
 import {
   EvidenceKind,
   EvidenceRecord,
@@ -25,17 +22,14 @@ import type {
 } from '../kernel/handles.js';
 import {
   AureliaResourceIdentity,
-  IdentityStability,
 } from '../kernel/identity.js';
 import {
   MaterializationRecord,
-  MaterializationState,
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
   compactFieldProvenance,
   FieldProvenance,
-  ProvenanceMode,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -298,16 +292,12 @@ export class ResourceDefinitionConverger {
         header.primaryIdentityHandle,
         header.sourceAddressHandle,
         source.provenanceHandle,
-        claimHandles,
       ),
       new MaterializationRecord(
         this.store.handles.materialization(`resource-definition-convergence:${header.localKey}`),
-        DerivationPhase.Materialization,
         header.primaryIdentityHandle ?? header.sourceAddressHandle,
-        openSeams.handles.length === 0 ? MaterializationState.Complete : MaterializationState.Partial,
         [definitionProductHandle],
         claimHandles,
-        [],
         openSeams.handles,
       ),
     ];
@@ -331,10 +321,7 @@ export class ResourceDefinitionConverger {
       ),
       new ProvenanceRecord(
         provenanceHandle,
-        ProvenanceMode.Derived,
         [evidenceHandle, ...this.evidenceHandlesForProvenance(header.provenanceHandle)],
-        [],
-        'Resource definition convergence from recognized header and static metadata.',
       ),
     ];
     return new ConvergenceSourceSet(records, provenanceHandle);
@@ -743,7 +730,6 @@ export class ResourceDefinitionConverger {
       records.push(
         new AureliaResourceIdentity(
           aliasIdentityHandle,
-          IdentityStability.SemanticStable,
           toAureliaResourceIdentityKind(headerDefinition.type),
           alias,
           header.targetReference?.identityHandle ?? null,
@@ -782,7 +768,6 @@ export class ResourceDefinitionConverger {
       if (open.node != null) {
         records.push(new SourceSpanAddress(
           addressHandle,
-          AddressStability.SourceStable,
           context.sourceFileAddressHandle,
           open.node.getStart(context.sourceFile),
           open.node.end,
@@ -792,7 +777,7 @@ export class ResourceDefinitionConverger {
       records.push(
         new EvidenceRecord(
           evidenceHandle,
-          EvidenceKind.Open,
+          EvidenceKind.SemanticObservation,
           [EvidenceRole.Diagnostic],
           open.summary,
           addressHandle,
@@ -800,7 +785,6 @@ export class ResourceDefinitionConverger {
         new OpenSeam(
           openSeamHandle,
           KernelVocabulary.Resource.OpenDefinitionField.key,
-          OpenSeamSeverity.Warning,
           open.summary,
           addressHandle,
           evidenceHandle,
@@ -1005,7 +989,6 @@ function templateMarkupSourceAddress(
   const records: KernelStoreRecord[] = [
     new SourceSpanAddress(
       addressHandle,
-      AddressStability.SourceStable,
       context.sourceFileAddressHandle,
       contentStart,
       contentEnd,
@@ -1020,10 +1003,7 @@ function templateMarkupSourceAddress(
     ),
     new ProvenanceRecord(
       provenanceHandle,
-      ProvenanceMode.Direct,
       [evidenceHandle],
-      [],
-      'Custom element template markup source observation.',
     ),
   ];
   return new TemplateSourceAddressSet(records, addressHandle, sourceMap);
@@ -1163,7 +1143,6 @@ function sourceSpanAddressForNode(
     [
       new SourceSpanAddress(
         addressHandle,
-        AddressStability.SourceStable,
         context.sourceFileAddressHandle,
         start,
         end,

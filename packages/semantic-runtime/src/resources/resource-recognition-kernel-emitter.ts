@@ -1,14 +1,11 @@
 import type ts from 'typescript';
 import {
-  AddressStability,
   SourceSpanAddress,
   SourceSpanRole,
 } from '../kernel/address.js';
 import {
-  DerivationPhase,
   OpenSeam,
-  OpenSeamSeverity,
-} from '../kernel/derivation.js';
+} from '../kernel/open-seam.js';
 import { SemanticClaim } from '../kernel/claim.js';
 import {
   EvidenceKind,
@@ -26,16 +23,13 @@ import type {
 import {
   AureliaAttributePatternIdentity,
   AureliaResourceIdentity,
-  IdentityStability,
   TypeScriptDeclarationIdentity,
 } from '../kernel/identity.js';
 import {
   MaterializationRecord,
-  MaterializationState,
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
-  ProvenanceMode,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -155,7 +149,6 @@ export class ResourceRecognitionKernelEmitter {
     const provenanceHandle = this.store.handles.provenance(`resource-observation:${local}`);
     const sourceAddress = new SourceSpanAddress(
       sourceAddressHandle,
-      AddressStability.SourceStable,
       context.sourceFileAddressHandle,
       observation.sourceNode.getStart(context.sourceFile),
       observation.sourceNode.end,
@@ -170,10 +163,7 @@ export class ResourceRecognitionKernelEmitter {
     );
     const provenance = new ProvenanceRecord(
       provenanceHandle,
-      ProvenanceMode.Direct,
       [evidenceHandle],
-      [],
-      'Resource recognition observation.',
     );
 
     records.push(sourceAddress, evidence, provenance);
@@ -204,17 +194,13 @@ export class ResourceRecognitionKernelEmitter {
         resourceIdentities.primaryIdentityHandle,
         sourceAddressHandle,
         provenanceHandle,
-        resourceIdentities.claimHandles,
       ));
     }
     records.push(new MaterializationRecord(
       this.store.handles.materialization(`resource-recognition:${local}`),
-      DerivationPhase.Materialization,
       target.identityHandle ?? sourceAddressHandle,
-      materializationStateForObservation(observation, productHandle),
       productHandle == null ? [] : [productHandle],
       resourceIdentities.claimHandles,
-      [],
       openSeams.handles,
     ));
 
@@ -269,7 +255,6 @@ export class ResourceRecognitionKernelEmitter {
     const targetReference = new ResourceTargetReference(identityHandle, addressHandle, target.localName, targetType);
     const address = new SourceSpanAddress(
       addressHandle,
-      AddressStability.SourceStable,
       context.sourceFileAddressHandle,
       target.node.getStart(context.sourceFile),
       target.node.end,
@@ -289,7 +274,6 @@ export class ResourceRecognitionKernelEmitter {
         address,
         new TypeScriptDeclarationIdentity(
           identityHandle,
-          IdentityStability.SourceStable,
           context.moduleKey,
           null,
           target.localName,
@@ -341,7 +325,6 @@ export class ResourceRecognitionKernelEmitter {
       records.push(
         new AureliaResourceIdentity(
           identityHandle,
-          name == null ? IdentityStability.SourceStable : IdentityStability.SemanticStable,
           toAureliaResourceIdentityKind(resourceKind),
           name,
           declarationIdentityHandle,
@@ -377,7 +360,6 @@ export class ResourceRecognitionKernelEmitter {
       records.push(
         new AureliaResourceIdentity(
           identityHandle,
-          IdentityStability.SourceStable,
           toAureliaResourceIdentityKind(resourceKind),
           null,
           declarationIdentityHandle,
@@ -420,7 +402,6 @@ export class ResourceRecognitionKernelEmitter {
       records.push(
         new SourceSpanAddress(
           addressHandle,
-          AddressStability.SourceStable,
           context.sourceFileAddressHandle,
           pattern.node.getStart(context.sourceFile),
           pattern.node.end,
@@ -428,7 +409,6 @@ export class ResourceRecognitionKernelEmitter {
         ),
         new AureliaAttributePatternIdentity(
           identityHandle,
-          IdentityStability.SemanticStable,
           pattern.pattern,
           pattern.symbols,
           declarationIdentityHandle,
@@ -471,7 +451,6 @@ export class ResourceRecognitionKernelEmitter {
       records.push(
         new AureliaResourceIdentity(
           aliasIdentityHandle,
-          IdentityStability.SemanticStable,
           toAureliaResourceIdentityKind(resourceKind),
           alias,
           declarationIdentityHandle,
@@ -508,7 +487,6 @@ export class ResourceRecognitionKernelEmitter {
       records.push(
         new SourceSpanAddress(
           addressHandle,
-          AddressStability.SourceStable,
           context.sourceFileAddressHandle,
           seam.node.getStart(context.sourceFile),
           seam.node.end,
@@ -516,22 +494,18 @@ export class ResourceRecognitionKernelEmitter {
         ),
         new EvidenceRecord(
           evidenceHandle,
-          EvidenceKind.Open,
+          EvidenceKind.SemanticObservation,
           [EvidenceRole.Diagnostic],
           seam.summary,
           addressHandle,
         ),
         new ProvenanceRecord(
           provenanceHandle,
-          ProvenanceMode.Open,
           [evidenceHandle],
-          [],
-          `Resource recognition left an open seam: ${seam.openKind}.`,
         ),
         new OpenSeam(
           openSeamHandle,
           seam.openKind,
-          OpenSeamSeverity.Warning,
           seam.summary,
           addressHandle,
           evidenceHandle,
@@ -540,20 +514,6 @@ export class ResourceRecognitionKernelEmitter {
     });
     return { records, handles };
   }
-}
-
-function materializationStateForObservation(
-  observation: ResourceRecognitionObservation,
-  productHandle: ProductHandle | null,
-): MaterializationState {
-  if (productHandle == null) {
-    return observation.openSeams.length === 0
-      ? MaterializationState.Unknown
-      : MaterializationState.Open;
-  }
-  return observation.openSeams.length === 0
-    ? MaterializationState.Complete
-    : MaterializationState.Partial;
 }
 
 function primaryResourceNames(

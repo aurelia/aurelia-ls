@@ -53,7 +53,7 @@ export const enum NavigationRelation {
   EditPlanFor = "edit-plan-for",
   /** The target inquiry resolves product-to-framework mirror targets. */
   MirrorTargetOf = "mirror-target-of",
-  /** The target inquiry follows semantic provenance or product/framework derivation. */
+  /** The target inquiry follows semantic provenance or product/framework transformation flow. */
   ProvenanceOf = "provenance-of",
   /** The target inquiry follows an explicit open seam that blocked closure. */
   SeamFor = "seam-for",
@@ -163,7 +163,6 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
       BasisKind.TypeScriptProgram,
       BasisKind.TypeScriptChecker,
       BasisKind.StaticEvaluator,
-      BasisKind.ProductKernelSubstrate,
       BasisKind.ProductVocabulary,
       BasisKind.AuLink,
       BasisKind.AtlasContract,
@@ -185,7 +184,6 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
       BasisKind.TypeScriptProgram,
       BasisKind.TypeScriptChecker,
       BasisKind.StaticEvaluator,
-      BasisKind.ProductKernelSubstrate,
       BasisKind.ProductVocabulary,
       BasisKind.AuLink,
     ],
@@ -206,7 +204,6 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
       BasisKind.TypeScriptProgram,
       BasisKind.TypeScriptChecker,
       BasisKind.StaticEvaluator,
-      BasisKind.ProductKernelSubstrate,
       BasisKind.ProductVocabulary,
       BasisKind.AuLink,
     ],
@@ -392,7 +389,6 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
     supportedBasis: [
       BasisKind.StaticEvaluator,
       BasisKind.TypeScriptChecker,
-      BasisKind.ProductKernelSubstrate,
       BasisKind.AuLink,
     ],
     evidenceKinds: [
@@ -416,7 +412,6 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
     defaultPriority: ContinuationPriority.Primary,
     supportedBasis: [
       BasisKind.StaticEvaluator,
-      BasisKind.ProductKernelSubstrate,
       BasisKind.AuLink,
       BasisKind.AtlasContract,
     ],

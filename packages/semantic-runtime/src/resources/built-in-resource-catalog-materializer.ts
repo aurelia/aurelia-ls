@@ -1,9 +1,7 @@
 import {
-  AddressStability,
   ExternalAddress,
 } from '../kernel/address.js';
 import { SemanticClaim } from '../kernel/claim.js';
-import { DerivationPhase } from '../kernel/derivation.js';
 import {
   EvidenceKind,
   EvidenceRecord,
@@ -18,18 +16,14 @@ import type {
 import {
   AureliaResourceIdentity,
   CompilerIdentity,
-  CompilerIdentityKind,
-  IdentityStability,
 } from '../kernel/identity.js';
 import {
   MaterializationRecord,
-  MaterializationState,
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
   compactFieldProvenance,
   FieldProvenance,
-  ProvenanceMode,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -253,8 +247,7 @@ export class BuiltInResourceCatalogMaterializer {
     records.push(
       new CompilerIdentity(
         catalogIdentityHandle,
-        IdentityStability.CrossProjectStable,
-        CompilerIdentityKind.BuiltInResourceCatalog,
+        KernelVocabulary.Resource.BuiltInCatalog.key,
         null,
         source.addressHandle,
         `${input.packageId}:${input.group}`,
@@ -265,13 +258,10 @@ export class BuiltInResourceCatalogMaterializer {
         catalogIdentityHandle,
         source.addressHandle,
         source.provenanceHandle,
-        catalogClaims.map((claim) => claim.handle),
       ),
       new MaterializationRecord(
         this.store.handles.materialization(local),
-        DerivationPhase.Materialization,
         catalogIdentityHandle,
-        MaterializationState.Complete,
         [
           catalogProductHandle,
           ...materializedResources.map((resource) => resource.productHandle!),
@@ -326,7 +316,6 @@ export class BuiltInResourceCatalogMaterializer {
       return {
         identity: new AureliaResourceIdentity(
           aliasIdentityHandle,
-          IdentityStability.SemanticStable,
           toAureliaResourceIdentityKind(materializedResource.resourceKind),
           alias,
           null,
@@ -366,7 +355,6 @@ export class BuiltInResourceCatalogMaterializer {
       records: [
         new AureliaResourceIdentity(
           identityHandle,
-          IdentityStability.CrossProjectStable,
           toAureliaResourceIdentityKind(materializedResource.resourceKind),
           materializedResource.name,
           null,
@@ -380,7 +368,6 @@ export class BuiltInResourceCatalogMaterializer {
           identityHandle,
           source.addressHandle,
           source.provenanceHandle,
-          allClaimHandles,
         ),
         ...(definition == null ? [] : [
           new MaterializedProduct(
@@ -389,14 +376,11 @@ export class BuiltInResourceCatalogMaterializer {
             identityHandle,
             source.addressHandle,
             source.provenanceHandle,
-            convergenceClaim == null ? [] : [convergenceClaim.handle],
           ),
         ]),
         new MaterializationRecord(
           this.store.handles.materialization(local),
-          DerivationPhase.Materialization,
           identityHandle,
-          MaterializationState.Complete,
           definition == null ? [productHandle] : [productHandle, definitionProductHandle],
           allClaimHandles,
         ),
@@ -418,7 +402,6 @@ export class BuiltInResourceCatalogMaterializer {
     const records: KernelStoreRecord[] = [
       new ExternalAddress(
         addressHandle,
-        AddressStability.ExternalStable,
         'aurelia-package-catalog',
         `${packageId}:${group}`,
         summary,
@@ -432,10 +415,7 @@ export class BuiltInResourceCatalogMaterializer {
       ),
       new ProvenanceRecord(
         provenanceHandle,
-        ProvenanceMode.Direct,
         [evidenceHandle],
-        [],
-        summary,
       ),
     ];
     return new BuiltInResourceSourceSet(records, addressHandle, provenanceHandle);
@@ -534,8 +514,7 @@ export class ConfiguredBuiltInResourceCatalogMaterializer {
         ...source.records,
         new CompilerIdentity(
           identityHandle,
-          IdentityStability.SourceStable,
-          CompilerIdentityKind.ConfiguredResourceCatalogSelection,
+          KernelVocabulary.Compiler.ConfiguredResourceCatalogSelection.key,
           admission.identityHandle,
           admission.sourceAddressHandle,
           frameworkKind,
@@ -547,13 +526,10 @@ export class ConfiguredBuiltInResourceCatalogMaterializer {
           identityHandle,
           admission.sourceAddressHandle,
           source.provenanceHandle,
-          claims.map((claim) => claim.handle),
         ),
         new MaterializationRecord(
           this.store.handles.materialization(local),
-          DerivationPhase.Materialization,
           identityHandle,
-          MaterializationState.Complete,
           [productHandle],
           claims.map((claim) => claim.handle),
         ),
@@ -580,10 +556,7 @@ export class ConfiguredBuiltInResourceCatalogMaterializer {
         ),
         new ProvenanceRecord(
           provenanceHandle,
-          ProvenanceMode.Derived,
           [evidenceHandle],
-          [],
-          summary,
         ),
       ],
       provenanceHandle,

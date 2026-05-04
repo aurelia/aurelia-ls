@@ -12,8 +12,6 @@ export const enum BasisKind {
   TypeScriptChecker = "typescript-checker",
   /** Static evaluator facts and explicit open seams. */
   StaticEvaluator = "static-evaluator",
-  /** Product-owned kernel substrate records, claims, products, and provenance. */
-  ProductKernelSubstrate = "product-kernel-substrate",
   /** Product-owned controlled vocabulary and declared usage slots. */
   ProductVocabulary = "product-vocabulary",
   /** Narrow product-to-framework anchors declared through auLink. */

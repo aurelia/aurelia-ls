@@ -6,16 +6,10 @@ import type {
 import type { FieldProvenance } from '../kernel/provenance.js';
 
 export const enum ConfigurationOptionContributionKind {
-  /** Option value came from a runtime default object before user customization. */
-  DefaultValue = 'default-value',
   /** Option value came from a user customization callback. */
   CustomizeCallback = 'customize-callback',
   /** Option value came from a builder method argument such as `.withStore(...)`. */
   BuilderArgument = 'builder-argument',
-  /** Option value was copied or forwarded from another configuration object. */
-  Forwarded = 'forwarded',
-  /** Option value exists but its producing shape is not classified yet. */
-  Unknown = 'unknown',
 }
 
 export const enum ConfigurationOptionValueKind {

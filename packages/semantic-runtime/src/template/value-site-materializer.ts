@@ -3,7 +3,6 @@ import {
   SourceSpanAddress,
 } from '../kernel/address.js';
 import { SemanticClaim } from '../kernel/claim.js';
-import { DerivationPhase } from '../kernel/derivation.js';
 import {
   EvidenceKind,
   EvidenceRecord,
@@ -17,18 +16,14 @@ import type {
 } from '../kernel/handles.js';
 import {
   CompilerIdentity,
-  CompilerIdentityKind,
-  IdentityStability,
 } from '../kernel/identity.js';
 import {
   MaterializationRecord,
-  MaterializationState,
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
   compactFieldProvenance,
   FieldProvenance,
-  ProvenanceMode,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -208,8 +203,7 @@ export class TemplateValueSiteMaterializer {
       const siteRecords: KernelStoreRecord[] = [
         new CompilerIdentity(
           site.identityHandle,
-          IdentityStability.SourceStable,
-          CompilerIdentityKind.TemplateValueSite,
+          KernelVocabulary.Template.ValueSite.key,
           input.compilationUnit.identityHandle,
           pending.sourceAddressHandle,
           pending.siteKind,
@@ -226,7 +220,6 @@ export class TemplateValueSiteMaterializer {
             site.identityHandle,
             pending.sourceAddressHandle,
             source.provenanceHandle,
-            siteClaimHandles,
           ),
         );
         return;
@@ -275,12 +268,10 @@ export class TemplateValueSiteMaterializer {
           site.identityHandle,
           pending.sourceAddressHandle,
           source.provenanceHandle,
-          [...siteClaimHandles, claim.handle],
         ),
         new CompilerIdentity(
           parse.identityHandle,
-          IdentityStability.SourceStable,
-          CompilerIdentityKind.TemplateExpressionParse,
+          KernelVocabulary.Template.ExpressionParse.key,
           site.identityHandle,
           pending.sourceAddressHandle,
           `${pending.siteKind}:${result.kind}`,
@@ -291,7 +282,6 @@ export class TemplateValueSiteMaterializer {
           parse.identityHandle,
           pending.sourceAddressHandle,
           source.provenanceHandle,
-          [claim.handle],
         ),
         claim,
       );
@@ -299,9 +289,7 @@ export class TemplateValueSiteMaterializer {
 
     records.push(new MaterializationRecord(
       this.store.handles.materialization(`template-value-site:${input.localKey}`),
-      DerivationPhase.Materialization,
       input.compilationUnit.identityHandle,
-      materializationStateForParses(parses),
       [
         ...sites.map((site) => site.productHandle),
         ...parses.map((parse) => parse.productHandle),
@@ -326,10 +314,7 @@ export class TemplateValueSiteMaterializer {
         ),
         new ProvenanceRecord(
           provenanceHandle,
-          ProvenanceMode.Derived,
           [evidenceHandle],
-          [],
-          'Compiler-owned value-site selection and expression parser publication.',
         ),
       ],
       provenanceHandle,
@@ -541,16 +526,4 @@ function parserServiceFor(
 ): TemplateCompilerServiceReference | null {
   return compilerWorld.world.services.find((service) => service.serviceKind === TemplateCompilerServiceKind.ExpressionParser)
     ?? null;
-}
-
-function materializationStateForParses(
-  parses: readonly TemplateExpressionParse[],
-): MaterializationState {
-  if (parses.some((parse) => parse.state === TemplateExpressionParseState.Error)) {
-    return MaterializationState.Invalid;
-  }
-  if (parses.some((parse) => parse.state !== TemplateExpressionParseState.Complete)) {
-    return MaterializationState.Partial;
-  }
-  return MaterializationState.Complete;
 }

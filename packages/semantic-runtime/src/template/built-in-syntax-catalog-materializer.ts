@@ -1,10 +1,8 @@
 import {
-  AddressStability,
   ExternalAddress,
   SourceSpanAddress,
 } from '../kernel/address.js';
 import { SemanticClaim } from '../kernel/claim.js';
-import { DerivationPhase } from '../kernel/derivation.js';
 import {
   EvidenceKind,
   EvidenceRecord,
@@ -19,18 +17,14 @@ import type {
 } from '../kernel/handles.js';
 import {
   CompilerIdentity,
-  CompilerIdentityKind,
-  IdentityStability,
 } from '../kernel/identity.js';
 import {
   MaterializationRecord,
-  MaterializationState,
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
   compactFieldProvenance,
   FieldProvenance,
-  ProvenanceMode,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -292,8 +286,7 @@ export class BuiltInSyntaxCatalogMaterializer {
     records.push(
       new CompilerIdentity(
         catalogIdentityHandle,
-        IdentityStability.CrossProjectStable,
-        CompilerIdentityKind.BuiltInSyntaxCatalog,
+        KernelVocabulary.Compiler.BuiltInSyntaxCatalog.key,
         null,
         source.addressHandle,
         input.variantKey == null
@@ -306,13 +299,10 @@ export class BuiltInSyntaxCatalogMaterializer {
         catalogIdentityHandle,
         source.addressHandle,
         source.provenanceHandle,
-        catalogClaims.map((claim) => claim.handle),
       ),
       new MaterializationRecord(
         this.store.handles.materialization(local),
-        DerivationPhase.Materialization,
         catalogIdentityHandle,
-        MaterializationState.Complete,
         [
           catalogProductHandle,
           ...executableProductHandles,
@@ -395,8 +385,7 @@ export class BuiltInSyntaxCatalogMaterializer {
     const records: KernelStoreRecord[] = [
       new CompilerIdentity(
         identityHandle,
-        IdentityStability.CrossProjectStable,
-        CompilerIdentityKind.AttributePatternExecutable,
+        KernelVocabulary.Compiler.AttributePatternExecutable.key,
         catalogIdentityHandle,
         source.addressHandle,
         materializedHandler.targetName,
@@ -407,10 +396,6 @@ export class BuiltInSyntaxCatalogMaterializer {
         identityHandle,
         source.addressHandle,
         source.provenanceHandle,
-        [
-          catalogClaimHandle,
-          ...compiledPatternClaims.map((claim) => claim.handle),
-        ],
       ),
       ...compiledPatternClaims,
       ...compiledPatternEmissions.flatMap((emission) => emission.records),
@@ -457,8 +442,7 @@ export class BuiltInSyntaxCatalogMaterializer {
       records: [
         new CompilerIdentity(
           identityHandle,
-          IdentityStability.CrossProjectStable,
-          CompilerIdentityKind.CompiledAttributePattern,
+          KernelVocabulary.Compiler.CompiledAttributePattern.key,
           ownerIdentityHandle,
           product.sourceAddressHandle,
           definition.pattern,
@@ -469,7 +453,6 @@ export class BuiltInSyntaxCatalogMaterializer {
           identityHandle,
           product.sourceAddressHandle,
           source.provenanceHandle,
-          [executableClaimHandle],
         ),
       ],
       product,
@@ -532,8 +515,7 @@ export class BuiltInSyntaxCatalogMaterializer {
     const records: KernelStoreRecord[] = [
       new CompilerIdentity(
         identityHandle,
-        IdentityStability.CrossProjectStable,
-        CompilerIdentityKind.BindingCommandExecutable,
+        KernelVocabulary.Compiler.BindingCommandExecutable.key,
         catalogIdentityHandle,
         source.addressHandle,
         materializedHandler.name,
@@ -544,7 +526,6 @@ export class BuiltInSyntaxCatalogMaterializer {
         identityHandle,
         source.addressHandle,
         source.provenanceHandle,
-        [catalogClaimHandle],
       ),
     ];
     return {
@@ -570,7 +551,6 @@ export class BuiltInSyntaxCatalogMaterializer {
     const records: KernelStoreRecord[] = [
       new ExternalAddress(
         addressHandle,
-        AddressStability.ExternalStable,
         'aurelia-package-catalog',
         `${packageId}:${group}`,
         summary,
@@ -584,10 +564,7 @@ export class BuiltInSyntaxCatalogMaterializer {
       ),
       new ProvenanceRecord(
         provenanceHandle,
-        ProvenanceMode.Direct,
         [evidenceHandle],
-        [],
-        summary,
       ),
     ];
     return new BuiltInSyntaxSourceSet(records, addressHandle, provenanceHandle);
@@ -686,8 +663,7 @@ export class ConfiguredBuiltInSyntaxCatalogMaterializer {
         ...source.records,
         new CompilerIdentity(
           identityHandle,
-          IdentityStability.SourceStable,
-          CompilerIdentityKind.ConfiguredSyntaxCatalogSelection,
+          KernelVocabulary.Compiler.ConfiguredSyntaxCatalogSelection.key,
           admission.identityHandle,
           admission.sourceAddressHandle,
           frameworkKind,
@@ -699,13 +675,10 @@ export class ConfiguredBuiltInSyntaxCatalogMaterializer {
           identityHandle,
           admission.sourceAddressHandle,
           source.provenanceHandle,
-          claims.map((claim) => claim.handle),
         ),
         new MaterializationRecord(
           this.store.handles.materialization(local),
-          DerivationPhase.Materialization,
           identityHandle,
-          MaterializationState.Complete,
           [productHandle],
           claims.map((claim) => claim.handle),
         ),
@@ -732,10 +705,7 @@ export class ConfiguredBuiltInSyntaxCatalogMaterializer {
         ),
         new ProvenanceRecord(
           provenanceHandle,
-          ProvenanceMode.Derived,
           [evidenceHandle],
-          [],
-          summary,
         ),
       ],
       provenanceHandle,

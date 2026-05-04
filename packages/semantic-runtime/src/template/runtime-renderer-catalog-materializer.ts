@@ -1,9 +1,7 @@
 import {
-  AddressStability,
   ExternalAddress,
 } from '../kernel/address.js';
 import { SemanticClaim } from '../kernel/claim.js';
-import { DerivationPhase } from '../kernel/derivation.js';
 import {
   EvidenceKind,
   EvidenceRecord,
@@ -18,18 +16,14 @@ import type {
 } from '../kernel/handles.js';
 import {
   CompilerIdentity,
-  CompilerIdentityKind,
-  IdentityStability,
 } from '../kernel/identity.js';
 import {
   MaterializationRecord,
-  MaterializationState,
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
   compactFieldProvenance,
   FieldProvenance,
-  ProvenanceMode,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -214,8 +208,7 @@ export class BuiltInRuntimeRendererCatalogMaterializer {
     records.push(
       new CompilerIdentity(
         catalogIdentityHandle,
-        IdentityStability.CrossProjectStable,
-        CompilerIdentityKind.BuiltInRuntimeRendererCatalog,
+        KernelVocabulary.Compiler.BuiltInRuntimeRendererCatalog.key,
         null,
         source.addressHandle,
         `${input.packageId}:${input.group}`,
@@ -226,13 +219,10 @@ export class BuiltInRuntimeRendererCatalogMaterializer {
         catalogIdentityHandle,
         source.addressHandle,
         source.provenanceHandle,
-        catalogClaims.map((claim) => claim.handle),
       ),
       new MaterializationRecord(
         this.store.handles.materialization(local),
-        DerivationPhase.Materialization,
         catalogIdentityHandle,
-        MaterializationState.Complete,
         [catalogProductHandle, ...rendererProductHandles],
         catalogClaims.map((claim) => claim.handle),
       ),
@@ -279,8 +269,7 @@ export class BuiltInRuntimeRendererCatalogMaterializer {
       records: [
         new CompilerIdentity(
           identityHandle,
-          IdentityStability.CrossProjectStable,
-          CompilerIdentityKind.RuntimeRenderer,
+          KernelVocabulary.Compiler.RuntimeRenderer.key,
           catalogIdentityHandle,
           source.addressHandle,
           materializedRenderer.rendererKind,
@@ -291,7 +280,6 @@ export class BuiltInRuntimeRendererCatalogMaterializer {
           identityHandle,
           source.addressHandle,
           source.provenanceHandle,
-          [catalogClaimHandle],
         ),
       ],
       product: new BuiltInRuntimeRendererEmission(catalogProductHandle, materializedRenderer),
@@ -310,7 +298,6 @@ export class BuiltInRuntimeRendererCatalogMaterializer {
     const records: KernelStoreRecord[] = [
       new ExternalAddress(
         addressHandle,
-        AddressStability.ExternalStable,
         'aurelia-runtime-renderer-catalog',
         `${packageId}:${group}`,
         summary,
@@ -324,10 +311,7 @@ export class BuiltInRuntimeRendererCatalogMaterializer {
       ),
       new ProvenanceRecord(
         provenanceHandle,
-        ProvenanceMode.Direct,
         [evidenceHandle],
-        [],
-        summary,
       ),
     ];
     return new BuiltInRuntimeRendererSourceSet(records, addressHandle, provenanceHandle);
@@ -421,8 +405,7 @@ export class ConfiguredBuiltInRuntimeRendererCatalogMaterializer {
         ...source.records,
         new CompilerIdentity(
           identityHandle,
-          IdentityStability.SourceStable,
-          CompilerIdentityKind.ConfiguredRuntimeRendererCatalogSelection,
+          KernelVocabulary.Compiler.ConfiguredRuntimeRendererCatalogSelection.key,
           admission.identityHandle,
           admission.sourceAddressHandle,
           frameworkKind,
@@ -434,13 +417,10 @@ export class ConfiguredBuiltInRuntimeRendererCatalogMaterializer {
           identityHandle,
           admission.sourceAddressHandle,
           source.provenanceHandle,
-          claims.map((claim) => claim.handle),
         ),
         new MaterializationRecord(
           this.store.handles.materialization(local),
-          DerivationPhase.Materialization,
           identityHandle,
-          MaterializationState.Complete,
           [productHandle],
           claims.map((claim) => claim.handle),
         ),
@@ -467,10 +447,7 @@ export class ConfiguredBuiltInRuntimeRendererCatalogMaterializer {
         ),
         new ProvenanceRecord(
           provenanceHandle,
-          ProvenanceMode.Derived,
           [evidenceHandle],
-          [],
-          summary,
         ),
       ],
       provenanceHandle,

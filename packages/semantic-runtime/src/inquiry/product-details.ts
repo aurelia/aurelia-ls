@@ -14,7 +14,6 @@ import {
 } from './answer.js';
 import { KernelExactBasis } from './basis.js';
 import { KernelRecordInquiryLocus } from './locus.js';
-import { InquiryIntents, type InquiryIntent } from './ontology.js';
 
 export class ProductDetailQuery {
   readonly kind = 'product-detail' as const;
@@ -24,8 +23,6 @@ export class ProductDetailQuery {
     readonly productHandle: ProductHandle,
     /** Projection requested by the caller. */
     readonly projection: InquiryProjection = new InquiryProjection(InquiryProjectionKind.Detail),
-    /** Consumer-neutral answer intent for this query. */
-    readonly intent: InquiryIntent = InquiryIntents.ProductDetailHydration,
   ) {}
 }
 
@@ -59,14 +56,12 @@ export function answerProductDetail(
       [],
       null,
       query.projection,
-      query.intent,
     );
   }
 
   const detailEntry = store.productDetails.readEntry(query.productHandle);
   const result = new ProductDetailResult(product, detailEntry);
   const claimHandles = unique([
-    ...product.claimHandles,
     ...store.readClaimsForSubject(product.handle),
     ...store.readClaimsForObject(product.handle),
   ]);
@@ -109,7 +104,6 @@ export function answerProductDetail(
     continuations,
     null,
     projection,
-    query.intent,
   );
 }
 

@@ -50,7 +50,6 @@ import {
   type CheckerTypeReference,
 } from '../type-system/type-shape.js';
 import {
-  ProvenanceMode,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import type { CompiledTemplateEmission } from './compiled-template-materializer.js';
@@ -594,10 +593,7 @@ export class TemplateControllerScopeMaterializer {
       ),
       new ProvenanceRecord(
         provenanceHandle,
-        ProvenanceMode.Derived,
         [evidenceHandle],
-        [],
-        'Instruction-to-scope application during template controller scope construction.',
       ),
       ...claims,
     ];

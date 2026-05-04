@@ -1331,10 +1331,18 @@ function sequenceKindForSteps(
   )
     ? ConfigurationSequenceKind.App
     : steps.some((step) =>
+      step.stepKind === ConfigurationStepKind.RegistryRegister
+    )
+      ? ConfigurationSequenceKind.Registry
+    : steps.some((step) =>
+      step.stepKind === ConfigurationStepKind.BuilderMutation
+      || step.stepKind === ConfigurationStepKind.OptionContribution
+    )
+      ? ConfigurationSequenceKind.Builder
+    : steps.some((step) =>
       step.stepKind === ConfigurationStepKind.ContainerRegister
       || step.stepKind === ConfigurationStepKind.AppTaskFactory
       || step.stepKind === ConfigurationStepKind.Customize
-      || step.stepKind === ConfigurationStepKind.BuilderMutation
     )
       ? ConfigurationSequenceKind.Plugin
       : ConfigurationSequenceKind.Unknown;

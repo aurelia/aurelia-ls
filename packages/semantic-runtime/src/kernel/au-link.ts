@@ -15,7 +15,6 @@ export type PackageId =
  * treated as semantic ground truth for new materializers.
  */
 export function auLink(id: 'kernel:Container'): ClassDecorator;
-export function auLink(id: 'kernel:IContainer'): ClassDecorator;
 export function auLink(id: 'kernel:ContainerConfiguration'): ClassDecorator;
 export function auLink(id: 'kernel:Resolver'): ClassDecorator;
 export function auLink(id: 'kernel:ParameterizedRegistry'): ClassDecorator;
@@ -97,7 +96,6 @@ export function auLink(id: 'runtime-html:AttributeBinding'): ClassDecorator;
 export function auLink(id: 'runtime-html:LetBinding'): ClassDecorator;
 export function auLink(id: 'runtime-html:ListenerBinding'): ClassDecorator;
 export function auLink(id: 'runtime-html:InterpolationBinding'): ClassDecorator;
-export function auLink(id: 'runtime-html:InterpolationPartBinding'): ClassDecorator;
 export function auLink(id: 'runtime-html:RefBinding'): ClassDecorator;
 export function auLink(id: 'runtime-html:ContentBinding'): ClassDecorator;
 export function auLink(id: 'runtime-html:SpreadBinding'): ClassDecorator;

@@ -20,7 +20,7 @@ Keep the runtime-emulation split visible. Module evaluation, configuration admis
 
 ## Layer Map
 
-- `kernel`: hot normalized record store, handles, vocabulary, identities, addresses, claims, evidence, provenance, derivation, materialization, open seams, auLink anchors, and substrate mapping aids.
+- `kernel`: hot normalized record store, handles, vocabulary, identities, addresses, claims, evidence, provenance, materialization, open seams, and auLink anchors.
 - `boot`: workspace, project, and source admission before Aurelia semantics are interpreted.
 - `inquiry`: selectors, loci, answer envelopes, projection lanes, continuations, and consumer policy boundaries above the kernel.
 - `evaluation`: ECMAScript-shaped static module, expression, environment, value, and seam substrate.
@@ -39,9 +39,9 @@ Template parser and compiler materializers should be built on these layers, not 
 
 Atlas is the live orientation and inspection layer over this package. `auLink` is deliberately narrower: it is only the framework-symbol bridge between local model classes and Aurelia runtime/compiler concepts.
 
-Do not put product taxonomy, pass roles, or model-surface classification into `auLink`; those belong in product models or `kernel/substrate-contract.ts` when they are source-inventory aids rather than domain semantics.
+Do not put product taxonomy, pass roles, or model-surface classification into `auLink`; those belong in product models, vocabulary, claims, or Atlas source lenses when they are real obligations rather than bridge metadata.
 
-When Atlas cannot cheaply stitch an important product path, prefer strengthening directional vocabulary, claims, or substrate-contract metadata before adding tool-local inference tables. The product should expose enough typed structure for TypeScript-backed lenses to follow paths such as configuration admission, resource or syntax catalog selection, DI spending, compiler-world construction, and template lowering.
+When Atlas cannot cheaply stitch an important product path, prefer strengthening directional vocabulary, claims, or the underlying semantic records before adding tool-local inference tables. The product should expose enough typed structure for TypeScript-backed lenses to follow paths such as configuration admission, resource or syntax catalog selection, DI spending, compiler-world construction, and template lowering.
 
 ## Documentation Ownership
 
@@ -51,7 +51,7 @@ When text starts repeating across files, prefer linking to the owner and keeping
 
 ## Rebuild Discipline
 
-Prefer small, named records over generic values, payloads, or compatibility shims. Keep uncertainty visible through open seams, provenance, derivation, and inquiry answers instead of flattening it into resolved-looking facts.
+Prefer small, named records over generic values, payloads, or compatibility shims. Keep uncertainty visible through open seams, provenance, claims, and inquiry answers instead of flattening it into resolved-looking facts.
 
 Materializers should emit kernel records at durable boundaries. Intermediate evaluator, type-system, recognizer, and parser machinery may keep TypeScript nodes, checker objects, or mutable state while it remains current-run machinery, but kernel records and durable products should carry handles, domain fields, and provenance instead.
 

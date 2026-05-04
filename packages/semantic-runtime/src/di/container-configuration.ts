@@ -3,8 +3,6 @@ import type { AddressHandle } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
 
 export const enum ContainerDefaultResolverPolicy {
-  /** Use when the default resolver policy is not known. */
-  Unknown = 'unknown',
   /** Runtime `DefaultResolver.none`: missing keys stay unresolved. */
   None = 'none',
   /** Runtime `DefaultResolver.singleton`: missing constructable keys register as singletons. */

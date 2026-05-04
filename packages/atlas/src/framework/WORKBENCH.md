@@ -819,7 +819,7 @@ and classification indexes. If a facade starts owning logic again, treat that as
 - Should `framework.evaluator` remain generic invocation/effect tracing, with Aurelia classification layered above it,
   or own small framework-aware projections such as `di-interfaces` and `bundle-effects`?
 - How much static evaluator value modeling is needed before bundle association is reliable enough to make vocabulary
-  and substrate-contract compensation shrink?
+  compensation and tool-local inference tables shrink?
 - Which open seams should become first-class continuations because they repeatedly guide the next useful query?
 
 ## Verification Notes

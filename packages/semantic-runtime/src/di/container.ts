@@ -31,10 +31,6 @@ export type ContainerField =
   | 'root'
   | 'source';
 
-export type ContainerInterfaceTokenField =
-  | 'friendlyName'
-  | 'source';
-
 /** Lightweight reference to a modeled container. */
 export class ContainerReference {
   constructor(
@@ -47,48 +43,6 @@ export class ContainerReference {
     /** Local source name for traces when identity is still open. */
     readonly localName: string | null,
   ) {}
-}
-
-/** Reference to the runtime `IContainer` DI key without expanding a concrete container frame. */
-export class ContainerInterfaceTokenReference {
-  constructor(
-    /** Product handle for the modeled interface token, when materialized. */
-    readonly productHandle: ProductHandle | null,
-    /** DI key identity for the runtime `IContainer` interface symbol. */
-    readonly identityHandle: IdentityHandle | null,
-    /** Source address for the framework token or source mention. */
-    readonly sourceAddressHandle: AddressHandle | null,
-    /** Trace label while identity is still open. */
-    readonly localName: string | null,
-  ) {}
-}
-
-/** Runtime `IContainer` interface symbol used as a DI key and backed by per-container self resolver rows. */
-@auLink('kernel:IContainer')
-export class ContainerInterfaceToken {
-  readonly tokenKind = 'container-interface-token' as const;
-
-  constructor(
-    /** Product handle for the kernel materialized-product envelope that represents this token. */
-    readonly productHandle: ProductHandle,
-    /** DI key identity for the runtime `IContainer` interface symbol. */
-    readonly identityHandle: IdentityHandle,
-    /** Runtime friendly name used by Aurelia's DI interface symbol. */
-    readonly friendlyName: 'IContainer',
-    /** Source or framework anchor address for the token declaration. */
-    readonly sourceAddressHandle: AddressHandle | null,
-    /** Field-level provenance for source facts that matter to explanation or ambiguity. */
-    readonly fieldProvenance: readonly FieldProvenance<ContainerInterfaceTokenField>[] = [],
-  ) {}
-
-  toReference(): ContainerInterfaceTokenReference {
-    return new ContainerInterfaceTokenReference(
-      this.productHandle,
-      this.identityHandle,
-      this.sourceAddressHandle,
-      this.friendlyName,
-    );
-  }
 }
 
 export type ContainerRegisterEntry =

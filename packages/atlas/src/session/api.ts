@@ -379,6 +379,18 @@ function orientationCapabilityMoves(): readonly OrientationCapabilityMove[] {
       },
     },
     {
+      id: "product.vocabulary",
+      family: "product",
+      summary:
+        "Inspect semantic-runtime vocabulary definitions, exact source usages, claim signatures, and product-kind adjacency.",
+      ask: {
+        lens: LensId.ProductVocabulary,
+        locus: RepoRootLocus,
+        projection: "summary",
+        budget: { rows: 40, evidencePerSubject: 3 },
+      },
+    },
+    {
       id: "atlas.self",
       family: "self",
       summary:

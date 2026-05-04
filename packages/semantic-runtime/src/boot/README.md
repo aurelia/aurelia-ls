@@ -6,7 +6,7 @@ Boot is the clean-room admission layer above the kernel. It creates workspace an
 files, and records why those inputs are present in the hot kernel store.
 
 Boot does not interpret Aurelia semantics. It must not scan resources, configurations, registrations, templates,
-or DI. Those belong to later materializers that consume admitted sources and emit their own evidence, derivations,
+or DI. Those belong to later materializers that consume admitted sources and emit their own evidence,
 claims, products, and seams.
 
 ## Responsibilities

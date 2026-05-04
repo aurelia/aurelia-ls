@@ -1,7 +1,7 @@
 import type {
   KernelStoreRecord,
 } from '../kernel/store.js';
-import type { OpenSeam } from '../kernel/derivation.js';
+import type { OpenSeam } from '../kernel/open-seam.js';
 import type { Container } from './container.js';
 import type { ContainerRegistrationOperation } from './container-registration.js';
 import type {

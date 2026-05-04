@@ -70,7 +70,6 @@ import {
 import { KernelExactBasis } from './basis.js';
 import { InquiryLocusKind, type InquiryLocus } from './locus.js';
 import type { SourceCursorInquiryLocus } from './locus.js';
-import { InquiryIntents, type InquiryIntent } from './ontology.js';
 import {
   InquiryPageInfo,
   InquiryPageRequest,
@@ -194,8 +193,6 @@ export class TemplateCompletionQuery {
     readonly memberOwnerTypeProductHandle: ProductHandle | null = null,
     /** Projection requested by the caller. */
     readonly projection: InquiryProjection = new InquiryProjection(InquiryProjectionKind.Compact),
-    /** Consumer-neutral answer intent for this query. */
-    readonly intent: InquiryIntent = completionIntentForSite(siteKind),
   ) {}
 
   withPage(page: InquiryPageRequest): TemplateCompletionQuery {
@@ -209,7 +206,6 @@ export class TemplateCompletionQuery {
       this.expressionParseProductHandle,
       this.memberOwnerTypeProductHandle,
       this.projection,
-      this.intent,
     );
   }
 
@@ -224,7 +220,6 @@ export class TemplateCompletionQuery {
       this.expressionParseProductHandle,
       memberOwnerTypeProductHandle,
       this.projection,
-      this.intent,
     );
   }
 }
@@ -436,7 +431,6 @@ export function answerTemplateCompletion(
     .map((handle) => store.readProduct(handle))
     .filter((product): product is NonNullable<typeof product> => product != null);
   const claimHandles = unique(products.flatMap((product) => [
-    ...product.claimHandles,
     ...store.readClaimsForSubject(product.handle),
     ...store.readClaimsForObject(product.handle),
   ]));
@@ -481,7 +475,6 @@ export function answerTemplateCompletion(
     continuations,
     page.info,
     projection,
-    query.intent,
   );
 }
 
@@ -1319,18 +1312,6 @@ function summaryForCompletion(
   return missingInputs.length === 0
     ? base
     : `${base} Missing inputs: ${missingInputs.join(', ')}.`;
-}
-
-function completionIntentForSite(siteKind: TemplateCompletionSiteKind): InquiryIntent {
-  switch (siteKind) {
-    case TemplateCompletionSiteKind.Expression:
-    case TemplateCompletionSiteKind.ExpressionMember:
-    case TemplateCompletionSiteKind.ExpressionValueConverter:
-    case TemplateCompletionSiteKind.ExpressionBindingBehavior:
-      return InquiryIntents.ExpressionCompletion;
-    default:
-      return InquiryIntents.TemplateCompletion;
-  }
 }
 
 function sourceSpanFor(

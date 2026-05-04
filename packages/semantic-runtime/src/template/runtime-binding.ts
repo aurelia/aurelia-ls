@@ -22,7 +22,6 @@ export const enum RuntimeBindingKind {
   Let = 'let',
   Listener = 'listener',
   Interpolation = 'interpolation',
-  InterpolationPart = 'interpolation-part',
   Ref = 'ref',
   Content = 'content',
   Spread = 'spread',
@@ -310,31 +309,6 @@ export class InterpolationBinding {
   }
 }
 
-/** Runtime InterpolationPartBinding model for future per-part interpolation inspection. */
-@auLink('runtime-html:InterpolationPartBinding')
-export class InterpolationPartBinding {
-  readonly bindingKind = RuntimeBindingKind.InterpolationPart;
-
-  constructor(
-    readonly productHandle: ProductHandle,
-    readonly identityHandle: IdentityHandle,
-    readonly instructionProductHandle: ProductHandle,
-    readonly instructionIdentityHandle: IdentityHandle,
-    readonly renderer: RuntimeRendererReference,
-    readonly expressionProductHandle: ProductHandle | null,
-    readonly sourceAddressHandle: AddressHandle | null,
-    readonly fieldProvenance: readonly FieldProvenance<RuntimeBindingField>[] = [],
-  ) {}
-
-  toReference(): RuntimeBindingReference {
-    return new RuntimeBindingReference(this.bindingKind, this.productHandle, this.identityHandle, this.sourceAddressHandle);
-  }
-
-  readScopeEffects(): readonly RuntimeBindingScopeEffectReference[] {
-    return [];
-  }
-}
-
 /** Runtime RefBinding model produced by ref command lowering. */
 @auLink('runtime-html:RefBinding')
 export class RefBinding {
@@ -543,7 +517,6 @@ export type RuntimeBinding =
   | LetBinding
   | ListenerBinding
   | InterpolationBinding
-  | InterpolationPartBinding
   | RefBinding
   | ContentBinding
   | SpreadBinding

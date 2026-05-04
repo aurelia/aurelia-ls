@@ -16,7 +16,6 @@ import {
   ProjectInquiryLocus,
   WorkspaceInquiryLocus,
 } from './locus.js';
-import { InquiryIntents, type InquiryIntent } from './ontology.js';
 import {
   InquiryPageInfo,
   InquiryPageRequest,
@@ -32,8 +31,6 @@ export class AdmittedSourcesQuery {
     readonly language: SourceLanguage | null = null,
     /** Page request for ordered source rows. */
     readonly page: InquiryPageRequest = new InquiryPageRequest(),
-    /** Consumer-neutral answer intent for this query. */
-    readonly intent: InquiryIntent = InquiryIntents.AdmittedSourceInventory,
   ) {}
 }
 
@@ -118,7 +115,6 @@ export function answerAdmittedSources(
       [],
       null,
       null,
-      query.intent,
     );
   }
 
@@ -137,7 +133,7 @@ export function answerAdmittedSources(
       new InquiryContinuation(
         InquiryContinuationKind.NextPage,
         'Continue with the next page of admitted source files.',
-        new AdmittedSourcesQuery(query.projectKey, query.language, new InquiryPageRequest(pageSize, nextCursor), query.intent),
+        new AdmittedSourcesQuery(query.projectKey, query.language, new InquiryPageRequest(pageSize, nextCursor)),
       ),
     ]
     : [];
@@ -157,6 +153,5 @@ export function answerAdmittedSources(
     continuations,
     page,
     null,
-    query.intent,
   );
 }

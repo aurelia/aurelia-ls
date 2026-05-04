@@ -5,18 +5,12 @@ export const enum KernelHandleKind {
   Address = 'address',
   /** Handle for a semantic identity record inside one analysis store. */
   Identity = 'identity',
-  /** Handle for an evidence record or evidence set inside one analysis store. */
+  /** Handle for an evidence record inside one analysis store. */
   Evidence = 'evidence',
   /** Handle for a provenance record inside one analysis store. */
   Provenance = 'provenance',
-  /** Handle for a semantic claim or claim set inside one analysis store. */
+  /** Handle for a semantic claim inside one analysis store. */
   Claim = 'claim',
-  /** Handle for a derivation edge record inside one analysis store. */
-  DerivationEdge = 'derivation-edge',
-  /** Handle for a derivation rule definition inside one analysis store. */
-  DerivationRule = 'derivation-rule',
-  /** Handle for a derivation record inside one analysis store. */
-  Derivation = 'derivation',
   /** Handle for an open seam record inside one analysis store. */
   OpenSeam = 'open-seam',
   /** Handle for a materialized product inside one analysis store. */
@@ -39,23 +33,14 @@ export type AddressHandle = KernelHandle<KernelHandleKind.Address>;
 /** Store-local handle for a semantic identity record. */
 export type IdentityHandle = KernelHandle<KernelHandleKind.Identity>;
 
-/** Store-local handle for an evidence record or evidence set. */
+/** Store-local handle for an evidence record. */
 export type EvidenceHandle = KernelHandle<KernelHandleKind.Evidence>;
 
 /** Store-local handle for a provenance record. */
 export type ProvenanceHandle = KernelHandle<KernelHandleKind.Provenance>;
 
-/** Store-local handle for a semantic claim or claim set. */
+/** Store-local handle for a semantic claim. */
 export type ClaimHandle = KernelHandle<KernelHandleKind.Claim>;
-
-/** Store-local handle for a derivation edge record. */
-export type DerivationEdgeHandle = KernelHandle<KernelHandleKind.DerivationEdge>;
-
-/** Store-local handle for a derivation rule definition. */
-export type DerivationRuleHandle = KernelHandle<KernelHandleKind.DerivationRule>;
-
-/** Store-local handle for a derivation record. */
-export type DerivationHandle = KernelHandle<KernelHandleKind.Derivation>;
 
 /** Store-local handle for an open seam record. */
 export type OpenSeamHandle = KernelHandle<KernelHandleKind.OpenSeam>;
@@ -73,9 +58,6 @@ export type KernelRecordHandle =
   | EvidenceHandle
   | ProvenanceHandle
   | ClaimHandle
-  | DerivationEdgeHandle
-  | DerivationRuleHandle
-  | DerivationHandle
   | OpenSeamHandle
   | ProductHandle
   | MaterializationHandle;
@@ -127,21 +109,6 @@ export class KernelHandleFactory {
   /** Mint a claim handle from an analysis-step-local key. */
   claim(local: string): ClaimHandle {
     return serializeKernelHandle(this.storeKey, KernelHandleKind.Claim, local);
-  }
-
-  /** Mint a derivation-edge handle from an analysis-step-local key. */
-  derivationEdge(local: string): DerivationEdgeHandle {
-    return serializeKernelHandle(this.storeKey, KernelHandleKind.DerivationEdge, local);
-  }
-
-  /** Mint a derivation-rule handle from an analysis-step-local key. */
-  derivationRule(local: string): DerivationRuleHandle {
-    return serializeKernelHandle(this.storeKey, KernelHandleKind.DerivationRule, local);
-  }
-
-  /** Mint a derivation handle from an analysis-step-local key. */
-  derivation(local: string): DerivationHandle {
-    return serializeKernelHandle(this.storeKey, KernelHandleKind.Derivation, local);
   }
 
   /** Mint an open-seam handle from an analysis-step-local key. */

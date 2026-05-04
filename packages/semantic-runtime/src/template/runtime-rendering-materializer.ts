@@ -6,10 +6,8 @@ import {
   EvidenceRole,
 } from '../kernel/evidence.js';
 import {
-  DerivationPhase,
   OpenSeam,
-  OpenSeamSeverity,
-} from '../kernel/derivation.js';
+} from '../kernel/open-seam.js';
 import type {
   AddressHandle,
   ClaimHandle,
@@ -20,18 +18,13 @@ import type {
 import {
   BindingIdentity,
   ConfigurationIdentity,
-  ConfigurationIdentityKind,
   CompilerIdentity,
-  CompilerIdentityKind,
-  IdentityStability,
 } from '../kernel/identity.js';
 import {
   MaterializationRecord,
-  MaterializationState,
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
-  ProvenanceMode,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -331,7 +324,6 @@ export class RuntimeRenderingMaterializer {
     records.push(
       new BindingIdentity(
         binding.identityHandle,
-        identityStabilityForSource(binding.sourceAddressHandle),
         binding.instructionIdentityHandle,
         renderer.semanticBindingKindKey,
       ),
@@ -341,13 +333,10 @@ export class RuntimeRenderingMaterializer {
         binding.identityHandle,
         binding.sourceAddressHandle,
         source.provenanceHandle,
-        bindingClaimHandles,
       ),
       new MaterializationRecord(
         this.store.handles.materialization(`${bindingLocal}:runtime-binding`),
-        DerivationPhase.Materialization,
         binding.identityHandle,
-        MaterializationState.Complete,
         [binding.productHandle],
         bindingClaimHandles,
       ),
@@ -377,8 +366,7 @@ export class RuntimeRenderingMaterializer {
     records.push(
       new CompilerIdentity(
         effect.identityHandle,
-        identityStabilityForSource(effect.sourceAddressHandle),
-        CompilerIdentityKind.BindingScopeEffect,
+        KernelVocabulary.Binding.ScopeEffect.key,
         binding.identityHandle,
         effect.sourceAddressHandle,
         `${effect.effectKind}:${local}`,
@@ -389,13 +377,10 @@ export class RuntimeRenderingMaterializer {
         effect.identityHandle,
         effect.sourceAddressHandle,
         source.provenanceHandle,
-        [claim.handle],
       ),
       new MaterializationRecord(
         this.store.handles.materialization(`${local}:scope-effect:${effect.productHandle}`),
-        DerivationPhase.Materialization,
         effect.identityHandle,
-        MaterializationState.Complete,
         [effect.productHandle],
         [claim.handle],
       ),
@@ -502,10 +487,6 @@ export class RuntimeRenderingMaterializer {
       ...bindingClaims,
       ...(instructionClaim == null ? [] : [instructionClaim]),
     ];
-    const productClaimHandles = uniqueClaimHandles([
-      ...claimsForProduct(claims, controller.productHandle).map((claim) => claim.handle),
-      ...claimsForProduct(externalClaims, controller.productHandle).map((claim) => claim.handle),
-    ]);
     const materializationClaimHandles = uniqueClaimHandles([
       ...claims.map((claim) => claim.handle),
       ...claimsForProduct(externalClaims, controller.productHandle).map((claim) => claim.handle),
@@ -513,8 +494,7 @@ export class RuntimeRenderingMaterializer {
     records.push(
       new ConfigurationIdentity(
         controller.identityHandle,
-        identityStabilityForSource(controller.sourceAddressHandle),
-        ConfigurationIdentityKind.Controller,
+        KernelVocabulary.Configuration.Controller.key,
         controller.parent?.identityHandle ?? null,
         controller.sourceAddressHandle,
         controller.name,
@@ -525,13 +505,10 @@ export class RuntimeRenderingMaterializer {
         controller.identityHandle,
         controller.sourceAddressHandle,
         source.provenanceHandle,
-        productClaimHandles,
       ),
       new MaterializationRecord(
         this.store.handles.materialization(`${local}:runtime-controller`),
-        DerivationPhase.Materialization,
         controller.identityHandle,
-        MaterializationState.Complete,
         [controller.productHandle],
         materializationClaimHandles,
       ),
@@ -662,7 +639,6 @@ export class RuntimeRenderingMaterializer {
     const seam = new OpenSeam(
       this.store.handles.openSeam(local),
       seamKindKey,
-      OpenSeamSeverity.Blocked,
       summary,
       addressHandle,
       source.evidenceHandle,
@@ -685,20 +661,13 @@ export class RuntimeRenderingMaterializer {
         ),
         new ProvenanceRecord(
           provenanceHandle,
-          ProvenanceMode.Derived,
           [evidenceHandle],
-          [],
-          'Runtime binding emulation.',
         ),
       ],
       evidenceHandle,
       provenanceHandle,
     );
   }
-}
-
-function identityStabilityForSource(addressHandle: unknown): IdentityStability {
-  return addressHandle == null ? IdentityStability.Session : IdentityStability.SourceStable;
 }
 
 function controllerName(

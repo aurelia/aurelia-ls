@@ -1,13 +1,11 @@
 import type ts from 'typescript';
 import {
-  AddressStability,
   SourceSpanAddress,
   SourceSpanRole,
 } from '../kernel/address.js';
 import {
   OpenSeam,
-  OpenSeamSeverity,
-} from '../kernel/derivation.js';
+} from '../kernel/open-seam.js';
 import {
   EvidenceKind,
   EvidenceRecord,
@@ -18,7 +16,6 @@ import type {
   KernelRecordHandle,
 } from '../kernel/handles.js';
 import {
-  ProvenanceMode,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -67,7 +64,6 @@ export class EvaluationKernelEmitter {
     const openSeamHandle = this.store.handles.openSeam(`evaluation-open:${local}`);
     const span = new SourceSpanAddress(
       spanHandle,
-      AddressStability.SourceStable,
       sourceFileAddressHandle,
       seam.node.getStart(sourceFile),
       seam.node.end,
@@ -75,22 +71,18 @@ export class EvaluationKernelEmitter {
     );
     const evidence = new EvidenceRecord(
       evidenceHandle,
-      EvidenceKind.Open,
+      EvidenceKind.SemanticObservation,
       [EvidenceRole.Diagnostic],
       seam.summary,
       spanHandle,
     );
     const provenance = new ProvenanceRecord(
       provenanceHandle,
-      ProvenanceMode.Open,
       [evidenceHandle],
-      [],
-      `Static evaluation left an open seam: ${seam.seamKind}.`,
     );
     const openSeam = new OpenSeam(
       openSeamHandle,
       seam.seamKind,
-      OpenSeamSeverity.Warning,
       seam.summary,
       spanHandle,
       evidenceHandle,

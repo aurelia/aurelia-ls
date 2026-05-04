@@ -1,16 +1,13 @@
 import ts from 'typescript';
 import {
-  AddressStability,
   SourceFileAddress,
   SourceSpanAddress,
   SourceSpanRole,
 } from '../kernel/address.js';
 import { SemanticClaim } from '../kernel/claim.js';
 import {
-  DerivationPhase,
   OpenSeam,
-  OpenSeamSeverity,
-} from '../kernel/derivation.js';
+} from '../kernel/open-seam.js';
 import {
   EvidenceKind,
   EvidenceRecord,
@@ -25,20 +22,16 @@ import type {
   ProvenanceHandle,
 } from '../kernel/handles.js';
 import {
-  IdentityStability,
   TypeSystemIdentity,
-  TypeSystemIdentityKind,
   TypeScriptDeclarationIdentity,
 } from '../kernel/identity.js';
 import {
   MaterializationRecord,
-  MaterializationState,
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
   compactFieldProvenance,
   FieldProvenance,
-  ProvenanceMode,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -228,7 +221,6 @@ export class CheckerTypeProjector {
         new OpenSeam(
           this.store.handles.openSeam(`type-shape:${input.localKey}:unknown-shape`),
           KernelVocabulary.TypeSystem.OpenTypeProjection.key,
-          OpenSeamSeverity.Warning,
           `TypeChecker projection could not classify '${display}' into a known type-shape lane.`,
           source.sourceAddressHandle,
           source.evidenceHandle,
@@ -274,8 +266,7 @@ export class CheckerTypeProjector {
     records.push(
       new TypeSystemIdentity(
         shapeIdentityHandle,
-        IdentityStability.Session,
-        TypeSystemIdentityKind.TypeShape,
+        KernelVocabulary.TypeSystem.TypeShape.key,
         checkerKey,
         input.ownerIdentityHandle,
         source.sourceAddressHandle,
@@ -283,8 +274,7 @@ export class CheckerTypeProjector {
       ),
       ...members.map((member) => new TypeSystemIdentity(
         member.identityHandle,
-        IdentityStability.Session,
-        TypeSystemIdentityKind.TypeMember,
+        KernelVocabulary.TypeSystem.TypeMember.key,
         `${checkerKey}.${member.name}`,
         shapeIdentityHandle,
         member.sourceAddressHandle,
@@ -298,7 +288,6 @@ export class CheckerTypeProjector {
         shapeIdentityHandle,
         source.sourceAddressHandle,
         source.provenanceHandle,
-        claims.map((claim) => claim.handle),
       ),
       ...members.map((member) => new MaterializedProduct(
         member.productHandle,
@@ -306,18 +295,12 @@ export class CheckerTypeProjector {
         member.identityHandle,
         member.sourceAddressHandle ?? source.sourceAddressHandle,
         source.provenanceHandle,
-        claimsForProduct(claims, member.productHandle).map((claim) => claim.handle),
       )),
       new MaterializationRecord(
         this.store.handles.materialization(`type-shape:${input.localKey}`),
-        DerivationPhase.Projection,
         shapeIdentityHandle,
-        shapeKind === CheckerTypeShapeKind.Unknown
-          ? MaterializationState.Partial
-          : MaterializationState.Complete,
         [shapeProductHandle, ...members.map((member) => member.productHandle)],
         claims.map((claim) => claim.handle),
-        [],
         openSeams.map((seam) => seam.handle),
       ),
     );
@@ -407,8 +390,7 @@ export class CheckerTypeProjector {
     records.push(
       new TypeSystemIdentity(
         shapeIdentityHandle,
-        IdentityStability.Session,
-        TypeSystemIdentityKind.TypeShape,
+        KernelVocabulary.TypeSystem.TypeShape.key,
         checkerKey,
         input.ownerIdentityHandle,
         source.sourceAddressHandle,
@@ -416,8 +398,7 @@ export class CheckerTypeProjector {
       ),
       ...members.map((member) => new TypeSystemIdentity(
         member.identityHandle,
-        IdentityStability.Session,
-        TypeSystemIdentityKind.TypeMember,
+        KernelVocabulary.TypeSystem.TypeMember.key,
         `${checkerKey}.${member.name}`,
         shapeIdentityHandle,
         member.sourceAddressHandle,
@@ -430,7 +411,6 @@ export class CheckerTypeProjector {
         shapeIdentityHandle,
         source.sourceAddressHandle,
         source.provenanceHandle,
-        claims.map((claim) => claim.handle),
       ),
       ...members.map((member) => new MaterializedProduct(
         member.productHandle,
@@ -438,16 +418,12 @@ export class CheckerTypeProjector {
         member.identityHandle,
         source.sourceAddressHandle,
         source.provenanceHandle,
-        claimsForProduct(claims, member.productHandle).map((claim) => claim.handle),
       )),
       new MaterializationRecord(
         this.store.handles.materialization(`type-shape:${input.localKey}`),
-        DerivationPhase.Projection,
         shapeIdentityHandle,
-        MaterializationState.Complete,
         [shapeProductHandle, ...members.map((member) => member.productHandle)],
         claims.map((claim) => claim.handle),
-        [],
         [],
       ),
     );
@@ -525,10 +501,7 @@ export class CheckerTypeProjector {
       ),
       new ProvenanceRecord(
         provenanceHandle,
-        ProvenanceMode.Derived,
         [evidenceHandle],
-        [],
-        provenanceSummary,
       ),
     ];
     return new TypeProjectionSourceSet(records, evidenceHandle, provenanceHandle, addressHandle);
@@ -738,7 +711,6 @@ function sourceSpanForDeclaration(
   return {
     address: new SourceSpanAddress(
       addressHandle,
-      AddressStability.SourceStable,
       sourceFileAddress.handle,
       start,
       end,
@@ -746,7 +718,6 @@ function sourceSpanForDeclaration(
     ),
     identity: new TypeScriptDeclarationIdentity(
       identityHandle,
-      IdentityStability.SourceStable,
       sourceFileAddress.path,
       null,
       symbol.getName(),

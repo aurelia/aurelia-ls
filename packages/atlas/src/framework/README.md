@@ -173,7 +173,7 @@ anchors; better anchors make future product modeling cheaper.
 - Treat seed anchors as starting handles, not authoritative taxonomy.
 - Keep relationship axes separate. A relation is not a mechanism, a phase is not a relation, and evidence basis is not
   confidence. If a projection wants to merge those dimensions, derive that view from atoms.
-- Keep old compensation layers small. Product vocabulary and kernel substrate contracts should shrink when framework
+- Keep old compensation layers small. Product vocabulary and tool-local inference tables should shrink when framework
   semantics can carry the relationship more honestly.
 - Make expensive discovery explicit at daemon boot when it makes query-time reads cheap and repeatable.
 

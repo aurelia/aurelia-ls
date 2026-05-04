@@ -17,8 +17,6 @@ export const enum ConfigurationSequenceKind {
   Registry = 'registry',
   /** Sequence owned by a builder-like configuration value before it is registered. */
   Builder = 'builder',
-  /** Sequence representing AppRoot lifecycle-slot dispatch points without executing callback bodies. */
-  LifecycleSlot = 'lifecycle-slot',
   /** Sequence exists but its owner or shape is not classified yet. */
   Unknown = 'unknown',
 }
@@ -42,8 +40,6 @@ export const enum ConfigurationStepKind {
   OptionContribution = 'option-contribution',
   /** An `AppTask.*(...)` factory creates a deferred lifecycle task. */
   AppTaskFactory = 'app-task-factory',
-  /** An AppRoot dispatch point selects AppTasks for one lifecycle slot. */
-  AppTaskSlotDispatch = 'app-task-slot-dispatch',
   /** A plugin-style `configure` function or export participates in app admission. */
   PluginConfigure = 'plugin-configure',
   /** The step exists, but the source shape is not classified yet. */
@@ -97,8 +93,8 @@ export class ConfigurationStepReference {
 /**
  * Ordered configuration flow before registration admissions are spent into a DI world.
  *
- * A sequence is not a compiler stage. It is source/evaluation order for one app, plugin, registry body, builder
- * object, or lifecycle-slot dispatch context.
+ * A sequence is not a compiler stage. It is source/evaluation order for one app, plugin, registry body, or builder
+ * object.
  */
 export class ConfigurationSequence {
   constructor(
@@ -112,8 +108,6 @@ export class ConfigurationSequence {
     readonly aurelia: AureliaReference | null,
     /** AppRoot boundary that owns this sequence, if applicable. */
     readonly appRoot: AppRootReference | null,
-    /** AppTask that owns this sequence, if this is interpreting deferred callback structure. */
-    readonly appTask: AppTaskReference | null,
     /** Ordered steps observed for this sequence. */
     readonly steps: readonly ConfigurationStepReference[],
     /** Source address for the sequence owner. */

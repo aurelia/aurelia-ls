@@ -1,9 +1,7 @@
 import {
-  AddressStability,
   TemplateAddress,
 } from '../kernel/address.js';
 import { SemanticClaim } from '../kernel/claim.js';
-import { DerivationPhase } from '../kernel/derivation.js';
 import {
   EvidenceKind,
   EvidenceRecord,
@@ -18,20 +16,16 @@ import type {
 import type { TemplateSourceOffsetMap } from '../resources/custom-element-definition.js';
 import {
   CompilerIdentity,
-  CompilerIdentityKind,
-  IdentityStability,
   TemplateIdentity,
   TemplatePhase,
 } from '../kernel/identity.js';
 import {
   MaterializationRecord,
-  MaterializationState,
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
   compactFieldProvenance,
   FieldProvenance,
-  ProvenanceMode,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -117,7 +111,7 @@ class TemplateCompilationSourceSet {
   ) {}
 }
 
-class TemplateCompilationClaimSet {
+class TemplateCompilationClaims {
   constructor(
     readonly sourceClaims: readonly SemanticClaim[],
     readonly unitClaims: readonly SemanticClaim[],
@@ -262,38 +256,33 @@ export class TemplateCompilationUnitMaterializer {
     records.push(
       new TemplateAddress(
         templateAddressHandle,
-        addressStabilityForTemplate(input),
         `template:${local}`,
         input.owner?.identityHandle ?? null,
         source.sourceAddressHandle,
       ),
       new TemplateIdentity(
         templateIdentityHandle,
-        identityStabilityForTemplate(input),
         input.owner?.identityHandle ?? null,
         TemplatePhase.Authored,
         templateAddressHandle,
       ),
       new CompilerIdentity(
         parseContextIdentityHandle,
-        IdentityStability.SourceStable,
-        CompilerIdentityKind.TemplateParseContext,
+        KernelVocabulary.Template.ParseContext.key,
         templateIdentityHandle,
         source.sourceAddressHandle,
         input.consumer,
       ),
       new CompilerIdentity(
         unitIdentityHandle,
-        identityStabilityForTemplate(input),
-        CompilerIdentityKind.TemplateCompilationUnit,
+        KernelVocabulary.Compiler.CompilationUnit.key,
         templateIdentityHandle,
         source.sourceAddressHandle,
         input.unitKind,
       ),
       new CompilerIdentity(
         contextIdentityHandle,
-        identityStabilityForTemplate(input),
-        CompilerIdentityKind.TemplateCompilationContext,
+        KernelVocabulary.Compiler.CompilationContext.key,
         unitIdentityHandle,
         source.sourceAddressHandle,
         TemplateCompilationContextKind.Root,
@@ -304,7 +293,6 @@ export class TemplateCompilationUnitMaterializer {
         templateIdentityHandle,
         source.sourceAddressHandle,
         source.provenanceHandle,
-        claimsForProduct(claims.allClaims, templateProductHandle).map((claim) => claim.handle),
       ),
       new MaterializedProduct(
         parseContextProductHandle,
@@ -312,7 +300,6 @@ export class TemplateCompilationUnitMaterializer {
         parseContextIdentityHandle,
         source.sourceAddressHandle,
         source.provenanceHandle,
-        claimsForProduct(claims.allClaims, parseContextProductHandle).map((claim) => claim.handle),
       ),
       new MaterializedProduct(
         unitProductHandle,
@@ -320,7 +307,6 @@ export class TemplateCompilationUnitMaterializer {
         unitIdentityHandle,
         source.sourceAddressHandle,
         source.provenanceHandle,
-        claimsForProduct(claims.allClaims, unitProductHandle).map((claim) => claim.handle),
       ),
       new MaterializedProduct(
         contextProductHandle,
@@ -328,13 +314,10 @@ export class TemplateCompilationUnitMaterializer {
         contextIdentityHandle,
         source.sourceAddressHandle,
         source.provenanceHandle,
-        claimsForProduct(claims.allClaims, contextProductHandle).map((claim) => claim.handle),
       ),
       new MaterializationRecord(
         this.store.handles.materialization(`template-compilation-unit:${local}`),
-        DerivationPhase.Materialization,
         unitIdentityHandle,
-        MaterializationState.Complete,
         [
           templateProductHandle,
           parseContextProductHandle,
@@ -367,10 +350,7 @@ export class TemplateCompilationUnitMaterializer {
       ),
       new ProvenanceRecord(
         provenanceHandle,
-        ProvenanceMode.Derived,
         [evidenceHandle],
-        [],
-        'Template compilation unit construction.',
       ),
     ];
     return new TemplateCompilationSourceSet(records, provenanceHandle, addressHandle);
@@ -384,7 +364,7 @@ export class TemplateCompilationUnitMaterializer {
     rootContext: TemplateCompilationContext,
     compilationUnit: TemplateCompilationUnit,
     provenanceHandle: ProvenanceHandle,
-  ): TemplateCompilationClaimSet {
+  ): TemplateCompilationClaims {
     const sourceClaims: SemanticClaim[] = [];
     if (input.owner?.productHandle != null) {
       sourceClaims.push(new SemanticClaim(
@@ -454,7 +434,7 @@ export class TemplateCompilationUnitMaterializer {
       contextClaims.push(claim);
     });
 
-    return new TemplateCompilationClaimSet(sourceClaims, unitClaims, contextClaims);
+    return new TemplateCompilationClaims(sourceClaims, unitClaims, contextClaims);
   }
 }
 
@@ -489,26 +469,6 @@ function claimsForProduct(
     claim.subjectHandle === productHandle
     || claim.objectHandle === productHandle
   );
-}
-
-function addressStabilityForTemplate(input: TemplateCompilationUnitConstructionInput): AddressStability {
-  if (input.sourceAddressHandle != null) {
-    return AddressStability.SourceStable;
-  }
-  if (input.owner?.identityHandle != null) {
-    return AddressStability.SemanticStable;
-  }
-  return AddressStability.Session;
-}
-
-function identityStabilityForTemplate(input: TemplateCompilationUnitConstructionInput): IdentityStability {
-  if (input.sourceAddressHandle != null) {
-    return IdentityStability.SourceStable;
-  }
-  if (input.owner?.identityHandle != null) {
-    return IdentityStability.SemanticStable;
-  }
-  return IdentityStability.Session;
 }
 
 export function compilationUnitKindForWorldKind(worldKind: TemplateCompilerWorldKind): TemplateCompilationUnitKind {

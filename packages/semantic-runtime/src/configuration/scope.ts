@@ -12,7 +12,6 @@ export const enum BindingContextKind {
   Synthetic = 'synthetic',
   Override = 'override',
   Object = 'object',
-  Unknown = 'unknown',
 }
 
 export const enum BindingScopeOwnerKind {
@@ -21,7 +20,6 @@ export const enum BindingScopeOwnerKind {
   SyntheticView = 'synthetic-view',
   LetElement = 'let-element',
   RepeatedItem = 'repeated-item',
-  Unknown = 'unknown',
 }
 
 export const enum BindingScopeLookupKind {
@@ -108,8 +106,7 @@ export class BindingContextSlot {
 export type RuntimeBindingContextKind =
   | BindingContextKind.ViewModel
   | BindingContextKind.Synthetic
-  | BindingContextKind.Object
-  | BindingContextKind.Unknown;
+  | BindingContextKind.Object;
 
 /** Construction input for one slot in a runtime BindingContext or IOverrideContext model. */
 export class BindingContextSlotInput {
@@ -194,8 +191,7 @@ export class BindingContext {
     /** Runtime binding-context lane. */
     readonly contextKind: BindingContextKind.ViewModel
       | BindingContextKind.Synthetic
-      | BindingContextKind.Object
-      | BindingContextKind.Unknown,
+      | BindingContextKind.Object,
     /** Product that owns the context, usually a controller, resource, or generated template context. */
     readonly ownerProductHandle: ProductHandle | null,
     /** Static type of the context object itself, if known through the TypeChecker substrate. */

@@ -41,9 +41,8 @@ also installs an `IContainer` self resolver that resolves to the requestor.
 The tooling model keeps those consequences distinct:
 
 - `Container` names the abstract container itself.
-- `ContainerInterfaceToken` names the runtime `IContainer` interface symbol separately from any concrete container
-  frame. The token is the DI key; `ContainerSelfResolverSlot` is the per-container row that makes that key resolve to
-  the requestor.
+- The runtime `IContainer` interface symbol is emitted as an interface DI key identity. `ContainerSelfResolverSlot` is
+  the per-container row that makes that key resolve to the requestor.
 - `ContainerConfiguration` names the runtime-shaped configuration policy.
 - `ContainerRegistrationOperation` names the act of spending an admission against a container.
 - `Resolver` names a runtime-shaped resolver value. Its `resolve(...)`, `register(...)`, and `getFactory(...)` methods
@@ -55,13 +54,13 @@ The tooling model keeps those consequences distinct:
 - `ContainerResolverLookup`, `ContainerFactoryLookup`, and `ContainerResourceLookup` are answer records returned by
   the emulator methods. They do not create kernel facts by themselves.
 - `ContainerLookupState.JitRegistration` names the `_jitRegister` boundary: runtime would execute a registry or
-  default resolver, but the tooling model has not yet spent that pressure into slots, claims, derivations, or seams.
+  default resolver, but the tooling model has not yet spent that pressure into slots, claims, or seams.
 - `createChild(...)` and `useResources(...)` require caller-owned factories for child containers and inherited resource
   slots. The runtime creates those rows directly; the product model must mint fresh handles, provenance, and child-owned
   slot products before mutating emulator state.
 
 `Container` is intentionally a live emulator frame, not a durable kernel record. Durable app-map facts still flow
-through handles, provenance, materialized products, claims, derivations, and open seams. The mutable maps inside
+through handles, provenance, materialized products, claims, and open seams. The mutable maps inside
 `Container` let DI world construction behave like the runtime while materializers decide which effects become stored
 kernel records.
 

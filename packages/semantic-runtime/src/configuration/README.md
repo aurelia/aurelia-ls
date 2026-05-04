@@ -50,10 +50,10 @@ The tooling model should keep that split:
 - `scope-materializer.ts` materializes runtime-shaped `Scope`, binding-context, and override-context products together,
   then attaches typed product details. Inquiry should read those details for expression name visibility instead of
   peeking into controller construction or compiler-world internals.
-- Configuration sequence records describe source/evaluation order for app setup, plugin setup, registry bodies,
-  builder-style configuration objects, and lifecycle-slot dispatch.
-- Configuration option contributions describe defaults, user customization callbacks, forwarded options, and builder
-  method mutations before convergence decides final precedence.
+- Configuration sequence records describe source/evaluation order for app setup, plugin setup, registry bodies, and
+  builder-style configuration objects.
+- Configuration option contributions currently describe user customization callbacks and builder method mutations before
+  convergence decides final precedence.
 - Direct assignments inside simple customization callbacks, such as `options.translationAttributeAliases = [...]`, may
   produce typed option contributions while the callback itself remains preserved as a callback contribution.
 - AppTask records describe deferred lifecycle tasks. Their callback bodies may be inspected later, but they are not
@@ -115,7 +115,8 @@ Configuration has at least two ordering axes that should stay separate:
   `activated`.
 
 `AppTask.*(...)` bridges those axes: it is admitted during source/app setup order, then selected later by lifecycle
-slot. The configuration layer records both facts without executing the callback.
+slot. The configuration layer currently records the deferred task definition without executing the callback; lifecycle
+dispatch should only become a product once AppRoot lifecycle emulation actually spends that boundary.
 
 ## Watchpoints
 
@@ -125,7 +126,7 @@ slot. The configuration layer records both facts without executing the callback.
   but their container consequences belong to registration and DI world construction.
 - Keep runtime binding scope distinct from compiler resource scope. Binding scope answers "which object/local does this
   expression name target?"; resource scope answers "which Aurelia resources and compiler services are visible here?".
-- Configuration ordering is semantic, but it is not a linear compiler stage machine. Use derivation/provenance for
+- Configuration ordering is semantic, but it is not a linear compiler stage machine. Use provenance and claims for
   why an ordering was observed.
 - Do not use option contributions as generic payloads for unresolved configuration objects. If a value matters beyond
   primitive option state, keep it referential until a domain-specific product earns a shape.

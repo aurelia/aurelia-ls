@@ -6,8 +6,8 @@ The analysis kernel is the low-level machine-readable semantic substrate for Aur
 shape is a long-lived in-memory analysis store that serves IDE features, Atlas queries, tooling queries, agents, diagnostics,
 future compilers, and analysis tools from the same normalized records.
 
-The kernel is intentionally small and record-oriented. It captures observations, semantic claims, derivation
-breadcrumbs, materialized products, and unresolved seams. Higher-level systems can then build IDE, Atlas, tooling, AI,
+The kernel is intentionally small and record-oriented. It captures observations, semantic claims,
+materialized products, provenance, and unresolved seams. Higher-level systems can then build IDE, Atlas, tooling, AI,
 diagnostic, and AOT projections from those records without rediscovering the same facts.
 
 ## Product Priorities
@@ -17,7 +17,7 @@ must preserve enough source, identity, provenance, uncertainty, and navigation s
 their own projections without rewriting the semantic substrate.
 
 False positives are more dangerous than false negatives. Candidates, ambiguity, parser recovery, generated
-facts, convention-derived facts, and unresolved seams must remain visible in the data model instead of being
+facts, convention-derived facts, and unresolved seams must remain visible in the graph instead of being
 collapsed into ordinary resolved facts.
 
 Correctness and explanation quality matter before latency. TypeScript analysis may initially bias toward completed
@@ -35,8 +35,8 @@ store. It can be readable and stable enough for tooling continuations during tha
 semantic truth. Real semantic identity lives in domain fields such as resource kind/name, DI key shape,
 declaration coordinates, template owner/phase, and provenance.
 
-Controlled vocabulary uses stable keys, not store handles. Claim predicates, rule kinds, derivation edge roles,
-seam kinds, binding kinds, instruction kinds, and product kinds use centrally defined vocabulary keys with an
+Controlled vocabulary uses stable keys, not store handles. Claim predicates, seam kinds, binding kinds,
+instruction kinds, and product kinds use centrally defined vocabulary keys with an
 explicit usage slot. New entries should be added as implementation pressure proves they are needed, with
 namespace, stable code, slot, and grounded usage comment.
 
@@ -60,24 +60,24 @@ a durable domain relationship, not a temporary materialization step, query state
 an existing edge.
 
 The key space is still deliberately small, but the TypeScript contracts now distinguish claim predicates, seam
-kinds, product kinds, derivation rule kinds, derivation edge roles, binding kinds, and instruction kinds. These
+kinds, product kinds, binding kinds, and instruction kinds. These
 are not interchangeable even when they share the same underlying stable key format.
 
-Do not hide uncertainty behind `null`, empty arrays, or best-effort guesses. Use explicit provenance modes,
-derivation states, materialization states, and open seams. Confidence, ranking, and user-specific belief policy
-belong in query answers or consumer projections, not in first-order kernel facts.
+Do not hide uncertainty behind `null`, empty arrays, or best-effort guesses. Use explicit open seams and
+claim predicates that say what was actually observed or produced. Confidence, ranking, completeness, severity,
+and user-specific belief policy belong in query answers or consumer projections, not in first-order kernel facts.
 
-Evidence and derivation are deliberate pressure surfaces. They are expected to evolve as real materializers are
-implemented, but they must not become catch-all storage for facts that belong in identities, addresses, claims,
-products, open seams, or inquiry answers. Treat them as high-leverage unstable surfaces: useful because they sit
-close to source reality and transformation flow, risky because they can quietly absorb policy, confidence,
-debugging notes, partial analysis state, and consumer-specific answer semantics.
+Evidence is a deliberate pressure surface. It is expected to evolve as real materializers are
+implemented, but it must not become catch-all storage for facts that belong in identities, addresses, claims,
+products, open seams, or inquiry answers. Treat it as a high-leverage unstable surface: useful because it sits
+close to source reality, risky because it can quietly absorb policy, confidence, debugging notes,
+partial analysis state, and consumer-specific answer semantics.
 
 Provenance is currently produced before many consumers exist. That is intentional, because rename support,
 go-to-definition, explanations, invalidation, and tooling traces need source lineage later. Until those consumers put
-harder pressure on the model, keep provenance boring: field lineage, evidence links, and derivation breadcrumbs only.
-Do not use provenance as a generic completion marker, payload channel, ranking hint, or place to hide missing domain
-fields.
+harder pressure on the model, keep provenance boring: field lineage and direct evidence links only.
+Do not use provenance as a generic completion marker, mode classifier, payload channel, ranking hint, or place to hide
+missing domain fields.
 
 Semantic graph edges should point at named records by handle. Avoid terminal JSON values, generic payload fields,
 and ref wrappers unless a concrete materializer proves they are necessary. If a literal matters semantically, first
@@ -103,23 +103,24 @@ must be declared as product-kind vocabulary, claim predicates must be declared a
 endpoints must match the predicate's directional signature.
 
 The store indexes normalized kernel records first. A `MaterializedProduct` is an envelope that names kind, identity,
-address, provenance, and claims. Rich domain objects can hydrate that envelope through `product-details.ts`, where
+address, and provenance. Claims are indexed by subject/object handles in the store instead of being duplicated on the
+product envelope. Rich domain objects can hydrate that envelope through `product-details.ts`, where
 typed slots validate the product kind before attaching current-run detail objects. Product details are for hot inquiry
 and materializer handoff; they are not kernel records, generic payloads, JSON storage, or a persistence schema. If a detail
 starts needing durable graph semantics, promote that semantics into named records, claims, identities, or addresses
 rather than widening the detail sidecar.
 
-`vocabulary.ts` defines the controlled vocabulary mechanism used by claims, rules, edge roles, seams, binding
-kinds, instruction kinds, and product kinds. Each vocabulary definition carries its usage slot.
-
-`substrate-contract.ts` defines tooling-visible, product-owned mapping aids for semantic-runtime substrate lenses. It is
-not runtime semantics, kernel truth, public API, or persistence schema. Use it only for stable source-inventory
-facts that are not naturally visible through the main model types, such as preservation channels, model-surface
-labels, and helper classes that should not be treated as semantic products.
+`vocabulary.ts` is the public barrel for the controlled vocabulary mechanism used by claims, seams, binding
+kinds, instruction kinds, and product kinds. The implementation is split by dependency direction and slot:
+`vocabulary/core.ts` owns keys, slots, definition registration, and claim-signature algebra; `vocabulary/product-kinds.ts`
+owns product-kind definitions; `vocabulary/open-seam-kinds.ts`, `vocabulary/binding-kinds.ts`, and
+`vocabulary/instruction-kinds.ts` own non-claim slot vocabularies; and `vocabulary/claim-predicates.ts` owns signed
+claim predicates. Claim signatures reference product-kind definitions directly, so TypeScript and Atlas can follow the
+topology through symbols instead of stringly namespace/name tuples.
 
 The folder-wide Atlas and auLink rule lives in [../README.md](../README.md). The kernel-local rule is narrower:
-`substrate-contract.ts` may expose source-inventory aids for Atlas or tooling lenses, but domain semantics must stay in the real
-model and record types.
+source-inventory aids should not become a parallel taxonomy. Domain semantics must stay in the real model and record
+types, with Atlas reading those typed surfaces directly.
 
 `address.ts` describes where something can be observed:
 
@@ -135,15 +136,17 @@ model and record types.
 - DI keys, split by runtime key shape rather than carried by display descriptions.
 - DI products produced while configuration and registration are spent into an abstract container world.
 - Registration admission identities that name a key plus the admission/strategy family before container-state spending.
-- Templates, template nodes, bindings, instructions, and generated identities.
-- Type-system projections for checker-backed type and member surfaces. These are session-stable handles over the
-  current TypeScript program/checker epoch, not long-lived declaration identities by themselves.
+- Templates, template nodes, bindings, and instructions.
+- Type-system projections for checker-backed type and member surfaces. These are handles over the current TypeScript
+  program/checker epoch, not long-lived declaration identities by themselves.
+Generated artifacts should earn concrete addresses, products, claims, and source maps instead of flowing through a
+generic generated identity bucket.
 
 `evidence.ts` describes direct witnesses:
 
 - Source syntax such as decorators, static definitions, call expressions, and markup attributes.
 - Semantic observations from the checker or analysis passes.
-- Configuration flow, conventions, recovery, generated output, external catalogs, absence, and open questions.
+- Configuration flow, conventions, recovery, generated output, and external catalogs.
 - Witness roles such as declaration, usage, registration, scope, transform input/output, or diagnostics.
 - Evidence does not rank strength; confidence is a consumer/query policy decision.
 - Evidence should answer "what was observed?" not "what should a consumer believe or do?"
@@ -151,7 +154,6 @@ model and record types.
 `provenance.ts` explains why a field, claim, or product exists:
 
 - Direct evidence for compact explanations.
-- Derivation links for expandable explanations.
 - Field-level provenance for records whose properties come from different witnesses.
 - Invalidation can walk from changed source to evidence/provenance to dependent claims and products.
 
@@ -161,19 +163,19 @@ model and record types.
 - A predicate vocabulary key and an object address, semantic identity, or product handle.
 - A provenance handle for expansion.
 
-`derivation.ts` records rule applications:
+`open-seam.ts` records first-class unresolved pressure:
 
-- Discovery, normalization, resolution, lowering, materialization, and projection phases.
-- Input and output edge handles, optional controlled edge-role keys, direct evidence handles, state, and open seam handles.
-- Derivation dependencies between claims belong here rather than in claim-to-claim object links.
-- Derivation should answer "which rule ran over which inputs and produced which outputs?" not "how should an IDE,
-  agent, diagnostic, or compiler rank the answer?"
+- A controlled seam-kind key.
+- A compact summary.
+- Optional source address and direct evidence handles.
+- Open seams answer "what remained unresolved and where can I inspect it?" not "how should an IDE, agent,
+  diagnostic, or compiler rank the answer?"
 
-`materialization.ts` records phase products:
+`materialization.ts` records products emitted around one owner:
 
 - Products such as resource definitions, DI associations, binding records, or instructions.
-- Product handles, claim handles, derivation handles, and open seam handles produced alongside those products.
-- Completeness/outcome state only; generated or convention-derived origin belongs in provenance and evidence records.
+- Product handles, claim handles, and open seam handles produced alongside those products.
+- Completeness and outcome policy are derived by consumers from products, claims, provenance, and open seams.
 - Materialized product envelopes should stay boring. If a consumer needs to expand a product into resource metadata,
   instruction details, parser publication state, or DI slot shape, use typed product detail slots or domain-specific
   records, not `unknown`, JSON, or payload storage.
@@ -188,8 +190,6 @@ model and record types.
 - Details support inquiry and tooling expansion, but they are not a shortcut around kernel vocabulary, claims, or
   provenance when a relationship needs to become semantic.
 
-`note.ts` contains small non-semantic notes for diagnostics and explanation hints.
-
 ## Query And Answer Pressure
 
 The kernel should not sit as inert vocabulary. It becomes useful through a loop:
@@ -201,12 +201,12 @@ help AI agents choose the next useful question. Expected answer outcomes include
 partial, unsupported, and reroute. Answers should be able to carry products, claims, evidence, provenance, open
 seams, policy-specific confidence/state, and suggested continuations.
 
-Do not back-port answer semantics into derivation records. A derivation may record partial, blocked, speculative,
-or failed materialization; the consumer-facing meaning of that result belongs in the inquiry/answer layer. Autocomplete
-ranking, rename safety, diagnostic severity beyond concrete open seams, AI usefulness, and AOT actionability are
+Do not back-port answer semantics into materialization records, evidence, or open seams. A materialization records
+emitted products and seams. The consumer-facing meaning of those records belongs in
+the inquiry/answer layer. Autocomplete ranking, rename safety, diagnostic severity, AI usefulness, and AOT actionability are
 query policy decisions layered over the kernel.
 
-Store observations, claims, derivations, materializations, and provenance in the hot analysis world. Build
+Store observations, claims, materializations, and provenance in the hot analysis world. Build
 consumer-specific projections at query time: autocomplete candidates, app-map summaries, go-to-definition
 payloads, explanation paths, and eventually refactor impact views.
 
@@ -223,7 +223,7 @@ The first strong vertical slice should connect TypeScript/module evaluation to D
 
 - What keys, resources, and registrations are available here?
 - Which source shapes produced them?
-- Which derivation rules connected the pieces?
+- Which claims and provenance records connected the pieces?
 - Which parts are ambiguous, convention-derived, recovered, or still open?
 
 That slice should emit kernel records from the start so the vocabulary is pressure-tested by real materializers and

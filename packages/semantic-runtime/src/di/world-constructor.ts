@@ -1,9 +1,7 @@
 import { SemanticClaim } from '../kernel/claim.js';
 import {
-  DerivationPhase,
   OpenSeam,
-  OpenSeamSeverity,
-} from '../kernel/derivation.js';
+} from '../kernel/open-seam.js';
 import {
   EvidenceKind,
   EvidenceRecord,
@@ -19,20 +17,16 @@ import type {
 } from '../kernel/handles.js';
 import {
   DiProductIdentity,
-  DiProductIdentityKind,
-  IdentityStability,
   InterfaceDiKeyIdentity,
   ResourceDiKeyIdentity,
 } from '../kernel/identity.js';
 import {
   MaterializationRecord,
-  MaterializationState,
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
   compactFieldProvenance,
   FieldProvenance,
-  ProvenanceMode,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -203,7 +197,6 @@ export class DiWorldConstructor {
           KernelVocabulary.Di.OpenRegistrationSpending.key,
           'Configuration step admitted registrations, but DI world construction could not identify the receiving container.',
           step.sourceAddressHandle,
-          OpenSeamSeverity.Blocked,
         );
         records.push(...seam.records);
         openSeams.push(seam.seam);
@@ -218,7 +211,6 @@ export class DiWorldConstructor {
             KernelVocabulary.Di.OpenRegistrationSpending.key,
             'Configuration step referenced a registration admission product that was not present in the configuration emission.',
             step.sourceAddressHandle,
-            OpenSeamSeverity.Blocked,
           );
           records.push(...seam.records);
           openSeams.push(seam.seam);
@@ -298,7 +290,6 @@ export class DiWorldConstructor {
     const operation = this.operationForAdmission(container, admission, local, source.provenanceHandle);
     records.push(...operation.records);
     container.register(operation.product);
-    const operationProductClaimHandles: ClaimHandle[] = [];
     const operationMaterializationClaimHandles = [operation.acceptRegistrationClaimHandle];
 
     if (admission instanceof OpenRegistrationAdmission) {
@@ -307,7 +298,6 @@ export class DiWorldConstructor {
         KernelVocabulary.Di.OpenRegistrationSpending.key,
         summaryForOpenRegistrationAdmission(admission),
         admission.sourceAddressHandle,
-        OpenSeamSeverity.Blocked,
       );
       records.push(...seam.records);
       openSeams.push(seam.seam);
@@ -327,19 +317,16 @@ export class DiWorldConstructor {
         source.provenanceHandle,
       );
       records.push(...productClaims.records);
-      operationProductClaimHandles.push(...productClaims.handles);
       operationMaterializationClaimHandles.push(...productClaims.handles);
       for (const slot of emission.resolverSlots) {
         container.registerResolver(slot);
       }
     } else if (admission instanceof ParameterizedRegistryAdmission) {
-      const productClaimHandle = this.operationProductClaimHandle(`${local}:parameterized-registry-products`, 0);
       const emission = this.recordsForParameterizedRegistry(
         container,
         admission,
         local,
         source.provenanceHandle,
-        [productClaimHandle],
       );
       records.push(...emission.records);
       if (emission.registry != null) {
@@ -351,18 +338,15 @@ export class DiWorldConstructor {
           source.provenanceHandle,
         );
         records.push(...productClaims.records);
-        operationProductClaimHandles.push(...productClaims.handles);
         operationMaterializationClaimHandles.push(...productClaims.handles);
       }
       openSeams.push(...emission.openSeams);
     } else if (admission instanceof RegistryRegistrationAdmission) {
-      const productClaimHandle = this.operationProductClaimHandle(`${local}:registry-products`, 0);
       const emission = this.recordsForRegistry(
         container,
         admission,
         local,
         source.provenanceHandle,
-        [productClaimHandle],
       );
       records.push(...emission.records);
       registries.push(emission.registry);
@@ -389,7 +373,6 @@ export class DiWorldConstructor {
         source.provenanceHandle,
       );
       records.push(...productClaims.records);
-      operationProductClaimHandles.push(...productClaims.handles);
       operationMaterializationClaimHandles.push(...productClaims.handles);
       openSeams.push(...emission.openSeams);
     } else if (admission instanceof ResourceRegistrationAdmission) {
@@ -412,7 +395,6 @@ export class DiWorldConstructor {
         source.provenanceHandle,
       );
       records.push(...productClaims.records);
-      operationProductClaimHandles.push(...productClaims.handles);
       operationMaterializationClaimHandles.push(...productClaims.handles);
       openSeams.push(...slotEmission.openSeams);
     } else if (admission instanceof FrameworkRegistrationAdmission) {
@@ -436,7 +418,6 @@ export class DiWorldConstructor {
         source.provenanceHandle,
       );
       records.push(...productClaims.records);
-      operationProductClaimHandles.push(...productClaims.handles);
       operationMaterializationClaimHandles.push(...productClaims.handles);
 
       const seam = this.recordsForOpenSeam(
@@ -444,7 +425,6 @@ export class DiWorldConstructor {
         KernelVocabulary.Di.OpenRegistrationSpending.key,
         summaryForFrameworkRegistrationOpen(admission.frameworkKind),
         admission.sourceAddressHandle,
-        OpenSeamSeverity.Warning,
       );
       records.push(...seam.records);
       openSeams.push(seam.seam);
@@ -452,7 +432,6 @@ export class DiWorldConstructor {
     records.push(...this.recordsForOperationEnvelope(
       local,
       operation,
-      operationProductClaimHandles,
       operationMaterializationClaimHandles,
       openSeams.map((seam) => seam.handle),
       source.provenanceHandle,
@@ -495,8 +474,7 @@ export class DiWorldConstructor {
     const records: KernelStoreRecord[] = [
       new DiProductIdentity(
         identityHandle,
-        IdentityStability.SourceStable,
-        DiProductIdentityKind.ContainerRegistration,
+        KernelVocabulary.Di.ContainerRegistration.key,
         container.identityHandle,
         admission.identityHandle,
         operation.sourceAddressHandle,
@@ -515,7 +493,6 @@ export class DiWorldConstructor {
   private recordsForOperationEnvelope(
     local: string,
     operation: DiRegistrationOperationEmission,
-    productClaimHandles: readonly ClaimHandle[],
     materializationClaimHandles: readonly ClaimHandle[],
     openSeamHandles: readonly OpenSeamHandle[],
     provenanceHandle: ProvenanceHandle,
@@ -527,16 +504,12 @@ export class DiWorldConstructor {
         operation.identityHandle,
         operation.product.sourceAddressHandle,
         provenanceHandle,
-        productClaimHandles,
       ),
       new MaterializationRecord(
         this.store.handles.materialization(`${local}:operation`),
-        DerivationPhase.Materialization,
         operation.identityHandle,
-        openSeamHandles.length === 0 ? MaterializationState.Complete : MaterializationState.Partial,
         [operation.productHandle],
         materializationClaimHandles,
-        [],
         openSeamHandles,
       ),
     ];
@@ -563,10 +536,6 @@ export class DiWorldConstructor {
     return new DiClaimEmission(records, handles);
   }
 
-  private operationProductClaimHandle(local: string, index: number): ClaimHandle {
-    return this.store.handles.claim(`${local}:${index}`);
-  }
-
   private recordsForResolverAdmission(
     container: Container,
     admission: ResolverRegistrationAdmission,
@@ -586,7 +555,6 @@ export class DiWorldConstructor {
         KernelVocabulary.Di.OpenRegistrationSpending.key,
         'Resolver admission could not produce a container slot because the admitted DI key stayed open.',
         admission.sourceAddressHandle,
-        OpenSeamSeverity.Blocked,
       );
       records.push(...seam.records);
       openSeams.push(seam.seam);
@@ -599,7 +567,6 @@ export class DiWorldConstructor {
         KernelVocabulary.Di.OpenRegistrationSpending.key,
         `DI world construction does not yet spend ${admission.strategy} admissions into concrete container effects.`,
         admission.sourceAddressHandle,
-        OpenSeamSeverity.Warning,
       );
       records.push(...seam.records);
       openSeams.push(seam.seam);
@@ -644,8 +611,7 @@ export class DiWorldConstructor {
     const records: KernelStoreRecord[] = [
       new DiProductIdentity(
         identityHandle,
-        IdentityStability.SourceStable,
-        DiProductIdentityKind.Resolver,
+        KernelVocabulary.Di.Resolver.key,
         container.identityHandle,
         admission.identityHandle,
         admission.sourceAddressHandle,
@@ -663,13 +629,10 @@ export class DiWorldConstructor {
         identityHandle,
         admission.sourceAddressHandle,
         provenanceHandle,
-        [claimHandle],
       ),
       new MaterializationRecord(
         this.store.handles.materialization(`${local}:resolver`),
-        DerivationPhase.Materialization,
         identityHandle,
-        MaterializationState.Complete,
         [productHandle],
         [claimHandle],
       ),
@@ -706,8 +669,7 @@ export class DiWorldConstructor {
     const records: KernelStoreRecord[] = [
       new DiProductIdentity(
         identityHandle,
-        IdentityStability.SourceStable,
-        DiProductIdentityKind.ResolverSlot,
+        KernelVocabulary.Di.ResolverSlot.key,
         container.identityHandle,
         admission.identityHandle,
         admission.sourceAddressHandle,
@@ -725,13 +687,10 @@ export class DiWorldConstructor {
         identityHandle,
         admission.sourceAddressHandle,
         provenanceHandle,
-        [claimHandle],
       ),
       new MaterializationRecord(
         this.store.handles.materialization(`${local}:resolver-slot`),
-        DerivationPhase.Materialization,
         identityHandle,
-        MaterializationState.Complete,
         [productHandle],
         [claimHandle],
       ),
@@ -744,7 +703,6 @@ export class DiWorldConstructor {
     admission: ParameterizedRegistryAdmission,
     local: string,
     provenanceHandle: ProvenanceHandle,
-    claimHandles: readonly ClaimHandle[],
   ): {
     readonly records: readonly KernelStoreRecord[];
     readonly registry: ParameterizedRegistry | null;
@@ -758,7 +716,6 @@ export class DiWorldConstructor {
         KernelVocabulary.Di.OpenRegistrationSpending.key,
         'ParameterizedRegistry admission did not expose a closed registry lookup key.',
         admission.sourceAddressHandle,
-        OpenSeamSeverity.Blocked,
       );
       records.push(...seam.records);
       openSeams.push(seam.seam);
@@ -785,13 +742,11 @@ export class DiWorldConstructor {
       KernelVocabulary.Di.OpenRegistryBody.key,
       summaryForParameterizedRegistryResult(registryResult?.state ?? RegistryRegistrationState.Open),
       admission.sourceAddressHandle,
-      OpenSeamSeverity.Warning,
     );
     records.push(
       new DiProductIdentity(
         identityHandle,
-        IdentityStability.SourceStable,
-        DiProductIdentityKind.ParameterizedRegistry,
+        KernelVocabulary.Di.ParameterizedRegistry.key,
         container.identityHandle,
         admission.identityHandle,
         admission.sourceAddressHandle,
@@ -802,15 +757,11 @@ export class DiWorldConstructor {
         identityHandle,
         admission.sourceAddressHandle,
         provenanceHandle,
-        claimHandles,
       ),
       new MaterializationRecord(
         this.store.handles.materialization(`${local}:parameterized-registry`),
-        DerivationPhase.Materialization,
         identityHandle,
-        MaterializationState.Open,
         [productHandle],
-        [],
         [],
         [seam.seam.handle],
       ),
@@ -825,7 +776,6 @@ export class DiWorldConstructor {
     admission: RegistryRegistrationAdmission,
     local: string,
     provenanceHandle: ProvenanceHandle,
-    claimHandles: readonly ClaimHandle[],
   ): {
     readonly records: readonly KernelStoreRecord[];
     readonly registry: RegistryValue;
@@ -848,13 +798,11 @@ export class DiWorldConstructor {
       KernelVocabulary.Di.OpenRegistryBody.key,
       summaryForRegistryAdmissionOpen(admission),
       admission.sourceAddressHandle,
-      OpenSeamSeverity.Warning,
     );
     const records: KernelStoreRecord[] = [
       new DiProductIdentity(
         identityHandle,
-        IdentityStability.SourceStable,
-        DiProductIdentityKind.Registry,
+        KernelVocabulary.Di.Registry.key,
         container.identityHandle,
         admission.identityHandle,
         admission.sourceAddressHandle,
@@ -865,15 +813,11 @@ export class DiWorldConstructor {
         identityHandle,
         admission.sourceAddressHandle,
         provenanceHandle,
-        claimHandles,
       ),
       new MaterializationRecord(
         this.store.handles.materialization(`${local}:registry`),
-        DerivationPhase.Materialization,
         identityHandle,
-        MaterializationState.Open,
         [productHandle],
-        [],
         [],
         [seam.seam.handle],
       ),
@@ -901,7 +845,6 @@ export class DiWorldConstructor {
         KernelVocabulary.Di.OpenRegistrationSpending.key,
         'Resource registration admission did not resolve to a full resource definition during DI world construction.',
         admission.sourceAddressHandle,
-        OpenSeamSeverity.Blocked,
       );
       return new DiResourceSlotEmission(seam.records, [], [], [seam.seam]);
     }
@@ -929,7 +872,6 @@ export class DiWorldConstructor {
         KernelVocabulary.Di.OpenRegistrationSpending.key,
         'Resource registration did not produce any runtime resource-key rows.',
         admission.sourceAddressHandle,
-        OpenSeamSeverity.Warning,
       );
       records.push(...seam.records);
       openSeams.push(seam.seam);
@@ -1037,8 +979,7 @@ export class DiWorldConstructor {
     records.push(
       new DiProductIdentity(
         identityHandle,
-        IdentityStability.SourceStable,
-        DiProductIdentityKind.ResourceSlot,
+        KernelVocabulary.Di.ResourceSlot.key,
         container.identityHandle,
         definition.identityHandle,
         slot.sourceAddressHandle,
@@ -1056,13 +997,10 @@ export class DiWorldConstructor {
         identityHandle,
         slot.sourceAddressHandle,
         provenanceHandle,
-        [claimHandle],
       ),
       new MaterializationRecord(
         this.store.handles.materialization(`di-resource-slot:${container.productHandle}:${resourceKey}`),
-        DerivationPhase.Materialization,
         identityHandle,
-        MaterializationState.Complete,
         [productHandle],
         [claimHandle],
       ),
@@ -1126,8 +1064,7 @@ export class DiWorldConstructor {
     records.push(
       new DiProductIdentity(
         identityHandle,
-        IdentityStability.SourceStable,
-        DiProductIdentityKind.ResourceSlot,
+        KernelVocabulary.Di.ResourceSlot.key,
         container.identityHandle,
         resource.identityHandle,
         slot.sourceAddressHandle,
@@ -1145,13 +1082,10 @@ export class DiWorldConstructor {
         identityHandle,
         slot.sourceAddressHandle,
         provenanceHandle,
-        [claimHandle],
       ),
       new MaterializationRecord(
         this.store.handles.materialization(`di-resource-slot:${container.productHandle}:${resourceKey}`),
-        DerivationPhase.Materialization,
         identityHandle,
-        MaterializationState.Complete,
         [productHandle],
         [claimHandle],
       ),
@@ -1197,8 +1131,7 @@ export class DiWorldConstructor {
     records.push(
       new DiProductIdentity(
         identityHandle,
-        IdentityStability.SourceStable,
-        DiProductIdentityKind.SelfResolverSlot,
+        KernelVocabulary.Di.SelfResolverSlot.key,
         container.identityHandle,
         keyIdentityHandle,
         container.sourceAddressHandle,
@@ -1223,13 +1156,10 @@ export class DiWorldConstructor {
         identityHandle,
         container.sourceAddressHandle,
         source.provenanceHandle,
-        [providesKeyClaimHandle, producedClaimHandle],
       ),
       new MaterializationRecord(
         this.store.handles.materialization(local),
-        DerivationPhase.Materialization,
         identityHandle,
-        MaterializationState.Complete,
         [productHandle],
         [providesKeyClaimHandle, producedClaimHandle],
       ),
@@ -1254,10 +1184,7 @@ export class DiWorldConstructor {
       ),
       new ProvenanceRecord(
         provenanceHandle,
-        ProvenanceMode.Derived,
         [evidenceHandle],
-        [],
-        summary,
       ),
     ];
     return new DiSourceSet(records, provenanceHandle);
@@ -1268,7 +1195,6 @@ export class DiWorldConstructor {
     seamKindKey: OpenSeamKindKey,
     summary: string,
     addressHandle: AddressHandle | null,
-    severity: OpenSeamSeverity,
   ): {
     readonly records: readonly KernelStoreRecord[];
     readonly seam: OpenSeam;
@@ -1276,22 +1202,19 @@ export class DiWorldConstructor {
     const evidenceHandle = this.store.handles.evidence(local);
     const provenanceHandle = this.store.handles.provenance(local);
     const seamHandle = this.store.handles.openSeam(local);
-    const seam = new OpenSeam(seamHandle, seamKindKey, severity, summary, addressHandle, evidenceHandle);
+    const seam = new OpenSeam(seamHandle, seamKindKey, summary, addressHandle, evidenceHandle);
     return {
       records: [
         new EvidenceRecord(
           evidenceHandle,
-          EvidenceKind.Open,
+          EvidenceKind.SemanticObservation,
           [EvidenceRole.Diagnostic, EvidenceRole.Registration],
           summary,
           addressHandle,
         ),
         new ProvenanceRecord(
           provenanceHandle,
-          ProvenanceMode.Open,
           [evidenceHandle],
-          [],
-          summary,
         ),
         seam,
       ],
@@ -1311,7 +1234,6 @@ export class DiWorldConstructor {
     this.emittedIdentityHandles.add(handle);
     records.push(new InterfaceDiKeyIdentity(
       handle,
-      IdentityStability.CrossProjectStable,
       interfaceName,
       null,
       addressHandle,
@@ -1331,7 +1253,6 @@ export class DiWorldConstructor {
     this.emittedIdentityHandles.add(handle);
     records.push(new ResourceDiKeyIdentity(
       handle,
-      IdentityStability.SemanticStable,
       resourceIdentityHandle,
       resourceKey,
       addressHandle,

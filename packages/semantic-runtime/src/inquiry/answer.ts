@@ -8,7 +8,6 @@ import type {
 } from '../kernel/handles.js';
 import type { InquiryBasis } from './basis.js';
 import type { InquiryLocus } from './locus.js';
-import type { InquiryIntent } from './ontology.js';
 import type { InquiryPageInfo } from './page.js';
 
 export const enum InquiryOutcomeKind {
@@ -65,7 +64,7 @@ export const enum InquiryContinuationKind {
   ExpandProductDetail = 'expand-product-detail',
   /** Inspect claims adjacent to a selected handle or product. */
   InspectClaimNeighborhood = 'inspect-claim-neighborhood',
-  /** Trace provenance, evidence, or derivation behind an answer. */
+  /** Trace provenance, evidence, or source context behind an answer. */
   TraceProvenance = 'trace-provenance',
   /** Inspect open seams that blocked closure. */
   InspectOpenSeams = 'inspect-open-seams',
@@ -138,7 +137,5 @@ export class InquiryAnswer<TValue, TQuery> {
     readonly page: InquiryPageInfo | null = null,
     /** Projection lane and expansions represented by this answer. */
     readonly projection: InquiryProjection | null = null,
-    /** Consumer-neutral intent that this answer attempted to satisfy. */
-    readonly intent: InquiryIntent | null = null,
   ) {}
 }

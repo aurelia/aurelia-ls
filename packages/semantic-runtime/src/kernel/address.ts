@@ -1,50 +1,5 @@
 import type { AddressHandle, IdentityHandle } from './handles.js';
 
-export const enum AddressRecordKind {
-  /** Identifies a source file without retaining a TypeScript SourceFile object. */
-  SourceFileAddress = 'source-file-address',
-  /** Identifies a half-open span inside a source file. */
-  SourceSpanAddress = 'source-span-address',
-  /** Identifies an authored, transformed, or compiled template as a whole. */
-  TemplateAddress = 'template-address',
-  /** Identifies a node inside one template tree by local address. */
-  TemplateNodeAddress = 'template-node-address',
-  /** Identifies compiler-generated structure that has no authored span of its own. */
-  GeneratedAddress = 'generated-address',
-  /** Identifies a location outside the analyzed source tree. */
-  ExternalAddress = 'external-address',
-}
-
-export const enum AddressStability {
-  /** Use when consumers should not keep the address after the current calculation step. */
-  Unknown = 'unknown',
-  /** Use for addresses that only make sense during one scanner or materializer invocation. */
-  Ephemeral = 'ephemeral',
-  /** Use for addresses stable within the active editor session or TypeScript program instance. */
-  Session = 'session',
-  /** Use for source-coordinate addresses the active store can remap or invalidate through provenance. */
-  SourceStable = 'source-stable',
-  /** Use for addresses tied to semantic owners rather than only source coordinates. */
-  SemanticStable = 'semantic-stable',
-  /** Use for locations owned outside the project, such as package exports or URLs. */
-  ExternalStable = 'external-stable',
-}
-
-export const enum AddressSpace {
-  /** Address a file in the analyzed workspace. */
-  SourceFile = 'source-file',
-  /** Address a text span inside a source file. */
-  SourceSpan = 'source-span',
-  /** Address a template as a complete authored or compiler-produced unit. */
-  Template = 'template',
-  /** Address a concrete node inside one parsed template tree. */
-  TemplateNode = 'template-node',
-  /** Address compiler-generated structure without direct authored text. */
-  Generated = 'generated',
-  /** Address a location outside the analyzed workspace. */
-  External = 'external',
-}
-
 export const enum SourceLanguage {
   /** Use when the parser or host cannot classify the source file yet. */
   Unknown = 'unknown',
@@ -78,15 +33,11 @@ export const enum SourceSpanRole {
 /** Address for one analyzed source file. */
 export class SourceFileAddress {
   /** String discriminator for serialized source-file address records. */
-  readonly kind = AddressRecordKind.SourceFileAddress;
-  /** Address-space discriminator for cheap filtering. */
-  readonly space = AddressSpace.SourceFile;
+  readonly kind = 'source-file-address' as const;
 
   constructor(
     /** Store-local handle for this address record. */
     readonly handle: AddressHandle,
-    /** Retention promise for this address inside the active analysis store. */
-    readonly stability: AddressStability,
     /** Workspace or project key that owns the path. */
     readonly workspaceKey: string,
     /** Normalized workspace-relative or canonical path used by diagnostics and navigation. */
@@ -99,15 +50,11 @@ export class SourceFileAddress {
 /** Address for a meaningful source range inside one file. */
 export class SourceSpanAddress {
   /** String discriminator for serialized source-span address records. */
-  readonly kind = AddressRecordKind.SourceSpanAddress;
-  /** Address-space discriminator for cheap filtering. */
-  readonly space = AddressSpace.SourceSpan;
+  readonly kind = 'source-span-address' as const;
 
   constructor(
     /** Store-local handle for this address record. */
     readonly handle: AddressHandle,
-    /** Retention promise for this address inside the active analysis store. */
-    readonly stability: AddressStability,
     /** File address handle that owns the span. */
     readonly fileHandle: AddressHandle,
     /** Inclusive zero-based start offset in the current source text. */
@@ -122,15 +69,11 @@ export class SourceSpanAddress {
 /** Address for a template unit before or after compiler transformation. */
 export class TemplateAddress {
   /** String discriminator for serialized template address records. */
-  readonly kind = AddressRecordKind.TemplateAddress;
-  /** Address-space discriminator for cheap filtering. */
-  readonly space = AddressSpace.Template;
+  readonly kind = 'template-address' as const;
 
   constructor(
     /** Store-local handle for this address record. */
     readonly handle: AddressHandle,
-    /** Retention promise for this address inside the active analysis store. */
-    readonly stability: AddressStability,
     /** Template-local key, usually derived from the owning component or template source. */
     readonly templateKey: string,
     /** Optional identity handle of the component/resource that owns this template. */
@@ -143,15 +86,11 @@ export class TemplateAddress {
 /** Address for one node inside a particular parsed template tree. */
 export class TemplateNodeAddress {
   /** String discriminator for serialized template-node address records. */
-  readonly kind = AddressRecordKind.TemplateNodeAddress;
-  /** Address-space discriminator for cheap filtering. */
-  readonly space = AddressSpace.TemplateNode;
+  readonly kind = 'template-node-address' as const;
 
   constructor(
     /** Store-local handle for this address record. */
     readonly handle: AddressHandle,
-    /** Retention promise for this address; child paths are usually session or current-source local. */
-    readonly stability: AddressStability,
     /** Template address handle that owns the addressed node. */
     readonly templateHandle: AddressHandle,
     /** Child-index path from template root to this node in the addressed tree. */
@@ -164,16 +103,12 @@ export class TemplateNodeAddress {
 /** Address for compiler-generated structure that needs navigation or explanation. */
 export class GeneratedAddress {
   /** String discriminator for serialized generated-address records. */
-  readonly kind = AddressRecordKind.GeneratedAddress;
-  /** Address-space discriminator for cheap filtering. */
-  readonly space = AddressSpace.Generated;
+  readonly kind = 'generated-address' as const;
 
   constructor(
     /** Store-local handle for this address record. */
     readonly handle: AddressHandle,
-    /** Retention promise for this address inside the active analysis store. */
-    readonly stability: AddressStability,
-    /** Analysis-step-local key for the generated item; derivation/provenance explains how it was produced. */
+    /** Analysis-step-local key for the generated item; provenance explains how it was produced. */
     readonly localKey: string,
     /** Optional address or identity handle that explains this generated item. */
     readonly anchorHandle: AddressHandle | IdentityHandle | null = null,
@@ -183,15 +118,11 @@ export class GeneratedAddress {
 /** Address for locations outside the analyzed source tree. */
 export class ExternalAddress {
   /** String discriminator for serialized external-address records. */
-  readonly kind = AddressRecordKind.ExternalAddress;
-  /** Address-space discriminator for cheap filtering. */
-  readonly space = AddressSpace.External;
+  readonly kind = 'external-address' as const;
 
   constructor(
     /** Store-local handle for this address record. */
     readonly handle: AddressHandle,
-    /** Retention promise for this address inside the active analysis store. */
-    readonly stability: AddressStability,
     /** External address scheme, such as `package`, `url`, or host-defined catalog names. */
     readonly scheme: string,
     /** Scheme-specific address value. */

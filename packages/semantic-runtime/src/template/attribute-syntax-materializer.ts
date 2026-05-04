@@ -1,5 +1,4 @@
 import { SemanticClaim } from '../kernel/claim.js';
-import { DerivationPhase } from '../kernel/derivation.js';
 import {
   EvidenceKind,
   EvidenceRecord,
@@ -11,18 +10,14 @@ import type {
 } from '../kernel/handles.js';
 import {
   CompilerIdentity,
-  CompilerIdentityKind,
-  IdentityStability,
 } from '../kernel/identity.js';
 import {
   MaterializationRecord,
-  MaterializationState,
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
   compactFieldProvenance,
   FieldProvenance,
-  ProvenanceMode,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -173,8 +168,7 @@ export class AttributeSyntaxMaterializer {
       records.push(
         new CompilerIdentity(
           identityHandle,
-          IdentityStability.SourceStable,
-          CompilerIdentityKind.AttributeSyntax,
+          KernelVocabulary.Template.AttributeSyntax.key,
           attribute.identityHandle,
           attribute.sourceAddressHandle,
           attribute.rawName,
@@ -185,7 +179,6 @@ export class AttributeSyntaxMaterializer {
           identityHandle,
           attribute.sourceAddressHandle,
           source.provenanceHandle,
-          claimsForProduct(claims, productHandle).map((claim) => claim.handle),
         ),
       );
     });
@@ -194,9 +187,7 @@ export class AttributeSyntaxMaterializer {
       ...claims,
       new MaterializationRecord(
         this.store.handles.materialization(`attribute-syntax:${input.localKey}`),
-        DerivationPhase.Materialization,
         input.compilationUnit.identityHandle,
-        MaterializationState.Complete,
         syntaxes.map((syntax) => syntax.productHandle),
         claims.map((claim) => claim.handle),
       ),
@@ -219,10 +210,7 @@ export class AttributeSyntaxMaterializer {
         ),
         new ProvenanceRecord(
           provenanceHandle,
-          ProvenanceMode.Derived,
           [evidenceHandle],
-          [],
-          'Attribute-pattern parsing of authored HTML attributes.',
         ),
       ],
       provenanceHandle,

@@ -39,6 +39,12 @@ This is not a compatibility layer for old readers and not the default caller sur
 - [bridge-lenses.ts](bridge-lenses.ts) adapts product bridge substrates such as `bridge.aulink` into exact inquiry
   answers. `bridge.aulink` reads a source-project-scoped bridge index on demand so exact product-to-framework target
   reads stay cached within the current source epoch without daemon startup warmup.
+- [product-vocabulary-analysis.ts](product-vocabulary-analysis.ts) and
+  [product-vocabulary-lenses.ts](product-vocabulary-lenses.ts) expose `product.vocabulary`. They walk the
+  semantic-runtime vocabulary package through the hot TypeScript Program, then return the declared catalog, exact
+  definition/key usages, claim predicate signatures, and product-kind adjacency expanded from those signatures. Keep
+  this lens algebra-oriented: product-specific pressure belongs in the product model and in maintainer judgment, not in
+  hard-coded Atlas cleanup checks.
 - [framework-lenses.ts](framework-lenses.ts) is now a compatibility facade. The actual inquiry work is split across
   discovery, compiler, and rendering answerers, entity catalogs, bundle readers, rendering syntax/instruction/binding
   phases, evidence builders, filters, and continuation families. Keep new framework semantics in the narrowest phase

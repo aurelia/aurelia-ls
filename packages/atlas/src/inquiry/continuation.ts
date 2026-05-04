@@ -20,7 +20,7 @@ export const enum ContinuationKind {
   ResolveSubject = "resolve-subject",
   /** Move the inquiry to a related locus. */
   ChangeLocus = "change-locus",
-  /** Expand evidence, derivation, claim, or product provenance. */
+  /** Expand evidence, claim, product, or transformation provenance. */
   TraceProvenance = "trace-provenance",
   /** Inspect explicit open seams that blocked closure. */
   InspectOpenSeam = "inspect-open-seam",

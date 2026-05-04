@@ -11,8 +11,6 @@ cursor, range, or known kernel handle and needs a truthful answer plus the next 
 ## Responsibilities
 
 - Represent query loci such as workspace, project, source file, source cursor, source range, and kernel record.
-- Classify questions by answer family, semantic subject, relation, and continuation kind without turning those
-  classifications into kernel facts.
 - Preserve outcomes such as hit, miss, ambiguous, open, partial, unsupported, and reroute.
 - Carry answer basis, projection lanes, expansions, evidence handles, provenance handles, claim handles, open seams,
   page state, and continuations.
@@ -31,8 +29,8 @@ cursor, range, or known kernel handle and needs a truthful answer plus the next 
 
 ## Design Pressure
 
-Inquiry is where answer shape is separated from produced facts. A derivation can say a materializer was partial or
-blocked; an inquiry answer can expose the seams, continuations, source context, and graph handles needed by later
+Inquiry is where answer shape is separated from produced facts. Kernel records can preserve that a materializer was
+partial or blocked; an inquiry answer can expose the seams, continuations, source context, and graph handles needed by later
 presentation or policy layers without changing what the kernel facts mean.
 
 The first serious pressure will come from integrating HTML parsing, attribute classification, expression parsing, and
@@ -45,17 +43,10 @@ workbench, diagnostics, AOT, or agent-facing APIs onto compact, detail, explanat
 projections outside the intent taxonomy. Those are projections over the same substrate, not separate meanings of the
 substrate.
 
-`ontology.ts` owns the current horizontal answer ontology:
-
-- answer families such as inventory, resolve, complete, explain, neighborhood, visibility, impact, validate, and
-  hydrate
-- semantic subjects such as resources, configuration, registration, DI, controllers, templates, expressions,
-  bindings, instructions, products, claims, explanation, and open seams
-- inquiry relations such as resolves-to, visible-in, registered-in, configured-by, produces, consumes, lowers-to,
-  parses-as, depends-on, impacts, explained-by, hydrates-to, blocked-by, and offers-candidate
-
-This is intentionally an answer ontology, not the durable app graph. If a relation starts carrying real app meaning
-across materializers, promote it into kernel vocabulary and signed claim predicates rather than only naming it here.
+Inquiry does not carry a parallel intent ontology. Query shape, locus, projection, basis, and continuation kind should
+be enough for callers to understand what an answer attempted. If a relation starts carrying real app meaning across
+materializers, promote it into kernel vocabulary and signed claim predicates rather than only naming it in answer
+metadata.
 
 This layer should not encode ranking, actionability, UI copy, transport defaults, or consumer personas. Materializers
 should preserve what they observed, what they could derive, and which seams remained open. Inquiry answers expose

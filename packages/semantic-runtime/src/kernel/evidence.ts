@@ -2,20 +2,11 @@ import type { AddressHandle, EvidenceHandle, IdentityHandle } from './handles.js
 
 /**
  * Evidence is a high-leverage unstable surface: it sits close to source reality, so it will evolve as materializers
- * learn more shapes. Keep it as witness data. Derived relationships belong in derivation/claims, unresolved
+ * learn more shapes. Keep it as witness data. Derived relationships belong in claims, unresolved
  * pressure belongs in open seams, and confidence or actionability belongs in inquiry answers.
  */
 
-export const enum EvidenceRecordKind {
-  /** A single witness that explains a semantic claim, derivation, product, or open seam. */
-  EvidenceRecord = 'evidence-record',
-  /** A compact grouping of witnesses that should travel together. */
-  EvidenceSet = 'evidence-set',
-}
-
 export const enum EvidenceKind {
-  /** Use when the witness type is not known yet. */
-  Unknown = 'unknown',
   /** Syntax observed directly from TypeScript, JavaScript, HTML, CSS, or JSON source. */
   SourceObservation = 'source-observation',
   /** Semantic information observed through the checker, a scanner, or a prior analysis pass. */
@@ -30,10 +21,6 @@ export const enum EvidenceKind {
   Generated = 'generated',
   /** Evidence supplied by a package, host, runtime catalog, or external index. */
   External = 'external',
-  /** Evidence based on meaningful absence, such as a missing explicit registration. */
-  Absence = 'absence',
-  /** Evidence that marks an unresolved question the analysis could not close. */
-  Open = 'open',
 }
 
 export const enum EvidenceRole {
@@ -57,10 +44,10 @@ export const enum EvidenceRole {
   Diagnostic = 'diagnostic',
 }
 
-/** Direct witness for a claim, derivation, materialized product, or open seam; not a confidence record. */
+/** Direct witness for a claim, materialized product, or open seam; not a confidence record. */
 export class EvidenceRecord {
   /** String discriminator for serialized evidence records. */
-  readonly kind = EvidenceRecordKind.EvidenceRecord;
+  readonly kind = 'evidence-record' as const;
 
   constructor(
     /** Store-local handle for this evidence record. */
@@ -75,20 +62,5 @@ export class EvidenceRecord {
     readonly addressHandle: AddressHandle | null = null,
     /** Optional semantic identity handle directly witnessed by this record. */
     readonly identityHandle: IdentityHandle | null = null,
-  ) {}
-}
-
-/** Group of evidence records that together explain one observation or derivation. */
-export class EvidenceSet {
-  /** String discriminator for serialized evidence-set records. */
-  readonly kind = EvidenceRecordKind.EvidenceSet;
-
-  constructor(
-    /** Store-local handle for this evidence set. */
-    readonly handle: EvidenceHandle,
-    /** Evidence handles that should be considered together. */
-    readonly evidenceHandles: readonly EvidenceHandle[] = [],
-    /** Optional short explanation for the group as a whole. */
-    readonly summary: string | null = null,
   ) {}
 }

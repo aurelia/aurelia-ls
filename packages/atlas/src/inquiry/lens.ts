@@ -11,7 +11,7 @@ export const enum LensFamily {
   Repo = "repo",
   /** TypeScript source, structure, checker, and flow lenses. */
   TypeScript = "typescript",
-  /** Product-owned kernel, vocabulary, and claim lenses. */
+  /** Product-owned vocabulary lenses. */
   Product = "product",
   /** Aurelia framework DI, evaluator, and materialization lenses. */
   Framework = "framework",
@@ -45,12 +45,8 @@ export const enum LensId {
   TsStructure = "ts.structure",
   /** TypeScript checker facts, references, calls, and flow. */
   TsType = "ts.type",
-  /** Product kernel substrate rows. */
-  ProductSubstrate = "product.substrate",
   /** Product vocabulary definitions and usages. */
   ProductVocabulary = "product.vocabulary",
-  /** Product signed claim graph. */
-  ProductClaims = "product.claims",
   /** auLink product-to-framework anchors. */
   BridgeAuLink = "bridge.aulink",
   /** Aurelia framework discovery seeds. */
@@ -424,39 +420,11 @@ export const LensCatalog: readonly LensSpec[] = [
     defaultBudget: { rows: 80, evidencePerSubject: 3, depth: 4 },
   },
   {
-    id: LensId.ProductSubstrate,
-    family: LensFamily.Product,
-    stage: LensStage.Contracted,
-    summary:
-      "Read product-owned kernel substrate records, producers, preservation channels, and model surfaces.",
-    supportedLoci: [
-      LocusKind.Repo,
-      LocusKind.RepoArea,
-      LocusKind.Package,
-      LocusKind.SourceFile,
-      LocusKind.Symbol,
-      LocusKind.Handle,
-    ],
-    requiredSubstrates: [SubstrateId.ProductKernel],
-    projections: [
-      { id: "summary", summary: "Substrate rollup." },
-      { id: "records", summary: "Record families, producers, and model rows." },
-      { id: "evidence", summary: "Evidence and provenance expansion." },
-    ],
-    outputKinds: [
-      EvidenceKind.ProductClaim,
-      EvidenceKind.SourceSpan,
-      EvidenceKind.OpenSeam,
-      EvidenceKind.MaintenanceSignal,
-    ],
-    defaultBudget: { rows: 120, evidencePerSubject: 3 },
-  },
-  {
     id: LensId.ProductVocabulary,
     family: LensFamily.Product,
-    stage: LensStage.Contracted,
+    stage: LensStage.Implemented,
     summary:
-      "Read product vocabulary terms, slots, predicate signatures, and allowed self-description surface.",
+      "Read semantic-runtime vocabulary definitions, exact usages, claim signatures, and product-kind adjacency.",
     supportedLoci: [
       LocusKind.Repo,
       LocusKind.RepoArea,
@@ -467,47 +435,99 @@ export const LensCatalog: readonly LensSpec[] = [
     ],
     requiredSubstrates: [SubstrateId.ProductVocabulary],
     projections: [
-      { id: "terms", summary: "Vocabulary term inventory." },
-      { id: "usage", summary: "Source usage and product claim links." },
+      {
+        id: "summary",
+        summary:
+          "Vocabulary rollup with definition, usage, claim-schema, and claim-graph counts.",
+      },
+      { id: "catalog", summary: "Declared vocabulary definition catalog." },
+      {
+        id: "usage",
+        summary:
+          "Exact definition and key-read usage rows outside the vocabulary package.",
+      },
+      {
+        id: "claim-schema",
+        summary:
+          "Claim predicate signatures with endpoint and product-kind constraints.",
+      },
+      {
+        id: "claim-graph",
+        summary:
+          "Product-kind adjacency edges expanded from claim predicate signatures.",
+      },
+      {
+        id: "claim-issues",
+        summary:
+          "Exact claim-signature parse and product-kind reference issues.",
+      },
+    ],
+    parameters: [
+      {
+        id: "slot",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter vocabulary entries by slot such as product-kind or claim-predicate.",
+      },
+      {
+        id: "namespace",
+        role: ParameterRole.Filter,
+        summary: "Filter vocabulary rows by namespace such as Compiler or Di.",
+      },
+      {
+        id: "rootName",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter source usage rows by vocabulary object root such as KernelVocabulary or KernelProductKinds.",
+      },
+      {
+        id: "memberName",
+        role: ParameterRole.Filter,
+        summary: "Filter vocabulary rows by exported member name.",
+      },
+      {
+        id: "accessKind",
+        role: ParameterRole.Filter,
+        summary: "Filter vocabulary usage rows by definition-read or key-read.",
+      },
+      {
+        id: "endpointKind",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter claim schema rows by endpoint family such as product or identity.",
+      },
+      {
+        id: "productKind",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter claim schema or graph rows by product-kind id or key.",
+      },
+      {
+        id: "predicateKey",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter claim graph or issue rows by exact claim predicate key.",
+      },
+      {
+        id: "issueKind",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter claim issue rows by exact issue kind.",
+      },
+      {
+        id: "query",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter product vocabulary rows by exact substring across ids, summaries, values, and source paths.",
+      },
     ],
     outputKinds: [
       EvidenceKind.VocabularyTerm,
       EvidenceKind.ProductClaim,
       EvidenceKind.SourceSpan,
+      EvidenceKind.MaintenanceSignal,
     ],
     defaultBudget: { rows: 100 },
-  },
-  {
-    id: LensId.ProductClaims,
-    family: LensFamily.Product,
-    stage: LensStage.Contracted,
-    summary:
-      "Read signed claim graph nodes, predicates, routes, producers, provenance, and open product seams.",
-    supportedLoci: [
-      LocusKind.Repo,
-      LocusKind.RepoArea,
-      LocusKind.Package,
-      LocusKind.SourceFile,
-      LocusKind.Symbol,
-      LocusKind.Handle,
-    ],
-    requiredSubstrates: [
-      SubstrateId.ProductKernel,
-      SubstrateId.ProductVocabulary,
-    ],
-    projections: [
-      { id: "summary", summary: "Claim graph rollup." },
-      { id: "graph", summary: "Claim nodes and adjacency." },
-      { id: "routes", summary: "Producer-to-product routes." },
-      { id: "issues", summary: "Claim graph gaps and consistency issues." },
-    ],
-    outputKinds: [
-      EvidenceKind.ProductClaim,
-      EvidenceKind.VocabularyTerm,
-      EvidenceKind.SourceSpan,
-      EvidenceKind.OpenSeam,
-    ],
-    defaultBudget: { rows: 100, routes: 80, evidencePerSubject: 3 },
   },
   {
     id: LensId.BridgeAuLink,
@@ -525,7 +545,6 @@ export const LensCatalog: readonly LensSpec[] = [
     ],
     requiredSubstrates: [
       SubstrateId.ProductAuLink,
-      SubstrateId.ProductKernel,
       SubstrateId.TypeScriptChecker,
     ],
     projections: [

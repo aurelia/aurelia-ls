@@ -1,5 +1,4 @@
 import { SemanticClaim } from '../kernel/claim.js';
-import { DerivationPhase } from '../kernel/derivation.js';
 import {
   EvidenceKind,
   EvidenceRecord,
@@ -11,18 +10,14 @@ import type {
 } from '../kernel/handles.js';
 import {
   CompilerIdentity,
-  CompilerIdentityKind,
-  IdentityStability,
 } from '../kernel/identity.js';
 import {
   MaterializationRecord,
-  MaterializationState,
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
   compactFieldProvenance,
   FieldProvenance,
-  ProvenanceMode,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -193,8 +188,7 @@ export class AttributeClassificationMaterializer {
       records.push(
         new CompilerIdentity(
           identityHandle,
-          IdentityStability.SourceStable,
-          CompilerIdentityKind.AttributeClassification,
+          KernelVocabulary.Template.AttributeClassification.key,
           syntax.identityHandle,
           syntax.sourceAddressHandle,
           syntax.rawName,
@@ -205,7 +199,6 @@ export class AttributeClassificationMaterializer {
           identityHandle,
           syntax.sourceAddressHandle,
           source.provenanceHandle,
-          claimsForProduct(claims, productHandle).map((claim) => claim.handle),
         ),
       );
     });
@@ -214,9 +207,7 @@ export class AttributeClassificationMaterializer {
       ...claims,
       new MaterializationRecord(
         this.store.handles.materialization(`attribute-classification:${input.localKey}`),
-        DerivationPhase.Materialization,
         input.compilationUnit.identityHandle,
-        MaterializationState.Complete,
         classifications.map((classification) => classification.productHandle),
         claims.map((claim) => claim.handle),
       ),
@@ -239,10 +230,7 @@ export class AttributeClassificationMaterializer {
         ),
         new ProvenanceRecord(
           provenanceHandle,
-          ProvenanceMode.Derived,
           [evidenceHandle],
-          [],
-          'Runtime-shaped attribute classification before instruction lowering.',
         ),
       ],
       provenanceHandle,

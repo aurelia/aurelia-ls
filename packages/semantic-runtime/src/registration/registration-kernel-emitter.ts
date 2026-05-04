@@ -1,15 +1,12 @@
 import ts from 'typescript';
 import {
-  AddressStability,
   SourceSpanAddress,
   SourceSpanRole,
 } from '../kernel/address.js';
 import { SemanticClaim } from '../kernel/claim.js';
 import {
-  DerivationPhase,
   OpenSeam,
-  OpenSeamSeverity,
-} from '../kernel/derivation.js';
+} from '../kernel/open-seam.js';
 import {
   EvidenceKind,
   EvidenceRecord,
@@ -24,7 +21,6 @@ import type {
   ProvenanceHandle,
 } from '../kernel/handles.js';
 import {
-  IdentityStability,
   InterfaceDiKeyIdentity,
   RegistrationIdentity,
   StringDiKeyIdentity,
@@ -33,13 +29,11 @@ import {
 } from '../kernel/identity.js';
 import {
   MaterializationRecord,
-  MaterializationState,
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
   compactFieldProvenance,
   FieldProvenance,
-  ProvenanceMode,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -176,7 +170,6 @@ export class RegistrationKernelEmitter {
     const sourceProvenanceHandle = this.store.handles.provenance(`registration-observation:${local}`);
     const sourceAddress = new SourceSpanAddress(
       sourceAddressHandle,
-      AddressStability.SourceStable,
       context.sourceFileAddressHandle,
       observation.sourceNode.getStart(context.sourceFile),
       observation.sourceNode.end,
@@ -191,10 +184,7 @@ export class RegistrationKernelEmitter {
     );
     const sourceProvenance = new ProvenanceRecord(
       sourceProvenanceHandle,
-      ProvenanceMode.Direct,
       [sourceEvidenceHandle],
-      [],
-      'Registration admission observation.',
     );
     records.push(sourceAddress, sourceEvidence, sourceProvenance);
 
@@ -215,7 +205,6 @@ export class RegistrationKernelEmitter {
     const registrationIdentityHandle = this.store.handles.identity(`registration-admission:${local}`);
     records.push(new RegistrationIdentity(
       registrationIdentityHandle,
-      IdentityStability.SourceStable,
       key.identityHandle,
       sourceAddressHandle,
     ));
@@ -323,16 +312,12 @@ export class RegistrationKernelEmitter {
         registrationIdentityHandle,
         sourceAddressHandle,
         sourceProvenanceHandle,
-        claims.handles,
       ),
       new MaterializationRecord(
         this.store.handles.materialization(`registration-admission:${local}`),
-        DerivationPhase.Materialization,
         registrationIdentityHandle,
-        materializationStateForAdmission(admission, observation, seams.handles),
         [productHandle],
         claims.handles,
-        [],
         seams.handles,
       ),
     );
@@ -367,7 +352,6 @@ export class RegistrationKernelEmitter {
     const records: KernelStoreRecord[] = [
       new SourceSpanAddress(
         addressHandle,
-        AddressStability.SourceStable,
         context.sourceFileAddressHandle,
         observation.node.getStart(context.sourceFile),
         observation.node.end,
@@ -382,31 +366,25 @@ export class RegistrationKernelEmitter {
       ),
       new ProvenanceRecord(
         provenanceHandle,
-        ProvenanceMode.Direct,
         [evidenceHandle],
-        [],
-        'Registration target key observation.',
       ),
     ];
     const stringValue = stringLiteralValue(observation.node);
     records.push(stringValue != null
       ? new StringDiKeyIdentity(
         identityHandle,
-        IdentityStability.SemanticStable,
         stringValue,
         addressHandle,
       )
       : isInterfaceKeyName(observation.localName)
       ? new InterfaceDiKeyIdentity(
         identityHandle,
-        IdentityStability.SemanticStable,
         observation.localName,
         null,
         addressHandle,
       )
       : new UnknownDiKeyIdentity(
         identityHandle,
-        IdentityStability.SourceStable,
         addressHandle,
         `Registration key expression still needs DI key classification: ${observation.localName ?? ts.SyntaxKind[observation.node.kind]}.`,
       ));
@@ -447,7 +425,6 @@ export class RegistrationKernelEmitter {
     const records: KernelStoreRecord[] = [
       new SourceSpanAddress(
         addressHandle,
-        AddressStability.SourceStable,
         context.sourceFileAddressHandle,
         observation.node.getStart(context.sourceFile),
         observation.node.end,
@@ -462,16 +439,12 @@ export class RegistrationKernelEmitter {
       ),
       new ProvenanceRecord(
         provenanceHandle,
-        ProvenanceMode.Direct,
         [evidenceHandle],
-        [],
-        'Registration value observation.',
       ),
     ];
     if (identityHandle != null) {
       records.push(new TypeScriptDeclarationIdentity(
         identityHandle,
-        IdentityStability.SourceStable,
         context.moduleKey,
         null,
         observation.localName,
@@ -595,7 +568,6 @@ export class RegistrationKernelEmitter {
       records.push(
         new SourceSpanAddress(
           addressHandle,
-          AddressStability.SourceStable,
           context.sourceFileAddressHandle,
           seam.node.getStart(context.sourceFile),
           seam.node.end,
@@ -603,22 +575,18 @@ export class RegistrationKernelEmitter {
         ),
         new EvidenceRecord(
           evidenceHandle,
-          EvidenceKind.Open,
+          EvidenceKind.SemanticObservation,
           [EvidenceRole.Diagnostic, EvidenceRole.Registration],
           seam.summary,
           addressHandle,
         ),
         new ProvenanceRecord(
           provenanceHandle,
-          ProvenanceMode.Open,
           [evidenceHandle],
-          [],
-          `Registration recognition left an open seam: ${seam.openKind}.`,
         ),
         new OpenSeam(
           openSeamHandle,
           seam.openKind,
-          OpenSeamSeverity.Warning,
           seam.summary,
           addressHandle,
           evidenceHandle,
@@ -663,18 +631,6 @@ function hasRegistrationOpen(
   openKind: OpenSeamKindKey,
 ): boolean {
   return seams.some((seam) => seam.openKind === openKind);
-}
-
-function materializationStateForAdmission(
-  admission: RegistrationAdmissionProduct,
-  observation: RegistrationAdmissionObservation,
-  openSeamHandles: readonly OpenSeamHandle[],
-): MaterializationState {
-  return !(admission instanceof OpenRegistrationAdmission)
-    && openSeamHandles.length === 0
-    && observation.strategy !== RegistrationStrategy.Unknown
-    ? MaterializationState.Complete
-    : MaterializationState.Partial;
 }
 
 function isFrameworkRegistrationGroupKind(kind: FrameworkRegistrationKind): boolean {

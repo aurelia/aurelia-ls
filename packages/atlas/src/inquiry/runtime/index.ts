@@ -14,6 +14,8 @@ export * from "./framework-lifecycle-lenses.js";
 export * from "./framework-materialization-lenses.js";
 export * from "./framework-resource-lenses.js";
 export * from "./lenses.js";
+export * from "./product-vocabulary-analysis.js";
+export * from "./product-vocabulary-lenses.js";
 export * from "./self-analysis.js";
 export * from "./self-contracts.js";
 export * from "./self-recipes.js";

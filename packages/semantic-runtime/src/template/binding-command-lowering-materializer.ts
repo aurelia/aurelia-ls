@@ -1,5 +1,4 @@
 import {
-  AddressStability,
   SourceFileAddress,
   SourceSpanRole,
   SourceSpanAddress,
@@ -7,9 +6,7 @@ import {
 import { SemanticClaim } from '../kernel/claim.js';
 import {
   OpenSeam,
-  OpenSeamSeverity,
-} from '../kernel/derivation.js';
-import { DerivationPhase } from '../kernel/derivation.js';
+} from '../kernel/open-seam.js';
 import {
   EvidenceKind,
   EvidenceRecord,
@@ -24,19 +21,15 @@ import type {
 } from '../kernel/handles.js';
 import {
   CompilerIdentity,
-  CompilerIdentityKind,
-  IdentityStability,
   InstructionIdentity,
 } from '../kernel/identity.js';
 import {
   MaterializationRecord,
-  MaterializationState,
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
   compactFieldProvenance,
   FieldProvenance,
-  ProvenanceMode,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -427,8 +420,7 @@ class CommandLoweringExecutionContext implements BindingCommandBuildContext {
     this.records.push(
       new CompilerIdentity(
         site.identityHandle,
-        IdentityStability.SourceStable,
-        CompilerIdentityKind.TemplateValueSite,
+        KernelVocabulary.Template.ValueSite.key,
         this.classification.identityHandle,
         addressHandle,
         `${this.command.name}:${entryFamily}`,
@@ -439,12 +431,10 @@ class CommandLoweringExecutionContext implements BindingCommandBuildContext {
         site.identityHandle,
         addressHandle,
         this.source.provenanceHandle,
-        [routeClaim?.handle ?? null, claim.handle].filter((handle): handle is ClaimHandle => handle != null),
       ),
       new CompilerIdentity(
         parse.identityHandle,
-        IdentityStability.SourceStable,
-        CompilerIdentityKind.TemplateExpressionParse,
+        KernelVocabulary.Template.ExpressionParse.key,
         site.identityHandle,
         addressHandle,
         `${this.command.name}:${result.kind}`,
@@ -455,7 +445,6 @@ class CommandLoweringExecutionContext implements BindingCommandBuildContext {
         parse.identityHandle,
         addressHandle,
         this.source.provenanceHandle,
-        [claim.handle],
       ),
       claim,
     );
@@ -594,8 +583,7 @@ export class BindingCommandLoweringMaterializer {
       records.push(
         new CompilerIdentity(
           buildInput.identityHandle,
-          IdentityStability.SourceStable,
-          CompilerIdentityKind.BindingCommandBuildInput,
+          KernelVocabulary.Compiler.BindingCommandBuildInput.key,
           classification.identityHandle,
           buildInput.sourceAddressHandle,
           classification.bindingCommand.name,
@@ -606,7 +594,6 @@ export class BindingCommandLoweringMaterializer {
           buildInput.identityHandle,
           buildInput.sourceAddressHandle,
           source.provenanceHandle,
-          [buildInputClaim.handle],
         ),
         buildInputClaim,
       );
@@ -679,8 +666,7 @@ export class BindingCommandLoweringMaterializer {
       records.push(
         new CompilerIdentity(
           lowering.identityHandle,
-          IdentityStability.SourceStable,
-          CompilerIdentityKind.BindingCommandLowering,
+          KernelVocabulary.Compiler.BindingCommandLowering.key,
           buildInput.identityHandle,
           lowering.sourceAddressHandle,
           commandReference.name,
@@ -691,7 +677,6 @@ export class BindingCommandLoweringMaterializer {
           lowering.identityHandle,
           lowering.sourceAddressHandle,
           source.provenanceHandle,
-          claimsForProduct(claims, lowering.productHandle).map((claim) => claim.handle),
         ),
         ...instructionRecords,
       );
@@ -734,9 +719,7 @@ export class BindingCommandLoweringMaterializer {
       ...claims.filter((claim) => records.indexOf(claim) < 0),
       new MaterializationRecord(
         this.store.handles.materialization(`binding-command-lowering:${input.localKey}`),
-        DerivationPhase.Lowering,
         input.compilationUnit.identityHandle,
-        materializationState(lowerings, multiBindingLowerings, expressionParses, openSeams),
         [
           ...buildInputs.map((buildInput) => buildInput.productHandle),
           ...lowerings.map((lowering) => lowering.productHandle),
@@ -748,7 +731,6 @@ export class BindingCommandLoweringMaterializer {
           ...expressionParses.map((parse) => parse.productHandle),
         ],
         claims.map((claim) => claim.handle),
-        [],
         openSeams.map((seam) => seam.handle),
       ),
     );
@@ -806,7 +788,6 @@ export class BindingCommandLoweringMaterializer {
         site.sourceAddressHandle,
         'Inline multi-binding lowering could not close over its authored attribute, owner element, classification, and custom-attribute definition.',
         KernelVocabulary.Instruction.OpenInstruction.key,
-        OpenSeamSeverity.Error,
       ));
     } else if (parsedSegments.length === 0) {
       openSeams.push(this.openSeam(
@@ -815,7 +796,6 @@ export class BindingCommandLoweringMaterializer {
         site.sourceAddressHandle,
         `Inline multi-binding value for '${classification.resource?.name ?? attribute.rawName}' did not contain a closed segment.`,
         KernelVocabulary.Instruction.OpenInstruction.key,
-        OpenSeamSeverity.Error,
       ));
     } else {
       const bindables = compilerWorld.resourceResolver.bindables(definition);
@@ -901,12 +881,10 @@ export class BindingCommandLoweringMaterializer {
             syntax.syntax.identityHandle,
             syntax.syntax.sourceAddressHandle,
             source.provenanceHandle,
-            [syntaxClaim.handle],
           ),
           new CompilerIdentity(
             segment.identityHandle,
-            IdentityStability.SourceStable,
-            CompilerIdentityKind.MultiBindingSegment,
+            KernelVocabulary.Compiler.MultiBindingSegment.key,
             site.identityHandle,
             segmentAddress.handle,
             syntax.syntax.target,
@@ -917,7 +895,6 @@ export class BindingCommandLoweringMaterializer {
             segment.identityHandle,
             segmentAddress.handle,
             source.provenanceHandle,
-            claimsForProduct(claims, segment.productHandle).map((claim) => claim.handle),
           ),
           splitClaim,
           syntaxClaim,
@@ -930,7 +907,6 @@ export class BindingCommandLoweringMaterializer {
             segmentAddress.handle,
             `Inline multi-binding segment '${syntax.syntax.target}' does not match a bindable on '${definition.name}'.`,
             KernelVocabulary.Instruction.OpenInstruction.key,
-            OpenSeamSeverity.Error,
           ));
           continue;
         }
@@ -1062,8 +1038,7 @@ export class BindingCommandLoweringMaterializer {
     records.push(
       new CompilerIdentity(
         lowering.identityHandle,
-        IdentityStability.SourceStable,
-        CompilerIdentityKind.MultiBindingLowering,
+        KernelVocabulary.Compiler.MultiBindingLowering.key,
         site.identityHandle,
         site.sourceAddressHandle,
         state,
@@ -1074,7 +1049,6 @@ export class BindingCommandLoweringMaterializer {
         lowering.identityHandle,
         lowering.sourceAddressHandle,
         source.provenanceHandle,
-        claimsForProduct(claims, lowering.productHandle).map((claim) => claim.handle),
       ),
       loweringClaim,
       ...recordsForInstructions(directInstructions, lowering.identityHandle, source, claims),
@@ -1156,8 +1130,7 @@ export class BindingCommandLoweringMaterializer {
       records: [
         new CompilerIdentity(
           syntax.identityHandle,
-          IdentityStability.SourceStable,
-          CompilerIdentityKind.AttributeSyntax,
+          KernelVocabulary.Template.AttributeSyntax.key,
           site.identityHandle,
           sourceAddressHandle,
           syntax.rawName,
@@ -1215,8 +1188,7 @@ export class BindingCommandLoweringMaterializer {
       records: [
         new CompilerIdentity(
           input.identityHandle,
-          IdentityStability.SourceStable,
-          CompilerIdentityKind.BindingCommandBuildInput,
+          KernelVocabulary.Compiler.BindingCommandBuildInput.key,
           segment.identityHandle,
           input.sourceAddressHandle,
           segment.command?.name ?? syntax.command ?? null,
@@ -1227,7 +1199,6 @@ export class BindingCommandLoweringMaterializer {
           input.identityHandle,
           input.sourceAddressHandle,
           source.provenanceHandle,
-          [claim.handle],
         ),
         claim,
       ],
@@ -1324,8 +1295,7 @@ export class BindingCommandLoweringMaterializer {
       records: [
         new CompilerIdentity(
           site.identityHandle,
-          IdentityStability.SourceStable,
-          CompilerIdentityKind.TemplateValueSite,
+          KernelVocabulary.Template.ValueSite.key,
           segment.identityHandle,
           sourceAddressHandle,
           `${segment.rawName}:Interpolation`,
@@ -1336,12 +1306,10 @@ export class BindingCommandLoweringMaterializer {
           site.identityHandle,
           sourceAddressHandle,
           source.provenanceHandle,
-          [routeClaim.handle, parseClaim.handle],
         ),
         new CompilerIdentity(
           parse.identityHandle,
-          IdentityStability.SourceStable,
-          CompilerIdentityKind.TemplateExpressionParse,
+          KernelVocabulary.Template.ExpressionParse.key,
           site.identityHandle,
           sourceAddressHandle,
           `${segment.rawName}:${result.kind}`,
@@ -1352,7 +1320,6 @@ export class BindingCommandLoweringMaterializer {
           parse.identityHandle,
           sourceAddressHandle,
           source.provenanceHandle,
-          [parseClaim.handle],
         ),
         routeClaim,
         parseClaim,
@@ -1480,8 +1447,7 @@ export class BindingCommandLoweringMaterializer {
       records: [
         new CompilerIdentity(
           lowering.identityHandle,
-          IdentityStability.SourceStable,
-          CompilerIdentityKind.BindingCommandLowering,
+          KernelVocabulary.Compiler.BindingCommandLowering.key,
           buildInput.identityHandle,
           lowering.sourceAddressHandle,
           commandReference.name,
@@ -1492,7 +1458,6 @@ export class BindingCommandLoweringMaterializer {
           lowering.identityHandle,
           lowering.sourceAddressHandle,
           source.provenanceHandle,
-          claimsForProduct(allClaims, lowering.productHandle).map((claim) => claim.handle),
         ),
         ...recordsForInstructions(result.instructions, lowering.identityHandle, source, allClaims),
         ...claims,
@@ -1534,7 +1499,6 @@ export class BindingCommandLoweringMaterializer {
       handle,
       record: new SourceSpanAddress(
         handle,
-        AddressStability.SourceStable,
         address.fileHandle,
         address.start + segment.valueStart,
         address.start + segment.valueEnd,
@@ -1601,7 +1565,6 @@ export class BindingCommandLoweringMaterializer {
         syntax.sourceAddressHandle,
         message,
         KernelVocabulary.Instruction.OpenInstruction.key,
-        OpenSeamSeverity.Error,
         BindingCommandLoweringState.Invalid,
       );
     }
@@ -1615,7 +1578,6 @@ export class BindingCommandLoweringMaterializer {
           result.state === BindingCommandLoweringState.Invalid
             ? KernelVocabulary.Instruction.OpenInstruction.key
             : KernelVocabulary.Compiler.OpenExecutableBody.key,
-          result.state === BindingCommandLoweringState.Invalid ? OpenSeamSeverity.Error : OpenSeamSeverity.Blocked,
         ),
       ]
       : [];
@@ -1628,12 +1590,11 @@ export class BindingCommandLoweringMaterializer {
     addressHandle: AddressHandle | null,
     summary: string,
     seamKindKey: OpenSeamKindKey = KernelVocabulary.Compiler.OpenExecutableBody.key,
-    severity = OpenSeamSeverity.Blocked,
     state = BindingCommandLoweringState.Open,
   ): OpenLoweringResult {
     return new OpenLoweringResult(
       new BindingCommandBuildResult(state, [], summary),
-      [this.openSeam(local, source, addressHandle, summary, seamKindKey, severity)],
+      [this.openSeam(local, source, addressHandle, summary, seamKindKey)],
     );
   }
 
@@ -1643,12 +1604,10 @@ export class BindingCommandLoweringMaterializer {
     addressHandle: AddressHandle | null,
     summary: string,
     seamKindKey: OpenSeamKindKey = KernelVocabulary.Compiler.OpenExecutableBody.key,
-    severity = OpenSeamSeverity.Blocked,
   ): OpenSeam {
     return new OpenSeam(
       this.store.handles.openSeam(`${local}:open:${encodeOpenSeamLocal(summary)}`),
       seamKindKey,
-      severity,
       summary,
       addressHandle,
       source.evidenceHandle,
@@ -1669,10 +1628,7 @@ export class BindingCommandLoweringMaterializer {
         ),
         new ProvenanceRecord(
           provenanceHandle,
-          ProvenanceMode.Derived,
           [evidenceHandle],
-          [],
-          'Runtime-shaped binding-command lowering before final instruction sequence assembly.',
         ),
       ],
       evidenceHandle,
@@ -1797,7 +1753,6 @@ function recordsForInstructions(
   return instructions.flatMap((instruction) => [
     new InstructionIdentity(
       instruction.identityHandle,
-      IdentityStability.SourceStable,
       ownerIdentityHandle,
       instructionKindKeyFor(instruction.instructionKind),
     ),
@@ -1807,7 +1762,6 @@ function recordsForInstructions(
       instruction.identityHandle,
       instruction.sourceAddressHandle,
       source.provenanceHandle,
-      claimsForProduct(claims, instruction.productHandle).map((claim) => claim.handle),
     ),
   ]);
 }
@@ -2023,13 +1977,11 @@ function loweringStateFor(
   if (
     commandLowerings.some((lowering) => lowering.state === BindingCommandLoweringState.Invalid)
     || parses.some((parse) => parse.state === TemplateExpressionParseState.Error)
-    || openSeams.some((seam) => seam.severity === OpenSeamSeverity.Error)
   ) {
     return BindingCommandLoweringState.Invalid;
   }
   if (
     commandLowerings.some((lowering) => lowering.state === BindingCommandLoweringState.Open)
-    || openSeams.some((seam) => seam.severity === OpenSeamSeverity.Blocked)
   ) {
     return BindingCommandLoweringState.Open;
   }
@@ -2191,38 +2143,6 @@ function missingInputSummary(
     return `Binding-command lowering could not resolve command '${syntax.command ?? '(unknown)'}'.`;
   }
   return 'Binding-command lowering could not close its required inputs.';
-}
-
-function materializationState(
-  lowerings: readonly BindingCommandLowering[],
-  multiBindingLowerings: readonly MultiBindingLowering[],
-  parses: readonly TemplateExpressionParse[],
-  openSeams: readonly OpenSeam[],
-): MaterializationState {
-  if (
-    lowerings.some((lowering) => lowering.state === BindingCommandLoweringState.Invalid)
-    || multiBindingLowerings.some((lowering) => lowering.state === BindingCommandLoweringState.Invalid)
-    || parses.some((parse) => parse.state === TemplateExpressionParseState.Error)
-    || openSeams.some((seam) => seam.severity === OpenSeamSeverity.Error)
-  ) {
-    return MaterializationState.Invalid;
-  }
-  if (
-    lowerings.some((lowering) => lowering.state === BindingCommandLoweringState.Open)
-    || multiBindingLowerings.some((lowering) => lowering.state === BindingCommandLoweringState.Open)
-    || openSeams.some((seam) => seam.severity === OpenSeamSeverity.Blocked)
-  ) {
-    return MaterializationState.Open;
-  }
-  if (
-    lowerings.some((lowering) => lowering.state === BindingCommandLoweringState.Partial)
-    || multiBindingLowerings.some((lowering) => lowering.state === BindingCommandLoweringState.Partial)
-    || parses.some((parse) => parse.state !== TemplateExpressionParseState.Complete)
-    || openSeams.length > 0
-  ) {
-    return MaterializationState.Partial;
-  }
-  return MaterializationState.Complete;
 }
 
 function claimsForProduct(

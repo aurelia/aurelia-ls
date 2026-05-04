@@ -1,11 +1,9 @@
 import {
-  AddressStability,
   SourceSpanAddress,
   SourceSpanRole,
   TemplateNodeAddress,
 } from '../kernel/address.js';
 import { SemanticClaim } from '../kernel/claim.js';
-import { DerivationPhase } from '../kernel/derivation.js';
 import {
   EvidenceKind,
   EvidenceRecord,
@@ -19,19 +17,15 @@ import type {
 } from '../kernel/handles.js';
 import {
   CompilerIdentity,
-  CompilerIdentityKind,
-  IdentityStability,
   TemplateNodeIdentity,
 } from '../kernel/identity.js';
 import {
   MaterializationRecord,
-  MaterializationState,
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
   compactFieldProvenance,
   FieldProvenance,
-  ProvenanceMode,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -236,8 +230,7 @@ export class HtmlParseMaterializer {
     state.records.push(
       new CompilerIdentity(
         documentIdentityHandle,
-        IdentityStability.SourceStable,
-        CompilerIdentityKind.HtmlDocument,
+        KernelVocabulary.Template.HtmlDocument.key,
         input.templateSource.identityHandle,
         source.sourceAddressHandle,
         input.compilationUnit.unitKind,
@@ -248,15 +241,12 @@ export class HtmlParseMaterializer {
         documentIdentityHandle,
         source.sourceAddressHandle,
         source.provenanceHandle,
-        claimsForProduct(state.claims, documentProductHandle).map((claim) => claim.handle),
       ),
       sourceClaim,
       ...state.claims.filter((claim) => claim !== sourceClaim),
       new MaterializationRecord(
         this.store.handles.materialization(`html-parse:${input.localKey}`),
-        DerivationPhase.Materialization,
         documentIdentityHandle,
-        input.templateSource.markup == null ? MaterializationState.Open : MaterializationState.Complete,
         [
           documentProductHandle,
           ...state.nodes.map((node) => node.productHandle),
@@ -288,10 +278,7 @@ export class HtmlParseMaterializer {
       ),
       new ProvenanceRecord(
         provenanceHandle,
-        ProvenanceMode.Derived,
         [evidenceHandle],
-        [],
-        'HTML parsing of an authored template source.',
       ),
     ];
     return new HtmlParseSourceSet(records, provenanceHandle, input.templateSource.sourceAddressHandle);
@@ -395,7 +382,6 @@ export class HtmlParseMaterializer {
     state.records.push(
       new TemplateNodeIdentity(
         identityHandle,
-        sourceAddressHandle == null ? IdentityStability.Session : IdentityStability.SourceStable,
         state.templateSource.identityHandle,
         nodeKey(draft, sourceAddressHandle),
         nodeAddressHandle,
@@ -406,7 +392,6 @@ export class HtmlParseMaterializer {
         identityHandle,
         sourceAddressHandle,
         state.source.provenanceHandle,
-        claimsForProduct(state.claims, productHandle).map((claim) => claim.handle),
       ),
     );
     return node.toReference();
@@ -461,8 +446,7 @@ export class HtmlParseMaterializer {
     state.records.push(
       new CompilerIdentity(
         identityHandle,
-        IdentityStability.SourceStable,
-        CompilerIdentityKind.HtmlAttribute,
+        KernelVocabulary.Template.HtmlAttribute.key,
         parentIdentityHandle,
         sourceAddressHandle,
         draft.rawName,
@@ -473,7 +457,6 @@ export class HtmlParseMaterializer {
         identityHandle,
         sourceAddressHandle,
         state.source.provenanceHandle,
-        claimsForProduct(state.claims, productHandle).map((claim) => claim.handle),
       ),
     );
     return attribute.toReference();
@@ -516,7 +499,6 @@ export class HtmlParseMaterializer {
     const handle = this.store.handles.address(local);
     state.records.push(new SourceSpanAddress(
       handle,
-      AddressStability.SourceStable,
       sourceAddress.fileHandle,
       sourceStart,
       sourceEnd,
@@ -534,7 +516,6 @@ export class HtmlParseMaterializer {
     const handle = this.store.handles.address(local);
     state.records.push(new TemplateNodeAddress(
       handle,
-      AddressStability.Session,
       state.templateSource.templateAddressHandle,
       path,
       sourceAddressHandle,

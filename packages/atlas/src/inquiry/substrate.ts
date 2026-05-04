@@ -11,8 +11,6 @@ export const enum SubstrateId {
   TypeScriptProgram = "typescript.program",
   /** TypeScript TypeChecker facts. */
   TypeScriptChecker = "typescript.checker",
-  /** Product-owned kernel records and products. */
-  ProductKernel = "product.kernel",
   /** Product-owned vocabulary terms and slots. */
   ProductVocabulary = "product.vocabulary",
   /** Product-to-framework auLink anchors. */
@@ -141,20 +139,6 @@ export const SubstrateCatalog: readonly SubstrateContract[] = [
     dependsOn: [SubstrateId.TypeScriptProgram],
   },
   {
-    id: SubstrateId.ProductKernel,
-    kind: SubstrateKind.Product,
-    trust: SubstrateTrust.ModeledStatic,
-    summary:
-      "Product-owned kernel substrate: records, claims, producers, provenance, and preservation channels.",
-    basisKinds: [BasisKind.ProductKernelSubstrate],
-    produces: [
-      EvidenceKind.ProductClaim,
-      EvidenceKind.SourceSpan,
-      EvidenceKind.OpenSeam,
-    ],
-    dependsOn: [SubstrateId.TypeScriptProgram, SubstrateId.TypeScriptChecker],
-  },
-  {
     id: SubstrateId.ProductVocabulary,
     kind: SubstrateKind.Product,
     trust: SubstrateTrust.ModeledStatic,
@@ -166,7 +150,7 @@ export const SubstrateCatalog: readonly SubstrateContract[] = [
       EvidenceKind.ProductClaim,
       EvidenceKind.SourceSpan,
     ],
-    dependsOn: [SubstrateId.ProductKernel],
+    dependsOn: [SubstrateId.TypeScriptProgram],
   },
   {
     id: SubstrateId.ProductAuLink,
@@ -175,7 +159,7 @@ export const SubstrateCatalog: readonly SubstrateContract[] = [
     summary: "Narrow product-to-framework anchors declared through auLink.",
     basisKinds: [BasisKind.AuLink],
     produces: [EvidenceKind.AuLinkAnchor, EvidenceKind.SourceSpan],
-    dependsOn: [SubstrateId.ProductKernel, SubstrateId.TypeScriptChecker],
+    dependsOn: [SubstrateId.TypeScriptChecker],
   },
   {
     id: SubstrateId.FrameworkStaticEvaluator,

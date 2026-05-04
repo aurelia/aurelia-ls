@@ -25,6 +25,10 @@ the caller to inspect Atlas source. Richer API teaching stays behind follow-up i
 `framework.discovery:recipes`, and `atlas.self:recipes`, so the orientation answer can stay compact while still making
 the TypeScript/IDE, framework cross-lens, and Atlas self-maintenance surfaces discoverable.
 
+`product.vocabulary` is the first product-specific substrate lens. Ask it through `createApi().ask(...)` to read
+semantic-runtime vocabulary definition rows, exact source usages, claim predicate signatures, and product-kind adjacency
+expanded from those signatures while the vocabulary and kernel records are still co-evolving in a dirty worktree.
+
 `createApi().frameworkEmulationSymbolsReport()` is the named report endpoint for the StandardConfiguration/framework
 emulation eyeball golden. It runs inside the same daemon-held source project as normal inquiries and returns
 deterministic Markdown plus compact stats. The package script

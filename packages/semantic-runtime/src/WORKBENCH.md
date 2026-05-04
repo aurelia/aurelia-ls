@@ -38,9 +38,9 @@ This breadth is intentional. The next useful work is not to preserve compatibili
 
 Atlas should increasingly learn from this package through typed contracts:
 
-- read terrain and source-surface inventory from `kernel/substrate-contract.ts`;
+- read terrain and source-surface inventory from typed product records, vocabulary, and claims;
 - follow auLink anchors into the framework checkout;
-- report stale, missing, or overlapping substrate declarations;
+- report stale, missing, or overlapping typed declarations where the product model itself exposes them;
 - expose continuations that move between Atlas self-maintenance, semantic-runtime source, and framework anchors;
 - avoid growing private product-specific inference tables when the product model itself can carry the intent.
 
