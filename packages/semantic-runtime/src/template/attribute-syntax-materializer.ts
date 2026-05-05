@@ -5,7 +5,6 @@ import {
   EvidenceRole,
 } from '../kernel/evidence.js';
 import type {
-  ProductHandle,
   ProvenanceHandle,
 } from '../kernel/handles.js';
 import {
@@ -26,17 +25,11 @@ import {
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
-import type { AttributePatternDefinitionEntry } from '../resources/attribute-pattern-definition.js';
 import {
-  AttributePatternExecutionResult,
   AttributeSyntax,
-  AttributeSyntaxKind,
   type AttributeSyntaxField,
 } from './attribute-syntax.js';
-import {
-  executeBuiltInAttributePattern,
-  type BuiltInAttributePattern,
-} from './built-in-syntax.js';
+import { BuiltInAttributeParserExecutionHost } from './attribute-parser-execution-host.js';
 import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
 import type { TemplateCompilationUnit } from './compilation-unit.js';
 import type { HtmlParseEmission } from './html-parse-materializer.js';
@@ -69,14 +62,6 @@ class AttributeSyntaxSourceSet {
   ) {}
 }
 
-class MatchedAttributePattern {
-  constructor(
-    readonly pattern: AttributePatternDefinitionEntry,
-    readonly handler: BuiltInAttributePattern,
-    readonly executableProductHandle: ProductHandle | null,
-  ) {}
-}
-
 /** Interprets authored HTML attributes through the runtime-shaped IAttributeParser model. */
 export class AttributeSyntaxMaterializer {
   constructor(
@@ -100,31 +85,14 @@ export class AttributeSyntaxMaterializer {
     const records: KernelStoreRecord[] = [...source.records];
     const syntaxes: AttributeSyntax[] = [];
     const claims: SemanticClaim[] = [];
+    const executionHost = new BuiltInAttributeParserExecutionHost(input.compilerWorld);
 
     input.html.attributes.forEach((attribute, index) => {
       const local = `attribute-syntax:${input.localKey}:${index}`;
       const productHandle = this.store.handles.product(local);
       const identityHandle = this.store.handles.identity(local);
-      const interpretation = input.compilerWorld.attributeParser.interpret(attribute.rawName);
-      const matched = interpretation?.compiledPatternProductHandle == null
-        ? null
-        : findMatchedPattern(input.compilerWorld, interpretation.compiledPatternProductHandle);
-      const execution = matched == null || interpretation == null
-        ? AttributePatternExecutionResult.plain(attribute.rawName, attribute.rawValue)
-        : executeBuiltInAttributePattern(
-          matched.handler,
-          matched.pattern.pattern,
-          attribute.rawName,
-          attribute.rawValue,
-          interpretation.parts,
-        ) ?? new AttributePatternExecutionResult(
-          AttributeSyntaxKind.Open,
-          attribute.rawName,
-          attribute.rawValue,
-          attribute.rawName,
-          null,
-          interpretation.parts,
-        );
+      const parse = input.compilerWorld.attributeParser.parse(attribute.rawName, attribute.rawValue, executionHost);
+      const execution = parse.execution;
       const syntax = new AttributeSyntax(
         productHandle,
         identityHandle,
@@ -134,7 +102,7 @@ export class AttributeSyntaxMaterializer {
         execution.target,
         execution.command,
         execution.parts,
-        matched?.pattern ?? null,
+        parse.pattern,
         attribute.toReference(),
         attribute.sourceAddressHandle,
         compactFieldProvenance<AttributeSyntaxField>([
@@ -143,7 +111,7 @@ export class AttributeSyntaxMaterializer {
           new FieldProvenance('target', source.provenanceHandle),
           execution.command == null ? null : new FieldProvenance('command', source.provenanceHandle),
           execution.parts.length === 0 ? null : new FieldProvenance('parts', source.provenanceHandle),
-          matched == null ? null : new FieldProvenance('pattern', source.provenanceHandle),
+          parse.pattern == null ? null : new FieldProvenance('pattern', source.provenanceHandle),
           new FieldProvenance('source', source.provenanceHandle),
         ]),
       );
@@ -155,12 +123,12 @@ export class AttributeSyntaxMaterializer {
         source.provenanceHandle,
       );
       claims.push(parseClaim);
-      if (matched?.executableProductHandle != null) {
+      if (parse.executableProductHandle != null) {
         claims.push(new SemanticClaim(
           this.store.handles.claim(`${local}:references-attribute-pattern`),
           productHandle,
           KernelVocabulary.Template.ReferencesResource.key,
-          matched.executableProductHandle,
+          parse.executableProductHandle,
           source.provenanceHandle,
         ));
       }
@@ -216,32 +184,4 @@ export class AttributeSyntaxMaterializer {
       provenanceHandle,
     );
   }
-}
-
-function findMatchedPattern(
-  world: TemplateCompilerWorldEmission,
-  compiledPatternProductHandle: ProductHandle,
-): MatchedAttributePattern | null {
-  for (const emission of world.attributePatterns) {
-    const pattern = emission.compiledPatterns.find((candidate) => candidate.productHandle === compiledPatternProductHandle);
-    if (pattern == null) {
-      continue;
-    }
-    return new MatchedAttributePattern(
-      pattern.definition,
-      emission.handler,
-      emission.executable.productHandle,
-    );
-  }
-  return null;
-}
-
-function claimsForProduct(
-  claims: readonly SemanticClaim[],
-  productHandle: ProductHandle,
-): readonly SemanticClaim[] {
-  return claims.filter((claim) =>
-    claim.subjectHandle === productHandle
-    || claim.objectHandle === productHandle
-  );
 }

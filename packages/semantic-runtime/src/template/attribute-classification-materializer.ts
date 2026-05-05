@@ -276,7 +276,7 @@ function classifySyntax(
   const commandName = syntax.command?.toLowerCase() ?? null;
   const bindingCommand = commandName == null
     ? null
-    : world.bindingCommandResolver.resolve(commandName)?.toReference() ?? null;
+    : world.bindingCommandResolver.get(commandName)?.toReference() ?? null;
   const elementResolution = world.resourceResolver.el(elementLookupName(owner));
   const elementDefinition = elementResolution?.definition?.type === ResourceDefinitionKind.CustomElement
     ? elementResolution.definition
@@ -416,7 +416,7 @@ function commandIgnoresAttributeName(
 ): boolean {
   return commandName == null
     ? false
-    : world.bindingCommandResolver.resolve(commandName)?.ignoreAttr === true;
+    : world.bindingCommandResolver.get(commandName)?.ignoreAttr === true;
 }
 
 function openDecision(

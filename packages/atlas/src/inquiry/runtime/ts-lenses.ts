@@ -575,6 +575,9 @@ export function answerTsType(
     const callSites = readCallSites(sourceProject, selector, {
       ...pageOptions,
       ...stringFilter(inquiry.filters, "calleeName"),
+      ...stringFilter(inquiry.filters, "argumentText"),
+      ...stringFilter(inquiry.filters, "argumentSymbolName"),
+      ...stringFilter(inquiry.filters, "argumentFullyQualifiedName"),
       ...stringFilter(inquiry.filters, "kind"),
     });
     const outcome =
@@ -1183,8 +1186,8 @@ function createTypeScriptIdeGuide(
       },
       {
         id: "call-sites.by-callee",
-        capability: "Find exact call or new expressions by callee name.",
-        use: "Use after package or file scoping; start with a source file before broadening to package-wide call scans.",
+        capability: "Find exact call or new expressions by callee name and optional argument facts.",
+        use: "Use after package or file scoping; add argumentText, argumentSymbolName, or argumentFullyQualifiedName when a call edge must stay exact.",
         ask: {
           lens: LensId.TsType,
           locus: {

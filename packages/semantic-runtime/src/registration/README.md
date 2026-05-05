@@ -60,7 +60,7 @@ That keeps registration analyzable before DI world construction exists.
 - Avoid generic value escape hatches. If key or registered-value shape matters, model it as a typed registration field
   with provenance or leave an open seam.
 
-## Current Shape
+## Implementation Shape
 
 `registration-observation.ts` is the AST-bearing layer. It records source carriers such as `Registration.*` calls,
 `container.register(...)`, static resource admission, object-map entries, and `IRegistry.register(...)` methods.

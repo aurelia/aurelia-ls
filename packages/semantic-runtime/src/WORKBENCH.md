@@ -1,8 +1,14 @@
 # Semantic Runtime Workbench
 
-This note keeps recent context close to the code while the package is still settling. It is not a roadmap and it should not become a procedural dossier. If a detail stops being useful for orientation, delete it or promote the durable part into the owning README or source contract.
+This note keeps active context close to the code while the package is still settling. It is not a roadmap and it should
+not become a procedural dossier. If a detail stops being useful for orientation, delete it or promote the durable part
+into the owning README or source contract.
 
-## Recent Context
+Product-pressure grounding lives in [../../atlas/workbench/product-specific-pressures.md](../../atlas/workbench/product-specific-pressures.md).
+Use that note when deciding whether a semantic concept belongs in product records, claims, provenance, inquiry answers,
+or Atlas-only navigation.
+
+## Standing Context
 
 The repo has consolidated around two internal surfaces:
 
@@ -11,7 +17,7 @@ The repo has consolidated around two internal surfaces:
 
 The static document packet and snapshot/query shell have been removed. The intent is for product semantics to live in typed substrate, vocabulary, auLink anchors, claims, provenance, materialized products, and open seams, with Atlas reading those surfaces directly instead of relying on parallel summaries.
 
-## Current Shape
+## Package Shape
 
 The broad horizontal substrate is present but not finished end to end. The active layers are:
 
@@ -34,7 +40,7 @@ This breadth is intentional. The next useful work is not to preserve compatibili
 - Keep uncertainty explicit with open seams instead of flattening partial knowledge into resolved-looking facts.
 - Treat package-local READMEs as boundary notes. Keep them short enough that future agents actually read them.
 
-## Near Pressure
+## Active Pressure
 
 Atlas should increasingly learn from this package through typed contracts:
 
@@ -45,3 +51,15 @@ Atlas should increasingly learn from this package through typed contracts:
 - avoid growing private product-specific inference tables when the product model itself can carry the intent.
 
 The expression parser remains useful but provisional. It has grammar, AST, and recovery algebra, yet it predates the current kernel shape. Keep it callable parser machinery above source text until template/compiler ownership proves where its products should land.
+
+## Template Compiler Emulation Notes
+
+The compiler front door now lives on `TemplateCompilerService` instead of only in `TemplateCompilationProjectPass`.
+`compile(...)` owns the runtime short-circuit branches and delegates product materialization to a host. Compiler
+collaborators should be used through their service models (`IAttributeParser.parse`, `IBindingCommandResolver.get`,
+`IExpressionParser.parse`, `AttrMapper.map/isTwoWay`) rather than through local aliases or duplicated helper logic.
+
+`compileSpread(...)` is wired from runtime rendering back into `TemplateCompilerService`, but dynamic spread instruction
+materialization is intentionally still open. The runtime path now preserves the captured AttrSyntax handles and emits
+open pressure when the spread compiler cannot close; future work should fill that host with real instruction emission
+rather than bypassing the compiler service again.

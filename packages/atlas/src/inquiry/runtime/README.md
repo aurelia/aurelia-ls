@@ -34,11 +34,19 @@ This is not a compatibility layer for old readers and not the default caller sur
   the API can navigate without source-reading fallback.
 - [ts-lenses.ts](ts-lenses.ts) adapts the hot TypeScript source substrate and LanguageService into `ts.source`,
   `ts.structure`, and `ts.type` answers, including IDE primitives and read-only TypeScript edit plans.
+  `ts.type:call-sites` supports exact callee and runtime-argument filters (`argumentText`, `argumentSymbolName`,
+  `argumentFullyQualifiedName`) so higher semantic lenses can preserve call precision when they hand off to raw
+  TypeScript facts.
   `ts.structure:document-symbols` supports exact query filtering and its source continuations use the whole symbol
   span, so callers can jump from a method/class row directly to the implementation body without opening files.
 - [bridge-lenses.ts](bridge-lenses.ts) adapts product bridge substrates such as `bridge.aulink` into exact inquiry
   answers. `bridge.aulink` reads a source-project-scoped bridge index on demand so exact product-to-framework target
   reads stay cached within the current source epoch without daemon startup warmup.
+  [bridge-aulink-lens-support.ts](bridge-aulink-lens-support.ts) owns the common bridge basis, route, and source-hop
+  primitives; [bridge-aulink-usage-lenses.ts](bridge-aulink-usage-lenses.ts) owns the `usage-comparison`,
+  `member-surface`, `usage-members`, `usage-consumers`, and `usage-sites` answer families. Keep new bridge detail
+  families near the substrate they spend, and keep `bridge-lenses.ts` focused on base auLink
+  catalog/anchor/target/gap/mirror routing.
 - [product-vocabulary-analysis.ts](product-vocabulary-analysis.ts) and
   [product-vocabulary-lenses.ts](product-vocabulary-lenses.ts) expose `product.vocabulary`. They walk the
   semantic-runtime vocabulary package through the hot TypeScript Program, then return the declared catalog, exact
@@ -79,6 +87,12 @@ This is not a compatibility layer for old readers and not the default caller sur
   `pnpm --filter @aurelia-ls/atlas report:framework-emulation`. Keep the report as a view over
   `framework.composition:emulation` and `framework.observation:entities` substrates rather than giving it its own
   ontology; changes should make the underlying rows clearer first, then let the report expose the new shape.
+- [framework-api-lenses.ts](framework-api-lenses.ts) exposes `framework.api`. It keeps public/module API subjects,
+  implementation shapes, member slots, source declarations, raw usage sites, and `usage-consumers` owner groups
+  separate. Usage rows also carry compact call-shape facts for call usages, so filters such as `callArgumentSymbolName`
+  can localize edges like `Container.get(ITemplateCompiler)` before the caller opens raw source. Use `usage-consumers`
+  as the compact owner map before opening large API usage pages; bridge owner rows can jump into this projection for
+  framework-side context.
 - [framework-di-lenses.ts](framework-di-lenses.ts) exposes the first relationship-atom lens, `framework.di`. It reads
   DI relationship atoms from `framework/di-index.ts` and keeps keys, registrations, provider/alias targets, lookups,
   and materialization mechanics navigable without folding those phases into the discovery catalog.
@@ -204,8 +218,8 @@ This is not a compatibility layer for old readers and not the default caller sur
   Flow also accepts `corridor: "jit-compiler"` for the compiler-only slice of a configuration world. That corridor
   keeps compiler-relevant resource-definition roles, TemplateCompiler/binding-command materialization and dependency
   edges, and source-backed compiler instruction-production edges. It intentionally does not pull renderer dispatch or
-  controller hydration into the same view; those should become their own resolved-runtime corridor when that question is
-  ready. The corridor distinguishes compile-time `find`/definition lookup from `get`/`invoke` materialization pressure:
+  controller hydration into the same view; `framework.rendering:hydration-flow` owns that resolved-runtime corridor.
+  The JIT corridor distinguishes compile-time `find`/definition lookup from `get`/`invoke` materialization pressure:
   custom elements, custom attributes, and template controllers stay visible as compiler definition lookups, while their
   view-model construction and hydration dependencies are outside this corridor.
 - `framework.di:dependencies` separates exact DI dependency edges from variable-carried key/type reads. Exact rows have
@@ -234,8 +248,8 @@ This is not a compatibility layer for old readers and not the default caller sur
   including find/get/build/emit/error roles plus instruction-product and resource-convergence continuations. The
   compiler summary should remain a rollup and point into these projections instead of embedding row samples.
 
-The first runtime lenses answer only contract-world questions. Thick TypeScript, product, and framework substrates plug
-into this layer by satisfying the same inquiry and answer contracts. Runtime continuations may carry route claims from
-the inquiry navigation grammar so repeated local moves can be promoted into named substrate indexes instead of staying hidden
-in lens implementation code. Route claims can also carry `basisTransition` metadata when a concrete continuation has
-source-backed reason to change epistemic footing; static product or framework handoff catalogs do not belong here.
+Runtime lenses answer through the same inquiry and answer contracts whether they spend static contract rows, TypeScript
+facts, product vocabulary, bridge anchors, or framework substrates. Runtime continuations may carry route claims from
+the inquiry navigation grammar so repeated local moves can be promoted into named substrate indexes instead of staying
+hidden in lens implementation code. Route claims can also carry `basisTransition` metadata when a concrete continuation
+has source-backed reason to change epistemic footing; static product or framework handoff catalogs do not belong here.

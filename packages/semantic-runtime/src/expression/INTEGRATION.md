@@ -80,10 +80,18 @@ Examples:
 
 ## Current Concrete Seams
 
-Binding-command values and custom-attribute multi-binding values currently
-publish value sites but no parser publications. That is intentional: the
-command/compiler layer must own command-specific preprocessing and secondary
-grammars before final expression parsing or instruction lowering can be honest.
+Parser-owned template values publish expression parses through
+`../template/value-site-materializer.ts`. Binding-command lowering now also
+publishes command-owned and multi-binding expression parses when the command or
+secondary grammar path closes cleanly. That ownership still belongs above the
+parser: command preprocessing, segment splitting, command build inputs, and
+instruction lowering are compiler facts first, then parser publications.
+
+The remaining seams are the paths where the command/compiler layer cannot yet
+close the secondary grammar or runtime command body honestly: custom command
+bodies, unresolved commands, invalid segment targets, dynamic spread
+materialization, and parser publication expansion that would require durable
+typed product details beyond the current hot in-process result objects.
 
 If a future integration change starts pushing template-specific ownership into
 `packages/semantic-runtime/src/expression/`, pause and re-check whether

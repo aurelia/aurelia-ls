@@ -350,10 +350,64 @@ export class AttributePatternExecutionResult {
   }
 }
 
+/** Matched runtime compiled pattern plus its executable handler product, when visible. */
+export class AttributeParserMatchedPattern {
+  constructor(
+    /** Compiled pattern selected by SyntaxInterpreter. */
+    readonly compiledPattern: CompiledAttributePattern,
+    /** Pattern handler visible through the parser service. */
+    readonly executable: AttributePatternExecutable | null,
+  ) {}
+
+  get pattern(): AttributePatternDefinitionEntry {
+    return this.compiledPattern.definition;
+  }
+
+  get executableProductHandle(): ProductHandle | null {
+    return this.compiledPattern.executableProductHandle ?? this.executable?.productHandle ?? null;
+  }
+}
+
+/** Host input for executing the handler part of runtime IAttributeParser.parse. */
+export class AttributeParserHandlerExecutionInput {
+  constructor(
+    readonly rawName: string,
+    readonly rawValue: string,
+    readonly interpretation: AttributePatternInterpretation,
+    readonly matchedPattern: AttributeParserMatchedPattern,
+  ) {}
+}
+
+/** Product host that performs the handler invocation part of runtime IAttributeParser.parse. */
+export interface AttributeParserExecutionHost {
+  execute(input: AttributeParserHandlerExecutionInput): AttributePatternExecutionResult | null;
+}
+
+/** Runtime-shaped IAttributeParser.parse result before kernel product allocation. */
+export class AttributeParserParseResult {
+  constructor(
+    /** Name interpretation produced by SyntaxInterpreter, or null when the parser machine is unavailable. */
+    readonly interpretation: AttributePatternInterpretation | null,
+    /** Matched compiled pattern and executable, when the name selected a pattern. */
+    readonly matchedPattern: AttributeParserMatchedPattern | null,
+    /** AttrSyntax-like execution result produced by the selected branch. */
+    readonly execution: AttributePatternExecutionResult,
+  ) {}
+
+  get pattern(): AttributePatternDefinitionEntry | null {
+    return this.matchedPattern?.pattern ?? null;
+  }
+
+  get executableProductHandle(): ProductHandle | null {
+    return this.matchedPattern?.executableProductHandle ?? null;
+  }
+}
+
 /** Runtime SyntaxInterpreter model that turns registered pattern definitions into an attribute-name matcher. */
 @auLink('template-compiler:SyntaxInterpreter')
 export class AttributeParserMachine {
   private readonly _cache = new Map<string, AttributePatternInterpretation>();
+  private readonly _compiledPatterns: CompiledAttributePattern[] = [];
 
   constructor(
     /** Product handle for the materialized-product envelope that represents this parser machine. */
@@ -361,7 +415,7 @@ export class AttributeParserMachine {
     /** Identity for this parser machine model. */
     readonly identityHandle: IdentityHandle,
     /** Compiled patterns in the order registered with the parser. */
-    readonly compiledPatterns: readonly CompiledAttributePattern[],
+    compiledPatterns: readonly CompiledAttributePattern[],
     /** Cached interpretations for already-seen raw names. */
     cachedInterpretations: readonly AttributePatternInterpretation[],
     /** Source address for the parser machine owner or registration boundary. */
@@ -369,14 +423,20 @@ export class AttributeParserMachine {
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */
     readonly fieldProvenance: readonly FieldProvenance<AttributeParserMachineField>[] = [],
   ) {
+    this._compiledPatterns.push(...compiledPatterns);
     for (const interpretation of cachedInterpretations) {
       this._cache.set(interpretation.rawName, interpretation);
     }
   }
 
+  /** Compiled patterns in runtime registration order. */
+  get compiledPatterns(): readonly CompiledAttributePattern[] {
+    return [...this._compiledPatterns];
+  }
+
   /** Product handles for the compiled patterns in runtime registration order. */
   get compiledPatternProductHandles(): readonly ProductHandle[] {
-    return this.compiledPatterns.map((pattern) => pattern.productHandle);
+    return this._compiledPatterns.map((pattern) => pattern.productHandle);
   }
 
   /** Cached interpretations for already-seen raw names. */
@@ -390,9 +450,15 @@ export class AttributeParserMachine {
     if (cached != null) {
       return cached;
     }
-    const interpretation = interpretCompiledAttributePatterns(rawName, this.compiledPatterns);
+    const interpretation = interpretCompiledAttributePatterns(rawName, this._compiledPatterns);
     this._cache.set(rawName, interpretation);
     return interpretation;
+  }
+
+  /** Runtime SyntaxInterpreter registration shape used by IAttributeParser.registerPattern. */
+  registerPatterns(compiledPatterns: readonly CompiledAttributePattern[]): void {
+    this._compiledPatterns.push(...compiledPatterns);
+    this._cache.clear();
   }
 
   /** Snapshot the current live interpretation cache for answer envelopes or later kernel emission. */
@@ -463,24 +529,33 @@ export class AttributePatternExecutable {
 /** Runtime IAttributeParser model, including the pattern handlers visible through DI. */
 @auLink('template-compiler:IAttributeParser')
 export class AttributeParserService {
+  private readonly _patternExecutables: AttributePatternExecutable[] = [];
+
   constructor(
     /** Product handle for the materialized-product envelope that represents this parser service. */
     readonly productHandle: ProductHandle,
     /** Identity for this parser service model. */
     readonly identityHandle: IdentityHandle,
     /** Pattern handlers visible to this parser service. */
-    readonly patternExecutables: readonly AttributePatternExecutable[],
+    patternExecutables: readonly AttributePatternExecutable[],
     /** Compiled SyntaxInterpreter machine visible to this parser service. */
     readonly machine: AttributeParserMachine | null,
     /** Source address for the parser service registration or lookup. */
     readonly sourceAddressHandle: AddressHandle | null,
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */
     readonly fieldProvenance: readonly FieldProvenance<AttributeParserServiceField>[] = [],
-  ) {}
+  ) {
+    this._patternExecutables.push(...patternExecutables);
+  }
+
+  /** Pattern handlers visible to this parser service. */
+  get patternExecutables(): readonly AttributePatternExecutable[] {
+    return [...this._patternExecutables];
+  }
 
   /** Product handles for pattern handlers visible through this parser service. */
   get patternExecutableProductHandles(): readonly ProductHandle[] {
-    return this.patternExecutables.map((pattern) => pattern.productHandle);
+    return this._patternExecutables.map((pattern) => pattern.productHandle);
   }
 
   /** Product handle for the compiled SyntaxInterpreter machine, when materialized. */
@@ -493,12 +568,100 @@ export class AttributeParserService {
     return this.machine?.interpret(rawName) ?? null;
   }
 
+  /** Runtime `IAttributeParser.registerPattern(patterns, Type)` shape over materialized pattern products. */
+  registerPattern(
+    executable: AttributePatternExecutable,
+    compiledPatterns: readonly CompiledAttributePattern[],
+  ): void {
+    if (!this._patternExecutables.some((pattern) => pattern.productHandle === executable.productHandle)) {
+      this._patternExecutables.push(executable);
+    }
+    this.machine?.registerPatterns(compiledPatterns);
+  }
+
+  /** Runtime `IAttributeParser.parse(name, value)` shape with handler execution delegated to a product host. */
+  parse(
+    rawName: string,
+    rawValue: string,
+    host: AttributeParserExecutionHost,
+  ): AttributeParserParseResult {
+    const interpretation = this.interpret(rawName);
+    if (interpretation == null) {
+      return new AttributeParserParseResult(
+        null,
+        null,
+        new AttributePatternExecutionResult(
+          AttributeSyntaxKind.Open,
+          rawName,
+          rawValue,
+          rawName,
+          null,
+          [],
+        ),
+      );
+    }
+    if (interpretation.compiledPatternProductHandle == null) {
+      return new AttributeParserParseResult(
+        interpretation,
+        null,
+        AttributePatternExecutionResult.plain(rawName, rawValue),
+      );
+    }
+
+    const matchedPattern = this.matchPattern(interpretation.compiledPatternProductHandle);
+    if (matchedPattern == null || matchedPattern.executableProductHandle == null) {
+      return new AttributeParserParseResult(
+        interpretation,
+        matchedPattern,
+        this.openExecution(rawName, rawValue, interpretation.parts),
+      );
+    }
+
+    const execution = host.execute(new AttributeParserHandlerExecutionInput(
+      rawName,
+      rawValue,
+      interpretation,
+      matchedPattern,
+    ));
+    return new AttributeParserParseResult(
+      interpretation,
+      matchedPattern,
+      execution ?? this.openExecution(rawName, rawValue, interpretation.parts),
+    );
+  }
+
   toReference(): TemplateCompilerServiceReference {
     return new TemplateCompilerServiceReference(
       TemplateCompilerServiceKind.AttributeParser,
       this.productHandle,
       this.identityHandle,
       this.sourceAddressHandle,
+    );
+  }
+
+  private matchPattern(compiledPatternProductHandle: ProductHandle): AttributeParserMatchedPattern | null {
+    const compiledPattern = this.machine?.compiledPatterns.find((pattern) => pattern.productHandle === compiledPatternProductHandle) ?? null;
+    if (compiledPattern == null) {
+      return null;
+    }
+    const executable = compiledPattern.executableProductHandle == null
+      ? null
+      : this._patternExecutables.find((pattern) => pattern.productHandle === compiledPattern.executableProductHandle) ?? null;
+    return new AttributeParserMatchedPattern(compiledPattern, executable);
+  }
+
+  private openExecution(
+    rawName: string,
+    rawValue: string,
+    parts: readonly string[],
+  ): AttributePatternExecutionResult {
+    return new AttributePatternExecutionResult(
+      AttributeSyntaxKind.Open,
+      rawName,
+      rawValue,
+      rawName,
+      null,
+      parts,
     );
   }
 }

@@ -1,5 +1,6 @@
 export * from "./admission.js";
 export * from "./admission-world.js";
+export * from "./api-usage.js";
 export * from "./discovery-index.js";
 export * from "./discovery-seeds.js";
 export * from "./di-index.js";

@@ -737,7 +737,7 @@ export class CompiledTemplateMaterializer {
             identityHandle,
             node.toReference(),
             elementDefinition.name,
-            elementDefinition.productHandle,
+            input.compilerWorld.templateCompiler.resolveResources ? elementDefinition.productHandle : null,
             null,
             bindableInstructions.map((instruction) => instruction.productHandle),
             capturedSyntaxProductHandles,
@@ -871,7 +871,7 @@ export class CompiledTemplateMaterializer {
         ? classification.resource.definition
         : null;
       const target = lane === 'plain'
-        ? mapAttribute(node, syntax.target) ?? camelCase(syntax.target)
+        ? input.compilerWorld.attributeMapper.map(node, syntax.target) ?? camelCase(syntax.target)
         : bindable?.definition.name ?? customAttributeDefinition?.defaultProperty ?? syntax.target;
       const addressHandle = attribute.valueAddressHandle ?? attribute.sourceAddressHandle;
       if (parse == null || parse.resultKind === ExpressionParseResultKind.InterpolationAbsent) {
@@ -931,7 +931,7 @@ export class CompiledTemplateMaterializer {
           node.toReference(),
           attribute?.toReference() ?? syntax?.attribute ?? { productHandle: null, addressHandle: classification.sourceAddressHandle, rawName: null },
           syntax?.target ?? classification.resource?.name ?? '(unknown)',
-          classification.resource?.definitionProductHandle ?? classification.resource?.resourceProductHandle ?? null,
+          resolvedInstructionResourceProductHandle(input, classification),
           props.map((instruction) => instruction.productHandle),
           classification.sourceAddressHandle,
           fieldProvenance<TemplateInstructionField>(['node', 'attribute', 'resource', 'instructions', 'source']),
@@ -963,7 +963,7 @@ export class CompiledTemplateMaterializer {
             node.toReference(),
             attribute?.toReference() ?? syntax?.attribute ?? { productHandle: null, addressHandle: classification.sourceAddressHandle, rawName: null },
             syntax?.target ?? classification.resource?.name ?? '(unknown)',
-            classification.resource?.definitionProductHandle ?? classification.resource?.resourceProductHandle ?? null,
+            resolvedInstructionResourceProductHandle(input, classification),
             childSequenceProductHandle,
             props.map((instruction) => instruction.productHandle),
             classification.sourceAddressHandle,
@@ -1169,83 +1169,13 @@ function camelCase(value: string): string {
   return value.replace(/-([a-z])/g, (_, ch: string) => ch.toUpperCase());
 }
 
-function mapAttribute(
-  element: HtmlElement,
-  attr: string,
-): string | null {
-  const tagName = element.tagName.toUpperCase();
-  const lowerAttr = attr.toLowerCase();
-  const tagMapping = tagName === 'LABEL' && lowerAttr === 'for'
-    ? 'htmlFor'
-    : tagName === 'IMG' && lowerAttr === 'usemap'
-      ? 'useMap'
-      : tagName === 'INPUT'
-        ? inputAttributeMapping(lowerAttr)
-        : (tagName === 'TEXTAREA' && lowerAttr === 'maxlength')
-          ? 'maxLength'
-          : (tagName === 'TD' || tagName === 'TH')
-            ? tableCellAttributeMapping(lowerAttr)
-            : null;
-  return tagMapping
-    ?? globalAttributeMapping(lowerAttr)
-    ?? (lowerAttr.startsWith('data-') ? attr : null);
-}
-
-function inputAttributeMapping(attr: string): string | null {
-  switch (attr) {
-    case 'maxlength':
-      return 'maxLength';
-    case 'minlength':
-      return 'minLength';
-    case 'formaction':
-      return 'formAction';
-    case 'formenctype':
-      return 'formEncType';
-    case 'formmethod':
-      return 'formMethod';
-    case 'formnovalidate':
-      return 'formNoValidate';
-    case 'formtarget':
-      return 'formTarget';
-    case 'inputmode':
-      return 'inputMode';
-    default:
-      return null;
-  }
-}
-
-function tableCellAttributeMapping(attr: string): string | null {
-  switch (attr) {
-    case 'rowspan':
-      return 'rowSpan';
-    case 'colspan':
-      return 'colSpan';
-    default:
-      return null;
-  }
-}
-
-function globalAttributeMapping(attr: string): string | null {
-  switch (attr) {
-    case 'accesskey':
-      return 'accessKey';
-    case 'contenteditable':
-      return 'contentEditable';
-    case 'tabindex':
-      return 'tabIndex';
-    case 'textcontent':
-      return 'textContent';
-    case 'innerhtml':
-      return 'innerHTML';
-    case 'scrolltop':
-      return 'scrollTop';
-    case 'scrollleft':
-      return 'scrollLeft';
-    case 'readonly':
-      return 'readOnly';
-    default:
-      return null;
-  }
+function resolvedInstructionResourceProductHandle(
+  input: CompiledTemplateMaterializationInput,
+  classification: AttributeClassification,
+): ProductHandle | null {
+  return input.compilerWorld.templateCompiler.resolveResources
+    ? classification.resource?.definitionProductHandle ?? classification.resource?.resourceProductHandle ?? null
+    : null;
 }
 
 function instructionKindKeyFor(

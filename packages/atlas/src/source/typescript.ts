@@ -10,6 +10,10 @@ import {
   type SourceProject,
   type SourceSpan,
 } from "./project.js";
+import {
+  canonicalSourceSymbolKey,
+  resolveAlias,
+} from "./semantic-surface/symbols.js";
 
 /** Selector scheme for resolving source, declaration, symbol, or checker targets. */
 export const enum SourceSelectorScheme {
@@ -797,6 +801,12 @@ export const enum TypeScriptCallSiteKind {
 export interface CallSiteReadOptions extends ApiSurfaceOptions {
   /** Optional exact callee symbol or property name filter. */
   readonly calleeName?: string;
+  /** Optional exact runtime argument source text filter. */
+  readonly argumentText?: string;
+  /** Optional exact runtime argument checker symbol name filter. */
+  readonly argumentSymbolName?: string;
+  /** Optional exact runtime argument checker fully qualified name filter. */
+  readonly argumentFullyQualifiedName?: string;
   /** Optional call-site syntax family filter. */
   readonly kind?: TypeScriptCallSiteKind | string;
 }
@@ -1688,6 +1698,7 @@ export function readCallSites(
   const allCallSites = uniqueCallSites(resolution.targets.flatMap((target) => callSitesForTarget(project, target)))
     .filter((entry) => kind === null || entry.kind === kind)
     .filter((entry) => options.calleeName === undefined || entry.calleeName === options.calleeName || entry.callee.symbolName === options.calleeName)
+    .filter((entry) => callSiteArgumentsMatch(entry, options))
     .sort(compareCallSites);
   const offset = Math.max(0, Math.trunc(options.offset ?? 0));
   const limit = Math.max(1, Math.trunc(options.limit));
@@ -1702,6 +1713,27 @@ export function readCallSites(
     limit,
     ...(nextOffset === undefined ? {} : { nextOffset }),
   };
+}
+
+function callSiteArgumentsMatch(
+  entry: TypeScriptCallSiteEntry,
+  options: CallSiteReadOptions,
+): boolean {
+  if (
+    options.argumentText === undefined &&
+    options.argumentSymbolName === undefined &&
+    options.argumentFullyQualifiedName === undefined
+  ) {
+    return true;
+  }
+  return entry.arguments.some((argument) =>
+    (options.argumentText === undefined ||
+      argument.expression.text === options.argumentText) &&
+    (options.argumentSymbolName === undefined ||
+      argument.expression.symbolName === options.argumentSymbolName) &&
+    (options.argumentFullyQualifiedName === undefined ||
+      argument.expression.fullyQualifiedName === options.argumentFullyQualifiedName),
+  );
 }
 
 /** Project bounded TypeScript syntactic, semantic, and suggestion diagnostics for selected source files. */
@@ -2859,7 +2891,9 @@ function expressionFact(
     type: checker.typeToString(type, expression),
     apparentType: checker.typeToString(apparentType, expression),
     symbolName: symbol?.getName() ?? null,
-    fullyQualifiedName: symbol === null ? null : checker.getFullyQualifiedName(symbol),
+    fullyQualifiedName: symbol === null
+      ? null
+      : canonicalSourceSymbolKey(checker.getFullyQualifiedName(symbol)),
     ...literalValueField(expression),
     ...objectKeysField(expression),
     ...arrayElementCountField(expression),
@@ -2867,13 +2901,15 @@ function expressionFact(
 }
 
 function symbolForExpression(checker: ts.TypeChecker, expression: ts.Expression): ts.Symbol | null {
+  let symbol: ts.Symbol | undefined;
   if (ts.isPropertyAccessExpression(expression)) {
-    return checker.getSymbolAtLocation(expression.name) ?? checker.getSymbolAtLocation(expression) ?? null;
+    symbol = checker.getSymbolAtLocation(expression.name) ?? checker.getSymbolAtLocation(expression);
+  } else if (ts.isElementAccessExpression(expression) && expression.argumentExpression !== undefined) {
+    symbol = checker.getSymbolAtLocation(expression.argumentExpression) ?? checker.getSymbolAtLocation(expression);
+  } else {
+    symbol = checker.getSymbolAtLocation(expression);
   }
-  if (ts.isElementAccessExpression(expression) && expression.argumentExpression !== undefined) {
-    return checker.getSymbolAtLocation(expression.argumentExpression) ?? checker.getSymbolAtLocation(expression) ?? null;
-  }
-  return checker.getSymbolAtLocation(expression) ?? null;
+  return symbol === undefined ? null : resolveAlias(checker, symbol);
 }
 
 function calleeName(expression: ts.Expression, fact: TypeScriptExpressionFact): string {

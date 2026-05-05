@@ -2,7 +2,7 @@
 
 See [../README.md](../README.md) for the folder-wide rebuild map and Atlas and auLink rule.
 
-This folder is the first fresh Aurelia-semantic materialization layer over boot, kernel, inquiry, and static evaluation.
+This folder is an Aurelia-semantic materialization layer over boot, kernel, inquiry, and static evaluation.
 
 It recognizes source carriers that the Aurelia runtime turns into resources:
 

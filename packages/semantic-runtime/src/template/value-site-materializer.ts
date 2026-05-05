@@ -32,7 +32,6 @@ import {
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
-import { ExpressionParser } from '../expression/expression-parser.js';
 import type { ExpressionParseContext } from '../expression/expression-parse-support.js';
 import {
   SourceFileRef,
@@ -50,10 +49,6 @@ import {
 import type { AttributeSyntaxParseEmission } from './attribute-syntax-materializer.js';
 import type {
   TemplateBindableReference,
-  TemplateCompilerServiceReference,
-} from './compiler-world.js';
-import {
-  TemplateCompilerServiceKind,
 } from './compiler-world.js';
 import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
 import type { TemplateCompilationUnit } from './compilation-unit.js';
@@ -122,8 +117,6 @@ class PendingValueSite {
 
 /** Selects compiler-owned template value sites and publishes parser-owned values. */
 export class TemplateValueSiteMaterializer {
-  private readonly parser = new ExpressionParser();
-
   constructor(
     /** Hot analysis store that receives value-site records. */
     readonly store: KernelStore,
@@ -149,7 +142,7 @@ export class TemplateValueSiteMaterializer {
     const sites: TemplateValueSite[] = [];
     const parses: TemplateExpressionParse[] = [];
     const claims: SemanticClaim[] = [];
-    const parserService = parserServiceFor(input.compilerWorld);
+    const parserService = input.compilerWorld.expressionParser;
     const pendingSites = [
       ...textValueSites(input.html),
       ...attributeValueSites(input.html, input.attributeSyntax, input.attributeClassification),
@@ -228,7 +221,7 @@ export class TemplateValueSiteMaterializer {
       const parseLocal = `template-expression-parse:${input.localKey}:${index}`;
       const parseProductHandle = this.store.handles.product(parseLocal);
       const parseIdentityHandle = this.store.handles.identity(parseLocal);
-      const result = this.parser.parse(
+      const result = parserService.parse(
         pending.rawValue,
         pending.entryFamily,
         this.expressionParseContext(pending.sourceAddressHandle),
@@ -237,14 +230,14 @@ export class TemplateValueSiteMaterializer {
         parseProductHandle,
         parseIdentityHandle,
         site.toReference(),
-        parserService?.productHandle ?? null,
+        parserService.productHandle,
         expressionParseStateForResult(result),
         result.kind,
         result,
         pending.sourceAddressHandle,
         compactFieldProvenance<TemplateExpressionParseField>([
           new FieldProvenance('site', source.provenanceHandle),
-          parserService == null ? null : new FieldProvenance('parser', source.provenanceHandle),
+          new FieldProvenance('parser', source.provenanceHandle),
           new FieldProvenance('state', source.provenanceHandle),
           new FieldProvenance('resultKind', source.provenanceHandle),
           new FieldProvenance('source', source.provenanceHandle),
@@ -519,11 +512,4 @@ function hasInlineBindings(rawValue: string): boolean {
     ++i;
   }
   return false;
-}
-
-function parserServiceFor(
-  compilerWorld: TemplateCompilerWorldEmission,
-): TemplateCompilerServiceReference | null {
-  return compilerWorld.world.services.find((service) => service.serviceKind === TemplateCompilerServiceKind.ExpressionParser)
-    ?? null;
 }

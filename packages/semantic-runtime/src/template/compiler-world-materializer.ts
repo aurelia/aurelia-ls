@@ -209,7 +209,6 @@ export class TemplateCompilerWorldMaterializer {
     const renderingProductHandle = this.store.handles.product(`rendering-service:${local}`);
     const renderingIdentityHandle = this.store.handles.identity(`rendering-service:${local}`);
 
-    const compiledPatterns = input.attributePatterns.flatMap((pattern) => pattern.compiledPatterns);
     const syntaxResources = [
       ...input.attributePatterns.map((pattern) => visibleAttributePattern(pattern, input.syntaxVisibilityKind)),
       ...input.bindingCommands.map((command) => visibleBindingCommand(command, input.syntaxVisibilityKind)),
@@ -232,7 +231,7 @@ export class TemplateCompilerWorldMaterializer {
     const attributeParserMachine = new AttributeParserMachine(
       machineProductHandle,
       machineIdentityHandle,
-      compiledPatterns,
+      [],
       [],
       source.addressHandle,
       compactFieldProvenance([
@@ -243,7 +242,7 @@ export class TemplateCompilerWorldMaterializer {
     const attributeParser = new AttributeParserService(
       attributeParserProductHandle,
       attributeParserIdentityHandle,
-      input.attributePatterns.map((pattern) => pattern.executable),
+      [],
       attributeParserMachine,
       source.addressHandle,
       compactFieldProvenance([
@@ -252,6 +251,9 @@ export class TemplateCompilerWorldMaterializer {
         new FieldProvenance('source', source.provenanceHandle),
       ]),
     );
+    for (const pattern of input.attributePatterns) {
+      attributeParser.registerPattern(pattern.executable, pattern.compiledPatterns);
+    }
     const bindingCommandResolver = new BindingCommandResolverService(
       bindingResolverProductHandle,
       bindingResolverIdentityHandle,
@@ -270,6 +272,8 @@ export class TemplateCompilerWorldMaterializer {
       compactFieldProvenance([
         new FieldProvenance('serviceKind', source.provenanceHandle),
         new FieldProvenance('container', source.provenanceHandle),
+        new FieldProvenance('debug', source.provenanceHandle),
+        new FieldProvenance('resolveResources', source.provenanceHandle),
         new FieldProvenance('source', source.provenanceHandle),
       ]),
     );

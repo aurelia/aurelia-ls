@@ -49,6 +49,8 @@ export interface AuLinkFilters {
   readonly filePath?: string;
   /** Exact framework target resolution state. */
   readonly frameworkStatus?: AuLinkFrameworkTargetStatus | string;
+  /** Exact substring filter across auLink ids, names, and source paths. */
+  readonly query?: string;
 }
 
 /** auLink id split into its declared package prefix and framework/product symbol suffix. */
@@ -687,18 +689,24 @@ function catalogMatches(entry: AuLinkCatalogEntry, filters: AuLinkFilters): bool
   return idMatches(entry, filters)
     && targetMatches(entry.frameworkTarget, filters)
     && (filters.targetName === undefined)
-    && (filters.filePath === undefined || entry.file.repoPath === filters.filePath);
+    && (filters.filePath === undefined || entry.file.repoPath === filters.filePath)
+    && (filters.query === undefined || catalogContains(entry, filters.query));
 }
 
 function anchorMatches(anchor: AuLinkAnchorRow, filters: AuLinkFilters): boolean {
   return idMatches(anchor, filters)
     && targetMatches(anchor.frameworkTarget, filters)
     && (filters.targetName === undefined || anchor.target.name === filters.targetName)
-    && (filters.filePath === undefined || anchor.file.repoPath === filters.filePath);
+    && (filters.filePath === undefined || anchor.file.repoPath === filters.filePath)
+    && (filters.query === undefined || anchorContains(anchor, filters.query));
 }
 
 function gapMatches(gap: AuLinkGapRow, filters: AuLinkFilters): boolean {
-  if (!idMatches(gap, filters) || !targetMatches(gap.frameworkTarget, filters)) {
+  if (
+    !idMatches(gap, filters)
+    || !targetMatches(gap.frameworkTarget, filters)
+    || (filters.query !== undefined && !gapContains(gap, filters.query))
+  ) {
     return false;
   }
   if (filters.targetName !== undefined && !gap.anchors.some((anchor) => anchor.target.name === filters.targetName)) {
@@ -720,7 +728,72 @@ function idMatches(parts: AuLinkIdParts, filters: AuLinkFilters): boolean {
 
 function targetMatches(target: AuLinkFrameworkTargetResolution, filters: AuLinkFilters): boolean {
   return idMatches(target, filters)
-    && (filters.frameworkStatus === undefined || target.status === filters.frameworkStatus);
+    && (filters.frameworkStatus === undefined || target.status === filters.frameworkStatus)
+    && (filters.query === undefined || frameworkTargetContains(target, filters.query));
+}
+
+function catalogContains(entry: AuLinkCatalogEntry, query: string): boolean {
+  return [
+    entry.linkId,
+    entry.packageId,
+    entry.symbolName,
+    entry.file.repoPath,
+  ].some((value) => value.includes(query))
+    || frameworkTargetContains(entry.frameworkTarget, query);
+}
+
+function anchorContains(anchor: AuLinkAnchorRow, query: string): boolean {
+  return [
+    anchor.linkId,
+    anchor.packageId,
+    anchor.symbolName,
+    anchor.file.repoPath,
+    anchor.target.name,
+    anchor.target.kind,
+    anchor.target.file.repoPath,
+    anchor.target.symbolKey,
+  ].some((value) => value?.includes(query) === true)
+    || frameworkTargetContains(anchor.frameworkTarget, query);
+}
+
+function gapContains(gap: AuLinkGapRow, query: string): boolean {
+  return [
+    gap.linkId,
+    gap.packageId,
+    gap.symbolName,
+    gap.kind,
+    gap.catalog?.file.repoPath,
+  ].some((value) => value?.includes(query) === true)
+    || gap.catalog !== undefined && catalogContains(gap.catalog, query)
+    || gap.anchors.some((anchor) => anchorContains(anchor, query))
+    || frameworkTargetContains(gap.frameworkTarget, query);
+}
+
+function frameworkTargetContains(
+  target: AuLinkFrameworkTargetResolution,
+  query: string,
+): boolean {
+  return [
+    target.linkId,
+    target.packageId,
+    target.symbolName,
+    target.status,
+  ].some((value) => value.includes(query))
+    || target.candidates.some((candidate) => frameworkCandidateContains(candidate, query));
+}
+
+function frameworkCandidateContains(
+  candidate: AuLinkFrameworkTargetCandidate,
+  query: string,
+): boolean {
+  return [
+    candidate.linkId,
+    candidate.packageId,
+    candidate.symbolName,
+    candidate.kind,
+    candidate.file.repoPath,
+    candidate.symbolKey,
+  ].some((value) => value?.includes(query) === true);
 }
 
 function rollupFor(

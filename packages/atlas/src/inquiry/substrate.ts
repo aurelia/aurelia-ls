@@ -23,6 +23,8 @@ export const enum SubstrateId {
   FrameworkResources = "framework.resources",
   /** Framework configuration/bundle admission substrate. */
   FrameworkAdmission = "framework.admission",
+  /** Framework API facets, shape edges, member slots, and usage rows. */
+  FrameworkApi = "framework.api",
   /** Atlas static contracts. */
   AtlasContracts = "atlas.contracts",
 }
@@ -230,6 +232,20 @@ export const SubstrateCatalog: readonly SubstrateContract[] = [
       SubstrateId.FrameworkStaticEvaluator,
       SubstrateId.TypeScriptChecker,
     ],
+  },
+  {
+    id: SubstrateId.FrameworkApi,
+    kind: SubstrateKind.Framework,
+    trust: SubstrateTrust.Derived,
+    summary:
+      "Aurelia framework API facets, declaration merges, implementation shape edges, normalized member slots, and repo-wide TypeChecker-resolved usage rows.",
+    basisKinds: [BasisKind.TypeScriptProgram, BasisKind.TypeScriptChecker],
+    produces: [
+      EvidenceKind.Symbol,
+      EvidenceKind.TypeFact,
+      EvidenceKind.SourceSpan,
+    ],
+    dependsOn: [SubstrateId.TypeScriptChecker],
   },
   {
     id: SubstrateId.AtlasContracts,

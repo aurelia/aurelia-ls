@@ -8,6 +8,10 @@ import type {
 import type { FieldProvenance } from '../kernel/provenance.js';
 import type { AppRootReference } from '../configuration/app-root.js';
 import type { ContainerReference } from '../di/container.js';
+import type { ExpressionType } from '../expression/ast.js';
+import type { ExpressionParseContext } from '../expression/expression-parse-support.js';
+import { ExpressionParser } from '../expression/expression-parser.js';
+import type { ExpressionParseResult } from '../expression/parse-result-algebra.js';
 import {
   BindableBindingMode,
   BindableDefinition,
@@ -16,8 +20,9 @@ import {
   BindableSetterKind,
 } from '../resources/bindable-definition.js';
 import type { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
-import type {
-  CustomElementDefinition,
+import {
+  CustomElementTemplateKind,
+  type CustomElementDefinition,
 } from '../resources/custom-element-definition.js';
 import type {
   FullResourceDefinition,
@@ -26,9 +31,11 @@ import type {
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import {
   SpreadElementPropBindingInstruction,
+  type SpreadTransferedBindingInstruction,
   TemplateInstructionKind,
   type TemplateInstruction,
 } from './instruction-ir.js';
+import type { AttributeSyntax } from './attribute-syntax.js';
 import type {
   CompiledTemplate,
   TemplateRenderTarget,
@@ -42,6 +49,8 @@ import {
   RuntimeRendererAllocation,
   RuntimeRendererInstructionOwner,
   RuntimeRendererInvocation,
+  RuntimeRendererSpreadCompileInput,
+  RuntimeRendererSpreadCompileResult,
   type RuntimeRenderer,
   type RuntimeRendererReference,
   type RuntimeRenderingRun,
@@ -50,6 +59,11 @@ import type {
   RuntimeControllerCreationInput,
   RuntimeControllerFrame,
 } from './runtime-controller.js';
+import {
+  mapAttribute,
+  shouldDefaultToTwoWay,
+  type TemplateAttributeMapperNode,
+} from './attribute-mapper.js';
 
 export const enum TemplateCompilerWorldKind {
   /** Compiler world for an app root or app-level container. */
@@ -139,6 +153,8 @@ export type TemplateResourceScopeField =
 export type TemplateCompilerServiceField =
   | 'serviceKind'
   | 'container'
+  | 'debug'
+  | 'resolveResources'
   | 'resources'
   | 'renderers'
   | 'source';
@@ -261,6 +277,8 @@ export interface TemplateRenderingRunHost {
   allocate(local: string): RuntimeRendererAllocation;
 
   createChildController(input: RuntimeControllerCreationInput): RuntimeControllerFrame | null;
+
+  compileSpread(input: RuntimeRendererSpreadCompileInput): RuntimeRendererSpreadCompileResult;
 }
 
 /** Input to the runtime Rendering service dispatch loop. */
@@ -355,6 +373,108 @@ export class TemplateRenderingRunResult {
     readonly renderedInstructions: readonly TemplateRenderedInstruction[],
     readonly openInstructions: readonly TemplateRenderingOpenInstruction[],
   ) {}
+}
+
+export const enum TemplateCompilerCompileState {
+  /** Runtime compile short-circuited because the definition has no authored template. */
+  NoTemplate = 'no-template',
+  /** Runtime compile short-circuited because the definition is already compiled. */
+  AlreadyCompiled = 'already-compiled',
+  /** Runtime compile entered the compiler host. */
+  Compiled = 'compiled',
+}
+
+/** Runtime-shaped TemplateCompiler.compile request. */
+export class TemplateCompilerCompileRequest {
+  constructor(
+    /** Store-local key shared by the caller and product materializers. */
+    readonly localKey: string,
+    /** Custom element definition being compiled. */
+    readonly definition: CustomElementDefinition,
+  ) {}
+}
+
+/** Product host that performs substrate-specific work after TemplateCompiler.compile admits a definition. */
+export interface TemplateCompilerCompileHost<TResult> {
+  compile(request: TemplateCompilerCompileRequest, compiler: TemplateCompilerService): TResult;
+}
+
+/** Runtime-shaped TemplateCompiler.compile result with the short-circuit branch preserved. */
+export class TemplateCompilerCompileResult<TResult> {
+  constructor(
+    /** Branch selected by the runtime compile front door. */
+    readonly state: TemplateCompilerCompileState,
+    /** Definition supplied to the compiler. */
+    readonly definition: CustomElementDefinition,
+    /** Host product emitted by the compiler branch, when any. */
+    readonly output: TResult | null,
+  ) {}
+}
+
+export const enum TemplateCompilerSpreadCompileState {
+  /** Runtime spread compile short-circuited because there are no captured attributes. */
+  NoCapturedAttributes = 'no-captured-attributes',
+  /** Runtime spread compile produced dynamic instruction products. */
+  Compiled = 'compiled',
+  /** Runtime spread compile is recognized but still open in the semantic model. */
+  Open = 'open',
+}
+
+/** Runtime-shaped TemplateCompiler.compileSpread request. */
+export class TemplateCompilerSpreadCompileRequest {
+  constructor(
+    /** Store-local key shared by rendering and compiler products. */
+    readonly localKey: string,
+    /** Product handle for the controller definition that owns the captured attributes. */
+    readonly requestorDefinitionProductHandle: ProductHandle | null,
+    /** Captured attribute syntaxes from the current hydration context. */
+    readonly capturedSyntaxes: readonly AttributeSyntax[],
+    /** Spread-transfer instruction that triggered dynamic compilation. */
+    readonly spreadInstruction: SpreadTransferedBindingInstruction,
+    /** Render target receiving the spread attributes. */
+    readonly target: TemplateRenderTarget,
+    /** Optional target custom-element definition product, matching runtime's targetDef parameter. */
+    readonly targetDefinitionProductHandle: ProductHandle | null,
+  ) {}
+}
+
+/** Product host that performs the substrate-specific part of TemplateCompiler.compileSpread. */
+export interface TemplateCompilerSpreadCompileHost {
+  compileSpread(
+    request: TemplateCompilerSpreadCompileRequest,
+    compiler: TemplateCompilerService,
+  ): TemplateCompilerSpreadCompileResult;
+}
+
+/** Runtime-shaped TemplateCompiler.compileSpread result. */
+export class TemplateCompilerSpreadCompileResult {
+  constructor(
+    readonly state: TemplateCompilerSpreadCompileState,
+    readonly request: TemplateCompilerSpreadCompileRequest,
+    readonly instructions: readonly TemplateInstruction[],
+    readonly summary: string | null,
+  ) {}
+
+  static noCapturedAttributes(request: TemplateCompilerSpreadCompileRequest): TemplateCompilerSpreadCompileResult {
+    return new TemplateCompilerSpreadCompileResult(
+      TemplateCompilerSpreadCompileState.NoCapturedAttributes,
+      request,
+      [],
+      null,
+    );
+  }
+
+  static open(
+    request: TemplateCompilerSpreadCompileRequest,
+    summary: string,
+  ): TemplateCompilerSpreadCompileResult {
+    return new TemplateCompilerSpreadCompileResult(
+      TemplateCompilerSpreadCompileState.Open,
+      request,
+      [],
+      summary,
+    );
+  }
 }
 
 /** Resource and syntax-resource scope visible to a template compiler world. */
@@ -469,6 +589,8 @@ export class TemplateResourceResolverService {
 /** Runtime IExpressionParser service model used through the compiler-world parser contract. */
 @auLink('expression-parser:IExpressionParser')
 export class TemplateExpressionParserService {
+  private readonly parser = new ExpressionParser();
+
   constructor(
     /** Product handle for the materialized-product envelope that represents this service. */
     readonly productHandle: ProductHandle,
@@ -481,6 +603,18 @@ export class TemplateExpressionParserService {
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */
     readonly fieldProvenance: readonly FieldProvenance<TemplateCompilerServiceField>[] = [],
   ) {}
+
+  parse(expression: string, context?: ExpressionParseContext): ExpressionParseResult;
+  parse(expression: string, expressionType: ExpressionType, context?: ExpressionParseContext): ExpressionParseResult;
+  parse(
+    expression: string,
+    expressionTypeOrContext?: ExpressionType | ExpressionParseContext,
+    maybeContext?: ExpressionParseContext,
+  ): ExpressionParseResult {
+    return typeof expressionTypeOrContext === 'string'
+      ? this.parser.parse(expression, expressionTypeOrContext, maybeContext)
+      : this.parser.parse(expression, expressionTypeOrContext);
+  }
 
   toReference(): TemplateCompilerServiceReference {
     return new TemplateCompilerServiceReference(
@@ -507,6 +641,16 @@ export class TemplateAttributeMapperService {
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */
     readonly fieldProvenance: readonly FieldProvenance<TemplateCompilerServiceField>[] = [],
   ) {}
+
+  /** Runtime `IAttrMapper.map(node, attr)` shape over product-authored HTML nodes. */
+  map(node: TemplateAttributeMapperNode, attr: string): string | null {
+    return mapAttribute(node, attr);
+  }
+
+  /** Runtime `IAttrMapper.isTwoWay(node, attrName)` shape over product-authored HTML nodes. */
+  isTwoWay(node: TemplateAttributeMapperNode, attrName: string): boolean {
+    return shouldDefaultToTwoWay(node, attrName);
+  }
 
   toReference(): TemplateCompilerServiceReference {
     return new TemplateCompilerServiceReference(
@@ -618,6 +762,14 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
     return this.input.host.createChildController(input);
   }
 
+  compileSpread(input: RuntimeRendererSpreadCompileInput): RuntimeRendererSpreadCompileResult {
+    return this.input.host.compileSpread(input);
+  }
+
+  recordOpenInstruction(local: string, summary: string, addressHandle: AddressHandle | null): void {
+    this.openInstructions.push(new TemplateRenderingOpenInstruction(local, summary, addressHandle));
+  }
+
   readInstruction(productHandle: ProductHandle): TemplateInstruction | null {
     return this.instructionsByProduct.get(productHandle) ?? null;
   }
@@ -701,6 +853,12 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
 /** Runtime TemplateCompiler service as a product model. */
 @auLink('template-compiler:TemplateCompiler')
 export class TemplateCompilerService {
+  /** Runtime debug flag. Debug output is intentionally not emitted by the semantic model. */
+  readonly debug = false;
+
+  /** Runtime switch controlling whether resource definitions are embedded into lowered instructions. */
+  readonly resolveResources = true;
+
   constructor(
     /** Product handle for the materialized-product envelope that represents this service. */
     readonly productHandle: ProductHandle,
@@ -713,6 +871,44 @@ export class TemplateCompilerService {
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */
     readonly fieldProvenance: readonly FieldProvenance<TemplateCompilerServiceField>[] = [],
   ) {}
+
+  /** Runtime `TemplateCompiler.compile(definition, container)` shape with the container fixed by this compiler world. */
+  compile<TResult>(
+    request: TemplateCompilerCompileRequest,
+    host: TemplateCompilerCompileHost<TResult>,
+  ): TemplateCompilerCompileResult<TResult> {
+    const template = request.definition.template;
+    if (template == null || template.kind === CustomElementTemplateKind.None) {
+      return new TemplateCompilerCompileResult<TResult>(
+        TemplateCompilerCompileState.NoTemplate,
+        request.definition,
+        null,
+      );
+    }
+    if (request.definition.needsCompile === false) {
+      return new TemplateCompilerCompileResult<TResult>(
+        TemplateCompilerCompileState.AlreadyCompiled,
+        request.definition,
+        null,
+      );
+    }
+    return new TemplateCompilerCompileResult<TResult>(
+      TemplateCompilerCompileState.Compiled,
+      request.definition,
+      host.compile(request, this),
+    );
+  }
+
+  /** Runtime `TemplateCompiler.compileSpread(...)` shape with the container fixed by this compiler world. */
+  compileSpread(
+    request: TemplateCompilerSpreadCompileRequest,
+    host: TemplateCompilerSpreadCompileHost,
+  ): TemplateCompilerSpreadCompileResult {
+    if (request.capturedSyntaxes.length === 0) {
+      return TemplateCompilerSpreadCompileResult.noCapturedAttributes(request);
+    }
+    return host.compileSpread(request, this);
+  }
 
   toReference(): TemplateCompilerServiceReference {
     return new TemplateCompilerServiceReference(

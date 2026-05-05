@@ -235,6 +235,24 @@ export function answerRepoMap(
           ),
         },
         {
+          id: "repo.map:framework-api",
+          kind: ContinuationKind.SwitchLens,
+          priority: ContinuationPriority.Secondary,
+          rationale:
+            "Enter exact Aurelia API subjects, implementation shapes, member slots, and repo usages.",
+          inquiry: {
+            lens: LensId.FrameworkApi,
+            locus: RepoRootLocus,
+            projection: "summary",
+          },
+          route: route(
+            NavigationPlane.Semantic,
+            NavigationRelation.FrameworkFlowOf,
+            [BasisKind.TypeScriptChecker],
+            "Aurelia framework API usage and shape graph.",
+          ),
+        },
+        {
           id: "repo.map:framework-resources",
           kind: ContinuationKind.SwitchLens,
           priority: ContinuationPriority.Primary,

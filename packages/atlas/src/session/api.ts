@@ -355,6 +355,18 @@ function orientationCapabilityMoves(): readonly OrientationCapabilityMove[] {
       },
     },
     {
+      id: "framework.api",
+      family: "framework",
+      summary:
+        "Inspect exact Aurelia API subjects, implementation shapes, normalized member slots, and repo-wide usage rows.",
+      ask: {
+        lens: LensId.FrameworkApi,
+        locus: RepoRootLocus,
+        projection: "summary",
+        budget: { rows: 20, evidencePerSubject: 3 },
+      },
+    },
+    {
       id: "framework.composition",
       family: "framework",
       summary:

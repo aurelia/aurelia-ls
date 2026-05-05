@@ -293,11 +293,6 @@ export class BindingCommandResolverService {
     return command;
   }
 
-  /** Alias used by lowering code that talks in lookup/resolution terms rather than runtime method names. */
-  resolve(commandName: string): BindingCommandExecutable | null {
-    return this.get(commandName);
-  }
-
   /** Snapshot command lookup cache for answer envelopes or later kernel emission. */
   readCachedCommands(): ReadonlyMap<string, BindingCommandExecutable | null> {
     return new Map(this._cache);

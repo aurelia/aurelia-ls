@@ -51,6 +51,8 @@ export const enum LensId {
   BridgeAuLink = "bridge.aulink",
   /** Aurelia framework discovery seeds. */
   FrameworkDiscovery = "framework.discovery",
+  /** Aurelia framework API facets, shape edges, member slots, and repo usages. */
+  FrameworkApi = "framework.api",
   /** Aurelia framework resource convergence across exports, admissions, syntax, and materialization. */
   FrameworkResources = "framework.resources",
   /** Aurelia framework compiler instruction production graph. */
@@ -405,6 +407,24 @@ export const LensCatalog: readonly LensSpec[] = [
           "Filter exact call-site rows by callee symbol or property name.",
       },
       {
+        id: "argumentText",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter exact call-site rows by runtime argument source text.",
+      },
+      {
+        id: "argumentSymbolName",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter exact call-site rows by checker symbol name of a runtime argument.",
+      },
+      {
+        id: "argumentFullyQualifiedName",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter exact call-site rows by canonical checker fully qualified name of a runtime argument.",
+      },
+      {
         id: "kind",
         role: ParameterRole.Filter,
         summary: "Filter exact call-site rows by call or new syntax family.",
@@ -555,11 +575,205 @@ export const LensCatalog: readonly LensSpec[] = [
         summary: "Framework-side declaration resolution for auLink ids.",
       },
       { id: "gaps", summary: "Missing, stale, or ambiguous anchor pressure." },
+      {
+        id: "mirror",
+        summary:
+          "Compact auLink rows joined to framework semantic role evidence and emulation obligations.",
+      },
+      {
+        id: "role-evidence",
+        summary:
+          "Exact framework relationship rows matched to auLink framework targets.",
+      },
+      {
+        id: "obligations",
+        summary:
+          "Framework emulation obligation rows matched to auLink framework targets.",
+      },
+      {
+        id: "usage-comparison",
+        summary:
+          "Compare Aurelia-side framework API usage with semantic-runtime usage of the auLink mirror targets.",
+      },
+      {
+        id: "member-surface",
+        summary:
+          "Compare framework target member declarations with semantic-runtime mirror member declarations before interpreting usage.",
+      },
+      {
+        id: "usage-members",
+        summary:
+          "Member-level usage comparison rows between auLink framework targets and semantic-runtime mirror targets.",
+      },
+      {
+        id: "usage-sites",
+        summary:
+          "Exact Aurelia-side and semantic-runtime-side source usage rows behind auLink usage comparisons.",
+      },
+      {
+        id: "usage-consumers",
+        summary:
+          "Group auLink usage sites by the framework or semantic-runtime declaration that consumes the linked target or member.",
+      },
+    ],
+    parameters: [
+      {
+        id: "linkId",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter bridge rows by exact auLink id such as template-compiler:TemplateCompiler.",
+      },
+      {
+        id: "packageId",
+        role: ParameterRole.Filter,
+        summary: "Filter bridge rows by Aurelia framework package id.",
+      },
+      {
+        id: "symbolName",
+        role: ParameterRole.Filter,
+        summary: "Filter bridge rows by exact framework symbol name.",
+      },
+      {
+        id: "frameworkStatus",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter framework target resolution by resolved, ambiguous, unresolved, or package-unadmitted.",
+      },
+      {
+        id: "roleFamily",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter mirror role rows by framework relationship family such as di, compiler, rendering, resource, materialization, lifecycle, or observation.",
+      },
+      {
+        id: "relation",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter mirror role rows by framework relationship relation.",
+      },
+      {
+        id: "sourceLens",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter mirror role rows by owning framework lens id.",
+      },
+      {
+        id: "sourceProjection",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter mirror role rows by owning framework projection id.",
+      },
+      {
+        id: "emulationLayer",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter mirror obligation rows by semantic-runtime emulation layer.",
+      },
+      {
+        id: "emulationMode",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter mirror obligation rows by ECMAScript evaluation, emulator, virtualized runtime, TypeChecker handoff, or open-boundary mode.",
+      },
+      {
+        id: "obligationKind",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter mirror obligation rows by worklist kind such as compile-template, hydrate-runtime, or model-binding.",
+      },
+      {
+        id: "productArea",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter mirror rows by semantic-runtime source area such as template, expression, resources, configuration, di, or router.",
+      },
+      {
+        id: "productDeclarationKind",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter mirror rows by product-side declaration kind such as class, interface, or type-alias.",
+      },
+      {
+        id: "side",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter bridge usage rows by framework or product side.",
+        values: ["framework", "product"],
+      },
+      {
+        id: "memberName",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter bridge usage rows by exact member name on the linked target.",
+      },
+      {
+        id: "presence",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter bridge member rows by whether a member is observed on both sides, framework only, or product only.",
+        values: ["both", "framework-only", "product-only"],
+      },
+      {
+        id: "ownerName",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter bridge usage owner rows by exact containing declaration name.",
+      },
+      {
+        id: "ownerKind",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter bridge usage owner rows by containing declaration kind.",
+      },
+      {
+        id: "ownerMemberName",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter bridge usage owner rows by exact containing class member name.",
+      },
+      {
+        id: "callCalleeName",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter bridge usage rows by exact call callee name when the usage is a call site.",
+      },
+      {
+        id: "callArgumentText",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter bridge usage rows by exact call argument text when the usage is a call site.",
+      },
+      {
+        id: "callArgumentSymbolName",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter bridge usage rows by exact checker symbol name for a call argument.",
+      },
+      {
+        id: "callArgumentFullyQualifiedName",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter bridge usage rows by exact checker fully qualified name for a call argument.",
+      },
+      {
+        id: "usageRole",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter bridge usage rows by exact TypeScript usage role such as member-call, import, export, or type-reference.",
+      },
+      {
+        id: "query",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter mirror rows by exact substring across link ids, endpoint names, summaries, and source paths.",
+      },
     ],
     outputKinds: [
       EvidenceKind.AuLinkAnchor,
       EvidenceKind.SourceSpan,
       EvidenceKind.Symbol,
+      EvidenceKind.TypeFact,
+      EvidenceKind.MaintenanceSignal,
       EvidenceKind.OpenSeam,
     ],
     defaultBudget: { rows: 80 },
@@ -883,6 +1097,177 @@ export const LensCatalog: readonly LensSpec[] = [
       EvidenceKind.TypeFact,
       EvidenceKind.DiRegistration,
       EvidenceKind.ResourceDefinition,
+    ],
+    defaultBudget: { rows: 80 },
+  },
+  {
+    id: LensId.FrameworkApi,
+    family: LensFamily.Framework,
+    stage: LensStage.Implemented,
+    summary:
+      "Inspect Aurelia framework API declaration facets, exact merge edges, implementation shape edges, normalized member slots, and repo-wide TypeChecker-resolved usage rows.",
+    supportedLoci: [
+      LocusKind.Repo,
+      LocusKind.RepoArea,
+      LocusKind.Package,
+      LocusKind.Symbol,
+      LocusKind.Handle,
+    ],
+    requiredSubstrates: [
+      SubstrateId.FrameworkApi,
+      SubstrateId.TypeScriptChecker,
+    ],
+    projections: [
+      { id: "summary", summary: "Framework API usage rollup." },
+      {
+        id: "subjects",
+        summary:
+          "Merged API declaration subjects grounded in same declaration, same export, same symbol, and explicit value alias edges.",
+      },
+      {
+        id: "facets",
+        summary:
+          "Framework API declaration facets from package exports and module exports, resolved back to source files when possible.",
+      },
+      {
+        id: "merge-edges",
+        summary:
+          "Exact identity-preserving API merge edges such as same declaration, same symbol, same export, and explicit value alias.",
+      },
+      {
+        id: "shape-edges",
+        summary:
+          "Exact type-shape edges such as class implements interface and interface extends interface, without treating shape as identity.",
+      },
+      {
+        id: "implementation-shapes",
+        summary:
+          "Class-rooted implementation shapes that combine a concrete class with reachable public interfaces for merged API interpretation.",
+      },
+      {
+        id: "member-slots",
+        summary:
+          "Compact normalized API member slots where MethodDeclaration and MethodSignature are represented as the same method slot.",
+      },
+      {
+        id: "member-declarations",
+        summary:
+          "Source declaration rows contributing to normalized API member slots; use after member-slots when exact provenance is needed.",
+      },
+      {
+        id: "usages",
+        summary:
+          "Repo-wide TypeChecker-resolved API usage rows for subjects and member slots.",
+      },
+      {
+        id: "usage-consumers",
+        summary:
+          "API usage rows grouped by the source declaration and class member that owns the usage site.",
+      },
+    ],
+    parameters: [
+      {
+        id: "packageId",
+        role: ParameterRole.Filter,
+        summary: "Filter API rows by Aurelia framework package id.",
+      },
+      {
+        id: "subjectName",
+        role: ParameterRole.Filter,
+        summary: "Filter API rows by merged API subject name.",
+      },
+      {
+        id: "implementationName",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter subjects, member slots, or usages to a class-rooted implementation shape such as Container.",
+      },
+      {
+        id: "exportName",
+        role: ParameterRole.Filter,
+        summary: "Filter API facets by exact exported name.",
+      },
+      {
+        id: "memberName",
+        role: ParameterRole.Filter,
+        summary: "Filter API member slots or usage rows by exact member name.",
+      },
+      {
+        id: "consumerPackageId",
+        role: ParameterRole.Filter,
+        summary: "Filter usage rows by consuming package id.",
+      },
+      {
+        id: "role",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter usage rows by exact role such as type-reference, member-call, new-expression, import, or value-reference.",
+      },
+      {
+        id: "ownerName",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter usage rows by exact containing declaration name.",
+      },
+      {
+        id: "ownerKind",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter usage rows by containing declaration kind.",
+      },
+      {
+        id: "ownerMemberName",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter usage rows by exact containing class member name.",
+      },
+      {
+        id: "callCalleeName",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter usage rows by exact call callee name when the usage is a call site.",
+      },
+      {
+        id: "callArgumentText",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter usage rows by exact call argument text when the usage is a call site.",
+      },
+      {
+        id: "callArgumentSymbolName",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter usage rows by exact checker symbol name for a call argument.",
+      },
+      {
+        id: "callArgumentFullyQualifiedName",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter usage rows by exact checker fully qualified name for a call argument.",
+      },
+      {
+        id: "relation",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter merge or shape edge rows by exact relation.",
+      },
+      {
+        id: "surfaceKind",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter facets by package-export or module-export surface.",
+      },
+      {
+        id: "query",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter API rows by exact substring across names, ids, source paths, and summaries.",
+      },
+    ],
+    outputKinds: [
+      EvidenceKind.Symbol,
+      EvidenceKind.TypeFact,
+      EvidenceKind.SourceSpan,
     ],
     defaultBudget: { rows: 80 },
   },

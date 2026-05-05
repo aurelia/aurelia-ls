@@ -179,11 +179,11 @@ child `CompilationContext`, model that at the compiled-template boundary first.
 instruction gaps. Keep their seam vocabulary in the compiler namespace and do not let these cases fall back to a generic
 open instruction unless the instruction shape itself is the thing that failed.
 
-HTML parsing, attribute classification, expression parsing, and instruction lowering are the next large inquiry
-pressure point. Those materializers cannot be designed as pure batch compilation only: parser recovery, cursor/range loci,
-candidate discovery, diagnostics, hovers, and tooling explanations will need answer envelopes and continuations. Keep
-compiler products current-world and provenance-rich, but do not back-port autocomplete ranking, rename safety,
-diagnostic severity, or agent usefulness into compiler-world records.
+HTML parsing, attribute classification, expression parsing, instruction lowering, and template completion are active
+inquiry pressure points. These materializers cannot be designed as pure batch compilation only: parser recovery,
+cursor/range loci, candidate discovery, diagnostics, hovers, and tooling explanations need answer envelopes and
+continuations. Keep compiler products current-world and provenance-rich, but do not back-port autocomplete ranking,
+rename safety, diagnostic severity, or agent usefulness into compiler-world records.
 
 Template completion starts above parser products: `inquiry/template-completion.ts` reads materialized
 scope/resource/expression details and returns candidate rows for classified sites. Cursor-to-site adaptation also lives

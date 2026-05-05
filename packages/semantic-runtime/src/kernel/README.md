@@ -219,12 +219,12 @@ evaluator substrate that performs explicit abstract interpretation over those sh
 The evaluator should prefer explicit open seams over pretending a path was understood. A useful partial result
 with clear seams is better than a confident false positive.
 
-The first strong vertical slice should connect TypeScript/module evaluation to DI and configuration questions:
+The active vertical slice connects TypeScript/module evaluation to DI, configuration, resource, and compiler questions:
 
 - What keys, resources, and registrations are available here?
 - Which source shapes produced them?
 - Which claims and provenance records connected the pieces?
 - Which parts are ambiguous, convention-derived, recovered, or still open?
 
-That slice should emit kernel records from the start so the vocabulary is pressure-tested by real materializers and
-real queries.
+That slice should keep emitting kernel records so the vocabulary is pressure-tested by real materializers and real
+queries instead of by static taxonomy design alone.

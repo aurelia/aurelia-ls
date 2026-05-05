@@ -80,6 +80,20 @@ export interface Evidence {
   readonly data?: unknown;
 }
 
+/** Strip lens-local payload data from evidence before embedding it into continuations. */
+export function evidenceBreadcrumb(evidence: Evidence): Evidence {
+  return {
+    ...(evidence.id === undefined ? {} : { id: evidence.id }),
+    kind: evidence.kind,
+    role: evidence.role,
+    ...(evidence.confidence === undefined ? {} : { confidence: evidence.confidence }),
+    summary: evidence.summary,
+    ...(evidence.basis === undefined ? {} : { basis: evidence.basis }),
+    ...(evidence.source === undefined ? {} : { source: evidence.source }),
+    ...(evidence.handle === undefined ? {} : { handle: evidence.handle }),
+  };
+}
+
 /** Classifier for explicitly modeled unresolved seams. */
 export const enum OpenSeamKind {
   /** Runtime-dependent behavior that static analysis should not pretend to close. */

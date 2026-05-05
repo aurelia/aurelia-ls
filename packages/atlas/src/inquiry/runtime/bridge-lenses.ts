@@ -24,11 +24,6 @@ import { HandleKind, HandleNamespace, type InquiryHandle } from "../handle.js";
 import type { Inquiry } from "../inquiry.js";
 import { LensId } from "../lens.js";
 import { LocusKind, type SourceRange } from "../locus.js";
-import {
-  NavigationPlane,
-  NavigationRelation,
-  type NavigationRouteClaim,
-} from "../navigation.js";
 import { PagedRowFamily } from "../paged-row-family.js";
 import {
   evidenceLimit,
@@ -43,7 +38,6 @@ import {
   sourceRangeForAuLinkTarget,
   type AuLinkAnchorRow,
   type AuLinkCatalogEntry,
-  type AuLinkFilters,
   type AuLinkFrameworkTargetCandidate,
   type AuLinkFrameworkTargetResolution,
   type AuLinkGapRow,
@@ -51,13 +45,40 @@ import {
   type AuLinkRollup,
   type SourceProject,
 } from "../../source/index.js";
+import {
+  readAuLinkMirrorModel,
+  type AuLinkMirrorFilters,
+  type AuLinkMirrorObligationEvidenceRow,
+  type AuLinkMirrorRoleEvidenceRow,
+  type AuLinkMirrorRollup,
+  type AuLinkMirrorRow,
+} from "./bridge-aulink-mirror.js";
+import {
+  answerBridgeAuLinkUsageProjection,
+  type BridgeAuLinkUsageValue,
+} from "./bridge-aulink-usage-lenses.js";
+export type { AuLinkUsageComparisonSummaryRow } from "./bridge-aulink-usage-lenses.js";
+import {
+  AULINK_MIRROR_DETAIL_BUDGET,
+  auLinkBasis,
+  checkerBasis,
+  frameworkBasis,
+  isUnscopedBridgeInquiry,
+  mirrorProjectionContinuation,
+  mirrorTargetRoute,
+  nextPageRoute,
+  ownerProjectionContinuation,
+  projectionRoute,
+  seamRoute,
+  sourceRangeContinuation,
+  sourceRoute,
+  typeFactsRoute,
+} from "./bridge-aulink-lens-support.js";
 
 /** Value returned by the bridge.aulink runtime lens. */
-export interface BridgeAuLinkValue {
-  /** Exact filters applied to the auLink model. */
-  readonly filters: AuLinkFilters;
-  /** Rollup for the filtered model. */
-  readonly rollup: AuLinkRollup;
+export interface BridgeAuLinkValue extends BridgeAuLinkUsageValue {
+  /** Rollup for the higher-order mirror model, when requested. */
+  readonly mirrorRollup?: AuLinkMirrorRollup;
   /** Catalog rows included for catalog-aware projections. */
   readonly catalog?: readonly AuLinkCatalogEntry[];
   /** Anchor rows included for anchor projections. */
@@ -66,6 +87,12 @@ export interface BridgeAuLinkValue {
   readonly targets?: readonly AuLinkFrameworkTargetResolution[];
   /** Gap rows included for gap projections. */
   readonly gaps?: readonly AuLinkGapRow[];
+  /** Compact per-auLink mirror rows joined to framework semantic role evidence. */
+  readonly mirror?: readonly AuLinkMirrorRow[];
+  /** Exact framework relationship rows matched to auLink targets. */
+  readonly roleEvidence?: readonly AuLinkMirrorRoleEvidenceRow[];
+  /** Exact emulation obligation rows matched to auLink targets. */
+  readonly obligations?: readonly AuLinkMirrorObligationEvidenceRow[];
 }
 
 const AULINK_ANCHOR_ROW_FAMILY = new PagedRowFamily<AuLinkAnchorRow>({
@@ -88,6 +115,30 @@ const AULINK_FRAMEWORK_TARGET_ROW_FAMILY =
     rowLabel: "auLink framework target row(s)",
     evidenceForRow: evidenceForFrameworkTarget,
     continuationsForPage: targetContinuations,
+  });
+
+const AULINK_MIRROR_ROW_FAMILY =
+  new PagedRowFamily<AuLinkMirrorRow>({
+    id: "bridge.aulink:mirror",
+    rowLabel: "auLink mirror row(s)",
+    evidenceForRow: evidenceForMirrorRow,
+    continuationsForPage: mirrorContinuations,
+  });
+
+const AULINK_ROLE_EVIDENCE_ROW_FAMILY =
+  new PagedRowFamily<AuLinkMirrorRoleEvidenceRow>({
+    id: "bridge.aulink:role-evidence",
+    rowLabel: "auLink mirror role evidence row(s)",
+    evidenceForRow: evidenceForRoleEvidence,
+    continuationsForPage: roleEvidenceContinuations,
+  });
+
+const AULINK_OBLIGATION_ROW_FAMILY =
+  new PagedRowFamily<AuLinkMirrorObligationEvidenceRow>({
+    id: "bridge.aulink:obligations",
+    rowLabel: "auLink mirror obligation row(s)",
+    evidenceForRow: evidenceForObligationEvidence,
+    continuationsForPage: obligationContinuations,
   });
 
 /** Answer auLink bridge inquiries from semantic-runtime source and TypeChecker state. */
@@ -161,6 +212,135 @@ export function answerBridgeAuLink(
     });
   }
 
+  if (projection === "mirror") {
+    const mirror = readAuLinkMirrorModel(sourceProject, filters);
+    if (isUnscopedBridgeInquiry(inquiry, filters)) {
+      return createAnswer(
+        inquiry,
+        mirror.rollup.linkCount === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
+        mirrorSummary(mirror, "ask for a filter, row budget, or detail projection to expand rows"),
+        {
+          value: {
+            filters,
+            rollup: model.rollup,
+            mirrorRollup: mirror.rollup,
+          },
+          basis: mirrorBasis(sourceProject),
+          evidence: [],
+          continuations: mirrorOverviewContinuations(inquiry, mirror),
+        },
+      );
+    }
+    return AULINK_MIRROR_ROW_FAMILY.answer({
+      inquiry,
+      rows: mirror.rows,
+      limit,
+      offset,
+      basis: mirrorBasis(sourceProject),
+      value: (page) => ({
+        filters,
+        rollup: model.rollup,
+        mirrorRollup: mirror.rollup,
+        mirror: page.rows,
+      }),
+      summary: (page) =>
+        mirrorSummary(mirror, `returned ${page.rows.length} mirror row(s)`),
+    });
+  }
+
+  if (projection === "role-evidence") {
+    const mirror = readAuLinkMirrorModel(sourceProject, filters);
+    if (isUnscopedBridgeInquiry(inquiry, filters)) {
+      return createAnswer(
+        inquiry,
+        mirror.rollup.roleEvidenceCount === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
+        mirrorSummary(
+          mirror,
+          "ask for a roleFamily, sourceLens, linkId, row budget, or page to expand role evidence",
+        ),
+        {
+          value: {
+            filters,
+            rollup: model.rollup,
+            mirrorRollup: mirror.rollup,
+          },
+          basis: mirrorBasis(sourceProject),
+          evidence: [],
+          continuations: roleEvidenceOverviewContinuations(inquiry, mirror),
+        },
+      );
+    }
+    return AULINK_ROLE_EVIDENCE_ROW_FAMILY.answer({
+      inquiry,
+      rows: mirror.roleEvidence,
+      limit,
+      offset,
+      basis: mirrorBasis(sourceProject),
+      value: (page) => ({
+        filters,
+        rollup: model.rollup,
+        mirrorRollup: mirror.rollup,
+        roleEvidence: page.rows,
+      }),
+      summary: (page) =>
+        mirrorSummary(mirror, `returned ${page.rows.length} role evidence row(s)`),
+    });
+  }
+
+  if (projection === "obligations") {
+    const mirror = readAuLinkMirrorModel(sourceProject, filters);
+    if (isUnscopedBridgeInquiry(inquiry, filters)) {
+      return createAnswer(
+        inquiry,
+        mirror.rollup.emulationObligationCount === 0
+          ? OutcomeKind.Miss
+          : OutcomeKind.Hit,
+        mirrorSummary(
+          mirror,
+          "ask for an emulationMode, obligationKind, linkId, row budget, or page to expand obligations",
+        ),
+        {
+          value: {
+            filters,
+            rollup: model.rollup,
+            mirrorRollup: mirror.rollup,
+          },
+          basis: mirrorBasis(sourceProject),
+          evidence: [],
+          continuations: obligationOverviewContinuations(inquiry, mirror),
+        },
+      );
+    }
+    return AULINK_OBLIGATION_ROW_FAMILY.answer({
+      inquiry,
+      rows: mirror.obligationEvidence,
+      limit,
+      offset,
+      basis: mirrorBasis(sourceProject),
+      value: (page) => ({
+        filters,
+        rollup: model.rollup,
+        mirrorRollup: mirror.rollup,
+        obligations: page.rows,
+      }),
+      summary: (page) =>
+        mirrorSummary(mirror, `returned ${page.rows.length} obligation row(s)`),
+    });
+  }
+
+  const usageAnswer = answerBridgeAuLinkUsageProjection({
+    inquiry,
+    sourceProject,
+    filters,
+    rollup: model.rollup,
+    projection,
+    limit,
+    offset,
+  });
+  if (usageAnswer !== undefined) {
+    return usageAnswer;
+  }
+
   const value: BridgeAuLinkValue = {
     filters,
     rollup: model.rollup,
@@ -178,14 +358,14 @@ export function answerBridgeAuLink(
   });
 }
 
-function filtersFromInquiry(inquiry: Inquiry): AuLinkFilters {
+function filtersFromInquiry(inquiry: Inquiry): AuLinkMirrorFilters {
   return {
     ...filtersFromSubject(inquiry.subject),
     ...filtersFromRecord(inquiry.filters),
   };
 }
 
-function filtersFromSubject(subject: unknown): AuLinkFilters {
+function filtersFromSubject(subject: unknown): AuLinkMirrorFilters {
   if (typeof subject === "string" && subject.includes(":")) {
     return { linkId: subject };
   }
@@ -197,7 +377,7 @@ function filtersFromSubject(subject: unknown): AuLinkFilters {
 
 function filtersFromRecord(
   source: Record<string, unknown> | undefined,
-): AuLinkFilters {
+): AuLinkMirrorFilters {
   if (source === undefined) {
     return {};
   }
@@ -207,6 +387,27 @@ function filtersFromRecord(
     ...stringField(source, "targetName"),
     ...stringField(source, "filePath"),
     ...stringField(source, "frameworkStatus"),
+    ...stringField(source, "roleFamily"),
+    ...stringField(source, "relation"),
+    ...stringField(source, "sourceLens"),
+    ...stringField(source, "sourceProjection"),
+    ...stringField(source, "emulationLayer"),
+    ...stringField(source, "emulationMode"),
+    ...stringField(source, "obligationKind"),
+    ...stringField(source, "productArea"),
+    ...stringField(source, "productDeclarationKind"),
+    ...stringField(source, "side"),
+    ...stringField(source, "memberName"),
+    ...stringField(source, "presence"),
+    ...stringField(source, "ownerName"),
+    ...stringField(source, "ownerKind"),
+    ...stringField(source, "ownerMemberName"),
+    ...stringField(source, "usageRole"),
+    ...stringField(source, "callCalleeName"),
+    ...stringField(source, "callArgumentText"),
+    ...stringField(source, "callArgumentSymbolName"),
+    ...stringField(source, "callArgumentFullyQualifiedName"),
+    ...stringField(source, "query"),
     ...(typeof source.symbolName === "string"
       ? { symbolName: source.symbolName }
       : {}),
@@ -218,7 +419,7 @@ function filtersFromRecord(
 
 function stringField(
   source: Record<string, unknown>,
-  key: keyof AuLinkFilters,
+  key: keyof AuLinkMirrorFilters,
 ): object {
   const value = source[key];
   return typeof value === "string" && value.length > 0 ? { [key]: value } : {};
@@ -245,10 +446,61 @@ function summaryEvidence(
 
 function summaryContinuations(
   inquiry: Inquiry,
-  filters: AuLinkFilters,
+  filters: AuLinkMirrorFilters,
   model: AuLinkModel,
 ): readonly Continuation[] {
   const continuations: Continuation[] = [
+    {
+      id: "bridge.aulink:mirror",
+      kind: ContinuationKind.SwitchProjection,
+      priority: ContinuationPriority.Primary,
+      rationale:
+        "Join auLink anchors to exact framework semantic roles and emulation obligations.",
+      inquiry: {
+        lens: LensId.BridgeAuLink,
+        locus: inquiry.locus,
+        subject: filters,
+        projection: "mirror",
+        budget: inquiry.budget,
+      },
+      route: projectionRoute(
+        "Higher-order mirror rows for the current auLink filters.",
+      ),
+    },
+    {
+      id: "bridge.aulink:usage-comparison",
+      kind: ContinuationKind.SwitchProjection,
+      priority: ContinuationPriority.Primary,
+      rationale:
+        "Compare Aurelia-side framework API usage with semantic-runtime usage of the auLink mirror targets.",
+      inquiry: {
+        lens: LensId.BridgeAuLink,
+        locus: inquiry.locus,
+        subject: filters,
+        projection: "usage-comparison",
+        budget: inquiry.budget,
+      },
+      route: projectionRoute(
+        "Framework/product usage comparison rows for the current auLink filters.",
+      ),
+    },
+    {
+      id: "bridge.aulink:usage-consumers",
+      kind: ContinuationKind.SwitchProjection,
+      priority: ContinuationPriority.Secondary,
+      rationale:
+        "Group framework and semantic-runtime usage by the declaration that consumes each auLink target.",
+      inquiry: {
+        lens: LensId.BridgeAuLink,
+        locus: inquiry.locus,
+        subject: filters,
+        projection: "usage-consumers",
+        budget: inquiry.budget ?? AULINK_MIRROR_DETAIL_BUDGET,
+      },
+      route: projectionRoute(
+        "Framework/product usage owner groups for the current auLink filters.",
+      ),
+    },
     {
       id: "bridge.aulink:anchors",
       kind: ContinuationKind.SwitchProjection,
@@ -282,6 +534,23 @@ function summaryContinuations(
       },
       route: seamRoute(
         "auLink catalog and placement gaps for the current filters.",
+      ),
+    },
+    {
+      id: "bridge.aulink:role-evidence",
+      kind: ContinuationKind.SwitchProjection,
+      priority: ContinuationPriority.Secondary,
+      rationale:
+        "Inspect exact framework rows that attach semantic roles to auLink targets.",
+      inquiry: {
+        lens: LensId.BridgeAuLink,
+        locus: inquiry.locus,
+        subject: filters,
+        projection: "role-evidence",
+        budget: inquiry.budget ?? AULINK_MIRROR_DETAIL_BUDGET,
+      },
+      route: projectionRoute(
+        "Framework role evidence behind the current auLink filters.",
       ),
     },
     {
@@ -340,6 +609,46 @@ function anchorContinuations(
       route: nextPageRoute("Next auLink anchor page."),
     });
   }
+  continuations.push({
+    id: "bridge.aulink:mirror",
+    kind: ContinuationKind.SwitchProjection,
+    priority: ContinuationPriority.Primary,
+    rationale:
+      "Join these anchors to framework semantic roles and emulation obligations.",
+    inquiry: {
+      ...inquiry,
+      projection: "mirror",
+      page: undefined,
+    },
+    route: projectionRoute("Mirror rows for the same auLink filters."),
+  });
+  continuations.push({
+    id: "bridge.aulink:usage-comparison",
+    kind: ContinuationKind.SwitchProjection,
+    priority: ContinuationPriority.Primary,
+    rationale:
+      "Compare Aurelia-side API usage with semantic-runtime usage for the same auLink filters.",
+    inquiry: {
+      ...inquiry,
+      projection: "usage-comparison",
+      page: undefined,
+    },
+    route: projectionRoute("Usage comparison rows for the same auLink filters."),
+  });
+  continuations.push({
+    id: "bridge.aulink:usage-consumers",
+    kind: ContinuationKind.SwitchProjection,
+    priority: ContinuationPriority.Secondary,
+    rationale:
+      "Group framework and semantic-runtime usage sites by owner declaration for the same auLink filters.",
+    inquiry: {
+      ...inquiry,
+      projection: "usage-consumers",
+      budget: inquiry.budget ?? AULINK_MIRROR_DETAIL_BUDGET,
+      page: undefined,
+    },
+    route: projectionRoute("Usage owner groups for the same auLink filters."),
+  });
   continuations.push({
     id: "bridge.aulink:gaps",
     kind: ContinuationKind.SwitchProjection,
@@ -419,6 +728,19 @@ function targetContinuations(
       route: nextPageRoute("Next auLink framework target page."),
     });
   }
+  continuations.push({
+    id: "bridge.aulink:mirror",
+    kind: ContinuationKind.SwitchProjection,
+    priority: ContinuationPriority.Primary,
+    rationale:
+      "Join these framework targets to semantic role and emulation evidence.",
+    inquiry: {
+      ...inquiry,
+      projection: "mirror",
+      page: undefined,
+    },
+    route: projectionRoute("Mirror rows for the same auLink filters."),
+  });
   continuations.push({
     id: "bridge.aulink:anchors",
     kind: ContinuationKind.SwitchProjection,
@@ -553,69 +875,6 @@ function sourceContinuation(
   };
 }
 
-function nextPageRoute(summary: string): NavigationRouteClaim {
-  return continuationRoute(
-    NavigationPlane.Addressing,
-    NavigationRelation.NextPageOf,
-    [],
-    summary,
-  );
-}
-
-function projectionRoute(summary: string): NavigationRouteClaim {
-  return continuationRoute(
-    NavigationPlane.Semantic,
-    NavigationRelation.ProjectionOf,
-    [BasisKind.AuLink],
-    summary,
-  );
-}
-
-function sourceRoute(summary: string): NavigationRouteClaim {
-  return continuationRoute(
-    NavigationPlane.Inspection,
-    NavigationRelation.SourceFor,
-    [BasisKind.SourceText, BasisKind.TypeScriptProgram],
-    summary,
-  );
-}
-
-function typeFactsRoute(summary: string): NavigationRouteClaim {
-  return continuationRoute(
-    NavigationPlane.Inspection,
-    NavigationRelation.TypeFactsFor,
-    [BasisKind.TypeScriptChecker],
-    summary,
-  );
-}
-
-function mirrorTargetRoute(summary: string): NavigationRouteClaim {
-  return continuationRoute(
-    NavigationPlane.Semantic,
-    NavigationRelation.MirrorTargetOf,
-    [BasisKind.AuLink, BasisKind.TypeScriptChecker],
-    summary,
-  );
-}
-
-function seamRoute(summary: string): NavigationRouteClaim {
-  return continuationRoute(
-    NavigationPlane.Semantic,
-    NavigationRelation.SeamFor,
-    [BasisKind.AuLink],
-    summary,
-  );
-}
-
-function continuationRoute(
-  plane: NavigationPlane,
-  relation: NavigationRelation,
-  basis: readonly BasisKind[],
-  summary: string,
-): NavigationRouteClaim {
-  return { plane, relation, basis, summary };
-}
-
 function evidenceForAnchor(anchor: AuLinkAnchorRow): Evidence {
   return {
     id: anchor.id,
@@ -681,6 +940,75 @@ function evidenceForFrameworkCandidate(
       summary: candidate.file.repoPath,
     },
     data: candidate,
+  };
+}
+
+function evidenceForMirrorRow(row: AuLinkMirrorRow): Evidence {
+  return {
+    id: row.id,
+    kind: EvidenceKind.AuLinkAnchor,
+    role: EvidenceRole.Subject,
+    confidence: EvidenceConfidence.Exact,
+    summary: row.summary,
+    source: row.firstProductSource ?? row.firstFrameworkSource,
+    handle: {
+      namespace: HandleNamespace.Product,
+      kind: HandleKind.ProductClaim,
+      id: row.id,
+      label: row.linkId,
+      summary: "auLink mirror row",
+    },
+    data: row,
+  };
+}
+
+function evidenceForRoleEvidence(row: AuLinkMirrorRoleEvidenceRow): Evidence {
+  return {
+    id: row.id,
+    kind: EvidenceKind.TypeFact,
+    role: EvidenceRole.Subject,
+    confidence: EvidenceConfidence.Exact,
+    summary: row.summary,
+    source: row.source,
+    handle: {
+      namespace: HandleNamespace.Framework,
+      kind: HandleKind.EvaluatorValue,
+      id: row.id,
+      label: row.linkId,
+      summary: `${row.roleFamily}/${row.relation}`,
+    },
+    data: row,
+  };
+}
+
+function evidenceForObligationEvidence(
+  row: AuLinkMirrorObligationEvidenceRow,
+): Evidence {
+  return {
+    id: row.id,
+    kind:
+      row.mode === "typescript-handoff" ||
+      row.mode === "virtualized-runtime" ||
+      row.closure === "open"
+        ? EvidenceKind.OpenSeam
+        : EvidenceKind.TypeFact,
+    role: EvidenceRole.Subject,
+    confidence:
+      row.closure === "exact"
+        ? EvidenceConfidence.Exact
+        : row.closure === "open"
+          ? EvidenceConfidence.Unknown
+          : EvidenceConfidence.Strong,
+    summary: row.summary,
+    ...(row.source === undefined ? {} : { source: row.source }),
+    handle: {
+      namespace: HandleNamespace.Framework,
+      kind: HandleKind.EvaluatorValue,
+      id: row.id,
+      label: row.linkId,
+      summary: `${row.layer}/${row.mode}`,
+    },
+    data: row,
   };
 }
 
@@ -780,37 +1108,374 @@ function handleForFrameworkTarget(
   };
 }
 
-function auLinkBasis(sourceProject: SourceProject): Basis {
-  return {
-    kind: BasisKind.AuLink,
-    closure: BasisClosure.Exact,
-    authority: BasisAuthority.Product,
-    freshness: BasisFreshness.Live,
-    summary:
-      "Answered from semantic-runtime auLink overload declarations and decorator placements.",
-    identity: sourceProject.snapshot().identity,
-  };
-}
-function checkerBasis(sourceProject: SourceProject): Basis {
-  return {
-    kind: BasisKind.TypeScriptChecker,
-    closure: BasisClosure.Exact,
-    authority: BasisAuthority.Checker,
-    freshness: BasisFreshness.Live,
-    summary:
-      "Resolved auLink decorator calls through the current TypeScript TypeChecker.",
-    identity: sourceProject.snapshot().identity,
-  };
+function mirrorBasis(sourceProject: SourceProject): readonly Basis[] {
+  return [
+    auLinkBasis(sourceProject),
+    checkerBasis(sourceProject),
+    frameworkBasis(sourceProject),
+    {
+      kind: BasisKind.StaticEvaluator,
+      closure: BasisClosure.Budgeted,
+      authority: BasisAuthority.Evaluator,
+      freshness: BasisFreshness.Live,
+      summary:
+        "Joined auLink targets to Atlas framework relationship and emulation-obligation substrates.",
+      identity: sourceProject.snapshot().identity,
+    },
+  ];
 }
 
-function frameworkBasis(sourceProject: SourceProject): Basis {
-  return {
-    kind: BasisKind.TypeScriptProgram,
-    closure: BasisClosure.Exact,
-    authority: BasisAuthority.Checker,
-    freshness: BasisFreshness.Live,
-    summary:
-      "Resolved framework-side auLink targets from admitted Aurelia package declarations.",
-    identity: sourceProject.snapshot().identity,
-  };
+function mirrorSummary(
+  mirror: {
+    readonly rollup: AuLinkMirrorRollup;
+  },
+  returned: string,
+): string {
+  return `auLink mirror has ${mirror.rollup.linkCount} link row(s), ${mirror.rollup.roleEvidenceCount} framework role evidence row(s), and ${mirror.rollup.emulationObligationCount} emulation obligation row(s); ${returned}.`;
+}
+
+function mirrorOverviewContinuations(
+  inquiry: Inquiry,
+  mirror: {
+    readonly rollup: AuLinkMirrorRollup;
+  },
+): readonly Continuation[] {
+  const continuations: Continuation[] = [
+    mirrorProjectionContinuation(
+      inquiry,
+      "bridge.aulink:mirror:role-evidence",
+      "role-evidence",
+      "Inspect exact framework relationship rows behind the mirror.",
+      {},
+      undefined,
+      AULINK_MIRROR_DETAIL_BUDGET,
+    ),
+    mirrorProjectionContinuation(
+      inquiry,
+      "bridge.aulink:mirror:obligations",
+      "obligations",
+      "Inspect framework emulation obligations behind the mirror.",
+      {},
+      undefined,
+      AULINK_MIRROR_DETAIL_BUDGET,
+    ),
+  ];
+  for (const sourceLens of Object.keys(mirror.rollup.sourceLenses).slice(0, 4)) {
+    continuations.push(
+      mirrorProjectionContinuation(
+        inquiry,
+        `bridge.aulink:mirror:source-lens:${sourceLens}`,
+        "mirror",
+        `Inspect mirror rows with ${sourceLens} role evidence.`,
+        { sourceLens },
+        undefined,
+        AULINK_MIRROR_DETAIL_BUDGET,
+      ),
+    );
+  }
+  for (const productArea of Object.keys(mirror.rollup.productAreas).slice(0, 4)) {
+    continuations.push(
+      mirrorProjectionContinuation(
+        inquiry,
+        `bridge.aulink:mirror:product-area:${productArea}`,
+        "mirror",
+        `Inspect mirror rows whose product placement is in ${productArea}.`,
+        { productArea },
+        undefined,
+        AULINK_MIRROR_DETAIL_BUDGET,
+      ),
+    );
+  }
+  for (const emulationMode of Object.keys(mirror.rollup.emulationModes).slice(0, 4)) {
+    continuations.push(
+      mirrorProjectionContinuation(
+        inquiry,
+        `bridge.aulink:mirror:emulation-mode:${emulationMode}`,
+        "mirror",
+        `Inspect mirror rows with ${emulationMode} obligations.`,
+        { emulationMode },
+        undefined,
+        AULINK_MIRROR_DETAIL_BUDGET,
+      ),
+    );
+  }
+  return continuations;
+}
+
+function roleEvidenceOverviewContinuations(
+  inquiry: Inquiry,
+  mirror: {
+    readonly rollup: AuLinkMirrorRollup;
+  },
+): readonly Continuation[] {
+  const continuations: Continuation[] = [
+    mirrorProjectionContinuation(
+      inquiry,
+      "bridge.aulink:role-evidence:mirror",
+      "mirror",
+      "Return to compact auLink mirror rows before selecting role evidence detail.",
+      {},
+      undefined,
+      AULINK_MIRROR_DETAIL_BUDGET,
+    ),
+  ];
+  for (const roleFamily of Object.keys(mirror.rollup.roleFamilies).slice(0, 6)) {
+    continuations.push(
+      mirrorProjectionContinuation(
+        inquiry,
+        `bridge.aulink:role-evidence:family:${roleFamily}`,
+        "role-evidence",
+        `Inspect ${roleFamily} role evidence rows.`,
+        { roleFamily },
+        undefined,
+        AULINK_MIRROR_DETAIL_BUDGET,
+      ),
+    );
+  }
+  for (const sourceLens of Object.keys(mirror.rollup.sourceLenses).slice(0, 6)) {
+    continuations.push(
+      mirrorProjectionContinuation(
+        inquiry,
+        `bridge.aulink:role-evidence:source-lens:${sourceLens}`,
+        "role-evidence",
+        `Inspect role evidence rows owned by ${sourceLens}.`,
+        { sourceLens },
+        undefined,
+        AULINK_MIRROR_DETAIL_BUDGET,
+      ),
+    );
+  }
+  return continuations;
+}
+
+function obligationOverviewContinuations(
+  inquiry: Inquiry,
+  mirror: {
+    readonly rollup: AuLinkMirrorRollup;
+  },
+): readonly Continuation[] {
+  const continuations: Continuation[] = [
+    mirrorProjectionContinuation(
+      inquiry,
+      "bridge.aulink:obligations:mirror",
+      "mirror",
+      "Return to compact auLink mirror rows before selecting obligation detail.",
+      {},
+      undefined,
+      AULINK_MIRROR_DETAIL_BUDGET,
+    ),
+  ];
+  for (const emulationMode of Object.keys(mirror.rollup.emulationModes).slice(0, 6)) {
+    continuations.push(
+      mirrorProjectionContinuation(
+        inquiry,
+        `bridge.aulink:obligations:mode:${emulationMode}`,
+        "obligations",
+        `Inspect ${emulationMode} obligation rows.`,
+        { emulationMode },
+        undefined,
+        AULINK_MIRROR_DETAIL_BUDGET,
+      ),
+    );
+  }
+  for (const obligationKind of Object.keys(mirror.rollup.obligationKinds).slice(0, 6)) {
+    continuations.push(
+      mirrorProjectionContinuation(
+        inquiry,
+        `bridge.aulink:obligations:kind:${obligationKind}`,
+        "obligations",
+        `Inspect ${obligationKind} obligation rows.`,
+        { obligationKind },
+        undefined,
+        AULINK_MIRROR_DETAIL_BUDGET,
+      ),
+    );
+  }
+  return continuations;
+}
+
+function mirrorContinuations(
+  inquiry: Inquiry,
+  rows: readonly AuLinkMirrorRow[],
+  nextOffset: number | undefined,
+  limit: number,
+): readonly Continuation[] {
+  const continuations: Continuation[] = [];
+  if (nextOffset !== undefined) {
+    continuations.push({
+      id: "bridge.aulink:mirror:next-page",
+      kind: ContinuationKind.NextPage,
+      priority: ContinuationPriority.Primary,
+      rationale: "Continue the auLink mirror page.",
+      inquiry: {
+        ...inquiry,
+        page: { size: limit, cursor: String(nextOffset) },
+      },
+      route: nextPageRoute("Next auLink mirror page."),
+    });
+  }
+  continuations.push(
+    mirrorProjectionContinuation(
+      inquiry,
+      "bridge.aulink:mirror:role-evidence",
+      "role-evidence",
+      "Inspect exact framework role evidence for these mirror rows.",
+    ),
+    mirrorProjectionContinuation(
+      inquiry,
+      "bridge.aulink:mirror:obligations",
+      "obligations",
+      "Inspect emulation obligations attached to these mirror rows.",
+    ),
+  );
+  for (const [index, row] of rows.slice(0, 3).entries()) {
+    const evidence = evidenceForMirrorRow(row);
+    continuations.push(
+      mirrorProjectionContinuation(
+        inquiry,
+        `bridge.aulink:mirror:role-evidence:${index}`,
+        "role-evidence",
+        "Inspect exact framework role rows for this auLink id.",
+        { linkId: row.linkId },
+        evidence,
+      ),
+      mirrorProjectionContinuation(
+        inquiry,
+        `bridge.aulink:mirror:obligations:${index}`,
+        "obligations",
+        "Inspect emulation obligations for this auLink id.",
+        { linkId: row.linkId },
+        evidence,
+      ),
+    );
+    if (row.firstProductSource !== undefined) {
+      continuations.push(
+        sourceRangeContinuation(
+          `bridge.aulink:mirror:product-source:${index}`,
+          "Inspect the product placement source for this mirror row.",
+          row.firstProductSource,
+          evidence,
+        ),
+      );
+    }
+    if (row.firstFrameworkSource !== undefined) {
+      continuations.push(
+        sourceRangeContinuation(
+          `bridge.aulink:mirror:framework-source:${index}`,
+          "Inspect the framework target source for this mirror row.",
+          row.firstFrameworkSource,
+          evidence,
+        ),
+      );
+    }
+  }
+  return continuations;
+}
+
+function roleEvidenceContinuations(
+  inquiry: Inquiry,
+  rows: readonly AuLinkMirrorRoleEvidenceRow[],
+  nextOffset: number | undefined,
+  limit: number,
+): readonly Continuation[] {
+  const continuations: Continuation[] = [];
+  if (nextOffset !== undefined) {
+    continuations.push({
+      id: "bridge.aulink:role-evidence:next-page",
+      kind: ContinuationKind.NextPage,
+      priority: ContinuationPriority.Primary,
+      rationale: "Continue the auLink mirror role evidence page.",
+      inquiry: {
+        ...inquiry,
+        page: { size: limit, cursor: String(nextOffset) },
+      },
+      route: nextPageRoute("Next auLink mirror role evidence page."),
+    });
+  }
+  continuations.push(
+    mirrorProjectionContinuation(
+      inquiry,
+      "bridge.aulink:role-evidence:mirror",
+      "mirror",
+      "Return to compact mirror rows for the same filters.",
+    ),
+  );
+  for (const [index, row] of rows.slice(0, 4).entries()) {
+    const evidence = evidenceForRoleEvidence(row);
+    continuations.push(
+      sourceRangeContinuation(
+        `bridge.aulink:role-evidence:source:${index}`,
+        "Inspect the source behind this framework role row.",
+        row.source,
+        evidence,
+      ),
+      ownerProjectionContinuation(
+        inquiry,
+        `bridge.aulink:role-evidence:owner:${index}`,
+        row.sourceLens,
+        row.sourceProjection,
+        row.detailFilters,
+        "Inspect the framework projection that owns this role row.",
+        evidence,
+        row.basis,
+      ),
+    );
+  }
+  return continuations;
+}
+
+function obligationContinuations(
+  inquiry: Inquiry,
+  rows: readonly AuLinkMirrorObligationEvidenceRow[],
+  nextOffset: number | undefined,
+  limit: number,
+): readonly Continuation[] {
+  const continuations: Continuation[] = [];
+  if (nextOffset !== undefined) {
+    continuations.push({
+      id: "bridge.aulink:obligations:next-page",
+      kind: ContinuationKind.NextPage,
+      priority: ContinuationPriority.Primary,
+      rationale: "Continue the auLink mirror obligation page.",
+      inquiry: {
+        ...inquiry,
+        page: { size: limit, cursor: String(nextOffset) },
+      },
+      route: nextPageRoute("Next auLink mirror obligation page."),
+    });
+  }
+  continuations.push(
+    mirrorProjectionContinuation(
+      inquiry,
+      "bridge.aulink:obligations:mirror",
+      "mirror",
+      "Return to compact mirror rows for the same filters.",
+    ),
+  );
+  for (const [index, row] of rows.slice(0, 4).entries()) {
+    const evidence = evidenceForObligationEvidence(row);
+    if (row.source !== undefined) {
+      continuations.push(
+        sourceRangeContinuation(
+          `bridge.aulink:obligations:source:${index}`,
+          "Inspect the source behind this emulation obligation.",
+          row.source,
+          evidence,
+        ),
+      );
+    }
+    continuations.push(
+      ownerProjectionContinuation(
+        inquiry,
+        `bridge.aulink:obligations:owner:${index}`,
+        row.sourceLens,
+        row.sourceProjection,
+        row.detailFilters,
+        "Inspect the framework projection that owns this obligation.",
+        evidence,
+        row.basis,
+      ),
+    );
+  }
+  return continuations;
 }

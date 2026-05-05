@@ -33,6 +33,7 @@ import {
   answerFrameworkLifecycle,
   answerFrameworkRendering,
 } from "./framework-lenses.js";
+import { answerFrameworkApi } from "./framework-api-lenses.js";
 import { answerFrameworkEvaluator } from "./framework-evaluator-lenses.js";
 import { answerFrameworkDi } from "./framework-di-lenses.js";
 import { answerFrameworkMaterialization } from "./framework-materialization-lenses.js";
@@ -81,6 +82,7 @@ export class InquiryEngine {
     LensId.ProductVocabulary,
     LensId.BridgeAuLink,
     LensId.FrameworkDiscovery,
+    LensId.FrameworkApi,
     LensId.FrameworkRendering,
     LensId.FrameworkResources,
     LensId.FrameworkCompiler,
@@ -156,6 +158,11 @@ export class InquiryEngine {
         );
       case LensId.FrameworkDiscovery:
         return answerFrameworkDiscovery(
+          normalized.inquiry,
+          this.substrates.sourceProject,
+        );
+      case LensId.FrameworkApi:
+        return answerFrameworkApi(
           normalized.inquiry,
           this.substrates.sourceProject,
         );

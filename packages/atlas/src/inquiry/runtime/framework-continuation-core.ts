@@ -36,6 +36,11 @@ export interface RowEffectContinuationOptions
   readonly filters?: Inquiry["filters"];
 }
 
+export interface RowCallSiteContinuationOptions
+  extends RowContinuationRouteOptions {
+  readonly filters?: Inquiry["filters"];
+}
+
 /** Stable framework lens/projection endpoint before row-local filters are applied. */
 export interface FrameworkRouteEndpointInit {
   /** Stable endpoint id used by route topology rows. */
@@ -291,7 +296,7 @@ export class FrameworkRowContinuationBuilder {
     source: SourceRange,
     rationale: string,
     routeSummary: string,
-    options: RowContinuationRouteOptions = {},
+    options: RowCallSiteContinuationOptions = {},
   ): Continuation {
     return this.#sourceRangeContinuation({
       idSuffix,
@@ -301,6 +306,7 @@ export class FrameworkRowContinuationBuilder {
       projection: "call-sites",
       source,
       rationale,
+      filters: options.filters,
       budget: options.budget,
       plane: NavigationPlane.Flow,
       relation: NavigationRelation.CallSitesOf,

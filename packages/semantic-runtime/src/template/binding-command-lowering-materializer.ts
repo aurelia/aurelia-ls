@@ -42,7 +42,6 @@ import {
   type InstructionKindKey,
   type OpenSeamKindKey,
 } from '../kernel/vocabulary.js';
-import { ExpressionParser } from '../expression/expression-parser.js';
 import type {
   BindingIdentifierOrPattern,
   ExpressionType,
@@ -68,7 +67,6 @@ import {
   AttributeClassification,
   AttributePatternExecutionResult,
   AttributeSyntax,
-  AttributeSyntaxKind,
   type AttributeSyntaxField,
 } from './attribute-syntax.js';
 import type {
@@ -94,13 +92,13 @@ import {
   type MultiBindingSegmentField,
 } from './binding-command-execution.js';
 import {
-  executeBuiltInAttributePattern,
-  type BuiltInAttributePattern,
   type BuiltInBindingCommand,
 } from './built-in-syntax.js';
+import { BuiltInAttributeParserExecutionHost } from './attribute-parser-execution-host.js';
 import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
 import type {
   TemplateBindableReference,
+  TemplateExpressionParserService,
 } from './compiler-world.js';
 import type { TemplateCompilationUnit } from './compilation-unit.js';
 import {
@@ -172,6 +170,10 @@ class BindingCommandLoweringSourceSet {
 }
 
 class OwnerElement {
+  get tagName(): string {
+    return this.element.tagName;
+  }
+
   constructor(
     readonly element: HtmlElement,
     readonly attributes: readonly HtmlAttribute[],
@@ -247,7 +249,7 @@ class CommandLoweringExecutionContext implements BindingCommandBuildContext {
     readonly command: BindingCommandExecutable,
     readonly commandReference: BindingCommandLowering['command'],
     readonly bindable: TemplateBindableReference | null,
-    readonly parser: ExpressionParser,
+    readonly parser: TemplateExpressionParserService,
   ) {}
 
   allocateInstruction(
@@ -294,44 +296,25 @@ class CommandLoweringExecutionContext implements BindingCommandBuildContext {
     rawValue: string,
     _info: BindingCommandBuildInfo,
   ): BindingCommandTailSyntax | null {
-    const interpretation = this.compilerWorld.attributeParser.interpret(rawName);
-    if (interpretation == null) {
-      return BindingCommandTailSyntaxFromExecution(AttributePatternExecutionResult.plain(rawName, rawValue));
-    }
-    const matched = interpretation.compiledPatternProductHandle == null
-      ? null
-      : findMatchedPattern(this.compilerWorld, interpretation.compiledPatternProductHandle);
-    const execution = matched == null
-      ? AttributePatternExecutionResult.plain(rawName, rawValue)
-      : executeBuiltInAttributePattern(
-        matched.handler,
-        matched.pattern.pattern,
-        rawName,
-        rawValue,
-        interpretation.parts,
-      ) ?? new AttributePatternExecutionResult(
-        AttributeSyntaxKind.Open,
-        rawName,
-        rawValue,
-        rawName,
-        null,
-        interpretation.parts,
-      );
-    return BindingCommandTailSyntaxFromExecution(execution);
+    return BindingCommandTailSyntaxFromExecution(parseAttributeSyntaxInWorld(
+      this.compilerWorld,
+      rawName,
+      rawValue,
+    ).execution);
   }
 
   mapAttribute(
     _node: HtmlNodeReference,
     attr: string,
   ): string | null {
-    return mapAttribute(this.owner.element, attr);
+    return this.compilerWorld.attributeMapper.map(this.owner, attr);
   }
 
   isTwoWay(
     _node: HtmlNodeReference,
     attr: string,
   ): boolean {
-    return shouldDefaultToTwoWay(this.owner, attr);
+    return this.compilerWorld.attributeMapper.isTwoWay(this.owner, attr);
   }
 
   private parseExpression(
@@ -471,8 +454,6 @@ class CommandLoweringExecutionContext implements BindingCommandBuildContext {
 
 /** Lowers command-bearing attribute classifications through runtime-shaped binding-command models. */
 export class BindingCommandLoweringMaterializer {
-  private readonly parser = new ExpressionParser();
-
   constructor(
     /** Hot analysis store that receives binding-command lowering records. */
     readonly store: KernelStore,
@@ -819,11 +800,12 @@ export class BindingCommandLoweringMaterializer {
         attributeSyntaxes.push(syntax.syntax);
 
         const bindable = bindables.attr(syntax.syntax.target);
-        const commandMatch = syntax.syntax.command == null
+        const command = syntax.syntax.command == null
           ? null
-          : compilerWorld.bindingCommandResolver.resolve(syntax.syntax.command) == null
-            ? null
-            : findCommand(compilerWorld, compilerWorld.bindingCommandResolver.resolve(syntax.syntax.command)!.toReference());
+          : compilerWorld.bindingCommandResolver.get(syntax.syntax.command);
+        const commandMatch = command == null
+          ? null
+          : findCommand(compilerWorld, command.toReference());
         const commandReference = commandMatch?.executable.toReference() ?? null;
         const segment = new MultiBindingSegment(
           this.store.handles.product(segmentLocal),
@@ -1082,26 +1064,8 @@ export class BindingCommandLoweringMaterializer {
     readonly records: readonly KernelStoreRecord[];
     readonly claims: readonly SemanticClaim[];
   } {
-    const interpretation = compilerWorld.attributeParser.interpret(segment.rawName);
-    const matched = interpretation?.compiledPatternProductHandle == null
-      ? null
-      : findMatchedPattern(compilerWorld, interpretation.compiledPatternProductHandle);
-    const execution = matched == null
-      ? AttributePatternExecutionResult.plain(segment.rawName, segment.rawValue)
-      : executeBuiltInAttributePattern(
-        matched.handler,
-        matched.pattern.pattern,
-        segment.rawName,
-        segment.rawValue,
-        interpretation?.parts ?? [],
-      ) ?? new AttributePatternExecutionResult(
-        AttributeSyntaxKind.Open,
-        segment.rawName,
-        segment.rawValue,
-        segment.rawName,
-        null,
-        interpretation?.parts ?? [],
-      );
+    const parse = parseAttributeSyntaxInWorld(compilerWorld, segment.rawName, segment.rawValue);
+    const execution = parse.execution;
     const syntaxProductHandle = this.store.handles.product(`${local}:attribute-syntax`);
     const syntaxIdentityHandle = this.store.handles.identity(`${local}:attribute-syntax`);
     const syntax = new AttributeSyntax(
@@ -1113,7 +1077,7 @@ export class BindingCommandLoweringMaterializer {
       execution.target,
       execution.command,
       execution.parts,
-      null,
+      parse.pattern,
       attribute.toReference(),
       sourceAddressHandle,
       compactFieldProvenance<AttributeSyntaxField>([
@@ -1122,6 +1086,7 @@ export class BindingCommandLoweringMaterializer {
         new FieldProvenance('target', source.provenanceHandle),
         execution.command == null ? null : new FieldProvenance('command', source.provenanceHandle),
         execution.parts.length === 0 ? null : new FieldProvenance('parts', source.provenanceHandle),
+        parse.pattern == null ? null : new FieldProvenance('pattern', source.provenanceHandle),
         new FieldProvenance('source', source.provenanceHandle),
       ]),
     );
@@ -1227,7 +1192,7 @@ export class BindingCommandLoweringMaterializer {
     const siteIdentityHandle = this.store.handles.identity(`${local}:value-site`);
     const parseProductHandle = this.store.handles.product(`${local}:expression-parse`);
     const parseIdentityHandle = this.store.handles.identity(`${local}:expression-parse`);
-    const result = this.parser.parse(
+    const result = compilerWorld.expressionParser.parse(
       expression,
       entryFamily,
       this.expressionParseContext(sourceAddressHandle),
@@ -1541,7 +1506,7 @@ export class BindingCommandLoweringMaterializer {
       executable,
       commandReference,
       bindable,
-      this.parser,
+      compilerWorld.expressionParser,
     );
     const buildInfo = new BindingCommandBuildInfo(
       classification.ownerNode,
@@ -1712,24 +1677,16 @@ function findCommand(
     : new CommandHandlerMatch(emission.executable, emission.handler);
 }
 
-function findMatchedPattern(
+function parseAttributeSyntaxInWorld(
   world: TemplateCompilerWorldEmission,
-  compiledPatternProductHandle: ProductHandle,
-): {
-  readonly pattern: { readonly pattern: string };
-  readonly handler: BuiltInAttributePattern;
-} | null {
-  for (const emission of world.attributePatterns) {
-    const pattern = emission.compiledPatterns.find((candidate) => candidate.productHandle === compiledPatternProductHandle);
-    if (pattern == null) {
-      continue;
-    }
-    return {
-      pattern: pattern.definition,
-      handler: emission.handler,
-    };
-  }
-  return null;
+  rawName: string,
+  rawValue: string,
+) {
+  return world.attributeParser.parse(
+    rawName,
+    rawValue,
+    new BuiltInAttributeParserExecutionHost(world),
+  );
 }
 
 function BindingCommandTailSyntaxFromExecution(
@@ -1993,135 +1950,6 @@ function loweringStateFor(
     return BindingCommandLoweringState.Partial;
   }
   return BindingCommandLoweringState.Complete;
-}
-
-function mapAttribute(
-  element: HtmlElement,
-  attr: string,
-): string | null {
-  const tagName = element.tagName.toUpperCase();
-  const lowerAttr = attr.toLowerCase();
-  const tagMapping = tagName === 'LABEL' && lowerAttr === 'for'
-    ? 'htmlFor'
-    : tagName === 'IMG' && lowerAttr === 'usemap'
-      ? 'useMap'
-      : tagName === 'INPUT'
-        ? inputAttributeMapping(lowerAttr)
-        : (tagName === 'TEXTAREA' && lowerAttr === 'maxlength')
-          ? 'maxLength'
-          : (tagName === 'TD' || tagName === 'TH')
-            ? tableCellAttributeMapping(lowerAttr)
-            : null;
-  return tagMapping
-    ?? globalAttributeMapping(lowerAttr)
-    ?? (lowerAttr.startsWith('data-') ? attr : null);
-}
-
-function inputAttributeMapping(attr: string): string | null {
-  switch (attr) {
-    case 'maxlength':
-      return 'maxLength';
-    case 'minlength':
-      return 'minLength';
-    case 'formaction':
-      return 'formAction';
-    case 'formenctype':
-      return 'formEncType';
-    case 'formmethod':
-      return 'formMethod';
-    case 'formnovalidate':
-      return 'formNoValidate';
-    case 'formtarget':
-      return 'formTarget';
-    case 'inputmode':
-      return 'inputMode';
-    default:
-      return null;
-  }
-}
-
-function tableCellAttributeMapping(attr: string): string | null {
-  switch (attr) {
-    case 'rowspan':
-      return 'rowSpan';
-    case 'colspan':
-      return 'colSpan';
-    default:
-      return null;
-  }
-}
-
-function globalAttributeMapping(attr: string): string | null {
-  switch (attr) {
-    case 'accesskey':
-      return 'accessKey';
-    case 'contenteditable':
-      return 'contentEditable';
-    case 'tabindex':
-      return 'tabIndex';
-    case 'textcontent':
-      return 'textContent';
-    case 'innerhtml':
-      return 'innerHTML';
-    case 'scrolltop':
-      return 'scrollTop';
-    case 'scrollleft':
-      return 'scrollLeft';
-    case 'readonly':
-      return 'readOnly';
-    default:
-      return null;
-  }
-}
-
-function shouldDefaultToTwoWay(
-  owner: OwnerElement,
-  attr: string,
-): boolean {
-  const lowerAttr = attr.toLowerCase();
-  switch (owner.element.tagName.toUpperCase()) {
-    case 'INPUT': {
-      const type = attributeValue(owner, 'type')?.toLowerCase() ?? '';
-      switch (type) {
-        case 'checkbox':
-        case 'radio':
-          return lowerAttr === 'checked';
-        default:
-          return lowerAttr === 'value'
-            || lowerAttr === 'files'
-            || lowerAttr === 'value-as-number'
-            || lowerAttr === 'value-as-date';
-      }
-    }
-    case 'TEXTAREA':
-    case 'SELECT':
-      return lowerAttr === 'value';
-    default:
-      switch (lowerAttr) {
-        case 'textcontent':
-        case 'innerhtml':
-          return hasAttribute(owner, 'contenteditable');
-        case 'scrolltop':
-        case 'scrollleft':
-          return true;
-        default:
-          return false;
-      }
-  }
-}
-
-function attributeValue(
-  owner: OwnerElement,
-  name: string,
-): string | null {
-  return owner.attributes.find((attribute) => attribute.rawName.toLowerCase() === name)?.rawValue ?? null;
-}
-
-function hasAttribute(
-  owner: OwnerElement,
-  name: string,
-): boolean {
-  return owner.attributes.some((attribute) => attribute.rawName.toLowerCase() === name);
 }
 
 function missingInputSummary(

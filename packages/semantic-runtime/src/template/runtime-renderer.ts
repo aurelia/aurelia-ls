@@ -196,12 +196,76 @@ export class RuntimeRendererRenderResult {
   }
 }
 
+export const enum RuntimeRendererSpreadCompileState {
+  /** The owning hydration instruction has no captured attributes to spend. */
+  NoCapturedAttributes = 'no-captured-attributes',
+  /** Captured attributes were compiled into dynamic spread instructions. */
+  Compiled = 'compiled',
+  /** Captured-attribute compilation is recognized but not fully materialized. */
+  Open = 'open',
+}
+
+export class RuntimeRendererSpreadCompileInput {
+  constructor(
+    readonly local: string,
+    readonly instruction: SpreadTransferedBindingInstruction,
+    readonly target: TemplateRenderTarget,
+    readonly targetController: RuntimeControllerFrame,
+  ) {}
+}
+
+export class RuntimeRendererSpreadCompileResult {
+  constructor(
+    readonly state: RuntimeRendererSpreadCompileState,
+    readonly instructionProductHandles: readonly ProductHandle[],
+    readonly summary: string | null,
+    readonly addressHandle: AddressHandle | null,
+  ) {}
+
+  static noCapturedAttributes(addressHandle: AddressHandle | null): RuntimeRendererSpreadCompileResult {
+    return new RuntimeRendererSpreadCompileResult(
+      RuntimeRendererSpreadCompileState.NoCapturedAttributes,
+      [],
+      null,
+      addressHandle,
+    );
+  }
+
+  static open(
+    summary: string,
+    addressHandle: AddressHandle | null,
+  ): RuntimeRendererSpreadCompileResult {
+    return new RuntimeRendererSpreadCompileResult(
+      RuntimeRendererSpreadCompileState.Open,
+      [],
+      summary,
+      addressHandle,
+    );
+  }
+
+  static compiled(
+    instructionProductHandles: readonly ProductHandle[],
+    addressHandle: AddressHandle | null,
+  ): RuntimeRendererSpreadCompileResult {
+    return new RuntimeRendererSpreadCompileResult(
+      RuntimeRendererSpreadCompileState.Compiled,
+      instructionProductHandles,
+      null,
+      addressHandle,
+    );
+  }
+}
+
 export interface RuntimeRenderingRun {
   readonly provenanceHandle: ProvenanceHandle;
 
   allocate(local: string): RuntimeRendererAllocation;
 
   createChildController(input: RuntimeControllerCreationInput): RuntimeControllerFrame | null;
+
+  compileSpread(input: RuntimeRendererSpreadCompileInput): RuntimeRendererSpreadCompileResult;
+
+  recordOpenInstruction(local: string, summary: string, addressHandle: AddressHandle | null): void;
 
   readInstruction(productHandle: ProductHandle): TemplateInstruction | null;
 
@@ -248,6 +312,26 @@ export class RuntimeRendererInvocation {
       instruction,
       this.renderingController,
     ));
+  }
+
+  compileSpread(
+    localSuffix: string,
+    instruction: SpreadTransferedBindingInstruction,
+  ): RuntimeRendererSpreadCompileResult {
+    return this.run.compileSpread(new RuntimeRendererSpreadCompileInput(
+      `${this.local}:${localSuffix}`,
+      instruction,
+      this.target,
+      this.targetController,
+    ));
+  }
+
+  recordOpenInstruction(
+    localSuffix: string,
+    summary: string,
+    addressHandle: AddressHandle | null,
+  ): void {
+    this.run.recordOpenInstruction(`${this.local}:${localSuffix}`, summary, addressHandle);
   }
 
   readInstruction(productHandle: ProductHandle): TemplateInstruction | null {
@@ -1347,6 +1431,10 @@ function renderSpreadRuntimeBinding(input: RuntimeRendererInvocation): RuntimeRe
   const instruction = input.instruction;
   if (!(instruction instanceof SpreadTransferedBindingInstruction)) {
     return RuntimeRendererRenderResult.none();
+  }
+  const spreadCompile = input.compileSpread('compile-spread', instruction);
+  if (spreadCompile.state === RuntimeRendererSpreadCompileState.Open && spreadCompile.summary != null) {
+    input.recordOpenInstruction('compile-spread', spreadCompile.summary, spreadCompile.addressHandle);
   }
   const allocation = input.allocateBinding();
   return new RuntimeRendererRenderResult(new SpreadBinding(

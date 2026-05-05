@@ -37,16 +37,24 @@ import {
   type OpenSeamKindKey,
 } from '../kernel/vocabulary.js';
 import type { CompiledTemplateEmission } from './compiled-template-materializer.js';
+import type { AttributeSyntaxParseEmission } from './attribute-syntax-materializer.js';
 import {
   type RuntimeBinding,
   type RuntimeBindingScopeEffect,
 } from './runtime-binding.js';
 import {
   RuntimeRendererAllocation,
+  RuntimeRendererSpreadCompileResult,
   type RuntimeRenderer,
+  type RuntimeRendererSpreadCompileInput,
 } from './runtime-renderer.js';
 import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
 import {
+  TemplateCompilerSpreadCompileRequest,
+  type TemplateCompilerSpreadCompileHost,
+  TemplateCompilerSpreadCompileResult,
+  TemplateCompilerSpreadCompileState,
+  type TemplateCompilerService,
   TemplateRenderingRunInput,
   TemplateRenderingTargetInput,
 } from './compiler-world.js';
@@ -63,6 +71,9 @@ import {
   CustomAttributeDefinition,
 } from '../resources/custom-attribute-definition.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
+import {
+  HydrateElementInstruction,
+} from './instruction-ir.js';
 
 export class RuntimeRenderingMaterializationInput {
   constructor(
@@ -72,6 +83,8 @@ export class RuntimeRenderingMaterializationInput {
     readonly definition: CustomElementDefinition,
     /** Compiled-template rows that renderer emulation spends into runtime binding models. */
     readonly compiledTemplate: CompiledTemplateEmission,
+    /** Runtime AttrSyntax products needed by dynamic spread compilation. */
+    readonly attributeSyntax: AttributeSyntaxParseEmission,
     /** Compiler world whose Rendering service selects runtime renderers. */
     readonly compilerWorld: TemplateCompilerWorldEmission,
   ) {}
@@ -135,8 +148,22 @@ class RuntimeRenderingSourceSet {
   ) {}
 }
 
+class OpenTemplateCompilerSpreadCompileHost implements TemplateCompilerSpreadCompileHost {
+  compileSpread(
+    request: TemplateCompilerSpreadCompileRequest,
+    _compiler: TemplateCompilerService,
+  ): TemplateCompilerSpreadCompileResult {
+    return TemplateCompilerSpreadCompileResult.open(
+      request,
+      `TemplateCompiler.compileSpread is recognized for ${request.capturedSyntaxes.length} captured attribute syntax product(s), but dynamic spread instruction materialization is not closed yet.`,
+    );
+  }
+}
+
 /** Materializes renderer-owned controller, binding, scope-effect, provenance, and claim products after Rendering dispatch. */
 export class RuntimeRenderingMaterializer {
+  private readonly spreadCompileHost = new OpenTemplateCompilerSpreadCompileHost();
+
   constructor(
     /** Hot analysis store that receives runtime binding products. */
     readonly store: KernelStore,
@@ -181,6 +208,7 @@ export class RuntimeRenderingMaterializer {
       {
         allocate: (allocationLocal) => this.allocate(allocationLocal),
         createChildController: (creation) => this.createChildController(creation, source, records, openSeams),
+        compileSpread: (spread) => this.compileSpread(spread, input),
       },
     ));
     const controllerBindingClaimHandles = this.controllerBindingClaimHandles(input.localKey, renderResult.controllers);
@@ -291,6 +319,59 @@ export class RuntimeRenderingMaterializer {
       targets.push(new TemplateRenderingTargetInput(target, sequence, instructions));
     });
     return targets;
+  }
+
+  private compileSpread(
+    spread: RuntimeRendererSpreadCompileInput,
+    input: RuntimeRenderingMaterializationInput,
+  ): RuntimeRendererSpreadCompileResult {
+    const contextInstruction = spread.targetController.instructionProductHandle == null
+      ? null
+      : input.compiledTemplate.instructions.find((instruction) =>
+        instruction.productHandle === spread.targetController.instructionProductHandle
+      ) ?? null;
+    if (!(contextInstruction instanceof HydrateElementInstruction)) {
+      return RuntimeRendererSpreadCompileResult.open(
+        'TemplateCompiler.compileSpread could not find the owning hydrate-element instruction for the spread hydration context.',
+        spread.instruction.sourceAddressHandle,
+      );
+    }
+
+    const syntaxesByProduct = new Map(input.attributeSyntax.syntaxes.map((syntax) => [syntax.productHandle, syntax]));
+    const capturedSyntaxes = contextInstruction.captureSyntaxProductHandles
+      .map((productHandle) => syntaxesByProduct.get(productHandle) ?? null)
+      .filter((syntax): syntax is NonNullable<typeof syntax> => syntax != null);
+    if (capturedSyntaxes.length !== contextInstruction.captureSyntaxProductHandles.length) {
+      return RuntimeRendererSpreadCompileResult.open(
+        'TemplateCompiler.compileSpread found captured attribute handles, but not every handle resolved to an AttrSyntax product.',
+        spread.instruction.sourceAddressHandle,
+      );
+    }
+
+    const request = new TemplateCompilerSpreadCompileRequest(
+      spread.local,
+      contextInstruction.definitionProductHandle,
+      capturedSyntaxes,
+      spread.instruction,
+      spread.target,
+      null,
+    );
+    const result = input.compilerWorld.templateCompiler.compileSpread(request, this.spreadCompileHost);
+
+    switch (result.state) {
+      case TemplateCompilerSpreadCompileState.NoCapturedAttributes:
+        return RuntimeRendererSpreadCompileResult.noCapturedAttributes(spread.instruction.sourceAddressHandle);
+      case TemplateCompilerSpreadCompileState.Compiled:
+        return RuntimeRendererSpreadCompileResult.compiled(
+          result.instructions.map((instruction) => instruction.productHandle),
+          spread.instruction.sourceAddressHandle,
+        );
+      case TemplateCompilerSpreadCompileState.Open:
+        return RuntimeRendererSpreadCompileResult.open(
+          result.summary ?? 'TemplateCompiler.compileSpread remained open.',
+          spread.instruction.sourceAddressHandle,
+        );
+    }
   }
 
   private recordBinding(

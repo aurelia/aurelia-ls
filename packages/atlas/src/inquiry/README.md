@@ -10,7 +10,9 @@ It defines the nouns that later TypeScript, product, framework, bridge, and Atla
 - [inquiry.ts](inquiry.ts) defines the shared question envelope and subject.
 - [locus.ts](locus.ts) defines where an inquiry is rooted.
 - [basis.ts](basis.ts) defines what substrate authority an answer spent.
-- [evidence.ts](evidence.ts) defines witnesses and open seams.
+- [evidence.ts](evidence.ts) defines witnesses and open seams. Use `evidenceBreadcrumb(...)` when a continuation only
+  needs to explain a row-local hop; full row payloads belong in answer evidence or explicit detail projections, not
+  repeated through every follow-up.
 - [continuation.ts](continuation.ts) defines semantic next-question moves.
 - [budget.ts](budget.ts) defines shared budget and pagination lanes.
 - [composition.ts](composition.ts) defines the shared actor/claim composition answer shape. Use it when a lens can

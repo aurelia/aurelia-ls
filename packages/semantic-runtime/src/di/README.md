@@ -86,7 +86,7 @@ kernel records.
 - Runtime `deregister(...)` is intentionally not mirrored in the container emulator yet. It primarily serves HMR plugin
   flows, and modeling it now would pull teardown/resource-removal policy into the first DI world-construction pass.
 
-## Current Shape
+## Implementation Shape
 
 `world-constructor.ts` is the first app-world spending pass. It consumes the typed products emitted by
 configuration recognition, installs each modeled container's built-in `IContainer` self resolver, then spends

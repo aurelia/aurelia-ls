@@ -24,6 +24,9 @@ runtime exports.
   refactor affordances, code fixes, refactor edit plans, organize-import edit plans, and file-rename edit plans.
 - Expose exact call-site facts over source ranges, declarations, files, packages, or the workspace: callee expression,
   resolved signature, argument spans, argument text, argument types, primitive literals, object keys, and array counts.
+- Expose the [TypeScript semantic surface](semantic-surface/README.md): exact source ranges, symbol identity, source
+  declaration mirrors, exported declaration surfaces, normalized member slots, usage roles, usage-owner declarations,
+  and AST walking primitives that multiple higher lenses can share without inventing local compatibility layers.
 - Expose package-scoped enum usage indexes: enum/member declarations, exact `Enum.Member` reference sites, raw literal
   value-space overlap, and exact enum-to-enum translation edges. This is source substrate, not `atlas.self`
   diagnostics; higher lenses decide what the value-space pressure means.
