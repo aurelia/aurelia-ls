@@ -149,8 +149,8 @@ Those are template/compiler concerns above the parser.
 ## Integration Boundary
 
 The parser itself is meant to stay stable while template/compiler callers evolve.
-Current handoff status, template/compiler ownership seams, and the next recommended
-integration slice live in [INTEGRATION.md](./INTEGRATION.md).
+Current handoff status, template/compiler ownership seams, and integration pressure live in
+[INTEGRATION.md](./INTEGRATION.md).
 
 Keep this README focused on parser contract and ownership. If a note is mainly
 about how current compiler callers have or have not spent the parser yet, it

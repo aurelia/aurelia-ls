@@ -84,15 +84,15 @@ kernel records.
 - Resource inheritance should not reuse parent slot products as child-owned facts. The DI constructor that applies
   inheritance must create child slot products with their own provenance.
 - Runtime `deregister(...)` is intentionally not mirrored in the container emulator yet. It primarily serves HMR plugin
-  flows, and modeling it now would pull teardown/resource-removal policy into the first DI world-construction pass.
+  flows, and modeling it now would pull teardown/resource-removal policy into app-world construction.
 
 ## Implementation Shape
 
-`world-constructor.ts` is the first app-world spending pass. It consumes the typed products emitted by
+`world-constructor.ts` is the app-world spending pass. It consumes the typed products emitted by
 configuration recognition, installs each modeled container's built-in `IContainer` self resolver, then spends
 configuration-owned registration admissions against the sequence's root container.
 
-The first spending path is intentionally narrow but end-to-end:
+The current spending path is intentionally narrow but end-to-end:
 
 - resolver-producing admissions with closed admitted keys become runtime-shaped `Resolver` products and
   `ContainerResolverSlot` products;

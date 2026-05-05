@@ -1,5 +1,7 @@
 # Router
 
+See [../README.md](../README.md) for the folder-wide rebuild map and Atlas and auLink rule.
+
 Router is a deliberately thin semantic island for now. The package is not part of the template compiler path yet, but
 it contributes real Aurelia configuration, DI services, resources, route config, route contexts, and navigation
 instruction objects that will eventually interact with app-world construction.

@@ -25,6 +25,8 @@ projects static type and member surfaces from the checker for template/expressio
   private evaluators or duplicate object/string/target projection helpers.
 - Provide a project-level evaluation envelope that boot-admitted Aurelia passes can share, so resource recognition,
   configuration recognition, and later DI/template materializers do not each invent their own source-evaluation loop.
+- Resolve local TypeScript-authored module specifiers faithfully enough for source analysis, including emitted `.js`
+  specifiers that point at `.ts` or `.tsx` source files.
 - Emit kernel records only for durable boundary facts such as source spans, evidence, provenance, and open seams.
 
 ## Non-Responsibilities
@@ -55,6 +57,8 @@ are worth materializing.
 
 - Import bindings start as evaluator-local unknown values. They should become seams only when a materializer or
   expression actually depends on the imported value and module linking cannot close it.
+- Bare package imports are outside the static module graph until a package-aware resolver exists. They should not be
+  counted as unresolved local module edges merely because the evaluator deliberately stops at the package boundary.
 - `EvaluationKernelEmitter` currently maps evaluator seam kinds onto general `KernelVocabulary.Evaluation` keys.
   Keep this emitter narrow: it translates evaluator-local seams to product-owned seam vocabulary, but it must not
   learn Aurelia resource, configuration, registration, template, or DI semantics.

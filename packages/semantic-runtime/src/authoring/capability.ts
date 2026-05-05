@@ -1,0 +1,36 @@
+import type {
+  AuthoringCapabilityKey,
+  AuthoringOperationKind,
+} from './ontology.js';
+
+export type AuthoringCapabilityStatus =
+  | 'supported'
+  | 'partial'
+  | 'open';
+
+/** One advertised authoring capability with explicit uncertainty. */
+export class AuthoringCapability {
+  readonly kind = 'authoring-capability' as const;
+
+  constructor(
+    readonly key: AuthoringCapabilityKey,
+    readonly status: AuthoringCapabilityStatus,
+    /** Operations needed to exercise this capability. */
+    readonly operations: readonly AuthoringOperationKind[],
+    /** Why the capability is partial or open, if it is not fully supported. */
+    readonly openSummary: string | null = null,
+  ) {}
+}
+
+/** Negotiation surface the AI can inspect before promising an app shape to the user. */
+export class AuthoringCapabilitySet {
+  readonly kind = 'authoring-capability-set' as const;
+
+  constructor(
+    readonly capabilities: readonly AuthoringCapability[],
+  ) {}
+
+  read(key: AuthoringCapabilityKey): AuthoringCapability | null {
+    return this.capabilities.find((capability) => capability.key === key) ?? null;
+  }
+}

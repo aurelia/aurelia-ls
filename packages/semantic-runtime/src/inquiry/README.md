@@ -5,8 +5,8 @@ See [../README.md](../README.md) for the folder-wide rebuild map and Atlas and a
 Inquiry is the answer algebra above the kernel. It turns selectors and loci into answers without creating a second
 semantic store or making transport, presentation, or consumer policy own the core model.
 
-The first pressure comes from editor, Atlas, tooling, and agent use: a caller often starts from a workspace, project, file,
-cursor, range, or known kernel handle and needs a truthful answer plus the next useful move.
+Core inquiry pressure comes from editor, Atlas, tooling, and agent use: a caller often starts from a workspace, project,
+file, cursor, range, or known kernel handle and needs a truthful answer plus a navigable follow-up move.
 
 ## Responsibilities
 
@@ -33,7 +33,7 @@ Inquiry is where answer shape is separated from produced facts. Kernel records c
 partial or blocked; an inquiry answer can expose the seams, continuations, source context, and graph handles needed by later
 presentation or policy layers without changing what the kernel facts mean.
 
-The first serious pressure will come from integrating HTML parsing, attribute classification, expression parsing, and
+Compiler and editor pressure comes from integrating HTML parsing, attribute classification, expression parsing, and
 instruction lowering. Those flows need to serve batch-like compiler questions and live IDE questions from the same
 semantic substrate. Cursor and range loci, recovery frontiers, candidate sets, explanation paths, and pagination should
 be modeled here or in answer envelopes, not smuggled into kernel claims or compiler products.
@@ -53,7 +53,7 @@ should preserve what they observed, what they could derive, and which seams rema
 enough typed shape for later policy layers to decide how much to show, how to rank it, which continuation is useful
 next, and whether a caller can act on it.
 
-`template-completion.ts` is the first concrete completion answer. It deliberately assumes cursor-to-template-site
+`template-completion.ts` is the concrete completion answer surface. It deliberately assumes cursor-to-template-site
 classification already happened: the query supplies a site kind and optional product handles for binding scope,
 resource scope, selected resource definition, expression parse, and optionally a checker-projected member owner type.
 The answer spends those typed details and reports missing inputs rather than re-scanning templates or inventing
@@ -61,7 +61,7 @@ candidates. Member completion after `foo.` can derive the member-owner type from
 the visible binding scope, and the TypeChecker expression evaluator. That is an answer-local type projection, not
 runtime execution and not completion ranking.
 
-`templateCompletionQueryForCursor` is the first cursor adapter over the horizontal compiler slice. It consumes a
+`templateCompletionQueryForCursor` is the cursor adapter over the horizontal compiler path. It consumes a
 materialized `TemplateResourceCompilationEmission`, picks the smallest HTML/value/scope products around the cursor,
 classifies the site, and returns the same product-handle `TemplateCompletionQuery` used by the answer. Empty start-tag
 attribute positions, such as `<my-element |>` before an authored attribute product exists, are still classified from

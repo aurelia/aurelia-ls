@@ -131,7 +131,7 @@ export class InquiryAnswer<TValue, TQuery> {
     readonly claimHandles: readonly ClaimHandle[] = [],
     /** Open seams that prevented complete closure. */
     readonly openSeamHandles: readonly OpenSeamHandle[] = [],
-    /** Suggested next useful queries. */
+    /** Suggested follow-up queries. */
     readonly continuations: readonly InquiryContinuation<TQuery>[] = [],
     /** Page state when this answer returns one page of a larger ordered result. */
     readonly page: InquiryPageInfo | null = null,

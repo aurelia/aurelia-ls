@@ -89,7 +89,7 @@ registration analysis. Configuration emission owns the registration products adm
 step, and later DI world construction should spend those configuration-owned products when constructing an app
 container world.
 
-`registration-factory-recognizer.ts` recognizes the first source carrier family: imported `Registration.*(...)`
+`registration-factory-recognizer.ts` recognizes the source carrier family for imported `Registration.*(...)`
 factory calls from `aurelia` or `@aurelia/kernel`, including namespace imports such as
 `Aurelia.Registration.singleton(...)`. This is source-shape recognition, not container reachability. Configuration and
 later DI world construction still decide whether a registration product participates in an app/container world.

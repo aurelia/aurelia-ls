@@ -196,8 +196,8 @@ The kernel should not sit as inert vocabulary. It becomes useful through a loop:
 
 `source/evaluation -> claims/materializations -> queries -> answers -> continuations`
 
-The query and answer layer should be minimal at first, but it needs enough algebra to preserve uncertainty and
-help AI agents choose the next useful question. Expected answer outcomes include hit, miss, ambiguous, open,
+The query and answer layer should stay small, but it needs enough algebra to preserve uncertainty and
+help AI agents choose an appropriate follow-up question. Expected answer outcomes include hit, miss, ambiguous, open,
 partial, unsupported, and reroute. Answers should be able to carry products, claims, evidence, provenance, open
 seams, policy-specific confidence/state, and suggested continuations.
 
@@ -219,12 +219,12 @@ evaluator substrate that performs explicit abstract interpretation over those sh
 The evaluator should prefer explicit open seams over pretending a path was understood. A useful partial result
 with clear seams is better than a confident false positive.
 
-The active vertical slice connects TypeScript/module evaluation to DI, configuration, resource, and compiler questions:
+The active vertical path connects TypeScript/module evaluation to DI, configuration, resource, and compiler questions:
 
 - What keys, resources, and registrations are available here?
 - Which source shapes produced them?
 - Which claims and provenance records connected the pieces?
 - Which parts are ambiguous, convention-derived, recovered, or still open?
 
-That slice should keep emitting kernel records so the vocabulary is pressure-tested by real materializers and real
+That path should keep emitting kernel records so the vocabulary is pressure-tested by real materializers and real
 queries instead of by static taxonomy design alone.

@@ -1,5 +1,7 @@
 # Template Substrate
 
+See [../README.md](../README.md) for the folder-wide rebuild map and Atlas and auLink rule.
+
 This folder models the template-compiler-facing world as it is re-layered onto kernel, resource, DI, parser, and
 lowering products.
 
@@ -25,7 +27,7 @@ classification, expression parsing, and instruction lowering converge on the sam
   classification, expression parsing, and lowering should consume. Inline string/template-literal sources may carry a
   decoded-markup-to-authored-source offset map; compiler materializers consume decoded markup, while cursor inquiries
   and source addresses must still point back to the authored TypeScript text.
-- `compilation-unit-materializer.ts` materializes that front-door slice once a template source and compiler world are
+- `compilation-unit-materializer.ts` materializes that front-door boundary once a template source and compiler world are
   known. It intentionally does not parse HTML yet; it establishes the product boundary where later template materializers
   attach.
 - `template-compilation-project-pass.ts` is the current project-level template entrypoint. It consumes app-world
@@ -35,7 +37,7 @@ classification, expression parsing, and instruction lowering converge on the sam
   projection.
 - `html-ir.ts` models authored HTML before Aurelia syntax interpretation. It preserves source addresses and recovery
   observations without performing resource lookup.
-- `html-parse-materializer.ts` is the first HTML materialization slice. It spends a template compilation unit into authored
+- `html-parse-materializer.ts` is the HTML materialization boundary. It spends a template compilation unit into authored
   HTML document/node/attribute products, records ownership claims, and keeps recovery local to the malformed syntax.
   It intentionally stops before Aurelia attribute-pattern parsing, resource lookup, or expression parsing.
 - `attribute-syntax.ts` models runtime `AttrSyntax`, attribute-pattern executables, `IAttributeParser`, and the
@@ -132,7 +134,7 @@ classification, expression parsing, and instruction lowering converge on the sam
 
 ## Boundaries
 
-Template products are consumers of earlier horizontal slices:
+Template products are consumers of earlier horizontal layers:
 
 - boot and inquiry decide source admission and active loci
 - evaluation closes static source shapes when it can and emits open seams when it cannot

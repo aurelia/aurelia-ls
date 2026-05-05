@@ -35,11 +35,11 @@ or template compilation. Template controllers currently converge through the cus
 operation that turns headers and source metadata into full definitions; it is recorded through
 materialization/provenance rather than being baked into the product name.
 
-Framework-owned built-ins are first modeled as resource headers. `built-in-resources.ts` records the runtime-html,
+Framework-owned built-ins enter the resource layer as resource headers. `built-in-resources.ts` records the runtime-html,
 i18n, and state default resource catalogs as concrete, runtime-linked model classes so compiler worlds can see
 built-in template controllers, custom attributes/elements, value converters, and binding behaviors without pretending
 they came from user source. The built-in catalog materializer now also emits full definition products for built-ins whose
-runtime metadata is static enough to model directly. That is the first convergence pressure from template compilation:
+runtime metadata is static enough to model directly. That convergence pressure comes from template compilation:
 headers remain admission/lookup facts, while full definitions carry bindables and compiler-consumable metadata.
 
 Recognizer classes stay kernel-free. The kernel boundary is the emitter: each observation records direct evidence
@@ -49,7 +49,7 @@ cheap to evolve while still giving inquiry a durable graph.
 
 Emitter results return typed definition-header handles for downstream materializers. The converger consumes
 those handles plus the AST-bearing observations and emits `resource.definition` products with field provenance and
-`resource.converges-to-definition` claims. This first convergence slice closes runtime defaults, resource keys,
+`resource.converges-to-definition` claims. The convergence path closes runtime defaults, resource keys,
 aliases, simple static bindables, `@bindable` metadata, template-controller flags, capture/template shape, and thin
 resource definitions. Bindable definitions preserve the source address for the metadata entry or
 member declaration that produced them, because template attribute completion, go-to-definition, and later rename support

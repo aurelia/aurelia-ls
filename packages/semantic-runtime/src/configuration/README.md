@@ -79,7 +79,7 @@ The tooling model should keep that split:
   compilation context, parser context, TypeChecker projection, or inquiry answer without moving source scanning back
   into the template layer.
 
-The first recognition slice admits method receivers it can identify from evaluated construction shapes:
+Configuration recognition admits method receivers it can identify from evaluated construction shapes:
 `Aurelia.app(...)`, chained Aurelia calls, and local variables initialized from `new Aurelia(...)` are treated as app
 admission; direct `container.register(...)`-shaped calls are treated as container registration. Other `.app(...)` and
 `.register(...)` methods stay invisible until evaluation or DI context can prove what they are. False positives here

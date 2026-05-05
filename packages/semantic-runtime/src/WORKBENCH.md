@@ -8,6 +8,11 @@ Product-pressure grounding lives in [../../atlas/workbench/product-specific-pres
 Use that note when deciding whether a semantic concept belongs in product records, claims, provenance, inquiry answers,
 or Atlas-only navigation.
 
+Durable package boundaries live in [README.md](./README.md). Authoring durable context lives in
+[authoring/README.md](./authoring/README.md), [authoring/ONTOLOGY.md](./authoring/ONTOLOGY.md), and
+[authoring/CAPABILITY_CHECKLIST.md](./authoring/CAPABILITY_CHECKLIST.md). Keep this workbench focused on live context
+that should not be mistaken for stable contract.
+
 ## Standing Context
 
 The repo has consolidated around two internal surfaces:
@@ -23,13 +28,16 @@ The broad horizontal substrate is present but not finished end to end. The activ
 
 - `kernel` for handles, vocabulary, records, claims, provenance, materialization, product details, and auLink.
 - `boot` for source admission before semantic interpretation.
+- `application` for framework-normal app topology shared by analysis and authoring.
+- `authoring` for semantic app-creation intent, operation, plan, capability, and verification contracts.
 - `evaluation` for static module/value evaluation and explicit open seams.
 - `resources`, `configuration`, `registration`, and `di` for Aurelia world construction.
 - `template` and `expression` for authored template/compiler surfaces and parser-owned recovery.
 - `type-system` for TypeChecker-backed projection where runtime emulation should stop.
 - `router` for router model anchors that are not yet deeply wired into passes.
 
-This breadth is intentional. The next useful work is not to preserve compatibility with retired readers, but to let real consumers pressure these layers and then refactor horizontally when the boundaries become clearer.
+This breadth is intentional. The useful work is not to preserve compatibility with retired readers, but to let real
+consumers pressure these layers and then refactor horizontally when the boundaries become clearer.
 
 ## Working Rules
 
@@ -51,6 +59,19 @@ Atlas should increasingly learn from this package through typed contracts:
 - avoid growing private product-specific inference tables when the product model itself can carry the intent.
 
 The expression parser remains useful but provisional. It has grammar, AST, and recovery algebra, yet it predates the current kernel shape. Keep it callable parser machinery above source text until template/compiler ownership proves where its products should land.
+
+The operational API boundary now lives in `api`. It opens an app by composing source admission, static module
+evaluation, resource recognition, configuration admission, DI world construction, compiler-world formation, template
+compilation, rendering dispatch, and TypeChecker-backed scope products. Keep initial answers compact; expose opaque
+kernel handles only through explicit detail projections so the API can serve app developers and AI callers without
+forcing every query into full graph expansion.
+
+The previous analyzer-shaped fixture was removed because it optimized for current recognizer closure rather than
+idiomatic app authoring. Future fixtures should split stress coverage from authoring examples: stress fixtures can be
+dense, while `../fixtures/authoring` should contain framework-normal app shapes once the substrate can analyze them.
+
+The authoring spine is intentionally non-operational for the moment. It exists to make future codegen land inside a
+typed plan/verification structure instead of drifting into ad hoc scaffold templates.
 
 ## Template Compiler Emulation Notes
 

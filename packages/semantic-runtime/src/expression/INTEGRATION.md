@@ -7,7 +7,7 @@ Unlike [README.md](./README.md), this file is allowed to change as caller-side
 integration closes. Keep it short and operational:
 
 - what the current seams are
-- what the next honest integration slice is
+- what integration pressure still needs a modeled owner
 - what still belongs above the parser
 
 Do not turn this into a second architecture document for the parser itself.
@@ -43,7 +43,7 @@ policy. The parser remains provisional until its grammar corridors, recovery
 publication, source/provenance shape, and inquiry behavior have been reviewed
 against the runtime grammar and the new value-site/lowering materializers.
 
-## Current Honest Integration Slice
+## Current Integration Shape
 
 The compiler-owned value-site layer classifies each authored value into an
 ownership family such as:

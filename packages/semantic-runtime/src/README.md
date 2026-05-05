@@ -6,7 +6,7 @@ The package is intentionally architecture-first. Build durable substrate layers,
 
 ## Product Priorities
 
-The first valuable experiences are deep template autocomplete, go-to-definition from markup, reliable rename substrate, app maps, resource visibility, configuration tracing, and DI explanations.
+Highest-value experiences include deep template autocomplete, go-to-definition from markup, reliable rename substrate, app maps, resource visibility, configuration tracing, DI explanations, and AI-assisted app authoring that can verify what it writes.
 
 Correctness and explanation quality matter before latency while the architecture is still settling. False positives are more expensive than explicit open seams.
 
@@ -22,6 +22,8 @@ Keep the runtime-emulation split visible. Module evaluation, configuration admis
 
 - `kernel`: hot normalized record store, handles, vocabulary, identities, addresses, claims, evidence, provenance, materialization, open seams, and auLink anchors.
 - `boot`: workspace, project, and source admission before Aurelia semantics are interpreted.
+- `application`: framework-normal app topology shared by analysis and authoring.
+- `authoring`: intent, capability, operation, plan, and verification contracts for AI-assisted app creation.
 - `inquiry`: selectors, loci, answer envelopes, projection lanes, continuations, and consumer policy boundaries above the kernel.
 - `evaluation`: ECMAScript-shaped static module, expression, environment, value, and seam substrate.
 - `type-system`: TypeChecker projection substrate for synthetic expression and template-local member surfaces.
@@ -32,6 +34,7 @@ Keep the runtime-emulation split visible. Module evaluation, configuration admis
 - `template`: compiler world contracts, authored HTML IR, attribute syntax/classification, binding-command execution, and lowered instruction IR.
 - `expression`: Aurelia expression parser and parser-owned recovery/candidate algebra.
 - `router`: router configuration, route config, route context, viewport instruction, and router-owned resource model anchors.
+- `api`: in-process app-opening and query facade over the product substrate.
 
 Template parser and compiler materializers should be built on these layers, not by reconnecting older runtime-shaped compiler models.
 
@@ -45,7 +48,7 @@ When Atlas cannot cheaply stitch an important product path, prefer strengthening
 
 ## Documentation Ownership
 
-This README owns the folder-level map, product priorities, and Atlas/auLink rule. Folder READMEs own local boundaries, watchpoints, and current shape. `kernel/README.md` owns kernel record-family rules. `expression/README.md` owns the parser contract, while `expression/INTEGRATION.md` owns parser/compiler handoff notes. `WORKBENCH.md` owns recent context that is useful while this substrate is still settling.
+This README owns the folder-level map, product priorities, and Atlas/auLink rule. Folder READMEs own local boundaries, watchpoints, and current shape. [kernel/README.md](./kernel/README.md) owns kernel record-family rules. [application/README.md](./application/README.md) owns app topology. [authoring/README.md](./authoring/README.md) owns the semantic authoring loop, [authoring/ONTOLOGY.md](./authoring/ONTOLOGY.md) owns operation taxonomy orientation, and [authoring/CAPABILITY_CHECKLIST.md](./authoring/CAPABILITY_CHECKLIST.md) owns the flexible authoring scope map. [api/README.md](./api/README.md) owns the operational API boundary. [expression/README.md](./expression/README.md) owns the parser contract, while [expression/INTEGRATION.md](./expression/INTEGRATION.md) owns parser/compiler handoff notes. [WORKBENCH.md](./WORKBENCH.md) owns recent context that is useful while this substrate is still settling.
 
 When text starts repeating across files, prefer linking to the owner and keeping only the local consequence.
 

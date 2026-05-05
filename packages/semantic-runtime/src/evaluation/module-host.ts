@@ -135,18 +135,20 @@ export function buildEvaluationModuleGraph(
 
     const record = readEvaluationModuleRecord(sourceFile, normalizedModuleKey);
     graph.addModule(record);
-    const moduleSpecifiers = [
+    const moduleSpecifiers = uniqueModuleEdges([
       ...record.imports.map((entry) => ({ moduleSpecifier: entry.moduleSpecifier, node: entry.node })),
       ...record.exports
         .filter((entry) => entry.moduleSpecifier != null)
         .map((entry) => ({ moduleSpecifier: entry.moduleSpecifier as string, node: entry.node })),
-    ];
+    ]);
 
     for (const edge of moduleSpecifiers) {
       const target = host.resolveModuleSpecifier(normalizedModuleKey, edge.moduleSpecifier);
       graph.linkModule(normalizedModuleKey, edge.moduleSpecifier, target);
       if (target == null) {
-        unresolvedModules.push(new EvaluationModuleResolutionOpen(normalizedModuleKey, edge.moduleSpecifier, edge.node));
+        if (isRelativeModuleSpecifier(edge.moduleSpecifier)) {
+          unresolvedModules.push(new EvaluationModuleResolutionOpen(normalizedModuleKey, edge.moduleSpecifier, edge.node));
+        }
         continue;
       }
       visit(target);
@@ -157,8 +159,44 @@ export function buildEvaluationModuleGraph(
   return new EvaluationModuleGraphBuildResult(graph, unresolvedModules);
 }
 
+function uniqueModuleEdges(
+  edges: readonly { readonly moduleSpecifier: string; readonly node: ts.Node }[],
+): readonly { readonly moduleSpecifier: string; readonly node: ts.Node }[] {
+  const seen = new Set<string>();
+  const unique: { readonly moduleSpecifier: string; readonly node: ts.Node }[] = [];
+  for (const edge of edges) {
+    if (seen.has(edge.moduleSpecifier)) {
+      continue;
+    }
+    seen.add(edge.moduleSpecifier);
+    unique.push(edge);
+  }
+  return unique;
+}
+
+function isRelativeModuleSpecifier(moduleSpecifier: string): boolean {
+  return moduleSpecifier.startsWith('./') || moduleSpecifier.startsWith('../');
+}
+
 function candidateModulePaths(base: string): readonly string[] {
-  const direct = MODULE_EXTENSIONS.map((extension) => `${base}${extension}`);
+  const direct = candidateDirectModulePaths(base);
   const indexes = MODULE_INDEX_FILES.map((file) => path.join(base, file));
   return [...direct, ...indexes];
+}
+
+function candidateDirectModulePaths(base: string): readonly string[] {
+  const extension = path.extname(base);
+  if (extension === '.js' || extension === '.jsx' || extension === '.mjs' || extension === '.cjs') {
+    const withoutExtension = base.slice(0, -extension.length);
+    return [
+      base,
+      `${withoutExtension}.ts`,
+      `${withoutExtension}.tsx`,
+      `${withoutExtension}.js`,
+      `${withoutExtension}.jsx`,
+      `${withoutExtension}.mjs`,
+      `${withoutExtension}.cjs`,
+    ];
+  }
+  return MODULE_EXTENSIONS.map((candidateExtension) => `${base}${candidateExtension}`);
 }
